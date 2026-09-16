@@ -1075,3 +1075,401 @@ export const APPLICATION_ACCEPTED_TENANT = {
   ],
   branding: { showSignoff: false },
 } as const;
+
+/* ──────────────── The tenant process: the emails the map planned ────────────────
+
+   James, 16 Sep 2026: build every email the tenant process map still had as
+   Planned. One document per step, named after the step on the map
+   (lib/process/tenant.ts), in the same block format and on the same customer
+   letterhead as the doorway emails above, so the builder owns the words and
+   Admin -> Emails can show every one before anything sends it.
+
+   Nothing here sends yet. Each catalogue entry says what it is waiting on.
+
+   Rules for every one of these:
+   - one job, one button, and the button goes somewhere a tenant can act;
+   - never silence at a dead end: a declined offer, a viewing they didn't like
+     and a no-show each end on the next thing to look at;
+   - no supplier names and no system names. A tenant deals with The Letting
+     Experts, not with whatever we run underneath;
+   - lists the send path fills (homes, viewing slots, what is missing) are one
+     placeholder of ready-made lines, the way {{detailsList}} already works.
+
+   Shared placeholders: {{firstName}} {{address}} {{agentName}} {{agentPhone}}
+   {{agentEmail}} {{link}}. Per email, listed on its own comment. */
+
+/** A single-property enquiry. {{rent}} {{availableLine}} {{moveInList}} {{slotsList}} {{passportLink}} */
+export const TENANT_ENQUIRY_REPLY = {
+  subject: "About {{address}}",
+  preheader: "Is it still available, what it costs to move in, and when you can see it.",
+  mode: "blocks",
+  blocks: [
+    H("ter1", "Thanks for your enquiry"),
+    T("ter2", "Hi {{firstName}},<br><br>Thanks for asking about <strong>{{address}}</strong>. {{availableLine}} The rent is <strong>{{rent}}</strong>."),
+    H2("ter3", "What it costs to move in"),
+    T("ter4", "{{moveInList}}"),
+    T("ter5", "No admin fees and no referencing fees. The holding fee goes towards your first month's rent."),
+    H2("ter6", "When you can see it"),
+    T("ter7", "{{slotsList}}"),
+    SP("ter8", 8),
+    BTN("ter9", "Choose a viewing time", "{{link}}"),
+    SP("ter10", 8),
+    T("ter11", "If none of those suit, reply with a day that does and I'll fit you in."),
+    T("ter12", "One more thing that saves time later: your <a href=\"{{passportLink}}\" style=\"color:#56423e;font-weight:600;\">tenant passport</a>. Fill it in once and it answers every application you make with us. Nothing in it goes to a landlord unless you apply."),
+    SP("ter13", 8),
+    T("ter14", "{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
+    FOOT("ter15", "You're getting this because you asked The Letting Experts about a property."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/** Added without a property: the search, not an enquiry. {{onNowLine}} */
+export const TENANT_ADDED_WELCOME = {
+  subject: "Let's find you a home, {{firstName}}",
+  preheader: "Tell us what you're after and we'll send you the homes that fit.",
+  mode: "blocks",
+  blocks: [
+    H("taw1", "Let's find you a home"),
+    T("taw2", "Hi {{firstName}},<br><br>Thanks for registering with The Letting Experts. I'm {{agentName}}, and I'll be looking after your search."),
+    H2("taw3", "What we need to know"),
+    T("taw4", "<strong>Your budget</strong>, per month<br><strong>Where</strong> you'd like to live<br><strong>When</strong> you want to move<br><strong>Who</strong> is moving in, and any pets"),
+    T("taw5", "It takes about ten minutes in your tenant passport, and the same details then answer every application you make with us. Nothing in it goes to a landlord unless you apply."),
+    SP("taw6", 8),
+    BTN("taw7", "Tell us what you're after", "{{link}}"),
+    SP("taw8", 8),
+    T("taw9", "{{onNowLine}} As soon as something fits, I'll send it over the same day."),
+    SP("taw10", 8),
+    T("taw11", "{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
+    FOOT("taw12", "You're getting this because you registered to look for a home with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/** Two days after the passport invite, nothing typed. */
+export const TENANT_PASSPORT_NUDGE_1 = {
+  subject: "Your tenant passport is ready when you are",
+  preheader: "About ten minutes, and you can stop and come back to it.",
+  mode: "blocks",
+  blocks: [
+    H("tpn1", "Ten minutes, once"),
+    T("tpn2", "Hi {{firstName}},<br><br>Just a nudge: your tenant passport is still waiting to be started. It takes about ten minutes, and it saves your place with any home you want to apply for."),
+    SP("tpn3", 8),
+    BTN("tpn4", "Start my passport", "{{link}}"),
+    SP("tpn5", 8),
+    T("tpn6", "You can stop part way and pick it up later. Nothing in it goes to a landlord unless you apply."),
+    SP("tpn7", 8),
+    T("tpn8", "The Letting Experts"),
+    FOOT("tpn9", "You're getting this because we invited you to start a tenant passport with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/** A week after the invite, still nothing. The why, not a louder reminder. */
+export const TENANT_PASSPORT_NUDGE_2 = {
+  subject: "One form for every home you apply for",
+  preheader: "Why your tenant passport is worth ten minutes now.",
+  mode: "blocks",
+  blocks: [
+    H("tpm1", "One form, every application"),
+    T("tpm2", "Hi {{firstName}},<br><br>When you find a home you want, the landlord needs the same things every time: who you are, where you've lived, what you do, and your right to rent in the UK."),
+    T("tpm3", "Your tenant passport is where those go, <strong>once</strong>. After that, applying for a home is one tap, and good homes go to the applications that are ready first."),
+    SP("tpm4", 8),
+    BTN("tpm5", "Start my passport", "{{link}}"),
+    SP("tpm6", 8),
+    T("tpm7", "It stays yours, and nothing in it is shared with a landlord unless you apply for their property. If you've found somewhere already, just reply and let us know."),
+    SP("tpm8", 8),
+    T("tpm9", "The Letting Experts"),
+    FOOT("tpm10", "You're getting this because we invited you to start a tenant passport with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/** The homes that fit. {{count}} {{homesList}} */
+export const TENANT_MATCHES = {
+  subject: "{{count}} homes that fit what you're after",
+  preheader: "Picked for your budget, your area and when you want to move.",
+  mode: "blocks",
+  blocks: [
+    H("tm1", "Homes that fit"),
+    T("tm2", "Hi {{firstName}},<br><br>Here are the homes on with us right now that match what you told us."),
+    T("tm3", "{{homesList}}"),
+    SP("tm4", 8),
+    BTN("tm5", "See the homes", "{{link}}"),
+    SP("tm6", 8),
+    T("tm7", "Tell us which you'd like to see, by replying or from the page, and I'll book it in. Homes like these tend to let within a couple of weeks, so the sooner the better."),
+    SP("tm8", 8),
+    T("tm9", "{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
+    FOOT("tm10", "You're getting this because you're looking for a home with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/** Four days of silence after the homes went. {{homesList}} */
+export const TENANT_MATCHES_AGAIN = {
+  subject: "Anything close, {{firstName}}?",
+  preheader: "Has anything changed? Here's what has come on since.",
+  mode: "blocks",
+  blocks: [
+    H("tma1", "Anything close?"),
+    T("tma2", "Hi {{firstName}},<br><br>I sent you some homes a few days ago and haven't heard back, so I wanted to check they were the right sort of thing."),
+    T("tma3", "If your budget, your area or your moving date has changed, tell me and I'll look again. In the meantime, here's what has come on since:"),
+    T("tma4", "{{homesList}}"),
+    SP("tma5", 8),
+    BTN("tma6", "See the homes", "{{link}}"),
+    SP("tma7", 8),
+    T("tma8", "If you've found somewhere already, congratulations. Reply and let me know and I'll stop sending."),
+    SP("tma9", 8),
+    T("tma10", "{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
+    FOOT("tma11", "You're getting this because you're looking for a home with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/** 7am on the day. {{timePretty}} {{meetLine}} {{mapLink}} */
+export const VIEWING_REMINDER = {
+  subject: "Your viewing today at {{timePretty}}",
+  preheader: "{{address}}. Everything you need for this morning.",
+  mode: "blocks",
+  blocks: [
+    H("vr1", "See you today"),
+    T("vr2", "Hi {{firstName}},<br><br>A reminder that you're viewing <strong>{{address}}</strong> today at <strong>{{timePretty}}</strong>. {{meetLine}}"),
+    SP("vr3", 8),
+    BTN("vr4", "Open it on a map", "{{mapLink}}"),
+    SP("vr5", 8),
+    T("vr6", "Bring some photo ID, and any questions about the home or the landlord."),
+    T("vr7", "Running late, or can't make it? Call {{agentName}} on <strong>{{agentPhone}}</strong> or reply to this email, and we'll move it."),
+    SP("vr8", 8),
+    T("vr9", "The Letting Experts"),
+    FOOT("vr10", "You're getting this because you booked a viewing with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/** Closed as a no-show. {{whenPretty}} {{slotsList}} */
+export const VIEWING_REBOOK = {
+  subject: "Shall we find another time for {{address}}?",
+  preheader: "We missed you. Here are three more times.",
+  mode: "blocks",
+  blocks: [
+    H("vb1", "Shall we find another time?"),
+    T("vb2", "Hi {{firstName}},<br><br>We missed you at <strong>{{address}}</strong> on {{whenPretty}}. No problem, things come up."),
+    T("vb3", "If you'd still like to see it, these times are free:"),
+    T("vb4", "{{slotsList}}"),
+    SP("vb5", 8),
+    BTN("vb6", "Pick a new time", "{{link}}"),
+    SP("vb7", 8),
+    T("vb8", "If it's not the one after all, reply and tell me, and I'll send you others."),
+    SP("vb9", 8),
+    T("vb10", "{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
+    FOOT("vb11", "You're getting this because you booked a viewing with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/** Two hours after the viewing. One button, to the feedback page, already signed in. {{viewedOn}} */
+export const VIEWING_FEEDBACK = {
+  subject: "How was {{address}}?",
+  preheader: "A minute, while you still remember it.",
+  mode: "blocks",
+  blocks: [
+    H("vf1", "How was it?"),
+    T("vf2", "Hi {{firstName}},<br><br>Thanks for coming to see <strong>{{address}}</strong> {{viewedOn}}. Whatever you thought, it helps: it tells me what to send you next, and it tells the landlord how their home is landing."),
+    T("vf3", "It takes about a minute. If it's the one, you can put an offer in on the same page."),
+    SP("vf4", 8),
+    BTN("vf5", "Tell us what you thought", "{{link}}"),
+    SP("vf6", 8),
+    T("vf7", "{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
+    FOOT("vf8", "You're getting this because you viewed a property with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/** It wasn't for them. {{reasonLine}} {{homesList}} */
+export const VIEWING_NOT_FOR_THEM = {
+  subject: "Not that one. Try these instead",
+  preheader: "Three homes without the thing you didn't like.",
+  mode: "blocks",
+  blocks: [
+    H("vn1", "Not that one? Try these"),
+    T("vn2", "Hi {{firstName}},<br><br>Thanks for telling us what you thought of <strong>{{address}}</strong>. {{reasonLine}}"),
+    T("vn3", "So here are homes that don't have that problem:"),
+    T("vn4", "{{homesList}}"),
+    SP("vn5", 8),
+    BTN("vn6", "See the homes", "{{link}}"),
+    SP("vn7", 8),
+    T("vn8", "Tell me which you'd like to see and I'll book it in."),
+    SP("vn9", 8),
+    T("vn10", "{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
+    FOOT("vn11", "You're getting this because you viewed a property with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/** The application is in. {{offerLine}} {{holdingFeeLine}} */
+export const APPLICATION_RECEIVED = {
+  subject: "We have your application for {{address}}",
+  preheader: "What happens now, and when you'll hear.",
+  mode: "blocks",
+  blocks: [
+    H("ar1", "We have your application"),
+    T("ar2", "Hi {{firstName}},<br><br>Thank you. Your application for <strong>{{address}}</strong> is in. {{offerLine}}"),
+    H2("ar3", "What happens now"),
+    T("ar4", "We put your application to the landlord today, with the details from your passport. Landlords usually answer within a working day, and <strong>you'll hear from us the moment they do</strong>, whichever way it goes."),
+    H2("ar5", "If it's a yes"),
+    T("ar6", "{{holdingFeeLine}} Then referencing starts, so it helps to have these ready:"),
+    T("ar7", "Your last three months of payslips, or accounts if you're self-employed<br>Your employer's contact email<br>Your current landlord's contact email<br>The dates of your addresses for the last three years"),
+    SP("ar8", 8),
+    BTN("ar9", "See my application", "{{link}}"),
+    SP("ar10", 8),
+    T("ar11", "{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
+    FOOT("ar12", "You're getting this because you applied for a property through The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/** The landlord said no. {{reasonLine}} {{homesList}} */
+export const APPLICATION_DECLINED = {
+  subject: "{{address}}: not this time",
+  preheader: "The landlord has gone another way. Here's what's next.",
+  mode: "blocks",
+  blocks: [
+    H("ad1", "Not this one"),
+    T("ad2", "Hi {{firstName}},<br><br>I'm sorry to tell you the landlord has decided not to go ahead with your application for <strong>{{address}}</strong>. {{reasonLine}}"),
+    T("ad3", "It happens, and it isn't the end of your search. Your passport is still ready, so your next application goes in with one tap."),
+    H2("ad4", "Homes that fit, on now"),
+    T("ad5", "{{homesList}}"),
+    SP("ad6", 8),
+    BTN("ad7", "See the homes", "{{link}}"),
+    SP("ad8", 8),
+    T("ad9", "Tell me which you'd like to see and I'll book it in straight away."),
+    SP("ad10", 8),
+    T("ad11", "{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
+    FOOT("ad12", "You're getting this because you applied for a property through The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/** The landlord said yes. {{holdingFee}} {{holdingFeeLine}} {{weekAheadList}} */
+export const APPLICATION_ITS_YOURS = {
+  subject: "Good news: the landlord has said yes to {{address}}",
+  preheader: "Your offer is accepted. Here's the holding fee and what happens next.",
+  mode: "blocks",
+  blocks: [
+    H("ay1", "The landlord has said yes"),
+    T("ay2", "Hi {{firstName}},<br><br>Congratulations. The landlord has accepted your application for <strong>{{address}}</strong>, subject to references and the tenancy agreement."),
+    H2("ay3", "The holding fee"),
+    T("ay4", "{{holdingFeeLine}}"),
+    H2("ay5", "What happens next, in order"),
+    T("ay6", "{{weekAheadList}}"),
+    SP("ay7", 8),
+    BTN("ay8", "See my tenancy", "{{link}}"),
+    SP("ay9", 8),
+    T("ay10", "Your tenancy page shows where each step is up to, so you never have to ring to find out. If anything is unclear, reply to this email."),
+    SP("ay11", 8),
+    T("ay12", "{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
+    FOOT("ay13", "You're getting this because you applied for a property through The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/** Referencing opens. {{adultsLine}} */
+export const REFERENCING_INVITE = {
+  subject: "Time to get referenced for {{address}}",
+  preheader: "What we'll ask, why, and what to have to hand.",
+  mode: "blocks",
+  blocks: [
+    H("ri1", "Time to get referenced"),
+    T("ri2", "Hi {{firstName}},<br><br>The next step for <strong>{{address}}</strong> is referencing. It's how the landlord knows the rent is affordable and that you've been a good tenant before."),
+    H2("ri3", "What we'll ask"),
+    T("ri4", "Your employment and income<br>Where you've lived for the last three years, and who your landlords were<br>A credit check<br>Your right to rent in the UK"),
+    H2("ri5", "What to have to hand"),
+    T("ri6", "Your last three months of payslips, or accounts if you're self-employed<br>Your employer's contact email<br>Your current landlord's contact email<br>The dates you moved in and out of each address"),
+    SP("ri7", 8),
+    BTN("ri8", "Start my referencing", "{{link}}"),
+    SP("ri9", 8),
+    T("ri10", "It takes about fifteen minutes. References usually come back within two or three working days of the last form going in. {{adultsLine}}"),
+    SP("ri11", 8),
+    T("ri12", "{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
+    FOOT("ri13", "You're getting this because a landlord accepted your application through The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/** To the guarantor, not the tenant. {{tenantName}} {{rent}} {{termLine}} */
+export const GUARANTOR_INVITE = {
+  subject: "{{tenantName}} has asked you to be their guarantor",
+  preheader: "What being a guarantor means, before you say yes.",
+  mode: "blocks",
+  blocks: [
+    H("gi1", "Would you be a guarantor?"),
+    T("gi2", "Hi {{firstName}},<br><br><strong>{{tenantName}}</strong> is renting <strong>{{address}}</strong> through The Letting Experts, at {{rent}}, and has named you as their guarantor. {{termLine}}"),
+    H2("gi3", "What it means"),
+    T("gi4", "A guarantor agrees to pay the rent, or the cost of damage beyond the deposit, if the tenant doesn't. It's a real commitment, so please read the agreement properly before you sign anything."),
+    H2("gi5", "What happens next"),
+    T("gi6", "You'll be referenced in your own right, with your own form: your income, your address history and a credit check. <strong>Your details stay private.</strong> {{tenantName}} won't see them."),
+    SP("gi7", 8),
+    BTN("gi8", "Read more and start", "{{link}}"),
+    SP("gi9", 8),
+    T("gi10", "If you weren't expecting this, or you'd rather not, reply and tell us. Nothing happens unless you fill in the form."),
+    SP("gi11", 8),
+    T("gi12", "{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
+    FOOT("gi13", "You're getting this because a tenant named you as their guarantor with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/** Three days, form still empty or part done. {{missingList}} */
+export const REFERENCING_CHASE = {
+  subject: "Your references for {{address}}",
+  preheader: "What's still missing, and why it's worth doing today.",
+  mode: "blocks",
+  blocks: [
+    H("rc1", "Nearly there with your references"),
+    T("rc2", "Hi {{firstName}},<br><br>Your referencing for <strong>{{address}}</strong> isn't finished yet. This is what's still missing:"),
+    T("rc3", "{{missingList}}"),
+    SP("rc4", 8),
+    BTN("rc5", "Finish my referencing", "{{link}}"),
+    SP("rc6", 8),
+    T("rc7", "The landlord is holding the home for you while references are done, so the sooner these are in, the sooner you have a moving date."),
+    T("rc8", "Stuck on something, like a landlord who won't reply? Tell me and I'll help."),
+    SP("rc9", 8),
+    T("rc10", "{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
+    FOOT("rc11", "You're getting this because your referencing with The Letting Experts isn't finished yet."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/**
+ * The holding-fee sentences, in one place, because they are the legal ones.
+ *
+ * England follows the Tenant Fees Act 2019: at most one week's rent, the
+ * tenancy to be agreed within 15 days, credited to the rent or refunded, and
+ * kept only for the reasons the Act allows. Scotland takes no holding deposit
+ * (lib/handover.ts already sends Scottish tenants no holding-fee sentence), so
+ * its lines say what happens instead. Both want James's eye before they send:
+ * see the catalogue entries.
+ */
+export const HOLDING_FEE_WORDING = {
+  england: {
+    ifYes: (fee: string) =>
+      `If the landlord says yes, you'll pay a holding fee of one week's rent, <strong>${fee}</strong>, to take the home off the market. It goes towards your first month's rent.`,
+    accepted: (fee: string) =>
+      `To take the home off the market while references are done, there is a holding fee of one week's rent: <strong>${fee}</strong>. It goes towards your first month's rent.<br><br>If the landlord pulls out, you get all of it back. It can only be kept if you give us false or misleading information, fail the right-to-rent check, or decide not to go ahead yourself, and the tenancy needs to be agreed within 15 days. If anything changes, tell us straight away.`,
+  },
+  scotland: {
+    ifYes: () => "If the landlord says yes, the home comes off the market while we do references.",
+    accepted: () =>
+      "There is no holding fee to pay. The home comes off the market while references are done, so please get your forms in as soon as you can.",
+  },
+} as const;
+
+/** The steps after a yes, in the order the tenancy page shows them. */
+export const WEEK_AHEAD_LINES = [
+  "<strong>1.</strong> The holding fee, where there is one. We'll send you the link today",
+  "<strong>2.</strong> Referencing: about fifteen minutes of forms for each adult moving in",
+  "<strong>3.</strong> The landlord's safety checks on the home. Nothing needed from you",
+  "<strong>4.</strong> Your deposit, protected in a government-approved scheme",
+  "<strong>5.</strong> Signing the tenancy agreement online",
+  "<strong>6.</strong> Your first month's rent, in cleared funds before move-in day",
+  "<strong>7.</strong> Your keys",
+].join("<br>");

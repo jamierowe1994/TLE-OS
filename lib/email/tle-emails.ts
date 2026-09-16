@@ -74,6 +74,24 @@ import {
   VIEWING_MOVED,
   APPLICATION_ACCEPTED_LANDLORD,
   APPLICATION_ACCEPTED_TENANT,
+  TENANT_ENQUIRY_REPLY,
+  TENANT_ADDED_WELCOME,
+  TENANT_PASSPORT_NUDGE_1,
+  TENANT_PASSPORT_NUDGE_2,
+  TENANT_MATCHES,
+  TENANT_MATCHES_AGAIN,
+  VIEWING_REMINDER,
+  VIEWING_REBOOK,
+  VIEWING_FEEDBACK,
+  VIEWING_NOT_FOR_THEM,
+  APPLICATION_RECEIVED,
+  APPLICATION_DECLINED,
+  APPLICATION_ITS_YOURS,
+  REFERENCING_INVITE,
+  GUARANTOR_INVITE,
+  REFERENCING_CHASE,
+  HOLDING_FEE_WORDING,
+  WEEK_AHEAD_LINES,
   SITE,
   type EmailDoc } from "@/lib/email/tle-documents";
 
@@ -763,9 +781,11 @@ The Letting Experts`
     name: "Viewing Booked - Start Your Passport",
     audience: "tenant",
     trigger: "A viewing is booked for a tenant",
-    fires: "Wired 4 Sep 2026. Sent from a viewing on /viewings (Invite to the passport) on the public sender; mints the passport and links to it.",
+    fires: "Wired. Sent on every booking by lib/viewing-confirm.ts (15 Sep 2026), from the agent's own Outlook where it is connected, with the calendar file; also by hand from a viewing (Invite to the passport). Mints the passport and links to it.",
     to: "The tenant who booked the viewing",
-    draft: true,
+    /* Not a draft since 15 Sep 2026: lib/viewing-confirm.ts sends it on every
+       booking with an applicant email. */
+    draft: false,
     summary:
       "Turns a booked viewing into a started passport. Leads on the payoff to THEM - fill it in once and it answers every application - rather than on us needing documents. Says plainly, in the body rather than a footnote, that nothing is shared with a landlord until they apply: referencing and right-to-rent are intrusive to hand over, and somebody who thinks a landlord can already see it will not fill it in.",
     doc: TENANT_PASSPORT_INVITE,
@@ -1026,4 +1046,223 @@ TLE_EMAILS.push(
       return { subject: m.subject, html: m.html };
     },
   }
+);
+
+
+/* ── The tenant process (16 Sep 2026) ──────────────────────────────────────
+
+   Every email the tenant process map had as Planned, written. None of them is
+   sent by anything yet, and each entry's `fires` says what it is waiting on -
+   the map shows them as Written for the same reason. One worked tenant runs
+   through all of them, so the set reads as one person's journey. */
+
+const TENANT_SAMPLE: Record<string, string> = {
+  firstName: "Sophie",
+  tenantName: "Sophie Clark",
+  address: "Flat 2, Mercer Street, Manchester M4 1SL",
+  rent: "£1,250 pcm",
+  agentName: "Rhiannon Dodge",
+  agentPhone: "0161 883 2525",
+  agentEmail: "rhiannon@thelettingexperts.co.uk",
+  link: `${SITE}/tenant/next`,
+  passportLink: `${SITE}/tenant/welcome`,
+  whenPretty: "Thursday 4 September at 5:30pm",
+  timePretty: "5:30pm",
+  viewedOn: "this afternoon",
+  meetLine: "Rhiannon Dodge will meet you at the front door.",
+  mapLink: "https://www.google.com/maps/search/?api=1&query=Mercer+Street+Manchester+M4+1SL",
+  count: "3",
+  availableLine: "Good news: it's still available, from 1 October.",
+  moveInList:
+    "Holding fee (one week's rent): <strong>£288</strong><br>Deposit (five weeks' rent): <strong>£1,442</strong><br>First month's rent: <strong>£1,250</strong>",
+  slotsList: "<strong>Thursday 4 September</strong>, 5:30pm<br><strong>Friday 5 September</strong>, 12:30pm<br><strong>Saturday 6 September</strong>, 10:00am",
+  onNowLine: "We have 14 homes on in Manchester right now.",
+  homesList:
+    "<strong>£1,195 pcm</strong> · 2 bed apartment, Ancoats M4<br><strong>£1,250 pcm</strong> · 2 bed apartment, Northern Quarter M1<br><strong>£1,100 pcm</strong> · 1 bed apartment with parking, Castlefield M3",
+  reasonLine: "You said the second bedroom was too small for a desk.",
+  offerLine: "You offered <strong>£1,250 pcm</strong>, from <strong>1 October</strong>, for 12 months.",
+  holdingFee: "£288",
+  adultsLine: "Everyone over 18 who is moving in gets their own link and fills in their own form.",
+  termLine: "The tenancy is for 12 months from 1 October.",
+  missingList: "<strong>Your employer's contact email</strong><br><strong>Your address history</strong> for 2023 and 2024<br><strong>Daniel Clark</strong> hasn't started his form yet",
+};
+
+const tenantEntry = (
+  id: string,
+  name: string,
+  trigger: string,
+  fires: string,
+  to: string,
+  summary: string,
+  doc: EmailDoc,
+  extra: Record<string, string> = {}
+): CatalogEntry => ({
+  id,
+  group: "Tenant process",
+  name,
+  audience: "tenant",
+  trigger,
+  fires,
+  to,
+  draft: true,
+  summary,
+  doc,
+  render: (o) => blocksAs("tenant")(withSample(o ?? doc, { ...TENANT_SAMPLE, ...extra }))(),
+});
+
+TLE_EMAILS.push(
+  tenantEntry(
+    "tenant-enquiry-reply",
+    "About the Home You Asked About",
+    "A tenant enquires about one property",
+    "NOT WIRED YET. Wants: the lead-scan cron (os-cron-leads-scan) to send it for a new applicant lead, the listing's availability and the next free viewing slots from the agent's Outlook, and a choose-a-time page (the link goes to the tenant area until one exists).",
+    "The person who enquired",
+    "Straight away: is it still there, what the rent is, the three things it costs to move in, the next viewing times, and the passport as a single link rather than a second button. The move-in costs are one list the send path builds from the rent.",
+    TENANT_ENQUIRY_REPLY
+  ),
+  tenantEntry(
+    "tenant-added-welcome",
+    "Let's Find You a Home",
+    "An agent registers a tenant with no property in mind",
+    "NOT WIRED YET. Wants a 'registered' event when a contact is added as an applicant with no enquiry against it, and a count of homes on in their area for {{onNowLine}}.",
+    "The tenant who was added",
+    "The search, not a property: what we need to know, one button into the passport where they tell us, and a promise to send what fits the same day.",
+    TENANT_ADDED_WELCOME,
+    { link: `${SITE}/tenant/welcome` }
+  ),
+  tenantEntry(
+    "tenant-passport-nudge-1",
+    "Passport Nudge: Two Days",
+    "Two days after a passport invite, with nothing typed",
+    "NOT WIRED YET. Wants a daily cron over passports with invited_at two days ago and no answers, and a flag so it only goes once.",
+    "The tenant who was invited",
+    "Short on purpose: it is still waiting, ten minutes, stop and come back, nothing shared until they apply.",
+    TENANT_PASSPORT_NUDGE_1,
+    { link: `${SITE}/tenant/welcome` }
+  ),
+  tenantEntry(
+    "tenant-passport-nudge-2",
+    "Passport Nudge: a Week",
+    "Seven days after a passport invite, still nothing",
+    "NOT WIRED YET. Same cron as the two-day nudge, at seven days, and it is the last one: no third reminder.",
+    "The tenant who was invited",
+    "Not a louder reminder but the reason: the same details every time, and ready applications go first. Ends with a way out if they have found somewhere.",
+    TENANT_PASSPORT_NUDGE_2,
+    { link: `${SITE}/tenant/welcome` }
+  ),
+  tenantEntry(
+    "tenant-matches",
+    "Homes That Fit",
+    "A tenant is qualified, and again when an agent sends homes from a lead",
+    "NOT WIRED YET. The picker exists on the lead (Email properties) but sends its own plain note; this is the email it should send once the outbound switch is on. {{homesList}} is built from the ticked listings.",
+    "The tenant",
+    "The homes that match what they told us, one line each with the rent first, and one ask: tell us which to see.",
+    TENANT_MATCHES
+  ),
+  tenantEntry(
+    "tenant-matches-again",
+    "Anything Close?",
+    "Four days after homes were sent, with no reply",
+    "NOT WIRED YET. Wants the send of Homes That Fit recorded against the lead, a check for a reply or a viewing since, and new listings matched on the same criteria.",
+    "The tenant",
+    "Asks whether the brief has changed, shows what has come on since, and lets them stop the emails by saying they have found somewhere.",
+    TENANT_MATCHES_AGAIN
+  ),
+  tenantEntry(
+    "viewing-reminder",
+    "Your Viewing Is Today",
+    "7am on the day of a booked viewing",
+    "NOT WIRED YET. Wants a 7am cron over the viewings ledger for today's bookings with an applicant email, skipping cancelled ones.",
+    "The applicant who is booked",
+    "The one email that stops a no-show: the time, the address with a map button, who is meeting them, the agent's mobile, and how to move it without a fuss.",
+    VIEWING_REMINDER
+  ),
+  tenantEntry(
+    "viewing-rebook",
+    "Shall We Rebook?",
+    "Two hours after a viewing is closed as a no-show",
+    "NOT WIRED YET. Wants a no-show outcome on the viewing drawer (today it is only 'happened' or 'cancelled') and the next free slots from the agent's Outlook.",
+    "The applicant who didn't turn up",
+    "No telling off: we missed you, things come up, here are three more times, and a way to say it is not the one.",
+    VIEWING_REBOOK
+  ),
+  tenantEntry(
+    "viewing-feedback",
+    "How Was It?",
+    "Two hours after a viewing is closed as happened",
+    "NOT WIRED YET. The page exists (/tenant/feedback, Howard's four questions and the offer). Wants a signed link per viewing so the tenant lands on the property they saw, and the answers written back to the viewing.",
+    "The applicant who viewed",
+    "One button, to the feedback page already signed in, where they can also put an offer in. Says why it matters to them: it decides what we send next.",
+    VIEWING_FEEDBACK,
+    { link: `${SITE}/tenant/feedback` }
+  ),
+  tenantEntry(
+    "viewing-not-for-them",
+    "Not That One, Try These",
+    "The same day feedback says the home wasn't for them",
+    "NOT WIRED YET. Wants the feedback answers, a reason line written from them, and matching that leaves out the thing they didn't like.",
+    "The applicant who viewed",
+    "Repeats back what they didn't like, so they know it was heard, and shows homes that don't have it.",
+    VIEWING_NOT_FOR_THEM
+  ),
+  tenantEntry(
+    "application-received",
+    "We Have Your Application",
+    "A tenant applies for a property",
+    "NOT WIRED YET. The apply page is designed but not joined to a real listing. England and Scotland take different holding-fee lines (HOLDING_FEE_WORDING) - the sample shows England.",
+    "The tenant who applied",
+    "What we do with it, when they will hear (the moment the landlord answers, either way), the holding fee if it is a yes, and the four things to have ready for referencing.",
+    APPLICATION_RECEIVED,
+    { holdingFeeLine: HOLDING_FEE_WORDING.england.ifYes("£288"), link: `${SITE}/tenant/next` }
+  ),
+  tenantEntry(
+    "application-declined",
+    "Not This One",
+    "The landlord declines an application",
+    "NOT WIRED YET. Wants a declined outcome on the application (today only acceptance runs the handover) and a fresh set of homes. {{reasonLine}} is left empty unless the agent writes one.",
+    "The tenant who applied",
+    "Same day, never silence. Says sorry once, gives the reason if we have one, says it is not the end, and puts the next homes straight in front of them.",
+    APPLICATION_DECLINED,
+    { reasonLine: "They've gone with an applicant who can move in a month sooner." }
+  ),
+  tenantEntry(
+    "application-its-yours",
+    "The Landlord Has Said Yes",
+    "An offer is accepted",
+    "NOT WIRED YET, and it would REPLACE Application Accepted (tenant), which the handover sends today in Howard's words. Switch the handover's tenant email to this id once James approves it. The holding-fee paragraph is the legal one: England shown; Scotland has its own (HOLDING_FEE_WORDING).",
+    "Each tenant on the application",
+    "Our rewrite of the acceptance email: the yes, the holding fee (what it is, where it goes, when it comes back and when it can be kept), then every step to the keys in order, with the tenancy page as the place to watch it happen.",
+    APPLICATION_ITS_YOURS,
+    { holdingFeeLine: HOLDING_FEE_WORDING.england.accepted("£288"), weekAheadList: WEEK_AHEAD_LINES, link: `${SITE}/tenant/tenancy` }
+  ),
+  tenantEntry(
+    "referencing-invite",
+    "Time to Get Referenced",
+    "The deal moves to referencing",
+    "NOT WIRED YET. Blocked on the biggest gap on the map: our own referencing form, and which referencing provider runs the checks. Until then tenants get the provider's own invite. The link goes to the tenancy page.",
+    "Each adult tenant",
+    "What we ask, why, what to have to hand, how long it takes, and that every adult gets their own link.",
+    REFERENCING_INVITE,
+    { link: `${SITE}/tenant/tenancy` }
+  ),
+  tenantEntry(
+    "guarantor-invite",
+    "Your Guarantor",
+    "Referencing says a guarantor is needed",
+    "NOT WIRED YET. Wants the guarantor's own form and link (planned on the map) and the referencing outcome that asks for one.",
+    "The guarantor, never the tenant",
+    "Written to the guarantor: who named them, for what home and rent, what a guarantor is actually agreeing to, that their details stay private from the tenant, and an easy way to say no.",
+    GUARANTOR_INVITE,
+    { firstName: "Karen", link: `${SITE}/tenant/tenancy` }
+  ),
+  tenantEntry(
+    "referencing-chase",
+    "Chase: Your References",
+    "Three days into referencing with forms missing",
+    "NOT WIRED YET. Wants the referencing form's own progress per adult, which does not exist until the form does.",
+    "Each adult with something missing",
+    "What is still missing, by name, why today matters (the landlord is holding the home), and an offer to help with the usual blocker.",
+    REFERENCING_CHASE,
+    { link: `${SITE}/tenant/tenancy` }
+  )
 );
