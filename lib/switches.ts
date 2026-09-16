@@ -150,11 +150,19 @@ export const SWITCHES: Switch[] = [
      * so refusing external addresses here would break the only legitimate
      * route to a landlord we have. What was missing was an arming step and a
      * brake, not a recipient rule.
+     *
+     * ── It is no longer only Steve's (16 Sep 2026) ────────────────────────
+     *
+     * The viewing confirmations ask the same question — send as the system, or
+     * send as the person — and the answer is the same one. So this arms the
+     * whole road (lib/send-as-agent) rather than one button, and the label says
+     * so. Off is not silence: those emails still go, on our own sender with the
+     * agent's address to reply to, exactly as they did before.
      */
     key: "assistant_email",
-    label: "Steve can send email",
-    what: "Lets the assistant's Send button actually send, from the agent's own Outlook via Microsoft Graph.",
-    who: "LANDLORDS AND TENANTS, in the agent's own name. A person presses the button, but the words are Steve's.",
+    label: "Send from the agent's own Outlook",
+    what: "Sends as the person instead of as the system, so the customer's reply lands in their inbox: viewing confirmations, cancellations and moves, the passport invite, and Steve's Send button. Off, all of those still go - from the Letting Experts sender, with the agent's address to reply to.",
+    who: "LANDLORDS AND TENANTS, in the agent's own name, out of their real mailbox. Email to landlords and tenants must be on as well before a customer is written to.",
     confirm: "SEND AS ME",
     /* No old variable — this was ungated rather than env-gated, so there is
        nothing to stay compatible with. Unset means off, which is the point. */

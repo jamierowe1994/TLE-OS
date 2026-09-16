@@ -5,7 +5,7 @@ import { publicOrigin } from "@/lib/origin";
 import { createPassport, findPassportByEmail, getPassport, markInvited } from "@/lib/passport";
 import { householdIncome } from "@/lib/passport-shape";
 import { renderTleEmail } from "@/lib/email/tle-emails";
-import { sendEmail } from "@/lib/resend";
+import { sendAsAgent } from "@/lib/send-as-agent";
 import { switchOn } from "@/lib/switches";
 import { isInternalAddress } from "@/lib/email-policy";
 
@@ -129,11 +129,13 @@ export async function POST(req: NextRequest) {
     link,
   });
 
-  try {
-    await sendEmail({ to: email, subject, html, audience: "customer", replyTo: me.email || undefined });
-  } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "The email did not send." }, { status: 502 });
-  }
+  /* From their own Outlook where that is armed, so the tenant's reply comes
+     back to the agent who invited them rather than to a shared inbox. */
+  const sent = await sendAsAgent({ me, to: email, toName: name || undefined, subject, html });
+  if (!sent.sent) return NextResponse.json({ ok: false, error: sent.detail }, { status: 502 });
   await markInvited(token, me.name || me.email);
-  return NextResponse.json({ ok: true, alreadySent: false, invitedAt: new Date().toISOString(), path: `/tenant/passport/${token}` });
+  return NextResponse.json({
+    ok: true, alreadySent: false, invitedAt: new Date().toISOString(),
+    path: `/tenant/passport/${token}`, said: sent.detail,
+  });
 }

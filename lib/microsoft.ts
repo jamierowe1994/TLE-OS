@@ -339,6 +339,8 @@ export interface GraphSend {
   body: string;
   /** Their REX user id, so the message is BCC'd onto the REX timeline. */
   rexUserId?: string | null;
+  /** Files to go with it, base64 - a viewing's calendar file, say. */
+  attachments?: { filename: string; content: string; contentType?: string }[];
 }
 
 /**
@@ -362,6 +364,19 @@ export async function msSendMail(userId: string, msg: GraphSend): Promise<{ bccd
         body: { contentType: "HTML", content: msg.body },
         toRecipients: [{ emailAddress: { address: msg.to.email, name: msg.to.name } }],
         ...(bcc ? { bccRecipients: [{ emailAddress: { address: bcc } }] } : {}),
+        /* Graph wants the type named on every attachment, and the bytes inline.
+           Fine for what we send here - a calendar file is under a kilobyte.
+           Anything over 3MB needs an upload session, which nothing does yet. */
+        ...(msg.attachments?.length
+          ? {
+              attachments: msg.attachments.map((a) => ({
+                "@odata.type": "#microsoft.graph.fileAttachment",
+                name: a.filename,
+                contentType: a.contentType ?? "application/octet-stream",
+                contentBytes: a.content,
+              })),
+            }
+          : {}),
       },
       saveToSentItems: true,
     }),

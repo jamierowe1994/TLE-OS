@@ -3,6 +3,7 @@ import type { OsUser } from "@/lib/users";
 import { createPassport, findPassportByEmail, markInvited } from "@/lib/passport";
 import { renderTleEmail } from "@/lib/email/tle-emails";
 import { sendEmail } from "@/lib/resend";
+import { sendAsAgent } from "@/lib/send-as-agent";
 import { renderPlain } from "@/lib/campaign-mail";
 import { icsFile } from "@/lib/outlook-calendar";
 
@@ -14,8 +15,10 @@ import { icsFile } from "@/lib/outlook-calendar";
  * sends two emails from the OS, and REX's are never asked for:
  *
  *   the applicant   the catalogue's Viewing Booked email (tenant-passport-invite)
- *                   on the public sender, reply-to the agent, with the passport
- *                   link and a calendar file attached
+ *                   with the passport link and a calendar file attached, from
+ *                   the agent's OWN Outlook where that is armed and connected
+ *                   so the reply comes back to them (lib/send-as-agent), and
+ *                   from our sender with their address to reply to otherwise
  *   the agent       a short note of what they booked, from the OS sender, with
  *                   the calendar file only when their Outlook did not take it
  *
@@ -54,7 +57,7 @@ export async function sendViewingConfirmations(p: {
     startsAt: p.startsAt,
     minutes: p.minutes,
   });
-  const attachment = { filename: "viewing.ics", content: Buffer.from(ics, "utf8").toString("base64") };
+  const attachment = { filename: "viewing.ics", content: Buffer.from(ics, "utf8").toString("base64"), contentType: "text/calendar" };
 
   const out: ConfirmOutcome = {
     applicant: { sent: false, detail: "" },
@@ -78,9 +81,11 @@ export async function sendViewingConfirmations(p: {
           : `${agentName} will meet you there.`,
         link: `${p.origin}/tenant/passport/${token}`,
       });
-      await sendEmail({ to, subject, html, audience: "customer", replyTo: p.me.email || undefined, attachments: [attachment] });
-      await markInvited(token, agentName).catch(() => null);
-      out.applicant = { sent: true, detail: `Confirmation sent to ${to}.` };
+      const r = await sendAsAgent({
+        me: p.me, to, toName: p.applicant.name, subject, html, attachments: [attachment],
+      });
+      if (r.sent) await markInvited(token, agentName).catch(() => null);
+      out.applicant = { sent: r.sent, detail: r.detail };
     } catch (e) {
       out.applicant.detail = `The applicant's confirmation did not send: ${e instanceof Error ? e.message.replace(/\.$/, "") : "unknown"}.`;
     }
@@ -97,7 +102,7 @@ export async function sendViewingConfirmations(p: {
       ...(p.unaccompanied ? ["Unaccompanied - nobody from us is going. Send them how to get in."] : []),
       ``,
       p.inAgentsCalendar ? "It is in your Outlook calendar." : "It is NOT in your Outlook calendar - the file attached adds it.",
-      out.applicant.sent ? "They have been sent a confirmation." : "They have NOT been sent a confirmation.",
+      out.applicant.sent ? out.applicant.detail : `They have NOT been sent a confirmation. ${out.applicant.detail}`,
     ].join("\n");
     await sendEmail({
       to: p.me.email,

@@ -4,7 +4,7 @@ import type { OsUser } from "@/lib/users";
 import { changeRexEvent } from "@/lib/rex-diary-write";
 import { putInOutlook, removeFromOutlook, icsFile } from "@/lib/outlook-calendar";
 import { renderTleEmail } from "@/lib/email/tle-emails";
-import { sendEmail } from "@/lib/resend";
+import { sendAsAgent } from "@/lib/send-as-agent";
 
 /**
  * CANCELLING OR MOVING A VIEWING, IN-HOUSE (15 Sep 2026).
@@ -18,8 +18,10 @@ import { sendEmail } from "@/lib/resend";
  *   REX       the diary entry is cancelled (with REX's reason) or moved
  *   Outlook   the OS-made entry is taken out or moved (only viewings booked
  *             in the OS have one - a viewing typed into REX never did)
- *   applicant viewing-cancelled or viewing-moved, reply-to the agent, the new
- *             time attached as a calendar file
+ *   applicant viewing-cancelled or viewing-moved, from the agent's own Outlook
+ *             where that is armed (lib/send-as-agent) and on our sender with
+ *             their address to reply to otherwise, the new time attached as a
+ *             calendar file
  *
  * Each step answers in words and none stops the others.
  */
@@ -91,40 +93,46 @@ export async function changeViewing(me: OsUser, p: ViewingChangeInput): Promise<
     steps.applicant = `${p.applicantName || "The applicant"} has no email on their record - ring them.`;
   } else {
     try {
-      if (p.action === "cancel") {
-        const { subject, html } = renderTleEmail("viewing-cancelled", {
-          firstName,
-          address: p.address,
-          whenPretty: pretty(p.oldStartsAt),
-          reasonLine: (p.reasonText ?? "").trim() || "Something has come up that means it can't go ahead as planned.",
-          agentName,
-        });
-        await sendEmail({ to, subject, html, audience: "customer", replyTo: me.email || undefined });
-      } else if (p.newStartsAt) {
-        const { subject, html } = renderTleEmail("viewing-moved", {
-          firstName,
-          address: p.address,
-          oldWhen: pretty(p.oldStartsAt),
-          whenPretty: pretty(p.newStartsAt),
-          agentName,
-          meetLine: p.unaccompanied
-            ? `It is still unaccompanied, so nobody from us will be there - ${agentName} will send you how to get in.`
-            : `${agentName} will meet you there.`,
-        });
-        const ics = icsFile({
-          uid: `viewing-${p.viewingId}`,
-          summary: `Viewing - ${p.address}`,
-          description: `With ${agentName}, The Letting Experts.`,
-          location: p.address,
-          startsAt: p.newStartsAt,
-          minutes: p.minutes,
-        });
-        await sendEmail({
-          to, subject, html, audience: "customer", replyTo: me.email || undefined,
-          attachments: [{ filename: "viewing.ics", content: Buffer.from(ics, "utf8").toString("base64") }],
-        });
+      /* One send, written either way, so the verdict on the screen is one
+         sentence and the choice of mailbox is made in one place. */
+      const mail =
+        p.action === "cancel"
+          ? { ...renderTleEmail("viewing-cancelled", {
+              firstName,
+              address: p.address,
+              whenPretty: pretty(p.oldStartsAt),
+              reasonLine: (p.reasonText ?? "").trim() || "Something has come up that means it can't go ahead as planned.",
+              agentName,
+            }), attachments: undefined as { filename: string; content: string; contentType?: string }[] | undefined }
+          : p.newStartsAt
+            ? { ...renderTleEmail("viewing-moved", {
+                firstName,
+                address: p.address,
+                oldWhen: pretty(p.oldStartsAt),
+                whenPretty: pretty(p.newStartsAt),
+                agentName,
+                meetLine: p.unaccompanied
+                  ? `It is still unaccompanied, so nobody from us will be there - ${agentName} will send you how to get in.`
+                  : `${agentName} will meet you there.`,
+              }), attachments: [{
+                filename: "viewing.ics",
+                content: Buffer.from(icsFile({
+                  uid: `viewing-${p.viewingId}`,
+                  summary: `Viewing - ${p.address}`,
+                  description: `With ${agentName}, The Letting Experts.`,
+                  location: p.address,
+                  startsAt: p.newStartsAt,
+                  minutes: p.minutes,
+                }), "utf8").toString("base64"),
+                contentType: "text/calendar",
+              }] }
+            : null;
+      if (!mail) {
+        steps.applicant = "No new time was given, so nothing was sent.";
+      } else {
+        const r = await sendAsAgent({ me, to, toName: p.applicantName, subject: mail.subject, html: mail.html, attachments: mail.attachments });
+        steps.applicant = r.sent ? `${firstName}: ${r.detail}` : `${firstName} was NOT emailed. ${r.detail}`;
       }
-      steps.applicant = `${firstName} has been emailed.`;
     } catch (e) {
       steps.applicant = `${firstName} was not emailed: ${e instanceof Error ? e.message.replace(/\.$/, "") : "unknown"}. Tell them yourself.`;
     }

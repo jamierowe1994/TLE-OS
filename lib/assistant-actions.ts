@@ -248,7 +248,7 @@ async function doEmail(
       ok: false,
       blocked: true,
       message:
-        "I can write it, but sending is switched off — I'm not putting an email in front of a landlord until somebody arms that. It's on the switches screen, under \"Steve can send email\". Copy the draft out and send it yourself if it can't wait.",
+        "I can write it, but sending is switched off — I'm not putting an email in front of a landlord until somebody arms that. It's on the switches screen, under \"Send from the agent's own Outlook\". Copy the draft out and send it yourself if it can't wait.",
     };
   }
 

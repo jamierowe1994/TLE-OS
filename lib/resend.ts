@@ -120,6 +120,18 @@ async function archive(to: string, subject: string, html: string): Promise<void>
   }
 }
 
+/**
+ * File a copy of something that went out by another road.
+ *
+ * A send from the agent's own Outlook (lib/send-as-agent) never touches this
+ * file, so without this the OS's own record of what it emailed would have holes
+ * in it exactly where the most important mail is. Same redaction, same promise:
+ * it can never break a send, because the send has already happened.
+ */
+export async function archiveSentCopy(to: string, subject: string, html: string): Promise<void> {
+  await archive(to, subject, html);
+}
+
 export async function sendEmail(msg: {
   to: string;
   subject: string;
