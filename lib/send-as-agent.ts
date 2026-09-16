@@ -59,12 +59,19 @@ export interface AgentSendResult {
   via: "mailbox" | "ours" | null;
   /** One sentence, written for the agent reading the screen. */
   detail: string;
+  /**
+   * BCC'd to their REX email dropbox, so it filed itself against the contact
+   * over there. Only a send from their own mailbox can do that, and only when
+   * their REX user is known - so it answers the question the old MailMerge
+   * send answered, without anybody opening REX.
+   */
+  timeline: boolean;
 }
 
 export async function sendAsAgent(p: AgentSend): Promise<AgentSendResult> {
   const to = p.to.trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
-    return { sent: false, via: null, detail: "There is no usable email address on their record, so nobody was written to." };
+    return { sent: false, via: null, timeline: false, detail: "There is no usable email address on their record, so nobody was written to." };
   }
 
   /* Our own address is a test (Admin, Testing): the tester stands in for the
@@ -75,6 +82,7 @@ export async function sendAsAgent(p: AgentSend): Promise<AgentSendResult> {
     return {
       sent: false,
       via: null,
+      timeline: false,
       detail: "Email to landlords and tenants is switched off on Admin, Switches, so nothing was sent.",
     };
   }
@@ -83,7 +91,7 @@ export async function sendAsAgent(p: AgentSend): Promise<AgentSendResult> {
     try {
       const conn = await msConnectionFor(p.me.id).catch(() => null);
       if (conn?.connected) {
-        await msSendMail(p.me.id, {
+        const { bccd } = await msSendMail(p.me.id, {
           to: { email: to, name: p.toName },
           subject: p.subject,
           body: p.html,
@@ -91,7 +99,12 @@ export async function sendAsAgent(p: AgentSend): Promise<AgentSendResult> {
           attachments: p.attachments,
         });
         await archiveSentCopy(to, p.subject, p.html).catch(() => null);
-        return { sent: true, via: "mailbox", detail: `Sent to ${to} from your Outlook, so their reply comes back to you.` };
+        return {
+          sent: true,
+          via: "mailbox",
+          timeline: bccd,
+          detail: `Sent to ${to} from your Outlook, so their reply comes back to you.`,
+        };
       }
     } catch (e) {
       /* Their mailbox refused, or the token has gone stale. Say nothing here:
@@ -105,11 +118,12 @@ export async function sendAsAgent(p: AgentSend): Promise<AgentSendResult> {
 
   try {
     await sendEmail({ to, subject: p.subject, html: p.html, audience: "customer", replyTo: p.me.email || undefined, attachments: p.attachments });
-    return { sent: true, via: "ours", detail: `Sent to ${to} from The Letting Experts, with your address to reply to.` };
+    return { sent: true, via: "ours", timeline: false, detail: `Sent to ${to} from The Letting Experts, with your address to reply to.` };
   } catch (e) {
     return {
       sent: false,
       via: null,
+      timeline: false,
       detail: `It did not send: ${e instanceof Error ? e.message.replace(/\.$/, "") : "unknown"}. Tell them yourself.`,
     };
   }

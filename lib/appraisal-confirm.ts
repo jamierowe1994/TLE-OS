@@ -3,7 +3,7 @@ import { hasDb, q } from "@/lib/db";
 import { getAppraisal } from "@/lib/appraisal-store";
 import { confirmBodyFor, confirmSubjectFor, icsFor, type AppraisalInvite } from "@/lib/appraisal-email";
 import { renderPlain } from "@/lib/campaign-mail";
-import { sendEmail, ResendBlocked } from "@/lib/resend";
+import { sendAsAgent } from "@/lib/send-as-agent";
 import type { MarketAppraisal } from "@/lib/market-appraisal";
 import type { OsUser } from "@/lib/users";
 
@@ -92,19 +92,20 @@ export async function sendBookingConfirmation(input: { ma: MarketAppraisal; me: 
   const text = confirmBodyFor(invite);
   const ics = icsFor(invite, new Date().toISOString());
 
-  try {
-    await sendEmail({
-      to,
-      subject,
-      html: renderPlain(subject, text).html,
-      text,
-      audience: "customer",
-      replyTo: me.email,
-      attachments: ics ? [{ filename: "market-appraisal.ics", content: Buffer.from(ics, "utf8").toString("base64") }] : undefined,
-    });
-  } catch (e) {
-    return { sent: false, to, reason: e instanceof ResendBlocked ? e.message : e instanceof Error ? e.message : "The email did not send." };
-  }
+  /* From the agent's own Outlook where that is armed, our sender otherwise:
+     the same road as the appraisal emails that follow it, so the landlord's
+     reply reaches the person who is turning up (lib/send-as-agent). */
+  const out = await sendAsAgent({
+    me,
+    to,
+    toName: full.landlord,
+    subject,
+    html: renderPlain(subject, text).html,
+    attachments: ics
+      ? [{ filename: "market-appraisal.ics", content: Buffer.from(ics, "utf8").toString("base64"), contentType: "text/calendar" }]
+      : undefined,
+  });
+  if (!out.sent) return { sent: false, to, reason: out.detail };
 
   await markConfirmed(full.leadId, me.email);
   return { sent: true, to };

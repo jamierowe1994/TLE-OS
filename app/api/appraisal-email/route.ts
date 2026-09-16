@@ -1,31 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
-import { isExpiredToken, rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
-import { rexTokenFor } from "@/lib/rex-user";
+import { findUserById } from "@/lib/users";
 import { renderPlain } from "@/lib/campaign-mail";
-import { sendMerge } from "@/lib/rex-mailmerge";
+import { sendAsAgent } from "@/lib/send-as-agent";
 
 /**
- * Send the pre-appraisal confirmation through REX's own mailer.
+ * The appraisal emails: confirming the appointment, before the visit, after it.
  *
- * Through REX rather than a mail service of ours for one reason that matters
- * more than convenience: a send from MailMerge lands on the contact's REX
- * timeline, so the next person to open that landlord sees the email. Anything
- * we sent ourselves would be invisible over there, and the team lives over
- * there.
+ * ── It used to go through REX, and that is what changed (16 Sep 2026) ────
  *
- * Locked like every other write. Unlike the write-up, this one has never been
- * fired — it puts a real email in front of a real landlord, so it wants a
- * supervised first send to a colleague rather than a landlord.
+ * This route sent through REX's MailMerge, for a reason that was good at the
+ * time: a merge lands on the landlord's REX timeline, where the team lived.
+ * James, 15 Sep: "we should never have to sign into REX ever again", and the
+ * confirmations are ours to send. The timeline is kept anyway - a send from
+ * the agent's own mailbox is BCC'd to their REX email dropbox (lib/microsoft),
+ * so it files itself against the contact exactly as a merge did.
+ *
+ * What that buys, beyond the decision:
+ *
+ *   • It works without REX. MailMerge needed REX connected, REX_ALLOW_WRITES
+ *     naming the method, and a REX contact id - so pressing Send on a test
+ *     appraisal, whose landlord is deliberately kept out of REX, could only
+ *     ever fail. Every one of Howard's appraisal tests started there.
+ *   • It stops the screen saying "Open them in REX first", which is the one
+ *     thing an agent screen must never say.
+ *   • The reply comes back to the agent, in their own inbox, and shows on the
+ *     record beside everything else (components/MailThread).
+ *
+ * Same two brakes as every other customer send, applied in lib/send-as-agent:
+ * the customer-email switch decides whether a real landlord may be written to,
+ * and it falls back to the Letting Experts sender when a mailbox is not
+ * connected rather than losing the email.
  */
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
-  /* READ-ONLY WHILE VIEWING AS. A write made wearing somebody else's face
-     would be recorded against their name in REX — see lib/view-as. */
+  /* READ-ONLY WHILE VIEWING AS. An email sent wearing somebody else's face
+     would go out in their name - see lib/view-as. */
   try {
     assertNotViewingAs(req.cookies.get(VIEW_AS_COOKIE)?.value);
   } catch (e) {
@@ -34,11 +48,12 @@ export async function POST(req: NextRequest) {
     }
     throw e;
   }
-  if (!rexConfigured()) {
-    return NextResponse.json({ error: "REX isn't connected on this environment." }, { status: 503 });
-  }
 
-  let body: { contactId?: string; to?: string; subject?: string; text?: string };
+  const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
+  const me = userId ? await findUserById(userId) : null;
+  if (!me) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
+
+  let body: { contactId?: string; to?: string; subject?: string; text?: string; name?: string };
   try {
     body = await req.json();
   } catch {
@@ -54,60 +69,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "The email needs a subject and a body." }, { status: 400 });
   }
 
-  try {
-    // On the letterhead, not as a wall of plain text. The agent writes the
-    // words; the logo, the type and the unsubscribe are not theirs to
-    // remember.
-    const mail = renderPlain(subject, text);
-    // Sent as the agent, so it lands on the landlord's REX timeline under
-    // their name — the person the landlord will ring back.
-    const actor = await rexTokenFor(verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value));
-
-    // REX addresses a merge by RECORD, never by string — that is what puts the
-    // send on the landlord's timeline. Without a contact id there is no record
-    // to hang it on, and a bare address would land nowhere anyone will look.
-    if (!body.contactId) {
-      return NextResponse.json(
-        { error: "That landlord has no REX contact record, so the email would land nowhere. Open them in REX first." },
-        { status: 400 }
-      );
-    }
-    const sent = await sendMerge(
-      { contactId: String(body.contactId) },
-      { subject: mail.subject, body: mail.html },
-      actor
-    );
-    if (!sent.ok) {
-      if (actor && isExpiredToken({ ok: false, status: 502, result: null, error: sent.error })) {
-        return NextResponse.json(
-          { error: "Your REX sign-in has lapsed — reconnect it in your profile and try again.", reconnect: true },
-          { status: 401 }
-        );
-      }
-      const msg = sent.error;
-      // Its own cryptic one, translated — confirmed cause is a contact with no
-      // valid email on the REX record.
-      return NextResponse.json(
-        {
-          error: /merge objects passed in are valid/i.test(String(msg))
-            ? "REX rejected it — that contact has no valid email address on their REX record."
-            : msg,
-        },
-        { status: 502 }
-      );
-    }
-    return NextResponse.json({ sent: true, onTimeline: Boolean(body.contactId) });
-  } catch (e) {
-    if (e instanceof RexWriteBlocked) {
-      return NextResponse.json(
-        {
-          error:
-            'Sending is locked on this environment. Set REX_ALLOW_WRITES="MailMerge/queueMergeUsingObjects" to unlock it — and send the first one to a colleague, not a landlord.',
-          locked: true,
-        },
-        { status: 423 }
-      );
-    }
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Send failed." }, { status: 500 });
-  }
+  /* On the letterhead, not as a wall of plain text. The agent writes the
+     words; the logo, the type and the footer are not theirs to remember. */
+  const mail = renderPlain(subject, text);
+  const sent = await sendAsAgent({
+    me,
+    to,
+    toName: (body.name ?? "").trim() || undefined,
+    subject: mail.subject,
+    html: mail.html,
+  });
+  if (!sent.sent) return NextResponse.json({ error: sent.detail }, { status: 502 });
+  return NextResponse.json({ sent: true, via: sent.via, onTimeline: sent.timeline, said: sent.detail });
 }
