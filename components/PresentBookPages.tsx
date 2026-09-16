@@ -1390,8 +1390,14 @@ export function BookValuation({ deck }: { deck: Deck }) {
 export function BookFees({ deck }: { deck: Deck }) {
   const f = deck.fees;
   const rent = deck.valuation?.rent ?? null;
-  const monthly = (r: { pct?: number | null; oneOff?: number | null }) =>
-    r.pct != null && rent != null ? `${gbp(Math.round((rent * r.pct) / 100))} a month` : r.oneOff != null ? `${gbp(r.oneOff)} one-off` : null;
+  const monthly = (r: { pct?: number | null; oneOff?: number | null; firstMonthPct?: number | null; minimum?: number | null }) =>
+    r.pct != null && rent != null
+      ? `${gbp(Math.round((rent * r.pct) / 100))} a month`
+      : r.firstMonthPct != null && rent != null
+        ? `${gbp(Math.round(Math.max(r.minimum ?? 0, (rent * r.firstMonthPct) / 100)))} one-off`
+        : r.oneOff != null
+          ? `${gbp(r.oneOff)} one-off`
+          : null;
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       <div className="absolute left-[96px] top-[84px] w-[1250px]">

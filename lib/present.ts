@@ -236,6 +236,10 @@ export type PresentFees = {
     pct?: number | null;
     /** A flat fee in pounds, where it is one. */
     oneOff?: number | null;
+    /** A one-off charged as a percentage of the first month's rent (Tenant Find). */
+    firstMonthPct?: number | null;
+    /** The least a one-off can come to, in pounds. */
+    minimum?: number | null;
   }[];
   /** What is NOT in the fee. Stated here so it is never a surprise later. */
   excluded: string[];
@@ -931,7 +935,16 @@ export function slidesFor(deck: PresentDeck): typeof SLIDES {
 /**
  * WHAT WE CHARGE. The office's schedule, not a per-property figure.
  *
- * James, 4 Sep: 10% managed, 7% rent collection, £750 tenant find.
+ * From the England terms of business, Sep 26, page 5 (16 Sep 2026, replacing
+ * James's 4 Sep placeholder of 10% / 7% / £750). The contract prints each fee
+ * plus VAT; a landlord is shown it WITH VAT (James: "always include the figure
+ * inclusive of that, not excluding it"), so every number here is the contract's
+ * times 1.2:
+ *
+ *   Experts Management  14% + VAT            -> 16.8%, set-up 50% + VAT -> 60%
+ *   Rent Collection     12% + VAT            -> 14.4%, set-up 50% + VAT -> 60%
+ *   Tenant Find         75% of month 1 + VAT -> 90% of the first month's rent
+ *   Minimum fee         £500 + VAT           -> £600
  *
  * ── Why this is standing copy and not a wizard step ───────────────────────
  *
@@ -955,18 +968,17 @@ export function slidesFor(deck: PresentDeck): typeof SLIDES {
  * it when `excluded` is empty rather than showing an empty heading.
  */
 export const STANDARD_FEES: PresentFees = {
-  headline: "10% of rent collected",
-  headlineFor: "Fully managed",
+  headline: "16.8% of rent collected",
+  headlineFor: "Experts Management",
   rows: [
-    /* The only row note that survives, because it is corroborated: the Rent &
-       Legal Protection slide says it is included as standard on the Experts
-       Management Service, at no extra cost. */
-    { label: "Fully managed", amount: "10% of rent", note: "Rent & Legal Protection included", pct: 10 },
-    { label: "Rent collection", amount: "7% of rent", note: null, pct: 7 },
-    { label: "Tenant find", amount: "\u00a3750 one-off", note: null, oneOff: 750 },
+    /* Rent & legal insurance is ticked for Experts Management alone on the
+       contract's service table. */
+    { label: "Experts Management", amount: "16.8% of rent", note: "Plus a set-up fee of 60% of the first month's rent. Rent & legal insurance included", pct: 16.8 },
+    { label: "Rent Collection", amount: "14.4% of rent", note: "Plus a set-up fee of 60% of the first month's rent", pct: 14.4 },
+    { label: "Tenant Find", amount: "90% of month one", note: "Of the first month's rent, charged once", firstMonthPct: 90, minimum: 600 },
   ],
   excluded: [],
-  note: null,
+  note: "All fees include VAT. Minimum fee \u00a3600.",
 };
 
 /**
@@ -980,19 +992,18 @@ export const STANDARD_FEES: PresentFees = {
  *
  * ── What it deliberately does NOT say ─────────────────────────────────────
  *
- * Anything about VAT, and therefore anything about what a landlord is left
- * with. Whether the fee is quoted plus or including VAT is not confirmed
- * (James is "90% sure it's plus", which is not a number that goes in front of
- * a landlord), and a net-income figure computed on the wrong side of that is
- * out by a fifth on the one page where being straight about money is the whole
- * argument. The slide restates the rate; the terms of business settle VAT.
+ * What a landlord is left with. The rates are VAT-inclusive (see
+ * STANDARD_FEES), so the fee is right, but a net figure would also need the
+ * set-up fee and the months the property sits empty, and a guess at either is
+ * not a number to put in front of a landlord.
  */
 export function feeOnRent(
-  row: { pct?: number | null; oneOff?: number | null },
+  row: { pct?: number | null; oneOff?: number | null; firstMonthPct?: number | null; minimum?: number | null },
   rentPcm: number
 ): { month: number; year: number } | null {
   if (!rentPcm) return null;
   if (row.pct != null) return { month: (rentPcm * row.pct) / 100, year: (rentPcm * row.pct * 12) / 100 };
+  if (row.firstMonthPct != null) return { month: 0, year: Math.max(row.minimum ?? 0, (rentPcm * row.firstMonthPct) / 100) };
   /* A one-off is not a monthly cost and must never be divided into one. */
   if (row.oneOff != null) return { month: 0, year: row.oneOff };
   return null;

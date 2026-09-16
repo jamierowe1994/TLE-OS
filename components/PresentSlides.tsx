@@ -2358,9 +2358,8 @@ export function Fees({ deck, show }: { deck: Deck; show: boolean }) {
                       </li>
                     ))}
                   </ul>
-                  {/* VAT is not settled and this slide will not guess at it.
-                      Deferring in one line is honest; a net figure computed on
-                      the wrong side of it would be out by a fifth. */}
+                  {/* True since 16 Sep 2026: STANDARD_FEES carries the
+                      contract's rates with VAT in. */}
                   <p className="mt-4 text-[11px] font-light leading-relaxed text-black/40">
                     Fees shown include VAT. Any set-up fee is set out in the terms of business.
                   </p>
