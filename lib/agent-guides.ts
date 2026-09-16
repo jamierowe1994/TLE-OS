@@ -336,6 +336,94 @@ export const AGENT_GUIDES: Guide[] = [
       },
     ],
   },
+  {
+    id: "listings",
+    title: "Getting a Listing Live",
+    blurb:
+      "From a new address to an advert on Rightmove, Zoopla and OnTheMarket: the Listings board, adding a listing, the Marketing tab and its eighteen boxes, and what happens when you push it to the portals.",
+    icon: "home",
+    href: "/listings",
+    minutes: 9,
+    cover: img("l-board"),
+    coverCaption: "Listings: every rental we have, live, let agreed or still a draft.",
+    intro:
+      "A home that is not on the portals is not being seen, and a draft earns nothing. Getting a listing live is three jobs: add it, make the advert good enough to stop someone scrolling, and push it to the portals. The OS checks everything the portals will check before you press the button, so when it lets you push, the advert goes up. This is how it works, in the order you will do it.",
+    steps: [
+      {
+        title: "The Listings Board",
+        body: "Listings shows every rental on the book as a tile with its photo, rent, available date, viewings and photo count. The tabs along the top split it up: all listings, available, let agreed, drafts, the ones missing photos, the ones with no EPC, and the archive. Each tile finishes with a line that says where it stands, such as Live, Needs attention or Ready to publish.",
+        how: "Filters sorts by newest or by rent, and narrows by rent, location and when it was listed. List swaps the tiles for rows when you want to scan quickly.",
+      },
+      {
+        title: "Drafts That Go Cold",
+        body: "A draft that has sat for two months without going live files itself away into Archived, along with any listing that came off the market without a tenant. Nothing is deleted. Search still finds it, and Bring back to drafts puts it on the board again for another two months.",
+        image: img("l-archived"),
+        why: "It keeps the Draft tab a list of real jobs rather than a wall of homes nobody is working on.",
+      },
+      {
+        title: "Adding a New Listing",
+        body: "Press Add new listing. Start typing the address and pick it from the list. If it is a home we have never had, press It is a brand new address and type it in. Then choose what kind of property it is, and set the rent, the deposit, the date it is available, the service and the let type. Create the listing makes it and opens it for you.",
+        image: img("l-new-filled"),
+        why: "Property type is the one box the portals will not do without, which is why it is asked for here, before anything else.",
+        how: "The deposit fills itself in at five weeks' rent until you type over it. Photos, the description and everything else come next, on the listing itself. If the screen says adding listings is not switched on for you yet, ask the office.",
+      },
+      {
+        title: "The Listing File",
+        body: "Open any tile and the listing file slides in. The head has the photo, the address, the rent and where it stands, with the property details beside it. Below sit three cards: the landlord, the listing at a glance (enquiries, viewings, applications and photos), and Next up, which always holds the one thing to do now.",
+        image: img("l-home"),
+      },
+      {
+        title: "The Marketing Tab",
+        body: "Marketing is the advert: the home's facts, the let, the bills and services, the headline and description, the key features, the photos and the floor plans. A ring at the top counts how many of the eighteen required boxes are done, and each one still empty is marked with a star and a soft pink edge.",
+        image: img("l-mkt"),
+        why: "The eighteen are what the portals need to show the home properly and what tenants filter on: photos, headline, description, at least five key features, rent, deposit, available date, property type, bedrooms, bathrooms, furnishing, council tax band, parking, heating, electricity, water, sewerage and broadband. Miss one and a tenant searching for, say, parking never sees it.",
+      },
+      {
+        title: "Fill It In for Me",
+        body: "Press Fill it in for me and the OS does the looking up for you. It reads the photos, the last time the home was listed, the landlord's answers, the property records, the appraisal and the local market, fills in every empty box it can, and writes a headline, a description and the key features. Anything it filled in is marked, so you can see what to check.",
+        why: "It is a first draft, not a finished advert. Read every box it filled before you save, especially the room counts and the description, because a landlord will read the advert too.",
+        how: "It never overwrites anything you have already typed, and it saves nothing on its own. Rewrite the advert does the same for the words alone when you want another go.",
+      },
+      {
+        title: "Photos and Floor Plans",
+        body: "Add photos and Add floor plan open a drop box. The first photo is the main one, the picture on the portals' search results; Make main photo swaps another into that spot. Up to fifty photos and five floor plans.",
+        image: img("l-photos"),
+        how: "Photos and floor plans go onto the listing the moment they finish uploading, without pressing Save, so check them before you drop them in. Choosing a different main photo is the exception and waits for Save.",
+      },
+      {
+        title: "Saving Your Changes",
+        body: "As soon as you change anything, a bar appears at the foot of the tab listing what is not saved yet. Save sends it; Discard puts everything back as it was.",
+        image: img("l-savebar"),
+        how: "If the listing is already live, the adverts on the portals update within about ten minutes of saving. Heating, furnishing, pets, outside space and floor area are kept with the listing but do not reach the portals yet.",
+      },
+      {
+        title: "Preview on the Portals",
+        body: "Preview on the portals shows the advert laid out the way Rightmove, OnTheMarket and Zoopla will show it, one tab each. Anything with a dashed outline can be clicked to change it there and then.",
+        image: img("l-preview"),
+        why: "It is the quickest way to see the advert as a tenant will: whether the main photo is the right one, whether the headline reads well, and what a portal leaves out when a box is empty.",
+      },
+      {
+        title: "Put It Live",
+        body: "On a draft, the Next up card becomes Put it live, with two things to tick: Marketing complete and the EPC filed. It also reminds you about the gas safety certificate and the EICR, which are needed before anyone moves in but do not stop the advert going up. When both ticks are green, press Push to the portals, and then Yes, push it live.",
+        image: img("l-putlive"),
+        why: "The OS checks the eighteen boxes, the EPC and the portals' own checks before it lets you push, so an advert that goes up is one the portals will take. If the button will not go, hover over it and it tells you what is missing.",
+        sends:
+          "The advert, to Rightmove, OnTheMarket and Zoopla. It is usually showing within five to ten minutes. No email goes to the landlord or to anyone else.",
+      },
+      {
+        title: "Once It Is Live",
+        body: "A live listing shows the day it went live and links to the advert on each portal. Take off the portals asks you to confirm, then pulls the advert from all three; Put back on the portals returns it.",
+        image: img("l-takeoff"),
+        how: "A listing that has been live cannot be turned back into a draft. Taking it off the portals is the way to pause it, for example while a holding deposit clears.",
+        sends: "Taking it off or putting it back updates Rightmove, OnTheMarket and Zoopla together, usually within about ten minutes.",
+      },
+      {
+        title: "Enquiries, Viewings and Applications",
+        body: "Once it is live, the listing gathers what comes in. Applications shows the enquiries from the portals, each with Apply, and the applications made. Viewings shows the viewings booked and done. Viewings themselves are booked from the applicant's lead, which is covered in its own guide.",
+        image: img("l-live"),
+      },
+    ],
+  },
 ];
 
 export const agentGuideById = (id: string | null | undefined) => AGENT_GUIDES.find((g) => g.id === id) ?? null;

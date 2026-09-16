@@ -6,6 +6,7 @@ import DropZone from "@/components/listing/DropZone";
 import PortalPreview, { PORTAL_TABS, type Portal } from "@/components/listing/PortalPreview";
 import { CHANGE_WORDS, changesIn, draftFrom, fiveWeeks, money, orderedImages, type Draft, type FactField } from "@/components/listing/listing-draft";
 import type { ListingDetails } from "@/lib/listing-details";
+import GuideButton from "@/components/GuideButton";
 import { MIN_FEATURES, OPTIONS, REQUIREMENTS, isRequired, type RequirementInput } from "@/lib/listing-requirements";
 
 /**
@@ -327,6 +328,10 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
               <DoodleIcon name="megaphone" size={13} />
               Preview on the portals
             </button>
+            <GuideButton
+              id="listings"
+              className="flex items-center gap-1.5 rounded-full px-3 py-2.5 text-[12.5px] font-semibold text-muted hover:text-ink"
+            />
           </div>
         </div>
         {fillNote && <p className="mt-3 border-t border-line/40 pt-2.5 text-[12px] text-muted">{fillNote}</p>}
