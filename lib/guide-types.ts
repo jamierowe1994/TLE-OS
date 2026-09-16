@@ -41,6 +41,16 @@ export type Guide = {
   /** The page this guide is about, for the "Open the screen" button. */
   href: string;
   minutes: number;
+  /**
+   * The picture at the top: where this lives and what you press to start.
+   * Every guide opens on one (James, 16 Sep 2026: "we kind of want an image at
+   * the top for everyone to show people where it is"). Falls back to the
+   * first step's picture, which is then not shown a second time.
+   */
+  cover?: string;
+  coverCaption?: string;
+  /** The opening paragraph, under the cover, before the first section. */
+  intro?: string;
   steps: GuideStep[];
   /** A practice run that covers this guide, offered at the end of the reading. */
   practice?: { href: string; label: string };

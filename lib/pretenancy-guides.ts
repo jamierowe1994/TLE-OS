@@ -32,6 +32,8 @@ export const GUIDES: Guide[] = [
     icon: "key",
     href: "/pre-tenancy/dashboard",
     minutes: 3,
+    cover: img("dashboard"),
+    coverCaption: "The pre-tenancy dashboard, where the day starts.",
     steps: [
       {
         title: "The job in one line",

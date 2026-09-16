@@ -1,30 +1,38 @@
 import type { Guide } from "@/lib/guide-types";
 
 /**
- * The agents' guides: how a process works from the agent's chair, a step at a
- * time, with a picture of each screen.
+ * The agents' guides: how a process works from the agent's chair, written to
+ * be read like a short article, with a picture of each screen set into it.
  *
  * James, 16 Sep 2026: "build the other side of that to show the agents what
  * that would look like, and then some other guides about the best price guide
- * ... as they click the guide, it will pop out onto the screen." Kirstie's
- * side is lib/pretenancy-guides; both are drawn by components/GuideModal and
- * opened over any screen by components/GuideLayer.
+ * ... as they click the guide, it will pop out onto the screen." Then, the same
+ * day: "we want it to read more like an article rather than a guide ... with
+ * the addition of screenshots", and a picture at the top of every one showing
+ * where it lives. Kirstie's side is lib/pretenancy-guides; both are drawn by
+ * components/GuideModal and opened over any screen by components/GuideLayer.
+ *
+ * ── Writing for this ─────────────────────────────────────────────────────
+ *
+ * Each step is a section of the article. `body` is its opening paragraph and
+ * is followed by the picture; `why` and `how` follow as run-in paragraphs
+ * ("Why it matters." / "How it works."), so write them as sentences that read
+ * on from the picture, not as labels. `sends` is set apart in a panel and says
+ * only what is really wired today.
  *
  * ── Where the pictures come from ─────────────────────────────────────────
  *
  * /public/guides/agents, captured from the real screens on invented data: the
- * PLC practice run (14 Sample Street) and the sample appraisals in the local
- * database (Priya Shah, Tom Okafor, Raj Patel). The market figures on the
+ * PLC practice run (14 Sample Street), a harness render of the application
+ * record, the sample deck, and the sample appraisals in the local database
+ * (Priya Shah, Tom Okafor, Raj Patel, Helen Test). The market figures on the
  * builder pictures are real, because the builder reads the live market; they
- * date, and that is fine, because the words describe what a thing is for.
- * When a screen changes, recapture it.
+ * date, and that is fine. When a screen changes, recapture it.
  *
- * ── House rules for this copy ────────────────────────────────────────────
+ * ── House rules ──────────────────────────────────────────────────────────
  *
- * Agent-facing, so it never says REX, and never names a data supplier: the OS
- * is the product and the plumbing stays out of sight. No em dashes. UK English.
- * "What it sends" is only written where something actually leaves the
- * building, and it says what is really wired today, not what is planned.
+ * Agent-facing, so it never says REX and never names a data supplier. No em
+ * dashes. UK English.
  */
 
 const img = (name: string) => `/guides/agents/${name}.webp`;
@@ -34,90 +42,92 @@ export const AGENT_GUIDES: Guide[] = [
     id: "agent-plc",
     title: "Handing Over the PLC Pack",
     blurb:
-      "From an accepted offer to a pack compliance can approve: what to check, what to attach, what happens when you send it and what coming back looks like.",
+      "Every let needs its paperwork checked before the keys change hands. Here is how you put the pack together, what happens when you send it, and what it looks like when it comes back.",
     icon: "shield",
     href: "/applications",
     minutes: 7,
     practice: { href: "/plc/practice", label: "Practise it" },
+    cover: img("plc-start"),
+    coverCaption: "It starts on the application, once the landlord has accepted: Start the PLC check.",
+    intro:
+      "PLC stands for pre-let compliance. It is the landlord's ID, the safety certificates and the tenant checks that make it legal to let the home, gathered into one pack and read by the compliance team before anything else moves. Nothing goes to the tenancy agreement until they have approved it, so the sooner your pack is with them, the sooner the move-in is safe. It takes about five minutes if the documents are to hand.",
     steps: [
       {
-        title: "When it starts",
-        body: "Once the landlord has accepted an offer, the application shows a brown Start the PLC check button. Press it. That is the only way into the pack, and it is always started from the application so nothing has to be typed twice. Underneath it sits Never done one? Practise it first, which runs the same screens on invented paperwork.",
-        why: "PLC is pre-let compliance: the landlord's ID, the safety certificates and the tenant checks that make it legal to hand over keys. Nothing moves to the agreement until compliance have approved it, so the sooner the pack goes, the sooner the move-in is safe.",
-        how: "When references come back on a deal, a pack is also opened for you automatically and you get a notification saying so. Either way it is the same pack.",
+        title: "Where It Starts",
+        body: "The moment the landlord accepts an offer, the application grows a brown button: Start the PLC check. That is the only door into the pack, and it always opens from the application, so nothing you have already recorded has to be typed again. If you have never done one, the quiet link beside it, Never done one? Practise it first, runs exactly the same screens on invented paperwork.",
+        how: "When references come back on a deal, a pack is also opened for you automatically, and a notification tells you so. It is the same pack either way.",
       },
       {
-        title: "Check these over",
-        body: "The OS reads the application and lays out the property, the tenants and the move-in date. You typed none of it. The move-in date is the only thing you can change here. Anything that looks thin is listed underneath in orange, such as Right to Rent not being recorded for every adult.",
-        why: "Every date check compliance run is 'in date on the move-in date', not 'in date today'. A wrong move-in date makes every answer wrong, and nothing on the screen will look broken.",
-        how: "The warnings are the gaps the application already knows about. They are cheaper to fix now than after the pack comes back.",
+        title: "Check the Details Over",
+        body: "The first screen reads the application back to you: the property, the tenants and the move-in date. The move-in date is the one thing you can change here. Anything the application already knows is thin shows underneath in orange, such as Right to Rent not being recorded for every adult.",
         image: img("plc-details"),
+        why: "Every date compliance check is 'in date on the move-in date', not 'in date today'. Get the move-in date wrong and every answer after it is wrong too, without anything on the screen looking broken.",
       },
       {
-        title: "If something is wrong",
-        body: "Press Something is not right. The fix belongs on the application itself, not in the pack, so this takes you back to it. Put it right there, then start the check again. If you pressed it by mistake, Never mind, it is fine carries on.",
-        why: "The pack copies the application. Correcting the pack alone leaves the record wrong for everybody who reads it after you.",
+        title: "If Something Looks Wrong",
+        body: "Press Something is not right. The fix belongs on the application, not in the pack, so this sends you back to it. Put it right there and start the check again. If you pressed it by mistake, Never mind, it is fine carries on where you were.",
         image: img("plc-not-right"),
+        why: "The pack is a copy of the application. Correcting only the pack leaves the record wrong for everybody who opens it after you.",
       },
       {
-        title: "The landlord's documents",
-        body: "Drop the landlord's documents anywhere on the page, or click to choose them: ID and proof of address, gas safety, EPC, EICR and any licence. Each file is placed against its check from its name, and the list underneath turns green as each check gets a file. A file the OS cannot place asks you Which check? so you choose.",
-        why: "A certificate filed against the wrong check goes to compliance with a confident label on it, which is worse than no label. That is why an unclear file asks rather than guesses.",
-        how: "Name files plainly (gas-safety.pdf, epc.pdf, landlord-id.pdf) and they file themselves. PDFs and photos both work.",
+        title: "The Landlord's Documents",
+        body: "Next come the landlord's documents: their ID and proof of address, the gas safety certificate, the EPC, the EICR and any licence the council asks for. Drop them anywhere on the page, or click to choose them. Each file is placed against its check from its name, and the list underneath turns green as each check is filled. If a file cannot be placed, it asks you which check it belongs to.",
         image: img("plc-landlord-filed"),
+        why: "A certificate filed against the wrong check arrives with compliance wearing a confident label, which is worse than no label at all. That is why an unclear file asks rather than guesses.",
+        how: "Name your files plainly, such as gas-safety.pdf, epc.pdf or landlord-id.pdf, and they file themselves. PDFs and photos both work.",
       },
       {
-        title: "Tenant and tenancy",
-        body: "The same again for the tenants: the referencing, and the guarantor's checks if there is a guarantor. Right to Rent is checked separately and the tenancy agreement is drawn up by compliance once the pack passes, so neither is asked for here.",
+        title: "Tenant and Tenancy",
+        body: "The same again for the tenants: the referencing, and the guarantor's checks if there is a guarantor. You will not be asked for Right to Rent, which is checked separately, or the tenancy agreement, which compliance draw up once the pack has passed.",
         image: img("plc-tenant-filed"),
       },
       {
-        title: "What is missing",
-        body: "Before anything goes, the OS shows every check in one list: a green tick with its file, or an empty circle with nothing attached. Send to the compliance team stays grey until every check is answered.",
-        why: "This is the last moment the pack is yours. Once sent, it is locked, so what compliance read is exactly what you sent.",
+        title: "Seeing What Is Missing",
+        body: "Before anything leaves your hands, every check is laid out in one list: a green tick where there is a file, an empty circle where there is nothing. Send to the compliance team stays grey until every check has an answer.",
         image: img("plc-review"),
+        why: "This is the last moment the pack is yours. Once it is sent it is locked, so what compliance read is exactly what you sent.",
       },
       {
-        title: "Not needed, with a reason",
-        body: "Some checks do not apply to every let: gas where there is no gas supply, licensing where the council has no scheme, a guarantor where there is none. Write why in the box and press Not needed. The reason has to be a real sentence; the button waits until it is. Press undo if you change your mind.",
-        why: "Landlord ID, the EPC, the EICR and the tenant checks can never be marked not needed. Every let needs them.",
-        how: "Your reason travels with the pack and is added to what compliance read, so write it for them.",
+        title: "When a Check Does Not Apply",
+        body: "Some checks do not apply to every let: gas where there is no gas supply, licensing where the council runs no scheme, a guarantor where there is none. For those, write the reason in the box and press Not needed. The button waits until the reason is a real sentence, and undo puts it back if you change your mind.",
         image: img("plc-waive"),
+        why: "The landlord's ID, the EPC, the EICR and the tenant checks can never be marked not needed. Every let needs them.",
+        how: "Your reason travels with the pack and is added to what compliance read, so write it for them.",
       },
       {
-        title: "Ready to send",
-        body: "When every check has a file or a reason, the title turns to Ready to Send and the button goes dark. Press Send to the compliance team.",
-        how: "Before it goes, each document is read for its dates and names. If the reading finds something that would fail the check, such as a gas certificate that runs out after the move-in date, the pack stays with you and the screen says what to fix. Fix it and send again. It usually takes under a minute.",
+        title: "Ready to Send",
+        body: "Once every check has a file or a reason, the heading changes to Ready to Send and the button darkens. Press Send to the compliance team.",
         image: img("plc-ready"),
+        how: "Before the pack goes, each document is read for its dates and names. If that reading finds something that would fail the check, such as a gas certificate that runs out after the move-in date, the pack stays with you and the screen tells you what to fix. Fix it and send again. It usually takes under a minute.",
       },
       {
-        title: "With the compliance team",
-        body: "That is it. The pack is locked and in the compliance queue, oldest first. You can go back to your applications; there is nothing to chase for 48 hours.",
-        why: "Compliance aim to decide within 48 hours. Their queue turns a pack red once it has waited longer than that, so a late pack is seen.",
-        sends:
-          "No email. The pre-tenancy team get a notification in the OS that a pack has been sent to them for checking (or re-sent, if it came back first). Nothing goes to the landlord or the tenants at this stage.",
+        title: "With the Compliance Team",
+        body: "And that is it. The pack is locked and sitting in the compliance queue, where the oldest is always read first. Go back to your applications; there is nothing to chase for 48 hours.",
         image: img("plc-done"),
+        why: "Compliance aim to decide within 48 hours, and their queue turns a pack red once it has waited longer, so a late one is never lost.",
+        sends:
+          "No email. The pre-tenancy team get a notification in the OS that a pack has been sent to them (or sent again, if it came back first). Nothing goes to the landlord or the tenants at this stage.",
       },
       {
-        title: "What compliance do with it",
-        body: "Compliance open your pack, read what the document reading found, check every file against its check and decide. There are three answers: approve, send it back to you with a reason, or decline.",
-        why: "Most slow packs are slow for reasons invisible from the agent's side: a certificate dated wrong, a name that does not match, a missing reason. Worth seeing once what they are looking at.",
+        title: "What Compliance Do With It",
+        body: "On the other side, compliance open your pack, read what the document check found, look at every file against its check and decide. There are three possible answers: approve it, send it back to you with a reason, or decline it.",
         image: "/guides/pre-tenancy/plc-findings.webp",
         caption: "Compliance's view of a pack: red is a blocker, amber is a query, green is in order.",
+        why: "Most slow packs are slow for reasons you cannot see from your side: a certificate dated wrong, a name that does not match, a missing reason. It is worth seeing once what they are looking at.",
       },
       {
-        title: "If it comes back",
-        body: "A pack sent back shows Compliance sent this back, with exactly what compliance wrote and who wrote it. Press Reopen and fix it, put right what they asked for, and send it again. Sending again puts it back in their queue.",
-        why: "Coming back is not a failure, it is the check working. The note is the only thing compliance can say to you on the pack, so it tells you exactly what is needed.",
-        sends: "A notification in the OS that your pack has been sent back. No email.",
+        title: "If It Comes Back",
+        body: "A pack that has been sent back says so plainly: Compliance sent this back, with exactly what they wrote and who wrote it. Press Reopen and fix it, put right what they asked for, and send it again. It goes straight back into their queue.",
         image: img("plc-deferred"),
+        why: "A pack coming back is not a failure. It is the check doing its job, and the note is written for you, so it says exactly what is needed.",
+        sends: "A notification in the OS that your pack has been sent back. No email.",
       },
       {
-        title: "When it is approved",
-        body: "An approved pack shows Approved by, with the name and the time. Your next job is to finish the deal in Propoly: open the application and use its link to the deal.",
-        how: "After approving, compliance file the approved documents against the deal, so the agreement can be drawn up without anyone uploading them again, and record the certificates and their expiry dates on the property, so compliance tracking stops calling them missing. You do not need to do either.",
-        sends: "A notification in the OS that the pack is approved. No email from the pack itself.",
+        title: "Once It Is Approved",
+        body: "An approved pack shows who approved it and when. Your part of the compliance is done, and the next job is to finish the deal in Propoly: open the application and follow its link to the deal.",
         image: img("plc-approved"),
+        how: "After approving, compliance file the approved documents against the deal, so the agreement can be drawn up without anybody uploading them again, and record the certificates and their expiry dates on the property, so the compliance tracker stops calling them missing. You do not need to do either.",
+        sends: "A notification in the OS that the pack is approved. No email comes from the pack itself.",
       },
     ],
   },
@@ -125,108 +135,113 @@ export const AGENT_GUIDES: Guide[] = [
     id: "appraisals",
     title: "Market Appraisals and Your Best-Price Guide",
     blurb:
-      "From a booked visit to signed terms: the appraisal file, building the presentation, how the best-price guide is worked out, and what the landlord receives at each step.",
+      "From the day a landlord agrees to a visit to the day they sign: how the appraisal file keeps you on track, how to build a presentation that wins the instruction, and how your best-price guide is worked out.",
     icon: "trend-up",
     href: "/market-appraisals",
     minutes: 10,
+    coverCaption: "Market Appraisals, on the rail: every landlord who has said yes to a visit, from booked to won.",
+    intro:
+      "A market appraisal is where an instruction is won or lost. The landlord wants to know three things: what their home will let for, why they should believe you, and what happens next. The OS does most of the preparation for you, from the pre-presentation that arrives before you do to the market research behind your figure. This is how it fits together, in the order you will meet it.",
     steps: [
       {
-        title: "The appraisals board",
-        body: "Market Appraisals is every landlord who has said yes to a visit, from booked to won. The tabs along the top count each stage. Every tile shows the address, the landlord, when the visit is, who is going, a progress bar of the seven stages, and a badge when there is no figure yet.",
-        why: "The list is sorted worst first: no figure recorded, then no date, then the soonest visit. The top tile is always the one to pick up next.",
-        how: "Nobody drags a file between stages. The OS works out the stage from what has happened: a visit that has passed, a figure recorded, terms signed, the landlord's documents in.",
+        title: "The Appraisals Board",
+        body: "Market Appraisals lists every appraisal still in play. The tabs along the top count how many sit at each stage, and each tile shows the address, the landlord, when the visit is, who is going, a bar for the seven stages, and a badge when no figure has been recorded yet.",
         image: img("ma-list"),
+        why: "The list is sorted worst first: no figure recorded, then no date booked, then the soonest visit. The top tile is always the one to pick up next.",
+        how: "Nobody drags an appraisal from stage to stage. The OS works the stage out from what has actually happened: the visit has passed, a figure is recorded, the terms are signed, the landlord's documents are in.",
       },
       {
-        title: "Booking the visit",
-        body: "Most appraisals are booked from the lead, with Book an appraisal on the lead itself. For one that never came through as a lead, use Book an appraisal here: the landlord, the address, the postcode, who is going and when.",
-        why: "A booking without a date shows on the board as needing a time, which is the chase. Book with the date whenever you have it.",
-        sends:
-          "Booked from a lead, the landlord gets a confirmation email with a calendar invite, from your own mailbox, subject 'Confirmed - your market appraisal' and the time. Booked here, nothing is emailed, because there is no email address to send to. The panel says so.",
+        title: "Booking the Visit",
+        body: "Most appraisals are booked straight from the lead, with Book an appraisal on the lead itself. For a landlord who never came through as a lead, use Book an appraisal on this screen instead: the landlord, the address, the postcode, who is going and when.",
         image: img("ma-book"),
+        why: "An appraisal booked without a date shows on the board as needing a time, and that becomes the chase. Book the date whenever you have it.",
+        sends:
+          "Booked from a lead, the landlord receives a confirmation email with a calendar invite, from your own mailbox, headed 'Confirmed - your market appraisal' with the time. Booked from this screen, nothing is emailed, because there is no address to send it to, and the panel tells you so.",
       },
       {
-        title: "The appraisal file",
-        body: "Open a tile and you are on the file. The pink head is the address, the stage in a line, and At a glance: the three things you open the file to find out. Along the top are quick links to the decks that exist, a welcome video recorder and the property file.",
-        how: "Mark as won and Mark as lost are here too. Lost is an outcome, not a stage, and the file can be reopened.",
+        title: "The Appraisal File",
+        body: "Open a tile and you are on the appraisal's file. The pink head carries the address, a line on where it is up to, and At a glance: the three facts you usually open the file to find. Along the top sit quick links to the presentations that exist, a welcome video recorder and the property file.",
         image: img("ma-file"),
+        how: "Mark as won and Mark as lost live here too. Lost is an outcome rather than a stage, and a lost appraisal can be reopened.",
       },
       {
-        title: "Next up",
-        body: "Under the head: the landlord, the appointment, and the sage Next up box. Next up is the only box that changes. It always holds the one thing to do now: record a video, build the presentation, record the figure, send the terms. Below it, Where it's up to shows the seven stages with the small ticks under each.",
-        why: "If you only ever do what Next up says, the appraisal moves through every stage in the right order and nothing is missed.",
+        title: "Next Up",
+        body: "Below the head are three cards: the landlord, the appointment, and the sage Next up card. Next up is the only one that changes, and it always holds the single thing to do now: record a video, build the presentation, record the figure, send the terms. Under the cards, Where it's up to lays out all seven stages with the small ticks beneath each.",
         image: img("ma-file-cards"),
+        why: "Do what Next up says, each time, and the appraisal moves through every stage in the right order with nothing missed.",
       },
       {
-        title: "The pre-presentation",
-        body: "The pre-presentation is a short deck that introduces you and the visit before you arrive: a welcome, the appointment, who is coming, why us, and the questions worth thinking about. It is made for you when the file is first opened. Next up then asks whether to record a personalised welcome video or send it without one.",
-        why: "A landlord who has seen your face and knows what to expect before you ring the bell is already half won.",
+        title: "The Pre-Presentation",
+        body: "Before you arrive, the landlord receives a short pre-presentation: a welcome, the appointment, who is coming, why us, and a few questions worth thinking about before the visit. It is made for you when the file is first opened. Next up then asks whether you would like to record a personalised welcome video to go with it, or send it without one.",
+        image: img("ma-pre-presentation"),
+        caption: "The opening page of the pre-presentation, as the landlord sees it.",
+        why: "A landlord who has seen your face and knows what to expect before you ring the bell is already halfway to saying yes.",
         sends:
-          "At 9am the day before the visit, the landlord gets 'Before your valuation' with the address, from you, with a button to open the pre-presentation (and your video, if you recorded one). It cannot go if there is no email address on the file; the head of the file says so.",
+          "At 9am the day before the visit, the landlord receives 'Before your valuation' with their address, from you, with a button to open the pre-presentation and your video if you recorded one. It cannot go if there is no email address on the file, and the head of the file warns you when that is the case.",
       },
       {
-        title: "Build the presentation: the property",
-        body: "Build presentation opens the builder: five steps along the top, which you can click in any order. Property shows what is known about the home: estimated value, tenure, bedrooms, type, floor area, council tax band, its history with us, and what the public registers hold on compliance.",
-        why: "Check the address has matched. The details only appear when the match is certain; if it matched a different house, the builder ignores it and tells you, because quoting a neighbour's details to a landlord is worse than quoting none.",
-        how: "The grey list at the bottom is what to ask the landlord for on the day. None of it is on a public register, so it is a list of questions, not a list of failures.",
+        title: "Building the Presentation",
+        body: "Build presentation opens the builder, the deck you take with you on the day. Its five steps run along the top and can be visited in any order. The first, Property, shows what is already known about the home: an estimated value, tenure, bedrooms, type, floor area, council tax band, its history with us, and what the public registers hold on its compliance.",
         image: img("ma-build-property"),
+        why: "Check that the address has matched. The details only appear when the match is certain. If it matched a different house, the builder ignores it and tells you, because quoting a neighbour's details to a landlord is worse than quoting none.",
+        how: "The grey list at the foot is what to ask the landlord for on the day. None of it is held on a public register, so treat it as a list of questions rather than a list of failures.",
       },
       {
-        title: "On the market",
-        body: "Everything advertised to let near the property right now, from every agent, with photos, rent and how long it has been listed. Narrow it with the distance slider, beds, type and price. Tick a property and it joins the row of circles top right: those go in the deck.",
-        why: "This is what a tenant is choosing between. Landlords always ask 'what else is out there?', and this answers it with pictures.",
-        how: "Pick three or four that are genuinely like-for-like: same size, same type, same streets. A landlord will dismiss the whole slide over one that is nothing like their home.",
+        title: "What Is on the Market",
+        body: "On the market shows everything advertised to let near the property right now, from every agent, with photos, the rent and how long each has been listed. Narrow it with the distance slider, bedrooms, type and price. Tick a property and it joins the row of circles in the top corner; those are the ones that go in the deck.",
         image: img("ma-build-market"),
+        why: "This is exactly what a tenant is choosing between. Landlords always ask what else is out there, and this answers it with pictures.",
+        how: "Pick three or four that are genuinely like for like: the same size, the same type, the same streets. One that is nothing like their home is enough for a landlord to dismiss the whole page.",
       },
       {
-        title: "Recently let, and what we have let",
-        body: "Recently let shows properties nearby that have gone let agreed, from every agent. Above it, What we've let opens our own: on the left what we have let recently in the district, with how long it took, and on the right our own homes letting now, with a tick box each.",
-        why: "The ticks on the right are the most important boxes in the builder. The homes you tick there are the ones the best-price guide in the deck is worked out from.",
-        how: "Homes in the same postcode sector start ticked. Tick the ones that are a fair comparison and untick any that are not, such as a four-bed in another town. Show ours further out widens the list when there are too few nearby.",
+        title: "What Has Let, and What We Have Let",
+        body: "Recently let shows the homes nearby that have gone let agreed, again from every agent. Above them, What we've let opens our own: on the left, what we have let recently in the district and how long each took; on the right, our homes letting now, each with a tick box.",
         image: img("ma-build-let"),
+        why: "Those tick boxes on the right are the most important boxes in the builder. The homes you tick there are the ones the best-price guide in your deck is worked out from.",
+        how: "Homes in the same postcode sector start ticked. Keep the ones that make a fair comparison and untick any that do not, such as a four-bed in another town. Show ours further out widens the list when there are too few nearby.",
       },
       {
-        title: "How the best-price guide is worked out",
-        body: "The guide is three figures: a low, a middle and a high monthly rent. It is worked out from our own homes, not from adverts, so every number in it is a property you can name and talk about.",
-        how: "The comparables are put in rent order and the guide takes the rents a quarter, half and three quarters of the way up the list. That is the middle half of real rents, so one expensive penthouse cannot drag it up. The search starts in the same postcode sector and widens to the district, then the whole postcode area, until it has at least four.",
-        why: "Read the line under the figure before you quote it. 'Only 2 comparables nearby, indicative' means treat it as a starting point. 'Across the wider area' means it is background, not evidence. 'The local spread is very wide' means quote from the named homes, not the range.",
+        title: "How Your Best-Price Guide Is Worked Out",
+        body: "The best-price guide is three figures: a low, a middle and a high monthly rent. It is worked out from homes we let ourselves rather than from adverts, so every figure in it rests on a property you can name and talk about with confidence.",
         image: img("ma-build-guide"),
-        caption: "The guide as the Market step shows it. The deck recalculates it from the homes you ticked.",
+        caption: "The guide as the Market step shows it. The deck works it out again from the homes you ticked.",
+        how: "The chosen homes are put in rent order, and the guide takes the rents a quarter, half and three quarters of the way up the list. That is the middle half of real rents, so one expensive penthouse cannot drag the figure up. The search starts in the same postcode sector and widens to the district, then the whole postcode area, until it has at least four homes to work from.",
+        why: "Always read the line under the figure before you quote it. 'Only 2 comparables nearby, indicative' means treat it as a starting point. 'Across the wider area' means it is background, not evidence. 'The local spread is very wide' means quote from the named homes rather than the range.",
       },
       {
-        title: "The local market",
-        body: "Market is the numbers behind the area: how much is advertised against how much let in the last twelve months, the median asking rent, how long stock is sitting, and how many landlords have already cut their price. Below are five blocks you can put on a slide: how fast it moves, how long stock sits, asking rent by size, what is competing, and who is letting it.",
-        why: "Months of supply is the one to lead with. Under three months means homes let faster than they come on, which is the case for pricing well rather than pricing low.",
-        how: "Only the blocks marked Put on slide go to the landlord. Pick the two or three that make your argument; a deck that shows everything argues nothing.",
+        title: "The Local Market",
+        body: "Market sets out the numbers behind the area: how much is advertised against how much has let in the last twelve months, the median asking rent, how long stock is sitting, and how many landlords have already cut their price. Beneath those are five blocks you can put in front of the landlord: how fast it moves, how long stock sits, asking rent by size, what is competing, and who is letting it.",
         image: img("ma-build-marketpic"),
+        why: "Months of supply is the figure to lead with. Under three months means homes are letting faster than they come on, which is the case for pricing well rather than pricing low.",
+        how: "Only the blocks marked Put on slide reach the landlord. Choose the two or three that make your argument; a deck that shows everything argues nothing.",
       },
       {
-        title: "Review and create",
-        body: "Review lists the pages of the deck on the left and shows the real presentation on the right, exactly as the landlord will open it. Scroll through it. When it reads right, press Create presentation.",
-        how: "The rent guide and the homes behind it only go in the deck when at least three of ours are ticked on Recently let. Fewer than three and the page is left out, because two homes make a landlord think we do not know their street. If it is missing from the preview, go back and tick more.",
-        sends:
-          "Nothing yet. Creating makes the presentation and a private link to it. You present it on the day from View presentation on the file. The link lasts 14 days after the visit, and the file shows each time the landlord opens it.",
+        title: "Review, Then Create",
+        body: "Review lists the pages of the deck on the left and shows the real presentation on the right, exactly as the landlord will see it. Read it through, and when it reads right, press Create presentation.",
         image: img("ma-build-review"),
-      },
-      {
-        title: "After the visit: record the figure",
-        body: "Once the visit has passed, Next up becomes Record the figure. Five short questions, one at a time: the rent agreed, the service level, the management fee, the set-up fee and anything else. Save the valuation and the appraisal moves on to post-appraisal.",
-        why: "This is the figure that goes in front of the landlord in writing, with the terms. It is the one you agreed on the day, not the guide.",
-        image: img("ma-figure"),
-      },
-      {
-        title: "Prepare and send the terms",
-        body: "Next up then offers Build the post-appraisal: the same deck with the figure you agreed, your fees and how to get started. Then Prepare the presentation and sign takes you to Prepare and send, which asks four things in order: read the booklet to the last page, confirm the details are right, sign your half of the contract, then send it.",
-        why: "The order is fixed on purpose. The landlord cannot open the contract until your half is signed, and the fee page is at the end, so you are asked to read to the end first.",
+        how: "The rent guide and the homes behind it only go in the deck when at least three of ours are ticked on Recently let. With fewer, the page is left out, because two homes make a landlord think we do not know their street. If it is missing from the preview, go back and tick more.",
         sends:
-          "The landlord gets 'Your presentation and your contract' with the address, with buttons to open the presentation and their property file. It comes from The Letting Experts, and when they reply it comes to you. Afterwards, Next up offers Send a reminder until they have signed.",
-        image: img("ma-send"),
+          "Nothing yet. Creating the presentation makes it and a private link to it, which you present from View presentation on the file on the day. The link lasts 14 days after the visit, and the file shows you each time the landlord opens it.",
       },
       {
-        title: "Take-on, AML and won",
-        body: "Once the terms are signed, Next up turns to the take-on: book the visit for photos and the description. Then AML and compliance: the landlord's ID and proof of ownership on their portal and the certificates on file. When the listing is created, the appraisal is won and Next up points you to Listings.",
-        how: "The landlord is chased by email for their property questions until they have answered, so you do not have to. Each tick under the stage turns green on its own as things arrive.",
+        title: "After the Visit: Recording the Figure",
+        body: "Once the visit has passed, Next up becomes Record the figure: five short questions, one at a time. The rent agreed, the service level, the management fee, the set-up fee, and anything else worth noting. Save the valuation and the appraisal moves on to post-appraisal.",
+        image: img("ma-figure"),
+        why: "This is the figure that goes in front of the landlord in writing, alongside the terms. It is the one you agreed on the day, not the guide.",
+      },
+      {
+        title: "Sending the Terms",
+        body: "Next up now offers Build the post-appraisal: the same presentation, with the figure you agreed, your fees and how to get started. After that, Prepare the presentation and sign takes you to Prepare and send, which asks for four things in order: read the booklet to the last page, confirm the details, sign your half of the contract, and send it.",
+        image: img("ma-send"),
+        why: "The order is deliberate. The landlord cannot open the contract until your half is signed, and the fees sit on the final pages, so you are asked to read to the end before anything goes.",
+        sends:
+          "The landlord receives 'Your presentation and your contract' with their address, and buttons to open the presentation and their property file. It comes from The Letting Experts, and any reply comes to you. Afterwards, Next up offers Send a reminder until they have signed.",
+      },
+      {
+        title: "Take-On, Compliance and Won",
+        body: "With the terms signed, Next up turns to the take-on: booking the visit for the photos and the description. Then comes AML and compliance, with the landlord's ID and proof of ownership on their portal and the certificates on file. When the listing is created, the appraisal is won, and Next up points you to Listings.",
         image: img("ma-spine"),
+        how: "The landlord is chased by email for their property questions until they have answered them, so you do not have to. The ticks under each stage turn green on their own as things arrive.",
       },
     ],
   },
