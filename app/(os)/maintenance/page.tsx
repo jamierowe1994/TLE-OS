@@ -1010,8 +1010,75 @@ function ContractorPick({ contractors, value, onChange, className }: { contracto
 function Accounts({ orders, loaded, onOpen, onChanged }: { orders: WorksOrder[]; loaded: boolean; onOpen: (id: string) => void; onChanged: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
   const rows = orders.filter((o) => o.status === "invoiced" || (o.status === "done" && o.invoicePence != null)).sort((a, b) => (a.invoicedAt ?? "").localeCompare(b.invoicedAt ?? ""));
   const total = rows.reduce((a, o) => a + (o.invoicePence ?? 0), 0);
+  /* WHAT MICHAEL TYPES INTO PAYPROP, in the order he types it.
+
+     Michael, 7 Sep 2026: sixty to seventy contractor invoices a month, keyed
+     in by hand. We cannot make the payment for him - PayProp is read-only to
+     the OS, and the payee lives over there with the bank details - but the
+     re-typing is ours to remove: one press puts the line on the clipboard, and
+     the whole run comes down as a file he can work from. */
+  const payFields = (o: WorksOrder) => [
+    o.payee === "agent" ? `${o.raisedBy} (paid it themselves)` : o.contractorName || "",
+    ((o.invoicePence ?? 0) / 100).toFixed(2),
+    o.invoiceRef || "",
+    [o.propertyName, o.locality].filter(Boolean).join(", "),
+    o.landlord || "",
+    `#${o.ref} ${o.title}`,
+    o.invoicedAt ? new Date(o.invoicedAt).toLocaleDateString("en-GB") : "",
+  ];
+  const HEADS = ["Pay", "Amount", "Invoice number", "Property", "Landlord", "Job", "Invoiced"];
+
+  /* Two ways, because the modern one is not always allowed: the clipboard API
+     refuses without a focused, permitted, secure context, and Michael on a
+     locked-down machine would get nothing and no reason. The old execCommand
+     path works in every browser we care about, so it catches what the new one
+     drops, and only if BOTH fail does the screen say so. */
+  async function copyRow(o: WorksOrder) {
+    const line = payFields(o).join("\t");
+    const done = () => {
+      setErr(null);
+      setCopied(o.id);
+      window.setTimeout(() => setCopied((c) => (c === o.id ? null : c)), 2000);
+    };
+    try {
+      await navigator.clipboard.writeText(line);
+      return done();
+    } catch {
+      /* Fall through and try the old way. */
+    }
+    try {
+      const box = document.createElement("textarea");
+      box.value = line;
+      box.setAttribute("readonly", "");
+      box.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+      document.body.appendChild(box);
+      box.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(box);
+      if (ok) return done();
+    } catch {
+      /* Nothing left to try. */
+    }
+    setErr("Your browser would not let the page copy. Select the row and copy it by hand.");
+  }
+
+  function downloadRun() {
+    /* Quoted properly: a property called "Flat 2, Mercer Street" would split a
+       bare comma-separated file into two columns and put the money in the
+       wrong one. */
+    const cell = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
+    const csv = [HEADS, ...rows.map(payFields)].map((r) => r.map(cell).join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `to-pay-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   async function paid(o: WorksOrder) {
     setBusy(o.id);
     setErr(null);
@@ -1024,9 +1091,21 @@ function Accounts({ orders, loaded, onOpen, onChanged }: { orders: WorksOrder[];
     <div className="mt-4 space-y-4">
       <div className="rounded-2xl border border-line/80 bg-panel p-5">
         <h2 className="text-[15px]">To pay</h2>
-        <p className="mt-0.5 text-[11.5px] text-muted">
-          Every invoice on a job that has not been paid, with what PayProp needs. {loaded ? `${rows.length} to pay · ${pounds(total)}.` : ""} Mark it paid once it has gone through PayProp and it drops off.
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <p className="mt-0.5 max-w-[68ch] text-[11.5px] text-muted">
+            Every invoice on a job that has not been paid, with what PayProp needs. {loaded ? `${rows.length} to pay · ${pounds(total)}.` : ""} Copy a line
+            rather than re-typing it, or take the whole run as a file. Mark it paid once it has gone through and it drops off.
+          </p>
+          {rows.length > 0 && (
+            <button
+              type="button"
+              onClick={downloadRun}
+              className="shrink-0 whitespace-nowrap rounded-full border border-line px-3.5 py-1.5 text-[12px] font-semibold transition hover:border-ink/40"
+            >
+              Download the run
+            </button>
+          )}
+        </div>
       </div>
       {err && <p className="text-[12.5px] text-accent-dark">{err}</p>}
       <div className="rounded-2xl border border-line/80 bg-panel p-5">
@@ -1052,7 +1131,19 @@ function Accounts({ orders, loaded, onOpen, onChanged }: { orders: WorksOrder[];
                     <td className="py-3 pr-3 text-muted">{o.invoiceRef || "no number"}</td>
                     <td className="figures py-3 pr-3 text-right">{pounds(o.invoicePence)}</td>
                     <td className="py-3 pr-3 text-muted">{day(o.invoicedAt)}</td>
-                    <td className="py-3 text-right"><button type="button" disabled={busy === o.id} onClick={() => void paid(o)} className="whitespace-nowrap rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-semibold text-page disabled:opacity-50">Paid in PayProp</button></td>
+                    <td className="py-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void copyRow(o)}
+                          title="Copy this line: who to pay, how much, the invoice number and the property"
+                          className="whitespace-nowrap rounded-full border border-line px-3 py-1.5 text-[12px] transition hover:border-ink/40"
+                        >
+                          {copied === o.id ? "Copied" : "Copy"}
+                        </button>
+                        <button type="button" disabled={busy === o.id} onClick={() => void paid(o)} className="whitespace-nowrap rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-semibold text-page disabled:opacity-50">Paid in PayProp</button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
