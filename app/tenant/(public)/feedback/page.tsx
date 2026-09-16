@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import PropertyPhoto from "@/components/PropertyPhoto";
 
 /**
@@ -24,9 +25,11 @@ import PropertyPhoto from "@/components/PropertyPhoto";
 /* The tenant surface's call-to-action colour (globals.css, data-surface="tenant"). */
 const CTA = "var(--accent-dark)";
 
-/** The viewing this feedback belongs to. Live, this comes from the link's
- *  token; the sample stands in so the page can be seen and judged. */
-const VIEWING = {
+/** The sample, shown when the page is opened without a link (/tenant/feedback),
+ *  so it can still be seen and judged. A real link carries ?t=<token> and the
+ *  page loads the viewing it was minted for (16 Sep 2026). */
+type Viewing = { tenant: string; property: string; locality: string; askingPcm: number; viewedOn: string; agent: string };
+const SAMPLE: Viewing = {
   tenant: "Sophie Turner",
   property: "Flat 2, Mercer Street",
   locality: "Manchester M4",
@@ -45,10 +48,42 @@ const QUESTIONS = [
 
 const gbp = (n: number) => `£${n.toLocaleString("en-GB")}`;
 
-export default function TenantFeedback() {
+export default function TenantFeedbackPage() {
+  return (
+    <Suspense fallback={null}>
+      <TenantFeedback />
+    </Suspense>
+  );
+}
+
+function TenantFeedback() {
+  const token = useSearchParams().get("t");
+  const [VIEWING, setViewing] = useState<Viewing | null>(token ? null : SAMPLE);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [already, setAlready] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!token) return;
+    let gone = false;
+    fetch(`/api/tenant/feedback?t=${encodeURIComponent(token)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; said?: string; viewing?: { firstName: string; property: string; locality: string; askingPcm: number | null; viewedOn: string; agent: string; answered: boolean } }) => {
+        if (gone) return;
+        if (!j.ok || !j.viewing) return setLoadError(j.said ?? "This link isn't working.");
+        const v = j.viewing;
+        setViewing({ tenant: v.firstName, property: v.property, locality: v.locality, askingPcm: v.askingPcm ?? 0, viewedOn: v.viewedOn, agent: v.agent || "your agent" });
+        setAlready(v.answered);
+      })
+      .catch(() => !gone && setLoadError("This page couldn't load. Try the link again in a minute."));
+    return () => {
+      gone = true;
+    };
+  }, [token]);
+
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [interested, setInterested] = useState<"yes" | "no" | null>(null);
-  const [offer, setOffer] = useState(String(VIEWING.askingPcm));
+  const [offer, setOffer] = useState("");
   const [moveIn, setMoveIn] = useState("");
   const [term, setTerm] = useState("12 months");
   const [sent, setSent] = useState(false);
@@ -59,14 +94,71 @@ export default function TenantFeedback() {
     if (!offer.trim()) return "Tell us what you’d like to offer.";
     if (!Number.isFinite(offerNum) || offerNum <= 0) return "That doesn’t look like an amount.";
     // The rule. Stated as a fact about the property, not as a telling-off.
-    if (offerNum > VIEWING.askingPcm) {
+    if (VIEWING?.askingPcm && offerNum > VIEWING.askingPcm) {
       return `The advertised rent is ${gbp(VIEWING.askingPcm)} a month, so an offer can’t be above that. You can offer ${gbp(VIEWING.askingPcm)} or less.`;
     }
     return null;
-  }, [interested, offer, offerNum]);
+  }, [interested, offer, offerNum, VIEWING]);
 
   const answered = QUESTIONS.filter((q) => (answers[q.key] ?? "").trim()).length;
   const canSend = answered > 0 && interested !== null && !offerError;
+
+  async function send() {
+    if (!token) return setSent(true); // the sample: nothing to save
+    setSending(true);
+    setSendError(null);
+    try {
+      const r = await fetch("/api/tenant/feedback", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          t: token,
+          answers,
+          interested: interested === "yes",
+          offer: interested === "yes" ? { amount: offerNum, moveIn, term } : undefined,
+        }),
+      });
+      const j = (await r.json()) as { ok?: boolean; said?: string };
+      if (j.ok) setSent(true);
+      else setSendError(j.said ?? "That didn't send. Try again in a minute.");
+    } catch {
+      setSendError("That didn't send. Try again in a minute.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  if (loadError) {
+    return (
+      <main className="mx-auto max-w-2xl px-5 py-16">
+        <div className="rounded-2xl border border-black/10 bg-white p-8 text-center">
+          <h1 className="text-[20px] font-bold">This link isn&rsquo;t working</h1>
+          <p className="mx-auto mt-2 max-w-md text-[13.5px] leading-relaxed text-black/60">{loadError}</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!VIEWING) {
+    return (
+      <main className="mx-auto max-w-2xl px-5 py-16">
+        <p className="text-center text-[13.5px] text-black/50">Loading your viewing&hellip;</p>
+      </main>
+    );
+  }
+
+  if (already && !sent) {
+    return (
+      <main className="mx-auto max-w-2xl px-5 py-16">
+        <div className="rounded-2xl border border-black/10 bg-white p-8 text-center">
+          <h1 className="text-[20px] font-bold">We already have your feedback</h1>
+          <p className="mx-auto mt-2 max-w-md text-[13.5px] leading-relaxed text-black/60">
+            Thank you. If you&rsquo;d like to add anything, reply to the email and it will reach {VIEWING.agent}.
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   if (sent) {
     return (
@@ -78,10 +170,10 @@ export default function TenantFeedback() {
           >
             ✓
           </div>
-          <h1 className="mt-4 text-[20px] font-bold">Thank you, Sophie</h1>
+          <h1 className="mt-4 text-[20px] font-bold">Thank you{VIEWING.tenant ? `, ${VIEWING.tenant.split(" ")[0]}` : ""}</h1>
           <p className="mx-auto mt-2 max-w-md text-[13.5px] leading-relaxed text-black/60">
             {interested === "yes"
-              ? `Your feedback and your offer of ${gbp(offerNum)} a month have gone to ${VIEWING.agent}. She’ll put it to the landlord and come back to you — usually the same day.`
+              ? `Your feedback and your offer of ${gbp(offerNum)} a month have gone to ${VIEWING.agent}, who will put it to the landlord and come back to you, usually the same day.`
               : `Your feedback has gone to ${VIEWING.agent}. It helps us find you somewhere that fits, and it helps the landlord understand how the property is being received.`}
           </p>
         </div>
@@ -100,7 +192,7 @@ export default function TenantFeedback() {
           </p>
           <p className="mt-0.5 truncate text-[15px] font-bold">{VIEWING.property}</p>
           <p className="text-[12.5px] text-black/50">
-            {VIEWING.locality} · {gbp(VIEWING.askingPcm)} pcm
+            {[VIEWING.locality, VIEWING.askingPcm ? `${gbp(VIEWING.askingPcm)} pcm` : null].filter(Boolean).join(" · ")}
           </p>
         </div>
       </div>
@@ -109,7 +201,7 @@ export default function TenantFeedback() {
         How did you find it?
       </h1>
       <p className="mt-1.5 text-[13.5px] leading-relaxed text-black/60">
-        Four quick questions. Whatever you say goes straight to {VIEWING.agent} — and
+        Four quick questions. Whatever you say goes straight to {VIEWING.agent}, and
         an honest answer is more use to you than a polite one.
       </p>
 
@@ -131,7 +223,7 @@ export default function TenantFeedback() {
       <div className="mt-9 rounded-2xl border border-black/10 bg-white p-5">
         <h2 className="text-[16px] font-bold">Would you like to take it?</h2>
         <p className="mt-1 text-[13px] leading-relaxed text-black/60">
-          No obligation — saying yes puts an offer to the landlord, and you can still
+          No obligation. Saying yes puts an offer to the landlord, and you can still
           change your mind.
         </p>
 
@@ -158,7 +250,7 @@ export default function TenantFeedback() {
             <label className="block">
               <span className="text-[13px] font-semibold">Your offer, per month</span>
               <span className="mt-0.5 block text-[12px] text-black/50">
-                Advertised at {gbp(VIEWING.askingPcm)} a month. Offers at or below that.
+                {VIEWING.askingPcm ? `Advertised at ${gbp(VIEWING.askingPcm)} a month. Offers at or below that.` : "What you would like to pay each month."}
               </span>
               <input
                 inputMode="numeric"
@@ -203,13 +295,18 @@ export default function TenantFeedback() {
 
       <button
         type="button"
-        disabled={!canSend}
-        onClick={() => setSent(true)}
+        disabled={!canSend || sending}
+        onClick={send}
         className="mt-6 w-full rounded-xl px-5 py-3.5 text-[14px] font-bold text-white transition-opacity disabled:opacity-35"
         style={{ background: CTA }}
       >
-        {interested === "yes" ? "Send feedback and offer" : "Send feedback"}
+        {sending ? "Sending…" : interested === "yes" ? "Send feedback and offer" : "Send feedback"}
       </button>
+      {sendError && (
+        <p className="mt-2 text-center text-[12.5px]" style={{ color: CTA }}>
+          {sendError}
+        </p>
+      )}
       <p className="mt-2 text-center text-[11.5px] text-black/45">
         {answered} of {QUESTIONS.length} questions answered
         {interested === null ? " · let us know if you’d like to offer" : ""}

@@ -1035,6 +1035,43 @@ CREATE TABLE IF NOT EXISTS os_tenant_email_log (
   detail     TEXT,
   sent_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- What a send was about, for the email that follows it: the homes a Homes That
+-- Fit went out with, so Anything Close can look for what has come on since.
+ALTER TABLE os_tenant_email_log ADD COLUMN IF NOT EXISTS meta JSONB;
+CREATE INDEX IF NOT EXISTS os_tenant_email_log_email_idx ON os_tenant_email_log (email_id, sent_at);
+
+-- A tenant's own feedback on a viewing (16 Sep 2026). One row per applicant
+-- per viewing, minted when How Was It? is sent; the token in the email IS the
+-- sign-in, the way the passport works. Kept apart from os_viewing_feedback,
+-- which is the AGENT's note and has one row per viewing.
+CREATE TABLE IF NOT EXISTS os_tenant_feedback (
+  token        TEXT PRIMARY KEY,
+  viewing_id   TEXT NOT NULL,
+  email        TEXT NOT NULL,
+  name         TEXT NOT NULL DEFAULT '',
+  listing_id   TEXT,
+  address      TEXT NOT NULL DEFAULT '',
+  asking_pcm   INTEGER,
+  starts_at    TIMESTAMPTZ,
+  agent        TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  answered_at  TIMESTAMPTZ,
+  answers      JSONB,
+  interested   BOOLEAN,
+  offer        JSONB
+);
+CREATE UNIQUE INDEX IF NOT EXISTS os_tenant_feedback_once ON os_tenant_feedback (viewing_id, email);
+
+-- Every application status the OS has seen, and when it first saw it. The
+-- declined email goes on a CHANGE to unsuccessful seen after the first run,
+-- never for the history that was already unsuccessful the day this shipped.
+CREATE TABLE IF NOT EXISTS os_application_status_seen (
+  application_id TEXT NOT NULL,
+  status         TEXT NOT NULL,
+  first_seen     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  baseline       BOOLEAN NOT NULL DEFAULT FALSE,
+  PRIMARY KEY (application_id, status)
+);
 
 -- Who is on which campaign.
 --

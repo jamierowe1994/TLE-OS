@@ -5,6 +5,7 @@ import { renderTleEmailLive } from "@/lib/email/tle-emails";
 import { createPassport, findPassportByEmail, markInvited } from "@/lib/passport";
 import { sendAsAgent } from "@/lib/send-as-agent";
 import { publicOrigin } from "@/lib/origin";
+import { logDone } from "@/lib/tenant-email-send";
 
 /**
  * POST -> Email properties from a lead, for real (16 Sep 2026).
@@ -23,7 +24,7 @@ import { publicOrigin } from "@/lib/origin";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-type Home = { name?: string; locality?: string; rent?: number | null };
+type Home = { id?: string; name?: string; locality?: string; rent?: number | null };
 
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -86,7 +87,16 @@ export async function POST(req: NextRequest) {
   const rendered = await renderTleEmailLive("tenant-matches", vars(`${publicOrigin(req)}/tenant/passport/${token}`));
   const subject = homes.length === 1 ? rendered.subject.replace(/^1 homes that fit/, "A home that fits") : rendered.subject;
   const r = await sendAsAgent({ me: actor, to, toName: name, subject, html: rendered.html });
-  if (r.sent) await markInvited(token, actor.name).catch(() => null);
+  if (r.sent) {
+    await markInvited(token, actor.name).catch(() => null);
+    /* On the tenant email log, with the homes, so Anything Close? can follow
+       up in four days with what has come on near them since. */
+    await logDone(`tenant-matches:${to.toLowerCase()}:${Date.now()}`, "tenant-matches", to, "sent", r.detail, {
+      name,
+      agentId: actor.id,
+      homes: homes.map((h) => ({ id: h.id ?? null, name: h.name, locality: h.locality ?? null, rent: h.rent ?? null })),
+    }).catch(() => null);
+  }
   return NextResponse.json(
     { ok: r.sent, said: r.detail, via: r.via, timeline: r.timeline },
     { status: r.sent ? 200 : r.reason === "switched_off" ? 423 : 502 }

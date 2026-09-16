@@ -171,17 +171,16 @@ export const SWITCHES: Switch[] = [
   },
   {
     /**
-     * The tenant reminders that go without anybody pressing a button (16 Sep
-     * 2026): the passport nudges at two and seven days, and the morning-of
-     * viewing reminder. Their own switch because nothing else on the list
-     * writes to a TENANT on a timer - every other tenant email follows an
-     * agent's action on a screen. Customer email must be on as well.
+     * Every tenant email that goes without anybody pressing a button (16 Sep
+     * 2026): lib/tenant-reminders and lib/tenant-journey-emails. The key says
+     * "reminders" because the reminders came first the same morning; the
+     * label is what it covers now. Customer email must be on as well.
      */
     key: "tenant_reminders",
-    label: "Tenant reminders",
-    what: "Emails tenants on a timer: a nudge two days and a week after a passport invite that nobody has started, and a reminder from 7am on the day of a TLE viewing. Each goes once.",
+    label: "Automatic tenant emails",
+    what: "Emails tenants without anybody pressing a button: the reply to a new enquiry, the welcome when a tenant is added, passport nudges at two and seven days, the reminder on the morning of a viewing, How Was It? afterwards, Shall We Rebook? after a no-show, Anything Close? four days after homes were sent, Not That One after a no on the feedback page, and the application received and declined emails. Each goes once.",
     who: "TENANTS, from the agent's own Outlook where that is armed and connected, otherwise from the Letting Experts sender. Email to landlords and tenants must be on as well.",
-    confirm: "REMIND TENANTS",
+    confirm: "EMAIL TENANTS",
     /* No old variable: this never existed before. Unset means off. */
     legacyEnv: "TENANT_REMINDERS",
     legacyOn: "on",

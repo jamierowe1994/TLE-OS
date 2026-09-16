@@ -1118,16 +1118,17 @@ TLE_EMAILS.push(
     "tenant-enquiry-reply",
     "About the Home You Asked About",
     "A tenant enquires about one property",
-    "NOT WIRED YET. Wants: the lead-scan cron (os-cron-leads-scan) to send it for a new applicant lead, the listing's availability and the next free viewing slots from the agent's Outlook, and a choose-a-time page (the link goes to the tenant area until one exists).",
+    "Wired 16 Sep 2026. lib/tenant-journey-emails enquiryReplies, on the leads scan every five minutes: a Letting lead first seen in the last two hours on a home still live with a rent. The move-in costs are worked out from the rent, England and Scotland apart. The button is their passport. Needs the Automatic tenant emails switch and customer email.",
     "The person who enquired",
     "Straight away: is it still there, what the rent is, the three things it costs to move in, the next viewing times, and the passport as a single link rather than a second button. The move-in costs are one list the send path builds from the rent.",
-    TENANT_ENQUIRY_REPLY
+    TENANT_ENQUIRY_REPLY,
+    { link: `${SITE}/tenant/welcome`, feesLine: "No admin fees and no referencing fees. The holding fee goes towards your first month's rent." }
   ),
   tenantEntry(
     "tenant-added-welcome",
     "Let's Find You a Home",
     "An agent registers a tenant with no property in mind",
-    "NOT WIRED YET. Wants a 'registered' event when a contact is added as an applicant with no enquiry against it, and a count of homes on in their area for {{onNowLine}}.",
+    "Wired 16 Sep 2026. POST /api/contacts, when an agent adds a tenant with an email address, from that agent. The button is their passport. Needs the Automatic tenant emails switch and customer email.",
     "The tenant who was added",
     "The search, not a property: what we need to know, one button into the passport where they tell us, and a promise to send what fits the same day.",
     TENANT_ADDED_WELCOME,
@@ -1167,10 +1168,11 @@ TLE_EMAILS.push(
     "tenant-matches-again",
     "Anything Close?",
     "Four days after homes were sent, with no reply",
-    "NOT WIRED YET. Wants the send of Homes That Fit recorded against the lead, a check for a reply or a viewing since, and new listings matched on the same criteria.",
+    "Wired 16 Sep 2026. Hourly: four to seven days after Homes That Fit, when no viewing has been booked for them since and something has come on near the homes sent, published after the send. Nothing new, nothing sent. Needs the Automatic tenant emails switch and customer email.",
     "The tenant",
     "Asks whether the brief has changed, shows what has come on since, and lets them stop the emails by saying they have found somewhere.",
-    TENANT_MATCHES_AGAIN
+    TENANT_MATCHES_AGAIN,
+    { link: `${SITE}/tenant/welcome` }
   ),
   tenantEntry(
     "viewing-reminder",
@@ -1185,16 +1187,17 @@ TLE_EMAILS.push(
     "viewing-rebook",
     "Shall We Rebook?",
     "Two hours after a viewing is closed as a no-show",
-    "NOT WIRED YET. Wants a no-show outcome on the viewing drawer (today it is only 'happened' or 'cancelled') and the next free slots from the agent's Outlook.",
+    "Wired 16 Sep 2026. Hourly: two hours to three days after the agent records a no-show on the viewing drawer, from that agent. Rebooked by reply. Needs the Automatic tenant emails switch and customer email.",
     "The applicant who didn't turn up",
     "No telling off: we missed you, things come up, here are three more times, and a way to say it is not the one.",
-    VIEWING_REBOOK
+    VIEWING_REBOOK,
+    { whenPretty: "on Thursday 4 September" }
   ),
   tenantEntry(
     "viewing-feedback",
     "How Was It?",
     "Two hours after a viewing is closed as happened",
-    "NOT WIRED YET. The page exists (/tenant/feedback, Howard's four questions and the offer). Wants a signed link per viewing so the tenant lands on the property they saw, and the answers written back to the viewing.",
+    "Wired 16 Sep 2026. Hourly: two to twenty-six hours after a TLE viewing ends, unless it was recorded as a no-show. The link carries a per-applicant token (os_tenant_feedback) and opens /tenant/feedback on the home they saw; the answers go to the agent by email. Needs the Automatic tenant emails switch and customer email.",
     "The applicant who viewed",
     "One button, to the feedback page already signed in, where they can also put an offer in. Says why it matters to them: it decides what we send next.",
     VIEWING_FEEDBACK,
@@ -1204,30 +1207,31 @@ TLE_EMAILS.push(
     "viewing-not-for-them",
     "Not That One, Try These",
     "The same day feedback says the home wasn't for them",
-    "NOT WIRED YET. Wants the feedback answers, a reason line written from them, and matching that leaves out the thing they didn't like.",
+    "Wired 16 Sep 2026. Straight after the tenant answers Not this one on the feedback page: live homes in the same postcode district at a rent within a fifth, quoting their concern back. Nothing similar, nothing sent. Needs the Automatic tenant emails switch and customer email.",
     "The applicant who viewed",
     "Repeats back what they didn't like, so they know it was heard, and shows homes that don't have it.",
-    VIEWING_NOT_FOR_THEM
+    VIEWING_NOT_FOR_THEM,
+    { reasonLine: "You said: \"The second bedroom was too small for a desk.\"" }
   ),
   tenantEntry(
     "application-received",
     "We Have Your Application",
     "A tenant applies for a property",
-    "NOT WIRED YET. The apply page is designed but not joined to a real listing. England and Scotland take different holding-fee lines (HOLDING_FEE_WORDING) - the sample shows England.",
+    "Wired 16 Sep 2026. Hourly: an application REX shows as received in the last three days, the first time the OS sees it, to each applicant with an email. The first run after switching on records the book and sends nothing. Needs the Automatic tenant emails switch and customer email.",
     "The tenant who applied",
     "What we do with it, when they will hear (the moment the landlord answers, either way), the holding fee if it is a yes, and the four things to have ready for referencing.",
     APPLICATION_RECEIVED,
-    { holdingFeeLine: HOLDING_FEE_WORDING.england.ifYes("£288"), link: `${SITE}/tenant/next` }
+    { holdingFeeLine: HOLDING_FEE_WORDING.england.ifYes("£288.46") }
   ),
   tenantEntry(
     "application-declined",
     "Not This One",
     "The landlord declines an application",
-    "NOT WIRED YET. Wants a declined outcome on the application (today only acceptance runs the handover) and a fresh set of homes. {{reasonLine}} is left empty unless the agent writes one.",
+    "Wired 16 Sep 2026. Hourly: an application REX moves to unsuccessful, seen after the first run, to each applicant, with live homes nearby at a similar rent. Nothing declined before switching on is ever written to. Needs the Automatic tenant emails switch and customer email.",
     "The tenant who applied",
     "Same day, never silence. Says sorry once, gives the reason if we have one, says it is not the end, and puts the next homes straight in front of them.",
     APPLICATION_DECLINED,
-    { reasonLine: "They've gone with an applicant who can move in a month sooner." }
+    { reasonLine: "" }
   ),
   tenantEntry(
     "application-its-yours",

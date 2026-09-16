@@ -102,7 +102,7 @@ export default function EmailProperties({
     .filter((l) => !all.some((p) => p.id === l.id))
     .filter((l) => !needle || `${l.name} ${l.locality}`.toLowerCase().includes(needle))
     .slice(0, needle ? 30 : 8);
-  const homes = picked.map((p) => ({ name: p.name, locality: p.locality, rent: p.rent }));
+  const homes = picked.map((p) => ({ id: p.id, name: p.name, locality: p.locality, rent: p.rent }));
 
   async function openReview() {
     setStage("review");

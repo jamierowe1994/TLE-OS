@@ -2,11 +2,11 @@ import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { switchOn } from "@/lib/switches";
 import { findUserById, type OsUser } from "@/lib/users";
+import { alreadyDone, deliver, firstName, logDone, london, validEmail } from "@/lib/tenant-email-send";
 import { renderTleEmailLive } from "@/lib/email/tle-emails";
 import { SITE } from "@/lib/email/tle-documents";
-import { sendAsAgent } from "@/lib/send-as-agent";
-import { sendEmail, ResendBlocked } from "@/lib/resend";
 import { presentAgentFor } from "@/lib/rex-agents";
+import { applicationEmails, feedbackRequests, matchesAgain, rebooks } from "@/lib/tenant-journey-emails";
 
 /**
  * The tenant emails that go on a timer (16 Sep 2026).
@@ -51,55 +51,6 @@ export interface ReminderRun {
   ukHour: number;
   results: ReminderResult[];
   error?: string;
-}
-
-const firstName = (name: string) => name.trim().split(/\s+/)[0] || "there";
-const validEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
-
-/** The hour and the date in London, whatever the server's clock says. */
-function london(now: Date) {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23",
-  }).formatToParts(now);
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
-  return { date: `${get("year")}-${get("month")}-${get("day")}`, hour: Number(get("hour")) };
-}
-
-async function alreadyDone(key: string): Promise<boolean> {
-  const rows = await q<{ key: string }>(`SELECT key FROM os_tenant_email_log WHERE key = $1`, [key]);
-  return rows.length > 0;
-}
-
-async function logDone(key: string, emailId: string, to: string, outcome: string, detail: string) {
-  await q(
-    `INSERT INTO os_tenant_email_log (key, email_id, sent_to, outcome, detail) VALUES ($1,$2,$3,$4,$5)
-     ON CONFLICT (key) DO NOTHING`,
-    [key, emailId, to, outcome, detail]
-  );
-}
-
-/**
- * Send one, as the agent when we know who they are, otherwise on our sender.
- * Returns whether the outcome is final (log it) or worth another go next hour.
- */
-async function deliver(p: {
-  agent: OsUser | null;
-  to: string;
-  toName: string;
-  subject: string;
-  html: string;
-}): Promise<{ sent: boolean; final: boolean; detail: string }> {
-  if (p.agent) {
-    const r = await sendAsAgent({ me: p.agent, to: p.to, toName: p.toName, subject: p.subject, html: p.html });
-    return { sent: r.sent, final: r.sent || r.reason === "no_address", detail: r.detail };
-  }
-  try {
-    await sendEmail({ to: p.to, subject: p.subject, html: p.html, audience: "customer" });
-    return { sent: true, final: true, detail: `Sent to ${p.to} from the Letting Experts sender.` };
-  } catch (e) {
-    const detail = e instanceof Error ? e.message : "The send failed.";
-    return { sent: false, final: false, detail: e instanceof ResendBlocked ? detail : `Not sent: ${detail}` };
-  }
 }
 
 /* ── Passport nudges ──────────────────────────────────────────────────── */
@@ -261,12 +212,27 @@ export async function runTenantReminders(opts: { dry?: boolean; now?: Date } = {
   const dry = Boolean(opts.dry) || !on;
   const run: ReminderRun = { ok: true, on, dry, ukHour: london(now).hour, results: [] };
   if (!hasDb()) return { ...run, ok: false, error: "No database is connected." };
-  try {
-    await passportNudges(dry, run.results);
-    await viewingReminders(dry, now, run.results);
-  } catch (e) {
+  /* Each job on its own: one that throws (REX not answering the application
+     read, say) must not stop the passport nudges going. */
+  const jobs: [string, () => Promise<void>][] = [
+    ["passport nudges", () => passportNudges(dry, run.results)],
+    ["viewing reminders", () => viewingReminders(dry, now, run.results)],
+    ["feedback requests", () => feedbackRequests(dry, now, run.results)],
+    ["rebooks", () => rebooks(dry, run.results)],
+    ["anything close", () => matchesAgain(dry, run.results)],
+    ["applications", () => applicationEmails(dry, run.results)],
+  ];
+  const errors: string[] = [];
+  for (const [name, job] of jobs) {
+    try {
+      await job();
+    } catch (e) {
+      errors.push(`${name}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  if (errors.length) {
     run.ok = false;
-    run.error = e instanceof Error ? e.message : String(e);
+    run.error = errors.join("; ");
   }
   return run;
 }
