@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import GuideButton from "@/components/GuideButton";
 import PageHeader from "@/components/PageHeader";
 import PickOne from "@/components/PickOne";
 import StageTabs from "@/components/StageTabs";
@@ -222,7 +223,7 @@ export default function Applications() {
         title="Applications"
         blurb={
           scope && !scope.everything
-            ? `${scope.label}'s applications, live from REX. See where each deal is, what needs attention, and take the next step.`
+            ? `${scope.label}'s applications. See where each deal is, what needs attention, and take the next step.`
             : "Track every application in one place. See where each deal is, what needs attention, and take the next step."
         }
         /* The line runs THROUGH her, at the waist. She is drawn full length
@@ -236,6 +237,12 @@ export default function Applications() {
         seat={0.5}
         illustrationCrop
         lineBreak="none"
+        actions={
+          <GuideButton
+            id="applications"
+            className="flex items-center gap-1.5 rounded-full border border-line/80 px-3.5 py-2 text-[12px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink"
+          />
+        }
       />
 
       {/* ── The pipeline, and the filter for it. Same shape as Market

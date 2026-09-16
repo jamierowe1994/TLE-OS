@@ -48,13 +48,13 @@ export const AGENT_GUIDES: Guide[] = [
     minutes: 7,
     practice: { href: "/plc/practice", label: "Practise it" },
     cover: img("plc-start"),
-    coverCaption: "It starts on the application, once the landlord has accepted: Start the PLC check.",
+    coverCaption: "It starts on the application: Start the PLC check.",
     intro:
       "PLC stands for pre-let compliance. It is the landlord's ID, the safety certificates and the tenant checks that make it legal to let the home, gathered into one pack and read by the compliance team before anything else moves. Nothing goes to the tenancy agreement until they have approved it, so the sooner your pack is with them, the sooner the move-in is safe. It takes about five minutes if the documents are to hand.",
     steps: [
       {
         title: "Where It Starts",
-        body: "The moment the landlord accepts an offer, the application grows a brown button: Start the PLC check. That is the only door into the pack, and it always opens from the application, so nothing you have already recorded has to be typed again. If you have never done one, the quiet link beside it, Never done one? Practise it first, runs exactly the same screens on invented paperwork.",
+        body: "Once an application is with the landlord or accepted, its file grows a brown button: Start the PLC check. That is the only door into the pack, and it always opens from the application, so nothing you have already recorded has to be typed again. If you have never done one, the quiet link beside it, Never done one? Practise it first, runs exactly the same screens on invented paperwork.",
         how: "When references come back on a deal, a pack is also opened for you automatically, and a notification tells you so. It is the same pack either way.",
       },
       {
@@ -421,6 +421,85 @@ export const AGENT_GUIDES: Guide[] = [
         title: "Enquiries, Viewings and Applications",
         body: "Once it is live, the listing gathers what comes in. Applications shows the enquiries from the portals, each with Apply, and the applications made. Viewings shows the viewings booked and done. Viewings themselves are booked from the applicant's lead, which is covered in its own guide.",
         image: img("l-live"),
+      },
+    ],
+  },
+  {
+    id: "applications",
+    title: "Applications, from Offer to Handover",
+    blurb:
+      "How applications reach you, how to read one at a glance, what to do while the landlord decides, and what happens the moment they say yes, up to the hand-off to pre-tenancy.",
+    icon: "checklist",
+    href: "/applications",
+    minutes: 8,
+    cover: img("a-board"),
+    coverCaption: "Applications: every application still in play, and what to focus on today.",
+    intro:
+      "An application is the point where a viewing turns into a tenancy, and it is where deals most often go quiet. Applicants apply through our application form, and each application arrives here on its own, with the checks already read out of their answers. Your job is to keep it moving: put it to the landlord, chase the decision, and once the landlord says yes, start the paperwork that gets them moved in. This is how the screen helps you do it.",
+    steps: [
+      {
+        title: "Where Applications Come From",
+        body: "You do not type applications in. When an applicant fills in the application form, it lands on Applications with the property, the rent offered, the move-in date and their answers to the four checks. The tenant passport they were invited to when their viewing was booked is what makes that form quick for them.",
+        why: "Because nothing is typed twice, what you see is what the applicant told us. If something looks wrong, ask them rather than correcting it by hand.",
+      },
+      {
+        title: "What to Focus On Today",
+        body: "The tiles along the top count every application still in play by stage: Received, Communicated (with the landlord), Accepted and Unsuccessful, plus Needs attention. Underneath, What to focus on today gathers them into three jobs: awaiting the landlord's decision, needing attention, and ready to progress.",
+        how: "Needs attention means the rent is over 40% of the applicants' income, or they have told us about adverse credit. Neither is a no. Both are conversations to have before the landlord asks.",
+      },
+      {
+        title: "The List",
+        body: "Open applications lists each one with the lead applicant, how many others are on it, the property, the rent, the move-in date and where it stands. The button on the right names the next job, such as Chase the landlord or View progress, and opens the application's file.",
+        image: img("a-list"),
+        how: "The buttons open the file; they do not send anything. Chasing the landlord is still your call or your email.",
+      },
+      {
+        title: "The Application File",
+        body: "The file opens with the property photo, the lead applicant, the rent and move-in date, and the stage it has reached. At a glance tells you when it came in, who it is waiting on, how many of the four checks are done, and whether Right to Rent is recorded for everyone on it.",
+        image: img("a-hero"),
+      },
+      {
+        title: "Needs You, the Checklist and the Activity",
+        body: "Below the head sit three cards. Needs you lists what to do next and who it is with: you, the landlord, pre-tenancy or the tenant. The checklist shows the four checks: Right to Rent, a landlord reference for the last two years, a guarantor if needed, and no adverse credit. Activity and comments keeps the record, and anything you write there stays on the application for everyone who opens it.",
+        image: img("a-cards"),
+        why: "A comment on the application is how the next person picks it up without ringing you. Write down the call you just made.",
+        how: "The checks are read from the applicant's own answers on the form. The form asks the lead applicant, so the other people on the application are worth a quick question too.",
+      },
+      {
+        title: "The Applicants",
+        body: "The Applicants tab has a card for each person on the application: how to reach them, their income, their work and employer, and their answers on Right to Rent, landlord reference, guarantor and credit. Open their file takes you to the lead applicant's own record.",
+        image: img("a-applicants"),
+      },
+      {
+        title: "While the Landlord Decides",
+        body: "Putting an application to the landlord is still done by you, by phone or email, with what you know about the applicants. Once it is with them the application shows as Landlord decision, and when they answer it moves to Accepted or Unsuccessful.",
+        why: "This is where deals go cold. The Awaiting landlord decision tile is the list to work through every morning.",
+        sends: "Nothing, from the application itself. The OS does not send the offer to the landlord, and it does not tell an applicant they were unsuccessful, so that call is yours.",
+      },
+      {
+        title: "Once the Landlord Says Yes",
+        body: "As soon as the application is with the landlord or accepted, Start the PLC check appears at the top of the file. That begins the pre-let compliance pack, which has its own guide, and a practice run if you have never done one.",
+        why: "The pack is what lets the tenancy go ahead, and pre-tenancy cannot start their side until it arrives. Start it the day the landlord says yes.",
+      },
+      {
+        title: "Handing Over to the Deal",
+        body: "An accepted application shows Hand over to the deal: the landlord, the tenants, the terms, and every certificate the property needs, with a count of anything short. Before this step nothing about the let exists on the deal side; the handover sets up the landlord and the property there and sends the good news.",
+        image: img("a-handover"),
+        how: "For now the handover is in rehearsal. Rehearse the handover works out every step and writes nothing, while the handover itself still runs the way it always has. When rehearsals keep matching, it is switched on, and the button becomes Hand over to the deal.",
+        sends:
+          "Nothing while it is in rehearsal. Once it is live, the landlord is emailed that their tenant is confirmed, and each tenant receives 'The Landlord Has Said Yes' with the holding fee (one week's rent, or none in Scotland) and what happens next.",
+      },
+      {
+        title: "Where It Is Up To",
+        body: "The track at the foot of the file runs all the way from Received to Move day: the three application stages, then the eight pre-tenancy stages as the deal is worked. Each stop shows what has happened, and Needs you picks up the jobs that come back to you along the way, such as answering pre-tenancy on the PLC pack, setting up a deposit replacement, or finishing the deal.",
+        image: img("a-spine"),
+        why: "It means you can answer a tenant who rings to ask where things are, without having to ask anyone else first.",
+      },
+      {
+        title: "What Applicants Receive Along the Way",
+        body: "The applicant hears from us when their viewing is booked, with a link to start their tenant passport, and again once the handover is live and the landlord has said yes. In between, the application itself sends them nothing.",
+        sends:
+          "At booking: the viewing confirmation with the passport link. After acceptance, once the handover is live: 'The Landlord Has Said Yes'. Passport reminders at two and seven days, and a reminder on the morning of the viewing, are written and ready but not switched on yet.",
       },
     ],
   },
