@@ -72,7 +72,7 @@ export interface ViewStep {
    * a DocuSeal session for this landlord, "message" opens the thread with
    * their agent. The live home sets these; the sample links.
    */
-  action?: "sign" | "message" | "presentation";
+  action?: "sign" | "message" | "presentation" | "offers";
 }
 
 /** An offer on the landlord's property, as they should read it. */
@@ -91,6 +91,32 @@ export interface ViewOffer {
   received: string | null;
   /** What the applicant asked for, if anything. */
   conditions: string | null;
+
+  /* ── What a landlord actually decides on ──
+     Added 16 Sep 2026 with the offers sheet. Until then an offer was a line on
+     the home page - an amount, a name and a date - which is enough to be told
+     about one and not nearly enough to say yes to one.
+
+     WHAT IS DELIBERATELY NOT HERE is as considered as what is. No date of
+     birth, no email or telephone, no current or previous address, no share
+     code, no employer or job title, no adverse-credit note, no savings. Some
+     of that is Right to Rent material that belongs to the agent doing the
+     check; the rest is identity and it is not the landlord's to hold on a
+     phone. The same instinct already strips the agent's referencing shorthand
+     out of `conditions` - see offerOf in lib/landlord-account. */
+
+  /** "12 months", when the application says. */
+  term: string | null;
+  /** The household's income a year, formatted. Null when REX has none. */
+  income: string | null;
+  /** Rent as a share of that income - the affordability test, as a percent. */
+  affordabilityPct: number | null;
+  /** "Employed, permanent" - the shape of the income, never where it is from. */
+  employment: string | null;
+  /** Offered a guarantor. Null when nobody has recorded it either way. */
+  guarantor: boolean | null;
+  /** A landlord reference covering the last two years is available. */
+  landlordRef: boolean | null;
 }
 
 /** The let moving through Kirstie's eight stages, in the landlord's words. */
@@ -223,6 +249,23 @@ export interface LandlordView {
   documents: ViewDocument[];
   /** Offers on the property, newest first. Absent before marketing. */
   offers?: ViewOffer[];
+  /**
+   * The offer they have already approved, if any.
+   *
+   * Their own record, not REX's: approving tells the agent and changes nothing
+   * in REX, so the offer's own status is no use for showing them what they
+   * already pressed. See lib/landlord-offers.
+   */
+  approvedOfferId?: string | null;
+  /**
+   * This is the harness, not a landlord's own file.
+   *
+   * On the view rather than passed down as a prop because it has to reach
+   * OffersTile through Dashboard and StepAction, neither of which has any
+   * other reason to know. Anything that WRITES checks it: the sample's
+   * Approve explains instead of filing, the way the sample's uploads do.
+   */
+  sample?: boolean;
   /** The accepted let, step by step. Absent until a deal exists in Propoly. */
   progress?: ViewProgress | null;
   /** The listing, from marketing onwards. */

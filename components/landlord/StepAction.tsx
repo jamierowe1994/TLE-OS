@@ -3,6 +3,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import SignTile from "@/components/landlord/SignTile";
 import MessageTile from "@/components/landlord/MessageTile";
 import PresentTile from "@/components/landlord/PresentTile";
+import OffersTile from "@/components/landlord/OffersTile";
 import type { LandlordView, ViewStep } from "@/lib/landlord-view";
 
 /**
@@ -51,6 +52,9 @@ export function HeroAction({ s, v, anchorBase = "", label }: { s: ViewStep; v: L
   if (s.action === "presentation" && v.presentation) {
     return <PresentTile variant="button" deck={v.presentation} sign={signSource(v)} label={text} sub={s.sub} icon={s.icon} />;
   }
+  if (s.action === "offers") {
+    return <OffersTile v={v} label={text} sub={s.sub} icon={s.icon} variant="button" />;
+  }
   const href = hrefOf(s, anchorBase);
   if (!href) return null;
   return s.external ? (
@@ -76,6 +80,9 @@ export function StepRow({ s, v, anchorBase = "" }: { s: ViewStep; v: LandlordVie
   }
   if (s.action === "presentation" && v.presentation) {
     return <PresentTile variant="row" deck={v.presentation} sign={signSource(v)} label={s.label} sub={s.sub} icon={s.icon} />;
+  }
+  if (s.action === "offers") {
+    return <OffersTile v={v} label={s.label} sub={s.sub} icon={s.icon} variant="row" />;
   }
   const inner = (
     <>

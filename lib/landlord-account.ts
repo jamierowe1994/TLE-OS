@@ -300,7 +300,50 @@ function offerOf(a: Application): ViewOffer {
       !/^flags?\s*:|key info|poor credit|right to rent\s*:/i.test(a.conditions)
         ? a.conditions.trim()
         : null,
+
+    /* ── the facts a landlord decides on ──
+       From the application, and from the PRIMARY applicant's key info where
+       the flow wrote it. What is left out is listed on ViewOffer and is not an
+       oversight: no employer, no job title, no address, no date of birth, no
+       adverse-credit note. The landlord is deciding whether somebody can
+       afford their property and whether the household suits it, and every one
+       of those answers that here. */
+    term: a.agreementMonths != null ? `${a.agreementMonths} months` : null,
+    income:
+      a.totalIncome != null && a.totalIncome > 0
+        ? `£${Math.round(a.totalIncome).toLocaleString("en-GB")} a year`
+        : null,
+    affordabilityPct: a.affordabilityPct ?? null,
+    employment: employmentOf(a),
+    guarantor: primaryInfo(a)?.guarantor ?? (a.applicants.some((p) => p.guarantorCount > 0) ? true : null),
+    landlordRef: primaryInfo(a)?.landlordRef ?? null,
   };
+}
+
+const primaryInfo = (a: Application) =>
+  (a.applicants.find((p) => p.isPrimary) ?? a.applicants[0])?.keyInfo ?? null;
+
+/**
+ * The SHAPE of the income, never its source.
+ *
+ * "Employed, permanent" or "Self-employed" tells a landlord what they need -
+ * how steady the money is. The company name and the job title tell them who
+ * somebody works for, which is not theirs to hold and which the agent already
+ * has for the reference. Probation and zero hours are in because they are the
+ * two things that genuinely change the answer.
+ */
+function employmentOf(a: Application): string | null {
+  const k = primaryInfo(a);
+  const base =
+    k?.employment?.trim() ||
+    (a.applicants.find((p) => p.isPrimary) ?? a.applicants[0])?.employmentRex?.trim() ||
+    null;
+  if (!base) return null;
+  const notes: string[] = [];
+  if (k?.position) notes.push(k.position.toLowerCase());
+  if (k?.inProbation) notes.push("in probation");
+  if (k?.zeroHours) notes.push("zero hours");
+  return notes.length ? `${base}, ${notes.join(", ")}` : base;
 }
 
 /* The last 300 applications, kept a minute. Three REX pages in series is

@@ -2552,6 +2552,41 @@ CREATE TABLE IF NOT EXISTS os_tenant_documents (
 CREATE INDEX IF NOT EXISTS os_tenant_documents_account
   ON os_tenant_documents (account_id, uploaded_at DESC);
 
+-- ── A LANDLORD APPROVING AN OFFER, added 16 Sep 2026 ─────────────────────
+--
+-- Approving is the landlord TELLING THEIR AGENT they are happy with an
+-- applicant. It is not the offer being accepted: REX and Propoly are read-only
+-- from here, so nothing about this row changes the application's status in
+-- either. The agent confirms it with the tenant, and REX catches up when they
+-- do. The copy on the button says exactly that, because a landlord who thinks
+-- they have signed something and has not is the worst outcome this screen has.
+--
+-- APPEND-ONLY, on purpose. A landlord who approves one offer and then changes
+-- their mind is an ordinary thing to do, and the agent needs to see that it
+-- happened rather than find a row quietly rewritten. The newest row for an
+-- account is the one that counts; the rest are the history of the decision.
+--
+-- There is deliberately NO decline. James, 16 Sep 2026: "we won't give them a
+-- decline button, and the simple reason why is that if they decline someone
+-- and they want to come back to it, it's going to be really difficult."
+CREATE TABLE IF NOT EXISTS os_landlord_offer_approvals (
+  id             TEXT PRIMARY KEY,
+  account_id     TEXT NOT NULL,
+  appraisal_id   TEXT,
+  -- The REX application id. Not a foreign key: the application lives in REX.
+  application_id TEXT NOT NULL,
+  -- What they saw when they pressed it, so a later argument about what was on
+  -- the screen has an answer. The offer moves; this does not.
+  amount         TEXT NOT NULL DEFAULT '',
+  applicants     TEXT NOT NULL DEFAULT '',
+  property       TEXT NOT NULL DEFAULT '',
+  approved_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  emailed_at     TIMESTAMPTZ,
+  email_error    TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS os_landlord_offer_approvals_account
+  ON os_landlord_offer_approvals (account_id, approved_at DESC);
+
 -- ── SENDING DOCUMENTS FROM A PHONE, added 16 Sep 2026 ────────────────────
 --
 -- A landlord at a desktop has the certificates in their hand and no scanner.

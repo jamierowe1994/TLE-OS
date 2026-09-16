@@ -120,12 +120,16 @@ export function rajAt(stage: Stage): { view: LandlordView; docs: DocsView; maint
     },
     message: { id: "message", label: "Message your agent", sub: "Ask questions or share information", href: "/landlord/demo/messages", icon: "message" },
     listing: { id: "listing", label: "See your listing", sub: marketing ? "Live on Rightmove, Zoopla and OnTheMarket" : "Once marketing starts", href: marketing ? "#listing" : null, icon: "home" },
+    /* Once there are offers the step IS the offers, and it opens them rather
+       than scrolling to a list that no longer exists - the same rule the live
+       view follows in lib/landlord-home-view. */
     viewings: {
       id: "viewings",
       label: stage === "viewings" ? "Review the offers" : "Viewings and offers",
       sub: stage === "viewings" ? "Two offers in, one waiting on you" : stage === "marketing" ? "2 viewings booked this week" : "Who has been, and what they said",
-      href: marketing ? "#offers" : null,
+      href: marketing && stage !== "viewings" ? "#viewings" : null,
       icon: "key",
+      ...(stage === "viewings" ? { action: "offers" as const } : {}),
     },
     tenancy: { id: "tenancy", label: "Sign the tenancy agreement", sub: "Sophie has signed. Your signature completes it", href: "#", icon: "file-contract", external: true },
     maintenance: { id: "maintenance", label: "Maintenance", sub: "1 job waiting on you, 2 in hand", href: "/landlord/demo/maintenance", icon: "setting" },
@@ -167,6 +171,9 @@ export function rajAt(stage: Stage): { view: LandlordView; docs: DocsView; maint
   const readiness = managed ? 100 : Math.round(((at + have / documents.length) / STAGES.length) * 100);
 
   const view: LandlordView = {
+    /* The harness. Anything that would WRITE explains itself instead - see
+       the note on LandlordView.sample. */
+    sample: true,
     greeting: "Hello, Raj",
     /* The drafted contract, reachable from the booklet as well as the file. */
     contractUrl: DEMO_CONTRACT,
@@ -233,8 +240,8 @@ export function rajAt(stage: Stage): { view: LandlordView; docs: DocsView; maint
     offers:
       at >= rank("viewings")
         ? [
-            { id: "o1", amount: "£850 per month", status: let_ ? "accepted" : "with-you", statusLabel: let_ ? "Accepted" : "With you", who: "1 adult, no children, a small dog", applicants: "Sophie", moveIn: "2026-10-01", received: "2026-06-14", conditions: "Would like to bring a small, older dog" },
-            { id: "o2", amount: "£825 per month", status: let_ ? "unsuccessful" : "received", statusLabel: let_ ? "Unsuccessful" : "Received", who: "2 adults, no children, no pets", applicants: "Daniel and Priya", moveIn: "2026-09-01", received: "2026-06-08", conditions: null },
+            { id: "o1", amount: "£850 per month", status: let_ ? "accepted" : "with-you", statusLabel: let_ ? "Accepted" : "With you", who: "1 adult, no children, a small dog", applicants: "Sophie", moveIn: "2026-10-01", received: "2026-06-14", conditions: "Would like to bring a small, older dog", term: "12 months", income: "£34,000 a year", affordabilityPct: 30, employment: "Employed, permanent", guarantor: false, landlordRef: true },
+            { id: "o2", amount: "£825 per month", status: let_ ? "unsuccessful" : "received", statusLabel: let_ ? "Unsuccessful" : "Received", who: "2 adults, no children, no pets", applicants: "Daniel and Priya", moveIn: "2026-09-01", received: "2026-06-08", conditions: null, term: "12 months", income: "£52,000 a year", affordabilityPct: 19, employment: "Employed, permanent", guarantor: true, landlordRef: null },
           ]
         : undefined,
     progress:

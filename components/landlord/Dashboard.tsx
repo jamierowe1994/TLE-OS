@@ -367,46 +367,12 @@ export default function LandlordDashboard({
         </section>
       )}
 
-      {/* ── offers, once there are any ──
-          Every application on the property, the accepted one first: the
-          amount, who, when they want to move and what they asked for - the
-          conversation the agent would otherwise have on the phone. */}
-      {v.offers && v.offers.length > 0 && (
-        <section className={`${card} p-6`} id="offers" data-search>
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 className="text-[18px]">Offers</h2>
-            <span className="text-[11.5px] text-muted">
-              {v.offers.length} on your property  •  your agent will talk you through them
-            </span>
-          </div>
-          <ul className="mt-3 divide-y divide-line/60">
-            {v.offers.map((o) => (
-              <li key={o.id} className="flex flex-wrap items-start gap-x-4 gap-y-1 py-3.5">
-                <span className="w-36 shrink-0 text-[15px] font-semibold">{o.amount}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[13px]">
-                    {o.applicants}
-                    <span className="text-muted">  •  {o.who}</span>
-                  </span>
-                  <span className="block text-[11.5px] text-muted">
-                    {o.moveIn ? `Wants to move in ${new Date(o.moveIn).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}` : "Move-in to be agreed"}
-                    {o.received ? `  •  received ${new Date(o.received).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}
-                  </span>
-                  {o.conditions && <span className="mt-1 block text-[12px]">Asked for: {o.conditions}</span>}
-                </span>
-                <span
-                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                    o.status === "unsuccessful" ? "bg-[#f3f3f1] text-muted line-through" : o.status === "with-you" ? "bg-accent-soft text-accent-dark" : "bg-[#f3f3f1] text-muted"
-                  }`}
-                  style={o.status === "accepted" ? { background: SAGE_WASH, color: SAGE_INK } : undefined}
-                >
-                  {o.statusLabel}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {/* THE OFFERS ARE NOT A SECTION ANY MORE.
+          James, 16 Sep 2026: "rather than showing the offers on the homepage
+          where it says Offers ... when they click View Offers, in Your Next
+          Step, we should be able to take that." A list you scroll past on the
+          way somewhere else is the wrong shape for the most consequential
+          choice on the portal - see OffersSheet. The step above opens them. */}
 
       {/* ── documents, snapshot, and what comes after the let ──
           minmax(0,1fr) on a phone: a bare one-column grid sizes its track to

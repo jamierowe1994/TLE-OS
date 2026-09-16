@@ -14,6 +14,7 @@ import {
 } from "@/lib/landlord-account";
 import { geocode } from "@/lib/geocode";
 import { DECK_KINDS } from "@/lib/present";
+import { currentApproval } from "@/lib/landlord-offers";
 import { STAGES, stepsForStage, type LandlordView, type Stage, type ViewOffer } from "@/lib/landlord-view";
 import { readAnswers } from "@/lib/property-answers-store";
 import { progress as answerProgress } from "@/lib/property-questions";
@@ -151,13 +152,16 @@ export async function loadLandlordHome(me: Me, pick?: string | null) {
   const book = chosenM ? [chosenM, ...managed.filter((p) => p !== chosenM)] : managed;
 
   const lead = open[0] ?? null;
-  const [compliance, offers, progress] = await Promise.all([
+  const [compliance, offers, progress, approved] = await Promise.all([
     landlordCompliance(book),
     landlordOffers(
       lead ? [lead.appraisal.rexPropertyId] : book[0] ? [book[0].propertyId] : [],
       lead ? [] : book[0] ? [book[0].listingId] : []
     ),
     landlordProgress(me.email, lead ? [lead.appraisal.address] : book[0] ? [book[0].name] : []),
+    /* What they have already said yes to. Ours, not REX's - see
+       lib/landlord-offers for why approving cannot move an application. */
+    currentApproval(me.id).catch(() => null),
   ]);
   const first = me.name.split(/\s+/)[0] || me.name;
   const base = open[0]
@@ -165,7 +169,7 @@ export async function loadLandlordHome(me: Me, pick?: string | null) {
     : book[0]
       ? await managedView(book[0], first, compliance.get(book[0].propertyId ?? "") ?? null, offers)
       : null;
-  const view = base ? { ...base, progress } : null;
+  const view = base ? { ...base, progress, approvedOfferId: approved?.applicationId ?? null } : null;
   const rest = open[0] ? book : book.slice(1);
   /* Which one this actually resolved to, so the shell can light the right row
      in the dropdown even when ?p= was absent or stale. */
@@ -315,7 +319,12 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
       compliance: { id: "compliance", label: "Upload your compliance documents", sub: `${required.length - have} of ${required.length} still to send`, href: "/landlord/documents", icon: "upload", done: allIn },
       message: { id: "message", label: "Message your agent", sub: "Ask questions or share information", href: null, icon: "message", action: "message" },
       listing: { id: "listing", label: "See your listing", sub: marketing?.live ? `Live on ${marketing.portals.map((p) => p.name).join(", ") || "the portals"}` : "Once marketing starts", href: marketing ? "#listing" : null, icon: "home" },
-      viewings: { id: "viewings", label: "Viewings and offers", sub: offersSub, href: offers.length ? "#offers" : viewings.length ? "#viewings" : null, icon: "key" },
+      /* With offers on the table this step IS the offers, and it opens them
+         rather than scrolling to a list - James, 16 Sep 2026. Before any have
+         come in it is the viewings anchor it always was. */
+      viewings: offers.length
+        ? { id: "viewings", label: offers.length === 1 ? "View the offer" : "View offers", sub: offersSub, href: null, icon: "key", action: "offers" as const }
+        : { id: "viewings", label: "Viewings and offers", sub: offersSub, href: viewings.length ? "#viewings" : null, icon: "key" },
       tenancy: { id: "tenancy", label: "Your tenancy", sub: "Drawn up once referencing is back", href: null, icon: "file-contract" },
       maintenance: { id: "maintenance", label: "Maintenance", sub: "Opens once your tenant moves in", href: null, icon: "setting" },
       renewal: { id: "renewal", label: "Tenancy renewal", sub: "After the let", href: null, icon: "calendar" },
