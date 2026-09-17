@@ -265,7 +265,7 @@ const running = new Map<string, Promise<unknown>>();
 // are figures missing the larger half of the business, and they would have been
 // served for the full hour-long TTL. Same cached-shape rule as the Payment
 // shape below: when what a stored payload MEANS changes, the key must change.
-const CACHE_VERSION = "v16";
+const CACHE_VERSION = "v17"; // v17, 17 Sep 2026: Tenant Find and Transaction fees are commission
 
 /**
  * `wait: true` — join the walk instead of being told null.
@@ -395,6 +395,12 @@ const FEE_CATEGORIES = new Set([
   "Set Up Fee",
   "Management Fee - Investor Services",
   "Rent and Legal Protection",
+  /* Found reconciling against Susan's H2 sheet, 17 Sep 2026. The let-only fee
+     splits between the agency and the partner exactly like a set-up fee
+     (August: £978.75 to TLE, £1,748.25 to partners, £90 transaction), and it
+     was reaching no figure at all - £2,348 net of August's commission. */
+  "Tenant Find Fee",
+  "Transaction Fee",
 ]);
 
 /**

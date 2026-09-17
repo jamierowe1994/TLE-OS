@@ -11,14 +11,14 @@ import {
 } from "@/lib/business/arrears-history";
 
 /**
- * The arrears LOG — who was behind, and when.
+ * The arrears LOG - who was behind, and when.
  *
  * GET  ?month=YYYY-MM      → the snapshot answering for that month, plus how
  *                            long each currently-behind tenant has been behind
  * POST { capture: true }   → store today's live PayProp read, once a day
  * POST { asAt, text }      → parse a pasted PayProp export; `commit` to store
  *
- * ADMIN ONLY — every row names a tenant.
+ * ADMIN ONLY - every row names a tenant.
  */
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
   if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
   // Parsed and shown back BEFORE anything is written. A mis-read column here
-  // becomes the permanent record of who owed what — it is worth one look.
+  // becomes the permanent record of who owed what - it is worth one look.
   if (!body.commit) {
     return NextResponse.json({
       preview: true,

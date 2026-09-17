@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireCapability } from "@/lib/admin";
 /* The BUSINESS seam, not the OS one. lib/db's q() refuses to mutate any table
-   not prefixed os_, which is the right rule — and integration_cache and
+   not prefixed os_, which is the right rule - and integration_cache and
    propoly_cache are two of the nine ported tables that predate it. This seam
    routes those through qShared with a stated reason and leaves everything
    else to the OS guard. */
 import { q } from "@/lib/business/db";
 
 /**
- * When each source last actually answered — and a way to make it answer again.
+ * When each source last actually answered - and a way to make it answer again.
  *
  * GET  /api/business/freshness → { sources[], oldest }
  * POST /api/business/freshness → forgets the cached copies, so the next read walks
@@ -21,7 +21,7 @@ import { q } from "@/lib/business/db";
  *
  * "How old is this?" is a question about the fetch, not about the number. The
  * figures themselves already carry an `asOf`, but that is stamped at RENDER
- * time — `new Date()` when the tile is built — so it says "now" whether the
+ * time - `new Date()` when the tile is built - so it says "now" whether the
  * underlying walk happened a minute ago or last Tuesday. It looks like
  * freshness and measures nothing.
  *
@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
       );
       sources.push({ label: c.label, feeds: c.feeds, computedAt: rows[0]?.at ?? null });
     } catch {
-      /* A cache table that doesn't exist yet is not an error — it is a source
+      /* A cache table that doesn't exist yet is not an error - it is a source
          that has never been asked. null says exactly that. */
       sources.push({ label: c.label, feeds: c.feeds, computedAt: null });
     }
@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
   const stamps = sources.map((s) => s.computedAt).filter((s): s is string => Boolean(s));
   return NextResponse.json({
     sources,
-    /* The oldest is what the header shows — the figures on screen are only as
+    /* The oldest is what the header shows - the figures on screen are only as
        fresh as the least fresh thing feeding them. */
     oldest: stamps.length ? stamps.sort()[0] : null,
   });
@@ -101,6 +101,6 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     cleared,
-    note: "Cleared. The next load walks the sources again — closed months stay archived.",
+    note: "Cleared. The next load walks the sources again - closed months stay archived.",
   });
 }

@@ -4,7 +4,7 @@ import { getPropolyMoveInForecast } from "@/lib/business/propoly-deals";
 
 // Move-in tracker: completed MTD + forward forecast (active Propoly deals by
 // move-in month) + quarter/YTD rollups, with the comparison figures the
-// trend arrows need. All Propoly — REX doesn't hold move-ins.
+// trend arrows need. All Propoly - REX doesn't hold move-ins.
 
 export async function GET(req: NextRequest) {
   if (!(await requireCapability(req, "see:business"))) {

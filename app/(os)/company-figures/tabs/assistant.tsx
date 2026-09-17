@@ -1,6 +1,6 @@
 "use client";
 
-// Admin tab: Assistant — Susan's briefing library for the TLE Assistant.
+// Admin tab: Assistant - Susan's briefing library for the TLE Assistant.
 // Anything saved here is handed to the chat on every question, so it can
 // answer with TLE's own guidance (fees, processes, policies, how-tos).
 // Plain text in, plain text out: paste or upload .txt/.md files.
@@ -75,7 +75,7 @@ export default function AssistantTab({ month }: { month: string }) {
         return [data.entry!, ...others];
       });
       startNew();
-      setNotice("Saved — Steve knows it already.");
+      setNotice("Saved - Steve knows it already.");
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "Couldn't save.");
     } finally {
@@ -98,7 +98,7 @@ export default function AssistantTab({ month }: { month: string }) {
 
   function onUpload(file: File) {
     if (!/\.(txt|md|markdown|csv)$/i.test(file.name)) {
-      setNotice("Text files only for now (.txt, .md, .csv) — paste content from PDFs/Word docs instead.");
+      setNotice("Text files only for now (.txt, .md, .csv) - paste content from PDFs/Word docs instead.");
       return;
     }
     const reader = new FileReader();
@@ -121,7 +121,7 @@ export default function AssistantTab({ month }: { month: string }) {
         <p className="mt-1 max-w-2xl text-[13px] text-muted">
           Everything saved here is handed to Steve on the agents&rsquo;
           dashboard, alongside their live figures. Add fee structures, processes,
-          policies, FAQs — anything you&rsquo;d want it to answer with. Changes take
+          policies, FAQs - anything you&rsquo;d want it to answer with. Changes take
           effect on the very next question.
         </p>
       </div>
@@ -139,7 +139,7 @@ export default function AssistantTab({ month }: { month: string }) {
                 onClick={startNew}
                 className="text-[12px] font-medium text-muted transition hover:text-ink"
               >
-                Cancel — add new instead
+                Cancel - add new instead
               </button>
             ) : null}
           </div>
@@ -148,13 +148,13 @@ export default function AssistantTab({ month }: { month: string }) {
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Title — e.g. “TLE management fees 2026”"
+            placeholder="Title - e.g. “TLE management fees 2026”"
             className="mt-3 w-full rounded-lg border border-line bg-white px-3 py-2 text-[13px] outline-none transition focus:border-black/25"
           />
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="The information itself — plain text. Steve quotes and references this at will."
+            placeholder="The information itself - plain text. Steve quotes and references this at will."
             rows={12}
             className="mt-2 w-full resize-y rounded-lg border border-line bg-white px-3 py-2 text-[13px] leading-relaxed outline-none transition focus:border-black/25"
           />
@@ -203,7 +203,7 @@ export default function AssistantTab({ month }: { month: string }) {
             <p className="mt-3 text-[13px] text-red-600">{error}</p>
           ) : entries.length === 0 ? (
             <p className="mt-3 text-[13px] text-muted">
-              Nothing yet — Steve currently only knows the agents&rsquo; figures.
+              Nothing yet - Steve currently only knows the agents&rsquo; figures.
               Add your first entry on the left.
             </p>
           ) : (

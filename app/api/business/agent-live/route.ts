@@ -8,7 +8,7 @@ import { getComplianceAsAt } from "@/lib/business/rex-stats";
 import { LIVE_START } from "@/lib/business/roster";
 
 /**
- * ONE partner, live — the four sources the drill-down used to read from July.
+ * ONE partner, live - the four sources the drill-down used to read from July.
  *
  * GET /api/business/agent-live?agent=Rhiannon+Dodge&email=…&month=YYYY-MM
  *   → { months, earnings[], book, deals, compliance }
@@ -16,7 +16,7 @@ import { LIVE_START } from "@/lib/business/roster";
  * ── Why this route had to exist ───────────────────────────────────────────
  *
  * Susan's partner drill-down was reading six hardcoded tables of 11 July
- * records — net income, portfolio, compliance, move-ins and two pipelines —
+ * records - net income, portfolio, compliance, move-ins and two pipelines —
  * while the tabs BEHIND it had all been wired live months ago. Open Rhiannon
  * from the live table and every figure silently reverted to July, including
  * property addresses and rents.
@@ -29,7 +29,7 @@ import { LIVE_START } from "@/lib/business/roster";
  *
  * It cannot start earlier and be true. The portal reports its own measured
  * figures from Aug 2026; before that there is Susan's hand-keyed sheet and
- * nothing else, and the two are not the same measurement — one is typed, one
+ * nothing else, and the two are not the same measurement - one is typed, one
  * is walked out of PayProp. Drawing them on one line describes the change of
  * method, not the business. So the series begins where the measuring begins
  * and the drill-down says "since August 2026" out loud.
@@ -40,7 +40,7 @@ import { LIVE_START } from "@/lib/business/roster";
  * passed through as null rather than collapsed to 0. A partner who earned
  * nothing and a partner PayProp could not answer for look identical at 0 and
  * must never look identical on screen. `matched: false` is the third case
- * again — PayProp holds no beneficiary under that partner at all.
+ * again - PayProp holds no beneficiary under that partner at all.
  */
 
 export const dynamic = "force-dynamic";
@@ -89,7 +89,7 @@ export async function GET(req: NextRequest) {
   const [earningsR, bookR, dealsR, complianceR] = await Promise.allSettled([
     /* Without an email there is no beneficiary to look up. Name matching is
        the looser key and getAgentEarningsForMonths already falls back to it,
-       but it needs SOMETHING — so skip rather than ask PayProp about "". */
+       but it needs SOMETHING - so skip rather than ask PayProp about "". */
     email ? getAgentEarningsForMonths(email, months, agent) : Promise.resolve(null),
     getAgentBook(agent),
     email ? getPropolyAgentDeals({ email, agentKey: agentKey ?? null }) : Promise.resolve(null),
@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
      name.
      
      normaliseAgentName strips the parenthetical, so "Sean McMahon (Edinburgh)"
-     and "Sean Mc Mahon (Glasgow)" both collapse to the same key — .find()
+     and "Sean Mc Mahon (Glasgow)" both collapse to the same key - .find()
      would then hand Edinburgh's certificates to Glasgow, or miss entirely on
      the spacing difference and report a clean book. Two real partners, and the
      roster carries the qualifier precisely because these tables spell people

@@ -63,15 +63,15 @@ const STYLES: Record<
 };
 
 const DOT: Record<StatSource, string> = {
-  "live-rex": "#22c55e",
-  "live-meta": "#22c55e",
-  "live-propoly": "#22c55e",
-  "live-teg": "#22c55e",
-  "live-ghl": "#22c55e",
-  "live-payprop": "#22c55e",
+  "live-rex": "#8d9b78",
+  "live-meta": "#8d9b78",
+  "live-propoly": "#8d9b78",
+  "live-teg": "#8d9b78",
+  "live-ghl": "#8d9b78",
+  "live-payprop": "#8d9b78",
   // Anything not coming from a live system reads amber: it's a to-do, not a
   // neutral fact, and grey let snapshots hide in plain sight.
-  manual: "#f59e0b",
+  manual: "#cfa867",
   /* Slate, NOT amber. Amber is a to-do; a derived figure is not one — it is
      worked out here FROM live figures, so it is exactly as trustworthy as the
      numbers behind it. Painting it amber turned every ratio on the Income tab
@@ -81,7 +81,7 @@ const DOT: Record<StatSource, string> = {
   /* Red, not amber. Amber is "not live yet"; this is "nothing reached it at
      all", and the two need telling apart at a glance or the gaps disappear
      into the to-do pile. */
-  unavailable: "#e11d48",
+  unavailable: "#a85a51",
 };
 
 export default function SourceBadge({

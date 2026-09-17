@@ -53,13 +53,13 @@ export async function GET(req: NextRequest) {
       rentCollected: Math.round(hist[m].rentCollected),
       propertiesPaying: hist[m].propertiesPaying,
       tenantsPaying: hist[m].tenantsPaying,
-      // Mean rent per paying property — a stable shape that makes an odd month
+      // Mean rent per paying property - a stable shape that makes an odd month
       // obvious without needing a denominator we cannot honestly supply.
       avgPerProperty:
         hist[m].propertiesPaying > 0
           ? Math.round(hist[m].rentCollected / hist[m].propertiesPaying)
           : null,
-      /** Short by a whole agency — the figures below understate. */
+      /** Short by a whole agency - the figures below understate. */
       incomplete: hist[m].unreachable.length > 0,
     }));
 

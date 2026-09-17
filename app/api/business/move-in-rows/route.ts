@@ -6,7 +6,7 @@ import { propolyConfigured } from "@/lib/business/propoly";
 // The two Move-ins tables, live from Propoly.
 //
 // Both were a hand-made capture taken on 11 Jul 2026, which is why they sat on
-// July whatever month was picked — and why they disagreed with the tracker
+// July whatever month was picked - and why they disagreed with the tracker
 // beside them. The capture holds ten rows; Propoly's own answer for July is
 // thirty-five, because the capture was taken on the 11th and the month kept
 // going.
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
     getAllPropolyDeals().catch(() => null),
   ]);
 
-  // A deal with no expected date is still real work — it belongs to the month
+  // A deal with no expected date is still real work - it belongs to the month
   // being looked at rather than disappearing because nobody has typed a date.
   const pipeline =
     deals == null

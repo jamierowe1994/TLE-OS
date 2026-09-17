@@ -93,7 +93,10 @@ export interface MonthlyGci {
  *       "unreachable", it was simply not configured, so it never appeared at
  *       all and a Glasgow-only £3,811 was frozen as August's commission.
  */
-const DEFINITION_VERSION = 4;
+/*
+ * 5 — 17 Sep 2026. Tenant Find Fee and Transaction Fee count as commission.
+ */
+const DEFINITION_VERSION = 5;
 
 /** Both agencies. Fixed, not read from what happens to be connected today -
  *  a month walked while one connection is down must not look whole. */

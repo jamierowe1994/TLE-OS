@@ -87,7 +87,8 @@ export default function OwnWorkspace({
   /* The owner reached this from his admin rail and expects to land back on it.
      Anybody else is ON their own screen, so "back" means the rest of the OS. */
   const backHref = can(role, "admin:open") ? "/admin" : "/dashboard";
-  const backLabel = can(role, "admin:open") ? "← Back to my view" : "← Back to TLE OS";
+  /* James, 17 Sep 2026: "Return to Admin Centre", in the rail's bottom corner. */
+  const backLabel = can(role, "admin:open") ? "← Return to Admin Centre" : "← Back to TLE OS";
 
   if (allowed === false) {
     return (

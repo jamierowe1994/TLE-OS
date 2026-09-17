@@ -13,7 +13,7 @@ import {
 import { getPortfolioBook, portfolioError } from "@/lib/business/payprop-portfolio";
 import { currentMonth } from "@/lib/business/format";
 
-// Live PayProp money for the admin centre — the figures that used to come off
+// Live PayProp money for the admin centre - the figures that used to come off
 // the 11 Jul 2026 snapshot.
 //
 // GET /api/admin/payprop-live?month=YYYY-MM → { income, arrears }
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
   // after another.
   //
   // `income` belongs IN here. Left outside and unawaited it serialised as {},
-  // which the Income tab reads as a live answer — green banner, then a throw on
+  // which the Income tab reads as a live answer - green banner, then a throw on
   // the first field it touches.
   const [income, prevIncome, ytd, arrears, moveIns, portfolio] = await Promise.all([
     getAgencyIncome(month),
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
   //
   // PayProp's amounts are VAT-inclusive; the business is not. The Income tab's
   // own metric is literally labelled "Combined GCI (exc VAT)", so the inclusive
-  // figure was being rendered under a heading promising the opposite — and the
+  // figure was being rendered under a heading promising the opposite - and the
   // accounts sheet confirms the convention (June: gross 41,438.44, VAT
   // 6,906.49, net 34,531.95).
   //
@@ -98,7 +98,7 @@ export async function GET(req: NextRequest) {
     byAgent: income?.byAgentProperty ?? [],
     // Which agencies PayProp wouldn't let us read. The Overview needs this to
     // say a total is INCOMPLETE rather than presenting one agency's money as
-    // the whole business — E&W's OAuth refresh token is currently rejected,
+    // the whole business - E&W's OAuth refresh token is currently rejected,
     // and without this its absence looks like a smaller but plausible GCI.
     unreachable: income?.unreachable ?? ytd?.unreachable ?? [],
     connected: true,

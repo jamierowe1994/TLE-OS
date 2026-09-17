@@ -56,12 +56,12 @@ export async function GET(req: NextRequest) {
   };
 
   /*
-   * Monthly GCI, live from the per-month store — the chart GROWS as months
+   * Monthly GCI, live from the per-month store - the chart GROWS as months
    * close rather than being a fixed Jan–Jun literal reading one seed row.
    *
    * There is NO seed fallback. It used to chart the six hand-typed Jan–Jun
    * figures whenever the store was cold, captioned "showing the captured 2026
-   * actuals meanwhile" — but a chart with bars on it reads as data, and nobody
+   * actuals meanwhile" - but a chart with bars on it reads as data, and nobody
    * reads the caption under a chart that looks finished. An empty chart that
    * says it is still gathering is slower to look at and impossible to
    * misread.
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
   const gciByMonth = live.length
     ? {
         labels: live.map((m) => SHORT[Number(m.month.slice(5, 7)) - 1]),
-        // NET of VAT — PayProp's amounts are VAT-inclusive and the accounts
+        // NET of VAT - PayProp's amounts are VAT-inclusive and the accounts
         // sheet is not. Charting the gross figure would overstate every bar
         // by 20%.
         actual: live.map((m) => Math.round(m.combinedGciNet)),
@@ -95,14 +95,14 @@ export async function GET(req: NextRequest) {
         budget: null,
         budgetNote:
           series && !series.complete
-            ? `Live from PayProp, net of VAT — ${
+            ? `Live from PayProp, net of VAT - ${
                 series.missing.length ? `${series.missing.length} month(s) still computing. ` : ""
               }${
                 series.unreachable.length
                   ? `${series.unreachable.join(", ")} unreachable, so these bars are SHORT by a whole agency.`
                   : ""
               }`.trim()
-            : "Live from PayProp, net of VAT. No budget series exists in the source data — actual GCI only.",
+            : "Live from PayProp, net of VAT. No budget series exists in the source data - actual GCI only.",
         live: true,
         ytdNet: series?.ytdNet ?? null,
         ytdGross: series?.ytdGross ?? null,
@@ -114,7 +114,7 @@ export async function GET(req: NextRequest) {
         actual: [],
         budget: null,
         budgetNote:
-          "Still walking the monthly commission out of PayProp. Nothing charted until it lands — a bar drawn from an old figure looks exactly like a real one.",
+          "Still walking the monthly commission out of PayProp. Nothing charted until it lands - a bar drawn from an old figure looks exactly like a real one.",
         live: false,
         ytdNet: null,
         ytdGross: null,
@@ -133,7 +133,7 @@ export async function GET(req: NextRequest) {
     yoyGrowth: SEED.yoyGrowth,
     gciByMonth,
     sources: SEED.sources,
-    // Every period Susan's dashboard can show, captured 21 Jul 2026 — powers
+    // Every period Susan's dashboard can show, captured 21 Jul 2026 - powers
     // the working period pills on the mirrored Overview.
     periods: PERIOD_KPIS,
   });

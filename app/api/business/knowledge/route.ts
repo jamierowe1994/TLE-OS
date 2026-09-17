@@ -14,7 +14,7 @@ import {
 async function requireAdmin(req: NextRequest): Promise<NextResponse | null> {
   /* ONE auth system. The portal guarded this with its own session plus an
      ADMIN_EMAILS list; in the OS the same job is a capability, so owner and
-     super_admin pass and nobody else does — including developers, who have no
+     super_admin pass and nobody else does - including developers, who have no
      business reading the money. */
   if (!(await requireCapability(req, "see:business"))) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });

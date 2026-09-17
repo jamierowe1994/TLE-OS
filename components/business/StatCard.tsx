@@ -40,7 +40,7 @@ export default function StatCard({
 
   const sizeClass = big ? "stat-value--big" : size === "sm" ? "stat-value--sm" : "";
 
-  // Every card carries the same corner dot — green for live, amber for not.
+  // Every card carries the same corner dot - green for live, amber for not.
   // The mix of text pills and dots made it impossible to scan a tab and tell
   // at a glance which figures were real; the wording is in the tooltip.
   const compactBadge = true;

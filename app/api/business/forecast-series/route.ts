@@ -13,7 +13,7 @@ import { recentMonths } from "@/lib/business/format";
  * Until now those lived in three different places and nobody could say whether
  * the first two were anywhere near each other, which was the whole question.
  *
- * Susan's is stored as a manual override under `forecast.susan.<month>` — the
+ * Susan's is stored as a manual override under `forecast.susan.<month>` - the
  * same store the P&L uses. One store for "a person typed this", rather than a
  * new table per figure.
  *

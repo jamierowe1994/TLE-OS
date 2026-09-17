@@ -1,10 +1,10 @@
 "use client";
 
-// Admin tab: Portfolio — the book in summary boxes (total, managed, let only,
+// Admin tab: Portfolio - the book in summary boxes (total, managed, let only,
 // rent collect, RLP), each split England & Wales / Scotland, then rents and
 // health, then the partner table. Everything is live from PayProp.
 //
-// Rebuilt 17 Sep 2026 from Susan's notes: the "Managed book — live" block at
+// Rebuilt 17 Sep 2026 from Susan's notes: the "Managed book - live" block at
 // the top repeated the partner table below it, and the rent protection row
 // ("No protection 69") was Scotland alone under a business-wide heading. The
 // summary now answers her question in one row: how big is the book, how much
@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
 import StatCard from "@/components/business/StatCard";
 import SourceNote from "@/components/business/SourceNote";
 import DataTable from "@/components/business/DataTable";
-import type { SeedData } from "@/lib/business/seed-data"; // type-only — erased at build
+import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
 import { formatGBP, monthLabel } from "@/lib/business/format";
 import { liveMonth } from "@/lib/business/roster";
 
@@ -175,7 +175,7 @@ export default function PortfolioTab({ month }: { month: string; seed: SeedData 
     };
   }, []);
 
-  // "Renewals due" is certificates coming up for renewal — a REX figure.
+  // "Renewals due" is certificates coming up for renewal - a REX figure.
   useEffect(() => {
     let cancelled = false;
     let tries = 0;
@@ -226,7 +226,7 @@ export default function PortfolioTab({ month }: { month: string; seed: SeedData 
 
   const acc = (a: Account) => live?.byAccount.find((x) => x.account === a) ?? null;
   /** Properties at a service level, for one agency or the whole book. Null when
-   *  the per-agency split isn't in the cached book yet — never a guessed zero. */
+   *  the per-agency split isn't in the cached book yet - never a guessed zero. */
   const levelCount = (re: RegExp, a?: Account): number | null => {
     if (!live) return null;
     if (!a) {

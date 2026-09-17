@@ -1,13 +1,13 @@
 "use client";
 
-// Admin tab: Compliance — per certificate type, on the managed book.
+// Admin tab: Compliance - per certificate type, on the managed book.
 //
 // Rebuilt 17 Sep 2026 from Susan's notes ("we need the breakdown of compliance
 // per category type i.e. Gas, EICR etc and % of portfolio").
 //
 // The old tab counted every compliance entry REX holds across the account —
 // 2,635 items including let-only homes, oil safety and three kinds of HMO
-// licence — so its "354 overdue" answered a different question from the
+// licence - so its "354 overdue" answered a different question from the
 // Compliance page Michael works from. This one reads the same book, under the
 // same scope and the same duty rules, through /api/business/compliance-breakdown.
 //
@@ -16,7 +16,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import type { SeedData } from "@/lib/business/seed-data"; // type-only — erased at build
+import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
 import { monthLabel } from "@/lib/business/format";
 import { liveMonth } from "@/lib/business/roster";
 

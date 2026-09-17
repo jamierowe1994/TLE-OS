@@ -21,7 +21,7 @@ import { q } from "@/lib/db";
  * half-finished archive with no record of where it stopped. PayProp clamps
  * every page to 25 rows, so a single month across both agencies is ~1,400 rows
  * ≈ 56 sequential requests. From MONEY_FLOOR (Jan 2022) that is well over
- * 3,000 requests — hours, against a maxDuration ceiling of 800 seconds.
+ * 3,000 requests - hours, against a maxDuration ceiling of 800 seconds.
  *
  * So each call takes a BOUNDED bite (default ONE month), freezes what it got,
  * and reports `remaining` and `nextFrom`. Call it until `done` is true. A
@@ -36,7 +36,7 @@ import { q } from "@/lib/db";
  *
  * `maxDuration = 800` below is the SERVERLESS ceiling. It is not the only
  * ceiling. Railway's edge proxy gives up on a request long before that —
- * around five minutes — so the handler is still working when the connection
+ * around five minutes - so the handler is still working when the connection
  * is already gone. Raising maxDuration cannot help; nobody is listening.
  *
  * The backfill allows up to 3 minutes per month (PER_MONTH_WAIT_MS in
@@ -46,7 +46,7 @@ import { q } from "@/lib/db";
  *
  * The lesson worth keeping: a timeout you control is not the timeout that
  * decides. Size the bite to the shortest ceiling in the chain, which is
- * whichever proxy, load balancer or CDN sits in front — not the one in your
+ * whichever proxy, load balancer or CDN sits in front - not the one in your
  * own config.
  *
  * ── Why it doesn't need a new table ───────────────────────────────────────
@@ -54,7 +54,7 @@ import { q } from "@/lib/db";
  * The archive already exists, twice. `gci_months` holds the money and
  * `history_funnels` holds the counts, both keyed by month, both written the
  * moment a month closes and read forever after. Neither was ever swept
- * backwards — they only ever froze months that happened to be looked at. This
+ * backwards - they only ever froze months that happened to be looked at. This
  * route is the sweep they were always missing, not a third store.
  *
  * ── What it refuses to freeze ─────────────────────────────────────────────
@@ -63,13 +63,13 @@ import { q } from "@/lib/db";
  * month with an unreachable agency, because a month short by a whole agency
  * looks exactly like a bad month, and freezing it would make a temporary
  * credential failure permanent. Those months come back in `missed` and a later
- * call retries them. The current month is never frozen at all — it is still
+ * call retries them. The current month is never frozen at all - it is still
  * accumulating.
  */
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-/* Kept high, but do NOT read this as "a request may take 800 seconds" — see
+/* Kept high, but do NOT read this as "a request may take 800 seconds" - see
    the note above. Railway's proxy closes the connection first, so this is a
    backstop for the function, not a promise to the caller. The bite size is
    what actually keeps a call inside the real limit. */
@@ -120,8 +120,8 @@ export async function POST(req: NextRequest) {
 
   const p = req.nextUrl.searchParams;
   const from = MONTH_RE.test(p.get("from") ?? "") ? p.get("from")! : MONEY_FLOOR;
-  /* One month per call by default. Bigger bites are still allowed — pass
-     ?months=N — but they only make sense somewhere without a five-minute
+  /* One month per call by default. Bigger bites are still allowed - pass
+     ?months=N - but they only make sense somewhere without a five-minute
      proxy in front, so the default is the one that works HERE. */
   const bite = Math.min(Math.max(Number(p.get("months") ?? 1) || 1, 1), 24);
 
@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
     );
     already = new Set(rows.map((r) => r.month));
   } catch {
-    /* No table yet, or no DB. Treat everything as outstanding — the walk is
+    /* No table yet, or no DB. Treat everything as outstanding - the walk is
        idempotent, so the cost of being wrong here is time, not correctness. */
   }
 
@@ -174,7 +174,7 @@ export async function POST(req: NextRequest) {
   const missed = batch.filter((m) => !frozen.includes(m));
 
   /* The funnel archive covers a shorter span (REX's viewing types only exist
-     from Sep 2025), and getHistory sweeps its whole range itself — so it is
+     from Sep 2025), and getHistory sweeps its whole range itself - so it is
      called once here rather than per bite, and simply no-ops once warm. */
   let funnelMonths = 0;
   try {
@@ -192,7 +192,7 @@ export async function POST(req: NextRequest) {
     frozen,
     missed,
     remaining,
-    /* Where to resume — the first outstanding month AFTER the ones just
+    /* Where to resume - the first outstanding month AFTER the ones just
        attempted, not the first outstanding month full stop.
        
        It used to return the earliest unfrozen month, which for a month that
@@ -202,7 +202,7 @@ export async function POST(req: NextRequest) {
        consecutive calls for 2022-01 returned byte-identical responses.
        
        Skipping past a miss is right because misses are reported separately and
-       the month stays outstanding — a later call with an explicit `from` can
+       the month stays outstanding - a later call with an explicit `from` can
        retry it. What must not happen is one dead month blocking every live
        month behind it. */
     nextFrom:
@@ -210,7 +210,7 @@ export async function POST(req: NextRequest) {
         ? (outstanding.find((m) => m > batch[batch.length - 1] && !frozen.includes(m)) ?? null)
         : null,
     /* Named so a caller can tell "nothing left to do" from "nothing left I can
-       do" — with nextFrom null and remaining above zero, the rest is
+       do" - with nextFrom null and remaining above zero, the rest is
        unanswerable rather than pending. */
     stuck: remaining > 0 && !outstanding.some((m) => m > batch[batch.length - 1]),
     funnelMonths,

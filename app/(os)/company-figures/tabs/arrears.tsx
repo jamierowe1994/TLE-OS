@@ -1,15 +1,15 @@
 "use client";
 
-// Admin tab: Arrears — summary, aging buckets, full tenant table.
+// Admin tab: Arrears - summary, aging buckets, full tenant table.
 // ADMIN ONLY: contains tenant personal data. It arrives via the seed prop
-// (fetched from the session+ADMIN_EMAILS-gated /api/admin/seed route) — never
+// (fetched from the session+ADMIN_EMAILS-gated /api/admin/seed route) - never
 // import lib/seed-data.ts here, or the tenant data ships in the public bundle.
-// PayProp-sourced (no API access yet) — PayProp arrears report 2026-07-06.
+// PayProp-sourced (no API access yet) - PayProp arrears report 2026-07-06.
 
 import { useCallback, useEffect, useState } from "react";
 import SourceNote from "@/components/business/SourceNote";
 import DataTable, { type DataTableColumn } from "@/components/business/DataTable";
-import type { SeedData } from "@/lib/business/seed-data"; // type-only — erased at build
+import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
 import { formatDate, formatGBP, formatNum, monthLabel } from "@/lib/business/format";
 import { liveMonth } from "@/lib/business/roster";
 
@@ -53,7 +53,7 @@ interface LiveArrears {
  * today. Rebuilding the past from invoices minus payments was measured and
  * rejected (2 of 9 real cases found, 1 invented). So instead the portal keeps
  * its own log: every live read is captured once a day, and prior months are
- * loaded from PayProp's own exports. Nothing in here is inferred — every row
+ * loaded from PayProp's own exports. Nothing in here is inferred - every row
  * was a real balance on a real date.
  */
 interface SnapshotPerson {
@@ -116,14 +116,14 @@ const COUNTRY_GROUPS = [
  * A balance owing on a tenancy that has not started yet.
  *
  * PayProp raises the first rent invoice ahead of the move-in, so the moment a
- * deal completes the tenant shows a balance — and the arrears report cannot
+ * deal completes the tenant shows a balance - and the arrears report cannot
  * tell that from someone who has stopped paying. Susan was right that the
  * count looked too high: these are not late, they simply have not moved in.
  *
  * Deliberately narrow. Only a tenancy starting AFTER today counts, because
  * that is the one case with no ambiguity. A tenancy that started earlier this
  * month HAS begun, and if its rent is unpaid that is a real arrear, however
- * young — it lands in the first age band on its own merit.
+ * young - it lands in the first age band on its own merit.
  *
  * No start date means MOVED IN, not excluded: stored snapshots from before
  * this field existed carry none, and quietly dropping them would shrink the
@@ -132,7 +132,7 @@ const COUNTRY_GROUPS = [
 const notMovedIn = (p: SnapshotPerson, asAt: string) =>
   Boolean(p.tenancyStart && p.tenancyStart > asAt);
 
-/** Exclusive day bands — `from` inclusive, `to` exclusive. */
+/** Exclusive day bands - `from` inclusive, `to` exclusive. */
 const AGE_BANDS = [
   { label: "Less than 7 days", from: 0, to: 7 },
   { label: "Less than 14 days", from: 7, to: 14 },
@@ -148,7 +148,7 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
   // PayProp gathers in the background, so poll until it lands rather than
   // sitting on the snapshot for the whole session.
   const [live, setLive] = useState<LiveArrears | null>(null);
-  /** Rent collection per month — the honest month-scoped figure on this tab. */
+  /** Rent collection per month - the honest month-scoped figure on this tab. */
   const [collection, setCollection] = useState<
     Array<{ month: string; rentCollected: number; propertiesPaying: number; tenantsPaying: number; avgPerProperty: number | null; incomplete: boolean }>
   >([]);
@@ -181,7 +181,7 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
     loadLog();
   }, [loadLog]);
 
-  // Rent roll comes from the portfolio walk — needed for "% of rent roll".
+  // Rent roll comes from the portfolio walk - needed for "% of rent roll".
   const [rentRoll, setRentRoll] = useState<number | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -230,7 +230,7 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
   /*
    * WHICH FIGURES THE FOUR BOXES SHOW.
    *
-   * On the live month, today's PayProp read — it is the truth and it is newer
+   * On the live month, today's PayProp read - it is the truth and it is newer
    * than anything stored. On any past month, the snapshot we hold from that
    * month, and nothing else: showing today's balances under "June" is what made
    * this tab report the same 40 tenants for every month of the year. When we
@@ -277,11 +277,11 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
       {live ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-800">
           <span className="font-semibold">
-            Live from PayProp — as at today, {formatDate(new Date().toISOString())}.
+            Live from PayProp - as at today, {formatDate(new Date().toISOString())}.
           </span>{" "}
           {month !== liveMonth() ? (
             <span className="font-semibold">
-              This is NOT {monthLabel(month)} — PayProp reports a tenant&rsquo;s balance as it
+              This is NOT {monthLabel(month)} - PayProp reports a tenant&rsquo;s balance as it
               stands now and keeps no history of it, so the same figure appears under every
               month. Rebuilding a past month means recomputing what was due against what was
               paid, tenant by tenant, which is an accounting exercise rather than a query —
@@ -289,29 +289,29 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
             </span>
           ) : null}{" "}
           <span className="font-semibold">
-            This view is admin-only — it contains tenant personal data.
+            This view is admin-only - it contains tenant personal data.
           </span>
         </div>
       ) : (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
           <span className="font-semibold">Fetching live arrears from PayProp…</span>{" "}
-          Nothing shown until it lands — an old arrears figure is worse than a gap.{" "}
+          Nothing shown until it lands - an old arrears figure is worse than a gap.{" "}
           <span className="font-semibold">
-            This view is admin-only — it contains tenant personal data.
+            This view is admin-only - it contains tenant personal data.
           </span>
         </div>
       )}
 
       {/* This tab reads a STOCK, not a flow. PayProp and Rex both export
           current state and neither keeps a history, so "as it stood in June"
-          cannot be rebuilt — only invented. The month selector above does not
+          cannot be rebuilt - only invented. The month selector above does not
           change these figures, and saying so is the whole point of this
           banner: the old wording implied they were a July capture, which made
           a live read look stale AND made a past month look answerable. */}
       {month !== liveMonth() ? (
         <div className="rounded-2xl border border-line bg-card px-4 py-3 text-[13px] text-muted">
           Everything below is <strong>as at today</strong>, not {monthLabel(month)}. These are
-          current-state figures — neither PayProp nor Rex stores a history of them, so a past
+          current-state figures - neither PayProp nor Rex stores a history of them, so a past
           month can&apos;t be rebuilt. Every figure carries its own date.
         </div>
       ) : null}
@@ -421,7 +421,7 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
       {collection.length ? (
         <section className="space-y-2">
           <div className="flex flex-wrap items-baseline gap-x-3">
-            <h2 className="text-sm font-semibold">Rent collection — month by month</h2>
+            <h2 className="text-sm font-semibold">Rent collection - month by month</h2>
             <span className="text-[11px] text-muted">
               Live from PayProp · what came in, from how many properties and tenants ·
               this DOES follow the month picker
@@ -476,15 +476,15 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
         </section>
       ) : null}
 
-      {/* Who's behind, and for how long — the question PayProp alone can't answer */}
+      {/* Who's behind, and for how long - the question PayProp alone can't answer */}
       {panel ? (
         <section className="card p-5">
           <div className="flex flex-wrap items-baseline gap-x-3">
             <h2 className="text-sm font-semibold">Who&rsquo;s behind</h2>
             <span className="text-[11px] text-muted">
               {log && !log.thin
-                ? `“Behind since” is the first of ${log.snapshots.length} readings in an unbroken run — a tenant who cleared and fell behind again starts afresh.`
-                : "“Behind since” fills in once there are two readings — today is the first."}
+                ? `“Behind since” is the first of ${log.snapshots.length} readings in an unbroken run - a tenant who cleared and fell behind again starts afresh.`
+                : "“Behind since” fills in once there are two readings - today is the first."}
             </span>
           </div>
           <div className="mt-3 space-y-1.5">
@@ -527,23 +527,23 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
       {/* ── Arrears by country and age ──────────────────────────────────────
           Two books, not one. PayProp keeps England & Wales in one agency and
           Scotland in another, and they are chased by different people under
-          different rules — a pooled total hides which book is actually behind.
+          different rules - a pooled total hides which book is actually behind.
 
           England and Wales are NOT separable here: PayProp's agency is the only
           country marker on an arrears row and it covers both. Splitting Wales
           out needs the property's postcode joined on, which these rows don't
-          carry (James, 18 Aug 2026 — two buckets now, Wales later).
+          carry (James, 18 Aug 2026 - two buckets now, Wales later).
 
           The bands are EXCLUSIVE, not cumulative. "Less than 14 days" means
-          7–13, not everything under 14 — overlapping bands would count the same
+          7–13, not everything under 14 - overlapping bands would count the same
           tenant four times and make the columns sum to nonsense. */}
       {panel ? (
         <section className="space-y-3">
           <h2 className="text-sm font-semibold">
-            Arrears by country and age — as at {formatDate(panel.asAt)}
+            Arrears by country and age - as at {formatDate(panel.asAt)}
             <SourceNote tone="live">
               PayProp report/tenant/balances, both agencies, counting only negative
-              balances. Country is PayProp&rsquo;s own agency — England and Wales share
+              balances. Country is PayProp&rsquo;s own agency - England and Wales share
               one, so they cannot be told apart here. Age counts from the first
               first reading of the current unbroken run, not from the missed payment.
             </SourceNote>
@@ -566,7 +566,7 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
                 };
               });
               /* Anyone whose run starts at the OLDEST reading we hold was
-                 already behind when capture began — their age is a floor, not
+                 already behind when capture began - their age is a floor, not
                  a fact. This matters more here than anywhere: if capture began
                  25 days ago then every long-standing debt in the book lands in
                  "Less than 30 days" and the screen reads as though nobody is
@@ -613,7 +613,7 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
                       {atLeast === people.length ? "All" : atLeast} of these{" "}
                       {atLeast === 1 ? "was" : "were"} already behind when we started
                       watching on {formatDate(log!.snapshots[0])}, so{" "}
-                      {atLeast === 1 ? "its" : "their"} age is a minimum — the debt may be
+                      {atLeast === 1 ? "its" : "their"} age is a minimum - the debt may be
                       considerably older.
                     </p>
                   ) : null}
@@ -644,7 +644,7 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
           </div>
           <p className="text-xs text-muted">
             Days counted from the first reading in the current unbroken run of
-            arrears, not from the missed payment — the portal only knows what it
+            arrears, not from the missed payment - the portal only knows what it
             has seen. A tenant first seen today counts as nought days, so a new
             arrear lands in the first band rather than being guessed at. Anyone
             already behind at the first reading is aged from that reading, which
@@ -657,7 +657,7 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
       {panel ? (
         <section className="space-y-3">
           <h2 className="text-sm font-semibold">
-            Every Tenant in Arrears — {panel.people.length} as at {formatDate(panel.asAt)}
+            Every Tenant in Arrears - {panel.people.length} as at {formatDate(panel.asAt)}
           </h2>
           <DataTable
             columns={COLUMNS}
@@ -687,8 +687,8 @@ interface Preview {
  * Paste a PayProp arrears export for a past date and keep it.
  *
  * Deliberately two steps. What lands here becomes the permanent record of who
- * owed what and when — the thing partners will be shown and tenants chased on
- * — so the parse is shown back BEFORE anything is written: which column was
+ * owed what and when - the thing partners will be shown and tenants chased on
+ * - so the parse is shown back BEFORE anything is written: which column was
  * read as the balance, how many rows, and every line the parser couldn't read.
  * A silently mis-mapped column would be indistinguishable from a good import.
  */
@@ -758,7 +758,7 @@ function ArrearsImport({
       {open ? (
         <div className="mt-4 space-y-3">
           <p className="text-[12px] text-muted">
-            Paste a PayProp arrears export — straight out of a spreadsheet, or CSV. Columns are
+            Paste a PayProp arrears export - straight out of a spreadsheet, or CSV. Columns are
             matched by their headings, so the order doesn&rsquo;t matter: it needs a{" "}
             <strong>tenant</strong> column and a <strong>balance</strong> column, and will use{" "}
             <strong>property</strong>, <strong>account</strong> and <strong>last payment</strong>{" "}
@@ -820,7 +820,7 @@ function ArrearsImport({
           {preview ? (
             <div className="rounded-2xl border border-line p-4 text-[12px]">
               <div className="font-semibold text-ink">
-                Read {preview.tenants} tenants owing {gbp(preview.totalOwed)} — nothing saved yet.
+                Read {preview.tenants} tenants owing {gbp(preview.totalOwed)} - nothing saved yet.
               </div>
               <div className="mt-1 text-muted">
                 Columns used:{" "}
@@ -839,7 +839,7 @@ function ArrearsImport({
                     {" "}
                     {preview.credits} row{preview.credits === 1 ? " was" : "s were"} on the other
                     side of zero and {preview.credits === 1 ? "was" : "were"} dropped as in credit
-                    — if that looks wrong, the file is the other way up and this import should not
+                    - if that looks wrong, the file is the other way up and this import should not
                     be saved.
                   </>
                 ) : null}

@@ -4,7 +4,7 @@ import { getHistory, getYoYLive } from "@/lib/business/business-history";
 
 // Closed-month live funnel history + like-for-like YoY for the admin
 // Overview's period pills. First-ever call computes any unstored months from
-// REX/Propoly (slow — up to a minute); after that everything is served from
+// REX/Propoly (slow - up to a minute); after that everything is served from
 // the permanent store, so keep the route budget generous.
 
 export const maxDuration = 300;

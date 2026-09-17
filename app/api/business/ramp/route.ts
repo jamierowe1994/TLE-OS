@@ -6,13 +6,13 @@ import { getAgentMoveInsInWindow } from "@/lib/business/propoly-deals";
 import { rexConfigured, rexLettingsAgents } from "@/lib/business/rex";
 import { loadSnapshot, saveSnapshot } from "@/lib/business/propoly-snapshot";
 
-// Partner ramp-time report — the YTD new-starter cohort cross-referenced
+// Partner ramp-time report - the YTD new-starter cohort cross-referenced
 // across all three systems the user named:
-//   • WHO + WHEN — TEG Team Hub (base44): partners whose date_launched falls
+//   • WHO + WHEN - TEG Team Hub (base44): partners whose date_launched falls
 //     this year, with their rex_id.
-//   • MAs + Listings in the first 60 days — REX (agent_1_id / listing_agent
+//   • MAs + Listings in the first 60 days - REX (agent_1_id / listing_agent
 //     within [launch, launch+60d]).
-//   • Move-ins within 60 days — Propoly completed deals matched to the agent.
+//   • Move-ins within 60 days - Propoly completed deals matched to the agent.
 // The frontend filters this cohort by the selected period pill and sums the
 // tiles. Ramp windows run to today for starters still inside their 60 days.
 
@@ -65,7 +65,7 @@ async function compute(year: string): Promise<RampPayload | null> {
     rexConfigured() ? rexLettingsAgents().catch(() => []) : Promise.resolve([]),
   ]);
   if (!teg) return null;
-  // TEG's rex_id is NOT the REX user id — resolve the real id by email.
+  // TEG's rex_id is NOT the REX user id - resolve the real id by email.
   const rexIdByEmail = new Map(rexAgents.map((a) => [a.email.toLowerCase(), a.id]));
   const today = new Date().toISOString().slice(0, 10);
   const yearStart = `${year}-01-01`;
@@ -118,7 +118,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ configured: true, ...cached.data, cached: true });
   }
 
-  // Stale-while-revalidate — the cohort sweep is ~2 REX calls per starter,
+  // Stale-while-revalidate - the cohort sweep is ~2 REX calls per starter,
   // so serve the last-good cohort instantly and refresh in the background.
   if (!force) {
     const lastGood =

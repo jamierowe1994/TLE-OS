@@ -1,6 +1,6 @@
 "use client";
 
-// Admin tab: Paid leads & pro licence (GoHighLevel — no API access yet), plus a
+// Admin tab: Paid leads & pro licence (GoHighLevel - no API access yet), plus a
 // live Socials snapshot (Facebook + Instagram followers + growth) pulled from
 // the sister ads platform's partner API.
 
@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import StatCard from "@/components/business/StatCard";
 import FunnelBar from "@/components/business/charts/FunnelBar";
 import TimescaleSelect from "@/components/business/TimescaleSelect";
-import type { SeedData } from "@/lib/business/seed-data"; // type-only — erased at build
+import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
 import { monthLabel } from "@/lib/business/format";
 const SNAPSHOT_MONTH = "2026-07"; // the one month the seed answers for
 
@@ -153,7 +153,7 @@ function SocialsSection() {
         </div>
       ) : state === "error" ? (
         <div className="card p-5 text-[13px] text-muted">
-          Couldn&rsquo;t load socials right now — try again shortly.
+          Couldn&rsquo;t load socials right now - try again shortly.
         </div>
       ) : state === "loading" && !social ? (
         <div className="grid gap-4 sm:grid-cols-2">
@@ -225,8 +225,8 @@ export default function PaidLeadsTab({ month, seed }: { month: string; seed: See
           source: "live-meta" as const,
           note:
             liveLeads.source === "account"
-              ? "Live from Meta — TLE ad account, this month."
-              : "Live from Meta — summed across every agent's tagged campaigns, this month.",
+              ? "Live from Meta - TLE ad account, this month."
+              : "Live from Meta - summed across every agent's tagged campaigns, this month.",
           asOf: new Date().toISOString().slice(0, 10),
         }
       : pl.leadsGenerated;
@@ -237,11 +237,11 @@ export default function PaidLeadsTab({ month, seed }: { month: string; seed: See
         }`
       : undefined;
 
-  // GHL funnel — live when connected, Susan's 11 Jul snapshot otherwise.
+  // GHL funnel - live when connected, Susan's 11 Jul snapshot otherwise.
   const ghl = liveLeads?.ghl ?? null;
   const asOf = new Date().toISOString().slice(0, 10);
   const ghlNote = ghl
-    ? `Live from Go High Level — ${ghl.pipelines.join(" + ")}, this month.`
+    ? `Live from Go High Level - ${ghl.pipelines.join(" + ")}, this month.`
     : "";
   const referredStat = ghl
     ? {
@@ -285,7 +285,7 @@ export default function PaidLeadsTab({ month, seed }: { month: string; seed: See
         { label: "Referred", value: ghl.referred },
         { label: "MAs Booked", value: ghl.masBooked },
       ]
-    : pl.funnel;
+    : []; // no typed July funnel while GoHighLevel is down
 
   return (
     <div className="space-y-6">
@@ -310,16 +310,16 @@ export default function PaidLeadsTab({ month, seed }: { month: string; seed: See
       {/* A FLOW tab: the month selector genuinely re-queries the source, so
           most figures below really are {monthLabel(month)}. The warning is
           only about the ones still on the seed, which stay badged and dated
-          — the old wording condemned the whole tab as stale, including the
+          - the old wording condemned the whole tab as stale, including the
           live figures it had just fetched for the selected month. */}
       {/* A banner stood here telling the reader that anything badged
           "snapshot" was really 11 Jul 2026. There is no such badge any more —
-          the capture is gone and the source is retired — so it was pointing at
+          the capture is gone and the source is retired - so it was pointing at
           something that does not exist, while implying the remaining dashes
           were July figures rather than nothing at all. Each figure carries its
           own source; a page-wide disclaimer only competed with them. */}
 
-      {/* Month cards — the selected month, not a fixed July */}
+      {/* Month cards - the selected month, not a fixed July */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard label="Leads generated (MTD)" stat={leadsStat} sub={leadsSub} big />
         <StatCard label="Referred to agents" stat={referredStat} />
@@ -330,7 +330,7 @@ export default function PaidLeadsTab({ month, seed }: { month: string; seed: See
           sub={
             ghl
               ? `${ghl.referred} of ${ghl.leads} leads referred`
-              : "3 of 180 leads referred"
+              : "GoHighLevel hasn't answered"
           }
         />
         <StatCard
@@ -339,25 +339,24 @@ export default function PaidLeadsTab({ month, seed }: { month: string; seed: See
           sub={
             ghl
               ? `${ghl.masBooked} MA${ghl.masBooked === 1 ? "" : "s"} from ${ghl.referred} referred lead${ghl.referred === 1 ? "" : "s"}`
-              : "2 MAs from 3 referred leads"
+              : "GoHighLevel hasn't answered"
           }
         />
         <StatCard
           label="Pro licence income (MTD)"
           stat={pl.proLicenceIncome}
-          sub="15 partners × £100+VAT / month"
         />
       </div>
 
       {/* Lead funnel */}
       <section className="card p-5">
         <h2 className="text-sm font-semibold">
-          Paid lead funnel — {ghl ? `${monthLabel(month)} MTD · live` : "July MTD"}
+          Paid Lead Funnel - {monthLabel(month)}
         </h2>
         <p className="mt-0.5 text-xs text-muted">
           {ghl
             ? `${ghl.leads} leads → ${ghl.referred} referred to agents → ${ghl.masBooked} market appraisal${ghl.masBooked === 1 ? "" : "s"} booked`
-            : "180 leads → 3 referred to agents → 2 market appraisals booked"}
+            : "GoHighLevel hasn't answered, so there is no funnel to show. Nothing typed stands in for it."}
         </p>
         <div className="mt-4">
           <FunnelBar stages={funnelStages} />

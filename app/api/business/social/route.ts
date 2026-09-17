@@ -8,7 +8,7 @@ import { fetchBrandSocial, socialApiConfigured } from "@/lib/business/social-cli
 //
 // Two audiences: Susan reads it as business performance, Francesca as her own
 // work. There were also two IDENTICAL guards here, one returning 401 and one
-// 403 — the second could never run.
+// 403 - the second could never run.
 export async function GET(req: NextRequest) {
   if (!(await requireAnyCapability(req, ["see:business", "see:marketing"]))) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });

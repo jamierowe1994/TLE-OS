@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 /**
- * "Loaded 17 hours ago · Refresh" — in the business header, above every tab.
+ * "Loaded 17 hours ago · Refresh" - in the business header, above every tab.
  *
  * James: "we should have it loaded from Propoly, like 17 hours ago or whatever.
  * They should have a manual refresh button where they can force a refresh, just
@@ -55,7 +55,7 @@ export default function Freshness() {
       setSources(d.sources ?? []);
       setOldest(d.oldest ?? null);
     } catch {
-      /* Freshness failing must never take the figures down with it — this is
+      /* Freshness failing must never take the figures down with it - this is
          a caption, not a data source. */
     }
   }, []);

@@ -1,15 +1,15 @@
 "use client";
 
-// Admin tab: Income — July MTD estimates, June finals, Jan–Jun monthly income
+// Admin tab: Income - July MTD estimates, June finals, Jan–Jun monthly income
 // table, licence fee table, YoY growth chips, GCI vs total income bars.
-// GCI actuals come from PayProp reports (no API access yet) — snapshot badges.
+// GCI actuals come from PayProp reports (no API access yet) - snapshot badges.
 
 import { useEffect, useMemo, useState } from "react";
 import StatCard from "@/components/business/StatCard";
 import DataTable, { type DataTableColumn } from "@/components/business/DataTable";
 import Donut from "@/components/business/charts/Donut";
 import Bars from "@/components/business/charts/Bars";
-import type { SeedData } from "@/lib/business/seed-data"; // type-only — erased at build
+import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
 import type { IncomeMonthlyRow, LicenceFeeRow } from "@/lib/business/seed-types";
 import { formatGBP, formatNum, monthLabel, monthsThisYearToDate } from "@/lib/business/format";
 const SNAPSHOT_MONTH = "2026-07"; // the one month the seed answers for
@@ -27,7 +27,7 @@ function money(v: number | null): string {
 type MonthlyRow = { metric: string } & Record<string, unknown>;
 
 /** Narrow a cell back to a figure. Anything that isn't a number is unknown,
- *  which renders as a dash — never as zero. */
+ *  which renders as a dash - never as zero. */
 /** A declared gap: no live source reached this, and here is what it needs. */
 const gap = (note: string) => ({ value: null, source: "unavailable" as const, note });
 
@@ -151,7 +151,7 @@ function YoyChips({ label, data }: { label: string; data: Record<string, number>
 
 /* --------------------------------- the tab --------------------------------- */
 
-// £1,200 average GCI per move-in — Susan's own July-estimate formula
+// £1,200 average GCI per move-in - Susan's own July-estimate formula
 // (her £12,000 est = 10 move-ins × £1,200). PayProp will replace this
 // with actuals when connected.
 const AVG_GCI_PER_MOVE_IN = 1200;
@@ -172,7 +172,7 @@ interface LiveMoveIns {
 }
 
 /* The rows this table can show, in Susan's reading order. They must match the
-   labels /api/business/income-months answers with, verbatim — the route keys
+   labels /api/business/income-months answers with, verbatim - the route keys
    its payload by these strings.
 
    TOTAL INCOME is deliberately absent: it is GCI plus licence and joining
@@ -189,7 +189,7 @@ const METRIC_ROWS = [
 export default function IncomeTab({ month, seed }: { month: string; seed: SeedData }) {
   const inc = seed.income;
 
-  // Live money from PayProp — gathered in the background, so poll for it.
+  // Live money from PayProp - gathered in the background, so poll for it.
   const [live, setLive] = useState<LiveIncome | null>(null);
   const [prev, setPrev] = useState<LiveIncome | null>(null);
   const [moveIns, setMoveIns] = useState<LiveMoveIns | null>(null);
@@ -250,7 +250,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
 
   /**
    * The month just gone, from PayProp. Everything here is a fee figure or a
-   * ratio of two of them, so it's as final as the snapshot was — but current.
+   * ratio of two of them, so it's as final as the snapshot was - but current.
    * Returns null until the walk lands, so the card falls back rather than
    * flashing a zero.
    */
@@ -263,7 +263,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
   const pv = (which: "totalGci" | "tleNet" | "gciPerAgent" | "netPerAgent" | "splitPct") => {
     if (!prev) return null;
     const agents = prev.agentsEarning || 0;
-    const note = `Live from PayProp — ${prevLabel} final, ${prev.paymentCount} payments.`;
+    const note = `Live from PayProp - ${prevLabel} final, ${prev.paymentCount} payments.`;
     const src = "live-payprop" as const;
     switch (which) {
       case "totalGci":
@@ -294,7 +294,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
     }
   };
 
-  // Resolved once so the card and its sub-line quote the SAME split — computed
+  // Resolved once so the card and its sub-line quote the SAME split - computed
   // twice, the sub kept reading the snapshot while the stat had gone live.
   const liveSplit = pv("splitPct");
   const splitStat = liveSplit ?? gap("Needs this month's PayProp split.");
@@ -323,18 +323,8 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
     };
   }, [month]);
 
-  const liveGciEst =
-    liveMoveIns != null
-      ? {
-          value: liveMoveIns * AVG_GCI_PER_MOVE_IN,
-          display: formatGBP(liveMoveIns * AVG_GCI_PER_MOVE_IN),
-          source: "live-propoly" as const,
-          note: `Estimate from live data — ${liveMoveIns} completed move-ins this month (live from Propoly) × £1,200 avg GCI, Susan's own estimating formula. PayProp actuals replace this when connected.`,
-          asOf: new Date().toISOString().slice(0, 10),
-        }
-      : null;
 
-  // GCI vs total income bars — January to the last COMPLETE month.
+  // GCI vs total income bars - January to the last COMPLETE month.
   //
   // These ran Jan–Jun because the six keys were typed out here, so in August
   // the chart still stopped at June and looked like the year had ended. The
@@ -376,7 +366,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
    * The table, built from PayProp alone.
    *
    * This used to start from a hand-typed Jan–Jun table and let live figures
-   * fill only the BLANKS — "the snapshot wins where it exists". Which meant
+   * fill only the BLANKS - "the snapshot wins where it exists". Which meant
    * Jan–Jun could never update: PayProp would walk the month, come back with a
    * number, and be discarded because a person had typed one in July. Six
    * months of this table were permanently frozen to the capture, and looked
@@ -402,7 +392,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
     const nothingOutstanding = Boolean(liveMonths) && (liveMonths?.pending?.length ?? 1) === 0;
 
     /**
-     * A total, or null — never a partial sum.
+     * A total, or null - never a partial sum.
      *
      * Two separate reasons to decline, and both matter:
      *
@@ -411,7 +401,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
      *    That is the same failure as the part-month August column, and it is
      *    the shape of every discrepancy this dashboard has been caught by.
      *  · the metric has no source at all. Licence, pro and joining fees never
-     *    come from PayProp, so every cell is null and the sum is 0 — which
+     *    come from PayProp, so every cell is null and the sum is 0 - which
      *    would state that TLE earned nothing in licence fees, a confident and
      *    false claim where a dash says the true thing.
      *
@@ -457,7 +447,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
   }, [liveMonths]);
 
   /* Which months this table could actually answer for. It used to say
-     "months after June", off a hardcoded `> 6` — so in 2027 it would have
+     "months after June", off a hardcoded `> 6` - so in 2027 it would have
      called January a snapshot month forever. Now it just reports what landed
      against what was asked, which needs no calendar knowledge at all. */
   const filledMonths = liveMonths?.filled ?? [];
@@ -467,7 +457,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
         pendingMonths.length
           ? ` Still fetching ${pendingMonths.map((m) => monthLabel(m)).join(", ")}.`
           : ""
-      } Licence, pro and joining fees are blank throughout — they don't run through PayProp, and joining fees go through a separate account we can't read.${
+      } Licence, pro and joining fees are blank throughout - they don't run through PayProp, and joining fees go through a separate account we can't read.${
         /* Without this sentence a dashed quarter reads as a fault rather than
            a refusal to guess, and the natural next move is to go looking for
            the figure somewhere less careful. */
@@ -478,7 +468,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
     : null;
 
   const gciRow = monthlyRows.find((r) => r.metric === "Combined GCI (exc VAT)");
-  /* NOT "TOTAL INCOME". That row existed only in the hand-keyed capture — it
+  /* NOT "TOTAL INCOME". That row existed only in the hand-keyed capture - it
      is GCI plus licence, pro and joining fees, and PayProp cannot see the last
      three (they run through a separate bank account). The live row set has no
      equivalent, so this plots what we can actually measure: TLE's retained
@@ -498,12 +488,12 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
   const barSeries = [
     {
       name: "Combined GCI (exc VAT)",
-      color: "#E31F36",
+      color: "#cfa096",
       values: monthKeys.map((k) => cell(gciRow, k)),
     },
     {
       name: "Net income to TLE",
-      color: "#101014",
+      color: "#56423e",
       values: monthKeys.map((k) => cell(totalRow, k)),
     },
   ];
@@ -513,14 +503,14 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
       {/* Source banner */}
       {live ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-800">
-          <span className="font-semibold">Live from PayProp</span> — {monthLabel(month)}{" "}
+          <span className="font-semibold">Live from PayProp</span> - {monthLabel(month)}{" "}
           agency income across {live.paymentCount.toLocaleString("en-GB")} payments.
           Derived from the all-payments report (the agency&rsquo;s own share), since
           the dedicated agency-income report needs a scope we weren&rsquo;t granted.
         </div>
       ) : (
         /* NO SNAPSHOT. It used to fill this gap with 11 Jul 2026 figures and
-           say "until they land" — so a screen that had loaded NOTHING looked
+           say "until they land" - so a screen that had loaded NOTHING looked
            identical to one that had loaded everything, and the numbers were
            built for a month that has since passed. James: "get rid of the
            snapshot completely and stop falling back on it."
@@ -535,7 +525,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
             <span className="font-semibold">
               Still fetching {monthLabel(month)} from PayProp.
             </span>{" "}
-            Nothing is shown in its place — an old figure here would be worse than a gap.
+            Nothing is shown in its place - an old figure here would be worse than a gap.
           </p>
           {liveMonths && (
             <>
@@ -559,7 +549,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
                 />
               </div>
               <p className="mt-1.5 text-[11.5px]">
-                A month PayProp has not been asked for before takes a few minutes — it pages at
+                A month PayProp has not been asked for before takes a few minutes - it pages at
                 25 rows and a month is around 1,400 of them. Once fetched it is kept, so this is
                 slow once rather than slow always.
               </p>
@@ -570,7 +560,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
 
       {live ? (
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold">{monthLabel(month)} — live from PayProp</h2>
+          <h2 className="text-sm font-semibold">{monthLabel(month)} - live from PayProp</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
               label="Agency income (GCI)"
@@ -584,7 +574,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
             />
             <StatCard
               label="Rent to landlords"
-              stat={{ value: Math.round(live.ownerPayments), display: gbp(live.ownerPayments), source: "live-payprop", note: "Rent passed through to owners — volume, not income." }}
+              stat={{ value: Math.round(live.ownerPayments), display: gbp(live.ownerPayments), source: "live-payprop", note: "Rent passed through to owners - volume, not income." }}
               big
               sub="Passed through, not income"
             />
@@ -623,21 +613,21 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
       {/* A FLOW tab: the month selector genuinely re-queries the source, so
           most figures below really are {monthLabel(month)}. The warning is
           only about the ones still on the seed, which stay badged and dated
-          — the old wording condemned the whole tab as stale, including the
+          - the old wording condemned the whole tab as stale, including the
           live figures it had just fetched for the selected month. */}
       {/* A banner stood here telling the reader that anything badged
           "snapshot" was really 11 Jul 2026. There is no such badge any more —
-          the capture is gone and the source is retired — so it was pointing at
+          the capture is gone and the source is retired - so it was pointing at
           something that does not exist, while implying the remaining dashes
           were July figures rather than nothing at all. Each figure carries its
           own source; a page-wide disclaimer only competed with them. */}
 
       {/* Estimates for the selected month */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold">{monthLabel(month)} — estimates</h2>
+        <h2 className="text-sm font-semibold">{monthLabel(month)} - estimates</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <StatCard
-            label={live ? "Combined GCI" : "Combined GCI (est)"}
+            label="Combined GCI"
             stat={
               live
                 ? {
@@ -646,14 +636,12 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
                     source: "live-payprop",
                     note: `Every fee charged this month across both agencies, exc VAT, ${live.paymentCount} payments. TLE's share plus the partners'.`,
                   }
-                : liveGciEst ?? gap("Waiting on this month's PayProp walk.")
+                : gap("Waiting on this month's PayProp walk.")
             }
             sub={
               live
                 ? `${netGbp(live.agencyIncome)} TLE · ${netGbp(live.paidToBeneficiaries)} partners, exc VAT`
-                : liveGciEst && liveMoveIns != null
-                  ? `${liveMoveIns} live move-ins × £1,200 avg`
-                  : undefined
+                : undefined
             }
             big
           />
@@ -676,7 +664,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
             }
           />
           {/* A tile labelled "June final GCI" sat here, inside a section headed
-              with the SELECTED month — a fixed month masquerading as a moving
+              with the SELECTED month - a fixed month masquerading as a moving
               one. The previous month's finals have their own section below. */}
         </div>
       </section>
@@ -684,21 +672,21 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
       {/* Split donut + June finals */}
       <div className="grid gap-4 lg:grid-cols-3">
         <section className="card p-5">
-          <h2 className="text-sm font-semibold">TLE / partner split — {monthLabel(month)} est</h2>
+          <h2 className="text-sm font-semibold">TLE / partner split - {monthLabel(month)} est</h2>
           <div className="mt-4">
             {/* A donut of two nulls draws itself as an empty ring and reads as
                 "nothing earned". Say there is no figure instead. */}
             {live ? (
               <Donut
                 segments={[
-                  { label: "TLE net", value: Math.round(live.agencyIncome), color: "#E31F36" },
-                  { label: "Associates", value: Math.round(live.paidToBeneficiaries), color: "#101014" },
+                  { label: "TLE net", value: Math.round(live.agencyIncome), color: "#cfa096" },
+                  { label: "Associates", value: Math.round(live.paidToBeneficiaries), color: "#56423e" },
                 ]}
                 centerLabel={gbp(live.combinedGci)}
               />
             ) : (
               <p className="text-[12.5px] text-muted">
-                No live split yet — this needs the month&rsquo;s PayProp figures, which are
+                No live split yet - this needs the month&rsquo;s PayProp figures, which are
                 fetching above.
               </p>
             )}
@@ -710,11 +698,11 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
         </section>
 
         <section className="lg:col-span-2">
-          <h2 className="mb-3 text-sm font-semibold">{prevLabel} — final</h2>
+          <h2 className="mb-3 text-sm font-semibold">{prevLabel} - final</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {/* These fell back to inc.june.* — literally June's figures, under a
+            {/* These fell back to inc.june.* - literally June's figures, under a
                 heading that renders the PREVIOUS month's name. On 28 August that
-                put June's £44,309 under "July 2026 — final". The fallback is
+                put June's £44,309 under "July 2026 - final". The fallback is
                 gone; the live figure or a dash. */}
             <StatCard label="Total GCI" stat={pv("totalGci") ?? gap(`${prevLabel} hasn't been walked from PayProp yet.`)} />
             <StatCard
@@ -732,13 +720,13 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
               stat={splitStat}
               sub={
                 splitStat.value != null
-                  ? `Partners ${100 - splitStat.value}%${splitPartnerNet ? ` — ${splitPartnerNet}` : ""}`
+                  ? `Partners ${100 - splitStat.value}%${splitPartnerNet ? ` - ${splitPartnerNet}` : ""}`
                   : undefined
               }
             />
             <StatCard label="Monthly licence" stat={gap("Licence fees don't run through PayProp. Needs the P&L upload.")} />
             <StatCard label="Pro licence" stat={gap("Licence fees don't run through PayProp. Needs the P&L upload.")} />
-            <StatCard label="Joining fees" stat={gap("Joining fees run through a separate bank account we can't read — Barclays/QuickBooks only.")} />
+            <StatCard label="Joining fees" stat={gap("Joining fees run through a separate bank account we can't read - Barclays/QuickBooks only.")} />
           </div>
         </section>
       </div>
@@ -746,19 +734,19 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
       {/* Monthly income table */}
       <section className="space-y-3">
         <h2 className="text-sm font-semibold">
-          TLE business income — {rangeLabel} (all fees exc VAT)
+          TLE business income - {rangeLabel} (all fees exc VAT)
         </h2>
         <DataTable columns={monthlyColumns(windowMonths)} rows={monthlyRows} compact />
         {liveMonthsNote && <p className="text-xs text-muted">{liveMonthsNote}</p>}
       </section>
 
       {/* The heading has to name what is actually plotted. It said "total
-          income" over a series that is TLE's net share — roughly 60% lower —
+          income" over a series that is TLE's net share - roughly 60% lower —
           which is precisely the shape of a reconciliation discrepancy: the
           layout looks right and the number is a different measure. */}
       <section className="card p-5">
         <h2 className="text-sm font-semibold">
-          Combined GCI vs net income to TLE — {rangeLabel}
+          Combined GCI vs net income to TLE - {rangeLabel}
         </h2>
         <p className="mt-1 text-[11.5px] leading-relaxed text-muted">
           Net income to TLE, not total income. Licence, pro and joining fees run through a
@@ -780,7 +768,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
       <section className="card space-y-2 p-5">
         <h2 className="text-sm font-semibold">Licence fees and year-on-year growth</h2>
         <p className="max-w-2xl text-[12.5px] leading-relaxed text-muted">
-          Not shown yet. Licence and joining fees don&rsquo;t run through PayProp — they need
+          Not shown yet. Licence and joining fees don&rsquo;t run through PayProp - they need
           the P&amp;L upload before they can be reported. Year-on-year growth needs two full
           years measured the same way, and the portal has measured its own figures since
           August 2026.

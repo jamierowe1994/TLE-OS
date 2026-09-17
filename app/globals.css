@@ -1189,3 +1189,58 @@ body {
 .os-rail { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--line) 70%, transparent) transparent; }
 .os-rail::-webkit-scrollbar { width: 5px; }
 .os-rail::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--line) 70%, transparent); border-radius: 999px; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SUSAN'S FIGURES IN THE HOUSE PALETTE (James, 17 Sep 2026: "rebrand all of
+   these ... the pinks instead of the reds").
+
+   The tabs were ported with Tailwind's stock reds, greens and ambers written
+   into hundreds of class names - a red "needs development", a green "LIVE",
+   an amber warning. Rather than rewrite every one, the scope redefines the
+   colour variables those classes read (Tailwind v4 resolves text-red-700 to
+   var(--color-red-700)), so inside .biz-os:
+
+     red / rose        → clay and brick   (bad, overdue, owed)
+     green / emerald   → sage             (live, good, in date)
+     amber / yellow    → sand             (a to-do, a warning)
+
+   Same lightness ladder as the stock scales, so contrast holds.
+   ══════════════════════════════════════════════════════════════════════════ */
+.biz-os {
+  --color-red-50: #fdf1ee;  --color-red-100: #fbe4df; --color-red-200: #f2cdc4;
+  --color-red-300: #e6b0a3; --color-red-400: #d8958a; --color-red-500: #c57a6d;
+  --color-red-600: #a85a51; --color-red-700: #8e4a42; --color-red-800: #6f3b35; --color-red-900: #56423e;
+  --color-rose-50: #fdf1ee;  --color-rose-100: #fbe4df; --color-rose-200: #f2cdc4;
+  --color-rose-300: #e6b0a3; --color-rose-400: #d8958a; --color-rose-500: #c57a6d;
+  --color-rose-600: #a85a51; --color-rose-700: #8e4a42; --color-rose-800: #6f3b35;
+  --color-green-50: #f3f5ee;  --color-green-100: #e8ecdf; --color-green-200: #d5ddc7;
+  --color-green-300: #c0cbae; --color-green-400: #a6b392; --color-green-500: #8d9b78;
+  --color-green-600: #6f7d5c; --color-green-700: #56634a; --color-green-800: #454f3c;
+  --color-emerald-50: #f3f5ee;  --color-emerald-100: #e8ecdf; --color-emerald-200: #d5ddc7;
+  --color-emerald-300: #c0cbae; --color-emerald-400: #a6b392; --color-emerald-500: #8d9b78;
+  --color-emerald-600: #6f7d5c; --color-emerald-700: #56634a; --color-emerald-800: #454f3c;
+  --color-amber-50: #fbf6ec;  --color-amber-100: #f6ebd6; --color-amber-200: #ecd8b4;
+  --color-amber-300: #dfc08c; --color-amber-400: #cfa867; --color-amber-500: #b98f4b;
+  --color-amber-600: #9a743a; --color-amber-700: #7c5d2f; --color-amber-800: #5f4724;
+  --color-yellow-50: #fbf6ec; --color-yellow-100: #f6ebd6; --color-yellow-200: #ecd8b4;
+  --color-yellow-600: #9a743a; --color-yellow-700: #7c5d2f;
+}
+/* Boxes as the rest of the OS draws them: a quiet rim, a generous corner,
+   no heavy outline and no drop shadow. */
+.type-admin.biz-os .card,
+.biz-os .card {
+  background: var(--card);
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 20px;
+  box-shadow: none;
+}
+/* Section headings in the house face and size, not small caps labels. */
+.biz-os h2 {
+  font-family: var(--font-heading);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+.biz-os table thead th { font-weight: 600; }

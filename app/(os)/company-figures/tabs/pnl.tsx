@@ -1,6 +1,6 @@
 "use client";
 
-// Admin tab: P&L — grid built on the H2 2026 reforecast structure (Jul–Dec).
+// Admin tab: P&L - grid built on the H2 2026 reforecast structure (Jul–Dec).
 // The Base44 P&L tab is password-protected, so this grid IS the working P&L:
 // July cells are click-to-edit; edits write manual overrides to
 // /api/admin/actuals (metric "pnl.<lineKey>.2026-07") and show a MANUAL badge.
@@ -9,14 +9,14 @@ import { useCallback, useEffect, useState } from "react";
 import StatCard from "@/components/business/StatCard";
 import PnlImport from "@/components/business/PnlImport";
 import SourceBadge from "@/components/business/SourceBadge";
-import type { SeedData } from "@/lib/business/seed-data"; // type-only — erased at build
+import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
 import { SNAPSHOT_DATE, liveMonth } from "@/lib/business/roster";
 import type { H2ReforecastRow } from "@/lib/business/seed-types";
 import { formatGBP, formatNum, formatPct } from "@/lib/business/format";
 import type { ActualOverride } from "@/lib/business/types";
 
 // This grid is the H2 2026 plan (Jul–Dec), so it deliberately does NOT follow
-// the month picker — the whole half-year is the point of it.
+// the month picker - the whole half-year is the point of it.
 //
 // The EDITABLE column does move, though. It was pinned to July, which meant
 // that from 1 August every actual typed in here was filed against July: the
@@ -65,7 +65,7 @@ export default function PnlTab({ month, seed }: { month: string; seed: SeedData 
       }
       setOverrides(map);
     } catch {
-      /* route not ready / offline — reforecast figures still render */
+      /* route not ready / offline - reforecast figures still render */
     }
   }, []);
 
@@ -96,7 +96,7 @@ export default function PnlTab({ month, seed }: { month: string; seed: SeedData 
           month: pnlMonth(),
           metric: `pnl.${row.key}.${pnlMonth()}`,
           value,
-          note: `P&L manual entry — ${row.label}, Jul 2026`,
+          note: `P&L manual entry - ${row.label}, Jul 2026`,
         }),
       });
       if (!res.ok) throw new Error(`Save failed (${res.status})`);
@@ -114,7 +114,7 @@ export default function PnlTab({ month, seed }: { month: string; seed: SeedData 
       {/* Source note */}
       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
         <span className="font-semibold">Base44 P&amp;L tab is password-protected</span>{" "}
-        — structure from the H2 reforecast (19 Nov 25 draft); figures are
+        - structure from the H2 reforecast (19 Nov 25 draft); figures are
         editable here. Click any July cell to key in an actual.
       </div>
 
@@ -140,7 +140,7 @@ export default function PnlTab({ month, seed }: { month: string; seed: SeedData 
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">
-            H2 2026 P&amp;L — Jul to Dec (Jul column editable)
+            H2 2026 P&amp;L - Jul to Dec (Jul column editable)
           </h2>
           <div className="flex items-center gap-3">
             <PnlImport
@@ -196,7 +196,7 @@ export default function PnlTab({ month, seed }: { month: string; seed: SeedData 
                     >
                       {row.label}
                     </td>
-                    {/* July — editable */}
+                    {/* July - editable */}
                     <td className="px-3.5 py-2 text-right tnum">
                       {isEditing ? (
                         <input
@@ -231,7 +231,7 @@ export default function PnlTab({ month, seed }: { month: string; seed: SeedData 
                         </button>
                       )}
                     </td>
-                    {/* Aug–Dec — reforecast */}
+                    {/* Aug–Dec - reforecast */}
                     {row.values.slice(1).map((v, i) => (
                       <td
                         key={i}

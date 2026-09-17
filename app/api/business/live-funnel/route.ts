@@ -4,7 +4,7 @@ import { findById, listUsers } from "@/lib/business/users-store";
 import { getAgentFunnel, getAgentPortfolio } from "@/lib/business/rex-stats";
 import { currentMonth } from "@/lib/business/format";
 
-// Live REX totals across every agent linked to a REX user id — powers the
+// Live REX totals across every agent linked to a REX user id - powers the
 // admin "Live from REX" summary. Cached briefly (this fans out several REX
 // calls per agent) and defensive: any agent that fails is simply skipped.
 

@@ -9,14 +9,14 @@ import { getComplianceAsAt } from "@/lib/business/rex-stats";
  * GET /api/admin/compliance-live?month=YYYY-MM → { compliance }
  *
  * `month` scopes the FLOWS only (recorded in the month, expiring in the
- * month). The stock — valid / expiring / overdue — is as at today and cannot
+ * month). The stock - valid / expiring / overdue - is as at today and cannot
  * honestly be anything else: REX edits a compliance entry in place when a
  * certificate is renewed, so a rewind would report a renewed property as
  * having been compliant during the very months it wasn't. Measured 11 Aug 2026;
  * the reasoning and the numbers are in lib/rex-stats.ts.
  *
  * The sweep takes ~2 minutes cold, so a first call may return null while it
- * runs. Poll — do not treat null as zero.
+ * runs. Poll - do not treat null as zero.
  */
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
   const month = param && MONTH_RE.test(param) ? param : new Date().toISOString().slice(0, 7);
   const compliance = await getComplianceAsAt(month).catch(() => null);
   // Echoed so the tab can drop an answer that arrived for a month the user has
-  // already navigated away from — the exact race that made the Overview show
+  // already navigated away from - the exact race that made the Overview show
   // one month's figures under another's heading.
   return NextResponse.json({ month, compliance });
 }

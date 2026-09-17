@@ -1,6 +1,6 @@
 "use client";
 
-// Admin · Agents tab — per-agent July MTD KPI table (seed, via the admin-gated
+// Admin · Agents tab - per-agent July MTD KPI table (seed, via the admin-gated
 // /api/admin/seed fetch in the shell) merged with live portal-account links,
 // the Partner Net Income YTD table, a row-click agent drill-down (forecast,
 // ads link, portfolio, compliance), and the user management panel (link
@@ -11,7 +11,7 @@ import type { ReactNode } from "react";
 import DataTable from "@/components/business/DataTable";
 import SourceBadge from "@/components/business/SourceBadge";
 import StatCard from "@/components/business/StatCard";
-import type { SeedData } from "@/lib/business/seed-data"; // type-only — erased at build
+import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
 import { ROSTER, agentKeysForName } from "@/lib/business/roster";
 import type { AgentForecast, UserProfile } from "@/lib/business/types";
 import { formatDate, formatGBP, formatNum, formatPct, monthLabel } from "@/lib/business/format";
@@ -35,17 +35,6 @@ const TIER_STYLES: Record<string, string> = {
   TOTAL: "border-line bg-card text-ink",
 };
 
-function TierChip({ tier }: { tier: string }) {
-  return (
-    <span
-      className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-        TIER_STYLES[tier] ?? TIER_STYLES.DEV
-      }`}
-    >
-      {tier}
-    </span>
-  );
-}
 
 const TAG_STYLES: Record<string, string> = {
   NEW: "border-blue-200 bg-blue-50 text-blue-700",
@@ -74,7 +63,7 @@ function SectionTitle({
 
 type AdminUser = UserProfile & { adminNotes?: { at: string; text: string }[] };
 
-/** One row of GET /api/admin/forecasts — forecast nested under `forecast`. */
+/** One row of GET /api/admin/forecasts - forecast nested under `forecast`. */
 interface AdminForecastRow {
   agentKey: string;
   displayName: string;
@@ -101,7 +90,7 @@ function extractForecastRows(payload: unknown): AdminForecastRow[] {
 
 /* ------------------------- user management row -------------------------
  *
- * This panel edits a PORTAL account, not an OS one — the two products share a
+ * This panel edits a PORTAL account, not an OS one - the two products share a
  * database and each keeps its own accounts table. What it may change is only
  * the mapping from a person to their book: roster slug, REX id, Meta campaign.
  *
@@ -114,7 +103,7 @@ function extractForecastRows(payload: unknown): AdminForecastRow[] {
  *
  * Password reset is gone rather than fixed, and deliberately. It set a
  * password on a portal account, which is exactly the thing the guard exists
- * to prevent — and the OS has its own reset on People that emails a link
+ * to prevent - and the OS has its own reset on People that emails a link
  * instead of reading a temporary password down the phone.
  */
 
@@ -156,7 +145,7 @@ function UserRow({
         setRexUserId(data.rexUserId);
         setMessage(
           data.matchedBy === "name"
-            ? `Linked to REX ${data.rexUserId} by name — REX has them as ${data.matchedEmail}. Worth a check.`
+            ? `Linked to REX ${data.rexUserId} by name - REX has them as ${data.matchedEmail}. Worth a check.`
             : `Linked to REX user ${data.rexUserId}.`
         );
         if (data.user) onSaved(data.user);
@@ -233,7 +222,7 @@ function UserRow({
             value={agentKey}
             onChange={(e) => setAgentKey(e.target.value)}
           >
-            <option value="">— Not linked —</option>
+            <option value="">Not linked</option>
             {ROSTER.map((r) => (
               <option key={r.agentKey} value={r.agentKey}>
                 {r.displayName}
@@ -272,7 +261,7 @@ function UserRow({
             className={inputClass}
             value={metaCampaignId}
             onChange={(e) => setMetaCampaignId(e.target.value)}
-            placeholder="Campaign id — comma-separate for several"
+            placeholder="Campaign id - comma-separate for several"
           />
         </label>
       </div>
@@ -319,7 +308,7 @@ interface LivePayload {
   totalAgents: number;
   totals: { marketAppraisals: number; listings: number; pipeline: number; managed: number; rentRoll: number };
   /** Per agent from REX, for the selected month. Fetched all along and never
-   *  read — the table below was built entirely from the July seed. */
+   *  read - the table below was built entirely from the July seed. */
   perAgent?: AgentLive[];
 }
 
@@ -336,7 +325,7 @@ interface LivePayload {
  * Where they came from, so the first argument starts somewhere real: combined
  * GCI runs about £39,600 a month across roughly 30 partners, so the average
  * partner earns about £1,320. £2,000 is comfortably above that, £750 is
- * comfortably below, and the middle band is deliberately the widest — most
+ * comfortably below, and the middle band is deliberately the widest - most
  * people are ordinary, and a scheme that calls half the office a problem gets
  * ignored.
  *
@@ -402,7 +391,7 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
           if (d.income?.byPartner) setEarnings(d.income.byPartner);
           // Property-attributed money for the selected month. byPartner above
           // is beneficiary-attributed and is £0 for every Scotland agent,
-          // because Scotland's fees go straight to the agency — so this is the
+          // because Scotland's fees go straight to the agency - so this is the
           // figure the table actually uses.
           if (d.byAgent?.length) setAgentMoney(d.byAgent);
           if ((!d.portfolio || !d.income) && tries++ < 40) setTimeout(ask, 5000);
@@ -415,7 +404,7 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
     };
   }, [month]);
 
-  // Live REX totals across linked agents — separate from the fast seed render
+  // Live REX totals across linked agents - separate from the fast seed render
   // because it fans out several REX calls (cached server-side for 3 min).
   useEffect(() => {
     let cancelled = false;
@@ -492,7 +481,7 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
   /*
    * THE PER-AGENT TABLE, built from live sources for the SELECTED month.
    *
-   * It used to be built entirely from seed.agentKpisJulyMtd — one captured
+   * It used to be built entirely from seed.agentKpisJulyMtd - one captured
    * month, one fixed list of people. Anyone not in that capture simply did not
    * exist on this page, which is why "pull each individual person's figures,
    * even if they're not starting up" wasn't possible.
@@ -500,33 +489,32 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
    * Now the row set is the UNION of everyone the live sources know about, so a
    * partner appears the moment they transact. Two sources, joined on the
    * normalised name:
-   *   REX      (live.perAgent)  — market appraisals, listings, pipeline
-   *   PayProp  (agentMoney)     — GCI, rent, properties, tenancies
+   *   REX      (live.perAgent)  - market appraisals, listings, pipeline
+   *   PayProp  (agentMoney)     - GCI, rent, properties, tenancies
    * The seed fills only what neither can answer (viewings, applications), and
    * is badged so it can't be mistaken for the selected month.
    */
   const norm = (n: string) => n.toLowerCase().replace(/[^a-z0-9]/g, "");
   const rexByName = new Map((live?.perAgent ?? []).map((a) => [norm(a.name), a]));
   const moneyByName = new Map(agentMoney.map((a) => [norm(a.name), a]));
-  const seedByName = new Map(seed.agentKpisJulyMtd.rows.map((r) => [norm(r.agent), r]));
 
   // Everyone any source knows, not just whoever was in the July capture.
   const everyName = new Map<string, string>();
   for (const a of agentMoney) everyName.set(norm(a.name), a.name);
   for (const a of live?.perAgent ?? []) everyName.set(norm(a.name), a.name);
-  for (const r of seed.agentKpisJulyMtd.rows) if (!everyName.has(norm(r.agent))) everyName.set(norm(r.agent), r.agent);
+  /* Only names a live source knows. The July capture's roster used to be
+     merged in, which kept twelve July names (and their tier) on the table
+     whatever month was picked. */
 
-  /* `isSeedMonth = month === "2026-07"` stood here — a hardcoded month
+  /* `isSeedMonth = month === "2026-07"` stood here - a hardcoded month
      literal, the exact fault that had this dashboard reporting July in
      August. Its last reader went with the capture. */
   const liveRows = [...everyName.entries()].map(([key, displayName]) => {
     const rex = rexByName.get(key);
     const cash = moneyByName.get(key);
-    const sd = seedByName.get(key);
     const linked = linkedUserForName(displayName);
     const forecast = forecastForName(displayName);
     return {
-      tier: sd?.tier ?? "—",
       agent: displayName,
       portal: linked
         ? forecast?.gciTarget != null
@@ -556,7 +544,7 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
   }));
 
   // TOTAL row summed from the very rows above it, so the table proves its own
-  // arithmetic — the reconciliation check this page exists for.
+  // arithmetic - the reconciliation check this page exists for.
   const sum = (k: "gci" | "rent" | "props" | "tens" | "ma" | "li" | "pn") =>
     liveRows.reduce((t, r) => t + ((r[k] as number | null) ?? 0), 0);
   const totalRow = {
@@ -599,18 +587,16 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
       {/* Susan, 17 Sep 2026: the per-agent KPIs are what she opens this tab
           for, so they lead. The PayProp book and the REX totals follow. */}
       {/* ----------------------- per-agent KPI table ----------------------- */}
-      <SectionTitle source={seed.agentKpisJulyMtd.source}>
-        Per-Agent KPIs — {monthLabel(month)}
+      <SectionTitle source="PayProp, REX and Propoly, live">
+        Per-Agent KPIs - {monthLabel(month)}
       </SectionTitle>
       <p className="mb-2 text-xs text-muted">
         Click an agent&rsquo;s row to open their drill-down (forecast, ads,
         portfolio, compliance). GCI, rent, properties and tenancies are{" "}
-        {monthLabel(month)} from PayProp, attributed by property — so the TOTAL row
+        {monthLabel(month)} from PayProp, attributed by property - so the TOTAL row
         is the same figure the Overview shows, split. MA, listings and pipeline are
         live from Rex.{" "}
-        {month === "2026-07"
-          ? "Viewings and applications come from the July capture."
-          : "Viewings and applications have no live per-partner source, so they are blank for any month but July 2026."}{" "}
+        Viewings and applications have no live per-partner source yet, so those columns are blank.{" "}
         Properties and tenancies count what actually transacted that month, which
         is lower than a partner&rsquo;s book where a property took no payment.
         Attribution uses today&rsquo;s property map, so a property that changed
@@ -639,7 +625,7 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
         ))}
       </div>
       <p className="mb-3 text-[11px] text-muted">
-        Bands are on this month&rsquo;s GCI and the thresholds are placeholders — set to
+        Bands are on this month&rsquo;s GCI and the thresholds are placeholders - set to
         sit either side of the ~£1,320 average partner. Tell me the real figures and
         they&rsquo;re a one-line change. Nobody with no figures is counted as
         underperforming.
@@ -647,11 +633,6 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
 
       <DataTable
         columns={[
-          {
-            key: "tier",
-            label: "Tier",
-            render: (row) => <TierChip tier={String(row.tier)} />,
-          },
           { key: "agent", label: "Agent" },
           {
             key: "portal",
@@ -835,7 +816,7 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
              earnings per partner for whichever month is selected, and the
              drill-down now totals them from August.
 
-          The figures are not lost — they are in git, and in Susan's sheet,
+          The figures are not lost - they are in git, and in Susan's sheet,
           which is where they came from. */}
       <SectionTitle>Partner Net Income</SectionTitle>
       <p className="mb-2 max-w-2xl text-[12.5px] leading-relaxed text-muted">
@@ -850,7 +831,7 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
       </p>
 
       {/* ------------------------- user management ------------------------- */}
-      <SectionTitle>Portal accounts — link & manage</SectionTitle>
+      <SectionTitle>Portal accounts - link & manage</SectionTitle>
       <p className="mb-3 text-xs text-muted">
         Link each portal account to its roster agent so their dashboard picks
         up the right seed stats, REX user and Meta campaign. Figures on this
@@ -861,7 +842,7 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
         <p className="text-sm text-muted">Loading portal accounts…</p>
       ) : users.length === 0 ? (
         <div className="card p-5 text-sm text-muted">
-          No portal accounts yet — agents create their own via Sign up on the
+          No portal accounts yet - agents create their own via Sign up on the
           landing page.
         </div>
       ) : (
@@ -902,7 +883,7 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
 
 /* ------------------------------ drill-down ------------------------------ */
 
-/** Live StatValue wrapper — carries the source so the badge is honest. */
+/** Live StatValue wrapper - carries the source so the badge is honest. */
 function liveStat(
   value: number | null,
   display: string | undefined,
@@ -915,7 +896,7 @@ function liveStat(
 /**
  * One partner's live detail, from /api/business/agent-live.
  *
- * Named ...Detail because AgentLive above is a ROW in the partner table — a
+ * Named ...Detail because AgentLive above is a ROW in the partner table - a
  * different thing at a different grain, and letting the two share a name is
  * how a row ends up rendered as a drill-down.
  */
@@ -954,7 +935,7 @@ function AgentDrilldown({
   name: string;
   month: string;
   seed: SeedData;
-  /** This partner's row from the live table above — the SAME object, so the
+  /** This partner's row from the live table above - the SAME object, so the
    *  drill-down cannot disagree with the row that opened it. */
   live: {
     gci: number | null; rent: number | null; props: number | null; tens: number | null;
@@ -972,7 +953,7 @@ function AgentDrilldown({
   const kpi = seed.agentKpisJulyMtd.rows.find((r) => matches(r.agent)) ?? null;
 
   /* Net income, portfolio, compliance, move-ins and pipeline used to be five
-     lookups into the 11 July capture — so opening a partner from the LIVE
+     lookups into the 11 July capture - so opening a partner from the LIVE
      table above silently reverted every figure to July, addresses and rents
      included. They now come from one per-partner call. */
   const [agentLive, setAgentLive] = useState<AgentLiveDetail | null>(null);
@@ -990,7 +971,7 @@ function AgentDrilldown({
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((d: AgentLiveDetail) => {
         /* Discard an answer for a partner or month that has since been
-           navigated away from — the race that put one month's figures under
+           navigated away from - the race that put one month's figures under
            another's heading on the Overview. */
         if (cancelled || d.agent !== name || d.month !== month) return;
         setAgentLive(d);
@@ -1026,7 +1007,7 @@ function AgentDrilldown({
     <section className="card mt-6 border-accent/30 p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-base font-semibold">{name} — drill-down</h3>
+          <h3 className="text-base font-semibold">{name} - drill-down</h3>
           <p className="mt-0.5 text-xs text-muted">
             {roster.length > 0
               ? roster
@@ -1047,7 +1028,7 @@ function AgentDrilldown({
 
       {/* Forecast */}
       <h4 className="mb-2 mt-4 text-[11px] font-semibold uppercase tracking-wide text-muted">
-        Forecast — {monthLabel(month)} (self-set in the portal)
+        Forecast - {monthLabel(month)} (self-set in the portal)
       </h4>
       {forecast ? (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -1076,16 +1057,16 @@ function AgentDrilldown({
       ) : (
         <p className="text-xs text-muted">
           No forecast set for {monthLabel(month)}
-          {user ? "" : " — no portal account is linked to this agent yet"}.
+          {user ? "" : " - no portal account is linked to this agent yet"}.
         </p>
       )}
 
-      {/* This partner's figures for the SELECTED month — the same row object
+      {/* This partner's figures for the SELECTED month - the same row object
           the table above rendered, so the two cannot disagree. Was a fixed July
           seed block, which meant a drill-down showed July whatever month was
           picked, and showed nothing at all for anyone outside that capture. */}
       <h4 className="mb-2 mt-4 text-[11px] font-semibold uppercase tracking-wide text-muted">
-        KPIs — {monthLabel(month)}
+        KPIs - {monthLabel(month)}
       </h4>
       {live ? (
         <>
@@ -1103,7 +1084,7 @@ function AgentDrilldown({
             <StatCard
               label="Properties"
               stat={liveStat(live.props, undefined, "live-payprop",
-                "Properties that actually transacted in the selected month — lower than the book where a property took no payment.")}
+                "Properties that actually transacted in the selected month - lower than the book where a property took no payment.")}
             />
             <StatCard
               label="Tenancies"
@@ -1112,7 +1093,7 @@ function AgentDrilldown({
             />
             <StatCard label="MAs" stat={liveStat(live.ma, undefined, "live-rex", "Market appraisals recorded in Rex for the selected month.")} />
             <StatCard label="Listings" stat={liveStat(live.li, undefined, "live-rex", "Rental listings instructed in the selected month.")} />
-            <StatCard label="Pipeline" stat={liveStat(live.pn, undefined, "live-rex", "Deals in progression right now — a current-state figure, not a month figure.")} />
+            <StatCard label="Pipeline" stat={liveStat(live.pn, undefined, "live-rex", "Deals in progression right now - a current-state figure, not a month figure.")} />
           </div>
           {/* Viewings / applications / move-ins per partner came only from the
               July capture, so with it gone this is a standing gap rather than
@@ -1126,7 +1107,7 @@ function AgentDrilldown({
         </>
       ) : (
         <p className="text-xs text-muted">
-          No figures for {monthLabel(month)} — this partner had no PayProp or Rex activity
+          No figures for {monthLabel(month)} - this partner had no PayProp or Rex activity
           that month.
         </p>
       )}
@@ -1171,7 +1152,7 @@ function AgentDrilldown({
                    Jan–Jul exists only in Susan's hand-keyed sheet, and a
                    typed half-year added to a measured one describes the
                    change of method rather than the business. */
-                "Fees net of VAT, summed from August 2026 — the first month the portal measures its own figures. Earlier months were hand-keyed and are not added in."
+                "Fees net of VAT, summed from August 2026 - the first month the portal measures its own figures. Earlier months were hand-keyed and are not added in."
               )}
               sub={agentLive?.earnings?.some((e) => e.earnings?.matched === false)
                 ? "No PayProp beneficiary matches this partner"
@@ -1183,7 +1164,7 @@ function AgentDrilldown({
                 dealsLive ? dealsLive.length : null,
                 undefined,
                 "live-propoly",
-                "Deals in progression in Propoly right now — a current-state figure, not a month figure."
+                "Deals in progression in Propoly right now - a current-state figure, not a month figure."
               )}
               sub={
                 deals
@@ -1201,7 +1182,7 @@ function AgentDrilldown({
             <p className="text-xs text-muted">Reading their book from PayProp…</p>
           ) : book ? (
             <div className="grid grid-cols-2 gap-3">
-              {/* Managed / let-only split off their own service levels — the
+              {/* Managed / let-only split off their own service levels - the
                   same derivation the Portfolio tab uses, so the drill-down and
                   the table it opened from cannot disagree. */}
               <StatCard label="Managed" stat={liveStat(countSvc(/managed|efm/i), undefined, "live-payprop")} />

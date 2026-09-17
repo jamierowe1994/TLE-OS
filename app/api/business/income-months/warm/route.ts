@@ -8,8 +8,8 @@ import { requireCapability } from "@/lib/admin";
  *
  * ── Why this exists ───────────────────────────────────────────────────────
  *
- * PayProp pages at 25 rows. One cold month is roughly 1,400 rows — about 56
- * sequential requests — so it takes minutes. Done on a page load that is
+ * PayProp pages at 25 rows. One cold month is roughly 1,400 rows - about 56
+ * sequential requests - so it takes minutes. Done on a page load that is
  * minutes of Susan watching a bar; done at 6am it is nobody watching anything.
  *
  * The point is not speed, it is WHO WAITS. James: "we might need to fetch a
@@ -24,13 +24,13 @@ import { requireCapability } from "@/lib/admin";
  * ── `wait: true`, unlike the page load ────────────────────────────────────
  *
  * getGciHistory returns nothing at once for a cold month and computes behind
- * the scenes — right for a page, useless here: a warmer that returns
+ * the scenes - right for a page, useless here: a warmer that returns
  * immediately has warmed nothing. This one waits, which is the whole job.
  */
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-/* Longer than a default serverless slice — several cold months genuinely take
+/* Longer than a default serverless slice - several cold months genuinely take
    this long, and being killed halfway means the next caller starts over. */
 export const maxDuration = 800;
 

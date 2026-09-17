@@ -1,6 +1,6 @@
 "use client";
 
-// Admin tab: Overview — a stat-for-stat MIRROR of Susan's Base44 dashboard
+// Admin tab: Overview - a stat-for-stat MIRROR of Susan's Base44 dashboard
 // ("KPI Overview" at tle-business-dashboard.base44.app, captured 21 Jul 2026):
 // same sections, same order, same boxes, same notes. Our upgrade on top:
 // tiles whose figure we can source live (REX business sums, Propoly move-ins)
@@ -72,13 +72,13 @@ interface OverviewPayload {
     /** True when the series came from the live per-month store. */
     live?: boolean;
     /** Year-to-date commission NET of VAT, summed from the same stored months
-     *  the chart plots — so the tile and the chart cannot disagree. */
+     *  the chart plots - so the tile and the chart cannot disagree. */
     ytdNet?: number | null;
     ytdGross?: number | null;
     /** False when a month is missing or an agency was unreachable. */
     complete?: boolean;
     unreachable?: string[];
-    /** Per month, what the bar is made of — shown on hover. */
+    /** Per month, what the bar is made of - shown on hover. */
     detail?: Array<Array<[string, string]>>;
   };
   sources: SeedData["sources"];
@@ -89,7 +89,7 @@ interface OverviewPayload {
 // This page used to hardcode July as "the current month" in five places: the
 // pill order, the default selection, the `isCurrent` test and both live
 // fetches. On 1 August that made the live layer pull July's figures and badge
-// them live, under a pill labelled "July MTD" — which is what Susan was
+// them live, under a pill labelled "July MTD" - which is what Susan was
 // looking at when she said she couldn't see the updated month.
 //
 // Now the current month comes off the clock. The pill for it is SYNTHETIC: the
@@ -104,7 +104,7 @@ const LIVE_KEY = monthKey(LIVE);
 const LIVE_YEAR = LIVE.slice(0, 4);
 const liveIdx = Number(LIVE.slice(5, 7)) - 1;
 
-/** Every CLOSED month of this year, newest first — the history pills. */
+/** Every CLOSED month of this year, newest first - the history pills. */
 const CLOSED = Array.from({ length: liveIdx }, (_, i) => `${LIVE_YEAR}-${String(i + 1).padStart(2, "0")}`).reverse();
 
 // Period order: the live month first, then closed months newest-first, then
@@ -119,7 +119,7 @@ const PERIOD_ORDER = [
 
 // Which stored months make up each period pill. Built from the closed months
 // rather than typed out, so it can't fall behind the calendar the way the
-// hardcoded list did — a quarter only appears once all three of its months
+// hardcoded list did - a quarter only appears once all three of its months
 // have actually closed.
 const quarter = (months: string[]) => (months.every((m) => CLOSED.includes(m)) ? months : null);
 const PERIOD_MONTHS: Record<string, string[]> = {
@@ -130,12 +130,12 @@ const PERIOD_MONTHS: Record<string, string[]> = {
   ...(quarter([`${LIVE_YEAR}-01`, `${LIVE_YEAR}-02`, `${LIVE_YEAR}-03`])
     ? { q1: [`${LIVE_YEAR}-01`, `${LIVE_YEAR}-02`, `${LIVE_YEAR}-03`] }
     : {}),
-  // Closed months only — the live month is added on top where a period needs it.
+  // Closed months only - the live month is added on top where a period needs it.
   ytd: [...CLOSED].reverse(),
 };
 
 /**
- * A period with no stored figures — every tile reads "—" until the live layer
+ * A period with no stored figures - every tile reads "—" until the live layer
  * supplies one. Used for the current month, which by definition has no seed
  * entry: the alternative was falling back to July, i.e. printing last month's
  * numbers under this month's heading.
@@ -146,7 +146,7 @@ function emptyPeriod(key: string): PeriodKpis {
   const label = idx >= 0 ? `${MONTH_NAMES[idx]} MTD` : key.toUpperCase();
   // NOT "live-rex": Tile keys its green border and pulsing LIVE chip off
   // source.startsWith("live-"), so a null dressed as live rendered an empty
-  // tile that claimed to be a live reading — and promised it would "fill in",
+  // tile that claimed to be a live reading - and promised it would "fill in",
   // which for the deliberately-gated stock tiles is false by construction.
   const none = (): StatValue => ({
     value: null,
@@ -190,7 +190,7 @@ interface HistoryPayload {
   };
 }
 
-// Ramp cohort — one new starter cross-referenced across TEG/REX/Propoly.
+// Ramp cohort - one new starter cross-referenced across TEG/REX/Propoly.
 interface RampStarter {
   name: string;
   email: string | null;
@@ -210,7 +210,7 @@ interface RampPayload {
 /* --------------------------------- tiles --------------------------------- */
 
 // The mirror's building block. Live figures pop (white card, green dot);
-// snapshot figures are deliberately dimmed — James's "grey them out so you
+// snapshot figures are deliberately dimmed - James's "grey them out so you
 // can see what's not live yet".
 function Tile({
   label,
@@ -225,13 +225,13 @@ function Tile({
   sub?: string | null;
   /** Set → single red dot under the figure; the text is the hover reason. */
   flag?: string | null;
-  /** Denser tile for the headline band — smaller number so £ figures fit. */
+  /** Denser tile for the headline band - smaller number so £ figures fit. */
   compact?: boolean;
   /**
    * A money figure to SHORTEN on the face of the tile (£280k) while keeping
    * the exact amount, to the penny, in the hover alongside the source note.
    *
-   * "£280,105" overflows a headline tile and reads as noise — nobody decides
+   * "£280,105" overflows a headline tile and reads as noise - nobody decides
    * anything on the last three digits of a year-to-date total. But the precise
    * figure must never become unreachable, because someone will eventually need
    * to tie it back to the accounts.
@@ -244,7 +244,7 @@ function Tile({
     money != null
       ? formatGBPCompact(money)
       : (stat.display ?? (stat.value != null ? formatNum(stat.value) : "—"));
-  // Exact amount first, then where it came from — read in that order on hover.
+  // Exact amount first, then where it came from - read in that order on hover.
   const hover = [money != null ? formatGBPExact(money) : null, stat.note]
     .filter(Boolean)
     .join(" · ");
@@ -298,7 +298,7 @@ const HEADLINE_GRID = "grid gap-2.5 grid-cols-[repeat(auto-fit,minmax(122px,1fr)
 
 // Per-starter table under the ramp tiles: who ramped, from their launch date,
 // with MAs / listings / move-ins in their first 60 days. This is the working
-// detail behind the four aggregate tiles — collapsed by default.
+// detail behind the four aggregate tiles - collapsed by default.
 function RampBreakdown({
   starters,
 }: {
@@ -353,7 +353,7 @@ function RampBreakdown({
                     {s.rexId == null ? (
                       <span
                         className="ml-1.5 cursor-help text-[10px] text-amber-600"
-                        title="No REX match by email — MAs/listings can't be counted for this starter"
+                        title="No REX match by email - MAs/listings can't be counted for this starter"
                       >
                         ⚠
                       </span>
@@ -376,7 +376,7 @@ function RampBreakdown({
   );
 }
 
-// Seed notes read "<snapshot boilerplate> · Source: <the useful bit>" — tiles
+// Seed notes read "<snapshot boilerplate> · Source: <the useful bit>" - tiles
 // show just the useful bit (the full note stays in the hover tooltip).
 function subNote(s: StatValue | undefined | null): string | null {
   const n = s?.note;
@@ -386,7 +386,7 @@ function subNote(s: StatValue | undefined | null): string | null {
   return i >= 0 ? n.slice(i + marker.length) : n;
 }
 
-/** Section shell: bold title left, tiny SOURCE right — exactly her layout. */
+/** Section shell: bold title left, tiny SOURCE right - exactly her layout. */
 function Section({
   title,
   source,
@@ -409,7 +409,7 @@ function Section({
   );
 }
 
-/** Her period pill row — now the real thing: click a period, tiles follow. */
+/** Her period pill row - now the real thing: click a period, tiles follow. */
 function PeriodPills({
   options,
   active,
@@ -446,7 +446,7 @@ export default function Overview({ month }: { month: string }) {
   /*
    * `month` is the top-right picker, and it now drives this whole page.
    *
-   * It used to be `void month` — the prop was accepted and thrown away, and
+   * It used to be `void month` - the prop was accepted and thrown away, and
    * both fetches were pinned to the clock month. Changing the picker did
    * literally nothing here; the only working control was a row of internal
    * pills keyed by three-letter month name ("jul"), a vocabulary that cannot
@@ -459,7 +459,7 @@ export default function Overview({ month }: { month: string }) {
   const [liveLoading, setLiveLoading] = useState(false);
   const [hist, setHist] = useState<HistoryPayload | null>(null);
   const [ramp, setRamp] = useState<RampPayload | null>(null);
-  // The ramp cohort keeps its own pill row — it selects a COHORT of starters
+  // The ramp cohort keeps its own pill row - it selects a COHORT of starters
   // by launch month, which is a different question from "what happened in
   // August", and collapsing the two would silently change what it counts.
   const [rampKey, setRampKey] = useState<string>("ytd");
@@ -467,7 +467,7 @@ export default function Overview({ month }: { month: string }) {
   // didn't exist, so Rex returns a real zero that reads as a trading figure.
   const sel = withinHistory(month);
   const isCurrent = sel === LIVE;
-  /** "August 2026" — what every heading on this page is an answer to. */
+  /** "August 2026" - what every heading on this page is an answer to. */
   const selLabel = monthLabel(sel);
 
   useEffect(() => {
@@ -488,12 +488,12 @@ export default function Overview({ month }: { month: string }) {
     };
   }, [sel]);
 
-  // Live layer (REX business sums + Propoly) — upgrades matching tiles.
+  // Live layer (REX business sums + Propoly) - upgrades matching tiles.
   // The API answers instantly with the last-good figures (flagged `stale`)
-  // while it re-sweeps REX in the background — poll a few times to swap the
+  // while it re-sweeps REX in the background - poll a few times to swap the
   // fresh numbers in as soon as they land.
   /*
-   * The live sweep, with cancellation — which it did not have, and which was
+   * The live sweep, with cancellation - which it did not have, and which was
    * the worst defect on this page.
    *
    * Three things conspired. loadLive re-enters itself via setTimeout every 6s
@@ -537,7 +537,7 @@ export default function Overview({ month }: { month: string }) {
         setLive(j);
         if (j.stale && retries < 7) {
           // Progressive backoff, not a flat 6s. Measured on a warm month the
-          // server answered its polls in 262ms, 29ms, 17ms and 19ms — but the
+          // server answered its polls in 262ms, 29ms, 17ms and 19ms - but the
           // fixed interval meant the tiles didn't settle until t+18.3s. Almost
           // all of that wait was ours, not PayProp's or Rex's. Start fast,
           // then ease off so a genuinely cold sweep isn't hammered.
@@ -548,7 +548,7 @@ export default function Overview({ month }: { month: string }) {
         }
         setLiveLoading(false);
       } catch {
-        /* live layer is an upgrade — the rest of the page still renders */
+        /* live layer is an upgrade - the rest of the page still renders */
         if (!cancelled) setLiveLoading(false);
       }
     };
@@ -556,7 +556,7 @@ export default function Overview({ month }: { month: string }) {
     // Clear the previous month's figures rather than leaving them on screen,
     // LIVE-badged, under the new month's heading for the length of a sweep.
     // The funnel tiles fall back to stored history, but RLP and the MA split
-    // have no fallback at all — they would simply show the wrong month.
+    // have no fallback at all - they would simply show the wrong month.
     setLive(null);
     staleRetries.current = 0;
     void run();
@@ -567,7 +567,7 @@ export default function Overview({ month }: { month: string }) {
     };
   }, [sel]);
 
-  /** Manual "Refresh live" — forces a re-sweep of the selected month. */
+  /** Manual "Refresh live" - forces a re-sweep of the selected month. */
   const loadLive = useCallback(
     async (refresh = true) => {
       setLiveLoading(true);
@@ -598,7 +598,7 @@ export default function Overview({ month }: { month: string }) {
         const j = (await res.json()) as HistoryPayload;
         if (!cancelled) setHist(j);
       } catch {
-        /* history is an upgrade — period pills still show the snapshot */
+        /* history is an upgrade - period pills still show the snapshot */
       }
     })();
     return () => {
@@ -606,7 +606,7 @@ export default function Overview({ month }: { month: string }) {
     };
   }, []);
 
-  // Ramp cohort — new starters cross-referenced across TEG/REX/Propoly.
+  // Ramp cohort - new starters cross-referenced across TEG/REX/Propoly.
   // Stale-while-revalidate: the sweep is a couple of REX calls per starter.
   const rampRetries = useRef(0);
   useEffect(() => {
@@ -623,7 +623,7 @@ export default function Overview({ month }: { month: string }) {
           setTimeout(() => void tick(), 6000);
         }
       } catch {
-        /* ramp is an upgrade — the snapshot tiles still render */
+        /* ramp is an upgrade - the snapshot tiles still render */
       }
     };
     void tick();
@@ -640,7 +640,7 @@ export default function Overview({ month }: { month: string }) {
     agentsEarning: number;
     moveIns: number | null;
   } | null>(null);
-  // Year-to-date fees, straight off PayProp — the headline band's GCI.
+  // Year-to-date fees, straight off PayProp - the headline band's GCI.
   const [ytdMoney, setYtdMoney] = useState<{ combinedGci: number; paymentCount: number } | null>(
     null
   );
@@ -692,7 +692,7 @@ export default function Overview({ month }: { month: string }) {
 
   const gbp = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
   // The money walk is asked for `sel`, so its figures describe the selected
-  // month whichever one that is — the isCurrent gate here was left over from
+  // month whichever one that is - the isCurrent gate here was left over from
   // when the fetch was pinned to the clock.
   // payprop-live's money is already net of VAT - never net it again here.
   const liveForThisPeriod = liveMoney;
@@ -701,11 +701,11 @@ export default function Overview({ month }: { month: string }) {
     (liveForThisPeriod && liveForThisPeriod.moveIns
       ? {
           // exc VAT, same basis as the accounts spreadsheet the rest of this
-          // page's history is seeded from — PayProp's wire amounts include it.
+          // page's history is seeded from - PayProp's wire amounts include it.
           value: Math.round((liveForThisPeriod.combinedGci) / liveForThisPeriod.moveIns),
           display: gbp((liveForThisPeriod.combinedGci) / liveForThisPeriod.moveIns),
           source: "live-payprop",
-          note: `${gbp((liveForThisPeriod.combinedGci))} commission exc VAT ÷ ${liveForThisPeriod.moveIns} tenancies starting this month — live from PayProp.`,
+          note: `${gbp((liveForThisPeriod.combinedGci))} commission exc VAT ÷ ${liveForThisPeriod.moveIns} tenancies starting this month - live from PayProp.`,
         }
       : null);
 
@@ -715,7 +715,7 @@ export default function Overview({ month }: { month: string }) {
           value: Math.round(liveForThisPeriod.combinedGci / liveForThisPeriod.agentsEarning),
           display: gbp(liveForThisPeriod.combinedGci / liveForThisPeriod.agentsEarning),
           source: "live-payprop",
-          note: `${gbp(liveForThisPeriod.combinedGci)} commission ÷ ${liveForThisPeriod.agentsEarning} partners who earned a fee this month — live from PayProp.`,
+          note: `${gbp(liveForThisPeriod.combinedGci)} commission ÷ ${liveForThisPeriod.agentsEarning} partners who earned a fee this month - live from PayProp.`,
         }
       : null;
 
@@ -736,7 +736,7 @@ export default function Overview({ month }: { month: string }) {
   /*
    * Susan's capture holds a value for every month of 2026 it covers, keyed by
    * three-letter month name. Map the selection back to that key rather than
-   * special-casing July — hardcoding "2026-07" made every other month fall to
+   * special-casing July - hardcoding "2026-07" made every other month fall to
    * emptyPeriod, whose values are null, which in turn made the June
    * reconciliation dot unreachable on the funnel (flagIf needs a non-null
    * figure of Susan's to compare against, and June's had become null).
@@ -748,7 +748,7 @@ export default function Overview({ month }: { month: string }) {
   const rampPeriod = d.periods[rampKey] ?? emptyPeriod(rampKey);
 
   // Upgrade a snapshot stat to live when the live layer carries the same
-  // figure — current month (July) only; history months are final numbers.
+  // figure - current month (July) only; history months are final numbers.
   const asLive = (value: number, note: string, display?: string): StatValue => ({
     value,
     display,
@@ -760,10 +760,10 @@ export default function Overview({ month }: { month: string }) {
     live?.monthCounts?.combinedMas != null
       ? asLive(
           live.monthCounts.combinedMas,
-          `Live from REX — Susan's combined-MA definition: ${live.monthCounts.marketAppraisals ?? "?"} recorded appraisals + listings with no same-month MA (June check: 41 vs her 40).`
+          `Live from REX - Susan's combined-MA definition: ${live.monthCounts.marketAppraisals ?? "?"} recorded appraisals + listings with no same-month MA (June check: 41 vs her 40).`
         )
-      : isCurrent && live?.totals /* current-state fallback — live month only */
-        ? asLive(live.totals.marketAppraisals, "Live from REX — recorded appraisals summed across every lettings agent.")
+      : isCurrent && live?.totals /* current-state fallback - live month only */
+        ? asLive(live.totals.marketAppraisals, "Live from REX - recorded appraisals summed across every lettings agent.")
         : kpiPeriod.funnel.marketAppraisals;
   // STOCK, not a flow: this is what is on the market RIGHT NOW, summed across
   // agents. REX keeps no history of it, so "on the market in July" does not
@@ -777,14 +777,14 @@ export default function Overview({ month }: { month: string }) {
   const funnelLiveListings = live?.totals
     ? asLive(
         live.totals.onMarketListings,
-        "Live from REX — on-market listings as at TODAY. This is a stock: REX keeps no history of it, so it cannot answer for a past month and is not trying to."
+        "Live from REX - on-market listings as at TODAY. This is a stock: REX keeps no history of it, so it cannot answer for a past month and is not trying to."
       )
     : kpiPeriod.funnel.liveListings;
   // STOCK, same as Live Listings above, and treated the same way.
   const funnelPipeline = live?.totals
     ? asLive(
         live.totals.pipeline,
-        "Live from REX — let-agreed forward pipeline as at TODAY. A stock, like Live Listings: today's figure, not the selected month's."
+        "Live from REX - let-agreed forward pipeline as at TODAY. A stock, like Live Listings: today's figure, not the selected month's."
       )
     : kpiPeriod.funnel.pipeline;
   const funnelMoveIns: StatValue =
@@ -792,37 +792,37 @@ export default function Overview({ month }: { month: string }) {
       ? {
           value: live.propoly.moveInsThisMonth,
           source: "live-propoly",
-          note: "Live from Propoly — completed deals with a move-in date this month.",
+          note: "Live from Propoly - completed deals with a move-in date this month.",
           asOf: live.propoly.generatedAt.slice(0, 10),
         }
       : kpiPeriod.funnel.moveIns;
-  // Month-bound REX counts — applications by date_received (proven field);
+  // Month-bound REX counts - applications by date_received (proven field);
   // listings by created-this-month (validate via /api/admin/rex-validate).
   const funnelApplications =
     live?.monthCounts?.applications != null
       ? asLive(
           live.monthCounts.applications,
-          "Live from REX — applications ACCEPTED this month (Susan's definition — validated vs her June final: 24 vs 25)."
+          "Live from REX - applications ACCEPTED this month (Susan's definition - validated vs her June final: 24 vs 25)."
         )
       : kpiPeriod.funnel.applications;
   const funnelListings =
     live?.monthCounts?.newListings != null
       ? asLive(
           live.monthCounts.newListings,
-          "Live from REX — rental listings created this month, drafts excluded (June check: 38 vs Susan's 35)."
+          "Live from REX - rental listings created this month, drafts excluded (June check: 38 vs Susan's 35)."
         )
       : kpiPeriod.funnel.listings;
   const funnelViewings =
     live?.monthCounts?.viewings != null
       ? asLive(
           live.monthCounts.viewings,
-          "Live from REX — TLE viewing appointments this month, cancellations excluded (June check: 221 vs Susan's 202)."
+          "Live from REX - TLE viewing appointments this month, cancellations excluded (June check: 221 vs Susan's 202)."
         )
       : kpiPeriod.funnel.viewings;
 
   // ---- History upgrade for past-period pills ----
   // Stored live figures (validated definitions) replace the snapshot, with a
-  // single red dot wherever they differ from Susan's report — James checks
+  // single red dot wherever they differ from Susan's report - James checks
   // each dot to work out why, so the dot NEVER hides the live number.
   // One month, the selected one. The pills used to map a 3-letter key to a
   // month list; the picker gives the month directly.
@@ -842,7 +842,7 @@ export default function Overview({ month }: { month: string }) {
   /**
    * The red "differs from Susan's report" dot.
    *
-   * Susan's captured figures describe ONE window — her June-2026 year-to-date
+   * Susan's captured figures describe ONE window - her June-2026 year-to-date
    * report. Comparing them against an arbitrary month lights the dot on every
    * tile and tells you nothing except that June is not August, which is how a
    * useful signal becomes noise people learn to ignore. The dot now only
@@ -851,7 +851,7 @@ export default function Overview({ month }: { month: string }) {
   const comparableToSusan = sel === "2026-06";
   const flagIf = (liveVal: number, susan: StatValue): string | null =>
     comparableToSusan && susan.value != null && susan.value !== liveVal
-      ? `Differs from Susan's report — her figure: ${susan.display ?? formatNum(susan.value)}. Hover the tile for our definition, then reconcile.`
+      ? `Differs from Susan's report - her figure: ${susan.display ?? formatNum(susan.value)}. Hover the tile for our definition, then reconcile.`
       : null;
   const histUpgrade = (
     metric: "marketAppraisals" | "combinedMas" | "listings" | "viewings" | "applications" | "moveIns",
@@ -870,31 +870,31 @@ export default function Overview({ month }: { month: string }) {
   const hMas = histUpgrade(
     "combinedMas",
     kpiPeriod.funnel.marketAppraisals,
-    `Live from REX — combined MAs (recorded + listing-only, Susan's definition), ${periodLabelBit}.`,
+    `Live from REX - combined MAs (recorded + listing-only, Susan's definition), ${periodLabelBit}.`,
     "live-rex"
   );
   const hListings = histUpgrade(
     "listings",
     kpiPeriod.funnel.listings,
-    `Live from REX — rental listings created, drafts excluded, ${periodLabelBit}.`,
+    `Live from REX - rental listings created, drafts excluded, ${periodLabelBit}.`,
     "live-rex"
   );
   const hViewings = histUpgrade(
     "viewings",
     kpiPeriod.funnel.viewings,
-    `Live from REX — TLE viewing appointments, cancellations excluded, ${periodLabelBit}.`,
+    `Live from REX - TLE viewing appointments, cancellations excluded, ${periodLabelBit}.`,
     "live-rex"
   );
   const hApplications = histUpgrade(
     "applications",
     kpiPeriod.funnel.applications,
-    `Live from REX — applications accepted, ${periodLabelBit}.`,
+    `Live from REX - applications accepted, ${periodLabelBit}.`,
     "live-rex"
   );
   const hMoveIns = histUpgrade(
     "moveIns",
     kpiPeriod.funnel.moveIns,
-    `Live from Propoly — completed deals with a move-in date, ${periodLabelBit}. Susan's Move-In Report also counts managed transfers + marketing-only, so hers can run higher.`,
+    `Live from Propoly - completed deals with a move-in date, ${periodLabelBit}. Susan's Move-In Report also counts managed transfers + marketing-only, so hers can run higher.`,
     "live-propoly"
   );
 
@@ -923,7 +923,7 @@ export default function Overview({ month }: { month: string }) {
    *
    * Preferred over the on-demand `liveMoney` walk, which is slower, cold more
    * often, and was pinned to whatever month it last fetched. Divided by
-   * `effMoveIns` — the very figure the funnel tile above shows — so the rate
+   * `effMoveIns` - the very figure the funnel tile above shows - so the rate
    * and the count it came from cannot contradict each other, which is the
    * class of bug this page has produced repeatedly.
    */
@@ -939,7 +939,7 @@ export default function Overview({ month }: { month: string }) {
           value: Math.round(selMonthGciNet / effMoveIns.value),
           display: gbp(selMonthGciNet / effMoveIns.value),
           source: "live-payprop",
-          note: `${gbp(selMonthGciNet)} commission exc VAT ÷ ${effMoveIns.value} move-ins in ${selLabel} — both from the figures shown above, so they agree by construction.`,
+          note: `${gbp(selMonthGciNet)} commission exc VAT ÷ ${effMoveIns.value} move-ins in ${selLabel} - both from the figures shown above, so they agree by construction.`,
           asOf: new Date().toISOString().slice(0, 10),
         }
       : null;
@@ -958,7 +958,7 @@ export default function Overview({ month }: { month: string }) {
    * snapshot's own percentage stands.
    *
    * PLUS a plausibility ceiling. Ten days into August there were 2 listings and
-   * 24 move-ins, giving "Listing → Move-in 1200%" with a green LIVE dot — not
+   * 24 move-ins, giving "Listing → Move-in 1200%" with a green LIVE dot - not
    * a counting error but a month-to-date artefact, because move-ins complete
    * against listings instructed in earlier months. Arithmetically correct and
    * completely useless, and a green dot on 1200% is what teaches someone to
@@ -979,7 +979,7 @@ export default function Overview({ month }: { month: string }) {
       // SHOW the number, but strip the live badge and say what it is. Hiding
       // it entirely was worse: the owner reported the tile as "missing", which
       // is exactly the wrong conclusion to invite. The figure is arithmetically
-      // right and structurally misleading — a move-in completing this month
+      // right and structurally misleading - a move-in completing this month
       // belongs to a listing instructed one to three months ago, so dividing
       // by THIS month's listings compares two different cohorts. That is most
       // visible early in a month, when the denominator has barely started.
@@ -995,30 +995,30 @@ export default function Overview({ month }: { month: string }) {
 
   // ---- Headline YEAR-TO-DATE band, ending at the selected month ----
   // Same stored per-month figures the period pills use. GCI + Total Income
-  // stay snapshot — they're PayProp figures on a route this tab doesn't call.
+  // stay snapshot - they're PayProp figures on a route this tab doesn't call.
   // Pipeline is a right-now state metric, so it upgrades to the live REX
   // let-agreed count rather than a year sum.
   /**
    * The headline band is YEAR TO DATE, and it ends at whichever pill is
-   * selected — January through that month inclusive.
+   * selected - January through that month inclusive.
    *
    * It used to sum a fixed Jan–Jun and ignore the pill entirely, so it read
    * "Jun YTD MAs 255" no matter which month you clicked. Two things were wrong
    * at once: the window never grew as months closed, and clicking July or
    * August changed nothing above the fold.
    *
-   * The live month is included from the live sweep — it has no stored history
-   * row yet, being unfinished — so August YTD is Jan–Jul stored plus August so
+   * The live month is included from the live sweep - it has no stored history
+   * row yet, being unfinished - so August YTD is Jan–Jul stored plus August so
    * far, which is what "year to date" means on the 10th.
    */
   const ytdThrough = sel;
   /**
    * Year to date runs from January OF THE SELECTED YEAR up to the selected
-   * month — clamped at HISTORY_FLOOR, because there is nothing trustworthy
+   * month - clamped at HISTORY_FLOOR, because there is nothing trustworthy
    * before it. So picking Nov 2025 gives Sept–Nov 2025, not Jan–Nov: the
    * earlier months would be zero-viewing months masquerading as quiet ones.
    *
-   * CLOSED was no use here — it only ever held months of the CURRENT year, so
+   * CLOSED was no use here - it only ever held months of the CURRENT year, so
    * any 2025 selection produced an empty window and a blank band.
    */
   const ytdMonths = (() => {
@@ -1028,7 +1028,7 @@ export default function Overview({ month }: { month: string }) {
       const m = `${year}-${String(i).padStart(2, "0")}`;
       if (m < HISTORY_FLOOR) continue;
       if (m > ytdThrough) break;
-      // The live (unfinished) month has no stored row — added below.
+      // The live (unfinished) month has no stored row - added below.
       if (m < LIVE) out.push(m);
     }
     return out;
@@ -1056,7 +1056,7 @@ export default function Overview({ month }: { month: string }) {
       if (v == null) return null;
       total += v;
     }
-    // The unfinished month has no history row — take it from the live sweep,
+    // The unfinished month has no history row - take it from the live sweep,
     // or the total would silently stop at the end of last month.
     if (includesLive) {
       const liveNow =
@@ -1081,7 +1081,7 @@ export default function Overview({ month }: { month: string }) {
     const v = closedSum(metric);
     // An incomplete window renders "—", NOT Susan's capture. The old fallback
     // put four plausible numbers from a fixed June-2026 window under whatever
-    // month was selected, with the discrepancy dot forced off — and because
+    // month was selected, with the discrepancy dot forced off - and because
     // `hist` is a separate round-trip, that was the state on every first paint.
     // The only honest answers here are the real total or none.
     if (v == null) {
@@ -1103,47 +1103,47 @@ export default function Overview({ month }: { month: string }) {
   const hlMas = headlineUpgrade(
     "combinedMas",
     d.headline.mas,
-    `Live from REX — combined MAs (recorded + listing-only, Susan's definition), ${ytdWindowLabel}, summed from the stored closed months.`,
+    `Live from REX - combined MAs (recorded + listing-only, Susan's definition), ${ytdWindowLabel}, summed from the stored closed months.`,
     "live-rex"
   );
   const hlListings = headlineUpgrade(
     "listings",
     d.headline.listings,
-    `Live from REX — rental listings created ${ytdWindowLabel}, drafts excluded, summed from the stored closed months.`,
+    `Live from REX - rental listings created ${ytdWindowLabel}, drafts excluded, summed from the stored closed months.`,
     "live-rex"
   );
   const hlApplications = headlineUpgrade(
     "applications",
     d.headline.applications,
-    `Live from REX — applications accepted ${ytdWindowLabel}, summed from the stored closed months.`,
+    `Live from REX - applications accepted ${ytdWindowLabel}, summed from the stored closed months.`,
     "live-rex"
   );
   const hlMoveIns = headlineUpgrade(
     "moveIns",
     d.headline.moveIns,
-    `Live from Propoly — completed move-ins ${ytdWindowLabel}. Susan's Move-In Report also counts managed transfers + marketing-only, so hers can run higher.`,
+    `Live from Propoly - completed move-ins ${ytdWindowLabel}. Susan's Move-In Report also counts managed transfers + marketing-only, so hers can run higher.`,
     "live-propoly"
   );
   const hlPipeline: StatValue = live?.totals
     ? asLive(
         live.totals.pipeline,
-        "Live from REX — let-agreed forward pipeline RIGHT NOW ."
+        "Live from REX - let-agreed forward pipeline RIGHT NOW ."
       )
     : d.headline.pipeline;
 
-  // Conversion rates go live only when BOTH inputs are live — a live/snapshot
+  // Conversion rates go live only when BOTH inputs are live - a live/snapshot
   // hybrid ratio would be a made-up number.
-  // MA → Listing, for WHICHEVER month is selected — derived from the same two
+  // MA → Listing, for WHICHEVER month is selected - derived from the same two
   // tiles shown above it, so the rate and the figures it came from can never
   // disagree. (Recorded MAs alone gave 1200%-style nonsense; the combined
   // definition is Susan's formula.)
   const convMaToListing = derived(
     effListings,
     effMas,
-    `Derived from the funnel above — listings ÷ combined MAs (Susan's formula), ${periodLabelBit}.`,
+    `Derived from the funnel above - listings ÷ combined MAs (Susan's formula), ${periodLabelBit}.`,
     kpiPeriod.conversions.maToListing
   );
-  // RLP conversion — fully-managed share of this month's Propoly move-ins.
+  // RLP conversion - fully-managed share of this month's Propoly move-ins.
   // No isCurrent gate: the live-business route is now called with the selected
   // month, so rlpMtd already describes that month. Gating it here was the only
   // reason a past month fell back to July's percentage.
@@ -1153,7 +1153,7 @@ export default function Overview({ month }: { month: string }) {
     liveRlp != null && rlp
       ? asLive(
           liveRlp,
-          `Live from Propoly — ${rlp.fullyManaged} of ${rlp.total} move-ins this month are fully managed. Susan's "EFM managed" rule may scope this differently — flag if it looks off.`,
+          `Live from Propoly - ${rlp.fullyManaged} of ${rlp.total} move-ins this month are fully managed. Susan's "EFM managed" rule may scope this differently - flag if it looks off.`,
           `${liveRlp}%`
         )
       : kpiPeriod.conversions.rlpConversion;
@@ -1161,36 +1161,36 @@ export default function Overview({ month }: { month: string }) {
   const convListingToMoveIn = derived(
     effMoveIns,
     effListings,
-    `Derived from the funnel above — move-ins ÷ listings, ${periodLabelBit}.`,
+    `Derived from the funnel above - move-ins ÷ listings, ${periodLabelBit}.`,
     kpiPeriod.conversions.listingToMoveIn
   );
 
-  // MAs by partner type — live REX per-agent MAs split by the Team Hub's
+  // MAs by partner type - live REX per-agent MAs split by the Team Hub's
   // dual-brand flag. Lettings Lite has no hub category → snapshot.
-  // Same again — masByType is computed from the selected month's per-agent MAs
+  // Same again - masByType is computed from the selected month's per-agent MAs
   // crossed with the Team Hub's dual-brand flag, so it answers for any month.
   const mbt = live?.masByType ?? null;
   const masTiles = {
     // The same combined-MA figure as the funnel tile above, whichever month is
-    // selected — these two disagreeing was one of the things that made the
+    // selected - these two disagreeing was one of the things that made the
     // page hard to trust.
     total: mbt
-      ? asLive(mbt.total, `Live from REX — MAs across all lettings agents, ${periodLabelBit}.`)
+      ? asLive(mbt.total, `Live from REX - MAs across all lettings agents, ${periodLabelBit}.`)
       : measured(effMas)
         ? effMas
         : d.masByPartnerType.total,
     tle: mbt
       ? asLive(
           mbt.tle,
-          `Live — REX MAs by agents the Team Hub lists as TLE-primary${mbt.unmatched ? ` (includes ${mbt.unmatched} from agents not yet matched to the hub)` : ""}.`
+          `Live - REX MAs by agents the Team Hub lists as TLE-primary${mbt.unmatched ? ` (includes ${mbt.unmatched} from agents not yet matched to the hub)` : ""}.`
         )
       : d.masByPartnerType.tle,
     tleDual: mbt
-      ? asLive(mbt.tleDual, "Live — REX MAs by dual-brand partners (per the Team Hub).")
+      ? asLive(mbt.tleDual, "Live - REX MAs by dual-brand partners (per the Team Hub).")
       : d.masByPartnerType.tleDual,
   };
 
-  // Agent Headcount — live from the TEG Team Hub (the group's people database)
+  // Agent Headcount - live from the TEG Team Hub (the group's people database)
   // when the secret is configured. TLE = primary-brand Active partners; Dual =
   // partners on another brand with TLE in sub_brands. "Lettings Lite" doesn't
   // exist as a hub category (packages are Basic/Pro/Academy), so that tile
@@ -1205,33 +1205,33 @@ export default function Overview({ month }: { month: string }) {
   });
   const hc = {
     activeAgents: teg
-      ? asTeg(teg.activeAgents, "Live from TEG Team Hub — active TLE partners (primary + dual brand).")
+      ? asTeg(teg.activeAgents, "Live from TEG Team Hub - active TLE partners (primary + dual brand).")
       : d.headcount.activeAgents,
     tle: teg
-      ? asTeg(teg.tlePrimary, "Live from TEG Team Hub — partners with The Letting Experts as primary brand.")
+      ? asTeg(teg.tlePrimary, "Live from TEG Team Hub - partners with The Letting Experts as primary brand.")
       : d.headcount.tle,
     tleDual: teg
-      ? asTeg(teg.tleDual, "Live from TEG Team Hub — partners on another Experts brand with TLE as a sub-brand.")
+      ? asTeg(teg.tleDual, "Live from TEG Team Hub - partners on another Experts brand with TLE as a sub-brand.")
       : d.headcount.tleDual,
     lettingsLite: d.headcount.lettingsLite,
     startingSoon: teg
-      ? asTeg(teg.startingSoon, "Live from TEG Team Hub — signed partners still onboarding.")
+      ? asTeg(teg.startingSoon, "Live from TEG Team Hub - signed partners still onboarding.")
       : d.headcount.startingSoon,
     startersYtd: teg
       ? asTeg(
           teg.startersYtd,
-          "Live from TEG Team Hub — launch date since 1 Jan. Launch dates are patchy in the hub, so this can undercount."
+          "Live from TEG Team Hub - launch date since 1 Jan. Launch dates are patchy in the hub, so this can undercount."
         )
       : d.headcount.startersYtd,
     leaversYtd: teg
-      ? asTeg(teg.leaversYtd, "Live from TEG Team Hub — leave date since 1 Jan.")
+      ? asTeg(teg.leaversYtd, "Live from TEG Team Hub - leave date since 1 Jan.")
       : d.headcount.leaversYtd,
     varianceYtd: teg
-      ? asTeg(teg.varianceYtd, "Live from TEG Team Hub — starters minus leavers.", `${teg.varianceYtd >= 0 ? "+" : ""}${teg.varianceYtd}`)
+      ? asTeg(teg.varianceYtd, "Live from TEG Team Hub - starters minus leavers.", `${teg.varianceYtd >= 0 ? "+" : ""}${teg.varianceYtd}`)
       : d.headcount.varianceYtd,
   };
 
-  // The live pill is offered even though the seed has no entry for it — it is
+  // The live pill is offered even though the seed has no entry for it - it is
   // the whole point of the page now. Everything else still needs stored KPIs.
   // "July MTD" reads as a partial month; on a closed month it is simply wrong,
   // and on the live one the pill already says which month it is. Dropped
@@ -1273,16 +1273,16 @@ export default function Overview({ month }: { month: string }) {
   });
   const periodWord = rampKey === "ytd" ? "this year" : (d.periods[rampKey]?.label ?? "").replace(" MTD", "");
   const rampNewStarters = liveCohort
-    ? rampStat(liveCohort.length, `Live from TEG Team Hub — partners launched ${periodWord} (by date_launched).`)
+    ? rampStat(liveCohort.length, `Live from TEG Team Hub - partners launched ${periodWord} (by date_launched).`)
     : rampPeriod.ramp.newStarters;
   const rampMa = liveCohort
-    ? rampStat(cohortSum("marketAppraisals"), "Live from REX — market appraisals these starters recorded in their first 60 days.")
+    ? rampStat(cohortSum("marketAppraisals"), "Live from REX - market appraisals these starters recorded in their first 60 days.")
     : rampPeriod.ramp.maInMonths1To2;
   const rampListings = liveCohort
-    ? rampStat(cohortSum("listings"), "Live from REX — rental listings these starters created in their first 60 days.")
+    ? rampStat(cohortSum("listings"), "Live from REX - rental listings these starters created in their first 60 days.")
     : rampPeriod.ramp.listingInMonths1To2;
   const rampMoveIns = liveCohort
-    ? rampStat(cohortSum("moveIns"), "Live from Propoly — completed move-ins these starters achieved within 60 days of launch.")
+    ? rampStat(cohortSum("moveIns"), "Live from Propoly - completed move-ins these starters achieved within 60 days of launch.")
     : rampPeriod.ramp.moveInWithin60Days;
 
   return (
@@ -1294,9 +1294,9 @@ export default function Overview({ month }: { month: string }) {
           {moneyGaps.length ? (
             <span
               className="rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700"
-              title="PayProp rejected the stored credential for this agency (HTTP 400, invalid_grant). No request reaches it, so its income counts as zero — which is why every £ figure below is short. Someone with admin access must re-authorise the connection, or PayProp must issue an API key for that agency."
+              title="PayProp rejected the stored credential for this agency (HTTP 400, invalid_grant). No request reaches it, so its income counts as zero - which is why every £ figure below is short. Someone with admin access must re-authorise the connection, or PayProp must issue an API key for that agency."
             >
-              £ figures incomplete — {moneyGaps.map((a) => (a === "uk" ? "E&W" : "Glasgow")).join(", ")} unreachable
+              £ figures incomplete - {moneyGaps.map((a) => (a === "uk" ? "E&W" : "Glasgow")).join(", ")} unreachable
             </span>
           ) : null}
           <span className="text-[11px] text-muted">
@@ -1333,7 +1333,7 @@ export default function Overview({ month }: { month: string }) {
                     value: Math.round(d.gciByMonth.ytdNet),
                     display: `£${Math.round(d.gciByMonth.ytdNet).toLocaleString("en-GB")}`,
                     source: "live-payprop",
-                    note: `Live from PayProp, net of VAT — every fee charged across ${ytdWindowLabel}, summed from the stored monthly figures the chart below plots.${
+                    note: `Live from PayProp, net of VAT - every fee charged across ${ytdWindowLabel}, summed from the stored monthly figures the chart below plots.${
                       d.gciByMonth.ytdGross
                         ? ` £${Math.round(d.gciByMonth.ytdGross).toLocaleString("en-GB")} including VAT.`
                         : ""
@@ -1348,7 +1348,7 @@ export default function Overview({ month }: { month: string }) {
                       note: `Year-to-date needs every month in ${ytdWindowLabel}. ${
                         d.gciByMonth.unreachable?.length
                           ? "An agency is unreachable, so a total would be short by a whole agency."
-                          : "Still walking the missing months from PayProp — it fills in once they land, then stays stored."
+                          : "Still walking the missing months from PayProp - it fills in once they land, then stays stored."
                       }`,
                     }
                   : d.headline.gciExcVat
@@ -1356,17 +1356,17 @@ export default function Overview({ month }: { month: string }) {
             compact
           />
           {/*
-            TOTAL INCOME — deliberately NOT inferred.
+            TOTAL INCOME - deliberately NOT inferred.
 
             I tested the obvious hypothesis and the data killed it. Susan's
             captured pair is £213,317 GCI exc VAT against £240,434 total income,
-            a ratio of 1.127 — so if total income were simply the VAT-inclusive
+            a ratio of 1.127 - so if total income were simply the VAT-inclusive
             twin it would read £255,980. Measured across every stored month,
             PayProp's VAT is a flat 20% (gross/net = 1.200 in Jan, Feb, Mar, Apr
             and May alike), which rules that reading out entirely.
 
             That leaves ~£27,117 over the June year-to-date window that PayProp
-            does not hold — joining fees or other revenue, most likely. Rather
+            does not hold - joining fees or other revenue, most likely. Rather
             than dress a commission figure up as total income, this shows the
             June capture under its own label and nothing under any other.
           */}
@@ -1380,7 +1380,7 @@ export default function Overview({ month }: { month: string }) {
                     value: null,
                     display: "—",
                     source: "unavailable",
-                    note: "PayProp holds COMMISSION, not total business income. Susan's captured total is about £27k above year-to-date commission over the same window, and that gap is not VAT (PayProp's VAT is a flat 20%) — so it is revenue from somewhere PayProp cannot see. Needs a definition before it can be computed live.",
+                    note: "PayProp holds COMMISSION, not total business income. Susan's captured total is about £27k above year-to-date commission over the same window, and that gap is not VAT (PayProp's VAT is a flat 20%) - so it is revenue from somewhere PayProp cannot see. Needs a definition before it can be computed live.",
                   }
             }
             compact
@@ -1428,8 +1428,8 @@ export default function Overview({ month }: { month: string }) {
         ) : null}
       </Section>
 
-      {/* ---- 3. Business KPIs — Sales Funnel ---- */}
-      <Section title={`Business KPIs — ${selLabel}`} source={d.sources.businessFunnel}>
+      {/* ---- 3. Business KPIs - Sales Funnel ---- */}
+      <Section title={`Business KPIs - ${selLabel}`} source={d.sources.businessFunnel}>
         <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted">Sales Funnel</h3>
         <div className={TILE_GRID}>
           <Tile label="Market Appraisals" stat={effMas} flag={hMas?.flag} />
@@ -1444,7 +1444,7 @@ export default function Overview({ month }: { month: string }) {
 
       {/* ---- 4. Conversion Rates ---- */}
       {/* Follows the Business KPIs pill, exactly as on her dashboard. */}
-      <Section title={`Conversion Rates — ${periodLabelBit}`} source={d.sources.conversions}>
+      <Section title={`Conversion Rates - ${periodLabelBit}`} source={d.sources.conversions}>
         <div className={TILE_GRID}>
           <Tile label="MA → Listing" stat={convMaToListing} sub={subNote(convMaToListing)} />
           <Tile label="Listing → Move-in" stat={convListingToMoveIn} sub={subNote(convListingToMoveIn)} />
@@ -1468,7 +1468,7 @@ export default function Overview({ month }: { month: string }) {
 
       {/* ---- 5. MAs by Partner Type ---- */}
       <Section
-        title={`Market Appraisals by Partner Type${mbt ? ` — ${periodLabelBit}` : ""}`}
+        title={`Market Appraisals by Partner Type${mbt ? ` - ${periodLabelBit}` : ""}`}
         source={d.sources.masByPartnerType}
       >
         <div className={TILE_GRID}>
@@ -1491,7 +1491,7 @@ export default function Overview({ month }: { month: string }) {
       <Section title="Monthly GCI vs Budget" source={d.sources.income}>
         <Bars
           labels={d.gciByMonth.labels}
-          series={[{ name: "Actual GCI (exc VAT)", color: "#e31f36", values: d.gciByMonth.actual }]}
+          series={[{ name: "Actual GCI (exc VAT)", color: "#cfa096", values: d.gciByMonth.actual }]}
           format={(n) => `£${Math.round(n / 1000)}k`}
           height={240}
           details={d.gciByMonth.detail}
@@ -1509,9 +1509,9 @@ export default function Overview({ month }: { month: string }) {
             if (g.label === "Total portfolio" && live?.totals) {
               const stat: StatValue = {
                 value: live.totals.managed,
-                display: `${g.from} → ${live.totals.managed}`,
+                display: String(live.totals.managed),
                 source: "live-rex",
-                note: `Live from REX — ${live.totals.managed} managed (let) properties across every lettings agent, as at today, against ${g.from} at the baseline.`,
+                note: `Live from REX - ${live.totals.managed} managed (let) properties across every lettings agent, as at today. No baseline: REX keeps no history of the book, and the old one was typed.`,
                 asOf: new Date().toISOString().slice(0, 10),
               };
               return <Tile key={g.label} label={g.label} stat={stat} />;
@@ -1529,9 +1529,9 @@ export default function Overview({ month }: { month: string }) {
               const per = Math.round(d.gciByMonth.ytdNet / hist.yoy.moveIns.currYtd);
               const stat: StatValue = {
                 value: per,
-                display: `${g.from ? `£${g.from.toLocaleString("en-GB")} → ` : ""}£${per.toLocaleString("en-GB")}`,
+                display: `£${per.toLocaleString("en-GB")}`,
                 source: "live-payprop",
-                note: `£${Math.round(d.gciByMonth.ytdNet).toLocaleString("en-GB")} commission exc VAT across ${ytdWindowLabel} ÷ ${hist.yoy.moveIns.currYtd} move-ins year to date. Baseline ${g.from} is the 2025 average from the capture.`,
+                note: `£${Math.round(d.gciByMonth.ytdNet).toLocaleString("en-GB")} commission exc VAT across ${ytdWindowLabel} ÷ ${hist.yoy.moveIns.currYtd} move-ins year to date. No baseline yet: PayProp commission is held from August 2025, so a like-for-like year arrives in 2027.`,
                 asOf: new Date().toISOString().slice(0, 10),
               };
               return <Tile key={g.label} label={g.label} stat={stat} />;
@@ -1543,7 +1543,7 @@ export default function Overview({ month }: { month: string }) {
                 value: currYtd,
                 display: `${prevYtd} → ${currYtd}`,
                 source: "live-propoly",
-                note: `Live from Propoly — completed move-ins 1 Jan–${to.slice(5)} vs the same window last year${pctUp != null ? ` (${pctUp >= 0 ? "+" : ""}${pctUp}%)` : ""}. Susan's figures also count managed transfers + marketing-only.`,
+                note: `Live from Propoly - completed move-ins 1 Jan–${to.slice(5)} vs the same window last year${pctUp != null ? ` (${pctUp >= 0 ? "+" : ""}${pctUp}%)` : ""}. Susan's figures also count managed transfers + marketing-only.`,
                 asOf: to,
               };
               return (
@@ -1552,16 +1552,19 @@ export default function Overview({ month }: { month: string }) {
                   label={g.label}
                   stat={stat}
                   sub={pctUp != null ? `${pctUp >= 0 ? "+" : ""}${pctUp}% vs this time last year` : null}
-                  flag={g.stat.value != null && g.stat.value !== currYtd ? `Differs from Susan's report — hers: ${g.stat.display ?? g.stat.value}` : null}
                 />
               );
             }
             if (g.label === "Partner count" && teg) {
+              /* 1 January, worked back from today's count and the year's
+                 starters and leavers - all three from the Team Hub. The "21"
+                 this used to start from was typed out of Susan's records. */
+              const jan = teg.activeAgents - teg.startersYtd + teg.leaversYtd;
               const stat: StatValue = {
                 value: teg.activeAgents,
-                display: `${g.from} → ${teg.activeAgents}`,
+                display: `${jan} → ${teg.activeAgents}`,
                 source: "live-teg",
-                note: `Current side live from the TEG Team Hub (${teg.activeAgents} active TLE partners today); the ${g.from} baseline is from Susan's records.`,
+                note: `Live from the TEG Team Hub: ${teg.activeAgents} active today; ${jan} on 1 January (${teg.startersYtd} starters, ${teg.leaversYtd} leavers since).`,
                 asOf: teg.generatedAt.slice(0, 10),
               };
               return (
@@ -1569,8 +1572,7 @@ export default function Overview({ month }: { month: string }) {
                   key={g.label}
                   label={g.label}
                   stat={stat}
-                  sub={`from ${g.from} · live now`}
-                  flag={g.to !== teg.activeAgents ? `Differs from Susan's report — hers: ${g.stat.display ?? g.to}` : null}
+                  sub="since 1 January"
                 />
               );
             }
@@ -1583,12 +1585,12 @@ export default function Overview({ month }: { month: string }) {
         <p className="hide-when-presenting text-[11px] text-muted">
           Live tiles: REX summed across {live.agentsCounted} lettings agents
           {live.propoly ? " · move-ins live from Propoly" : ""}. Anything showing a dash has no
-          live source yet — hover it to see which connection it needs.
+          live source yet - hover it to see which connection it needs.
         </p>
       ) : live?.propoly ? (
         <p className="hide-when-presenting text-[11px] text-muted">
           Move-ins live from Propoly · REX live sums appear on the deployed site. Anything
-          showing a dash has no live source yet — hover it to see which connection it needs.
+          showing a dash has no live source yet - hover it to see which connection it needs.
         </p>
       ) : null}
     </div>

@@ -6,8 +6,8 @@ import { getGhlPaidLeadsMtd } from "@/lib/business/ghl";
 import { currentMonth } from "@/lib/business/format";
 
 // Live figures for the Paid Leads tab, from both ends of the funnel:
-//   Meta — leads generated + spend + CPL (the ads platform's own numbers).
-//   GHL  — the CRM funnel: leads created, referred to agents (Initial Call
+//   Meta - leads generated + spend + CPL (the ads platform's own numbers).
+//   GHL  - the CRM funnel: leads created, referred to agents (Initial Call
 //          Booked), MAs booked (MA Booked stage / won). Cached in lib/ghl.ts.
 
 // Two audiences: Susan reads the spend and CPL as business performance,

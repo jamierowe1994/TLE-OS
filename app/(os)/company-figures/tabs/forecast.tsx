@@ -1,6 +1,6 @@
 "use client";
 
-// Admin · Forecast tab — THE ROLL-UP. Live sum of every agent's self-set
+// Admin · Forecast tab - THE ROLL-UP. Live sum of every agent's self-set
 // forecast for the month via /api/admin/forecasts, which returns
 // { month, rows, rollup, actualMtd, predictedMonthEnd, varianceVsForecast }
 // with one row per ACTIVE roster agent: { agentKey, displayName, userLinked,
@@ -16,7 +16,7 @@ import SusanForecast from "@/components/business/SusanForecast";
 import SourceNote from "@/components/business/SourceNote";
 import { Bars } from "@/components/business/charts/Bars";
 import DataTable from "@/components/business/DataTable";
-import type { SeedData } from "@/lib/business/seed-data"; // type-only — erased at build
+import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
 import type { AgentForecast, StatValue } from "@/lib/business/types";
 import {
   formatDate,
@@ -42,11 +42,11 @@ interface ForecastSeries {
 interface LivePayProp {
   income?: {
     byCategory?: Array<{ category: string; amount: number }>;
-    /** Commission TLE kept — the TLE side of the split. Net of VAT. */
+    /** Commission TLE kept - the TLE side of the split. Net of VAT. */
     agencyIncome?: number;
     /** Every fee charged, whoever received it. Net of VAT. */
     combinedGci?: number;
-    /** Paid out to partners — the partner side of the split. Net of VAT. */
+    /** Paid out to partners - the partner side of the split. Net of VAT. */
     paidToBeneficiaries?: number;
     /** Partners who actually earned a fee this month: the honest denominator
      *  for "per trading partner", rather than everyone on the roster. */
@@ -172,10 +172,10 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
      but they are DIFFERENT KINDS of figure and the section had been treating
      them as one:
 
-       Management fees are a FLOW — they belong to a month, and July is the
+       Management fees are a FLOW - they belong to a month, and July is the
        last month that finished, so July is what we ask for.
 
-       Rent roll is a STOCK — what the book is worth right now. PayProp keeps
+       Rent roll is a STOCK - what the book is worth right now. PayProp keeps
        no history of it, so "the rent roll at the end of July" does not exist
        anywhere and cannot be recovered. Today's is the honest answer, and it
        says so rather than being labelled July.
@@ -187,7 +187,7 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
      understated. */
   /* The three forecasts side by side. Susan sets one for the business, the
      partners each set their own, and the month produces a third. They lived in
-     three places and nobody could say whether the first two agreed — which was
+     three places and nobody could say whether the first two agreed - which was
      the entire question being asked. */
   const [series, setSeries] = useState<ForecastSeries | null>(null);
   const loadSeries = useCallback(async () => {
@@ -195,7 +195,7 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
       const r = await fetch("/api/business/forecast-series?months=12", { cache: "no-store" });
       if (r.ok) setSeries((await r.json()) as ForecastSeries);
     } catch {
-      /* leave it empty — an absent chart beats an invented one */
+      /* leave it empty - an absent chart beats an invented one */
     }
   }, []);
   useEffect(() => {
@@ -213,7 +213,7 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
       const d: unknown = await r.json();
       if (d && typeof d === "object") setLive(d as LivePayProp);
     } catch {
-      /* leave the snapshot showing — a missing live read is not a zero */
+      /* leave the snapshot showing - a missing live read is not a zero */
     }
   }, []);
   useEffect(() => {
@@ -240,7 +240,7 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
   const managed = live?.portfolio?.totalProperties ?? null;
   const inc = live?.income ?? null;
   // Recurring is the management fee; everything else charged in the month is
-  // one-off by definition — set-up, let-only, transfers. Derived by subtraction
+  // one-off by definition - set-up, let-only, transfers. Derived by subtraction
   // rather than by naming categories, so a fee type PayProp adds tomorrow lands
   // in one-off instead of vanishing from the total.
   const liveOneOff =
@@ -273,7 +273,7 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
     <div>
       {/* ------------------------- roll-up hero ------------------------- */}
       <SectionTitle source="Agent-set forecasts, live from the portal · actuals from PayProp, with manual override">
-        Partner Forecast Roll-up — {monthLabel(month)}
+        Partner Forecast Roll-up - {monthLabel(month)}
       </SectionTitle>
 
       {error ? (
@@ -301,7 +301,7 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
             value: susanThisMonth,
             display: susanThisMonth == null ? "—" : formatGBP(susanThisMonth),
             source: "manual",
-            note: "Set by hand on this tab and stored with the other manual figures. Not derived from anything — it is the number Susan expects.",
+            note: "Set by hand on this tab and stored with the other manual figures. Not derived from anything - it is the number Susan expects.",
           }}
           sub={
             susanThisMonth == null
@@ -320,7 +320,7 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
           big
           label="Predicted month-end"
           stat={data?.predictedMonthEnd ?? { value: null, source: "derived" }}
-          sub="Actual MTD ÷ fraction of the month elapsed — straight run rate"
+          sub="Actual MTD ÷ fraction of the month elapsed - straight run rate"
         />
         <StatCard
           big
@@ -351,7 +351,7 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
               <SourceNote tone="derived">
                 Susan&rsquo;s figure and the partners&rsquo; roll-up are both typed by
                 people; the actual is live from PayProp, net of VAT. A month nobody
-                forecast is left blank rather than drawn as zero — &ldquo;nobody has
+                forecast is left blank rather than drawn as zero - &ldquo;nobody has
                 said yet&rdquo; and &ldquo;they forecast nothing&rdquo; are different
                 claims.
               </SourceNote>
@@ -359,9 +359,9 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
             <Bars
               labels={series.rows.map((r) => monthLabel(r.month).slice(0, 3))}
               series={[
-                { name: "Susan", color: "#101014", values: series.rows.map((r) => r.susan) },
-                { name: "Partners", color: "#E31F36", values: series.rows.map((r) => r.partners) },
-                { name: "Actual", color: "#5FA87C", values: series.rows.map((r) => r.actual) },
+                { name: "Susan", color: "#56423e", values: series.rows.map((r) => r.susan) },
+                { name: "Partners", color: "#cfa096", values: series.rows.map((r) => r.partners) },
+                { name: "Actual", color: "#8d9b78", values: series.rows.map((r) => r.actual) },
               ]}
               format={(n) => `£${Math.round(n / 1000)}k`}
               height={240}
@@ -382,7 +382,7 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
           : `${rollup.agentsForecasted} of ${rollup.agentsTotal} active agents have set a forecast for ${monthLabel(month)}.`}
       </p>
 
-      <SectionTitle>Agent forecasts — {monthLabel(month)}</SectionTitle>
+      <SectionTitle>Agent forecasts - {monthLabel(month)}</SectionTitle>
       <DataTable
         columns={[
           { key: "agent", label: "Agent" },
@@ -433,14 +433,14 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
       />
       {!loading && rollup.agentsForecasted === 0 && !error ? (
         <p className="mt-2 text-xs text-muted">
-          No agent has set a forecast for {monthLabel(month)} yet — agents set
+          No agent has set a forecast for {monthLabel(month)} yet - agents set
           theirs under Dashboard → Forecast.
         </p>
       ) : null}
 
       {/* ------------------------- business value ------------------------- */}
       <SectionTitle source={seed.sources.businessValue}>
-        Business Value — Monthly Rent Roll &amp; Recurring Income (
+        Business Value - Monthly Rent Roll &amp; Recurring Income (
         {monthLabel(feeMonth)})
       </SectionTitle>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
@@ -450,7 +450,7 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
             liveStat(
               rentRoll,
               rentRoll == null ? "—" : formatGBP(rentRoll),
-              "Live from the PayProp portfolio walk, both agencies. This is a STOCK — what the book is worth today. PayProp keeps no history of it, so the rent roll as at the end of a past month cannot be recovered."
+              "Live from the PayProp portfolio walk, both agencies. This is a STOCK - what the book is worth today. PayProp keeps no history of it, so the rent roll as at the end of a past month cannot be recovered."
             ) ?? bv.monthlyRentRoll
           }
           sub={managed != null ? `${managed} managed properties · as at today` : "362 managed properties"}
@@ -461,13 +461,13 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
             liveStat(
               liveMgmtFees,
               liveMgmtFees == null ? "—" : formatGBP(liveMgmtFees),
-              `Live from PayProp for ${monthLabel(feeMonth)}, net of VAT — Management Fee, Monthly Management Fee, First Month Management Fee and Investor Services summed across both agencies.`
+              `Live from PayProp for ${monthLabel(feeMonth)}, net of VAT - Management Fee, Monthly Management Fee, First Month Management Fee and Investor Services summed across both agencies.`
             ) ?? bv.monthlyManagementFees
           }
           sub={monthLabel(feeMonth)}
         />
         <StatCard
-          label="MRI — Monthly Recurring Income"
+          label="MRI - Monthly Recurring Income"
           stat={
             liveStat(
               liveMgmtFees,
@@ -475,7 +475,7 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
               "SHORT BY LICENCE INCOME. Management fees are live; licence income is in no connected system and needs the P&L upload, and partner joining fees run through a separate bank account entirely. This is the reachable part, not the whole of MRI."
             ) ?? bv.mri
           }
-          sub="management fees only — licence income not yet reachable"
+          sub="management fees only - licence income not yet reachable"
         />
         <StatCard
           label="One-off Fees"
@@ -483,7 +483,7 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
             liveStat(
               liveOneOff,
               liveOneOff == null ? "—" : formatGBP(liveOneOff),
-              `Live for ${monthLabel(feeMonth)}: every fee charged, less the management fee — set-up, let-only and transfers. Partner JOINING fees are not in here and cannot be: they run through a separate bank account, reachable only via Barclays/QuickBooks.`
+              `Live for ${monthLabel(feeMonth)}: every fee charged, less the management fee - set-up, let-only and transfers. Partner JOINING fees are not in here and cannot be: they run through a separate bank account, reachable only via Barclays/QuickBooks.`
             ) ?? bv.oneOffFees
           }
           sub={monthLabel(feeMonth)}
@@ -494,7 +494,7 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
             liveStat(
               liveTotalIncome,
               liveTotalIncome == null ? "—" : formatGBP(liveTotalIncome),
-              `Live combined GCI for ${monthLabel(feeMonth)}, net of VAT, both agencies — recurring plus one-off.${SHORT} Joining fees are absent for the same reason as above.`
+              `Live combined GCI for ${monthLabel(feeMonth)}, net of VAT, both agencies - recurring plus one-off.${SHORT} Joining fees are absent for the same reason as above.`
             ) ?? bv.totalMonthlyIncome
           }
           sub={monthLabel(feeMonth)}
@@ -528,24 +528,24 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
             liveStat(
               perPartner,
               perPartner == null ? "—" : formatGBP(perPartner),
-              `Divided by partners who actually EARNED a fee this month, not everyone on the roster — a quiet month would otherwise flatter this figure.${SHORT}`
+              `Divided by partners who actually EARNED a fee this month, not everyone on the roster - a quiet month would otherwise flatter this figure.${SHORT}`
             ) ?? bv.mriPerTradingPartner
           }
           sub={inc?.agentsEarning ? `÷ ${inc.agentsEarning} earning` : "21 trading · 30 active"}
         />
         <StatCard
-          label="MRI Split — TLE Retained"
+          label="MRI Split - TLE Retained"
           stat={
             liveStat(
               inc?.agencyIncome ?? null,
               inc?.agencyIncome == null ? "—" : formatGBP(inc.agencyIncome),
-              `Commission the agency kept in ${monthLabel(feeMonth)}, net of VAT. This one is COMPLETE — it is measured from the payments themselves, not derived from MRI, so no licence gap applies.`
+              `Commission the agency kept in ${monthLabel(feeMonth)}, net of VAT. This one is COMPLETE - it is measured from the payments themselves, not derived from MRI, so no licence gap applies.`
             ) ?? bv.mriSplitTle
           }
           sub={monthLabel(feeMonth)}
         />
         <StatCard
-          label="MRI Split — Partner"
+          label="MRI Split - Partner"
           stat={
             liveStat(
               inc?.paidToBeneficiaries ?? null,
@@ -587,7 +587,7 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
               [
                 ...bv.baselineCosts.direct.map((r) => ({ ...r, label: `${r.label} (direct)` })),
                 ...bv.baselineCosts.fixed,
-                /* Null is not £0 of costs — that would read as a business with
+                /* Null is not £0 of costs - that would read as a business with
                    no overheads at all.
                    
                    And the sentinel must be null, not the string "—". money()
@@ -616,7 +616,7 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
 
       {/* ------------------------ H2 reforecast P&L ------------------------ */}
       <SectionTitle source={seed.sources.h2Reforecast}>
-        H2 2026 Reforecast — Month-by-Month P&L
+        H2 2026 Reforecast - Month-by-Month P&L
       </SectionTitle>
       <div className="mb-3 grid grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard label="H2 Net Loss" stat={h2.h2NetLoss} />

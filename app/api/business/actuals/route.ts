@@ -19,7 +19,7 @@ const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 async function requireAdmin(req: NextRequest): Promise<NextResponse | null> {
   /* ONE auth system. The portal guarded this with its own session plus an
      ADMIN_EMAILS list; in the OS the same job is a capability, so owner and
-     super_admin pass and nobody else does — including developers, who have no
+     super_admin pass and nobody else does - including developers, who have no
      business reading the money. */
   if (!(await requireCapability(req, "see:business"))) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
@@ -78,7 +78,7 @@ export async function PUT(req: NextRequest) {
   const metric = typeof body.metric === "string" ? body.metric.trim() : "";
   if (!metric || metric.length > 120) {
     return NextResponse.json(
-      { error: 'metric is required — a dot-key like "income.combinedGci".' },
+      { error: 'metric is required - a dot-key like "income.combinedGci".' },
       { status: 400 }
     );
   }

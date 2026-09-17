@@ -9,7 +9,7 @@ import { hasDb, q } from "@/lib/business/db";
  * WHY THIS EXISTS
  *
  * The table on the Income tab was a snapshot typed out of Susan's reports, and
- * its COLUMNS were typed too — jan…jun, q1, q2, ytd. So in August it still
+ * its COLUMNS were typed too - jan…jun, q1, q2, ytd. So in August it still
  * ended at June, while the chart above it (which derives its window from the
  * calendar) already ran to July. One screen, two different ideas of how far
  * the year had got.
@@ -19,19 +19,19 @@ import { hasDb, q } from "@/lib/business/db";
  *
  * WHAT CAN AND CANNOT BE FILLED THIS WAY
  *
- * PayProp gives the GCI rows honestly — combined, per country, the agency's own
+ * PayProp gives the GCI rows honestly - combined, per country, the agency's own
  * share, and what therefore went to associates. Those reconcile with Susan to
  * under 1%.
  *
  * It gives NOTHING for the licence fee rows: monthly licence, pro licence and
- * joining fees do not run through PayProp at all — joining fees go through a
+ * joining fees do not run through PayProp at all - joining fees go through a
  * separate bank account visible only in Barclays and QuickBooks. Those rows
  * stay null for any month the snapshot doesn't cover, and null renders as a
  * dash rather than a zero. A zero would say "we earned nothing", which is a
  * different and false statement.
  *
  * Nor does it give the fee BREAKDOWN (management / set-up / other) per country
- * — that split comes from Susan's own Summary of Fees. Also null.
+ * - that split comes from Susan's own Summary of Fees. Also null.
  */
 
 export const dynamic = "force-dynamic";
@@ -47,7 +47,7 @@ const GCI_ROWS = {
 } as const;
 
 /**
- * SELF-WARMING — so nobody has to schedule anything.
+ * SELF-WARMING - so nobody has to schedule anything.
  *
  * A cold month is minutes of PayProp paging. Somebody has to absorb that, and
  * the only question is who: Susan opening her figures at nine, or a background
@@ -55,7 +55,7 @@ const GCI_ROWS = {
  *
  * Railway's cron runs a SERVICE on a schedule rather than pinging a URL, so
  * using it would mean deploying a second service whose entire job is to make
- * one HTTP call — a whole extra deployment, and one more thing to forget
+ * one HTTP call - a whole extra deployment, and one more thing to forget
  * exists. This does the same work with nothing to maintain.
  *
  * Once a day, at most: the first request after the marker goes stale kicks the
@@ -65,7 +65,7 @@ const GCI_ROWS = {
  *
  * The marker lives in os_cache, NOT in a module variable. Railway restarts
  * containers, and an in-memory flag would mean a fresh warm on every deploy
- * and every cold start — several of those in an afternoon is exactly the
+ * and every cold start - several of those in an afternoon is exactly the
  * hammering the daily limit exists to prevent.
  */
 const WARM_KEY = "income:last-warm";
@@ -89,7 +89,7 @@ async function warmIfStale(months: string[]): Promise<void> {
       [WARM_KEY, JSON.stringify({ startedAt: new Date().toISOString() })]
     );
 
-    // Deliberately not awaited — the caller gets their page now.
+    // Deliberately not awaited - the caller gets their page now.
     void getGciHistory(months[0], months[months.length - 1], { wait: true }).catch(() => {});
   } catch {
     /* A warm that cannot start must never break the page it was warming. */
@@ -98,10 +98,10 @@ async function warmIfStale(months: string[]): Promise<void> {
 
 export async function GET() {
   /* The LIVE month included. It was months-to-last-complete, which on the 28th
-     of August ends at July — see the note on the business page about why a
+     of August ends at July - see the note on the business page about why a
      closed-report rule is wrong on a screen Susan runs the business from. */
   /* CLOSED months only. An earlier pass appended the current month, which put a
-     part-month column in a row of complete ones — smaller, entirely plausible,
+     part-month column in a row of complete ones - smaller, entirely plausible,
      and marked as walked-from-PayProp with nothing saying it was partial. That
      is the exact shape of the discrepancy this dashboard has been burned by.
      
@@ -113,7 +113,7 @@ export async function GET() {
     return NextResponse.json({ months: [], rows: {}, filled: [] });
   }
 
-  // Keyed by month, not a list — see lib/gci-history.
+  // Keyed by month, not a list - see lib/gci-history.
   void warmIfStale(months);
 
   const by = await getGciHistory(months[0], months[months.length - 1]).catch(
@@ -132,7 +132,7 @@ export async function GET() {
      
      getGciHistory is non-blocking on a cold month: it starts the walk and
      returns nothing for that month. PayProp pages at 25 rows, so one cold
-     month is ~1,400 rows ≈ 56 sequential requests — genuinely minutes. The
+     month is ~1,400 rows ≈ 56 sequential requests - genuinely minutes. The
      screen used to fill the gap with a July snapshot and say "until they
      land", which meant a page that had loaded NOTHING looked identical to one
      that had loaded everything, and nobody could tell whether to wait. */

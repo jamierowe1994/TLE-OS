@@ -1,6 +1,6 @@
 "use client";
 
-// Admin tab: Move-ins & pipeline — header stats, July move-ins table (10 rows),
+// Admin tab: Move-ins & pipeline - header stats, July move-ins table (10 rows),
 // July pipeline (26 rows), forward pipeline Aug–Sep (25 rows).
 // Admin can ADD a move-in: the row (agent/property/date/rent/fees) is stored in
 // the actuals-store (metric "moveIns.row.<id>", row JSON in the note) and is
@@ -12,7 +12,7 @@ import StatCard from "@/components/business/StatCard";
 import SourceNote from "@/components/business/SourceNote";
 import DataTable, { type DataTableColumn } from "@/components/business/DataTable";
 import SourceBadge from "@/components/business/SourceBadge";
-import type { SeedData } from "@/lib/business/seed-data"; // type-only — erased at build
+import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
 import { ROSTER } from "@/lib/business/roster";
 import type { PipelineRow, MoveInRow } from "@/lib/business/seed-types";
 import { resolveStat, type ManualOverride } from "@/lib/business/stats";
@@ -129,7 +129,7 @@ interface LiveRows {
   }> | null;
 }
 
-/** Propoly's own words, tidied. Never invented — an unknown level shows raw. */
+/** Propoly's own words, tidied. Never invented - an unknown level shows raw. */
 const SERVICE = (s: string | null) =>
   s == null
     ? "—"
@@ -254,7 +254,7 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
   /* These open on the CURRENT month, not the tab's.
      The tab reports the last complete month, which is right for counting
      finished work. But "who is moving in this month, and who has already"
-     is a question about the month we are standing in — answering it with July
+     is a question about the month we are standing in - answering it with July
      on the 18th of August is answering a different question. The toggle still
      reaches back. */
   const [tableMonth, setTableMonth] = useState(currentMonth);
@@ -288,7 +288,7 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Move-in tracker — completed MTD, forward forecast + rollups with trends.
+  // Move-in tracker - completed MTD, forward forecast + rollups with trends.
   const [tracker, setTracker] = useState<MoveInTracker | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -303,7 +303,7 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
     };
   }, []);
 
-  // Live Propoly strip — the true progression pipeline + completed move-ins.
+  // Live Propoly strip - the true progression pipeline + completed move-ins.
   const [livePropoly, setLivePropoly] = useState<PropolyBiz | null>(null);
   const [propolyAnswered, setPropolyAnswered] = useState(false);
   useEffect(() => {
@@ -355,7 +355,7 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
           .filter((r): r is MoveInRow => r !== null)
       );
     } catch {
-      /* offline / route not ready — snapshot figures still render */
+      /* offline / route not ready - snapshot figures still render */
     }
   }, [month]);
 
@@ -471,11 +471,11 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
         <section className="card p-5">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-[13px] font-semibold uppercase tracking-wide">
-              Live progression — Propoly
+              Live progression - Propoly
             </h2>
             <SourceBadge
               source="live-propoly"
-              note="Live from Propoly tenancy progression — the whole business, refreshed every minute or so."
+              note="Live from Propoly tenancy progression - the whole business, refreshed every minute or so."
             />
           </div>
           <div className="mt-3 grid gap-3 grid-cols-[repeat(auto-fit,minmax(150px,1fr))]">
@@ -523,14 +523,20 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
         ? (() => {
             const horizon = Object.keys(tracker.forecastByMonth).sort();
             const [m0, m1, m2] = horizon;
-            const year = (m0 ?? "2026-07").slice(0, 4);
             const sumMonths = (ms: string[], from: Record<string, number>) =>
               ms.reduce((t, m) => t + (from[m] ?? 0), 0);
-            const q3Months = [`${year}-07`, `${year}-08`, `${year}-09`];
-            const q2Actual = sumMonths(
-              [`${year}-04`, `${year}-05`, `${year}-06`],
-              tracker.completedByMonth
-            );
+            /* This quarter and the one before, from today. Was Q3 and Q2 typed
+               out, which would have gone on calling October "Q3". */
+            const now = new Date();
+            const qStart = Math.floor(now.getUTCMonth() / 3) * 3;
+            const quarter = (offset: number) =>
+              [0, 1, 2].map((i) =>
+                new Date(Date.UTC(now.getUTCFullYear(), qStart + offset * 3 + i, 1)).toISOString().slice(0, 7)
+              );
+            const qLabel = (offset: number) =>
+              `Q${(((Math.floor(now.getUTCMonth() / 3) + offset) % 4) + 4) % 4 + 1}`;
+            const q3Months = quarter(0);
+            const q2Actual = sumMonths(quarter(-1), tracker.completedByMonth);
             const q3Projected =
               sumMonths(q3Months, tracker.completedByMonth) +
               sumMonths(q3Months, tracker.forecastByMonth);
@@ -568,10 +574,10 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
                 sub: `${tracker.forecastOverdue} past move-in date · ${tracker.forecastUndated} undated`,
               },
               {
-                label: "Q3 projected",
+                label: `${qLabel(0)} projected`,
                 value: q3Projected,
                 sub: "Completed + progression forecast",
-                trend: { prev: q2Actual, vs: "Q2 actual" },
+                trend: { prev: q2Actual, vs: `${qLabel(-1)} actual` },
               },
               {
                 label: "YTD move-ins",
@@ -588,7 +594,7 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
                   </h2>
                   <SourceBadge
                     source="live-propoly"
-                    note="Live from Propoly — completed deals and the forward progression forecast. Susan's Move-In Report also counts managed transfers + marketing-only move-ins."
+                    note="Live from Propoly - completed deals and the forward progression forecast. Susan's Move-In Report also counts managed transfers + marketing-only move-ins."
                     asOf={asOf}
                   />
                 </div>
@@ -616,11 +622,11 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
       {/* A FLOW tab: the month selector genuinely re-queries the source, so
           most figures below really are {monthLabel(month)}. The warning is
           only about the ones still on the seed, which stay badged and dated
-          — the old wording condemned the whole tab as stale, including the
+          - the old wording condemned the whole tab as stale, including the
           live figures it had just fetched for the selected month. */}
       {/* A banner stood here telling the reader that anything badged
           "snapshot" was really 11 Jul 2026. There is no such badge any more —
-          the capture is gone and the source is retired — so it was pointing at
+          the capture is gone and the source is retired - so it was pointing at
           something that does not exist, while implying the remaining dashes
           were July figures rather than nothing at all. Each figure carries its
           own source; a page-wide disclaimer only competed with them. */}
@@ -636,7 +642,7 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
         />
         {/* Removed 18 Aug 2026 (James): "Remaining in July pipeline",
             "July forecast", "Aug–Sep pipeline", "Q2 move-ins" and "YTD move-ins" all named a
-            fixed month in their label and carried a hand-typed sub — they were
+            fixed month in their label and carried a hand-typed sub - they were
             answering July whatever the picker said, and would have gone on
             saying July into next year. The tab now reports one month, the last
             complete one, and rolls itself. */}
@@ -651,7 +657,7 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
               Add a move-in
               <SourceNote tone="derived">
                 Typed here and stored in the portal as a manual actual. It bumps the
-                completed count and appends a row marked ADDED — it does not write
+                completed count and appends a row marked ADDED - it does not write
                 back to Propoly.
               </SourceNote>
             </h2>
@@ -687,7 +693,7 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
                   onChange={(e) => setFAgent(e.target.value)}
                   className={inputClass}
                 >
-                  <option value="">— Pick an agent —</option>
+                  <option value="">Pick an agent</option>
                   {ROSTER.filter((r) => r.active).map((r) => (
                     <option key={r.agentKey} value={r.displayName}>
                       {r.displayName}
@@ -810,7 +816,7 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
       {/* The amber "these tables are the 11 Jul capture and don't follow the
           month selector" banner stood here. Both statements stopped being true
           when the tables went live on their own month toggle, so it was
-          warning people off figures that were correct — which is worse than no
+          warning people off figures that were correct - which is worse than no
           banner, because it teaches them to distrust the live ones too.
 
           A warning has to be deleted at the same time as the thing it warns
@@ -818,7 +824,7 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
 
       {/* ── The two tables, live from Propoly, with their own month ──────────
           They were a capture taken on 11 Jul 2026, which is why they sat on
-          July whatever was picked above — and why they disagreed with the
+          July whatever was picked above - and why they disagreed with the
           tracker beside them. The capture holds ten rows; Propoly's answer for
           July is thirty-five, because the capture was taken on the 11th and the
           month carried on. */}
@@ -830,7 +836,7 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
           <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2">
             <div>
               <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                {monthLabel(tableMonth)} — total
+                {monthLabel(tableMonth)} - total
               </div>
               <div className="stat-value mt-1 text-[30px]">
                 {(rows.moveIns?.length ?? 0) + (rows.pipeline?.length ?? 0)}
@@ -850,7 +856,7 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-sm font-semibold">
-            Moved in — {monthLabel(tableMonth)}
+            Moved in - {monthLabel(tableMonth)}
             {rows?.moveIns ? ` · ${rows.moveIns.length}` : ""}
             <SourceNote tone="live">
               Propoly deals with tenancy_status=complete and a move-in date in this
@@ -893,11 +899,11 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold">
-          Still to move in — {monthLabel(tableMonth)}
+          Still to move in - {monthLabel(tableMonth)}
           {rows?.pipeline ? ` · ${rows.pipeline.length}` : ""}
           <SourceNote tone="live">
             Propoly deals still in progression, expected in this month. Deals with
-            no expected date are included rather than hidden — an undated deal is
+            no expected date are included rather than hidden - an undated deal is
             still real work, and it shows as TBC.
           </SourceNote>
         </h2>

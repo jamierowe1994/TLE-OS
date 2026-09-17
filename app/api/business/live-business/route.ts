@@ -18,9 +18,9 @@ import { currentMonth } from "@/lib/business/format";
 import { loadSnapshot, saveSnapshot } from "@/lib/business/propoly-snapshot";
 
 // Business-wide LIVE figures from two sources:
-//   REX     — every lettings agent's funnel + portfolio, summed (heavy,
+//   REX     - every lettings agent's funnel + portfolio, summed (heavy,
 //             cached, concurrency-limited).
-//   Propoly — the whole progression pipeline by stage + completed move-ins
+//   Propoly - the whole progression pipeline by stage + completed move-ins
 //             for the month (cached inside lib/propoly-deals).
 // Propoly answers even when REX isn't configured, so the admin Overview can
 // upgrade whatever it can rather than all-or-nothing.
@@ -45,7 +45,7 @@ interface Payload {
   teg: TegHeadcount | null;
   /** Month-bound REX counts (applications by date_received, listings created). */
   monthCounts: BusinessMonthCounts | null;
-  /** Live MA split by partner type — REX per-agent MAs × TEG Hub dual flag. */
+  /** Live MA split by partner type - REX per-agent MAs × TEG Hub dual flag. */
   masByType: { total: number; tle: number; tleDual: number; unmatched: number } | null;
   /** RLP input: this month's Propoly move-ins split by service level. */
   rlpMtd: { total: number; fullyManaged: number } | null;
@@ -76,7 +76,7 @@ interface AgentRow {
 }
 
 const cache = new Map<string, { at: number; data: Payload }>();
-// One recompute at a time per month — a second admin loading during the
+// One recompute at a time per month - a second admin loading during the
 // ~15s REX sweep must not double the load.
 const inflight = new Map<string, Promise<Payload | null>>();
 
@@ -102,7 +102,7 @@ export async function GET(req: NextRequest) {
   const force = req.nextUrl.searchParams.get("refresh") === "1";
 
   if (!rexConfigured()) {
-    // No REX here — Propoly and the Team Hub still answer (own caches).
+    // No REX here - Propoly and the Team Hub still answer (own caches).
     const [propoly, teg] = await Promise.all([
       getPropolyBusinessStats(month).catch(() => null),
       getTegHeadcount().catch(() => null),
@@ -137,7 +137,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Nothing to serve (first ever run) or forced — do the full sweep, shared
+  // Nothing to serve (first ever run) or forced - do the full sweep, shared
   // with any other request already doing it.
   let job = inflight.get(month);
   if (!job || force) {
@@ -166,7 +166,7 @@ async function compute(month: string, force: boolean): Promise<Payload> {
   ]);
 
   // These two are INDEPENDENT and were awaited one after the other, so a cold
-  // sweep paid for both in series — measured 14.3s for the month counts then
+  // sweep paid for both in series - measured 14.3s for the month counts then
   // 10.3s for the per-agent walk. Nothing in the second needs the first.
   const [monthCounts, rows] = await Promise.all([
     getBusinessMonthCounts(month, agents.map((a) => a.id), force).catch(() => null),
@@ -236,11 +236,11 @@ async function compute(month: string, force: boolean): Promise<Payload> {
     monthCounts,
     masByType,
     rlpMtd,
-    // Biggest book first — the order anyone reading a partner table wants.
+    // Biggest book first - the order anyone reading a partner table wants.
     byAgent: [...counted].sort((a, b) => b.managed - a.managed),
     generatedAt: new Date().toISOString(),
   };
-  // Only cache/persist a COMPLETE payload — a Propoly/TEG timeout on a cold
+  // Only cache/persist a COMPLETE payload - a Propoly/TEG timeout on a cold
   // run must not freeze `null` into everyone's dashboard.
   const propolyOk = !propolyConfigured() || propoly != null;
   const tegOk = !tegHubConfigured() || teg != null;

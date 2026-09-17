@@ -13,7 +13,7 @@ import { rexConfigured, rexFindUser } from "@/lib/business/rex";
  * ── Why this route was worth restoring ────────────────────────────────────
  *
  * The Agents tab has called `/api/business/rex-link` since the port and the
- * route had never existed, so the button 404'd in silence — the client reads
+ * route had never existed, so the button 404'd in silence - the client reads
  * `data.reason ?? data.error` off a Next.js 404 page, finds neither, and says
  * "Couldn't find them in REX." Which is a sentence about REX, for a failure
  * that has nothing to do with REX.
@@ -21,7 +21,7 @@ import { rexConfigured, rexFindUser } from "@/lib/business/rex";
  * That matters more than one dead button. An unlinked `rex_user_id` is not a
  * cosmetic gap: it is why a partner's listings, leads and appraisals go
  * missing from Susan's roll-up. The fallback for anyone signup could not link
- * automatically — typically someone added to REX after they signed up — was
+ * automatically - typically someone added to REX after they signed up - was
  * this button, and it has never once worked.
  *
  * ── The write ─────────────────────────────────────────────────────────────
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
   if (!hit) {
     return NextResponse.json({
       linked: false,
-      reason: `No REX user matched ${target.email} or the name "${target.name}". Check they're in REX, then try again — or paste their AccountUsers id.`,
+      reason: `No REX user matched ${target.email} or the name "${target.name}". Check they're in REX, then try again - or paste their AccountUsers id.`,
     });
   }
 

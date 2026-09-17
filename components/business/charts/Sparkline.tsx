@@ -18,7 +18,7 @@ export default function Sparkline({
   values,
   width = 168,
   height = 46,
-  color = "#E31F36",
+  color = "#cfa096",
   fill = true,
   strokeWidth = 2,
 }: SparklineProps) {

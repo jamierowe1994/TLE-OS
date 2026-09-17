@@ -1,6 +1,6 @@
 "use client";
 
-// Admin tab: Diagnostics — integration status from /api/admin/status, env
+// Admin tab: Diagnostics - integration status from /api/admin/status, env
 // presence checklist, and the worklist of figures we couldn't match to a live
 // source yet (so Susan/James can work through them one by one).
 
@@ -27,7 +27,7 @@ interface StatusPayload {
   env: { present: string[] };
 }
 
-// Same list the status route checks — names only, never values.
+// Same list the status route checks - names only, never values.
 const ENV_CHECKLIST = [
   "AUTH_SECRET",
   "ADMIN_EMAILS",
@@ -49,21 +49,21 @@ const ENV_CHECKLIST = [
 
 const REX_CAPABILITY_LABELS: Record<string, string> = {
   login: "REX login (UserProfile/getAccessibleAccounts)",
-  accountUsers: "AccountUsers/search — map portal accounts to REX users",
-  leadsSearch: "Leads/search — per-agent lead / MA-request counts by month",
+  accountUsers: "AccountUsers/search - map portal accounts to REX users",
+  leadsSearch: "Leads/search - per-agent lead / MA-request counts by month",
   listingsModel: "Listings model discovered (describeModel)",
   appraisalsModel: "Appraisals model discovered (describeModel)",
 };
 
-// Figures we couldn't match to a live source yet — worked through one by one.
+// Figures we couldn't match to a live source yet - worked through one by one.
 const WORKLIST: { system: string; items: string[] }[] = [
   {
     system: "REX (KPI funnel figures)",
     items: [
-      "Market appraisals — business + per-agent (REX KPI reports)",
-      "Listings, viewings, applications — funnel counts",
+      "Market appraisals - business + per-agent (REX KPI reports)",
+      "Listings, viewings, applications - funnel counts",
       "Live listings and forward pipeline counts",
-      "Compliance items (REX PM module — live pull candidate)",
+      "Compliance items (REX PM module - live pull candidate)",
     ],
   },
   {
@@ -181,7 +181,7 @@ export default function DiagnosticsTab({ month }: { month: string }) {
             What live pulls are possible: with login + AccountUsers we can link
             portal accounts to REX users; with Leads/search we can count each
             agent&rsquo;s lead records (MA requests) per month. Listings /
-            appraisals reporting endpoints are still being discovered — until
+            appraisals reporting endpoints are still being discovered - until
             they answer, those funnel figures show a dash.
           </p>
           {status?.rex?.lastError ? (
@@ -227,7 +227,7 @@ export default function DiagnosticsTab({ month }: { month: string }) {
             />
           </div>
           <p className="mt-1 text-xs text-muted">
-            Tenancy progression — referencing, Right to Rent, AML and digital
+            Tenancy progression - referencing, Right to Rent, AML and digital
             agreements. Auth: x-api-key + agent-name → JWT.
           </p>
           <p className="mt-3 text-[13px]">
@@ -243,7 +243,10 @@ export default function DiagnosticsTab({ month }: { month: string }) {
         <section className="card p-5">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">PayProp</h2>
-            <StatusPill tone="off" label="NO ACCESS YET" />
+            <StatusPill
+              tone={status?.payprop?.status === "connected" ? "ok" : status?.payprop?.status === "partial" ? "warn" : "off"}
+              label={status?.payprop?.status === "connected" ? "CONNECTED" : status?.payprop?.status === "partial" ? "ONE AGENCY DOWN" : "NOT CONNECTED"}
+            />
           </div>
           <p className="mt-1 text-xs text-muted">{SOURCES.payprop.note}</p>
           <p className="mt-3 text-[13px]">
@@ -283,7 +286,7 @@ export default function DiagnosticsTab({ month }: { month: string }) {
       <section className="card p-5">
         <h2 className="text-sm font-semibold">Environment variables</h2>
         <p className="mt-1 text-xs text-muted">
-          Presence only — secret values never leave the server.
+          Presence only - secret values never leave the server.
         </p>
         <ul className="mt-3 grid gap-1.5 text-[13px] sm:grid-cols-2 lg:grid-cols-3">
           {ENV_CHECKLIST.map((name) => {

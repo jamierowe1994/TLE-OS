@@ -7,7 +7,7 @@ import { useState } from "react";
 // This used the browser's own `title`, which technically works and practically
 // does not: about a second of delay, no styling, and it wraps a long sentence
 // into an unreadable strip. Nobody waited long enough to see one, so the mark
-// looked decorative. It is a real tooltip now — instant, readable, and wide
+// looked decorative. It is a real tooltip now - instant, readable, and wide
 // enough for a sentence that actually explains the source.
 export default function SourceNote({
   children,
@@ -19,7 +19,7 @@ export default function SourceNote({
   children: string;
   /** "unavailable" = nothing reached this yet, shown red. "derived" = worked
    *  out here FROM live figures, and therefore exactly as trustworthy as the
-   *  numbers behind it — slate, not a warning colour. */
+   *  numbers behind it - slate, not a warning colour. */
   tone?: "live" | "derived" | "unavailable";
 }) {
   const [show, setShow] = useState(false);

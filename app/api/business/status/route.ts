@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { payPropCanAuth } from "@/lib/business/payprop";
 import { requireCapability } from "@/lib/admin";
 import { getRexStatus } from "@/lib/business/rex-stats";
 import { metaConfigPresence } from "@/lib/business/meta";
@@ -32,7 +33,7 @@ const ENV_CHECKLIST = [
 ] as const;
 
 // Propoly accepts either naming scheme (the Railway vars may predate the real
-// header names) — report the canonical name present if either alias is set.
+// header names) - report the canonical name present if either alias is set.
 const ENV_ALIASES: Record<string, string[]> = {
   PROPOLY_API_KEY: ["PROPOLY_API_KEY", "PROPOLY_PASSWORD"],
   PROPOLY_AGENT_NAME: ["PROPOLY_AGENT_NAME", "PROPOLY_USERNAME"],
@@ -53,12 +54,18 @@ export async function GET(req: NextRequest) {
   }
 
   const rex = await getRexStatus();
+  /* Asked, not typed. This said "no-access-yet" for a month after both
+     agencies were connected. */
+  const reach = await Promise.all(
+    (["scotland", "uk"] as const).map((a) => payPropCanAuth(a).catch(() => false))
+  );
+  const payprop = reach.every(Boolean) ? "connected" : reach.some(Boolean) ? "partial" : "not-connected";
 
   return NextResponse.json({
     rex,
     meta: { configured: metaConfigPresence() },
     propoly: { configured: propolyConfigured() },
-    payprop: { status: "no-access-yet" },
+    payprop: { status: payprop },
     ghl: {
       status: ghlConfigured() ? "attempting-live" : "no-access-yet",
       configured: ghlConfigured(),

@@ -1,8 +1,8 @@
-// SEED lane — THE FIGURES HAVE BEEN REMOVED. 28 Aug 2026.
+// SEED lane - THE FIGURES HAVE BEEN REMOVED. 28 Aug 2026.
 //
 // This was a full transcription of Susan's Base44 dashboard captured 11 Jul
 // 2026. Those numbers were right that day and wrong now, and they were being
-// shown whenever a live source had not landed — so a stale figure and a
+// shown whenever a live source had not landed - so a stale figure and a
 // working one looked identical.
 //
 // snap(), snapP() and nullStat() now all return a declared GAP: value null,
@@ -21,14 +21,14 @@
 // - The Base44 "P&L" tab is password-protected and was NOT captured. The H2
 //   reforecast below (from the Forecast tab) provides the P&L structure only.
 // - Per-agent partnerType (TLE / TLE Dual / Lettings Lite) is NOT broken out
-//   per agent anywhere in the snapshot — only headcount totals. ROSTER defaults
+//   per agent anywhere in the snapshot - only headcount totals. ROSTER defaults
 //   everyone to "TLE"; admin can correct individual agents later.
 // - Viewings: KPI Overview funnel shows 46 for July MTD, the Agent Detail
-//   per-agent table totals 28 — different report cuts on the source dashboard.
+//   per-agent table totals 28 - different report cuts on the source dashboard.
 
 // SERVER-ONLY: the full seed contains tenant personal data (arrears) and
 // owner-only business financials (P&L, partner net income). It must never be
-// statically imported by a "use client" component — client code gets it via
+// statically imported by a "use client" component - client code gets it via
 // the admin-gated /api/admin/* routes. Client-safe pieces (ROSTER, name
 // matching, SOURCES, snapshot constants) live in lib/roster.ts.
 import "server-only";
@@ -83,7 +83,7 @@ export {
  *
  * Deleting the file would have meant editing ten tabs at once and blanking any
  * tile whose live source has not landed yet, with nothing to say which. So the
- * SHAPE stays — every tab still finds the field it expects — and the VALUE
+ * SHAPE stays - every tab still finds the field it expects - and the VALUE
  * goes. Each becomes an explicit "no live source reached this", which renders
  * as an em dash with the reason in the badge.
  *
@@ -96,7 +96,7 @@ export {
  * this was ported from.
  *
  * The parameters are kept so ~500 call sites do not need rewriting, and so the
- * SOURCE LINE survives — knowing a figure used to come from "PayProp arrears
+ * SOURCE LINE survives - knowing a figure used to come from "PayProp arrears
  * report" is exactly what tells you where to go and wire it.
  */
 function snap(_value: number | null, _display?: string, src?: string): StatValue {
@@ -113,7 +113,7 @@ function snap(_value: number | null, _display?: string, src?: string): StatValue
 /* ============================== SEED ============================== */
 
 export const SEED = {
-  /* ---- Tab 1: KPI Overview — header strip (JUN YTD) ---- */
+  /* ---- Tab 1: KPI Overview - header strip (JUN YTD) ---- */
   headline: {
     mas: snap(174, undefined, "REX KPI reports"),
     listings: snap(172, undefined, "REX KPI reports"),
@@ -126,7 +126,7 @@ export const SEED = {
     lastUpdated: "11 Jul 2026",
   },
 
-  /* ---- Tab 1: Agent headcount — July 2026 ---- */
+  /* ---- Tab 1: Agent headcount - July 2026 ---- */
   headcount: {
     activeAgents: snap(30, undefined, "Agent Headcount report"),
     tle: snap(19, undefined, "Agent Headcount report"),
@@ -138,7 +138,7 @@ export const SEED = {
     varianceYtd: snap(3, "+3", "Agent Headcount report (net change TLE / TLE Dual)"),
   },
 
-  /* ---- Tab 1: Partner productivity & ramp time — July ---- */
+  /* ---- Tab 1: Partner productivity & ramp time - July ---- */
   partnerRamp: {
     newStarters: snap(0, undefined, "Agent Headcount report · REX KPI reports"),
     maInMonths1To2: snap(null, "—", "No July starters · June cohort: Rovena Buci got MA in month 1"),
@@ -147,7 +147,7 @@ export const SEED = {
     note: "No new starters in July · Chanade Patrick starting Aug 2026 · June cohort now in month 2",
   },
 
-  /* ---- Tab 1: Business KPIs — sales funnel, July MTD ---- */
+  /* ---- Tab 1: Business KPIs - sales funnel, July MTD ---- */
   businessFunnel: {
     marketAppraisals: snap(10, undefined, "REX KPI reports"),
     listings: snap(9, undefined, "REX KPI reports"),
@@ -159,16 +159,16 @@ export const SEED = {
     gci: snap(12000, "£12,000", "£12,000 est combined exc VAT · 10 move-ins × £1,200 avg · preliminary · 9 Jul"),
   } satisfies FunnelStats,
 
-  /* ---- Tab 1: Conversion rates — July MTD ---- */
+  /* ---- Tab 1: Conversion rates - July MTD ---- */
   conversions: {
-    maToListing: snap(90, "90%", "Derived from sales funnel — 9 listings from 10 combined MAs · 1 recorded + 9 listing-only · Jul MTD"),
-    listingToMoveIn: snap(111, "111%", "Derived from sales funnel — 10 move-ins from 9 listings · Jul MTD · 6 Jul"),
+    maToListing: snap(90, "90%", "Derived from sales funnel - 9 listings from 10 combined MAs · 1 recorded + 9 listing-only · Jul MTD"),
+    listingToMoveIn: snap(111, "111%", "Derived from sales funnel - 10 move-ins from 9 listings · Jul MTD · 6 Jul"),
     rlpConversion: snap(50, "50%", "5 of 10 EFM managed · Jul MTD preliminary"),
     gciPerMoveIn: snap(1200, "£1,200", "£12,000 est GCI ÷ 10 fee-generating MIs · Jul MTD preliminary"),
     gciPerAgent: snap(400, "£400", "£12,000 est GCI ÷ 30 partners · Jul MTD preliminary"),
   },
 
-  /* ---- Tab 1: Market appraisals by partner type — July MTD ---- */
+  /* ---- Tab 1: Market appraisals by partner type - July MTD ---- */
   masByPartnerType: {
     total: snap(10, undefined, "REX export · Agent Headcount export"),
     tle: snap(7, undefined, "REX export · Agent Headcount export"),
@@ -184,7 +184,7 @@ export const SEED = {
     { label: "GCI per move-in", from: 1603, to: 1136, stat: snap(1136, "£1,603 → £1,136", "2025 avg vs May 26 adj · excl transfers & Lianna") },
   ] satisfies YoYGrowthEntry[],
 
-  /* ---- Tab 2: Paid leads & pro licence (GoHighLevel — no API access) ---- */
+  /* ---- Tab 2: Paid leads & pro licence (GoHighLevel - no API access) ---- */
   paidLeads: {
     leadsGenerated: snap(180, undefined, "Go High Level"),
     referredToAgents: snap(3, undefined, "Go High Level"),
@@ -201,7 +201,7 @@ export const SEED = {
     note: "Lead data from paid lead platform (Go High Level) · Pro licence = £100+VAT/month per partner · Joining fee = £1,000+VAT one-off",
   },
 
-  /* ---- Tab 3: Move-ins & pipeline — header stats ---- */
+  /* ---- Tab 3: Move-ins & pipeline - header stats ---- */
   moveInHeader: {
     julyMtdCompleted: snap(10, undefined, "Lettings Support - Move In Report (6 new lets + 4 relets)"),
     julyMtdNewLets: snap(6, undefined, "Lettings Support - Move In Report (from move-in tracker)"),
@@ -214,13 +214,13 @@ export const SEED = {
   },
 
   /* ---- Tab 3: Move-ins July (10 rows · total 12M cost value £5,659) ---- */
-  /* moveInsJuly removed — the 11 Jul capture. move-ins.tsx reads Propoly live for any month */
+  /* moveInsJuly removed - the 11 Jul capture. move-ins.tsx reads Propoly live for any month */
 
-  /* ---- Tab 3: July pipeline — 26 properties (expected July move-ins) ---- */
-  /* julyPipeline removed — the 11 Jul capture. Propoly is the source of truth for the pipeline */
+  /* ---- Tab 3: July pipeline - 26 properties (expected July move-ins) ---- */
+  /* julyPipeline removed - the 11 Jul capture. Propoly is the source of truth for the pipeline */
 
-  /* ---- Tab 3: Forward pipeline — Aug–Sep · 25 properties ---- */
-  /* forwardPipeline removed — the Aug-Sep capture. The month toggle now reaches either side, live */
+  /* ---- Tab 3: Forward pipeline - Aug–Sep · 25 properties ---- */
+  /* forwardPipeline removed - the Aug-Sep capture. The month toggle now reaches either side, live */
 
   /* ---- Tab 4: Income ---- */
   income: {
@@ -248,28 +248,28 @@ export const SEED = {
       tleSplitPct: snap(47, "47%", "TLE / Partner split (E&W GCI): TLE 47% / Partners 53% (£15,982 TLE · £17,686 partners)"),
       partnerSplitPct: snap(53, "53%", "TLE / Partner split (E&W GCI): TLE 47% / Partners 53% (£15,982 TLE · £17,686 partners)"),
     },
-    // TLE Business Income — Jan–Jun 2026 (all fees exc VAT · E&W from Summary of Fees + Glasgow from Glasgow fees report)
-    /* monthlyTable removed — hand-typed Jan-Jun. The table is built from /api/business/income-months now */
-    /* licenceFeeTable removed — hand-typed. Licence fees need the P&L upload (task 13) */
-    // Year on Year — Gross GCI exc VAT growth %
-    /* yoyGrowthPct removed — hand-typed percentages against figures we cannot reproduce */
+    // TLE Business Income - Jan–Jun 2026 (all fees exc VAT · E&W from Summary of Fees + Glasgow from Glasgow fees report)
+    /* monthlyTable removed - hand-typed Jan-Jun. The table is built from /api/business/income-months now */
+    /* licenceFeeTable removed - hand-typed. Licence fees need the P&L upload (task 13) */
+    // Year on Year - Gross GCI exc VAT growth %
+    /* yoyGrowthPct removed - hand-typed percentages against figures we cannot reproduce */
     modelNote:
-      "GCI split roughly TLE 40-47% / Partners 53-60% on E&W; Glasgow (Sean McMahon) pays 0 to associates; licence income = monthly licence + pro licence (£100+VAT × 15 partners) + joining fees (£1,000+VAT). PayProp is the source for GCI actuals (not yet accessible — PayProp pending).",
+      "GCI split roughly TLE 40-47% / Partners 53-60% on E&W; Glasgow (Sean McMahon) pays 0 to associates; licence income = monthly licence + pro licence (£100+VAT × 15 partners) + joining fees (£1,000+VAT). PayProp is the source for GCI actuals (not yet accessible - PayProp pending).",
   },
 
-  /* ---- Tab 6 (Forecast): Business value — monthly rent roll & recurring income ---- */
+  /* ---- Tab 6 (Forecast): Business value - monthly rent roll & recurring income ---- */
   businessValue: {
     monthlyRentRoll: snap(357431, "£357,431", "E&W & Glasgow PayProp portfolio reports (362 managed properties)"),
     monthlyManagementFees: snap(28886, "£28,886", "E&W £24,619 · Glasgow £4,267"),
-    mri: snap(32336, "£32,336", "MRI — monthly recurring income · Mgmt £28,886 + lic £3,450 · Core £1,950 · Pro £1,500"),
+    mri: snap(32336, "£32,336", "MRI - monthly recurring income · Mgmt £28,886 + lic £3,450 · Core £1,950 · Pro £1,500"),
     oneOffFees: snap(11973, "£11,973", "Set-up & other £10,723 + joining £1,250 · 6-mo avg £12,507"),
     totalMonthlyIncome: snap(44309, "£44,309", "MRI £32,336 + one-off £11,973 · matches Income tab"),
     tradingPartners: snap(21, undefined, "21 trading · 30 active · June 2026"),
     mriPerProperty: snap(89, "£89", "÷ 362 managed · avg rent £987"),
     mriPctPerProperty: snap(9.0, "9.0%", "MRI as % of rent roll"),
     mriPerTradingPartner: snap(1540, "£1,540", "MRI ÷ 21 trading partners"),
-    mriSplitTle: snap(19432, "£19,432", "MRI split — TLE retained"),
-    mriSplitPartner: snap(12904, "£12,904", "MRI split — Partner"),
+    mriSplitTle: snap(19432, "£19,432", "MRI split - TLE retained"),
+    mriSplitPartner: snap(12904, "£12,904", "MRI split - Partner"),
     glasgowNote:
       "Glasgow's lower rents and smaller management fee yield mean its per-property MRI is materially below E&W and pulls blended figures down.",
     // Baseline costs vs income (May 2026 cost actuals)
@@ -308,8 +308,8 @@ export const SEED = {
     },
   },
 
-  /* ---- Tab 5 (Forecast tab): H2 2026 Reforecast — month-by-month P&L ---- */
-  // NOTE: the dashboard's separate "P&L" tab is password-protected — not captured.
+  /* ---- Tab 5 (Forecast tab): H2 2026 Reforecast - month-by-month P&L ---- */
+  // NOTE: the dashboard's separate "P&L" tab is password-protected - not captured.
   h2Reforecast: {
     months: ["Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
     rows: [
@@ -331,14 +331,14 @@ export const SEED = {
     ] satisfies H2ReforecastRow[],
     h2NetLoss: snap(-34818, "(£34,818)", "H2 2026 Reforecast (19th Nov 25 draft)"),
     cumulativeYtdDec: snap(-91700, "(£91,700)", "H2 2026 Reforecast (19th Nov 25 draft)"),
-    breakEvenNote: "Break-even: NOT in 2026 — requires ~500+ managed properties at current cost structure",
+    breakEvenNote: "Break-even: NOT in 2026 - requires ~500+ managed properties at current cost structure",
     assumptions:
       "Avg rent £987 · Mgmt fee 9% (inc RLP) · Core TLE agents only (excl Lettings Lite) · Agent commissions ~70% of fee income · RLP insurance cost within operating expenditure",
     sourceNote:
-      "H2 2026 Reforecast (19th Nov 25 draft). The Base44 P&L tab is password-protected — source P&L figures pending.",
+      "H2 2026 Reforecast (19th Nov 25 draft). The Base44 P&L tab is password-protected - source P&L figures pending.",
   },
 
-  /* ---- Tab 6: Agent Detail — network health + tier counts (July MTD) ---- */
+  /* ---- Tab 6: Agent Detail - network health + tier counts (July MTD) ---- */
   networkHealth: {
     avgGciPerPartner: snap(null, "—", "0 active GCI earners · Jul MTD"),
     medianGciPerPartner: snap(null, "—", "Jul MTD"),
@@ -360,7 +360,7 @@ export const SEED = {
 
   /* ---- Tab 6: Per-agent KPI table (July MTD) ---- */
   // MA=market appraisals, Li=listings, Vw=viewings, Ap=applications, MI=move-ins, Pn=pipeline
-  // NOTE: viewings here total 28 vs 46 on the KPI Overview funnel — different report cuts on the source.
+  // NOTE: viewings here total 28 vs 46 on the KPI Overview funnel - different report cuts on the source.
   agentKpisJulyMtd: {
     rows: [
       { tier: "DEV", agent: "Sean McMahon (Edinburgh)", gci: null, ma: 1, li: 0, vw: 12, ap: 5, mi: null, pn: 7 },
@@ -380,12 +380,12 @@ export const SEED = {
     source: "Agent Headcount report & REX KPI reports & Finance monthly summary fee report",
   },
 
-  /* ---- Tab 6: Partner net income — YTD 2026 ---- */
+  /* ---- Tab 6: Partner net income - YTD 2026 ---- */
   // † Glasgow (Margo Wilson Jan–Apr · Sean Mc Mahon from May): 70% of GCI less
   //   £50+VAT per move-in (transaction fee) and £150+VAT per month (licence fee)
-  /* partnerNetIncome removed — 24 rows under six hardcoded month columns; unbackfillable before LIVE_START */
+  /* partnerNetIncome removed - 24 rows under six hardcoded month columns; unbackfillable before LIVE_START */
 
-  /* ---- Tab 7: Portfolio (PayProp-sourced — no API access yet) ---- */
+  /* ---- Tab 7: Portfolio (PayProp-sourced - no API access yet) ---- */
   portfolio: {
     overview: {
       eAndWTotal: snap(442, undefined, "E&W & Glasgow PayProp portfolio report"),
@@ -396,36 +396,36 @@ export const SEED = {
       eAndWLetOnly: snap(163, undefined, "E&W & Glasgow PayProp portfolio report"),
       glasgowLetOnly: snap(0, undefined, "E&W & Glasgow PayProp portfolio report"),
       totalManaged: snap(362, undefined, "E&W & Glasgow PayProp portfolio report"),
-      // Managed — rent protection breakdown
-      noProtection: snap(231, undefined, "PayProp portfolio report — managed rent protection breakdown"),
-      withRlp: snap(123, undefined, "PayProp portfolio report — managed rent protection breakdown"),
-      withLec: snap(8, undefined, "PayProp portfolio report — managed rent protection breakdown"),
-      protectedPct: snap(36, "36%", "PayProp portfolio report — managed rent protection breakdown"),
+      // Managed - rent protection breakdown
+      noProtection: snap(231, undefined, "PayProp portfolio report - managed rent protection breakdown"),
+      withRlp: snap(123, undefined, "PayProp portfolio report - managed rent protection breakdown"),
+      withLec: snap(8, undefined, "PayProp portfolio report - managed rent protection breakdown"),
+      protectedPct: snap(36, "36%", "PayProp portfolio report - managed rent protection breakdown"),
       avgRentEAndW: snap(1143, "£1,143", "PayProp portfolio report"),
       avgRentGlasgow: snap(465, "£465", "PayProp portfolio report"),
-      vacant: snap(8, undefined, "PayProp portfolio report — health"),
-      renewals: snap(12, undefined, "PayProp portfolio report — health"),
-      arrears: snap(37, undefined, "PayProp portfolio report — health"),
-      rentRollEAndW: snap(318806, "£318,806", "PayProp portfolio report — monthly rent roll"),
-      rentRollGlasgow: snap(38625, "£38,625", "PayProp portfolio report — monthly rent roll"),
-      rentRollTotal: snap(357431, "£357,431", "PayProp portfolio report — monthly rent roll"),
+      vacant: snap(8, undefined, "PayProp portfolio report - health"),
+      renewals: snap(12, undefined, "PayProp portfolio report - health"),
+      arrears: snap(37, undefined, "PayProp portfolio report - health"),
+      rentRollEAndW: snap(318806, "£318,806", "PayProp portfolio report - monthly rent roll"),
+      rentRollGlasgow: snap(38625, "£38,625", "PayProp portfolio report - monthly rent roll"),
+      rentRollTotal: snap(357431, "£357,431", "PayProp portfolio report - monthly rent roll"),
     },
-    // Portfolio by partner — June 2026 · Managed = EFM with & without RLP/LEC + Rent Collect · RLP column includes LEC
-    /* byPartner removed — the June PayProp report. getAgentBook + getPortfolioBook answer this live */
+    // Portfolio by partner - June 2026 · Managed = EFM with & without RLP/LEC + Rent Collect · RLP column includes LEC
+    /* byPartner removed - the June PayProp report. getAgentBook + getPortfolioBook answer this live */
     totals: { agent: "TOTAL", managed: 362, letOnly: 163, total: 528, rlpLec: 131, rentRoll: 357431, avgRent: null } satisfies PortfolioRow,
     source: "E&W & Glasgow PayProp portfolio report · June 2026 · PayProp API access pending",
   },
 
-  /* ---- Tab 8: Arrears (PayProp arrears report 2026-07-06 — ADMIN ONLY) ---- */
+  /* ---- Tab 8: Arrears (PayProp arrears report 2026-07-06 - ADMIN ONLY) ---- */
   arrears: {
     summary: {
-      totalInArrears: snap(21, undefined, "PayProp arrears report 2026-07-06 — tenants with negative balance"),
+      totalInArrears: snap(21, undefined, "PayProp arrears report 2026-07-06 - tenants with negative balance"),
       totalValue: snap(19882.04, "£19,882.04", "PayProp arrears report 2026-07-06"),
       eAndWCount: snap(10, undefined, "PayProp arrears report 2026-07-06"),
       eAndWValue: snap(10611.07, "£10,611.07", "PayProp arrears report 2026-07-06"),
       glasgowCount: snap(11, undefined, "PayProp arrears report 2026-07-06"),
       glasgowValue: snap(9270.97, "£9,270.97", "PayProp arrears report 2026-07-06"),
-      protectedCount: snap(0, undefined, "PayProp arrears report 2026-07-06 — RLP/LEC · £0.00 claimable · 21 unprotected"),
+      protectedCount: snap(0, undefined, "PayProp arrears report 2026-07-06 - RLP/LEC · £0.00 claimable · 21 unprotected"),
       protectedClaimable: snap(0, "£0.00", "PayProp arrears report 2026-07-06"),
       pctOfRentRoll: snap(5.6, "5.6%", "£19,882.04 of £357,431 rent roll · 21 active tenants"),
     },
@@ -437,7 +437,7 @@ export const SEED = {
       { label: "31 days+", count: 0, value: 0 },
       { label: "No invoice", count: 0, value: 0 },
     ] satisfies ArrearsAgingBucket[],
-    agingNote: "Arrears aging — days since last invoice · report date 2026-07-06",
+    agingNote: "Arrears aging - days since last invoice · report date 2026-07-06",
     tenants: [
       { tenant: "Moore, John", property: "Parkend Gardens 8", region: "Glasgow", balance: 3360.0, status: "ACTIVE", protection: "None", lastInvoice: "2026-06-26", lastPayment: "2026-06-29", lastReminder: "2026-06-22" },
       { tenant: "Erica De Araujo Cardoso & Robson Resende Teixeira", property: "Chapter Road, 228a", region: "E&W", balance: 2150.0, status: "ACTIVE", protection: "None", lastInvoice: "2026-06-28", lastPayment: "2026-06-05", lastReminder: "2026-07-06" },
@@ -463,10 +463,10 @@ export const SEED = {
     ] satisfies ArrearsTenantRow[],
     footer:
       'Data source: Payprop "Tenants in Arrears" view · 2026-07-06 · 21 total records (10 E&W + 11 Glasgow). Protection status matched against live RLP/LEC policy data from LFL report.',
-    // PRIVACY: tenant personal data — arrears view must be admin (Susan) only.
+    // PRIVACY: tenant personal data - arrears view must be admin (Susan) only.
   },
 
-  /* ---- Tab 9: Compliance (REX PM — candidate for live pull later) ---- */
+  /* ---- Tab 9: Compliance (REX PM - candidate for live pull later) ---- */
   compliance: {
     totals: {
       totalItems: snap(136, undefined, "Claude Compliance report (REX PM) · report date 7 Jul 2026"),
@@ -485,7 +485,7 @@ export const SEED = {
       { type: "Fire Risk Assessment", total: 6, overdue: 4, upcoming: 2 },
     ] satisfies ComplianceTypeRow[],
     byTypeTotal: { type: "Total", total: 136, overdue: 69, upcoming: 67 } satisfies ComplianceTypeRow,
-    /* byAgent removed — the 7 Jul REX PM capture. getComplianceAsAt().byAgent answers this live */
+    /* byAgent removed - the 7 Jul REX PM capture. getComplianceAsAt().byAgent answers this live */
     byAgentTotal: { agent: "Total", total: 136, overdue: 69, upcoming: 67, pctOverdue: 51 } satisfies ComplianceAgentRow,
     // Sample of the 136 item rows shown on the source dashboard (earliest/most overdue first)
     sampleItems: [
@@ -503,7 +503,7 @@ export const SEED = {
       { task: "EPC Flat 3, 7 Colonsay Close", type: "EPC", manager: "Sean McMahon", status: "Not Started", expires: "2026-08-04", dueIn: "23d" },
     ] satisfies ComplianceItemRow[],
     reportDate: "7 Jul 2026",
-    source: "Claude Compliance report (REX PM) — candidate for live pull via REX Property Management module",
+    source: "Claude Compliance report (REX PM) - candidate for live pull via REX Property Management module",
   },
 
   /* ---- Which system feeds each section ---- */
@@ -516,9 +516,9 @@ export const SEED = {
     yoyGrowth: "REX KPI reports · Agent Headcount report · PayProp portfolio reports",
     paidLeads: "Go High Level (no API access yet)",
     moveIns: "Lettings Support - Move In Report",
-    income: "E&W & Glasgow PayProp reports & Budget reports 24-26 (PayProp access pending)",
+    income: "E&W & Glasgow PayProp reports & Budget reports 24-26",
     businessValue: "E&W & Glasgow PayProp portfolio reports & Finance monthly summary fee report & Budget report",
-    h2Reforecast: "H2 2026 Reforecast (19th Nov 25 draft) — Base44 P&L tab is password-protected, source P&L pending",
+    h2Reforecast: "H2 2026 Reforecast (19th Nov 25 draft) - Base44 P&L tab is password-protected, source P&L pending",
     agentKpis: "Agent Headcount report & REX KPI reports & Finance monthly summary fee report",
     partnerNetIncome: "Monthly fee report (net commission paid to partners, exc VAT)",
     portfolio: "E&W & Glasgow PayProp portfolio report (no API access yet)",
@@ -527,10 +527,10 @@ export const SEED = {
   } as Record<string, string>,
 };
 
-/* SOURCES status map moved to lib/roster.ts (client-safe) — re-exported above. */
+/* SOURCES status map moved to lib/roster.ts (client-safe) - re-exported above. */
 
 /**
- * Structural type of the full seed — used via TYPE-ONLY imports (erased at
+ * Structural type of the full seed - used via TYPE-ONLY imports (erased at
  * compile time, so safe alongside "server-only") by the admin client tabs,
  * which receive the seed data itself through the gated /api/admin/seed route.
  */
@@ -557,7 +557,7 @@ function statFrom(value: number | null, src: string): StatValue {
 /**
  * The month the frozen KPI rows describe. Exported because the callers that
  * decide whether a figure may be shown for the selected period have to ask
- * "is this the month the seed actually describes?" — /api/my/stats does it for
+ * "is this the month the seed actually describes?" - /api/my/stats does it for
  * every funnel field. Hardcoding "2026-07" in each of them is how July's
  * numbers ended up under other months' headings in the first place.
  */
@@ -568,7 +568,7 @@ export function agentSeedStats(agentKey: string, month?: string): FunnelStats {
   const src = "REX KPI reports · Agent Detail tab · Jul MTD";
   // These rows are July 2026 month-to-date, frozen from the KPI report. They
   // were being returned for whatever month was asked for, so a partner looking
-  // at June saw July's numbers labelled as June — silently wrong, and the kind
+  // at June saw July's numbers labelled as June - silently wrong, and the kind
   // of thing someone builds a decision on. Only answer for the month they
   // actually describe.
   if (!row || (month && month !== SNAPSHOT_MONTH)) {
@@ -598,11 +598,11 @@ export function agentSeedStats(agentKey: string, month?: string): FunnelStats {
    agentPortfolio
 
    They read the six July row-tables that have gone, and every one of them had
-   zero callers — the drill-down did its own inline `seed.x.find(...)` instead,
+   zero callers - the drill-down did its own inline `seed.x.find(...)` instead,
    so these were being maintained while answering nobody.
 
    The live per-partner equivalents are getPropolyAgentDeals, getAgentBook,
-   getAgentEarningsForMonths and getComplianceAsAt().byAgent — all of which
+   getAgentEarningsForMonths and getComplianceAsAt().byAgent - all of which
    also had no callers until /api/business/agent-live introduced them. */
 
 
@@ -615,7 +615,7 @@ export function agentSeedStats(agentKey: string, month?: string): FunnelStats {
 
 const PERIOD_CAPTURE_DATE = "2026-07-21";
 
-/** The period-view capture. Same treatment as snap() — see its note. */
+/** The period-view capture. Same treatment as snap() - see its note. */
 function snapP(_value: number | null, _display?: string, src?: string): StatValue {
   return {
     value: null,

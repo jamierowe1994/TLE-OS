@@ -3,7 +3,7 @@ import { requireCapability } from "@/lib/admin";
 import { SEED, SNAPSHOT_DATE } from "@/lib/business/seed-data";
 
 // Admin-gated delivery of the full dashboard snapshot (SEED). lib/seed-data.ts
-// is "server-only" — it contains tenant personal data (arrears) and owner-only
+// is "server-only" - it contains tenant personal data (arrears) and owner-only
 // financials (P&L, partner net income), so it must never ship in a client
 // bundle. The admin tabs fetch it here instead; a valid session belonging to
 // an ADMIN_EMAILS address is required, exactly like every other /api/admin/*.

@@ -27,7 +27,7 @@ export interface AdminForecastRow {
 
 export async function GET(req: NextRequest) {
   /* One check. The port left four stacked here, one of which looked up the
-     OS user's id in the PORTAL's users table — two different id spaces, so it
+     OS user's id in the PORTAL's users table - two different id spaces, so it
      never matched and this route answered 401 to everybody, including Susan.
      
      The capability IS the authorisation. There is nothing this route needs
@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
     agentsTotal: rows.length,
   };
 
-  // Actual MTD — business combined GCI. No live feed (PayProp pending), so:
+  // Actual MTD - business combined GCI. No live feed (PayProp pending), so:
   // manual override "income.combinedGci" → July snapshot estimate → unknown.
   const gciOverride = overrides.find(
     (o) => o.scope === "business" && o.metric === "income.combinedGci"
@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
         ? `Run rate: ${formatGBP(actualMtd.value)} MTD ÷ ${Math.round(
             fraction * 100
           )}% of month elapsed. Based on a ${actualMtd.source} figure.`
-        : "Cannot predict — no actual MTD figure for this month yet.",
+        : "Cannot predict - no actual MTD figure for this month yet.",
     asOf: actualMtd.asOf,
   };
 

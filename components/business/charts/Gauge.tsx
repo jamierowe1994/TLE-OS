@@ -17,7 +17,7 @@ export default function Gauge({
   pct,
   label,
   sub,
-  color = "#E31F36",
+  color = "#cfa096",
   size = 104,
 }: GaugeProps) {
   const stroke = 9;
