@@ -196,6 +196,37 @@ async function propertyManagers(): Promise<Map<string, Manager> | null> {
       if (Date.now() - snap.savedAt < PROPS_TTL_MS) return propCache.map;
     }
   }
+  return oneWalk("managers", refreshManagers);
+}
+
+/**
+ * ONE WALK OF A BIG LIST AT A TIME (16 Sep 2026).
+ *
+ * The deals board got its inflight guard; the two lists underneath it did not.
+ * The pre-tenancy board asks for the pipeline and the move-in forecast in the
+ * same breath, the business page asks for its stats and its RLP together, and
+ * both of those reach the property book and the completed deals. On a cold
+ * cache each caller fired its own walk - 23 pages of properties, 20-odd of
+ * completes, all in parallel - so one screen was 80-plus calls in a second and
+ * Propoly answered with 429s: 37 in one minute on the morning of 16 Sep. The
+ * second caller now waits for the first walk instead of starting its own.
+ */
+const inflight = new Map<string, Promise<unknown>>();
+
+function oneWalk<T>(key: string, walk: () => Promise<T>): Promise<T> {
+  const running = inflight.get(key) as Promise<T> | undefined;
+  if (running) return running;
+  const work = walk();
+  inflight.set(key, work);
+  void work
+    .catch(() => null)
+    .finally(() => {
+      if (inflight.get(key) === work) inflight.delete(key);
+    });
+  return work;
+}
+
+async function refreshManagers(): Promise<Map<string, Manager> | null> {
   const rows = await listAll("/api/v1/properties", 40); // 574 props ≈ 23 pages
   if (!rows) return propCache?.map ?? null; // stale beats nothing
   const map = new Map<string, Manager>();
@@ -613,6 +644,10 @@ async function ensureCompletes(): Promise<CompletedDeal[] | null> {
       if (Date.now() - snap.savedAt < COMPLETES_TTL_MS) return completesCache.completes;
     }
   }
+  return oneWalk("completes", refreshCompletes);
+}
+
+async function refreshCompletes(): Promise<CompletedDeal[] | null> {
   const rows = await listAll("/api/v1/deals?tenancy_status=complete", 40);
   if (!rows) return completesCache?.completes ?? null;
   completesCache = {
