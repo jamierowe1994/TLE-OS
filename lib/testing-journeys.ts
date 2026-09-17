@@ -1046,8 +1046,8 @@ export const KITS: Record<KitId, KitDef> = {
   "booked-appraisal": {
     id: "booked-appraisal",
     label: "Create a booked appraisal",
-    makes: "A landlord lead with your email, an appraisal booked three days from now at 11am, the booking confirmation sent to you, and a way into the landlord portal as that landlord.",
-    emails: true,
+    makes: "A landlord lead with your email, an appraisal booked three days from now at 11am, and a way into the landlord portal as that landlord. The booking confirmation is not sent: review and send it from the appraisal, as on a real booking.",
+    emails: false,
   },
   "tenant-passport": {
     id: "tenant-passport",
@@ -1062,6 +1062,49 @@ export const KITS: Record<KitId, KitDef> = {
     emails: false,
   },
 };
+
+/**
+ * TEST FILES (James, 17 Sep 2026): a tester's own landlord and tenant files,
+ * each of which can be put back to a stage and walked again, as many times as
+ * it takes to find what breaks. lib/test-files does the work.
+ */
+export type TestFileSide = "landlord" | "tenant" | "plc";
+
+export interface TestFileStage {
+  id: string;
+  label: string;
+  /** What the file looks like after a reset to here. Resetting never sends an email. */
+  says: string;
+}
+
+export const TEST_FILE_SIDES: Record<TestFileSide, { label: string; add: string; stages: TestFileStage[] }> = {
+  landlord: {
+    label: "Landlord",
+    add: "Add a test landlord lead",
+    stages: [
+      { id: "new", label: "New lead", says: "A landlord lead at 14 Test Street. Nothing contacted, booked or sent." },
+      { id: "booked", label: "Appraisal booked", says: "An appraisal in three days at 11am, in nobody's diary. The confirmation is not sent: review it on the file." },
+      { id: "visited", label: "Visit done", says: "The appraisal was yesterday at 11am, so the file asks for the figure." },
+    ],
+  },
+  tenant: {
+    label: "Tenant",
+    add: "Add a test tenant lead",
+    stages: [
+      { id: "new", label: "New enquiry", says: "A tenant looking for a two-bed in Didsbury. Nothing booked or sent." },
+      { id: "passport", label: "Passport made", says: "A tenant passport exists for them, not emailed. Send it from the lead." },
+    ],
+  },
+  plc: {
+    label: "PLC pack",
+    add: "Add a test PLC pack",
+    stages: [{ id: "new", label: "Empty pack", says: "An empty pre-let compliance pack, moving in three weeks from today." }],
+  },
+};
+
+export function sideOfKit(kit: KitId): TestFileSide {
+  return kit === "tenant-enquiry" || kit === "tenant-passport" ? "tenant" : kit === "plc-pack" ? "plc" : "landlord";
+}
 
 export type TestAreaId =
   | "getting-in"

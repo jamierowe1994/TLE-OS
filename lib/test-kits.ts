@@ -11,9 +11,8 @@ import { renderTleEmail } from "@/lib/email/tle-emails";
 import { sendEmail } from "@/lib/resend";
 import { isInternalAddress } from "@/lib/email-policy";
 import { createCase } from "@/lib/plc-store";
-import { removeFromOutlook } from "@/lib/outlook-calendar";
-import { changeRexEvent } from "@/lib/rex-diary-write";
 import { KITS, type KitId, type TestWho } from "@/lib/testing-journeys";
+import { deleteTestFile, testingClosed } from "@/lib/test-files";
 
 /**
  * CREATE A TEST.
@@ -69,19 +68,21 @@ export interface KitRun {
   canRelink: boolean;
 }
 
-interface Refs {
+export interface Refs {
   contacts?: string[];
   appraisals?: string[];
   leadIds?: string[];
   passports?: string[];
   plcCases?: string[];
   landlordEmail?: string;
+  /** Where the file was last put (lib/test-files). */
+  stage?: string;
 }
 
 export class KitRefused extends Error {}
 
-const TEST_ADDRESS = "14 Test Street, Didsbury, Manchester";
-const TEST_POSTCODE = "M20 2RN";
+export const TEST_ADDRESS = "14 Test Street, Didsbury, Manchester";
+export const TEST_POSTCODE = "M20 2RN";
 
 function firstNameOf(me: OsUser): string {
   return (me.name || me.email.split("@")[0]).trim().split(/\s+/)[0] || "Tester";
@@ -99,7 +100,7 @@ export function londonAt(days: number, hour: number, now = new Date()): string {
   return new Date(guess - (shown - hour) * 3600000).toISOString();
 }
 
-async function landlordLink(email: string, origin: string): Promise<string> {
+export async function landlordLink(email: string, origin: string): Promise<string> {
   const match = await landlordByEmail(email);
   if (!match) throw new KitRefused("The appraisal was made, but the landlord portal does not recognise it yet.");
   await upsertLandlordAccount(match);
@@ -114,6 +115,7 @@ async function landlordLink(email: string, origin: string): Promise<string> {
 export async function runKit(kit: KitId, me: OsUser, origin: string): Promise<KitRun> {
   if (!hasDb()) throw new KitRefused("There is no database here, so a test has nowhere to live.");
   if (!KITS[kit]) throw new KitRefused("That is not a test we can create.");
+  if ((await testingClosed()).closed) throw new KitRefused("Testing is closed for launch. An owner can reopen it on the Test files tab.");
   const email = me.email.trim().toLowerCase();
   if (!isInternalAddress(email)) {
     throw new KitRefused("Tests are made with your own email as the customer's, and yours is not one of ours, so nothing could safely be sent.");
@@ -225,6 +227,7 @@ export async function runKit(kit: KitId, me: OsUser, origin: string): Promise<Ki
     said.push(`Opened an empty pack for test application ${ref}, moving in three weeks from today. Attach documents as the agent, then send it to pre-tenancy.`);
   }
 
+  refs.stage = kit === "booked-appraisal" ? "booked" : kit === "tenant-passport" ? "passport" : "new";
   const id = uid();
   const text = said.join(" ");
   await q(
@@ -291,59 +294,7 @@ export async function relinkKit(id: string, me: OsUser, origin: string): Promise
 export async function clearMyKits(me: OsUser): Promise<{ cleared: number }> {
   if (!hasDb()) return { cleared: 0 };
   const email = me.email.trim().toLowerCase();
-  const rows = await q<{ id: string; refs: Refs }>(
-    `SELECT id, refs FROM os_test_kits WHERE created_by = $1 AND cleared_at IS NULL`,
-    [email]
-  );
-  if (!rows.length) return { cleared: 0 };
-
-  const all = (k: keyof Refs) => rows.flatMap((r) => (Array.isArray(r.refs?.[k]) ? (r.refs[k] as string[]) : []));
-  const contacts = all("contacts");
-  const appraisals = all("appraisals");
-  const leadIds = all("leadIds");
-  const passports = all("passports");
-  const plcCases = all("plcCases");
-
-  const run = (sql: string, ids: string[]) => (ids.length ? q(sql, [ids]).catch(() => []) : Promise.resolve([]));
-
-  /* WHAT A TEST SET GOING, not just what it made (17 Sep 2026). Clearing
-     James's tests left a pre-presentation and a video reminder queued for the
-     next two days, the appointment in his Outlook and in REX's diary, and the
-     travel time around it. Taken back out first, while the ids that find them
-     still exist. */
-  const refIds = [...leadIds, ...appraisals];
-  await run(`UPDATE os_scheduled_sends SET state = 'cancelled', error = 'Test cleared' WHERE state = 'queued' AND ref = ANY($1)`, refIds);
-  for (const id of appraisals) {
-    await removeFromOutlook(me.id, `appraisal|${id}`).catch(() => null);
-    const rex = await q<{ payload: { eventId?: string } }>(`SELECT payload FROM os_case_state WHERE kind = 'rex-diary' AND record_id = $1`, [id]).catch(() => []);
-    if (rex[0]?.payload?.eventId) await changeRexEvent({ userId: me.id, eventId: rex[0].payload.eventId, cancel: { reason: "organiser" } }).catch(() => null);
-  }
-  const viewingKeys = leadIds.length
-    ? await q<{ record_id: string }>(`SELECT record_id FROM os_case_state WHERE kind = 'outlook-event' AND split_part(record_id, '|', 2) = ANY($1) AND record_id LIKE 'viewing|%'`, [leadIds]).catch(() => [])
-    : [];
-  for (const v of viewingKeys) await removeFromOutlook(me.id, v.record_id).catch(() => null);
-  await run(`DELETE FROM os_case_state WHERE kind = 'confirmation-sent' AND split_part(record_id, '|', 2) = ANY($1)`, refIds);
-  const rexViewings = leadIds.length
-    ? await q<{ payload: { eventId?: string } }>(`SELECT payload FROM os_case_state WHERE kind = 'rex-viewing' AND split_part(record_id, '|', 1) = ANY($1)`, [leadIds]).catch(() => [])
-    : [];
-  for (const r of rexViewings) {
-    if (r.payload?.eventId) await changeRexEvent({ userId: me.id, eventId: r.payload.eventId, cancel: { reason: "organiser" } }).catch(() => null);
-  }
-  await run(`DELETE FROM os_case_state WHERE kind = 'rex-viewing' AND split_part(record_id, '|', 1) = ANY($1)`, leadIds);
-  /* Only rows still flagged as tests, so an id that somehow pointed at a real
-     contact is left alone. */
-  await run(`DELETE FROM os_contacts WHERE id = ANY($1) AND is_test`, contacts);
-  await run(`DELETE FROM os_market_appraisals WHERE id = ANY($1)`, appraisals);
-  await run(`DELETE FROM os_case_state WHERE record_id = ANY($1)`, [...leadIds, ...appraisals]);
-  await run(`DELETE FROM os_presentations WHERE ref = ANY($1)`, refIds);
-  await run(`DELETE FROM os_tenant_passports WHERE token = ANY($1)`, passports);
-  await run(`DELETE FROM os_plc_cases WHERE id = ANY($1)`, plcCases);
-  if (rows.some((r) => r.refs?.landlordEmail)) {
-    /* The tester's landlord portal account and any unspent link. Theirs by
-       email, and the email is one of ours, so no real landlord shares it. */
-    await q(`DELETE FROM os_email_verifications WHERE email = $1 AND purpose = 'landlord'`, [email]).catch(() => []);
-    await q(`DELETE FROM os_portal_accounts WHERE email = $1 AND kind = 'landlord'`, [email]).catch(() => []);
-  }
-  await q(`UPDATE os_test_kits SET cleared_at = NOW() WHERE id = ANY($1)`, [rows.map((r) => r.id)]);
+  const rows = await q<{ id: string }>(`SELECT id FROM os_test_kits WHERE created_by = $1 AND cleared_at IS NULL`, [email]);
+  for (const r of rows) await deleteTestFile(r.id, me);
   return { cleared: rows.length };
 }
