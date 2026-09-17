@@ -70,15 +70,23 @@ async function markConfirmed(leadId: string | null, by: string): Promise<void> {
   ).catch(() => null);
 }
 
-export function inviteFor(ma: MarketAppraisal, agent: { name: string; phone: string }): AppraisalInvite {
+/** "Sunday 20 September at 1:30pm" - how a person says it, in UK time. */
+function londonWhen(iso: string): string {
+  const d = new Date(iso);
+  const day = d.toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long" });
+  const time = d.toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "numeric", minute: "2-digit", hour12: true }).replace(/\s/g, "").toLowerCase();
+  return `${day} at ${time}`;
+}
+
+export function inviteFor(ma: MarketAppraisal, agent: { name: string; phone: string }, minutes = 45): AppraisalInvite {
   return {
     landlordName: ma.landlord,
     address: [ma.address, ma.postcode].filter((s) => s && !ma.address.includes(s)).join(", ") || ma.address,
     whenPretty: ma.appointmentAt
-      ? new Date(ma.appointmentAt).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" })
+      ? londonWhen(ma.appointmentAt)
       : "",
     startsAt: ma.appointmentAt,
-    minutes: 45,
+    minutes,
     agentName: agent.name,
     agentPhone: agent.phone,
   };
@@ -102,11 +110,17 @@ export interface ConfirmationDraft {
 
 const recordKey = (ma: MarketAppraisal) => `appraisal|${ma.id}`;
 
-async function prepare(ma: MarketAppraisal, me: OsUser) {
+async function prepare(ma: MarketAppraisal, me: OsUser, minutes?: number, unsaved = false) {
   /* The landlord's address is derived from the contact on read, never stored
-     on the appraisal - so read it back. */
-  const full = (await getAppraisal(ma.id).catch(() => null)) ?? ma;
-  const invite = inviteFor(full, { name: me.name || "The Letting Experts", phone: await phoneOf(me.id) });
+     on the appraisal - so read it back. An appointment being booked right now
+     (the booker's email column) is not saved yet: its time, place and email
+     are the ones on screen, and a record from an earlier booking only
+     supplies what was sent before. */
+  const stored = await getAppraisal(ma.id).catch(() => null);
+  const full: MarketAppraisal = unsaved
+    ? { ...(stored ?? ma), landlord: ma.landlord, address: ma.address, postcode: ma.postcode, appointmentAt: ma.appointmentAt, landlordEmail: ma.landlordEmail || stored?.landlordEmail || null }
+    : stored ?? ma;
+  const invite = inviteFor(full, { name: me.name || "The Letting Experts", phone: await phoneOf(me.id) }, minutes && minutes > 0 ? minutes : 45);
   const prev = await lastSent(recordKey(full));
   const moved = hasMoved(prev, full.appointmentAt);
   let subject = confirmSubjectFor(invite);
@@ -120,8 +134,8 @@ async function prepare(ma: MarketAppraisal, me: OsUser) {
   return { full, invite, prev, moved, subject, text };
 }
 
-export async function draftBookingConfirmation(input: { ma: MarketAppraisal; me: OsUser }): Promise<ConfirmationDraft> {
-  const { full, prev, moved, subject, text } = await prepare(input.ma, input.me);
+export async function draftBookingConfirmation(input: { ma: MarketAppraisal; me: OsUser; minutes?: number; unsaved?: boolean }): Promise<ConfirmationDraft> {
+  const { full, prev, moved, subject, text } = await prepare(input.ma, input.me, input.minutes, input.unsaved);
   const to = (full.landlordEmail ?? "").trim();
   return {
     ok: true,
@@ -151,9 +165,11 @@ export async function sendBookingConfirmation(input: {
   subject?: string;
   html?: string;
   again?: boolean;
+  /** How long was booked, for the calendar file. */
+  minutes?: number;
 }): Promise<ConfirmationResult> {
   const { me } = input;
-  const { full, invite, prev, subject: templSubject, text } = await prepare(input.ma, me);
+  const { full, invite, prev, subject: templSubject, text } = await prepare(input.ma, me, input.minutes);
   if (!full.appointmentAt) return { sent: false, reason: "No time booked yet, so nothing to confirm." };
   const to = (full.landlordEmail ?? "").trim();
   if (!to.includes("@")) return { sent: false, reason: "The landlord has no email address on their record." };

@@ -78,7 +78,7 @@ export function bodyFor(i: AppraisalInvite): string {
 [View your pre-presentation](${i.presentationUrl})
 
 It opens straight away, there's nothing to sign up for.`
-    : `It usually takes about ${i.minutes} minutes. I'll walk round with you, take a few notes, and we'll talk through what it should let for and how quickly.`;
+    : `It usually takes ${lengthWords(i.minutes)}. I'll walk round with you, take a few notes, and we'll talk through what it should let for and how quickly.`;
 
   return `Hi ${first(i.landlordName)},
 
@@ -258,6 +258,15 @@ export function confirmSubjectFor(i: AppraisalInvite): string {
   return `Confirmed - your market appraisal${i.whenPretty ? `, ${i.whenPretty}` : ""}`;
 }
 
+/** "about an hour", as a person says it, not "about 60 minutes". */
+function lengthWords(mins: number): string {
+  if (mins === 60) return "about an hour";
+  if (mins === 90) return "about an hour and a half";
+  if (mins >= 120 && mins % 60 === 0) return `about ${mins / 60} hours`;
+  if (mins === 30) return "about half an hour";
+  return `about ${mins} minutes`;
+}
+
 export function confirmBodyFor(i: AppraisalInvite): string {
   const { day, time } = dayAndTime(i);
   const rows = [
@@ -272,7 +281,7 @@ Thanks for booking in. Putting this in writing so you have it:
 
 ${rows.join("\n")}
 
-It takes about ${i.minutes} minutes, and the calendar invite is attached so it goes straight in your diary.
+It takes ${lengthWords(i.minutes)}, and the calendar invite is attached so it goes straight in your diary.
 
 There's nothing you need to do before then. ${PRE_APPRAISAL_LEAD_WORDS.replace(/^./, (c) => c.toUpperCase())}, I'll send you a short pre-presentation so you know who's coming and what happens on the day.
 

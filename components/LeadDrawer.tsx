@@ -2919,6 +2919,7 @@ export default function LeadDrawer({
            reads the rest of the live book itself. No sample rows. */
         properties={bookMode === "viewing" ? shortlist : (shortlist.length ? shortlist : LISTINGS.slice(0, 4))}
         firstId={lead.listingId != null ? String(lead.listingId) : null}
+        leadId={lead.id}
         /* Whose diary the grid shows. An unassigned lead is being booked by
            whoever is looking at it, not by a name typed into the source in
            August. */
@@ -2954,11 +2955,12 @@ export default function LeadDrawer({
              REX. Now /api/viewings/book puts it in the agent's Outlook, copies
              it to REX silently, and sends OUR confirmations to the applicant
              and the agent. The row says what actually happened. */
+          const said: string[] = [];
           if (bookMode === "viewing" && v.startsAt) {
             const confirm = {
               leadId: lead.id,
               listingId: v.listingId,
-              applicantName: lead.name,
+              applicantName: personName || lead.name,
               applicantEmail: contact.email || lead.email || null,
               address: v.property,
               startsAt: v.startsAt,
@@ -2966,20 +2968,29 @@ export default function LeadDrawer({
               unaccompanied: Boolean(v.unaccompanied),
             };
             setBooked((cur) => cur.map((b) => (b.id === bookedId ? { ...b, confirm } : b)));
-            fetch("/api/viewings/book", {
+            const j = await fetch("/api/viewings/book", {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ ...confirm, contactId: lead.contactId ?? null }),
             })
-              .then((r) => r.json())
-              .then((j: { ok?: boolean; said?: string }) => {
-                setBooked((cur) => cur.map((b) => (b.id === bookedId ? { ...b, rex: j.said ?? "Booked." } : b)));
-                /* Booked, so now the email - shown, never sent behind their back. */
-                if (j.ok) setConfirming({ id: bookedId, when: v.when, property: v.property, locality: v.locality, outcome: "Booked", confirm });
-              })
-              .catch(() => {
-                setBooked((cur) => cur.map((b) => (b.id === bookedId ? { ...b, rex: "Couldn't reach the server: check your calendar and tell the applicant yourself." } : b)));
-              });
+              .then((r) => r.json() as Promise<{ ok?: boolean; outlook?: { ok?: boolean; detail?: string } }>)
+              .catch(() => null);
+            said.push(!j ? "Couldn't reach the server: check your calendar and tell the applicant yourself." : j.outlook?.ok ? "In your Outlook calendar." : (j.outlook?.detail ?? "Booked."));
+            /* The confirmation, as the agent left it in the booker's email
+               column - or nothing, if they unticked it (17 Sep 2026). */
+            let confirmed: string | undefined;
+            if (j?.ok && v.confirmation?.send) {
+              const c = await fetch("/api/confirmations", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ action: "send", kind: "viewing", booking: confirm, subject: v.confirmation.subject, html: v.confirmation.html, again: v.confirmation.again }),
+              }).then((r) => r.json() as Promise<{ sent?: boolean; detail?: string; error?: string }>).catch(() => null);
+              said.push(c?.sent ? `Confirmation sent. ${c.detail ?? ""}`.trim() : `The confirmation did not send: ${c?.detail ?? c?.error ?? "the connection dropped"}. Send it from the lead.`);
+              if (c?.sent) confirmed = `Confirmation sent. ${c.detail ?? ""}`.trim();
+            } else if (j?.ok) {
+              said.push("No confirmation sent. Send it from the lead when you are ready.");
+            }
+            setBooked((cur) => cur.map((b) => (b.id === bookedId ? { ...b, rex: said[0], ...(confirmed ? { confirmed } : {}) } : b)));
           }
           /* The appraisal remembers its own appointment. Without this the
              landlord's confirmation had no date to state and no calendar file
@@ -3030,13 +3041,16 @@ export default function LeadDrawer({
              navigation would leave the agent staring at a lead drawer with no
              idea whether anything happened; landing on Market Appraisals with
              the row missing is at least a visible, reportable problem. */
-          if (here.action === "appraise") {
-            await fetch("/api/appraisals", {
+          /* FROM ANY STEP (17 Sep 2026). This used to run only while the
+             lead's track was on "book an appraisal", so the Book an appraisal
+             button at the top of a new lead booked nothing at all. */
+          if (bookMode === "appraisal") {
+            const res = await fetch("/api/appraisals", {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({
                 leadId: lead.id,
-                landlord: lead.name,
+                landlord: personName || lead.name,
                 /* The lead's area is what the booker used as the address, so
                    the appraisal states the same place the landlord was just
                    told about. "—" is the list's empty marker and must never
@@ -3045,19 +3059,33 @@ export default function LeadDrawer({
                   contact.area && contact.area !== "—"
                     ? contact.area
                     : lead.preferred || lead.area,
-                /* A lead has no postcode field — it is an enquiry, not a
-                   property yet. The appraisal carries an empty one until the
-                   take-on fills it in, rather than inventing one from the
-                   area. */
                 postcode: "",
                 agent: lead.agent === "Unassigned" ? null : lead.agent,
                 appointmentAt: v.startsAt,
               }),
-            }).catch(() => {});
-            onClose();
-            /* confirm=1: the file opens on the landlord's confirmation, to read and send. */
-            router.push(`${handoverTarget(`lead-${lead.id}`)}&confirm=1`);
+            })
+              .then((r) => r.json() as Promise<{ appraisal?: { id?: string }; outlook?: { ok?: boolean; detail?: string }; error?: string }>)
+              .catch(() => null);
+            const id = res?.appraisal?.id;
+            if (!id) return { said: `The appraisal did not save: ${res?.error ?? "the connection dropped"}. Try again.` };
+            said.push(res?.outlook?.ok ? "In your Outlook calendar." : (res?.outlook?.detail ?? "Booked."));
+            if (v.confirmation?.send) {
+              const c = await fetch("/api/confirmations", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ action: "send", kind: "appraisal", id, subject: v.confirmation.subject, html: v.confirmation.html, again: v.confirmation.again, minutes: v.minutes }),
+              }).then((r) => r.json() as Promise<{ sent?: boolean; detail?: string; error?: string }>).catch(() => null);
+              said.push(c?.sent ? `Confirmation sent. ${c.detail ?? ""}`.trim() : `The confirmation did not send: ${c?.detail ?? c?.error ?? "the connection dropped"}. Send it from the appraisal.`);
+            } else {
+              said.push("No confirmation sent. Send it from the appraisal when you are ready.");
+            }
+            /* Not a jump. The agent is asked, and stays if they say no. */
+            return {
+              said: said.join(" "),
+              goTo: { ask: "This lead will now appear on Market Appraisals. Do you want to go there now?", label: "Go to Market Appraisals", href: handoverTarget(`lead-${lead.id}`) },
+            };
           }
+          return said.length ? { said: said.join(" ") } : undefined;
         }}
       />
 

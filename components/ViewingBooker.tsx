@@ -14,6 +14,11 @@ import type { Landlord } from "@/lib/rex-landlord";
 import { minutesOf, type Appt } from "@/lib/diary";
 import { useDiary, refreshDiary } from "@/lib/diary-store";
 import { usePref } from "@/lib/prefs-store";
+import { useRouter } from "next/navigation";
+import ConfirmEditor, { type ConfirmDraft, type ConfirmEditorHandle, type ConfirmTarget } from "@/components/ConfirmEditor";
+
+/** What the record did with a booking, told back to the booker's done screen. */
+export type BookedResult = { said?: string; goTo?: { ask: string; label: string; href: string } } | undefined;
 
 /**
  * Booking a viewing, in the order the job actually happens: which property,
@@ -91,6 +96,7 @@ export default function ViewingBooker({
   origin = null,
   onBooked,
   firstId = null,
+  leadId = null,
 }: {
   open: boolean;
   onClose: () => void;
@@ -117,6 +123,8 @@ export default function ViewingBooker({
   origin?: { lat: number; lng: number } | null;
   /** The listing they enquired about: first in the list and picked by default. */
   firstId?: string | null;
+  /** The lead being booked, so the confirmation can be drafted beside the diary. */
+  leadId?: string | null;
   /**
    * `startsAt` and `minutes` are the booking as a MACHINE reads it, and they
    * are not decoration. Everything downstream — the landlord's calendar file,
@@ -140,7 +148,9 @@ export default function ViewingBooker({
     listingId: string | null;
     /** Nobody from us is going: the applicant lets themselves in (15 Sep 2026). */
     unaccompanied?: boolean;
-  }) => void;
+    /** The confirmation as the agent left it in the email column, or send: false. */
+    confirmation?: { send: boolean; subject?: string; html?: string; again?: boolean };
+  }) => void | BookedResult | Promise<BookedResult | void>;
 }) {
   const today = useMemo(() => startOfDay(new Date()), []);
   /* A viewing is booked property first (James, 11 Sep 2026): find it, confirm
@@ -166,6 +176,19 @@ export default function ViewingBooker({
   // One calendar for the whole OS: the diary's own week grid, with the pick
   // drawn into it. Which day AND what else that day holds, one look.
   const [week, setWeek] = useState(0);
+  /* ── THE EMAIL COLUMN (James, 17 Sep 2026) ──────────────────────────────
+     Pick a time and the diary makes room: the confirmation opens beside it,
+     editable, with travel time underneath, and Book does both. The column
+     can be dragged wider, and the whole booker widened, for a long email. */
+  const [sendEmail, setSendEmail] = useState(true);
+  const [draft, setDraft] = useState<ConfirmDraft | null>(null);
+  const editor = useRef<ConfirmEditorHandle>(null);
+  const [column, setColumn] = useState(540);
+  const [wide, setWide] = useState(false);
+  const [booking, setBooking] = useState(false);
+  const [result, setResult] = useState<BookedResult | null>(null);
+  const router = useRouter();
+  const splitRef = useRef<HTMLDivElement>(null);
 
   // Reset on OPEN only. The caller builds `properties` inline, so depending on
   // it here would throw the chosen day and time away on any parent re-render.
@@ -201,6 +224,9 @@ export default function ViewingBooker({
     setPropertyId(firstId ?? seed.current[0]?.id ?? "");
     setFilters(NO_FILTERS);
     setWeek(0);
+    setSendEmail(true);
+    setResult(null);
+    setBooking(false);
     /* Re-seeded on OPEN, not just at mount. The booker mounts once and is
        shown and hidden by `open`, and it mounts under whatever mode the
        caller last held — usually "viewing". So an appraisal opened later
@@ -481,20 +507,6 @@ export default function ViewingBooker({
     const h12 = h % 12 === 0 ? 12 : h % 12;
     return `${dayLabel} at ${h12}:${String(m).padStart(2, "0")}${am ? "am" : "pm"}`;
   })();
-  /**
-   * An appraisal stops HERE.
-   *
-   * It used to carry straight on into "who do we tell", compose the
-   * confirmation and finish on a Booked screen with confetti — which read as
-   * "that has gone out to them" when nothing had. Everything after the time
-   * is picked now belongs to the appraisal box on the record, where the
-   * confirmation, the calendar invite and the pre-appraisal live together and
-   * you can see which of them has actually happened.
-   *
-   * Viewings keep the old run: there is no appraisal box behind them, so the
-   * booker is the only place their messages can be composed.
-   */
-  const bookedOnly = mode === "appraisal";
 
   /* `startsAt` is computed up with the hooks — the travel lookup needs it. */
 
@@ -612,21 +624,69 @@ export default function ViewingBooker({
     }
   }
 
-  /** Hand the booking to the record and get out of the way. */
-  async function bookAndClose() {
+  /** The confirmation to draft beside the diary, when there is one to send. */
+  const emailTarget: ConfirmTarget | null =
+    !startsAt || !leadId || !chosen || mode === "takeon"
+      ? null
+      : mode === "appraisal"
+        ? { kind: "appraisal-new", appraisal: { leadId, landlord: chosen.name, email: chosen.email, address: address || "", startsAt, minutes: mins } }
+        : property
+          ? { kind: "viewing", booking: { leadId, listingId: property.id, applicantName: chosen.name, applicantEmail: chosen.email, address: property.name, startsAt, minutes: mins, unaccompanied: !accompanied } }
+          : null;
+  const willSend = Boolean(emailTarget && sendEmail && draft?.ok && draft.to && !draft.blocked);
+  const draftLoading = Boolean(emailTarget && sendEmail && draft === null);
+
+  /** Drag the divider: the email column is as wide as the space to its right. */
+  function startDrag(e: React.PointerEvent) {
+    e.preventDefault();
+    const box = splitRef.current?.getBoundingClientRect();
+    if (!box) return;
+    const move = (ev: PointerEvent) => setColumn(Math.round(Math.min(Math.max(box.right - ev.clientX, 380), Math.max(380, box.width - 420))));
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  }
+
+  /**
+   * Book it, send what the column says, and show what happened.
+   *
+   * The email is read out of the editor BEFORE the stage changes, because the
+   * done screen unmounts it. The record does the saving and the sending
+   * (onBooked) and says back what went, so the done screen reports facts
+   * rather than hopes.
+   */
+  async function bookIt() {
+    if (!ready || booking) return;
+    setBooking(true);
+    const confirmation = willSend
+      ? { send: true, subject: editor.current?.subject, html: editor.current?.html(), again: Boolean(draft?.alreadySent) }
+      : { send: false };
     await saveBuffers();
-    onBooked({
-      when: whenLabel,
-      property: address || "Visit",
-      locality: mode === "takeon" ? "Take-on visit" : "Market appraisal",
-      who: chosen?.name ?? "",
-      whenPretty,
-      startsAt,
-      minutes: mins,
-      propertyId: null,
-      listingId: null,
-    });
-    onClose();
+    setResult(null);
+    setStage("done");
+    try {
+      const r = await onBooked({
+        when: whenLabel,
+        property: toLandlord ? (address || "Visit") : property!.name,
+        propertyId: toLandlord ? null : (property?.propertyId ?? null),
+        listingId: toLandlord ? null : (property?.id ?? null),
+        locality: mode === "appraisal" ? "Market appraisal" : mode === "takeon" ? "Take-on visit" : property!.locality,
+        who: chosen?.name ?? "",
+        whenPretty,
+        startsAt,
+        minutes: mins,
+        ...(mode === "viewing" && !accompanied ? { unaccompanied: true } : {}),
+        confirmation,
+      });
+      setResult(r ?? {});
+    } catch {
+      setResult({ said: "Something went wrong saving it. Check the diary before booking it again." });
+    } finally {
+      setBooking(false);
+    }
   }
 
   /* Composed at the point of sending so the wording carries the choices made
@@ -837,7 +897,13 @@ export default function ViewingBooker({
         className="absolute inset-0 cursor-default bg-ink/45"
       />
 
-      <div className={`fade-up relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)] ${toLandlord ? "max-w-5xl" : "max-w-4xl"}`}>
+      <div
+        className={`fade-up relative flex w-full flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)] transition-[max-width] duration-300 ${
+          stage === "when"
+            ? `h-[94vh] ${wide ? "max-w-[calc(100vw-1rem)]" : "max-w-[1440px]"}`
+            : `max-h-[92vh] ${toLandlord ? "max-w-5xl" : "max-w-4xl"}`
+        }`}
+      >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line/70 px-6 py-4">
           <div className="min-w-0">
             <h2 className="text-[19px] leading-tight">
@@ -867,16 +933,29 @@ export default function ViewingBooker({
                     }`}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line/80 text-[12px] text-muted transition-colors hover:text-ink"
-          >
-            ✕
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {stage === "when" && (
+              <button
+                type="button"
+                onClick={() => setWide((w) => !w)}
+                title={wide ? "Back to the usual width" : "Use the whole screen"}
+                className="hidden rounded-full border border-line/80 px-3 py-1.5 text-[11.5px] text-muted transition-colors hover:text-ink lg:block"
+              >
+                {wide ? "Narrower" : "Wider"}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line/80 text-[12px] text-muted transition-colors hover:text-ink"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+        <div className={`min-h-0 flex-1 overflow-y-auto px-6 py-5 ${stage === "when" ? "lg:overflow-hidden" : ""}`}>
           {/* ══ WHO'S VIEWING ══ */}
           {stage === "applicant" && (
             <>
@@ -969,50 +1048,27 @@ export default function ViewingBooker({
             </div>
           )}
 
-          {/* ══ WHEN ══ */}
+          {/* ══ WHEN ══
+              The diary takes the whole booker until a time is picked. Then it
+              makes room: the confirmation opens in a column beside it, with
+              travel time under it, and Book does all of it (James, 17 Sep
+              2026). The column can be dragged wider. */}
           {stage === "when" && (
-            <>
+            <div ref={splitRef} className="flex flex-col gap-4 lg:h-full lg:flex-row">
+              <div className="flex min-h-[460px] min-w-0 flex-1 flex-col lg:min-h-0">
               {toLandlord && address && (
-                <p className="mb-4 flex items-center gap-2 text-[12.5px] text-muted">
+                <p className="mb-3 flex items-center gap-2 text-[12.5px] text-muted">
                   <DoodleIcon name="home" size={14} />
                   At {address} — their place, not ours.
                 </p>
               )}
               {!toLandlord && property && (
-                <p className="mb-4 flex items-center gap-2 text-[12.5px] text-muted">
+                <p className="mb-3 flex items-center gap-2 text-[12.5px] text-muted">
                   <DoodleIcon name="home" size={14} />
                   {property.name} · {property.locality}
                   <button type="button" onClick={() => setStage("property")} className="ml-1 text-[11.5px] font-semibold text-accent-dark hover:underline">change</button>
                 </p>
               )}
-              {false && (
-                <div className="mb-5">
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                    Which property
-                  </p>
-                  <div className="flex gap-2.5 overflow-x-auto pb-1">
-                    {properties.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => setPropertyId(p.id)}
-                        className={`flex w-56 shrink-0 items-center gap-2.5 rounded-xl border p-2 text-left transition-colors ${
-                          p.id === propertyId
-                            ? "border-accent-dark bg-accent-soft/40"
-                            : "border-line/60 hover:border-ink/30"
-                        }`}
-                      >
-                        <PropertyPhoto src={p.image} className="h-9 w-11 shrink-0 rounded-lg" />
-                        <span className="min-w-0">
-                          <span className="hand block truncate text-[12.5px]">{p.name}</span>
-                          <span className="block truncate text-[10px] text-muted">{p.locality}</span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {/* THE week — the diary's own grid, so booking happens against
                   the day you can see: every existing appointment drawn in,
                   the weather up top for the agent's own visits, and the pick
@@ -1049,10 +1105,10 @@ export default function ViewingBooker({
                 </button>
               </div>
 
-              <div className="max-h-[46vh] overflow-auto rounded-xl border border-line/60">
+              <div className="min-h-[320px] flex-1 overflow-auto rounded-xl border border-line/60">
                 <DiaryGrid
                   week={week}
-                  hourPx={44}
+                  hourPx={52}
                   pick={day && slot ? { day: offsetOf(day), slot } : null}
                   onPick={(o, t) => {
                     setDay(dateFromOffset(o));
@@ -1072,8 +1128,36 @@ export default function ViewingBooker({
                 drawn in, so a clash is visible before it happens.
                 {slot && " Drag the bar at the bottom of your booking to make it longer."}
               </p>
+              </div>
+
+              {day && slot && (
+                <>
+                  <div
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label="Drag to widen the email"
+                    onPointerDown={startDrag}
+                    className="group hidden w-2.5 shrink-0 cursor-col-resize items-center justify-center lg:flex"
+                  >
+                    <span className="h-12 w-1 rounded-full bg-line transition-colors group-hover:bg-ink/40" />
+                  </div>
+                  <aside
+                    style={{ ["--col" as string]: `${column}px` }}
+                    className="frame-grow flex w-full shrink-0 flex-col gap-4 lg:min-h-0 lg:w-[var(--col)] lg:overflow-y-auto lg:pr-1"
+                  >
+                    <div>
+                      <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">
+                        {mode === "appraisal" ? "Market appraisal" : mode === "takeon" ? "Take-on visit" : "Viewing"}
+                      </p>
+                      <p className="hand mt-1 text-[20px] leading-tight">{whenPretty}</p>
+                      <p className="mt-0.5 text-[12px] text-muted">
+                        {howLong.charAt(0).toUpperCase() + howLong.slice(1)}
+                        {day && forecast[dayKey(day)] ? ` · ${forecast[dayKey(day)].glyph} ${forecast[dayKey(day)].word.toLowerCase()}, ${forecast[dayKey(day)].temp}°` : ""}
+                      </p>
+                    </div>
+
               {mode === "viewing" && (
-                <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-xl border border-line/60 px-3 py-2.5 text-[12px]">
+                <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-line/60 px-3 py-2.5 text-[12px]">
                   <input
                     id="booker-accompanied"
                     type="checkbox"
@@ -1090,6 +1174,39 @@ export default function ViewingBooker({
                 </label>
               )}
 
+
+                    {emailTarget ? (
+                      <section className="rounded-xl border border-line/60 bg-card p-4">
+                        <label className="flex cursor-pointer items-start gap-2.5 text-[12.5px]">
+                          <input
+                            id="booker-send-email"
+                            type="checkbox"
+                            checked={sendEmail}
+                            onChange={(e) => setSendEmail(e.target.checked)}
+                            className="mt-0.5"
+                          />
+                          <span>
+                            <span className="block font-semibold">Email the confirmation</span>
+                            <span className="block text-[11px] leading-snug text-muted">
+                              {mode === "appraisal"
+                                ? "To the landlord, with the calendar invite. Change any of the words first."
+                                : "To the applicant, with the calendar invite and their passport link. Change any of the words first."}
+                              {" "}Untick to book without telling them.
+                            </span>
+                          </span>
+                        </label>
+                        {sendEmail && (
+                          <div className="mt-3 flex flex-col">
+                            <ConfirmEditor ref={editor} target={emailTarget} onDraft={setDraft} fill={false} />
+                          </div>
+                        )}
+                      </section>
+                    ) : mode !== "takeon" ? (
+                      <p className="rounded-xl border border-line/60 px-3.5 py-3 text-[12px] text-muted">
+                        The confirmation can be sent from the record once this is booked.
+                      </p>
+                    ) : null}
+
               {/* ══ TRAVEL TIME ══
                   Offered, never imposed. The buffer is the thing everybody
                   means to add and nobody remembers to, so it appears the
@@ -1097,7 +1214,7 @@ export default function ViewingBooker({
                   because "add a buffer" is a question you can't answer
                   without knowing how far away the place is. */}
               {canTravel && travel.status !== "idle" && (
-                <div className="mt-4 rounded-xl border border-line/60 bg-panel/50 p-4">
+                <div className="rounded-xl border border-line/60 bg-panel/50 p-4">
                   <p className="mb-2.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
                     <DoodleIcon name="target" size={13} />
                     Travel time
@@ -1243,7 +1360,10 @@ export default function ViewingBooker({
                   )}
                 </div>
               )}
-            </>
+                  </aside>
+                </>
+              )}
+            </div>
           )}
 
                     {/* ══ WHO ══ */}
@@ -1265,37 +1385,39 @@ export default function ViewingBooker({
               <p className="mt-1 text-[12.5px]">
                 {toLandlord ? address || "Visit booked" : property?.name}
               </p>
-              <p className="mt-3 text-[12px] text-muted">
-                {sentCount
-                  ? `${sentCount} message${sentCount === 1 ? "" : "s"} sent. In the diary and on the record.`
-                  : VIEWING_SENDS_LIVE
-                    ? "In the diary and on the record. Nobody was told."
-                    : "Booked, and going into your Outlook calendar."}
-              </p>
-              {!toLandlord && !VIEWING_SENDS_LIVE && chosen && (
-                <div className="mt-6 w-full max-w-md rounded-2xl border border-line/60 bg-card p-4 text-left">
-                  {/* Since 17 Sep 2026 the booking sends nothing: the lead opens the
-                      confirmation for the agent to read, edit and send (ConfirmSheet).
-                      Before that the booking route sent it itself. This box used to
-                      say sending was not on yet and to confirm from Outlook, which on
-                      live meant a second confirmation (16 Sep 2026). What actually went
-                      is written on the lead's activity once the booking returns. */}
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Confirmation to {chosen.name.split(" ")[0]}</p>
-                  <p className="mt-1.5 text-[12.5px]">
-                    {chosen.email ? (
-                      <>
-                        To <span className="font-semibold">{chosen.email}</span>: {property?.name}, {whenPretty}.
-                      </>
-                    ) : (
-                      <>No email on this lead, so nothing can be sent. Ring them to confirm.</>
-                    )}
+              {/* What actually happened, as the record reports it: the
+                  diary, the email or its absence, and where to go next. */}
+              {result === null ? (
+                <p className="mt-4 flex items-center gap-2 text-[12.5px] text-muted">
+                  <span aria-hidden className="h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+                  Putting it in the diary{sentCount || !sendEmail ? "" : " and sending the confirmation"}…
+                </p>
+              ) : (
+                <>
+                  <p className="mt-4 max-w-md text-[12.5px] leading-relaxed text-muted">
+                    {result?.said ?? (sentCount ? `${sentCount} message${sentCount === 1 ? "" : "s"} sent. In the diary and on the record.` : "Booked, and going into your Outlook calendar.")}
                   </p>
-                  {chosen.email ? (
-                    <p className="mt-2 text-[11.5px] text-muted">
-                      Not sent yet. The email opens next, with a calendar invite and their tenant passport link: read it, change anything, then send it. Nothing goes until you do.
-                    </p>
-                  ) : null}
-                </div>
+                  {result?.goTo && (
+                    <div className="mt-6 w-full max-w-md rounded-2xl border border-line/60 bg-card p-5">
+                      <p className="text-[13.5px] leading-snug">{result.goTo.ask}</p>
+                      <div className="mt-4 flex flex-wrap justify-center gap-2.5">
+                        <PressButton
+                          onClick={() => { onClose(); router.push(result.goTo!.href); }}
+                          className="press-ring rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white"
+                        >
+                          {result.goTo.label}
+                        </PressButton>
+                        <button
+                          type="button"
+                          onClick={onClose}
+                          className="rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-semibold transition-colors hover:border-ink/40"
+                        >
+                          Stay on the lead
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -1347,18 +1469,22 @@ export default function ViewingBooker({
                     : "Pick a day and a time"}
                 </p>
                 <PressButton
-                  onClick={() => ready && !savingBuffers && (bookedOnly ? void bookAndClose() : VIEWING_SENDS_LIVE ? setStage("who") : finishBooking(0))}
+                  onClick={() => {
+                    if (!ready || savingBuffers || booking || draftLoading) return;
+                    if (VIEWING_SENDS_LIVE && mode === "viewing") setStage("who");
+                    else void bookIt();
+                  }}
                   className={`shrink-0 rounded-full px-6 py-2.5 text-[13px] font-semibold ${
-                    ready && !savingBuffers ? "bg-ink text-page" : "cursor-not-allowed bg-ink/30 text-page/60"
+                    ready && !savingBuffers && !booking && !draftLoading ? "bg-ink text-page" : "cursor-not-allowed bg-ink/30 text-page/60"
                   }`}
                 >
                   <span className="flex items-center gap-2">
-                    {savingBuffers ? (
+                    {savingBuffers || booking ? (
                       <span className="block h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-page/40 border-t-page" />
                     ) : (
-                      <DoodleIcon name="calendar" size={15} />
+                      <DoodleIcon name={willSend ? "mail" : "calendar"} size={15} />
                     )}
-                    {savingBuffers ? "Booking…" : bookedOnly || !VIEWING_SENDS_LIVE ? "Book it" : "Next — who do we tell?"}
+                    {savingBuffers || booking ? "Booking…" : draftLoading ? "Getting the email ready…" : willSend ? "Book and send" : "Book it"}
                   </span>
                 </PressButton>
               </>
