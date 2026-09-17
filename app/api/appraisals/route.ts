@@ -8,7 +8,7 @@ import { SERVICE_LEVELS, type ServiceLevel } from "@/lib/market-appraisal";
 import type { NextRequest } from "next/server";
 import { queueVideoChase } from "@/lib/video-chase";
 import { publicOrigin } from "@/lib/origin";
-import { sendBookingConfirmation, type ConfirmationResult } from "@/lib/appraisal-confirm";
+import type { ConfirmationResult } from "@/lib/appraisal-confirm";
 
 import { putAppraisalInRexDiary, type DiaryOutcome } from "@/lib/rex-diary-write";
 import { putInOutlook, type OutlookOutcome } from "@/lib/outlook-calendar";
@@ -94,11 +94,10 @@ export async function POST(req: NextRequest) {
       const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
       const me = userId ? await findUserById(userId).catch(() => null) : null;
       if (me) {
-        try {
-          confirmation = await sendBookingConfirmation({ ma: appraisal, me });
-        } catch (e) {
-          confirmation = { sent: false, reason: e instanceof Error ? e.message : "The confirmation did not send." };
-        }
+        /* The landlord's confirmation is NOT sent here any more (17 Sep 2026).
+           Every save of an appraisal with a date came through this route and
+           sent it again. The agent now sees it, edits it and sends it from
+           the file (/api/confirmations). */
         try {
           const origin = publicOrigin(req);
           videoChase = await queueVideoChase({ ma: appraisal, me, origin });

@@ -150,7 +150,8 @@ export default function MarketAppraisals() {
   useEffect(() => {
     if (live === null) return;
     const id = new URLSearchParams(window.location.search).get("open");
-    if (id && all.some((m) => m.id === id)) router.replace(`/market-appraisals/${id}`);
+    const confirm = new URLSearchParams(window.location.search).get("confirm") === "1";
+    if (id && all.some((m) => m.id === id)) router.replace(`/market-appraisals/${id}${confirm ? "?confirm=1" : ""}`);
   }, [router, live, all]);
 
   /* Both figures count the SAME set the list is about to draw. A strip that
@@ -183,7 +184,7 @@ export default function MarketAppraisals() {
           onClose={() => setBooking(false)}
           /* Straight onto the file, the same landing as booking from a lead -
              the next thing to do is the research, and it lives there. */
-          onBooked={(id) => router.push(`/market-appraisals/${id}`)}
+          onBooked={(id) => router.push(`/market-appraisals/${id}?confirm=1`)}
         />
       ) : null}
       <PageHeader

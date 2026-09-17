@@ -534,7 +534,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
     name: "Appointment Confirmed",
     audience: "landlord",
     trigger: "The agent presses Send the confirmation on a booked appraisal",
-    fires: "components/AppraisalTrack.tsx → lib/appraisal-email.ts → confirmBodyFor()",
+    fires: "Opened after booking on the appraisal file (components/appraisal/ConfirmLine) and the lead (AppraisalTrack) → components/ConfirmSheet → /api/confirmations → lib/appraisal-confirm.ts; recorded in lib/confirmations so it is never sent twice by accident",
     to: "The landlord",
     summary:
       "Short, sent the moment it is booked, however it was booked. The date, time, address and agent on their own lines in bold, and the calendar invite attached. One of only two emails before the visit: this, and the pre-presentation the day before.",
@@ -782,7 +782,7 @@ The Letting Experts`
     name: "Viewing Booked - Start Your Passport",
     audience: "tenant",
     trigger: "A viewing is booked for a tenant",
-    fires: "Wired. Sent on every booking by lib/viewing-confirm.ts (15 Sep 2026), from the agent's own Outlook where it is connected, with the calendar file; also by hand from a viewing (Invite to the passport). Mints the passport and links to it.",
+    fires: "Wired. Opened for the agent after every booking (17 Sep 2026: read, edit, Send - never sent on its own), by lib/viewing-confirm.ts, from the agent's own Outlook where it is connected, with the calendar file; also by hand from a viewing (Invite to the passport). Mints the passport and links to it.",
     to: "The tenant who booked the viewing",
     /* Not a draft since 15 Sep 2026: lib/viewing-confirm.ts sends it on every
        booking with an applicant email. */

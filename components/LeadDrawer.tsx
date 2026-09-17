@@ -39,6 +39,7 @@ import {
   type Task,
 } from "@/lib/leads-sample";
 import AppraisalTrack from "@/components/AppraisalTrack";
+import ConfirmSheet from "@/components/ConfirmSheet";
 import { EMPTY_CASE, type AppraisalCase } from "@/lib/appraisal";
 import { saveLabel, useCaseState } from "@/lib/case-state";
 import { isStalled, NURTURE_BRANCH, startingStep, trackFor } from "@/lib/journey";
@@ -860,6 +861,9 @@ export default function LeadDrawer({
   const [passportSaid, setPassportSaid] = useState<string | null>(null);
   const [signing, setSigning] = useState(false);
   const [booked, setBooked] = useState<LeadViewing[]>([]);
+  /* The booked viewing whose confirmation is open for the agent to read,
+     edit and send (17 Sep 2026: booking no longer sends it). */
+  const [confirming, setConfirming] = useState<LeadViewing | null>(null);
   const [handingOff, setHandingOff] = useState(false);
   const [tagging, setTagging] = useState(false);
   // The booker serves two jobs; which one is decided at fire time.
@@ -1741,7 +1745,20 @@ export default function LeadDrawer({
                               Viewing — {v.property}, {v.locality}
                             </span>
                             <span className="block text-[10.5px] text-muted">{v.when}</span>
-                            {v.rex && <span className="mt-0.5 block text-[10.5px] leading-snug text-muted">{v.rex}</span>}
+                            {v.confirmed ? (
+                              <span className="mt-0.5 block text-[10.5px] leading-snug text-muted">{v.confirmed}</span>
+                            ) : (
+                              v.rex && <span className="mt-0.5 block text-[10.5px] leading-snug text-muted">{v.rex}</span>
+                            )}
+                            {v.confirm && !v.confirmed && (
+                              <button
+                                type="button"
+                                onClick={() => setConfirming(v)}
+                                className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-line/80 px-2.5 py-1 text-[10.5px] font-semibold transition-colors hover:border-accent-dark hover:text-accent-dark"
+                              >
+                                <DoodleIcon name="mail" size={11} /> Send confirmation
+                              </button>
+                            )}
                           </span>
                           <Pill tone={v.outcome === "Applying" ? "good" : "neutral"}>{v.outcome}</Pill>
                         </li>
@@ -2816,6 +2833,18 @@ export default function LeadDrawer({
         </div>
       )}
 
+      {confirming?.confirm && (
+        <ConfirmSheet
+          title="Confirm the viewing"
+          target={{ kind: "viewing", booking: confirming.confirm }}
+          onClose={() => setConfirming(null)}
+          onSent={(detail) => {
+            const id = confirming.id;
+            setBooked((cur) => cur.map((b) => (b.id === id ? { ...b, confirmed: `Confirmation sent. ${detail}` } : b)));
+          }}
+        />
+      )}
+
       <ViewingBooker
         open={booking}
         onClose={() => setBooking(false)}
@@ -2867,24 +2896,27 @@ export default function LeadDrawer({
              it to REX silently, and sends OUR confirmations to the applicant
              and the agent. The row says what actually happened. */
           if (bookMode === "viewing" && v.startsAt) {
+            const confirm = {
+              leadId: lead.id,
+              listingId: v.listingId,
+              applicantName: lead.name,
+              applicantEmail: contact.email || lead.email || null,
+              address: v.property,
+              startsAt: v.startsAt,
+              minutes: v.minutes,
+              unaccompanied: Boolean(v.unaccompanied),
+            };
+            setBooked((cur) => cur.map((b) => (b.id === bookedId ? { ...b, confirm } : b)));
             fetch("/api/viewings/book", {
               method: "POST",
               headers: { "content-type": "application/json" },
-              body: JSON.stringify({
-                leadId: lead.id,
-                listingId: v.listingId,
-                contactId: lead.contactId ?? null,
-                applicantName: lead.name,
-                applicantEmail: contact.email || lead.email || null,
-                address: v.property,
-                startsAt: v.startsAt,
-                minutes: v.minutes,
-                unaccompanied: Boolean(v.unaccompanied),
-              }),
+              body: JSON.stringify({ ...confirm, contactId: lead.contactId ?? null }),
             })
               .then((r) => r.json())
               .then((j: { ok?: boolean; said?: string }) => {
                 setBooked((cur) => cur.map((b) => (b.id === bookedId ? { ...b, rex: j.said ?? "Booked." } : b)));
+                /* Booked, so now the email - shown, never sent behind their back. */
+                if (j.ok) setConfirming({ id: bookedId, when: v.when, property: v.property, locality: v.locality, outcome: "Booked", confirm });
               })
               .catch(() => {
                 setBooked((cur) => cur.map((b) => (b.id === bookedId ? { ...b, rex: "Couldn't reach the server: check your calendar and tell the applicant yourself." } : b)));
@@ -2964,7 +2996,8 @@ export default function LeadDrawer({
               }),
             }).catch(() => {});
             onClose();
-            router.push(handoverTarget(`lead-${lead.id}`));
+            /* confirm=1: the file opens on the landlord's confirmation, to read and send. */
+            router.push(`${handoverTarget(`lead-${lead.id}`)}&confirm=1`);
           }
         }}
       />

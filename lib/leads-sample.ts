@@ -295,6 +295,9 @@ export type LeadViewing = {
   outcome: "Booked" | "Attended" | "Applying" | "Thinking" | "Not for them" | "No show";
   /** What REX did with a viewing booked in the OS (15 Sep 2026), in words. */
   rex?: string;
+  /** A viewing booked in the OS: what its confirmation email needs, and whether it went. */
+  confirm?: { leadId: string; listingId?: string | number | null; applicantName: string; applicantEmail?: string | null; address: string; startsAt: string; minutes: number; unaccompanied?: boolean };
+  confirmed?: string;
 };
 
 export const DOC_TAGS: DocTag[] = [
