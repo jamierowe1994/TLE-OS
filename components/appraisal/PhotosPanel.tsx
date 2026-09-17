@@ -105,19 +105,13 @@ export default function PhotosPanel({ ma }: { ma: MarketAppraisal }) {
     setWriting(true);
     setNote(null);
     try {
-      const urls = (photos ?? []).slice(0, 4).map((p) => `${window.location.origin}/api/appraisals/${encodeURIComponent(ma.id)}/photos?photo=${encodeURIComponent(p.id)}`);
-      const r = await fetch("/api/listings/describe", {
+      /* The file's own writer: it signs the photographs itself and reads
+         everything the file holds. Handing our photo links to the listing's
+         writer gave the model a sign-in page (James, 17 Sep 2026). */
+      const r = await fetch(`/api/appraisals/${encodeURIComponent(ma.id)}/advert`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          name: ma.address,
-          locality: ma.postcode ?? "",
-          rent: ma.valuation ?? null,
-          rentPeriod: "month",
-          photos: urls,
-          steer,
-          current: advert?.body ?? null,
-        }),
+        body: JSON.stringify({ steer, current: advert?.body ?? null }),
       });
       const j = (await r.json()) as { ok?: boolean; heading?: string; body?: string; error?: string };
       if (!j.ok || !j.body) throw new Error(j.error ?? "Nothing came back.");

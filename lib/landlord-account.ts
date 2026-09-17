@@ -616,6 +616,9 @@ export const DOC_KINDS: Array<{ id: DocKind; label: string }> = [
 
 export const isDocKind = (v: string): v is DocKind => DOC_KINDS.some((k) => k.id === v);
 
+/** The ones a let actually needs, in the order we ask for them. */
+export const REQUIRED_DOC_KINDS = DOC_KINDS.filter((k) => k.id !== "other");
+
 export interface LandlordDocument {
   id: string;
   accountId: string;

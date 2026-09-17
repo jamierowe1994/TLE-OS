@@ -8,6 +8,7 @@ import RexPropertyPicker from "@/components/RexPropertyPicker";
 import PropertyFile from "@/components/PropertyFile";
 import AppraisalMessages from "@/components/appraisal/AppraisalMessages";
 import PhotosPanel from "@/components/appraisal/PhotosPanel";
+import TakeOnWizard from "@/components/appraisal/TakeOnWizard";
 import ConfirmLine from "@/components/appraisal/ConfirmLine";
 import AppraisalOutcome from "@/components/AppraisalOutcome";
 import WelcomeVideoRecorder from "@/components/WelcomeVideoRecorder";
@@ -141,9 +142,13 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
   const [showMessages, setShowMessages] = useState(false);
   /* The photographs and the advert, after the take-on visit (?photos=1). */
   const [showPhotos, setShowPhotos] = useState(false);
+  /* The pop-out does the writing up; the panel under the file is the record
+     of what came of it (James, 17 Sep 2026: "I would rather a pop-out modal
+     ... the scroll down just looks a bit shit"). */
+  const [wizard, setWizard] = useState(false);
   const openPhotos = useCallback(() => {
+    setWizard(true);
     setShowPhotos(true);
-    setTimeout(() => document.getElementById("photos")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
   }, []);
   useEffect(() => {
     if (booked === undefined) return;
@@ -496,6 +501,8 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
           </span>
         </p>
       </section>
+
+      {wizard && <TakeOnWizard ma={ma} onClose={() => setWizard(false)} onSaved={reload} />}
 
       {showPhotos && (
         <div id="photos" className="fade-up scroll-mt-6">

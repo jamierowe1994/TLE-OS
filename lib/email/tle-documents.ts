@@ -956,6 +956,33 @@ export const LANDLORD_MESSAGE_REPLY = {
 } as const;
 
 /**
+ * Landlord: the compliance documents, still outstanding (17 Sep 2026).
+ *
+ * Sent from the end of the take-on write-up, when the photographs are done
+ * and the only thing left is their paperwork. Names what is missing: "your
+ * documents" is a chore, "your EPC and your gas certificate" is a job.
+ */
+export const LANDLORD_DOCS_NUDGE = {
+  subject: "The paperwork for {{address}}",
+  preheader: "{{whatCap}} - and the rest is ready to go.",
+  mode: "blocks",
+  blocks: [
+    H("ldn1", "Just the Paperwork Left"),
+    T(
+      "ldn2",
+      "Hi {{firstName}},<br><br>We have been round and taken the photographs for <strong>{{address}}</strong>, so the advert is nearly ready. The last thing we need from you is {{what}}."
+    ),
+    T("ldn3", "You can send them from your property file - photographs of them are fine, straight off your phone."),
+    BTN("ldn4", "Send your documents", "{{link}}"),
+    SP("ldn5", 8),
+    T("ldn6", "Anything you cannot find, reply to this email and we will help you get hold of it."),
+    T("ldn7", "The Letting Experts"),
+    FOOT("ldn8", "You're getting this because The Letting Experts are letting your property."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/**
  * Landlord: a nudge to sign the contract (James, 17 Sep 2026).
  *
  * "Give the agent the ability to send a nudge, which will send an email out

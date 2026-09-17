@@ -96,6 +96,53 @@ export async function accessLine(appraisalId: string): Promise<{ label: string; 
   return null;
 }
 
+/**
+ * WHAT THE AGENT FILLED IN AFTER THE VISIT (James, 17 Sep 2026): the gaps -
+ * beds, baths, parking, whatever nobody had recorded - and the advert they
+ * wrote while they still remembered the place. Kept against the appraisal
+ * until there is a listing to carry them.
+ */
+const DETAILS = "takeon-details";
+
+export interface TakeOnDetails {
+  fields: Record<string, string>;
+  advert?: { heading: string; body: string; at: string } | null;
+  at: string;
+}
+
+/** The details a listing needs, in the order an agent would say them. */
+export const DETAIL_FIELDS: Array<{ id: string; label: string; hint?: string }> = [
+  { id: "propertyType", label: "Property type", hint: "House, flat, bungalow" },
+  { id: "beds", label: "Bedrooms" },
+  { id: "baths", label: "Bathrooms" },
+  { id: "receptions", label: "Reception rooms" },
+  { id: "furnishing", label: "Furnishing" },
+  { id: "heating", label: "Heating" },
+  { id: "parking", label: "Parking" },
+  { id: "garden", label: "Garden" },
+  { id: "councilTax", label: "Council tax band" },
+  { id: "epc", label: "EPC rating" },
+  { id: "availableFrom", label: "Available from" },
+  { id: "floorArea", label: "Floor area", hint: "If the floor plan gives one" },
+];
+
+
+export async function takeOnDetails(appraisalId: string): Promise<TakeOnDetails | null> {
+  if (!hasDb()) return null;
+  const rows = await q<{ payload: TakeOnDetails }>(`SELECT payload FROM os_case_state WHERE kind = $1 AND record_id = $2`, [DETAILS, appraisalId]).catch(() => []);
+  return rows[0]?.payload ?? null;
+}
+
+export async function saveTakeOnDetails(appraisalId: string, details: TakeOnDetails, by: string): Promise<void> {
+  if (!hasDb()) return;
+  await q(
+    `INSERT INTO os_case_state (kind, record_id, payload, updated_at, updated_by)
+     VALUES ($1, $2, $3::jsonb, NOW(), $4)
+     ON CONFLICT (kind, record_id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW(), updated_by = EXCLUDED.updated_by`,
+    [DETAILS, appraisalId, JSON.stringify(details), by]
+  ).catch(() => null);
+}
+
 /* ── the confirmation, the same shape as the appraisal's ─────────────────── */
 
 const key = (id: string) => `takeon|${id}`;

@@ -72,6 +72,7 @@ import {
   LANDLORD_QUESTIONS_CHASE,
   LANDLORD_CONTRACT_NUDGE,
   LANDLORD_MESSAGE_REPLY,
+  LANDLORD_DOCS_NUDGE,
   VIEWING_CANCELLED,
   VIEWING_MOVED,
   APPLICATION_ACCEPTED_LANDLORD,
@@ -637,6 +638,27 @@ export const TLE_EMAILS: CatalogEntry[] = [
           agentFirst: "Rhiannon",
           deckLink: `${SITE}/present/example`,
           link: `${SITE}/landlord/enter?token=example`,
+        })
+      )(),
+  },
+  {
+    id: "landlord-docs-nudge",
+    group: "Market appraisals",
+    name: "Just the Paperwork Left",
+    audience: "landlord",
+    trigger: "The agent presses Send a nudge for the documents at the end of the take-on write-up",
+    fires: "Wired 17 Sep 2026. components/appraisal/TakeOnWizard.tsx → POST /api/appraisals/[id]/docs-nudge, on the public sender, reply-to the agent.",
+    to: "The landlord whose documents are outstanding",
+    summary: "Names what is actually missing and lands them on their own documents page. Sent when the photographs are done and the paperwork is the only thing holding the advert up.",
+    doc: LANDLORD_DOCS_NUDGE,
+    render: (o) =>
+      blocksAs("landlord")(
+        withSample(o ?? LANDLORD_DOCS_NUDGE, {
+          firstName: "Helen",
+          address: "12 Chorlton Road",
+          what: "your EPC and your gas safety certificate",
+          whatCap: "Your EPC and your gas safety certificate",
+          link: `${SITE}/landlord/enter?token=example&next=/landlord/documents`,
         })
       )(),
   },
