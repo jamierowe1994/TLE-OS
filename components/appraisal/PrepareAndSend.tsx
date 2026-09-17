@@ -77,6 +77,7 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
   const [api, setApi] = useState<{ go: (dir: 1 | -1) => void } | null>(null);
   const stage = useRef<HTMLDivElement | null>(null);
   const [room, setRoom] = useState(0);
+  const [tall, setTall] = useState(0);
 
   const pull = useCallback(async () => {
     try {
@@ -94,7 +95,10 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
   }, [pull]);
 
   useEffect(() => {
-    const measure = () => setRoom(stage.current?.clientWidth ?? 0);
+    const measure = () => {
+      setRoom(stage.current?.clientWidth ?? 0);
+      setTall(window.innerHeight);
+    };
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
@@ -158,7 +162,12 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
     }
   }
 
-  const fit = room ? Math.min((room - 40) / (PAGE_W * 2), 420 / PAGE_H) : 0.18;
+  /* AS BIG AS THE SCREEN ALLOWS (James, 17 Sep 2026). In a column beside
+     the steps it was drawn at about a quarter size, and text that small
+     lays out a hair differently - lines wrapped and pages looked cut off
+     that are whole on the landlord's copy. Full width, and tall enough that
+     the Back and Next buttons stay on screen with the spread. */
+  const fit = room ? Math.min((room - 48) / (PAGE_W * 2), Math.max(0.3, (tall - 250) / PAGE_H)) : 0.3;
   const pages = deck ? slidesFor(deck).map((s) => s.id) : [];
   const open = page.at >= 0;
 
@@ -204,7 +213,7 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
   );
 
   return (
-    <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_420px]">
+    <div className="space-y-6">
       {/* ── the booklet, exactly as they will get it ── */}
       <section>
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
@@ -247,8 +256,9 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
         </div>
       </section>
 
-      {/* ── the four things ── */}
-      <aside>
+      {/* ── the four things: reading and checking on the left, signing and
+            sending on the right ── */}
+      <div className="grid gap-6 lg:grid-cols-2">
         <ol className="space-y-6 rounded-[20px] border border-line/60 bg-white p-6">
           {step(1, read, "Read it through", <p className="text-[12px] leading-relaxed text-muted">{read ? "You have been to the last page." : "Turn to the last page of the booklet."}</p>)}
 
@@ -260,7 +270,7 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
               <dl className="mb-2.5 space-y-1">
                 {details.map(([k, v]) => (
                   <div key={k} className="flex gap-3 text-[12px]">
-                    <dt className="w-[108px] shrink-0 text-muted">{k}</dt>
+                    <dt className="w-[128px] shrink-0 text-muted">{k}</dt>
                     <dd className={v ? "font-medium" : "text-accent-dark"}>{v ?? "Not on the file"}</dd>
                   </div>
                 ))}
@@ -271,7 +281,10 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
               </label>
             </div>
           )}
+        </ol>
 
+        <div>
+        <ol start={3} className="space-y-6 rounded-[20px] border border-line/60 bg-white p-6">
           {step(
             3,
             signed,
@@ -332,7 +345,8 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
         <Link href={`/market-appraisals/${ma.id}`} className="mt-5 inline-block text-[12.5px] text-muted underline underline-offset-4">
           Back to the file
         </Link>
-      </aside>
+        </div>
+      </div>
 
       {signing && (
         <SignModal
