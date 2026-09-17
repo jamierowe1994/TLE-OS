@@ -28,7 +28,7 @@ const ORIGIN = (process.env.OS_ORIGIN ?? "https://tle-os.co.uk").replace(/\/+$/,
 const jobLink = (id: string) => `${ORIGIN}/maintenance?open=${encodeURIComponent(id)}`;
 const where = (o: WorksOrder) => o.propertyName + (o.locality ? `, ${o.locality}` : "");
 const when = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "a date to be agreed";
+  iso ? new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "a date to be agreed";
 
 /** A contractor's invoice is on a job, ready to key into PayProp. */
 export function accountsInvoiceEmail(o: WorksOrder): AgentEmail {

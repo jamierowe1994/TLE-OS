@@ -68,7 +68,7 @@ export function inviteFor(ma: MarketAppraisal, agent: { name: string; phone: str
     landlordName: ma.landlord,
     address: [ma.address, ma.postcode].filter((s) => s && !ma.address.includes(s)).join(", ") || ma.address,
     whenPretty: ma.appointmentAt
-      ? new Date(ma.appointmentAt).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" })
+      ? new Date(ma.appointmentAt).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" })
       : "",
     startsAt: ma.appointmentAt,
     minutes: 45,

@@ -122,7 +122,7 @@ async function appraisalReminders(list: Person[], now: number): Promise<Reminder
     if (!who) continue;
     const at = new Date(ma.appointmentAt).getTime();
     const href = `/market-appraisals/${encodeURIComponent(ma.id)}`;
-    const when = new Date(ma.appointmentAt).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    const when = new Date(ma.appointmentAt).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
     if (at > now && at - now <= 2 * DAY) {
       const sent = (await presentationsFor(ma.leadId ?? ma.id).catch(() => [])).some((p) => p.kind === "pre-appraisal");

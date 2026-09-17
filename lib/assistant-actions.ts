@@ -170,7 +170,7 @@ async function doReminder(p: Extract<ActionProposal, { kind: "reminder" }>, acto
     [uid(), new Date(p.startsAt).toISOString(), p.mins, "reminder", p.title.slice(0, 200),
      (p.address ?? "").slice(0, 200), "", actor.id, actor.name]
   );
-  const when = new Date(p.startsAt).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+  const when = new Date(p.startsAt).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
   /* Said every time, same as the appointments route: a reminder nobody told
      you was OS-only is a reminder somebody expects REX to fire. */
   return { ok: true, message: `Set for ${when}. It's in the OS diary only — it has NOT gone to REX or your 365 calendar.` };

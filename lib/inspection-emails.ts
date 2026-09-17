@@ -32,7 +32,7 @@ const ORIGIN = (process.env.OS_ORIGIN ?? "https://tle-os.co.uk").replace(/\/+$/,
 
 const first = (name: string) => (name || "there").trim().split(/\s+/)[0];
 const when = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "a time to be agreed";
+  iso ? new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "a time to be agreed";
 
 const CONDITION_WORD: Record<string, string> = {
   good: "in good order",

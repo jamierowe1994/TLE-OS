@@ -38,7 +38,7 @@ import { rexConfigured } from "@/lib/rex";
 import type { ViewMaintenance, ViewMarketing, ViewViewing } from "@/lib/landlord-view";
 
 const dayTime = (iso: string | null | undefined) =>
-  iso ? new Date(iso).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
+  iso ? new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
 
 /**
  * The listing and its viewings, from REX, once a property is on the market:

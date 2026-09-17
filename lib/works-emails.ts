@@ -73,7 +73,7 @@ async function contractorOf(id: string | null): Promise<{ name: string; contact:
 
 const first = (name: string) => (name || "there").trim().split(/\s+/)[0];
 const when = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "a date to be agreed";
+  iso ? new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "a date to be agreed";
 
 async function varsFor(o: WorksOrder, me: OsUser): Promise<Record<string, string>> {
   const c = await contractorOf(o.contractorId);

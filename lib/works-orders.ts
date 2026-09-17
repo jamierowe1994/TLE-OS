@@ -498,7 +498,7 @@ export const pounds = (pence: number | null | undefined) =>
   pence == null ? "—" : `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: pence % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
 
 const when = (v: string | null | undefined) =>
-  v ? new Date(v).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "a date to be agreed";
+  v ? new Date(v).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "a date to be agreed";
 
 /** Compliance have been told the job is done: stamped so it only ever goes once. */
 export async function markComplianceTold(id: string): Promise<void> {
