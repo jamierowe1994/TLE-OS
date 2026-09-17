@@ -2735,6 +2735,10 @@ CREATE TABLE IF NOT EXISTS os_landlord_messages (
 );
 CREATE INDEX IF NOT EXISTS os_landlord_messages_account
   ON os_landlord_messages (account_id, sent_at DESC);
+-- When the agent read a landlord's message on the appraisal file (17 Sep 2026).
+ALTER TABLE os_landlord_messages ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS os_landlord_messages_appraisal
+  ON os_landlord_messages (appraisal_id, sent_at);
 
 -- What a person typed on an application. REX holds the application; the OS
 -- holds the conversation about it, keyed on the REX id, because writing notes

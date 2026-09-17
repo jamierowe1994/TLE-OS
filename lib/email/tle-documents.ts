@@ -935,6 +935,27 @@ export const LANDLORD_CONTRACT_PACK = {
 } as const;
 
 /**
+ * Landlord: their agent has replied to a message (17 Sep 2026). The words
+ * themselves are in the email, so a short answer needs no click; the button
+ * opens the thread on their file to carry on.
+ */
+export const LANDLORD_MESSAGE_REPLY = {
+  subject: "{{agentFirst}} replied about {{address}}",
+  preheader: "{{preview}}",
+  mode: "blocks",
+  blocks: [
+    H("lmr1", "A reply from {{agentFirst}}"),
+    T("lmr2", "Hi {{firstName}},<br><br>{{agentFirst}} has replied to your message about <strong>{{address}}</strong>:"),
+    T("lmr3", "<span style=\"display:block;border-left:3px solid #e7ddd9;padding:4px 0 4px 14px;color:#3b3b3c\">{{bodyHtml}}</span>"),
+    BTN("lmr4", "Open your messages", "{{link}}"),
+    SP("lmr5", 8),
+    T("lmr6", "The Letting Experts"),
+    FOOT("lmr7", "You're getting this because you messaged The Letting Experts from your property file."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/**
  * Landlord: a nudge to sign the contract (James, 17 Sep 2026).
  *
  * "Give the agent the ability to send a nudge, which will send an email out

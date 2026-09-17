@@ -71,6 +71,7 @@ import {
   LANDLORD_CONTRACT_PACK,
   LANDLORD_QUESTIONS_CHASE,
   LANDLORD_CONTRACT_NUDGE,
+  LANDLORD_MESSAGE_REPLY,
   VIEWING_CANCELLED,
   VIEWING_MOVED,
   APPLICATION_ACCEPTED_LANDLORD,
@@ -636,6 +637,28 @@ export const TLE_EMAILS: CatalogEntry[] = [
           agentFirst: "Rhiannon",
           deckLink: `${SITE}/present/example`,
           link: `${SITE}/landlord/enter?token=example`,
+        })
+      )(),
+  },
+  {
+    id: "landlord-message-reply",
+    group: "Market appraisals",
+    name: "A Reply From Your Agent",
+    audience: "landlord",
+    trigger: "The agent replies to a landlord's message from the Messages panel on the appraisal",
+    fires: "Wired 17 Sep 2026. app/(os)/market-appraisals/[id] → POST /api/appraisals/[id]/messages → lib/appraisal-messages.ts, on the public sender, reply-to the agent.",
+    to: "The landlord who messaged",
+    summary: "The reply in full, so a short answer needs no click, and a button into the thread on their file.",
+    doc: LANDLORD_MESSAGE_REPLY,
+    render: (o) =>
+      blocksAs("landlord")(
+        withSample(o ?? LANDLORD_MESSAGE_REPLY, {
+          firstName: "Helen",
+          agentFirst: "Rhiannon",
+          address: "12 Chorlton Road",
+          preview: "Yes, Thursday works - I'll bring the keys.",
+          bodyHtml: "Yes, Thursday works - I'll bring the keys.",
+          link: `${SITE}/landlord/enter?token=example&next=/landlord/messages`,
         })
       )(),
   },

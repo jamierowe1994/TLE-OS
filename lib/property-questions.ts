@@ -46,6 +46,14 @@ export interface Question {
   help?: string;
   options?: Array<{ id: string; label: string }>;
   placeholder?: string;
+  /**
+   * The common answers, as tap-to-fill chips under a free-text box (James,
+   * 17 Sep 2026: "the free-form boxes will give the most common answers").
+   * The box stays editable - a chip is a start, not a choice.
+   */
+  suggestions?: string[];
+  /** Chips ADD to what is there (several meters) rather than replacing it. */
+  addsUp?: boolean;
   /** Not counted towards the step being done. */
   optional?: boolean;
 }
@@ -187,6 +195,7 @@ export const PROPERTY_QUESTIONS: QuestionStep[] = [
         label: "Where is the stopcock?",
         kind: "text",
         placeholder: "Under the kitchen sink, left-hand cupboard",
+        suggestions: ["Under the kitchen sink", "In the downstairs toilet", "Under the stairs", "In the airing cupboard", "In the utility room", "Outside, by the front path"],
         help: "A burst pipe is minutes, not hours. This is the single most useful line on this page.",
       },
       {
@@ -194,6 +203,7 @@ export const PROPERTY_QUESTIONS: QuestionStep[] = [
         label: "Where is the fuse box?",
         kind: "text",
         placeholder: "Hallway, above the front door",
+        suggestions: ["Under the stairs", "In the hallway, above the front door", "In a kitchen cupboard", "In the garage", "In the porch", "In the cupboard by the front door"],
       },
     ],
   },
@@ -208,11 +218,41 @@ export const PROPERTY_QUESTIONS: QuestionStep[] = [
         label: "Where are the meters?",
         kind: "text",
         placeholder: "Electric in the hall cupboard, gas outside by the gate",
+        addsUp: true,
+        suggestions: ["Electric under the stairs", "Electric in a box outside", "Gas in a box outside", "Gas under the stairs", "Both in a box outside", "In the communal meter cupboard", "Water meter in the pavement outside"],
       },
-      { id: "electric-supplier", label: "Electricity supplier", kind: "text", placeholder: "Octopus", optional: true },
-      { id: "gas-supplier", label: "Gas supplier", kind: "text", placeholder: "British Gas", optional: true },
-      { id: "water-supplier", label: "Water company", kind: "text", placeholder: "Severn Trent", optional: true },
-      { id: "council-tax-band", label: "Council tax band", kind: "text", placeholder: "C", optional: true },
+      {
+        id: "electric-supplier",
+        label: "Electricity supplier",
+        kind: "text",
+        placeholder: "Octopus",
+        optional: true,
+        suggestions: ["British Gas", "Octopus Energy", "EDF", "E.ON Next", "OVO", "Scottish Power", "Not sure"],
+      },
+      {
+        id: "gas-supplier",
+        label: "Gas supplier",
+        kind: "text",
+        placeholder: "British Gas",
+        optional: true,
+        suggestions: ["British Gas", "Octopus Energy", "EDF", "E.ON Next", "OVO", "Scottish Power", "No gas at the property", "Not sure"],
+      },
+      {
+        id: "water-supplier",
+        label: "Water company",
+        kind: "text",
+        placeholder: "Severn Trent",
+        optional: true,
+        suggestions: ["Anglian Water", "Severn Trent", "Thames Water", "United Utilities", "Yorkshire Water", "South West Water", "Welsh Water", "Not sure"],
+      },
+      {
+        id: "council-tax-band",
+        label: "Council tax band",
+        kind: "text",
+        placeholder: "C",
+        optional: true,
+        suggestions: ["A", "B", "C", "D", "E", "F", "Not sure"],
+      },
     ],
   },
   {
@@ -245,12 +285,22 @@ export const PROPERTY_QUESTIONS: QuestionStep[] = [
           { id: "none", label: "There isn't one" },
         ],
       },
-      { id: "bin-day", label: "Bin collection day", kind: "text", placeholder: "Tuesday, black and green alternating", optional: true },
+      {
+        id: "bin-day",
+        label: "Bin collection day",
+        kind: "text",
+        placeholder: "Tuesday, black and green alternating",
+        optional: true,
+        addsUp: true,
+        suggestions: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "every week", "alternate weeks"],
+      },
       {
         id: "shared",
         label: "Anything shared with the neighbours?",
         kind: "long",
         placeholder: "A shared drive, a shared side gate, a communal bin store…",
+        addsUp: true,
+        suggestions: ["A shared driveway", "A shared side gate or path", "A communal bin store", "A shared garden", "Nothing shared"],
         optional: true,
       },
     ],

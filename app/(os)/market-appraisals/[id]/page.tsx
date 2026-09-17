@@ -6,6 +6,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import GuideButton from "@/components/GuideButton";
 import RexPropertyPicker from "@/components/RexPropertyPicker";
 import PropertyFile from "@/components/PropertyFile";
+import AppraisalMessages from "@/components/appraisal/AppraisalMessages";
 import ConfirmLine from "@/components/appraisal/ConfirmLine";
 import AppraisalOutcome from "@/components/AppraisalOutcome";
 import WelcomeVideoRecorder from "@/components/WelcomeVideoRecorder";
@@ -134,6 +135,25 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
   /* The property file panel, shown when asked for. */
   const [showFile, setShowFile] = useState(false);
 
+  /* The landlord conversation. Opened from the Messages link, or straight
+     away from the agent's email (?messages=1 - James, 17 Sep 2026). */
+  const [showMessages, setShowMessages] = useState(false);
+  const [readHere, setReadHere] = useState(false);
+  const markRead = useCallback(() => setReadHere(true), []);
+  const openMessages = useCallback(() => {
+    setShowMessages(true);
+    setTimeout(() => document.getElementById("messages")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+  }, []);
+  useEffect(() => {
+    if (booked === undefined) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("messages") !== "1") return;
+    params.delete("messages");
+    const qs = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+    openMessages();
+  }, [booked, openMessages]);
+
   if (booked === undefined) {
     return (
       <div className="mx-auto max-w-2xl py-16 text-center">
@@ -209,6 +229,12 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
             <WelcomeVideoRecorder compact token={pre.token} address={ma.address} />
           </span>
         )}
+        <button type="button" onClick={openMessages} className={`${pill} relative`}>
+          <DoodleIcon name="message" size={13} className="text-accent-dark" /> Messages
+          {!readHere && (ma.unreadMessages ?? 0) > 0 && (
+            <span className="ml-0.5 rounded-full bg-accent-dark px-1.5 py-px text-[10.5px] font-bold text-white">{ma.unreadMessages} new</span>
+          )}
+        </button>
         <button type="button" onClick={openFile} className={pill}>
           <DoodleIcon name="folder" size={13} className="text-accent-dark" /> Property file
         </button>
@@ -445,6 +471,12 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
           </span>
         </p>
       </section>
+
+      {showMessages && (
+        <div id="messages" className="fade-up scroll-mt-6">
+          <AppraisalMessages appraisalId={ma.id} landlord={ma.landlord} onRead={markRead} />
+        </div>
+      )}
 
       {/* ── the property file, when asked for ───────────────────────────── */}
       {/* Certificates the landlord hands over at the appraisal are filed NOW,

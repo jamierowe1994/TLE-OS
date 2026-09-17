@@ -129,6 +129,8 @@ export interface MarketAppraisal {
   /** The small ticks inside each stage - "have I sent this, done this, made
    *  this" - read from the record by lib/appraisal-stage. */
   ticks?: AppraisalTick[];
+  /** Landlord messages the agent has not opened yet (the list read only). */
+  unreadMessages?: number;
 }
 
 /** One thing that has or has not happened on the file, filed under its stage. */

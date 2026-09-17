@@ -309,6 +309,38 @@ function Field({
             className={`${FIELD} resize-y`}
           />
         )}
+
+        {/* The usual answers, one tap each. A chip fills the box (or adds to
+            it, where several things are listed) and the box stays theirs to
+            edit. */}
+        {(q.kind === "text" || q.kind === "long") && q.suggestions?.length ? (
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {q.suggestions.map((sug) => {
+              const has = chosen.toLowerCase().includes(sug.toLowerCase());
+              return (
+                <button
+                  key={sug}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    if (!q.addsUp) return onChange(sug);
+                    if (has) return;
+                    const base = chosen.trim().replace(/[,\s]+$/, "");
+                    onChange(base ? `${base}, ${sug.charAt(0).toLowerCase()}${sug.slice(1)}` : sug);
+                  }}
+                  className="rounded-full border px-3 py-1.5 text-[12px] transition-colors"
+                  style={
+                    has
+                      ? { background: "#56423e", borderColor: "#56423e", color: "#fff" }
+                      : { borderColor: "rgba(86,66,62,0.22)", background: "#fff", color: "#56423e" }
+                  }
+                >
+                  {sug}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
       </div>
     </div>
   );

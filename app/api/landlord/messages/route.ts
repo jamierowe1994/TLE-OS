@@ -8,6 +8,9 @@ import {
   recordLandlordMessage,
 } from "@/lib/landlord-account";
 import { sendEmail } from "@/lib/resend";
+import { agentMessageEmail } from "@/lib/appraisal-messages";
+import { recipientFor } from "@/lib/agent-recipient";
+import { publicOrigin } from "@/lib/origin";
 import { hasDb } from "@/lib/db";
 
 /**
@@ -53,22 +56,30 @@ export async function POST(req: NextRequest) {
   const journeys = await landlordJourneys(me);
   const journey = appraisalId ? journeys.find((j) => j.appraisal.id === appraisalId) : journeys[0];
   const agent = journey?.decks[0]?.deck.agent ?? null;
-  const to = agent?.email?.trim() || OFFICE;
+  /* The agent on the appraisal first - a file with no deck on it yet still
+     has an agent - then whoever sent the deck, then the office. */
+  const named = journey?.appraisal.agent ? await recipientFor(journey.appraisal.agent, { email: "", name: "" }) : null;
+  const to = named?.email || agent?.email?.trim() || OFFICE;
   const property = journey?.appraisal.address ?? "your property";
 
   let message;
   try {
-    message = await recordLandlordMessage({ accountId: me.id, appraisalId, body: text, toEmail: to });
+    /* Filed against the property it is about, even when the page did not say,
+       so it lands in that appraisal's Messages panel. */
+    message = await recordLandlordMessage({ accountId: me.id, appraisalId: appraisalId ?? journey?.appraisal.id ?? null, body: text, toEmail: to });
   } catch (e) {
     console.error("[landlord/messages] could not store", e);
     return NextResponse.json({ ok: false, error: "That didn't save. Try again in a moment." }, { status: 502 });
   }
 
-  const subject = `${me.name} about ${property}`;
-  const html = `<p>${escape(me.name)} wrote from their property file about <strong>${escape(property)}</strong>:</p><blockquote style="border-left:3px solid #ccc;margin:12px 0;padding:8px 12px;white-space:pre-wrap">${escape(text)}</blockquote><p>Reply to this email and it goes straight to them (${escape(me.email)}).</p>`;
+  /* A proper email with a button straight into the Messages panel on the
+     appraisal (James, 17 Sep 2026: "when they click it, it'll launch the
+     agent straight ... into the message tab"). */
+  const link = `${publicOrigin(req)}/market-appraisals/${encodeURIComponent(journey?.appraisal.id ?? appraisalId ?? "")}?messages=1`;
+  const mail = agentMessageEmail({ landlord: me.name, address: property, body: text, link, landlordEmail: me.email });
   let emailed = false;
   try {
-    await sendEmail({ to, subject, html, text: `${me.name} wrote about ${property}:\n\n${text}\n\nReply to reach them: ${me.email}`, replyTo: me.email });
+    await sendEmail({ to, subject: mail.subject, html: mail.html, text: mail.text, replyTo: me.email });
     await markMessageEmailed(message.id, null);
     emailed = true;
   } catch (e) {

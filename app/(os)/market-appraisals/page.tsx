@@ -376,6 +376,12 @@ function AppraisalCard({ m, tile }: { m: MarketAppraisal & { live: MaStage }; ti
 
   const badges = (
     <>
+      {(m.unreadMessages ?? 0) > 0 && (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-dark px-2.5 py-1 text-[11px] font-semibold text-white">
+          <DoodleIcon name="message" size={11} />
+          {m.unreadMessages === 1 ? "New message" : `${m.unreadMessages} new messages`}
+        </span>
+      )}
       {missing && <span className="rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-semibold text-accent-dark">No figure yet</span>}
       {m.valuation ? (
         <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: SAGE_WASH, color: SAGE_INK }}>

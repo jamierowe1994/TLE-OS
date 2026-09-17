@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { unreadByAppraisal } from "@/lib/appraisal-messages";
 import { stopLeadCampaigns } from "@/lib/campaign-store";
 import { listAppraisals, createAppraisal, recordValuation, setOutcome } from "@/lib/appraisal-store";
 import { withLiveStages } from "@/lib/appraisal-stage";
@@ -37,7 +38,9 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    return NextResponse.json({ appraisals: await withLiveStages(await listAppraisals()) });
+    const [rows, unread] = await Promise.all([listAppraisals().then(withLiveStages), unreadByAppraisal()]);
+    /* New landlord messages, for the "new message" pill on the list and the file. */
+    return NextResponse.json({ appraisals: rows.map((a: { id: string }) => ({ ...a, unreadMessages: unread.get(a.id) ?? 0 })) });
   } catch (e) {
     /* An empty list with a reason, not a 500. The screen renders the error
        rather than a stale or invented row, which is the honest state. */
