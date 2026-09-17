@@ -780,6 +780,8 @@ export default function LeadDrawer({
   const [personName, setPersonName] = useState("");
   /** What happened to the last edit — saved, saved-but-not-mirrored, or failed. */
   const [sync, setSync] = useState<{ busy: boolean; text: string; bad?: boolean } | null>(null);
+  /** Set by the first save, so a slow read-back on open cannot undo it. */
+  const editedRef = useRef(false);
   // Properties attached in-session, plus the tick that confirms one landed.
   const [added, setAdded] = useState<string[]>([]);
   const [justAdded, setJustAdded] = useState(false);
@@ -934,6 +936,26 @@ export default function LeadDrawer({
     setContact({ phone: lead.phone, email: lead.email, area: lead.preferred });
     setPersonName(lead.name);
     setSync(null);
+    editedRef.current = false;
+    /* The board's copy of this person can be older than the last save - the
+       list is cached - so an OS record reads itself back on open. Without it
+       an address changed a minute ago came back as the old one (James,
+       17 Sep 2026). A save made before this lands wins. */
+    if (!isOsLead(lead.id)) return;
+    let live = true;
+    fetch(`/api/contacts/${osContactIdFrom(lead.id)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { contact?: { name?: string; email?: string; mobile?: string; address?: string; postcode?: string } }) => {
+        const c = j?.contact;
+        if (!live || !c || editedRef.current) return;
+        const address = (c.address ?? "").trim();
+        const pc = (c.postcode ?? "").trim();
+        const area = address && pc && !address.replace(/\s/g, "").toUpperCase().includes(pc.replace(/\s/g, "").toUpperCase()) ? `${address}, ${pc}` : address;
+        setContact({ phone: c.mobile ?? "", email: c.email ?? "", area: area || lead.preferred });
+        if (c.name) setPersonName(c.name);
+      })
+      .catch(() => { /* the board's copy stands */ });
+    return () => { live = false; };
   }, [lead]);
 
   /* ── Saving an edit, for people the OS owns ───────────────────────────────
@@ -948,6 +970,7 @@ export default function LeadDrawer({
 
   async function saveField(patch: Record<string, string>) {
     if (!lead || !ours) return;
+    editedRef.current = true;
     setSync({ busy: true, text: "Saving…" });
     try {
       const r = await fetch(`/api/contacts/${osContactIdFrom(lead.id)}`, {
@@ -963,12 +986,13 @@ export default function LeadDrawer({
       /* Saved here is the fact that matters; the mirror is reported after it,
          and a mirror that failed must not read as a failed save. */
       setSync(
-        j.sync?.ok
+        /* Not in REX yet (or never, for a test) is not a failed save. */
+        j.sync?.ok || (j.sync as { reason?: string } | undefined)?.reason === "not_in_rex"
           ? { busy: false, text: "Saved" }
           : { busy: false, text: `Saved here. ${j.sync?.detail ?? "Not backed up."}`, bad: true }
       );
     } catch {
-      setSync({ busy: false, text: "That didn't save — the connection dropped.", bad: true });
+      setSync({ busy: false, text: "That didn't save - the connection dropped.", bad: true });
     }
   }
 
@@ -1234,6 +1258,42 @@ export default function LeadDrawer({
       setFilling(false);
     }
   }
+  /**
+   * The landlord's address IS the property on a landlord lead (James,
+   * 17 Sep 2026: "if I change the address on a property, the property address
+   * doesn't stick"). It saved to the contact, but the heading, the lookups and
+   * the appraisal read the property facts first - and once the wand had filled
+   * those, a changed address changed nothing else. So the edit carries to the
+   * property: the same place (same postcode) keeps its facts, a different one
+   * starts clean so last house's bedrooms and photo are not shown against it.
+   */
+  function landlordAddress(v: string) {
+    const next = v.trim();
+    const shown = real(contact.area) || propAddress;
+    if (!next || next === shown) return;
+    setContact((c) => ({ ...c, area: next }));
+    const pcOf = (s?: string | null) => (s ?? "").match(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i)?.[0]?.toUpperCase().replace(/\s+/g, "") ?? "";
+    const pc = next.match(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i)?.[0]?.toUpperCase() ?? null;
+    void saveField({ address: next, ...(pc ? { postcode: pc } : {}) });
+    if (real(prop.address)) {
+      const samePlace = Boolean(pcOf(prop.address)) && pcOf(prop.address) === pcOf(next);
+      changeProp(samePlace ? { ...prop, address: next } : { ...EMPTY_PROPERTY, address: next, postcode: pc });
+      if (!samePlace) setFillNote("A new address, so the old property details were cleared. Press the wand to find this one.");
+    }
+  }
+
+  /* Said under the details, where the edit was made: saving, then Saved. */
+  const saveLine = ours && sync ? (
+    <p className={`mt-2 flex items-center gap-1.5 text-[11px] ${sync.bad ? "text-accent-dark" : "text-muted"}`} aria-live="polite">
+      {sync.busy ? (
+        <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+      ) : !sync.bad ? (
+        <span aria-hidden className="text-[#1e7a3c]">✓</span>
+      ) : null}
+      {sync.text}
+    </p>
+  ) : null;
+
   const pickRex = (h: { id: string; address: string; image: string | null }) => {
     changeProp({ ...prop, rexPropertyId: h.id, address: h.address, image: h.image ?? prop.image, matched: "rex" });
     setNearMisses([]);
@@ -2081,12 +2141,14 @@ export default function LeadDrawer({
                         copyable
                         address
                         onChange={(v) => {
+                          if (v === contact.area) return;
                           setContact((c) => ({ ...c, area: v }));
                           const pc = v.match(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i)?.[0];
                           void saveField({ address: v, ...(pc ? { postcode: pc.toUpperCase() } : {}) });
                         }}
                       />
                     </div>
+                    {saveLine}
                     {passport?.done && passport.summary && (
                       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-line/50 pt-3 text-[12px]">
                         {([
@@ -2275,13 +2337,10 @@ export default function LeadDrawer({
                         value={real(contact.area) || propAddress}
                         copyable
                         address
-                        onChange={(v) => {
-                          setContact((c) => ({ ...c, area: v }));
-                          const pc = v.match(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i)?.[0];
-                          void saveField({ address: v, ...(pc ? { postcode: pc.toUpperCase() } : {}) });
-                        }}
+                        onChange={(v) => landlordAddress(v)}
                       />
                     </div>
+                    {saveLine}
                   </section>
 
                   {/* The property: the facts, and the wand that fills them in. */}
