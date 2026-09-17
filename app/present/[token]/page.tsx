@@ -129,7 +129,7 @@ export default async function PresentPage({
   }
 
   /* The builder's own ticks are for the builder; the landlord's page has no use for them. */
-  deck = { ...deck, builder: null };
+  deck = { ...deck, builder: null, terms: deck.terms ? { ...deck.terms, signUrl: null } : deck.terms };
   return <PresentDeck token={row.token} deck={deck} slides={slidesFor(deck)} />;
 }
 

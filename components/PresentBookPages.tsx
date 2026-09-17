@@ -1514,7 +1514,7 @@ export function BookTerms({ deck }: { deck: Deck }) {
           ))}
         </ol>
         <p className="mt-6 max-w-[760px] text-[15px] leading-[1.6] text-black/60">
-          {deck.terms?.summary ?? (deck.terms?.signUrl ? "Your terms are ready - press Sign the terms whenever you are." : `Your terms are being prepared. ${deck.agent.firstName || "Your agent"} will send them across, and Sign the terms will take you straight to them.`)}
+          {deck.terms?.summary ?? (actions ? "Your terms are ready - press Sign the terms whenever you are." : `Your terms are being prepared. ${deck.agent.firstName || "Your agent"} will send them across, and Sign the terms will take you straight to them.`)}
         </p>
       </div>
     </div>

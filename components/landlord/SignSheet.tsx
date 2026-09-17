@@ -265,16 +265,27 @@ export default function SignSheet({
     if (!root || !started || vw < SPLIT_MIN) return;
     let stop = false;
     let raf = 0;
-    let last = "";
-    /* Frames since the target last moved, and consecutive frames the panel has
-       failed to paint. The check below only counts once the layout has stopped
-       moving: during the slide-left, and while their own form re-renders
-       between steps, a miss means nothing. Reading it as a failure is what
-       turned the column off on a screen where it was working. */
-    let settled = 0;
-    let misses = 0;
+    /* Frames spent trying to put it in place without it landing there. */
+    let tries = 0;
     const clear = (st: CSSStyleDeclaration) =>
       ["position", "right", "bottom", "width", "top", "left"].forEach((k) => st.removeProperty(k));
+    /**
+     * PLACED EVERY FRAME, CHECKED BY WHERE IT IS (17 Sep 2026).
+     *
+     * James: "sometimes the right-hand side box is not showing ... it's really
+     * inconsistent". Two things did that. Their form replaces .form-container
+     * when it moves between steps, and the new element arrived without our
+     * styles - but the slot had not moved, so nothing re-placed it and it fell
+     * to the foot of the contract. And the old "is it painted" test asked the
+     * document what sat at the panel's centre, misread it on some opens, and
+     * gave the column up for good.
+     *
+     * So every frame: find the panel as it is now, and if it is not exactly on
+     * the slot (a new element, a moved slot, anything), put it there again.
+     * It counts as placed when its own box sits on the slot. Only if it will
+     * not land there for two seconds straight is the column given up, which
+     * is the one case the foot of the contract is better than nothing.
+     */
     const tick = () => {
       if (stop) return;
       const fc = root.querySelector(".form-container");
@@ -286,11 +297,16 @@ export default function SignSheet({
           const mini = root.querySelector(".minimize-form-button");
           if (mini instanceof HTMLElement) mini.click();
         }
-        const key = Math.round(to.left) + ":" + Math.round(to.top);
-        if (key !== last) {
-          last = key;
-          settled = 0;
-          misses = 0;
+        const now = fc.getBoundingClientRect();
+        const onSlot =
+          fc.style.getPropertyValue("position") === "fixed" &&
+          Math.abs(now.left - to.left) < 1.5 &&
+          Math.abs(now.top - to.top) < 1.5 &&
+          Math.abs(now.width - COL_W) < 1.5;
+        if (onSlot && now.height > 8) {
+          tries = 0;
+          setPlaced(true);
+        } else {
           const st = fc.style;
           st.setProperty("position", "fixed", "important");
           st.setProperty("right", "auto", "important");
@@ -301,36 +317,8 @@ export default function SignSheet({
           const origin = fc.getBoundingClientRect();
           st.setProperty("top", to.top - origin.top + "px", "important");
           st.setProperty("left", to.left - origin.left + "px", "important");
-        } else if (settled++ > 12) {
-          /**
-           * IS IT ACTUALLY ON THE SCREEN - not "does it have a rectangle".
-           *
-           * The check this replaces read getBoundingClientRect and was
-           * satisfied, twice, while James was looking at nothing: a CLIPPED
-           * element still reports its rectangle exactly where you put it. So
-           * this asks the document what is painted at the panel's own centre.
-           * If that is not the form, something is covering or clipping it and
-           * the column is not worth having.
-           *
-           * Only once the layout has held still, and only after a run of
-           * misses - a single frame proves nothing and turning the column off
-           * by mistake is its own bug.
-           */
-          const now = fc.getBoundingClientRect();
-          /* root.elementFromPoint, not document's: document's retargets to the
-             host and answers DOCUSEAL-FORM whether the panel is painted there
-             or not, which is a check that cannot fail and therefore is not a
-             check. This one names the element actually on top. */
-          const at =
-            typeof root.elementFromPoint === "function"
-              ? root.elementFromPoint(now.left + now.width / 2, now.top + now.height / 2)
-              : null;
-          const painted = at != null && at.closest(".form-container") != null;
-          const ok = now.width > 8 && now.height > 8 && painted;
-          misses = ok ? 0 : misses + 1;
-          if (ok) setPlaced(true);
-          if (misses > 20) {
-            clear(fc.style);
+          if (++tries > 120) {
+            clear(st);
             setPlaced(false);
             return;
           }
@@ -384,6 +372,47 @@ export default function SignSheet({
      written for one version of the contract must never label the boxes of
      another. */
   const trust = live.count > 0 && live.count === steps.length;
+
+  /**
+   * SKIP, for the steps that are optional (James, 17 Sep 2026: "it's not
+   * obvious that they can skip that ... we'll give them a skip button").
+   *
+   * Their form moves past an optional box left empty when its own Next is
+   * pressed, so that is what Skip presses. The cooling-off waiver comes as a
+   * pair - a signature and the date of it - and a date for a waiver they did
+   * not sign means nothing, so skipping one skips the rest of the optional
+   * run. Only offered when our list is known to match their steps.
+   */
+  const currentOptional = trust && live.current >= 0 && steps[live.current]?.optional === true;
+  const skipsToEnd = currentOptional && steps.slice(live.current).every((x) => x.optional);
+  const skipping = useRef(false);
+  const skip = useCallback(() => {
+    if (!root || skipping.current) return;
+    skipping.current = true;
+    const press = () => {
+      const btn =
+        root.querySelector('form.steps-form button[type="submit"]') ??
+        root.querySelector(".submit-form-button, .complete-button");
+      if (btn instanceof HTMLElement) btn.click();
+    };
+    const from = live.current;
+    press();
+    /* Then keep going while the step they land on is also optional. */
+    let waited = 0;
+    const t = window.setInterval(() => {
+      waited++;
+      const dots = Array.from(root.querySelectorAll(DOTS)) as HTMLElement[];
+      const at = dots.findIndex((d) => d.className.includes("steps-progress-current"));
+      if (at > from && steps[at]?.optional) {
+        window.clearInterval(t);
+        press();
+        skipping.current = false;
+      } else if (at > from || waited > 20) {
+        window.clearInterval(t);
+        skipping.current = false;
+      }
+    }, 150);
+  }, [root, live.current, steps]);
   const rows: SigningStep[] = trust
     ? steps
     : Array.from({ length: live.count }, (_, i) => ({
@@ -500,6 +529,16 @@ export default function SignSheet({
               <button type="button" onClick={onClose} className="shrink-0 text-[12px] text-muted underline transition hover:text-ink">
                 {closeLabel}
               </button>
+              {/* No column on a smaller screen, so the skip lives here. */}
+              {started && currentOptional && !split && (
+                <button
+                  type="button"
+                  onClick={skip}
+                  className="shrink-0 rounded-full border border-[#56423e]/40 px-4 py-2 text-[12.5px] font-semibold text-[#56423e]"
+                >
+                  {skipsToEnd ? "Skip this and finish" : "Skip this, it's optional"}
+                </button>
+              )}
               {!started && (
                 <button
                   type="button"
@@ -582,6 +621,21 @@ export default function SignSheet({
                 </ol>
               )}
             </div>
+            {/* Optional, said plainly, with the way past it. */}
+            {started && currentOptional && (
+              <div className="mt-3 flex items-center gap-3 bg-white px-5 py-3">
+                <p className="min-w-0 flex-1 text-[12px] leading-relaxed text-muted">
+                  This one is optional. You can sign your contract without it.
+                </p>
+                <button
+                  type="button"
+                  onClick={skip}
+                  className="shrink-0 rounded-full border border-[#56423e]/40 px-4 py-2 text-[12.5px] font-semibold text-[#56423e] transition-colors hover:bg-[#56423e] hover:text-white"
+                >
+                  {skipsToEnd ? "Skip and finish" : "Skip"}
+                </button>
+              </div>
+            )}
             {/* Where their panel goes. It is measured, never computed - the one
                 thing that says where the column's second box belongs. */}
             <div ref={slot} className="mt-3 h-px w-full" aria-hidden />

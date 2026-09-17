@@ -77,12 +77,16 @@ export default function PresentModal({
   const [contactOpen, setContactOpen] = useState(false);
   const [room, setRoom] = useState({ w: 0, h: 0 });
   /* The portal's contract first, the deck's own as the fallback. */
+  /* THE LANDLORD'S SIDE, ALWAYS (James, 17 Sep 2026: signing from the
+     booklet said "already signed" and showed TLE OS). The deck's own
+     terms.signUrl was minted when the AGENT built the deck, so it is the
+     agent's signing session. With an appraisal to ask about it is never used. */
   const { open: mint, signing, busy, note } = useSigning({
     appraisalId: sign?.appraisalId ?? null,
-    url: sign?.url ?? deck.terms?.signUrl ?? null,
+    url: sign?.appraisalId ? null : (sign?.url ?? null),
   });
   const signUrl = signing;
-  const canSign = Boolean(sign?.appraisalId || sign?.url || deck.terms?.signUrl);
+  const canSign = Boolean(sign?.appraisalId || sign?.url);
 
   const openSign = useCallback(() => {
     setSignUp(true);

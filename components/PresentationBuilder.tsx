@@ -217,18 +217,13 @@ export default function PresentationBuilder({
     if (kind !== "post-appraisal" || !appraisal?.valuation) return {};
     /* Best effort. A signing session that cannot be opened must not stop a
        deck being built — the offer is still worth sending. */
-    let signUrl: string | null = null;
-    try {
-      const r = await fetch("/api/docuseal/sign", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: appraisal.id }),
-      });
-      const j = (await r.json()) as { ok?: boolean; embedSrc?: string };
-      if (j.ok && j.embedSrc) signUrl = j.embedSrc;
-    } catch {
-      /* left null — the slide explains rather than dead-ends */
-    }
+    /* NO SIGNING LINK ON THE DECK (17 Sep 2026). This used to draw up the
+       contract here and freeze the session it got back into the deck - but
+       that session is the AGENT's (they build the deck, they sign first), so
+       a landlord pressing Sign from the booklet opened James Rowe's half,
+       "already signed". The landlord's own session is found for them in
+       their file (app/api/landlord/sign). */
+    const signUrl: string | null = null;
     const level = SERVICE_LEVELS.find((s) => s.id === appraisal.serviceLevel);
     return {
       valuation: {

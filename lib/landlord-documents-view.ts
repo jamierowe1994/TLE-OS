@@ -87,7 +87,10 @@ export async function loadLandlordDocuments(me: LandlordAccount): Promise<DocsVi
   if (j) {
     const signed = j.signed[0] ?? null;
     const post = j.decks.find((d) => d.kind === "post-appraisal") ?? null;
-    const signUrl = post?.deck.terms?.signUrl ?? null;
+    /* Signed from their home page, where their own session is found. A link
+       frozen into the deck was the agent's (17 Sep 2026). */
+    void post;
+    const signUrl = j.appraisal.termsSentAt ? "/landlord" : null;
     fromUs.push({
       title: "Terms of business",
       sub: signed ? `Signed  •  ${day(signed.signedAt) ?? ""}` : signUrl ? "Ready for you to sign" : "On its way from your agent",

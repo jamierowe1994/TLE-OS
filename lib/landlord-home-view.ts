@@ -211,7 +211,9 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
   const readIt = shown && landlordId ? await deckReadBy(landlordId, shown.token) : false;
   const deckAgent = latest?.deck.agent ?? null;
   const property = latest?.deck.property ?? null;
-  const signUrl = post?.deck.terms?.signUrl ?? null;
+  /* Ready to sign once the agent has sent the terms, not when a deck happens
+     to carry a link (that link was the agent's own - see the builder). */
+  const signUrl = a.termsSentAt ? "sent" : null;
   const signed = j.signed.length > 0;
   /* Only asked for once they have signed, so only read then - a questionnaire
      nobody has been offered has nothing to report. */
@@ -346,7 +348,11 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
          tiles exactly as they were. */
       presentationOpened: shown ? readIt : undefined,
     }),
-    presentation: shown ? { ...shown.deck, builder: null } : null,
+    /* Any signing link frozen into an older deck is the agent's - see the
+       builder. The file finds the landlord's own. */
+    presentation: shown
+      ? { ...shown.deck, builder: null, terms: shown.deck.terms ? { ...shown.deck.terms, signUrl: null } : shown.deck.terms }
+      : null,
     presentationToken: shown?.token ?? null,
     documents,
     marketing,
