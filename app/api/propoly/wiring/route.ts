@@ -88,8 +88,18 @@ export async function GET() {
   let spec: Spec | null = null;
   let specPath: string | null = null;
   const attempts: Array<{ path: string; status: number }> = [];
+  /* EVERY CALL ON THIS ROUTE IS A PROBE.
+
+     A refusal here is the finding, not a failure — the census asks about paths
+     that may not exist and the control asks about one that certainly does not.
+     Without `probe` each of those 403s raised an automatic bug, so opening the
+     wiring sheet filed tickets and emailed the owners about its own questions.
+     The paths the OS calls in anger report as they always did, from the screens
+     that call them. */
+  const probe = { probe: true } as const;
+
   for (const p of ["/api-docs", "/api-docs.json", "/swagger.json"]) {
-    const res = await propolyGet(p);
+    const res = await propolyGet(p, probe);
     attempts.push({ path: p, status: res.status });
     if (res.status === 200 && res.body && typeof res.body === "object" && "paths" in (res.body as object)) {
       spec = res.body as Spec;
@@ -137,7 +147,7 @@ export async function GET() {
        that certainly does not exist ALSO answers 403, the census proves
        nothing. So one deliberately absent path is asked alongside the rest and
        reported, and the census is only readable against it. */
-    const controlRes = await propolyGet("/api/v1/definitely_not_a_real_endpoint_xyz");
+    const controlRes = await propolyGet("/api/v1/definitely_not_a_real_endpoint_xyz", probe);
     const control = {
       path: "/api/v1/definitely_not_a_real_endpoint_xyz",
       status: controlRes.status,
@@ -149,7 +159,7 @@ export async function GET() {
 
     const census = await Promise.all(
       CANDIDATES.map(async (p) => {
-        const r = await propolyGet(p);
+        const r = await propolyGet(p, probe);
         return {
           path: p,
           status: r.status,
@@ -178,7 +188,7 @@ export async function GET() {
        never the value itself. A diagnostics route should not print a landlord's
        address or a signed URL that works for a week for anyone holding it. */
     const shapeOf = async (path: string) => {
-      const r = await propolyGet(path);
+      const r = await propolyGet(path, probe);
       const body = r.body as Record<string, unknown> | null;
       /* FIND THE FIRST ARRAY ANYWHERE, rather than guessing its name.
       
@@ -250,7 +260,7 @@ export async function GET() {
        would be the same mistake as reading the pagination envelope. So: take a
        real uuid from the list, then ask for that one record. */
     const firstUuid = async (listPath: string, key: string) => {
-      const r = await propolyGet(listPath);
+      const r = await propolyGet(listPath, probe);
       const rows = (r.body as Record<string, unknown> | null)?.[key];
       const head = Array.isArray(rows) ? (rows[0] as Record<string, unknown>) : null;
       return typeof head?.uuid === "string" ? head.uuid : null;
@@ -285,7 +295,7 @@ export async function GET() {
             `/api/v1/documents?property_uuid=${propUuid}`,
             ...(dealUuid ? [`/api/v1/deals/${dealUuid}/documents`] : []),
           ].map(async (path) => {
-            const r = await propolyGet(path);
+            const r = await propolyGet(path, probe);
             return {
               path: path.replace(propUuid, "{uuid}").replace(dealUuid ?? "~", "{deal}"),
               status: r.status,
@@ -302,7 +312,7 @@ export async function GET() {
        are first-class in their model and the only question is which route
        serves the file — which is a very different conversation with them than
        "does this exist". Configuration only; no personal data. */
-    const typesRes = await propolyGet("/api/v1/configuration/document_types");
+    const typesRes = await propolyGet("/api/v1/configuration/document_types", probe);
     const typesBody = typesRes.body as Record<string, unknown> | null;
     const typeList = (() => {
       if (!typesBody) return [];
