@@ -71,7 +71,8 @@ export interface ListingDetails {
   parking: string | null;
   epc: { rating: string | null; expiry: string | null; chartUrl: string | null; fileUrl: string | null };
   material: { electricity: string | null; water: string | null; sewerage: string | null; broadband: string | null; gas: string | null };
-  agent: { name: string | null; phone: string | null; email: string | null };
+  /** listing_agent_1. `id` is their REX user id. */
+  agent: { id: string | null; name: string | null; phone: string | null; email: string | null };
   /** The Marketing form's facts: the listing's own where it has them, else what the OS holds. */
   facts: {
     councilTaxBand: string | null;
@@ -212,7 +213,7 @@ export async function readListingDetails(id: number): Promise<ListingDetails> {
       broadband: text(p.attr_broadband),
       gas: yesNo(p.attr_has_gas),
     },
-    agent: { name: str(agent.name), phone: str(agent.phone_mobile) ?? str(agent.phone_direct), email: str(agent.email_address) },
+    agent: { id: agent.id != null ? String(agent.id) : null, name: str(agent.name), phone: str(agent.phone_mobile) ?? str(agent.phone_direct), email: str(agent.email_address) },
     facts: {
       councilTaxBand: str(p.meta_tax_band) ?? str(p.meta_rates_council) ?? held.councilTaxBand ?? null,
       parking: text(p.attr_parking_type) ?? held.parking ?? null,

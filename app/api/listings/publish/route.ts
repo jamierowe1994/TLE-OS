@@ -9,6 +9,7 @@ import { publishGaps } from "@/lib/listing-publish-check";
 import { isExpiredToken, rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
 import { rexTokenFor } from "@/lib/rex-user";
 import { forAgent, isOwner } from "@/lib/agent-words";
+import { ensureRexLink, findUserByEmail, findUserByRexId, type OsUser } from "@/lib/users";
 
 /**
  * Putting a listing on Rightmove, OnTheMarket and Zoopla, and taking it off.
@@ -43,6 +44,17 @@ import { forAgent, isOwner } from "@/lib/agent-words";
  *      because the middleware fails open and this one reaches the public.
  *   3. The person is the owner, Susan, or an agent the switch lets through.
  *      Kirstie, marketing and support work from their own screens.
+ *
+ * ── It goes live as the listing's agent, never as whoever pressed it ─────
+ *
+ * REX stamps system_publication_user_id with the account that called publish,
+ * and the Newman helper bot (HelperBot@newman.uk.com, "Orca Message") copies
+ * every enquiry to that person. James pushed 843312 for Rhiannon on 15 Sep
+ * and from then on her Williams Court enquiries also landed in his inbox.
+ * REX has no way to change that stamp afterwards and no unpublish, so the
+ * only fix is before the press: publish with listing_agent_1's own REX
+ * sign-in. The office account is James too, so it is no fallback - with no
+ * sign-in for the agent the push is refused and says who has to do it.
  */
 
 export const dynamic = "force-dynamic";
@@ -69,6 +81,21 @@ function portalMessages(v: unknown): string[] {
   if (Array.isArray(v)) return v.map(String);
   if (v && typeof v === "object") return Object.values(v as Record<string, unknown>).flatMap((x) => (Array.isArray(x) ? x.map(String) : [String(x)]));
   return [];
+}
+
+/**
+ * The REX sign-in to publish with: the listing's agent's, whoever pressed it.
+ * Answers an error sentence instead when the agent has none.
+ */
+async function agentToken(actor: OsUser, agent: { id: string | null; name: string | null; email: string | null }): Promise<{ token: string; asActor: boolean; name: string } | { error: string }> {
+  if (!agent.id) return { error: "The listing has no agent yet, so nobody would get its enquiries. Choose the agent first." };
+  const first = agent.name?.split(" ")[0] ?? "The listing's agent";
+  const same = (await ensureRexLink(actor)) === agent.id || (!!agent.email && agent.email.trim().toLowerCase() === actor.email.trim().toLowerCase());
+  const owner = same ? actor : ((await findUserByRexId(agent.id)) ?? (agent.email ? await findUserByEmail(agent.email) : null));
+  const token = owner ? await rexTokenFor(owner.id).catch(() => null) : null;
+  if (token) return { token, asActor: same, name: agent.name ?? first };
+  if (same) return { error: "Connect your sign-in to the listings system on your Profile first. Enquiries go to whoever puts a listing live, and without it they would go to the office." };
+  return { error: `This one has to go live as ${first}, because enquiries go to whoever puts a listing live. ${first} needs to connect their sign-in to the listings system on their Profile, then either of you can push it.` };
 }
 
 function listingId(v: unknown): number | null {
@@ -143,6 +170,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: isOwner(actor) ? before.error ?? "REX did not say where the listing is." : plain }, { status: 502 });
     }
     const was = whereFrom(before.result);
+    /* Publish as the listing's agent (see the header); off and on as them. */
+    let token: string | null = null;
+    let as: { asActor: boolean; name: string } = { asActor: true, name: actor.name };
 
     if (action === "publish") {
       if (was.status === "published") {
@@ -169,13 +199,17 @@ export async function POST(req: NextRequest) {
       if (blockers.length) {
         return NextResponse.json({ ok: false, error: `The portals will not take it yet: ${blockers.join("; ")}`, blockers }, { status: 422 });
       }
+      const who = await agentToken(actor, details.agent);
+      if ("error" in who) return NextResponse.json({ ok: false, error: who.error, needsAgent: true }, { status: 409 });
+      token = who.token;
+      as = who;
     } else if (was.status !== "published") {
       return NextResponse.json({ ok: false, error: "It is not published yet, so there is nothing to take off." }, { status: 409 });
+    } else {
+      /* As THEM, so REX says who did it. No token falls to the office
+         account, the same as the write-up. */
+      token = await rexTokenFor(actor.id);
     }
-
-    /* As THEM, so REX says who pushed it. No token falls to the office
-       account, the same as the write-up. */
-    const token = await rexTokenFor(actor.id);
     const res =
       action === "publish"
         ? await rexCall("ListingPublication", "publish", { listing_id: id }, token)
@@ -187,7 +221,8 @@ export async function POST(req: NextRequest) {
           );
     if (!res.ok) {
       if (token && isExpiredToken(res)) {
-        return NextResponse.json({ ok: false, error: "Your sign-in to the listings system has lapsed. Reconnect it on your Profile and try again.", reconnect: true }, { status: 401 });
+        const whose = as.asActor ? "Your sign-in to the listings system has lapsed. Reconnect it on your Profile" : `${as.name}'s sign-in to the listings system has lapsed. They need to reconnect it on their Profile`;
+        return NextResponse.json({ ok: false, error: `${whose} and try again.`, reconnect: as.asActor }, { status: 401 });
       }
       const plain = "The portals did not take that change. Try again in a minute.";
       return NextResponse.json({ ok: false, error: isOwner(actor) ? res.error ?? `REX refused it (${res.status}).` : plain }, { status: 502 });
@@ -202,7 +237,7 @@ export async function POST(req: NextRequest) {
       kind: "listing_publication",
       actorId: actor.id,
       actorEmail: actor.email,
-      detail: `${id}: ${action} (${was.status ?? "?"} [${was.channels.join(",")}] -> ${now.status ?? "?"} [${now.channels.join(",")}])${token ? "" : " as the office account"}`,
+      detail: `${id}: ${action} (${was.status ?? "?"} [${was.channels.join(",")}] -> ${now.status ?? "?"} [${now.channels.join(",")}])${token ? (as.asActor ? "" : ` as ${as.name}`) : " as the office account"}`,
     });
 
     return NextResponse.json({ ok: true, id, action, ...now });

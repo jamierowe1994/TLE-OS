@@ -95,6 +95,15 @@ export async function findUserByEmail(email: string): Promise<OsUser | null> {
   return rows[0] ? toUser(rows[0]) : null;
 }
 
+export async function findUserByRexId(rexUserId: string): Promise<OsUser | null> {
+  if (!hasDb() || !rexUserId) return null;
+  const rows = await q<Row>(
+    "SELECT id, email, name, role, photo, created_at, rex_user_id FROM os_users WHERE rex_user_id = $1 LIMIT 1",
+    [rexUserId]
+  );
+  return rows[0] ? toUser(rows[0]) : null;
+}
+
 /** Create a person. The FIRST person to register becomes the owner. */
 export async function createUser(params: {
   email: string;
