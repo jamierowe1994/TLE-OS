@@ -4,7 +4,6 @@ import { uid } from "@/lib/auth";
 import type { OsUser } from "@/lib/users";
 import { saveContact } from "@/lib/contacts-store";
 import { createAppraisal } from "@/lib/appraisal-store";
-import { sendBookingConfirmation } from "@/lib/appraisal-confirm";
 import { landlordByEmail, upsertLandlordAccount } from "@/lib/landlord-account";
 import { startVerification } from "@/lib/verification";
 import { createPassport, markInvited } from "@/lib/passport";
@@ -12,6 +11,8 @@ import { renderTleEmail } from "@/lib/email/tle-emails";
 import { sendEmail } from "@/lib/resend";
 import { isInternalAddress } from "@/lib/email-policy";
 import { createCase } from "@/lib/plc-store";
+import { removeFromOutlook } from "@/lib/outlook-calendar";
+import { changeRexEvent } from "@/lib/rex-diary-write";
 import { KITS, type KitId, type TestWho } from "@/lib/testing-journeys";
 
 /**
@@ -24,8 +25,9 @@ import { KITS, type KitId, type TestWho } from "@/lib/testing-journeys";
  *
  *   tenant-enquiry    a tenant lead
  *   landlord-lead     a landlord lead
- *   booked-appraisal  a landlord lead, an appraisal in three days, the
- *                     booking confirmation, and a way in as that landlord
+ *   booked-appraisal  a landlord lead, an appraisal in three days, and a way
+ *                     in as that landlord (the confirmation is left for
+ *                     the tester to review and send, as on a real booking)
  *   tenant-passport   a tenant lead, a passport, the invite email
  *   plc-pack          an empty PLC pack for a test application
  *
@@ -169,8 +171,10 @@ export async function runKit(kit: KitId, me: OsUser, origin: string): Promise<Ki
     const when = new Date(ma.appointmentAt!).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" });
     said.push(`Booked an appraisal at ${TEST_ADDRESS} for ${when}.`);
 
-    const confirm = await sendBookingConfirmation({ ma, me }).catch((e) => ({ sent: false, reason: e instanceof Error ? e.message : "did not send" }));
-    said.push(confirm.sent ? `The booking confirmation is on its way to ${email}.` : `The booking confirmation did not send: ${"reason" in confirm ? confirm.reason : "unknown"}`);
+    /* Not sent (17 Sep 2026). Booking never sends the confirmation now - the
+       agent reviews and sends it from the file - so the test starts where a
+       real booking does, and checking that step is part of the test. */
+    said.push(`The booking confirmation has NOT been sent: open the appraisal to read it, change it if you like, and send it to ${email}.`);
 
     try {
       once.push({ who: "landlord", label: "Open the landlord portal as them", href: await landlordLink(email, origin) });
@@ -301,12 +305,37 @@ export async function clearMyKits(me: OsUser): Promise<{ cleared: number }> {
   const plcCases = all("plcCases");
 
   const run = (sql: string, ids: string[]) => (ids.length ? q(sql, [ids]).catch(() => []) : Promise.resolve([]));
+
+  /* WHAT A TEST SET GOING, not just what it made (17 Sep 2026). Clearing
+     James's tests left a pre-presentation and a video reminder queued for the
+     next two days, the appointment in his Outlook and in REX's diary, and the
+     travel time around it. Taken back out first, while the ids that find them
+     still exist. */
+  const refIds = [...leadIds, ...appraisals];
+  await run(`UPDATE os_scheduled_sends SET state = 'cancelled', error = 'Test cleared' WHERE state = 'queued' AND ref = ANY($1)`, refIds);
+  for (const id of appraisals) {
+    await removeFromOutlook(me.id, `appraisal|${id}`).catch(() => null);
+    const rex = await q<{ payload: { eventId?: string } }>(`SELECT payload FROM os_case_state WHERE kind = 'rex-diary' AND record_id = $1`, [id]).catch(() => []);
+    if (rex[0]?.payload?.eventId) await changeRexEvent({ userId: me.id, eventId: rex[0].payload.eventId, cancel: { reason: "organiser" } }).catch(() => null);
+  }
+  const viewingKeys = leadIds.length
+    ? await q<{ record_id: string }>(`SELECT record_id FROM os_case_state WHERE kind = 'outlook-event' AND split_part(record_id, '|', 2) = ANY($1) AND record_id LIKE 'viewing|%'`, [leadIds]).catch(() => [])
+    : [];
+  for (const v of viewingKeys) await removeFromOutlook(me.id, v.record_id).catch(() => null);
+  await run(`DELETE FROM os_case_state WHERE kind = 'confirmation-sent' AND split_part(record_id, '|', 2) = ANY($1)`, refIds);
+  const rexViewings = leadIds.length
+    ? await q<{ payload: { eventId?: string } }>(`SELECT payload FROM os_case_state WHERE kind = 'rex-viewing' AND split_part(record_id, '|', 1) = ANY($1)`, [leadIds]).catch(() => [])
+    : [];
+  for (const r of rexViewings) {
+    if (r.payload?.eventId) await changeRexEvent({ userId: me.id, eventId: r.payload.eventId, cancel: { reason: "organiser" } }).catch(() => null);
+  }
+  await run(`DELETE FROM os_case_state WHERE kind = 'rex-viewing' AND split_part(record_id, '|', 1) = ANY($1)`, leadIds);
   /* Only rows still flagged as tests, so an id that somehow pointed at a real
      contact is left alone. */
   await run(`DELETE FROM os_contacts WHERE id = ANY($1) AND is_test`, contacts);
   await run(`DELETE FROM os_market_appraisals WHERE id = ANY($1)`, appraisals);
   await run(`DELETE FROM os_case_state WHERE record_id = ANY($1)`, [...leadIds, ...appraisals]);
-  await run(`DELETE FROM os_presentations WHERE ref = ANY($1)`, leadIds);
+  await run(`DELETE FROM os_presentations WHERE ref = ANY($1)`, refIds);
   await run(`DELETE FROM os_tenant_passports WHERE token = ANY($1)`, passports);
   await run(`DELETE FROM os_plc_cases WHERE id = ANY($1)`, plcCases);
   if (rows.some((r) => r.refs?.landlordEmail)) {
