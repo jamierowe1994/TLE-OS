@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import ViewingBooker from "@/components/ViewingBooker";
+import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import { fetchMe } from "@/lib/me";
 import type { MarketAppraisal } from "@/lib/market-appraisal";
@@ -25,6 +26,7 @@ type Booking = { startsAt: string; minutes: number; by: string; at: string } | n
 
 const dayWords = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
 const partWords = (p: string) => (p === "morning" ? "morning" : p === "afternoon" ? "afternoon" : "any time");
+const minuteWords = (m: number) => (m % 60 === 0 ? (m === 60 ? "An hour" : `${m / 60} hours`) : m === 90 ? "An hour and a half" : `${m} minutes`);
 const when = (iso: string) =>
   new Date(iso).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" });
 
@@ -71,6 +73,8 @@ export default function TakeOnCard({ ma, primary, ghost }: { ma: MarketAppraisal
   }, []);
 
   const suggested = times?.slots.map((s) => `${dayWords(s.day)}, ${partWords(s.part)}`) ?? null;
+  /* The visit has happened: the next thing is the photographs off the camera. */
+  const been = Boolean(booking && new Date(booking.startsAt).getTime() + booking.minutes * 60000 < Date.now());
 
   return (
     <div>
@@ -96,17 +100,30 @@ export default function TakeOnCard({ ma, primary, ghost }: { ma: MarketAppraisal
       ) : null}
 
       {booking ? (
-        <p className="mb-3 text-[12px] leading-relaxed">
-          <span className="font-semibold">Booked for {when(booking.startsAt)}</span>
-          <span className="text-muted"> · {booking.minutes} minutes, in your calendar.</span>
-        </p>
+        <ul className="mb-3 space-y-1 text-[12.5px] leading-relaxed">
+          <li className="font-semibold">{when(booking.startsAt)}</li>
+          <li className="text-muted">{minuteWords(booking.minutes)} · in your Outlook calendar</li>
+          <li className="text-muted">Photographs, floor plan and the details for the advert</li>
+          {been && <li className="font-semibold text-ink">That visit has been. The photos come next.</li>}
+        </ul>
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => setOpen(true)} className={booking ? ghost : primary}>
-          {booking ? "Move the take-on visit" : suggested?.length ? "Book one of their times" : "Book take-on visit"}
-          {!booking && <span aria-hidden>→</span>}
-        </button>
+        {been ? (
+          <>
+            <Link href={`/market-appraisals/${ma.id}?photos=1`} className={primary}>
+              Upload the photos <span aria-hidden>→</span>
+            </Link>
+            <button type="button" onClick={() => setOpen(true)} className={ghost}>
+              Book another visit
+            </button>
+          </>
+        ) : (
+          <button type="button" onClick={() => setOpen(true)} className={booking ? ghost : primary}>
+            {booking ? "Move the take-on visit" : suggested?.length ? "Book one of their times" : "Book take-on visit"}
+            {!booking && <span aria-hidden>→</span>}
+          </button>
+        )}
       </div>
       {said && <p className="mt-2.5 text-[11.5px] leading-relaxed">{said}</p>}
 

@@ -219,10 +219,13 @@ export default function NextUp({
      * against, and the card says that rather than offering a button that
      * cannot work.
      */
+    /* No preamble here (James, 17 Sep 2026: "we can remove the subtext").
+       Before it is booked the card is the booking; once it is booked it is
+       the booking's own details; once the visit has been, it is the photos.
+       TakeOnCard knows which of those it is. */
     card = {
       icon: "pack/photo",
       title: "The Take-On Visit",
-      sub: "Terms are signed. The photographs, the floor plan and the details for the advert all come from this visit.",
       body: (
         <div>
           <TakeOnCard ma={ma} primary={primary} ghost={ghost} />

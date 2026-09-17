@@ -56,6 +56,8 @@ export async function POST(req: NextRequest) {
     epcRating?: string | null;
     photos?: string[];
     current?: string | null;
+    /** What the agent asked for before it wrote - they were there (17 Sep 2026). */
+    steer?: string | null;
   };
   if (!b.name) return NextResponse.json({ ok: false, error: "Which property?" }, { status: 400 });
 
@@ -84,6 +86,13 @@ export async function POST(req: NextRequest) {
         `What we know:\n${facts.map((f) => `- ${f}`).join("\n")}\n\n` +
         (photos.length ? `${photos.length} photograph${photos.length === 1 ? "" : "s"} of the property are attached. Describe only what you can actually see in them.\n\n` : "No photographs are available.\n\n") +
         (b.current ? `There is an existing draft, which may be out of date. Improve on it rather than repeating it:\n"""\n${b.current}\n"""\n\n` : "") +
+        /* THE AGENT WAS THERE. James, 17 Sep 2026: "they should also have to
+           put a pre-prompt in ... that will allow them to build that out and
+           give a better description." What they say outranks the facts only
+           where it adds; it never licenses inventing anything. */
+        (b.steer?.trim()
+          ? `The agent who visited asked for this, and they saw the property:\n"""\n${b.steer.trim().slice(0, 1200)}\n"""\nFollow it where it does not conflict with the facts or the photographs. It does not permit inventing anything.\n\n`
+          : "") +
         `Rules: British English. Warm, plain, confident; no clichés like "stunning" or "must-see". Do not invent rooms, features, dimensions, transport links or schools that are not in the facts or visible in the photographs; if you do not know the number of bedrooms, do not state one. Say what is there, then who it suits, then how to arrange a viewing with The Letting Experts. Use the write_advert tool to hand the advert back.`,
     },
   ];

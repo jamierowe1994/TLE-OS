@@ -18,13 +18,33 @@ import { CTA } from "@/components/landlord/StepAction";
  */
 type Slot = { day: string; part: "morning" | "afternoon" | "either" };
 
+const dayWords = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+
 const PARTS: Array<{ id: Slot["part"]; label: string }> = [
   { id: "morning", label: "Morning" },
   { id: "afternoon", label: "Afternoon" },
   { id: "either", label: "Any time" },
 ];
 
-const today = () => new Date().toISOString().slice(0, 10);
+/** The next three weeks, Monday to Saturday - nobody photographs on a Sunday. */
+function upcoming(): Array<{ iso: string; day: string; date: string; month: string }> {
+  const out: Array<{ iso: string; day: string; date: string; month: string }> = [];
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() + 1);
+  for (let i = 0; i < 24 && out.length < 18; i++) {
+    if (d.getDay() !== 0) {
+      out.push({
+        iso: d.toISOString().slice(0, 10),
+        day: d.toLocaleDateString("en-GB", { weekday: "short" }),
+        date: String(d.getDate()),
+        month: d.toLocaleDateString("en-GB", { month: "short" }),
+      });
+    }
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
 
 export default function PhotoTimesTile({
   appraisalId,
@@ -40,7 +60,8 @@ export default function PhotoTimesTile({
   variant: "button" | "row" | "link";
 }) {
   const [open, setOpen] = useState(false);
-  const [slots, setSlots] = useState<Slot[]>([{ day: "", part: "either" }]);
+  const [slots, setSlots] = useState<Slot[]>([]);
+  const days = upcoming();
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
@@ -117,45 +138,69 @@ export default function PhotoTimesTile({
                   <p className="mt-2.5 text-[13.5px] leading-relaxed text-muted">
                     Pick a few days that suit and your agent will confirm one. It takes about an hour: photographs, the floor plan, and the details that go on the advert.
                   </p>
-                  <div className="mt-5 space-y-3">
-                    {slots.map((s, i) => (
-                      <div key={i} className="flex flex-wrap items-center gap-2">
-                        <input
-                          type="date"
-                          min={today()}
-                          value={s.day}
-                          onChange={(e) => setSlots((all) => all.map((x, n) => (n === i ? { ...x, day: e.target.value } : x)))}
-                          className="min-w-[160px] flex-1 rounded-xl border border-line/70 px-3.5 py-2.5 text-[13.5px] outline-none focus:border-ink/40"
-                        />
-                        <div className="flex gap-1.5">
-                          {PARTS.map((p) => (
-                            <button
-                              key={p.id}
-                              type="button"
-                              onClick={() => setSlots((all) => all.map((x, n) => (n === i ? { ...x, part: p.id } : x)))}
-                              className="rounded-full border px-3 py-2 text-[12px] font-semibold transition-colors"
-                              style={
-                                s.part === p.id
-                                  ? { background: "#56423e", borderColor: "#56423e", color: "#fff" }
-                                  : { borderColor: "rgba(86,66,62,0.22)", color: "#56423e" }
-                              }
-                            >
-                              {p.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
+                  {/* THE DAYS THEMSELVES, not a date box (James, 17 Sep 2026:
+                      the browser's own picker "looks generally awful"). Tap a
+                      day, then say whether the morning or the afternoon is
+                      better. */}
+                  <div className="mt-5 -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+                    {days.map((d) => {
+                      const on = slots.some((s) => s.day === d.iso);
+                      return (
+                        <button
+                          key={d.iso}
+                          type="button"
+                          onClick={() =>
+                            setSlots((all) =>
+                              all.some((s) => s.day === d.iso)
+                                ? all.filter((s) => s.day !== d.iso)
+                                : all.length >= 4
+                                  ? all
+                                  : [...all, { day: d.iso, part: "either" }]
+                            )
+                          }
+                          aria-pressed={on}
+                          className="flex w-[54px] shrink-0 flex-col items-center gap-0.5 rounded-2xl border px-2 py-2.5 transition-colors"
+                          style={on ? { background: "#56423e", borderColor: "#56423e", color: "#fff" } : { borderColor: "rgba(86,66,62,0.2)", color: "#56423e" }}
+                        >
+                          <span className="text-[10.5px] uppercase tracking-wide opacity-70">{d.day}</span>
+                          <span className="text-[17px] font-semibold leading-none">{d.date}</span>
+                          <span className="text-[10.5px] opacity-70">{d.month}</span>
+                        </button>
+                      );
+                    })}
                   </div>
-                  {slots.length < 4 && (
-                    <button
-                      type="button"
-                      onClick={() => setSlots((all) => [...all, { day: "", part: "either" }])}
-                      className="mt-3 text-[12.5px] font-semibold text-muted underline underline-offset-4 hover:text-ink"
-                    >
-                      Add another day
-                    </button>
+
+                  {slots.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      {slots.map((s) => (
+                        <div key={s.day} className="flex flex-wrap items-center gap-2">
+                          <span className="min-w-[132px] flex-1 text-[13px] font-semibold">{dayWords(s.day)}</span>
+                          <div className="flex gap-1.5">
+                            {PARTS.map((p) => (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => setSlots((all) => all.map((x) => (x.day === s.day ? { ...x, part: p.id } : x)))}
+                                className="rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors"
+                                style={s.part === p.id ? { background: "#56423e", borderColor: "#56423e", color: "#fff" } : { borderColor: "rgba(86,66,62,0.22)", color: "#56423e" }}
+                              >
+                                {p.label}
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSlots((all) => all.filter((x) => x.day !== s.day))}
+                            aria-label={`Remove ${dayWords(s.day)}`}
+                            className="rounded-full px-2 py-1 text-[12px] text-muted hover:text-ink"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   )}
+
                   <textarea
                     value={note}
                     onChange={(e) => setNote(e.target.value)}

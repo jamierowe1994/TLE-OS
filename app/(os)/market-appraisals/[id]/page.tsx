@@ -7,6 +7,7 @@ import GuideButton from "@/components/GuideButton";
 import RexPropertyPicker from "@/components/RexPropertyPicker";
 import PropertyFile from "@/components/PropertyFile";
 import AppraisalMessages from "@/components/appraisal/AppraisalMessages";
+import PhotosPanel from "@/components/appraisal/PhotosPanel";
 import ConfirmLine from "@/components/appraisal/ConfirmLine";
 import AppraisalOutcome from "@/components/AppraisalOutcome";
 import WelcomeVideoRecorder from "@/components/WelcomeVideoRecorder";
@@ -138,6 +139,21 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
   /* The landlord conversation. Opened from the Messages link, or straight
      away from the agent's email (?messages=1 - James, 17 Sep 2026). */
   const [showMessages, setShowMessages] = useState(false);
+  /* The photographs and the advert, after the take-on visit (?photos=1). */
+  const [showPhotos, setShowPhotos] = useState(false);
+  const openPhotos = useCallback(() => {
+    setShowPhotos(true);
+    setTimeout(() => document.getElementById("photos")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+  }, []);
+  useEffect(() => {
+    if (booked === undefined) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("photos") !== "1") return;
+    params.delete("photos");
+    const qs = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+    openPhotos();
+  }, [booked, openPhotos]);
   const [readHere, setReadHere] = useState(false);
   const markRead = useCallback(() => setReadHere(true), []);
   const openMessages = useCallback(() => {
@@ -229,6 +245,9 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
             <WelcomeVideoRecorder compact token={pre.token} address={ma.address} />
           </span>
         )}
+        <button type="button" onClick={openPhotos} className={pill}>
+          <DoodleIcon name="pack/photo" size={13} className="text-accent-dark" /> Photographs
+        </button>
         <button type="button" onClick={openMessages} className={`${pill} relative`}>
           <DoodleIcon name="message" size={13} className="text-accent-dark" /> Messages
           {!readHere && (ma.unreadMessages ?? 0) > 0 && (
@@ -471,6 +490,12 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
           </span>
         </p>
       </section>
+
+      {showPhotos && (
+        <div id="photos" className="fade-up scroll-mt-6">
+          <PhotosPanel ma={ma} />
+        </div>
+      )}
 
       {showMessages && (
         <div id="messages" className="fade-up scroll-mt-6">

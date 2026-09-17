@@ -2605,6 +2605,23 @@ CREATE TABLE IF NOT EXISTS os_process_maps (
 -- point of recording them is that the file can say "the EPC is in" and take
 -- the ask off the landlord's list. The bytes live in R2 under
 -- documents/landlord/<account>/; the row is the index.
+-- The take-on visit's photographs, before they reach a listing (17 Sep 2026).
+-- Ours, in R2 under photos/takeon/<appraisal>/, so an agent can empty a
+-- camera into the file on the doorstep and the advert can be written from
+-- them the same afternoon. REX gets them when the listing exists.
+CREATE TABLE IF NOT EXISTS os_property_photos (
+  id            TEXT PRIMARY KEY,
+  appraisal_id  TEXT NOT NULL,
+  r2_key        TEXT NOT NULL,
+  name          TEXT NOT NULL DEFAULT '',
+  bytes         INTEGER,
+  content_type  TEXT NOT NULL DEFAULT '',
+  uploaded_by   TEXT NOT NULL DEFAULT '',
+  uploaded_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_property_photos_appraisal
+  ON os_property_photos (appraisal_id, uploaded_at);
+
 CREATE TABLE IF NOT EXISTS os_landlord_documents (
   id             TEXT PRIMARY KEY,
   account_id     TEXT NOT NULL,
