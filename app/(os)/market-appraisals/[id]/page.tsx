@@ -6,7 +6,6 @@ import DoodleIcon from "@/components/DoodleIcon";
 import GuideButton from "@/components/GuideButton";
 import RexPropertyPicker from "@/components/RexPropertyPicker";
 import PropertyFile from "@/components/PropertyFile";
-import VideoChaseControl from "@/components/VideoChaseControl";
 import ConfirmLine from "@/components/appraisal/ConfirmLine";
 import AppraisalOutcome from "@/components/AppraisalOutcome";
 import WelcomeVideoRecorder from "@/components/WelcomeVideoRecorder";
@@ -48,8 +47,13 @@ const pill =
   "inline-flex items-center gap-1.5 rounded-full border border-line/70 bg-white px-3.5 py-2 text-[12px] font-semibold transition-colors hover:border-ink/40";
 const gbp = (n: number) => `£${n.toLocaleString("en-GB")}`;
 
-const longDate = (iso: string) =>
-  new Date(iso).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+/* "Saturday 19 September at 11:30am" - the way the landlord's email says it. */
+const longDate = (iso: string) => {
+  const d = new Date(iso);
+  const day = d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+  const time = d.toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit", hour12: true }).replace(/\s/g, "").toLowerCase();
+  return `${day} at ${time}`;
+};
 
 interface FileRow {
   state: string;
@@ -316,14 +320,12 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
               pre-appraisal deck is scheduled from the appointment.
             </p>
           )}
-          {/* The landlord's confirmation: sent from here, never on booking. */}
-          {when && !past && <ConfirmLine appraisalId={ma.id} appointmentAt={ma.appointmentAt!} />}
-          {/* The video nudge, while there is still time for one. */}
-          {(live === "booked" || live === "pre_appraisal") && (
-            <div className="mt-auto border-t border-line/50 pt-3.5">
-              <VideoChaseControl appraisalId={ma.id} />
-            </div>
-          )}
+          {/* What the landlord has been sent: the confirmation until it has
+              gone, then the latest thing sent, and the rest one press away.
+              The video reminder box that sat under it is gone (James, 17 Sep
+              2026): the reminder goes on its own two days out if there is no
+              video, and nobody needs to send it to themselves. */}
+          {when && <ConfirmLine appraisalId={ma.id} appointmentAt={ma.appointmentAt!} />}
         </section>
 
         {/* Next up: the one box that changes with the stage. */}

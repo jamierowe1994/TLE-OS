@@ -196,6 +196,24 @@ export default function WelcomeVideoRecorder({
                   ✕
                 </button>
               </div>
+              {/* LANDED (James, 17 Sep 2026): recorded on the phone, the laptop
+                  showed nothing happening. The moment our own API says the
+                  recording is ready, the recorder makes way for a tick. If
+                  this screen's recorder never said a word, it came from the
+                  phone. */}
+              {ready ? (
+                <div className="flex flex-col items-center px-6 py-14 text-center">
+                  <span className="flex h-16 w-16 items-center justify-center rounded-full text-[30px] text-white" style={{ background: "#56634a" }}>✓</span>
+                  <p className="hand mt-5 text-[22px]">{frameSays ? "Video uploaded" : "Video uploaded from your phone"}</p>
+                  <p className="mt-1.5 max-w-sm text-[12.5px] text-muted">
+                    It&apos;s on the landlord&apos;s pre-appraisal, on the page that introduces you.
+                  </p>
+                  <button type="button" onClick={() => setOpen(false)} className="mt-6 rounded-full bg-ink px-6 py-2.5 text-[12.5px] font-semibold text-page">
+                    Done
+                  </button>
+                </div>
+              ) : (
+              <>
               {/* `allow` is REQUIRED. Without it the browser blocks camera and
                   microphone inside the frame and the recorder shows a
                   permissions error it cannot resolve on its own. */}
@@ -240,6 +258,8 @@ export default function WelcomeVideoRecorder({
                   </p>
                 </div>
               </div>
+              </>
+              )}
             </div>
           </div>,
           document.body
@@ -247,6 +267,18 @@ export default function WelcomeVideoRecorder({
       : null;
 
   if (compact) {
+    /* Done is shown as done, with a tick, not as a greyed-out button. */
+    if (ready) {
+      return (
+        <>
+          <span className="inline-flex items-center gap-2 rounded-full border border-line/70 bg-white px-3.5 py-2 text-[12px] font-semibold" style={{ color: "#56634a" }} title="It's on the landlord's pre-appraisal">
+            <span aria-hidden className="flex h-4 w-4 items-center justify-center rounded-full text-[9px] text-white" style={{ background: "#56634a" }}>✓</span>
+            Video uploaded
+          </span>
+          {modal}
+        </>
+      );
+    }
     return (
       <>
         <button

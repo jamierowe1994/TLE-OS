@@ -267,7 +267,13 @@ function lengthWords(mins: number): string {
   return `about ${mins} minutes`;
 }
 
-export function confirmBodyFor(i: AppraisalInvite): string {
+/**
+ * `calendarLines` puts Add to my calendar buttons in the body (lib/calendar-
+ * links, 17 Sep 2026) in place of the line about an attachment, which people
+ * missed. Without them - a preview on a screen that cannot sign a link - the
+ * words stay as they were.
+ */
+export function confirmBodyFor(i: AppraisalInvite, calendarLines?: string): string {
   const { day, time } = dayAndTime(i);
   const rows = [
     day && `Date: **${day}**`,
@@ -281,7 +287,9 @@ Thanks for booking in. Putting this in writing so you have it:
 
 ${rows.join("\n")}
 
-It takes ${lengthWords(i.minutes)}, and the calendar invite is attached so it goes straight in your diary.
+${calendarLines ? `It takes ${lengthWords(i.minutes)}. Press the button to put it straight in your diary.
+
+${calendarLines}` : `It takes ${lengthWords(i.minutes)}, and the calendar invite is attached so it goes straight in your diary.`}
 
 There's nothing you need to do before then. ${PRE_APPRAISAL_LEAD_WORDS.replace(/^./, (c) => c.toUpperCase())}, I'll send you a short pre-presentation so you know who's coming and what happens on the day.
 

@@ -406,18 +406,20 @@ export default function ProfilePage() {
                     if (!file) return;
                     const img = new Image();
                     img.onload = () => {
-                      // 256px square crop-fit — enough for every avatar spot,
-                      // small enough to live in localStorage until sign-in.
+                      /* Up to 1200px on the long side, uncropped (17 Sep
+                         2026). It was a 256px square, and the landlord's
+                         deck shows this photo 500px wide - so on a sharp
+                         screen it was drawn four times its size and looked
+                         fuzzy. Avatars crop it themselves with object-cover. */
+                      const long = Math.max(img.width, img.height);
+                      const s = Math.min(1, 1200 / long);
                       const c = document.createElement("canvas");
-                      c.width = c.height = 256;
+                      c.width = Math.round(img.width * s);
+                      c.height = Math.round(img.height * s);
                       const ctx = c.getContext("2d")!;
-                      const side = Math.min(img.width, img.height);
-                      ctx.drawImage(
-                        img,
-                        (img.width - side) / 2, (img.height - side) / 2, side, side,
-                        0, 0, 256, 256
-                      );
-                      save({ ...profile, photo: c.toDataURL("image/jpeg", 0.85) });
+                      ctx.imageSmoothingQuality = "high";
+                      ctx.drawImage(img, 0, 0, c.width, c.height);
+                      save({ ...profile, photo: c.toDataURL("image/jpeg", 0.86) });
                       URL.revokeObjectURL(img.src);
                     };
                     img.src = URL.createObjectURL(file);

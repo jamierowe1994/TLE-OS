@@ -206,7 +206,12 @@ const withSample = (doc: EmailDoc, extra?: Record<string, string>): EmailDoc => 
  * A placeholder with no value is left visible rather than blanked, so a
  * missing variable is seen on the first test and not shipped as a gap.
  */
-export function renderTleEmail(id: string, vars: Record<string, string>): { subject: string; html: string } {
+export function renderTleEmail(
+  id: string,
+  vars: Record<string, string>,
+  /** Blocks only this send carries, placed after the named block (the viewing's Add to calendar buttons). */
+  extra?: { after: string; blocks: Record<string, unknown>[] }
+): { subject: string; html: string } {
   const entry = TLE_EMAILS.find((e) => e.id === id);
   if (!entry?.doc) throw new Error(`No email document for ${id}.`);
   const fill = (t: string) => t.replace(/\{\{(\w+)\}\}/g, (m, k: string) => vars[k] ?? m);
@@ -223,7 +228,11 @@ export function renderTleEmail(id: string, vars: Record<string, string>): { subj
         if (typeof anyB[key] === "string") next[key] = fill(anyB[key] as string);
       }
       return next as unknown as EmailDoc["blocks"][number];
-    }),
+    }).flatMap((b) =>
+      extra && (b as unknown as { id?: string }).id === extra.after
+        ? [b, ...(extra.blocks as unknown as EmailDoc["blocks"])]
+        : [b]
+    ),
   };
   return blocks(filled, entry.audience)();
 }

@@ -1283,6 +1283,17 @@ export default function LeadDrawer({
   }
 
   /* Said under the details, where the edit was made: saving, then Saved. */
+  /* The agent a booking is for, as a NAME. A lead added in the OS carries
+     whoever typed it in as an email address, which went onto the appraisal as
+     "with james@therecruitmentexperts.co.uk" and matched nobody's diary
+     (17 Sep 2026). */
+  const agentOnBooking = (() => {
+    const raw = (lead?.agent ?? "").trim();
+    if (!raw || raw === "Unassigned") return me?.name ?? "";
+    if (!raw.includes("@")) return raw;
+    return me?.email && me.name && raw.toLowerCase() === me.email.toLowerCase() ? me.name : agentName(raw);
+  })();
+
   const saveLine = ours && sync ? (
     <p className={`mt-2 flex items-center gap-1.5 text-[11px] ${sync.bad ? "text-accent-dark" : "text-muted"}`} aria-live="polite">
       {sync.busy ? (
@@ -2923,7 +2934,7 @@ export default function LeadDrawer({
         /* Whose diary the grid shows. An unassigned lead is being booked by
            whoever is looking at it, not by a name typed into the source in
            August. */
-        agent={lead.agent && lead.agent !== "Unassigned" ? lead.agent : (me?.name ?? "")}
+        agent={agentOnBooking}
         onBooked={async (v) => {
           /* Who lives there? Asked once, after the booking is safely made, so
              a slow lookup can never hold up the thing the agent came to do. */
@@ -3060,7 +3071,7 @@ export default function LeadDrawer({
                     ? contact.area
                     : lead.preferred || lead.area,
                 postcode: "",
-                agent: lead.agent === "Unassigned" ? null : lead.agent,
+                agent: agentOnBooking || null,
                 appointmentAt: v.startsAt,
               }),
             })

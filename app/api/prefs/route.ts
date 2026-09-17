@@ -20,7 +20,8 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /** A stored preference should be a setting, not a filing cabinet. */
-const MAX_VALUE_BYTES = 64 * 1024;
+/* 640KB: the profile carries a photo sharp enough for the landlord's deck. */
+const MAX_VALUE_BYTES = 640 * 1024;
 
 function userIdFrom(req: NextRequest): string | null {
   return verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);

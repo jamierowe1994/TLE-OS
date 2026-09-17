@@ -6,6 +6,7 @@ import { sendEmail } from "@/lib/resend";
 import { sendAsAgent } from "@/lib/send-as-agent";
 import { renderPlain } from "@/lib/campaign-mail";
 import { icsFile } from "@/lib/outlook-calendar";
+import { calendarLinks, LINK } from "@/lib/calendar-links";
 import { cleanEmailHtml, isRepeat, lastSent, recordSent, sentWords } from "@/lib/confirmations";
 
 /**
@@ -54,7 +55,7 @@ export interface ViewingDraft {
   html: string;
   blocked?: string;
   alreadySent?: { at: string; to: string; subject: string };
-  attachment: string;
+  attachment: string | null;
 }
 
 const emailOk = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
@@ -86,6 +87,23 @@ async function passportFor(b: ViewingBooking, me: OsUser, to: string): Promise<s
 
 function render(b: ViewingBooking, me: OsUser, origin: string, token: string) {
   const agentName = me.name || "Your agent";
+  /* Add to my calendar, in the body where it is seen, rather than a file
+     attached that people miss (James, 17 Sep 2026). */
+  const cal = calendarLinks({
+    title: `Viewing - ${b.address}`,
+    startsAt: b.startsAt,
+    minutes: b.minutes,
+    location: b.address,
+    details: b.unaccompanied ? "Unaccompanied viewing, The Letting Experts." : `With ${agentName}, The Letting Experts.`,
+    uid: `viewing-${new Date(b.startsAt).getTime()}-${b.address.replace(/\W+/g, "").slice(0, 40)}`,
+  }, origin);
+  const extra = {
+    after: "tp2",
+    blocks: [
+      { type: "button", id: "tpcal", text: "Add to my calendar", url: cal.ics, color: "", align: "left", pad: { t: 16, r: 22, b: 16, l: 22 } },
+      { type: "text", id: "tpcal2", text: `Using Google or Outlook on the web? <a href="${cal.google}" style="${LINK}">Add it to Google Calendar</a> or <a href="${cal.outlook}" style="${LINK}">Outlook</a>.`, bg: "" },
+    ],
+  };
   return renderTleEmail("tenant-passport-invite", {
     firstName: b.applicant.name.trim().split(/\s+/)[0] || "there",
     address: b.address || "the property",
@@ -95,7 +113,7 @@ function render(b: ViewingBooking, me: OsUser, origin: string, token: string) {
       ? `This is an unaccompanied viewing, so nobody from us will be there - ${agentName} will send you how to get in.`
       : `${agentName} will meet you there.`,
     link: `${origin}/tenant/passport/${token}`,
-  });
+  }, extra);
 }
 
 /** What the agent sees before the applicant is told. */
@@ -112,7 +130,7 @@ export async function draftViewingConfirmation(b: ViewingBooking, me: OsUser, or
     html,
     blocked: emailOk(to) ? undefined : `${b.applicant.name || "The applicant"} has no email address on their record, so this cannot go. Ring them.`,
     alreadySent: prev && isRepeat(prev, b.startsAt) ? { at: prev.sentAt, to: prev.to, subject: prev.subject } : undefined,
-    attachment: "viewing.ics",
+    attachment: null,
   };
 }
 
@@ -157,7 +175,7 @@ export async function sendViewingConfirmation(p: {
     /* The draft was rendered with the same token, so the agent's edit already
        carries the right link. */
     const html = p.html ? cleanEmailHtml(p.html) : templ.html;
-    const r = await sendAsAgent({ me: p.me, to, toName: b.applicant.name, subject, html, attachments: [attachment] });
+    const r = await sendAsAgent({ me: p.me, to, toName: b.applicant.name, subject, html });
     if (r.sent) {
       await markInvited(token, agentName).catch(() => null);
       await recordSent(key, { sentAt: new Date().toISOString(), startsAt: b.startsAt, to, subject, by: p.me.email });

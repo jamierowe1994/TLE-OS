@@ -55,6 +55,18 @@ function sign(data: string): string {
   return crypto.createHmac("sha256", getSecret()).update(data).digest("base64url");
 }
 
+/** Sign anything a link carries (lib/calendar-links), with the same secret. */
+export function signPayload(data: string): string {
+  return sign(`payload.${data}`);
+}
+
+export function payloadSignatureOk(data: string, signature: string | null | undefined): boolean {
+  if (!signature) return false;
+  const want = Buffer.from(signPayload(data));
+  const got = Buffer.from(signature);
+  return want.length === got.length && crypto.timingSafeEqual(want, got);
+}
+
 /**
  * Session token: `userId.expiryMs.signature`.
  * The format splits on ".", so user ids must never contain one — uid() below

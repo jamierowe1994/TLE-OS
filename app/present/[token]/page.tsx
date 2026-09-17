@@ -97,7 +97,21 @@ export default async function PresentPage({
     return <Expired agent={row.authorName} />;
   }
 
-  return <PresentDeck token={row.token} deck={row.deck} slides={slidesFor(row.deck)} />;
+  /* The welcome video, only when a landlord can actually watch it. On 17 Sep
+     2026 Flow's player address sent everyone who was not signed in to Flow to
+     its login page, so a button here opened a blank box. Asked once per
+     open, without following the redirect: a player that answers 200 is
+     shown; anything else leaves the deck as it is without one. */
+  let deck = row.deck;
+  const video = deck.welcomeVideo;
+  if (video?.status === "ready" && video.embedUrl) {
+    const playable = await fetch(video.embedUrl, { method: "GET", redirect: "manual", cache: "no-store", signal: AbortSignal.timeout(4000) })
+      .then((r) => r.status === 200)
+      .catch(() => false);
+    if (!playable) deck = { ...deck, welcomeVideo: null };
+  }
+
+  return <PresentDeck token={row.token} deck={deck} slides={slidesFor(deck)} />;
 }
 
 /** The quiet page a link shows once its fortnight is up. */

@@ -81,17 +81,17 @@ export async function POST(req: NextRequest) {
         appointmentAt: a.startsAt,
         landlordEmail: (a.email ?? "").trim() || null,
       } as unknown as MarketAppraisal;
-      return NextResponse.json(await draftBookingConfirmation({ ma: pending, me: actor, minutes: Number(a.minutes) || undefined, unsaved: true }));
+      return NextResponse.json(await draftBookingConfirmation({ ma: pending, me: actor, minutes: Number(a.minutes) || undefined, unsaved: true, origin }));
     }
 
     if (body.kind === "appraisal") {
       const ma = body.id ? await getAppraisal(body.id).catch(() => null) : null;
       if (!ma) return NextResponse.json({ ok: false, error: "That appraisal isn't here any more." }, { status: 404 });
       if (body.action === "send") {
-        const r = await sendBookingConfirmation({ ma, me: actor, subject: body.subject, html: body.html, again: body.again === true, minutes: Number(body.minutes) || undefined });
+        const r = await sendBookingConfirmation({ ma, me: actor, subject: body.subject, html: body.html, again: body.again === true, minutes: Number(body.minutes) || undefined, origin });
         return NextResponse.json({ ok: r.sent, sent: r.sent, alreadySent: r.alreadySent ?? false, detail: r.sent ? `Sent to ${r.to}.` : r.reason });
       }
-      return NextResponse.json(await draftBookingConfirmation({ ma, me: actor }));
+      return NextResponse.json(await draftBookingConfirmation({ ma, me: actor, origin }));
     }
 
     if (body.kind === "viewing") {

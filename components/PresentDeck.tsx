@@ -75,6 +75,9 @@ import {
   themeVars,
   isCream,
   isDark,
+  WelcomeVideoBadge,
+  WelcomeVideoButton,
+  welcomeReady,
   type IconName,
 } from "@/components/present-kit";
 import * as S from "@/components/PresentSlides";
@@ -480,6 +483,14 @@ function AgentHouse({ deck, show }: { deck: Deck; show: boolean }) {
         </Rise>
         <Rise show={show} i={3}>
           <div className="mt-7 flex flex-wrap items-center gap-3">
+            {welcomeReady(deck.welcomeVideo) && (
+              <WelcomeVideoButton
+                video={deck.welcomeVideo}
+                firstName={first}
+                className="flex items-center gap-2.5 rounded-[12px] px-6 py-3.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ background: "#3b3b3c" }}
+              />
+            )}
             {a.phone && (
               <a href={`tel:${tel}`} className="flex items-center gap-2.5 rounded-[12px] px-6 py-3.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90" style={{ background: "var(--p-accent)" }}>
                 <Line name="phone" size={16} />
@@ -573,6 +584,7 @@ function AgentHouse({ deck, show }: { deck: Deck; show: boolean }) {
                 <span className="text-[120px] leading-none" style={{ fontFamily: HAND, fontWeight: 800, color: "#56634a" }}>{initialsOf(a.name)}</span>
               </div>
             )}
+            {welcomeReady(deck.welcomeVideo) && <WelcomeVideoBadge video={deck.welcomeVideo} firstName={first} />}
           </Rise>
           <Rise show={show} i={5} className="absolute right-[100px] top-[792px] z-[2] w-[220px]">
             <p className="text-[27px] leading-[1.1] text-black/70" style={{ ...SCRIPT, transform: "rotate(-6deg)" }}>

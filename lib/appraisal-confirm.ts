@@ -6,6 +6,7 @@ import { renderPlain } from "@/lib/campaign-mail";
 import { sendAsAgent } from "@/lib/send-as-agent";
 import type { MarketAppraisal } from "@/lib/market-appraisal";
 import type { OsUser } from "@/lib/users";
+import { calendarLinesFor, calendarLinks } from "@/lib/calendar-links";
 import { cleanEmailHtml, hasMoved, isRepeat, lastSent, recordSent, sentWords } from "@/lib/confirmations";
 
 /**
@@ -110,7 +111,7 @@ export interface ConfirmationDraft {
 
 const recordKey = (ma: MarketAppraisal) => `appraisal|${ma.id}`;
 
-async function prepare(ma: MarketAppraisal, me: OsUser, minutes?: number, unsaved = false) {
+async function prepare(ma: MarketAppraisal, me: OsUser, minutes?: number, unsaved = false, origin?: string) {
   /* The landlord's address is derived from the contact on read, never stored
      on the appraisal - so read it back. An appointment being booked right now
      (the booker's email column) is not saved yet: its time, place and email
@@ -124,18 +125,28 @@ async function prepare(ma: MarketAppraisal, me: OsUser, minutes?: number, unsave
   const prev = await lastSent(recordKey(full));
   const moved = hasMoved(prev, full.appointmentAt);
   let subject = confirmSubjectFor(invite);
-  let text = confirmBodyFor(invite);
+  const links = origin && full.appointmentAt
+    ? calendarLinks({
+        title: `Market appraisal - ${invite.address}`,
+        startsAt: full.appointmentAt,
+        minutes: invite.minutes,
+        location: invite.address,
+        details: `With ${invite.agentName}, The Letting Experts.${invite.agentPhone ? ` ${invite.agentPhone}` : ""}`,
+        uid: `ma-${full.id}`,
+      }, origin)
+    : null;
+  let text = confirmBodyFor(invite, links ? calendarLinesFor(links) : undefined);
   if (moved) {
     /* A second "Confirmed" with a different time and nothing else reads as
        two appointments. Say it moved. Wording for James to approve. */
     subject = subject.replace(/^Confirmed - /, "Moved - ");
     text = text.replace("Thanks for booking in. Putting this in writing so you have it:", "Your market appraisal has moved. Here are the new details, so you have them in writing:");
   }
-  return { full, invite, prev, moved, subject, text };
+  return { full, invite, prev, moved, subject, text, links };
 }
 
-export async function draftBookingConfirmation(input: { ma: MarketAppraisal; me: OsUser; minutes?: number; unsaved?: boolean }): Promise<ConfirmationDraft> {
-  const { full, prev, moved, subject, text } = await prepare(input.ma, input.me, input.minutes, input.unsaved);
+export async function draftBookingConfirmation(input: { ma: MarketAppraisal; me: OsUser; minutes?: number; unsaved?: boolean; origin?: string }): Promise<ConfirmationDraft> {
+  const { full, prev, moved, subject, text, links } = await prepare(input.ma, input.me, input.minutes, input.unsaved, input.origin);
   const to = (full.landlordEmail ?? "").trim();
   return {
     ok: true,
@@ -150,7 +161,8 @@ export async function draftBookingConfirmation(input: { ma: MarketAppraisal; me:
         : undefined,
     alreadySent: prev && isRepeat(prev, full.appointmentAt) ? { at: prev.sentAt, to: prev.to, subject: prev.subject } : undefined,
     moved: moved && prev?.startsAt ? { from: prev.startsAt } : undefined,
-    attachment: full.appointmentAt ? "market-appraisal.ics" : null,
+    /* The buttons in the body replace the attachment people missed. */
+    attachment: full.appointmentAt && !links ? "market-appraisal.ics" : null,
   };
 }
 
@@ -167,9 +179,11 @@ export async function sendBookingConfirmation(input: {
   again?: boolean;
   /** How long was booked, for the calendar file. */
   minutes?: number;
+  /** Where the Add to calendar buttons point. Without it the calendar file is attached instead. */
+  origin?: string;
 }): Promise<ConfirmationResult> {
   const { me } = input;
-  const { full, invite, prev, subject: templSubject, text } = await prepare(input.ma, me, input.minutes);
+  const { full, invite, prev, subject: templSubject, text, links } = await prepare(input.ma, me, input.minutes, false, input.origin);
   if (!full.appointmentAt) return { sent: false, reason: "No time booked yet, so nothing to confirm." };
   const to = (full.landlordEmail ?? "").trim();
   if (!to.includes("@")) return { sent: false, reason: "The landlord has no email address on their record." };
@@ -179,7 +193,7 @@ export async function sendBookingConfirmation(input: {
 
   const subject = (input.subject ?? "").trim() || templSubject;
   const html = input.html ? cleanEmailHtml(input.html) : renderPlain(subject, text).html;
-  const ics = icsFor(invite, new Date().toISOString());
+  const ics = links ? null : icsFor(invite, new Date().toISOString());
 
   /* From the agent's own Outlook where that is armed, our sender otherwise:
      the same road as the appraisal emails that follow it, so the landlord's

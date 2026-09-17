@@ -1,4 +1,5 @@
 import * as React from "react";
+import * as ReactDOM from "react-dom";
 import type { PresentStyle, SlideId } from "@/lib/present";
 
 /**
@@ -973,4 +974,102 @@ export function Art({
 export function useIsPhoto(): boolean {
   /* House is the only look (12 Sep 2026), and it is not drawn. */
   return THEMES[React.useContext(DeckStyleCtx)]?.art !== "drawn";
+}
+
+/* ───────────────────────── the welcome video ───────────────────────── */
+
+/**
+ * The agent's own welcome, playable from the deck (James, 17 Sep 2026: "I've
+ * uploaded my custom video, though. Where does that video go?"). It was
+ * recorded against the pre-appraisal and saved on the deck, and nothing on
+ * the landlord's side ever showed it.
+ *
+ * A button, and a play badge on the portrait, both opening the recording in
+ * a player over the slide. Only when the recording is ready: a deck without
+ * one is a good deck, and says nothing about it.
+ */
+export type DeckWelcomeVideo = { status: string; embedUrl: string | null; durationSecs: number | null; thumbnailUrl?: string | null };
+
+export function welcomeReady(v: DeckWelcomeVideo | null | undefined): v is DeckWelcomeVideo & { embedUrl: string } {
+  return Boolean(v && v.status === "ready" && v.embedUrl);
+}
+
+const clock = (secs: number | null) => (secs ? `${Math.floor(secs / 60)}:${String(Math.round(secs % 60)).padStart(2, "0")}` : "");
+
+export function WelcomeVideoPlayer({ video, name, onClose }: { video: DeckWelcomeVideo & { embedUrl: string }; name: string; onClose: () => void }) {
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+  return ReactDOM.createPortal(
+    <div className="fixed inset-0 z-[400] flex items-center justify-center bg-black/80 p-4" onClick={onClose} role="dialog" aria-modal="true" aria-label={`A message from ${name}`}>
+      <div className="relative w-full max-w-[960px]" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute -top-12 right-0 flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-[18px] text-white transition-colors hover:bg-white/25"
+        >
+          ✕
+        </button>
+        <div className="overflow-hidden rounded-[18px] bg-black shadow-2xl" style={{ aspectRatio: "16 / 9" }}>
+          <iframe
+            src={video.embedUrl}
+            title={`A message from ${name}`}
+            className="h-full w-full"
+            allow="autoplay; fullscreen; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/** The button, for a row of buttons: "Watch James's welcome · 0:16". */
+export function WelcomeVideoButton({ video, firstName, className, style }: { video: DeckWelcomeVideo & { embedUrl: string }; firstName: string; className?: string; style?: React.CSSProperties }) {
+  const [open, setOpen] = React.useState(false);
+  const who = firstName || "your agent";
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} className={className} style={style}>
+        <svg viewBox="0 0 24 24" aria-hidden className="h-[16px] w-[16px]" fill="currentColor">
+          <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z" />
+        </svg>
+        Watch {who}&rsquo;s welcome{video.durationSecs ? <span className="opacity-70">· {clock(video.durationSecs)}</span> : null}
+      </button>
+      {open && <WelcomeVideoPlayer video={video} name={who} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+/** A play badge laid over the portrait, opening the same player. */
+export function WelcomeVideoBadge({ video, firstName }: { video: DeckWelcomeVideo & { embedUrl: string }; firstName: string }) {
+  const [open, setOpen] = React.useState(false);
+  const who = firstName || "your agent";
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label={`Play a message from ${who}`}
+        className="absolute bottom-5 left-5 flex items-center gap-3 rounded-full bg-white/95 py-2 pl-2 pr-5 text-[14px] font-semibold shadow-[0_12px_30px_-12px_rgba(0,0,0,0.45)] transition-transform hover:scale-[1.03]"
+        style={{ color: "#3b3b3c" }}
+      >
+        <span className="flex h-10 w-10 items-center justify-center rounded-full text-white" style={{ background: "var(--p-accent)" }}>
+          <svg viewBox="0 0 24 24" aria-hidden className="ml-0.5 h-[16px] w-[16px]" fill="currentColor">
+            <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z" />
+          </svg>
+        </span>
+        A message from {who}
+        {video.durationSecs ? <span className="text-black/45">{clock(video.durationSecs)}</span> : null}
+      </button>
+      {open && <WelcomeVideoPlayer video={video} name={who} onClose={() => setOpen(false)} />}
+    </>
+  );
 }
