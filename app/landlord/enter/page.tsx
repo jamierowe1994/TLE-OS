@@ -33,7 +33,9 @@ function Enter() {
              /landlord/: a link that could send them anywhere is a link that
              can be used to send them somewhere that is not us. */
           const next = params.get("next") ?? "";
-          const safe = /^\/landlord\/[a-z0-9/-]*$/i.test(next) ? next : null;
+          /* Plus the one query the contract nudge uses: which property, and
+             open the contract (/landlord?p=a:<id>&sign=1). */
+          const safe = /^\/landlord\/[a-z0-9/-]*$/i.test(next) || /^\/landlord\?p=a:[a-z0-9_-]+&sign=1$/i.test(next) ? next : null;
           router.replace(j.first ? "/landlord/welcome" : safe ?? "/landlord");
           router.refresh();
         } else {

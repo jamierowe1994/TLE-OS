@@ -37,8 +37,26 @@ type State = {
   connected?: boolean;
   sendUnlocked?: boolean;
   parties?: Party[];
+  sent?: { firstSentAt: string; lastSentAt: string; count: number; to: string } | null;
+  nudge?: { count: number; autoCount: number; lastAt: string | null; lastBy: string | null } | null;
+  nextNudgeAt?: string | null;
+  views?: { presentation: number; contract: number };
   error?: string;
 };
+
+/** The eye and a number - how often the landlord has opened it in their file. */
+function Seen({ n, what }: { n: number; what: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5" title={`${what} opened ${n} time${n === 1 ? "" : "s"} by the landlord`}>
+      <svg viewBox="0 0 24 24" aria-hidden className="h-[14px] w-[14px]" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12z" />
+        <circle cx="12" cy="12" r="2.8" />
+      </svg>
+      <span className="font-semibold text-ink">{n}</span>
+      <span>{what}</span>
+    </span>
+  );
+}
 
 const day = (iso: string | null) =>
   iso
@@ -86,13 +104,15 @@ export default function TermsCard({
     void read();
   }, [read]);
 
-  async function nudge() {
+  async function nudge(first: boolean) {
     if (busy) return;
     setBusy(true);
     setError(null);
     setSaid(null);
     try {
-      const r = await fetch(`/api/appraisals/${appraisalId}/terms`, { method: "POST" });
+      /* The first send is the whole pack; after that it is a nudge - a short
+         reminder whose button opens the contract on their file. */
+      const r = await fetch(`/api/appraisals/${appraisalId}/${first ? "terms" : "nudge"}`, { method: "POST" });
       const j = (await r.json()) as { ok?: boolean; message?: string; error?: string };
       if (j.ok) {
         setSaid(j.message ?? "Sent.");
@@ -138,21 +158,46 @@ export default function TermsCard({
 
   const sent = landlordParty.sentAt;
   const opened = landlordParty.openedAt;
+  const signedIt = landlordParty.completedAt;
+  const views = state.views ?? { presentation: 0, contract: 0 };
+  const nudged = state.nudge;
+  const nextAt = state.nextNudgeAt;
 
   return (
     <div>
+      {sent && (
+        <p className="mb-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-muted">
+          <Seen n={views.presentation} what="presentation" />
+          <Seen n={views.contract} what="contract" />
+        </p>
+      )}
       <ul className="mb-3.5 space-y-1 text-[11.5px] leading-relaxed text-muted">
         <li>You signed it on {day(agent.completedAt)}.</li>
         <li>
           {sent ? `Sent to ${landlordParty.email} ${ago(sent)}.` : `Not emailed to ${landlordParty.email} yet.`}
         </li>
-        <li>{opened ? `They opened it ${ago(opened)}, and have not signed.` : "They have not opened it."}</li>
+        {signedIt ? (
+          <li className="font-semibold text-ink">{landlord} signed it on {day(signedIt)}.</li>
+        ) : (
+          <>
+            <li>{opened ? `They opened it ${ago(opened)}, and have not signed.` : "They have not opened it."}</li>
+            {nudged?.count ? (
+              <li>
+                Nudged {nudged.count === 1 ? "once" : nudged.count === 2 ? "twice" : `${nudged.count} times`}, last {ago(nudged.lastAt)}
+                {nudged.lastBy === "automatic" ? " (automatic)" : nudged.lastBy ? ` by ${nudged.lastBy}` : ""}.
+              </li>
+            ) : null}
+            {sent && nextAt && <li>Next automatic nudge {day(nextAt)}.</li>}
+          </>
+        )}
       </ul>
 
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={nudge} disabled={busy || state.sendUnlocked === false} className={primary}>
-          {busy ? "Sending…" : sent ? "Send a reminder" : "Send it to them"}
-        </button>
+        {!signedIt && (
+          <button type="button" onClick={() => nudge(!sent)} disabled={busy || state.sendUnlocked === false} className={primary}>
+            {busy ? "Sending…" : sent ? "Nudge to sign" : "Send it to them"}
+          </button>
+        )}
         <Link href={`/market-appraisals/${appraisalId}/send`} className={ghost}>
           Open the contract
         </Link>

@@ -70,6 +70,7 @@ import {
   INVOICE_SENT,
   LANDLORD_CONTRACT_PACK,
   LANDLORD_QUESTIONS_CHASE,
+  LANDLORD_CONTRACT_NUDGE,
   VIEWING_CANCELLED,
   VIEWING_MOVED,
   APPLICATION_ACCEPTED_LANDLORD,
@@ -634,6 +635,27 @@ export const TLE_EMAILS: CatalogEntry[] = [
           agentName: "Rhiannon Dodge",
           agentFirst: "Rhiannon",
           deckLink: `${SITE}/present/example`,
+          link: `${SITE}/landlord/enter?token=example`,
+        })
+      )(),
+  },
+  {
+    id: "landlord-contract-nudge",
+    group: "Market appraisals",
+    name: "A Reminder to Sign Your Contract",
+    audience: "landlord",
+    trigger: "The agent presses Nudge to sign on the appraisal, and on its own two, five and nine days after the terms were sent, until they are signed",
+    fires: "Wired 17 Sep 2026. components/appraisal/TermsCard.tsx → POST /api/appraisals/[id]/nudge, and os-cron-scheduled-sends → lib/contract-nudge.ts, on the public sender, reply-to the agent.",
+    to: "The landlord on the appraisal",
+    summary:
+      "James, 17 Sep: a nudge the agent can send from the file that also runs on its own. The button signs them in and opens the contract on their property file.",
+    doc: LANDLORD_CONTRACT_NUDGE,
+    render: (o) =>
+      blocksAs("landlord")(
+        withSample(o ?? LANDLORD_CONTRACT_NUDGE, {
+          firstName: "Helen",
+          address: "12 Chorlton Road",
+          agentFirst: "Rhiannon",
           link: `${SITE}/landlord/enter?token=example`,
         })
       )(),

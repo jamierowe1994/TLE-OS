@@ -10,6 +10,7 @@ import { getAppraisal } from "@/lib/appraisal-store";
 import { ResendBlocked, sendEmail } from "@/lib/resend";
 import { VIDEO_CHASE_KIND, videoRecorded } from "@/lib/video-chase";
 import { runDeckReminders } from "@/lib/deck-reminders";
+import { runContractNudges } from "@/lib/contract-nudge";
 import { publicOrigin } from "@/lib/origin";
 
 /**
@@ -194,7 +195,11 @@ export async function POST(req: NextRequest) {
      booked late, moved, or built at midnight is still judged on the day. */
   const decks = await runDeckReminders(publicOrigin(req)).catch((e) => ({ chased: 0, sent: 0, failed: [e instanceof Error ? e.message : "Deck reminders failed."] }));
 
-  return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, skipped: skipped.length, failed, decks });
+  /* Landlords who have not signed: nudged two, five and nine days after the
+     terms went (lib/contract-nudge). */
+  const nudges = await runContractNudges(publicOrigin(req)).catch((e) => ({ sent: 0, failed: [e instanceof Error ? e.message : "Nudges failed."] }));
+
+  return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, skipped: skipped.length, failed, decks, nudges });
 }
 
 /** A dry read: what is due, without sending it. */

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import SignModal from "@/components/landlord/SignModal";
 import { useSigning } from "@/lib/use-signing";
@@ -13,6 +14,8 @@ import { useSigning } from "@/lib/use-signing";
  * page has the step gone and the file at compliance. If signing is not
  * switched on, or the terms are not ready, the tile says so in place.
  */
+let autoOpened = false;
+
 export default function SignTile({
   appraisalId,
   url,
@@ -42,9 +45,24 @@ export default function SignTile({
 }) {
   const { open, close, signing, busy, note } = useSigning({ appraisalId, url });
 
+  /* ?sign=1 - the contract nudge's button lands here and opens the contract
+     straight away (James, 17 Sep 2026). Once per page: the same tile can be
+     on the page two or three times. */
+  useEffect(() => {
+    if (autoOpened || !appraisalId) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("sign") !== "1") return;
+    autoOpened = true;
+    params.delete("sign");
+    const qs = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+    void open();
+  }, [appraisalId, open]);
+
   const modal = signing ? (
     <SignModal
       url={signing}
+      appraisalId={appraisalId}
       onClose={close}
       onDone={() => {
         close();

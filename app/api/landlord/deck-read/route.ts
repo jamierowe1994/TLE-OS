@@ -15,11 +15,23 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   const me = await currentLandlord();
   if (!me) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
-  const { token } = (await req.json().catch(() => ({}))) as { token?: string };
+  const { token, view } = (await req.json().catch(() => ({}))) as { token?: string; view?: boolean };
   if (!token) return NextResponse.json({ ok: false, error: "Which presentation?" }, { status: 400 });
   const journeys = await landlordJourneys(me);
   if (!journeys.some((j) => j.decks.some((d) => d.token === token))) {
     return NextResponse.json({ ok: false, error: "Not one of yours." }, { status: 404 });
+  }
+  /* view: an open of the booklet, counted for the agent's eye icon. */
+  if (hasDb() && view) {
+    await q(
+      `INSERT INTO os_case_state (kind, record_id, payload, updated_at, updated_by)
+       VALUES ('landlord-deck-views', $1, $2::jsonb, NOW(), $3)
+       ON CONFLICT (kind, record_id) DO UPDATE
+         SET payload = jsonb_build_object('count', COALESCE((os_case_state.payload->>'count')::int, 0) + 1, 'lastAt', $4::text),
+             updated_at = NOW()`,
+      [token, JSON.stringify({ count: 1, lastAt: new Date().toISOString() }), me.email, new Date().toISOString()]
+    );
+    return NextResponse.json({ ok: true });
   }
   if (hasDb()) {
     await q(

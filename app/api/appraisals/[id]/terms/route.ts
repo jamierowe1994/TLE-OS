@@ -7,6 +7,8 @@ import { contractSendReady, contractSendRecord, sendContractPack, ContractSendRe
 import { ResendBlocked } from "@/lib/resend";
 import { publicOrigin } from "@/lib/origin";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
+import { nextAutoNudge, nudgeRecord, viewCounts } from "@/lib/contract-nudge";
+import { presentationsFor } from "@/lib/present-store";
 
 /**
  * One appraisal's contract: where it has got to, and the way to chase it.
@@ -54,7 +56,16 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     return NextResponse.json({ ok: true, connected: false, sendUnlocked: false, parties: [] });
   }
   try {
-    const [parties, sent] = await Promise.all([termsParties(id), contractSendRecord(id)]);
+    const refs = [...new Set([got.ma.leadId, got.ma.id].filter((r): r is string => Boolean(r)))];
+    const [parties, sent, nudge, decks] = await Promise.all([
+      termsParties(id),
+      contractSendRecord(id),
+      nudgeRecord(id),
+      Promise.all(refs.map((r) => presentationsFor(r))).then((l) => l.flat()),
+    ]);
+    const post = decks.filter((d) => d.kind === "post-appraisal").sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null;
+    const views = await viewCounts(id, post?.token ?? null);
+    const nextNudge = sent ? nextAutoNudge(sent.firstSentAt, nudge) : null;
     return NextResponse.json({
       ok: true,
       connected: true,
@@ -63,6 +74,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
          laid over DocuSeal's, which no longer moves. */
       parties: parties.map((p) => (p.role === "landlord" && sent ? { ...p, sentAt: sent.lastSentAt } : p)),
       sent,
+      nudge,
+      nextNudgeAt: nextNudge ? nextNudge.toISOString() : null,
+      views,
     });
   } catch (e) {
     const why = e instanceof DocusealBlocked ? e.message : "Couldn't read the contract just now.";

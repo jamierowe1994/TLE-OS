@@ -8,6 +8,7 @@ import { createPassport } from "@/lib/passport";
 import { createCase } from "@/lib/plc-store";
 import { removeFromOutlook } from "@/lib/outlook-calendar";
 import { changeRexEvent } from "@/lib/rex-diary-write";
+import { archiveTermsFor, docusealConfigured } from "@/lib/docuseal";
 import { KITS, TEST_FILE_SIDES, sideOfKit, type KitId, type TestFileSide, type TestWho } from "@/lib/testing-journeys";
 import { KitRefused, londonAt, runKit, TEST_ADDRESS, TEST_POSTCODE, type Refs } from "@/lib/test-kits";
 
@@ -198,6 +199,19 @@ async function unwind(refs: Refs, ownerEmail: string, since: Date | string): Pro
   await run(`DELETE FROM os_lead_facts WHERE lead_id = ANY($1)`, [leadIds]);
   await run(`DELETE FROM os_campaign_sends WHERE enrolment_id IN (SELECT id FROM os_campaign_enrolments WHERE record_id = ANY($1))`, [leadIds]);
   await run(`DELETE FROM os_campaign_enrolments WHERE record_id = ANY($1)`, [leadIds]);
+  /* The contract and everything around the presentations, before the decks
+     go: a reset appraisal keeps its id, so anything keyed on it or on a deck
+     token came straight back (17 Sep 2026 - the file said "signed"). */
+  const deckTokens = (await q<{ token: string }>(`SELECT token FROM os_presentations WHERE ref = ANY($1)`, [refIds]).catch(() => [])).map((t) => t.token);
+  await run(
+    `DELETE FROM os_case_state
+      WHERE (kind IN ('deck-emailed', 'landlord-deck-views') AND record_id = ANY($1))
+         OR (kind = 'landlord-deck-read' AND split_part(record_id, '|', 2) = ANY($1))
+         OR (kind IN ('deck-build-chase') AND split_part(record_id, '|', 1) = ANY($2))`,
+    [deckTokens, appraisals]
+  );
+  await run(`DELETE FROM os_signed_documents WHERE appraisal_id = ANY($1)`, [appraisals]);
+  if (docusealConfigured()) for (const a of appraisals) await archiveTermsFor(a).catch(() => 0);
   await run(`DELETE FROM os_presentations WHERE ref = ANY($1)`, [refIds]);
   await run(`DELETE FROM os_market_appraisals WHERE id = ANY($1) OR lead_id = ANY($2)`, [appraisals, leadIds]);
   /* Passports: the file's own, and any the flow made for this person - a

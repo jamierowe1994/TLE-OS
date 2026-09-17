@@ -20,6 +20,7 @@ import type { SigningStep } from "@/lib/signing-steps";
  */
 export default function SignModal({
   url,
+  appraisalId,
   email,
   steps,
   closeLabel,
@@ -27,6 +28,7 @@ export default function SignModal({
   onDone,
 }: {
   url: string;
+  appraisalId?: string | null;
   email?: string | null;
   /** Whose boxes these are. The agent's five differ from the landlord's. */
   steps?: SigningStep[];
@@ -51,7 +53,7 @@ export default function SignModal({
       style={{ animation: "sign-dim 460ms ease-out both" }}
     >
       <style>{"@keyframes sign-dim { from { opacity: 0 } to { opacity: 1 } }"}</style>
-      <SignSheet url={url} email={email} steps={steps} closeLabel={closeLabel} onClose={onClose} onDone={onDone} />
+      <SignSheet url={url} appraisalId={appraisalId} email={email} steps={steps} closeLabel={closeLabel} onClose={onClose} onDone={onDone} />
     </div>
   );
 }

@@ -935,6 +935,35 @@ export const LANDLORD_CONTRACT_PACK = {
 } as const;
 
 /**
+ * Landlord: a nudge to sign the contract (James, 17 Sep 2026).
+ *
+ * "Give the agent the ability to send a nudge, which will send an email out
+ * reminding them to sign the contract ... That should then automate ... It'll
+ * open straight into the landlord portal, straight into the contracts." The
+ * button signs them in and opens the contract on their file; sent by hand from
+ * the appraisal and on its own two, five and nine days after the terms went.
+ */
+export const LANDLORD_CONTRACT_NUDGE = {
+  subject: "A reminder: your contract for {{address}}",
+  preheader: "It's ready and waiting - about two minutes to sign.",
+  mode: "blocks",
+  blocks: [
+    H("lcn1", "Your contract is ready to sign"),
+    T(
+      "lcn2",
+      "Hi {{firstName}},<br><br>Just a reminder that your contract for <strong>{{address}}</strong> is ready and waiting in your property file. {{agentFirst}} has already signed their half."
+    ),
+    T("lcn3", "It takes about two minutes, and the button takes you straight to it."),
+    BTN("lcn4", "Sign your contract", "{{link}}"),
+    SP("lcn5", 8),
+    T("lcn6", "Any questions at all, just reply to this email and it comes straight to {{agentFirst}}."),
+    T("lcn7", "The Letting Experts"),
+    FOOT("lcn8", "You're getting this because your terms of business with The Letting Experts are waiting for your signature."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/**
  * Landlord: signed, but the property questions are not finished (15 Sep 2026).
  *
  * Susan's call, 14 Sep: the questionnaire "keeps emailing them until it is

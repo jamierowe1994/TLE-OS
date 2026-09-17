@@ -178,6 +178,15 @@ export default function PresentModal({
      second spread on a laptop, the third page on a phone. That is what moves
      their next step from View your presentation to Sign your contract. */
   const [readSent, setReadSent] = useState(false);
+  /* Every open counts once, for the eye on the agent's file. */
+  useEffect(() => {
+    if (!readToken) return;
+    void fetch("/api/landlord/deck-read", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: readToken, view: true }),
+    }).catch(() => {});
+  }, [readToken]);
   useEffect(() => {
     if (!readToken || readSent || page.at < (phone ? 2 : 1)) return;
     setReadSent(true);
@@ -440,6 +449,7 @@ export default function PresentModal({
             {signUrl ? (
               <SignSheet
                 url={signUrl}
+                appraisalId={sign?.appraisalId ?? null}
                 open={signOpen}
                 height="calc(100% - 56px)"
                 closeLabel="Back to the presentation"

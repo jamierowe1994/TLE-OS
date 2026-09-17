@@ -321,8 +321,9 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
          questionnaire itself uses. */
       questions: {
         id: "questions",
-        label: "Tell us about the property",
-        sub: answered.done === 0 ? "Seven short screens - it saves as you go" : `${answered.done} of ${answered.of} done`,
+        /* James, 17 Sep 2026: after signing, "we need some details". */
+        label: "We need some details",
+        sub: answered.done === 0 ? "A few questions about the property - it saves as you go" : `${answered.done} of ${answered.of} done`,
         href: "/landlord/questions",
         icon: "key",
         done: answered.done >= answered.of,

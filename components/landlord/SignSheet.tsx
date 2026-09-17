@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import SignedNext from "@/components/landlord/SignedNext";
 import DocusealEmbed from "@/components/landlord/DocusealEmbed";
 import { LANDLORD_SIGNING, type SigningStep } from "@/lib/signing-steps";
 
@@ -71,6 +72,7 @@ const DOTS = 'button[aria-label^="Step "]';
 
 export default function SignSheet({
   url,
+  appraisalId,
   email,
   steps = LANDLORD_SIGNING,
   height,
@@ -80,6 +82,9 @@ export default function SignSheet({
   onDone,
 }: {
   url: string;
+  /** The landlord's appraisal. Set, finishing brings up what comes next
+   *  (SignedNext); left out - the agent's own signing - it just says done. */
+  appraisalId?: string | null;
   email?: string | null;
   /** What they are signing, in their words. See lib/signing-steps. */
   steps?: SigningStep[];
@@ -422,6 +427,7 @@ export default function SignSheet({
 
   return (
     <div className="relative flex w-full justify-center" style={{ height: tall }} onClick={onClose}>
+      {done && appraisalId && <SignedNext appraisalId={appraisalId} />}
       <div
         className="relative"
         style={{
