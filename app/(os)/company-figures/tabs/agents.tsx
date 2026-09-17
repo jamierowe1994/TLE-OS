@@ -596,101 +596,8 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
 
   return (
     <div>
-      {/* ----------------------- live REX totals ----------------------- */}
-      {/* ---- live from PayProp: each partner's book and commission ---- */}
-      {book ? (
-        <>
-          <SectionTitle>Live from PayProp</SectionTitle>
-          <div className="card mb-6 p-5">
-            <p className="text-[12.5px] text-muted">
-              Managed properties and rent under management come from PayProp&rsquo;s
-              own responsible-agent field; commission is what each partner was
-              actually paid this month.
-            </p>
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full text-[12.5px]">
-                <thead>
-                  <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
-                    <th className="pb-2 font-semibold">Partner</th>
-                    <th className="pb-2 text-right font-semibold">Properties</th>
-                    <th className="pb-2 text-right font-semibold">Tenancies</th>
-                    <th className="pb-2 text-right font-semibold">Rent / month</th>
-                    <th className="pb-2 text-right font-semibold">Earned this month</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.values(book.byAgent)
-                    .sort((a, b) => b.properties - a.properties)
-                    .map((a) => {
-                      const label = a.names.join(" / ");
-                      // Commission is keyed by the beneficiary name PayProp
-                      // pays, which may differ from the property's agent name.
-                      const paid = (earnings ?? []).find((e) =>
-                        a.names.some(
-                          (n) => n.toLowerCase().trim() === e.name.toLowerCase().trim()
-                        )
-                      );
-                      return (
-                        <tr key={label} className="border-t border-line">
-                          <td className="py-2">{label}</td>
-                          <td className="py-2 text-right tnum">{a.properties}</td>
-                          <td className="py-2 text-right tnum">{a.activeTenancies}</td>
-                          <td className="py-2 text-right tnum">
-                            £{Math.round(a.rentRoll).toLocaleString("en-GB")}
-                          </td>
-                          <td className="py-2 text-right tnum">
-                            {paid
-                              ? `£${Math.round(paid.amount).toLocaleString("en-GB")}`
-                              : "—"}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
-      ) : null}
-
-      <SectionTitle>Live from REX</SectionTitle>
-      {liveLoading && !live ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="card h-24 animate-pulse" />
-          ))}
-        </div>
-      ) : live && live.linkedCount > 0 ? (
-        <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            {liveCards.map((c) => (
-              <div key={c.label} className="card relative p-4">
-                <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-1.5 py-0.5 text-[9px] font-semibold text-green-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> LIVE
-                </span>
-                <div className="stat-label pr-12 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  {c.label}
-                </div>
-                <div className="stat-value mt-2 text-[24px]">{c.value}</div>
-                <div className="mt-1 text-[11px] text-muted">{c.sub}</div>
-              </div>
-            ))}
-          </div>
-          <p className="mt-2 text-[11px] text-muted">
-            Live from REX across{" "}
-            <span className="font-semibold text-ink">
-              {live.linkedCount} of {live.totalAgents}
-            </span>{" "}
-            agents linked to a REX id. Link more accounts below to grow the live figures.
-          </p>
-        </>
-      ) : (
-        <p className="rounded-xl border border-line bg-card px-4 py-3 text-[13px] text-muted">
-          No agents are linked to a REX id yet. Set an agent&rsquo;s REX id in the accounts below and
-          their live appraisals, listings, pipeline and portfolio will roll up here.
-        </p>
-      )}
-
+      {/* Susan, 17 Sep 2026: the per-agent KPIs are what she opens this tab
+          for, so they lead. The PayProp book and the REX totals follow. */}
       {/* ----------------------- per-agent KPI table ----------------------- */}
       <SectionTitle source={seed.agentKpisJulyMtd.source}>
         Per-Agent KPIs — {monthLabel(month)}
@@ -813,6 +720,101 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
           onClose={() => setSelectedAgent(null)}
         />
       ) : null}
+
+      {/* ----------------------- live REX totals ----------------------- */}
+      {/* ---- live from PayProp: each partner's book and commission ---- */}
+      {book ? (
+        <>
+          <SectionTitle>Live from PayProp</SectionTitle>
+          <div className="card mb-6 p-5">
+            <p className="text-[12.5px] text-muted">
+              Managed properties and rent under management come from PayProp&rsquo;s
+              own responsible-agent field; commission is what each partner was
+              actually paid this month.
+            </p>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-[12.5px]">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
+                    <th className="pb-2 font-semibold">Partner</th>
+                    <th className="pb-2 text-right font-semibold">Properties</th>
+                    <th className="pb-2 text-right font-semibold">Tenancies</th>
+                    <th className="pb-2 text-right font-semibold">Rent / month</th>
+                    <th className="pb-2 text-right font-semibold">Earned this month</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.values(book.byAgent)
+                    .sort((a, b) => b.properties - a.properties)
+                    .map((a) => {
+                      const label = a.names.join(" / ");
+                      // Commission is keyed by the beneficiary name PayProp
+                      // pays, which may differ from the property's agent name.
+                      const paid = (earnings ?? []).find((e) =>
+                        a.names.some(
+                          (n) => n.toLowerCase().trim() === e.name.toLowerCase().trim()
+                        )
+                      );
+                      return (
+                        <tr key={label} className="border-t border-line">
+                          <td className="py-2">{label}</td>
+                          <td className="py-2 text-right tnum">{a.properties}</td>
+                          <td className="py-2 text-right tnum">{a.activeTenancies}</td>
+                          <td className="py-2 text-right tnum">
+                            £{Math.round(a.rentRoll).toLocaleString("en-GB")}
+                          </td>
+                          <td className="py-2 text-right tnum">
+                            {paid
+                              ? `£${Math.round(paid.amount).toLocaleString("en-GB")}`
+                              : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      ) : null}
+
+      <SectionTitle>Live from REX</SectionTitle>
+      {liveLoading && !live ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="card h-24 animate-pulse" />
+          ))}
+        </div>
+      ) : live && live.linkedCount > 0 ? (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {liveCards.map((c) => (
+              <div key={c.label} className="card relative p-4">
+                <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-1.5 py-0.5 text-[9px] font-semibold text-green-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> LIVE
+                </span>
+                <div className="stat-label pr-12 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  {c.label}
+                </div>
+                <div className="stat-value mt-2 text-[24px]">{c.value}</div>
+                <div className="mt-1 text-[11px] text-muted">{c.sub}</div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-muted">
+            Live from REX across{" "}
+            <span className="font-semibold text-ink">
+              {live.linkedCount} of {live.totalAgents}
+            </span>{" "}
+            agents linked to a REX id. Link more accounts below to grow the live figures.
+          </p>
+        </>
+      ) : (
+        <p className="rounded-xl border border-line bg-card px-4 py-3 text-[13px] text-muted">
+          No agents are linked to a REX id yet. Set an agent&rsquo;s REX id in the accounts below and
+          their live appraisals, listings, pipeline and portfolio will roll up here.
+        </p>
+      )}
 
       {/* --------------------- partner net income YTD ---------------------
           The Jan–Jun 2026 per-partner table used to live here: 24 rows of

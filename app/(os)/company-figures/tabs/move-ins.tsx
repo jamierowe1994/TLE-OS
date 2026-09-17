@@ -305,14 +305,19 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
 
   // Live Propoly strip — the true progression pipeline + completed move-ins.
   const [livePropoly, setLivePropoly] = useState<PropolyBiz | null>(null);
+  const [propolyAnswered, setPropolyAnswered] = useState(false);
   useEffect(() => {
     let cancelled = false;
+    setPropolyAnswered(false);
     fetch(`/api/business/live-business?month=${encodeURIComponent(month)}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => {
         if (!cancelled) setLivePropoly((j as { propoly?: PropolyBiz | null }).propoly ?? null);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setPropolyAnswered(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -420,10 +425,16 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
     }
   }
 
-  // Completed move-ins: explicit count override wins; otherwise snapshot count
-  // plus any rows the admin has added through the portal.
+  // Completed move-ins: explicit count override wins; otherwise Propoly's live
+  // count plus any rows the admin has added through the portal.
+  //
+  // This read the July seed (h.julyMtdCompleted) and nothing else, so from
+  // August it was a dash with a red dot under every month - while the Propoly
+  // strip directly above it had the real count the whole time.
+  const liveCompleted =
+    livePropoly && livePropoly.month === month ? livePropoly.moveInsThisMonth : null;
   const completed: StatValue = useMemo(() => {
-    const base = resolveStat(null, countOverride, h.julyMtdCompleted);
+    const base = resolveStat(liveCompleted, countOverride, h.julyMtdCompleted, "live-propoly");
     if (countOverride == null && addedRows.length > 0 && base.value != null) {
       return {
         value: base.value + addedRows.length,
@@ -432,7 +443,17 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
       };
     }
     return base;
-  }, [countOverride, addedRows, h.julyMtdCompleted, month]);
+  }, [liveCompleted, countOverride, addedRows, h.julyMtdCompleted, month]);
+
+  /* Managed against let only, from the same Propoly rows the table lists -
+     only when the table is showing this month, or the split is another
+     month's. Replaces a hand-typed "6 new lets + 4 relets" from July. */
+  const completedSub = useMemo(() => {
+    if (!rows?.moveIns || tableMonth !== month) return "Completed Propoly deals";
+    const managed = rows.moveIns.filter((r) => /manag/i.test(r.service ?? "")).length;
+    const letOnly = rows.moveIns.filter((r) => /tenant.?find|let(ting)?.?only/i.test(r.service ?? "")).length;
+    return `${managed} managed · ${letOnly} let only`;
+  }, [rows, tableMonth, month]);
 
 
   const addedTwelveMonthValue = addedRows.reduce(
@@ -609,7 +630,8 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
         <StatCard
           label={`Completed (${monthLabel(month)})`}
           stat={completed}
-          sub="6 new lets + 4 relets"
+          sub={completedSub}
+          loading={!propolyAnswered && countOverride == null}
           big
         />
         {/* Removed 18 Aug 2026 (James): "Remaining in July pipeline",

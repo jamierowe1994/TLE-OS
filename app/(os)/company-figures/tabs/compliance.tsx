@@ -1,477 +1,284 @@
 "use client";
 
-// Admin tab: Compliance — live from REX.
+// Admin tab: Compliance — per certificate type, on the managed book.
 //
-// WHAT FOLLOWS THE MONTH PICKER AND WHAT CAN'T. Measured on the live account,
-// 11 Aug 2026, and the reasoning is in lib/rex-stats.ts:
+// Rebuilt 17 Sep 2026 from Susan's notes ("we need the breakdown of compliance
+// per category type i.e. Gas, EICR etc and % of portfolio").
 //
-//   • REX edits a compliance entry IN PLACE when a certificate is renewed —
-//     6,426 of 6,467 (property, type) pairs hold exactly one entry. So today's
-//     expiry date is the ONLY one REX has, and rewinding "overdue" to a past
-//     month would report a renewed property as having been compliant during
-//     the months it was actually overdue. Wrong in the dangerous direction.
-//   • The record itself only starts in November 2025 (2,554 entries created
-//     that month — the EPC bulk import — against 87 in the whole of the
-//     preceding year). A past month would look clean because nobody had typed
-//     it in yet.
+// The old tab counted every compliance entry REX holds across the account —
+// 2,635 items including let-only homes, oil safety and three kinds of HMO
+// licence — so its "354 overdue" answered a different question from the
+// Compliance page Michael works from. This one reads the same book, under the
+// same scope and the same duty rules, through /api/business/compliance-breakdown.
 //
-// So the STOCK is as at today and stamped. The two FLOWS — recorded in the
-// month, expiring in the month — come straight off dates REX holds, and those
-// do follow the picker.
+// Stock, not flow: REX edits a certificate in place when it is renewed, so a
+// past month cannot be rebuilt. Everything here is as at the last read.
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import StatCard from "@/components/business/StatCard";
-import DataTable, { type DataTableColumn } from "@/components/business/DataTable";
 import type { SeedData } from "@/lib/business/seed-data"; // type-only — erased at build
-import type { ComplianceAgentRow, ComplianceTypeRow } from "@/lib/business/seed-types";
-import { formatPct, monthLabel } from "@/lib/business/format";
+import { monthLabel } from "@/lib/business/format";
+import { liveMonth } from "@/lib/business/roster";
 
-interface BucketRow {
+interface CertRow {
   key: string;
   label: string;
-  total: number;
-  overdue: number;
-  upcoming: number;
+  required: number;
+  inDate: number;
+  dueSoon: number;
+  expired: number;
+  noRecord: number;
+  compliantPct: number | null;
+  portfolioPct: number;
 }
-interface AgentRowLive extends BucketRow {
-  pctOverdue: number;
-  recorded: number;
-  expiring: number;
-}
-interface LiveCompliance {
+
+interface Breakdown {
+  ok: true;
   asAt: string;
-  month: string;
-  totalItems: number;
-  overdue: number;
-  upcoming: number;
-  valid: number;
-  noExpiry: number;
-  byType: BucketRow[];
-  byAgent: AgentRowLive[];
-  recordedInMonth: number;
-  expiringInMonth: number;
-  recordedSeries: Array<{ month: string; recorded: number; expiring: number }>;
-  otherBusinesses: number;
-  unattributed: number;
-  contactEntries: number;
-  impossibleDates: number;
-  agentsResolved: boolean;
-  tleScoped: boolean;
+  stale: boolean;
+  homes: number;
+  hmos: number;
+  gasHomes: number;
+  gasUnanswered: number;
+  fullyCompliant: number;
+  fullyCompliantPct: number | null;
+  withExpired: number;
+  withNoRecord: number;
+  withDueSoon: number;
+  certificates: CertRow[];
 }
 
-const pct = (n: number, total: number) =>
-  total ? `${((n / total) * 100).toFixed(1)}%` : "—";
+const LONG_LABEL: Record<string, string> = {
+  gas: "Gas Safety",
+  eicr: "EICR",
+  epc: "EPC",
+  licence: "HMO Licence",
+  fire: "Fire Risk Assessment",
+  pat: "PAT Testing",
+  alarms: "Smoke & CO Alarms",
+  legionella: "Legionella",
+};
 
+const n = (v: number) => v.toLocaleString("en-GB");
 const stamp = (iso: string) =>
-  new Date(iso).toLocaleString("en-GB", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
-function PctOverdueBar({ pct }: { pct: number }) {
-  const clamped = Math.min(100, Math.max(0, pct));
+/** Green from 95%, amber from 85%, red below. Placeholders until Michael sets them. */
+const tone = (pct: number | null) =>
+  pct == null ? "bg-line" : pct >= 95 ? "bg-green-500" : pct >= 85 ? "bg-amber-400" : "bg-red-500";
+
+function Bar({ pct }: { pct: number | null }) {
   return (
-    <div className="flex items-center justify-end gap-2">
-      <div className="h-1.5 w-24 overflow-hidden rounded-full bg-gray-100">
-        <div
-          className={`h-full rounded-full ${clamped >= 75 ? "bg-accent" : clamped >= 40 ? "bg-amber-400" : "bg-green-500"}`}
-          style={{ width: `${clamped}%` }}
-        />
-      </div>
-      <span className="w-10 text-right tnum">{formatPct(pct)}</span>
+    <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100" aria-hidden>
+      <div className={`h-full rounded-full ${tone(pct)}`} style={{ width: `${Math.max(0, Math.min(100, pct ?? 0))}%` }} />
     </div>
   );
 }
 
-/* ------------------------------ live columns ------------------------------ */
+function Tile({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="card p-5">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</div>
+      <div className="stat-value stat-value--big mt-2">{value}</div>
+      {sub ? <div className="mt-1.5 text-xs text-muted">{sub}</div> : null}
+    </div>
+  );
+}
 
-const LIVE_TYPE_COLUMNS: DataTableColumn<Record<string, unknown>>[] = [
-  { key: "label", label: "Certificate type" },
-  { key: "total", label: "Held", align: "right" },
-  {
-    key: "overdue",
-    label: "Overdue",
-    align: "right",
-    render: (r) => (
-      <span className={Number(r.overdue) > 0 ? "font-semibold text-accent" : undefined}>
-        {String(r.overdue)}
-      </span>
-    ),
-  },
-  { key: "upcoming", label: "Next 60 days", align: "right" },
-  {
-    key: "pct",
-    label: "% overdue",
-    align: "right",
-    render: (r) => (
-      <PctOverdueBar pct={Number(r.total) ? (Number(r.overdue) / Number(r.total)) * 100 : 0} />
-    ),
-  },
-];
+function CertCard({ row, homes }: { row: CertRow; homes: number }) {
+  return (
+    <div className="card flex h-full flex-col p-5">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="text-[15px] text-ink">{LONG_LABEL[row.key] ?? row.label}</h3>
+        <span className="text-[11px] text-muted">
+          {n(row.required)} homes · {row.portfolioPct}% of portfolio
+        </span>
+      </div>
+      <div className="mt-3 flex items-end gap-2">
+        <span className="stat-value stat-value--big">{row.compliantPct == null ? "—" : `${row.compliantPct}%`}</span>
+        <span className="pb-1 text-xs text-muted">compliant</span>
+      </div>
+      <div className="mt-2">
+        <Bar pct={row.compliantPct} />
+      </div>
+      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-[12.5px]">
+        <div className="flex justify-between gap-2">
+          <dt className="text-muted">In date</dt>
+          <dd className="tnum font-semibold text-ink">{n(row.inDate)}</dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="text-muted">Due in 30 days</dt>
+          <dd className="tnum font-semibold text-amber-700">{n(row.dueSoon)}</dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="text-muted">Expired</dt>
+          <dd className="tnum font-semibold text-red-700">{n(row.expired)}</dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="text-muted">No record</dt>
+          <dd className="tnum font-semibold text-red-700">{n(row.noRecord)}</dd>
+        </div>
+      </dl>
+      {row.key === "gas" && row.required < homes ? (
+        <p className="mt-auto pt-3 text-[11px] text-muted">
+          The other {n(homes - row.required)} homes have no gas duty.
+        </p>
+      ) : null}
+    </div>
+  );
+}
 
-/* ---------------------------- snapshot columns ---------------------------- */
+export default function ComplianceTab({ month }: { month: string; seed: SeedData }) {
+  const [data, setData] = useState<Breakdown | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-const TYPE_COLUMNS: DataTableColumn<ComplianceTypeRow & Record<string, unknown>>[] = [
-  {
-    key: "type",
-    label: "Certificate type",
-    render: (r) => (
-      <span className={r.type === "Total" ? "font-semibold" : undefined}>{r.type}</span>
-    ),
-  },
-  { key: "total", label: "Total", align: "right" },
-  {
-    key: "overdue",
-    label: "Overdue",
-    align: "right",
-    render: (r) => <span className={r.overdue > 0 ? "font-semibold text-accent" : undefined}>{r.overdue}</span>,
-  },
-  { key: "upcoming", label: "Upcoming", align: "right" },
-];
-
-const AGENT_COLUMNS: DataTableColumn<ComplianceAgentRow & Record<string, unknown>>[] = [
-  {
-    key: "agent",
-    label: "Partner",
-    render: (r) => (
-      <span className={r.agent === "Total" ? "font-semibold" : undefined}>{r.agent}</span>
-    ),
-  },
-  { key: "total", label: "Total", align: "right" },
-  {
-    key: "overdue",
-    label: "Overdue",
-    align: "right",
-    render: (r) => <span className={r.overdue > 0 ? "font-semibold text-accent" : undefined}>{r.overdue}</span>,
-  },
-  { key: "upcoming", label: "Upcoming", align: "right" },
-  {
-    key: "pctOverdue",
-    label: "% overdue",
-    align: "right",
-    render: (r) => <PctOverdueBar pct={r.pctOverdue} />,
-  },
-];
-
-export default function ComplianceTab({ month, seed }: { month: string; seed: SeedData }) {
-  const c = seed.compliance;
-
-  // The REX sweep is ~65 pages at ~13s each, batched eight at a time — roughly
-  // two minutes cold, instant once cached. Poll rather than blocking the tab,
-  // and gate on the month so a slow answer can't land under a heading the user
-  // has already navigated away from.
-  const [live, setLive] = useState<LiveCompliance | null>(null);
   useEffect(() => {
     let cancelled = false;
-    let tries = 0;
-    const ask = () => {
-      fetch(`/api/business/compliance-live?month=${encodeURIComponent(month)}`, { cache: "no-store" })
-        .then((r) => r.json())
-        .then((d: { month?: string; compliance?: LiveCompliance | null }) => {
-          if (cancelled || (d.month && d.month !== month)) return;
-          if (d.compliance) setLive(d.compliance);
-          else if (tries++ < 40) setTimeout(ask, 5000);
-        })
-        .catch(() => {});
-    };
-    ask();
+    fetch("/api/business/compliance-breakdown", { cache: "no-store" })
+      .then(async (r) => {
+        const j = await r.json().catch(() => null);
+        if (cancelled) return;
+        if (r.ok && j?.ok) setData(j as Breakdown);
+        else setError(j?.error ?? `REX didn't answer (${r.status}).`);
+      })
+      .catch(() => !cancelled && setError("REX didn't answer."));
     return () => {
       cancelled = true;
     };
-  }, [month]);
+  }, []);
 
-  const agentRows = live
-    ? [
-        ...live.byAgent,
-        {
-          key: "__total",
-          label: "Total",
-          total: live.byAgent.reduce((t, a) => t + a.total, 0),
-          overdue: live.byAgent.reduce((t, a) => t + a.overdue, 0),
-          upcoming: live.byAgent.reduce((t, a) => t + a.upcoming, 0),
-          recorded: live.byAgent.reduce((t, a) => t + a.recorded, 0),
-          expiring: live.byAgent.reduce((t, a) => t + a.expiring, 0),
-          pctOverdue: (() => {
-            const t = live.byAgent.reduce((s, a) => s + a.total, 0);
-            const o = live.byAgent.reduce((s, a) => s + a.overdue, 0);
-            return t ? (o / t) * 100 : 0;
-          })(),
-        },
-      ]
-    : [];
+  if (error) {
+    return (
+      <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800">
+        <span className="font-semibold">Compliance couldn&rsquo;t be read.</span> {error}
+      </div>
+    );
+  }
 
-  const LIVE_AGENT_COLUMNS: DataTableColumn<Record<string, unknown>>[] = [
-    {
-      key: "label",
-      label: "Partner",
-      render: (r) => (
-        <span className={r.key === "__total" ? "font-semibold" : undefined}>{String(r.label)}</span>
-      ),
-    },
-    { key: "total", label: "Held", align: "right" },
-    {
-      key: "overdue",
-      label: "Overdue",
-      align: "right",
-      render: (r) => (
-        <span className={Number(r.overdue) > 0 ? "font-semibold text-accent" : undefined}>
-          {String(r.overdue)}
-        </span>
-      ),
-    },
-    { key: "upcoming", label: "Next 60 days", align: "right" },
-    {
-      key: "recorded",
-      label: `Recorded ${monthLabel(month)}`,
-      align: "right",
-    },
-    {
-      key: "expiring",
-      label: `Expires ${monthLabel(month)}`,
-      align: "right",
-    },
-    {
-      key: "pctOverdue",
-      label: "% overdue",
-      align: "right",
-      render: (r) => <PctOverdueBar pct={Number(r.pctOverdue)} />,
-    },
-  ];
+  if (!data) {
+    return (
+      <div className="card flex items-center gap-3 p-5 text-[13px] text-muted" aria-busy="true">
+        <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-transparent" aria-hidden />
+        Reading certificates from REX - this takes up to a minute when it hasn&rsquo;t been read recently.
+      </div>
+    );
+  }
+
+  const main = data.certificates.filter((c) => ["gas", "eicr", "epc"].includes(c.key));
+  const needAttention = data.homes - data.fullyCompliant;
 
   return (
     <div className="space-y-6">
-      {/* Source banner */}
-      {live ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-800">
-          <span className="font-semibold">Live from REX — read {stamp(live.asAt)}.</span>{" "}
-          {live.totalItems.toLocaleString("en-GB")} property certificates on TLE properties,{" "}
-          <span className="font-semibold">{live.overdue}</span> overdue and {live.upcoming} due
-          within 60 days.
-          {live.tleScoped ? null : (
-            <>
-              {" "}
-              <span className="font-semibold">
-                REX wouldn&rsquo;t name the partner list this time, so this covers every lettings
-                property in the shared account — not just TLE&rsquo;s.
-              </span>
-            </>
-          )}
+      {month !== liveMonth() ? (
+        <div className="rounded-2xl border border-line bg-card px-4 py-3 text-[13px] text-muted">
+          Everything on this tab is <strong>as at today</strong>, not {monthLabel(month)}. REX
+          overwrites a certificate when it is renewed, so a past month can&apos;t be rebuilt.
         </div>
-      ) : (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
-          <span className="font-semibold">Sweeping REX for compliance…</span> Around two minutes
-          cold — every entry in the account, read once and kept for six hours. Nothing shown until it lands.
-        </div>
-      )}
+      ) : null}
 
-      {/* Why the stock doesn't move with the picker. This is not a caveat for
-          its own sake: the obvious rewind (compare today's expiry date against
-          a past date) reports a RENEWED property as having been compliant
-          during the months it was overdue, which is wrong in the direction
-          that gets someone hurt. */}
-      <div className="rounded-2xl border border-line bg-card px-4 py-3 text-[13px] text-muted">
-        <strong className="text-ink">Valid, expiring and overdue are as at today</strong> — for
-        any month you pick. REX overwrites a certificate&rsquo;s record when it is renewed rather
-        than keeping the old one (6,426 of 6,467 property/type pairs hold exactly one entry), so
-        the only expiry date it holds is the current one. Rewinding it would show a property that
-        was overdue in February as having been fine. What <em>is</em> honestly month-scoped is
-        below: what was <strong>recorded</strong> that month and what <strong>expires</strong> in
-        it — both read straight off dates REX holds.
-      </div>
-
-      {/* Stock — as at today */}
+      {/* ------------------------------ headline ------------------------------ */}
       <section className="space-y-3">
         <div className="flex flex-wrap items-baseline gap-x-3">
-          <h2 className="text-sm font-semibold">Where the book stands — today</h2>
-          {live ? (
-            <span className="text-[11px] text-muted">
-              {live.valid.toLocaleString("en-GB")} valid ·{" "}
-              {live.noExpiry.toLocaleString("en-GB")} with no expiry date recorded
-            </span>
-          ) : null}
+          <h2 className="text-sm font-semibold">Compliance - the Managed Book</h2>
+          <span className="text-[11px] text-muted">
+            Live from REX and REX PM · read {stamp(data.asAt)}
+            {data.stale ? " · refreshing" : ""}
+          </span>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            label="Property certificates"
-            stat={
-              live
-                ? {
-                    value: live.totalItems,
-                    source: "live-rex",
-                    note: "Every active property compliance entry in REX. Contact-level checks (ID, AML, right to rent) are excluded — different job.",
-                  }
-                : c.totals.totalItems
-            }
-            big
+          <Tile
+            label="Homes we manage"
+            value={n(data.homes)}
+            sub={`${n(data.hmos)} HMOs · let only excluded`}
           />
-          <StatCard
-            label="Overdue"
-            stat={
-              live
-                ? { value: live.overdue, source: "live-rex", note: "Past their expiry date, as at the read above." }
-                : c.totals.overdue
-            }
-            big
-            sub={live ? `${pct(live.overdue, live.totalItems)} of the book` : "50.7% of total"}
+          <Tile
+            label="Fully compliant"
+            value={data.fullyCompliantPct == null ? "—" : `${data.fullyCompliantPct}%`}
+            sub={`${n(data.fullyCompliant)} homes hold every certificate they need`}
           />
-          <StatCard
-            label="Due in 60 days"
-            stat={
-              live
-                ? { value: live.upcoming, source: "live-rex", note: "Expiring within the next 60 days." }
-                : c.totals.upcoming
-            }
-            big
-            sub={live ? `${pct(live.upcoming, live.totalItems)} of the book` : "49.3% of total"}
+          <Tile
+            label="Expired certificate"
+            value={n(data.withExpired)}
+            sub="homes with at least one"
           />
-          <StatCard
-            label="No expiry recorded"
-            stat={
-              live
-                ? {
-                    value: live.noExpiry,
-                    source: "live-rex",
-                    note: "REX holds the entry but no expiry date, so it can be flagged neither valid nor overdue. These are invisible to any reminder that runs off dates.",
-                  }
-                : {
-                    value: null,
-                    source: "unavailable",
-                    note: "This one only exists once REX has been read — waiting on the live read.",
-                  }
-            }
-            big
-            sub={live ? `${pct(live.noExpiry, live.totalItems)} — can't be reminded on` : undefined}
+          <Tile
+            label="Missing certificate"
+            value={n(data.withNoRecord)}
+            sub={`homes with no record for at least one · ${n(data.withDueSoon)} due in 30 days`}
           />
         </div>
       </section>
 
-      {/* Flows — these DO follow the picker */}
-      {live ? (
-        <section className="space-y-3">
-          <div className="flex flex-wrap items-baseline gap-x-3">
-            <h2 className="text-sm font-semibold">{monthLabel(month)} — the month itself</h2>
-            <span className="text-[11px] text-muted">
-              live from REX · this section follows the month picker
-            </span>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <StatCard
-              label={`Recorded in ${monthLabel(month)}`}
-              stat={{
-                value: live.recordedInMonth,
-                source: "live-rex",
-                note: "Compliance entries created in REX during this month — the admin actually done. Bulk imports show up here as a spike (November 2025 carries 2,554).",
-              }}
-              big
-            />
-            <StatCard
-              label={`Expiring in ${monthLabel(month)}`}
-              stat={{
-                value: live.expiringInMonth,
-                source: "live-rex",
-                note: "Certificates whose expiry date falls in this month — the only compliance figure that can be read forward, so it is the one to plan against.",
-              }}
-              big
-            />
-          </div>
-          <DataTable
-            columns={[
-              { key: "month", label: "Month", render: (r) => monthLabel(String(r.month)) },
-              { key: "recorded", label: "Recorded", align: "right" },
-              { key: "expiring", label: "Expiring", align: "right" },
-            ]}
-            rows={live.recordedSeries as unknown as Record<string, unknown>[]}
-            compact
-          />
-          <p className="text-[11px] text-muted">
-            Twelve months ending {monthLabel(month)}. Months after today under
-            &ldquo;expiring&rdquo; are a forecast off dates already held — nothing is projected.
-          </p>
-        </section>
-      ) : null}
-
-      {/* By type */}
+      {/* ---------------------------- the big three ---------------------------- */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold">By certificate type</h2>
-        {live ? (
-          <>
-            <DataTable
-              columns={LIVE_TYPE_COLUMNS}
-              rows={live.byType as unknown as Record<string, unknown>[]}
-              compact
-            />
-            <p className="text-[11px] text-muted">
-              Live from REX, as at {stamp(live.asAt)}. Held = entries on record, not properties —
-              a property with two EPCs counts twice.
-            </p>
-          </>
-        ) : (
-          <DataTable columns={TYPE_COLUMNS} rows={[...c.byType, c.byTypeTotal]} compact />
-        )}
+        <h2 className="text-sm font-semibold">By Certificate</h2>
+        <div className="grid gap-4 lg:grid-cols-3">
+          {main.map((row) => (
+            <CertCard key={row.key} row={row} homes={data.homes} />
+          ))}
+        </div>
       </section>
 
-      {/* By partner */}
+      {/* ------------------------------ every type ------------------------------ */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold">By partner</h2>
-        {live && live.byAgent.length ? (
-          <>
-            <DataTable
-              columns={LIVE_AGENT_COLUMNS}
-              rows={agentRows as unknown as Record<string, unknown>[]}
-              compact
-            />
-            <p className="text-[11px] text-muted">
-              Attributed through the listing agent REX holds against each property, so these rows
-              sum exactly to the totals above — the same entries, split.
-            </p>
-          </>
-        ) : (
-          /* No seed fallback — REX's sweep is slow cold, and filling the wait
-             with the 7 Jul capture meant the table read as finished. */
-          <p className="text-xs text-muted">
-            Waiting on REX for the partner split. The sweep takes a couple of minutes cold.
-          </p>
-        )}
+        <h2 className="text-sm font-semibold">Every Certificate Type</h2>
+        <div className="card overflow-x-auto p-0">
+          <table className="w-full min-w-[640px] text-[12.5px]">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
+                <th className="px-4 py-3 font-semibold">Certificate</th>
+                <th className="px-3 py-3 text-right font-semibold">Homes needing it</th>
+                <th className="px-3 py-3 text-right font-semibold">% of portfolio</th>
+                <th className="px-3 py-3 text-right font-semibold">In date</th>
+                <th className="px-3 py-3 text-right font-semibold">Due 30 days</th>
+                <th className="px-3 py-3 text-right font-semibold">Expired</th>
+                <th className="px-3 py-3 text-right font-semibold">No record</th>
+                <th className="w-40 px-4 py-3 text-right font-semibold">Compliant</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.certificates.map((row) => (
+                <tr key={row.key} className="border-t border-line">
+                  <td className="px-4 py-2.5 text-ink">
+                    {LONG_LABEL[row.key] ?? row.label}
+                    {["licence", "fire", "pat", "alarms", "legionella"].includes(row.key) ? (
+                      <span className="ml-1.5 text-[11px] text-muted">HMOs only</span>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-2.5 text-right tnum">{n(row.required)}</td>
+                  <td className="px-3 py-2.5 text-right tnum">{row.portfolioPct}%</td>
+                  <td className="px-3 py-2.5 text-right tnum">{n(row.inDate)}</td>
+                  <td className="px-3 py-2.5 text-right tnum">{n(row.dueSoon)}</td>
+                  <td className="px-3 py-2.5 text-right tnum">{n(row.expired)}</td>
+                  <td className="px-3 py-2.5 text-right tnum">{n(row.noRecord)}</td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center justify-end gap-2">
+                      <div className="w-20">
+                        <Bar pct={row.compliantPct} />
+                      </div>
+                      <span className="w-12 text-right tnum font-semibold text-ink">
+                        {row.compliantPct == null ? "—" : `${row.compliantPct}%`}
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-[11px] leading-relaxed text-muted">
+          Compliant = in date, including those due in the next 30 days. Gas, EICR and EPC are
+          required on every home (gas only where there is gas); the rest only on HMOs. Homes let
+          only are the landlord&rsquo;s duty and are left out.
+          {data.gasUnanswered > 0
+            ? ` ${n(data.gasUnanswered)} ${data.gasUnanswered === 1 ? "home has" : "homes have"} no answer yet on whether there is gas.`
+            : ""}{" "}
+          <Link href="/compliance" className="font-semibold text-ink underline underline-offset-2">
+            Open Compliance
+          </Link>{" "}
+          for the homes behind each figure.
+        </p>
       </section>
-
-      {/* What the figures deliberately leave out. Six businesses share this REX
-          account, so the raw sweep is roughly three times TLE's book — most of
-          it EPCs on The Property Experts' sales stock. Counting those would
-          make the headline bigger and meaningless, and would put overdue
-          certificates on the dashboard that nobody here can chase. */}
-      {live ? (
-        <section className="rounded-2xl border border-line bg-card px-4 py-3 text-[12px] text-muted">
-          <div className="font-semibold text-ink">What this excludes, and why</div>
-          <ul className="mt-1.5 space-y-1">
-            <li>
-              <strong>{live.otherBusinesses.toLocaleString("en-GB")}</strong> certificates on
-              lettings properties belonging to another business in this shared REX account.
-            </li>
-            <li>
-              <strong>{live.unattributed.toLocaleString("en-GB")}</strong> on properties no
-              current lettings listing claims — sold, archived, or never listed. Mostly EPCs on
-              sales stock. Some will be TLE properties whose listing has since been archived, so
-              this is the one exclusion that costs us a little coverage; the alternative is
-              putting somebody else&rsquo;s overdue gas certificate on a partner&rsquo;s row.
-            </li>
-            <li>
-              <strong>{live.contactEntries.toLocaleString("en-GB")}</strong> contact-level checks
-              — ID, right to rent, AML, referencing. A different job that lives in the same REX
-              table. Adding them in is why this tile used to read 6,397.
-            </li>
-            {live.impossibleDates > 0 ? (
-              <li>
-                {live.impossibleDates}{" "}
-                {live.impossibleDates === 1 ? "certificate carries" : "certificates carry"} an
-                expiry date that isn&rsquo;t a real year (3033, 8203) — keying slips worth
-                correcting in REX. Counted in the book, flagged neither valid nor overdue.
-              </li>
-            ) : null}
-          </ul>
-        </section>
-      ) : null}
     </div>
   );
 }

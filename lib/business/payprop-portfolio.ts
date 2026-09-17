@@ -103,6 +103,10 @@ export interface AccountSlice {
   rentRoll: number;
   /** Mean rent across that account's properties. */
   avgRent: number;
+  /** PayProp service level counts for this agency alone, e.g.
+   *  { "Fully managed": 305, "Let only": 188 }. Absent on a book cached
+   *  before 17 Sep 2026. */
+  serviceLevels?: Record<string, number>;
 }
 
 export interface PortfolioBook {
@@ -288,6 +292,7 @@ async function computePortfolioBook(): Promise<PortfolioBook | null> {
   for (const { account, rows } of perAccount) {
     let accProperties = 0;
     let accRent = 0;
+    const accLevels: Record<string, number> = {};
     for (const r of rows) {
       // contract_amount is the agreed rent; monthly_payment_required is what's
       // actually collected each month. Prefer the latter, fall back.
@@ -304,6 +309,7 @@ async function computePortfolioBook(): Promise<PortfolioBook | null> {
       // PayProp's own service level — how "managed" vs "let only" is decided,
       // rather than us inferring it.
       const level = text(r.service_level) || "Not set";
+      accLevels[level] = (accLevels[level] ?? 0) + 1;
       const lv = levels.get(level) ?? { properties: 0, rentRoll: 0 };
       lv.properties++;
       lv.rentRoll += rent;
@@ -362,6 +368,7 @@ async function computePortfolioBook(): Promise<PortfolioBook | null> {
       properties: accProperties,
       rentRoll: accRent,
       avgRent: accProperties ? accRent / accProperties : 0,
+      serviceLevels: accLevels,
     });
   }
 

@@ -12,13 +12,29 @@ export default function StatCard({
   sub,
   big = false,
   size = "default",
+  loading = false,
 }: {
   label: string;
   stat: StatValue;
   sub?: string;
   big?: boolean;
   size?: "default" | "sm";
+  /** The source is still answering. Shown as a spinner, never as a dash with
+   *  a red dot - that reads as "broken" when it only means "not yet". */
+  loading?: boolean;
 }) {
+  if (loading) {
+    return (
+      <div className={`card relative h-full ${size === "sm" ? "p-4" : "p-5"}`} aria-busy="true">
+        <div className="stat-label text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</div>
+        <div className="mt-3 flex items-center gap-2 text-xs text-muted">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-transparent" aria-hidden />
+          Loading
+        </div>
+      </div>
+    );
+  }
+
   const display =
     stat.display ?? (stat.value == null ? "—" : formatNum(stat.value));
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getGciHistory } from "@/lib/business/gci-history";
-import { currentMonth, monthsThisYearToDate } from "@/lib/business/format";
+import { getGciHistory, hasEveryAgency } from "@/lib/business/gci-history";
+import { exVat, monthsThisYearToDate } from "@/lib/business/format";
 import { hasDb, q } from "@/lib/business/db";
 
 /**
@@ -143,11 +143,21 @@ export async function GET() {
     // A month PayProp couldn't fully answer is NOT reported as a figure. A
     // short month looks like a bad month, and nobody would know to doubt it.
     if (m.unreachable?.length) continue;
+    // Nor is a month holding only one of the two agencies. August 2026 sat
+    // here as £3,811 - Glasgow alone - for a fortnight.
+    if (!hasEveryAgency(m)) continue;
 
+    /* Net of VAT, like the rows they sit beside. PayProp's per-agency amounts
+       are VAT-inclusive, so these two rows were gross under an "exc VAT"
+       label and added up to more than the combined line beneath them. */
     const account = (match: RegExp) =>
-      m.byAccount
-        .filter((a) => match.test(a.label))
-        .reduce((t, a) => t + a.combinedGci, 0) || null;
+      Math.round(
+        exVat(
+          m.byAccount
+            .filter((a) => match.test(a.label))
+            .reduce((t, a) => t + a.combinedGci, 0)
+        )
+      ) || null;
 
     const combined = Math.round(m.combinedGciNet);
     const tleNet = Math.round(m.agencyIncomeNet);

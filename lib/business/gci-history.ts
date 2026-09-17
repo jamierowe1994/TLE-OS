@@ -84,7 +84,24 @@ export interface MonthlyGci {
  *     propertiesPaying, tenantsPaying) — the honest month-scoped answer for
  *     the Arrears tab, after the arrears REBUILD was tested and rejected.
  */
-const DEFINITION_VERSION = 3;
+/*
+ * 4 — 17 Sep 2026. Two fixes, both found on Susan's August.
+ *     · byAccount now counts agency-only "Other" fees, so E&W + Glasgow add up
+ *       to the combined figure instead of falling ~£2k short of it.
+ *     · A month is only complete when BOTH agencies are in it. August was
+ *       walked on 1 Sep, while E&W's PayProp connection was dead: E&W was not
+ *       "unreachable", it was simply not configured, so it never appeared at
+ *       all and a Glasgow-only £3,811 was frozen as August's commission.
+ */
+const DEFINITION_VERSION = 4;
+
+/** Both agencies. Fixed, not read from what happens to be connected today -
+ *  a month walked while one connection is down must not look whole. */
+const EVERY_AGENCY: PayPropAccountId[] = ["scotland", "uk"];
+
+export function hasEveryAgency(m: Pick<MonthlyGci, "byAccount">): boolean {
+  return EVERY_AGENCY.every((a) => m.byAccount.some((b) => b.account === a));
+}
 
 /**
  * How far back the MONEY reaches — deliberately NOT HISTORY_FLOOR.
@@ -187,6 +204,7 @@ function complete(m: MonthlyGci): boolean {
   return (
     m.definitionVersion >= DEFINITION_VERSION &&
     m.unreachable.length === 0 &&
+    hasEveryAgency(m) &&
     m.paymentCount > 0
   );
 }
@@ -251,7 +269,10 @@ export async function getGciHistory(
       }
     }
     if (!income) {
-      if (stored[m]) out[m] = stored[m];
+      /* While a month recomputes, an older definition still stands in - but a
+         month missing a whole agency never does. That is a wrong figure, not a
+         stale one. */
+      if (stored[m] && hasEveryAgency(stored[m])) out[m] = stored[m];
       continue;
     }
     const entry = toMonthly(m, income);
@@ -290,8 +311,8 @@ export async function getGciSeries(month = currentMonth()): Promise<GciSeries> {
   const start = `${year}-01`;
   const hist = await getGciHistory(start, month);
   const asked = monthsBetween(start, month);
-  const months = asked.map((m) => hist[m]).filter(Boolean);
-  const missing = asked.filter((m) => !hist[m]);
+  const months = asked.map((m) => hist[m]).filter((m) => m && hasEveryAgency(m));
+  const missing = asked.filter((m) => !hist[m] || !hasEveryAgency(hist[m]));
   const unreachable = [...new Set(months.flatMap((m) => m.unreachable))];
   const isComplete = missing.length === 0 && unreachable.length === 0;
   return {

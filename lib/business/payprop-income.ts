@@ -683,6 +683,14 @@ async function computeIncomeRange(
     let partners = 0;
     for (const r of list) {
       const cat = r.c || "Other";
+      /* The same two rules as the headline loop below, agency-only catch-alls
+         included. Leaving "Other" out here is why E&W + Glasgow came to less
+         than the combined figure they sit under (July: £58.7k against £60.9k
+         gross) - the split and the total were answering different questions. */
+      if (AGENCY_ONLY_FEE_CATEGORIES.has(cat)) {
+        if (r.t === "agency") agency += r.a;
+        continue;
+      }
       if (!FEE_CATEGORIES.has(cat)) continue;
       if (r.t === "agency") agency += r.a;
       else if (r.t === "beneficiary" || r.t === "global_beneficiary") partners += r.a;
@@ -1538,6 +1546,43 @@ export async function getAgentEarningsForMonths(
         matched: true,
         matchedBy,
       },
+    };
+  });
+}
+
+/**
+ * Properties paying for Rent & Legal Protection in a month, per agency.
+ *
+ * WHY PAYMENTS AND NOT TAGS. The proper record is PayProp's property tag
+ * ("Experts Managed Service with RLP"), and that is still read for Scotland -
+ * but E&W refuses the tags call (its consent lacks read:entity:tags), which
+ * left Susan's RLP % as Scotland alone. The premium itself is a payment, paid
+ * to "TLE - Rent & Legal Protection" under the "Rent and Legal Protection"
+ * category, so a property that paid it this month is a property on RLP.
+ *
+ * Measured on August 2026: 87 E&W properties. Scotland bills no premium through
+ * PayProp at all (0 rows), so for Scotland the tag stays the only answer.
+ */
+export interface RlpTakeUp {
+  month: string;
+  byAccount: Array<{ account: PayPropAccountId; properties: number; propertyIds: string[] }>;
+}
+
+const RLP_PAYMENT = /legal\s*protection/i;
+
+export function getRlpTakeUp(month: string): Promise<RlpTakeUp | null> {
+  return cachedAsync(`rlp:${month}`, async () => {
+    const { from, to } = monthRange(month);
+    const perAccount = await paymentsSettledInRange(from, to);
+    if (perAccount.every((p) => p.rows.length === 0)) return null;
+    return {
+      month,
+      byAccount: perAccount.map((p) => {
+        const ids = new Set(
+          p.rows.filter((r) => r.p && (RLP_PAYMENT.test(r.c) || RLP_PAYMENT.test(r.n))).map((r) => r.p)
+        );
+        return { account: p.account, properties: ids.size, propertyIds: [...ids] };
+      }),
     };
   });
 }

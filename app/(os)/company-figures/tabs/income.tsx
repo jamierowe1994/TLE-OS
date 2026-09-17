@@ -11,7 +11,7 @@ import Donut from "@/components/business/charts/Donut";
 import Bars from "@/components/business/charts/Bars";
 import type { SeedData } from "@/lib/business/seed-data"; // type-only — erased at build
 import type { IncomeMonthlyRow, LicenceFeeRow } from "@/lib/business/seed-types";
-import { exVat, formatGBP, formatNum, monthLabel, monthsThisYearToDate } from "@/lib/business/format";
+import { formatGBP, formatNum, monthLabel, monthsThisYearToDate } from "@/lib/business/format";
 const SNAPSHOT_MONTH = "2026-07"; // the one month the seed answers for
 
 
@@ -228,20 +228,20 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
     `£${n.toLocaleString("en-GB", { maximumFractionDigits: 0 })}`;
 
   /**
-   * Live PayProp amounts arrive INCLUSIVE of VAT; every historical row on this
-   * tab is seeded from the accounts spreadsheet, whose fee columns are all
-   * "exc VAT". The live cards must be netted or the tab disagrees with itself
-   * — which is exactly how July read ~£61.3k here against £51,068 on Susan's
-   * summary: same fees, hers net, ours gross, the gap the VAT to the penny.
+   * Live PayProp amounts arrive ALREADY net of VAT: /api/business/payprop-live
+   * converts them once, on the server, so no screen can miss it. This tab used
+   * to net them a second time, which is how August "final" read £41,829 when
+   * August's commission was £50,195 - exactly a sixth short, twice over.
+   * Formatting only here.
    */
-  const netGbp = (n: number) => gbp(exVat(n));
+  const netGbp = (n: number) => gbp(n);
 
   /** One agency's GCI, or null when it isn't there yet. */
   const accountGci = (l: LiveIncome | null, label: string) => {
     const a = l?.byAccount?.find((x) => x.label === label);
     if (!a) return null;
     return {
-      value: Math.round(exVat(a.combinedGci)),
+      value: Math.round((a.combinedGci)),
       display: netGbp(a.combinedGci),
       source: "live-payprop" as const,
       note: `${netGbp(a.agencyIncome)} exc VAT kept by the agency; the rest paid to partners.`,
@@ -267,22 +267,22 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
     const src = "live-payprop" as const;
     switch (which) {
       case "totalGci":
-        return { value: Math.round(exVat(prev.combinedGci)), display: netGbp(prev.combinedGci), source: src, note };
+        return { value: Math.round((prev.combinedGci)), display: netGbp(prev.combinedGci), source: src, note };
       case "tleNet":
-        return { value: Math.round(exVat(prev.agencyIncome)), display: netGbp(prev.agencyIncome), source: src, note };
+        return { value: Math.round((prev.agencyIncome)), display: netGbp(prev.agencyIncome), source: src, note };
       case "gciPerAgent":
         if (!agents) return null;
         return {
-          value: Math.round(exVat(prev.combinedGci) / agents),
-          display: gbp(exVat(prev.combinedGci) / agents),
+          value: Math.round((prev.combinedGci) / agents),
+          display: gbp((prev.combinedGci) / agents),
           source: src,
           note: `${netGbp(prev.combinedGci)} exc VAT across ${agents} earning partners.`,
         };
       case "netPerAgent":
         if (!agents) return null;
         return {
-          value: Math.round(exVat(prev.agencyIncome) / agents),
-          display: gbp(exVat(prev.agencyIncome) / agents),
+          value: Math.round((prev.agencyIncome) / agents),
+          display: gbp((prev.agencyIncome) / agents),
           source: src,
           note: `${netGbp(prev.agencyIncome)} exc VAT across ${agents} earning partners.`,
         };
@@ -641,7 +641,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
             stat={
               live
                 ? {
-                    value: Math.round(exVat(live.combinedGci)),
+                    value: Math.round((live.combinedGci)),
                     display: netGbp(live.combinedGci),
                     source: "live-payprop",
                     note: `Every fee charged this month across both agencies, exc VAT, ${live.paymentCount} payments. TLE's share plus the partners'.`,

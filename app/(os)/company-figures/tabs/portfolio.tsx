@@ -1,49 +1,22 @@
 "use client";
 
-// Admin tab: Portfolio — overview cards + portfolio-by-partner table.
-// PayProp is the source system; no API access yet, so everything is the
-// 11 Jul 2026 snapshot. (No portfolio growth time series exists in the
-// snapshot, so no growth chart is rendered.)
+// Admin tab: Portfolio — the book in summary boxes (total, managed, let only,
+// rent collect, RLP), each split England & Wales / Scotland, then rents and
+// health, then the partner table. Everything is live from PayProp.
+//
+// Rebuilt 17 Sep 2026 from Susan's notes: the "Managed book — live" block at
+// the top repeated the partner table below it, and the rent protection row
+// ("No protection 69") was Scotland alone under a business-wide heading. The
+// summary now answers her question in one row: how big is the book, how much
+// of it is managed, and how much of the managed book is on RLP.
 
 import { useEffect, useState } from "react";
 import StatCard from "@/components/business/StatCard";
 import SourceNote from "@/components/business/SourceNote";
-import DataTable, { type DataTableColumn } from "@/components/business/DataTable";
+import DataTable from "@/components/business/DataTable";
 import type { SeedData } from "@/lib/business/seed-data"; // type-only — erased at build
-import type { PortfolioRow } from "@/lib/business/seed-types";
 import { formatGBP, monthLabel } from "@/lib/business/format";
 import { liveMonth } from "@/lib/business/roster";
-
-const COLUMNS: DataTableColumn<PortfolioRow & Record<string, unknown>>[] = [
-  {
-    key: "agent",
-    label: "Partner",
-    render: (r) => (
-      <span className={r.agent === "TOTAL" ? "font-semibold" : undefined}>{r.agent}</span>
-    ),
-  },
-  { key: "managed", label: "Managed", align: "right" },
-  { key: "letOnly", label: "Let only", align: "right" },
-  {
-    key: "total",
-    label: "Total",
-    align: "right",
-    render: (r) => <span className="font-semibold">{r.total.toLocaleString("en-GB")}</span>,
-  },
-  { key: "rlpLec", label: "RLP / LEC", align: "right" },
-  {
-    key: "rentRoll",
-    label: "Rent roll",
-    align: "right",
-    render: (r) => (r.rentRoll == null ? "—" : formatGBP(r.rentRoll)),
-  },
-  {
-    key: "avgRent",
-    label: "Avg rent",
-    align: "right",
-    render: (r) => (r.avgRent == null ? "—" : formatGBP(r.avgRent)),
-  },
-];
 
 const LIVE_PARTNER_COLUMNS = [
   { key: "partner", label: "Partner" },
@@ -73,14 +46,21 @@ const LIVE_PARTNER_COLUMNS = [
   },
 ];
 
+type Account = "uk" | "scotland";
+
 interface LiveBook {
   totalProperties: number;
   totalRentRoll: number;
   avgRent: number;
-  vacant: number;
-  tenanted: number;
   byServiceLevel: Array<{ level: string; properties: number; rentRoll: number }>;
-  byAccount: Array<{ account: string; label: string; properties: number; rentRoll: number; avgRent: number }>;
+  byAccount: Array<{
+    account: string;
+    label: string;
+    properties: number;
+    rentRoll: number;
+    avgRent: number;
+    serviceLevels?: Record<string, number>;
+  }>;
   unattributed: number;
   accounts: string[];
   byAgent: Record<
@@ -90,42 +70,112 @@ interface LiveBook {
       properties: number;
       rentRoll: number;
       activeTenancies: number;
-      /** This partner's own split, e.g. { "Fully managed": 12, "Let only": 5 }.
-       *  Always been on the wire; the tab simply never declared it. */
       serviceLevels?: Record<string, number>;
     }
   >;
 }
 
-export default function PortfolioTab({ month, seed }: { month: string; seed: SeedData }) {
-  // The managed book, live from PayProp across both agencies. Gathered in the
-  // background, so poll until it lands rather than blocking the tab.
+interface Protection {
+  agencies: { account: string; withRlp: number | null; withoutRlp: number | null; error: string | null }[];
+  rlpPayments: { month: string; byAccount: { account: string; properties: number }[] } | null;
+}
+
+/* PayProp's own service-level wording, grouped. "Fully managed" is the only
+   managed level it uses today; the pattern allows for "Managed" or EFM. */
+const LEVELS = {
+  managed: /managed|efm/i,
+  letOnly: /let\s*only|tenant\s*find/i,
+  rentCollect: /rent\s*collect/i,
+} as const;
+
+const COUNTRY: Record<Account, string> = { uk: "England & Wales", scotland: "Scotland" };
+
+const gbp = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
+
+/** A figure for the whole business, with England & Wales and Scotland beneath it. */
+function SplitTile({
+  label,
+  total,
+  uk,
+  scotland,
+  note,
+  loading = false,
+  error,
+}: {
+  label: string;
+  total: string | null;
+  uk: string | null;
+  scotland: string | null;
+  note?: string;
+  loading?: boolean;
+  error?: string | null;
+}) {
+  return (
+    <div className="card card-lift flex h-full flex-col p-5" title={note}>
+      <div className="stat-label text-[11px] font-semibold uppercase tracking-wide text-muted">
+        {label}
+      </div>
+      {loading ? (
+        <div className="mt-3 flex items-center gap-2 text-xs text-muted" aria-busy="true">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-transparent" aria-hidden />
+          Loading
+        </div>
+      ) : error ? (
+        <div className="mt-2 text-xs text-red-700">{error}</div>
+      ) : (
+        <>
+          <div className="stat-value stat-value--big mt-2">{total ?? "—"}</div>
+          <div className="mt-auto grid grid-cols-2 gap-2 border-t border-line pt-3">
+            <div className="min-w-0">
+              <div className="truncate text-[10px] uppercase tracking-wide text-muted">{COUNTRY.uk}</div>
+              <div className="tnum text-[15px] font-semibold text-ink">{uk ?? "—"}</div>
+            </div>
+            <div className="min-w-0">
+              <div className="truncate text-[10px] uppercase tracking-wide text-muted">{COUNTRY.scotland}</div>
+              <div className="tnum text-[15px] font-semibold text-ink">{scotland ?? "—"}</div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+export default function PortfolioTab({ month }: { month: string; seed: SeedData }) {
   const [live, setLive] = useState<LiveBook | null>(null);
-  /** Rent protection, from PayProp's property tags. See lib/payprop-tags. */
-  const [protBook, setProtBook] = useState<{
-    agencies: { account: string; withRlp: number | null; withoutRlp: number | null; error: string | null }[];
-    withRlp: number;
-    withoutRlp: number;
-    unreadable: string[];
-  } | null>(null);
+  const [liveError, setLiveError] = useState<string | null>(null);
+  const [prot, setProt] = useState<Protection | null>(null);
+  const [protFailed, setProtFailed] = useState(false);
   const [arrearsCount, setArrearsCount] = useState<number | null>(null);
   const [renewals, setRenewals] = useState<number | null>(null);
 
-  // "Renewals due" is certificates coming up for renewal — a REX figure, not
-  // a PayProp one, so it comes from the compliance sweep.
+  // Protection: tags for Scotland, premium payments for E&W. The payments are a
+  // month's walk, so poll until they land.
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/business/protection", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => !cancelled && d?.agencies && setProtBook(d))
-      .catch(() => {
-        /* The snapshot still stands. */
-      });
+    let tries = 0;
+    const ask = () => {
+      fetch("/api/business/protection", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((d: Protection & { error?: string }) => {
+          if (cancelled) return;
+          if (!d?.agencies) {
+            setProtFailed(true);
+            return;
+          }
+          setProt(d);
+          if (!d.rlpPayments && tries++ < 40) setTimeout(ask, 5000);
+          else if (!d.rlpPayments) setProtFailed(true);
+        })
+        .catch(() => !cancelled && setProtFailed(true));
+    };
+    ask();
     return () => {
       cancelled = true;
     };
   }, []);
 
+  // "Renewals due" is certificates coming up for renewal — a REX figure.
   useEffect(() => {
     let cancelled = false;
     let tries = 0;
@@ -144,6 +194,7 @@ export default function PortfolioTab({ month, seed }: { month: string; seed: See
       cancelled = true;
     };
   }, []);
+
   useEffect(() => {
     let cancelled = false;
     let tries = 0;
@@ -153,12 +204,14 @@ export default function PortfolioTab({ month, seed }: { month: string; seed: See
         .then(
           (d: {
             portfolio?: LiveBook | null;
+            portfolioError?: string | null;
             arrears?: { tenants: unknown[] } | null;
           }) => {
             if (cancelled) return;
             if (d.portfolio) setLive(d.portfolio);
             if (d.arrears) setArrearsCount(d.arrears.tenants.length);
             if ((!d.portfolio || !d.arrears) && tries++ < 40) setTimeout(ask, 5000);
+            else if (!d.portfolio) setLiveError(d.portfolioError || "PayProp has not answered.");
           }
         )
         .catch(() => {});
@@ -169,61 +222,56 @@ export default function PortfolioTab({ month, seed }: { month: string; seed: See
     };
   }, []);
 
-  const gbp = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
+  /* ---------------------------- the summary ---------------------------- */
 
-  /** Sum the service levels whose name matches — PayProp's own wording varies. */
-  function serviceStat(b: LiveBook, match: RegExp) {
-    const hits = b.byServiceLevel.filter((l) => match.test(l.level));
-    if (hits.length === 0) return undefined;
-    return {
-      value: hits.reduce((n, l) => n + l.properties, 0),
-      source: "live-payprop" as const,
-      note: hits.map((l) => `${l.level}: ${l.properties}`).join(" · "),
-    };
-  }
+  const acc = (a: Account) => live?.byAccount.find((x) => x.account === a) ?? null;
+  /** Properties at a service level, for one agency or the whole book. Null when
+   *  the per-agency split isn't in the cached book yet — never a guessed zero. */
+  const levelCount = (re: RegExp, a?: Account): number | null => {
+    if (!live) return null;
+    if (!a) {
+      return live.byServiceLevel.filter((l) => re.test(l.level)).reduce((n, l) => n + l.properties, 0);
+    }
+    const lv = acc(a)?.serviceLevels;
+    if (!lv) return null;
+    return Object.entries(lv)
+      .filter(([k]) => re.test(k))
+      .reduce((n, [, v]) => n + v, 0);
+  };
+  const fmt = (n: number | null) => (n == null ? null : n.toLocaleString("en-GB"));
+  const notSet = live?.byServiceLevel.find((l) => l.level === "Not set")?.properties ?? 0;
 
-  function accountAvg(b: LiveBook, label: string) {
-    const a = b.byAccount.find((x) => x.label === label);
-    if (!a || !a.properties) return null;
-    return {
-      value: Math.round(a.avgRent),
-      display: gbp(a.avgRent),
-      source: "live-payprop" as const,
-      note: `${gbp(a.rentRoll)} across ${a.properties} properties.`,
-    };
-  }
-  /* Only report protection when at least one agency actually answered. Zero
-     from a refused call would read as "nobody is protected". */
-  const prot =
-    protBook && (protBook.withRlp > 0 || protBook.withoutRlp > 0) ? protBook : null;
-  const protReadable = (protBook?.agencies ?? [])
-    .filter((a) => !a.error)
-    .map((a) => (a.account === "uk" ? "E&W" : a.account === "scotland" ? "Scotland" : a.account));
-  const protBlocked = (protBook?.unreadable ?? []).map((a) =>
-    a === "uk" ? "E&W" : a === "scotland" ? "Scotland" : a
-  );
-  /* Appended to every note, so a figure lifted out of context still says which
-     part of the business it describes. */
-  const protShort = protBlocked.length ? ` · ${protReadable.join(" and ")} only` : "";
+  /* RLP per agency. The tag is the proper record and wins where PayProp lets
+     us read it (Scotland today); otherwise the month's premium payments (E&W,
+     whose consent refuses the tags call). */
+  const rlpFor = (a: Account): { count: number; basis: string } | null => {
+    const tag = prot?.agencies.find((x) => x.account === a);
+    if (tag && !tag.error && tag.withRlp != null) return { count: tag.withRlp, basis: "PayProp tag" };
+    const paid = prot?.rlpPayments?.byAccount.find((x) => x.account === a);
+    if (paid && prot?.rlpPayments) {
+      return { count: paid.properties, basis: `RLP premium paid in ${monthLabel(prot.rlpPayments.month)}` };
+    }
+    return null;
+  };
+  const rlpUk = rlpFor("uk");
+  const rlpSc = rlpFor("scotland");
+  const managedUk = levelCount(LEVELS.managed, "uk");
+  const managedSc = levelCount(LEVELS.managed, "scotland");
+  const pct = (n: number | null | undefined, d: number | null) =>
+    n == null || !d ? null : `${((n / d) * 100).toFixed(1)}%`;
+  const rlpReady = Boolean(rlpUk && rlpSc && managedUk != null && managedSc != null);
+  const rlpTotal = rlpReady ? rlpUk!.count + rlpSc!.count : null;
+  const managedTotal = managedUk != null && managedSc != null ? managedUk + managedSc : null;
+  const rlpNote = rlpReady
+    ? `England & Wales: ${rlpUk!.count} of ${managedUk} managed (${rlpUk!.basis}). Scotland: ${rlpSc!.count} of ${managedSc} managed (${rlpSc!.basis}).`
+    : undefined;
 
-  const agents = live
-    ? Object.entries(live.byAgent)
-        .map(([, b]) => b)
-        .sort((a, b) => b.properties - a.properties)
-    : [];
+  const bookLoading = !live && !liveError;
+  const rlpLoading = !rlpReady && !protFailed && !liveError;
+  const rlpError = !rlpReady && (protFailed || liveError) ? "PayProp could not answer for RLP." : null;
 
-  const p = seed.portfolio;
-  const o = p.overview;
-  /* Portfolio by partner, live.
-     Everything except RLP/LEC is already in the PayProp book — the managed /
-     let-only split comes from each partner's own serviceLevels, which the walk
-     has always collected and this tab simply never read.
+  /* ------------------------------ by partner ------------------------------ */
 
-     RLP/LEC is NOT carried. It appears in no PayProp service level, no Propoly
-     service level (censused across all 575 completed deals: full_managed,
-     tenant_find, rent_collect and nothing else) and no readable fee category.
-     The old column was typed by a person. A column we cannot source is dropped
-     and said so, rather than shown half-full. */
   const livePartnerRows = live
     ? Object.values(live.byAgent)
         .map((b) => {
@@ -234,8 +282,8 @@ export default function PortfolioTab({ month, seed }: { month: string; seed: See
               .reduce((n, [, v]) => n + v, 0);
           return {
             partner: b.names[0] ?? "—",
-            managed: count(/managed|efm/i),
-            letOnly: count(/let\s*only/i),
+            managed: count(LEVELS.managed),
+            letOnly: count(LEVELS.letOnly),
             total: b.properties,
             rentRoll: b.rentRoll,
             avgRent: b.properties ? b.rentRoll / b.properties : null,
@@ -254,329 +302,160 @@ export default function PortfolioTab({ month, seed }: { month: string; seed: See
       }
     : null;
 
+  const accountAvg = (a: Account) => {
+    const x = acc(a);
+    if (!x || !x.properties) return { value: null, source: "unavailable" as const, note: "Not in the PayProp book yet." };
+    return {
+      value: Math.round(x.avgRent),
+      display: gbp(x.avgRent),
+      source: "live-payprop" as const,
+      note: `${gbp(x.rentRoll)} across ${x.properties} properties.`,
+    };
+  };
+
   return (
     <div className="space-y-6">
-      {/* Source banner */}
-      {live ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-800">
-          <span className="font-semibold">Live from PayProp</span> —{" "}
-          {live.totalProperties.toLocaleString("en-GB")} managed properties across{" "}
-          {live.accounts.length === 2 ? "both agencies" : live.accounts.join(", ")}, worth{" "}
-          <span className="font-semibold">{gbp(live.totalRentRoll)}</span> a month.
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
-          <span className="font-semibold">Fetching the live book from PayProp…</span>{" "}
-          Nothing shown until it lands — the walk takes a moment cold.
-        </div>
-      )}
-
-      {live ? (
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold">Managed book — live</h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="card p-5">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                Managed properties
-              </div>
-              <div className="stat-value mt-1 text-[26px]">{live.totalProperties}</div>
-            </div>
-            <div className="card p-5">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                Rent under management
-              </div>
-              <div className="stat-value mt-1 text-[26px]">{gbp(live.totalRentRoll)}</div>
-              <div className="mt-0.5 text-[11px] text-muted">per month</div>
-            </div>
-            <div className="card p-5">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                Partners with a book
-              </div>
-              <div className="stat-value mt-1 text-[26px]">{agents.length}</div>
-            </div>
-            <div className="card p-5">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                Unattributed
-              </div>
-              <div className="stat-value mt-1 text-[26px]">{live.unattributed}</div>
-              <div className="mt-0.5 text-[11px] text-muted">
-                On TLE / Admin / blank in PayProp
-              </div>
-            </div>
-          </div>
-
-          <div className="card p-5">
-            <h3 className="text-[13px] font-semibold">By responsible agent</h3>
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full text-[12.5px]">
-                <thead>
-                  <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
-                    <th className="pb-2 font-semibold">Agent</th>
-                    <th className="pb-2 text-right font-semibold">Properties</th>
-                    <th className="pb-2 text-right font-semibold">Tenancies</th>
-                    <th className="pb-2 text-right font-semibold">Rent / month</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {agents.map((a) => (
-                    <tr key={a.names.join("|")} className="border-t border-line">
-                      <td className="py-2">{a.names.join(" / ")}</td>
-                      <td className="py-2 text-right tnum">{a.properties}</td>
-                      <td className="py-2 text-right tnum">{a.activeTenancies}</td>
-                      <td className="py-2 text-right tnum">{gbp(a.rentRoll)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-3 text-[11px] text-muted">
-              Grouped on PayProp&rsquo;s own <code>responsible_agent</code> field.
-              Spelling variants of one person are merged; anything that
-              can&rsquo;t be resolved to a single partner is left unattributed
-              rather than guessed at.
-            </p>
-          </div>
-        </section>
-      ) : null}
-
-      {/* This tab reads a STOCK, not a flow. PayProp and Rex both export
-          current state and neither keeps a history, so "as it stood in June"
-          cannot be rebuilt — only invented. The month selector above does not
-          change these figures, and saying so is the whole point of this
-          banner: the old wording implied they were a July capture, which made
-          a live read look stale AND made a past month look answerable. */}
+      {/* Stock, not flow: PayProp keeps no history of the book. */}
       {month !== liveMonth() ? (
         <div className="rounded-2xl border border-line bg-card px-4 py-3 text-[13px] text-muted">
-          Everything below is <strong>as at today</strong>, not {monthLabel(month)}. These are
-          current-state figures — neither PayProp nor Rex stores a history of them, so a past
-          month can&apos;t be rebuilt. Every figure carries its own date.
+          Everything on this tab is <strong>as at today</strong>, not {monthLabel(month)}. PayProp
+          keeps no history of the book, so a past month can&apos;t be rebuilt.
         </div>
       ) : null}
 
-      {/* Overview */}
+      {liveError ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800">
+          <span className="font-semibold">PayProp didn&rsquo;t answer for the book.</span> {liveError}
+        </div>
+      ) : null}
+
+      {/* ---------------------------- summary ---------------------------- */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold">Portfolio overview</h2>
+        <h2 className="text-sm font-semibold">
+          Portfolio
+          <SourceNote tone={live ? "live" : "unavailable"}>
+            PayProp&rsquo;s active properties across both agencies, by PayProp&rsquo;s own service
+            level. England &amp; Wales is one PayProp agency and Scotland the other.
+          </SourceNote>
+        </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            label="Total properties"
-            stat={
-              live
-                ? { value: live.totalProperties, source: "live-payprop", note: "Active properties in PayProp across both agencies." }
-                : o.total
-            }
-            big
-            sub={
-              live
-                ? live.byAccount.map((a) => `${a.label} ${a.properties}`).join(" · ")
-                : `E&W ${o.eAndWTotal.value ?? "—"} · Glasgow ${o.glasgowTotal.value ?? "—"}`
-            }
+          <SplitTile
+            label="Total portfolio"
+            loading={bookLoading}
+            error={liveError}
+            total={fmt(live?.totalProperties ?? null)}
+            uk={fmt(acc("uk")?.properties ?? null)}
+            scotland={fmt(acc("scotland")?.properties ?? null)}
+            note={notSet ? `${notSet} with no service level set in PayProp.` : undefined}
           />
-          <StatCard
-            label="Managed"
-            stat={(live ? serviceStat(live, /managed/i) : null) ?? o.totalManaged}
-            big
-            sub={
-              live
-                ? "By PayProp service level"
-                : `E&W ${o.eAndWManaged.value ?? "—"} · Glasgow ${o.glasgowManaged.value ?? "—"}`
-            }
+          <SplitTile
+            label="Total managed"
+            loading={bookLoading}
+            error={liveError}
+            total={fmt(levelCount(LEVELS.managed))}
+            uk={fmt(managedUk)}
+            scotland={fmt(managedSc)}
           />
-          <StatCard
+          <SplitTile
             label="Let only"
-            stat={(live ? serviceStat(live, /let\s*only|tenant\s*find/i) : null) ?? o.eAndWLetOnly}
-            sub={live ? "By PayProp service level" : "All E&W — Glasgow has 0 let-only"}
+            loading={bookLoading}
+            error={liveError}
+            total={fmt(levelCount(LEVELS.letOnly))}
+            uk={fmt(levelCount(LEVELS.letOnly, "uk"))}
+            scotland={fmt(levelCount(LEVELS.letOnly, "scotland"))}
           />
-          <StatCard
+          <SplitTile
+            label="Rent collection"
+            loading={bookLoading}
+            error={liveError}
+            total={fmt(levelCount(LEVELS.rentCollect))}
+            uk={fmt(levelCount(LEVELS.rentCollect, "uk"))}
+            scotland={fmt(levelCount(LEVELS.rentCollect, "scotland"))}
+          />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <SplitTile
+            label="Managed on RLP"
+            loading={rlpLoading}
+            error={rlpError}
+            total={fmt(rlpTotal)}
+            uk={fmt(rlpUk?.count ?? null)}
+            scotland={fmt(rlpSc?.count ?? null)}
+            note={rlpNote}
+          />
+          <SplitTile
+            label="RLP % of managed"
+            loading={rlpLoading}
+            error={rlpError}
+            total={pct(rlpTotal, managedTotal)}
+            uk={pct(rlpUk?.count, managedUk)}
+            scotland={pct(rlpSc?.count, managedSc)}
+            note={rlpNote ? `Of the managed book. ${rlpNote}` : undefined}
+          />
+          <SplitTile
             label="Monthly rent roll"
-            stat={
-              live
-                ? { value: Math.round(live.totalRentRoll), display: gbp(live.totalRentRoll), source: "live-payprop", note: `Across ${live.totalProperties} properties — average ${gbp(live.avgRent)}.` }
-                : o.rentRollTotal
-            }
-            big
-            sub={
-              live
-                ? live.byAccount.map((a) => `${a.label} ${gbp(a.rentRoll)}`).join(" · ")
-                : `E&W ${o.rentRollEAndW.display ?? "—"} · Glasgow ${o.rentRollGlasgow.display ?? "—"}`
-            }
+            loading={bookLoading}
+            error={liveError}
+            total={live ? gbp(live.totalRentRoll) : null}
+            uk={acc("uk") ? gbp(acc("uk")!.rentRoll) : null}
+            scotland={acc("scotland") ? gbp(acc("scotland")!.rentRoll) : null}
           />
         </div>
-      </section>
-
-      {live ? (
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold">Service levels — live</h2>
-          <div className="card p-5">
-            <table className="w-full text-[12.5px]">
-              <thead>
-                <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
-                  <th className="pb-2 font-semibold">Service level (as PayProp records it)</th>
-                  <th className="pb-2 text-right font-semibold">Properties</th>
-                  <th className="pb-2 text-right font-semibold">Rent / month</th>
-                </tr>
-              </thead>
-              <tbody>
-                {live.byServiceLevel.map((l) => (
-                  <tr key={l.level} className="border-t border-line">
-                    <td className="py-2">{l.level}</td>
-                    <td className="py-2 text-right tnum">{l.properties}</td>
-                    <td className="py-2 text-right tnum">{gbp(l.rentRoll)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="mt-3 text-[11px] text-muted">
-              PayProp&rsquo;s service level never mentions protection — it is only ever
-              Fully managed, Let only or Rent collect. Rent protection is a{" "}
-              <span className="font-semibold">tag on the property</span>, read separately
-              below.
-            </p>
-          </div>
-        </section>
-      ) : null}
-
-      {/* Rent protection — from PayProp's TAGS, not the service level.
-
-          The service level never mentions protection: PayProp's own wording is
-          only ever "Fully managed", "Let only" or "Rent collect", so the
-          heuristic below it could never match and the typed seed showed
-          through. The record is a tag on the property. */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold">Managed — rent protection</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            label="No protection"
-            stat={
-              prot
-                ? {
-                    value: prot.withoutRlp,
-                    source: "live-payprop",
-                    note: `Tagged "Experts Managed Service No RLP"${protShort}.`,
-                  }
-                : o.noProtection
-            }
-          />
-          <StatCard
-            label="With RLP"
-            stat={
-              prot
-                ? {
-                    value: prot.withRlp,
-                    source: "live-payprop",
-                    note: `Tagged "Experts Managed Service with RLP"${protShort}.`,
-                  }
-                : o.withRlp
-            }
-          />
-          {/* No LEC tag exists anywhere we can read. Reported as a gap rather
-              than zero — zero would say "nobody has LEC", which is a different
-              and unevidenced claim. */}
-          <StatCard label="With LEC" stat={o.withLec} sub="no tag for this anywhere we can read" />
-          <StatCard
-            label="Protected %"
-            stat={
-              prot && prot.withRlp + prot.withoutRlp > 0
-                ? (() => {
-                    const total = prot.withRlp + prot.withoutRlp;
-                    const pctVal = (prot.withRlp / total) * 100;
-                    return {
-                      value: Math.round(pctVal * 10) / 10,
-                      display: `${pctVal.toFixed(1)}%`,
-                      source: "live-payprop" as const,
-                      note: `${prot.withRlp} of ${total} tagged properties${protShort}.`,
-                    };
-                  })()
-                : o.protectedPct
-            }
-            sub="of tagged portfolio"
-          />
-        </div>
-
-        {/* The missing agency, named. A total that silently omits the larger
-            book is worse than no total, and E&W is 503 of 587 properties. */}
-        {protBlocked.length > 0 && (
-          <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-[11px] leading-relaxed text-amber-800">
-            <span className="font-semibold">
-              These figures are {protReadable.join(" and ") || "partial"} only.
-            </span>{" "}
-            {protBlocked.join(" and ")} refused the tags call — the OAuth consent is
-            missing <code>read:entity:tags</code>. Re-authorise that agency on the
-            deployed site and the rest fills in by itself. It must be done there, not
-            locally: there is one refresher and rotating its token breaks live E&amp;W.
+        {rlpReady && rlpUk && !/tag/.test(rlpUk.basis) ? (
+          <p className="text-[11px] text-muted">
+            RLP for England &amp; Wales is counted from the premiums paid in{" "}
+            {prot?.rlpPayments ? monthLabel(prot.rlpPayments.month) : "the last month"}; Scotland
+            from its PayProp tags. Hover a box for the working.
           </p>
-        )}
+        ) : null}
       </section>
 
-      {/* Rents + health */}
+      {/* ------------------------- rents & health ------------------------- */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold">Rents &amp; portfolio health</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <StatCard
-            label="Avg rent — E&W"
-            stat={live ? accountAvg(live, "E&W") ?? o.avgRentEAndW : o.avgRentEAndW}
-          />
-          <StatCard
-            label="Avg rent — Glasgow"
-            stat={live ? accountAvg(live, "Glasgow") ?? o.avgRentGlasgow : o.avgRentGlasgow}
-          />
-          <StatCard
-            label="Vacant"
-            stat={
-              live
-                ? { value: live.vacant, source: "live-payprop", note: `Properties with no tenancy running; ${live.tenanted} are tenanted.` }
-                : o.vacant
-            }
-          />
+        <h2 className="text-sm font-semibold">Rents &amp; Portfolio Health</h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard label="Avg rent - England & Wales" stat={accountAvg("uk")} loading={bookLoading} />
+          <StatCard label="Avg rent - Scotland" stat={accountAvg("scotland")} loading={bookLoading} />
           <StatCard
             label="Renewals due"
-            stat={
-              renewals != null
-                ? { value: renewals, source: "live-rex", note: "Compliance certificates expiring within 60 days, across the account." }
-                : o.renewals
-            }
-            sub={renewals != null ? "Next 60 days" : undefined}
+            loading={renewals == null}
+            stat={{
+              value: renewals,
+              source: "live-rex",
+              note: "Compliance certificates expiring within 60 days, across the account.",
+            }}
+            sub="Next 60 days"
           />
           <StatCard
             label="In arrears"
-            stat={
-              arrearsCount != null
-                ? { value: arrearsCount, source: "live-payprop", note: "Tenancies currently in debit across both agencies." }
-                : o.arrears
-            }
-            sub="See Arrears tab (admin only)"
+            loading={arrearsCount == null}
+            stat={{
+              value: arrearsCount,
+              source: "live-payprop",
+              note: "Tenancies currently in debit across both agencies.",
+            }}
+            sub="See the Arrears tab"
           />
         </div>
       </section>
 
-      {/* By partner */}
+      {/* --------------------------- by partner --------------------------- */}
       <section className="space-y-3">
         <h2 className="text-sm font-semibold">
-          Portfolio by partner{" "}
-          {live ? `— live (${livePartnerRows.length} partners)` : ""}
+          Portfolio by Partner {live ? `(${livePartnerRows.length} partners)` : ""}
           <SourceNote tone={live ? "live" : "unavailable"}>
             {live
-              ? "PayProp portfolio walk, both agencies, as it stands today. Managed and let-only come from each partner's own service-level split; average rent is worked out per partner rather than blended down from the whole book."
+              ? `PayProp portfolio walk, both agencies, as it stands today. Managed and let only come from each partner's own service-level split. ${live.unattributed} properties sit on TLE, Admin or a blank agent in PayProp and are not in any partner's row.`
               : "The live PayProp book has not answered yet."}
           </SourceNote>
         </h2>
-        {/* No seed fallback. It rendered the June book under a live heading
-            while PayProp was still walking, so the table looked finished and
-            was a month out. A wait that says it is waiting is better. */}
         {live && liveTotals ? (
-          <>
-            <DataTable
-              columns={LIVE_PARTNER_COLUMNS}
-              rows={[...livePartnerRows, liveTotals]}
-              compact
-            />
-            <p className="text-xs text-muted">
-              RLP / LEC is not shown. It appears in no PayProp service level, no
-              Propoly service level and no fee category we can read — the column on
-              the old table was typed by hand, so there is nothing to pull it from.
-            </p>
-          </>
-        ) : (
-          <p className="text-xs text-muted">Waiting on PayProp for the partner split.</p>
+          <DataTable columns={LIVE_PARTNER_COLUMNS} rows={[...livePartnerRows, liveTotals]} compact />
+        ) : liveError ? null : (
+          <div className="flex items-center gap-2 text-xs text-muted" aria-busy="true">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-transparent" aria-hidden />
+            Waiting on PayProp for the partner split.
+          </div>
         )}
       </section>
     </div>

@@ -7,29 +7,35 @@
 // PayProp-sourced (no API access yet) — PayProp arrears report 2026-07-06.
 
 import { useCallback, useEffect, useState } from "react";
-import StatCard from "@/components/business/StatCard";
 import SourceNote from "@/components/business/SourceNote";
 import DataTable, { type DataTableColumn } from "@/components/business/DataTable";
 import type { SeedData } from "@/lib/business/seed-data"; // type-only — erased at build
-import type { ArrearsTenantRow } from "@/lib/business/seed-types";
 import { formatDate, formatGBP, formatNum, monthLabel } from "@/lib/business/format";
 import { liveMonth } from "@/lib/business/roster";
 
-const COLUMNS: DataTableColumn<ArrearsTenantRow & Record<string, unknown>>[] = [
+/* Every tenant behind, from the same reading as the boxes above. This table was
+   the 6 July 2026 PayProp capture (21 records), still on the page two months
+   on under the same heading as today's live list. */
+const COLUMNS: DataTableColumn<Record<string, unknown>>[] = [
   { key: "tenant", label: "Tenant" },
   { key: "property", label: "Property" },
-  { key: "region", label: "Region" },
   {
-    key: "balance",
-    label: "Balance",
-    align: "right",
-    render: (r) => <span className="font-semibold text-accent">{formatGBP(r.balance, true)}</span>,
+    key: "account",
+    label: "Country",
+    render: (r) => (/scot|glasgow/i.test(String(r.account ?? "")) ? "Scotland" : "England & Wales"),
   },
-  { key: "status", label: "Status" },
-  { key: "protection", label: "Protection" },
-  { key: "lastInvoice", label: "Last invoice", align: "right", render: (r) => formatDate(r.lastInvoice) },
-  { key: "lastPayment", label: "Last payment", align: "right", render: (r) => formatDate(r.lastPayment) },
-  { key: "lastReminder", label: "Last reminder", align: "right", render: (r) => formatDate(r.lastReminder) },
+  {
+    key: "tenancyStart",
+    label: "Tenancy start",
+    align: "right",
+    render: (r) => (r.tenancyStart ? formatDate(String(r.tenancyStart)) : "—"),
+  },
+  {
+    key: "owed",
+    label: "Owed",
+    align: "right",
+    render: (r) => <span className="font-semibold text-accent">{formatGBP(Number(r.owed), true)}</span>,
+  },
 ];
 
 interface LiveArrears {
@@ -138,8 +144,6 @@ const daysBetween = (from: string, to: string) =>
   Math.max(0, Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000));
 
 export default function ArrearsTab({ month, seed }: { month: string; seed: SeedData }) {
-  const a = seed.arrears;
-  const s = a.summary;
 
   // PayProp gathers in the background, so poll until it lands rather than
   // sitting on the snapshot for the whole session.
@@ -275,11 +279,6 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
           <span className="font-semibold">
             Live from PayProp — as at today, {formatDate(new Date().toISOString())}.
           </span>{" "}
-          {live.tenants.length} of {live.checked} tenancies in arrears, owing{" "}
-          <span className="font-semibold">
-            £{live.totalOwed.toLocaleString("en-GB", { maximumFractionDigits: 0 })}
-          </span>
-          .{" "}
           {month !== liveMonth() ? (
             <span className="font-semibold">
               This is NOT {monthLabel(month)} — PayProp reports a tenant&rsquo;s balance as it
@@ -316,6 +315,102 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
           month can&apos;t be rebuilt. Every figure carries its own date.
         </div>
       ) : null}
+
+      {/* ------------- the summary, for the selected month -------------
+          Susan, 17 Sep 2026: the boxes were split in two - four here and six
+          more further down the page repeating the count and the total. One
+          row now, at the top: count, total (with % of rent roll), largest,
+          average, and each country. */}
+      <section className="space-y-2">
+        <div className="flex flex-wrap items-baseline gap-x-3">
+          <h2 className="text-sm font-semibold">
+            {panel?.basis === "stored"
+              ? `Arrears as at ${formatDate(panel.asAt)}`
+              : "Arrears as at today"}
+          </h2>
+          <span className="text-[11px] text-muted">
+            {panel?.basis === "stored" ? (
+              <>
+                from the arrears log ·{" "}
+                {log?.exact
+                  ? `stored ${monthLabel(month)}`
+                  : `nearest we hold before the end of ${monthLabel(month)}`}
+              </>
+            ) : panel ? (
+              "live from PayProp · kept, so this month is answerable next year"
+            ) : (
+              "nothing held for this month"
+            )}
+          </span>
+        </div>
+        {panel ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="card p-5">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                Tenants in arrears
+              </div>
+              <div className="stat-value mt-1 text-[26px]">{panel.tenants}</div>
+              <div className="mt-0.5 text-[11px] text-muted">
+                {panel.checked != null ? `of ${panel.checked} tenancies` : "denominator not in this export"}
+              </div>
+            </div>
+            <div className="card p-5">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                Total owed
+              </div>
+              <div className="stat-value mt-1 text-[26px]">{gbp(panel.totalOwed)}</div>
+              <div className="mt-0.5 text-[11px] text-muted">
+                {panel.basis === "live" && rentRoll
+                  ? `${((panel.totalOwed / rentRoll) * 100).toFixed(1)}% of the ${gbp(rentRoll)} monthly rent roll`
+                  : panel.basis === "live"
+                    ? "% of rent roll loading"
+                    : "rent roll is today's, so no % for a past month"}
+              </div>
+            </div>
+            <div className="card p-5">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                Largest debt
+              </div>
+              <div className="stat-value mt-1 text-[26px]">{gbp(panel.largest)}</div>
+              <div className="mt-0.5 truncate text-[11px] text-muted">
+                {panel.people[0]?.tenant ?? "—"}
+              </div>
+            </div>
+            <div className="card p-5">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                Average debt
+              </div>
+              <div className="stat-value mt-1 text-[26px]">{gbp(panel.average)}</div>
+            </div>
+            {COUNTRY_GROUPS.map((g) => {
+              const people = panel.people.filter((p) => g.match(p.account));
+              const owed = people.reduce((t, p) => t + p.owed, 0);
+              return (
+                <div key={g.key} className="card p-5">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                    {g.label}
+                  </div>
+                  <div className="stat-value mt-1 text-[26px]">{people.length}</div>
+                  <div className="mt-0.5 text-[11px] text-muted">tenants owing {gbp(owed)}</div>
+                </div>
+              );
+            })}
+          </div>
+        ) : isLiveMonth && !live ? (
+          <div className="flex items-center gap-2 rounded-2xl border border-line bg-card px-4 py-3 text-[13px] text-muted" aria-busy="true">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-transparent" aria-hidden />
+            Loading arrears from PayProp
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-line bg-card px-4 py-3 text-[13px] text-muted">
+            <strong className="text-ink">Nothing held for {monthLabel(month)}.</strong> PayProp
+            keeps no history of a balance, so a month can only be answered from a reading taken at
+            the time. Today&rsquo;s is captured automatically from now on; for earlier months, paste
+            the PayProp arrears export below and it becomes answerable permanently. Deliberately
+            left blank rather than filled with today&rsquo;s figures.
+          </div>
+        )}
+      </section>
 
       {/* ------------------- rent collection, month by month -------------------
           The month-scoped half of this tab. Arrears itself cannot be rewound —
@@ -381,73 +476,6 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
         </section>
       ) : null}
 
-      {/* ---------------- the four boxes, for the selected month ---------------- */}
-      <section className="space-y-2">
-        <div className="flex flex-wrap items-baseline gap-x-3">
-          <h2 className="text-sm font-semibold">
-            {panel?.basis === "stored"
-              ? `Arrears as at ${formatDate(panel.asAt)}`
-              : "Arrears as at today"}
-          </h2>
-          <span className="text-[11px] text-muted">
-            {panel?.basis === "stored" ? (
-              <>
-                from the arrears log ·{" "}
-                {log?.exact
-                  ? `stored ${monthLabel(month)}`
-                  : `nearest we hold before the end of ${monthLabel(month)}`}
-              </>
-            ) : panel ? (
-              "live from PayProp · kept, so this month is answerable next year"
-            ) : (
-              "nothing held for this month"
-            )}
-          </span>
-        </div>
-        {panel ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="card p-5">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                Tenants in arrears
-              </div>
-              <div className="stat-value mt-1 text-[26px]">{panel.tenants}</div>
-              <div className="mt-0.5 text-[11px] text-muted">
-                {panel.checked != null ? `of ${panel.checked} tenancies` : "denominator not in this export"}
-              </div>
-            </div>
-            <div className="card p-5">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                Total owed
-              </div>
-              <div className="stat-value mt-1 text-[26px]">{gbp(panel.totalOwed)}</div>
-            </div>
-            <div className="card p-5">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                Largest debt
-              </div>
-              <div className="stat-value mt-1 text-[26px]">{gbp(panel.largest)}</div>
-              <div className="mt-0.5 truncate text-[11px] text-muted">
-                {panel.people[0]?.tenant ?? "—"}
-              </div>
-            </div>
-            <div className="card p-5">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                Average debt
-              </div>
-              <div className="stat-value mt-1 text-[26px]">{gbp(panel.average)}</div>
-            </div>
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-line bg-card px-4 py-3 text-[13px] text-muted">
-            <strong className="text-ink">Nothing held for {monthLabel(month)}.</strong> PayProp
-            keeps no history of a balance, so a month can only be answered from a reading taken at
-            the time. Today&rsquo;s is captured automatically from now on; for earlier months, paste
-            the PayProp arrears export below and it becomes answerable permanently. Deliberately
-            left blank rather than filled with today&rsquo;s figures.
-          </div>
-        )}
-      </section>
-
       {/* Who's behind, and for how long — the question PayProp alone can't answer */}
       {panel ? (
         <section className="card p-5">
@@ -495,75 +523,6 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
       ) : null}
 
       <ArrearsImport snapshots={log?.snapshots ?? []} onSaved={loadLog} />
-
-      {/* Summary cards — live where PayProp can answer, a stated gap otherwise */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <StatCard
-          label="Tenants in arrears"
-          stat={
-            live
-              ? { value: live.tenants.length, source: "live-payprop", note: `Of ${live.checked} tenancies across both agencies — live from PayProp.` }
-              : s.totalInArrears
-          }
-          big
-        />
-        <StatCard
-          label="Total arrears"
-          stat={
-            live
-              ? { value: Math.round(live.totalOwed), display: gbp(live.totalOwed), source: "live-payprop", note: `Largest single debt ${gbp(live.largest)}; average ${gbp(live.average)}.` }
-              : s.totalValue
-          }
-          big
-        />
-        {live
-          ? live.byAccount.map((acc) => (
-              <StatCard
-                key={acc.account}
-                label={acc.label}
-                stat={{ value: acc.tenants, source: "live-payprop", note: `${gbp(acc.owed)} owed across ${acc.tenants} tenancies.` }}
-                sub={gbp(acc.owed)}
-              />
-            ))
-          : (
-            <>
-              <StatCard label="E&W" stat={s.eAndWCount} sub={s.eAndWValue.display} />
-              <StatCard label="Glasgow" stat={s.glasgowCount} sub={s.glasgowValue.display} />
-            </>
-          )}
-        <StatCard
-          label="Protected (RLP/LEC)"
-          stat={s.protectedCount}
-          /* Two unknowns do not subtract to zero. Without both figures this
-             said "0 unprotected", which is the most reassuring possible way to
-             say "we have no idea". */
-          sub={
-            s.totalInArrears.value != null && s.protectedCount.value != null
-              ? `${s.protectedClaimable.display ?? "—"} claimable — ${
-                  s.totalInArrears.value - s.protectedCount.value
-                } unprotected`
-              : "Unprotected count needs both figures — one is missing."
-          }
-        />
-        <StatCard
-          label="% of rent roll"
-          stat={
-            live && rentRoll
-              ? {
-                  value: Math.round((live.totalOwed / rentRoll) * 1000) / 10,
-                  display: `${((live.totalOwed / rentRoll) * 100).toFixed(1)}%`,
-                  source: "live-payprop",
-                  note: `${gbp(live.totalOwed)} owed against ${gbp(rentRoll)} of monthly rent under management.`,
-                }
-              : s.pctOfRentRoll
-          }
-          sub={
-            live && rentRoll
-              ? `${gbp(live.totalOwed)} of ${gbp(rentRoll)} rent roll`
-              : `${s.totalValue.display ?? ""} of ${seed.portfolio.overview.rentRollTotal.display ?? "rent roll"}`
-          }
-        />
-      </div>
 
       {/* ── Arrears by country and age ──────────────────────────────────────
           Two books, not one. PayProp keeps England & Wales in one agency and
@@ -695,13 +654,18 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
       ) : null}
 
       {/* Tenant table */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold">
-          Tenants in arrears — {a.tenants.length} records
-        </h2>
-        <DataTable columns={COLUMNS} rows={a.tenants} compact />
-        <p className="text-xs text-muted">{a.footer}</p>
-      </section>
+      {panel ? (
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold">
+            Every Tenant in Arrears — {panel.people.length} as at {formatDate(panel.asAt)}
+          </h2>
+          <DataTable
+            columns={COLUMNS}
+            rows={panel.people as unknown as Record<string, unknown>[]}
+            compact
+          />
+        </section>
+      ) : null}
     </div>
   );
 }
