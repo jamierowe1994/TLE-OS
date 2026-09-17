@@ -36,6 +36,7 @@ import { fetchListingBook } from "@/lib/rex-listings";
  * Never trust `hs_id` alone.
  */
 
+import { buildGuide, type Guide } from "@/lib/ma-guide";
 import { shapeMaterialInfo, type MaterialInfo, type MatInfoRaw } from "@/lib/matinfo";
 
 const HS = "https://data.homesearch.co.uk/avi/api/v1";
@@ -100,6 +101,20 @@ async function hsJson<T>(path: string): Promise<T | null> {
 /* ── address safety ───────────────────────────────────────────────────────── */
 
 const normPc = (s: string) => s.replace(/\s+/g, "").toUpperCase();
+
+/**
+ * A postcode with its space put back, so districtOf can read it.
+ *
+ * districtOf reads greedily: "NN36QS" came back as district "NN36", so 429
+ * Kettering Road NN3 6QS was "wider area" on an NN3 appraisal (measured 16 Sep
+ * 2026). The inward code is always the last three characters of a full
+ * postcode, so a full one splits without guessing. A partial one ("NN3") is
+ * returned squashed, as it was.
+ */
+const spacedPc = (s: string) => {
+  const p = normPc(s);
+  return /^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/.test(p) ? `${p.slice(0, -3)} ${p.slice(-3)}` : p;
+};
 
 /** Every building-ish number in an address, postcode digits removed. */
 function numbersIn(address: string): Set<string> {
@@ -935,61 +950,11 @@ export interface MaResearch {
   subjectPoint: { lat: number; lon: number } | null;
   comparables: Comparable[];
   /** Our own book's picture, which is the honest sample size. */
-  guide: {
-    low: number;
-    mid: number;
-    high: number;
-    basedOn: number;
-    /** Which ring the sample came from — "area" means town-wide, not local. */
-    ring: "sector" | "district" | "area";
-    /** Say it plainly when the sample cannot mean much. */
-    caveat: string | null;
-  } | null;
+  guide: Guide | null;
   pulledAt: string;
 }
 
 const money = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
-
-/**
- * The best-price guide.
- *
- * Quartiles, not mean ± a made-up percentage. A mean is dragged by one
- * penthouse; the middle 50% of real local asking rents is a range an agent can
- * defend line by line, because every number in it is a property we could name.
- *
- * Fewer than four comparables produces a guide with a caveat attached rather
- * than no guide at all — an agent standing in a kitchen would rather have
- * "only two nearby, treat as indicative" than a blank.
- */
-function buildGuide(comps: Comparable[]): MaResearch["guide"] {
-  if (!comps.length) return null;
-  const rents = comps.map((c) => c.rentMonthly).sort((a, b) => a - b);
-  const at = (q: number) => rents[Math.min(rents.length - 1, Math.floor(rents.length * q))];
-  const ring: "sector" | "district" | "area" = comps.some((c) => c.nearness === "sector")
-    ? "sector"
-    : comps.some((c) => c.nearness === "district")
-      ? "district"
-      : "area";
-  const low = at(0.25);
-  const high = at(0.75);
-
-  /* Two different ways a guide can be untrustworthy, and they need different
-     words. Too FEW comparables is a small-sample problem. A whole-postcode-AREA
-     sample is a distance problem: measured on B32, widening to the B area gave
-     43 properties across all of Birmingham and a £775–£2,000 quartile spread,
-     which is not a guide, it is a shrug with numbers on it. */
-  const wideSpread = low > 0 && high / low > 1.8;
-  const caveat =
-    rents.length < 4
-      ? `Only ${rents.length} comparable${rents.length === 1 ? "" : "s"} nearby — indicative, not evidence.`
-      : ring === "area"
-        ? `No comparables in the same postcode district — these are across the wider area${wideSpread ? ", and the spread is too wide to quote" : ""}. Treat as background, not evidence.`
-        : wideSpread
-          ? "The local spread is very wide — quote a figure from the named comparables, not this range."
-          : null;
-
-  return { low, mid: at(0.5), high, basedOn: rents.length, ring, caveat };
-}
 
 /**
  * Comparables from our own live book, nearest first.
@@ -1066,12 +1031,12 @@ export async function getResearch(
   const comparables: Comparable[] = [];
   try {
     const book = await fetchListingBook();
-    const dist = districtOf(postcode);
-    const area = areaOf(postcode);
+    const dist = districtOf(spacedPc(postcode));
+    const area = areaOf(spacedPc(postcode));
 
     for (const l of book.listings) {
       if (!l.rentMonthly || l.rentMonthly <= 0) continue;
-      const pc = normPc(l.locality.match(/[A-Z]{1,2}\d[A-Z\d]?\s*\d?[A-Z]{0,2}/i)?.[0] ?? "");
+      const pc = spacedPc(l.locality.match(/[A-Z]{1,2}\d[A-Z\d]?\s*\d?[A-Z]{0,2}/i)?.[0] ?? "");
       if (!pc) continue;
 
       /* MEASURED BUG, and it reached the screen: a Liverpool appraisal was

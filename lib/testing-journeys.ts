@@ -372,13 +372,13 @@ export const JOURNEYS: Journey[] = [
       {
         id: "handover",
         title: "Offer accepted: the handover into Propoly",
-        what: "Creates the landlord, the property and the relationship in Propoly, puts the tenants and the Propoly uuid on the REX listing, emails both parties through REX. Rehearses in shadow until switched on.",
+        what: "Creates the landlord, the property and the relationship in Propoly, puts the tenants and the Propoly uuid on the REX listing, emails both parties from the agent's own mailbox. Rehearses in shadow until switched on.",
         how: ["Open an accepted application. Press Rehearse in the handover panel.", "Read every step. It should name the landlord it would create and the emails it would send.", "Compare with what Howard's flow did for the same deal.", "Only then: Admin, Switches, HAND OVER FOR REAL, and Howard's Power Automate flow OFF the same day."],
         where: "/applications",
         state: "built",
         since: "2026-09-04",
         switchKey: "handover_live",
-        notes: ["REX writes also need Listings/update, CustomFields/setFieldValues and MailMerge/createAndSend on REX_ALLOW_WRITES.", "Four accepted deals had no owner on the REX listing on 4 Sep. The rehearsal stops there and says so."],
+        notes: ["REX writes also need Listings/update and CustomFields/setFieldValues on REX_ALLOW_WRITES. The emails go through the agent's mailbox, not REX, and need the Customer email switch on.", "Four accepted deals had no owner on the REX listing on 4 Sep. The rehearsal stops there and says so."],
       },
       {
         id: "referencing",

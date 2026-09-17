@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
+import { whoIs } from "@/lib/admin";
+import { forAgent, isOwner } from "@/lib/agent-words";
 
 /**
  * WRITE THE ADVERT FOR ME (James, 11 Sep 2026).
@@ -106,9 +108,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, heading: out.heading.trim(), body: out.body.trim(), model: res.model });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "The writer could not be reached.";
+    const { actor: who } = await whoIs(req).catch(() => ({ actor: null }));
     const plain = /credit balance/i.test(msg)
-      ? "The writer's Anthropic account has run out of credit - top it up at console.anthropic.com."
-      : msg;
+      ? isOwner(who)
+        ? "The writer's Anthropic account has run out of credit - top it up at console.anthropic.com."
+        : "The advert writer is not available just now. Write it by hand, or try again later."
+      : forAgent(who, msg, "The advert writer could not be reached. Try again in a minute.");
     return NextResponse.json({ ok: false, error: plain }, { status: 502 });
   }
 }

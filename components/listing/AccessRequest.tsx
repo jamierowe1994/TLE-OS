@@ -369,7 +369,7 @@ function Composer({
             {onBook ? (
               <button type="button" onClick={onBook} className="font-semibold text-accent-dark hover:underline">Book the viewing first</button>
             ) : (
-              "Book it in REX first."
+              "Book the viewing first"
             )}
             .
           </div>

@@ -7,6 +7,7 @@ import { switchOn } from "@/lib/switches";
 import { handoffFor, type Handoff } from "@/lib/deal-handoff";
 import { findUserById } from "@/lib/users";
 import { renderTleEmail } from "@/lib/email/tle-emails";
+import { HOLDING_FEE_WORDING, SITE, WEEK_AHEAD_LINES } from "@/lib/email/tle-documents";
 import { sendAsAgent } from "@/lib/send-as-agent";
 
 /**
@@ -469,6 +470,18 @@ export async function runHandover(
       .map(([k, v]) => `${k}: <strong>${v}</strong>`)
       .join("<br>");
     const agentPhone = "0161 883 2525";
+    /* One week's rent, and never a penny over: the Tenant Fees Act caps a
+       holding deposit at a week, so this rounds DOWN to the penny rather than
+       to the nearest pound. */
+    const holdingFee =
+      packet.rentPcm && packet.rentPcm > 0
+        ? (() => {
+            const pence = Math.floor(((packet.rentPcm * 12) / 52) * 100);
+            return pence % 100 === 0
+              ? `£${(pence / 100).toLocaleString("en-GB")}`
+              : `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+          })()
+        : null;
 
     const targets: { id: string; who: string; to: string | null; name: string; email: string }[] = [
       ...(packet.landlord?.email
@@ -476,7 +489,7 @@ export async function runHandover(
         : []),
       ...packet.tenants
         .filter((t) => t.email)
-        .map((t) => ({ id: `email-tenant:${t.contactId ?? t.name}`, who: `tenant ${t.name}`, to: t.email, name: t.name, email: "application-accepted-tenant" })),
+        .map((t) => ({ id: `email-tenant:${t.contactId ?? t.name}`, who: `tenant ${t.name}`, to: t.email, name: t.name, email: "application-its-yours" })),
     ];
 
     for (const t of targets) {
@@ -484,15 +497,20 @@ export async function runHandover(
         t.email === "application-accepted-landlord"
           ? { landlordName: t.name, address, detailsList, agentName: sender?.name ?? packet.agent ?? "The Letting Experts", agentPhone, agentEmail: sender?.email ?? "" }
           : {
-              tenantName: t.name,
+              /* OUR OWN WORDS NOW (16 Sep 2026). Howard's REX template 10979
+                 was carried across word for word on the 16th and replaced the
+                 same day with The Landlord Has Said Yes, once James had read
+                 it: the holding fee explained, then every step to the keys.
+                 Scotland takes no holding deposit, so it gets its own line
+                 (HOLDING_FEE_WORDING) - still wants checking by somebody who
+                 knows Scottish lettings. */
+              firstName: t.name.trim().split(/\s+/)[0] || "there",
               address,
-              detailsList,
-              /* Scotland has no holding deposit, so the sentence that names one
-                 must not go there. REX held no Scottish template - this wording
-                 is ours and wants checking by somebody who knows. */
-              payLine: scotland
-                ? "You will now receive an invite from Propoly to complete your referencing information."
-                : "You will now receive an invite from Propoly to pay the holding fee, if applicable, and to complete your referencing information.",
+              holdingFeeLine: scotland
+                ? HOLDING_FEE_WORDING.scotland.accepted()
+                : HOLDING_FEE_WORDING.england.accepted(holdingFee ?? "one week's rent"),
+              weekAheadList: WEEK_AHEAD_LINES,
+              link: `${SITE}/tenant/tenancy`,
               agentName: sender?.name ?? packet.agent ?? "The Letting Experts",
               agentPhone,
               agentEmail: sender?.email ?? "",
@@ -553,16 +571,19 @@ function firstMatch(body: unknown, pred: (r: Row) => boolean): Row | null {
  */
 export async function ensureHandoverTodos(): Promise<number> {
   if (!hasDb()) return 0;
-  const wanted: { title: string; detail: string }[] = [
+  /* `was`: a title this item used to carry. The lookup is by title, so a
+     rename without it would put the same job on the list a second time. */
+  const wanted: { title: string; detail: string; was?: string }[] = [
     {
       title: "Handover: schedule the shadow scan",
       detail:
         "A Railway cron hitting GET https://tle-os.co.uk/api/handover/scan with header x-cron-key: <CRON_SECRET>, hourly. It rehearses every newly accepted application and records what the handover would do, writing nothing.",
     },
     {
-      title: "Handover: allow the three REX writes",
+      title: "Handover: allow the two REX writes",
+      was: "Handover: allow the three REX writes",
       detail:
-        "Add Listings/update and CustomFields/setFieldValues to REX_ALLOW_WRITES on the TLE-OS service. Until then the live handover cannot touch REX even with the switch on. The accepted emails no longer need it - they are ours now.",
+        "Add Listings/update and CustomFields/setFieldValues to REX_ALLOW_WRITES on the TLE-OS service. Until then the live handover cannot touch REX even with the switch on. The accepted emails no longer need it - they go from the agent's own mailbox now.",
     },
     {
       title: "Handover: compare the rehearsals with Howard's flow, then switch it on",
@@ -577,7 +598,11 @@ export async function ensureHandoverTodos(): Promise<number> {
   ];
   let added = 0;
   for (const t of wanted) {
-    const exists = await q<{ id: string }>(`SELECT id FROM os_todos WHERE title = $1 LIMIT 1`, [t.title]).catch(() => []);
+    /* An open item still under its old title takes the new words in place. */
+    if (t.was) {
+      await q(`UPDATE os_todos SET title = $1, detail = $2 WHERE title = $3 AND state <> 'done'`, [t.title, t.detail, t.was]).catch(() => []);
+    }
+    const exists = await q<{ id: string }>(`SELECT id FROM os_todos WHERE title = ANY($1::text[]) LIMIT 1`, [[t.title, ...(t.was ? [t.was] : [])]]).catch(() => []);
     if (exists.length) continue;
     await q(`INSERT INTO os_todos (id, title, detail, area) VALUES ($1, $2, $3, 'handover')`, [
       randomBytes(9).toString("base64url"),

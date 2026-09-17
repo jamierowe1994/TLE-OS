@@ -3,6 +3,7 @@ import { whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
 import { listKnowledge } from "@/lib/business/knowledge-store";
 import { GUIDES } from "@/lib/guides";
+import { AGENT_GUIDES } from "@/lib/agent-guides";
 
 /**
  * GET /api/knowledge/guides → Steve's Guides shelf.
@@ -37,8 +38,12 @@ export interface ShelfGuide {
   blurb: string;
   minutes: number;
   href: string;
-  /** "Walkthrough" for a built page, "Written" for one typed into /knowledge. */
-  form: "walkthrough" | "written";
+  /**
+   * "Walkthrough" for a built page, "Written" for one typed into /knowledge,
+   * "Step by step" for a pop-up guide that opens over the current screen
+   * (lib/agent-guides) rather than navigating away.
+   */
+  form: "walkthrough" | "written" | "popup";
   updatedAt: string | null;
 }
 
@@ -64,6 +69,19 @@ export async function GET(req: NextRequest) {
     updatedAt: null,
   }));
 
+  /* The pop-up guides first: an agent opens one without leaving the screen
+     they are on, so the dock opens them in place (href is the fallback link). */
+  const popups: ShelfGuide[] = AGENT_GUIDES.map((g) => ({
+    id: g.id,
+    title: g.title,
+    section: "How it works",
+    blurb: g.blurb,
+    minutes: g.minutes,
+    href: `${g.href}?walkthrough=${g.id}`,
+    form: "popup",
+    updatedAt: null,
+  }));
+
   const written: ShelfGuide[] = (await listKnowledge().catch(() => []))
     .filter((e) => e.guide)
     .map((e) => ({
@@ -77,8 +95,9 @@ export async function GET(req: NextRequest) {
       updatedAt: e.updatedAt,
     }));
 
-  const guides = [...built, ...written].sort(
-    (a, b) => a.section.localeCompare(b.section) || a.title.localeCompare(b.title)
-  );
+  const guides = [
+    ...popups,
+    ...[...built, ...written].sort((a, b) => a.section.localeCompare(b.section) || a.title.localeCompare(b.title)),
+  ];
   return NextResponse.json({ ok: true, guides });
 }

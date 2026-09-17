@@ -72,7 +72,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "That date didn't make sense." }, { status: 400 });
   }
 
-  const mins = Math.min(Math.max(Number(b.mins) || 30, 15), 8 * 60);
+  /* Travel may run past the eight hours an appointment gets: the buffer is
+     the whole drive, and cutting it short puts the agent somewhere they
+     can't be. */
+  const most = b.kind === "travel" ? 16 * 60 : 8 * 60;
+  const mins = Math.min(Math.max(Number(b.mins) || 30, 15), most);
 
   try {
     const id = uid();

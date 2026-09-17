@@ -77,19 +77,32 @@ export function frameToSource(
  *  almost always A4, and a square guide over an A4 page either cuts the top
  *  and bottom off or leaves so much room either side that nobody lines
  *  anything up. Landscape is offered because an EICR summary often is. */
-const SHAPES = {
+const SHAPES: Record<string, FrameShape> = {
   portrait: { w: 1, h: 1.414, label: "Portrait" },
   landscape: { w: 1.414, h: 1, label: "Landscape" },
-} as const;
-type Shape = keyof typeof SHAPES;
+};
+
+/** A frame the caller can ask for instead - the phone view's ID check uses a
+ *  card (85.6 x 54mm) and a passport photo page (125 x 88mm). */
+export interface FrameShape {
+  w: number;
+  h: number;
+  label: string;
+}
 
 export default function DocCamera({
   title,
   onShot,
   onClose,
+  shapes = SHAPES,
+  hint = "Fit the whole document inside the frame. Everything outside it is cut off.",
 }: {
   /** What they are photographing, so the frame can say it. */
   title: string;
+  /** The frames on offer, first is the default. One shape hides the toggle. */
+  shapes?: Record<string, FrameShape>;
+  /** The line under the viewfinder. */
+  hint?: string;
   /** The cropped page. Called once per shot; the sheet decides what happens. */
   onShot: (file: File) => void;
   onClose: () => void;
@@ -97,7 +110,7 @@ export default function DocCamera({
   const video = useRef<HTMLVideoElement | null>(null);
   const stream = useRef<MediaStream | null>(null);
   const frame = useRef<HTMLDivElement | null>(null);
-  const [shape, setShape] = useState<Shape>("portrait");
+  const [shape, setShape] = useState<string>(() => Object.keys(shapes)[0]);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
   const [flash, setFlash] = useState(false);
@@ -200,7 +213,8 @@ export default function DocCamera({
     );
   };
 
-  const s = SHAPES[shape];
+  const s = shapes[shape] ?? Object.values(shapes)[0];
+  const tall = s.h > s.w;
 
   return (
     <div className="fixed inset-0 z-[95] flex flex-col" style={{ background: "#14100f" }}>
@@ -222,9 +236,9 @@ export default function DocCamera({
           </svg>
         </button>
         <p className="min-w-0 flex-1 truncate text-[14px] font-semibold text-white">{title}</p>
-        {!failed && (
+        {!failed && Object.keys(shapes).length > 1 && (
           <div className="flex shrink-0 rounded-full p-[3px]" style={{ background: "rgba(255,255,255,0.14)" }}>
-            {(Object.keys(SHAPES) as Shape[]).map((k) => (
+            {Object.keys(shapes).map((k) => (
               <button
                 key={k}
                 type="button"
@@ -233,7 +247,7 @@ export default function DocCamera({
                 className="rounded-full px-3 py-1 text-[11.5px] font-semibold"
                 style={shape === k ? { background: "#fff", color: "#14100f" } : { color: "rgba(255,255,255,0.75)" }}
               >
-                {SHAPES[k].label}
+                {shapes[k].label}
               </button>
             ))}
           </div>
@@ -278,10 +292,10 @@ export default function DocCamera({
                   aspectRatio: `${s.w} / ${s.h}`,
                   /* Whichever of the two runs out first, so the frame is
                      always whole and always the same shape. */
-                  width: shape === "portrait" ? "min(100%, calc((100% - 0px) * 0.72))" : "100%",
+                  width: tall ? "min(100%, calc((100% - 0px) * 0.72))" : "100%",
                   maxWidth: "100%",
                   maxHeight: "100%",
-                  height: shape === "portrait" ? "auto" : undefined,
+                  height: tall ? "auto" : undefined,
                   boxShadow: "0 0 0 9999px rgba(10, 8, 7, 0.62)",
                   borderRadius: 14,
                   transition: "aspect-ratio 200ms ease",
@@ -319,7 +333,7 @@ export default function DocCamera({
           {/* ── the instruction and the shutter ── */}
           <div className="shrink-0 px-6 pb-[max(20px,env(safe-area-inset-bottom))] pt-5 text-center">
             <p className="text-[13px] leading-relaxed text-white/70">
-              Fit the whole document inside the frame. Everything outside it is cut off.
+              {hint}
             </p>
             <button
               type="button"

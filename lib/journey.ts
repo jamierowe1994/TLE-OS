@@ -268,30 +268,30 @@ export const LISTING_TRACK: JourneyStep[] = [
   },
   {
     id: "offers-in", label: "Offers in", icon: "doc",
-    title: "Log every offer as it lands",
+    title: "Let the applications build up",
     detail:
-      "One record per offer: who, how much, from when, and their situation. They accumulate here while the viewings finish, so the landlord sees the whole field at once rather than the first one in.",
+      "Each applicant applies through the form: who, how much, from when, and their situation. They build up while the viewings finish, so the landlord sees the whole field at once rather than the first one in.",
     action: "none", cta: "Log an offer",
   },
   {
     id: "offers", label: "Landlord review", icon: "coin",
     title: "Put the applications to the landlord",
     detail:
-      "Viewings have stopped. Send the landlord a link to every application — the offer, the situation, the agent's pick — and they choose or ring in.",
+      "Viewings have stopped. Put every application to the landlord: the offer, the situation and who we would pick. Each one opens with its next step.",
     action: "review", cta: "Send the landlord the applications",
   },
   {
     id: "accepted", label: "Offer accepted", icon: "shield",
     title: "Offer accepted",
     detail:
-      "The landlord has chosen. Confirm to the applicant, take the holding deposit, and let the others down kindly — every applicant gets an answer.",
-    action: "none", cta: "Accepted — confirm",
+      "The landlord has chosen. Confirm to the applicant, and let the others down kindly. Every applicant gets an answer.",
+    action: "none", cta: "Accepted: confirm",
   },
   {
     id: "handover", label: "Handover", icon: "key",
     title: "Hand over to Kirstie",
     detail:
-      "Compile everything — property, landlord, applicant, agreed rent, dates — and pass it to Applications. Pre-tenancy, referencing and move-in run there.",
+      "Property, landlord, applicants, agreed rent and dates go to pre-tenancy in one package, from the accepted application. Referencing and move-in run from there.",
     action: "handoff", cta: "Hand over to Kirstie",
   },
 ];

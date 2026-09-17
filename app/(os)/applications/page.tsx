@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import GuideButton from "@/components/GuideButton";
 import PageHeader from "@/components/PageHeader";
 import PickOne from "@/components/PickOne";
 import StageTabs from "@/components/StageTabs";
@@ -19,10 +20,13 @@ const secondary =
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-line/70 bg-white px-4 py-2 text-[12px] font-semibold transition-colors hover:border-ink/40";
 const PER_PAGE = 25;
 
-/** What a row asks you to do next, by where it is. Every one opens the file. */
+/** The row's button. Every one opens the file, so every label says so: the
+ *  file holds the next step, and nothing is sent from the list itself. They
+ *  said "Send to landlord" and "Chase the landlord" until 16 Sep 2026, and a
+ *  button that promises a send and only opens a drawer teaches people the
+ *  labels lie. Still strong while it is waiting on us or the landlord. */
 function nextAction(a: Application): { label: string; strong: boolean } {
-  if (a.status === "received") return { label: "Send to landlord", strong: true };
-  if (a.status === "communicated") return { label: "Chase the landlord", strong: true };
+  if (a.status === "received" || a.status === "communicated") return { label: "Open application", strong: true };
   if (a.status === "accepted") return { label: "View progress", strong: false };
   return { label: "View application", strong: false };
 }
@@ -81,7 +85,7 @@ function Initials({ name }: { name: string }) {
 const STAGES = [
   { key: "received", label: "Received", icon: "message", blurb: "In, and not yet put to the landlord." },
   { key: "communicated", label: "Communicated", icon: "mail", blurb: "With the landlord, waiting on their decision." },
-  { key: "accepted", label: "Accepted", icon: "checklist", blurb: "Landlord has said yes — the deal opens from here." },
+  { key: "accepted", label: "Accepted", icon: "checklist", blurb: "Landlord has said yes. The deal opens from here." },
   { key: "unsuccessful", label: "Unsuccessful", icon: "cross", blurb: "Turned down, or the applicant withdrew." },
 ] as const;
 
@@ -119,7 +123,7 @@ function checksFor(a: Application): Check[] {
   const answered = a.applicants.filter((p) => p.keyInfo?.rightToRent === true).length;
   return [
     {
-      label: `Right to rent — ${answered} of ${everyone} applicant${everyone === 1 ? "" : "s"}`,
+      label: `Right to rent - ${answered} of ${everyone} applicant${everyone === 1 ? "" : "s"}`,
       done: everyone > 0 && answered === everyone,
       note:
         answered < everyone
@@ -129,14 +133,14 @@ function checksFor(a: Application): Check[] {
     {
       label: "Landlord reference, last 2 years",
       done: k?.landlordRef === true,
-      note: k?.landlordRef === false ? "None available — worth a guarantor conversation." : undefined,
+      note: k?.landlordRef === false ? "None available. Worth a guarantor conversation." : undefined,
     },
     {
       label: "Guarantor available if needed",
       done: k?.guarantor === true,
       note:
         k?.guarantor === true && lead?.guarantorCount === 0
-          ? "Offered, but nobody has been recorded. REX's guarantor list is empty on every application."
+          ? "Offered, but the form doesn't ask who, so nobody is named yet."
           : undefined,
     },
     {
@@ -222,7 +226,7 @@ export default function Applications() {
         title="Applications"
         blurb={
           scope && !scope.everything
-            ? `${scope.label}'s applications, live from REX. See where each deal is, what needs attention, and take the next step.`
+            ? `${scope.label}'s applications. See where each deal is, what needs attention, and take the next step.`
             : "Track every application in one place. See where each deal is, what needs attention, and take the next step."
         }
         /* The line runs THROUGH her, at the waist. She is drawn full length
@@ -236,6 +240,12 @@ export default function Applications() {
         seat={0.5}
         illustrationCrop
         lineBreak="none"
+        actions={
+          <GuideButton
+            id="applications"
+            className="flex items-center gap-1.5 rounded-full border border-line/80 px-3.5 py-2 text-[12px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink"
+          />
+        }
       />
 
       {/* ── The pipeline, and the filter for it. Same shape as Market
@@ -340,7 +350,10 @@ export default function Applications() {
           </div>
 
           {apps === null ? (
-            <p className="py-10 text-center text-[12.5px] text-muted">Pulling from REX…</p>
+            <p className="flex items-center justify-center gap-2 py-10 text-[12.5px] text-muted">
+              <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+              Loading applications&hellip;
+            </p>
           ) : error ? (
             <p className="py-10 text-center text-[12.5px] text-muted">{error}</p>
           ) : rows.length === 0 ? (
@@ -495,33 +508,32 @@ export default function Applications() {
         />
       )}
 
-      {/* The caveats about what REX does and does not hold. Still true, still
-          worth reading; folded so the board stays clean (James, 12 Sep 2026). */}
+      {/* The caveats about what the record does and does not hold. Still true,
+          still worth reading; folded so the board stays clean (James, 12 Sep
+          2026). Agent-facing, so no system names but Propoly, which agents
+          already work in (16 Sep 2026). */}
       <details className="mt-5 text-[11px] text-muted">
         <summary className="cursor-pointer select-none font-semibold hover:text-ink">About these figures</summary>
         <ul className="mt-3 space-y-1.5 text-[11px] leading-relaxed text-muted">
-        <li>
-          These are REX&apos;s four application statuses, live. The{" "}
-          <span className="font-semibold">eight pre-tenancy stages</span> — holding fee,
-          referencing, PLC, deposit, move day — belong to the Propoly deal created once an
-          application is accepted, and that record isn&apos;t joined in yet.
-        </li>
-        <li>
-          <span className="font-semibold">Right to rent, landlord reference, guarantor and
-          credit have no fields in REX.</span> They are written as one line of prose into the
-          notes column, describing the lead applicant only. This page reads that line back out.
-        </li>
-        <li>
-          <span className="font-semibold">REX&apos;s guarantor list is empty on every
-          application</span> — including the hundred-odd where the applicant said they could
-          provide one. We know a guarantor was offered; we have never recorded who.
-        </li>
-        <li>
-          <span className="font-semibold">Referencing has no API source anywhere</span> — The
-          Lettings Hub isn&apos;t connected in REX and Propoly carries no reference status
-          field. That stage is manual until someone connects it.
-        </li>
-      </ul>
+          <li>
+            These are the four application statuses, live. Once an application is accepted, the{" "}
+            <span className="font-semibold">eight pre-tenancy stages</span> (holding fee,
+            referencing, PLC, deposit, move day) come from its deal in Propoly, and show on the
+            application&apos;s own track when you open it.
+          </li>
+          <li>
+            <span className="font-semibold">Right to rent, landlord reference, guarantor and
+            credit</span> are read from the application form, which only asks the lead applicant.
+          </li>
+          <li>
+            <span className="font-semibold">No guarantor is named on any application yet.</span>{" "}
+            The form asks whether the applicant can provide one, but not who.
+          </li>
+          <li>
+            <span className="font-semibold">Referencing is followed up by hand for now.</span>{" "}
+            No referencing results come into the OS yet.
+          </li>
+        </ul>
       </details>
     </>
   );

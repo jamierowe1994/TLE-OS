@@ -19,6 +19,7 @@ import {
   type MaStage,
 } from "@/lib/market-appraisal";
 import { fetchMe } from "@/lib/me";
+import GuideButton from "@/components/GuideButton";
 
 /**
  * Market Appraisals — the landlord side, from booked to won.
@@ -269,6 +270,10 @@ export default function MarketAppraisals() {
                  null, so no second any row. */
               clearable={false}
               neutral="any"
+            />
+            <GuideButton
+              id="appraisals"
+              className="flex items-center gap-1.5 rounded-full border border-line/80 px-3.5 py-2 text-[12px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink"
             />
           </div>
         }

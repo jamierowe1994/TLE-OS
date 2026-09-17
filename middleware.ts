@@ -267,6 +267,7 @@ const MACHINE_ROUTES = [
      have complained. Meets the precondition: with no CRON_SECRET the key
      comparison fails and the route answers 401, so the redirect was never
      what protected it. */
+  "/api/tenant/reminders/run",        // passport nudges and the morning viewing reminder, hourly
   "/api/reminders/run",
 ];
 
@@ -344,6 +345,6 @@ export const config = {
        not hold, and the only thing it can write is that one inspection's
        access answer - a yes is refused unless it names one of the times we
        actually offered. See lib/inspections. */
-    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|visit|api/visit|rehearsal|api/rehearsal|proof|api/tenant/passport|api/landlord|brand|email|rex|r|api/r|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$).*)",
+    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|visit|api/visit|rehearsal|api/rehearsal|proof|api/tenant/passport|api/tenant/feedback|api/landlord|brand|email|rex|r|api/r|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$).*)",
   ],
 };

@@ -14,11 +14,15 @@ import MarketPicturePanel, {
 import type { MarketPicture } from "@/lib/market-picture";
 import PresentDeck from "@/components/PresentDeck";
 import {
+  SECTIONS,
   STANDARD_FEES,
   defaultBio,
   firstNameOf,
+  slideHasContent,
   slidesFor,
+  slidesInKind,
   type DeckKind,
+  type SlideId,
   type PresentAgent,
   type PresentDeck as Deck,
 } from "@/lib/present";
@@ -26,18 +30,15 @@ import { SERVICE_LEVELS, type MarketAppraisal } from "@/lib/market-appraisal";
 import { Pill } from "@/components/Wire";
 import {
   BUILD_STEPS,
-  DECK_SECTIONS,
-  defaultPlan,
   defaultSelection,
-  pagesIn,
-  reorder,
   type BuildStepId,
-  type DeckPlan,
 } from "@/lib/presentation-builder";
 import type { MaResearch, MarketListing } from "@/lib/ma-research";
+import { buildGuide, guideReach } from "@/lib/ma-guide";
 import { knownCompliance, OUTSTANDING_AT_APPRAISAL } from "@/lib/appraisal-compliance";
 import { listingKey } from "@/lib/listing-key";
 import { fetchMe } from "@/lib/me";
+import GuideButton from "@/components/GuideButton";
 
 /**
  * Build the presentation.
@@ -133,7 +134,10 @@ export default function PresentationBuilder({
   const [d, setD] = useState<MaResearch | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [chosen, setChosen] = useState<string[]>([]);
-  const [plan, setPlan] = useState<DeckPlan>(defaultPlan);
+  /* Slides switched off on the Review step. Written onto the deck as
+     `hidden`, which slidesFor honours in the preview, the minted deck and
+     the booklet alike. */
+  const [hidden, setHidden] = useState<SlideId[]>([]);
   const [making, setMaking] = useState(false);
   const [made, setMade] = useState<string | null>(null);
   /* The market picture is loaded by its own panel on its own step, and lifted
@@ -263,8 +267,11 @@ export default function PresentationBuilder({
   function deckBody() {
     if (!d) return null;
     const picked = d.comparables.filter((c) => chosen.includes(c.id));
-    const rents = picked.map((c) => c.rentMonthly).sort((a, b) => a - b);
-    const at = (q: number) => rents[Math.min(rents.length - 1, Math.floor(rents.length * q))];
+    /* Recomputed from what the agent CHOSE, not copied from the research.
+       Ticking three of eight must move the range, or the deck quotes a
+       number the chosen properties do not support. The caveat is recomputed
+       too: the research's caveat described a different sample. */
+    const guide = buildGuide(picked);
     return {
       ref: refId ?? "",
       /* THIS BUILDER MAKES THE APPRAISAL DECK, not the pre-appraisal one.
@@ -277,15 +284,12 @@ export default function PresentationBuilder({
       recipientName: landlord ?? "",
       address,
       postcode,
-      comparables: rents.length
+      comparables: guide
         ? {
-            // Recomputed from what the agent CHOSE, not copied from the
-            // research. Ticking three of eight must move the range, or the
-            // deck quotes a number the chosen properties do not support.
-            guideLow: at(0.25),
-            guideMid: at(0.5),
-            guideHigh: at(0.75),
-            basedOn: rents.length,
+            guideLow: guide.low,
+            guideMid: guide.mid,
+            guideHigh: guide.high,
+            basedOn: guide.basedOn,
             rows: picked.map((c) => ({
               name: c.name,
               locality: c.locality,
@@ -293,9 +297,10 @@ export default function PresentationBuilder({
               days: c.daysOnMarket,
               letAgreed: c.letAgreed,
             })),
-            caveat: d.guide?.caveat ?? null,
+            caveat: guide.caveat,
           }
         : null,
+      hidden,
       market: marketPayload(),
       /* WHAT THE AGENT PICKED ON THE AVAILABLE STEP, snapshotted with its
          photographs. Until now the wizard let somebody choose these and
@@ -950,12 +955,32 @@ export default function PresentationBuilder({
   }
 
   const available = useMemo(() => (d?.comparables ?? []).filter((c) => !c.letAgreed), [d]);
+  /* THE TICK LIST. Everything of ours still letting, PLUS every comparable
+     that starts ticked or is ticked. Same-sector comparables are ticked by
+     default whether or not they are let agreed (defaultSelection), and this
+     list used to be `available` alone - so a let-agreed one went into the
+     deck with no box on screen to untick it. Keyed on the default as well as
+     the current ticks so a let-agreed row does not vanish the moment it is
+     unticked, which would leave no way to put it back. */
+  const oursTickable = useMemo(
+    () =>
+      (d?.comparables ?? []).filter(
+        (c) => !c.letAgreed || c.nearness === "sector" || chosen.includes(c.id)
+      ),
+    [d, chosen]
+  );
+  /* The ticked comparables that still exist in the research, and the guide
+     the deck will carry from them. */
+  const pickedComps = useMemo(
+    () => (d?.comparables ?? []).filter((c) => chosen.includes(c.id)),
+    [d, chosen]
+  );
+  const deckGuide = useMemo(() => buildGuide(pickedComps), [pickedComps]);
 
   const toggle = (id: string) =>
     setChosen((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
 
   const here = BUILD_STEPS[step].id as BuildStepId;
-  const pages = pagesIn(plan);
 
   /**
    * A CIRCLE SHOWING A MAP — and it stays a map when you press it.
@@ -1065,12 +1090,12 @@ export default function PresentationBuilder({
             })()}
           </div>
           <div>
-            <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">Ours, letting now &mdash; tick what goes in the deck</p>
-            {available.length === 0 ? (
+            <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">Ours nearby - tick what goes in the deck</p>
+            {oursTickable.length === 0 ? (
               <p className="mt-1.5 text-[11.5px] text-muted">Nothing of ours near this postcode.</p>
             ) : (
               <ul className="mt-1.5 max-h-52 overflow-y-auto">
-                {available.map((c) => (
+                {oursTickable.map((c) => (
                   <li key={c.id}>
                     <label className="flex cursor-pointer items-center gap-2.5 py-1.5 text-[12.5px]">
                       <input type="checkbox" checked={chosen.includes(c.id)} onChange={() => toggle(c.id)} className="h-3.5 w-3.5 accent-[#56423e]" />
@@ -1078,6 +1103,11 @@ export default function PresentationBuilder({
                         {c.name}
                         <span className="ml-1.5 text-[10.5px] text-muted">{c.locality}</span>
                       </span>
+                      {c.letAgreed && (
+                        <span className="shrink-0 rounded-full border border-line/80 px-1.5 py-px text-[9.5px] font-semibold uppercase tracking-wider text-muted">
+                          Let agreed
+                        </span>
+                      )}
                       <span className="figures shrink-0">{c.rentDisplay}</span>
                     </label>
                   </li>
@@ -1258,9 +1288,9 @@ export default function PresentationBuilder({
   /* The preview deck: the same payload the server would receive, given a
      stand-in agent and the standing fees, so it is the landlord's deck as it
      would be minted right now. Recomputed as picks and ticks change. */
-  const previewDeck = useMemo<Deck | null>(() => {
+  const draftDeck = useMemo<Deck | null>(() => {
     const b = deckBody();
-    if (!b || !me) return null;
+    if (!b) return null;
     const level = SERVICE_LEVELS.find((sl) => sl.id === appraisal?.serviceLevel);
     return {
       kind,
@@ -1278,7 +1308,9 @@ export default function PresentationBuilder({
       whenPretty: "",
       startsAt: appraisal?.appointmentAt ?? null,
       minutes: 45,
-      agent: me,
+      /* A stand-in until the agent loads. The draft also drives the Review
+         list, which must not wait on who is signed in; the preview does. */
+      agent: me ?? { name: "", firstName: "", title: "", email: "", phone: "", photo: null, bio: "" },
       comparables: b.comparables && b.comparables.rows.length >= 3 ? b.comparables : null,
       market: b.market && b.market.area ? b.market : null,
       listings: b.listings.length ? (b.listings as Deck["listings"]) : null,
@@ -1294,11 +1326,16 @@ export default function PresentationBuilder({
               note: appraisal.valuationNote ?? null,
             }
           : null,
-      terms: null,
+      /* The signing link is only minted at send, but the terms slide goes out
+         whenever there is a figure, so the draft carries an empty one: the
+         slide's no-link branch, which is what it shows until DocuSeal answers. */
+      terms: kind === "post-appraisal" && appraisal?.valuation ? { signUrl: null, summary: null } : null,
+      hidden: b.hidden,
       createdAt: new Date().toISOString(),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [d, me, chosen, picks, marketSel, marketPic, kind, landlord, address, postcode, appraisal]);
+  }, [d, me, chosen, picks, marketSel, marketPic, kind, landlord, address, postcode, appraisal, hidden]);
+  const previewDeck = me ? draftDeck : null;
 
   const body = (
     <>
@@ -1330,6 +1367,12 @@ export default function PresentationBuilder({
               On the title line they cost nothing — the line was already there
               and half empty — and the map gets the height back. */}
           <div className="flex shrink-0 items-center gap-2">
+            {/* The best-price guide explained, over this screen, so an agent
+                does not lose their ticks going to read it. */}
+            <GuideButton
+              id="appraisals"
+              className="mr-1 flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[12px] font-semibold text-muted transition-colors hover:text-ink"
+            />
             {walk}
             {onClose && (
               <button type="button" onClick={onClose} className="ml-1 text-[18px] leading-none text-muted hover:text-ink">
@@ -1799,20 +1842,56 @@ export default function PresentationBuilder({
                 onLoaded={setMarketPic}
               />
 
+              {/* TWO FIGURES, NAMED, because they are two different samples.
+                  This box used to print the research guide (every comparable
+                  we found) while the deck recalculated from the TICKED ones,
+                  so an agent could read £1,250 here and send a landlord
+                  £1,400 without either number being wrong or either being
+                  labelled. The deck's figure leads, because it is the one the
+                  landlord sees; everything we found sits underneath when it
+                  differs. Same function for both - lib/ma-guide. */}
               {d.guide ? (
                 <div className="rounded-xl border border-line/70 p-4">
-                  <p className="figures text-[22px] leading-none">{money(d.guide.mid)} pcm</p>
-                  <p className="mt-1 text-[12px] text-muted">
-                    {money(d.guide.low)}–{money(d.guide.high)} · {d.guide.basedOn} comparables ·{" "}
-                    {d.guide.ring === "sector" ? "same sector" : d.guide.ring === "district" ? "same district" : "wider area"}
-                  </p>
-                  {d.guide.caveat && (
-                    <p className="mt-2 text-[11.5px] leading-relaxed text-accent-dark">{d.guide.caveat}</p>
+                  <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">Rent guide in the presentation</p>
+                  {deckGuide && pickedComps.length >= 3 ? (
+                    <>
+                      <p className="figures mt-2 text-[22px] leading-none">{money(deckGuide.mid)} pcm</p>
+                      <p className="mt-1 text-[12px] text-muted">
+                        {money(deckGuide.low)}-{money(deckGuide.high)} &middot; from the {deckGuide.basedOn} comparables ticked on Recently let &middot;{" "}
+                        {guideReach(deckGuide, d.sector, d.sector?.split(" ")[0] ?? null)}
+                      </p>
+                      {deckGuide.caveat && (
+                        <p className="mt-2 text-[11.5px] leading-relaxed text-accent-dark">{deckGuide.caveat}</p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="mt-2 text-[12.5px] leading-relaxed text-muted">
+                      No rent guide goes in yet. It needs at least 3 comparables ticked on Recently let
+                      {pickedComps.length ? ` (${pickedComps.length} ticked so far)` : ""}.
+                    </p>
+                  )}
+                  {(!deckGuide ||
+                    pickedComps.length < 3 ||
+                    deckGuide.mid !== d.guide.mid ||
+                    deckGuide.low !== d.guide.low ||
+                    deckGuide.high !== d.guide.high ||
+                    deckGuide.basedOn !== d.guide.basedOn) && (
+                    <div className="mt-3 border-t border-line/60 pt-3">
+                      <p className="text-[11.5px] text-muted">
+                        All {d.guide.basedOn} comparable{d.guide.basedOn === 1 ? "" : "s"} we found:{" "}
+                        <span className="figures text-ink">{money(d.guide.mid)} pcm</span> &middot;{" "}
+                        {money(d.guide.low)}-{money(d.guide.high)} &middot;{" "}
+                        {guideReach(d.guide, d.sector, d.sector?.split(" ")[0] ?? null)}
+                      </p>
+                      {d.guide.caveat && (
+                        <p className="mt-1 text-[11px] leading-relaxed text-accent-dark">{d.guide.caveat}</p>
+                      )}
+                    </div>
                   )}
                 </div>
               ) : (
                 <p className="rounded-xl border border-line/70 p-4 text-[12.5px] text-muted">
-                  No guide — nothing in our book near this postcode.
+                  No guide. Nothing in our book near this postcode.
                 </p>
               )}
               {/* The old single-sector, fixed-2-bed average lived here and it
@@ -1853,82 +1932,117 @@ export default function PresentationBuilder({
                uses - so what they see is what the landlord gets. */
             <div className="grid gap-5 lg:grid-cols-[minmax(220px,1fr)_minmax(0,3fr)]">
               <div className="min-w-0">
-                <p className="text-[12px] leading-relaxed text-muted">
-                  {pages.length} pages, {chosen.length} comparable{chosen.length === 1 ? "" : "s"}.
-                  Untick to leave a section out.
-                </p>
-                <ol className="mt-2.5 space-y-1.5">
-                  {plan.order.map((id, i) => {
-                    const s = DECK_SECTIONS.find((x) => x.id === id);
-                    if (!s) return null;
-                    const isMarket = s.id === "market";
-                    const marketOn = Boolean(marketSel?.blocks.length);
-                    const on = isMarket ? marketOn : s.always || plan.enabled[s.id];
-                    const locked = s.always || (isMarket && !marketOn);
-                    const flip = () => {
-                      if (locked) return;
-                      if (isMarket) setMarketSel(null);
-                      else setPlan((p) => ({ ...p, enabled: { ...p.enabled, [s.id]: !p.enabled[s.id] } }));
-                    };
-                    return (
-                      /* A card per section (James, 11 Sep 2026: "make the
-                         sections a little bit nicer"): its place in the deck,
-                         its name, one line on what it is, and a switch rather
-                         than a checkbox. Off is faded, not hidden - the
-                         landlord will not see it, but the agent should. */
-                      <li
-                        key={s.id}
-                        className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 transition-colors ${
-                          on ? "border-line/70 bg-card" : "border-dashed border-line/60 opacity-60"
-                        }`}
-                      >
-                        <span className={`figures flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10.5px] font-bold ${on ? "bg-brown text-page" : "bg-line/60 text-muted"}`}>
-                          {i + 1}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[12.5px] font-semibold leading-tight">{s.label}</span>
-                          <span className="block truncate text-[10.5px] leading-snug text-muted">
-                            {isMarket
-                              ? marketOn
-                                ? `${marketSel!.blocks.length} block${marketSel!.blocks.length === 1 ? "" : "s"} from ${marketSel!.area}`
-                                : "Nothing ticked on the Market step"
-                              : s.blurb}
-                          </span>
-                        </span>
-                        {s.always ? (
-                          <span className="shrink-0 text-[9.5px] font-bold uppercase tracking-wider text-muted">Fixed</span>
-                        ) : (
-                          <button
-                            type="button"
-                            role="switch"
-                            aria-checked={on}
-                            aria-label={`${s.label} ${on ? "on" : "off"}`}
-                            disabled={locked}
-                            onClick={flip}
-                            className={`relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-40 ${on ? "bg-[#56634a]" : "bg-line"}`}
-                          >
-                            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-[left] ${on ? "left-[18px]" : "left-0.5"}`} />
-                          </button>
-                        )}
-                        {!s.always && (
-                          <span className="flex shrink-0 flex-col">
-                            <button type="button" onClick={() => setPlan((p) => reorder(p, s.id, -1))} className="px-1 text-[10px] leading-none text-muted hover:text-ink" title="Move up">▲</button>
-                            <button type="button" onClick={() => setPlan((p) => reorder(p, s.id, 1))} className="px-1 text-[10px] leading-none text-muted hover:text-ink" title="Move down">▼</button>
-                          </span>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ol>
-                <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
-                  Welcome stays first and the close stays last.
-                </p>
+                {(() => {
+                  /* THE DECK'S REAL SLIDES, grouped by the chapters the
+                     landlord sees. This list used to be eight made-up
+                     "sections" whose switches and arrows reached nothing -
+                     see lib/presentation-builder. Now each switch writes
+                     `hidden`, and the preview beside it redraws. */
+                  const all = slidesInKind(kind);
+                  const shown = draftDeck ? slidesFor(draftDeck) : [];
+                  const why = (id: SlideId): string | null => {
+                    if (!draftDeck || slideHasContent(draftDeck, id)) return null;
+                    switch (id) {
+                      case "comparables":
+                        return `Needs 3 comparables ticked on Recently let (${pickedComps.length} ticked)`;
+                      case "market":
+                        return "Nothing ticked on the Market step";
+                      case "listings":
+                        return "No properties picked on the On the market step";
+                      case "material":
+                        return "Nothing on record for this address";
+                      case "testimonial":
+                        return "No review to show yet";
+                      case "valuation":
+                      case "terms":
+                        return "Needs the agreed rent on the appraisal";
+                      default:
+                        return "Nothing to show on this one";
+                    }
+                  };
+                  const toggleSlide = (id: SlideId) =>
+                    setHidden((h) => (h.includes(id) ? h.filter((x) => x !== id) : [...h, id]));
+                  return (
+                    <>
+                      <p className="text-[12px] leading-relaxed text-muted">
+                        {shown.length} slides, {pickedComps.length} comparable{pickedComps.length === 1 ? "" : "s"}.
+                        Switch a slide off to leave it out.
+                      </p>
+                      <div className="mt-2.5 space-y-3">
+                        {SECTIONS.map((sec) => {
+                          const inSec = all.filter((sl) => sl.section === sec.id);
+                          if (!inSec.length) return null;
+                          return (
+                            <div key={sec.id}>
+                              <p className="mb-1.5 text-[9.5px] font-bold uppercase tracking-wider text-muted">
+                                {sec.label || "Opening"}
+                              </p>
+                              <ol className="space-y-1.5">
+                                {inSec.map((sl) => {
+                                  const missing = why(sl.id);
+                                  const on = !missing && !(sl.removable && hidden.includes(sl.id));
+                                  const at = shown.findIndex((x) => x.id === sl.id);
+                                  return (
+                                    /* A card per slide (James, 11 Sep 2026: "make
+                                       the sections a little bit nicer"): its
+                                       place in the deck, its title, and a switch.
+                                       Off is faded, not hidden - the landlord will
+                                       not see it, but the agent should, with the
+                                       reason when there is nothing to show. */
+                                    <li
+                                      key={sl.id}
+                                      className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 transition-colors ${
+                                        on ? "border-line/70 bg-card" : "border-dashed border-line/60 opacity-60"
+                                      }`}
+                                    >
+                                      <span
+                                        className={`figures flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10.5px] font-bold ${
+                                          on ? "bg-brown text-page" : "bg-line/60 text-muted"
+                                        }`}
+                                      >
+                                        {at >= 0 ? at + 1 : "-"}
+                                      </span>
+                                      <span className="min-w-0 flex-1">
+                                        <span className="block truncate text-[12.5px] font-semibold leading-tight">{sl.title}</span>
+                                        {missing && (
+                                          <span className="block text-[10.5px] leading-snug text-muted">{missing}</span>
+                                        )}
+                                      </span>
+                                      {!sl.removable ? (
+                                        <span className="shrink-0 text-[9.5px] font-bold uppercase tracking-wider text-muted">Fixed</span>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          role="switch"
+                                          aria-checked={on}
+                                          aria-label={`${sl.title} ${on ? "on" : "off"}`}
+                                          disabled={Boolean(missing)}
+                                          onClick={() => toggleSlide(sl.id)}
+                                          className={`relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-40 ${on ? "bg-[#56634a]" : "bg-line"}`}
+                                        >
+                                          <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-[left] ${on ? "left-[18px]" : "left-0.5"}`} />
+                                        </button>
+                                      )}
+                                    </li>
+                                  );
+                                })}
+                              </ol>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
+                        The order is fixed. It follows the chapters the deck lists at the start.
+                      </p>
+                    </>
+                  );
+                })()}
               </div>
 
               <div className="min-w-0">
                 <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
                   <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
-                    Preview &mdash; what the landlord opens
+                    Preview - what the landlord opens
                   </p>
                   {previewDeck && (
                     <span className="text-[11px] text-muted">

@@ -68,7 +68,15 @@ function SignIn() {
            will be the activity log." Only when nothing asked for a
            particular page: a link she followed still goes where it said. */
         const asked = new URLSearchParams(window.location.search).get("next");
-        router.replace(!asked && j.user?.role === "pretenancy" ? "/pre-tenancy/dashboard" : next);
+        /* An agent signing in on a PHONE lands on the phone view (16 Sep
+           2026): they are on a viewing and want their diary, not a desktop
+           dashboard squeezed onto a small screen. Width and a touch pointer
+           together, so a narrow laptop window is not a phone. The full OS is
+           one tap away from the phone view's menu. */
+        const phone = window.matchMedia("(max-width: 640px) and (pointer: coarse)").matches;
+        router.replace(
+          !asked && j.user?.role === "pretenancy" ? "/pre-tenancy/dashboard" : !asked && phone ? "/m" : next
+        );
       } else {
         setError(j.error ?? "That didn't work.");
       }

@@ -142,7 +142,7 @@ function messages(v: unknown): string[] {
 
 export async function readListingDetails(id: number): Promise<ListingDetails> {
   const res = await rexCall("Listings", "read", { id });
-  if (!res.ok || !res.result) throw new Error(res.error ?? "REX would not read that listing.");
+  if (!res.ok || !res.result) throw new Error(res.error ?? "The listings system would not read that listing.");
   const l = res.result as Obj;
   const related = (l.related ?? {}) as Obj;
   const embedded = (l.property ?? {}) as Obj;
@@ -268,7 +268,7 @@ export const MAX_HIGHLIGHTS = 10;
  */
 export async function planListingWrite(id: number, edit: ListingEdit): Promise<{ listing: Obj | null; property: Obj | null; propertyId: string | null }> {
   const res = await rexCall("Listings", "read", { id });
-  if (!res.ok || !res.result) throw new Error(res.error ?? "REX would not read that listing.");
+  if (!res.ok || !res.result) throw new Error(res.error ?? "The listings system would not read that listing.");
   const l = res.result as Obj;
   const related = (l.related ?? {}) as Obj;
   const embedded = (l.property ?? {}) as Obj;

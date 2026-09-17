@@ -184,7 +184,18 @@ function reportPropoly(method: string, path: string, status: number): void {
   });
 }
 
-export async function propolyGet(path: string): Promise<PropolyResult> {
+/**
+ * A PROBE'S REFUSAL IS ITS ANSWER, NOT A FAULT.
+ *
+ * The wiring sheet asks Propoly for paths nobody expects to be allowed — a
+ * census of endpoints that may not exist, a control path that certainly does
+ * not, document routes asked in the hope of a 200. Every one of those 403s was
+ * being filed as an automatic bug, so opening the wiring sheet raised tickets
+ * and emailed the owners about the questions it had just asked. Callers whose
+ * refusal is the finding pass `probe`, and their answers stay on the sheet
+ * where they belong. Everything the OS calls in anger still reports.
+ */
+export async function propolyGet(path: string, opts?: { probe?: boolean }): Promise<PropolyResult> {
   const keyHeaders = { "x-api-key": apiKey(), "agent-name": agentName() };
   let token = await getToken();
   let res = await fetch(`${BASE}${path}`, {
@@ -204,7 +215,7 @@ export async function propolyGet(path: string): Promise<PropolyResult> {
   } catch {
     body = null;
   }
-  reportPropoly("GET", path, res.status);
+  if (!opts?.probe) reportPropoly("GET", path, res.status);
   return { status: res.status, body };
 }
 

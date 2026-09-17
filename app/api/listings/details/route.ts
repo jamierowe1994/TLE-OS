@@ -8,6 +8,7 @@ import { saveMarketingFacts, type MarketingFacts } from "@/lib/listing-marketing
 import { OPTIONS } from "@/lib/listing-requirements";
 import { isExpiredToken, rexCall, rexConfigured, rexWritesLocked } from "@/lib/rex";
 import { rexTokenFor } from "@/lib/rex-user";
+import { isOwner } from "@/lib/agent-words";
 
 /**
  * The advert, live from REX, and saved back to it.
@@ -152,24 +153,24 @@ export async function PATCH(req: NextRequest) {
     if (plan.property) {
       if (rexWritesLocked("Properties", "update")) {
         /* Owner-only diagnostics say which permission; nobody else needs to. */
-        outcome.rooms = actor.role === "owner" ? "Rooms and utilities are kept here; sending them on needs Properties/update on REX_ALLOW_WRITES." : "Kept here; they will reach the portals once switched on.";
+        outcome.rooms = isOwner(actor) ? "Rooms and utilities are kept here; sending them on needs Properties/update on REX_ALLOW_WRITES." : "Kept here; they will reach the portals once switched on.";
       } else {
         const r = await rexCall("Properties", "update", { data: plan.property }, token);
-        outcome.rooms = r.ok ? "Saved." : actor.role === "owner" ? `REX refused the property half: ${r.error ?? r.status}` : "The rooms and services are kept here, and did not reach the portals yet.";
+        outcome.rooms = r.ok ? "Saved." : isOwner(actor) ? `REX refused the property half: ${r.error ?? r.status}` : "The rooms and services are kept here, and did not reach the portals yet.";
         failed ||= !r.ok;
       }
     }
 
     if (plan.listing) {
       if (rexWritesLocked("Listings", "update")) {
-        outcome.listing = actor.role === "owner" ? "Locked here: REX_ALLOW_WRITES needs Listings/update." : "Saving the advert is not switched on yet.";
+        outcome.listing = isOwner(actor) ? "Locked here: REX_ALLOW_WRITES needs Listings/update." : "Saving the advert is not switched on yet.";
         failed = true;
       } else {
         const r = await rexCall("Listings", "update", { data: plan.listing }, token);
         if (!r.ok && token && isExpiredToken(r)) {
-          return NextResponse.json({ ok: false, error: "Your REX sign-in has lapsed - reconnect it in your profile and try again.", reconnect: true }, { status: 401 });
+          return NextResponse.json({ ok: false, error: "Your sign-in to the listings system has lapsed. Reconnect it on your Profile and try again.", reconnect: true }, { status: 401 });
         }
-        outcome.listing = r.ok ? "Saved." : actor.role === "owner" ? `REX refused it: ${r.error ?? r.status}` : "The advert did not save. Try again in a minute.";
+        outcome.listing = r.ok ? "Saved." : isOwner(actor) ? `REX refused it: ${r.error ?? r.status}` : "The advert did not save. Try again in a minute.";
         failed ||= !r.ok;
       }
     }

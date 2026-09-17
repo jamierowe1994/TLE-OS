@@ -62,27 +62,34 @@ export interface NewProperty {
   ownerContactId?: string | null;
 }
 
+/** `detail` is safe for any agent to read; `ownerDetail`, when there is one, names the lock. */
 export type CreateOutcome =
   | { ok: true; propertyId: string }
-  | { ok: false; reason: string; detail: string };
+  | { ok: false; reason: string; detail: string; ownerDetail?: string };
 
 /** Everything that has to be true before a property can be written. */
-async function blockedBecause(): Promise<{ reason: string; detail: string } | null> {
+async function blockedBecause(): Promise<{ reason: string; detail: string; ownerDetail?: string } | null> {
   if (!rexConfigured()) {
-    return { reason: "rex_not_configured", detail: "REX credentials are not set on this environment." };
+    return {
+      reason: "rex_not_configured",
+      detail: "The listings system isn't connected here.",
+      ownerDetail: "REX credentials are not set on this environment.",
+    };
   }
   if (!(await switchOn("rex_property_create"))) {
     return {
       reason: "switch_off",
-      detail:
-        "Creating properties in REX is switched off. Arm it on Admin → Switches — it writes a new " +
+      detail: "Adding a property is not switched on yet.",
+      ownerDetail:
+        "Creating properties in REX is switched off. Arm it on Admin → Switches - it writes a new " +
         "record into the live system six businesses share.",
     };
   }
   if (rexWritesLocked("Properties", "create")) {
     return {
       reason: "writes_locked",
-      detail: "REX_ALLOW_WRITES does not include Properties/create.",
+      detail: "Adding a property is not switched on yet.",
+      ownerDetail: "REX_ALLOW_WRITES does not include Properties/create.",
     };
   }
   return null;
@@ -121,12 +128,13 @@ export async function createProperty(
   p: NewProperty,
   userId: string | null
 ): Promise<CreateOutcome> {
+  const WORDS = { streetName: "a street name", town: "a town", postcode: "a postcode" } as const;
   const missing = (["streetName", "town", "postcode"] as const).filter((k) => !p[k]?.trim());
   if (missing.length) {
     return {
       ok: false,
       reason: "incomplete",
-      detail: `A property needs ${missing.join(", ")} — REX records without them cannot be found again.`,
+      detail: `A property needs ${missing.map((k) => WORDS[k]).join(", ")} - without them it can't be found again.`,
     };
   }
 
@@ -138,7 +146,8 @@ export async function createProperty(
     return {
       ok: false,
       reason: "no_rex_session",
-      detail:
+      detail: "Connect your listings account on your Profile first, so the property is recorded under your name rather than the office's.",
+      ownerDetail:
         "You have no REX sign-in held, so the property would be created under the office account " +
         "rather than your name. Link your REX account on Profile, then try again. (This is the " +
         "same gap that made the first listing write record as 'System User'.)",
@@ -156,16 +165,17 @@ export async function createProperty(
     return {
       ok: false,
       reason: "rex_session_expired",
-      detail: "Your REX sign-in has lapsed. Sign in to REX again and try once more.",
+      detail: "Your sign-in to the listings system has lapsed. Reconnect it on your Profile and try again.",
     };
   }
   if (!res.ok) {
     return {
       ok: false,
       reason: "rex_refused",
-      /* REX's own words. "The field passed in X is not permissible" tells an
-         agent exactly what is wrong; "create failed" tells them nothing. */
-      detail: res.error ?? `REX refused the property (${res.status}).`,
+      detail: "The address was not accepted. Check the street, town and postcode and try again.",
+      /* REX's own words, for the owner. "The field passed in X is not
+         permissible" says exactly what is wrong; "create failed" says nothing. */
+      ownerDetail: res.error ?? `REX refused the property (${res.status}).`,
     };
   }
 
@@ -177,7 +187,8 @@ export async function createProperty(
     return {
       ok: false,
       reason: "no_id",
-      detail: "REX accepted the property but returned no id, so it cannot be linked to anything.",
+      detail: "The address was saved but no reference came back, so it can't be linked. Search for the address and pick it from the list.",
+      ownerDetail: "REX accepted the property but returned no id, so it cannot be linked to anything.",
     };
   }
   return { ok: true, propertyId: id };

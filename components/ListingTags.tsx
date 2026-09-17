@@ -1,6 +1,7 @@
 "use client";
 
 import DoodleIcon from "@/components/DoodleIcon";
+import { REQUIREMENTS } from "@/lib/listing-requirements";
 
 /**
  * THE LISTING'S STATE, DRAWN THE SAME WAY EVERYWHERE (James, 11 Sep 2026).
@@ -54,30 +55,84 @@ export interface ReadinessState {
 }
 
 /**
+ * What the board can check for itself, out of lib/listing-requirements: the
+ * book carries these fields. The rest (council tax, bills, furnishing, key
+ * features) are only on the full read, which the board asks for separately.
+ */
+const BOARD_CAN_SEE = new Set(["photos", "heading", "body", "rent", "availableFrom"]);
+
+/**
+ * The full check for one listing, from /api/listings/readiness: the labels it
+ * still needs, "checking" while that is running, "failed" if it could not be
+ * read. Absent when it has not been asked for.
+ */
+export type PublishCheck = string[] | "checking" | "failed";
+
+type BoardListing = {
+  letAgreed: boolean;
+  publicationStatus: string | null;
+  imageCount: number;
+  epcExpiry: string | null;
+  epcRating?: string | null;
+  rent?: number | null;
+  availableFrom?: string | null;
+  /* Absent on the static export, which never carried the write-up. */
+  advertHeading?: string | null;
+  advertBody?: string | null;
+};
+
+/** What is visibly missing, in the requirement's own words. */
+export function boardGaps(l: BoardListing): string[] {
+  const input = {
+    rent: l.rent ?? null, deposit: null, availableFrom: l.availableFrom ?? null, beds: null, baths: null, propertyType: null,
+    heading: l.advertHeading ?? "", body: l.advertBody ?? "", highlights: [], photos: l.imageCount,
+    councilTaxBand: null, parking: null, electricity: null, water: null, sewerage: null, broadband: null, heating: null, furnishing: null,
+  };
+  const knowsWriteUp = l.advertBody !== undefined;
+  return REQUIREMENTS.filter((r) => BOARD_CAN_SEE.has(r.id) && (knowsWriteUp || (r.id !== "heading" && r.id !== "body")) && !r.ok(input)).map((r) =>
+    r.label.toLowerCase()
+  );
+}
+
+/** "photos, headline and 4 more" - a row has room for a few, not eighteen. */
+function listOf(items: string[]): string {
+  if (items.length <= 3) return items.length > 1 ? `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}` : items[0] ?? "";
+  return `${items.slice(0, 2).join(", ")} and ${items.length - 2} more`;
+}
+
+/**
  * WHERE THE LISTING IS, in one line - the thing an agent scans the board for.
  *
- * Derived from the record, never typed: a draft missing photographs or an
- * EPC needs attention before it can go live; a draft with both is ready to
- * publish; a published listing is live, and says so if it went live short
- * of something; let agreed is its own state. The words name what is missing
- * so the next move is on the row.
+ * Derived from the record, never typed. "Ready to publish" is only ever said
+ * on the push route's own answer (17 Sep 2026): it used to be said on photos
+ * and an EPC alone, over a drawer that then refused for want of a council tax
+ * band. A draft short of something the book can see says so straight away;
+ * one that looks complete waits for the full check. The words name what is
+ * missing so the next move is on the row.
  */
-export function readiness(l: { letAgreed: boolean; publicationStatus: string | null; imageCount: number; epcExpiry: string | null }): ReadinessState {
-  const missing: string[] = [];
-  if (l.imageCount === 0) missing.push("photos");
-  if (l.epcExpiry == null) missing.push("EPC");
-  const list = missing.join(" and ");
+export function readiness(l: BoardListing, check?: PublishCheck): ReadinessState {
+  const seen = boardGaps(l);
   if (l.letAgreed) {
-    return { tone: "neutral", icon: "key", title: "Let agreed", sub: "Under offer to a tenant.", action: "View listing", missing };
+    return { tone: "neutral", icon: "key", title: "Let agreed", sub: "Under offer to a tenant.", action: "View listing", missing: seen };
   }
   if (l.publicationStatus === "published") {
-    return missing.length
-      ? { tone: "accent", icon: "info", title: "Live, needs attention", sub: `Live without ${list}.`, action: "Open listing", missing }
-      : { tone: "good", icon: "checklist", title: "Live", sub: "On the portals, all in order.", action: "Open listing", missing };
+    const live = [...seen, ...(l.epcExpiry == null && !l.epcRating ? ["EPC"] : [])];
+    return live.length
+      ? { tone: "accent", icon: "info", title: "Live, needs attention", sub: `Live without ${listOf(live)}.`, action: "Open listing", missing: live }
+      : { tone: "good", icon: "checklist", title: "Live", sub: "On the portals.", action: "Open listing", missing: live };
   }
-  return missing.length
-    ? { tone: "accent", icon: "info", title: "Needs attention", sub: `Add ${list} to publish.`, action: "Continue setup", missing }
-    : { tone: "good", icon: "checklist", title: "Ready to publish", sub: "All required info looks good.", action: "Open listing", missing };
+  if (seen.length) {
+    return { tone: "accent", icon: "info", title: "Needs attention", sub: `Add ${listOf(seen)} to publish.`, action: "Continue setup", missing: seen };
+  }
+  if (Array.isArray(check)) {
+    return check.length
+      ? { tone: "accent", icon: "info", title: "Needs attention", sub: `Add ${listOf(check.map((c) => (c === "EPC" ? c : c.toLowerCase())))} to publish.`, action: "Continue setup", missing: check }
+      : { tone: "good", icon: "checklist", title: "Ready to publish", sub: "Everything the portals need is in.", action: "Open listing", missing: [] };
+  }
+  if (check === "checking") {
+    return { tone: "neutral", icon: "clock", title: "Checking", sub: "Seeing what the Marketing tab still needs.", action: "Open listing", missing: [] };
+  }
+  return { tone: "neutral", icon: "info", title: "Draft", sub: "Open it to see what is left before it can go live.", action: "Open listing", missing: [] };
 }
 
 /** The readiness box: the state, why, and (where there is room) the one move. */

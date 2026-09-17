@@ -97,6 +97,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  /* A tenant added by hand gets Let's Find You a Home (16 Sep 2026), once,
+     behind the Automatic tenant emails switch. Never allowed to fail the
+     save: the contact exists whatever the email does. */
+  if (draft.kind === "tenant" && (draft.email ?? "").trim()) {
+    await import("@/lib/tenant-journey-emails")
+      .then((m) => m.sendAddedWelcome({ contactId: saved.id, name: saved.name ?? draft.name, email: String(draft.email), by: actor }))
+      .catch(() => null);
+  }
+
   /* Opt out with pushToRex: false — useful for entering a backlog without
      firing a REX write per row. Default is to try. */
   if (body.pushToRex === false) {

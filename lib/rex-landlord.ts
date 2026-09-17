@@ -102,7 +102,7 @@ export type LandlordAnswer =
 export async function landlordForListing(listingId: string): Promise<LandlordAnswer> {
   const id = Number(listingId);
   if (!Number.isFinite(id) || id <= 0) {
-    return { ok: false, problem: "That listing has no REX id, so its landlord can't be looked up." };
+    return { ok: false, problem: "That listing has no reference in the listings system, so its landlord can't be looked up." };
   }
 
   const hit = await cached(listingId);
@@ -129,7 +129,7 @@ export async function landlordForListing(listingId: string): Promise<LandlordAns
     console.error("[landlord] Listings/read failed", { listingId, status: res.status });
     return {
       ok: false,
-      problem: "REX didn't answer when asked who the landlord is, so nothing is being assumed.",
+      problem: "The listings system didn't answer when asked who the landlord is, so nothing is being assumed.",
     };
   }
 

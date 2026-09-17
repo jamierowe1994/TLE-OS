@@ -171,6 +171,22 @@ export const SWITCHES: Switch[] = [
   },
   {
     /**
+     * Every tenant email that goes without anybody pressing a button (16 Sep
+     * 2026): lib/tenant-reminders and lib/tenant-journey-emails. The key says
+     * "reminders" because the reminders came first the same morning; the
+     * label is what it covers now. Customer email must be on as well.
+     */
+    key: "tenant_reminders",
+    label: "Automatic tenant emails",
+    what: "Emails tenants without anybody pressing a button: the reply to a new enquiry, the welcome when a tenant is added, passport nudges at two and seven days, the reminder on the morning of a viewing, How Was It? afterwards, Shall We Rebook? after a no-show, Anything Close? four days after homes were sent, Not That One after a no on the feedback page, and the application received and declined emails. Each goes once.",
+    who: "TENANTS, from the agent's own Outlook where that is armed and connected, otherwise from the Letting Experts sender. Email to landlords and tenants must be on as well.",
+    confirm: "EMAIL TENANTS",
+    /* No old variable: this never existed before. Unset means off. */
+    legacyEnv: "TENANT_REMINDERS",
+    legacyOn: "on",
+  },
+  {
+    /**
      * Creating a PROPERTY in REX — the first time this OS would bring a record
      * into existence in the live system six businesses share, rather than
      * reading one or editing one that already exists.
@@ -199,15 +215,17 @@ export const SWITCHES: Switch[] = [
      * recorded step by step with nothing written anywhere. On, the same
      * steps create the landlord, property and relationship in Propoly, put
      * the tenants on the REX listing, set the Propoly uuid on it, and send
-     * both emails through REX. This replaces Howard's Power Automate flow;
+     * both emails from the agent's own mailbox (lib/send-as-agent, so the
+     * Customer email switch must be on too; REX's MailMerge is no longer
+     * used, 16 Sep 2026). This replaces Howard's Power Automate flow;
      * both running at once makes duplicates, so the day this goes on is the
      * day his goes off. REX writes also need their methods on
      * REX_ALLOW_WRITES; this switch alone does not unlock them.
      */
     key: "handover_live",
     label: "Handover: create in Propoly, update REX, email both parties",
-    what: "Runs the offer-accepted handover for real instead of rehearsing it: Propoly landlord, property and relationship; tenants and the Propoly uuid on the REX listing; the accepted emails to landlord and tenant through REX.",
-    who: "LANDLORDS AND TENANTS are emailed. Propoly and REX are WRITTEN TO. Howard's Power Automate flow must be off before this is on.",
+    what: "Runs the offer-accepted handover for real instead of rehearsing it: Propoly landlord, property and relationship; tenants and the Propoly uuid on the REX listing; the accepted emails to landlord and tenant from the agent's own mailbox.",
+    who: "LANDLORDS AND TENANTS are emailed (Customer email must be on too). Propoly and REX are WRITTEN TO. Howard's Power Automate flow must be off before this is on.",
     confirm: "HAND OVER FOR REAL",
     legacyEnv: "HANDOVER_LIVE",
     legacyOn: "on",

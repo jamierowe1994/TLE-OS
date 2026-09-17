@@ -10,6 +10,7 @@ import Segmented from "@/components/Segmented";
 import { fillFrontCompose, getOpenListing, getOpenSurfaces } from "@/lib/open-record";
 import { whenAgo } from "@/lib/lead-spine";
 import { fetchMe } from "@/lib/me";
+import { openGuide } from "@/lib/guide-sheet";
 
 /**
  * The character in the corner, and what he says.
@@ -1237,13 +1238,21 @@ export default function HelpDock() {
                   {shelf && shelf.length > 0 ? (
                     <>
                       <p className="text-[12px] leading-relaxed text-muted">
-                        Written by the office, to read at your own pace.
+                        Step by step, with a picture of every screen. They open right here, over what you are doing.
                       </p>
                       <ul className="mt-2.5 max-h-[46vh] space-y-1.5 overflow-y-auto pr-0.5">
                         {shelf.map((g) => (
                           <li key={`${g.form}-${g.id}`}>
                             <a
                               href={g.href}
+                              onClick={(e) => {
+                                /* A step-by-step guide pops up over this
+                                   screen instead of taking the agent away. */
+                                if (g.form !== "popup") return;
+                                e.preventDefault();
+                                setOpen(false);
+                                openGuide(g.id);
+                              }}
                               className="block rounded-xl border border-line/80 bg-box/50 px-3 py-2.5 transition-colors hover:border-accent-dark/50 hover:bg-accent-soft/30"
                             >
                               <span className="flex items-baseline gap-2">
@@ -1251,7 +1260,7 @@ export default function HelpDock() {
                                 <span className="shrink-0 text-[10px] text-muted">{g.minutes} min</span>
                               </span>
                               <span className="mt-0.5 block text-[10px] uppercase tracking-[0.07em] text-muted">
-                                {g.section} · {g.form === "walkthrough" ? "Walkthrough" : "Written"}
+                                {g.section} · {g.form === "popup" ? "Step by step" : g.form === "walkthrough" ? "Walkthrough" : "Written"}
                               </span>
                               {g.blurb && (
                                 <span className="mt-1 block text-[11.5px] leading-snug text-muted">{g.blurb}</span>

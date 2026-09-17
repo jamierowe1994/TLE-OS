@@ -18,7 +18,7 @@ import { hasDb, q } from "@/lib/db";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const KINDS = new Set(["appraisal", "tenancy-link", "access"]);
+const KINDS = new Set(["appraisal", "tenancy-link", "access", "listing-step"]);
 
 export async function GET(req: Request) {
   const url = new URL(req.url);

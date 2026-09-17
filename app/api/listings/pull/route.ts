@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 403 });
   }
   if (!rexConfigured()) {
-    return NextResponse.json({ ok: false, error: "REX is not connected on this environment." }, { status: 503 });
+    return NextResponse.json({ ok: false, error: "The listings system isn't connected here." }, { status: 503 });
   }
 
   const body = (await req.json().catch(() => ({}))) as { id?: string };
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
   const scope = await scopeFor(req);
   const mine = scope.rexUserId ?? null;
   if (!scope.everything && !mine) {
-    return NextResponse.json({ ok: false, error: "Link your REX account on Profile first." }, { status: 403 });
+    return NextResponse.json({ ok: false, error: "Connect your listings account on your Profile first." }, { status: 403 });
   }
 
   /* Ask REX for it, with the agent filter when there is one. A listing that
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     limit: 1,
   }).catch(() => null);
   if (!res?.ok) {
-    return NextResponse.json({ ok: false, error: "REX did not answer just now." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: "The listings system did not answer just now. Try again in a minute." }, { status: 502 });
   }
   const row = rexRows(res.result)[0];
   if (!row) {

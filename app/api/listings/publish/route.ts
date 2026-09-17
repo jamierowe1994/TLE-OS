@@ -5,9 +5,10 @@ import { AREA_DEFS, canAct, levelOf, lockedSentence } from "@/lib/area-map";
 import { record } from "@/lib/audit";
 import { invalidateListingBook } from "@/lib/listings-cache";
 import { readListingDetails } from "@/lib/listing-details";
-import { inputFromDetails, missing } from "@/lib/listing-requirements";
+import { publishGaps } from "@/lib/listing-publish-check";
 import { isExpiredToken, rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
 import { rexTokenFor } from "@/lib/rex-user";
+import { forAgent, isOwner } from "@/lib/agent-words";
 
 /**
  * Putting a listing on Rightmove, OnTheMarket and Zoopla, and taking it off.
@@ -50,6 +51,9 @@ export const runtime = "nodejs";
 const ALL_CHANNELS = ["portals", "automatch", "external", "general"];
 const OFF_CHANNELS = ["general"];
 const PUBLISH_AREA = AREA_DEFS.find((a) => a.id === "listing-publish")!;
+/* For a portal message that names the system behind it: agents get these instead. */
+const PORTAL_CHECK = "One of the portal checks has not passed yet.";
+const PORTAL_WARNING = "One of the portal checks has a warning.";
 
 type Where = { status: string | null; channels: string[]; onPortals: boolean };
 
@@ -58,29 +62,6 @@ function whereFrom(result: unknown): Where {
   const status = typeof r.status === "string" ? r.status : null;
   const channels = Array.isArray(r.active_targets) ? r.active_targets.filter((c): c is string => typeof c === "string") : [];
   return { status, channels, onPortals: status === "published" && channels.includes("portals") };
-}
-
-/**
- * Is there an EPC? On the listing itself (where REX keeps one entered with
- * the advert) or as a compliance entry on the property. "Not required" counts:
- * a handful of homes are genuinely exempt.
- */
-async function hasEpc(details: Awaited<ReturnType<typeof readListingDetails>>): Promise<boolean> {
-  const today = new Date().toISOString().slice(0, 10);
-  if (details.epc.rating || (details.epc.expiry && details.epc.expiry >= today)) return true;
-  if (!details.propertyId) return false;
-  try {
-    const { certificatesFor } = await import("@/lib/rex-compliance");
-    const book = await certificatesFor([
-      { propertyId: details.propertyId, name: details.address, locality: details.town, epcExpiry: details.epc.expiry, service: details.service },
-    ]);
-    const state = book.properties[0]?.certs?.epc;
-    return Boolean(state && (state.expires == null ? state.attached : state.expires >= 0 || state.notRequired));
-  } catch {
-    /* A check that cannot be made must not stop a legitimate publish: the
-       screen has already shown the agent what is missing. */
-    return true;
-  }
 }
 
 /** getErrorsPreventingUpload answers a list, or messages keyed by portal. */
@@ -96,7 +77,7 @@ function listingId(v: unknown): number | null {
 }
 
 export async function GET(req: NextRequest) {
-  if (!rexConfigured()) return NextResponse.json({ ok: false, error: "REX isn't connected on this environment." }, { status: 503 });
+  if (!rexConfigured()) return NextResponse.json({ ok: false, error: "The listings system isn't connected here." }, { status: 503 });
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const id = listingId(req.nextUrl.searchParams.get("id"));
@@ -111,23 +92,26 @@ export async function GET(req: NextRequest) {
       rexCall("ListingPublication", "getPublicationIssues", { listing_id: id }),
       rexCall("ListingPortalUploads", "getErrorsPreventingUpload", { listing_id: id }),
     ]);
-    if (!status.ok) return NextResponse.json({ ok: false, error: status.error ?? "REX did not say." }, { status: 502 });
+    if (!status.ok) {
+      const plain = "The listings system did not say where the listing is. Try again in a minute.";
+      return NextResponse.json({ ok: false, error: isOwner(actor) ? status.error ?? "REX did not say." : plain }, { status: 502 });
+    }
     const iss = (issues.result ?? {}) as { errors?: unknown; warnings?: unknown };
     const list = (v: unknown) => (Array.isArray(v) ? v.map(String) : []);
     return NextResponse.json({
       ok: true,
       id,
       ...whereFrom(status.result),
-      blockers: [...new Set([...list(iss.errors), ...(upload.ok ? portalMessages(upload.result) : [])])],
-      warnings: list(iss.warnings),
+      blockers: [...new Set([...list(iss.errors), ...(upload.ok ? portalMessages(upload.result) : [])].map((m) => forAgent(actor, m, PORTAL_CHECK)))],
+      warnings: [...new Set(list(iss.warnings).map((m) => forAgent(actor, m, PORTAL_WARNING)))],
     });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "REX did not answer." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: e instanceof Error ? forAgent(actor, e.message, "The listings system did not answer. Try again in a minute.") : "The listings system did not answer. Try again in a minute." }, { status: 502 });
   }
 }
 
 export async function POST(req: NextRequest) {
-  if (!rexConfigured()) return NextResponse.json({ ok: false, error: "REX isn't connected on this environment." }, { status: 503 });
+  if (!rexConfigured()) return NextResponse.json({ ok: false, error: "The listings system isn't connected here." }, { status: 503 });
 
   const { actor, viewingAs } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
@@ -154,7 +138,10 @@ export async function POST(req: NextRequest) {
 
   try {
     const before = await rexCall("ListingPublication", "getPublicationStatus", { listing_id: id });
-    if (!before.ok) return NextResponse.json({ ok: false, error: before.error ?? "REX did not say where the listing is." }, { status: 502 });
+    if (!before.ok) {
+      const plain = "The listings system did not say where the listing is. Try again in a minute.";
+      return NextResponse.json({ ok: false, error: isOwner(actor) ? before.error ?? "REX did not say where the listing is." : plain }, { status: 502 });
+    }
     const was = whereFrom(before.result);
 
     if (action === "publish") {
@@ -165,11 +152,7 @@ export async function POST(req: NextRequest) {
          rule the Marketing tab counts down - so a button pressed from a stale
          screen still cannot put a half-filled advert on Rightmove. */
       const details = await readListingDetails(id);
-      /* The EPC, and only the EPC (James, 16 Sep 2026): it is what the law
-         needs to ADVERTISE. Gas and the EICR are needed before anyone moves
-         in and block the handover instead (lib/deal-handoff). */
-      const gaps = missing(inputFromDetails(details));
-      if (!(await hasEpc(details))) gaps.push({ id: "epc" as never, label: "EPC", ok: () => false });
+      const gaps = await publishGaps(details);
       if (gaps.length) {
         return NextResponse.json(
           { ok: false, error: `Finish the Marketing tab first: ${gaps.map((g) => g.label.toLowerCase()).join(", ")}.`, missing: gaps.map((g) => g.id) },
@@ -182,7 +165,7 @@ export async function POST(req: NextRequest) {
         rexCall("ListingPublication", "getErrorsPreventingPublication", { listing_id: id }),
         rexCall("ListingPortalUploads", "getErrorsPreventingUpload", { listing_id: id }),
       ]);
-      const blockers = [...new Set([...(Array.isArray(errs.result) ? errs.result.map(String) : []), ...(upload.ok ? portalMessages(upload.result) : [])])];
+      const blockers = [...new Set([...(Array.isArray(errs.result) ? errs.result.map(String) : []), ...(upload.ok ? portalMessages(upload.result) : [])].map((m) => forAgent(actor, m, PORTAL_CHECK)))];
       if (blockers.length) {
         return NextResponse.json({ ok: false, error: `The portals will not take it yet: ${blockers.join("; ")}`, blockers }, { status: 422 });
       }
@@ -204,9 +187,10 @@ export async function POST(req: NextRequest) {
           );
     if (!res.ok) {
       if (token && isExpiredToken(res)) {
-        return NextResponse.json({ ok: false, error: "Your REX sign-in has lapsed - reconnect it in your profile and try again.", reconnect: true }, { status: 401 });
+        return NextResponse.json({ ok: false, error: "Your sign-in to the listings system has lapsed. Reconnect it on your Profile and try again.", reconnect: true }, { status: 401 });
       }
-      return NextResponse.json({ ok: false, error: res.error ?? `REX refused it (${res.status}).` }, { status: 502 });
+      const plain = "The portals did not take that change. Try again in a minute.";
+      return NextResponse.json({ ok: false, error: isOwner(actor) ? res.error ?? `REX refused it (${res.status}).` : plain }, { status: 502 });
     }
 
     /* Read it back rather than trusting the answer. */
@@ -226,10 +210,14 @@ export async function POST(req: NextRequest) {
     if (e instanceof RexWriteBlocked) {
       const method = action === "publish" ? "ListingPublication/publish" : "ListingPublication/setActivePublicationChannels";
       return NextResponse.json(
-        { ok: false, locked: true, error: `Pushing to the portals is locked on this environment. REX_ALLOW_WRITES needs ${method}.` },
+        {
+          ok: false,
+          locked: true,
+          error: isOwner(actor) ? `Pushing to the portals is locked on this environment. REX_ALLOW_WRITES needs ${method}.` : "Pushing to the portals is not switched on yet.",
+        },
         { status: 423 }
       );
     }
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "REX did not answer." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: e instanceof Error ? forAgent(actor, e.message, "The listings system did not answer. Try again in a minute.") : "The listings system did not answer. Try again in a minute." }, { status: 502 });
   }
 }

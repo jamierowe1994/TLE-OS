@@ -25,7 +25,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   if (!rexConfigured()) {
-    return NextResponse.json({ error: "REX isn't connected here.", applications: [] }, { status: 503 });
+    return NextResponse.json({ error: "Applications aren't connected here.", applications: [] }, { status: 503 });
   }
   const limit = Math.min(300, Number(req.nextUrl.searchParams.get("limit") ?? 100) || 100);
 
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
   if (scope.unlinked) {
     return NextResponse.json({
       error:
-        "We can't tell which REX user you are, so we can't show you your applications — and we won't show you everybody's. Ask James to link your account.",
+        "Your account isn't linked to your applications yet, so we can't show you yours, and we won't show you everybody's. Ask James to link your account.",
       unlinked: true,
       applications: [],
     });

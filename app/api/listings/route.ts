@@ -3,6 +3,8 @@ import { scopeFor } from "@/lib/scope";
 import { cacheKeyFor, heldFor, refresh, FRESH_MS, STALE_MS } from "@/lib/listings-cache";
 import { withArchiveState } from "@/lib/listings-archive-view";
 import { rexConfigured } from "@/lib/rex";
+import { whoIs } from "@/lib/admin";
+import { forAgent } from "@/lib/agent-words";
 
 /**
  * The rental book, cached — same two layers as the leads route (memory for
@@ -25,7 +27,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       live: false,
-      reason: "REX isn't connected on this environment — the static export is standing in.",
+      reason: "The listings system isn't connected here, so a saved copy is standing in.",
     });
   }
 
@@ -37,7 +39,7 @@ export async function GET(req: NextRequest) {
       live: false,
       unlinked: true,
       reason:
-        "We can't tell which REX user you are, so we can't show you your listings — and we won't show you everybody's. Ask James to link your account.",
+        "We can't tell which agent you are in the listings system, so we can't show you your listings - and we won't show you everybody's. Ask James to link your account.",
     });
   }
   const key = cacheKeyFor(scope.rexUserId);
@@ -62,8 +64,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await withArchiveState(fresh.book)), ageMs: 0 });
   } catch (e) {
     if (held) return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await withArchiveState(held.book)), ageMs: age, stale: true });
+    const { actor } = await whoIs(req).catch(() => ({ actor: null }));
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Couldn't reach REX." },
+      { ok: false, error: e instanceof Error ? forAgent(actor, e.message, "The listings system did not answer. Try again in a minute.") : "The listings system did not answer. Try again in a minute." },
       { status: 502 }
     );
   }

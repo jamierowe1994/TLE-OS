@@ -51,7 +51,8 @@ export interface NewListing {
 
 export type NewListingOutcome =
   | { ok: true; listingId: string }
-  | { ok: false; reason: string; detail: string; payload?: Record<string, unknown> };
+  /** `detail` is safe for any agent to read; `ownerDetail`, when there is one, names the lock. */
+  | { ok: false; reason: string; detail: string; ownerDetail?: string; payload?: Record<string, unknown> };
 
 const TLE_OFFICE_ID = process.env.REX_LOCATION_ID ?? "728";
 
@@ -108,21 +109,35 @@ export async function createListing(l: NewListing, userId: string | null, dryRun
     return {
       ok: false,
       reason: "no_rex_session",
-      detail: "Connect your REX account on your Profile first, so the listing is recorded as yours rather than the office's.",
+      detail: "Connect your listings account on your Profile first, so the listing is recorded as yours rather than the office's.",
     };
   }
 
   const payload = buildListingPayload(l, agentRexId);
   if (dryRun) return { ok: false, reason: "dry_run", detail: "Nothing was created.", payload };
   if (rexWritesLocked("Listings", "create")) {
-    return { ok: false, reason: "writes_locked", detail: "Adding a listing is not switched on yet.", payload };
+    return {
+      ok: false,
+      reason: "writes_locked",
+      detail: "Adding a listing is not switched on yet.",
+      ownerDetail: "REX_ALLOW_WRITES does not include Listings/create.",
+      payload,
+    };
   }
 
   const res = await rexCall("Listings", "create", { data: payload, return_id: true }, token);
   if (isExpiredToken(res)) {
-    return { ok: false, reason: "rex_session_expired", detail: "Your REX sign-in has lapsed. Connect it again on your Profile and try once more." };
+    return { ok: false, reason: "rex_session_expired", detail: "Your sign-in to the listings system has lapsed. Reconnect it on your Profile and try again." };
   }
-  if (!res.ok) return { ok: false, reason: "refused", detail: res.error ?? `The listing was refused (${res.status}).`, payload };
+  if (!res.ok) {
+    return {
+      ok: false,
+      reason: "refused",
+      detail: "The listing was not accepted. Check the details and try again.",
+      ownerDetail: res.error ?? `The listing was refused (${res.status}).`,
+      payload,
+    };
+  }
 
   const id = idFrom(res.result);
   if (!id) return { ok: false, reason: "no_id", detail: "It was created but no id came back, so it cannot be opened here. Find it in the book.", payload };

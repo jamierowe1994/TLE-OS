@@ -46,7 +46,14 @@ export async function POST(req: NextRequest) {
     ).catch(() => null);
   }
   const stats = await ledgerStats();
-  return NextResponse.json({ ok: true, scanned: book.scanned, kept: book.leads.length, written, onFile: stats.onFile, since: stats.since, newestAt: book.newestAt, ms: Date.now() - started });
+  /* The enquiry reply rides the scan, because "straight away" means within
+     five minutes, not within the hour. Its own failure is reported, never
+     the scan's. See lib/tenant-journey-emails. */
+  const replies = await import("@/lib/tenant-journey-emails")
+    .then((m) => m.enquiryReplies())
+    .then((r) => ({ sent: r.filter((x) => x.state === "sent").length, would: r.filter((x) => x.state === "would").length, skipped: r.filter((x) => x.state === "skipped").length }))
+    .catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+  return NextResponse.json({ ok: true, scanned: book.scanned, kept: book.leads.length, written, onFile: stats.onFile, since: stats.since, newestAt: book.newestAt, replies, ms: Date.now() - started });
 }
 
 export const GET = POST;

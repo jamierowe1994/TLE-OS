@@ -15,24 +15,12 @@
  * No em dashes: this copy is read by people.
  */
 
-export type GuideStep = {
-  title: string;
-  body: string;
-  image?: string;
-  /** A short line under the picture, when the picture needs one. */
-  caption?: string;
-};
+import type { Guide as SharedGuide } from "@/lib/guide-types";
 
-export type Guide = {
-  id: "start" | "dashboard" | "board" | "plc";
-  title: string;
-  blurb: string;
-  icon: string;
-  /** The page this guide is about, for the "Open it" button. */
-  href: string;
-  minutes: number;
-  steps: GuideStep[];
-};
+export type { GuideStep } from "@/lib/guide-types";
+
+/** The shared guide shape, with this shelf's four ids. */
+export type Guide = SharedGuide & { id: "start" | "dashboard" | "board" | "plc" };
 
 const img = (name: string) => `/guides/pre-tenancy/${name}.webp`;
 
@@ -44,6 +32,8 @@ export const GUIDES: Guide[] = [
     icon: "key",
     href: "/pre-tenancy/dashboard",
     minutes: 3,
+    cover: img("dashboard"),
+    coverCaption: "The pre-tenancy dashboard, where the day starts.",
     steps: [
       {
         title: "The job in one line",

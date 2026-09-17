@@ -231,6 +231,9 @@ export async function driveTime(
  * buffer somebody will keep rather than quietly delete.
  */
 export function bufferMinutes(minutes: number): number {
+  /* Never less than the drive. This was capped at 180, so a 294-minute
+     drive home offered "180 min added" and the diary showed the agent
+     home two hours before they could be (James, 17 Sep 2026). */
   const withParking = minutes + 5;
-  return Math.min(180, Math.ceil(withParking / 5) * 5);
+  return Math.ceil(withParking / 5) * 5;
 }

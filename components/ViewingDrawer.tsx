@@ -835,7 +835,7 @@ export default function ViewingDrawer({
                     value={fbNotes}
                     onChange={(e) => setFbNotes(e.target.value)}
                     rows={2}
-                    placeholder="What they actually said — this goes to the landlord…"
+                    placeholder="What they actually said, in their words. Copy it for the landlord from the Feedback tab."
                     className="mt-3 w-full resize-none rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[12px] leading-relaxed outline-none transition-colors focus:border-ink"
                   />
                   <PressButton

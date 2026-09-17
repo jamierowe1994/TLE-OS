@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   if (!rexConfigured()) {
     return NextResponse.json({
       ok: false,
-      problem: "REX isn't connected on this environment, so the landlord can't be looked up.",
+      problem: "The listings system isn't connected here, so the landlord can't be looked up.",
     });
   }
 

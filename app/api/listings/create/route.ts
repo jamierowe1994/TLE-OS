@@ -6,6 +6,7 @@ import { invalidateListingBook } from "@/lib/listings-cache";
 import { createListing, findAddresses, listingSubcategories, type NewListing } from "@/lib/rex-listing-create";
 import { createProperty, propertySubcategories } from "@/lib/rex-properties";
 import { rexConfigured } from "@/lib/rex";
+import { isOwner } from "@/lib/agent-words";
 
 /**
  * "+ Add new listing".
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest) {
       },
       actor.id
     );
-    if (!outcome.ok) return NextResponse.json({ ok: false, step: "address", error: outcome.detail }, { status: 422 });
+    if (!outcome.ok) return NextResponse.json({ ok: false, step: "address", error: isOwner(actor) ? outcome.ownerDetail ?? outcome.detail : outcome.detail }, { status: 422 });
     propertyId = outcome.propertyId;
     madeProperty = true;
   }
@@ -120,7 +121,7 @@ export async function POST(req: NextRequest) {
       {
         ok: false,
         step: "listing",
-        error: made.detail,
+        error: isOwner(actor) ? made.ownerDetail ?? made.detail : made.detail,
         /* The property is real even when the listing is refused: say so, or
            the next attempt makes a second one at the same address. */
         propertyId: madeProperty ? propertyId : undefined,

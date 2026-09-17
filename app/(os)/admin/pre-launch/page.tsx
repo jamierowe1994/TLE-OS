@@ -612,12 +612,13 @@ export default function PreLaunch() {
                   </span>
                 </div>
                 <p className="mt-1.5 whitespace-pre-wrap text-[12.5px] leading-relaxed">{b.body}</p>
-                {/* What the bug bot made of it (lib/bug-bot). A fix is only
-                    ever a pull request: merging it is the approval. */}
+                {/* What the bug bot made of it (lib/bug-bot). Since 17 Sep it
+                    lists the cause and the fix rather than preparing one;
+                    older tickets may still carry a pull request. */}
                 {b.botState && b.state !== "fixed" && b.state !== "wontfix" && (
                   <div
                     className={`mt-2 rounded-lg border px-2.5 py-2 text-[12px] leading-relaxed ${
-                      b.botState === "fix_ready"
+                      b.botState === "fix_ready" || b.botState === "to_fix"
                         ? "border-emerald-200 bg-emerald-50 text-emerald-950"
                         : b.botState === "needs_you"
                           ? "border-amber-200 bg-amber-50 text-amber-950"
@@ -627,7 +628,9 @@ export default function PreLaunch() {
                     <p className="text-[11px] uppercase tracking-wide opacity-70">
                       {b.botState === "looking"
                         ? "Bug bot is looking at this"
-                        : b.botState === "fix_ready"
+                        : b.botState === "to_fix"
+                          ? "Bug bot: cause found, on the list to fix"
+                          : b.botState === "fix_ready"
                           ? "Bug bot: fix ready for you to approve"
                           : b.botState === "needs_you"
                             ? "Bug bot: needs you"

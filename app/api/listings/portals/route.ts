@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { portalLinksFor } from "@/lib/rex-portal-links";
 import { rexConfigured } from "@/lib/rex";
+import { whoIs } from "@/lib/admin";
+import { forAgent } from "@/lib/agent-words";
 
 /**
  * The public advert links for one listing — Rightmove, Zoopla, OnTheMarket.
@@ -17,13 +19,14 @@ export async function GET(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id")?.trim() ?? "";
   if (!id) return NextResponse.json({ ok: false, error: "A listing id is required." }, { status: 400 });
   if (!rexConfigured()) {
-    return NextResponse.json({ ok: false, error: "REX isn't connected on this environment." }, { status: 503 });
+    return NextResponse.json({ ok: false, error: "The listings system isn't connected here." }, { status: 503 });
   }
   try {
     return NextResponse.json({ ok: true, listingId: id, portals: await portalLinksFor(id) });
   } catch (e) {
+    const { actor } = await whoIs(req).catch(() => ({ actor: null }));
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Portal links failed." },
+      { ok: false, error: e instanceof Error ? forAgent(actor, e.message, "The portal links did not load. Try again in a minute.") : "The portal links did not load. Try again in a minute." },
       { status: 502 }
     );
   }

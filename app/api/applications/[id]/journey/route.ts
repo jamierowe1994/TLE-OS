@@ -19,7 +19,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
   if (!userId || !(await findUserById(userId))) {
     return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   }
-  if (!rexConfigured()) return NextResponse.json({ ok: false, error: "REX isn't connected here." }, { status: 503 });
+  if (!rexConfigured()) return NextResponse.json({ ok: false, error: "Applications aren't connected here." }, { status: 503 });
 
   /* The book, then the one. TenancyApplications has no id criterion that
      behaves, which is why every reader here pulls and matches. */
