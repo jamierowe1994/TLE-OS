@@ -5,6 +5,7 @@ import AgentCard from "@/components/landlord/AgentCard";
 import AgentSheet from "@/components/landlord/AgentSheet";
 import Spine from "@/components/landlord/Spine";
 import SpinePhone from "@/components/landlord/SpinePhone";
+import PhotoTimesTile from "@/components/landlord/PhotoTimesTile";
 import { HeroAction, pickHero, signSource } from "@/components/landlord/StepAction";
 import PresentTile from "@/components/landlord/PresentTile";
 import PropertySheet from "@/components/landlord/PropertySheet";
@@ -57,7 +58,9 @@ export default function LandlordDashboard({
   const others = v.steps.filter(
     (s) =>
       s !== hero &&
-      (s.action === "presentation"
+      (s.action === "photos"
+        ? true
+        : s.action === "presentation"
         ? Boolean(v.presentation)
         : s.action === "sign"
           ? Boolean(v.appraisalId || s.href)
@@ -183,7 +186,9 @@ export default function LandlordDashboard({
                 <p className="mt-5 hidden flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px] text-muted sm:flex">
                   <span>Also:</span>
                   {others.map((s) =>
-                    s.action === "presentation" && v.presentation ? (
+                    s.action === "photos" ? (
+                      <PhotoTimesTile key={s.id} appraisalId={v.appraisalId ?? null} label={s.label} sub={s.sub} icon={s.icon} variant="link" />
+                    ) : s.action === "presentation" && v.presentation ? (
                       <PresentTile key={s.id} variant="link" deck={v.presentation} readToken={v.presentationToken ?? null} sign={signSource(v)} label={s.label} sub={s.sub} icon={s.icon} />
                     ) : s.action === "sign" && (v.appraisalId || s.href) ? (
                       /* The "Also:" line too. A contract that opens in a modal

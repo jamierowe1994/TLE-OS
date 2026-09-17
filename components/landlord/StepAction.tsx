@@ -4,6 +4,7 @@ import SignTile from "@/components/landlord/SignTile";
 import MessageTile from "@/components/landlord/MessageTile";
 import PresentTile from "@/components/landlord/PresentTile";
 import OffersTile from "@/components/landlord/OffersTile";
+import PhotoTimesTile from "@/components/landlord/PhotoTimesTile";
 import type { LandlordView, ViewStep } from "@/lib/landlord-view";
 
 /**
@@ -60,6 +61,9 @@ export function HeroAction({ s, v, anchorBase = "", label }: { s: ViewStep; v: L
   if (s.action === "offers") {
     return <OffersTile v={v} label={text} sub={s.sub} icon={s.icon} variant="button" />;
   }
+  if (s.action === "photos") {
+    return <PhotoTimesTile appraisalId={v.appraisalId ?? null} label={text} sub={s.sub} icon={s.icon} variant="button" />;
+  }
   const href = hrefOf(s, anchorBase);
   if (!href) return null;
   return s.external ? (
@@ -77,6 +81,9 @@ export function HeroAction({ s, v, anchorBase = "", label }: { s: ViewStep; v: L
 export function StepRow({ s, v, anchorBase = "" }: { s: ViewStep; v: LandlordView; anchorBase?: string }) {
   if (s.action === "sign" && (v.appraisalId || s.href)) {
     return <SignTile variant="row" appraisalId={v.appraisalId ?? null} url={v.appraisalId ? null : s.href} label={s.label} sub={s.sub} icon={s.icon} />;
+  }
+  if (s.action === "photos") {
+    return <PhotoTimesTile appraisalId={v.appraisalId ?? null} label={s.label} sub={s.sub} icon={s.icon} variant="row" />;
   }
   if (s.action === "message") {
     return (

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import TermsCard from "@/components/appraisal/TermsCard";
+import TakeOnCard from "@/components/appraisal/TakeOnCard";
 import ValuationSteps from "@/components/appraisal/ValuationSteps";
 import WelcomeVideoRecorder from "@/components/WelcomeVideoRecorder";
 import { mintPreAppraisalDeck } from "@/components/DeckRail";
@@ -218,22 +219,23 @@ export default function NextUp({
      * against, and the card says that rather than offering a button that
      * cannot work.
      */
-    card = ma.rexPropertyId
-      ? {
-          icon: "pack/photo",
-          title: "Photographs, and the description",
-          sub: "Terms are signed and the visit is the one that produces them. The description is written on the listing, and Claude will draft it from the record and the photographs.",
-          body: (
-            <Link href={`/listings?open=${encodeURIComponent(ma.rexPropertyId)}`} className={primary}>
-              Write the description <span aria-hidden>→</span>
-            </Link>
-          ),
-        }
-      : {
-          icon: "pack/photo",
-          title: "Book the take-on visit",
-          sub: "Terms are signed. The photographs and the description come from this visit. The description is written on the listing, so it waits until there is one.",
-        };
+    card = {
+      icon: "pack/photo",
+      title: "The Take-On Visit",
+      sub: "Terms are signed. The photographs, the floor plan and the details for the advert all come from this visit.",
+      body: (
+        <div>
+          <TakeOnCard ma={ma} primary={primary} ghost={ghost} />
+          {ma.rexPropertyId && (
+            <p className="mt-3">
+              <Link href={`/listings?open=${encodeURIComponent(ma.rexPropertyId)}`} className="text-[12px] text-muted underline underline-offset-4 hover:text-ink">
+                Write the description on the listing
+              </Link>
+            </p>
+          )}
+        </div>
+      ),
+    };
   } else if (missingFigure || (visitPassed && ma.valuation == null)) {
     card = { icon: "pencil", title: "Record the figure", body: <ValuationSteps appraisal={ma} onSaved={onSaved} /> };
   } else if (ma.valuation != null && !post) {

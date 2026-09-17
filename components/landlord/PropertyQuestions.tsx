@@ -5,6 +5,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import {
   PROPERTY_QUESTIONS,
   allDone,
+  asked,
   firstUnfinished,
   progress,
   stepDone,
@@ -213,7 +214,7 @@ export default function PropertyQuestions({
         </div>
 
         <div className="mt-7 space-y-7">
-          {step.questions.map((qn) => (
+          {step.questions.filter((qn) => asked(qn, answers)).map((qn) => (
             <Field key={qn.id} q={qn} value={answers[qn.id]} onChange={(v) => set(qn.id, v)} />
           ))}
         </div>

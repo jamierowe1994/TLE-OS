@@ -56,6 +56,12 @@ export interface Question {
   addsUp?: boolean;
   /** Not counted towards the step being done. */
   optional?: boolean;
+  /**
+   * Only asked when an earlier answer says it matters - "when will it be
+   * free?" means nothing on an empty house (James, 17 Sep 2026). A hidden
+   * question is not required either.
+   */
+  showIf?: { id: string; is: string[] };
 }
 
 export interface QuestionStep {
@@ -75,6 +81,28 @@ export const PROPERTY_QUESTIONS: QuestionStep[] = [
     blurb: "So we can show it, and so a contractor is never left on the doorstep.",
     icon: "key",
     questions: [
+      {
+        /* WHO IS IN IT. Everything about access follows from this - and the
+           take-on visit's own line on the agent's side does too (James,
+           17 Sep 2026: "confirm via tenant, confirm via landlord, vacant"). */
+        id: "occupancy",
+        label: "Who is in the property at the moment?",
+        kind: "choice",
+        options: [
+          { id: "empty", label: "It's empty" },
+          { id: "tenant", label: "A tenant is living there" },
+          { id: "owner", label: "I live there, or family do" },
+        ],
+      },
+      {
+        id: "available-from",
+        label: "When will it be free?",
+        kind: "text",
+        help: "Roughly is fine. It sets the date we advertise from, so a tenant is not asking to move in before you have moved out.",
+        placeholder: "The end of October",
+        showIf: { id: "occupancy", is: ["tenant", "owner"] },
+        suggestions: ["Straight away", "In two weeks", "Next month", "The end of next month", "Not sure yet"],
+      },
       {
         id: "keys",
         label: "How do we get in?",
@@ -391,15 +419,22 @@ export const PROPERTY_QUESTIONS: QuestionStep[] = [
 ];
 
 /** Every question that has to be answered before a step counts as done. */
-export function required(step: QuestionStep): Question[] {
-  return step.questions.filter((q) => !q.optional);
+export function required(step: QuestionStep, answers: Answers = {}): Question[] {
+  return step.questions.filter((q) => !q.optional && asked(q, answers));
+}
+
+/** Is this question on screen, given what they have answered so far? */
+export function asked(q: Question, answers: Answers): boolean {
+  if (!q.showIf) return true;
+  const v = answers[q.showIf.id];
+  return typeof v === "string" && q.showIf.is.includes(v);
 }
 
 const filled = (v: Answers[string]) =>
   Array.isArray(v) ? v.length > 0 : typeof v === "string" && v.trim().length > 0;
 
 export function stepDone(step: QuestionStep, answers: Answers): boolean {
-  return required(step).every((q) => filled(answers[q.id]));
+  return required(step, answers).every((q) => filled(answers[q.id]));
 }
 
 /** How far through they are, counted in STEPS - the unit they experience. */

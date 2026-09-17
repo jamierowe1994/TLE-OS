@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import PresentTile from "@/components/landlord/PresentTile";
+import PhotoTimesTile from "@/components/landlord/PhotoTimesTile";
 import SignTile from "@/components/landlord/SignTile";
 import MessageTile from "@/components/landlord/MessageTile";
 import { signSource } from "@/components/landlord/StepAction";
@@ -90,6 +91,9 @@ function Row({ s, v }: { s: ViewStep; v: LandlordView }) {
     </span>
   );
 
+  if (s.action === "photos") {
+    return <PhotoTimesTile appraisalId={v.appraisalId ?? null} label={s.label} sub={s.sub} icon={s.icon} variant="row" />;
+  }
   if (s.action === "presentation" && v.presentation) {
     return <PresentTile variant="row" deck={v.presentation} readToken={v.presentationToken ?? null} sign={signSource(v)} label={s.label} sub={s.sub} icon={s.icon} />;
   }

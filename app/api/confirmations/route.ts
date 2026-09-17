@@ -6,6 +6,7 @@ import type { MarketAppraisal } from "@/lib/market-appraisal";
 import { draftBookingConfirmation, sendBookingConfirmation } from "@/lib/appraisal-confirm";
 import { draftViewingConfirmation, sendViewingConfirmation, viewingKey, type ViewingBooking } from "@/lib/viewing-confirm";
 import { publicOrigin } from "@/lib/origin";
+import { draftTakeOnConfirmation, sendTakeOnConfirmation } from "@/lib/takeon";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 
 /**
@@ -25,8 +26,10 @@ export const maxDuration = 60;
 
 type Body = {
   action?: "draft" | "send";
-  kind?: "appraisal" | "viewing";
+  kind?: "appraisal" | "viewing" | "takeon";
   id?: string;
+  /** Take-on: the time being booked, which is not on the appraisal record. */
+  startsAt?: string;
   booking?: {
     leadId?: string; listingId?: string | number | null; applicantName?: string; applicantEmail?: string | null;
     address?: string; startsAt?: string; minutes?: number; unaccompanied?: boolean;
@@ -92,6 +95,23 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: r.sent, sent: r.sent, alreadySent: r.alreadySent ?? false, detail: r.sent ? `Sent to ${r.to}.` : r.reason });
       }
       return NextResponse.json(await draftBookingConfirmation({ ma, me: actor, origin }));
+    }
+
+    /* THE TAKE-ON VISIT - photographs and the floor plan. Drafted beside the
+       diary in the booker and sent with the booking (James, 17 Sep 2026). */
+    if (body.kind === "takeon") {
+      const ma = body.id ? await getAppraisal(body.id) : null;
+      if (!ma) return NextResponse.json({ ok: false, error: "No such appraisal." }, { status: 404 });
+      const startsAt = (body.startsAt ?? "").trim();
+      if (!startsAt || Number.isNaN(new Date(startsAt).getTime())) {
+        return NextResponse.json({ ok: false, error: "When is the visit?" }, { status: 400 });
+      }
+      const minutes = Number(body.minutes) > 0 ? Number(body.minutes) : 60;
+      if (body.action === "send") {
+        const out = await sendTakeOnConfirmation({ ma, me: actor, startsAt, minutes, subject: body.subject, html: body.html, again: body.again, origin });
+        return NextResponse.json(out.sent ? { sent: true, detail: out.detail } : { sent: false, detail: out.reason });
+      }
+      return NextResponse.json(await draftTakeOnConfirmation({ ma, me: actor, startsAt, minutes, origin }));
     }
 
     if (body.kind === "viewing") {

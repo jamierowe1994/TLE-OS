@@ -97,6 +97,8 @@ export default function ViewingBooker({
   onBooked,
   firstId = null,
   leadId = null,
+  appraisalId = null,
+  suggested = null,
 }: {
   open: boolean;
   onClose: () => void;
@@ -125,6 +127,10 @@ export default function ViewingBooker({
   firstId?: string | null;
   /** The lead being booked, so the confirmation can be drafted beside the diary. */
   leadId?: string | null;
+  /** The appraisal, in take-on mode: the confirmation is drafted from it. */
+  appraisalId?: string | null;
+  /** What the landlord said they can do, shown above the diary (17 Sep 2026). */
+  suggested?: string[] | null;
   /**
    * `startsAt` and `minutes` are the booking as a MACHINE reads it, and they
    * are not decoration. Everything downstream — the landlord's calendar file,
@@ -626,7 +632,13 @@ export default function ViewingBooker({
 
   /** The confirmation to draft beside the diary, when there is one to send. */
   const emailTarget: ConfirmTarget | null =
-    !startsAt || !leadId || !chosen || mode === "takeon"
+    !startsAt
+      ? null
+      : mode === "takeon"
+        ? appraisalId
+          ? { kind: "takeon", id: appraisalId, startsAt, minutes: mins }
+          : null
+      : !leadId || !chosen
       ? null
       : mode === "appraisal"
         ? { kind: "appraisal-new", appraisal: { leadId, landlord: chosen.name, email: chosen.email, address: address || "", startsAt, minutes: mins } }
@@ -1062,6 +1074,22 @@ export default function ViewingBooker({
                   At {address} — their place, not ours.
                 </p>
               )}
+              {/* What the landlord said they can do, beside the diary rather
+                  than on another screen (James, 17 Sep 2026). */}
+              {suggested?.length ? (
+                <p className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px]">
+                  <span className="inline-flex items-center gap-2 font-semibold">
+                    <DoodleIcon name="calendar" size={14} className="text-accent-dark" />
+                    They can do:
+                  </span>
+                  {suggested.map((s, i) => (
+                    <span key={s} className="text-muted">
+                      {s}
+                      {i < suggested.length - 1 ? " ·" : ""}
+                    </span>
+                  ))}
+                </p>
+              ) : null}
               {!toLandlord && property && (
                 <p className="mb-3 flex items-center gap-2 text-[12.5px] text-muted">
                   <DoodleIcon name="home" size={14} />
@@ -1190,7 +1218,9 @@ export default function ViewingBooker({
                             <span className="block text-[11px] leading-snug text-muted">
                               {mode === "appraisal"
                                 ? "To the landlord, with the calendar invite. Change any of the words first."
-                                : "To the applicant, with the calendar invite and their passport link. Change any of the words first."}
+                                : mode === "takeon"
+                                  ? "To the landlord, with the calendar invite and what to expect on the day. Change any of the words first."
+                                  : "To the applicant, with the calendar invite and their passport link. Change any of the words first."}
                               {" "}Untick to book without telling them.
                             </span>
                           </span>

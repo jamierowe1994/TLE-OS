@@ -56,7 +56,9 @@ export interface ViewStep {
     | "maintenance"
     | "renewal"
     | "certificates"
-    | "tenancy";
+    | "tenancy"
+    /** Times for the photographs, once their compliance is in (17 Sep 2026). */
+    | "photos";
   label: string;
   sub: string;
   href: string | null;
@@ -72,7 +74,7 @@ export interface ViewStep {
    * a DocuSeal session for this landlord, "message" opens the thread with
    * their agent. The live home sets these; the sample links.
    */
-  action?: "sign" | "message" | "presentation" | "offers";
+  action?: "sign" | "message" | "presentation" | "offers" | "photos";
 }
 
 /** An offer on the landlord's property, as they should read it. */
@@ -339,7 +341,7 @@ export function stepsForStage(
        just need you to answer some questions about your property." They are
        also the only thing on the list nobody else can do for them - we can
        chase a certificate, we cannot guess where the stopcock is. */
-    compliance: ["questions", "compliance", "presentation", "message", "sign"],
+    compliance: ["questions", "compliance", "photos", "presentation", "message", "sign"],
     marketing: ["listing", "compliance", "message", "presentation"],
     viewings: ["viewings", "listing", "message", "compliance"],
     let: ["tenancy", "viewings", "message", "compliance"],

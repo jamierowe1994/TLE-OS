@@ -79,6 +79,7 @@ export function rajAt(stage: Stage): { view: LandlordView; docs: DocsView; maint
 
   /* ── the steps, every one a real place to go ── */
   const all: Record<ViewStep["id"], ViewStep> = {
+    photos: { id: "photos", label: "Suggest times for the photographs", sub: "Optional. Tell us when suits and we'll book the visit for the photographs and floor plan.", href: "#", icon: "pack/photo", action: "photos", done: !done("compliance") },
     presentation: { id: "presentation", label: "View your presentation", sub: "See how we'll let your property for you", href: "#", icon: "analytics", action: "presentation" },
     /**
      * THE REAL CONTRACT, filled in, so it can actually be looked at.

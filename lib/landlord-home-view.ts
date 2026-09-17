@@ -13,6 +13,8 @@ import {
   type LandlordMessage,
 } from "@/lib/landlord-account";
 import { geocode } from "@/lib/geocode";
+import { epcForAddress } from "@/lib/epc";
+import { takeOnBooking, takeOnTimes } from "@/lib/takeon";
 import { DECK_KINDS } from "@/lib/present";
 import { currentApproval } from "@/lib/landlord-offers";
 import { STAGES, stepsForStage, type LandlordView, type Stage, type ViewOffer } from "@/lib/landlord-view";
@@ -208,6 +210,10 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
   /* The deck their file shows: the one built after the visit once there is
      one, which is what we sent them - not whichever deck is newest. */
   const shown = post ?? latest;
+  /* Their EPC on the public register, if there is a current one. */
+  const registerEpc = await epcForAddress(a.address, a.postcode ?? "").catch(() => null);
+  /* The photographs: what they have offered, and what has been booked. */
+  const [photoTimes, takeOn] = await Promise.all([takeOnTimes(a.id).catch(() => null), takeOnBooking(a.id).catch(() => null)]);
   const readIt = shown && landlordId ? await deckReadBy(landlordId, shown.token) : false;
   const deckAgent = latest?.deck.agent ?? null;
   const property = latest?.deck.property ?? null;
@@ -263,7 +269,17 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
     ...REQUIRED_DOCS.map((r) => {
       const u = uploaded(r.kind);
       if (u) return { title: r.title, sub: `Uploaded  •  ${day(u.uploadedAt) ?? ""}`, state: "uploaded" as const, href: `/api/landlord/documents/${u.id}` };
-      if (r.kind === "epc" && property?.epc) return { title: r.title, sub: `On record  •  rating ${property.epc}`, state: "uploaded" as const, href: null };
+      /* The national register counts. A current certificate is public and we
+         can see it, so nobody is asked to send a copy (James, 17 Sep 2026). */
+      if (r.kind === "epc" && (property?.epc || registerEpc)) {
+        const band = property?.epc ?? registerEpc?.band ?? null;
+        return {
+          title: r.title,
+          sub: registerEpc && !property?.epc ? `On the national register  •  ${band ? `rating ${band}  •  ` : ""}${registerEpc.registeredOn.slice(0, 4)}` : `On record  •  rating ${band}`,
+          state: "uploaded" as const,
+          href: null,
+        };
+      }
       return { title: r.title, sub: r.missing, state: "missing" as const, href: null };
     }),
     ...mine.filter((d) => d.kind === "other").map((d) => ({ title: d.name, sub: `Uploaded  •  ${day(d.uploadedAt) ?? ""}`, state: "uploaded" as const, href: `/api/landlord/documents/${d.id}` })),
@@ -271,6 +287,10 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
   const required = documents.filter((d) => REQUIRED_DOCS.some((r) => r.title === d.title));
   const have = required.filter((d) => d.state === "uploaded").length;
   const allIn = have === required.length;
+  /* Enough to book the photographs: everything in, or at the very least an
+     EPC - theirs or the register's (James, 17 Sep 2026: "as a minimum it
+     will be EPC for the moment"). */
+  const photosReady = allIn || required.some((d) => d.title.includes("Energy Performance") && d.state === "uploaded");
   const readiness = Math.round(((at + have / required.length) / STAGES.length) * 100);
 
   const activity: LandlordView["activity"] = [
@@ -329,6 +349,22 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
         done: answered.done >= answered.of,
       },
       /* Everything in: off the list. */
+      /* The photographs. Offered once their compliance is in - and always
+         optional, because a re-let often keeps the photographs it has
+         (James, 17 Sep 2026). Done, so off the list, until then. */
+      photos: {
+        id: "photos",
+        label: photoTimes ? "Times sent for the photographs" : "Suggest times for the photographs",
+        sub: takeOn
+          ? `Booked for ${dayLong(takeOn.startsAt) ?? "the agreed time"}`
+          : photoTimes
+            ? `${photoTimes.slots.length} time${photoTimes.slots.length === 1 ? "" : "s"} with your agent - they'll confirm`
+            : "Optional. Tell us when suits and we'll book the visit for the photographs and floor plan.",
+        href: null,
+        icon: "pack/photo",
+        action: "photos",
+        done: Boolean(takeOn) || !photosReady,
+      },
       compliance: { id: "compliance", label: "Upload your compliance documents", sub: `${required.length - have} of ${required.length} still to send`, href: "/landlord/documents", icon: "upload", done: allIn },
       message: { id: "message", label: "Message your agent", sub: "Ask questions or share information", href: null, icon: "message", action: "message" },
       listing: { id: "listing", label: "See your listing", sub: marketing?.live ? `Live on ${marketing.portals.map((p) => p.name).join(", ") || "the portals"}` : "Once marketing starts", href: marketing ? "#listing" : null, icon: "home" },
@@ -420,6 +456,7 @@ async function managedView(p: ManagedProperty, first: string, comp: LandlordComp
       lng: p.lng,
     },
     steps: stepsForStage("managed", {
+      photos: { id: "photos", label: "Photographs", sub: "Arranged with your agent", href: null, icon: "pack/photo", done: true },
       presentation: { id: "presentation", label: "View your presentation", sub: "From when we valued it", href: null, icon: "analytics" },
       sign: { id: "sign", label: "Your contract", sub: "Coming to this file", href: null, icon: "pencil" },
       questions: { id: "questions", label: "About the property", sub: "What you told us at the start", href: "/landlord/questions", icon: "key", done: true },

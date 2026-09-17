@@ -38,7 +38,9 @@ export type AppraisalBookingInput = {
 export type ConfirmTarget =
   | { kind: "appraisal"; id: string }
   | { kind: "appraisal-new"; appraisal: AppraisalBookingInput }
-  | { kind: "viewing"; booking: ViewingBookingInput };
+  | { kind: "viewing"; booking: ViewingBookingInput }
+  /** The take-on visit: photographs and the floor plan, on an appraisal. */
+  | { kind: "takeon"; id: string; startsAt: string; minutes: number };
 
 export type ConfirmDraft = {
   ok: boolean;
@@ -64,7 +66,9 @@ export function payloadOf(t: ConfirmTarget): Record<string, unknown> {
     ? { kind: "appraisal", id: t.id }
     : t.kind === "appraisal-new"
       ? { kind: "appraisal", appraisal: t.appraisal }
-      : { kind: "viewing", booking: t.booking };
+      : t.kind === "takeon"
+        ? { kind: "takeon", id: t.id, startsAt: t.startsAt, minutes: t.minutes }
+        : { kind: "viewing", booking: t.booking };
 }
 
 const when = (iso: string) =>

@@ -230,3 +230,29 @@ export async function matchEpc(): Promise<{ matched: number }> {
   );
   return { matched: rows.length };
 }
+
+/**
+ * THE REGISTER'S OWN EPC FOR ONE ADDRESS (James, 17 Sep 2026).
+ *
+ * "If we scrape the property and find an EPC ... if it's in date and we've
+ * got the copy of it, surely we shouldn't need to ask them for it." The
+ * register is public and a certificate lasts ten years, so a current one
+ * found here answers the question - the landlord is not chased for a copy of
+ * something we can already see. Matched the way matchEpc does it: postcode
+ * plus the number off the front of the address, newest first.
+ */
+export async function epcForAddress(address: string, postcode: string): Promise<{ band: string | null; registeredOn: string; certificate: string } | null> {
+  if (!hasDb()) return null;
+  const pc = (postcode ?? "").trim().toUpperCase();
+  const num = (address ?? "").match(/\d+[A-Za-z]?/)?.[0]?.toUpperCase() ?? null;
+  if (!pc || !num) return null;
+  const rows = await q<{ band: string | null; registered_on: Date | string; certificate: string }>(
+    `SELECT band, registered_on, certificate FROM os_epc
+      WHERE upper(postcode) = $1 AND house_number = $2
+        AND registered_on > CURRENT_DATE - INTERVAL '10 years'
+      ORDER BY registered_on DESC LIMIT 1`,
+    [pc, num]
+  ).catch(() => []);
+  const r = rows[0];
+  return r ? { band: r.band, registeredOn: new Date(r.registered_on).toISOString().slice(0, 10), certificate: r.certificate } : null;
+}
