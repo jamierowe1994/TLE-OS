@@ -154,6 +154,12 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
     window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
     openPhotos();
   }, [booked, openPhotos]);
+  /* Asked for from the Next up card, which is on this page. */
+  useEffect(() => {
+    const onAsk = () => openPhotos();
+    window.addEventListener("os-appraisal-photos", onAsk);
+    return () => window.removeEventListener("os-appraisal-photos", onAsk);
+  }, [openPhotos]);
   const [readHere, setReadHere] = useState(false);
   const markRead = useCallback(() => setReadHere(true), []);
   const openMessages = useCallback(() => {

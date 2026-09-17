@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import ViewingBooker from "@/components/ViewingBooker";
-import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import { fetchMe } from "@/lib/me";
 import type { MarketAppraisal } from "@/lib/market-appraisal";
@@ -111,9 +110,12 @@ export default function TakeOnCard({ ma, primary, ghost }: { ma: MarketAppraisal
       <div className="flex flex-wrap items-center gap-2">
         {been ? (
           <>
-            <Link href={`/market-appraisals/${ma.id}?photos=1`} className={primary}>
+            {/* The panel is on THIS page, so it is opened rather than linked
+                to: a link to the address we are already at changes nothing
+                (James, 17 Sep 2026 - the button "doesn't seem to work"). */}
+            <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("os-appraisal-photos"))} className={primary}>
               Upload the photos <span aria-hidden>→</span>
-            </Link>
+            </button>
             <button type="button" onClick={() => setOpen(true)} className={ghost}>
               Book another visit
             </button>
