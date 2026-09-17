@@ -96,7 +96,9 @@ export default function WelcomeVideoRecorder({
       const type = (e.data as { type?: string; message?: string } | null)?.type;
       switch (type) {
         case "flow:recording:started": setFrameSays("Recording…"); break;
-        case "flow:recording:stopped": setFrameSays("Stopped — sending it over…"); break;
+        case "flow:recording:review": setFrameSays("Watch it back, then use it or record it again."); break;
+        case "flow:recording:retake": setFrameSays(null); break;
+        case "flow:recording:stopped": setFrameSays("Stopped. Sending it over…"); break;
         case "flow:recording:uploaded":
           setFrameSays(null);
           // Safe to close the frame. NOT safe to call it done — that is what

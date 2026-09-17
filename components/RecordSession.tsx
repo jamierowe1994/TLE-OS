@@ -291,6 +291,12 @@ export default function RecordSession({ appraisalId }: { appraisalId: string }) 
         case "flow:recording:started":
           setFrameSays("Recording…");
           break;
+        case "flow:recording:review":
+          setFrameSays("Watch it back, then use it or record it again.");
+          break;
+        case "flow:recording:retake":
+          setFrameSays(null);
+          break;
         case "flow:recording:stopped":
           setFrameSays("Stopped. Sending it over…");
           break;
