@@ -139,7 +139,16 @@ export default function PresentationBuilder({
      the booklet alike. */
   const [hidden, setHidden] = useState<SlideId[]>([]);
   const [making, setMaking] = useState(false);
-  const [made, setMade] = useState<string | null>(null);
+  /* THE PRESENTATION THIS APPRAISAL ALREADY HAS, if any (James, 17 Sep 2026:
+     "rather than saying create presentation, it should always be update
+     presentation"). Undefined while asking. When there is one, the builder
+     opens with the agent's own ticks and saving changes that deck behind
+     the same link, so nobody is ever stuck with one they cannot edit. */
+  const [existing, setExisting] = useState<SavedDeck | null | undefined>(refId ? undefined : null);
+  /* The build screen: ticks while it saves, then the four things to do next. */
+  const [progress, setProgress] = useState<null | "building" | "done" | "error">(null);
+  const [updatingRun, setUpdatingRun] = useState(false);
+  const seeded = useRef(false);
   /* The market picture is loaded by its own panel on its own step, and lifted
      here so the deck is built from exactly the object that was on screen when
      the agent ticked the blocks. See MarketPicturePanel's onLoaded. */
@@ -351,21 +360,60 @@ export default function PresentationBuilder({
     if (!body) return;
     setMaking(true);
     setError(null);
+    setProgress("building");
+    setUpdatingRun(Boolean(existing));
+    const builder = { comparables: chosen, listings: pickedNearby, market: marketSel, hidden };
     try {
       const res = await fetch("/api/presentations", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...body, ...(await offerPayload()) }),
+        body: JSON.stringify({ ...body, ...(await offerPayload()), builder, token: existing?.token }),
       });
-      const j = (await res.json()) as { ok?: boolean; url?: string; error?: string };
-      if (j.ok && j.url) setMade(j.url);
-      else setError(j.error ?? "Couldn't create the presentation.");
+      const j = (await res.json()) as { ok?: boolean; url?: string; token?: string; error?: string };
+      if (j.ok && j.url && j.token) {
+        setExisting({ token: j.token, url: j.url, builder });
+        setProgress("done");
+      } else {
+        setError(j.error ?? "Couldn't save the presentation.");
+        setProgress("error");
+      }
     } catch (e) {
       setError((e as Error).message);
+      setProgress("error");
     } finally {
       setMaking(false);
     }
   }
+
+  useEffect(() => {
+    if (!refId) return;
+    let gone = false;
+    fetch(`/api/presentations?ref=${encodeURIComponent(refId)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; sent?: (SavedDeck & { kind: string })[] }) => {
+        if (gone) return;
+        const mine = j.ok ? (j.sent ?? []).find((s) => s.kind === kind) : null;
+        setExisting(mine ? { token: mine.token, url: mine.url, builder: mine.builder ?? null } : null);
+      })
+      .catch(() => !gone && setExisting(null));
+    return () => {
+      gone = true;
+    };
+  }, [refId, kind]);
+
+  /* Their own ticks back, once the research is in: only ids that still name
+     something on screen, so a comparable that has since gone just drops. */
+  useEffect(() => {
+    if (seeded.current || !d || existing === undefined) return;
+    seeded.current = true;
+    const b = existing?.builder;
+    if (!b) return;
+    const ids = new Set(d.comparables.map((c) => c.id));
+    setChosen(b.comparables.filter((id) => ids.has(id)));
+    setPickedNearby(b.listings);
+    if (b.market) setMarketSel({ area: b.market.area, blocks: b.market.blocks as MarketBlockId[] });
+    setHidden(b.hidden);
+  }, [d, existing]);
 
   useEffect(() => {
     /* NO beds. The filter starts on "Any beds", so the first list must be any
@@ -1276,10 +1324,10 @@ export default function PresentationBuilder({
         <button
           type="button"
           onClick={create}
-          disabled={making || !d}
+          disabled={making || !d || existing === undefined}
           className="rounded-full bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40"
         >
-          {making ? "Creating…" : "Create presentation"}
+          {existing ? "Update presentation" : "Create presentation"}
         </button>
       )}
     </>
@@ -1349,7 +1397,7 @@ export default function PresentationBuilder({
             caption. Tight underneath, because space here is at a premium. */}
         <div className="flex shrink-0 flex-wrap items-end justify-between gap-x-6 gap-y-2 px-0 pb-3 pt-5">
           <div className="min-w-0">
-            <h1 className="hand text-[30px] leading-[1.05] sm:text-[38px]">Build the presentation</h1>
+            <h1 className="hand text-[30px] leading-[1.05] sm:text-[38px]">{existing ? "Edit the Presentation" : "Build the Presentation"}</h1>
             <p className="mt-1.5 truncate text-[16px] leading-snug sm:text-[18px]">
               {address}
               {/* Some records carry the postcode inside the address already;
@@ -1373,6 +1421,20 @@ export default function PresentationBuilder({
               id="appraisals"
               className="mr-1 flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[12px] font-semibold text-muted transition-colors hover:text-ink"
             />
+            {/* Once it exists: look at it, or have it in your inbox. */}
+            {existing && (
+              <>
+                <a
+                  href={existing.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] font-semibold transition-colors hover:border-ink/40"
+                >
+                  View presentation
+                </a>
+                <SendToMe token={existing.token} appraisalId={appraisal?.id ?? null} compact />
+              </>
+            )}
             {walk}
             {onClose && (
               <button type="button" onClick={onClose} className="ml-1 text-[18px] leading-none text-muted hover:text-ink">
@@ -1904,24 +1966,6 @@ export default function PresentationBuilder({
             </div>
           )}
 
-          {here === "review" && made && (
-            <div className="mb-3 rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-4">
-              <p className="text-[13px] font-semibold">The presentation is ready.</p>
-              <p className="mt-1 text-[12px] leading-relaxed text-muted">
-                This is the link the landlord opens. Check it before you send it — it has
-                their name on it.
-              </p>
-              <a
-                href={made}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-block text-[12.5px] underline"
-              >
-                {made}
-              </a>
-            </div>
-          )}
-
           {here === "review" && (
             /* A QUARTER FOR THE LIST, THE REST FOR THE PREVIEW. James, 11 Sep
                2026: "we've got no preview, so they can't see what it would
@@ -2062,6 +2106,19 @@ export default function PresentationBuilder({
           )}
         </div>
 
+        {progress && (
+          <BuildProgress
+            phase={progress}
+            updating={updatingRun}
+            error={error}
+            url={existing?.url ?? null}
+            token={existing?.token ?? null}
+            appraisalId={appraisal?.id ?? null}
+            backHref={backHref ?? null}
+            onEdit={() => setProgress(null)}
+            onRetry={() => void create()}
+          />
+        )}
     </>
   );
 
@@ -2139,5 +2196,266 @@ function DeckPreview({ deck }: { deck: Deck }) {
         <PresentDeck token="preview" deck={deck} slides={slidesFor(deck)} embedded />
       </div>
     </div>
+  );
+}
+
+type SavedDeck = {
+  token: string;
+  url: string;
+  builder: { comparables: string[]; listings: string[]; market: { area: string; blocks: string[] } | null; hidden: SlideId[] } | null;
+};
+
+/** "Send presentation to my email" - the builder's header and the build screen both use it. */
+function SendToMe({ token, appraisalId, compact = false }: { token: string; appraisalId: string | null; compact?: boolean }) {
+  const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [note, setNote] = useState<string | null>(null);
+  async function send() {
+    setState("sending");
+    setNote(null);
+    try {
+      const r = await fetch("/api/presentations/email", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token, appraisalId }),
+      });
+      const j = (await r.json()) as { ok?: boolean; to?: string; error?: string };
+      if (!j.ok) throw new Error(j.error ?? "It didn't send.");
+      setNote(`Sent to ${j.to}`);
+      setState("sent");
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : "It didn't send.");
+      setState("error");
+    }
+  }
+  const label = state === "sending" ? "Sending…" : state === "sent" ? "Sent to your email" : compact ? "Send to my email" : "Send presentation to my email";
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={() => void send()}
+        disabled={state === "sending"}
+        title={note ?? undefined}
+        className="rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] font-semibold transition-colors hover:border-ink/40 disabled:opacity-50"
+      >
+        {state === "error" ? "Didn't send - try again" : label}
+      </button>
+    );
+  }
+  return (
+    <div>
+      <button type="button" onClick={() => void send()} disabled={state === "sending"} className={CHOICE}>
+        <ChoiceIcon d="M4 6.5h16v11H4z M4.5 7l7.5 6 7.5-6" />
+        <span className="min-w-0 flex-1 text-left">
+          <span className="block text-[14px] font-semibold">{label}</span>
+          <span className="block text-[12px] text-muted">{note ?? "Have it in your inbox for the day."}</span>
+        </span>
+        {state === "sending" && <span aria-hidden className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-accent-dark" />}
+        {state === "sent" && <Tick />}
+      </button>
+    </div>
+  );
+}
+
+const CHOICE =
+  "flex w-full items-center gap-3.5 rounded-2xl border border-line/80 bg-white px-4 py-3.5 transition-[border-color,transform] hover:-translate-y-px hover:border-ink/35 disabled:opacity-60";
+
+function ChoiceIcon({ d }: { d: string }) {
+  return (
+    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
+      <svg viewBox="0 0 24 24" aria-hidden className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d={d} />
+      </svg>
+    </span>
+  );
+}
+
+function Tick({ size = 16 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12.5l4.5 4.5L19 7.5" />
+    </svg>
+  );
+}
+
+/**
+ * Building the presentation, shown (James, 17 Sep 2026).
+ *
+ * "When they click Create Presentation, we should show a loading page ...
+ * go through a few tick things ... then it will say brilliant,
+ * congratulations, your presentation is built", with four things to do
+ * next: view it, edit it, send it to myself, report a bug.
+ *
+ * The ticks are paced so each can be read, and the last one waits for the
+ * save itself: nothing says built until it is. Edit presentation closes this
+ * and leaves the agent in the builder with everything as they had it, and
+ * from then on the button says Update presentation.
+ */
+const BUILD_TICKS = [
+  "Gathering the comparables you picked",
+  "Adding what's on the market nearby",
+  "Putting every slide in the right order",
+  "Checking the photos and the figures",
+];
+
+function BuildProgress({
+  phase,
+  updating,
+  error,
+  url,
+  token,
+  appraisalId,
+  backHref,
+  onEdit,
+  onRetry,
+}: {
+  phase: "building" | "done" | "error";
+  updating: boolean;
+  error: string | null;
+  url: string | null;
+  token: string | null;
+  appraisalId: string | null;
+  backHref: string | null;
+  onEdit: () => void;
+  onRetry: () => void;
+}) {
+  const steps = [...BUILD_TICKS, updating ? "Saving your changes" : "Saving your presentation"];
+  /* How many are ticked. Paced at a readable 650ms, and the last one only
+     ticks when the save has come back. */
+  const [ticked, setTicked] = useState(0);
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (phase !== "building") return;
+    setTicked(0);
+    setShown(false);
+    const t = window.setInterval(() => setTicked((n) => Math.min(n + 1, BUILD_TICKS.length)), 650);
+    return () => window.clearInterval(t);
+  }, [phase]);
+  useEffect(() => {
+    if (phase !== "done") return;
+    /* The save may beat the ticks. Finish them first, then the good news. */
+    if (ticked < steps.length) {
+      const t = window.setTimeout(() => setTicked((n) => n + 1), 380);
+      return () => window.clearTimeout(t);
+    }
+    const t = window.setTimeout(() => setShown(true), 450);
+    return () => window.clearTimeout(t);
+  }, [phase, ticked, steps.length]);
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+
+  const done = phase === "done" && shown;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-page/85 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-label={done ? "Your presentation is built" : "Building the presentation"}>
+      <style>{`
+        @keyframes build-tick-in { from { transform: scale(0.2) rotate(-25deg); opacity: 0 } to { transform: none; opacity: 1 } }
+        .build-tick-in { display: flex; animation: build-tick-in 360ms cubic-bezier(0.2, 0.9, 0.3, 1.4) both }
+        @keyframes build-done-in { from { transform: translateY(10px); opacity: 0 } to { transform: none; opacity: 1 } }
+        .build-done-in { animation: build-done-in 420ms cubic-bezier(0.2, 0.9, 0.3, 1) both }
+        .build-done-in > * { animation: build-done-in 420ms cubic-bezier(0.2, 0.9, 0.3, 1) both }
+        .build-done-in > :nth-child(2) { animation-delay: 60ms } .build-done-in > :nth-child(3) { animation-delay: 110ms } .build-done-in > :nth-child(4) { animation-delay: 170ms }
+      `}</style>
+      <div className="popout-in max-h-full w-full max-w-[520px] overflow-y-auto rounded-[28px] border border-line/70 bg-page p-6 shadow-2xl sm:p-8">
+        {!done ? (
+          <>
+            <h2 className="hand text-[26px] leading-tight sm:text-[30px]">
+              {phase === "error" ? "That Didn't Save" : updating ? "Updating the Presentation" : "Building the Presentation"}
+            </h2>
+            <p className="mt-1.5 text-[13px] text-muted">
+              {phase === "error" ? error ?? "Something went wrong saving it. Nothing you picked has been lost." : "This only takes a moment."}
+            </p>
+            <ul className="mt-6 space-y-3">
+              {steps.map((s, i) => {
+                const isDone = i < ticked;
+                const isNow = i === ticked && phase !== "error";
+                return (
+                  <li key={s} className="flex items-center gap-3 text-[14px]" style={{ opacity: i <= ticked ? 1 : 0.4, transition: "opacity 300ms" }}>
+                    <span
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors duration-300 ${
+                        isDone ? "border-accent-dark bg-accent-dark text-white" : "border-line"
+                      }`}
+                    >
+                      {isDone ? (
+                        <span className="build-tick-in">
+                          <Tick size={14} />
+                        </span>
+                      ) : isNow ? (
+                        <span aria-hidden className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-accent-dark" />
+                      ) : null}
+                    </span>
+                    <span className={isDone ? "" : "text-muted"}>{s}</span>
+                  </li>
+                );
+              })}
+            </ul>
+            {phase === "error" && (
+              <div className="mt-6 flex flex-wrap gap-2">
+                <button type="button" onClick={onRetry} className="rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-white">
+                  Try again
+                </button>
+                <button type="button" onClick={onEdit} className="rounded-full border border-line/80 px-5 py-2.5 text-[13px] font-semibold hover:border-ink/40">
+                  Back to editing
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="build-done-in">
+            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-accent-dark text-white shadow-[0_12px_30px_-12px_rgba(0,0,0,0.35)]">
+              <Tick size={26} />
+            </span>
+            <h2 className="hand mt-5 text-[28px] leading-tight sm:text-[32px]">
+              {updating ? "Brilliant, Your Presentation Is Updated" : "Brilliant, Your Presentation Is Built"}
+            </h2>
+            <p className="mt-2 text-[13.5px] leading-relaxed text-muted">
+              {updating
+                ? "The same link opens the new version, so anyone who already has it sees your changes."
+                : "Congratulations. Have a look through it, and change anything you like, as often as you like."}
+            </p>
+            <div className="mt-6 space-y-2.5">
+              {url && (
+                <a href={url} target="_blank" rel="noreferrer" className={CHOICE}>
+                  <ChoiceIcon d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12z M12 9.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6z" />
+                  <span className="min-w-0 flex-1 text-left">
+                    <span className="block text-[14px] font-semibold">View presentation</span>
+                    <span className="block text-[12px] text-muted">Opens exactly as the landlord will see it.</span>
+                  </span>
+                </a>
+              )}
+              <button type="button" onClick={onEdit} className={CHOICE}>
+                <ChoiceIcon d="M4 20h4L19 9l-4-4L4 16v4z M13.5 6.5l4 4" />
+                <span className="min-w-0 flex-1 text-left">
+                  <span className="block text-[14px] font-semibold">Edit presentation</span>
+                  <span className="block text-[12px] text-muted">Back into the builder, with everything as you left it.</span>
+                </span>
+              </button>
+              {token && <SendToMe token={token} appraisalId={appraisalId} />}
+              <button
+                type="button"
+                onClick={() => {
+                  onEdit();
+                  window.dispatchEvent(new CustomEvent("os-help-dock", { detail: { open: true, tab: "feedback" } }));
+                }}
+                className={CHOICE}
+              >
+                <ChoiceIcon d="M12 8v5 M12 16.5v.01 M10.3 3.9L2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+                <span className="min-w-0 flex-1 text-left">
+                  <span className="block text-[14px] font-semibold">Report a bug</span>
+                  <span className="block text-[12px] text-muted">Something not look right? Tell us and we&apos;ll fix it.</span>
+                </span>
+              </button>
+            </div>
+            {backHref && (
+              <Link href={backHref} className="mt-5 inline-block text-[12.5px] text-muted underline underline-offset-2 hover:text-ink">
+                Back to the appraisal
+              </Link>
+            )}
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
   );
 }

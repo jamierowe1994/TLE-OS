@@ -75,7 +75,6 @@ import {
   themeVars,
   isCream,
   isDark,
-  WelcomeVideoBadge,
   WelcomeVideoButton,
   welcomeReady,
   type IconName,
@@ -585,7 +584,6 @@ function AgentHouse({ deck, show }: { deck: Deck; show: boolean }) {
                 <span className="text-[120px] leading-none" style={{ fontFamily: HAND, fontWeight: 800, color: "#56634a" }}>{initialsOf(a.name)}</span>
               </div>
             )}
-            {welcomeReady(deck.welcomeVideo) && <WelcomeVideoBadge video={deck.welcomeVideo} firstName={first} />}
           </Rise>
           <Rise show={show} i={5} className="absolute right-[100px] top-[792px] z-[2] w-[220px]">
             <p className="text-[27px] leading-[1.1] text-black/70" style={{ ...SCRIPT, transform: "rotate(-6deg)" }}>

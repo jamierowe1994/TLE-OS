@@ -316,9 +316,14 @@ export default function NextUp({
       title: "Ready for the visit",
       sub: "Show the deck, then record the figure here while it is fresh.",
       body: (
-        <a href={deck.url} target="_blank" rel="noreferrer" className={ghost}>
-          Open the presentation
-        </a>
+        <div className="flex flex-wrap gap-2">
+          <a href={deck.url} target="_blank" rel="noreferrer" className={ghost}>
+            Open the presentation
+          </a>
+          <Link href={`/market-appraisals/${ma.id}/build`} className={ghost}>
+            Update presentation
+          </Link>
+        </div>
       ),
     };
   }

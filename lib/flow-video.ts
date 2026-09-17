@@ -65,6 +65,12 @@ export function flowOrigin(): string {
   return base();
 }
 
+/** The MP4 for a recording, for players of our own. Flow hands this back as
+ *  `videoUrl` from 17 Sep 2026; worked out here for recordings saved before. */
+export function mp4UrlFor(recordingId: string): string {
+  return `${base()}/api/playlist?videoId=${encodeURIComponent(recordingId)}&videoType=mp4`;
+}
+
 export type RecordingStatus =
   | "awaiting_recording"
   | "uploading"
@@ -79,6 +85,10 @@ export interface Recording {
   title?: string | null;
   durationSecs?: number | null;
   embedUrl?: string | null;
+  /** The converted MP4 (a redirect to a short-lived signed address). */
+  videoUrl?: string | null;
+  width?: number | null;
+  height?: number | null;
   thumbnailUrl?: string | null;
   recorderUrl?: string | null;
   expiresAt?: string | null;

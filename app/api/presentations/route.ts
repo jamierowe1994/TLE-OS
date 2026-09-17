@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { presentAgentFor } from "@/lib/rex-agents";
-import { createPresentation, presentationsFor } from "@/lib/present-store";
+import { createPresentation, presentationsFor, readPresentation, updatePresentation } from "@/lib/present-store";
 import {
   DECK_KINDS,
   SLIDES,
@@ -14,6 +14,7 @@ import {
   type PresentFees,
   type PresentListing,
   type PresentMarket,
+  type PresentBuilderPicks,
   type PresentMaterialRow,
   type PresentTerms,
   type PresentValuation,
@@ -45,6 +46,10 @@ const origin = publicOrigin;
 
 type Body = {
   ref?: string;
+  /** Update presentation: this deck, changed in place, same link. */
+  token?: string;
+  /** The builder's ticks, so the next Update opens with them. */
+  builder?: PresentBuilderPicks | null;
   /** Which of the three decks to mint. Absent means pre-appraisal, so every
    *  caller written before kinds existed keeps working unchanged. */
   kind?: DeckKind;
@@ -103,6 +108,8 @@ export async function GET(req: NextRequest) {
       url: `${origin(req)}/present/${r.token}`,
       createdAt: r.createdAt,
       authorName: r.authorName,
+      updatedAt: r.deck.updatedAt ?? null,
+      builder: r.deck.builder ?? null,
       opens: r.opens,
       firstOpenedAt: r.firstOpenedAt,
       lastOpenedAt: r.lastOpenedAt,
@@ -242,21 +249,39 @@ export async function POST(req: NextRequest) {
     hidden: Array.isArray(body.hidden)
       ? SLIDES.filter((sl) => sl.removable && body.hidden!.includes(sl.id)).map((sl): SlideId => sl.id)
       : null,
+    builder: pickedIn(body.builder),
     createdAt: new Date().toISOString(),
   };
 
-  const row = await createPresentation({
-    ref: (body.ref ?? "").trim(),
-    deck,
-    authorId: me.id,
-    authorName: me.name,
-  });
+  /* UPDATE PRESENTATION changes the deck behind the same link, so whatever
+     the landlord or the agent already has opens the new one. Only the same
+     kind of deck for the same appraisal: a token is not a licence to rewrite
+     somebody else's. */
+  const token = (body.token ?? "").trim();
+  let updated = false;
+  let row;
+  if (token) {
+    const held = await readPresentation(token);
+    if (!held || held.kind !== kind || held.ref !== (body.ref ?? "").trim()) {
+      return NextResponse.json({ ok: false, error: "That presentation isn't this appraisal's, so it can't be updated from here." }, { status: 409 });
+    }
+    row = await updatePresentation(token, { ...deck, updatedAt: new Date().toISOString() });
+    updated = true;
+  } else {
+    row = await createPresentation({
+      ref: (body.ref ?? "").trim(),
+      deck,
+      authorId: me.id,
+      authorName: me.name,
+    });
+  }
   if (!row) {
     return NextResponse.json({ ok: false, error: "Couldn't save the presentation." }, { status: 500 });
   }
 
   return NextResponse.json({
     ok: true,
+    updated,
     token: row.token,
     url: `${origin(req)}/present/${row.token}`,
     /** So the caller can tell the agent their profile is thin before it goes. */
@@ -293,5 +318,18 @@ async function agentProfile(userId: string): Promise<{ bio: string; photo: strin
        ask REX and the Hub only — and both hold nothing for TLE, so an agent
        who had uploaded their own face still went out as a monogram. */
     photo: (rows[0]?.value?.photo ?? "").trim() || null,
+  };
+}
+
+/** The builder's ticks, kept to plain strings. They are only ever read back
+ *  by the builder, but they arrive from a browser. */
+function pickedIn(b: PresentBuilderPicks | null | undefined): PresentBuilderPicks | null {
+  if (!b || typeof b !== "object") return null;
+  const strs = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, 200) : []);
+  return {
+    comparables: strs(b.comparables),
+    listings: strs(b.listings),
+    market: b.market && typeof b.market.area === "string" ? { area: b.market.area, blocks: strs(b.market.blocks) } : null,
+    hidden: SLIDES.filter((sl) => sl.removable && strs(b.hidden).includes(sl.id)).map((sl): SlideId => sl.id),
   };
 }

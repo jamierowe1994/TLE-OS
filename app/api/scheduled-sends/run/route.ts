@@ -9,6 +9,8 @@ import { plainTextOf, renderPlain } from "@/lib/campaign-mail";
 import { getAppraisal } from "@/lib/appraisal-store";
 import { ResendBlocked, sendEmail } from "@/lib/resend";
 import { VIDEO_CHASE_KIND, videoRecorded } from "@/lib/video-chase";
+import { runDeckReminders } from "@/lib/deck-reminders";
+import { publicOrigin } from "@/lib/origin";
 
 /**
  * Send what's due.
@@ -51,7 +53,8 @@ function authorised(req: NextRequest): boolean {
      (they authenticate themselves), an unset secret in production would put
      this endpoint on the open internet. Fail shut. */
   if (!secret) return process.env.NODE_ENV !== "production";
-  const given = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  /* Either form: the Railway cron services all send x-cron-key. */
+  const given = req.headers.get("x-cron-key") ?? (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
   const a = Buffer.from(given);
   const b = Buffer.from(secret);
   return a.length === b.length && timingSafeEqual(a, b);
@@ -186,7 +189,12 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, skipped: skipped.length, failed });
+  /* The agent's own presentation emails: the day-before "not built yet" and
+     the on-the-day copy. Swept here rather than queued, so a visit that is
+     booked late, moved, or built at midnight is still judged on the day. */
+  const decks = await runDeckReminders(publicOrigin(req)).catch((e) => ({ chased: 0, sent: 0, failed: [e instanceof Error ? e.message : "Deck reminders failed."] }));
+
+  return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, skipped: skipped.length, failed, decks });
 }
 
 /** A dry read: what is due, without sending it. */

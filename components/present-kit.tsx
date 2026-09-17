@@ -984,46 +984,281 @@ export function useIsPhoto(): boolean {
  * recorded against the pre-appraisal and saved on the deck, and nothing on
  * the landlord's side ever showed it.
  *
- * A button, and a play badge on the portrait, both opening the recording in
- * a player over the slide. Only when the recording is ready: a deck without
- * one is a good deck, and says nothing about it.
+ * One button, beside Email. It opens OUR player, not Flow's (James, the same
+ * day): no title, no "Powered by", the frame the shape of the recording - a
+ * phone video is portrait, and a landscape box gave it black bars either
+ * side. A play button in the middle until it plays; everything else sits
+ * UNDER the picture, off the face - play, a scrub bar, and a speed picker
+ * that slides in once it is playing.
+ *
+ * Only when the recording is ready and its MP4 answers (see the present
+ * page): a deck without one is a good deck, and says nothing about it.
  */
-export type DeckWelcomeVideo = { status: string; embedUrl: string | null; durationSecs: number | null; thumbnailUrl?: string | null };
+export type DeckWelcomeVideo = {
+  status: string;
+  embedUrl: string | null;
+  videoUrl?: string | null;
+  width?: number | null;
+  height?: number | null;
+  durationSecs: number | null;
+  thumbnailUrl?: string | null;
+};
+type PlayableVideo = DeckWelcomeVideo & { videoUrl: string };
 
-export function welcomeReady(v: DeckWelcomeVideo | null | undefined): v is DeckWelcomeVideo & { embedUrl: string } {
-  return Boolean(v && v.status === "ready" && v.embedUrl);
+export function welcomeReady(v: DeckWelcomeVideo | null | undefined): v is PlayableVideo {
+  return Boolean(v && v.status === "ready" && v.videoUrl);
 }
 
-const clock = (secs: number | null) => (secs ? `${Math.floor(secs / 60)}:${String(Math.round(secs % 60)).padStart(2, "0")}` : "");
+const clock = (secs: number | null | undefined) =>
+  secs && Number.isFinite(secs) ? `${Math.floor(secs / 60)}:${String(Math.floor(secs % 60)).padStart(2, "0")}` : "0:00";
 
-export function WelcomeVideoPlayer({ video, name, onClose }: { video: DeckWelcomeVideo & { embedUrl: string }; name: string; onClose: () => void }) {
-  React.useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+const SPEEDS = [1, 1.25, 1.5, 2] as const;
+const PLAY_PATH = "M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z";
+const PAUSE_PATH = "M7 5h3.2v14H7zM13.8 5H17v14h-3.2z";
+
+export function WelcomeVideoPlayer({ video, name, onClose }: { video: PlayableVideo; name: string; onClose: () => void }) {
+  const ref = React.useRef<HTMLVideoElement>(null);
+  const bar = React.useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = React.useState(false);
+  const [playing, setPlaying] = React.useState(false);
+  const [started, setStarted] = React.useState(false);
+  const [waiting, setWaiting] = React.useState(false);
+  const [failed, setFailed] = React.useState(false);
+  const [at, setAt] = React.useState(0);
+  const [length, setLength] = React.useState(video.durationSecs ?? 0);
+  const [speed, setSpeed] = React.useState<number>(1);
+  const [dragging, setDragging] = React.useState(false);
+  /* Portrait until told otherwise: that is how agents record. The saved
+     shape usually arrives with the deck; the file's own replaces both. */
+  const [shape, setShape] = React.useState(() => (video.width && video.height ? video.width / video.height : 9 / 16));
+
   React.useEffect(() => setMounted(true), []);
+
+  const toggle = React.useCallback(() => {
+    const v = ref.current;
+    if (!v) return;
+    if (v.paused || v.ended) void v.play().catch(() => setFailed(true));
+    else v.pause();
+  }, []);
+
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const v = ref.current;
+      if (e.key === "Escape") onClose();
+      else if (e.key === " " || e.key === "k") {
+        e.preventDefault();
+        toggle();
+      } else if (v && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
+        v.currentTime = Math.max(0, Math.min(v.duration || 0, v.currentTime + (e.key === "ArrowRight" ? 5 : -5)));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    const { overflow } = document.body.style;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflow;
+    };
+  }, [onClose, toggle]);
+
+  /* The bar follows the picture every frame while it plays; timeupdate alone
+     moves it in visible steps four times a second. */
+  React.useEffect(() => {
+    if (!playing || dragging) return;
+    let f = 0;
+    const tick = () => {
+      if (ref.current) setAt(ref.current.currentTime);
+      f = requestAnimationFrame(tick);
+    };
+    f = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(f);
+  }, [playing, dragging]);
+
+  const seekTo = (clientX: number) => {
+    const v = ref.current;
+    const el = bar.current;
+    if (!v || !el || !length) return;
+    const r = el.getBoundingClientRect();
+    const t = Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * length;
+    v.currentTime = t;
+    setAt(t);
+  };
+
+  const pickSpeed = (s: number) => {
+    setSpeed(s);
+    if (ref.current) ref.current.playbackRate = s;
+  };
+
   if (!mounted) return null;
+  const done = length ? Math.min(1, at / length) : 0;
+  const speedAt = SPEEDS.indexOf(speed as (typeof SPEEDS)[number]);
+
+  /* The frame: as tall as the screen allows with room for the controls, no
+     wider than the screen, and exactly the recording's shape - so there is
+     never a bar either side. */
+  const frame: React.CSSProperties = {
+    aspectRatio: String(shape),
+    height: `min(calc(100dvh - 176px), calc(min(92vw, 980px) / ${shape}))`,
+  };
+
   return ReactDOM.createPortal(
-    <div className="fixed inset-0 z-[400] flex items-center justify-center bg-black/80 p-4" onClick={onClose} role="dialog" aria-modal="true" aria-label={`A message from ${name}`}>
-      <div className="relative w-full max-w-[960px]" onClick={(e) => e.stopPropagation()}>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="absolute -top-12 right-0 flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-[18px] text-white transition-colors hover:bg-white/25"
-        >
-          ✕
-        </button>
-        <div className="overflow-hidden rounded-[18px] bg-black shadow-2xl" style={{ aspectRatio: "16 / 9" }}>
-          <iframe
-            src={video.embedUrl}
-            title={`A message from ${name}`}
-            className="h-full w-full"
-            allow="autoplay; fullscreen; picture-in-picture"
-            allowFullScreen
+    <div
+      className="fixed inset-0 z-[400] flex flex-col items-center justify-center bg-[rgba(16,16,20,0.86)] px-4 py-6 backdrop-blur-md"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`A video from ${name}`}
+      style={{ animation: "wv-fade 220ms ease-out both" }}
+    >
+      <style>{`
+        @keyframes wv-fade { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes wv-rise { from { opacity: 0; transform: translateY(14px) scale(.97) } to { opacity: 1; transform: none } }
+        @keyframes wv-spin { to { transform: rotate(360deg) } }
+      `}</style>
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close"
+        className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/12 text-white transition-colors hover:bg-white/25"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+          <path d="M6 6l12 12M18 6L6 18" />
+        </svg>
+      </button>
+
+      <div className="flex max-w-full flex-col items-stretch" onClick={(e) => e.stopPropagation()} style={{ animation: "wv-rise 320ms cubic-bezier(.2,.8,.2,1) both" }}>
+        <div className="relative max-w-[92vw] overflow-hidden rounded-[22px] bg-black shadow-[0_40px_90px_-30px_rgba(0,0,0,0.8)]" style={frame}>
+          <video
+            ref={ref}
+            /* #t=0.1 paints the first frame behind the play button instead
+               of a black box, on phones too. */
+            src={`${video.videoUrl}#t=0.1`}
+            playsInline
+            preload="auto"
+            className="h-full w-full cursor-pointer object-cover"
+            onClick={toggle}
+            onLoadedMetadata={(e) => {
+              const v = e.currentTarget;
+              if (v.videoWidth && v.videoHeight) setShape(v.videoWidth / v.videoHeight);
+              if (Number.isFinite(v.duration) && v.duration > 0) setLength(v.duration);
+            }}
+            onDurationChange={(e) => Number.isFinite(e.currentTarget.duration) && e.currentTarget.duration > 0 && setLength(e.currentTarget.duration)}
+            onPlay={() => {
+              setPlaying(true);
+              setStarted(true);
+            }}
+            onPause={() => setPlaying(false)}
+            onEnded={() => setPlaying(false)}
+            onWaiting={() => setWaiting(true)}
+            onPlaying={() => setWaiting(false)}
+            onCanPlay={() => setWaiting(false)}
+            onTimeUpdate={(e) => !dragging && setAt(e.currentTarget.currentTime)}
+            onError={() => setFailed(true)}
           />
+
+          {/* The one thing ON the picture: play, while it is not playing.
+              Centred across, and in the lower third rather than dead
+              centre - in a selfie the middle is the face (James). */}
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={playing ? "Pause" : "Play"}
+            className="absolute left-1/2 top-[74%] flex h-[76px] w-[76px] items-center justify-center rounded-full bg-white/90 text-[#101014] shadow-[0_14px_40px_-12px_rgba(0,0,0,0.6)] backdrop-blur transition-[opacity,transform] duration-300 hover:scale-105"
+            style={{
+              opacity: playing || failed ? 0 : 1,
+              transform: `translate(-50%, -50%) scale(${playing ? 0.8 : 1})`,
+              pointerEvents: playing || failed ? "none" : "auto",
+            }}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden className="ml-1 h-[30px] w-[30px]" fill="currentColor">
+              <path d={PLAY_PATH} />
+            </svg>
+          </button>
+
+          {waiting && playing && (
+            <span aria-hidden className="pointer-events-none absolute left-1/2 top-1/2 -ml-5 -mt-5 h-10 w-10 rounded-full border-[3px] border-white/30 border-t-white" style={{ animation: "wv-spin 800ms linear infinite" }} />
+          )}
+          {failed && (
+            <p className="absolute inset-x-6 top-1/2 -translate-y-1/2 text-center text-[14px] leading-relaxed text-white/85">
+              This video won&rsquo;t play right now. Please try again in a moment.
+            </p>
+          )}
+        </div>
+
+        {/* Everything else, under the picture. */}
+        {/* Two groups, so on a phone the speed picker drops under the bar
+            instead of running off the edge. */}
+        <div className="mt-4 flex w-full flex-wrap items-center justify-center gap-x-3 gap-y-3 text-white" style={{ maxWidth: "92vw" }}>
+          <div className="flex min-w-0 flex-1 basis-[280px] items-center gap-3">
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={playing ? "Pause" : "Play"}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#101014] transition-transform hover:scale-105"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden className={`h-[16px] w-[16px] ${playing ? "" : "ml-0.5"}`} fill="currentColor">
+              <path d={playing ? PAUSE_PATH : PLAY_PATH} />
+            </svg>
+          </button>
+          <span className="w-[34px] shrink-0 text-right text-[12px] tabular-nums text-white/75">{clock(at)}</span>
+          <div
+            ref={bar}
+            role="slider"
+            tabIndex={0}
+            aria-label="Scrub through the video"
+            aria-valuemin={0}
+            aria-valuemax={Math.round(length)}
+            aria-valuenow={Math.round(at)}
+            className="group relative h-8 min-w-[60px] flex-1 cursor-pointer touch-none"
+            onPointerDown={(e) => {
+              e.currentTarget.setPointerCapture(e.pointerId);
+              setDragging(true);
+              seekTo(e.clientX);
+            }}
+            onPointerMove={(e) => dragging && seekTo(e.clientX)}
+            onPointerUp={() => setDragging(false)}
+            onPointerCancel={() => setDragging(false)}
+          >
+            <span className="absolute inset-x-0 top-1/2 h-[4px] -translate-y-1/2 rounded-full bg-white/25 transition-[height] group-hover:h-[6px]" />
+            <span className="absolute left-0 top-1/2 h-[4px] -translate-y-1/2 rounded-full bg-white transition-[height] group-hover:h-[6px]" style={{ width: `${done * 100}%` }} />
+            <span
+              className="absolute top-1/2 h-[14px] w-[14px] rounded-full bg-white shadow transition-transform"
+              style={{ left: `${done * 100}%`, transform: `translate(-50%, -50%) scale(${dragging ? 1.25 : 1})` }}
+            />
+          </div>
+          <span className="w-[34px] shrink-0 text-[12px] tabular-nums text-white/75">{clock(length)}</span>
+          </div>
+
+          {/* The speed picker slides in once it has started playing. */}
+          <div
+            className="relative flex shrink-0 overflow-hidden rounded-full bg-white/12 p-1 transition-all duration-500"
+            style={{
+              maxWidth: started ? 240 : 0,
+              opacity: started ? 1 : 0,
+              padding: started ? undefined : 0,
+              transitionTimingFunction: "cubic-bezier(.2,.8,.2,1)",
+            }}
+            aria-hidden={!started}
+          >
+            <span
+              aria-hidden
+              className="absolute bottom-1 top-1 rounded-full bg-white transition-[left] duration-300"
+              style={{ left: `calc(4px + ${Math.max(0, speedAt)} * 46px)`, width: 46, transitionTimingFunction: "cubic-bezier(.3,1.4,.5,1)" }}
+            />
+            {SPEEDS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                tabIndex={started ? 0 : -1}
+                onClick={() => pickSpeed(s)}
+                aria-pressed={speed === s}
+                className="relative z-[1] h-8 w-[46px] shrink-0 rounded-full text-[12px] font-semibold tabular-nums transition-colors duration-300"
+                style={{ color: speed === s ? "#101014" : "rgba(255,255,255,0.8)" }}
+              >
+                {s}&times;
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>,
@@ -1032,42 +1267,17 @@ export function WelcomeVideoPlayer({ video, name, onClose }: { video: DeckWelcom
 }
 
 /** The button, beside Email James: "James made you a video · 0:16" (James, 17 Sep 2026). */
-export function WelcomeVideoButton({ video, firstName, className, style }: { video: DeckWelcomeVideo & { embedUrl: string }; firstName: string; className?: string; style?: React.CSSProperties }) {
+export function WelcomeVideoButton({ video, firstName, className, style }: { video: PlayableVideo; firstName: string; className?: string; style?: React.CSSProperties }) {
   const [open, setOpen] = React.useState(false);
   const who = firstName || "your agent";
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} className={className} style={style}>
         <svg viewBox="0 0 24 24" aria-hidden className="h-[16px] w-[16px]" fill="currentColor">
-          <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z" />
+          <path d={PLAY_PATH} />
         </svg>
-        {firstName ? `${firstName} made you a video` : "A video from your agent"}{video.durationSecs ? <span className="opacity-70">· {clock(video.durationSecs)}</span> : null}
-      </button>
-      {open && <WelcomeVideoPlayer video={video} name={who} onClose={() => setOpen(false)} />}
-    </>
-  );
-}
-
-/** A play badge laid over the portrait, opening the same player. */
-export function WelcomeVideoBadge({ video, firstName }: { video: DeckWelcomeVideo & { embedUrl: string }; firstName: string }) {
-  const [open, setOpen] = React.useState(false);
-  const who = firstName || "your agent";
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label={`Play a message from ${who}`}
-        className="absolute bottom-5 left-5 flex items-center gap-3 rounded-full bg-white/95 py-2 pl-2 pr-5 text-[14px] font-semibold shadow-[0_12px_30px_-12px_rgba(0,0,0,0.45)] transition-transform hover:scale-[1.03]"
-        style={{ color: "#3b3b3c" }}
-      >
-        <span className="flex h-10 w-10 items-center justify-center rounded-full text-white" style={{ background: "var(--p-accent)" }}>
-          <svg viewBox="0 0 24 24" aria-hidden className="ml-0.5 h-[16px] w-[16px]" fill="currentColor">
-            <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z" />
-          </svg>
-        </span>
-        A message from {who}
-        {video.durationSecs ? <span className="text-black/45">{clock(video.durationSecs)}</span> : null}
+        {firstName ? `${firstName} made you a video` : "A video from your agent"}
+        {video.durationSecs ? <span className="opacity-70">· {clock(video.durationSecs)}</span> : null}
       </button>
       {open && <WelcomeVideoPlayer video={video} name={who} onClose={() => setOpen(false)} />}
     </>

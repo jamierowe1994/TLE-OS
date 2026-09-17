@@ -24,7 +24,13 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
   const token = (req.nextUrl.searchParams.get("k") ?? "").trim();
   const appraisalId = (req.nextUrl.searchParams.get("a") ?? "").trim();
-  const path = appraisalId ? recordPagePath(appraisalId) : "/market-appraisals";
+  /* to=build: the presentation emails (lib/deck-reminders) open the builder. */
+  const toBuild = req.nextUrl.searchParams.get("to") === "build";
+  const path = !appraisalId
+    ? "/market-appraisals"
+    : toBuild
+      ? `/market-appraisals/${encodeURIComponent(appraisalId)}/build`
+      : recordPagePath(appraisalId);
   const to = new URL(path, publicOrigin(req));
 
   const already = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);

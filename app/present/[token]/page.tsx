@@ -3,6 +3,7 @@ import { readPresentation, presentationExpiry, deletePresentation } from "@/lib/
 import { SAMPLE_DECK, DECK_KINDS, asStyle, slidesFor } from "@/lib/present";
 import StylePicker from "@/components/StylePicker";
 import PresentDeck from "@/components/PresentDeck";
+import { getRecording, mp4UrlFor } from "@/lib/flow-video";
 
 /**
  * The landlord's copy.
@@ -98,19 +99,37 @@ export default async function PresentPage({
   }
 
   /* The welcome video, only when a landlord can actually watch it. On 17 Sep
-     2026 Flow's player address sent everyone who was not signed in to Flow to
-     its login page, so a button here opened a blank box. Asked once per
-     open, without following the redirect: a player that answers 200 is
-     shown; anything else leaves the deck as it is without one. */
+     2026 Flow's player sent everyone who was not signed in to its login
+     page, then played an iPhone recording Chrome could not decode, so a
+     button here opened a blank box. Asked once per open. */
   let deck = row.deck;
   const video = deck.welcomeVideo;
-  if (video?.status === "ready" && video.embedUrl) {
-    const playable = await fetch(video.embedUrl, { method: "GET", redirect: "manual", cache: "no-store", signal: AbortSignal.timeout(4000) })
-      .then((r) => r.status === 200)
-      .catch(() => false);
-    if (!playable) deck = { ...deck, welcomeVideo: null };
+  if (video?.status === "ready" && video.recordingId) {
+    /* Our own player plays the MP4 itself (James, 17 Sep 2026), so that is
+       what is asked for: two bytes of it, following Flow's redirect to the
+       file. Until Flow has converted the recording there is no file, and the
+       deck goes without the button rather than with a player that will not
+       play. The shape is asked for alongside when it was not saved, so a
+       portrait video opens in a portrait frame instead of changing shape. */
+    const videoUrl = video.videoUrl || mp4UrlFor(video.recordingId);
+    const [playable, shape] = await Promise.all([
+      fetch(videoUrl, { method: "GET", headers: { range: "bytes=0-1" }, cache: "no-store", signal: AbortSignal.timeout(5000) })
+        .then(async (r) => {
+          await r.body?.cancel().catch(() => {});
+          return r.status === 200 || r.status === 206;
+        })
+        .catch(() => false),
+      video.width && video.height
+        ? Promise.resolve({ width: video.width, height: video.height })
+        : getRecording(video.recordingId)
+            .then(({ recording }) => ({ width: recording?.width ?? null, height: recording?.height ?? null }))
+            .catch(() => ({ width: null, height: null })),
+    ]);
+    deck = playable ? { ...deck, welcomeVideo: { ...video, videoUrl, ...shape } } : { ...deck, welcomeVideo: null };
   }
 
+  /* The builder's own ticks are for the builder; the landlord's page has no use for them. */
+  deck = { ...deck, builder: null };
   return <PresentDeck token={row.token} deck={deck} slides={slidesFor(deck)} />;
 }
 

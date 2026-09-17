@@ -182,10 +182,17 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
             <DoodleIcon name="mail" size={13} className="text-accent-dark" /> Pre-appraisal deck
           </a>
         )}
+        {/* Built: look at it, or change it (James, 17 Sep 2026 - new
+            information comes in, or they are not happy with how it looks). */}
         {deck ? (
-          <a href={deck.url} target="_blank" rel="noreferrer" className={pill}>
-            <DoodleIcon name="magic-wand" size={13} className="text-accent-dark" /> View presentation
-          </a>
+          <>
+            <a href={deck.url} target="_blank" rel="noreferrer" className={pill}>
+              <DoodleIcon name="magic-wand" size={13} className="text-accent-dark" /> View presentation
+            </a>
+            <Link href={`/market-appraisals/${ma.id}/build`} className={pill}>
+              <DoodleIcon name="pencil" size={13} className="text-accent-dark" /> Update presentation
+            </Link>
+          </>
         ) : (
           <Link href={`/market-appraisals/${ma.id}/build`} className={pill}>
             <DoodleIcon name="magic-wand" size={13} className="text-accent-dark" /> Build presentation

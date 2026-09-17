@@ -210,6 +210,9 @@ export async function GET(req: NextRequest) {
   const patch: Partial<WelcomeVideo> = {
     status: recording.status,
     embedUrl: recording.embedUrl ?? null,
+    videoUrl: recording.videoUrl ?? null,
+    width: recording.width ?? null,
+    height: recording.height ?? null,
     thumbnailUrl: recording.thumbnailUrl ?? null,
     durationSecs: recording.durationSecs ?? null,
   };

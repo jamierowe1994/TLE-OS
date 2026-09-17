@@ -91,6 +91,29 @@ export async function createPresentation(params: {
  * renders. So the read is pure and the count is fired once from the client
  * when the deck is genuinely on screen.
  */
+/**
+ * Update presentation: the same link, the new deck (James, 17 Sep 2026).
+ *
+ * The token, the opens and the welcome video stay. A landlord who already
+ * has the link opens the new version, and a video recorded against the deck
+ * is not lost because the agent changed a comparable.
+ */
+export async function updatePresentation(token: string, deck: PresentDeck): Promise<PresentationRow | null> {
+  if (!hasDb() || !token) return null;
+  const rows = await q<Raw>(
+    `UPDATE os_presentations
+        SET deck = $2::jsonb || CASE WHEN deck ? 'welcomeVideo'
+                                     THEN jsonb_build_object('welcomeVideo', deck -> 'welcomeVideo')
+                                     ELSE '{}'::jsonb END
+                             || jsonb_build_object('createdAt', deck -> 'createdAt')
+      WHERE token = $1
+      RETURNING token, kind, ref, deck, author_name, created_at,
+                first_opened_at, last_opened_at, opens`,
+    [token, JSON.stringify(deck)]
+  );
+  return rows[0] ? toRow(rows[0]) : null;
+}
+
 export async function readPresentation(token: string): Promise<PresentationRow | null> {
   if (!hasDb() || !token) return null;
   const rows = await q<Raw>(

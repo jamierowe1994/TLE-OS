@@ -84,6 +84,13 @@ export type WelcomeVideo = {
   thumbnailUrl: string | null;
   durationSecs: number | null;
   recordedAt: string | null;
+  /** The converted MP4 itself, for our own player (James, 17 Sep 2026: no
+   *  Flow title, no "Powered by", a portrait video in a portrait frame).
+   *  Absent on videos saved before then; the page works it out. */
+  videoUrl?: string | null;
+  /** The picture's shape, so the frame opens the right way round. */
+  width?: number | null;
+  height?: number | null;
 };
 
 /** The comparables slide's data, snapshotted onto the deck when it is minted.
@@ -347,7 +354,23 @@ export type PresentDeck = {
    * deck minted before 16 Sep 2026, which then shows everything, as it did.
    */
   hidden?: SlideId[] | null;
+  /**
+   * What the agent picked in the builder, so Update presentation opens with
+   * their choices still ticked (James, 17 Sep 2026: an agent must never be
+   * left with a presentation they are unhappy with and cannot edit). Ids and
+   * keys only; the deck itself is what the landlord sees. Never rendered.
+   */
+  builder?: PresentBuilderPicks | null;
   createdAt: string;
+  /** When Update presentation last changed it. The link stays the same. */
+  updatedAt?: string | null;
+};
+
+export type PresentBuilderPicks = {
+  comparables: string[];
+  listings: string[];
+  market: { area: string; blocks: string[] } | null;
+  hidden: SlideId[];
 };
 
 /* ───────────────────────── the words ───────────────────────── */
