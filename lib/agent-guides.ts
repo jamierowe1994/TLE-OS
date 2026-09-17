@@ -320,6 +320,8 @@ export const AGENT_GUIDES: Guide[] = [
         body: "Once a viewing has happened, its quick look offers Open the viewing and record feedback, and the file asks the first question: did they turn up? Press They showed to carry on, or No-show, which is recorded straight away.",
         image: img("v-showed"),
         why: "A no-show is feedback too. A landlord who hears that three people did not turn up learns something about the listing, and so do you.",
+        sends:
+          "Nothing yet. Once automatic tenant emails are switched on, a no-show is offered a new time with 'Shall We Rebook?', and everyone who did turn up is asked 'How Was It?' two hours after the viewing, with their answers coming back to you.",
       },
       {
         title: "How Did It Land?",
@@ -474,7 +476,7 @@ export const AGENT_GUIDES: Guide[] = [
         title: "While the Landlord Decides",
         body: "Putting an application to the landlord is still done by you, by phone or email, with what you know about the applicants. Once it is with them the application shows as Landlord decision, and when they answer it moves to Accepted or Unsuccessful.",
         why: "This is where deals go cold. The Awaiting landlord decision tile is the list to work through every morning.",
-        sends: "Nothing, from the application itself. The OS does not send the offer to the landlord, and it does not tell an applicant they were unsuccessful, so that call is yours.",
+        sends: "The OS does not send the offer to the landlord; that is still yours. An automatic 'Not This One' email for applicants who are unsuccessful is written and ready but not switched on yet, so for now telling them is your call too.",
       },
       {
         title: "Once the Landlord Says Yes",
@@ -497,9 +499,9 @@ export const AGENT_GUIDES: Guide[] = [
       },
       {
         title: "What Applicants Receive Along the Way",
-        body: "The applicant hears from us when their viewing is booked, with a link to start their tenant passport, and again once the handover is live and the landlord has said yes. In between, the application itself sends them nothing.",
+        body: "Today the applicant hears from us when their viewing is booked, with a link to start their tenant passport, and again once the handover is live and the landlord has said yes. A fuller set of automatic emails is written and waiting to be switched on, and when it is, applicants will hear from us at each step without you having to send anything.",
         sends:
-          "At booking: the viewing confirmation with the passport link. After acceptance, once the handover is live: 'The Landlord Has Said Yes'. Passport reminders at two and seven days, and a reminder on the morning of the viewing, are written and ready but not switched on yet.",
+          "Now: the viewing confirmation with the passport link, and 'The Landlord Has Said Yes' once the handover is live. Written and waiting to be switched on: passport reminders at two and seven days, a reminder on the morning of the viewing, 'How Was It?' two hours after it, 'We Have Your Application' when an application arrives, and 'Not This One' if it is unsuccessful.",
       },
     ],
   },
