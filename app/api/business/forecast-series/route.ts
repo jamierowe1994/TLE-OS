@@ -4,6 +4,7 @@ import { listForecasts } from "@/lib/business/forecast-store";
 import { getOverrides } from "@/lib/business/actuals-store";
 import { getGciSeries } from "@/lib/business/gci-history";
 import { recentMonths } from "@/lib/business/format";
+import { getPlan } from "@/lib/business/plan-store";
 
 /**
  * The three forecasts, month by month, so they can be looked at together.
@@ -28,6 +29,16 @@ export async function GET(req: NextRequest) {
   const n = Math.min(Math.max(Number(req.nextUrl.searchParams.get("months") ?? 12), 3), 24);
   const months = recentMonths(n);
 
+  /* Susan's forecast falls back to her uploaded sheet, for the months the
+     sheet itself calls a forecast. A figure typed on the Forecast tab wins. */
+  const years = [...new Set(months.map((m) => Number(m.slice(0, 4))))];
+  const plans = await Promise.all(years.map((y) => getPlan(y).catch(() => null)));
+  const fromSheet = (m: string): number | null => {
+    const plan = plans[years.indexOf(Number(m.slice(0, 4)))];
+    if (!plan || plan.basis[m] !== "forecast") return null;
+    return plan.lines.totalIncome?.[m] ?? null;
+  };
+
   const [perMonth, gci] = await Promise.all([
     Promise.all(
       months.map(async (m) => {
@@ -43,7 +54,7 @@ export async function GET(req: NextRequest) {
           // floor and reads as "they forecast nothing", which is a different
           // and much worse claim than "nobody has said yet".
           partners: forecasts.length ? partners : null,
-          susan: susanRow ? susanRow.value : null,
+          susan: susanRow ? susanRow.value : fromSheet(m),
           agentsForecasted: forecasts.length,
         };
       })

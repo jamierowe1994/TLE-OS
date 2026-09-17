@@ -16,7 +16,9 @@ import SusanForecast from "@/components/business/SusanForecast";
 import SourceNote from "@/components/business/SourceNote";
 import { Bars } from "@/components/business/charts/Bars";
 import DataTable from "@/components/business/DataTable";
+import Link from "next/link";
 import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
+import type { YearPlan } from "@/lib/business/plan-import";
 import type { AgentForecast, StatValue } from "@/lib/business/types";
 import {
   formatDate,
@@ -52,7 +54,11 @@ interface LivePayProp {
      *  for "per trading partner", rather than everyone on the roster. */
     agentsEarning?: number;
   } | null;
-  portfolio?: { totalRentRoll?: number; totalProperties?: number } | null;
+  portfolio?: {
+    totalRentRoll?: number;
+    totalProperties?: number;
+    byServiceLevel?: Array<{ level: string; properties: number }>;
+  } | null;
 }
 
 /* ------------------------------ helpers ------------------------------ */
@@ -220,6 +226,19 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
     void fees();
   }, [fees]);
 
+  /* Susan's uploaded year sheet - the only place the costs live. */
+  const [plan, setPlan] = useState<YearPlan | null | undefined>(undefined);
+  useEffect(() => {
+    let off = false;
+    fetch(`/api/business/plan?year=${previousMonth().slice(0, 4)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { plan: null }))
+      .then((d: { plan: YearPlan | null }) => !off && setPlan(d.plan))
+      .catch(() => !off && setPlan(null));
+    return () => {
+      off = true;
+    };
+  }, []);
+
   const susanThisMonth =
     series?.rows.find((r) => r.month === month)?.susan ?? null;
 
@@ -237,7 +256,13 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
     : null;
   const liveSetUp = cats.length ? sumCats(["Set Up Fee"]) : null;
   const rentRoll = live?.portfolio?.totalRentRoll ?? null;
-  const managed = live?.portfolio?.totalProperties ?? null;
+  /* MANAGED homes, not the whole book: this divided management fees by all 586
+     properties, let-only included, which halved the per-property figure. */
+  const levels = live?.portfolio?.byServiceLevel;
+  const managed = levels ? levels.filter((l) => /managed/i.test(l.level)).reduce((t, l) => t + l.properties, 0) : null;
+  /* Licence income is on Susan's sheet (as a negative cost), not in PayProp. */
+  const licenceRaw = plan?.lines.licenceFeeIncome?.[previousMonth()] ?? null;
+  const licence = licenceRaw == null ? null : Math.abs(licenceRaw);
   const inc = live?.income ?? null;
   // Recurring is the management fee; everything else charged in the month is
   // one-off by definition - set-up, let-only, transfers. Derived by subtraction
@@ -266,8 +291,10 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
   ): StatValue | null =>
     value == null ? null : { value, display, source: "live-payprop", note, asOf: feeMonth };
 
-  const bv = seed.businessValue;
-  const h2 = seed.h2Reforecast;
+  /* No typed fallbacks. These used to fall back to May's figures from the
+     capture while PayProp loaded, and to "362 managed properties" underneath. */
+  const waiting: StatValue = { value: null, source: "unavailable", note: "PayProp didn't return this for the month." };
+  const loadingLive = live == null;
 
   return (
     <div>
@@ -446,56 +473,63 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         <StatCard
           label="Monthly Rent Roll"
+          loading={loadingLive}
           stat={
             liveStat(
               rentRoll,
               rentRoll == null ? "—" : formatGBP(rentRoll),
               "Live from the PayProp portfolio walk, both agencies. This is a STOCK - what the book is worth today. PayProp keeps no history of it, so the rent roll as at the end of a past month cannot be recovered."
-            ) ?? bv.monthlyRentRoll
+            ) ?? waiting
           }
-          sub={managed != null ? `${managed} managed properties · as at today` : "362 managed properties"}
+          sub={managed != null ? `${managed} managed properties · as at today` : undefined}
         />
         <StatCard
           label="Monthly Management Fees"
+          loading={loadingLive}
           stat={
             liveStat(
               liveMgmtFees,
               liveMgmtFees == null ? "—" : formatGBP(liveMgmtFees),
               `Live from PayProp for ${monthLabel(feeMonth)}, net of VAT - Management Fee, Monthly Management Fee, First Month Management Fee and Investor Services summed across both agencies.`
-            ) ?? bv.monthlyManagementFees
+            ) ?? waiting
           }
           sub={monthLabel(feeMonth)}
         />
         <StatCard
           label="MRI - Monthly Recurring Income"
+          loading={loadingLive}
           stat={
             liveStat(
-              liveMgmtFees,
-              liveMgmtFees == null ? "—" : formatGBP(liveMgmtFees),
-              "SHORT BY LICENCE INCOME. Management fees are live; licence income is in no connected system and needs the P&L upload, and partner joining fees run through a separate bank account entirely. This is the reachable part, not the whole of MRI."
-            ) ?? bv.mri
+              liveMgmtFees == null ? null : liveMgmtFees + (licence ?? 0),
+              liveMgmtFees == null ? "-" : formatGBP(liveMgmtFees + (licence ?? 0)),
+              licence != null
+                ? `Management fees from PayProp (${formatGBP(liveMgmtFees ?? 0)}) plus licence fee income from Susan's sheet (${formatGBP(licence)}), ${monthLabel(feeMonth)}.`
+                : "Management fees only: licence income comes from Susan's sheet, and none is uploaded for this month."
+            ) ?? waiting
           }
-          sub="management fees only - licence income not yet reachable"
+          sub={licence != null ? "management fees + licence income" : "management fees only - licence income not uploaded"}
         />
         <StatCard
           label="One-off Fees"
+          loading={loadingLive}
           stat={
             liveStat(
               liveOneOff,
               liveOneOff == null ? "—" : formatGBP(liveOneOff),
               `Live for ${monthLabel(feeMonth)}: every fee charged, less the management fee - set-up, let-only and transfers. Partner JOINING fees are not in here and cannot be: they run through a separate bank account, reachable only via Barclays/QuickBooks.`
-            ) ?? bv.oneOffFees
+            ) ?? waiting
           }
           sub={monthLabel(feeMonth)}
         />
         <StatCard
           label="Total Monthly Income"
+          loading={loadingLive}
           stat={
             liveStat(
               liveTotalIncome,
               liveTotalIncome == null ? "—" : formatGBP(liveTotalIncome),
               `Live combined GCI for ${monthLabel(feeMonth)}, net of VAT, both agencies - recurring plus one-off.${SHORT} Joining fees are absent for the same reason as above.`
-            ) ?? bv.totalMonthlyIncome
+            ) ?? waiting
           }
           sub={monthLabel(feeMonth)}
         />
@@ -503,173 +537,158 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
       <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         <StatCard
           label="MRI per Property"
+          loading={loadingLive}
           stat={
             liveStat(
               perProperty,
               perProperty == null ? "—" : formatGBP(perProperty),
               `Management fees for ${monthLabel(feeMonth)} divided by the managed book as it stands today.${SHORT}`
-            ) ?? bv.mriPerProperty
+            ) ?? waiting
           }
-          sub={managed != null ? `÷ ${managed} managed` : "avg rent £987"}
+          sub={managed != null ? `÷ ${managed} managed` : undefined}
         />
         <StatCard
           label="MRI % per Property"
+          loading={loadingLive}
           stat={
             liveStat(
               pctOfRentRoll,
               pctOfRentRoll == null ? "—" : `${pctOfRentRoll.toFixed(1)}%`,
               `Management fees as a share of the rent roll. The fee is ${monthLabel(feeMonth)}; the rent roll is today's, because PayProp keeps no history of it.${SHORT}`
-            ) ?? bv.mriPctPerProperty
+            ) ?? waiting
           }
         />
         <StatCard
           label="MRI per Trading Partner"
+          loading={loadingLive}
           stat={
             liveStat(
               perPartner,
               perPartner == null ? "—" : formatGBP(perPartner),
               `Divided by partners who actually EARNED a fee this month, not everyone on the roster - a quiet month would otherwise flatter this figure.${SHORT}`
-            ) ?? bv.mriPerTradingPartner
+            ) ?? waiting
           }
-          sub={inc?.agentsEarning ? `÷ ${inc.agentsEarning} earning` : "21 trading · 30 active"}
+          sub={inc?.agentsEarning ? `÷ ${inc.agentsEarning} earning` : undefined}
         />
         <StatCard
           label="MRI Split - TLE Retained"
+          loading={loadingLive}
           stat={
             liveStat(
               inc?.agencyIncome ?? null,
               inc?.agencyIncome == null ? "—" : formatGBP(inc.agencyIncome),
               `Commission the agency kept in ${monthLabel(feeMonth)}, net of VAT. This one is COMPLETE - it is measured from the payments themselves, not derived from MRI, so no licence gap applies.`
-            ) ?? bv.mriSplitTle
+            ) ?? waiting
           }
           sub={monthLabel(feeMonth)}
         />
         <StatCard
           label="MRI Split - Partner"
+          loading={loadingLive}
           stat={
             liveStat(
               inc?.paidToBeneficiaries ?? null,
               inc?.paidToBeneficiaries == null ? "—" : formatGBP(inc.paidToBeneficiaries),
               `Fees paid out to partners in ${monthLabel(feeMonth)}, net of VAT. Also complete, and measured the same way.`
-            ) ?? bv.mriSplitPartner
+            ) ?? waiting
           }
           sub={monthLabel(feeMonth)}
         />
       </div>
-      <p className="mt-3 text-xs text-muted">{bv.glasgowNote}</p>
 
-      {/* --------------------- baseline costs vs income --------------------- */}
-      <SectionTitle source="May 2026 cost actuals">
-        Baseline Costs vs Income
+      {/* ----------------------- costs against income -----------------------
+          The month just closed: what TLE kept (PayProp) against what it cost
+          to run (Susan's sheet). The cost lines were a typed May 2026 list. */}
+      <SectionTitle source={plan ? `Costs from Susan's sheet · income from PayProp` : undefined}>
+        Costs Against Income - {monthLabel(feeMonth)}
       </SectionTitle>
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <StatCard label="Monthly Gap" stat={bv.monthlyGap} sub="Recurring GP + one-off − baseline" />
-        <StatCard label="Cost Coverage" stat={bv.costCoveragePct} sub="of baseline covered by total income" />
-        <StatCard label="Direct / Variable Costs" stat={bv.baselineCosts.directSubtotal} />
-        <StatCard label="Fixed Operational Costs" stat={bv.baselineCosts.fixedSubtotal} />
-      </div>
-      <div className="mt-3 grid gap-3 lg:grid-cols-2">
-        <div>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-            Cost lines (monthly)
-          </h3>
-          <DataTable
-            columns={[
-              { key: "label", label: "Cost line" },
-              {
-                key: "value",
-                label: "£ / month",
-                align: "right",
-                render: (row) => money(row.value as number),
-              },
-            ]}
-            rows={
-              [
-                ...bv.baselineCosts.direct.map((r) => ({ ...r, label: `${r.label} (direct)` })),
-                ...bv.baselineCosts.fixed,
-                /* Null is not £0 of costs - that would read as a business with
-                   no overheads at all.
-                   
-                   And the sentinel must be null, not the string "—". money()
-                   guards null and NaN; a string sails past both, reaches
-                   Intl.NumberFormat, and renders the literal text "£NaN" on
-                   Susan's screen. Caught comparing this file against the
-                   portal it was ported from. */
-                { label: "TOTAL BASELINE COSTS", value: bv.baselineCosts.total.value ?? null },
-              ] as unknown as Record<string, unknown>[]
-            }
-            compact
-          />
+      {plan === undefined ? (
+        <div className="flex items-center gap-2 text-[13px] text-muted" aria-busy="true">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-transparent" aria-hidden />
+          Loading the sheet
         </div>
-        <div className="card h-fit p-5">
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-            One-off / non-recurring income (monthly)
-          </h3>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <StatCard label="Set-up & Other (TLE share)" stat={bv.oneOffIncome.setupAndOtherTleShare} />
-            <StatCard label="Partner Joining Fees" stat={bv.oneOffIncome.partnerJoiningFees} />
-            <StatCard label="Total One-off" stat={bv.oneOffIncome.total} />
-          </div>
-          <p className="mt-3 text-xs text-muted">{bv.forecast750Note}</p>
-        </div>
-      </div>
+      ) : !plan ? (
+        <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
+          Costs come from Susan&rsquo;s year sheet, and none is uploaded yet. Upload it on the{" "}
+          <Link href="/company-figures/pnl" className="font-semibold underline underline-offset-2">P&amp;L</Link> tab.
+        </p>
+      ) : (
+        (() => {
+          const at = (k: string) => plan.lines[k]?.[feeMonth] ?? null;
+          const forecastCosts = plan.basis[feeMonth] === "forecast";
+          const fromAccounts = plan.accountsMonths?.includes(feeMonth) ?? false;
+          /* The same sum as the P&L tab, so the two can never disagree about a
+             month: all commission income from PayProp, less every cost on the
+             sheet - agent commission included, because PayProp cannot see
+             Glasgow's partners being paid. */
+          const commission = ["commissionLetOnly", "commissionSetUp", "commissionManagement"].every((k) => at(k) == null)
+            ? null
+            : ["commissionLetOnly", "commissionSetUp", "commissionManagement"].reduce((t, k) => t + (at(k) ?? 0), 0);
+          const plc = at("plcReferencing");
+          const rlp = at("rlpPremium");
+          const exp = at("totalExpenditure");
+          const costs = commission != null && plc != null && rlp != null && exp != null ? commission + plc + rlp + exp : null;
+          const kept = inc?.combinedGci ?? null;
+          const gap = kept != null && costs != null ? kept - costs : null;
+          const cover = kept != null && costs ? (kept / costs) * 100 : null;
+          const costLines = [
+            { label: "Agent commission", value: commission },
+            { label: "PLC checks & referencing", value: plc },
+            { label: "RLP insurance premium", value: rlp },
+            ...["accountancy", "groupAdmin", "advertising", "bankCharges", "computer", "insurance", "operatingSoftware", "propertySoftware", "recruitment", "training", "subscriptions", "telephone", "travel", "joiningFeeIncome", "licenceFeeIncome"]
+              .filter((k) => plan.lines[k])
+              .map((k) => ({
+                label: ({ accountancy: "Accountancy", groupAdmin: "Group admin & support", advertising: "Advertising & promotion", bankCharges: "Bank charges", computer: "Computer expenses", insurance: "Insurance", operatingSoftware: "Operating software", propertySoftware: "Property software", recruitment: "Recruitment fees", training: "Staff training", subscriptions: "Subscriptions", telephone: "Telephone", travel: "Travel", joiningFeeIncome: "Joining fee income", licenceFeeIncome: "Licence fee income" } as Record<string, string>)[k],
+                value: at(k),
+              })),
+            { label: "TOTAL COSTS", value: costs },
+          ];
+          return (
+            <>
+              <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                <StatCard
+                  label="Commission income"
+                  loading={loadingLive}
+                  stat={liveStat(kept, kept == null ? "-" : formatGBP(kept), `Every fee charged in ${monthLabel(feeMonth)}, both agencies, net of VAT, from PayProp.`) ?? waiting}
+                />
+                <StatCard
+                  label="Costs"
+                  stat={{ value: costs, display: costs == null ? undefined : formatGBP(costs), source: "manual", note: `Agent commission, PLC checks, the RLP premium and total expenditure for ${monthLabel(feeMonth)}, from Susan's sheet${forecastCosts ? " - still her forecast for that month" : ""}. Joining and licence fee income are netted off, as on her sheet.` }}
+                  sub={fromAccounts ? "From the accounts" : forecastCosts ? "Her forecast for the month" : "From her sheet"}
+                />
+                <StatCard
+                  label="Monthly gap"
+                  loading={loadingLive}
+                  stat={{ value: gap, display: gap == null ? undefined : `${gap < 0 ? "-" : "+"}${formatGBP(Math.abs(gap))}`, source: "derived", note: "Commission income less every cost - the same net profit the P&L tab shows for the month." }}
+                />
+                <StatCard
+                  label="Cost coverage"
+                  loading={loadingLive}
+                  stat={{ value: cover, display: cover == null ? undefined : `${cover.toFixed(0)}%`, source: "derived", note: "Commission income as a share of the month's costs." }}
+                  sub="of costs covered by income"
+                />
+              </div>
+              <div className="mt-3">
+                <DataTable
+                  columns={[
+                    { key: "label", label: `Cost line, ${monthLabel(feeMonth)}` },
+                    { key: "value", label: "£", align: "right", render: (row) => money(row.value as number | null) },
+                  ]}
+                  rows={costLines as unknown as Record<string, unknown>[]}
+                  compact
+                />
+              </div>
+            </>
+          );
+        })()
+      )}
 
-      {/* ------------------------ H2 reforecast P&L ------------------------ */}
-      <SectionTitle source={seed.sources.h2Reforecast}>
-        H2 2026 Reforecast - Month-by-Month P&L
-      </SectionTitle>
-      <div className="mb-3 grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <StatCard label="H2 Net Loss" stat={h2.h2NetLoss} />
-        <StatCard label="Cumulative YTD (Dec)" stat={h2.cumulativeYtdDec} />
-        <div className="card col-span-2 p-5">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-            Break-even
-          </div>
-          <p className="mt-2 text-sm">{h2.breakEvenNote}</p>
-          <p className="mt-1.5 text-xs text-muted">{h2.assumptions}</p>
-        </div>
-      </div>
-      <DataTable
-        columns={[
-          { key: "label", label: "H2 2026" },
-          ...h2.months.map((m, i) => ({
-            key: `m${i}`,
-            label: m,
-            align: "right" as const,
-            render: (row: Record<string, unknown>) =>
-              formatH2Cell(
-                (row.values as number[])[i],
-                row.kind as string,
-                row.key as string
-              ),
-          })),
-          {
-            key: "h2Total",
-            label: "H2 Total",
-            align: "right",
-            render: (row) =>
-              formatH2Cell(row.h2Total as number, row.kind as string, row.key as string),
-          },
-        ]}
-        rows={h2.rows as unknown as Record<string, unknown>[]}
-        compact
-      />
-      <p className="mt-2 text-[11px] text-muted">{h2.sourceNote}</p>
+      {/* The H2 table that stood here was a typed November 2025 draft. The year,
+          month by month, is the P&L tab now - one place, not two. */}
+      <p className="mt-6 text-[12.5px] text-muted">
+        The year month by month, PayProp income against Susan&rsquo;s plan, is on the{" "}
+        <Link href="/company-figures/pnl" className="font-semibold text-ink underline underline-offset-2">P&amp;L</Link> tab.
+      </p>
     </div>
   );
-}
-
-/** Format one H2 reforecast cell per row kind (negatives in red parentheses). */
-function formatH2Cell(value: number, kind: string, rowKey: string): ReactNode {
-  if (kind === "pct") return formatPct(value, 1);
-  if (kind === "count") {
-    if (rowKey === "starters" && value >= 0) return `+${formatNum(value)}`;
-    if (value < 0) return <span className="text-red-600">−{formatNum(Math.abs(value))}</span>;
-    return formatNum(value);
-  }
-  // currency
-  if (value < 0) {
-    return <span className="text-red-600">({formatGBP(Math.abs(value))})</span>;
-  }
-  return formatGBP(value);
 }

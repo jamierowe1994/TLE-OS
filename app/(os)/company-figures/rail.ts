@@ -15,7 +15,7 @@ export const BUSINESS_TABS = [
   { key: "paid-leads", label: "Paid Leads", icon: "megaphone", blurb: "What the paid adverts bring in, and what those leads turn into." },
   { key: "move-ins", label: "Move-ins & Pipeline", icon: "key", blurb: "Who has moved in, who is on the way, and the deals in progression." },
   { key: "income", label: "Income", icon: "coin", blurb: "Commission from PayProp, net of VAT, month by month." },
-  { key: "pnl", label: "P&L", icon: "bank", blurb: "Profit and loss against the H2 plan." },
+  { key: "pnl", label: "P&L", icon: "bank", blurb: "Income from PayProp, costs from the accounts, and the plan for the months ahead." },
   { key: "forecast", label: "Forecast", icon: "trend-up", blurb: "The plan, the partners' own forecasts, and what the book is worth." },
   { key: "agents", label: "Agents", icon: "user", blurb: "Each partner's month: commission, book, appraisals, listings and pipeline." },
   { key: "portfolio", label: "Portfolio", icon: "pack/building", blurb: "The book: managed, let only and rent collection, England & Wales and Scotland." },

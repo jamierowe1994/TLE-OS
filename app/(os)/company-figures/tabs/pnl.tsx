@@ -1,262 +1,252 @@
 "use client";
 
-// Admin tab: P&L - grid built on the H2 2026 reforecast structure (Jul–Dec).
-// The Base44 P&L tab is password-protected, so this grid IS the working P&L:
-// July cells are click-to-edit; edits write manual overrides to
-// /api/admin/actuals (metric "pnl.<lineKey>.2026-07") and show a MANUAL badge.
+// Admin tab: P&L - the year, month by month.
+//
+// Rebuilt 17 Sep 2026. It was a typed copy of a November 2025 H2 draft with a
+// July column you could overwrite. Now:
+//   · commission income for every month that has happened is PayProp, worked
+//     out by the OS, with Susan's own figure beneath it to read against;
+//   · every cost is her uploaded sheet, because the accounts are the only place
+//     those costs exist;
+//   · months still to come are her forecast, and say so.
+// See lib/business/pnl-build.ts for which line is answered by which source.
 
 import { useCallback, useEffect, useState } from "react";
 import StatCard from "@/components/business/StatCard";
-import PnlImport from "@/components/business/PnlImport";
-import SourceBadge from "@/components/business/SourceBadge";
+import PlanUpload from "@/components/business/PlanUpload";
 import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
-import { SNAPSHOT_DATE, liveMonth } from "@/lib/business/roster";
-import type { H2ReforecastRow } from "@/lib/business/seed-types";
-import { formatGBP, formatNum, formatPct } from "@/lib/business/format";
-import type { ActualOverride } from "@/lib/business/types";
+import type { PnlYear, PnlRow, PnlColumn } from "@/lib/business/pnl-build";
+import { formatGBP, formatDate } from "@/lib/business/format";
 
-// This grid is the H2 2026 plan (Jul–Dec), so it deliberately does NOT follow
-// the month picker - the whole half-year is the point of it.
-//
-// The EDITABLE column does move, though. It was pinned to July, which meant
-// that from 1 August every actual typed in here was filed against July: the
-// figures went into the right grid under the wrong month. It now tracks the
-// live month, clamped into the plan's own window.
-const PNL_FIRST = "2026-07";
-const PNL_LAST = "2026-12";
-const pnlMonth = () => {
-  const m = liveMonth();
-  return m < PNL_FIRST ? PNL_FIRST : m > PNL_LAST ? PNL_LAST : m;
-};
+const SHORT = (m: string) =>
+  new Date(`${m}-01T00:00:00Z`).toLocaleString("en-GB", { month: "short", timeZone: "UTC" });
 
-function formatCell(row: H2ReforecastRow, value: number): string {
-  if (row.kind === "currency") return formatGBP(value);
-  if (row.kind === "pct") return formatPct(value, 1);
-  return formatNum(value);
+function money(v: number | null, pct = false): string {
+  if (v == null) return "-";
+  if (pct) return `${v.toFixed(0)}%`;
+  const s = formatGBP(Math.abs(Math.round(v)));
+  return v < 0 ? `(${s})` : s;
 }
 
-export default function PnlTab({ month, seed }: { month: string; seed: SeedData }) {
-  void month; // grid always shows the H2 2026 reforecast (Jul–Dec)
-  const rf = seed.h2Reforecast;
+const GROUP_TITLE: Partial<Record<PnlRow["group"], string>> = {
+  income: "Income",
+  cos: "Cost of sales",
+  expenditure: "Expenditure",
+};
 
-  const [overrides, setOverrides] = useState<Record<string, number>>({});
-  const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState("");
-  const [savingKey, setSavingKey] = useState<string | null>(null);
+export default function PnlTab({ month }: { month: string; seed: SeedData }) {
+  const year = Number(month.slice(0, 4));
+  const [data, setData] = useState<PnlYear | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const loadOverrides = useCallback(async () => {
+  const load = useCallback(async () => {
+    setError(null);
     try {
-      const res = await fetch(
-        `/api/business/actuals?month=${encodeURIComponent(pnlMonth())}`,
-        { cache: "no-store" }
-      );
-      if (!res.ok) return;
-      const data: unknown = await res.json();
-      const list: ActualOverride[] = Array.isArray(data)
-        ? (data as ActualOverride[])
-        : ((data as { overrides?: ActualOverride[] })?.overrides ?? []);
-      const map: Record<string, number> = {};
-      for (const o of list) {
-        const m = /^pnl\.([A-Za-z0-9]+)\.(\d{4}-\d{2})$/.exec(o.metric);
-        if (m && m[2] === pnlMonth() && o.scope === "business") {
-          map[m[1]] = o.value;
-        }
-      }
-      setOverrides(map);
+      const r = await fetch(`/api/business/pnl?year=${year}`, { cache: "no-store" });
+      if (!r.ok) throw new Error(String(r.status));
+      setData((await r.json()) as PnlYear);
     } catch {
-      /* route not ready / offline - reforecast figures still render */
+      setError("The P&L couldn't be put together. Refresh to try again.");
     }
-  }, []);
-
+  }, [year]);
   useEffect(() => {
-    void loadOverrides();
-  }, [loadOverrides]);
+    void load();
+  }, [load]);
 
-  function startEdit(row: H2ReforecastRow) {
-    setEditingKey(row.key);
-    setEditValue(String(overrides[row.key] ?? row.values[0]));
-    setError(null);
+  if (error) {
+    return <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800">{error}</p>;
+  }
+  if (!data) {
+    return (
+      <div className="flex items-center gap-2 text-[13px] text-muted" aria-busy="true">
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-transparent" aria-hidden />
+        Putting the P&amp;L together
+      </div>
+    );
   }
 
-  async function saveEdit(row: H2ReforecastRow) {
-    const value = Number(editValue);
-    if (!Number.isFinite(value)) {
-      setError("Enter a valid number.");
-      return;
-    }
-    setSavingKey(row.key);
-    setError(null);
-    try {
-      const res = await fetch("/api/business/actuals", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          scope: "business",
-          month: pnlMonth(),
-          metric: `pnl.${row.key}.${pnlMonth()}`,
-          value,
-          note: `P&L manual entry - ${row.label}, Jul 2026`,
-        }),
-      });
-      if (!res.ok) throw new Error(`Save failed (${res.status})`);
-      setOverrides((prev) => ({ ...prev, [row.key]: value }));
-      setEditingKey(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Save failed");
-    } finally {
-      setSavingKey(null);
-    }
-  }
+  const t = data.tiles;
+  const closedLabel = t.closedMonths ? `Jan to ${SHORT(data.columns[t.closedMonths - 1].month)} ${year}` : "No closed months yet";
+  const diff = (a: number | null, b: number | null) =>
+    a == null || b == null ? null : `${a - b >= 0 ? "+" : "-"}${formatGBP(Math.abs(Math.round(a - b)))} against the accounts and sheet`;
 
   return (
     <div className="space-y-6">
-      {/* Source note */}
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
-        <span className="font-semibold">Base44 P&amp;L tab is password-protected</span>{" "}
-        - structure from the H2 reforecast (19 Nov 25 draft); figures are
-        editable here. Click any July cell to key in an actual.
-      </div>
-
-      {/* Hero cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <StatCard label="H2 2026 net loss (forecast)" stat={rf.h2NetLoss} big />
-        <StatCard label="Cumulative YTD at Dec" stat={rf.cumulativeYtdDec} big />
-        <div className="card relative p-5">
-          <div className="absolute right-4 top-4">
-            <SourceBadge source="manual" note={rf.sourceNote} />
-          </div>
-          <div className="stat-label pr-16 text-[11px] font-semibold uppercase tracking-wide text-muted">
-            Break-even
-          </div>
-          <div className="stat-value mt-2 text-[24px]">Not in 2026</div>
-          <div className="mt-1.5 text-xs text-muted">
-            Needs ~500+ managed properties at the current cost structure
-          </div>
+      {!data.plan ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
+          <span className="font-semibold">No year plan uploaded.</span> Income below is live from PayProp. Costs and the
+          forecast months come from Susan&rsquo;s sheet, so they stay blank until it is uploaded.
         </div>
-      </div>
+      ) : null}
 
-      {/* P&L grid */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Net profit / (loss) YTD"
+          big
+          stat={{
+            value: t.netYtd,
+            display: t.netYtd == null ? undefined : money(t.netYtd),
+            source: "derived",
+            note: "PayProp commission income less the costs on Susan's sheet, for every closed month.",
+          }}
+          sub={diff(t.netYtd, t.netYtdSheet) ?? closedLabel}
+        />
+        <StatCard
+          label="Commission income YTD"
+          big
+          stat={{
+            value: t.incomeYtd,
+            display: t.incomeYtd == null ? undefined : money(t.incomeYtd),
+            source: "live-payprop",
+            note: "Every fee charged, both agencies, net of VAT, from PayProp.",
+          }}
+          sub={diff(t.incomeYtd, t.incomeYtdSheet) ?? closedLabel}
+        />
+        <StatCard
+          label="Gross margin YTD"
+          stat={{
+            value: t.grossMarginYtd,
+            display: t.grossMarginYtd == null ? undefined : `${t.grossMarginYtd.toFixed(1)}%`,
+            source: "derived",
+            note: "Gross profit over commission income, closed months.",
+          }}
+          sub={closedLabel}
+        />
+        <StatCard
+          label={`Full year ${year} outlook`}
+          stat={{
+            value: t.fullYearOutlook,
+            display: t.fullYearOutlook == null ? undefined : money(t.fullYearOutlook),
+            source: "derived",
+            note: "Net profit so far, plus Susan's forecast for this month and every month after it.",
+          }}
+          sub="Actual so far plus the plan"
+        />
+      </div>
+      {t.missingMonths.length ? (
+        <p className="text-[12px] text-red-700">
+          PayProp hasn&rsquo;t answered in full for {t.missingMonths.map(SHORT).join(", ")}, so the year-to-date figures
+          are held back rather than shown short.
+        </p>
+      ) : null}
+
       <section className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold">
-            H2 2026 P&amp;L - Jul to Dec (Jul column editable)
-          </h2>
-          <div className="flex items-center gap-3">
-            <PnlImport
-              month={pnlMonth()}
-              lines={rf.rows}
-              onApplied={(applied) =>
-                setOverrides((prev) => ({ ...prev, ...applied }))
-              }
-            />
-            <SourceBadge source="manual" note={rf.sourceNote} />
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2>{year} Month by Month</h2>
+            <p className="mt-1 text-[12px] text-muted">
+              <Key tone="payprop" /> PayProp, worked out here &nbsp; <Key tone="accounts" /> the accounts &nbsp; <Key tone="sheet" /> Susan&rsquo;s sheet &nbsp;
+              <span className="italic">Italic</span> = a forecast on her sheet
+            </p>
           </div>
+          <PlanUpload year={year} current={data.plan} onSaved={load} />
         </div>
-        {error ? <p className="text-xs text-accent">{error}</p> : null}
-        <div className="card overflow-x-auto">
-          <table className="w-full border-collapse text-[13px]">
+
+        <div className="card overflow-x-auto p-0">
+          <table className="w-full min-w-[1100px] border-collapse text-[12.5px]">
             <thead>
-              <tr>
-                <th className="sticky top-0 z-10 border-b border-line bg-card px-3.5 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  P&amp;L line
-                </th>
-                {rf.months.map((m, i) => (
-                  <th
-                    key={m}
-                    className={`sticky top-0 z-10 border-b border-line bg-card px-3.5 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide ${
-                      i === 0 ? "text-accent" : "text-muted"
-                    }`}
-                  >
-                    {m}
-                    {i === 0 ? " ✎" : ""}
+              <tr className="text-[11px] uppercase tracking-wide text-muted">
+                <th className="sticky left-0 z-10 bg-card px-4 py-3 text-left font-semibold">&nbsp;</th>
+                {data.columns.map((c) => (
+                  <th key={c.month} className="px-2.5 py-3 text-right font-semibold">
+                    <div>{SHORT(c.month)}</div>
+                    <div className={`mt-0.5 text-[9.5px] font-semibold ${c.kind === "mtd" ? "text-accent-dark" : "text-muted/70"}`}>
+                      {c.kind === "actual" ? "Actual" : c.kind === "mtd" ? "So far" : "Plan"}
+                    </div>
                   </th>
                 ))}
-                <th className="sticky top-0 z-10 border-b border-line bg-card px-3.5 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  H2 total
-                </th>
+                <th className="px-4 py-3 text-right font-semibold">Year</th>
               </tr>
             </thead>
             <tbody>
-              {rf.rows.map((row) => {
-                const overridden = overrides[row.key] != null;
-                const julValue = overrides[row.key] ?? row.values[0];
-                const isEditing = editingKey === row.key;
-                const emphasis =
-                  row.key === "totalIncome" ||
-                  row.key === "grossProfit" ||
-                  row.key === "netProfit";
+              {data.rows.map((r, i) => {
+                // A heading where a group starts; comparison rows belong to the row above.
+                const prev = data.rows.slice(0, i).reverse().find((x) => x.group !== "compare");
+                const title = r.group !== "compare" && GROUP_TITLE[r.group] && prev?.group !== r.group ? (GROUP_TITLE[r.group] ?? null) : null;
                 return (
-                  <tr
-                    key={row.key}
-                    className="border-b border-line/60 last:border-b-0 hover:bg-gray-50/60"
-                  >
-                    <td
-                      className={`px-3.5 py-2 ${emphasis ? "font-semibold" : ""}`}
-                    >
-                      {row.label}
-                    </td>
-                    {/* July - editable */}
-                    <td className="px-3.5 py-2 text-right tnum">
-                      {isEditing ? (
-                        <input
-                          autoFocus
-                          type="number"
-                          step="any"
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") void saveEdit(row);
-                            if (e.key === "Escape") setEditingKey(null);
-                          }}
-                          onBlur={() => setEditingKey(null)}
-                          disabled={savingKey === row.key}
-                          className="w-28 rounded-md border border-accent bg-card px-2 py-1 text-right text-[13px] tnum focus:outline-none"
-                        />
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => startEdit(row)}
-                          title="Click to key in the July actual"
-                          className={`inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 tnum hover:bg-accent-soft ${
-                            emphasis ? "font-semibold" : ""
-                          }`}
-                        >
-                          {formatCell(row, julValue)}
-                          {overridden ? (
-                            <span className="rounded-full border border-amber-200 bg-amber-50 px-1 py-px text-[9px] font-semibold text-amber-700">
-                              MANUAL
-                            </span>
-                          ) : null}
-                        </button>
-                      )}
-                    </td>
-                    {/* Aug–Dec - reforecast */}
-                    {row.values.slice(1).map((v, i) => (
-                      <td
-                        key={i}
-                        className={`px-3.5 py-2 text-right tnum ${
-                          emphasis ? "font-semibold" : ""
-                        }`}
-                      >
-                        {formatCell(row, v)}
-                      </td>
-                    ))}
-                    <td
-                      className={`px-3.5 py-2 text-right tnum font-semibold`}
-                    >
-                      {formatCell(row, row.h2Total)}
-                    </td>
-                  </tr>
+                  <Row key={r.key} row={r} columns={data.columns} title={title} />
                 );
               })}
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-muted">
-          {rf.assumptions} · {rf.breakEvenNote}
+        <p className="text-[11.5px] leading-relaxed text-muted">
+          Fees for closed months are PayProp&rsquo;s, net of VAT, never the accounts&rsquo; figure: the accounts sit
+          underneath to read against. Every cost comes from the accountant&rsquo;s P&amp;L where it has been uploaded, and
+          from Susan&rsquo;s sheet for the months after, because the accounts are the only place costs exist. Agent
+          commission included: PayProp only sees partners it pays, and Glasgow&rsquo;s are paid outside it, so what
+          PayProp paid out is shown for comparison but not used. This month&rsquo;s profit is left blank until the
+          month closes - part of a month&rsquo;s income against a whole month&rsquo;s costs is not a result.
+          {data.plan ? ` Last upload ${formatDate(data.plan.importedAt)} by ${data.plan.importedBy}.` : ""}
+          {data.plan?.accountsMonths.length ? ` Accounts cover ${data.plan.accountsMonths.map(SHORT).join(", ")}.` : ""}
         </p>
       </section>
     </div>
+  );
+}
+
+function Key({ tone }: { tone: "payprop" | "sheet" | "accounts" }) {
+  return (
+    <span
+      className={`mr-1 inline-block h-2 w-2 rounded-full align-middle ${tone === "payprop" ? "bg-green-500" : tone === "accounts" ? "bg-[#56423e]" : "bg-amber-400"}`}
+      aria-hidden
+    />
+  );
+}
+
+function Row({ row, columns, title }: { row: PnlRow; columns: PnlColumn[]; title: string | null }) {
+  const compare = row.group === "compare";
+  const strong = row.emphasis;
+  const netRow = row.group === "net";
+  return (
+    <>
+      {title ? (
+        <tr>
+          <td colSpan={columns.length + 2} className="sticky left-0 bg-card px-4 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wide text-muted">
+            {title}
+          </td>
+        </tr>
+      ) : null}
+      <tr className={`${strong ? "border-t border-line" : ""} ${netRow && strong ? "bg-accent-soft/50" : ""}`}>
+        <td
+          className={`sticky left-0 z-10 whitespace-nowrap px-4 py-2 ${netRow && strong ? "bg-[color-mix(in_srgb,var(--accent-soft)_50%,var(--card))]" : "bg-card"} ${
+            compare ? "pl-7 text-[11.5px] text-muted" : strong ? "font-semibold text-ink" : "text-ink"
+          }`}
+        >
+          {row.label}
+        </td>
+        {columns.map((c) => {
+          const cell = row.cells[c.month];
+          const forecast = cell?.source === "sheet" && c.sheetBasis === "forecast";
+          return (
+            <td
+              key={c.month}
+              className={`px-2.5 py-2 text-right tnum ${compare ? "text-[11.5px] text-muted" : strong ? "font-semibold" : ""} ${
+                forecast ? "italic" : ""
+              } ${cell?.value != null && cell.value < 0 && !row.pct ? "text-red-700" : ""}`}
+              title={
+                cell?.source === "payprop"
+                  ? "PayProp, worked out here"
+                  : cell?.source === "accounts"
+                    ? "The accountant's P&L"
+                    : cell?.source === "sheet"
+                    ? forecast
+                      ? "Susan's sheet - forecast"
+                      : "Susan's sheet"
+                    : undefined
+              }
+            >
+              <span className="inline-flex items-center justify-end gap-1">
+                {cell?.source === "payprop" && !compare ? <span className="h-1.5 w-1.5 rounded-full bg-green-500" aria-hidden /> : null}
+                {money(cell?.value ?? null, row.pct)}
+              </span>
+            </td>
+          );
+        })}
+        <td className={`px-4 py-2 text-right tnum ${strong ? "font-semibold" : ""} ${compare ? "text-[11.5px] text-muted" : ""}`}>
+          {row.pct ? "" : money(row.total)}
+        </td>
+      </tr>
+    </>
   );
 }

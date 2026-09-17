@@ -5,7 +5,8 @@ import { listForecasts } from "@/lib/business/forecast-store";
 import { getOverrides } from "@/lib/business/actuals-store";
 import { resolveStat } from "@/lib/business/stats";
 import { currentMonth, daysElapsedFraction, formatGBP } from "@/lib/business/format";
-import { ROSTER, SEED } from "@/lib/business/seed-data";
+import { ROSTER } from "@/lib/business/seed-data";
+import { getAgencyIncome } from "@/lib/business/payprop-income";
 import type { AgentForecast, StatValue, UserProfile } from "@/lib/business/types";
 
 // Admin roll-up: every ACTIVE roster agent joined with their linked portal
@@ -81,17 +82,27 @@ export async function GET(req: NextRequest) {
     agentsTotal: rows.length,
   };
 
-  // Actual MTD - business combined GCI. No live feed (PayProp pending), so:
-  // manual override "income.combinedGci" → July snapshot estimate → unknown.
+  // Actual MTD - combined GCI for the month, net of VAT, from PayProp. It said
+  // "no live feed (PayProp pending)" and fell back to a July snapshot, so
+  // Predicted and Variance were dashes unless somebody typed a number in.
+  // A typed override is used only while PayProp has no answer.
   const gciOverride = overrides.find(
     (o) => o.scope === "business" && o.metric === "income.combinedGci"
   );
-  const snapshotGci = month === "2026-07" ? SEED.income.julyMtd.combinedGci : null;
+  const income = await getAgencyIncome(month).catch(() => null);
+  const liveNet = income?.unreachable?.length ? null : (income as { net?: { combinedGci: number } } | null)?.net?.combinedGci ?? null;
   const actualMtd = resolveStat(
-    null,
+    liveNet != null ? Math.round(liveNet) : null,
     gciOverride ? { value: gciOverride.value, note: gciOverride.note } : null,
-    snapshotGci
+    null,
+    "live-payprop"
   );
+  if (actualMtd.source === "live-payprop") {
+    actualMtd.display = formatGBP(actualMtd.value);
+    actualMtd.note = `Every fee charged in the month so far, both agencies, net of VAT - ${income?.paymentCount ?? 0} PayProp payments.`;
+  } else if (actualMtd.value == null) {
+    actualMtd.note = "PayProp is still gathering this month - try again in a minute.";
+  }
 
   // Predicted month-end = actual MTD ÷ fraction of the month elapsed.
   const fraction = daysElapsedFraction(month);
