@@ -228,6 +228,9 @@ export interface LandlordView {
    * appraisal - nothing does that yet.
    */
   presentation?: import("@/lib/present").PresentDeck | null;
+  /** That deck's token, so reading past its first spread can be recorded
+   *  against this landlord (see /api/landlord/deck-read). */
+  presentationToken?: string | null;
   stage: Stage;
   journey: JourneyStop[];
   property: {
@@ -314,9 +317,23 @@ export function stepsForStage(
     presentationOpened?: boolean;
   } = {}
 ): ViewStep[] {
+  /**
+   * READ FIRST, BUT NEVER HIDDEN (James, 17 Sep 2026).
+   *
+   * "It should always show View Presentation first as the main button. It
+   * should also have, underneath, Sign Contract and Upload Your Compliance
+   * Documents ... as soon as they've gone past the first set of slides, we'll
+   * switch it." So until they have read past the opening spread the deck
+   * leads and the contract sits underneath it; after that the contract leads
+   * and the deck stays underneath. "Read" is THIS landlord turning pages in
+   * their own file - an agent previewing the link no longer counts.
+   */
   const order: Record<Stage, ViewStep["id"][]> = {
     valuation: ["presentation", "message", "compliance", "sign"],
-    instruction: ["presentation", "sign", "questions", "compliance", "message"],
+    instruction:
+      opts.presentationOpened === false
+        ? ["presentation", "sign", "questions", "compliance", "message"]
+        : ["sign", "presentation", "questions", "compliance", "message"],
     /* THE QUESTIONS COME FIRST once the contract is signed. James, 15 Sep
        2026: "once they've signed this, we'll say, Brilliant, signed. Now we
        just need you to answer some questions about your property." They are
@@ -330,8 +347,7 @@ export function stepsForStage(
   };
   /* Held back only where signing is the thing being offered. Once they are
      past instruction the contract is history and the order says so anyway. */
-  const holdSign =
-    opts.presentationOpened === false && (stage === "valuation" || stage === "instruction");
+  const holdSign = opts.presentationOpened === false && stage === "valuation";
 
   /**
    * SIGNED, SO THE DECK COMES OFF TOO.

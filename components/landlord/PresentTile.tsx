@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import DoodleIcon from "@/components/DoodleIcon";
 import PresentModal from "@/components/PresentModal";
@@ -18,6 +19,7 @@ export default function PresentTile({
   variant,
   deck,
   sign,
+  readToken,
   label,
   sub,
   icon,
@@ -28,11 +30,16 @@ export default function PresentTile({
    *  booklet's foot. See PresentModal - the deck's own signUrl is null until a
    *  deck is looked up per landlord, and the portal knows better. */
   sign?: { appraisalId?: string | null; url?: string | null };
+  /** The deck's token: reading past its first spread is recorded, and the
+   *  page re-reads on close so the next step moves on to the contract. */
+  readToken?: string | null;
   label: string;
   sub: string;
   icon: string;
 }) {
   const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const [read, setRead] = useState(false);
   return (
     <>
       {variant === "button" ? (
@@ -59,7 +66,19 @@ export default function PresentTile({
       {/* Portalled to the body: the link form sits inside a <p>, and a
           dialog inside a paragraph is invalid HTML that React refuses to
           hydrate. */}
-      {open && typeof document !== "undefined" && createPortal(<PresentModal deck={deck} sign={sign} onClose={() => setOpen(false)} />, document.body)}
+      {open && typeof document !== "undefined" && createPortal(
+          <PresentModal
+            deck={deck}
+            sign={sign}
+            readToken={readToken ?? null}
+            onRead={() => setRead(true)}
+            onClose={() => {
+              setOpen(false);
+              if (read) router.refresh();
+            }}
+          />,
+          document.body
+        )}
     </>
   );
 }

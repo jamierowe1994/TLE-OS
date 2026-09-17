@@ -165,7 +165,7 @@ export async function loadLandlordHome(me: Me, pick?: string | null) {
   ]);
   const first = me.name.split(/\s+/)[0] || me.name;
   const base = open[0]
-    ? await appraisalView(open[0], first, docs, msgs, offers)
+    ? await appraisalView(open[0], first, docs, msgs, offers, me.id)
     : book[0]
       ? await managedView(book[0], first, compliance.get(book[0].propertyId ?? "") ?? null, offers)
       : null;
@@ -201,10 +201,14 @@ export const REQUIRED_DOCS: Array<{ kind: LandlordDocument["kind"]; title: strin
   { kind: "epc", title: "Energy Performance Certificate (EPC)", missing: "Missing" },
 ];
 
-async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordDocument[], msgs: LandlordMessage[], offers: ViewOffer[] = []): Promise<LandlordView> {
+async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordDocument[], msgs: LandlordMessage[], offers: ViewOffer[] = [], landlordId: string | null = null): Promise<LandlordView> {
   const a = j.appraisal;
   const latest = j.decks[0] ?? null;
   const post = j.decks.find((d) => d.kind === "post-appraisal") ?? null;
+  /* The deck their file shows: the one built after the visit once there is
+     one, which is what we sent them - not whichever deck is newest. */
+  const shown = post ?? latest;
+  const readIt = shown && landlordId ? await deckReadBy(landlordId, shown.token) : false;
   const deckAgent = latest?.deck.agent ?? null;
   const property = latest?.deck.property ?? null;
   const signUrl = post?.deck.terms?.signUrl ?? null;
@@ -225,6 +229,7 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
   const { marketing, viewings } = onMarket ? await marketingFor(a.rexPropertyId) : { marketing: null, viewings: [] as ViewViewing[] };
 
   const deckLabel = latest ? (DECK_KINDS.find((k) => k.id === latest.kind)?.label ?? latest.kind) : null;
+  const shownLabel = shown ? (DECK_KINDS.find((k) => k.id === shown.kind)?.label ?? shown.kind) : null;
 
   const journey: LandlordView["journey"] = STAGES.map((s, i) => ({
     id: s.id,
@@ -301,7 +306,12 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
       lng: geo?.ok ? geo.at.lng : null,
     },
     steps: stepsForStage(stage, {
-      presentation: { id: "presentation", label: "View your presentation", sub: latest ? `${deckLabel}, from ${latest.authorName || agentName || "your agent"}` : "Lands here before the visit", href: latest ? `/present/${latest.token}` : null, icon: "analytics", external: true },
+      /* Opens the booklet IN their file (PresentModal), never the bare
+         /present link - James, 17 Sep 2026: that took them to "an actual
+         version of the property presentation rather than the curated one". */
+      presentation: shown
+        ? { id: "presentation", label: "View your presentation", sub: `${shownLabel}, from ${shown.authorName || agentName || "your agent"}`, href: null, icon: "analytics", action: "presentation" }
+        : { id: "presentation", label: "View your presentation", sub: "Lands here before the visit", href: null, icon: "analytics" },
       /* Signed: off the list. Not yet: the tile opens the signing here. */
       sign: { id: "sign", label: "Sign your contract", sub: a.valuation != null ? "Review and sign your management terms" : "Follows the valuation", href: null, icon: "pencil", action: "sign", done: signed },
       /* The things only they know. Held back until the contract is signed by
@@ -334,8 +344,10 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
          see /api/present/opened - so this is "they read it", not "we sent it".
          Undefined while there is no presentation at all, which leaves the
          tiles exactly as they were. */
-      presentationOpened: latest ? latest.opens > 0 : undefined,
+      presentationOpened: shown ? readIt : undefined,
     }),
+    presentation: shown ? { ...shown.deck, builder: null } : null,
+    presentationToken: shown?.token ?? null,
     documents,
     marketing,
     viewings,
@@ -449,3 +461,13 @@ async function managedView(p: ManagedProperty, first: string, comp: LandlordComp
   };
 }
 
+/** Has this landlord read past the first spread of this deck in their own file? */
+async function deckReadBy(landlordId: string, token: string): Promise<boolean> {
+  const { hasDb, q } = await import("@/lib/db");
+  if (!hasDb()) return false;
+  const rows = await q<{ record_id: string }>(
+    `SELECT record_id FROM os_case_state WHERE kind = 'landlord-deck-read' AND record_id = $1`,
+    [`${landlordId}|${token}`]
+  ).catch(() => []);
+  return rows.length > 0;
+}

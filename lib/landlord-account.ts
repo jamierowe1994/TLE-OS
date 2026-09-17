@@ -566,8 +566,12 @@ export async function landlordJourneys(a: LandlordAccount): Promise<AppraisalJou
   const now = new Date();
   return Promise.all(
     appraisals.map(async (ap) => {
+      /* Under BOTH references. A deck built from a lead is filed under the
+         lead (the builder's refId is leadId ?? id), so reading the appraisal's
+         own id alone found nothing, and the landlord's file had no
+         presentation in it (James, 17 Sep 2026). */
       const [byRef, byToken, signedRows] = await Promise.all([
-        presentationsFor(ap.id),
+        Promise.all([...new Set([ap.id, ap.leadId].filter((r): r is string => Boolean(r)))].map((r) => presentationsFor(r))).then((l) => l.flat()),
         ap.presentToken ? readPresentation(ap.presentToken) : Promise.resolve(null),
         signedFor(ap.id),
       ]);

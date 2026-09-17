@@ -32,6 +32,8 @@ import { BookActionsCtx } from "@/components/PresentBookPages";
 export default function PresentModal({
   deck,
   sign,
+  readToken,
+  onRead,
   onClose,
 }: {
   deck: Deck;
@@ -46,6 +48,9 @@ export default function PresentModal({
    * not have to.
    */
   sign?: { appraisalId?: string | null; url?: string | null };
+  /** Whose reading to record: the deck's token, on the landlord's own portal. */
+  readToken?: string | null;
+  onRead?: () => void;
   onClose: () => void;
 }) {
   const pages = slidesFor(deck).map((s) => s.id);
@@ -165,6 +170,21 @@ export default function PresentModal({
      booklet reports -1 until the cover is turned. */
   const onPage = useCallback((at: number, of: number) => setPage({ at, of }), []);
   const open = page.at >= 0;
+  /* PAST THE FIRST SET OF SLIDES, recorded once (James, 17 Sep 2026): the
+     second spread on a laptop, the third page on a phone. That is what moves
+     their next step from View your presentation to Sign your contract. */
+  const [readSent, setReadSent] = useState(false);
+  useEffect(() => {
+    if (!readToken || readSent || page.at < (phone ? 2 : 1)) return;
+    setReadSent(true);
+    void fetch("/api/landlord/deck-read", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: readToken }),
+    })
+      .then((r) => r.ok && onRead?.())
+      .catch(() => {});
+  }, [readToken, readSent, page.at, phone, onRead]);
   /* The agent's spread: a "Contact" button appears above the booklet while
      it is showing - James, 13 Sep 2026: "the most call-to-action ... not
      affecting the page scroll or anything like that". */

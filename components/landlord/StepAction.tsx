@@ -31,9 +31,14 @@ export const signSource = (v: LandlordView) => ({
   url: v.appraisalId ? null : (v.contractUrl ?? v.steps.find((s) => s.id === "sign")?.href ?? null),
 });
 
-/** The one next step: signing when there is a contract to sign, else the first in the stage's order. */
+/**
+ * The one next step: the first in the stage's order. The order already puts
+ * the presentation ahead of the contract until it has been read, and the
+ * contract ahead once it has (stepsForStage) - picking signing out first
+ * here is what put Sign your contract on top of an unread deck.
+ */
 export function pickHero(v: LandlordView): ViewStep | null {
-  return v.steps.find((s) => s.id === "sign" && ((s.action === "sign" && v.appraisalId) || s.href)) ?? v.steps[0] ?? null;
+  return v.steps[0] ?? null;
 }
 
 /** The big button on the next-step and current-stage cards. */
@@ -50,7 +55,7 @@ export function HeroAction({ s, v, anchorBase = "", label }: { s: ViewStep; v: L
     );
   }
   if (s.action === "presentation" && v.presentation) {
-    return <PresentTile variant="button" deck={v.presentation} sign={signSource(v)} label={text} sub={s.sub} icon={s.icon} />;
+    return <PresentTile variant="button" deck={v.presentation} readToken={v.presentationToken ?? null} sign={signSource(v)} label={text} sub={s.sub} icon={s.icon} />;
   }
   if (s.action === "offers") {
     return <OffersTile v={v} label={text} sub={s.sub} icon={s.icon} variant="button" />;
@@ -79,7 +84,7 @@ export function StepRow({ s, v, anchorBase = "" }: { s: ViewStep; v: LandlordVie
     );
   }
   if (s.action === "presentation" && v.presentation) {
-    return <PresentTile variant="row" deck={v.presentation} sign={signSource(v)} label={s.label} sub={s.sub} icon={s.icon} />;
+    return <PresentTile variant="row" deck={v.presentation} readToken={v.presentationToken ?? null} sign={signSource(v)} label={s.label} sub={s.sub} icon={s.icon} />;
   }
   if (s.action === "offers") {
     return <OffersTile v={v} label={s.label} sub={s.sub} icon={s.icon} variant="row" />;

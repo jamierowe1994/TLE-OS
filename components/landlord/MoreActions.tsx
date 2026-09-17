@@ -91,7 +91,7 @@ function Row({ s, v }: { s: ViewStep; v: LandlordView }) {
   );
 
   if (s.action === "presentation" && v.presentation) {
-    return <PresentTile variant="row" deck={v.presentation} sign={signSource(v)} label={s.label} sub={s.sub} icon={s.icon} />;
+    return <PresentTile variant="row" deck={v.presentation} readToken={v.presentationToken ?? null} sign={signSource(v)} label={s.label} sub={s.sub} icon={s.icon} />;
   }
   if (s.action === "sign" && (v.appraisalId || s.href)) {
     return <SignTile variant="row" appraisalId={v.appraisalId ?? null} url={v.appraisalId ? null : s.href} label={s.label} sub={s.sub} icon={s.icon} />;

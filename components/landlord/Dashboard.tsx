@@ -54,7 +54,15 @@ export default function LandlordDashboard({
   /* Plain links, and the presentation - which acts here (PresentTile) but
      belongs in this list all the same, or "View presentation" vanishes the
      moment the contract becomes the hero. */
-  const others = v.steps.filter((s) => s !== hero && (s.action === "presentation" ? Boolean(v.presentation) : s.href && !s.action));
+  const others = v.steps.filter(
+    (s) =>
+      s !== hero &&
+      (s.action === "presentation"
+        ? Boolean(v.presentation)
+        : s.action === "sign"
+          ? Boolean(v.appraisalId || s.href)
+          : s.href && !s.action)
+  );
   const maintenanceHref = v.steps.find((s) => s.id === "maintenance")?.href ?? "/landlord/maintenance";
   void isLet;
 
@@ -176,7 +184,7 @@ export default function LandlordDashboard({
                   <span>Also:</span>
                   {others.map((s) =>
                     s.action === "presentation" && v.presentation ? (
-                      <PresentTile key={s.id} variant="link" deck={v.presentation} sign={signSource(v)} label={s.label} sub={s.sub} icon={s.icon} />
+                      <PresentTile key={s.id} variant="link" deck={v.presentation} readToken={v.presentationToken ?? null} sign={signSource(v)} label={s.label} sub={s.sub} icon={s.icon} />
                     ) : s.action === "sign" && (v.appraisalId || s.href) ? (
                       /* The "Also:" line too. A contract that opens in a modal
                          from the big button and in a new tab from the small
