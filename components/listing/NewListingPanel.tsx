@@ -116,7 +116,16 @@ export default function NewListingPanel({ onClose, onCreated }: Props) {
           serviceLevel,
         }),
       });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; listingId?: string };
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; listingId?: string; propertyId?: string };
+      /* The address can be made when the listing is then refused. Hold on to
+         it, so trying again adds the listing to that address rather than
+         making a second one (the route returns its id for exactly this). */
+      if (!j.ok && j.propertyId && fresh) {
+        const address = [fresh.streetNumber, fresh.streetName, fresh.town, fresh.postcode].map((x) => x.trim()).filter(Boolean).join(", ");
+        setPicked({ id: j.propertyId, address });
+        setFresh(null);
+        throw new Error(`${j.error ?? "The listing was not created."} The address is saved, so trying again will not add it twice.`);
+      }
       if (!j.ok || !j.listingId) throw new Error(j.error ?? "The listing was not created.");
       onCreated(j.listingId);
     } catch (e) {

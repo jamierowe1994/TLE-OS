@@ -3,6 +3,7 @@ import { autofillListing } from "@/lib/listing-autofill";
 import { readListingDetails } from "@/lib/listing-details";
 import { gateListingWrite } from "@/lib/listing-gate";
 import { rexConfigured } from "@/lib/rex";
+import { forAgent } from "@/lib/agent-words";
 
 /**
  * "Fill it in for me" on the Marketing tab.
@@ -34,6 +35,6 @@ export async function POST(req: NextRequest) {
     const result = await autofillListing(details, { writeCopy: b.copy !== false });
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "The lookup did not finish." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: e instanceof Error ? forAgent(gate.actor, e.message, "The lookup did not finish. Try again in a minute.") : "The lookup did not finish. Try again in a minute." }, { status: 502 });
   }
 }

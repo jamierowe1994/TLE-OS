@@ -3,6 +3,8 @@ import { isExpiredToken, rexCall, rexConfigured, RexWriteBlocked } from "@/lib/r
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { rexTokenFor } from "@/lib/rex-user";
 import { invalidateListingBook } from "@/lib/listings-cache";
+import { whoIs } from "@/lib/admin";
+import { forAgent, isOwner } from "@/lib/agent-words";
 
 /**
  * Save a listing's portal write-up back to REX.
@@ -34,7 +36,7 @@ const MAX_HEADING = 500;
 
 export async function POST(req: NextRequest) {
   if (!rexConfigured()) {
-    return NextResponse.json({ error: "REX isn't connected on this environment." }, { status: 503 });
+    return NextResponse.json({ error: "The listings system isn't connected here." }, { status: 503 });
   }
 
   let payload: { id?: unknown; heading?: unknown; body?: unknown };
@@ -51,7 +53,7 @@ export async function POST(req: NextRequest) {
   const heading = typeof payload.heading === "string" ? payload.heading.trim() : null;
   const body = typeof payload.body === "string" ? payload.body : null;
   if ((heading?.length ?? 0) > MAX_HEADING || (body?.length ?? 0) > MAX_BODY) {
-    return NextResponse.json({ error: "That write-up is longer than REX will take." }, { status: 400 });
+    return NextResponse.json({ error: "That write-up is longer than the listing will take." }, { status: 400 });
   }
 
   try {
@@ -72,11 +74,15 @@ export async function POST(req: NextRequest) {
       // guess at a 502.
       if (actor && isExpiredToken(res)) {
         return NextResponse.json(
-          { error: "Your REX sign-in has lapsed — reconnect it in your profile and try again.", reconnect: true },
+          { error: "Your sign-in to the listings system has lapsed. Reconnect it on your Profile and try again.", reconnect: true },
           { status: 401 }
         );
       }
-      return NextResponse.json({ error: res.error ?? `REX refused the write (${res.status}).` }, { status: 502 });
+      const { actor: who } = await whoIs(req).catch(() => ({ actor: null }));
+      return NextResponse.json(
+        { error: isOwner(who) ? res.error ?? `REX refused the write (${res.status}).` : "The write-up did not save. Try again in a minute." },
+        { status: 502 }
+      );
     }
 
     // Read it straight back rather than trusting the write: REX normalises
@@ -99,16 +105,21 @@ export async function POST(req: NextRequest) {
       body: net?.advert_body ?? null,
     });
   } catch (e) {
+    const { actor: who } = await whoIs(req).catch(() => ({ actor: null }));
     if (e instanceof RexWriteBlocked) {
       return NextResponse.json(
         {
-          error:
-            "Writes to REX are locked on this environment. Set REX_ALLOW_WRITES=\"Listings/update\" to unlock this one call.",
+          error: isOwner(who)
+            ? "Writes to REX are locked on this environment. Set REX_ALLOW_WRITES=\"Listings/update\" to unlock this one call."
+            : "Saving the write-up is not switched on yet.",
           locked: true,
         },
         { status: 423 }
       );
     }
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Save failed." }, { status: 500 });
+    return NextResponse.json(
+      { error: e instanceof Error ? forAgent(who, e.message, "The write-up did not save. Try again in a minute.") : "The write-up did not save. Try again in a minute." },
+      { status: 500 }
+    );
   }
 }

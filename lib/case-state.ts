@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export type CaseKind = "appraisal" | "tenancy-link" | "access";
+export type CaseKind = "appraisal" | "tenancy-link" | "access" | "listing-step";
 
 export type CaseStatus = "loading" | "ready" | "saving" | "saved" | "offline" | "error";
 
@@ -115,7 +115,7 @@ export function saveLabel(status: CaseStatus): string | null {
     case "saved":
       return "Saved";
     case "offline":
-      return "Not saved — no database on this environment";
+      return "Not saved - no database on this environment";
     case "error":
       return "Couldn't save";
     default:

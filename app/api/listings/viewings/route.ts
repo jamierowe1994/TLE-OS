@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { rexConfigured } from "@/lib/rex";
+import { forAgent } from "@/lib/agent-words";
 import { fetchViewingsFor, leadIdsByContact, recordViewings, type Viewing } from "@/lib/rex-viewings";
 
 /**
@@ -33,6 +34,6 @@ export async function GET(req: NextRequest) {
     const past = withLeads.filter((v) => new Date(v.startsAt).getTime() < now);
     return NextResponse.json({ ok: true, live: true, upcoming, past, count: all.length });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "REX didn't answer." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: e instanceof Error ? forAgent(actor, e.message, "The listings system did not answer. Try again in a minute.") : "The listings system did not answer. Try again in a minute." }, { status: 502 });
   }
 }

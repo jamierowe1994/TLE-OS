@@ -6,6 +6,7 @@ import { stampArchive } from "@/lib/listings-archive-view";
 import { setArchive } from "@/lib/listing-archive-store";
 import { archiveOf } from "@/lib/listing-archive";
 import { rexConfigured } from "@/lib/rex";
+import { forAgent } from "@/lib/agent-words";
 
 /**
  * THE ARCHIVE: everything that stopped moving.
@@ -31,7 +32,7 @@ export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   if (!rexConfigured()) {
-    return NextResponse.json({ ok: true, live: false, listings: [], reason: "REX isn't connected on this environment." });
+    return NextResponse.json({ ok: true, live: false, listings: [], reason: "The listings system isn't connected here." });
   }
   const scope = await scopeFor(req);
   if (scope.unlinked) {
@@ -40,7 +41,7 @@ export async function GET(req: NextRequest) {
       live: false,
       listings: [],
       unlinked: true,
-      reason: "We can't tell which REX user you are, so we can't show you your archive.",
+      reason: "We can't tell which agent you are in the listings system, so we can't show you your archive.",
     });
   }
 
@@ -64,8 +65,9 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (e) {
+    const { actor } = await whoIs(req).catch(() => ({ actor: null }));
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Couldn't reach REX." },
+      { ok: false, error: e instanceof Error ? forAgent(actor, e.message, "The listings system did not answer. Try again in a minute.") : "The listings system did not answer. Try again in a minute." },
       { status: 502 }
     );
   }

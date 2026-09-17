@@ -12,7 +12,7 @@ import ListingDrawer from "@/components/ListingDrawer";
 import NewListingPanel from "@/components/listing/NewListingPanel";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { DIARY } from "@/lib/diary";
-import { Readiness, Tag, readiness, statusOf } from "@/components/ListingTags";
+import { Readiness, Tag, boardGaps, readiness, statusOf, type PublishCheck } from "@/components/ListingTags";
 import { ARCHIVE_AFTER_DAYS, archiveLabel, archiveWhy, type ArchiveReason } from "@/lib/listing-archive";
 import rexSample from "@/lib/rex-sample.json";
 
@@ -44,6 +44,9 @@ type SampleListing = {
   availableFrom: string | null;
   epcExpiry: string | null;
   epcRating?: string | null;
+  /** The portal write-up. Absent on the static export. */
+  advertHeading?: string | null;
+  advertBody?: string | null;
   daysOnMarket: number | null;
   /** The day it went live, ISO. Absent on the static fallback, which is why
    *  the date window treats "no date" as never-published rather than as a
@@ -162,8 +165,8 @@ const RENT_BANDS = [
 
 const SORTS = [
   { id: "recent", label: "Most recent" },
-  { id: "rent-low", label: "Rent — low to high" },
-  { id: "rent-high", label: "Rent — high to low" },
+  { id: "rent-low", label: "Rent - low to high" },
+  { id: "rent-high", label: "Rent - high to low" },
 ];
 
 /** The dropdown chip — same grammar as the leads bar. */
@@ -391,7 +394,7 @@ export default function Listings() {
       }
       setBook({ listings: FALLBACK, counts: FALLBACK_COUNTS, live: false, loading: false, reason: j.reason });
     } catch {
-      setBook((b) => ({ ...b, loading: false, reason: "The book didn't answer — showing the last static export." }));
+      setBook((b) => ({ ...b, loading: false, reason: "The book didn't answer - showing the last saved copy." }));
     }
     return false;
   }, []);
@@ -558,19 +561,56 @@ export default function Listings() {
     return rows;
   }, [WORKING, archive.listings, q, sort, rentBand, loc, stage, period]);
 
+  /* ── READY TO PUBLISH, ON THE PUSH ROUTE'S OWN WORD (17 Sep 2026) ───────
+     The book cannot see council tax, bills, furnishing or key features, so a
+     draft that looks complete from here is checked the way the push button
+     checks it before the tile says "Ready to publish". Only those drafts, only
+     once per version of the listing: each check is several calls upstream. */
+  const [checks, setChecks] = useState<Record<string, PublishCheck>>({});
+  const asked = useRef(new Set<string>());
+  useEffect(() => {
+    if (!book.live) return;
+    const want = board
+      .filter((l) => !l.archived && !l.letAgreed && l.publicationStatus !== "published" && boardGaps(l).length === 0)
+      .map((l) => `${l.id}:${l.lastUpdated ?? ""}`)
+      .filter((key) => !asked.current.has(key));
+    if (!want.length) return;
+    want.forEach((key) => asked.current.add(key));
+    setChecks((c) => ({ ...c, ...Object.fromEntries(want.map((key) => [key, "checking" as const])) }));
+    void (async () => {
+      for (let i = 0; i < want.length; i += 24) {
+        const batch = want.slice(i, i + 24);
+        const settled: Record<string, PublishCheck> = {};
+        try {
+          const j = (await fetch(`/api/listings/readiness?ids=${encodeURIComponent(batch.join(","))}`, { cache: "no-store" }).then((r) => r.json())) as {
+            ok?: boolean;
+            results?: Record<string, { gaps?: { label: string }[]; failed?: boolean }>;
+          };
+          for (const key of batch) {
+            const r = j.ok ? j.results?.[key.split(":")[0]] : undefined;
+            settled[key] = r?.gaps ? r.gaps.map((g) => g.label) : "failed";
+          }
+        } catch {
+          for (const key of batch) settled[key] = "failed";
+        }
+        setChecks((c) => ({ ...c, ...settled }));
+      }
+    })();
+  }, [board, book.live]);
+
   return (
     <>
       <PageHeader
         title="Listings"
         blurb={
           book.loading
-            ? "Fetching the rental book from REX…"
+            ? "Fetching the rental book…"
             : book.live
               /* The full unpublished figure still gets said out loud. The Draft
                  tab counts the live ones now, and a page that never admitted
                  the other 144 exist would be hiding them rather than filing
                  them. */
-              ? `Live from REX — ${C.currentRentals} current rentals: ${byStage.Available} available, ${byStage["Let agreed"]} let agreed and ${byStage.Draft} drafts on the go${
+              ? `Live - ${C.currentRentals} current rentals: ${byStage.Available} available, ${byStage["Let agreed"]} let agreed and ${byStage.Draft} drafts on the go${
                   archivedInBook ? `, with ${archivedInBook} older drafts filed away` : ""
                 }.`
               : (book.reason ?? "Manage your properties and their marketing.")
@@ -641,7 +681,7 @@ export default function Listings() {
           /* Last, and deliberately: it is where things go, not where work
              starts. The count grows once the tab is opened and REX's
              withdrawn listings come in with it. */
-          { id: "archived" as const, label: "Archived", icon: "folder", count: archivedKnown, blurb: `${archivedInBook} cold drafts from the book, plus every listing REX holds that came off without a tenant` },
+          { id: "archived" as const, label: "Archived", icon: "folder", count: archivedKnown, blurb: `${archivedInBook} cold drafts from the book, plus every listing that came off without a tenant` },
         ]}
       />
           <div className="ml-auto mt-4">
@@ -680,7 +720,7 @@ export default function Listings() {
             sentence that explains why they are all here. */}
         {stage === "archived" && (
           <p className="mb-4 rounded-2xl border border-line/50 bg-page px-4 py-3 text-[12px] leading-relaxed text-muted">
-            Nothing is deleted and nothing is changed in REX. A draft comes here once it has sat{" "}
+            Nothing is deleted and nothing is changed on the listing. A draft comes here once it has sat{" "}
             {Math.round(ARCHIVE_AFTER_DAYS / 30)} months without being published, and so does any listing
             taken off the market without a tenant. Search still reaches everything in here, and
             <span className="font-semibold text-ink"> Bring back to drafts</span> gives one another{" "}
@@ -700,14 +740,14 @@ export default function Listings() {
           <p className="mb-3 rounded-xl bg-accent-soft px-3.5 py-2.5 text-[12px] font-semibold text-accent-dark">{archiveNote}</p>
         )}
         {stage === "archived" && archive.loading && (
-          <p className="py-6 text-[12.5px] text-muted">Reading the archive - REX holds the withdrawn listings separately, so this one takes a moment…</p>
+          <p className="py-6 text-[12.5px] text-muted">Reading the archive - the withdrawn listings are held separately, so this one takes a moment…</p>
         )}
         {stage === "archived" && archive.error && !archive.loading && (
           <p className="py-6 text-[12.5px] text-accent-dark">{archive.error}</p>
         )}
         {board.length === 0 && !(stage === "archived" && (archive.loading || archive.error)) && (
           <p className="py-6 text-[12.5px] text-muted">
-            Nothing matches{period === "any" ? "" : " in that window"} — widen the rent band or clear the filters.
+            Nothing matches{period === "any" ? "" : " in that window"} - widen the rent band or clear the filters.
           </p>
         )}
         <div className={`cascade ${view === "tiles" ? "grid gap-4 sm:grid-cols-2 xl:grid-cols-3" : "space-y-3"}`}>
@@ -844,7 +884,7 @@ export default function Listings() {
                         {archiveWhy({ archived: true, reason: l.archiveReason ?? null, since: l.archivedSince ?? null, ageDays: l.archiveAgeDays ?? null })}
                       </span>
                     ) : (
-                      <Readiness r={readiness(l)} compact={view === "tiles"} buttonOnly={view !== "tiles"} />
+                      <Readiness r={readiness(l, checks[`${l.id}:${l.lastUpdated ?? ""}`])} compact={view === "tiles"} buttonOnly={view !== "tiles"} />
                     )}
                   </span>
                 </div>
@@ -875,7 +915,7 @@ export default function Listings() {
         {stage === "archived" ? (
           <>
             Showing {board.length} of {archivedKnown} filed away · Nothing here has been deleted, and
-            nothing has been written to REX. The archive is the same book, read a different way.
+            no listing has been changed. The archive is the same book, read a different way.
           </>
         ) : (
           <>

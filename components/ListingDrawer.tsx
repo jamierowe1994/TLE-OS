@@ -74,6 +74,9 @@ export type Listing = {
   name: string;
   locality: string;
   rent: number | null;
+  /** Some rents are quoted weekly. Printing those as "pcm" understates the
+   *  home fourfold, so the period travels with the number. */
+  rentPeriod?: "month" | "week" | null;
   letAgreed: boolean;
   publicationStatus: string | null;
   availableFrom: string | null;
@@ -443,7 +446,11 @@ export default function ListingDrawer({
   }, [listing]);
 
   const [booked, setBooked] = useState<{ when: string; who: string }[]>([]);
-  const [step, setStep] = useState(0);
+  /* WHERE IT'S UP TO, KEPT (17 Sep 2026). The step used to live in this
+     component alone, so "Click a step to move the record" moved nothing: it
+     was back where it started the next time the listing opened. Saved by
+     step id, not number, for the reason listingStartingStep gives. */
+  const [savedStep, saveStep, stepSave] = useCaseState<{ at: string | null }>("listing-step", listing?.id ?? null, { at: null });
   const [handingOver, setHandingOver] = useState(false);
   const [offers, setOffers] = useState<Offer[]>([]);
   /* LIVE, from REX via the OS: the enquiries and the applications on THIS
@@ -629,7 +636,6 @@ export default function ListingDrawer({
     if (!listing) return;
     setTab("home");
     setBooked([]);
-    setStep(listingStartingStep(listing));
     setHandingOver(false);
     setOffers([]); setTopPick(null); setOffering(false); setReviewing(false);
   }, [listing]);
@@ -701,8 +707,21 @@ export default function ListingDrawer({
     .filter((v) => !v.cancelled)
     .map((v) => ({ id: v.id, startsAt: v.startsAt, who: v.contacts.map((c) => c.name).join(", ") || v.title }));
 
+  /* What the rent is quoted per: the listing as read now, else the book's. */
+  const per = /week/i.test(live?.rentPeriod ?? listing.rentPeriod ?? "") ? "per week" : "pcm";
+
+  /* Never behind what the book already knows: a published listing is at
+     viewings at least, a let agreed one at offer accepted, whatever was saved
+     before either happened. */
+  const floor = listingStartingStep(listing);
+  const savedAt = LISTING_TRACK.findIndex((s) => s.id === savedStep.at);
+  const step = Math.max(floor, savedAt);
+  const setStep = (i: number) => {
+    const to = Math.min(Math.max(i, floor), LISTING_TRACK.length - 1);
+    if (to !== step) saveStep({ at: LISTING_TRACK[to].id });
+  };
   const here = LISTING_TRACK[Math.min(step, LISTING_TRACK.length - 1)];
-  const advance = () => setStep((s) => Math.min(s + 1, LISTING_TRACK.length - 1));
+  const advance = () => setStep(step + 1);
 
   // What's already happened here, from the shared diary — same entries the
   // calendar shows, filtered to this property.
@@ -975,7 +994,7 @@ export default function ListingDrawer({
                   <span className="figures text-[28px] leading-none">
                     {listing.rent == null ? "—" : `£${listing.rent.toLocaleString("en-GB")}`}
                   </span>
-                  <span className="text-[12px] text-muted">{listing.rent == null ? "rent not set" : "pcm"}</span>
+                  <span className="text-[12px] text-muted">{listing.rent == null ? "rent not set" : per}</span>
                 </p>
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   <Tag tone={status.tone}>{status.label}</Tag>
@@ -1194,7 +1213,7 @@ export default function ListingDrawer({
               )}
               {landlord.status === "none" && (
                 <p className="mt-4 text-[12.5px] leading-relaxed text-muted">
-                  No landlord is held against this property in REX, so there is nobody to ring or email from here. Adding them to the listing in REX brings them through.
+                  No landlord is held against this property, so there is nobody to ring or email from here. Ask the office to add them to the listing and they will come through.
                 </p>
               )}
               {landlord.status === "problem" && (
@@ -1407,8 +1426,11 @@ export default function ListingDrawer({
                 <h3 className="hand text-[17px]">Where it&apos;s up to</h3>
                 <p className="mt-0.5 text-[12px] text-muted">Track progress through the {LISTING_TRACK.length} steps of a listing. Click a step to move the record.</p>
               </div>
-              <span className="rounded-full px-3 py-1 text-[10.5px] font-semibold uppercase tracking-[0.12em]" style={{ background: SAGE_WASH, color: SAGE_INK }}>
-                Step {Math.min(step, LISTING_TRACK.length - 1) + 1} of {LISTING_TRACK.length}
+              <span className="flex items-center gap-2.5">
+                {saveLabel(stepSave) && <span className="text-[11px] text-muted">{saveLabel(stepSave)}</span>}
+                <span className="rounded-full px-3 py-1 text-[10.5px] font-semibold uppercase tracking-[0.12em]" style={{ background: SAGE_WASH, color: SAGE_INK }}>
+                  Step {Math.min(step, LISTING_TRACK.length - 1) + 1} of {LISTING_TRACK.length}
+                </span>
               </span>
             </div>
             {(() => {
@@ -1448,8 +1470,9 @@ export default function ListingDrawer({
                           <button
                             type="button"
                             onClick={() => setStep(i)}
-                            title={`Move the record to ${st.label}`}
-                            className={`relative z-[1] flex h-[26px] w-[26px] items-center justify-center rounded-full text-[11px] font-semibold transition-transform hover:scale-110 ${
+                            disabled={i < floor}
+                            title={i < floor ? `${listing.letAgreed ? "Already let agreed" : "Already on the portals"}, so it cannot go back to ${st.label}` : `Move the record to ${st.label}`}
+                            className={`relative z-[1] flex h-[26px] w-[26px] items-center justify-center rounded-full text-[11px] font-semibold transition-transform enabled:hover:scale-110 disabled:cursor-default ${
                               done ? "text-white" : cur ? "bg-accent-dark text-white" : "border-[1.5px] border-line/80 bg-white text-muted"
                             }`}
                             style={done ? { background: SAGE_INK } : undefined}
@@ -1627,7 +1650,7 @@ export default function ListingDrawer({
                               {o.tenants.map((t) => t.name).join(" & ")}
                             </span>
                             <span className="figures text-[14px] text-accent-dark">
-                              £{o.rent}<span className="text-[10px] text-muted"> pcm</span>
+                              £{o.rent}<span className="text-[10px] text-muted"> {per}</span>
                             </span>
                           </div>
                           <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted">
@@ -1812,7 +1835,7 @@ export default function ListingDrawer({
             <dl className="mt-5 space-y-2 rounded-2xl border border-line/70 p-4 text-[12.5px]">
               {[
                 ["Property", listing.name],
-                ["Rent agreed", `£${listing.rent?.toLocaleString("en-GB")} pcm`],
+                ["Rent agreed", `£${listing.rent?.toLocaleString("en-GB")} ${per}`],
                 ["Landlord", landlord.status === "known" ? [landlord.landlord.name, landlord.landlord.phone].filter(Boolean).join(" · ") : "Not recorded"],
                 ["Applicant", "From the accepted offer"],
                 ["Available from", listing.availableFrom ?? "Not set"],
@@ -1859,13 +1882,13 @@ export default function ListingDrawer({
             <div className="shrink-0 border-b border-line/70 px-6 py-4">
               <h2 className="text-[19px] leading-tight">Make an offer</h2>
               <p className="mt-0.5 text-[12px] text-muted">
-                {listing.name} · asking £{listing.rent?.toLocaleString("en-GB")} pcm
+                {listing.name} · asking £{listing.rent?.toLocaleString("en-GB")} {per}
               </p>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
               <label className="block">
                 <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  Rent offered, pcm
+                  Rent offered, {per}
                 </span>
                 <span className="flex items-center gap-2 rounded-xl border border-line/80 px-3.5 py-2.5 focus-within:border-ink">
                   <span className="figures text-[14px] text-muted">£</span>
@@ -2055,7 +2078,7 @@ export default function ListingDrawer({
                         {o.tenants.length > 1 ? ` (party of ${o.tenants.length})` : ""}
                       </span>
                       <span className="figures text-[16px] text-accent-dark">
-                        £{o.rent}<span className="text-[10px] text-muted"> pcm</span>
+                        £{o.rent}<span className="text-[10px] text-muted"> {per}</span>
                       </span>
                     </div>
                     {topPick === i && (
