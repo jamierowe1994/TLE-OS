@@ -421,7 +421,7 @@ export const AGENT_GUIDES: Guide[] = [
       },
       {
         title: "Enquiries, Viewings and Applications",
-        body: "Once it is live, the listing gathers what comes in. Applications shows the enquiries from the portals, each with Apply, and the applications made. Viewings shows the viewings booked and done. Viewings themselves are booked from the applicant's lead, which is covered in its own guide.",
+        body: "Once it is live, the listing gathers what comes in. Applications shows the enquiries from the portals and the applications made, and each application opens on the Applications screen. Viewings shows the viewings booked and done. Viewings themselves are booked from the applicant's lead, which is covered in its own guide.",
         image: img("l-live"),
       },
     ],
@@ -451,7 +451,7 @@ export const AGENT_GUIDES: Guide[] = [
       },
       {
         title: "The List",
-        body: "Open applications lists each one with the lead applicant, how many others are on it, the property, the rent, the move-in date and where it stands. The button on the right names the next job, such as Chase the landlord or View progress, and opens the application's file.",
+        body: "Open applications lists each one with the lead applicant, how many others are on it, the property, the rent, the move-in date and where it stands. The button on the right, Open application or View progress, opens the application's file, where the next job is.",
         image: img("a-list"),
         how: "The buttons open the file; they do not send anything. Chasing the landlord is still your call or your email.",
       },
