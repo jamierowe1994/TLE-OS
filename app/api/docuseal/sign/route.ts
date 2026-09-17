@@ -3,7 +3,8 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { getAppraisal, markTermsSent } from "@/lib/appraisal-store";
 import { SERVICE_LEVELS } from "@/lib/market-appraisal";
-import { docusealConfigured, openTermsSigning, feeWording, DocusealBlocked } from "@/lib/docuseal";
+import { docusealConfigured, openTermsSigning, feeWording, DocusealBlocked, archiveTermsFor } from "@/lib/docuseal";
+import { signedFor } from "@/lib/signed-documents";
 
 /**
  * Open a signing session for one appraisal's terms of business.
@@ -55,7 +56,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const body = (await req.json().catch(() => ({}))) as { id?: string };
+  /* replace: Change on Prepare and send (James, 17 Sep 2026) - a typo in the
+     landlord's address, a wrong box - draws the contract up again and
+     archives the one it replaces, so there is only ever one live contract. */
+  const body = (await req.json().catch(() => ({}))) as { id?: string; replace?: boolean };
   const id = (body.id ?? "").trim();
   if (!id) return NextResponse.json({ error: "Which appraisal?" }, { status: 400 });
 
@@ -82,6 +86,13 @@ export async function POST(req: NextRequest) {
   }
 
   const service = SERVICE_LEVELS.find((s) => s.id === ma.serviceLevel);
+
+  if (body.replace && (await signedFor(ma.id)).some((r) => r.completed_at)) {
+    return NextResponse.json(
+      { error: `${ma.landlord} has already signed it, so it can't be changed here.` },
+      { status: 409 }
+    );
+  }
 
   try {
     const fees = feeWording(service?.label ?? ma.serviceLevel, ma.feePct ?? null, ma.setupFee ?? null);
@@ -111,6 +122,7 @@ export async function POST(req: NextRequest) {
 
     /* The spine's "Terms sent" tick reads this. */
     await markTermsSent(ma.id);
+    if (body.replace) await archiveTermsFor(ma.id, session.submissionId).catch(() => 0);
 
     return NextResponse.json({
       ok: true,

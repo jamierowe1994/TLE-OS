@@ -154,7 +154,7 @@ export default function NextUp({
   const ghost =
     "inline-flex items-center gap-2 rounded-full border border-line/70 bg-white px-4 py-2.5 text-[12.5px] font-semibold transition-colors hover:border-ink/40";
 
-  type Card = { icon: string; eyebrow?: string; title: string; sub?: string; body?: React.ReactNode };
+  type Card = { icon: string; eyebrow?: string; title: React.ReactNode; sub?: string; body?: React.ReactNode };
   let card: Card;
 
   if (decks === undefined) {
@@ -255,7 +255,13 @@ export default function NextUp({
        sign ... they would then prepare everything". */
     card = {
       icon: "file-contract",
-      title: "Prepare the presentation and sign",
+      title: (
+        <>
+          Prepare the presentation
+          <br />
+          and sign
+        </>
+      ),
       sub:
         post.opens > 0
           ? `The post-appraisal deck has been opened ${post.opens} time${post.opens === 1 ? "" : "s"}.`
@@ -334,22 +340,23 @@ export default function NextUp({
       <span aria-hidden className="pointer-events-none absolute -bottom-20 -right-14 h-48 w-48 rounded-full" style={{ background: `${SAGE}33` }} />
       <span aria-hidden className="pointer-events-none absolute -bottom-24 right-16 h-44 w-44 rounded-full bg-white/50" />
 
-      {/* Spread down the box rather than stacked at the top of it, and the
-          button in line with the words above it, not out under the icon
-          (James, 17 Sep 2026: "very top-heavy"). */}
-      <div className="relative flex flex-1 items-start gap-3">
+      {/* THE ICON AND "NEXT UP" STAY AT THE TOP; EVERYTHING ELSE SITS IN THE
+          MIDDLE of the room left (James, 17 Sep 2026: "all sit really high or
+          low ... everything else should be middle-aligned"). Indented to line
+          up with the words beside the icon, not out under it. */}
+      <div className="relative flex items-center gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/80" style={{ color: SAGE_INK }}>
           <DoodleIcon name={card.icon} size={16} />
         </span>
-        <div className="flex min-h-full min-w-0 flex-1 flex-col self-stretch pt-0.5">
-          <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em]" style={{ color: SAGE_INK }}>
-            {card.eyebrow ?? "Next up"}
-          </p>
-          <h2 className="hand mt-3 text-[20px] leading-tight">{card.title}</h2>
-          {card.sub && <p className="mt-2 text-[12.5px] leading-relaxed text-muted">{card.sub}</p>}
-          {card.body && <div className="mt-auto pt-5">{card.body}</div>}
-          {error && <p className="mt-2 text-[11.5px] text-accent-dark">{error}</p>}
-        </div>
+        <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em]" style={{ color: SAGE_INK }}>
+          {card.eyebrow ?? "Next up"}
+        </p>
+      </div>
+      <div className="relative flex min-w-0 flex-1 flex-col justify-center py-4 pl-12">
+        <h2 className="hand text-[20px] leading-tight">{card.title}</h2>
+        {card.sub && <p className="mt-2 text-[12.5px] leading-relaxed text-muted">{card.sub}</p>}
+        {card.body && <div className="mt-5">{card.body}</div>}
+        {error && <p className="mt-2 text-[11.5px] text-accent-dark">{error}</p>}
       </div>
     </section>
   );

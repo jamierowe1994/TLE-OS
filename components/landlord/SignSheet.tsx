@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import SignedNext from "@/components/landlord/SignedNext";
 import DocusealEmbed from "@/components/landlord/DocusealEmbed";
 import { LANDLORD_SIGNING, type SigningStep } from "@/lib/signing-steps";
@@ -296,11 +297,17 @@ export default function SignSheet({
       const fc = root.querySelector(".form-container");
       const to = slot.current?.getBoundingClientRect();
       if (fc instanceof HTMLElement && to) {
-        /* Collapsed - their minimise button is hidden but still reachable by
-           keyboard. Press it again rather than leaving a 0x0 box behind. */
+        /* HIDDEN, SO BRING IT BACK - with THEIR expand button (17 Sep 2026).
+           This used to press .minimize-form-button, on the belief that it
+           toggles. It does not: minimizeForm() only ever hides the panel and
+           puts a "Sign now" bar at the foot instead - the brown bar James saw
+           poking out from behind the paper, with the column empty and the
+           "at the foot of the contract" note showing. Read off their form.js. */
         if (fc.offsetWidth === 0 || fc.offsetHeight === 0) {
-          const mini = root.querySelector(".minimize-form-button");
-          if (mini instanceof HTMLElement) mini.click();
+          const expand = root.querySelector("#expand_form_button, .expand-form-button");
+          if (expand instanceof HTMLElement) expand.click();
+          raf = window.requestAnimationFrame(tick);
+          return;
         }
         const now = fc.getBoundingClientRect();
         const onSlot =
@@ -428,6 +435,10 @@ export default function SignSheet({
   return (
     <div className="relative flex w-full justify-center" style={{ height: tall }} onClick={onClose}>
       {done && appraisalId && <SignedNext appraisalId={appraisalId} />}
+      {/* The agent's own half: said in the middle of the screen, with one
+          button (James, 17 Sep 2026 - he pressed the X thinking he was done,
+          and it had not saved). */}
+      {done && !appraisalId && <AgentSigned onDone={onDone} />}
       <div
         className="relative"
         style={{
@@ -492,19 +503,22 @@ export default function SignSheet({
           </button>
         )}
 
-        {/* Close floats over the paper - nothing takes a strip off the top of
-            the contract. */}
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="absolute top-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/85 text-muted shadow-sm backdrop-blur transition hover:text-ink"
-          style={{ left: paperW - 52 }}
-        >
-          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
-          </svg>
-        </button>
+        {/* Close floats over the paper until signing starts; once the column
+            is up it moves beside "What you need to sign", out of the contract's
+            way (James, 17 Sep 2026). */}
+        {!(split && started) && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute top-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/85 text-muted shadow-sm backdrop-blur transition hover:text-ink"
+            style={{ left: paperW - 52 }}
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        )}
 
         {/* THE FOOT. One button, and it is the only thing asked of them until
             they press it. */}
@@ -532,9 +546,14 @@ export default function SignSheet({
               {/* The way back is offered before they start as well as after.
                   Reading a contract and deciding not to sign it today is a
                   perfectly good outcome and should not need the Escape key. */}
-              <button type="button" onClick={onClose} className="shrink-0 text-[12px] text-muted underline transition hover:text-ink">
-                {closeLabel}
-              </button>
+              {/* No "Finish later" down here any more (James, 17 Sep 2026) -
+                  the X is the way out. Kept only where there is no X beside
+                  the column to find: the presentation's "Back" label. */}
+              {closeLabel !== "Finish later" && (
+                <button type="button" onClick={onClose} className="shrink-0 text-[12px] text-muted underline transition hover:text-ink">
+                  {closeLabel}
+                </button>
+              )}
               {/* No column on a smaller screen, so the skip lives here. */}
               {started && currentOptional && !split && (
                 <button
@@ -573,7 +592,20 @@ export default function SignSheet({
             aria-hidden={!started}
           >
             <div ref={list} className="bg-white px-5 py-4">
-              <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">What you need to sign</p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">What you need to sign</p>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Close"
+                  title="Close - nothing is saved until the last step"
+                  className="-mr-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-black/5 hover:text-ink"
+                >
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
+                  </svg>
+                </button>
+              </div>
               {rows.length === 0 ? (
                 <p className="mt-3 text-[12.5px] leading-relaxed text-muted">
                   Opening your boxes&hellip; they will appear on the contract as well.
@@ -658,5 +690,48 @@ export default function SignSheet({
         )}
       </div>
     </div>
+  );
+}
+
+/** "You finished the contract" - the agent's side, over everything. */
+function AgentSigned({ onDone }: { onDone: () => void }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-[#2b201d]/60 p-4 backdrop-blur-sm"
+      style={{ animation: "agent-signed-in 280ms ease-out both" }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <style>{`
+        @keyframes agent-signed-in { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes agent-signed-card { from { opacity: 0; transform: translateY(14px) scale(.98) } to { opacity: 1; transform: none } }
+      `}</style>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="You finished the contract"
+        className="w-full max-w-[440px] rounded-[28px] bg-white p-8 text-center shadow-2xl"
+        style={{ animation: "agent-signed-card 420ms cubic-bezier(.2,.9,.3,1.1) 60ms both" }}
+      >
+        <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-accent-dark text-white">
+          <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={2.8} aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 12.5l4.5 4.5L19 7.5" />
+          </svg>
+        </span>
+        <h2 className="mt-5 text-[28px] leading-tight">Congratulations, You Finished the Contract</h2>
+        <p className="mt-3 text-[14px] leading-relaxed text-muted">Your half is signed and saved. Next, send it to the landlord.</p>
+        <button
+          type="button"
+          onClick={onDone}
+          autoFocus
+          className="mt-7 w-full rounded-full bg-accent-dark px-6 py-4 text-[15px] font-semibold text-white transition-opacity hover:opacity-90"
+        >
+          Done
+        </button>
+      </div>
+    </div>,
+    document.body
   );
 }

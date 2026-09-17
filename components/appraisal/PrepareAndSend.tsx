@@ -121,10 +121,10 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
     if (of > 0 && at >= of - 1) setRead(true);
   }, []);
 
-  async function openSigning() {
+  async function openSigning(replace = false) {
     if (busy) return;
     setError(null);
-    if (agent?.embedSrc) return setSigning(agent.embedSrc);
+    if (agent?.embedSrc && !replace) return setSigning(agent.embedSrc);
     setBusy("sign");
     try {
       /* No contract yet: this is what draws it up, with the figure and the fee
@@ -132,7 +132,7 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
       const r = await fetch("/api/docuseal/sign", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: ma.id }),
+        body: JSON.stringify({ id: ma.id, replace }),
       });
       const j = (await r.json()) as { ok?: boolean; embedSrc?: string; error?: string };
       if (j.ok && j.embedSrc) setSigning(j.embedSrc);
@@ -290,12 +290,29 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
             signed,
             "Sign your half",
             signed ? (
-              <p className="text-[12px] leading-relaxed text-muted">Signed on {day(agent!.completedAt)}.</p>
+              <div className="flex items-start gap-3">
+                <p className="min-w-0 flex-1 text-[12px] leading-relaxed text-muted">
+                  Signed on {day(agent!.completedAt)}.
+                  {gone ? " Change it and their file opens the new one - nothing to send again." : " Spotted a mistake? Change draws it up again for you to sign."}
+                </p>
+                {/* A typo in the landlord's address, a wrong box: draw it up
+                    again (James, 17 Sep 2026). The old one is archived. */}
+                {!landlord?.completedAt && (
+                  <button
+                    type="button"
+                    onClick={() => void openSigning(true)}
+                    disabled={busy === "sign"}
+                    className="shrink-0 rounded-full border border-line/80 px-4 py-2 text-[12px] font-semibold transition-colors hover:border-ink/40 disabled:opacity-60"
+                  >
+                    {busy === "sign" ? "Drawing it up…" : "Change"}
+                  </button>
+                )}
+              </div>
             ) : (
               <div>
                 <button
                   type="button"
-                  onClick={openSigning}
+                  onClick={() => void openSigning()}
                   disabled={busy === "sign"}
                   className="rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white disabled:opacity-60"
                 >

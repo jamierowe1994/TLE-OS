@@ -596,11 +596,11 @@ export async function findLandlordSigning(externalId: string): Promise<SigningSe
  * left behind was found again and the file read "signed" before anything had
  * been sent (James, 17 Sep 2026). DocuSeal's DELETE archives; nothing is lost.
  */
-export async function archiveTermsFor(externalId: string): Promise<number> {
+export async function archiveTermsFor(externalId: string, keepSubmissionId?: number | null): Promise<number> {
   const raw = await ds<{ data?: Array<{ submission_id?: number }> }>(
     `/submitters?external_id=${encodeURIComponent(externalId)}&limit=50`
   ).catch(() => null);
-  const ids = [...new Set((raw?.data ?? []).map((r) => r.submission_id).filter((x): x is number => typeof x === "number"))];
+  const ids = [...new Set((raw?.data ?? []).map((r) => r.submission_id).filter((x): x is number => typeof x === "number" && x !== keepSubmissionId))];
   let n = 0;
   for (const id of ids) {
     const ok = await ds(`/submissions/${id}`, { method: "DELETE" }).then(() => true).catch(() => false);

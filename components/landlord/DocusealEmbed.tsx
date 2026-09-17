@@ -197,6 +197,8 @@ export default function DocusealEmbed({
       /* Walks them field to field rather than leaving them to hunt down twelve
          pages for the next box. */
       el.setAttribute("data-autoscroll-fields", "true");
+      /* Their panel open, never minimised - SignSheet places it in the column. */
+      el.setAttribute("data-expand", "true");
       el.setAttribute("data-custom-css", CUSTOM_CSS);
       el.setAttribute("data-completed-message-title", "That is signed, thank you.");
       el.setAttribute("data-completed-message-body", "Your copy is on its way to your file. You can close this.");
