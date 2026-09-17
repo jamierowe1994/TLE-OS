@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { bugShot } from "@/lib/pilot";
-import { BotRefused, cronAuthorised, record, takeQueue, type BotState } from "@/lib/bug-bot";
+import { BotRefused, cronAuthorised, listToFix, record, takeQueue, type BotState } from "@/lib/bug-bot";
 import { publicOrigin } from "@/lib/origin";
 
 /**
@@ -8,6 +8,7 @@ import { publicOrigin } from "@/lib/origin";
  *
  * GET  ?limit=3     → takes up to that many open bugs off the queue
  * GET  ?shot=<id>   → the screenshot for one, as a data URL
+ * GET  ?list=to_fix → the bot's list: diagnosed, not yet fixed
  * POST { id, state, note, branch, pr } → what the bot concluded
  */
 
@@ -18,6 +19,7 @@ export async function GET(req: NextRequest) {
   if (!cronAuthorised(req)) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   const shot = req.nextUrl.searchParams.get("shot");
   if (shot) return NextResponse.json({ ok: true, shot: await bugShot(shot) });
+  if (req.nextUrl.searchParams.get("list") === "to_fix") return NextResponse.json({ ok: true, bugs: await listToFix() });
   const limit = Number(req.nextUrl.searchParams.get("limit") ?? 3) || 3;
   return NextResponse.json({ ok: true, bugs: await takeQueue(limit) });
 }

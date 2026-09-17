@@ -27,10 +27,20 @@ import { isInternalAddress } from "@/lib/email-policy";
  * ever stores the bot's words and a link, behind the cron key.
  *
  * Ideas are not on the queue: an idea is a decision, not a fault.
+ *
+ * ── It makes a list now, it does not fix (James, 17 Sep 2026) ──────────────
+ *
+ * Preparing a fix meant worktrees, commits, pushes and pull requests, and an
+ * unattended run stopped on a permission prompt at nearly every one of them -
+ * "stuck in the middle space where it finds them, tries to do it, but it
+ * can't". So the bot reads the code, finds the cause and records `to_fix`: a
+ * plain note with the cause and the fix it would make. James works down that
+ * list (listToFix) in a session of his own. fix_ready stays valid so the
+ * tickets recorded before today still read correctly.
  */
 
-export type BotState = "" | "looking" | "fix_ready" | "needs_you" | "not_a_bug";
-export const BOT_STATES: BotState[] = ["", "looking", "fix_ready", "needs_you", "not_a_bug"];
+export type BotState = "" | "looking" | "to_fix" | "fix_ready" | "needs_you" | "not_a_bug";
+export const BOT_STATES: BotState[] = ["", "looking", "to_fix", "fix_ready", "needs_you", "not_a_bug"];
 
 /** A run that died mid-bug leaves it "looking"; after this long it goes back on the queue. */
 const STALE_HOURS = 3;
@@ -90,6 +100,38 @@ export async function takeQueue(limit = 3): Promise<QueuedBug[]> {
   }));
 }
 
+export interface ListedBug {
+  id: string;
+  body: string;
+  path: string;
+  occurrences: number;
+  lastSeenAt: string;
+  note: string;
+  foundAt: string | null;
+}
+
+/** The bot's list: every open bug it has diagnosed and nobody has fixed yet, newest first. */
+export async function listToFix(): Promise<ListedBug[]> {
+  if (!hasDb()) return [];
+  const rows = await q<{
+    id: string; body: string; path: string; occurrences: number | null;
+    created_at: Date; last_seen_at: Date | null; bot_note: string; bot_at: Date | null;
+  }>(
+    `SELECT id, body, path, occurrences, created_at, last_seen_at, bot_note, bot_at FROM os_bugs
+      WHERE state IN ('open','ack') AND bot_state = 'to_fix'
+      ORDER BY coalesce(last_seen_at, created_at) DESC`
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    body: r.body,
+    path: r.path,
+    occurrences: r.occurrences ?? 1,
+    lastSeenAt: new Date(r.last_seen_at ?? r.created_at).toISOString(),
+    note: r.bot_note,
+    foundAt: r.bot_at ? new Date(r.bot_at).toISOString() : null,
+  }));
+}
+
 export class BotRefused extends Error {}
 
 /**
@@ -135,7 +177,7 @@ export async function record(
   if (p.state === "fix_ready" && (!note || !/^https:\/\/github\.com\//.test(pr))) {
     throw new BotRefused("A fix needs a note saying what broke and why, and the GitHub link to the change.");
   }
-  if ((p.state === "needs_you" || p.state === "not_a_bug") && !note) {
+  if ((p.state === "to_fix" || p.state === "needs_you" || p.state === "not_a_bug") && !note) {
     throw new BotRefused("Say why, in a sentence James can act on.");
   }
 
@@ -151,7 +193,9 @@ export async function record(
     [id, p.state, note, (p.branch ?? "").trim().slice(0, 200), pr.slice(0, 300)]
   );
 
-  /* One email per fix, not per run: a bot re-recording the same fix is quiet. */
+  /* One email per fix, not per run: a bot re-recording the same fix is quiet.
+     A to_fix is not emailed at all - it joins the list on Pre-launch, and a
+     mail per line of a list is the noise the list exists to replace. */
   const emailed: string[] = [];
   if ((p.state === "fix_ready" || p.state === "needs_you") && !(wasReady && p.state === "fix_ready")) {
     const reported = rows[0].body.length > 300 ? `${rows[0].body.slice(0, 300)}…` : rows[0].body;
