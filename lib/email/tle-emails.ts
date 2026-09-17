@@ -627,10 +627,12 @@ export const TLE_EMAILS: CatalogEntry[] = [
       blocksAs("landlord")(
         withSample(o ?? LANDLORD_CONTRACT_PACK, {
           firstName: "Helen",
-          address: "12 Chorlton Road, Manchester M15 4AZ",
+          address: "12 Chorlton Road",
           rent: "£1,300",
-          serviceLevel: "Fully Managed",
+          serviceLevel: "Fully managed",
+          serviceLine: "a fully managed service",
           agentName: "Rhiannon Dodge",
+          agentFirst: "Rhiannon",
           deckLink: `${SITE}/present/example`,
           link: `${SITE}/landlord/enter?token=example`,
         })

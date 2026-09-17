@@ -902,38 +902,31 @@ export const INSPECTION_LANDLORD_REPORT = {
  * (read what you are agreeing to, then agree to it).
  */
 export const LANDLORD_CONTRACT_PACK = {
-  subject: "Your presentation and your contract for {{address}}",
-  preheader: "Everything from your appraisal in one place, ready when you are.",
+  subject: "Your presentation and contract for {{address}}",
+  preheader: "Everything from your appraisal in one place.",
   mode: "blocks",
   blocks: [
     H("lcp1", "Thank you for having us round"),
+    /* James, 17 Sep 2026: one short note, the four things as a list, the
+       contract mentioned at the end rather than a section of its own. The
+       first line of the address only - the whole thing, postcode and all,
+       read like a form. */
     T(
       "lcp2",
-      "Hi {{firstName}},<br><br>Thank you for showing {{agentName}} round <strong>{{address}}</strong>. As promised, here is everything from the visit in one place."
+      "Hi {{firstName}},<br><br>Thank you for showing {{agentName}} round <strong>{{address}}</strong>. As promised, everything you need is in one place:"
     ),
-    SP("lcp3", 8),
-    H2("lcp4", "Your presentation"),
     T(
-      "lcp5",
-      "Our figure of <strong>{{rent}} a month</strong>, the homes nearby we based it on, and how we would let and look after yours on <strong>{{serviceLevel}}</strong>."
+      "lcp3",
+      "<span style=\"display:block;padding-left:16px;text-indent:-16px\"><span style=\"display:inline-block;width:16px;text-indent:0\">&bull;</span>your presentation</span><span style=\"display:block;padding-left:16px;text-indent:-16px\"><span style=\"display:inline-block;width:16px;text-indent:0\">&bull;</span>our figure of <strong>{{rent}} a month</strong></span><span style=\"display:block;padding-left:16px;text-indent:-16px\"><span style=\"display:inline-block;width:16px;text-indent:0\">&bull;</span>the homes nearby we based it on</span><span style=\"display:block;padding-left:16px;text-indent:-16px\"><span style=\"display:inline-block;width:16px;text-indent:0\">&bull;</span>how we would let and manage your property on {{serviceLine}}</span>"
     ),
-    BTN("lcp6", "View your presentation", "{{deckLink}}"),
-    SP("lcp7", 8),
-    DIV("lcp8"),
-    H2("lcp9", "Your contract"),
+    BTN("lcp4", "View your presentation", "{{deckLink}}"),
+    SP("lcp5", 8),
     T(
-      "lcp10",
-      "Your terms of business are filled in with the figures we talked through, and {{agentName}} has already signed their half. When you have read the presentation and you are happy, sign yours from your property file. It takes about two minutes."
+      "lcp6",
+      "You will also find the contract in <a href=\"{{link}}\" style=\"color:inherit;text-decoration:underline\">your property file</a> for you to look through. Let {{agentFirst}} know if you have any questions - just reply to this email."
     ),
-    BTN("lcp11", "Open your property file", "{{link}}"),
-    T(
-      "lcp12",
-      "That button signs you straight in. It works once and lasts 24 hours; after that, ask for a fresh link from the sign-in page and it brings you back to the same place."
-    ),
-    SP("lcp13", 8),
-    T("lcp14", "Any questions at all, just reply to this email and it comes straight to {{agentName}}."),
-    T("lcp15", "The Letting Experts"),
-    FOOT("lcp16", "You're getting this because you had a market appraisal with The Letting Experts."),
+    T("lcp7", "The Letting Experts"),
+    FOOT("lcp8", "You're getting this because you had a market appraisal with The Letting Experts."),
   ],
   branding: { showSignoff: false },
 } as const;

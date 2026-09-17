@@ -91,13 +91,18 @@ export async function sendContractPack(p: {
   await upsertLandlordAccount(match);
   const { token } = await startVerification(to, "landlord");
 
-  const service = SERVICE_LEVELS.find((s) => s.id === ma.serviceLevel)?.label ?? "the service we discussed";
+  const level = SERVICE_LEVELS.find((s) => s.id === ma.serviceLevel)?.label;
+  const agentName = me.name || ma.agent || "Your agent";
   const { subject, html } = renderTleEmail("landlord-contract-pack", {
     firstName: ma.landlord.trim().split(/\s+/)[0] || "there",
-    address: [ma.address, ma.postcode].filter((x) => x && !ma.address.includes(x)).join(", ") || ma.address,
+    /* The first line only (James, 17 Sep 2026). The old join dropped the
+       address itself and left the postcode: "for EX226LE". */
+    address: ma.address.split(",")[0].trim() || ma.address,
     rent: money(ma.valuation),
-    serviceLevel: service,
-    agentName: me.name || ma.agent || "Your agent",
+    serviceLevel: level ?? "the service we discussed",
+    serviceLine: level ? `a ${level.toLowerCase()} service` : "the service we discussed",
+    agentName,
+    agentFirst: agentName.split(/\s+/)[0] || agentName,
     deckLink: `${origin}/present/${post.token}`,
     link: `${origin}/landlord/enter?token=${encodeURIComponent(token)}`,
   });
