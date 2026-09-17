@@ -483,14 +483,6 @@ function AgentHouse({ deck, show }: { deck: Deck; show: boolean }) {
         </Rise>
         <Rise show={show} i={3}>
           <div className="mt-7 flex flex-wrap items-center gap-3">
-            {welcomeReady(deck.welcomeVideo) && (
-              <WelcomeVideoButton
-                video={deck.welcomeVideo}
-                firstName={first}
-                className="flex items-center gap-2.5 rounded-[12px] px-6 py-3.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90"
-                style={{ background: "#3b3b3c" }}
-              />
-            )}
             {a.phone && (
               <a href={`tel:${tel}`} className="flex items-center gap-2.5 rounded-[12px] px-6 py-3.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90" style={{ background: "var(--p-accent)" }}>
                 <Line name="phone" size={16} />
@@ -502,6 +494,15 @@ function AgentHouse({ deck, show }: { deck: Deck; show: boolean }) {
                 <Line name="mail" size={16} />
                 Email {first || "us"}
               </a>
+            )}
+            {/* Right beside Email: the agent's own recorded introduction. */}
+            {welcomeReady(deck.welcomeVideo) && (
+              <WelcomeVideoButton
+                video={deck.welcomeVideo}
+                firstName={first}
+                className="flex items-center gap-2.5 rounded-[12px] px-6 py-3.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ background: "#3b3b3c" }}
+              />
             )}
             {a.phone && (
               <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" aria-label="WhatsApp" title="WhatsApp" className="flex h-12 w-12 items-center justify-center rounded-full transition-colors hover:bg-black/10" style={{ background: "#f1f4ec", color: "#56634a" }}>

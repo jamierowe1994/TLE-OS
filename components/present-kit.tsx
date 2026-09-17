@@ -1031,7 +1031,7 @@ export function WelcomeVideoPlayer({ video, name, onClose }: { video: DeckWelcom
   );
 }
 
-/** The button, for a row of buttons: "Watch James's welcome · 0:16". */
+/** The button, beside Email James: "James made you a video · 0:16" (James, 17 Sep 2026). */
 export function WelcomeVideoButton({ video, firstName, className, style }: { video: DeckWelcomeVideo & { embedUrl: string }; firstName: string; className?: string; style?: React.CSSProperties }) {
   const [open, setOpen] = React.useState(false);
   const who = firstName || "your agent";
@@ -1041,7 +1041,7 @@ export function WelcomeVideoButton({ video, firstName, className, style }: { vid
         <svg viewBox="0 0 24 24" aria-hidden className="h-[16px] w-[16px]" fill="currentColor">
           <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z" />
         </svg>
-        Watch {who}&rsquo;s welcome{video.durationSecs ? <span className="opacity-70">· {clock(video.durationSecs)}</span> : null}
+        {firstName ? `${firstName} made you a video` : "A video from your agent"}{video.durationSecs ? <span className="opacity-70">· {clock(video.durationSecs)}</span> : null}
       </button>
       {open && <WelcomeVideoPlayer video={video} name={who} onClose={() => setOpen(false)} />}
     </>
