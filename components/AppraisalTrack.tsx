@@ -15,6 +15,7 @@ import {
   type AppraisalInvite,
 } from "@/lib/appraisal-email";
 import EmailPopout from "@/components/EmailPopout";
+import ConfirmSheet from "@/components/ConfirmSheet";
 import SendHandoff from "@/components/SendHandoff";
 import WelcomeVideoRecorder from "@/components/WelcomeVideoRecorder";
 import VideoChaseControl from "@/components/VideoChaseControl";
@@ -298,6 +299,7 @@ export default function AppraisalTrack({
    * The id is derivable: booking POSTs `leadId: lead.id` and the store keys the
    * appraisal `lead-<leadId>`, so the lead this panel is on names it exactly.
    */
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const appraisalId = recordId ? `lead-${recordId}` : null;
   const [figure, setFigure] = useState<{ valuation: number | null; feePct: number | null } | null>(
     null
@@ -682,8 +684,12 @@ export default function AppraisalTrack({
                       body="Short, and in writing while the call is still warm. The detail has its own email nearer the time."
                       done={Boolean(c.confirmationSentAt)}
                       doneLabel="Sent"
-                      onClick={() => invite && setComposing("confirm")}
-                      disabled={!invite}
+                      /* The same sheet, and the same record of what went, as
+                         the appraisal file (17 Sep 2026). Two send buttons
+                         that knew nothing of each other were how a landlord
+                         could be confirmed twice. */
+                      onClick={() => (appraisalId ? setConfirmOpen(true) : invite && setComposing("confirm"))}
+                      disabled={!invite && !appraisalId}
                     />
                     <Choice
                       icon="calendar"
@@ -1097,6 +1103,15 @@ export default function AppraisalTrack({
           setComposing("pre");
         }}
       />
+
+      {confirmOpen && appraisalId && (
+        <ConfirmSheet
+          title="Confirm the appraisal"
+          target={{ kind: "appraisal", id: appraisalId }}
+          onClose={() => setConfirmOpen(false)}
+          onSent={() => patch({ confirmationSentAt: new Date().toISOString(), state: "pre" })}
+        />
+      )}
 
       {composing && invite && (
         <EmailPopout

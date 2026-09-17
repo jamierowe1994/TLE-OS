@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { putViewingInRexDiary } from "@/lib/rex-diary-write";
 import { putInOutlook } from "@/lib/outlook-calendar";
-import { sendViewingConfirmations } from "@/lib/viewing-confirm";
-import { publicOrigin } from "@/lib/origin";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 
 /**
@@ -12,7 +10,9 @@ import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view
  *
  *   1. the agent's own Outlook calendar (lib/outlook-calendar) - their diary
  *   2. REX's diary, as the silent mirror (lib/rex-diary-write) - REX sends nothing
- *   3. our confirmations to the applicant and the agent (lib/viewing-confirm)
+ *
+ * It does NOT email the applicant (17 Sep 2026). The agent is shown the
+ * confirmation next, can rewrite it, and sends it through /api/confirmations.
  *
  * Body: { leadId, listingId, contactId, applicantName, applicantEmail, address, startsAt, minutes }.
  * Answers with what happened at each, in words, for the lead's row. Never while
@@ -72,21 +72,8 @@ export async function POST(req: NextRequest) {
     unaccompanied,
   }).catch(() => ({ ok: false as const, reason: "refused" as const, detail: "Could not reach REX." }));
 
-  const confirm = await sendViewingConfirmations({
-    me: actor,
-    applicant: { name: applicantName, email: b.applicantEmail ?? null },
-    address,
-    startsAt: b.startsAt,
-    minutes,
-    origin: publicOrigin(req),
-    inAgentsCalendar: outlook.ok,
-    unaccompanied,
-  });
-
-  const said = [
-    outlook.ok ? "In your Outlook calendar." : outlook.detail,
-    confirm.applicant.detail,
-    rex.ok ? "Copied to REX." : `Not copied to REX: ${rex.detail}`,
-  ].filter(Boolean).join(" ");
-  return NextResponse.json({ ok: true, said, outlook, rex, confirm });
+  /* For the agent's row: their diary and the email. The REX mirror is in the
+     response for owners, never in the words an agent reads. */
+  const said = [outlook.ok ? "In your Outlook calendar." : outlook.detail, "Confirmation not sent yet."].filter(Boolean).join(" ");
+  return NextResponse.json({ ok: true, said, outlook, rex });
 }

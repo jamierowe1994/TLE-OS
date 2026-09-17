@@ -7,6 +7,7 @@ import GuideButton from "@/components/GuideButton";
 import RexPropertyPicker from "@/components/RexPropertyPicker";
 import PropertyFile from "@/components/PropertyFile";
 import VideoChaseControl from "@/components/VideoChaseControl";
+import ConfirmLine from "@/components/appraisal/ConfirmLine";
 import AppraisalOutcome from "@/components/AppraisalOutcome";
 import WelcomeVideoRecorder from "@/components/WelcomeVideoRecorder";
 import NextUp, { SAGE_INK, SAGE_WASH, type SentDeck } from "@/components/appraisal/NextUp";
@@ -315,6 +316,8 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
               pre-appraisal deck is scheduled from the appointment.
             </p>
           )}
+          {/* The landlord's confirmation: sent from here, never on booking. */}
+          {when && !past && <ConfirmLine appraisalId={ma.id} appointmentAt={ma.appointmentAt!} />}
           {/* The video nudge, while there is still time for one. */}
           {(live === "booked" || live === "pre_appraisal") && (
             <div className="mt-auto border-t border-line/50 pt-3.5">

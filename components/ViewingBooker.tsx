@@ -1274,8 +1274,9 @@ export default function ViewingBooker({
               </p>
               {!toLandlord && !VIEWING_SENDS_LIVE && chosen && (
                 <div className="mt-6 w-full max-w-md rounded-2xl border border-line/60 bg-card p-4 text-left">
-                  {/* The booking route sends the confirmation itself (lib/viewing-confirm),
-                      from the agent's mailbox where it is connected. This box used to
+                  {/* Since 17 Sep 2026 the booking sends nothing: the lead opens the
+                      confirmation for the agent to read, edit and send (ConfirmSheet).
+                      Before that the booking route sent it itself. This box used to
                       say sending was not on yet and to confirm from Outlook, which on
                       live meant a second confirmation (16 Sep 2026). What actually went
                       is written on the lead's activity once the booking returns. */}
@@ -1291,7 +1292,7 @@ export default function ViewingBooker({
                   </p>
                   {chosen.email ? (
                     <p className="mt-2 text-[11.5px] text-muted">
-                      Sent for you, with a calendar invite and their tenant passport link. No need to confirm it again. The lead shows it once it has gone.
+                      Not sent yet. The email opens next, with a calendar invite and their tenant passport link: read it, change anything, then send it. Nothing goes until you do.
                     </p>
                   ) : null}
                 </div>

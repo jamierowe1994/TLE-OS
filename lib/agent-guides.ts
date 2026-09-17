@@ -156,7 +156,7 @@ export const AGENT_GUIDES: Guide[] = [
         image: img("ma-book"),
         why: "An appraisal booked without a date shows on the board as needing a time, and that becomes the chase. Book the date whenever you have it.",
         sends:
-          "Booked from a lead, the landlord receives a confirmation email with a calendar invite, from your own mailbox, headed 'Confirmed - your market appraisal' with the time. Booked from this screen, nothing is emailed, because there is no address to send it to, and the panel tells you so.",
+          "Nothing goes when you book. The appraisal file opens on the landlord's confirmation, headed 'Confirmed - your market appraisal' with the time and a calendar invite, from your own mailbox. Read it, change any of the words, and press Send, or Not now. The appointment card then says whether it has gone, and if you move the time it offers to send the new one.",
       },
       {
         title: "The Appraisal File",
@@ -256,7 +256,7 @@ export const AGENT_GUIDES: Guide[] = [
     cover: img("v-screen"),
     coverCaption: "Viewings: your day, the week around it, and what is still owed feedback.",
     intro:
-      "A viewing is the moment a lead becomes a likely tenant, and most of what happens around it now happens for you. You book it from the applicant's lead in a few clicks. It goes into your Outlook calendar, the applicant gets their confirmation and a head start on their application, and afterwards the feedback you record is kept together, property by property, ready for the landlord. This is how it fits together.",
+      "A viewing is the moment a lead becomes a likely tenant, and most of what happens around it now happens for you. You book it from the applicant's lead in a few clicks. It goes into your Outlook calendar, you check the applicant's confirmation and send it, with a head start on their application, and afterwards the feedback you record is kept together, property by property, ready for the landlord. This is how it fits together.",
     steps: [
       {
         title: "Where a Viewing Is Booked",
@@ -284,12 +284,12 @@ export const AGENT_GUIDES: Guide[] = [
       },
       {
         title: "What Happens When You Press Book It",
-        body: "Book it does three things at once. The viewing goes into your Outlook calendar, with the address and the applicant, and a reminder thirty minutes before. The applicant is sent their confirmation. And you are sent a short note of what was booked. The lead's activity then records what went, so you can see at a glance that the confirmation left.",
+        body: "Book it does three things at once. The viewing goes into your Outlook calendar, with the address and the applicant, and a reminder thirty minutes before. Then the applicant's confirmation opens, exactly as they will get it. Click into any of it to change the words, and press Send, or Not now. Nothing goes until you press Send, and the lead's activity shows whether it has gone, with Send confirmation if it has not.",
         image: img("v-email"),
         caption: "The confirmation the applicant receives, shown here on sample details.",
-        why: "The confirmation is sent for you, so there is no need to confirm from Outlook as well. Two confirmations with slightly different wording is how applicants turn up at the wrong time.",
+        why: "Send it from here rather than from Outlook. It carries the calendar invite and the passport link, and the OS remembers it went, so the same viewing is never confirmed twice by accident.",
         sends:
-          "To the applicant: 'Your viewing is booked. Next, your tenant passport', with the address, the time, a calendar invite, and a link to start their tenant passport. It comes from your own mailbox where that is connected, or from The Letting Experts where it is not, and either way their reply comes straight to you. To you: 'Viewing booked' with the address and time. Nothing goes to the landlord, and there are no texts yet. If the lead has no email address, nothing can be sent, so ring them.",
+          "When you press Send, to the applicant: 'Your viewing is booked. Next, your tenant passport', with the address, the time, a calendar invite, and a link to start their tenant passport. It comes from your own mailbox where that is connected, or from The Letting Experts where it is not, and either way their reply comes straight to you. To you: 'Viewing booked' with the address and time. Nothing goes to the landlord, and there are no texts yet. If the lead has no email address, nothing can be sent, so ring them.",
       },
       {
         title: "Your Day on Viewings",

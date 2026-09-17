@@ -6,9 +6,14 @@ import { renderPlain } from "@/lib/campaign-mail";
 import { sendAsAgent } from "@/lib/send-as-agent";
 import type { MarketAppraisal } from "@/lib/market-appraisal";
 import type { OsUser } from "@/lib/users";
+import { cleanEmailHtml, hasMoved, isRepeat, lastSent, recordSent, sentWords } from "@/lib/confirmations";
 
 /**
- * The booking confirmation, sent the moment an appraisal is booked.
+ * The booking confirmation for an appraisal.
+ *
+ * NO LONGER SENT ON BOOKING (17 Sep 2026). The agent sees it, can rewrite it,
+ * and sends it (lib/confirmations, components/ConfirmSheet). What follows is
+ * the history of why it was wired at all.
  *
  * James, 6 Sep 2026: the confirmation email and the calendar invite to the
  * landlord "are not connected" - the words and the .ics have existed since
@@ -36,6 +41,8 @@ export interface ConfirmationResult {
   sent: boolean;
   to?: string;
   reason?: string;
+  /** Refused because this exact appointment was already confirmed. */
+  alreadySent?: boolean;
 }
 
 const PROFILE_KEY = "tle-profile-v1";
@@ -77,19 +84,85 @@ export function inviteFor(ma: MarketAppraisal, agent: { name: string; phone: str
   };
 }
 
-export async function sendBookingConfirmation(input: { ma: MarketAppraisal; me: OsUser }): Promise<ConfirmationResult> {
-  const { ma, me } = input;
-  if (!ma.appointmentAt) return { sent: false, reason: "No time booked yet, so nothing to confirm." };
+/** What the agent is shown before the confirmation goes: everything, editable. */
+export interface ConfirmationDraft {
+  ok: true;
+  to: string | null;
+  toName: string;
+  subject: string;
+  html: string;
+  /** Why nothing can go, when nothing can. */
+  blocked?: string;
+  /** The same appointment, at the same time, has already been confirmed. */
+  alreadySent?: { at: string; to: string; subject: string };
+  /** Confirmed before at another time, so this one says it has moved. */
+  moved?: { from: string };
+  attachment: string | null;
+}
 
+const recordKey = (ma: MarketAppraisal) => `appraisal|${ma.id}`;
+
+async function prepare(ma: MarketAppraisal, me: OsUser) {
   /* The landlord's address is derived from the contact on read, never stored
      on the appraisal - so read it back. */
   const full = (await getAppraisal(ma.id).catch(() => null)) ?? ma;
+  const invite = inviteFor(full, { name: me.name || "The Letting Experts", phone: await phoneOf(me.id) });
+  const prev = await lastSent(recordKey(full));
+  const moved = hasMoved(prev, full.appointmentAt);
+  let subject = confirmSubjectFor(invite);
+  let text = confirmBodyFor(invite);
+  if (moved) {
+    /* A second "Confirmed" with a different time and nothing else reads as
+       two appointments. Say it moved. Wording for James to approve. */
+    subject = subject.replace(/^Confirmed - /, "Moved - ");
+    text = text.replace("Thanks for booking in. Putting this in writing so you have it:", "Your market appraisal has moved. Here are the new details, so you have them in writing:");
+  }
+  return { full, invite, prev, moved, subject, text };
+}
+
+export async function draftBookingConfirmation(input: { ma: MarketAppraisal; me: OsUser }): Promise<ConfirmationDraft> {
+  const { full, prev, moved, subject, text } = await prepare(input.ma, input.me);
+  const to = (full.landlordEmail ?? "").trim();
+  return {
+    ok: true,
+    to: to.includes("@") ? to : null,
+    toName: full.landlord,
+    subject,
+    html: renderPlain(subject, text).html,
+    blocked: !full.appointmentAt
+      ? "There is no time on this appraisal, so there is nothing to confirm yet."
+      : !to.includes("@")
+        ? "The landlord has no email address on the file, so this cannot go. Ring them, or add their email."
+        : undefined,
+    alreadySent: prev && isRepeat(prev, full.appointmentAt) ? { at: prev.sentAt, to: prev.to, subject: prev.subject } : undefined,
+    moved: moved && prev?.startsAt ? { from: prev.startsAt } : undefined,
+    attachment: full.appointmentAt ? "market-appraisal.ics" : null,
+  };
+}
+
+/**
+ * Send it. With `subject` and `html` it sends the agent's edit; without, the
+ * template as it stands (lib/test-kits). The same appointment at the same time
+ * is refused unless `again` says the agent means it.
+ */
+export async function sendBookingConfirmation(input: {
+  ma: MarketAppraisal;
+  me: OsUser;
+  subject?: string;
+  html?: string;
+  again?: boolean;
+}): Promise<ConfirmationResult> {
+  const { me } = input;
+  const { full, invite, prev, subject: templSubject, text } = await prepare(input.ma, me);
+  if (!full.appointmentAt) return { sent: false, reason: "No time booked yet, so nothing to confirm." };
   const to = (full.landlordEmail ?? "").trim();
   if (!to.includes("@")) return { sent: false, reason: "The landlord has no email address on their record." };
+  if (isRepeat(prev, full.appointmentAt) && !input.again) {
+    return { sent: false, to, reason: `Already sent to ${prev!.to} on ${sentWords(prev!.sentAt)}.`, alreadySent: true };
+  }
 
-  const invite = inviteFor(full, { name: me.name || "The Letting Experts", phone: await phoneOf(me.id) });
-  const subject = confirmSubjectFor(invite);
-  const text = confirmBodyFor(invite);
+  const subject = (input.subject ?? "").trim() || templSubject;
+  const html = input.html ? cleanEmailHtml(input.html) : renderPlain(subject, text).html;
   const ics = icsFor(invite, new Date().toISOString());
 
   /* From the agent's own Outlook where that is armed, our sender otherwise:
@@ -100,13 +173,14 @@ export async function sendBookingConfirmation(input: { ma: MarketAppraisal; me: 
     to,
     toName: full.landlord,
     subject,
-    html: renderPlain(subject, text).html,
+    html,
     attachments: ics
       ? [{ filename: "market-appraisal.ics", content: Buffer.from(ics, "utf8").toString("base64"), contentType: "text/calendar" }]
       : undefined,
   });
   if (!out.sent) return { sent: false, to, reason: out.detail };
 
+  await recordSent(recordKey(full), { sentAt: new Date().toISOString(), startsAt: full.appointmentAt, to, subject, by: me.email });
   await markConfirmed(full.leadId, me.email);
   return { sent: true, to };
 }
