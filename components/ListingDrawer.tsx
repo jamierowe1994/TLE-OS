@@ -1221,7 +1221,7 @@ export default function ListingDrawer({
                   { icon: "target", title: enquiries === null ? "Reading the enquiries…" : `${enquiries.length} enquir${enquiries.length === 1 ? "y" : "ies"}`, sub: "From the portals, on this listing", to: "applications" as TabKey },
                   { icon: "calendar", title: viewings === null ? "Reading the diary…" : `${viewings.upcoming.length + booked.length} booked · ${viewings.past.length} done`, sub: "Viewings", to: "viewings" as TabKey },
                   { icon: "coin", title: liveApps === null ? "Reading the applications…" : `${(liveApps?.length ?? 0) + offers.length} application${(liveApps?.length ?? 0) + offers.length === 1 ? "" : "s"}`, sub: liveApps?.some((a) => /accept/i.test(a.statusLabel)) ? "One accepted" : "None accepted yet", to: "applications" as TabKey },
-                  { icon: "folder", title: `${listing.imageCount} photo${listing.imageCount === 1 ? "" : "s"} on file`, sub: listing.daysOnMarket != null ? `${listing.daysOnMarket} days on the market` : "Not published yet", to: "marketing" as TabKey },
+                  { icon: "folder", title: `${listing.imageCount} photo${listing.imageCount === 1 ? "" : "s"} on file`, sub: listing.daysOnMarket != null ? `${listing.daysOnMarket} day${listing.daysOnMarket === 1 ? "" : "s"} on the market` : "Not published yet", to: "marketing" as TabKey },
                 ].map((g) => (
                   <li key={g.sub + g.title}>
                     <button type="button" onClick={() => setTab(g.to)} className="flex w-full items-start gap-3 text-left">
