@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
+import TestFilesTab from "@/components/testing/TestFilesTab";
 import {
   JOURNEYS,
   KITS,
@@ -209,7 +210,7 @@ export default function TestingPage() {
   const [data, setData] = useState<Payload | null>(null);
   const [kits, setKits] = useState<KitRun[]>([]);
   const [fresh, setFresh] = useState<Record<string, KitRun>>({});
-  const [scope, setScope] = useState<"core" | "all">("core");
+  const [scope, setScope] = useState<"core" | "all" | "files">("core");
   const [leftOnly, setLeftOnly] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   const [note, setNote] = useState<Record<string, string>>({});
@@ -383,6 +384,7 @@ export default function TestingPage() {
             [
               ["core", "Core for launch"],
               ["all", "Everything"],
+              ["files", "Test files"],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -399,20 +401,28 @@ export default function TestingPage() {
             </button>
           ))}
         </div>
+        {scope !== "files" && (
         <label className="flex items-center gap-2 text-[12.5px] text-muted">
           <input id="testing-left-only" type="checkbox" checked={leftOnly} onChange={(e) => setLeftOnly(e.target.checked)} />
           Only what is left to test
         </label>
+        )}
+        {scope !== "files" && (
         <span className="ml-auto flex items-center gap-4 text-[12px] text-muted">
           <span className="tabular-nums">
             {tested} of {testable} tested
           </span>
           <Dots counts={total} />
         </span>
+        )}
       </div>
 
       {error && <p className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[12.5px] text-rose-900">{error}</p>}
 
+      {scope === "files" ? (
+        <TestFilesTab />
+      ) : (
+      <>
       {!data && !error && <p className="mb-4 text-[12.5px] text-muted">Reading the marks…</p>}
 
       <Found runs={data?.runs ?? []} journeys={journeys} onOpen={setOpen} />
@@ -641,6 +651,8 @@ export default function TestingPage() {
           );
         })}
       </div>
+      </>
+      )}
     </>
   );
 }

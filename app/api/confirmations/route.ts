@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
-import { getAppraisal } from "@/lib/appraisal-store";
+import { appraisalIdForLead, getAppraisal } from "@/lib/appraisal-store";
+import type { MarketAppraisal } from "@/lib/market-appraisal";
 import { draftBookingConfirmation, sendBookingConfirmation } from "@/lib/appraisal-confirm";
 import { draftViewingConfirmation, sendViewingConfirmation, viewingKey, type ViewingBooking } from "@/lib/viewing-confirm";
 import { publicOrigin } from "@/lib/origin";
@@ -30,6 +31,9 @@ type Body = {
     leadId?: string; listingId?: string | number | null; applicantName?: string; applicantEmail?: string | null;
     address?: string; startsAt?: string; minutes?: number; unaccompanied?: boolean;
   };
+  /** An appraisal being booked, before it is saved: the booker's email column. */
+  appraisal?: { leadId?: string; landlord?: string; email?: string | null; address?: string; startsAt?: string; minutes?: number };
+  minutes?: number;
   subject?: string;
   html?: string;
   again?: boolean;
@@ -63,11 +67,28 @@ export async function POST(req: NextRequest) {
   const origin = publicOrigin(req);
 
   try {
+    if (body.kind === "appraisal" && body.action !== "send" && body.appraisal) {
+      const a = body.appraisal;
+      if (!a.leadId || !a.startsAt || Number.isNaN(new Date(a.startsAt).getTime())) {
+        return NextResponse.json({ ok: false, error: "Which appraisal, and when?" }, { status: 400 });
+      }
+      const pending = {
+        id: appraisalIdForLead(a.leadId),
+        leadId: a.leadId,
+        landlord: (a.landlord ?? "").trim() || "there",
+        address: (a.address ?? "").trim() || "your property",
+        postcode: "",
+        appointmentAt: a.startsAt,
+        landlordEmail: (a.email ?? "").trim() || null,
+      } as unknown as MarketAppraisal;
+      return NextResponse.json(await draftBookingConfirmation({ ma: pending, me: actor, minutes: Number(a.minutes) || undefined, unsaved: true }));
+    }
+
     if (body.kind === "appraisal") {
       const ma = body.id ? await getAppraisal(body.id).catch(() => null) : null;
       if (!ma) return NextResponse.json({ ok: false, error: "That appraisal isn't here any more." }, { status: 404 });
       if (body.action === "send") {
-        const r = await sendBookingConfirmation({ ma, me: actor, subject: body.subject, html: body.html, again: body.again === true });
+        const r = await sendBookingConfirmation({ ma, me: actor, subject: body.subject, html: body.html, again: body.again === true, minutes: Number(body.minutes) || undefined });
         return NextResponse.json({ ok: r.sent, sent: r.sent, alreadySent: r.alreadySent ?? false, detail: r.sent ? `Sent to ${r.to}.` : r.reason });
       }
       return NextResponse.json(await draftBookingConfirmation({ ma, me: actor }));

@@ -780,6 +780,8 @@ export default function LeadDrawer({
   const [personName, setPersonName] = useState("");
   /** What happened to the last edit — saved, saved-but-not-mirrored, or failed. */
   const [sync, setSync] = useState<{ busy: boolean; text: string; bad?: boolean } | null>(null);
+  /** Set by the first save, so a slow read-back on open cannot undo it. */
+  const editedRef = useRef(false);
   // Properties attached in-session, plus the tick that confirms one landed.
   const [added, setAdded] = useState<string[]>([]);
   const [justAdded, setJustAdded] = useState(false);
@@ -934,6 +936,26 @@ export default function LeadDrawer({
     setContact({ phone: lead.phone, email: lead.email, area: lead.preferred });
     setPersonName(lead.name);
     setSync(null);
+    editedRef.current = false;
+    /* The board's copy of this person can be older than the last save - the
+       list is cached - so an OS record reads itself back on open. Without it
+       an address changed a minute ago came back as the old one (James,
+       17 Sep 2026). A save made before this lands wins. */
+    if (!isOsLead(lead.id)) return;
+    let live = true;
+    fetch(`/api/contacts/${osContactIdFrom(lead.id)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { contact?: { name?: string; email?: string; mobile?: string; address?: string; postcode?: string } }) => {
+        const c = j?.contact;
+        if (!live || !c || editedRef.current) return;
+        const address = (c.address ?? "").trim();
+        const pc = (c.postcode ?? "").trim();
+        const area = address && pc && !address.replace(/\s/g, "").toUpperCase().includes(pc.replace(/\s/g, "").toUpperCase()) ? `${address}, ${pc}` : address;
+        setContact({ phone: c.mobile ?? "", email: c.email ?? "", area: area || lead.preferred });
+        if (c.name) setPersonName(c.name);
+      })
+      .catch(() => { /* the board's copy stands */ });
+    return () => { live = false; };
   }, [lead]);
 
   /* ── Saving an edit, for people the OS owns ───────────────────────────────
@@ -948,6 +970,7 @@ export default function LeadDrawer({
 
   async function saveField(patch: Record<string, string>) {
     if (!lead || !ours) return;
+    editedRef.current = true;
     setSync({ busy: true, text: "Saving…" });
     try {
       const r = await fetch(`/api/contacts/${osContactIdFrom(lead.id)}`, {
@@ -963,12 +986,13 @@ export default function LeadDrawer({
       /* Saved here is the fact that matters; the mirror is reported after it,
          and a mirror that failed must not read as a failed save. */
       setSync(
-        j.sync?.ok
+        /* Not in REX yet (or never, for a test) is not a failed save. */
+        j.sync?.ok || (j.sync as { reason?: string } | undefined)?.reason === "not_in_rex"
           ? { busy: false, text: "Saved" }
           : { busy: false, text: `Saved here. ${j.sync?.detail ?? "Not backed up."}`, bad: true }
       );
     } catch {
-      setSync({ busy: false, text: "That didn't save — the connection dropped.", bad: true });
+      setSync({ busy: false, text: "That didn't save - the connection dropped.", bad: true });
     }
   }
 
@@ -1234,6 +1258,42 @@ export default function LeadDrawer({
       setFilling(false);
     }
   }
+  /**
+   * The landlord's address IS the property on a landlord lead (James,
+   * 17 Sep 2026: "if I change the address on a property, the property address
+   * doesn't stick"). It saved to the contact, but the heading, the lookups and
+   * the appraisal read the property facts first - and once the wand had filled
+   * those, a changed address changed nothing else. So the edit carries to the
+   * property: the same place (same postcode) keeps its facts, a different one
+   * starts clean so last house's bedrooms and photo are not shown against it.
+   */
+  function landlordAddress(v: string) {
+    const next = v.trim();
+    const shown = real(contact.area) || propAddress;
+    if (!next || next === shown) return;
+    setContact((c) => ({ ...c, area: next }));
+    const pcOf = (s?: string | null) => (s ?? "").match(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i)?.[0]?.toUpperCase().replace(/\s+/g, "") ?? "";
+    const pc = next.match(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i)?.[0]?.toUpperCase() ?? null;
+    void saveField({ address: next, ...(pc ? { postcode: pc } : {}) });
+    if (real(prop.address)) {
+      const samePlace = Boolean(pcOf(prop.address)) && pcOf(prop.address) === pcOf(next);
+      changeProp(samePlace ? { ...prop, address: next } : { ...EMPTY_PROPERTY, address: next, postcode: pc });
+      if (!samePlace) setFillNote("A new address, so the old property details were cleared. Press the wand to find this one.");
+    }
+  }
+
+  /* Said under the details, where the edit was made: saving, then Saved. */
+  const saveLine = ours && sync ? (
+    <p className={`mt-2 flex items-center gap-1.5 text-[11px] ${sync.bad ? "text-accent-dark" : "text-muted"}`} aria-live="polite">
+      {sync.busy ? (
+        <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+      ) : !sync.bad ? (
+        <span aria-hidden className="text-[#1e7a3c]">✓</span>
+      ) : null}
+      {sync.text}
+    </p>
+  ) : null;
+
   const pickRex = (h: { id: string; address: string; image: string | null }) => {
     changeProp({ ...prop, rexPropertyId: h.id, address: h.address, image: h.image ?? prop.image, matched: "rex" });
     setNearMisses([]);
@@ -2081,12 +2141,14 @@ export default function LeadDrawer({
                         copyable
                         address
                         onChange={(v) => {
+                          if (v === contact.area) return;
                           setContact((c) => ({ ...c, area: v }));
                           const pc = v.match(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i)?.[0];
                           void saveField({ address: v, ...(pc ? { postcode: pc.toUpperCase() } : {}) });
                         }}
                       />
                     </div>
+                    {saveLine}
                     {passport?.done && passport.summary && (
                       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-line/50 pt-3 text-[12px]">
                         {([
@@ -2275,13 +2337,10 @@ export default function LeadDrawer({
                         value={real(contact.area) || propAddress}
                         copyable
                         address
-                        onChange={(v) => {
-                          setContact((c) => ({ ...c, area: v }));
-                          const pc = v.match(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i)?.[0];
-                          void saveField({ address: v, ...(pc ? { postcode: pc.toUpperCase() } : {}) });
-                        }}
+                        onChange={(v) => landlordAddress(v)}
                       />
                     </div>
+                    {saveLine}
                   </section>
 
                   {/* The property: the facts, and the wand that fills them in. */}
@@ -2860,6 +2919,7 @@ export default function LeadDrawer({
            reads the rest of the live book itself. No sample rows. */
         properties={bookMode === "viewing" ? shortlist : (shortlist.length ? shortlist : LISTINGS.slice(0, 4))}
         firstId={lead.listingId != null ? String(lead.listingId) : null}
+        leadId={lead.id}
         /* Whose diary the grid shows. An unassigned lead is being booked by
            whoever is looking at it, not by a name typed into the source in
            August. */
@@ -2895,11 +2955,12 @@ export default function LeadDrawer({
              REX. Now /api/viewings/book puts it in the agent's Outlook, copies
              it to REX silently, and sends OUR confirmations to the applicant
              and the agent. The row says what actually happened. */
+          const said: string[] = [];
           if (bookMode === "viewing" && v.startsAt) {
             const confirm = {
               leadId: lead.id,
               listingId: v.listingId,
-              applicantName: lead.name,
+              applicantName: personName || lead.name,
               applicantEmail: contact.email || lead.email || null,
               address: v.property,
               startsAt: v.startsAt,
@@ -2907,20 +2968,29 @@ export default function LeadDrawer({
               unaccompanied: Boolean(v.unaccompanied),
             };
             setBooked((cur) => cur.map((b) => (b.id === bookedId ? { ...b, confirm } : b)));
-            fetch("/api/viewings/book", {
+            const j = await fetch("/api/viewings/book", {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ ...confirm, contactId: lead.contactId ?? null }),
             })
-              .then((r) => r.json())
-              .then((j: { ok?: boolean; said?: string }) => {
-                setBooked((cur) => cur.map((b) => (b.id === bookedId ? { ...b, rex: j.said ?? "Booked." } : b)));
-                /* Booked, so now the email - shown, never sent behind their back. */
-                if (j.ok) setConfirming({ id: bookedId, when: v.when, property: v.property, locality: v.locality, outcome: "Booked", confirm });
-              })
-              .catch(() => {
-                setBooked((cur) => cur.map((b) => (b.id === bookedId ? { ...b, rex: "Couldn't reach the server: check your calendar and tell the applicant yourself." } : b)));
-              });
+              .then((r) => r.json() as Promise<{ ok?: boolean; outlook?: { ok?: boolean; detail?: string } }>)
+              .catch(() => null);
+            said.push(!j ? "Couldn't reach the server: check your calendar and tell the applicant yourself." : j.outlook?.ok ? "In your Outlook calendar." : (j.outlook?.detail ?? "Booked."));
+            /* The confirmation, as the agent left it in the booker's email
+               column - or nothing, if they unticked it (17 Sep 2026). */
+            let confirmed: string | undefined;
+            if (j?.ok && v.confirmation?.send) {
+              const c = await fetch("/api/confirmations", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ action: "send", kind: "viewing", booking: confirm, subject: v.confirmation.subject, html: v.confirmation.html, again: v.confirmation.again }),
+              }).then((r) => r.json() as Promise<{ sent?: boolean; detail?: string; error?: string }>).catch(() => null);
+              said.push(c?.sent ? `Confirmation sent. ${c.detail ?? ""}`.trim() : `The confirmation did not send: ${c?.detail ?? c?.error ?? "the connection dropped"}. Send it from the lead.`);
+              if (c?.sent) confirmed = `Confirmation sent. ${c.detail ?? ""}`.trim();
+            } else if (j?.ok) {
+              said.push("No confirmation sent. Send it from the lead when you are ready.");
+            }
+            setBooked((cur) => cur.map((b) => (b.id === bookedId ? { ...b, rex: said[0], ...(confirmed ? { confirmed } : {}) } : b)));
           }
           /* The appraisal remembers its own appointment. Without this the
              landlord's confirmation had no date to state and no calendar file
@@ -2971,13 +3041,16 @@ export default function LeadDrawer({
              navigation would leave the agent staring at a lead drawer with no
              idea whether anything happened; landing on Market Appraisals with
              the row missing is at least a visible, reportable problem. */
-          if (here.action === "appraise") {
-            await fetch("/api/appraisals", {
+          /* FROM ANY STEP (17 Sep 2026). This used to run only while the
+             lead's track was on "book an appraisal", so the Book an appraisal
+             button at the top of a new lead booked nothing at all. */
+          if (bookMode === "appraisal") {
+            const res = await fetch("/api/appraisals", {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({
                 leadId: lead.id,
-                landlord: lead.name,
+                landlord: personName || lead.name,
                 /* The lead's area is what the booker used as the address, so
                    the appraisal states the same place the landlord was just
                    told about. "—" is the list's empty marker and must never
@@ -2986,19 +3059,33 @@ export default function LeadDrawer({
                   contact.area && contact.area !== "—"
                     ? contact.area
                     : lead.preferred || lead.area,
-                /* A lead has no postcode field — it is an enquiry, not a
-                   property yet. The appraisal carries an empty one until the
-                   take-on fills it in, rather than inventing one from the
-                   area. */
                 postcode: "",
                 agent: lead.agent === "Unassigned" ? null : lead.agent,
                 appointmentAt: v.startsAt,
               }),
-            }).catch(() => {});
-            onClose();
-            /* confirm=1: the file opens on the landlord's confirmation, to read and send. */
-            router.push(`${handoverTarget(`lead-${lead.id}`)}&confirm=1`);
+            })
+              .then((r) => r.json() as Promise<{ appraisal?: { id?: string }; outlook?: { ok?: boolean; detail?: string }; error?: string }>)
+              .catch(() => null);
+            const id = res?.appraisal?.id;
+            if (!id) return { said: `The appraisal did not save: ${res?.error ?? "the connection dropped"}. Try again.` };
+            said.push(res?.outlook?.ok ? "In your Outlook calendar." : (res?.outlook?.detail ?? "Booked."));
+            if (v.confirmation?.send) {
+              const c = await fetch("/api/confirmations", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ action: "send", kind: "appraisal", id, subject: v.confirmation.subject, html: v.confirmation.html, again: v.confirmation.again, minutes: v.minutes }),
+              }).then((r) => r.json() as Promise<{ sent?: boolean; detail?: string; error?: string }>).catch(() => null);
+              said.push(c?.sent ? `Confirmation sent. ${c.detail ?? ""}`.trim() : `The confirmation did not send: ${c?.detail ?? c?.error ?? "the connection dropped"}. Send it from the appraisal.`);
+            } else {
+              said.push("No confirmation sent. Send it from the appraisal when you are ready.");
+            }
+            /* Not a jump. The agent is asked, and stays if they say no. */
+            return {
+              said: said.join(" "),
+              goTo: { ask: "This lead will now appear on Market Appraisals. Do you want to go there now?", label: "Go to Market Appraisals", href: handoverTarget(`lead-${lead.id}`) },
+            };
           }
+          return said.length ? { said: said.join(" ") } : undefined;
         }}
       />
 

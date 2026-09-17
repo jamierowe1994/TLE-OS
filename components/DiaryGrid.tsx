@@ -216,7 +216,7 @@ export default function DiaryGrid({
   return (
     <div className="min-w-[720px]">
       {/* Day headers — sticky, so the week survives scrolling. */}
-      <div className="sticky top-0 z-10 grid grid-cols-[52px_repeat(7,1fr)] border-b border-line/70 bg-page">
+      <div className="sticky top-0 z-10 grid grid-cols-[52px_repeat(7,minmax(0,1fr))] border-b border-line/70 bg-page">
         <div />
         {columns.map((c, i) => {
           const isToday = c.offset === 0;
@@ -265,7 +265,7 @@ export default function DiaryGrid({
       </div>
 
       {/* Hours down, days across. */}
-      <div className="grid grid-cols-[52px_repeat(7,1fr)]">
+      <div className="grid grid-cols-[52px_repeat(7,minmax(0,1fr))]">
         <div className="relative" style={{ height: gridH }}>
           {hours.map((h) => (
             <span
