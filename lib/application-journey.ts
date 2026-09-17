@@ -1,6 +1,6 @@
 import type { Application } from "@/lib/applications";
 import { buildHandoff } from "@/lib/deal-handoff";
-import { latestHandover } from "@/lib/handover";
+import { handoverMode, latestHandover } from "@/lib/handover";
 import { getCase } from "@/lib/plc-store";
 import { PLC_STATES } from "@/lib/plc";
 import { dealStatusLabel, getAllPropolyDeals, type BusinessDeal } from "@/lib/business/propoly-deals";
@@ -161,11 +161,12 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
   });
 
   /* The three sources the rest reads from, in parallel. */
-  const [handoff, run, plcCase, allDeals] = await Promise.all([
+  const [handoff, run, plcCase, allDeals, mode] = await Promise.all([
     buildHandoff(app).catch(() => null),
     latestHandover(app.id).catch(() => null),
     getCase(`plc-${app.id}`).catch(() => null),
     accepted ? deals() : Promise.resolve(null),
+    handoverMode().catch(() => "shadow" as const),
   ]);
 
   const deal = accepted && allDeals ? findDeal(app, allDeals) : null;
@@ -191,14 +192,21 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
       tone: "warn",
       state: "current",
     };
-    actions.push({ id: "handover", label: "Hand over to the deal", detail: "Accepted, but nothing is in Propoly for it yet. Rehearse the handover below and check what it is short of.", href: null, who: "you" });
+    /* The words follow the switch (16 Sep 2026). It said "Rehearse the
+       handover below" whatever the mode, which is wrong the day it goes live:
+       then the button below IS the handover. */
+    actions.push(
+      mode === "live"
+        ? { id: "handover", label: "Hand over to the deal", detail: "Accepted, but nothing is in Propoly for it yet. Check what the handover below is short of, then hand it over.", href: null, who: "you" }
+        : { id: "handover", label: "Check the handover", detail: "Accepted, but it isn't in Propoly yet. The handover runs on its own; check below that nothing is missing so it goes through.", href: null, who: "you" }
+    );
   }
   stops.push(handoverStop);
 
   /* What the packet says is short - these are the agent's jobs whatever stage it is at. */
   if (handoff) {
     if (!handoff.landlord) {
-      actions.push({ id: "landlord", label: "Attach the landlord to the listing in REX", detail: "No owner is on the listing, so there is nobody to create in Propoly or email.", href: null, who: "you" });
+      actions.push({ id: "landlord", label: "Add the landlord to the listing", detail: "No landlord is on the listing, so there is nobody to set up in Propoly or email.", href: null, who: "you" });
     }
     if (app.rightToRentIncomplete) {
       actions.push({ id: "rtr", label: "Record right to rent", detail: "Not recorded for every applicant on the application.", href: null, who: "you" });

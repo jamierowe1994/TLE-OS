@@ -6,7 +6,6 @@ import Doodles from "@/components/Doodles";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import PropertyFile from "@/components/PropertyFile";
 import { Pill } from "@/components/Wire";
-import { rexContactUrl } from "@/lib/business/rex-links";
 import { type SpineStop } from "@/components/StageSpine";
 import GuideButton from "@/components/GuideButton";
 import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-events";
@@ -139,7 +138,11 @@ export interface Check {
 const NEXT_ACTION: Record<string, { label: string; do: string; who: string }> = {
   received: { label: "Received", do: "Put it to the landlord - offer, income, and anything they've disclosed.", who: "Us" },
   communicated: { label: "With the landlord", do: "The landlord has it. Chase for a decision if it's been more than a day.", who: "Landlord" },
-  accepted: { label: "Accepted", do: "Take the holding deposit and open the deal. Let the other applicants know.", who: "Us" },
+  /* It said "Take the holding deposit and open the deal. Let the other
+     applicants know." until 16 Sep 2026, and no screen does either. The fee
+     is Propoly's stop on the track; telling the others is still a phone call
+     or an email from the agent. */
+  accepted: { label: "Accepted", do: "Check the handover and start the PLC check. The holding fee shows on the track below once it's paid. Let the other applicants on this home know it's gone.", who: "Us" },
   unsuccessful: { label: "Unsuccessful", do: "Nothing outstanding. Tell them why if they haven't been told.", who: "—" },
 };
 
@@ -306,7 +309,7 @@ export default function ApplicationDrawer({
     fetch(`/api/leads/by-contact?ids=${encodeURIComponent(ids.join(","))}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => { if (live && j?.ok) setLeadIds(j.leads ?? {}); })
-      .catch(() => { /* the panel still offers REX */ });
+      .catch(() => { /* no file link; the card still shows who they are */ });
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [app?.id]);
@@ -420,7 +423,7 @@ export default function ApplicationDrawer({
       />
       <aside
         role="dialog"
-        aria-label={`Application — ${app.tenant}`}
+        aria-label={`Application: ${app.tenant}`}
         className={`absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden rounded-l-lg bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[420ms] lg:w-[calc(100%-17rem)] ${
           shown ? "translate-x-0" : "translate-x-full"
         }`}
@@ -827,12 +830,9 @@ export default function ApplicationDrawer({
                             Open their file
                           </a>
                         )}
-                        {p.contactId && (
-                          <a href={rexContactUrl(p.contactId)} target="_blank" rel="noreferrer" className={whiteButton.replace("px-4 py-2.5 text-[12.5px]", "px-3.5 py-1.5 text-[11.5px]")}>
-                            Open in REX
-                          </a>
-                        )}
-                        {!leadId && !p.contactId && <span className="text-[11.5px] text-muted">No contact record on this application.</span>}
+                        {/* "Open in REX" sat here until 16 Sep 2026. Agents
+                            don't work in REX, so the OS file is the only door. */}
+                        {!leadId && <span className="text-[11.5px] text-muted">No file for them in the OS yet.</span>}
                       </div>
                     </Card>
                   );

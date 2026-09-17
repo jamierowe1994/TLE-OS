@@ -279,7 +279,7 @@ export async function buildHandoff(application: Application): Promise<Handoff> {
   if (!listingId) blockers.push("No listing on the application.");
   if (!landlord) {
     blockers.push(
-      "No landlord on the listing — nothing to create the Propoly landlord from."
+      "No landlord on the listing, so there is nobody to set up in Propoly."
     );
   } else if (!landlord.email) {
     blockers.push(`${landlord.name} has no email address, so they can't be told.`);
@@ -288,7 +288,7 @@ export async function buildHandoff(application: Application): Promise<Handoff> {
     // "your property is let" email to a colleague, and the landlord hears
     // nothing — a silent failure, which is the worst kind.
     blockers.push(
-      `${landlord.name}'s email is a TLE staff address (${landlord.email}) — the landlord email would go to us, not them.`
+      `${landlord.name}'s email is a TLE staff address (${landlord.email}), so the landlord's email would come to us, not them.`
     );
   }
   if (!tenants.length) blockers.push("No applicants on the application.");

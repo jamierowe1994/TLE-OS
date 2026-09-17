@@ -20,6 +20,22 @@ import DropZone, { type DropKind } from "@/components/listing/DropZone";
 import Doodles from "@/components/Doodles";
 import { LISTING_BOOKER_LIVE } from "@/lib/viewing-sends";
 import { LISTING_TRACK, listingStartingStep } from "@/lib/journey";
+
+/**
+ * Offers made on the listing itself are off (16 Sep 2026).
+ *
+ * "Make an offer", "Apply", "Mark as our pick", the landlord's review page and
+ * "Hand over to Kirstie" were a wireframe: the offers lived in this drawer's
+ * state and were gone when it closed, the landlord's link was a placeholder,
+ * and the handover only opened Applications. An agent could log an offer,
+ * star it, "send" it and believe it had gone somewhere.
+ *
+ * Applications is the real path - the form files them, the drawer there puts
+ * them to the landlord and runs the handover - so with this off the listing
+ * shows the real applications and each one opens there. Flip it only once
+ * an offer made here is saved as an application.
+ */
+const LISTING_OFFERS_LIVE = false;
 import type { Landlord } from "@/lib/rex-landlord";
 import { LEADS, leadSide } from "@/lib/leads-sample";
 import { DIARY } from "@/lib/diary";
@@ -1322,6 +1338,30 @@ export default function ListingDrawer({
                   )
                 ) : here.action === "viewing" && !LISTING_BOOKER_LIVE ? (
                   <p className="text-[11.5px] leading-snug text-muted">Book viewings from the applicant&apos;s lead for now.</p>
+                ) : !LISTING_OFFERS_LIVE && (here.id === "offers-in" || here.action === "review" || here.action === "handoff") ? (
+                  (() => {
+                    /* The handover opens the accepted application itself, where
+                       the handover panel is; the rest open this listing's
+                       applications. */
+                    const acceptedApp = here.action === "handoff" ? liveApps?.find((a) => /accept/i.test(a.statusLabel)) : undefined;
+                    return acceptedApp ? (
+                      <Link
+                        href={`/applications?open=${encodeURIComponent(acceptedApp.id)}`}
+                        className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white"
+                      >
+                        <DoodleIcon name={here.icon} size={14} />
+                        Open the accepted application
+                      </Link>
+                    ) : (
+                      <PressButton
+                        onClick={() => setTab("applications")}
+                        className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white"
+                      >
+                        <DoodleIcon name={here.icon} size={14} />
+                        See the applications
+                      </PressButton>
+                    );
+                  })()
                 ) : (
                   <PressButton
                     onClick={fire}
@@ -1333,7 +1373,7 @@ export default function ListingDrawer({
                     {here.cta}
                   </PressButton>
                 )}
-                {here.id === "viewings" && (
+                {here.id === "viewings" && LISTING_OFFERS_LIVE && (
                   <PressButton
                     onClick={() => setOffering(true)}
                     className="press-ring flex items-center gap-2 rounded-full border border-line/60 bg-white px-4 py-2.5 text-[12.5px] font-semibold"
@@ -1343,7 +1383,7 @@ export default function ListingDrawer({
                   </PressButton>
                 )}
               </div>
-              {here.id === "viewings" && (
+              {here.id === "viewings" && LISTING_OFFERS_LIVE && (
                 <button
                   type="button"
                   onClick={() => offers.length && advance()}
@@ -1353,7 +1393,7 @@ export default function ListingDrawer({
                   Viewings have stopped → landlord review
                 </button>
               )}
-              {here.action === "review" && !offers.length && (
+              {here.action === "review" && !offers.length && LISTING_OFFERS_LIVE && (
                 <p className="relative mt-2 text-[10.5px] text-muted">No applications logged yet.</p>
               )}
             </section>
@@ -1384,7 +1424,7 @@ export default function ListingDrawer({
                 viewings: [
                   { label: "Enquiries in", done: (enquiries?.length ?? 0) > 0, detail: enquiries?.length ? String(enquiries.length) : undefined },
                   { label: "Viewings booked", done: n > 0, detail: n ? String(n) : undefined },
-                  { label: "Offers logged", done: apps > 0, detail: apps ? String(apps) : undefined },
+                  { label: "Applications in", done: apps > 0, detail: apps ? String(apps) : undefined },
                 ],
                 offers: [{ label: "Sent to the landlord", done: at > 2 }],
                 accepted: [{ label: "Offer accepted", done: Boolean(accepted) }],
@@ -1477,7 +1517,7 @@ export default function ListingDrawer({
 
           <div key={`view-${tab}`} className={tab === "home" ? "" : "fade-up"}>
             {tab === "applications" && (
-              <ViewTitle title="Applications" sub="Who has enquired and who has offered. Start an application from anybody here, and put the offers to the landlord when the viewings stop." wash="blush" art="/brand/art/keys-handover.png" />
+              <ViewTitle title="Applications" sub={LISTING_OFFERS_LIVE ? "Who has enquired and who has offered. Start an application from anybody here, and put the offers to the landlord when the viewings stop." : "Who has enquired and who has applied. Open an application to put it to the landlord and take it on from there."} wash="blush" art="/brand/art/keys-handover.png" />
             )}
             {tab === "viewings" && (
               <ViewTitle title="Viewings" sub="Everything in the diary for this property. Ask for access against a viewing, and mark it granted when they say yes." wash="sage" art="/brand/art/viewing.png" />
@@ -1510,14 +1550,17 @@ export default function ListingDrawer({
                           <span className="text-right text-[11px] text-muted">{e.received}</span>
                         </a>
                         {/* An enquirer is a tenant we hold a file on, so an
-                            application can start right here. */}
-                        <button
-                          type="button"
-                          onClick={() => applyFor({ id: e.id, name: e.name, phone: e.phone })}
-                          className="shrink-0 rounded-full border border-line/80 px-2.5 py-1 text-[10.5px] font-semibold text-muted transition-colors hover:border-accent-dark hover:text-accent-dark"
-                        >
-                          Apply
-                        </button>
+                            application can start right here - once offers
+                            made here are saved. */}
+                        {LISTING_OFFERS_LIVE && (
+                          <button
+                            type="button"
+                            onClick={() => applyFor({ id: e.id, name: e.name, phone: e.phone })}
+                            className="shrink-0 rounded-full border border-line/80 px-2.5 py-1 text-[10.5px] font-semibold text-muted transition-colors hover:border-accent-dark hover:text-accent-dark"
+                          >
+                            Apply
+                          </button>
+                        )}
                       </li>
                     ))}
                     {enquiries.length > 12 && (
@@ -1537,28 +1580,45 @@ export default function ListingDrawer({
                   title="Applications"
                   icon="coin"
                   action={
-                    <PressButton
-                      onClick={() => setOffering(true)}
-                      className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-3.5 py-2 text-[11.5px] font-semibold text-page"
-                    >
-                      <DoodleIcon name="coin" size={13} />
-                      Make an offer
-                    </PressButton>
+                    LISTING_OFFERS_LIVE ? (
+                      <PressButton
+                        onClick={() => setOffering(true)}
+                        className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-3.5 py-2 text-[11.5px] font-semibold text-page"
+                      >
+                        <DoodleIcon name="coin" size={13} />
+                        Make an offer
+                      </PressButton>
+                    ) : undefined
                   }
                 >
-                  {/* What REX holds first: the real applications on this listing. */}
+                  {/* The real applications on this listing first. Each opens
+                      on Applications, where the next step lives. */}
                   {liveApps && liveApps.length > 0 && (
                     <ul className="mb-3 divide-y divide-line/40">
                       {liveApps.map((a) => (
-                        <li key={a.id} className="flex items-center gap-3 py-2">
-                          <span className="hand min-w-0 flex-1 truncate text-[13px]">{a.applicants || "Applicant not named"}</span>
-                          <Tag tone={/accept/i.test(a.statusLabel) ? "good" : /unsuccess|withdraw|declin/i.test(a.statusLabel) ? "neutral" : "accent"}>{a.statusLabel}</Tag>
-                          {a.offerAmount != null && <span className="figures text-[13px]">£{a.offerAmount.toLocaleString("en-GB")}</span>}
+                        <li key={a.id}>
+                          <Link href={`/applications?open=${encodeURIComponent(a.id)}`} className="flex items-center gap-3 py-2 transition-colors hover:bg-page">
+                            <span className="hand min-w-0 flex-1 truncate text-[13px]">{a.applicants || "Applicant not named"}</span>
+                            <Tag tone={/accept/i.test(a.statusLabel) ? "good" : /unsuccess|withdraw|declin/i.test(a.statusLabel) ? "neutral" : "accent"}>{a.statusLabel}</Tag>
+                            {a.offerAmount != null && <span className="figures text-[13px]">£{a.offerAmount.toLocaleString("en-GB")}</span>}
+                            <span aria-hidden className="text-[13px] text-muted/70">›</span>
+                          </Link>
                         </li>
                       ))}
                     </ul>
                   )}
-                  {offers.length ? (
+                  {!LISTING_OFFERS_LIVE ? (
+                    liveApps === null ? (
+                      <p className="flex items-center justify-center gap-2 py-6 text-[12px] text-muted">
+                        <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+                        Reading the applications&hellip;
+                      </p>
+                    ) : liveApps.length === 0 ? (
+                      <p className="py-6 text-center text-[12px] leading-relaxed text-muted">
+                        No applications on this listing yet. They land here, and on Applications, as applicants fill in the form.
+                      </p>
+                    ) : null
+                  ) : offers.length ? (
                     <ul className="space-y-3">
                       {offers.map((o, i) => (
                         <li key={i} className="rounded-2xl border border-line/50 p-3.5">
@@ -1590,8 +1650,8 @@ export default function ListingDrawer({
                     </ul>
                   ) : (
                     <p className="py-6 text-center text-[12px] leading-relaxed text-muted">
-                      No offers yet. They land here as viewings happen —<br />
-                      the record doesn&apos;t move on until the viewings stop.
+                      No offers yet. They land here as viewings happen.<br />
+                      The record doesn&apos;t move on until the viewings stop.
                     </p>
                   )}
                 </Card>

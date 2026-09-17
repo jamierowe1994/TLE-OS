@@ -64,6 +64,32 @@ export interface Handoff {
 
 const gbp = (n: number | null) => (n == null ? "—" : `£${n.toLocaleString("en-GB")}`);
 
+/**
+ * A run's step, in the agent's words.
+ *
+ * lib/handover records its steps for the owner's audit, in the plumbing's own
+ * terms ("Tenants on the REX listing", "REX refused", "purchtenant"), and old
+ * runs keep whatever they were written with. Agents never see REX named
+ * (James, 15 Sep 2026), so the panel translates on the way out rather than
+ * rewriting the record.
+ */
+const STEP_LABEL: Record<string, string> = {
+  "rex-uuid": "Listing linked to Propoly",
+  "rex-tenants": "Tenants on the listing",
+};
+function stepWords(s: Step): { label: string; detail: string } {
+  const label = STEP_LABEL[s.id] ?? s.label.replace(/\bthe REX listing\b/g, "the listing");
+  const detail = s.detail
+    .replace(/^REX refused\.$/, "The listing wouldn't take it.")
+    .replace(/^REX would not read listing (\S+)\.$/, "Couldn't read listing $1.")
+    .replace(/^REX already holds the Propoly uuid on the listing\./, "The listing is already linked to Propoly.")
+    .replace(/No email on the REX contact/g, "No email on their contact record")
+    .replace(/ as purchtenant\./g, ".")
+    .replace(/\bthe REX listing\b/g, "the listing")
+    .replace(/Would write the uuid to the listing's custom field\./, "Would link the listing to Propoly.");
+  return { label, detail };
+}
+
 export default function HandoffPanel({ applicationId }: { applicationId: string }) {
   const [h, setH] = useState<Handoff | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -254,7 +280,7 @@ export default function HandoffPanel({ applicationId }: { applicationId: string 
           {h.unrecognised.length > 0 && (
             <p className="mt-2 text-[11px] leading-snug text-muted">
               Uploaders name these themselves, so an unrecognised file means we couldn&apos;t
-              place it — not that it isn&apos;t there.
+              place it, not that it isn&apos;t there.
             </p>
           )}
         </div>
@@ -303,10 +329,12 @@ export default function HandoffPanel({ applicationId }: { applicationId: string 
           >
             {sending ? "Rehearsing…" : "Rehearse the handover"}
           </button>
+          {/* Agent-facing (16 Sep 2026): it named REX, Howard's flow and the
+              Admin switch. What the agent needs is that pressing it changes
+              nothing and that the real handover still happens without them. */}
           <p className="mt-2 text-[11px] leading-relaxed text-muted">
-            Rehearsal only: the OS works out every step against Propoly and REX and writes
-            nothing. Howard&apos;s flow still does the real handover. When the rehearsals match
-            what his flow does, the switch in Admin turns this into the real thing.
+            A practice run: it checks every step of the handover and changes nothing. The real
+            handover still happens on its own once an application is accepted.
           </p>
         </>
       )}
@@ -336,7 +364,7 @@ export default function HandoffPanel({ applicationId }: { applicationId: string 
                 </button>
                 {openRun === r.id && (
                   <ul className="border-t border-line/60 px-3 py-2">
-                    {r.steps.map((s) => (
+                    {r.steps.map((s) => ({ ...s, words: stepWords(s) })).map((s) => (
                       <li key={s.id} className="flex gap-2 py-1 text-[11.5px] leading-snug">
                         <span
                           className={`mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full ${
@@ -344,8 +372,8 @@ export default function HandoffPanel({ applicationId }: { applicationId: string 
                           }`}
                         />
                         <span className="min-w-0">
-                          <span className="font-semibold">{s.label}</span>
-                          <span className="text-muted"> — {s.detail}</span>
+                          <span className="font-semibold">{s.words.label}</span>
+                          <span className="text-muted"> - {s.words.detail}</span>
                         </span>
                       </li>
                     ))}

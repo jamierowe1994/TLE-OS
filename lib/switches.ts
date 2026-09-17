@@ -215,15 +215,17 @@ export const SWITCHES: Switch[] = [
      * recorded step by step with nothing written anywhere. On, the same
      * steps create the landlord, property and relationship in Propoly, put
      * the tenants on the REX listing, set the Propoly uuid on it, and send
-     * both emails through REX. This replaces Howard's Power Automate flow;
+     * both emails from the agent's own mailbox (lib/send-as-agent, so the
+     * Customer email switch must be on too; REX's MailMerge is no longer
+     * used, 16 Sep 2026). This replaces Howard's Power Automate flow;
      * both running at once makes duplicates, so the day this goes on is the
      * day his goes off. REX writes also need their methods on
      * REX_ALLOW_WRITES; this switch alone does not unlock them.
      */
     key: "handover_live",
     label: "Handover: create in Propoly, update REX, email both parties",
-    what: "Runs the offer-accepted handover for real instead of rehearsing it: Propoly landlord, property and relationship; tenants and the Propoly uuid on the REX listing; the accepted emails to landlord and tenant through REX.",
-    who: "LANDLORDS AND TENANTS are emailed. Propoly and REX are WRITTEN TO. Howard's Power Automate flow must be off before this is on.",
+    what: "Runs the offer-accepted handover for real instead of rehearsing it: Propoly landlord, property and relationship; tenants and the Propoly uuid on the REX listing; the accepted emails to landlord and tenant from the agent's own mailbox.",
+    who: "LANDLORDS AND TENANTS are emailed (Customer email must be on too). Propoly and REX are WRITTEN TO. Howard's Power Automate flow must be off before this is on.",
     confirm: "HAND OVER FOR REAL",
     legacyEnv: "HANDOVER_LIVE",
     legacyOn: "on",

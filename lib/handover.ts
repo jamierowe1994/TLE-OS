@@ -571,16 +571,19 @@ function firstMatch(body: unknown, pred: (r: Row) => boolean): Row | null {
  */
 export async function ensureHandoverTodos(): Promise<number> {
   if (!hasDb()) return 0;
-  const wanted: { title: string; detail: string }[] = [
+  /* `was`: a title this item used to carry. The lookup is by title, so a
+     rename without it would put the same job on the list a second time. */
+  const wanted: { title: string; detail: string; was?: string }[] = [
     {
       title: "Handover: schedule the shadow scan",
       detail:
         "A Railway cron hitting GET https://tle-os.co.uk/api/handover/scan with header x-cron-key: <CRON_SECRET>, hourly. It rehearses every newly accepted application and records what the handover would do, writing nothing.",
     },
     {
-      title: "Handover: allow the three REX writes",
+      title: "Handover: allow the two REX writes",
+      was: "Handover: allow the three REX writes",
       detail:
-        "Add Listings/update and CustomFields/setFieldValues to REX_ALLOW_WRITES on the TLE-OS service. Until then the live handover cannot touch REX even with the switch on. The accepted emails no longer need it - they are ours now.",
+        "Add Listings/update and CustomFields/setFieldValues to REX_ALLOW_WRITES on the TLE-OS service. Until then the live handover cannot touch REX even with the switch on. The accepted emails no longer need it - they go from the agent's own mailbox now.",
     },
     {
       title: "Handover: compare the rehearsals with Howard's flow, then switch it on",
@@ -595,7 +598,11 @@ export async function ensureHandoverTodos(): Promise<number> {
   ];
   let added = 0;
   for (const t of wanted) {
-    const exists = await q<{ id: string }>(`SELECT id FROM os_todos WHERE title = $1 LIMIT 1`, [t.title]).catch(() => []);
+    /* An open item still under its old title takes the new words in place. */
+    if (t.was) {
+      await q(`UPDATE os_todos SET title = $1, detail = $2 WHERE title = $3 AND state <> 'done'`, [t.title, t.detail, t.was]).catch(() => []);
+    }
+    const exists = await q<{ id: string }>(`SELECT id FROM os_todos WHERE title = ANY($1::text[]) LIMIT 1`, [[t.title, ...(t.was ? [t.was] : [])]]).catch(() => []);
     if (exists.length) continue;
     await q(`INSERT INTO os_todos (id, title, detail, area) VALUES ($1, $2, $3, 'handover')`, [
       randomBytes(9).toString("base64url"),
