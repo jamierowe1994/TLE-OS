@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { can } from "@/lib/roles";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
-import { loadAdmin, when, type AdminData, type Person } from "@/lib/admin-client";
+import AdminLoadFailed from "@/components/AdminLoadFailed";
+import { useAdmin, when, type Person } from "@/lib/admin-client";
 import { ROLES, ROLE_LABEL, ROLE_BLURB } from "@/lib/roles";
 import PickOne from "@/components/PickOne";
 import { fetchMe } from "@/lib/me";
@@ -81,8 +82,7 @@ function shown(
  * is a filter somebody forgets is on, and then the list "loses" people.
  */
 export default function AdminPeople() {
-  const [d, setD] = useState<AdminData | null>(null);
-  const [denied, setDenied] = useState(false);
+  const { d, denied, failed, load } = useAdmin();
   const [busy, setBusy] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -96,10 +96,6 @@ export default function AdminPeople() {
     if (f === "stale") setOrder("stale");
   }, []);
 
-  const load = useCallback(() => {
-    loadAdmin().then((x) => (x ? setD(x) : setDenied(true)));
-  }, []);
-  useEffect(load, [load]);
 
   /* The ping, by hand. Same endpoint the scheduled one hits, so there is only
      one code path to be wrong. */
@@ -239,6 +235,7 @@ export default function AdminPeople() {
   }
 
   if (denied) return <div className="py-16 text-center"><p className="hand text-[20px]">Nothing here</p></div>;
+  if (failed) return <AdminLoadFailed onRetry={load} />;
   if (!d) return <p className="text-[12.5px] text-muted">Loading…</p>;
 
   const rows = shown(d.people, q, roleFilter, order);

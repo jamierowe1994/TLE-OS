@@ -1,18 +1,16 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
-import { loadAdmin, type AdminData } from "@/lib/admin-client";
+import AdminLoadFailed from "@/components/AdminLoadFailed";
+import { useAdmin } from "@/lib/admin-client";
 
 /** The system tracker — kept in the product, not in a document nobody opens. */
 export default function AdminTodo() {
-  const [d, setD] = useState<AdminData | null>(null);
-  const [denied, setDenied] = useState(false);
+  const { d, denied, failed, load } = useAdmin();
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(() => { loadAdmin().then((x) => (x ? setD(x) : setDenied(true))); }, []);
-  useEffect(load, [load]);
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
@@ -34,6 +32,7 @@ export default function AdminTodo() {
   }
 
   if (denied) return <div className="py-16 text-center"><p className="hand text-[20px]">Nothing here</p></div>;
+  if (failed) return <AdminLoadFailed onRetry={load} />;
   if (!d) return <p className="text-[12.5px] text-muted">Loading…</p>;
 
   return (

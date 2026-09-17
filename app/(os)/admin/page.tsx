@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import { SAGE_INK, SAGE_WASH } from "@/components/appraisal/NextUp";
-import { loadAdmin, when, AUDIT_KIND, type AdminData } from "@/lib/admin-client";
+import AdminLoadFailed from "@/components/AdminLoadFailed";
+import { useAdmin, when, AUDIT_KIND } from "@/lib/admin-client";
 
 /**
  * The overview, in the same frame as every board in the OS (James, 12 Sep
@@ -26,13 +26,10 @@ const PILOT = new Date("2026-09-21T00:00:00");
 const daysTo = (d: Date) => Math.ceil((d.getTime() - Date.now()) / 86400000);
 
 export default function AdminOverview() {
-  const [d, setD] = useState<AdminData | null>(null);
-  const [denied, setDenied] = useState(false);
-  useEffect(() => {
-    loadAdmin().then((x) => (x ? setD(x) : setDenied(true)));
-  }, []);
+  const { d, denied, failed, load } = useAdmin();
 
   if (denied) return <div className="py-16 text-center"><p className="hand text-[20px]">Nothing here</p></div>;
+  if (failed) return <AdminLoadFailed onRetry={load} />;
 
   const s = d?.summary;
   const tiles = [

@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import PageHeader from "@/components/PageHeader";
-import { loadAdmin, when, AUDIT_KIND, type AdminData } from "@/lib/admin-client";
+import AdminLoadFailed from "@/components/AdminLoadFailed";
+import { useAdmin, when, AUDIT_KIND } from "@/lib/admin-client";
 
 /**
  * Sign-ins, failed sign-ins, resets, every view-as — and every email that left.
@@ -22,15 +23,10 @@ type Sent = { id: string; to: string; subject: string; sentAt: string };
 type Opened = { id: string; to: string; subject: string; html: string; sentAt: string };
 
 export default function AdminActivity() {
-  const [d, setD] = useState<AdminData | null>(null);
-  const [denied, setDenied] = useState(false);
+  const { d, denied, failed, load } = useAdmin();
   const [sent, setSent] = useState<Sent[]>([]);
   const [open, setOpen] = useState<Opened | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
-
-  useEffect(() => {
-    loadAdmin().then((x) => (x ? setD(x) : setDenied(true)));
-  }, []);
 
   useEffect(() => {
     fetch("/api/admin/sent-emails", { cache: "no-store" })
@@ -56,6 +52,7 @@ export default function AdminActivity() {
         <p className="hand text-[20px]">Nothing here</p>
       </div>
     );
+  if (failed) return <AdminLoadFailed onRetry={load} />;
   if (!d) return <p className="text-[12.5px] text-muted">Loading…</p>;
 
   return (
