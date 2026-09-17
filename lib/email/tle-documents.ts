@@ -919,11 +919,14 @@ export const LANDLORD_CONTRACT_PACK = {
       "lcp3",
       "<span style=\"display:block;padding-left:16px;text-indent:-16px\"><span style=\"display:inline-block;width:16px;text-indent:0\">&bull;</span>your presentation</span><span style=\"display:block;padding-left:16px;text-indent:-16px\"><span style=\"display:inline-block;width:16px;text-indent:0\">&bull;</span>our figure of <strong>{{rent}} a month</strong></span><span style=\"display:block;padding-left:16px;text-indent:-16px\"><span style=\"display:inline-block;width:16px;text-indent:0\">&bull;</span>the homes nearby we based it on</span><span style=\"display:block;padding-left:16px;text-indent:-16px\"><span style=\"display:inline-block;width:16px;text-indent:0\">&bull;</span>how we would let and manage your property on {{serviceLine}}</span>"
     ),
-    BTN("lcp4", "View your presentation", "{{deckLink}}"),
+    /* Into their property file, not the public deck link (James, 17 Sep
+       2026): the file shows the presentation we built for them, with the
+       contract under it. The bare /present link opened another copy. */
+    BTN("lcp4", "Open your property file", "{{link}}"),
     SP("lcp5", 8),
     T(
       "lcp6",
-      "You will also find the contract in <a href=\"{{link}}\" style=\"color:inherit;text-decoration:underline\">your property file</a> for you to look through. Let {{agentFirst}} know if you have any questions - just reply to this email."
+      "You will also find the contract there for you to look through. Let {{agentFirst}} know if you have any questions - just reply to this email."
     ),
     T("lcp7", "The Letting Experts"),
     FOOT("lcp8", "You're getting this because you had a market appraisal with The Letting Experts."),
