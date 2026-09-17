@@ -1085,6 +1085,10 @@ export const TEST_FILE_SIDES: Record<TestFileSide, { label: string; add: string;
       { id: "new", label: "New lead", says: "A landlord lead at 14 Test Street. Nothing contacted, booked or sent." },
       { id: "booked", label: "Appraisal booked", says: "An appraisal in three days at 11am, in nobody's diary. The confirmation is not sent: review it on the file." },
       { id: "visited", label: "Visit done", says: "The appraisal was yesterday at 11am, so the file asks for the figure." },
+      { id: "valued", label: "Figure recorded", says: "Valued at £1,250 fully managed, so the file wants the post-appraisal deck built and sent." },
+      { id: "signed", label: "Terms signed", says: "The contract is signed by both sides, so the file is at the take-on and the landlord is asked the property questions." },
+      { id: "takeon-booked", label: "Take-on booked", says: "Signed, with the photographs visit in the diary for the day after tomorrow at 10am." },
+      { id: "takeon-done", label: "Take-on done", says: "Signed, the visit happened yesterday and three photographs are on the file, so the advert is the next thing." },
     ],
   },
   tenant: {

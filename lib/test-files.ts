@@ -3,7 +3,9 @@ import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
 import { findUserByEmail, type OsUser } from "@/lib/users";
 import { getContact } from "@/lib/contacts-store";
-import { createAppraisal } from "@/lib/appraisal-store";
+import { createAppraisal, markTermsSent, recordValuation } from "@/lib/appraisal-store";
+import { recordTakeOnBooked } from "@/lib/takeon";
+import { storePhoto } from "@/lib/property-photos";
 import { createPassport } from "@/lib/passport";
 import { createCase } from "@/lib/plc-store";
 import { removeFromOutlook } from "@/lib/outlook-calendar";
@@ -259,19 +261,58 @@ export async function resetTestFile(id: string, stageId: string, me: OsUser, ori
     if (!leadId || !contact) throw new KitRefused("This file has lost its lead, so it cannot be reset. Delete it and add another.");
     links.push({ who: "agent", label: "Open the lead", href: `/leads?side=landlord&open=${leadId}` });
     nextKit = "landlord-lead";
-    if (stage.id === "booked" || stage.id === "visited") {
+    /* Every stage from the booking onwards is the same appraisal, built up
+       one step further (James, 17 Sep 2026: "a stage for each of these, so I
+       can batter between the two of them"). Nothing is emailed by a reset. */
+    const LATER = ["booked", "visited", "valued", "signed", "takeon-booked", "takeon-done"];
+    if (LATER.includes(stage.id)) {
+      const past = stage.id !== "booked";
       const ma = await createAppraisal({
         leadId,
         landlord: contact.name,
         address: TEST_ADDRESS,
         postcode: TEST_POSTCODE,
         agent: maker.name || email,
-        appointmentAt: stage.id === "booked" ? londonAt(3, 11) : londonAt(-1, 11),
+        appointmentAt: past ? londonAt(-1, 11) : londonAt(3, 11),
       });
       next.appraisals = [ma.id];
       next.landlordEmail = email;
       nextKit = "booked-appraisal";
       links.unshift({ who: "agent", label: "Open the appraisal", href: `/market-appraisals/${encodeURIComponent(ma.id)}` });
+
+      if (["valued", "signed", "takeon-booked", "takeon-done"].includes(stage.id)) {
+        await recordValuation(ma.id, { valuation: 1250, serviceLevel: "full_managed", feePct: 12, setupFee: 750 }, maker.name || email);
+      }
+      if (["signed", "takeon-booked", "takeon-done"].includes(stage.id)) {
+        /* Signed by both sides. The row is what every screen reads for
+           "signed"; no DocuSeal submission is made for a test file. The id is
+           NEGATIVE - the column is DocuSeal's own bigint, and nothing real
+           can ever collide with it. */
+        await q(
+          `INSERT INTO os_signed_documents
+             (submitter_id, submission_id, appraisal_id, template_name, signer_name, signer_email, r2_key, completed_at)
+           VALUES ($1, $2, $3, 'Terms of business (test)', $4, $5, '', NOW() - INTERVAL '1 day')
+           ON CONFLICT (submitter_id) DO NOTHING`,
+          [-Date.now(), -1, ma.id, contact.name, email]
+        ).catch((e) => {
+          console.error("[test-files] could not file the test signature", (e as Error).message);
+          return null;
+        });
+        await markTermsSent(ma.id).catch(() => null);
+      }
+      if (stage.id === "takeon-booked" || stage.id === "takeon-done") {
+        await recordTakeOnBooked(ma.id, {
+          startsAt: stage.id === "takeon-booked" ? londonAt(2, 10) : londonAt(-1, 10),
+          minutes: 60,
+          by: maker.name || email,
+          at: new Date().toISOString(),
+        });
+      }
+      if (stage.id === "takeon-done") {
+        /* Three photographs, so the advert has something to read. */
+        await seedPhotos(ma.id, maker.name || email);
+        links.push({ who: "agent", label: "The photographs", href: `/market-appraisals/${encodeURIComponent(ma.id)}?photos=1` });
+      }
     }
   } else if (side === "tenant") {
     if (!leadId || !contact) throw new KitRefused("This file has lost its lead, so it cannot be reset. Delete it and add another.");
@@ -361,4 +402,18 @@ export async function readyForLaunch(me: OsUser): Promise<{ files: number; stray
 export async function reopenTesting(me: OsUser): Promise<void> {
   if (me.role !== "owner") throw new KitRefused("Only an owner can reopen testing.");
   await setClosed(false, me);
+}
+
+/** A few of our own photographs on a test file, so the advert writer has something to read. */
+async function seedPhotos(appraisalId: string, by: string): Promise<void> {
+  const { readFile } = await import("node:fs/promises");
+  const names = ["appointment.webp", "commitment.webp", "close-door.webp"];
+  for (const name of names) {
+    try {
+      const bytes = await readFile(`${process.cwd()}/public/brand/photo/${name}`);
+      await storePhoto({ appraisalId, file: new File([new Uint8Array(bytes)], name, { type: "image/webp" }), by });
+    } catch {
+      /* A test file without photographs is still a usable test file. */
+    }
+  }
 }

@@ -500,6 +500,8 @@ export default function ViewingBooker({
   const dayLabel = day
     ? day.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })
     : "";
+  /* Behind us: a warning, never a block. */
+  const gone = Boolean(startsAt && new Date(startsAt).getTime() < Date.now());
   const shortDate = day
     ? day.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })
     : "";
@@ -1498,6 +1500,17 @@ export default function ViewingBooker({
                       }`
                     : "Pick a day and a time"}
                 </p>
+                {/* ALREADY GONE, AND ALLOWED (James, 17 Sep 2026). Somebody
+                    writing up a visit that happened before the OS existed is
+                    doing the right thing; they are just told what they are
+                    doing, so a mistyped day is caught here rather than by a
+                    landlord getting a confirmation for last Tuesday. */}
+                {gone && (
+                  <p className="flex items-start gap-1.5 text-[11.5px] leading-snug text-accent-dark">
+                    <DoodleIcon name="info" size={12} className="mt-[2px] shrink-0" />
+                    <span>That time has already gone. Book it anyway if the visit has happened - the confirmation will say so.</span>
+                  </p>
+                )}
                 <PressButton
                   onClick={() => {
                     if (!ready || savingBuffers || booking || draftLoading) return;

@@ -287,7 +287,10 @@ export default function DiaryGrid({
           const lanes = laneMap(appts);
           const isToday = c.offset === 0;
           const past = c.offset < 0;
-          const pickable = Boolean(onPick) && !past;
+          /* A day that has been can still be booked - writing up a visit
+             that already happened is a real job (James, 17 Sep 2026). The
+             booker says it is in the past before anything is sent. */
+          const pickable = Boolean(onPick);
           const picked = pick && pick.day === c.offset ? pick : null;
           return (
             <div
