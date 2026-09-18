@@ -5,6 +5,8 @@ import { scopeFor } from "@/lib/scope";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { rexConfigured } from "@/lib/rex";
 import { factsByRexId } from "@/lib/os-properties";
+import { getComplianceBook } from "@/lib/compliance-cache";
+import { isOurs } from "@/lib/compliance";
 import {
   createInspection, dueList, inspectionRules, listInspections, openFindings, summarise,
   KIND_IDS, type Kind, type NewInspection,
@@ -57,9 +59,18 @@ export async function GET(req: NextRequest) {
       bookError = "We can't tell which REX user you are, so we can't work out what's due on your book.";
     } else {
       try {
-        const [{ book }, facts] = await Promise.all([managedBookFor(scope.rexUserId), factsByRexId()]);
+        const [{ book }, facts, comp] = await Promise.all([managedBookFor(scope.rexUserId), factsByRexId(), getComplianceBook()]);
         const hmoIds = new Set([...facts.entries()].filter(([, f]) => f.hmo).map(([id]) => id));
-        due = dueList(book.properties, inspections, rules, hmoIds);
+        /* Only the homes we actually look after (James, 18 Sep 2026): the
+           board said 257 when the real job was 150. REX's leased listings
+           carry every home ever let, including tenant-find-only lets and the
+           books of agents who have left, and none of those get a visit from
+           us. The scope is the compliance screen's own - managed in REX PM,
+           not let only, agent still here - so the two screens agree about
+           which homes are ours. A home the managed book has under a second
+           REX id is covered by the one the compliance book knows. */
+        const ours = new Set(comp.book.properties.filter(isOurs).map((p) => String(p.id)));
+        due = dueList(book.properties.filter((p) => ours.has(String(p.propertyId ?? p.listingId))), inspections, rules, hmoIds);
       } catch (e) {
         bookError = e instanceof Error ? e.message : "REX didn't answer, so the due list is missing.";
       }
