@@ -179,6 +179,7 @@ export default function WeekGrid({
                       <button
                         key={a.id}
                         type="button"
+                        data-steve-row=""
                         title={[
                           `${a.start}–${endTime(a)} (${lengthLabel(a.mins)})`,
                           a.what,

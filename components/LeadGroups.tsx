@@ -186,6 +186,7 @@ export default function LeadGroups({
                   <li key={l.id}>
                     <button
                       type="button"
+                      data-steve-row=""
                       onClick={() => onOpen(l)}
                       className={`flex w-full flex-wrap items-center gap-x-4 gap-y-1.5 px-5 py-3 text-left transition-colors md:grid md:grid-cols-[10px_minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_auto] ${
                         l.id === activeId ? "bg-accent-soft/50" : "hover:bg-accent-soft/20"

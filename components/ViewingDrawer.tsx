@@ -404,7 +404,7 @@ export default function ViewingDrawer({
   ];
 
   return (
-    <div className="fixed inset-0 z-[130]">
+    <div className="fixed inset-0 z-[130]" data-steve="viewing.drawer">
       <button
         aria-label="Close"
         onClick={onClose}
@@ -461,7 +461,7 @@ export default function ViewingDrawer({
               </>
             )}
             {past && completing === "idle" && !localOutcome && (
-              <PressButton
+              <PressButton data-steve="viewing.complete"
                 onClick={() => setCompleting("choose")}
                 className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-4 py-2 text-[11.5px] font-semibold text-page"
               >
@@ -690,7 +690,7 @@ export default function ViewingDrawer({
               </Card>
 
               <Card title="Notes" icon="note">
-                <input
+                <input data-steve="viewing.note"
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   onKeyDown={(e) => {

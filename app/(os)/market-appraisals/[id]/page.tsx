@@ -236,12 +236,12 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
             <a href={deck.url} target="_blank" rel="noreferrer" className={pill}>
               <DoodleIcon name="magic-wand" size={13} className="text-accent-dark" /> View presentation
             </a>
-            <Link href={`/market-appraisals/${ma.id}/build`} className={pill}>
+            <Link href={`/market-appraisals/${ma.id}/build`} className={pill} data-steve="appraisal.build">
               <DoodleIcon name="pencil" size={13} className="text-accent-dark" /> Update presentation
             </Link>
           </>
         ) : (
-          <Link href={`/market-appraisals/${ma.id}/build`} className={pill}>
+          <Link href={`/market-appraisals/${ma.id}/build`} className={pill} data-steve="appraisal.build">
             <DoodleIcon name="magic-wand" size={13} className="text-accent-dark" /> Build presentation
           </Link>
         )}

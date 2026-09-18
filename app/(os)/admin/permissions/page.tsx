@@ -114,7 +114,7 @@ export default function Permissions() {
                 {(d.mayEdit ? d.roles : [])
                   .filter((r) => r.id !== p.role)
                   .map((r) => (
-                    <button
+                    <button data-steve="perm.set-role"
                       key={r.id}
                       type="button"
                       disabled={busy !== null}

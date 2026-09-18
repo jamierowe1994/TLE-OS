@@ -213,6 +213,9 @@ export async function POST(req: NextRequest) {
     ...(answer.proposal
       ? { proposal: answer.proposal, sealed: sealPayload(answer.proposal) }
       : {}),
+    /* A walk-through to start on their screen. Not sealed: it only points,
+       and the browser checks the id against its own list of routes. */
+    ...(answer.guide ? { guide: answer.guide } : {}),
   });
 }
 

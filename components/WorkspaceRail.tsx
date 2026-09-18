@@ -158,6 +158,7 @@ export default function WorkspaceRail({
                   <li key={t.href}>
                     <Link
                       href={t.href}
+                      data-admin-nav={t.href}
                       title={collapsed ? t.label : undefined}
                       className={`flex items-center rounded-lg py-2 text-[12.5px] transition-colors ${
                         collapsed ? "justify-center px-0" : "gap-3 px-3"
@@ -208,6 +209,7 @@ export default function WorkspaceRail({
           .map((t) => (
             <Link
               key={t.href}
+              data-admin-nav={t.href}
               href={t.href}
               className={`shrink-0 rounded-full border px-3.5 py-1.5 text-[12px] ${
                 isOn(t) ? "border-accent-dark bg-accent-dark text-white" : "border-line/80"

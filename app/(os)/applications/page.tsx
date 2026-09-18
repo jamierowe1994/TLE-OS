@@ -415,7 +415,7 @@ export default function Applications() {
                     {/* A row opens the file. The button at its end says what
                         the file wants next, and opens the same file - one
                         door, labelled by what is behind it. */}
-                    <div
+                    <div data-steve-row=""
                       role="button"
                       tabIndex={0}
                       onClick={() => setOpenId(on ? null : a.id)}

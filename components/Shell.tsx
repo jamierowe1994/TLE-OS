@@ -119,6 +119,7 @@ function NavLink({
               <Link
                 key={c.href}
                 href={c.href}
+                data-nav={c.href}
                 onClick={(e) => { e.preventDefault(); go(c.href); }}
                 className={`rounded-lg px-2.5 py-1.5 text-[12.5px] transition-colors ${
                   on ? "font-medium text-accent-dark" : "text-muted hover:text-ink"

@@ -5,7 +5,7 @@ import { hasDb, q } from "@/lib/db";
 import { listKnowledge } from "@/lib/business/knowledge-store";
 import { getBrief } from "@/lib/assistant-brief";
 import { systemMap } from "@/lib/system-map";
-import { labelFor, proposalIn, runTool, TOOL_SCHEMAS } from "@/lib/assistant-tools";
+import { guideIn, labelFor, proposalIn, runTool, TOOL_SCHEMAS } from "@/lib/assistant-tools";
 import type { ActionProposal } from "@/lib/assistant-actions";
 import type { Scope } from "@/lib/scope";
 
@@ -314,6 +314,8 @@ export interface Answer {
   /** The one thing he is offering to DO, awaiting a button. Only ever one:
    *  a card with two actions on it is a card nobody reads before pressing. */
   proposal: ActionProposal | null;
+  /** A walk-through he started on their screen (lib/steve-guide), if any. */
+  guide: string | null;
 }
 
 /**
@@ -449,6 +451,7 @@ export async function ask(
       canned: true,
       steps: [],
       proposal: null,
+      guide: null,
     };
   }
 
@@ -463,6 +466,7 @@ export async function ask(
       canned: true,
       steps: [],
       proposal: null,
+      guide: null,
     };
   }
 
@@ -476,6 +480,7 @@ export async function ask(
   const system = await systemBlocks();
   const steps: string[] = [];
   let proposal: ActionProposal | null = null;
+  let guide: string | null = null;
   let inTokens = 0;
   let outTokens = 0;
   let spent = 0;
@@ -525,6 +530,7 @@ export async function ask(
         canned: false,
         steps,
         proposal,
+        guide,
       };
     }
 
@@ -546,6 +552,7 @@ export async function ask(
          twice in a turn the second is what he was actually talking about by
          the end of it. */
       proposal = proposalIn(out) ?? proposal;
+      guide = guideIn(out) ?? guide;
       results.push({
         type: "tool_result",
         tool_use_id: call.id,
@@ -566,5 +573,6 @@ export async function ask(
     canned: false,
     steps,
     proposal,
+    guide,
   };
 }

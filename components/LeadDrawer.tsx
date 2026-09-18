@@ -1528,6 +1528,7 @@ export default function LeadDrawer({
                   {sp && !sp.booked && here.id !== "appraisal_booked" && (
                     <button
                       type="button"
+                      data-steve="lead.book-appraisal"
                       onClick={() => { setBookMode("appraisal"); setBooking(true); }}
                       className="text-[11px] font-semibold text-accent-dark transition-colors hover:text-ink"
                     >
@@ -1927,7 +1928,7 @@ export default function LeadDrawer({
   }
 
   return (
-    <div className="fixed inset-0 z-[120]">
+    <div className="fixed inset-0 z-[120]" data-steve="lead.drawer">
       {/* The scrim — clicking anywhere on it closes, as asked. */}
       <button
         aria-label="Close"
@@ -1997,6 +1998,7 @@ export default function LeadDrawer({
             </button>
             {isTenant && (
               <button
+                data-steve="lead.passport"
                 type="button"
                 onClick={() => (passport?.done && passport.path ? window.open(passport.path, "_blank") : setPassportFlow("ask"))}
                 disabled={!passport?.done && (!passportEmail || passportBusy)}
@@ -2594,6 +2596,7 @@ export default function LeadDrawer({
                 <div className="flex justify-end pt-2">
                   <button
                     type="button"
+                    data-steve="lead.save-note"
                     onClick={addNote}
                     disabled={!draft.trim()}
                     className="rounded-full bg-accent-dark px-4 py-1.5 text-[11.5px] font-semibold text-page transition-opacity disabled:opacity-30"

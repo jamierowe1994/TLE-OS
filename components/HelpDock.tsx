@@ -1,5 +1,6 @@
 "use client";
 
+import { GUIDE_EVENT } from "@/lib/steve-guide";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import AssistantCharacter, { type Mood } from "@/components/AssistantCharacter";
@@ -765,6 +766,14 @@ export default function HelpDock() {
       },
     ]);
     setBusy(false);
+
+    /* He is showing them where something is (lib/steve-guide): start the walk
+       once they have had a beat to read his line. The guide closes this dock
+       itself, so it is not sat over the thing he is pointing at. */
+    if (typeof r?.guide === "string") {
+      const id = r.guide;
+      window.setTimeout(() => window.dispatchEvent(new CustomEvent(GUIDE_EVENT, { detail: id })), 900);
+    }
 
     /* Thinking ends the moment he has something to say, and he says it —
        which is the whole reason the mouth animates. Unless what was said to

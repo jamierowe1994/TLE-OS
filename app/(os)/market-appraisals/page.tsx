@@ -240,7 +240,7 @@ export default function MarketAppraisals() {
             {/* First, and the only filled button on the row: it is the one
                 thing on this screen that MAKES something rather than sorting
                 what is already here. */}
-            <button
+            <button data-steve="ma.book"
               type="button"
               onClick={() => setBooking(true)}
               className="btn-press flex items-center gap-2 rounded-full bg-accent-dark px-4 py-2 text-[12px] font-semibold text-page"
@@ -428,7 +428,7 @@ function AppraisalCard({ m, tile }: { m: MarketAppraisal & { live: MaStage }; ti
 
   if (tile) {
     return (
-      <Link
+      <Link data-steve-row=""
         href={`/market-appraisals/${m.id}`}
         className="flex h-full flex-col rounded-[22px] border border-line/50 bg-white p-5 transition-colors hover:border-ink/40"
       >
@@ -457,7 +457,7 @@ function AppraisalCard({ m, tile }: { m: MarketAppraisal & { live: MaStage }; ti
   }
 
   return (
-    <Link
+    <Link data-steve-row=""
       href={`/market-appraisals/${m.id}`}
       /* Fixed columns for the strip and the pills, so the strip starts at the
          same place on every row and sits in the middle of the space rather

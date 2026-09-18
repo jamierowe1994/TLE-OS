@@ -298,6 +298,9 @@ export function DataTable<T extends { id: string }>({
             return (
               <tr
                 key={row.id}
+                /* Steve's handle on "a row" (lib/steve-guide): any row will do
+                   when he is showing somebody how to open a record. */
+                data-steve-row=""
                 onClick={() => onRowClick?.(row, rowIndex)}
                 /* Hover is theatre: the ink rule draws itself under the row
                    and the row leans forward a touch — no doubt about which

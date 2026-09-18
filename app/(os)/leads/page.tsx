@@ -457,6 +457,7 @@ export default function Leads() {
                 cousin. The switch beside it is brown, so the one button that
                 MAKES something is the one thing on the row in the accent. */}
             <PressButton
+              data-steve="leads.new"
               onClick={() => setCreating(true)}
               className="flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-[13px] font-semibold text-white ring-1 ring-inset ring-black/10"
             >

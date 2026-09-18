@@ -80,7 +80,7 @@ export function ApptRow({
 
   return (
     <li className="border-b border-line/40 last:border-0">
-      <button
+      <button data-steve-row=""
         type="button"
         onClick={() => onOpen(a)}
         className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-panel"

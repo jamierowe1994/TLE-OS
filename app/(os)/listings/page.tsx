@@ -668,7 +668,7 @@ export default function Listings() {
             />
             {/* A listing is made here now (16 Sep 2026): the address, what it
                 is and the rent, then straight into Marketing for the rest. */}
-            <button
+            <button data-steve="listings.new"
               type="button"
               onClick={() => setAdding(true)}
               className="flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-[13px] font-semibold text-white ring-1 ring-inset ring-black/10 transition-opacity hover:opacity-90"
@@ -810,7 +810,7 @@ export default function Listings() {
                reaches the right handler. It sits on top instead, which also
                keeps the whole card clickable through to the record. */
             <div key={l.id} className="fade-up relative">
-            <button
+            <button data-steve-row=""
               type="button"
               onClick={() => setOpenId(String(l.id))}
               // Thinner rule and less padding, so the photograph can grow

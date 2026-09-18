@@ -9,6 +9,7 @@ import { portalLinksFor } from "@/lib/rex-portal-links";
 import { rexCall, rexConfigured } from "@/lib/rex";
 import { requiredCerts, statusOf, type CompProperty } from "@/lib/compliance";
 import type { ActionProposal } from "@/lib/assistant-actions";
+import { GUIDE_TARGETS, guideTarget } from "@/lib/steve-guide";
 
 /**
  * WHAT STEVE CAN ACTUALLY GO AND FIND OUT.
@@ -680,6 +681,37 @@ export const fillOpenEmail: AssistantTool = {
   },
 };
 
+/**
+ * SHOW THEM ON SCREEN (James, 18 Sep 2026): highlight where something is and
+ * walk them to it, page by page, rather than describe it. The route lives in
+ * lib/steve-guide and the browser walks it (components/SteveGuide), skipping
+ * any step already true - so it is right to call this whatever screen they
+ * are on. It changes nothing: it only points, which is why it needs no
+ * confirmation card the way a note or an email does.
+ */
+const showOnScreen: AssistantTool = {
+  name: "show_on_screen",
+  description:
+    "Highlight on their screen where something is and walk them to it, click by click, across pages. Call this whenever someone asks where something is, how to get somewhere, or how to do one of these things in the OS - showing beats describing. It works from whatever screen they are on: steps they have already done are skipped. After calling it, reply in ONE short sentence (e.g. \"I'll show you - follow the highlight.\"); the highlight does the explaining, so do not list the steps. Targets:\n" +
+    GUIDE_TARGETS.map((t) => `- ${t.id}: ${t.about}`).join("\n"),
+  input_schema: {
+    type: "object",
+    properties: {
+      target: { type: "string", enum: GUIDE_TARGETS.map((t) => t.id), description: "What to show them." },
+    },
+    required: ["target"],
+  },
+  label: () => "Getting ready to show you…",
+  async run(input) {
+    const t = guideTarget(str(input.target));
+    if (!t) return { error: "I don't have a route to that one yet." };
+    return {
+      __guide: t.id,
+      ok: `Showing them: ${t.about}. ${t.steps.length} step${t.steps.length === 1 ? "" : "s"} at most - any already done are skipped. Reply in one short sentence; the highlight does the rest.`,
+    };
+  },
+};
+
 export const TOOLS: AssistantTool[] = [
   findProperty,
   propertyDetail,
@@ -692,7 +724,14 @@ export const TOOLS: AssistantTool[] = [
   proposeWriteUp,
   proposeEmail,
   fillOpenEmail,
+  showOnScreen,
 ];
+
+/** Pull a guide out of a tool result, if it started one. */
+export function guideIn(result: unknown): string | null {
+  const g = (result as { __guide?: unknown } | null)?.__guide;
+  return typeof g === "string" ? g : null;
+}
 
 /** Pull the proposal out of a tool result, if it made one. */
 export function proposalIn(result: unknown): ActionProposal | null {

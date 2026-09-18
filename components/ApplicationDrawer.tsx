@@ -413,7 +413,7 @@ export default function ApplicationDrawer({
   const whiteButton = "press-ring inline-flex items-center gap-2 rounded-full border border-line/60 bg-white px-4 py-2.5 text-[12.5px] font-semibold transition-colors hover:border-ink/40";
 
   return (
-    <div className="fixed inset-0 z-[130]">
+    <div className="fixed inset-0 z-[130]" data-steve="application.drawer">
       <button
         aria-label="Close"
         onClick={onClose}
@@ -689,7 +689,7 @@ export default function ApplicationDrawer({
                   {/* The composer. A comment is the fastest thing anyone does on
                       a stalled deal, so it is always in reach, not behind a button. */}
                   <div className="mt-4 border-t border-line/50 pt-4">
-                    <textarea
+                    <textarea data-steve="application.comment"
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}
                       onKeyDown={(e) => {
@@ -701,7 +701,7 @@ export default function ApplicationDrawer({
                     />
                     <div className="mt-2.5 flex items-center justify-between gap-3">
                       <p className="text-[10.5px] text-muted">{postError ? <span className="font-semibold text-accent-dark">{postError}</span> : "⌘↵ to post"}</p>
-                      <button
+                      <button data-steve="application.post"
                         type="button"
                         onClick={() => void post()}
                         disabled={!draft.trim() || posting}

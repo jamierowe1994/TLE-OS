@@ -126,7 +126,7 @@ export default function Dashboard() {
            pills they picked themselves, and in customise mode the circle that
            adds them. */
         actions={<>
-          <button
+          <button data-steve="dash.customise"
             type="button"
             onClick={() => setCustomising((c) => !c)}
             className={`flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-medium transition-colors ${

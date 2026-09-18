@@ -6,6 +6,7 @@ import ViewAsBar from "@/components/ViewAsBar";
 import HelpDock from "@/components/HelpDock";
 import SetupGate from "@/components/SetupGate";
 import Tour from "@/components/Tour";
+import SteveGuide from "@/components/SteveGuide";
 import DocumentSheet from "@/components/DocumentSheet";
 import GuideLayer from "@/components/GuideLayer";
 import Watchdog from "@/components/Watchdog";
@@ -40,6 +41,11 @@ export default function OsLayout({ children }: { children: React.ReactNode }) {
             rest of the searchParams readers have. */}
         <Suspense fallback={null}>
           <Tour />
+        </Suspense>
+        {/* Steve pointing at things - above everything, and still here when
+            the page changes (lib/steve-guide). */}
+        <Suspense fallback={null}>
+          <SteveGuide />
         </Suspense>
         {/* The certificate viewer, up from the bottom of whichever page a
             file was opened on. Drawers slide aside for it (lib/doc-sheet). */}

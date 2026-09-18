@@ -153,7 +153,7 @@ export default function AppointmentDrawer({
     : null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[130]">
+    <div className="fixed inset-0 z-[130]" data-steve="appointment.drawer">
       <button
         aria-label="Close"
         onClick={onClose}
@@ -379,7 +379,7 @@ export default function AppointmentDrawer({
         <div className="shrink-0 border-t border-line/60 px-5 py-4">
           {appt.kind === "viewing" ? (
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => onOpenViewing(appt)} className={`${primary} flex-1`}>
+              <button type="button" data-steve="appointment.open-viewing" onClick={() => onOpenViewing(appt)} className={`${primary} flex-1`}>
                 <DoodleIcon name="folder" size={13} />
                 {past && !appt.feedback ? "Open the viewing and record feedback" : "Open the viewing file"}
               </button>

@@ -19,11 +19,14 @@ export function PressButton({
   className = "",
   title,
   disabled = false,
+  "data-steve": steve,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
   className?: string;
   title?: string;
+  /** Steve's handle on it (lib/steve-guide). */
+  "data-steve"?: string;
   /** A button that's working shouldn't wobble when pressed again. */
   disabled?: boolean;
 }) {
@@ -33,6 +36,7 @@ export function PressButton({
       type="button"
       title={title}
       disabled={disabled}
+      data-steve={steve}
       onClick={() => {
         if (disabled) return;
         setPressed(true);

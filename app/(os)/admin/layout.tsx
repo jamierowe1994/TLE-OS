@@ -246,7 +246,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           label="Admin"
           groups={groups}
           footer={
-            <button
+            <button data-admin-leave=""
               type="button"
               onClick={() => router.push("/dashboard")}
               className="w-full rounded-lg border border-line/80 px-3 py-2 text-[12px] text-muted transition-colors hover:border-ink"

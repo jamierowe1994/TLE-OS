@@ -278,7 +278,7 @@ export default function AdminPeople() {
       {/* ── Find one person, or one kind of person. ── */}
       <div className="fade-up mt-6 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          <input
+          <input data-steve="people.search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search a name or an email…"
@@ -393,7 +393,7 @@ export default function AdminPeople() {
               {/* Not for another owner: view-as refuses it, and a button that
                   answers 403 reads as a fault rather than as a boundary. */}
               {mayManage && p.role !== "owner" && (p.userId || p.rexId) && (
-                <button
+                <button data-steve="people.view-as"
                   type="button"
                   disabled={busy !== null}
                   onClick={() => viewAs(p)}

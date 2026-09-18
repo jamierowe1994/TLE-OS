@@ -858,7 +858,7 @@ export default function ListingDrawer({
       : { label: "Draft", tone: "accent" as const };
 
   return (
-    <div className="fixed inset-0 z-[120]">
+    <div className="fixed inset-0 z-[120]" data-steve="listing.drawer">
       <button
         aria-label="Close"
         onClick={onClose}
@@ -917,6 +917,7 @@ export default function ListingDrawer({
               return (
                 <button
                   key={t.key}
+                  data-steve={`listing.tab.${t.key}`}
                   type="button"
                   onClick={() => setTab(t.key)}
                   className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-[12.5px] font-semibold transition-colors ${
@@ -1128,6 +1129,7 @@ export default function ListingDrawer({
                     onBook={LISTING_BOOKER_LIVE ? () => setBooking(true) : undefined}
                   />
                   <PressButton
+                    data-steve="listing.mail-db"
                     onClick={() => setEmailing(true)}
                     className="press-ring flex items-center gap-2 rounded-full bg-[var(--brown)] px-4 py-2.5 text-[12.5px] font-semibold text-white"
                   >
