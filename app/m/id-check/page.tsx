@@ -163,6 +163,9 @@ export default function PhoneIdCheck() {
     setSeen(false);
     setError(null);
     setStep("photos");
+    /* Straight into the camera (James, 18 Sep 2026: from the viewing it should
+       go "straight through to a scanning page where we can scan"). */
+    setCamera(0);
   };
 
   const put = (i: number, f: File) => {
@@ -511,7 +514,10 @@ export default function PhoneIdCheck() {
           hint={d.hint}
           onShot={(f) => {
             put(camera, f);
-            setCamera(null);
+            /* Then the next side still to take - the back of a card - so a
+               two-sided document is two shots in a row, not a trip back out. */
+            const next = shots.findIndex((x, n) => n !== camera && !x);
+            setCamera(next >= 0 ? next : null);
           }}
           onClose={() => setCamera(null)}
         />
