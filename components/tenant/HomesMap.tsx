@@ -50,6 +50,7 @@ export default function HomesMap({
   hovered,
   hrefFor,
   onSearchHere,
+  onPick,
 }: {
   homes: MarketHome[];
   centre: { lat: number; lng: number } | null;
@@ -57,6 +58,9 @@ export default function HomesMap({
   radiusMiles: number | null;
   hovered: string | null;
   hrefFor: (id: string) => string;
+  /** On a phone a pin raises the home in a bottom sheet rather than the card
+   *  over the map: the tap is handed up, and a tap on the map clears it. */
+  onPick?: (id: string | null) => void;
   /** Absent on a single home's page: there is nothing to search there. */
   onSearchHere?: (at: { lat: number; lng: number }) => void;
 }) {
@@ -76,6 +80,8 @@ export default function HomesMap({
   const placed = homes.filter((h) => h.lat != null && h.lng != null);
   const homesRef = useRef(placed);
   homesRef.current = placed;
+  const pickRef = useRef(onPick);
+  pickRef.current = onPick;
   const centreRef = useRef(centre);
   centreRef.current = centre;
 
@@ -119,7 +125,10 @@ export default function HomesMap({
         map.current.addListener("dragend", () => {
           if (!fitting.current) setMoved(true);
         });
-        map.current.addListener("click", () => setOpen(null));
+        map.current.addListener("click", () => {
+          setOpen(null);
+          pickRef.current?.(null);
+        });
         setReady(true);
       })
       .catch(() => {
@@ -196,9 +205,17 @@ export default function HomesMap({
       if (h) b.extend({ lat: h.lat!, lng: h.lng! });
     });
     fitting.current = true;
+    const before = map.current.getZoom() ?? 6;
     map.current.fitBounds(b, 80);
-    const z = map.current.getZoom();
-    if (z != null && z > 16) map.current.setZoom(16);
+    /* fitBounds can barely move for a bubble whose homes are a city apart,
+       which reads as the tap doing nothing. Always at least two steps in. */
+    google.maps.event.addListenerOnce(map.current, "idle", () => {
+      const z = map.current?.getZoom() ?? before;
+      if (z < before + 2) {
+        map.current?.setCenter(b.getCenter());
+        map.current?.setZoom(before + 2);
+      } else if (z > 16) map.current?.setZoom(16);
+    });
     window.setTimeout(() => {
       fitting.current = false;
     }, 400);
@@ -218,7 +235,7 @@ export default function HomesMap({
 
       {/* Their house, or wherever they are searching from. */}
       {ready && me && (
-        <div className="pointer-events-none absolute z-[3] -translate-x-1/2 -translate-y-1/2" style={{ left: me.x, top: me.y }}>
+        <div className="pointer-events-none absolute z-[1] -translate-x-1/2 -translate-y-1/2" style={{ left: me.x, top: me.y }}>
           <span className="flex h-9 w-9 items-center justify-center rounded-full border-[3px] border-white bg-accent-dark text-white shadow-md">
             <DoodleIcon name={centreIsHome ? "home" : "target"} size={15} className="invert" />
           </span>
@@ -258,7 +275,8 @@ export default function HomesMap({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                setOpen(open === p.id ? null : p.id);
+                if (onPick) onPick(p.id);
+                else setOpen(open === p.id ? null : p.id);
               }}
               className={`absolute -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full border px-2.5 py-1 text-[12px] font-bold shadow-sm transition-transform ${
                 lit ? "z-[4] scale-110 border-accent-dark bg-accent-dark text-white" : "z-[2] border-line/80 bg-white text-ink hover:scale-105"

@@ -31,7 +31,7 @@ import { locksFor, type TenantStageKey } from "@/lib/tenant-journey";
 function Logo({ className = "" }: { className?: string }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src="/brand/tle-logo.png" alt="The Letting Experts" className={`block w-auto ${className}`} />
+    <img src="/brand/tle-logo-coral.png" alt="The Letting Experts" className={`block w-auto ${className}`} />
   );
 }
 

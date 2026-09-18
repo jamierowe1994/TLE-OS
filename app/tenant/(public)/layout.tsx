@@ -37,7 +37,7 @@ export default async function TenantPublicLayout({ children }: { children: React
                 for anyone the image never reaches. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/brand/tle-logo.png"
+              src="/brand/tle-logo-coral.png"
               alt="The Letting Experts"
               className="h-11 w-auto"
             />

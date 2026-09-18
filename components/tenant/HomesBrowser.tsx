@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import HomesMap from "@/components/tenant/HomesMap";
+import Sheet from "@/components/tenant/Sheet";
+import { useRouter } from "next/navigation";
 import { describeSearch as describe, fits, milesBetween, type HomeFilter, type MarketHome } from "@/lib/market-homes";
 
 /**
@@ -69,6 +71,11 @@ export default function HomesBrowser({
   /* A phone shows one or the other; from a laptop up, both side by side. */
   const [view, setView] = useState<"list" | "map">("list");
   const [hovered, setHovered] = useState<string | null>(null);
+  /* On a phone: which sheet is up, and the home a pin was tapped for. */
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null);
+  const phone = useIsPhone();
+  const router = useRouter();
 
   const filter: HomeFilter = { lat: from?.lat ?? null, lng: from?.lng ?? null, radiusMiles: radius, minBeds, maxRent, type };
   const shown = useMemo(() => {
@@ -83,9 +90,145 @@ export default function HomesBrowser({
   }, [homes, from, radius, minBeds, maxRent, type, sort]);
 
   const nextRadius = radius ? RADII.find((r) => r > radius) ?? null : null;
+  const place = from ? (from === home ? "your home" : from.label) : null;
+  const pickedHome = picked ? shown.find((x) => x.h.id === picked) ?? null : null;
+  const onPlace = (o: Origin | null) => {
+    setFrom(o);
+    if (o && !radius) setRadius(10);
+    if (o) setSort("near");
+  };
 
   return (
-    <div className="space-y-6">
+    <>
+    {/* ── ON A PHONE (James, 18 Sep 2026) ───────────────────────────────────
+        "Searching for your new home": one button that raises the search as
+        a bottom sheet - where from, how far, bedrooms, rent, type, and the
+        alert - and Search drops them onto the map. No list: on a phone the
+        map IS the result, and a pin raises the home in a second sheet. The
+        page above stays the desktop's from sm up. */}
+    <div className="space-y-4 sm:hidden">
+      <div>
+        <p className={eyebrow}>Find a home</p>
+        <h1 className="mt-1 text-[32px] leading-[1.05]">Homes to Rent</h1>
+      </div>
+      <button
+        type="button"
+        onClick={() => setFiltersOpen(true)}
+        className="flex w-full items-center gap-3 rounded-[20px] bg-accent-soft p-4 text-left"
+      >
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-accent-dark"><DoodleIcon name="search" size={18} /></span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15px] font-bold leading-tight">Searching for your new home</span>
+          <span className="mt-0.5 block truncate text-[12.5px] text-muted">{describe(filter, place)}</span>
+        </span>
+        <span className="shrink-0 rounded-full bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-white">Search</span>
+      </button>
+      {error ? (
+        <div className={`${card} p-5`}>
+          <p className="text-[15px] font-semibold">{error}</p>
+          <p className="mt-1 text-[13px] text-muted">Try again in a minute. If it keeps happening, message your agent and they will send you what is on.</p>
+        </div>
+      ) : (
+        <div className="relative h-[calc(100svh-300px)] min-h-[400px]">
+          {phone === true && (
+            <HomesMap
+              homes={shown.map((x) => x.h)}
+              centre={from ? { lat: from.lat, lng: from.lng } : null}
+              centreIsHome={Boolean(home) && from === home}
+              radiusMiles={from ? radius : null}
+              hovered={picked}
+              hrefFor={(id) => `${base}/homes/${id}${q}`}
+              onPick={setPicked}
+              onSearchHere={(at) => {
+                setFrom({ ...at, label: "the area on the map" });
+                if (!radius) setRadius(3);
+              }}
+            />
+          )}
+          <span className="pointer-events-none absolute bottom-3 left-3 z-[5] rounded-full bg-white/95 px-3 py-1.5 text-[12px] font-semibold shadow-sm">
+            {shown.length} {shown.length === 1 ? "home" : "homes"}
+            {radius && from ? ` within ${radius} ${radius === 1 ? "mile" : "miles"}` : ""}
+          </span>
+        </div>
+      )}
+    </div>
+
+    <Sheet
+      open={filtersOpen}
+      onClose={() => setFiltersOpen(false)}
+      label="Search for a home"
+      footer={
+        <button type="button" onClick={() => { setFiltersOpen(false); setPicked(null); }} className="flex w-full items-center justify-center gap-2 rounded-full bg-accent-dark py-3.5 text-[14.5px] font-semibold text-white">
+          Search <span className="font-normal text-white/75">· {shown.length} {shown.length === 1 ? "home" : "homes"}</span>
+        </button>
+      }
+    >
+      <h2 className="text-[20px] font-bold leading-tight">Search for Your New Home</h2>
+      <div className="mt-4 space-y-5">
+        <Where from={from} home={home} sample={sample} onPlace={onPlace} />
+        <Row label="Within">
+          {RADII.map((r) => (
+            <Chip key={r} on={radius === r} disabled={!from} onClick={() => setRadius(r)}>{r} {r === 1 ? "mile" : "miles"}</Chip>
+          ))}
+          <Chip on={radius === null} onClick={() => setRadius(null)}>Any distance</Chip>
+        </Row>
+        <Row label="Bedrooms">
+          <Chip on={minBeds === null} onClick={() => setMinBeds(null)}>Any</Chip>
+          {BEDS.map((b) => (
+            <Chip key={b} on={minBeds === b} onClick={() => setMinBeds(b)}>{b}+</Chip>
+          ))}
+        </Row>
+        <div className="grid grid-cols-2 gap-3">
+          <Pick label="Rent up to" value={maxRent ?? ""} onChange={(v) => setMaxRent(v ? Number(v) : null)}>
+            <option value="">Any rent</option>
+            {RENTS.map((r) => <option key={r} value={r}>{pounds(r)} a month</option>)}
+          </Pick>
+          <Pick label="Type" value={type ?? ""} onChange={(v) => setType(v === "house" || v === "flat" ? v : null)}>
+            <option value="">All types</option>
+            <option value="house">Houses</option>
+            <option value="flat">Flats</option>
+          </Pick>
+        </div>
+        <Alerts filter={filter} place={place} saved={alert} sample={sample} />
+      </div>
+    </Sheet>
+
+    <Sheet
+      open={Boolean(pickedHome)}
+      onClose={() => setPicked(null)}
+      label={pickedHome ? pickedHome.h.name : "A home"}
+      footer={
+        pickedHome && (
+          <button type="button" onClick={() => router.push(`${base}/homes/${pickedHome.h.id}${q}`)} className="flex w-full items-center justify-center gap-2 rounded-full bg-accent-dark py-3.5 text-[14.5px] font-semibold text-white">
+            See the home <DoodleIcon name="trend-up" size={14} className="invert" />
+          </button>
+        )
+      }
+    >
+      {pickedHome && (
+        <div>
+          <div className="relative">
+            <PropertyPhoto src={pickedHome.h.photo} alt="" className="h-[190px] w-full rounded-[16px]" />
+            {askedAbout === pickedHome.h.id && <span className="absolute left-2.5 top-2.5 rounded-full bg-accent-dark px-2.5 py-1 text-[11px] font-semibold text-white">You asked about this</span>}
+            {pickedHome.h.photoCount > 1 && (
+              <span className="absolute bottom-2.5 right-2.5 flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold text-white">
+                <DoodleIcon name="camera" size={12} className="invert" /> {pickedHome.h.photoCount}
+              </span>
+            )}
+          </div>
+          <p className="mt-4 text-[22px] font-bold leading-none">{rentWords(pickedHome.h)}</p>
+          <p className="mt-2 text-[15px] font-semibold leading-snug">{pickedHome.h.name}</p>
+          <p className="mt-0.5 text-[13px] text-muted">{pickedHome.h.locality}</p>
+          <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted">
+            {pickedHome.h.beds != null && <span className="flex items-center gap-1.5"><DoodleIcon name="bed.png" size={14} />{pickedHome.h.beds === 0 ? "Studio" : `${pickedHome.h.beds} bed`}</span>}
+            {pickedHome.h.propertyType && <span>{pickedHome.h.propertyType}</span>}
+            {pickedHome.miles != null && <span className="flex items-center gap-1"><DoodleIcon name="target" size={12} />{milesWords(pickedHome.miles)}</span>}
+          </p>
+        </div>
+      )}
+    </Sheet>
+
+    <div className="hidden space-y-6 sm:block">
       <div className="pt-2">
         <p className={eyebrow}>Find a home</p>
         <h1 className="mt-2 text-[44px] leading-[1.05]">Homes to Rent</h1>
@@ -97,7 +240,7 @@ export default function HomesBrowser({
 
       {/* ── the search ── */}
       <div className={`${card} space-y-5 p-5 sm:p-6`}>
-        <Where from={from} home={home} sample={sample} onPlace={(o) => { setFrom(o); if (o && !radius) setRadius(10); if (o) setSort("near"); }} />
+        <Where from={from} home={home} sample={sample} onPlace={onPlace} />
         <div className="flex flex-wrap items-end gap-x-10 gap-y-5">
           <Row label="Within">
             {RADII.map((r) => (
@@ -148,7 +291,7 @@ export default function HomesBrowser({
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         {/* ── the homes ── */}
         <section className={`space-y-5 ${view === "map" ? "hidden lg:block" : ""}`}>
-          <Alerts filter={filter} place={from ? (from === home ? "your home" : from.label) : null} saved={alert} sample={sample} />
+          <Alerts filter={filter} place={place} saved={alert} sample={sample} />
           {error ? (
             <div className={`${card} flex items-start gap-4 p-6`}>
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-panel text-muted"><DoodleIcon name="info" size={17} /></span>
@@ -189,7 +332,7 @@ export default function HomesBrowser({
 
         {/* ── the map ── */}
         <aside className={`h-[70vh] lg:sticky lg:top-6 lg:block lg:h-[calc(100vh-3rem)] ${view === "list" ? "hidden" : ""}`}>
-          <HomesMap
+          {phone === false && <HomesMap
             homes={shown.map((x) => x.h)}
             centre={from ? { lat: from.lat, lng: from.lng } : null}
             centreIsHome={Boolean(home) && from === home}
@@ -201,11 +344,27 @@ export default function HomesBrowser({
               if (!radius) setRadius(3);
               setSort("near");
             }}
-          />
+          />}
         </aside>
       </div>
     </div>
+    </>
   );
+}
+
+/** Whether this is a phone (under sm), once known. Null until the first
+ *  effect, so only one of the two maps is ever made - a hidden Google map
+ *  is a whole second map loading for nothing. */
+function useIsPhone(): boolean | null {
+  const [phone, setPhone] = useState<boolean | null>(null);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const set = () => setPhone(mq.matches);
+    set();
+    mq.addEventListener("change", set);
+    return () => mq.removeEventListener("change", set);
+  }, []);
+  return phone;
 }
 
 /* ── Where they search from ─────────────────────────────────────────────── */

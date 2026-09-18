@@ -7,6 +7,7 @@ import PropertyPhoto from "@/components/PropertyPhoto";
 import { milesBetween, type MarketHomeDetail } from "@/lib/market-homes";
 import { milesWords, rentWords, type Origin } from "@/components/tenant/HomesBrowser";
 import HomesMap from "@/components/tenant/HomesMap";
+import Sheet from "@/components/tenant/Sheet";
 
 /**
  * One home on Find a home: every photo, the write-up the portals carry, and
@@ -40,6 +41,7 @@ export default function HomeDetail({
   phone: string;
 }) {
   const [open, setOpen] = useState<number | null>(null);
+  const [asking, setAsking] = useState(false);
   const photos = h.images;
   const miles = home && h.lat != null && h.lng != null ? milesBetween(home, { lat: h.lat, lng: h.lng }) : null;
   const available = h.availableFrom && new Date(h.availableFrom).getTime() > Date.now() ? `From ${longDate(h.availableFrom)}` : "Now";
@@ -101,10 +103,30 @@ export default function HomeDetail({
         </div>
 
         {/* ── enquire ── */}
-        <aside className="lg:sticky lg:top-6">
+        <aside className="hidden sm:block lg:sticky lg:top-6">
           <Enquire h={h} sample={sample} asked={asked} first={first} phone={phone} />
         </aside>
       </div>
+
+      {/* ON A PHONE the enquiry is a bar on the foot of the screen that raises
+          the form as a sheet (James, 18 Sep 2026: bottom sheets on a phone),
+          so it is always one thumb away however far down the write-up they
+          have read. */}
+      <div aria-hidden className="h-20 sm:hidden" />
+      <div className="fixed inset-x-0 bottom-0 z-[50] border-t border-line/60 bg-white/95 px-5 pt-3 backdrop-blur sm:hidden" style={{ paddingBottom: "calc(12px + env(safe-area-inset-bottom))" }}>
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[17px] font-bold leading-none">{rentWords(h)}</p>
+            <p className="mt-1 truncate text-[12px] text-muted">{asked ? `You asked on ${asked}` : h.name}</p>
+          </div>
+          <button type="button" onClick={() => setAsking(true)} className="shrink-0 rounded-full bg-accent-dark px-5 py-3 text-[14px] font-semibold text-white">
+            {asked ? "Ask again" : "Enquire"}
+          </button>
+        </div>
+      </div>
+      <Sheet open={asking} onClose={() => setAsking(false)} label="Enquire about this home">
+        <Enquire h={h} sample={sample} asked={asked} first={first} phone={phone} />
+      </Sheet>
 
       {open != null && <Viewer photos={photos} at={open} onMove={setOpen} onClose={() => setOpen(null)} />}
     </div>
