@@ -101,28 +101,42 @@ export async function POST(req: NextRequest) {
      switch: an offer sitting in a table nobody reads is the failure here. */
   const agent = await userByName(f.agent);
   if (agent?.email) {
-    const who = f.name || f.email;
+    /* What a stranger typed on a public page, going into HTML (18 Sep 2026).
+       renderPlain was built for our own words and lets markup through, so an
+       answer could carry a link, an image, or a line in the button shape that
+       came out as a branded button in an email from us. Escaped, and the
+       button shape broken, before any of it is laid out. */
+    const safe = (v: unknown) =>
+      String(v ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/\[([^\]]*)\]\(/g, "$1 (");
+    const who = safe(f.name || f.email);
+    const address = safe(f.address);
+    /* The subject line is plain text, so it carries their words as typed. */
     const subject = offer
-      ? `Offer from ${who}: £${offer.amount.toLocaleString("en-GB")} pcm on ${f.address}`
-      : `Viewing feedback from ${who}: ${f.address}`;
+      ? `Offer from ${f.name || f.email}: £${offer.amount.toLocaleString("en-GB")} pcm on ${f.address}`
+      : `Viewing feedback from ${f.name || f.email}: ${f.address}`;
     const text = [
-      offer ? `${who} would like to offer on ${f.address}.` : `${who} has said ${f.address} is not for them.`,
+      offer ? `${who} would like to offer on ${address}.` : `${who} has said ${address} is not for them.`,
       "",
       ...(offer
         ? [
             `**Offer:** £${offer.amount.toLocaleString("en-GB")} pcm${f.asking_pcm ? ` (advertised at £${f.asking_pcm.toLocaleString("en-GB")})` : ""}`,
-            `**Move in:** ${offer.moveIn ?? "not said"}`,
-            `**Term:** ${offer.term ?? "not said"}`,
+            `**Move in:** ${safe(offer.moveIn ?? "not said")}`,
+            `**Term:** ${safe(offer.term ?? "not said")}`,
             "",
             "Put it to the landlord, and reply to them either way.",
             "",
           ]
         : ["They have been sent other homes nearby at a similar rent, if there were any.", ""]),
-      ...QUESTIONS.map(([k, q]) => `**${q}**\n${answers[k] || "-"}`),
+      ...QUESTIONS.map(([k, q]) => `**${q}**\n${safe(answers[k]) || "-"}`),
       "",
-      `Their email: ${f.email}`,
+      `Their email: ${safe(f.email)}`,
     ].join("\n");
-    await sendEmail({ to: agent.email, subject, html: renderPlain(subject, text).html, text: text.replace(/\*\*/g, ""), replyTo: f.email }).catch(() => null);
+    await sendEmail({ to: agent.email, subject, html: renderPlain(safe(subject), text).html, text: text.replace(/\*\*/g, ""), replyTo: f.email }).catch(() => null);
   }
 
   if (!b.interested) await sendNotForThem(f.token).catch(() => null);

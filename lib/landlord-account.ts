@@ -411,6 +411,12 @@ const LANDLORD_WORDS: Record<string, { label: string; now: string; next: string 
   move_day: { label: "Move-in day", now: "Everything is in place. The tenant moves in on the date agreed.", next: "Keys, inventory and check-in are handled by your agent." },
 };
 
+/** A UK postcode found anywhere in a line of address, squashed: "NN1 4AB" -> "NN14AB". */
+function postcodeKey(text: string): string | null {
+  const m = /\b([A-Z]{1,2}\d[A-Z\d]?)\s*(\d[A-Z]{2})\b/i.exec(text ?? "");
+  return m ? `${m[1]}${m[2]}`.toUpperCase() : null;
+}
+
 /**
  * The landlord's accepted let, from Propoly, by address or by their email on
  * the deal. Nearest move-in first where there is more than one. Null when no
@@ -418,14 +424,30 @@ const LANDLORD_WORDS: Record<string, { label: string; now: string; next: string 
  */
 export async function landlordProgress(email: string, propertyNames: string[]): Promise<ViewProgress | null> {
   const all = (await getAllPropolyDeals().catch(() => null)) ?? [];
-  const keys = new Set(propertyNames.map((n) => propertyKey(n)).filter(Boolean));
-  const mine = all.filter(
-    (d) =>
-      d.statusKey !== "cancelled" &&
-      d.statusKey !== "complete" &&
-      ((d.app.propoly?.landlord?.email && normaliseEmail(d.app.propoly.landlord.email) === email) ||
-        (keys.size > 0 && keys.has(propertyKey(d.app.propertyName))))
+  /* THE ADDRESS MATCH NEEDS THE POSTCODE TOO (18 Sep 2026). `propertyKey` is a
+     house number and the first word of the street - its own note says it
+     collides across towns and is only a fallback behind an id. Here it was the
+     whole test, against every live deal in every agency, so "Flat 3, 12 High
+     Street" matched "3 High Road" anywhere and one landlord was shown another's
+     tenants, rent and move-in date. No postcode on either side, no match: the
+     landlord's email on the deal still finds theirs. */
+  const mineAt = new Set(
+    propertyNames
+      .map((n) => {
+        const key = propertyKey(n);
+        const pc = postcodeKey(n);
+        return key && pc ? `${key}|${pc}` : "";
+      })
+      .filter(Boolean)
   );
+  const mine = all.filter((d) => {
+    if (d.statusKey === "cancelled" || d.statusKey === "complete") return false;
+    if (d.app.propoly?.landlord?.email && normaliseEmail(d.app.propoly.landlord.email) === email) return true;
+    if (mineAt.size === 0) return false;
+    const key = propertyKey(d.app.propertyName);
+    const pc = postcodeKey(`${d.app.propertyName} ${d.app.locality ?? ""}`);
+    return Boolean(key && pc && mineAt.has(`${key}|${pc}`));
+  });
   if (!mine.length) return null;
   mine.sort((a, b) => (a.app.startDate ?? "9999").localeCompare(b.app.startDate ?? "9999"));
   const d = mine[0];

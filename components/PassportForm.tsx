@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PassportBook, { CLAY, COVER, PassportBack, photoPosition, type PassportFocus } from "@/components/PassportBook";
@@ -259,11 +259,16 @@ function looksLikeADoor(a: string): boolean {
   return /^(flat|apartment|apt|unit|room|studio|penthouse|the\s|\S+\s+(cottage|house|lodge|barn|farm|mews|court|manor|villa))/i.test(first);
 }
 
+/** The passport's own token, for the address lookup: it is the ticket the
+ *  lookup asks for, and the field sits too deep to be handed it as a prop. */
+const PassportToken = createContext("");
+
 function TenantAddress({ label, hint, value, onChange, onEnter, onPicked }: { label: string; hint?: string; value: string; onChange: (v: string) => void; onEnter?: () => void; onPicked?: () => void }) {
   const [matches, setMatches] = useState<{ id: string; label: string }[]>([]);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const picked = useRef<string | null>(null);
+  const ticket = encodeURIComponent(useContext(PassportToken));
   /** Set when what they chose came back as a street rather than a door. */
   const [needsNumber, setNeedsNumber] = useState(false);
   const [houseNumber, setHouseNumber] = useState("");
@@ -274,7 +279,7 @@ function TenantAddress({ label, hint, value, onChange, onEnter, onPicked }: { la
     const id = window.setTimeout(async () => {
       setBusy(true);
       try {
-        const r = await fetch(`/api/tenant/passport/address?q=${encodeURIComponent(q)}`, { cache: "no-store" });
+        const r = await fetch(`/api/tenant/passport/address?token=${ticket}&q=${encodeURIComponent(q)}`, { cache: "no-store" });
         const j = await r.json();
         const found = (j.suggestions ?? []) as { id: string; label: string }[];
         setMatches(found);
@@ -293,7 +298,7 @@ function TenantAddress({ label, hint, value, onChange, onEnter, onPicked }: { la
     picked.current = label;
     onChange(label);
     try {
-      const r = await fetch(`/api/tenant/passport/address?resolve=${encodeURIComponent(id)}`, { cache: "no-store" });
+      const r = await fetch(`/api/tenant/passport/address?token=${ticket}&resolve=${encodeURIComponent(id)}`, { cache: "no-store" });
       const j = await r.json();
       if (j.address) {
         picked.current = j.address;
@@ -1643,6 +1648,7 @@ export default function PassportForm({
   }
 
   return (
+    <PassportToken.Provider value={token}>
     <div
       data-passport-page
       className="lg:grid lg:h-[calc(100vh-64px)] lg:grid-cols-[minmax(0,46%)_minmax(0,54%)] lg:overflow-hidden"
@@ -1779,5 +1785,6 @@ export default function PassportForm({
         </div>
       </aside>
     </div>
+    </PassportToken.Provider>
   );
 }

@@ -160,7 +160,15 @@ export async function loadLandlordHome(me: Me, pick?: string | null) {
       lead ? [lead.appraisal.rexPropertyId] : book[0] ? [book[0].propertyId] : [],
       lead ? [] : book[0] ? [book[0].listingId] : []
     ),
-    landlordProgress(me.email, lead ? [lead.appraisal.address] : book[0] ? [book[0].name] : []),
+    /* With the postcode on the end: the match will not accept an address without one. */
+    landlordProgress(
+      me.email,
+      lead
+        ? [[lead.appraisal.address, lead.appraisal.postcode].filter(Boolean).join(" ")]
+        : book[0]
+          ? [[book[0].name, book[0].locality, book[0].postcode].filter(Boolean).join(" ")]
+          : []
+    ),
     /* What they have already said yes to. Ours, not REX's - see
        lib/landlord-offers for why approving cannot move an application. */
     currentApproval(me.id).catch(() => null),

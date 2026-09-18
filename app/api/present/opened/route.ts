@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { markOpened } from "@/lib/present-store";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 
 /**
  * "They've opened it."
@@ -26,6 +27,11 @@ export async function POST(req: NextRequest) {
   } catch {
     /* an empty body is not worth a 400 — nothing depends on the answer */
   }
-  if (token) await markOpened(token);
+  /* Not ours. View on the appraisal opens this same public page, and so does
+     presenting it on the day - both ticked "Opened by the landlord" before the
+     landlord had seen anything (18 Sep 2026). Same origin, so a member of
+     staff's session cookie comes along and says who is really looking. */
+  const staff = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
+  if (token && !staff) await markOpened(token);
   return NextResponse.json({ ok: true });
 }

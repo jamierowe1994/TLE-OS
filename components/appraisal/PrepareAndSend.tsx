@@ -312,7 +312,10 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
               <div>
                 <button
                   type="button"
-                  onClick={() => void openSigning()}
+                  /* With the old signature stale this must REPLACE: a bare
+                     openSigning() reopened the contract already signed at the
+                     old figures, and Send then refused it - no way forward. */
+                  onClick={() => void openSigning(Boolean(staleSignature))}
                   disabled={busy === "sign"}
                   className="rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white disabled:opacity-60"
                 >

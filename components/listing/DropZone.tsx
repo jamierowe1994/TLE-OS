@@ -113,8 +113,14 @@ export default function DropZone({
     const list = Array.from(files ?? []);
     if (!list.length) return;
     if (pictures) {
-      for (const f of list) {
-        const i = queue.length;
+      /* Each file's row, counted here rather than read off `queue`: that is
+         the value from when this function started, so every file in a drop got
+         the SAME index - one row finished and the rest spun for ever, with the
+         photos actually uploaded, and the natural thing to do was drop them
+         again and put every photo on the advert twice. */
+      const base = queue.length;
+      for (const [n, f] of list.entries()) {
+        const i = base + n;
         setQueue((q) => [...q, { name: f.name, pct: 0, done: false }]);
         const body = new FormData();
         body.append("file", f);
