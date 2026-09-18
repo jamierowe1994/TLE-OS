@@ -122,6 +122,23 @@ export async function markInvited(token: string, by: string): Promise<void> {
 }
 
 /** A passport already minted for this email by this agent, if one exists. */
+/**
+ * The address this passport's link was EMAILED to, or null if it never was.
+ *
+ * Holding a link only proves an address is yours when we sent the link there.
+ * A link an agent copied and pasted, or one minted with no address, proves
+ * nothing about whatever gets typed on page one.
+ */
+export async function passportEmailedTo(token: string): Promise<string | null> {
+  if (!hasDb()) return null;
+  const rows = await q<{ email: string | null }>(
+    `SELECT email FROM os_tenant_passports WHERE token = $1 AND invited_at IS NOT NULL`,
+    [token]
+  );
+  const email = (rows[0]?.email ?? "").trim();
+  return email.includes("@") ? email : null;
+}
+
 export async function findPassportByEmail(email: string, agentId: string | null): Promise<{ token: string; invitedAt: string | null } | null> {
   if (!hasDb() || !email) return null;
   const rows = await q<{ token: string; invited_at: string | Date | null }>(
@@ -189,7 +206,12 @@ export async function savePassport(token: string, data: PassportData): Promise<P
     `UPDATE os_tenant_passports
         SET data = $2::jsonb,
             name = COALESCE(NULLIF($3,''), name),
-            email = COALESCE(NULLIF($4,''), email),
+            /* The address the link was SENT to stays (18 Sep 2026). It used
+               to follow whatever was typed on page one, and the account at the
+               end is made for this column - so anybody holding any passport
+               link could type somebody else's address and be handed their
+               account. Filled from the form only when nothing was invited. */
+            email = COALESCE(NULLIF(email,''), NULLIF($4,'')),
             updated_at = NOW()
       WHERE token = $1
       RETURNING ${COLS}`,

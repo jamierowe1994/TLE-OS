@@ -74,7 +74,7 @@ export async function tenantByEmail(rawEmail: string): Promise<TenantMatch | nul
   return { email, name: me?.name || email, deals };
 }
 
-export async function upsertTenantAccount(m: TenantMatch): Promise<TenantAccount> {
+export async function upsertTenantAccount(m: Pick<TenantMatch, "email" | "name">): Promise<TenantAccount> {
   const rows = await q<Row>(
     `INSERT INTO os_portal_accounts (id, kind, email, name, rex_contact_id, profile)
      VALUES ($1, 'tenant', $2, $3, NULL, '{}'::jsonb)
@@ -136,13 +136,25 @@ export async function createTenantFromPassport(opts: {
      VALUES ($1, 'tenant', $2, $3, $4, NULL, NOW(), $5::jsonb)
      ON CONFLICT (email, kind) DO UPDATE
        SET name = EXCLUDED.name,
-           password_hash = EXCLUDED.password_hash,
+           /* Sets a password, never REPLACES one. The route refuses first;
+              this is the same rule where it cannot be forgotten. */
+           password_hash = COALESCE(os_portal_accounts.password_hash, EXCLUDED.password_hash),
            activated_at = COALESCE(os_portal_accounts.activated_at, NOW()),
            profile = os_portal_accounts.profile || EXCLUDED.profile
      RETURNING id, email, name, activated_at`,
     [uid(), email, opts.name.trim() || email, hashPassword(opts.password), JSON.stringify({ passportToken: opts.passportToken })]
   );
   return shape(rows[0]);
+}
+
+/** Does this address already have an account with a password on it? */
+export async function tenantHasPassword(rawEmail: string): Promise<boolean> {
+  if (!hasDb()) return false;
+  const rows = await q<{ has: boolean }>(
+    `SELECT (password_hash IS NOT NULL) AS has FROM os_portal_accounts WHERE kind = 'tenant' AND email = $1`,
+    [normaliseEmail(rawEmail)]
+  );
+  return rows[0]?.has === true;
 }
 
 /** Email and password, or nothing. The same nothing for a wrong password,

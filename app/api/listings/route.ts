@@ -27,6 +27,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       live: false,
+      /* The ONLY answer that lets the page show the saved export. */
+      demo: true,
       reason: "The listings system isn't connected here, so a saved copy is standing in.",
     });
   }

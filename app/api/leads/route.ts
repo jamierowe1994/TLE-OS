@@ -112,7 +112,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       live: false,
-      reason: "REX isn't connected on this environment — the demo book is standing in.",
+      /* The ONLY answer that lets the page show the demo book. */
+      demo: true,
+      reason: "REX isn't connected on this environment - the demo book is standing in.",
     });
   }
 

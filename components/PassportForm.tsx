@@ -563,6 +563,7 @@ function FinishStage({ data, phase, token, demo, onBack }: { data: PassportData;
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
   const [sampleDone, setSampleDone] = useState(false);
   const email = data.email.trim();
   const first = data.legalName.trim().split(/\s+/)[0] || "";
@@ -632,9 +633,16 @@ function FinishStage({ data, phase, token, demo, onBack }: { data: PassportData;
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ token, password: pw }),
       });
-      const j = (await r.json()) as { ok?: boolean; error?: string };
+      const j = (await r.json()) as { ok?: boolean; error?: string; verify?: boolean; email?: string };
       if (!j.ok) {
         setErr(j.error ?? "That didn't work. Try again in a moment.");
+        setBusy(false);
+        return;
+      }
+      /* An address we did not send this link to has to be shown to be theirs
+         first: the way in is the link we have just emailed it. */
+      if (j.verify) {
+        setLinkSentTo(j.email ?? "your email address");
         setBusy(false);
         return;
       }
@@ -784,6 +792,11 @@ function FinishStage({ data, phase, token, demo, onBack }: { data: PassportData;
                       <li className="hidden xl:block">· A mix of letters and numbers helps</li>
                     </ul>
                     {err && <p className="text-[13.5px]" style={{ color: "#9d4340" }}>{err}</p>}
+                    {linkSentTo && (
+                      <p className="text-[13.5px] leading-relaxed" role="status">
+                        Your passport is saved. We have emailed a sign-in link to {linkSentTo} - open it to finish and go straight in.
+                      </p>
+                    )}
                     <div className="flex flex-wrap items-center gap-4">
                       <button
                         type="submit"

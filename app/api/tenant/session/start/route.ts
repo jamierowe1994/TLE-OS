@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { startVerification, VerificationError } from "@/lib/verification";
-import { tenantByEmail, upsertTenantAccount } from "@/lib/tenant-account";
+import { tenantAccountByEmail, tenantByEmail, upsertTenantAccount } from "@/lib/tenant-account";
 import { renderTenantSignIn } from "@/lib/email/tle-emails";
 import { sendEmail, ResendBlocked } from "@/lib/resend";
 import { hasDb } from "@/lib/db";
@@ -55,12 +55,19 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const match = await tenantByEmail(email);
-    if (!match) {
+    /* Two ways to be somebody we know (18 Sep 2026): an address on a Propoly
+       deal, or an account already made at the end of a passport. It was the
+       first only - and Propoly stopped sending tenant addresses on 6 Sep, so
+       "Email me a sign-in link" said "on its way" to everybody and sent to
+       nobody. */
+    const onDeal = await tenantByEmail(email);
+    const held = onDeal ? null : await tenantAccountByEmail(email);
+    if (!onDeal && !held) {
       console.warn(`[tenant/start] not a tenant we hold: ${email}`);
       return NextResponse.json(SAME_ANSWER);
     }
-    await upsertTenantAccount(match);
+    if (onDeal) await upsertTenantAccount(onDeal);
+    const match = onDeal ?? { name: held!.name };
     const { token } = await startVerification(email, "tenant");
     const origin = process.env.OS_ORIGIN?.replace(/\/+$/, "") || req.nextUrl.origin;
     const link = `${origin}/tenant/enter?token=${encodeURIComponent(token)}`;

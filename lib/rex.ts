@@ -334,7 +334,7 @@ export async function rexCall(
     });
     throw e;
   }
-  if (!res.ok && worthReporting(res, method, Boolean(actorToken))) {
+  if (!res.ok && worthReporting(res, service, method, Boolean(actorToken))) {
     noteFailure({ source: "REX", what: path, status: res.status, message: res.error ?? `answered ${res.status}` });
   }
   return res;
@@ -347,10 +347,18 @@ export async function rexCall(
  * nothing is not a fault - plenty of code asks "is this id still there?" - so
  * RecordNotFound on a read is left out. So is a person's own sign-in lapsing:
  * that is "connect REX again" on their screen, not a bug in ours.
+ *
+ * And one refusal that is the plan rather than a fault (18 Sep 2026): REX keeps
+ * one active compliance entry per type per home and turns a second create away.
+ * writeCertificateToRex in lib/plc-rex expects exactly that and goes on to
+ * update the entry already there - so reporting it raised a ticket for every
+ * certificate filed on a home REX already knew about. The update that follows
+ * still reports its own refusal, so a real failure is not lost.
  */
-function worthReporting(res: RexResponse, method: string, asPerson: boolean): boolean {
+function worthReporting(res: RexResponse, service: string, method: string, asPerson: boolean): boolean {
   if (asPerson && isTokenError(res)) return false;
   if (res.status === 429 || res.status >= 500) return true;
+  if (service === "ComplianceEntries" && method === "create" && /already an active compliance entry/i.test(res.error ?? "")) return false;
   const readOnly = isReadOnlyMethod(method);
   if (readOnly && /recordnotfound|not found/i.test(res.error ?? "")) return false;
   return true;

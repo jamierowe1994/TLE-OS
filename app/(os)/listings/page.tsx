@@ -78,6 +78,7 @@ type Counts = {
 
 const FALLBACK = rexSample.listings as SampleListing[];
 const FALLBACK_COUNTS = rexSample.counts as Counts;
+const NO_COUNTS: Counts = { currentRentals: 0, published: 0, draft: 0, letAgreed: 0, available: 0 };
 
 /** What to print under the price. Weekly rents say so. */
 function rentPeriodLabel(l: SampleListing): string {
@@ -373,15 +374,20 @@ export default function Listings() {
   /* Tiles by default, like Market Appraisals (James, 11 Sep 2026). */
   const [view, setView] = useState<"list" | "tiles">("tiles");
 
-  /* ── The real book, out of REX. The static export stands in until it
-        answers, so the page never renders empty. ── */
+  /* ── The real book. NOTHING stands in for it (18 Sep 2026). A saved export
+        from 6 August used to show while the book loaded, when it failed, and
+        for an agent with no link - other agents' real listings, dressed as the
+        viewer's own, each opening a drawer that could edit them. The export is
+        for a laptop with no listings system at all, and the server says so
+        with `demo`. Anything else is a loading line or an error. ── */
   const [book, setBook] = useState<{
     listings: SampleListing[];
     counts: Counts;
     live: boolean;
     loading: boolean;
+    failed?: boolean;
     reason?: string;
-  }>({ listings: FALLBACK, counts: FALLBACK_COUNTS, live: false, loading: true });
+  }>({ listings: [], counts: NO_COUNTS, live: false, loading: true });
 
   /** The book. Also called after a listing is added, so the new one is there
    *  to open - the board holds a cached read and would not have it yet. */
@@ -392,9 +398,26 @@ export default function Listings() {
         setBook({ listings: j.listings, counts: j.counts, live: true, loading: false });
         return true;
       }
-      setBook({ listings: FALLBACK, counts: FALLBACK_COUNTS, live: false, loading: false, reason: j.reason });
+      if (j.ok && j.demo) {
+        setBook({ listings: FALLBACK, counts: FALLBACK_COUNTS, live: false, loading: false, reason: j.reason });
+        return false;
+      }
+      setBook({
+        listings: [],
+        counts: NO_COUNTS,
+        live: false,
+        loading: false,
+        failed: !j.unlinked,
+        reason: j.reason ?? "We couldn't read your listings just now. Nothing is lost - try again in a minute.",
+      });
     } catch {
-      setBook((b) => ({ ...b, loading: false, reason: "The book didn't answer - showing the last saved copy." }));
+      /* A book already on the screen stays: a refresh that fails after a save
+         must not empty a board that was true a moment ago. */
+      setBook((b) =>
+        b.live
+          ? { ...b, loading: false }
+          : { listings: [], counts: NO_COUNTS, live: false, loading: false, failed: true, reason: "We couldn't read your listings just now. Nothing is lost - try again in a minute." }
+      );
     }
     return false;
   }, []);
@@ -745,7 +768,24 @@ export default function Listings() {
         {stage === "archived" && archive.error && !archive.loading && (
           <p className="py-6 text-[12.5px] text-accent-dark">{archive.error}</p>
         )}
-        {board.length === 0 && !(stage === "archived" && (archive.loading || archive.error)) && (
+        {book.loading && (
+          <p className="flex items-center gap-2.5 py-6 text-[12.5px] text-muted" role="status">
+            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-accent" aria-hidden />
+            Fetching your listings…
+          </p>
+        )}
+        {!book.loading && !book.live && book.listings.length === 0 && (
+          <div className="py-8 text-center" role={book.failed ? "alert" : "status"}>
+            <p className="text-[13px] font-semibold text-ink">{book.failed ? "Your listings didn't load" : "No listings to show yet"}</p>
+            <p className="mx-auto mt-1.5 max-w-md text-[12px] leading-relaxed text-muted">{book.reason}</p>
+            {book.failed && (
+              <button type="button" onClick={() => void loadBook()} className="mt-4 rounded-full bg-accent px-5 py-2 text-[12px] font-semibold text-white">
+                Try again
+              </button>
+            )}
+          </div>
+        )}
+        {board.length === 0 && (book.live || book.listings.length > 0) && !(stage === "archived" && (archive.loading || archive.error)) && (
           <p className="py-6 text-[12.5px] text-muted">
             Nothing matches{period === "any" ? "" : " in that window"} - widen the rent band or clear the filters.
           </p>

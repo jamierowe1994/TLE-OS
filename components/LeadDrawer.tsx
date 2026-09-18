@@ -854,6 +854,18 @@ export default function LeadDrawer({
     EMPTY_CASE
   );
   useEffect(() => setShowProcess(false), [lead?.id]);
+  /* Anything open on top belongs to the lead it was opened for. Keyed on the
+     id, not the object: the board hands over a fresh object whenever the spine
+     re-reads, and that must not shut an email somebody is halfway through. */
+  useEffect(() => {
+    setEmailing(false);
+    setComposing(false);
+    setLogging(null);
+    setBooking(false);
+    setSigning(false);
+    setConfirming(null);
+    setAppraising(false);
+  }, [lead?.id]);
   const [booking, setBooking] = useState(false);
   /* The tenant passport, sent by hand. There is an automatic send off a booked
      viewing; James, 9 Sep: an agent must also be able to send it whenever they
@@ -1012,16 +1024,25 @@ export default function LeadDrawer({
 
   // Escape closes; arrows step. A record you can only leave with the mouse is
   // a record nobody works through quickly.
+  const onTop = emailing || composing || logging !== null || booking || signing || confirming !== null || appraising;
   useEffect(() => {
     if (!lead) return;
     const onKey = (e: KeyboardEvent) => {
+      /* Not while somebody is typing, and not while something is open on top
+         (18 Sep 2026). An arrow key inside the email body stepped the lead
+         UNDERNEATH it: the words stayed, the address became the next person's,
+         and Send went to them. Escape also closed the drawer along with
+         whatever sat on it. */
+      const t = e.target as HTMLElement | null;
+      const typing = !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
+      if (typing || onTop) return;
       if (e.key === "Escape") onClose();
       if (e.key === "ArrowRight") onStep(1);
       if (e.key === "ArrowLeft") onStep(-1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [lead, onClose, onStep]);
+  }, [lead, onClose, onStep, onTop]);
 
   if (!lead || !detail) return null;
 

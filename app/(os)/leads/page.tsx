@@ -38,6 +38,9 @@ interface LeadSource {
   live: boolean;
   loading: boolean;
   reason?: string;
+  /** The read failed. The board says so rather than showing an empty list as
+   *  if it were true. */
+  failed?: boolean;
   scanned?: number;
   setAside?: { sales: number; unclear: number; blank: number };
   total?: number | null;
@@ -154,9 +157,13 @@ export default function Leads() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [side, viewReady]);
 
-  /* ── The real book, out of REX. Until it answers we show the demo one, so
-        the page never renders empty; `live` says which you're looking at. ── */
-  const [source, setSource] = useState<LeadSource>({ leads: LEADS, live: false, loading: true });
+  /* ── The real book, out of REX. NOTHING stands in for it (18 Sep 2026).
+        The demo book used to show while the real one loaded, when an agent had
+        no link, and when the read failed - made-up people with real-looking
+        addresses, on a live board, with Email and Send passport beside them.
+        The demo book is for a laptop with no REX at all, and the server says
+        so with `demo`. Anything else is a loading line or an error. ── */
+  const [source, setSource] = useState<LeadSource>({ leads: [], live: false, loading: true });
 
   /* ── People added in the OS ────────────────────────────────────────────
      Their own fetch rather than a field on /api/leads, because the two answer
@@ -208,12 +215,20 @@ export default function Leads() {
             onFile: j.onFile,
             stale: j.stale,
           });
-        } else {
+        } else if (j.ok && j.demo) {
           setSource({ leads: LEADS, live: false, loading: false, reason: j.reason });
+        } else {
+          setSource({
+            leads: [],
+            live: false,
+            loading: false,
+            failed: !j.unlinked,
+            reason: j.reason ?? "We couldn't read your leads just now. Nothing is lost - try again in a minute.",
+          });
         }
       })
       .catch(() => {
-        if (!gone) setSource({ leads: LEADS, live: false, loading: false, reason: "REX didn't answer — showing the demo book." });
+        if (!gone) setSource({ leads: [], live: false, loading: false, failed: true, reason: "We couldn't read your leads just now. Nothing is lost - try again in a minute." });
       });
     return () => { gone = true; };
   }, []);
@@ -453,8 +468,36 @@ export default function Leads() {
 
       <AddedHere refreshKey={addedTick} />
 
+      {source.failed && ALL.length > 0 && (
+        <p className="mt-4 rounded-2xl border border-line/50 bg-white px-4 py-3 text-[12px] text-muted" role="alert">
+          Your enquiries didn't load, so only the people added here by hand are showing. Try again in a minute.
+        </p>
+      )}
+
       <div className="mt-4">
-        {view === "groups" ? (
+        {/* Somebody typed in by hand still shows when the book does not: the
+            state below only takes the board's place when there is nothing at
+            all to put on it. */}
+        {!source.live && ALL.length === 0 ? (
+          <div className="fade-up rounded-[22px] border border-line/50 bg-white px-5 py-10 text-center" role="status">
+            {source.loading ? (
+              <p className="flex items-center justify-center gap-2.5 text-[13px] text-muted">
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-accent" aria-hidden />
+                Fetching your leads…
+              </p>
+            ) : (
+              <>
+                <p className="text-[13px] font-semibold text-ink">{source.failed ? "Your leads didn't load" : "No leads to show yet"}</p>
+                <p className="mx-auto mt-1.5 max-w-md text-[12px] leading-relaxed text-muted">{source.reason}</p>
+                {source.failed && (
+                  <PressButton onClick={() => window.location.reload()} className="mt-4 rounded-full bg-accent px-5 py-2 text-[12px] font-semibold text-white">
+                    Try again
+                  </PressButton>
+                )}
+              </>
+            )}
+          </div>
+        ) : view === "groups" ? (
           <>
             <div className="fade-up relative z-20 rounded-[22px] border border-line/50 bg-white px-5 py-4">
               <CornerSwell />
