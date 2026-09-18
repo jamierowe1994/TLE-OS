@@ -1,4 +1,5 @@
 import "server-only";
+import { isTestFile, TEST_REFUSAL } from "@/lib/test-guard";
 import { rexCall, rexConfigured, rexWritesLocked, isExpiredToken } from "@/lib/rex";
 import { rexTokenFor } from "@/lib/rex-user";
 import { switchOn } from "@/lib/switches";
@@ -50,6 +51,8 @@ import { switchOn } from "@/lib/switches";
  */
 
 export interface NewProperty {
+  /** "Flat 3" - REX's own unit field (adr_unit_number, in its model). */
+  unitNumber?: string | null;
   streetNumber: string;
   streetName: string;
   town: string;
@@ -64,7 +67,7 @@ export interface NewProperty {
 
 /** `detail` is safe for any agent to read; `ownerDetail`, when there is one, names the lock. */
 export type CreateOutcome =
-  | { ok: true; propertyId: string }
+  | { ok: true; propertyId: string; ownerDropped?: boolean }
   | { ok: false; reason: string; detail: string; ownerDetail?: string };
 
 /** Everything that has to be true before a property can be written. */
@@ -111,9 +114,13 @@ function buildPayload(p: NewProperty) {
     /* Lowercase "uk" — that is what the live records carry, and REX's enums
        are not forgiving about case. */
     adr_country: "uk",
-    property_category: { id: p.categoryId?.trim() || "residential" },
+    /* The _id forms: they are what Properties/describeModel lists (checked
+       18 Sep 2026). The nested { id } shape is how a READ comes back, and a
+       write naming a field the model does not have is refused outright. */
+    property_category_id: p.categoryId?.trim() || "residential",
   };
-  if (p.subcategoryId) data.property_subcategory = { id: String(p.subcategoryId) };
+  if (p.unitNumber?.trim()) data.adr_unit_number = p.unitNumber.trim();
+  if (p.subcategoryId) data.property_subcategory_id = String(p.subcategoryId);
   if (p.ownerContactId) {
     data.related = {
       contact_reln_property: [
@@ -142,15 +149,9 @@ export async function createProperty(
      one, so just make sure that stays the same"). Contacts already refuse
      their test flag; a property has none, so it is recognised by the test
      address the kits all use and by a test owner. */
-  if (/\b14 Test Street\b/i.test(`${p.streetNumber ?? ""} ${p.streetName ?? ""}`) || /^M20\s*2RN$/i.test(p.postcode.trim())) {
-    return { ok: false, reason: "test_file", detail: "This is a test address from Admin -> Testing, so it stays in the OS and never goes to REX." };
-  }
-  if (p.ownerContactId) {
-    const { q } = await import("@/lib/db");
-    const test = await q<{ is_test: boolean }>(`SELECT is_test FROM os_contacts WHERE rex_id = $1 OR id = $1 LIMIT 1`, [p.ownerContactId]).catch(() => []);
-    if (test[0]?.is_test) {
-      return { ok: false, reason: "test_file", detail: "The owner is a test contact from Admin -> Testing, so this stays in the OS and never goes to REX." };
-    }
+  /* Not the postcode alone: M20 2RN is a real street, see lib/test-guard. */
+  if (await isTestFile({ address: `${p.streetNumber ?? ""} ${p.streetName ?? ""}`, contactId: p.ownerContactId ?? null })) {
+    return { ok: false, reason: "test_file", detail: TEST_REFUSAL };
   }
 
   const blocked = await blockedBecause();
@@ -169,12 +170,23 @@ export async function createProperty(
     };
   }
 
-  const res = await rexCall(
+  let res = await rexCall(
     "Properties",
     "create",
     { data: buildPayload(p), return_id: true },
     token
   );
+  /* The owner join is the one part never written before. If REX will not take
+     it, the home still matters more than the join: make it without, and the
+     owner can be added in REX by hand. */
+  let ownerDropped = false;
+  if (!res.ok && !isExpiredToken(res) && p.ownerContactId) {
+    const bare = await rexCall("Properties", "create", { data: buildPayload({ ...p, ownerContactId: null }), return_id: true }, token);
+    if (bare.ok) {
+      res = bare;
+      ownerDropped = true;
+    }
+  }
 
   if (isExpiredToken(res)) {
     return {
@@ -206,7 +218,7 @@ export async function createProperty(
       ownerDetail: "REX accepted the property but returned no id, so it cannot be linked to anything.",
     };
   }
-  return { ok: true, propertyId: id };
+  return { ok: true, propertyId: id, ownerDropped };
 }
 
 /**

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { putInstructionInRex } from "@/lib/rex-instruct";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { fetchSigned, store, pushToRex } from "@/lib/signed-documents";
 import { everybodySigned } from "@/lib/docuseal";
@@ -154,8 +155,17 @@ export async function POST(req: NextRequest) {
       reason: e instanceof Error ? e.message : "REX copy failed.",
     }));
 
+    /* Signed terms are the instruction: the landlord and the home go into REX
+       now, so the listing has something to hang on (lib/rex-instruct). Never
+       the reason the webhook fails; the cron retries anything left over. */
+    const appraisalId = (d.external_id ?? "").trim();
+    const instructed = appraisalId && d.completed_at
+      ? await putInstructionInRex(appraisalId).catch((e) => ({ ok: false, detail: e instanceof Error ? e.message : "REX step failed." }))
+      : null;
+
     return NextResponse.json({
       ok: true,
+      instructed,
       fresh: result.fresh,
       r2Key: result.r2Key,
       rexCopied: rex.pushed,

@@ -2,6 +2,7 @@ import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { rexCall, rexRows, rexWritesLocked } from "@/lib/rex";
 import { rexTokenFor } from "@/lib/rex-user";
+import { isTestFile, TEST_REFUSAL } from "@/lib/test-guard";
 import type { MarketAppraisal } from "@/lib/market-appraisal";
 
 /**
@@ -42,7 +43,7 @@ const KIND = "rex-diary";
 
 export type DiaryOutcome =
   | { ok: true; eventId: string; moved: boolean }
-  | { ok: false; reason: "write_locked" | "no_rex_session" | "no_calendar" | "refused" | "no_time"; detail: string };
+  | { ok: false; reason: "write_locked" | "no_rex_session" | "no_calendar" | "refused" | "no_time" | "test_file"; detail: string };
 
 async function storedEvent(appraisalId: string): Promise<{ eventId: string; startsAt: string } | null> {
   if (!hasDb()) return null;
@@ -101,6 +102,7 @@ export async function putAppraisalInRexDiary(p: {
 }): Promise<DiaryOutcome> {
   const { ma, userId } = p;
   if (!ma.appointmentAt) return { ok: false, reason: "no_time", detail: "No time on the booking, so nothing to put in the diary." };
+  if (await isTestFile({ appraisalId: ma.id, leadId: ma.leadId, address: ma.address })) return { ok: false, reason: "test_file", detail: TEST_REFUSAL };
 
   const before = await storedEvent(ma.id);
   const method = before ? "update" : "create";
@@ -184,7 +186,7 @@ export const TLE_UNACCOMPANIED_TYPE_ID = 956;
 
 export type ViewingOutcome =
   | { ok: true; eventId: string; duplicate: boolean }
-  | { ok: false; reason: "write_locked" | "no_rex_session" | "no_calendar" | "refused" | "no_listing"; detail: string };
+  | { ok: false; reason: "write_locked" | "no_rex_session" | "no_calendar" | "refused" | "no_listing" | "test_file"; detail: string };
 
 export async function putViewingInRexDiary(p: {
   userId: string;
@@ -198,6 +200,7 @@ export async function putViewingInRexDiary(p: {
   unaccompanied?: boolean;
 }): Promise<ViewingOutcome> {
   if (!p.listingId) return { ok: false, reason: "no_listing", detail: "No listing on the booking, so REX would not know which home it is." };
+  if (await isTestFile({ leadId: p.leadId, contactId: p.contactId })) return { ok: false, reason: "test_file", detail: TEST_REFUSAL };
   const key = `${p.leadId}|${p.listingId}|${new Date(p.startsAt).toISOString()}`;
   if (hasDb()) {
     const seen = await q<{ payload: { eventId?: string } }>(

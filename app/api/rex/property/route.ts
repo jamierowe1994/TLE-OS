@@ -58,8 +58,8 @@ export async function GET(req: NextRequest) {
       adr_suburb_or_town: draft.town,
       adr_postcode: draft.postcode.toUpperCase(),
       adr_country: "uk",
-      property_category: { id: draft.categoryId },
-      ...(draft.subcategoryId ? { property_subcategory: { id: draft.subcategoryId } } : {}),
+      property_category_id: draft.categoryId,
+      ...(draft.subcategoryId ? { property_subcategory_id: draft.subcategoryId } : {}),
       ...(draft.ownerContactId
         ? {
             related: {

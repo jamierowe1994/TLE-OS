@@ -132,11 +132,30 @@ export async function POST(req: NextRequest) {
   }
 
   await invalidateListingBook();
+  /* The signed terms from the appraisal that won this home go onto the new
+     listing (they wait in R2 until there is one - lib/signed-documents). */
+  const contracts = await attachSignedTerms(propertyId, made.listingId).catch(() => 0);
   await record({
     kind: "listing_edited",
     actorId: actor.id,
     actorEmail: actor.email,
     detail: `created listing ${made.listingId} on property ${propertyId}${madeProperty ? " (new address)" : ""}, £${rent} pcm`,
   });
-  return NextResponse.json({ ok: true, listingId: made.listingId, propertyId, madeProperty });
+  return NextResponse.json({ ok: true, listingId: made.listingId, propertyId, madeProperty, contracts });
+}
+
+/** Signed terms on any appraisal linked to this property, copied to the listing. */
+async function attachSignedTerms(propertyId: string, listingId: string): Promise<number> {
+  const { hasDb, q } = await import("@/lib/db");
+  if (!hasDb()) return 0;
+  const { pushToRex } = await import("@/lib/signed-documents");
+  const rows = await q<{ submitter_id: string }>(
+    `SELECT d.submitter_id FROM os_signed_documents d
+       JOIN os_market_appraisals a ON a.id = d.appraisal_id
+      WHERE a.rex_property_id = $1 AND d.completed_at IS NOT NULL AND d.submitter_id > 0 AND d.rex_pushed_at IS NULL`,
+    [propertyId]
+  );
+  let n = 0;
+  for (const r of rows) if ((await pushToRex(Number(r.submitter_id), { listingId: Number(listingId) })).pushed) n++;
+  return n;
 }

@@ -11,6 +11,7 @@ import { ResendBlocked, sendEmail } from "@/lib/resend";
 import { VIDEO_CHASE_KIND, videoRecorded } from "@/lib/video-chase";
 import { runDeckReminders } from "@/lib/deck-reminders";
 import { runContractNudges } from "@/lib/contract-nudge";
+import { runInstructionSweep } from "@/lib/rex-instruct";
 import { publicOrigin } from "@/lib/origin";
 
 /**
@@ -199,7 +200,9 @@ export async function POST(req: NextRequest) {
      terms went (lib/contract-nudge). */
   const nudges = await runContractNudges(publicOrigin(req)).catch((e) => ({ sent: 0, failed: [e instanceof Error ? e.message : "Nudges failed."] }));
 
-  return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, skipped: skipped.length, failed, decks, nudges });
+  /* Signed files REX still has no property for (lib/rex-instruct). */
+  const instructions = await runInstructionSweep().catch((e) => ({ tried: 0, linked: 0, failed: [e instanceof Error ? e.message : "Sweep failed."] }));
+  return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, skipped: skipped.length, failed, decks, nudges, instructions });
 }
 
 /** A dry read: what is due, without sending it. */

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { putViewingInRexDiary } from "@/lib/rex-diary-write";
 import { putInOutlook } from "@/lib/outlook-calendar";
+import { isOsLead, osContactIdFrom } from "@/lib/contacts-as-leads";
+import { getContact, markRex } from "@/lib/contacts-store";
+import { pushContactToRex } from "@/lib/rex-contacts";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 
 /**
@@ -60,11 +63,34 @@ export async function POST(req: NextRequest) {
     minutes,
   }).catch(() => ({ ok: false as const, reason: "refused" as const, detail: "Could not reach Outlook." }));
 
+  /* The applicant goes into REX with the viewing (James, 18 Sep 2026: "if a
+     tenant goes for a viewing, it should then push that"). An OS lead with no
+     REX contact yet is pushed now, so the diary entry is joined to them.
+     Test contacts refuse inside pushContactToRex and stay in the OS. */
+  let contactId = b.contactId != null && b.contactId !== "" ? String(b.contactId) : null;
+  let tenant: { pushed: boolean; detail: string } | null = null;
+  if (!contactId && isOsLead(String(b.leadId))) {
+    const c = await getContact(osContactIdFrom(String(b.leadId))).catch(() => null);
+    if (c?.rexId) contactId = c.rexId;
+    else if (c && !c.isTest) {
+      const pushed = await pushContactToRex(c, actor.id).catch((e) => ({ ok: false as const, reason: "refused" as const, detail: e instanceof Error ? e.message : "REX push failed." }));
+      if (pushed.ok) {
+        contactId = pushed.rexId;
+        await markRex(c.id, "sent", pushed.detail, pushed.rexId, actor.name || actor.email).catch(() => null);
+      } else {
+        /* "failed" only when REX said no; our own locks leave it held, as /api/contacts does. */
+        const state = pushed.reason === "refused" || pushed.reason === "rex_session_expired" ? "failed" : "held";
+        await markRex(c.id, state, pushed.detail, null, actor.name || actor.email).catch(() => null);
+      }
+      tenant = { pushed: pushed.ok, detail: pushed.detail };
+    }
+  }
+
   const rex = await putViewingInRexDiary({
     userId: actor.id,
     leadId: String(b.leadId),
     listingId,
-    contactId: b.contactId != null && b.contactId !== "" ? String(b.contactId) : null,
+    contactId,
     applicantName,
     address,
     startsAt: b.startsAt,
@@ -75,5 +101,5 @@ export async function POST(req: NextRequest) {
   /* For the agent's row: their diary and the email. The REX mirror is in the
      response for owners, never in the words an agent reads. */
   const said = [outlook.ok ? "In your Outlook calendar." : outlook.detail, "Confirmation not sent yet."].filter(Boolean).join(" ");
-  return NextResponse.json({ ok: true, said, outlook, rex });
+  return NextResponse.json({ ok: true, said, outlook, rex, tenant });
 }
