@@ -110,7 +110,6 @@ export default function TakeOnWizard({ ma, onClose, onSaved }: { ma: MarketAppra
       const j = (await r.json()) as { ok?: boolean; heading?: string; body?: string; error?: string; photos?: number };
       if (!j.ok || !j.body) throw new Error(j.error ?? "Nothing came back.");
       setAdvert({ heading: j.heading ?? "", body: j.body });
-      setAsking(false);
       setNote(j.photos ? `Written from ${j.photos} photograph${j.photos === 1 ? "" : "s"} and what the file holds.` : "Written from what the file holds - there were no photographs to read.");
     } catch (e) {
       setNote(e instanceof Error ? e.message : "The writer could not be reached.");
@@ -171,7 +170,7 @@ export default function TakeOnWizard({ ma, onClose, onSaved }: { ma: MarketAppra
     await fetch(`/api/appraisals/${encodeURIComponent(ma.id)}/details`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ fields: values, advert }),
+      body: JSON.stringify({ fields: values, advert: advert?.body?.trim() ? advert : null }),
     }).catch(() => null);
     setSaving(false);
     setStep(next);
@@ -242,13 +241,14 @@ export default function TakeOnWizard({ ma, onClose, onSaved }: { ma: MarketAppra
                 tabIndex={0}
                 onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && picker.current?.click()}
                 className="flex cursor-copy flex-col items-center justify-center rounded-[22px] px-6 py-14 text-center transition-transform"
-                style={{ background: "#2b201d", transform: over ? "scale(1.01)" : "none", outline: over ? "2px solid #cfa096" : "2px dashed rgba(255,255,255,0.25)", outlineOffset: -10 }}
+                /* The light pink, not the brown (James, 18 Sep 2026). */
+                style={{ background: "var(--accent-soft, #fdf2ef)", transform: over ? "scale(1.01)" : "none", outline: over ? "2px solid #56423e" : "2px dashed rgba(86,66,62,0.3)", outlineOffset: -10 }}
               >
-                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/10 text-white">
+                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-accent-dark">
                   <DoodleIcon name="pack/photo" size={24} />
                 </span>
-                <p className="mt-4 text-[18px] font-semibold text-white">Drop the photographs here</p>
-                <p className="mt-1.5 text-[13px] text-white/65">All of them at once. Or click to pick them off the camera.</p>
+                <p className="mt-4 text-[18px] font-semibold text-ink">Drop the photographs here</p>
+                <p className="mt-1.5 text-[13px] text-muted">All of them at once. Or click to pick them off the camera.</p>
                 <input
                   ref={picker}
                   type="file"
@@ -308,59 +308,68 @@ export default function TakeOnWizard({ ma, onClose, onSaved }: { ma: MarketAppra
 
           {step === 1 && (
             <>
-              <p className="text-[13px] leading-relaxed text-muted">
-                Written from the photographs you have just put on and everything the file holds - the rent, the EPC, whether anyone is living there and from when.
-              </p>
-              {!advert && !asking && (
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <button type="button" onClick={() => setAsking(true)} disabled={writing} className={primary}>
+              {/* WRITE IT YOURSELF FIRST (James, 18 Sep 2026: "some people
+                  might not want to use AI for it"). The boxes are always
+                  here; the AI below writes into them, and whatever it writes
+                  stays theirs to change. */}
+              <label className="block text-[12.5px] font-semibold">The headline</label>
+              <input
+                value={advert?.heading ?? ""}
+                onChange={(e) => setAdvert({ heading: e.target.value, body: advert?.body ?? "" })}
+                placeholder="Two-bedroom apartment with a sea-view balcony"
+                className="mt-1.5 w-full rounded-xl border border-line/70 bg-white px-3.5 py-2.5 text-[14px] font-semibold outline-none focus:border-ink/40"
+              />
+              <label className="mt-4 block text-[12.5px] font-semibold">The description</label>
+              <textarea
+                value={advert?.body ?? ""}
+                onChange={(e) => setAdvert({ heading: advert?.heading ?? "", body: e.target.value })}
+                rows={10}
+                placeholder="Write it here in your own words - or let AI draft it from the photographs below."
+                className="mt-1.5 w-full resize-y rounded-xl border border-line/70 bg-white px-3.5 py-2.5 text-[13px] leading-relaxed outline-none focus:border-ink/40"
+              />
+              {advert?.body?.trim() && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(`${advert.heading}\n\n${advert.body}`);
+                    setNote("Copied.");
+                  }}
+                  className={`${ghost} mt-2`}
+                >
+                  Copy it
+                </button>
+              )}
+
+              <div className="mt-6 rounded-2xl border border-line/60 bg-white p-4">
+                <p className="text-[13.5px] font-semibold">Or write it with AI</p>
+                <p className="mt-1 text-[12px] leading-relaxed text-muted">
+                  It reads the photographs and everything the file holds - the rent, the EPC, whether anyone is living there and from when - and writes into the boxes above.
+                </p>
+                {!asking ? (
+                  <button type="button" onClick={() => setAsking(true)} disabled={writing} className={`${primary} mt-3`}>
                     Write it with AI
                   </button>
-                  <span className="text-[12px] text-muted">Or carry on and write it later.</span>
-                </div>
-              )}
-              {(asking || advert) && (
-                <div className="mt-4">
-                  <label className="block text-[12.5px] font-semibold">Anything to add before it writes?</label>
-                  <p className="mt-0.5 text-[11.5px] text-muted">Optional. You were there and it wasn&apos;t: what to lead on, what the photographs miss.</p>
-                  <textarea
-                    value={steer}
-                    onChange={(e) => setSteer(e.target.value)}
-                    rows={3}
-                    placeholder="Lead on the sea view and the balcony. New build, quiet block. The second bedroom is a good single."
-                    className="mt-2 w-full resize-y rounded-xl border border-line/70 bg-white px-3.5 py-2.5 text-[13px] outline-none focus:border-ink/40"
-                  />
-                  <button type="button" onClick={() => void write()} disabled={writing} className={`${primary} mt-3`}>
-                    {writing ? "Writing…" : advert ? "Write it again" : "Write it with AI"}
-                  </button>
-                </div>
-              )}
-              {note && <p className="mt-3 text-[11.5px] leading-relaxed text-muted">{note}</p>}
-              {advert && (
-                <div className="mt-4 rounded-2xl border border-line/60 bg-white p-4">
-                  <input
-                    value={advert.heading}
-                    onChange={(e) => setAdvert({ ...advert, heading: e.target.value })}
-                    className="w-full rounded-lg border border-transparent px-2 py-1 text-[14px] font-semibold outline-none hover:border-line focus:border-ink/40"
-                  />
-                  <textarea
-                    value={advert.body}
-                    onChange={(e) => setAdvert({ ...advert, body: e.target.value })}
-                    rows={12}
-                    className="mt-2 w-full resize-y rounded-lg border border-transparent px-2 py-1 text-[12.5px] leading-relaxed outline-none hover:border-line focus:border-ink/40"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void navigator.clipboard.writeText(`${advert.heading}\n\n${advert.body}`);
-                      setNote("Copied.");
-                    }}
-                    className={ghost}
-                  >
-                    Copy it
-                  </button>
-                </div>
-              )}
+                ) : (
+                  <>
+                    <label className="mt-3 block text-[12.5px] font-semibold">Anything to add before it writes?</label>
+                    <p className="mt-0.5 text-[11.5px] text-muted">Optional. You were there and it wasn&apos;t: what to lead on, what the photographs miss.</p>
+                    <textarea
+                      value={steer}
+                      onChange={(e) => setSteer(e.target.value)}
+                      rows={3}
+                      placeholder="Lead on the sea view and the balcony. New build, quiet block. The second bedroom is a good single."
+                      className="mt-2 w-full resize-y rounded-xl border border-line/70 bg-white px-3.5 py-2.5 text-[13px] outline-none focus:border-ink/40"
+                    />
+                    <button type="button" onClick={() => void write()} disabled={writing} className={`${primary} mt-3`}>
+                      {writing ? "Writing…" : advert?.body?.trim() ? "Rewrite it with AI" : "Write it with AI"}
+                    </button>
+                    {advert?.body?.trim() && !writing && (
+                      <p className="mt-2 text-[11.5px] text-muted">It will improve on what is in the box rather than start again.</p>
+                    )}
+                  </>
+                )}
+                {note && <p className="mt-3 text-[11.5px] leading-relaxed text-muted">{note}</p>}
+              </div>
             </>
           )}
 
@@ -408,7 +417,7 @@ export default function TakeOnWizard({ ma, onClose, onSaved }: { ma: MarketAppra
               <p className="text-[14px] font-semibold">That is the visit written up.</p>
               <ul className="mt-3 space-y-1 text-[12.5px] text-muted">
                 <li>{photos?.length ?? 0} photograph{(photos?.length ?? 0) === 1 ? "" : "s"} on the file</li>
-                <li>{advert ? "The advert is written and saved" : "No advert yet - write it whenever you like"}</li>
+                <li>{advert?.body?.trim() ? "The advert is written and saved" : "No advert yet - write it whenever you like"}</li>
                 <li>{Object.values(values).filter(Boolean).length} details recorded</li>
               </ul>
               <div className="mt-5 rounded-2xl border border-line/60 bg-white p-4">
