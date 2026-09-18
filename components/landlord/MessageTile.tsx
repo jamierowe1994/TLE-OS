@@ -53,6 +53,13 @@ export default function MessageTile({
   async function send() {
     const body = text.trim();
     if (!body || busy) return;
+    /* The sample portal sends nothing. It did: with no appraisal id the server
+       fell back to the newest real file of whoever was signed in, so a landlord
+       (or James, testing) trying the demo emailed a real agent. */
+    if (window.location.pathname.startsWith("/landlord/demo")) {
+      setErr("This is the sample portal, so nothing is sent from here.");
+      return;
+    }
     setBusy(true);
     setErr(null);
     try {

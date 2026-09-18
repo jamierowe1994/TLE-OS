@@ -79,7 +79,9 @@ let moneyCache: { at: number; money: MoneyContext | null } | null = null;
 async function deals(): Promise<BusinessDeal[] | null> {
   if (dealsCache && Date.now() - dealsCache.at < KEEP_MS) return dealsCache.deals;
   const d = await getAllPropolyDeals().catch(() => null);
-  dealsCache = { at: Date.now(), deals: d };
+  /* A read that failed is not kept. It was, for five minutes, and for those
+     five minutes every accepted application said "it isn't in Propoly yet". */
+  if (d) dealsCache = { at: Date.now(), deals: d };
   return d;
 }
 async function money(): Promise<MoneyContext | null> {

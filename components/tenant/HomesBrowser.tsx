@@ -531,8 +531,14 @@ function Alerts({ filter, place, saved, sample }: { filter: HomeFilter; place: s
   async function stop() {
     if (!sample) {
       setBusy(true);
-      await fetch("/api/tenant/homes/alert", { method: "DELETE" }).catch(() => null);
+      /* Only "stopped" when it WAS stopped. This ignored the answer, so a
+         signed-out session or a failed save still showed the alerts as off -
+         and the emails kept coming to somebody who had asked for them to stop. */
+      const r = await fetch("/api/tenant/homes/alert", { method: "DELETE" })
+        .then(async (x) => (x.ok ? ((await x.json()) as { ok?: boolean }) : null))
+        .catch(() => null);
       setBusy(false);
+      if (!r?.ok) return setErr("That didn't stop them. Try again in a moment, or use the link at the foot of any alert email.");
     }
     setOn(null);
     setEditing(true);

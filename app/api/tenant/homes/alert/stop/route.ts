@@ -28,6 +28,10 @@ export async function GET(req: NextRequest) {
   if (!email || !stopSignatureOk(email, req.nextUrl.searchParams.get("s"))) {
     return page("That Link Has Not Worked", "It may have been cut short by your email. Sign in to your tenant area and stop the alerts from Find a home.");
   }
-  await stopAlert(email).catch(() => null);
+  try {
+    await stopAlert(email);
+  } catch {
+    return page("That Has Not Worked Yet", "We could not stop your alerts just now. Please try the link again in a minute, or reply to the email and we will stop them for you.");
+  }
   return page("Your Alerts Are Stopped", "We won't email you about new homes any more. You can turn them back on from Find a home in your tenant area whenever you like.");
 }

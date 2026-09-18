@@ -72,7 +72,10 @@ export default function Compliance() {
     loading: boolean;
     reason?: string;
     counts?: { properties: number; withAnyRecord: number; entries: number; withCertificate: number; gasUnknown: number };
-  }>({ properties: COMP_BOOK, live: false, loading: true });
+    /* Nothing stands in for the book (18 Sep 2026): the sample homes used to
+       show for the whole thirty-second read and again whenever it failed. The
+       sample is for a laptop with nothing connected, and the server says so. */
+  }>({ properties: [], live: false, loading: true });
 
   useEffect(() => {
     let gone = false;
@@ -83,10 +86,15 @@ export default function Compliance() {
         if (j.ok && j.live && Array.isArray(j.properties)) {
           setSource({ properties: j.properties, live: true, loading: false, counts: j.counts });
         } else {
-          setSource({ properties: COMP_BOOK, live: false, loading: false, reason: j.reason });
+          setSource({
+            properties: j.ok && j.demo ? COMP_BOOK : [],
+            live: false,
+            loading: false,
+            reason: j.reason ?? j.error ?? "The certificates didn't load. Try again in a minute.",
+          });
         }
       })
-      .catch(() => { if (!gone) setSource((b) => ({ ...b, loading: false, reason: "REX didn't answer — showing the sample book." })); });
+      .catch(() => { if (!gone) setSource({ properties: [], live: false, loading: false, reason: "The certificates didn't load. Try again in a minute." }); });
     return () => { gone = true; };
   }, []);
 

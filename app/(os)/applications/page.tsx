@@ -132,6 +132,14 @@ function book() {
       inFlight = null;
       throw e;
     });
+  /* Shared between the mounts of ONE visit, then let go. It was held for the
+     life of the tab: come back an hour later and it was the same list, and a
+     single "wouldn't answer" stuck until a hard reload. */
+  const mine = inFlight;
+  void mine.then(
+    (j) => window.setTimeout(() => { if (inFlight === mine) inFlight = null; }, j?.error ? 0 : 5000),
+    () => undefined
+  );
   return inFlight;
 }
 

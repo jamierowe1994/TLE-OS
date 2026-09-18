@@ -18,7 +18,9 @@ export async function GET() {
     return NextResponse.json({
       ok: true,
       live: false,
-      reason: "REX isn't connected here — the sample book is standing in.",
+      /* The ONLY answer that lets the page show the sample book. */
+      demo: true,
+      reason: "REX isn't connected here - the sample book is standing in.",
     });
   }
   try {

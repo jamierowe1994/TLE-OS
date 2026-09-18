@@ -70,6 +70,11 @@ export default function PhotoTimesTile({
   async function send() {
     const picked = slots.filter((s) => s.day);
     if (!picked.length || busy) return;
+    /* The sample portal saves nothing - see MessageTile for what it used to do. */
+    if (window.location.pathname.startsWith("/landlord/demo")) {
+      setError("This is the sample portal, so nothing is sent from here.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {

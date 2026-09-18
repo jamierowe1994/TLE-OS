@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import DiaryCalendar from "@/components/DiaryCalendar";
@@ -15,7 +15,7 @@ import { FlowTag, Pill } from "@/components/Wire";
    been dead for a while and nobody noticed. */
 import { minutesOf, feedbackLabel, type Appt } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
-import { dueWithin, CERT_META } from "@/lib/compliance";
+import { dueWithin, CERT_META, type CompProperty } from "@/lib/compliance";
 import type { Lead } from "@/lib/leads-sample";
 import type { Notice } from "@/lib/notices";
 import type { Application } from "@/lib/applications";
@@ -837,10 +837,19 @@ function useShared<T>(
     slot.p ??= fetch(url)
       .then((r) => r.json())
       .catch(() => null);
+    const mine = slot.p;
     void slot.p.then((raw) => {
-      if (!alive) return;
       const j = (raw ?? null) as Record<string, unknown> | null;
       const data = j ? pick(j) : null;
+      /* A good answer is shared for a few minutes; a failed one is not kept at
+         all. It used to be kept for the life of the tab, so a tile that once
+         said "didn't answer" said it until a hard reload, and a good figure
+         read at nine was still the figure at five. */
+      if (slot.p === mine) {
+        if (!data) slot.p = null;
+        else window.setTimeout(() => { if (slot.p === mine) slot.p = null; }, 3 * 60 * 1000);
+      }
+      if (!alive) return;
       setState({
         data,
         loading: false,
@@ -922,6 +931,45 @@ function LeadSourcesWidget({ w, h }: { w: number; h: number }) {
         </div>
       )}
     </>
+  );
+}
+
+/** Live since 18 Sep 2026. It called dueWithin(30) with no book, which falls
+ *  back to the SAMPLE one - so the tile showed made-up homes and landlords
+ *  (41 Harewood Road, Margaret Wilson) to anybody who added it, with no
+ *  loading and no error because it never asked anything. Same book, same
+ *  once-per-home rule and same scope as the Compliance screen. */
+const complianceSlot: { p: Promise<unknown> | null } = { p: null };
+function ComplianceDueWidget({ w, h }: { w: number; h: number }) {
+  const { data, loading, error } = useShared<{ properties: CompProperty[] }>(
+    complianceSlot, "/api/compliance",
+    (j) => (j.ok && j.live && Array.isArray(j.properties) ? { properties: j.properties as CompProperty[] } : null)
+  );
+  const due = useMemo(() => {
+    if (!data) return [];
+    const seen = new Set<string>();
+    return dueWithin(30, data.properties.filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true))));
+  }, [data]);
+  return (
+    <Link href="/compliance" className="block">
+      <Head icon="shield" label="Compliance due" />
+      {loading ? (
+        <BigCount value="•" hint="reading the certificates" />
+      ) : error || !data ? (
+        <BigCount value="—" hint={error ?? "couldn't read the certificates"} />
+      ) : w === 1 && h === 1 ? (
+        <BigCount value={String(due.length)} hint="expired or due in 30 days" />
+      ) : (
+        <RowList
+          rows={due.map((d) => ({
+            a: d.cert?.expires != null && d.cert.expires < 0 ? `${Math.abs(d.cert.expires)}d over` : `${d.cert?.expires}d`,
+            b: `${d.p.name} — ${CERT_META[d.key].short}`,
+            c: d.p.landlord,
+          }))}
+          max={h >= 2 ? (w >= 2 ? 8 : 6) : 3}
+        />
+      )}
+    </Link>
   );
 }
 
@@ -1297,26 +1345,7 @@ export const WIDGETS: Record<string, WidgetDef> = {
   "compliance-due": {
     label: "Compliance due", icon: "shield", hint: "certificates dying this month",
     defaultW: 1, defaultH: 1,
-    render: (w, h) => {
-      const due = dueWithin(30);
-      return (
-        <Link href="/compliance" className="block">
-          <Head icon="shield" label="Compliance due" />
-          {w === 1 && h === 1 ? (
-            <BigCount value={String(due.length)} hint="expired or due in 30 days" />
-          ) : (
-            <RowList
-              rows={due.map((d) => ({
-                a: d.cert?.expires != null && d.cert.expires < 0 ? `${Math.abs(d.cert.expires)}d over` : `${d.cert?.expires}d`,
-                b: `${d.p.name} — ${CERT_META[d.key].short}`,
-                c: d.p.landlord,
-              }))}
-              max={h >= 2 ? (w >= 2 ? 8 : 6) : 3}
-            />
-          )}
-        </Link>
-      );
-    },
+    render: (w, h) => <ComplianceDueWidget w={w} h={h} />,
   },
 
   portfolio: {
