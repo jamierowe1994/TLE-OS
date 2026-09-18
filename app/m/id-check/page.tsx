@@ -5,7 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import DocCamera, { type FrameShape } from "@/components/landlord/DocCamera";
 import DoodleIcon from "@/components/DoodleIcon";
 import type { Appt } from "@/lib/diary";
-import { ErrorLine, PhoneTop, Spinner } from "../bits";
+import type { PhonePerson } from "@/app/api/m/people/route";
+import { ErrorLine, PhoneTop, SearchBox, Spinner } from "../bits";
 
 /**
  * RIGHT TO RENT ID: who, which document, the photos, sent.
@@ -69,18 +70,58 @@ export default function PhoneIdCheck() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [today, setToday] = useState<Appt[] | null>(null);
+  const [query, setQuery] = useState("");
+  const [fromCalendar, setFromCalendar] = useState(false);
+  const [found, setFound] = useState<PhonePerson[] | null>(null);
   const [sent, setSent] = useState<Sent[] | null>(null);
   const [sentError, setSentError] = useState<string | null>(null);
   const library = useRef<HTMLInputElement | null>(null);
   const libraryFor = useRef<number>(0);
 
-  /* Arriving from a viewing in the diary brings the name and address with it. */
+  /* Arriving from a viewing in the diary brings the name and address with it,
+     and goes straight to the document: who it is has already been chosen. */
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
-    setName(sp.get("name") ?? "");
+    const n = sp.get("name") ?? "";
+    setName(n);
     setProperty(sp.get("property") ?? "");
     setAppt(sp.get("appt"));
+    if (n.trim().length >= 2) setStep("doc");
   }, []);
+
+  /* The tenant search: what the OS holds, then the full contact book, the
+     landlord side left out. */
+  useEffect(() => {
+    const term = query.trim();
+    if (term.length < 2) return setFound(null);
+    let dead = false;
+    setFound(null);
+    const t = window.setTimeout(async () => {
+      const ask = (extra: string) =>
+        fetch(`/api/m/people?q=${encodeURIComponent(term)}${extra}`, { cache: "no-store" })
+          .then((r) => r.json())
+          .then((j: { people?: PhonePerson[] }) => (j.people ?? []).filter((p) => !/landlord/i.test(p.role)))
+          .catch(() => [] as PhonePerson[]);
+      const first = await ask("");
+      if (dead) return;
+      setFound(first.slice(0, 8));
+      const more = await ask("&rex=1");
+      if (dead) return;
+      const seen = new Set(first.map((p) => p.name.toLowerCase()));
+      setFound([...first, ...more.filter((p) => !seen.has(p.name.toLowerCase()))].slice(0, 8));
+    }, 300);
+    return () => {
+      dead = true;
+      window.clearTimeout(t);
+    };
+  }, [query]);
+
+  const pick = (who: string, where: string, apptId: string | null) => {
+    setName(who);
+    setProperty(where);
+    setAppt(apptId);
+    setStep("doc");
+  };
 
   /* Today's viewings, so the name is a tap rather than typing on a doorstep. */
   useEffect(() => {
@@ -186,16 +227,17 @@ export default function PhoneIdCheck() {
     setSeen(false);
     setError(null);
     setStep("who");
+    setQuery("");
+    setFromCalendar(false);
     window.history.replaceState(null, "", "/m/id-check");
   };
 
   const d = doc ? DOCS[doc] : null;
-  const field = "h-14 w-full rounded-2xl border border-line/80 bg-card px-4 text-[16px] outline-none focus:border-accent";
   const primary = "flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-[16px] font-semibold text-white disabled:opacity-40";
 
   return (
     <main>
-      <PhoneTop title="Scan an ID" />
+      <PhoneTop title="Scan ID" />
 
       {step !== "sent" && (
         <ol className="mb-5 flex gap-1.5" aria-label="Steps">
@@ -209,55 +251,82 @@ export default function PhoneIdCheck() {
       {/* ── 1. who ── */}
       {step === "who" && (
         <>
-          <h2 className="hand text-[21px] leading-tight">Whose ID Is It?</h2>
+          {/* WHO, IN ONE TAP (James, 18 Sep 2026): a search box first, today's
+              viewings folded behind one box under it rather than a long list
+              to scroll, and picking somebody moves straight on - no Next. */}
+          <SearchBox value={query} onChange={setQuery} placeholder="Search for the tenant" />
+          <button
+            type="button"
+            onClick={() => setFromCalendar((v) => !v)}
+            aria-expanded={fromCalendar}
+            className="mt-2.5 flex h-14 w-full items-center gap-3 rounded-2xl border bg-card px-4 text-left active:bg-panel"
+            style={{ borderColor: fromCalendar ? "var(--accent)" : "color-mix(in srgb, var(--line) 80%, transparent)" }}
+          >
+            <DoodleIcon name="calendar" size={18} className="text-muted" />
+            <span className="min-w-0 flex-1 text-[16px] text-muted">Search From Calendar</span>
+            {today && today.length > 0 && <span className="figures text-[14px] text-muted">{today.length}</span>}
+            <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4 shrink-0 text-muted" style={{ transform: fromCalendar ? "rotate(90deg)" : undefined, transition: "transform 200ms" }}>
+              <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
 
-          {today === null ? (
-            <Spinner label="Loading today's viewings" className="mt-3" />
-          ) : (
-            today.length > 0 && (
-              <div className="mt-3">
-                <p className="text-[13px] text-muted">From today&rsquo;s viewings</p>
-                <ul className="mt-2 grid grid-cols-1 gap-2">
-                  {today.map((a) => {
-                    const picked = appt === a.id;
-                    return (
-                      <li key={a.id}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setName(a.who);
-                            setProperty(a.where);
-                            setAppt(a.id);
-                          }}
-                          className="flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left"
-                          style={{ borderColor: picked ? "var(--accent)" : "color-mix(in srgb, var(--line) 70%, transparent)", background: picked ? "var(--accent-soft)" : "var(--card)" }}
-                        >
+          {fromCalendar && (
+            <div className="mt-3">
+              {today === null ? (
+                <Spinner label="Loading today's viewings" />
+              ) : today.length === 0 ? (
+                <p className="px-1 text-[14px] text-muted">No viewings in your calendar today.</p>
+              ) : (
+                <ul className="grid grid-cols-1 gap-2">
+                  {today
+                    .filter((a) => !query.trim() || a.who.toLowerCase().includes(query.trim().toLowerCase()))
+                    .map((a, i) => (
+                      <li key={`${a.id}-${i}`}>
+                        <button type="button" onClick={() => pick(a.who, a.where, a.id)} className="flex w-full items-center gap-3 rounded-2xl border border-line/70 bg-card px-4 py-3 text-left active:bg-panel">
                           <span className="figures w-[46px] shrink-0 text-[15px]">{a.start}</span>
                           <span className="min-w-0 flex-1">
                             <span className="block text-[15px] font-semibold">{a.who}</span>
                             <span className="block truncate text-[13px] text-muted">{a.where}</span>
                           </span>
+                          <Chevron />
                         </button>
                       </li>
-                    );
-                  })}
+                    ))}
                 </ul>
-              </div>
-            )
+              )}
+            </div>
           )}
 
-          <label className="mt-5 block">
-            <span className="text-[13px] font-semibold">Their full name</span>
-            <input className={`${field} mt-1.5`} value={name} onChange={(e) => { setName(e.target.value); setAppt(null); }} autoComplete="off" autoCapitalize="words" placeholder="As it is on the document" />
-          </label>
-          <label className="mt-3 block">
-            <span className="text-[13px] font-semibold">Property</span>
-            <input className={`${field} mt-1.5`} value={property} onChange={(e) => setProperty(e.target.value)} autoComplete="off" placeholder="The address they are applying for" />
-          </label>
-
-          <button type="button" disabled={name.trim().length < 2} onClick={() => setStep("doc")} className={`${primary} mt-5`} style={{ background: "var(--brown)" }}>
-            Next
-          </button>
+          {!fromCalendar && query.trim().length >= 2 && (
+            <div className="mt-3">
+              {found === null ? (
+                <Spinner label="Searching" />
+              ) : (
+                <ul className="grid grid-cols-1 gap-2">
+                  {found.map((p) => (
+                    <li key={p.key}>
+                      <button type="button" onClick={() => pick(p.name, p.context, null)} className="flex w-full items-center gap-3 rounded-2xl border border-line/70 bg-card px-4 py-3 text-left active:bg-panel">
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[15px] font-semibold">{p.name}</span>
+                          <span className="block truncate text-[13px] text-muted">{[p.role, p.context].filter(Boolean).join(" · ")}</span>
+                        </span>
+                        <Chevron />
+                      </button>
+                    </li>
+                  ))}
+                  {/* Not on the system yet: their name as typed is enough. */}
+                  <li>
+                    <button type="button" onClick={() => pick(query.trim(), "", null)} className="flex w-full items-center gap-3 rounded-2xl border border-dashed border-line px-4 py-3 text-left active:bg-panel">
+                      <span className="min-w-0 flex-1 text-[15px]">
+                        Use <span className="font-semibold">&ldquo;{query.trim()}&rdquo;</span>
+                      </span>
+                      <Chevron />
+                    </button>
+                  </li>
+                </ul>
+              )}
+            </div>
+          )}
 
           <section className="mt-8">
             <h3 className="hand text-[17px]">Sent in the Last Two Weeks</h3>
@@ -292,7 +361,13 @@ export default function PhoneIdCheck() {
       {step === "doc" && (
         <>
           <h2 className="hand text-[21px] leading-tight">Which Document?</h2>
-          <p className="mt-1 text-[14px] text-muted">For {name.trim()}</p>
+          <p className="mt-1 text-[14px] text-muted">
+            For {name.trim()}
+            {/* One tap got them here, so one tap goes back. */}
+            <button type="button" onClick={() => setStep("who")} className="ml-2 font-semibold text-accent-dark underline underline-offset-2">
+              Change
+            </button>
+          </p>
           <div className="mt-4 grid grid-cols-1 gap-3">
             {(Object.keys(DOCS) as DocType[]).map((k) => (
               <button
@@ -442,5 +517,13 @@ export default function PhoneIdCheck() {
         />
       )}
     </main>
+  );
+}
+
+function Chevron() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4 shrink-0 text-muted">
+      <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }

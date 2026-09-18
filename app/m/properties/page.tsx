@@ -47,7 +47,7 @@ export default function PhoneProperties() {
 
   return (
     <main>
-      <PhoneTop title="Find a Property" />
+      <PhoneTop title="Property" />
       <SearchBox value={needle} onChange={setNeedle} placeholder="Street, town or postcode" />
 
       <div className="mt-4">

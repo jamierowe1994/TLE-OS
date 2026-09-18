@@ -21,12 +21,14 @@ import { useCallback, useEffect, useState } from "react";
  * Only the /m pages use this, and /m is only where a phone lands.
  */
 
+/* One word each (James, 18 Sep 2026: "Calendar, Tenant, Landlord, Property,
+   Scan ID" rather than a sentence per line). */
 const LINKS: Array<{ href: string; label: string }> = [
-  { href: "/m", label: "Today's Calendar" },
-  { href: "/m/people?who=tenant", label: "Search for a Tenant" },
-  { href: "/m/people?who=landlord", label: "Search for a Landlord" },
-  { href: "/m/properties", label: "Find a Property" },
-  { href: "/m/id-check", label: "Scan an ID" },
+  { href: "/m", label: "Calendar" },
+  { href: "/m/people?who=tenant", label: "Tenant" },
+  { href: "/m/people?who=landlord", label: "Landlord" },
+  { href: "/m/properties", label: "Property" },
+  { href: "/m/id-check", label: "Scan ID" },
 ];
 
 export default function PhoneFrame({ children }: { children: React.ReactNode }) {
@@ -81,7 +83,7 @@ export default function PhoneFrame({ children }: { children: React.ReactNode }) 
           <ul className="ml-auto w-[80%] space-y-0.5 text-right">
             {LINKS.map((l) => (
               <li key={l.href}>
-                <Link href={l.href} onClick={close} className="block py-2 text-[21px] font-bold leading-tight text-ink">
+                <Link href={l.href} onClick={close} className="block py-2 text-[26px] font-bold leading-tight text-ink">
                   {l.label}
                 </Link>
               </li>

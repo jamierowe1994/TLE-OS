@@ -20,10 +20,20 @@ import { DIARY_KEY, KIND_LABEL, endOf } from "./diary-bits";
  */
 
 function dayTitle(offset: number): string {
-  if (offset === 0) return "Today's Calendar";
-  if (offset === 1) return "Tomorrow's Calendar";
-  if (offset === -1) return "Yesterday's Calendar";
-  return "Calendar";
+  return offset === 0 ? "Today's Calendar" : "Calendar";
+}
+
+/**
+ * Between the arrows (James, 18 Sep 2026): "Today", then the day's name for
+ * the rest of the week either side - "Saturday", "Sunday" - and the date
+ * itself once it is further away than that.
+ */
+function stepLabel(offset: number): string {
+  if (offset === 0) return "Today";
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  if (Math.abs(offset) <= 6) return d.toLocaleDateString("en-GB", { weekday: "long" });
+  return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 }
 
 function dateOf(offset: number): string {
@@ -81,20 +91,14 @@ export default function PhoneHome() {
 
   return (
     <main>
-      <div className="mb-4 flex items-end justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-[27px] leading-tight">
-            {dayTitle(day)}
-          </h1>
-          <p className="mt-0.5 text-[13.5px] text-muted">{dateOf(day)}</p>
-        </div>
-        <div className="flex shrink-0 items-center">
+      <div className="mb-4">
+        <h1 className="text-[27px] leading-tight">{dayTitle(day)}</h1>
+        <p className="mt-0.5 text-[13.5px] text-muted">{dateOf(day)}</p>
+        <div className="mt-3 flex items-center justify-between gap-2 rounded-full border border-line/70 bg-card p-1">
           <Step dir={-1} onClick={() => setDay((d) => Math.max(d - 1, -7))} />
-          {day !== 0 && (
-            <button type="button" onClick={() => setDay(0)} className="h-10 px-2 text-[13px] font-semibold text-accent-dark">
-              Today
-            </button>
-          )}
+          <button type="button" onClick={() => setDay(0)} className="h-10 min-w-0 flex-1 truncate rounded-full text-[15px] font-semibold active:bg-panel">
+            {stepLabel(day)}
+          </button>
           <Step dir={1} onClick={() => setDay((d) => Math.min(d + 1, 14))} />
         </div>
       </div>
@@ -184,7 +188,7 @@ function Step({ dir, onClick }: { dir: 1 | -1; onClick: () => void }) {
       type="button"
       onClick={onClick}
       aria-label={dir < 0 ? "Previous day" : "Next day"}
-      className="flex h-10 w-10 items-center justify-center rounded-full border border-line/70 bg-card active:bg-panel"
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full active:bg-panel"
     >
       <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4">
         <path d={dir < 0 ? "M15 5l-7 7 7 7" : "M9 5l7 7-7 7"} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
