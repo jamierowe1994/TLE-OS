@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Sheet from "@/components/tenant/Sheet";
+import { APPLICANT_TYPES } from "@/lib/passport-shape";
+import { show, type OfferFieldKey, type OfferPassport } from "@/lib/offer-passport";
 
 /**
  * AFTER THE VIEWING: the three answers, each in its own bottom sheet (James,
@@ -47,6 +49,9 @@ const TERMS = ["6 months", "12 months", "18 months", "24 months"];
 const card = "rounded-[16px] border border-line/60";
 const label = "text-[13px] font-semibold";
 const input = "mt-1.5 w-full rounded-[12px] border border-line/80 bg-white px-3.5 py-2.5 text-[14px] outline-none focus:border-accent-dark";
+/* A fixed height for the controls that sit side by side, so a date box and
+   a select line up whatever the phone draws inside them. */
+const field = "mt-1.5 block h-12 w-full min-w-0 rounded-[12px] border border-line/80 bg-white px-3.5 text-[14px] outline-none focus:border-accent-dark";
 const primary = "flex w-full items-center justify-center gap-2 rounded-full bg-accent-dark py-3.5 text-[14.5px] font-semibold text-white disabled:opacity-50";
 const gbp = (n: number) => `£${n.toLocaleString("en-GB")}`;
 
@@ -55,9 +60,8 @@ export default function ViewedSheets({
   listingId,
   askingPcm,
   agentFirst,
-  facts,
+  passport,
   passportHref,
-  household,
   sample,
   base,
 }: {
@@ -65,10 +69,9 @@ export default function ViewedSheets({
   listingId: string | null;
   askingPcm: number | null;
   agentFirst: string;
-  /** Their passport, as label/value lines to confirm. */
-  facts: [string, string][];
+  /** The passport answers the offer shows back, and lets them change. */
+  passport: OfferPassport;
   passportHref: string | null;
-  household: { adults: number; children: number; pets: boolean; petsNote: string };
   sample: boolean;
   base: string;
 }) {
@@ -84,10 +87,14 @@ export default function ViewedSheets({
   const [amount, setAmount] = useState(askingPcm ? String(askingPcm) : "");
   const [moveIn, setMoveIn] = useState("");
   const [term, setTerm] = useState("12 months");
-  const [adults, setAdults] = useState(household.adults || 1);
-  const [children, setChildren] = useState(household.children || 0);
-  const [pets, setPets] = useState(household.pets);
-  const [petsNote, setPetsNote] = useState(household.petsNote);
+  /* Their passport as they are sending it. Anything changed here is saved to
+     the passport and shown to the agent against the original (lib/offer-
+     passport); the tenant sees nothing different. */
+  const [pp, setPp] = useState<OfferPassport>(passport);
+  const set = <K extends OfferFieldKey>(k: K, v: OfferPassport[K]) => setPp((cur) => ({ ...cur, [k]: v }));
+  const [editing, setEditing] = useState<string | null>(null);
+  const adults = Math.max(1, parseInt(pp.numAdults, 10) || 1);
+  const children = Math.max(0, parseInt(pp.numChildren, 10) || 0);
   const [offerNote, setOfferNote] = useState("");
   const [confirmed, setConfirmed] = useState(false);
 
@@ -126,7 +133,8 @@ export default function ViewedSheets({
         note,
         topics,
         message,
-        offer: { amount: offerNum, moveIn, term, adults, children, pets, petsNote, note: offerNote, confirmed },
+        offer: { amount: offerNum, moveIn, term, note: offerNote, confirmed },
+        passport: { ...pp, numAdults: String(adults), numChildren: String(children) },
       }),
     })
       .then((x) => x.json())
@@ -271,14 +279,17 @@ export default function ViewedSheets({
               </div>
               {offerError && <span className="mt-1.5 block text-[12.5px] text-[#9d4340]">{offerError}</span>}
             </label>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <label className="block">
+            {/* The same height, the date a little narrower and the term a
+                little wider (James, 18 Sep 2026): a phone's date box has its
+                own minimum width and was pushing into the select beside it. */}
+            <div className="mt-4 grid grid-cols-[minmax(0,1fr)_minmax(0,1.12fr)] gap-3">
+              <label className="block min-w-0">
                 <span className={label}>Move in on</span>
-                <input type="date" min={today} value={moveIn} onChange={(e) => setMoveIn(e.target.value)} className={input} />
+                <input type="date" min={today} value={moveIn} onChange={(e) => setMoveIn(e.target.value)} className={`${field} appearance-none`} />
               </label>
-              <label className="block">
+              <label className="block min-w-0">
                 <span className={label}>For</span>
-                <select value={term} onChange={(e) => setTerm(e.target.value)} className={input}>
+                <select value={term} onChange={(e) => setTerm(e.target.value)} className={field}>
                   {TERMS.map((t) => <option key={t}>{t}</option>)}
                 </select>
               </label>
@@ -286,35 +297,54 @@ export default function ViewedSheets({
 
             <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Who&apos;s moving in</p>
             <div className="mt-2 grid grid-cols-2 gap-3">
-              <Stepper label="Adults" value={adults} min={1} onChange={setAdults} />
-              <Stepper label="Children" value={children} min={0} onChange={setChildren} />
+              <Stepper label="Adults" value={adults} min={1} onChange={(n) => set("numAdults", String(n))} />
+              <Stepper label="Children" value={children} min={0} onChange={(n) => set("numChildren", String(n))} />
             </div>
             <div className="mt-3 flex items-center justify-between gap-3">
               <span className={label}>Any pets?</span>
               <div className="flex gap-2">
                 {[false, true].map((v) => (
-                  <button key={String(v)} type="button" onClick={() => setPets(v)} className={`rounded-full border px-4 py-1.5 text-[13px] ${pets === v ? "border-accent-dark bg-accent-dark font-semibold text-white" : "border-line/80"}`}>
+                  <button key={String(v)} type="button" onClick={() => set("pets", v)} className={`rounded-full border px-4 py-1.5 text-[13px] ${pp.pets === v ? "border-accent-dark bg-accent-dark font-semibold text-white" : "border-line/80"}`}>
                     {v ? "Yes" : "No"}
                   </button>
                 ))}
               </div>
             </div>
-            {pets && <input value={petsNote} onChange={(e) => setPetsNote(e.target.value)} placeholder="What, and how many?" className={input} />}
+            {pp.pets && <input value={pp.petsNote} onChange={(e) => set("petsNote", e.target.value)} placeholder="What, and how many?" className={input} />}
 
             <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">About you, from your passport</p>
+            <p className="mt-1 text-[12px] leading-snug text-muted">Anything changed since you made it? Put it right here and your passport updates too.</p>
             <dl className={`${card} mt-2 divide-y divide-line/50 px-4`}>
-              {facts.map(([k, v]) => (
-                <div key={k} className="flex items-center justify-between gap-4 py-2.5">
-                  <dt className="text-[12.5px] text-muted">{k}</dt>
-                  <dd className="text-right text-[13px] font-semibold">{v}</dd>
+              <Fact id="work" title="Working" value={show("applicantType", pp.applicantType)} editing={editing} setEditing={setEditing}>
+                <select value={pp.applicantType} onChange={(e) => set("applicantType", e.target.value)} className={field}>
+                  <option value="">Choose one</option>
+                  {APPLICANT_TYPES.map((t) => <option key={t}>{t}</option>)}
+                </select>
+              </Fact>
+              <Fact id="income" title="Income" value={show("annualIncome", pp.annualIncome)} editing={editing} setEditing={setEditing}>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[14px] text-muted">£</span>
+                  <input inputMode="numeric" value={pp.annualIncome} onChange={(e) => set("annualIncome", e.target.value)} placeholder="A year, before tax" className={`${field} pl-7`} />
                 </div>
-              ))}
+              </Fact>
+              <Fact id="rtr" title="Right to rent" value={pp.hasBritishPassport ? "British or Irish passport" : pp.shareCode ? `Share code ${pp.shareCode}` : "Not given yet"} editing={editing} setEditing={setEditing}>
+                <YesNo q="Do you have a British or Irish passport?" v={pp.hasBritishPassport} on={(v) => set("hasBritishPassport", v)} />
+                {pp.hasBritishPassport === false && <input value={pp.shareCode} onChange={(e) => set("shareCode", e.target.value.toUpperCase())} placeholder="Your share code" className={`${field} mt-2`} />}
+              </Fact>
+              <Fact id="ref" title="Landlord reference" value={show("landlordRef", pp.landlordRef)} editing={editing} setEditing={setEditing}>
+                <YesNo q="Can your current or last landlord give a reference?" v={pp.landlordRef} on={(v) => set("landlordRef", v)} />
+              </Fact>
+              <Fact id="guar" title="Guarantor" value={show("guarantor", pp.guarantor)} editing={editing} setEditing={setEditing}>
+                <YesNo q="Do you have a guarantor if one is needed?" v={pp.guarantor} on={(v) => set("guarantor", v)} />
+              </Fact>
+              <Fact id="credit" title="Adverse credit" value={show("adverseCredit", pp.adverseCredit)} editing={editing} setEditing={setEditing}>
+                <YesNo q="Any CCJs, defaults or missed payments?" v={pp.adverseCredit} on={(v) => set("adverseCredit", v)} />
+                {pp.adverseCredit && <input value={pp.adverseCreditNote} onChange={(e) => set("adverseCreditNote", e.target.value)} placeholder="A line about it" className={`${field} mt-2`} />}
+              </Fact>
+              <Fact id="smoke" title="Smoker" value={show("smoker", pp.smoker)} editing={editing} setEditing={setEditing}>
+                <YesNo q="Does anyone moving in smoke?" v={pp.smoker} on={(v) => set("smoker", v)} />
+              </Fact>
             </dl>
-            {passportHref && (
-              <a href={passportHref} className="mt-2 inline-block text-[12.5px] font-semibold underline underline-offset-4">
-                Something changed? Update your passport
-              </a>
-            )}
             <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-[12px] bg-accent-soft/70 p-3">
               <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent-dark)]" />
               <span className="text-[12.5px] leading-snug">These details are up to date, and I&apos;m happy for them to go to the landlord with my offer.</span>
@@ -341,6 +371,40 @@ function Stepper({ label: l, value, min, onChange }: { label: string; value: num
         <span className="w-4 text-center text-[14px] font-semibold">{value}</span>
         <button type="button" onClick={() => onChange(Math.min(9, value + 1))} className="flex h-7 w-7 items-center justify-center rounded-full bg-panel text-[15px]" aria-label={`More ${l.toLowerCase()}`}>+</button>
       </span>
+    </div>
+  );
+}
+
+/** One passport answer: the value, and Change to open its editor in place. */
+function Fact({ id, title, value, editing, setEditing, children }: { id: string; title: string; value: string; editing: string | null; setEditing: (v: string | null) => void; children: React.ReactNode }) {
+  const open = editing === id;
+  return (
+    <div className="py-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <dt className="text-[12.5px] text-muted">{title}</dt>
+        <dd className="flex min-w-0 items-center gap-2.5">
+          <span className="truncate text-right text-[13px] font-semibold">{value}</span>
+          <button type="button" onClick={() => setEditing(open ? null : id)} className="shrink-0 text-[12px] font-semibold text-accent-dark underline underline-offset-2">
+            {open ? "Done" : "Change"}
+          </button>
+        </dd>
+      </div>
+      {open && <div className="pb-1 pt-2.5">{children}</div>}
+    </div>
+  );
+}
+
+function YesNo({ q, v, on }: { q: string; v: boolean | null; on: (v: boolean) => void }) {
+  return (
+    <div>
+      <p className="text-[12.5px]">{q}</p>
+      <div className="mt-2 flex gap-2">
+        {[true, false].map((b) => (
+          <button key={String(b)} type="button" onClick={() => on(b)} className={`flex-1 rounded-full border py-2 text-[13px] ${v === b ? "border-accent-dark bg-accent-dark font-semibold text-white" : "border-line/80"}`}>
+            {b ? "Yes" : "No"}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

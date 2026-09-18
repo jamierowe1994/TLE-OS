@@ -6,7 +6,7 @@ import SpinePhone from "@/components/landlord/SpinePhone";
 import AgentSheet, { OpenAgentButton } from "@/components/tenant/AgentSheet";
 import HomeSheet from "@/components/tenant/HomeSheet";
 import ViewedSheets, { ViewedButton } from "@/components/tenant/ViewedSheets";
-import type { PassportData } from "@/lib/passport-shape";
+import { offerSubset } from "@/lib/offer-passport";
 import type { TenantHome, TenantProperty } from "@/lib/tenant-home-view";
 import { DEAL, STAGE_UPDATE, locksFor, phaseOf } from "@/lib/tenant-journey";
 
@@ -130,14 +130,8 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
           listingId={v.enquiry.href?.match(/\/homes\/(\d+)/)?.[1] ?? null}
           askingPcm={v.enquiry.rentPcm}
           agentFirst={first.charAt(0).toUpperCase() + first.slice(1)}
-          facts={passportFacts(v.passport.data)}
+          passport={offerSubset(v.passport.data)}
           passportHref={v.passport.path}
-          household={{
-            adults: parseInt(v.passport.data?.numAdults ?? "", 10) || 1,
-            children: parseInt(v.passport.data?.numChildren ?? "", 10) || 0,
-            pets: v.passport.data?.pets === true,
-            petsNote: v.passport.data?.petsNote ?? "",
-          }}
           sample={sample}
           base={base}
         />
@@ -588,20 +582,4 @@ function homeEyebrow(v: TenantHome, home: TenantProperty | null): string {
   if (v.offer) return "Your offer is in";
   if (v.viewing) return v.viewing.status === "done" ? "You viewed" : "Your viewing";
   return "You asked about";
-}
-
-/** Their passport, as the offer sheet shows it back to them to confirm. */
-function passportFacts(d: PassportData | null): [string, string][] {
-  if (!d) return [["Your passport", "Not started"]];
-  const yn = (b: boolean | null) => (b == null ? "Not said" : b ? "Yes" : "No");
-  const income = Number((d.annualIncome ?? "").replace(/[£,\s]/g, ""));
-  return [
-    ["Working", d.applicantType || "Not said"],
-    ["Income", income ? `£${income.toLocaleString("en-GB")} a year` : "Not said"],
-    ["Right to rent", d.hasBritishPassport ? "British passport" : d.shareCode ? "Share code given" : "Not given yet"],
-    ["Landlord reference", yn(d.landlordRef)],
-    ["Guarantor", yn(d.guarantor)],
-    ["Adverse credit", yn(d.adverseCredit)],
-    ["Smoker", yn(d.smoker)],
-  ];
 }

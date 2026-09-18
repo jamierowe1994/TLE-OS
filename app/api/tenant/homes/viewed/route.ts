@@ -6,7 +6,9 @@ import { homeOnMarket } from "@/lib/tenant-homes";
 import { agentEmailFor, noteOnLeads } from "@/lib/tenant-find";
 import { proseEmail } from "@/lib/email/prose";
 import { sendEmail } from "@/lib/resend";
-import type { PassportData } from "@/lib/passport-shape";
+import { APPLICANT_TYPES, type PassportData } from "@/lib/passport-shape";
+import { savePassport } from "@/lib/passport";
+import { diffOffer, offerSubset, show, type OfferChange, type OfferPassport } from "@/lib/offer-passport";
 
 /**
  * After a viewing, from the tenant's own area (James, 18 Sep 2026): the three
@@ -38,15 +40,49 @@ const list = (v: unknown) => (Array.isArray(v) ? v.map((x) => str(x, 80)).filter
 const gbp = (n: number) => `£${n.toLocaleString("en-GB")}`;
 const yn = (b: boolean | null | undefined) => (b == null ? "not said" : b ? "yes" : "no");
 
-/** The passport, as the agent reads it in the email. */
-function passportLines(d: PassportData | null): string[] {
-  if (!d) return ["No passport on file."];
+/**
+ * The passport, as the agent reads it in the email. A changed answer carries
+ * an asterisk and what it said before; one worth a second look (lib/offer-
+ * passport watched) says so. Plain text: the email is prose.
+ */
+function passportLines(d: OfferPassport, changes: OfferChange[]): string[] {
+  const mark = (k: keyof OfferPassport, line: string) => {
+    const c = changes.find((x) => x.key === k);
+    return c ? `${line} *  (was: ${c.from})${c.watch ? "  - worth a look" : ""}` : line;
+  };
   return [
-    `Working: ${d.applicantType || "not said"}${d.annualIncome ? `, ${gbp(Number(d.annualIncome.replace(/[£,\s]/g, "")) || 0)} a year` : ""}`,
-    `Right to rent: ${d.hasBritishPassport ? "British passport" : d.shareCode ? `share code ${d.shareCode}` : "not given yet"}`,
-    `Landlord reference: ${yn(d.landlordRef)} · Guarantor: ${yn(d.guarantor)} · Adverse credit: ${yn(d.adverseCredit)}${d.adverseCreditNote ? ` (${d.adverseCreditNote})` : ""}`,
-    `Smoker: ${yn(d.smoker)} · Pets: ${yn(d.pets)}${d.petsNote ? ` (${d.petsNote})` : ""}`,
+    mark("applicantType", `Working: ${show("applicantType", d.applicantType)}`),
+    mark("annualIncome", `Income: ${show("annualIncome", d.annualIncome)}`),
+    mark("hasBritishPassport", `British or Irish passport: ${show("hasBritishPassport", d.hasBritishPassport)}`),
+    ...(d.hasBritishPassport ? [] : [mark("shareCode", `Share code: ${show("shareCode", d.shareCode)}`)]),
+    mark("landlordRef", `Landlord reference: ${show("landlordRef", d.landlordRef)}`),
+    mark("guarantor", `Guarantor: ${show("guarantor", d.guarantor)}`),
+    mark("adverseCredit", `Adverse credit: ${show("adverseCredit", d.adverseCredit)}${d.adverseCredit && d.adverseCreditNote ? ` (${d.adverseCreditNote})` : ""}`),
+    mark("smoker", `Smoker: ${show("smoker", d.smoker)}`),
   ];
+}
+
+/** What the sheet sent for the passport, kept to the shapes each answer can take. */
+function cleanPassport(raw: unknown, was: OfferPassport): OfferPassport {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const bool = (k: keyof OfferPassport) => (r[k] === true ? true : r[k] === false ? false : (was[k] as boolean | null));
+  const text = (k: keyof OfferPassport, max = 200) => (typeof r[k] === "string" ? String(r[k]).trim().slice(0, max) : (was[k] as string));
+  const type = text("applicantType", 40);
+  return {
+    applicantType: (APPLICANT_TYPES as readonly string[]).includes(type) || type === "" ? type : was.applicantType,
+    annualIncome: text("annualIncome", 20),
+    hasBritishPassport: bool("hasBritishPassport"),
+    shareCode: text("shareCode", 20),
+    landlordRef: bool("landlordRef"),
+    guarantor: bool("guarantor"),
+    adverseCredit: bool("adverseCredit"),
+    adverseCreditNote: text("adverseCreditNote"),
+    smoker: bool("smoker"),
+    numAdults: String(Math.max(1, Math.min(9, parseInt(text("numAdults", 2), 10) || 1))),
+    numChildren: String(Math.max(0, Math.min(9, parseInt(text("numChildren", 2), 10) || 0))),
+    pets: bool("pets"),
+    petsNote: text("petsNote"),
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -81,18 +117,35 @@ export async function POST(req: NextRequest) {
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(str(o.moveIn, 10))) return NextResponse.json({ ok: false, error: "Choose the day you'd like to move in." }, { status: 400 });
     if (o.confirmed !== true) return NextResponse.json({ ok: false, error: "Tick to say your details are up to date." }, { status: 400 });
+    /* Their passport as they sent it, against the passport as we HOLD it -
+       never against what the page says it was. What differs is saved to the
+       passport and kept here with the original, for the agent only. */
+    /* A blank household count reads as the sheet's own default (1 adult,
+       no children), so filling it in is not flagged to the agent as a change. */
+    const held = offerSubset(data);
+    const before = { ...held, numAdults: held.numAdults || "1", numChildren: held.numChildren || "0" };
+    const after = cleanPassport(b.passport, before);
+    const changes = diffOffer(before, after);
+    if (changes.length && record) {
+      await savePassport(record.token, { ...(data as PassportData), ...after }).catch(() => null);
+    }
     payload = {
       amount,
       asking,
       moveIn: str(o.moveIn, 10),
       term: str(o.term, 20) || "12 months",
-      adults: Math.max(1, Math.min(9, Math.round(Number(o.adults) || 1))),
-      children: Math.max(0, Math.min(9, Math.round(Number(o.children) || 0))),
-      pets: o.pets === true,
-      petsNote: str(o.petsNote, 200),
+      adults: Number(after.numAdults),
+      children: Number(after.numChildren),
+      pets: after.pets === true,
+      petsNote: after.petsNote,
       note: str(o.note),
+      passport: after,
+      changes,
     };
   }
+
+  const id = randomUUID();
+  const OFFER_LINK = `${(process.env.OS_ORIGIN ?? "https://tle-os.co.uk").replace(/\/+$/, "")}/offers/${id}`;
 
   /* The agent hears. */
   const to = await agentEmailFor(listingId, record?.agentId ?? null);
@@ -109,14 +162,17 @@ export async function POST(req: NextRequest) {
     subject = `Questions from ${who} on ${address}`;
     body = [`${who} liked ${address} but has some questions before they decide.`, topics ? `About: ${topics}.` : "", `Their questions:\n${payload.message}`, "Reply to this email to answer them."];
   } else {
-    const p = payload as { amount: number; asking: number | null; moveIn: string; term: string; adults: number; children: number; pets: boolean; petsNote: string; note: string };
+    const p = payload as { amount: number; asking: number | null; moveIn: string; term: string; adults: number; children: number; pets: boolean; petsNote: string; note: string; passport: OfferPassport; changes: OfferChange[] };
     const moveIn = new Date(p.moveIn).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
     subject = `Offer from ${who}: ${gbp(p.amount)} a month on ${address}`;
     body = [
       `${who} would like to offer on ${address}.`,
       [`Offer: ${gbp(p.amount)} a month${p.asking ? ` (advertised at ${gbp(p.asking)})` : ""}`, `Move in: ${moveIn}`, `Term: ${p.term}`, `Moving in: ${p.adults} adult${p.adults === 1 ? "" : "s"}${p.children ? `, ${p.children} child${p.children === 1 ? "" : "ren"}` : ""}${p.pets ? `, with pets${p.petsNote ? ` (${p.petsNote})` : ""}` : ", no pets"}`].join("\n"),
       p.note ? `For the landlord:\n${p.note}` : "",
-      `From their tenant passport, confirmed as up to date:\n${passportLines(data).join("\n")}`,
+      `From their tenant passport, confirmed as up to date:\n${passportLines(p.passport, p.changes).join("\n")}`,
+      p.changes.length
+        ? `* ${p.changes.length === 1 ? "One answer was" : `${p.changes.length} answers were`} changed with this offer. They can't see these marks.${p.changes.some((c) => c.watch) ? " Worth a look before it goes to the landlord." : ""}\nOpen the offer: ${OFFER_LINK}`
+        : `Open the offer: ${OFFER_LINK}`,
       "Put it to the landlord, and reply to them either way.",
     ];
   }
@@ -135,7 +191,7 @@ export async function POST(req: NextRequest) {
   await q(
     `INSERT INTO os_tenant_viewing_responses (id, email, name, listing_id, address, kind, payload, sent_to, outcome)
      VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9)`,
-    [randomUUID(), me.email, me.name, listingId, address, kind, JSON.stringify(payload), to, outcome]
+    [id, me.email, me.name, listingId, address, kind, JSON.stringify(payload), to, outcome]
   );
   const on = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" });
   await noteOnLeads({ email: me.email, name: me.name, phone, address, line: `${on}: ${subject}.${outcome === "sent" ? ` Emailed to ${to}.` : ""}` }).catch(() => null);
