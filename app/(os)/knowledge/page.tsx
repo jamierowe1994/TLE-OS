@@ -90,6 +90,19 @@ export default function KnowledgeHub() {
     setGuide(false);
     setNote(null);
   }
+
+  /* /knowledge?write=<question> opens a new entry titled with it - the
+     Trending list on Admin, Steve links here for a question he could not
+     answer (18 Sep 2026). Once, after the sections have loaded. */
+  const wrote = useRef(false);
+  useEffect(() => {
+    if (wrote.current || entries === null) return;
+    const q = new URLSearchParams(window.location.search).get("write");
+    if (!q) return;
+    wrote.current = true;
+    startNew({ title: q.replace(/[?.!]+$/, "").slice(0, 120) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries]);
   function startEdit(e: Entry) {
     setEditing(e);
     setTitle(e.title);

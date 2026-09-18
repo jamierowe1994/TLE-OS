@@ -65,6 +65,8 @@ type Line = {
   createdAt: string;
 };
 
+type Trend = { question: string; wordings: string[]; times: number; people: number; lastAsked: string; notCovered: boolean };
+
 function when(iso: string | null) {
   if (!iso) return "—";
   const d = new Date(iso).getTime();
@@ -76,6 +78,7 @@ function when(iso: string | null) {
 
 export default function AssistantConsole() {
   const [lines, setLines] = useState<Line[] | null>(null);
+  const [trends, setTrends] = useState<Trend[]>([]);
   const [brain, setBrain] = useState<{
     live: boolean;
     spent: number;
@@ -116,7 +119,10 @@ export default function AssistantConsole() {
       .catch(() => setBrain(null));
     fetch("/api/admin/assistant-log")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("no"))))
-      .then((d: { lines?: Line[] }) => setLines(d.lines ?? []))
+      .then((d: { lines?: Line[]; trends?: Trend[] }) => {
+        setLines(d.lines ?? []);
+        setTrends(d.trends ?? []);
+      })
       .catch(() => setDenied(true));
   }, []);
   useEffect(load, [load]);
@@ -149,7 +155,6 @@ export default function AssistantConsole() {
     }
   }
 
-  const questions = (lines ?? []).filter((l) => l.role === "agent" && l.kind === "ask");
   /* Agents only — the assistant's own lines would swamp the picker. */
   const people = [...new Set((lines ?? []).filter((l) => l.role === "agent").map((l) => l.userEmail))].sort();
   const shown = who ? (lines ?? []).filter((l) => l.userEmail === who) : (lines ?? []);
@@ -191,9 +196,15 @@ export default function AssistantConsole() {
         </div>
       </section>
 
+      {/* ── TRENDING (James, 18 Sep 2026) ──────────────────────────────────
+          "Rather than giving us all of the dialogue for the questions asked,
+          we should look for trends ... if a question gets asked more than
+          once, then it should show on the trending list", top five. Grouped
+          however it was worded (lib/assistant-trends); greetings and "what
+          about now" never count. The full dialogue is folded away at the foot. */}
       <section className="fade-up mt-6">
         <div className="flex items-baseline justify-between gap-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide">Questions asked</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wide">Trending questions</h2>
           <button
             type="button"
             onClick={load}
@@ -203,55 +214,46 @@ export default function AssistantConsole() {
           </button>
         </div>
         <p className="mt-1 text-[12px] text-muted">
-          Each one is a guide somebody needed and couldn&rsquo;t find. Write from the top.
+          What people keep asking, however they word it - the top five, asked more than once. The top of this list is the next thing worth writing down.
         </p>
 
         {lines === null ? (
           <p className="mt-4 text-[12.5px] text-muted">Loading…</p>
-        ) : questions.length === 0 ? (
+        ) : trends.length === 0 ? (
           <p className="mt-4 rounded-xl border border-dashed border-line p-4 text-[12.5px] text-muted">
-            Nobody has asked anything yet. The character sits in the bottom-right of every
-            screen — questions asked through him land here.
+            Nothing asked more than once yet. As soon as a question comes up twice, it shows here.
           </p>
         ) : (
-          <ul className="mt-3 space-y-2">
-            {questions.map((q) => (
-              <li key={q.id} className="rounded-[18px] border border-line/50 bg-white p-3.5">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="text-[12px] text-muted">
-                    {q.userEmail} on {q.path || "—"}
-                  </span>
-                  <span className="shrink-0 text-[11px] text-muted">{when(q.createdAt)}</span>
+          <ol className="mt-3 space-y-2">
+            {trends.map((t, i) => (
+              <li key={t.question} className="flex gap-4 rounded-[18px] border border-line/50 bg-white p-4">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[15px] font-bold text-accent-dark">{i + 1}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[14px] font-semibold leading-snug">{t.question.charAt(0).toUpperCase() + t.question.slice(1)}</p>
+                  <p className="mt-1 text-[12px] text-muted">
+                    Asked {t.times} times{t.people > 1 ? ` by ${t.people} people` : ""} · last {when(t.lastAsked)}
+                    {t.notCovered ? " · he couldn't answer it" : ""}
+                  </p>
+                  {t.wordings.length > 1 && (
+                    <details className="mt-1.5">
+                      <summary className="cursor-pointer text-[11.5px] text-muted hover:text-ink">{t.wordings.length} ways it was asked</summary>
+                      <ul className="mt-1.5 space-y-1 border-l-2 border-line/60 pl-3">
+                        {t.wordings.map((w) => (
+                          <li key={w} className="text-[12px] text-muted">&ldquo;{w}&rdquo;</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
                 </div>
-                <p className="mt-1.5 text-[13px]">{q.text}</p>
-                {/* The other half of "which we should be able to receive". A
-                    file attached to a question is no use sitting in a bucket:
-                    this is where somebody actually opens it. The link is signed
-                    for five minutes when it is followed. */}
-                {q.attachments && q.attachments.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {q.attachments.map((a) => (
-                      <a
-                        key={a.key}
-                        href={`/api/r2/file?key=${encodeURIComponent(a.key)}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex max-w-full items-center gap-1.5 rounded-full border border-line/80 bg-box px-2.5 py-1 text-[11px] text-muted transition-colors hover:border-ink/40 hover:text-ink"
-                      >
-                        <DoodleIcon name="doc" size={11} />
-                        <span className="truncate">{a.name}</span>
-                        <span className="shrink-0 opacity-70">
-                          {a.size < 1024 * 1024
-                            ? `${Math.max(1, Math.round(a.size / 1024))}KB`
-                            : `${(a.size / 1024 / 1024).toFixed(1)}MB`}
-                        </span>
-                      </a>
-                    ))}
-                  </div>
-                )}
+                <Link
+                  href={`/knowledge?write=${encodeURIComponent(t.question)}`}
+                  className={`shrink-0 self-start rounded-full px-3.5 py-1.5 text-[12px] font-semibold ${t.notCovered ? "bg-accent-dark text-white" : "border border-line/80 hover:border-ink/40"}`}
+                >
+                  Write the answer
+                </Link>
               </li>
             ))}
-          </ul>
+          </ol>
         )}
       </section>
 
@@ -350,7 +352,12 @@ export default function AssistantConsole() {
       </section>
 
       {/* ---------------------------- the log ---------------------------- */}
-      <section className="fade-up mt-8">
+      {/* Folded away (James, 18 Sep 2026: "we don't need to see every single
+          transcript") - kept, because what he replied is the half that might
+          have been wrong, and this is where to check it. */}
+      <details className="fade-up mt-8 rounded-[22px] border border-line/50 bg-white p-5">
+        <summary className="cursor-pointer text-sm font-semibold uppercase tracking-wide">Every conversation</summary>
+      <section className="mt-4">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide">Conversations</h2>
           {people.length > 1 && (
@@ -397,11 +404,30 @@ export default function AssistantConsole() {
                   <span className="shrink-0 text-[11px] text-muted">{when(l.createdAt)}</span>
                 </div>
                 <p className="mt-1 text-[13px]">{l.text}</p>
+                {/* Files sent with a question: this is where somebody opens
+                    them. The link is signed for five minutes when followed. */}
+                {l.attachments && l.attachments.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {l.attachments.map((a) => (
+                      <a
+                        key={a.key}
+                        href={`/api/r2/file?key=${encodeURIComponent(a.key)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex max-w-full items-center gap-1.5 rounded-full border border-line/80 bg-box px-2.5 py-1 text-[11px] text-muted transition-colors hover:border-ink/40 hover:text-ink"
+                      >
+                        <DoodleIcon name="doc" size={11} />
+                        <span className="truncate">{a.name}</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
         )}
       </section>
+      </details>
 
       <section className="fade-up mt-8 rounded-[22px] border border-line/50 bg-white p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide">What he&rsquo;ll read from</h2>
