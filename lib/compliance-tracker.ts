@@ -124,7 +124,9 @@ function rowsFor(p: CompProperty, agent: string | null): ChaseRow[] {
 
     const reason =
       status === "missing"
-        ? "No record at all — we cannot say whether this exists."
+        ? daysLeft != null
+          ? `The last certificate on file ran out ${Math.abs(daysLeft)} days ago and no renewal has reached us.`
+          : "No record at all — we cannot say whether this exists."
         : status === "expired"
           ? `Expired ${Math.abs(daysLeft ?? 0)} days ago.`
           : !attached

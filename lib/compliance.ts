@@ -122,6 +122,11 @@ export type CompProperty = {
    * did not, and the screen was calling all 101 unknown.
    */
   gasAnswered?: boolean;
+  /** Who REX says looks after the home: the agent on its latest listing. */
+  agent?: string | null;
+  /** That agent is no longer on the REX account (or the TEG register says
+   *  they have departed). Their homes went with them. */
+  agentLeft?: boolean;
 };
 
 /**
@@ -160,9 +165,17 @@ export const isLetOnly = (p: CompProperty): boolean => p.service === "Let Only";
  *   - REX says let only                          → the landlord's, always
  *   - neither                                    → nobody has told us we manage
  *     it, so it is not a job anybody here can be given
+ *   - the agent on it has left the business       → the home went with them
+ *
+ * James, 18 Sep 2026: "cross-reference these with who looks after them. If
+ * it's an agent and the agent has left, then we don't look after them." REX
+ * PM's letting agreements are not closed when an agent goes, so an "active"
+ * agreement on a leaver's home is a record nobody tidied, not a home we run.
+ * A home with no agent on record (the Not on REX homes) stays: REX PM is the
+ * only thing that speaks for it.
  */
 export const isOurs = (p: CompProperty): boolean =>
-  Boolean(p.managedByPm) && !isLetOnly(p);
+  Boolean(p.managedByPm) && !isLetOnly(p) && !p.agentLeft;
 
 /**
  * What this property is REQUIRED to hold.
@@ -185,8 +198,27 @@ export function requiredCerts(p: CompProperty): CertKey[] {
 
 export type CertStatus = "expired" | "urgent" | "watch" | "ok" | "missing";
 
+/**
+ * How long past its expiry a certificate still counts as a live, chaseable
+ * expiry. Beyond this it is not "expired" - it is a record that is years old
+ * with no renewal filed behind it.
+ *
+ * James, 18 Sep 2026: the list was leading with gas certificates ten, seven
+ * and three years over on homes that have been let since, which cannot be
+ * true of a home we manage - a let needs a current certificate. What it means
+ * is that the renewal never reached REX. "Ignore anything over 6 months out of
+ * date." So past 180 days the certificate reads as no current record: out of
+ * Expired and out of the month's chase list, still in No record, because we
+ * genuinely cannot produce a valid one. It is never shown as in date.
+ */
+export const STALE_AFTER_DAYS = 180;
+
+/** A certificate we hold that ran out long enough ago to be a dead record. */
+export const isStaleRecord = (c: Cert | undefined): boolean =>
+  c?.expires != null && c.expires < -STALE_AFTER_DAYS;
+
 export function statusOf(c: Cert | undefined): CertStatus {
-  if (!c || c.expires == null) return "missing";
+  if (!c || c.expires == null || isStaleRecord(c)) return "missing";
   if (c.expires < 0) return "expired";
   if (c.expires <= 30) return "urgent";
   if (c.expires <= 90) return "watch";

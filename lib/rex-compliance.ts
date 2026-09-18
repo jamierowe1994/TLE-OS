@@ -6,6 +6,8 @@ import type { CertKey, CompProperty } from "@/lib/compliance";
 import { activeOsProperties, factsByRexId } from "@/lib/os-properties";
 import { osCertsFor } from "@/lib/os-certs";
 import { houseKeyOf, isRoomAddress } from "@/lib/address-parse";
+import { allAgents } from "@/lib/rex-agents";
+import { listTegPeople, normEmail } from "@/lib/teg-people";
 
 /**
  * The compliance book, live from REX.
@@ -247,9 +249,23 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
    * the expensive mistake and carrying a let-only one is merely noise.
    */
   const serviceByProperty = new Map<string, Set<string>>();
+  /**
+   * Who looks after each home: the agent on its most recent listing, off the
+   * same rows. James, 18 Sep 2026: if that agent has left, we do not look
+   * after the home - REX PM's letting agreement was simply never closed.
+   */
+  const agentByProperty = new Map<string, { id: string; name: string; email: string; at: number }>();
   for (const row of peopleResults.flat()) {
     const pid = String((row.property as Row | null)?.id ?? row.property_id ?? "");
     if (!pid) continue;
+    const a = row.listing_agent_1 as Row | null | undefined;
+    if (a?.id) {
+      const at = Number(row.system_ctime ?? 0);
+      const held = agentByProperty.get(pid);
+      if (!held || at > held.at) {
+        agentByProperty.set(pid, { id: String(a.id), name: String(a.name ?? "").trim(), email: normEmail(String(a.email_address ?? "")), at });
+      }
+    }
     const raw = row.lettings_service_type as string | { text?: string } | null | undefined;
     const svc = (typeof raw === "string" ? raw : (raw?.text ?? "")).trim();
     if (svc) {
@@ -301,6 +317,25 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
     const managed = all.find((s) => !/let\s*only/i.test(s));
     return managed ?? all[0];
   };
+
+  /**
+   * Has the agent left? Two witnesses, either is enough:
+   *   - REX: a leaver is removed from the account, so their user id is no
+   *     longer among AccountUsers (18 Sep 2026: 9 former agents, 23 homes);
+   *   - the TEG register says "Departed" (Geraldine Mulhern still had a REX
+   *     login on some reads but is Departed on the Hub).
+   * If REX's user list does not come back we say nobody has left, rather
+   * than dropping every home in the book on a failed call.
+   */
+  const rexUsers = await allAgents().catch(() => []);
+  const onAccount = new Set(rexUsers.map((u) => u.id));
+  const departed = new Set(
+    (await listTegPeople().catch(() => []))
+      .filter((t) => /departed|left|inactive/i.test(t.status ?? ""))
+      .map((t) => normEmail(t.email))
+  );
+  const hasLeft = (a: { id: string; email: string } | undefined): boolean =>
+    Boolean(a) && ((onAccount.size > 0 && !onAccount.has(a!.id)) || (Boolean(a!.email) && departed.has(a!.email)));
 
   let withCertificate = 0;
   let gasUnknown = 0;
@@ -362,6 +397,8 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
       gasAnswered: hasGasRecord,
       service: serviceOf(String(l.propertyId), l.service),
       managedByPm: pmManaged.has(String(l.propertyId)),
+      agent: agentByProperty.get(String(l.propertyId))?.name || null,
+      agentLeft: hasLeft(agentByProperty.get(String(l.propertyId))),
       certs,
     };
   });

@@ -5,7 +5,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import ComplianceDrawer from "@/components/ComplianceDrawer";
 import {
-  BIG_THREE, CERT_META, COMP_BOOK, dueWithin, headlineCerts, isOurs, statusOf,
+  BIG_THREE, CERT_META, COMP_BOOK, dueWithin, headlineCerts, isOurs, isStaleRecord, statusOf,
   type CertKey, type CertStatus, type CompProperty,
 } from "@/lib/compliance";
 
@@ -37,7 +37,7 @@ function CertPill({ cert, name }: { cert: CompProperty["certs"][CertKey]; name?:
     s === "expired"
       ? `${Math.abs(cert!.expires!)}d over`
       : s === "missing"
-        ? "no record"
+        ? isStaleRecord(cert) ? "old record" : "no record"
         : s === "urgent"
           ? `${cert!.expires}d left`
           : s === "watch"
@@ -46,7 +46,7 @@ function CertPill({ cert, name }: { cert: CompProperty["certs"][CertKey]; name?:
   return (
     <span
       className={`figures inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${TONE[s]}`}
-      title={name}
+      title={isStaleRecord(cert) ? `${name}: the last one on file ran out ${Math.round(Math.abs(cert!.expires!) / 30)} months ago and no renewal has reached REX` : name}
     >
       {text}
     </span>
@@ -173,7 +173,7 @@ export default function Compliance() {
                    the managed book - and printing that total above a list
                    scoped to what we manage is how the page and Susan's sheet
                    ended up quoting different numbers for the same question. */
-                `Live from REX — ${BOOK.length} homes we manage. ${noGas} have no gas supply, from the signed terms or REX PM's own record; ${gasUnknown} have nobody's answer either way, which is unknown rather than exempt. Let-only homes are the landlord's duty and are not on this screen.`
+                `Live from REX — ${BOOK.length} homes we manage. ${noGas} have no gas supply, from the signed terms or REX PM's own record; ${gasUnknown} have nobody's answer either way, which is unknown rather than exempt. Let-only homes, and homes whose agent has left the business, are not on this screen. A certificate more than 6 months out of date reads as an old record, not an expiry.`
               : (source.reason ?? "Every certificate on every home, and the button that fixes each one.")
         }
         /* James's own artwork, trimmed to its ink so the drawing's own

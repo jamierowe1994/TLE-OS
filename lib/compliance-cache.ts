@@ -31,7 +31,9 @@ import { RULES } from "./staleness";
 /* v4, and the bump is load-bearing: CompProperty now carries `service`, and a
    v3 blob has none, so every let-only home would read as an ordinary managed
    one and be counted as a gap again (7 Sep 2026). */
-const CACHE_KEY = "compliance:v6";
+/* v7 (18 Sep 2026): the book carries the agent and whether they have left.
+   A v6 blob has neither, so every leaver's home would read as ours again. */
+const CACHE_KEY = "compliance:v7";
 /* From lib/staleness, where every kind's window lives with the reason for it.
    An hour to READ a certificate is fine; approving a pack on one is not, and
    that path asks REX itself rather than coming through here. */
