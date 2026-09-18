@@ -15,7 +15,7 @@ import RoomPicker from "@/components/RoomPicker";
 import PhotoLightbox from "@/components/PhotoLightbox";
 import { useDocumentOpen } from "@/lib/doc-sheet";
 import {
-  CERT_META, headlineCerts, requiredCerts, statusOf,
+  CERT_META, headlineCerts, isOurs, requiredCerts, statusOf,
   type CertKey, type CertStatus, type CompProperty,
 } from "@/lib/compliance";
 import type { ManagedBook, ManagedLandlord, ManagedProperty, Party } from "@/lib/portfolio-types";
@@ -544,25 +544,45 @@ export default function Portfolio() {
     [certBy]
   );
 
+  /* Only the homes we are answerable for (James, 18 Sep 2026). The book
+     here is every REX listing ever let - let-only homes, homes REX PM no
+     longer manages, the books of agents who have left - and counting their
+     certificates put 116 on this card when Compliance, asking the same
+     question, said 75. isOurs() is the one scope both screens use. */
+  const oursHome = useCallback(
+    (p: ManagedProperty) => {
+      const cp = certBy && p.propertyId ? certBy.get(p.propertyId) : undefined;
+      return Boolean(cp && isOurs(cp));
+    },
+    [certBy]
+  );
+
   const attention = useMemo(() => {
     const s = new Set<string>();
     if (!book || !certBy) return s;
-    for (const p of book.properties) if (needsLook(summaryOf(p))) s.add(p.listingId);
+    for (const p of book.properties) if (oursHome(p) && needsLook(summaryOf(p))) s.add(p.listingId);
     return s;
-  }, [book, certBy, summaryOf]);
+  }, [book, certBy, summaryOf, oursHome]);
 
-  /* The certificate position across the book, split three ways. */
+  /* The certificate position across the book, split three ways - counted
+     per HOME, not per listing: a house let by the room is several listings
+     on one property, and its one gas certificate was being counted once a
+     room. */
   const certTally = useMemo(() => {
-    const t = { expired: 0, urgent: 0, missing: 0 };
+    const t = { expired: 0, urgent: 0, missing: 0, toRenew: 0 };
     if (!book || !certBy) return t;
+    const seen = new Set<string>();
     for (const p of book.properties) {
+      if (!p.propertyId || seen.has(p.propertyId) || !oursHome(p)) continue;
+      seen.add(p.propertyId);
       const w = summaryOf(p)?.worst;
       if (w === "expired") t.expired++;
       else if (w === "urgent") t.urgent++;
       else if (w === "missing") t.missing++;
     }
+    t.toRenew = t.expired + t.urgent;
     return t;
-  }, [book, certBy, summaryOf]);
+  }, [book, certBy, summaryOf, oursHome]);
 
   const services = useMemo(
     () => (book ? Object.keys(book.counts.byService).sort().map((s) => ({ id: s, label: s })) : []),
@@ -677,7 +697,7 @@ export default function Portfolio() {
     certs.status === "checking" ? <FindingData label="Checking REX" />
     : certs.status === "slow" ? "REX is still reading them. Refresh in a few minutes."
     : certs.status === "failed" ? <span className="text-accent-dark">{certs.error}</span>
-    : `${certTally.expired} expired · ${certTally.urgent} due in 30 days · ${certTally.missing} with no record in REX${certs.stale ? " · refreshing" : ""}`;
+    : `Homes we manage: ${certTally.expired} expired · ${certTally.urgent} due in 30 days · ${certTally.missing} with no current record${certs.stale ? " · refreshing" : ""}`;
 
   const pillClass = (on: boolean) =>
     `rounded-full border px-3.5 py-2 text-[12px] transition-colors ${on ? "border-accent-dark bg-accent-soft text-accent-dark" : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"}`;
@@ -742,9 +762,9 @@ export default function Portfolio() {
             />
             <StatCard
               icon="shield"
-              tone={certs.status === "ready" && attention.size > 0 ? "pink" : undefined}
+              tone={certs.status === "ready" && certTally.toRenew > 0 ? "pink" : undefined}
               label="Certificates to renew"
-              value={certs.status === "ready" ? attention.size.toLocaleString("en-GB") : <span className="text-[18px] text-muted">…</span>}
+              value={certs.status === "ready" ? certTally.toRenew.toLocaleString("en-GB") : <span className="text-[18px] text-muted">…</span>}
               hint={book ? certsHint : undefined}
             />
           </div>

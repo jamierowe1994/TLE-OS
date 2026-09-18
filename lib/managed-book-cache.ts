@@ -32,7 +32,9 @@ import type { ManagedBook } from "./portfolio-types";
    application where the listing names nobody. Stored books hold the old,
    thinner answer and would be served for six hours. */
 const BOOK_BASE = "portfolio:v2";
-const CERTS_BASE = "portfolio-certs:v1";
+/* v2 (18 Sep 2026): REX PM rows no longer pass "Managed" as a service, so a
+   let-only home stops counting as ours here. A v1 answer still would. */
+const CERTS_BASE = "portfolio-certs:v2";
 
 export const bookKeyFor = (rexUserId: string | null) =>
   rexUserId ? `${BOOK_BASE}:agent:${rexUserId}` : `${BOOK_BASE}:all`;
@@ -159,7 +161,12 @@ export async function managedCertsFor(rexUserId: string | null, book: ManagedBoo
     certificatesFor(
       book.properties
         .filter((p) => p.propertyId)
-        .map((p) => ({ propertyId: p.propertyId as string, name: p.name, locality: p.locality, epcExpiry: p.epcExpiry, service: p.service }))
+        /* A REX PM row ("pm-link-") says "Managed" because REX PM holds a
+           letting agreement - that is not REX's service type, and passing it
+           as one let it outrank REX's own "Let Only" (1 The Coppice, 18 Sep
+           2026: let only on Compliance, ours on Portfolio). Let only wins
+           over everything, so these rows leave the service to REX. */
+        .map((p) => ({ propertyId: p.propertyId as string, name: p.name, locality: p.locality, epcExpiry: p.epcExpiry, service: p.listingId.startsWith("pm-link-") ? null : p.service }))
     );
 
   const h = await held<ComplianceBook>(key);
