@@ -114,12 +114,16 @@ export const STAGE_UPDATE: Record<TenantStageKey, StageUpdate> = {
     next: "Tell us what you are after and we will send you the homes that fit.",
     cta: "See properties to rent", href: "/tenant/homes",
   },
+  /* James, 18 Sep 2026: after an enquiry there is nothing for the tenant to
+     pick - the agent books the viewing - so the step is waiting for that, and
+     the one thing they can do is get hold of the agent about it. "#agent"
+     raises the agent sheet (components/tenant/AgentSheet). */
   enquired: {
     label: "Enquire",
-    title: "We have your enquiry",
-    blurb: "{agent} has your enquiry about {property} and will come back to you today with times to see it.",
-    next: "Pick a viewing time, or tell us it is not the one and we will send others.",
-    cta: "Choose a time", href: "/tenant/next",
+    title: "Waiting for a viewing",
+    blurb: "{agent} is arranging a time to show you round {property}. Haven't heard? Get in touch and they will book you in.",
+    next: "The agent books your viewing and it appears here with the time.",
+    cta: "Contact your agent", href: "#agent",
   },
   matched: {
     label: "Homes for you",

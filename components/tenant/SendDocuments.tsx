@@ -1,18 +1,28 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { TENANT_DOC_KINDS, tenantDocLabel, type TenantDocument } from "@/lib/tenant-documents-kinds";
+import { TENANT_DOC_KINDS, type TenantDocument } from "@/lib/tenant-documents-kinds";
 
 /**
- * The tenant sending something in, and what they have sent.
- *
- * The page it sits on has always been one-way - things the tenant receives -
- * so this is the only control on it that goes the other direction, and it says
- * so plainly rather than sitting as a bare file input among a list of links.
+ * Everything we might ask a tenant for, one row each, with its own Send
+ * button and whether it is in (James, 18 Sep 2026: "Send us something ...
+ * will ask for all of the things underneath"). It replaces a dropdown and one
+ * file button, where the tenant had to know what we meant before they could
+ * give it to us.
  */
+const HINT: Record<string, string> = {
+  id: "A passport or driving licence",
+  right_to_rent: "Your share code, or a British or Irish passport",
+  reference: "From an employer or a previous landlord",
+  proof_of_income: "Three recent payslips, or a bank statement",
+  proof_of_address: "A bill or bank statement from the last three months",
+  other: "Anything else we have asked for",
+};
+
+const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+
 export default function SendDocuments({ sample = false }: { sample?: boolean }) {
-  const [kind, setKind] = useState<string>(TENANT_DOC_KINDS[0].id);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [docs, setDocs] = useState<TenantDocument[] | null>(null);
 
@@ -25,10 +35,10 @@ export default function SendDocuments({ sample = false }: { sample?: boolean }) 
   }, [sample]);
   useEffect(load, [load]);
 
-  async function send(files: FileList | null) {
+  async function send(kind: string, files: FileList | null) {
     if (!files?.length) return;
     if (sample) { setErr("This is the sample portal, so nothing is sent from here."); return; }
-    setBusy(true);
+    setBusy(kind);
     setErr(null);
     try {
       for (const file of Array.from(files)) {
@@ -42,62 +52,55 @@ export default function SendDocuments({ sample = false }: { sample?: boolean }) 
     } catch (e) {
       setErr(e instanceof Error ? e.message : "That did not send.");
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
   return (
     <>
-      <div className="mt-4 flex flex-wrap items-center gap-2.5">
-        <select
-          value={kind}
-          onChange={(e) => setKind(e.target.value)}
-          className="rounded-xl border border-line/60 bg-white px-3.5 py-2.5 text-[14px]"
-        >
-          {TENANT_DOC_KINDS.map((k) => (
-            <option key={k.id} value={k.id}>{k.label}</option>
-          ))}
-        </select>
-        <label className={`rounded-full px-5 py-2.5 text-[13px] font-semibold ${busy ? "bg-line text-muted" : "cursor-pointer bg-accent-dark text-white"}`}>
-          {busy ? "Sending…" : "Choose a file"}
-          <input
-            type="file"
-            multiple
-            accept="application/pdf,image/jpeg,image/png,image/webp,image/heic"
-            disabled={busy}
-            onChange={(e) => void send(e.target.files)}
-            className="hidden"
-          />
-        </label>
-        <p className="text-[12.5px] text-muted">A PDF or a photograph, up to 25MB.</p>
-      </div>
-      {err && <p className="mt-2 text-[13px] font-semibold text-accent-dark">{err}</p>}
-
-      <div className="mt-5 border-t border-line/60 pt-4">
-        <h3 className="text-[15px] font-bold">What you have sent</h3>
-        {docs == null ? (
-          <p className="mt-2 text-[13.5px] text-muted">Looking…</p>
-        ) : docs.length === 0 ? (
-          <p className="mt-2 text-[13.5px] text-muted">Nothing yet.</p>
-        ) : (
-          <ul className="mt-2 divide-y divide-line/50">
-            {docs.map((d) => (
-              <li key={d.id} className="flex items-center justify-between gap-4 py-3">
-                <span className="min-w-0">
-                  <span className="block truncate text-[14px] font-medium">{d.name}</span>
-                  <span className="block text-[12.5px] text-muted">
-                    {tenantDocLabel(d.kind)} · sent{" "}
-                    {new Date(d.uploadedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                  </span>
+      {err && <p className="mt-3 text-[13px] font-semibold text-accent-dark">{err}</p>}
+      <ul className="mt-3 divide-y divide-line/60">
+        {TENANT_DOC_KINDS.map((k) => {
+          const sent = (docs ?? []).filter((d) => d.kind === k.id);
+          const last = sent[0];
+          return (
+            <li key={k.id} className="flex items-center gap-3 py-3.5">
+              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] ${sent.length ? "bg-[#f1f4ec] text-[#56634a]" : "bg-panel text-muted"}`}>
+                {sent.length ? "✓" : "·"}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14px] font-semibold leading-tight">{k.label}</span>
+                <span className="mt-0.5 block text-[12px] leading-snug text-muted">
+                  {last ? (
+                    <>
+                      Sent {day(last.uploadedAt)}
+                      {sent.length > 1 ? ` · ${sent.length} files` : ""} ·{" "}
+                      <a href={`/api/tenant/documents/${last.id}`} target="_blank" rel="noreferrer" className="underline">Open</a>
+                    </>
+                  ) : (
+                    HINT[k.id]
+                  )}
                 </span>
-                <a href={`/api/tenant/documents/${d.id}`} target="_blank" rel="noreferrer" className="shrink-0 text-[12.5px] font-semibold underline">
-                  Open
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+              </span>
+              <label
+                className={`shrink-0 rounded-full px-4 py-2 text-[12.5px] font-semibold ${
+                  busy === k.id ? "bg-line text-muted" : sent.length ? "cursor-pointer border border-line/80" : "cursor-pointer bg-accent-dark text-white"
+                }`}
+              >
+                {busy === k.id ? "Sending…" : sent.length ? "Add" : "Send"}
+                <input
+                  type="file"
+                  multiple
+                  accept="application/pdf,image/jpeg,image/png,image/webp,image/heic"
+                  disabled={busy !== null}
+                  onChange={(e) => void send(k.id, e.target.files)}
+                  className="hidden"
+                />
+              </label>
+            </li>
+          );
+        })}
+      </ul>
     </>
   );
 }

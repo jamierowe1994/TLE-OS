@@ -13,10 +13,29 @@ import DoodleIcon from "@/components/DoodleIcon";
  * right that raises a sheet with the three things you do with an agent on a
  * phone - call, message, WhatsApp. Anything we cannot offer is not shown.
  */
+export const OPEN_AGENT = "tle-open-agent";
+
+/** A button that raises the agent sheet from anywhere on the page. */
+export function OpenAgentButton({ className, children }: { className: string; children: React.ReactNode }) {
+  return (
+    <button type="button" className={className} onClick={() => window.dispatchEvent(new Event(OPEN_AGENT))}>
+      {children}
+    </button>
+  );
+}
+
 export type SheetAgent = { name: string; email: string | null; phone: string | null; photo: string | null };
 
 export default function AgentSheet({ agent, messagesHref }: { agent: SheetAgent | null; messagesHref: string }) {
   const [open, setOpen] = useState(false);
+
+  /* Anything on the page can raise it - the next step's "Contact your agent"
+     does (OpenAgentButton) - without the two sharing state. */
+  useEffect(() => {
+    const raise = () => setOpen(true);
+    window.addEventListener(OPEN_AGENT, raise);
+    return () => window.removeEventListener(OPEN_AGENT, raise);
+  }, []);
 
   useEffect(() => {
     if (!open) return;

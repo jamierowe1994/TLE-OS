@@ -54,8 +54,12 @@ export default function SpinePhone({
   /* On the journey page itself there is nowhere to go, so it stops being a
      link rather than pretending to be one. */
   const href = given !== undefined ? given : path.endsWith("/journey") ? null : `${base}/journey${q}`;
-  const at = Math.max(0, stops.findIndex((s) => s.state === "current"));
   const done = stops.filter((s) => s.state === "done").length;
+  /* With every stop done there is no current one, and the ring used to fall
+     back to the FIRST - a tenant moved in read "8/8 Offer accepted". The last
+     stop is where they are. */
+  const cur = stops.findIndex((s) => s.state === "current");
+  const at = cur >= 0 ? cur : done === stops.length ? stops.length - 1 : 0;
   const here = stops[at];
   /* Counted in stops FINISHED, not the one they are standing on: a landlord
      whose compliance is under way has not finished compliance, and a ring that

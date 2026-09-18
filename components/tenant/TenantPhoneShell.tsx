@@ -14,7 +14,7 @@ import type { NavKey } from "@/lib/tenant-journey";
  */
 const PAGES: { key: NavKey; path: string; label: string }[] = [
   { key: "home", path: "", label: "Home" },
-  { key: "homes", path: "/homes", label: "Find a home" },
+  { key: "homes", path: "/homes", label: "Finding Home" },
   { key: "documents", path: "/documents", label: "Documents" },
   { key: "tenancy", path: "/tenancy", label: "My tenancy" },
   { key: "maintenance", path: "/maintenance", label: "Maintenance" },
@@ -41,7 +41,10 @@ export default function TenantPhoneShell({
     ...(signedIn && base === "/tenant" ? [{ href: "/tenant/profile", label: "My details" }] : []),
   ];
   return (
-    <PhoneShell signedIn={signedIn} letHere={false} links={links} signInHref="/tenant/sign-in" signOut={<TenantSignOut variant="drawer" />}>
+    /* Always Sign out, never Sign in (James, 18 Sep 2026): nobody reaches a
+       page in here without being signed in. In the sample it lands on the
+       sign-in page, which is where a real tenant's would. */
+    <PhoneShell signedIn letHere={false} links={links} signInHref="/tenant/sign-in" signOut={<TenantSignOut variant="drawer" />}>
       {children}
     </PhoneShell>
   );

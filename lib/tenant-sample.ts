@@ -50,6 +50,7 @@ const HOME: TenantProperty = {
   rentPcm: 850,
   beds: 2,
   photo: "/brand/photo/property.jpg",
+  images: ["/brand/photo/property.jpg", "/brand/living-room.jpg"],
   /* An invented home, so it opens Find a home rather than a listing. */
   href: "/tenant/homes",
 };

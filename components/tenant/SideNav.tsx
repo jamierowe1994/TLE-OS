@@ -17,7 +17,7 @@ const ITEMS: { key: NavKey; path: string; label: string; icon: string }[] = [
   { key: "home", path: "", label: "Home", icon: "home" },
   /* Find a home, inside the portal (James, 18 Sep 2026) - never locked:
      somebody moving in can still look, and somebody living in may move on. */
-  { key: "homes", path: "/homes", label: "Find a home", icon: "search" },
+  { key: "homes", path: "/homes", label: "Finding Home", icon: "search" },
   { key: "documents", path: "/documents", label: "Documents", icon: "doc" },
   { key: "tenancy", path: "/tenancy", label: "My tenancy", icon: "home-1" },
   { key: "maintenance", path: "/maintenance", label: "Maintenance", icon: "setting" },

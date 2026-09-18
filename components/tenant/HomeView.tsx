@@ -3,7 +3,8 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import Spine from "@/components/landlord/Spine";
 import SpinePhone from "@/components/landlord/SpinePhone";
-import AgentSheet from "@/components/tenant/AgentSheet";
+import AgentSheet, { OpenAgentButton } from "@/components/tenant/AgentSheet";
+import HomeSheet from "@/components/tenant/HomeSheet";
 import type { TenantHome, TenantProperty } from "@/lib/tenant-home-view";
 import { DEAL, STAGE_UPDATE, locksFor, phaseOf } from "@/lib/tenant-journey";
 
@@ -66,7 +67,7 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
   const phase = phaseOf(v.stage);
   const locks = locksFor(v.stage);
   const first = v.agent?.name.split(/\s+/)[0] ?? "your agent";
-  const home = d ? { property: d.property, locality: d.locality, rentPcm: d.rentPcm, beds: v.enquiry?.beds ?? null, photo: v.enquiry?.photo ?? null, href: v.enquiry?.href ?? null } : v.enquiry;
+  const home: TenantProperty | null = d ? { property: d.property, locality: d.locality, rentPcm: d.rentPcm, beds: v.enquiry?.beds ?? null, photo: v.enquiry?.photo ?? null, images: v.enquiry?.images, href: v.enquiry?.href ?? null } : v.enquiry;
 
   const lead = welcome
     ? "Your passport is made and your details are in. This is where your tenancy will live."
@@ -122,8 +123,49 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
 
       <AgentSheet agent={v.agent} messagesHref={to("/messages")} />
 
-      {/* ── the property, and the one next step ── */}
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+      {/* ── ON A PHONE: the home small, the next step beside it ──
+          James, 18 Sep 2026: the property took the whole first screen. It is
+          a round photo and the address now, with See home raising every photo
+          and the facts in a sheet (HomeSheet), and the next step sits beside
+          it rather than a scroll below. */}
+      <div className="grid grid-cols-[112px_minmax(0,1fr)] gap-3 sm:hidden" style={rise(1)}>
+        <div className={`${card} flex flex-col items-center px-2.5 py-4 text-center`} data-search>
+          <PropertyPhoto src={home?.photo ?? null} alt="" className="h-[72px] w-[72px] shrink-0 rounded-full" />
+          <p className="mt-2.5 text-[13px] font-bold leading-tight">{home ? home.property : "Your next home"}</p>
+          {home?.locality && <p className="mt-0.5 text-[11px] leading-snug text-muted">{home.locality}</p>}
+          <div className="mt-auto w-full pt-3">
+            {home ? (
+              <HomeSheet
+                property={home.property}
+                locality={home.locality}
+                photos={home.images?.length ? home.images : home.photo ? [home.photo] : []}
+                facts={homeFacts(v, home)}
+                href={home.href && /\/homes\/./.test(home.href) ? href(home.href) : null}
+                className="w-full rounded-full border border-line/80 py-2 text-[12px] font-semibold"
+              />
+            ) : (
+              <Link href={to("/homes")} className="block w-full rounded-full border border-line/80 py-2 text-[12px] font-semibold">
+                Find one
+              </Link>
+            )}
+          </div>
+        </div>
+        <div className="relative flex flex-col overflow-hidden rounded-[22px] bg-accent-soft p-4" data-search>
+          <p className={eyebrow}>{phase === "living" ? "Right now" : "Your next step"}</p>
+          <h2 className="mt-2 text-[17px] font-bold leading-tight">{viewingNow(v) ? "Viewing" : v.next.title}</h2>
+          {viewingNow(v) ? (
+            <ViewingRows v={v} compact />
+          ) : (
+            <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink/70">{v.next.blurb}</p>
+          )}
+          <div className="mt-auto pt-3">
+            <NextCta v={v} href={href} className="flex w-full items-center justify-center gap-1.5 rounded-full bg-accent-dark px-3 py-2.5 text-[12.5px] font-semibold text-white" />
+          </div>
+        </div>
+      </div>
+
+      {/* ── the property, and the one next step, from sm up ── */}
+      <div className="hidden gap-5 sm:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         <div className={`${card} flex flex-col gap-4 p-4 sm:flex-row sm:gap-5`} data-search style={rise(1)}>
           {/* On a phone the photo goes across the top; the text beside it was
               a column of single words. */}
@@ -187,24 +229,16 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
               <DoodleIcon name={nextIcon(v)} size={28} />
             </span>
             <div className="min-w-0">
-              <h2 className="text-[21px] font-bold leading-tight sm:text-[26px]">{v.next.title}</h2>
-              <p className="mt-1.5 max-w-md text-[13px] leading-relaxed text-ink/70 sm:mt-2 sm:text-[14.5px]">{v.next.blurb}</p>
+              <h2 className="text-[21px] font-bold leading-tight sm:text-[26px]">{viewingNow(v) ? "Viewing" : v.next.title}</h2>
+              {viewingNow(v) ? (
+                <ViewingRows v={v} />
+              ) : (
+                <p className="mt-1.5 max-w-md text-[13px] leading-relaxed text-ink/70 sm:mt-2 sm:text-[14.5px]">{v.next.blurb}</p>
+              )}
             </div>
           </div>
           <div className="relative mt-5 flex flex-wrap items-center gap-x-5 gap-y-3 sm:mt-6">
-            {v.next.href.startsWith("http") ? (
-              <a href={v.next.href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full bg-accent-dark px-6 py-3 text-[14px] font-semibold text-white">
-                {v.next.cta} <DoodleIcon name="trend-up" size={14} className="invert" />
-              </a>
-            ) : v.next.href.startsWith("#") ? (
-              <a href={v.next.href} className="inline-flex items-center gap-2 rounded-full bg-accent-dark px-6 py-3 text-[14px] font-semibold text-white">
-                {v.next.cta} <DoodleIcon name="trend-up" size={14} className="invert" />
-              </a>
-            ) : (
-              <Link href={href(v.next.href)} className="inline-flex items-center gap-2 rounded-full bg-accent-dark px-6 py-3 text-[14px] font-semibold text-white">
-                {v.next.cta} <DoodleIcon name="trend-up" size={14} className="invert" />
-              </Link>
-            )}
+            <NextCta v={v} href={href} className="inline-flex items-center gap-2 rounded-full bg-accent-dark px-6 py-3 text-[14px] font-semibold text-white" />
             <Also v={v} first={first} homes={to("/homes")} />
           </div>
         </div>
@@ -231,29 +265,12 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
         </div>
       </div>
 
-      {/* ── what else is on, while they are looking ── */}
-      {phase === "finding" && v.stage !== "offer" && v.market.length > 0 && (
-        <section id="market" className="scroll-mt-6" style={rise(4)}>
-          <div className="flex items-end justify-between gap-4 px-1">
-            <div>
-              <h2 className="text-[19px] font-bold">{v.enquiry ? "Also on the market" : "On the market now"}</h2>
-              <p className="mt-0.5 text-[13px] text-muted">{v.enquiry ? "More homes near you." : "Homes near you. Ask about any of them and it appears above."}</p>
-            </div>
-            <Link href={to("/homes")} className="shrink-0 rounded-full border border-line/80 px-4 py-1.5 text-[12.5px] font-semibold transition-colors hover:border-ink">
-              See them all
-            </Link>
-          </div>
-          {/* On a phone, a row to swipe rather than three full-width cards. */}
-          <div className="-mx-5 mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2 [scrollbar-width:none] sm:mx-0 sm:grid sm:snap-none sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-3">
-            {v.market.map((m) => (
-              <MarketCard key={m.property} m={m} href={m.href ? href(m.href) : to("/homes")} />
-            ))}
-          </div>
-        </section>
-      )}
-
+      {/* "On the market", Documents and Recent activity came off the home
+          page on 18 Sep 2026 (James): Find a home and Documents are tabs of
+          their own, and on a phone they were three screens of scrolling
+          between the tenant and anything they came to do. */}
       {/* ── the tiles ── */}
-      <div className={`grid gap-4 md:grid-cols-2 ${phase === "finding" ? "xl:grid-cols-3" : "xl:grid-cols-4"}`}>
+      <div className="grid gap-4 md:grid-cols-2">
         {phase === "finding" ? (
           <MomentTile v={v} first={first} href={href} i={5} rise={rise} />
         ) : (
@@ -270,17 +287,6 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
             )}
           </Tile>
         )}
-        <Tile icon="doc" title="Documents" href={to("/documents")} action="View all" i={5} rise={rise}>
-          <ul className="space-y-2.5">
-            <Doc label="Your tenant passport" sub={v.passport.done === v.passport.total ? "Complete" : `${v.passport.done} of ${v.passport.total} sections`} href={v.passport.path} ok={v.passport.done === v.passport.total} />
-            <Doc label="How to rent guide" sub="From the government" href="https://www.gov.uk/government/publications/how-to-rent" ok />
-            {phase === "finding" ? (
-              <Doc label="Your right to rent" sub="Checked from your passport" href={null} ok={Boolean(v.passport.data?.hasBritishPassport)} />
-            ) : (
-              <Doc label="Tenancy agreement" sub={phase === "living" ? "Signed" : v.stage === "rent_payment" || v.stage === "move_day" ? "Signed" : "Sent for signing when it is drawn up"} href={null} ok={phase === "living" || v.stage === "rent_payment" || v.stage === "move_day"} />
-            )}
-          </ul>
-        </Tile>
         {phase !== "finding" && (
           <Tile icon="setting" title="Maintenance" href={to("/maintenance")} action={locks.maintenance ? null : "Report"} i={6} rise={rise}>
             <div className="text-center">
@@ -302,21 +308,6 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
             </div>
           </Tile>
         )}
-        <Tile icon="clock" title="Recent activity" href={to("/messages")} action="View all" i={7} rise={rise}>
-          <ul className="space-y-3">
-            {v.activity.map((a, k) => (
-              <li key={k} className="flex gap-3">
-                <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${a.tone === "done" ? "bg-[#56634a]" : a.tone === "live" ? "bg-accent-dark" : "bg-line"}`} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-medium leading-snug">{a.label}</p>
-                  {a.sub && <p className="text-[12px] text-muted">{a.sub}</p>}
-                </div>
-                {a.when && <span className="shrink-0 text-[11.5px] text-muted">{a.when}</span>}
-              </li>
-            ))}
-            {!v.activity.length && <li className="text-[13px] text-muted">Nothing yet.</li>}
-          </ul>
-        </Tile>
       </div>
     </div>
   );
@@ -503,4 +494,59 @@ function Doc({ label, sub, href, ok }: { label: string; sub: string; href: strin
     </>
   );
   return <li>{href ? <a href={href} target={href.startsWith("http") ? "_blank" : undefined} rel="noreferrer" className="flex items-center gap-3 rounded-xl px-1 py-1 transition-colors hover:bg-panel">{inner}</a> : <div className="flex items-center gap-3 px-1 py-1">{inner}</div>}</li>;
+}
+
+/** Whether the next step is a booked viewing: the card then says Viewing
+ *  and lays out when, who and where rather than a paragraph. */
+function viewingNow(v: TenantHome): boolean {
+  return v.stage === "viewing" && v.viewing?.status === "booked";
+}
+
+function ViewingRows({ v, compact = false }: { v: TenantHome; compact?: boolean }) {
+  if (!v.viewing) return null;
+  const home = v.enquiry;
+  const row = compact ? "flex items-start gap-1.5 text-[12px] leading-snug" : "flex items-center gap-2 text-[14px]";
+  return (
+    <ul className={compact ? "mt-2 space-y-1.5" : "mt-3 space-y-2"}>
+      <li className={row}><DoodleIcon name="calendar" size={compact ? 13 : 15} className="mt-px shrink-0" /><span className="font-semibold">{dayTime(v.viewing.when)}</span></li>
+      <li className={row}><DoodleIcon name="user" size={compact ? 13 : 15} className="mt-px shrink-0" /><span>With {v.viewing.withName}</span></li>
+      {home && <li className={row}><DoodleIcon name="home" size={compact ? 13 : 15} className="mt-px shrink-0" /><span>{home.property}</span></li>}
+    </ul>
+  );
+}
+
+/** The one thing to do. "#agent" raises the agent sheet; with no agent, it
+ *  opens Messages instead. */
+function NextCta({ v, href, className }: { v: TenantHome; href: (h: string) => string; className: string }) {
+  const label = (
+    <>
+      {v.next.cta} <DoodleIcon name="trend-up" size={13} className="invert" />
+    </>
+  );
+  const h = v.next.href;
+  if (h === "#agent") {
+    return v.agent ? (
+      <OpenAgentButton className={className}>{label}</OpenAgentButton>
+    ) : (
+      <Link href={href("/tenant/messages")} className={className}>{label}</Link>
+    );
+  }
+  if (h.startsWith("http")) return <a href={h} target="_blank" rel="noreferrer" className={className}>{label}</a>;
+  if (h.startsWith("#")) return <a href={h} className={className}>{label}</a>;
+  return <Link href={href(h)} className={className}>{label}</Link>;
+}
+
+/** The facts the See home sheet lists, for where they are. */
+function homeFacts(v: TenantHome, home: TenantProperty): [string, string][] {
+  const d = v.deal;
+  const phase = phaseOf(v.stage);
+  const facts: [string, string][] = [];
+  const rent = d?.rentPcm ?? home.rentPcm;
+  if (rent) facts.push(["Rent", `${money(rent)} a month`]);
+  if (home.beds) facts.push(["Bedrooms", String(home.beds)]);
+  if (d?.moveIn) facts.push([phase === "living" ? "Moved in" : "Moving in", longDate(d.moveIn) ?? ""]);
+  if (!d && v.viewing) facts.push([v.viewing.status === "done" ? "Viewed" : "Viewing", dayTime(v.viewing.when)]);
+  if (!d && v.offer) facts.push(["Your offer", `${money(v.offer.amount)} a month`]);
+  if (!d && v.enquiry?.enquiredOn) facts.push(["You asked", longDate(v.enquiry.enquiredOn) ?? ""]);
+  return facts;
 }

@@ -7,7 +7,7 @@ import { tenantDealViews, tenantPassport, type TenantAccount, type TenantDealVie
 import { STAGE_UPDATE, fillUpdate, findingRoad, isStage, type TenantStageKey } from "@/lib/tenant-journey";
 import { homeOnMarket, homesOnMarket } from "@/lib/tenant-homes";
 import { latestEnquiry, originFromPassport } from "@/lib/tenant-find";
-import { milesBetween, type MarketHome } from "@/lib/market-homes";
+import { milesBetween, type MarketHome, type MarketHomeDetail } from "@/lib/market-homes";
 
 /**
  * Everything the tenant's home needs, in one shape, from what we actually
@@ -25,6 +25,8 @@ export type TenantProperty = {
   rentPcm: number | null;
   beds: number | null;
   photo: string | null;
+  /** Every photo, for the See home sheet. Absent, just `photo`. */
+  images?: string[];
   /** Where it opens: its page on Find a home, inside the portal. */
   href: string | null;
 };
@@ -97,9 +99,13 @@ export async function loadTenantHome(me: TenantAccount): Promise<TenantHome> {
     const u = STAGE_UPDATE.enquired;
     next = {
       title: u.title,
-      blurb: fillUpdate(u.blurb, { property: enquiry.property, agent: agent?.name ?? null }) || "We have your enquiry and will come back to you with times to view.",
-      cta: enquiry.href ? "See the home" : "See other homes",
-      href: enquiry.href ?? "/tenant/homes",
+      blurb: agent
+        ? fillUpdate(u.blurb, { property: enquiry.property, agent: agent.name })
+        : `We are arranging a time to show you round ${enquiry.property}. Haven't heard? Get in touch and we will book you in.`,
+      /* Contacting the agent is the one thing they can do; with no agent on
+         file, Messages is where that happens. */
+      cta: u.cta,
+      href: agent ? u.href : "/tenant/messages",
     };
   } else if (deal) {
     const label = deal.stages.find((s) => s.state === "current")?.label ?? "Your tenancy";
@@ -163,5 +169,5 @@ export async function tenantStage(me: TenantAccount): Promise<TenantStageKey> {
 
 /** A home on the market as the home page's cards draw it. */
 function property(h: MarketHome): TenantProperty {
-  return { property: h.name, locality: h.locality, rentPcm: h.rentPeriod === "month" ? h.rent : null, beds: h.beds, photo: h.photo, href: `/tenant/homes/${h.id}` };
+  return { property: h.name, locality: h.locality, rentPcm: h.rentPeriod === "month" ? h.rent : null, beds: h.beds, photo: h.photo, images: "images" in h ? (h as MarketHomeDetail).images : undefined, href: `/tenant/homes/${h.id}` };
 }
