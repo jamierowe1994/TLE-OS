@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
+import HomesMap from "@/components/tenant/HomesMap";
 import { fits, milesBetween, type HomeFilter, type MarketHome } from "@/lib/market-homes";
 
 /**
@@ -65,6 +66,9 @@ export default function HomesBrowser({
   const [maxRent, setMaxRent] = useState<number | null>(null);
   const [type, setType] = useState<"house" | "flat" | null>(null);
   const [sort, setSort] = useState<"near" | "new" | "cheap">(home ? "near" : "new");
+  /* A phone shows one or the other; from a laptop up, both side by side. */
+  const [view, setView] = useState<"list" | "map">("list");
+  const [hovered, setHovered] = useState<string | null>(null);
 
   const filter: HomeFilter = { lat: from?.lat ?? null, lng: from?.lng ?? null, radiusMiles: radius, minBeds, maxRent, type };
   const shown = useMemo(() => {
@@ -126,9 +130,25 @@ export default function HomesBrowser({
         </div>
       </div>
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+      {/* List or map, on a phone. */}
+      <div className="flex gap-2 lg:hidden">
+        {(["list", "map"] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setView(v)}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-full border py-2.5 text-[13px] font-semibold ${view === v ? "border-accent-dark bg-accent-dark text-white" : "border-line/80 bg-white"}`}
+          >
+            <DoodleIcon name={v === "list" ? "list" : "target"} size={14} className={view === v ? "invert" : ""} />
+            {v === "list" ? "List" : "Map"}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         {/* ── the homes ── */}
-        <section>
+        <section className={`space-y-5 ${view === "map" ? "hidden lg:block" : ""}`}>
+          <Alerts filter={filter} place={from ? (from === home ? "your home" : from.label) : null} saved={alert} sample={sample} />
           {error ? (
             <div className={`${card} flex items-start gap-4 p-6`}>
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-panel text-muted"><DoodleIcon name="info" size={17} /></span>
@@ -138,15 +158,17 @@ export default function HomesBrowser({
               </div>
             </div>
           ) : (
-            <>
+            <div>
               <p className="px-1 text-[13.5px] text-muted">
                 <span className="font-semibold text-ink">{shown.length} {shown.length === 1 ? "home" : "homes"}</span>
                 {radius && from ? ` within ${radius} ${radius === 1 ? "mile" : "miles"} of ${from === home ? "your home" : from.label}` : ""}
               </p>
               {shown.length ? (
-                <div className="mt-4 grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+                <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                   {shown.map(({ h, miles }) => (
-                    <HomeCard key={h.id} h={h} miles={miles} href={`${base}/homes/${h.id}${q}`} asked={askedAbout === h.id} />
+                    <div key={h.id} onMouseEnter={() => setHovered(h.id)} onMouseLeave={() => setHovered(null)}>
+                      <HomeCard h={h} miles={miles} href={`${base}/homes/${h.id}${q}`} asked={askedAbout === h.id} />
+                    </div>
                   ))}
                 </div>
               ) : (
@@ -161,13 +183,25 @@ export default function HomesBrowser({
                   )}
                 </div>
               )}
-            </>
+            </div>
           )}
         </section>
 
-        {/* ── alerts ── */}
-        <aside className="xl:sticky xl:top-6">
-          <Alerts filter={filter} place={from ? (from === home ? "your home" : from.label) : null} saved={alert} sample={sample} />
+        {/* ── the map ── */}
+        <aside className={`h-[70vh] lg:sticky lg:top-6 lg:block lg:h-[calc(100vh-3rem)] ${view === "list" ? "hidden" : ""}`}>
+          <HomesMap
+            homes={shown.map((x) => x.h)}
+            centre={from ? { lat: from.lat, lng: from.lng } : null}
+            centreIsHome={Boolean(home) && from === home}
+            radiusMiles={from ? radius : null}
+            hovered={hovered}
+            hrefFor={(id) => `${base}/homes/${id}${q}`}
+            onSearchHere={(at) => {
+              setFrom({ ...at, label: "the area on the map" });
+              if (!radius) setRadius(3);
+              setSort("near");
+            }}
+          />
         </aside>
       </div>
     </div>
@@ -238,7 +272,7 @@ function Where({ from, home, sample, onPlace }: { from: Origin | null; home: Ori
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
+    <div className="w-full min-w-0 sm:w-auto">
       <p className={`${eyebrow} mb-2`}>{label}</p>
       {/* One scrolling line on a phone; wrapped rows from a tablet up. */}
       <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">{children}</div>
@@ -355,31 +389,30 @@ function Alerts({ filter, place, saved, sample }: { filter: HomeFilter; place: s
   }
 
   return (
-    <div className="relative overflow-hidden rounded-[22px] bg-accent-soft p-6">
-      <div aria-hidden className="pointer-events-none absolute -bottom-20 -right-14 h-52 w-52 rounded-full bg-accent-dark/10" />
-      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/70 text-accent-dark"><DoodleIcon name="bell" size={20} /></span>
+    <div className="relative flex gap-4 overflow-hidden rounded-[22px] bg-accent-soft p-5">
+      <div aria-hidden className="pointer-events-none absolute -bottom-24 -right-14 h-52 w-52 rounded-full bg-accent-dark/10" />
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/70 text-accent-dark"><DoodleIcon name="bell" size={18} /></span>
+      <div className="relative min-w-0 flex-1">
       {on && !editing ? (
         <div className="relative">
-          <h2 className="mt-4 text-[21px] font-bold leading-tight">Your alerts are on</h2>
-          <p className="mt-2 text-[13.5px] leading-relaxed text-ink/70">We will email you when a new home comes on that fits:</p>
-          <p className="mt-2 text-[14px] font-semibold leading-snug">{describe(on, on.place)}</p>
-          {sample && <p className="mt-3 text-[12px] text-muted">This is the sample, so nothing is saved.</p>}
-          <div className="mt-5 flex flex-wrap gap-2">
+          <h2 className="text-[18px] font-bold leading-tight">Your alerts are on</h2>
+          <p className="mt-1 text-[13px] leading-relaxed text-ink/70">We will email you when a new home comes on that fits: <span className="font-semibold text-ink">{describe(on, on.place)}</span></p>
+          {sample && <p className="mt-2 text-[12px] text-muted">This is the sample, so nothing is saved.</p>}
+          <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" onClick={() => setEditing(true)} className="rounded-full bg-accent-dark px-4 py-2 text-[12.5px] font-semibold text-white">Use this search instead</button>
             <button type="button" disabled={busy} onClick={stop} className="rounded-full border border-ink/20 bg-white/60 px-4 py-2 text-[12.5px] font-semibold disabled:opacity-50">Stop the emails</button>
           </div>
         </div>
       ) : (
         <div className="relative">
-          <h2 className="mt-4 text-[21px] font-bold leading-tight">Be First to New Homes</h2>
-          <p className="mt-2 text-[13.5px] leading-relaxed text-ink/70">Good homes go in days. We will email you the moment one comes on that fits this search:</p>
-          <p className="mt-2 text-[14px] font-semibold leading-snug">{describe(filter, place)}</p>
-          <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl bg-white/70 p-3">
+          <h2 className="text-[18px] font-bold leading-tight">Be First to New Homes</h2>
+          <p className="mt-1 text-[13px] leading-relaxed text-ink/70">Good homes go in days. We will email you the moment one comes on that fits: <span className="font-semibold text-ink">{describe(filter, place)}</span></p>
+          <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl bg-white/70 p-3">
             <input type="checkbox" checked={consent} onChange={(e) => { setConsent(e.target.checked); setErr(""); }} className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent-dark)]" />
             <span className="text-[12.5px] leading-snug">I&apos;m happy to get emails from The Letting Experts about new homes that match. I can stop them at any time.</span>
           </label>
           {err && <p className="mt-2 text-[12.5px] text-[#9d4340]">{err}</p>}
-          <div className="mt-4 flex flex-wrap items-center gap-3">
+          <div className="mt-3 flex flex-wrap items-center gap-3">
             <button type="button" disabled={busy} onClick={save} className={`rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-white transition-opacity disabled:opacity-50 ${consent ? "" : "opacity-60"}`}>
               {busy ? "Saving…" : on ? "Update my alerts" : "Turn on alerts"}
             </button>
@@ -387,6 +420,7 @@ function Alerts({ filter, place, saved, sample }: { filter: HomeFilter; place: s
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

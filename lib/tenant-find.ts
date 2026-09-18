@@ -6,6 +6,7 @@ import { proseEmail } from "@/lib/email/prose";
 import { sendEmail } from "@/lib/resend";
 import { readListingDetails } from "@/lib/listing-details";
 import { findUserById } from "@/lib/users";
+import { saveContact, updateContact } from "@/lib/contacts-store";
 import { fits, type HomeFilter, type MarketHome } from "@/lib/market-homes";
 import type { PassportRecord } from "@/lib/passport";
 
@@ -66,9 +67,18 @@ export async function latestEnquiry(email: string): Promise<AskedAbout | null> {
 }
 
 /**
- * An enquiry from the portal: kept, then straight to the listing's agent as
- * an email they can reply to. Not a REX lead - REX writes stay locked - so
- * the agent's inbox is where it lands (flagged to James, 18 Sep 2026).
+ * An enquiry from the portal, in three places (James, 18 Sep 2026: "they
+ * should go to the agent's inbox as well, on file"):
+ *
+ *   the agent's inbox   an email to the listing's agent they can reply to
+ *   on file             the tenant on the Leads board as an OS person
+ *                       (os_contacts, source "Tenant area"), with every home
+ *                       they asked about in the notes, opening in the same
+ *                       drawer as a REX lead. One person per email: a second
+ *                       enquiry adds to their notes rather than a new row.
+ *   their own page      os_tenant_enquiries, for "You asked about"
+ *
+ * Not a REX lead - REX writes stay locked.
  *
  * Who gets it: the listing's own agent in REX; failing that, the agent who
  * sent the tenant their passport. If neither can be found it is still kept,
@@ -107,12 +117,43 @@ export async function makeEnquiry(p: {
     }
   }
 
+  const contactId = await fileOnLeads({ ...p, address, rent, emailed: outcome === "sent" ? `Emailed to ${to}.` : to ? `The email to ${to} did not go.` : "No agent email found, so nobody was emailed." }).catch(() => null);
+
   await q(
-    `INSERT INTO os_tenant_enquiries (id, email, name, phone, listing_id, address, message, sent_to, outcome)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-    [randomUUID(), p.email, p.name, p.phone.trim() || null, p.home.id, address, p.message.trim().slice(0, 4000), to, outcome]
+    `INSERT INTO os_tenant_enquiries (id, email, name, phone, listing_id, address, message, sent_to, outcome, contact_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+    [randomUUID(), p.email, p.name, p.phone.trim() || null, p.home.id, address, p.message.trim().slice(0, 4000), to, outcome, contactId]
   );
   return { ok: true, sentTo: outcome === "sent" ? to : null };
+}
+
+/** The tenant on the Leads board: found by email, or added. Returns the
+ *  os_contacts id. */
+async function fileOnLeads(p: { email: string; name: string; phone: string; message: string; address: string; rent: string; emailed: string }): Promise<string> {
+  const on = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" });
+  const line = [
+    `${on}: asked about ${p.address} (${p.rent}) from the tenant area.`,
+    p.message.trim() ? `"${p.message.trim().slice(0, 1000)}"` : null,
+    p.emailed,
+  ].filter(Boolean).join(" ");
+  const rows = await q<{ id: string; notes: string; mobile: string }>(
+    `SELECT id, notes, mobile FROM os_contacts WHERE kind = 'tenant' AND LOWER(email) = LOWER($1) AND source = 'Tenant area'
+      ORDER BY created_at DESC LIMIT 1`,
+    [p.email]
+  );
+  if (rows[0]) {
+    await updateContact(rows[0].id, {
+      address: p.address,
+      notes: `${line}\n\n${rows[0].notes ?? ""}`.slice(0, 8000),
+      ...(p.phone.trim() && !rows[0].mobile ? { mobile: p.phone } : {}),
+    });
+    return rows[0].id;
+  }
+  const c = await saveContact(
+    { kind: "tenant", name: p.name, email: p.email, mobile: p.phone, address: p.address, source: "Tenant area", enquiry: "Letting", notes: line },
+    "Tenant area"
+  );
+  return c.id;
 }
 
 /* ── New-home alerts ────────────────────────────────────────────────────── */

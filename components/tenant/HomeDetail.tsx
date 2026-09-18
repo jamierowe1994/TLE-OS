@@ -6,6 +6,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { milesBetween, type MarketHomeDetail } from "@/lib/market-homes";
 import { milesWords, rentWords, type Origin } from "@/components/tenant/HomesBrowser";
+import HomesMap from "@/components/tenant/HomesMap";
 
 /**
  * One home on Find a home: every photo, the write-up the portals carry, and
@@ -85,6 +86,11 @@ export default function HomeDetail({
             <Fact icon="calendar" label="Available" value={available} />
             <Fact icon="target" label="From your home" value={miles == null ? "-" : milesWords(miles).replace(" away", "")} />
           </div>
+          {h.lat != null && h.lng != null && (
+            <section className="h-[300px]">
+              <HomesMap homes={[h]} centre={home} centreIsHome radiusMiles={null} hovered={h.id} hrefFor={() => "#"} />
+            </section>
+          )}
           {(h.heading || h.body) && (
             <section className={`${card} p-6`}>
               <p className={eyebrow}>About this home</p>

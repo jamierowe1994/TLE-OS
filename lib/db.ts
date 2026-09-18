@@ -1065,8 +1065,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS os_tenant_feedback_once ON os_tenant_feedback 
 -- Find a home, inside the tenant portal (18 Sep 2026).
 --
 -- An enquiry a signed-in tenant made on a home from the portal. The agent is
--- emailed at the moment it is made; this row is what puts the home on the
--- tenant's own page as "You asked about" and ticks Find a home off the spine.
+-- emailed at the moment it is made, and it is filed on the Leads board as an
+-- OS person (os_contacts, source "Tenant area"); this row is what puts the
+-- home on the tenant's own page as "You asked about" and ticks Find a home.
 -- Enquiries from Rightmove and the rest are in os_leads already and are read
 -- beside these, by email.
 CREATE TABLE IF NOT EXISTS os_tenant_enquiries (
@@ -1081,6 +1082,8 @@ CREATE TABLE IF NOT EXISTS os_tenant_enquiries (
   outcome      TEXT,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- The person on the Leads board it was filed against (os_contacts id).
+ALTER TABLE os_tenant_enquiries ADD COLUMN IF NOT EXISTS contact_id TEXT;
 CREATE INDEX IF NOT EXISTS os_tenant_enquiries_email_idx ON os_tenant_enquiries (LOWER(email), created_at DESC);
 
 -- New-home alerts a tenant asked for, with the moment they agreed to the
