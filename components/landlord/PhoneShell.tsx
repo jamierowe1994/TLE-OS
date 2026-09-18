@@ -26,6 +26,12 @@ import type { LandlordPlace } from "@/lib/landlord-account";
  * were looking at, which needs no explaining.
  *
  * Phone only. From sm up the portal keeps its pills and its sidebar.
+ *
+ * The tenant portal wears the same shell (James, 18 Sep 2026: "follow the
+ * same kind of scheme as the landlord portal ... replicate one for one"). It
+ * passes its own `links` and sign-in address; everything else - the slide,
+ * the pink, the shadow, the rules about when the pink exists - is this file,
+ * once, so the two portals cannot drift apart.
  */
 
 const Ctx = createContext<{ open: boolean; toggle: () => void } | null>(null);
@@ -69,8 +75,14 @@ export default function PhoneShell({
   letHere,
   places = [],
   signOut,
+  links: given,
+  signInHref = "/landlord/sign-in",
   children,
 }: {
+  /** The tenant's pages. Absent, the landlord's (worked out below). A muted
+   *  one is a page not open yet at this stage - still a link, drawn quieter. */
+  links?: { href: string; label: string; muted?: boolean }[];
+  signInHref?: string;
   signedIn: boolean;
   letHere: boolean;
   /** Every property this landlord has with us. Fewer than two draws nothing. */
@@ -142,7 +154,7 @@ export default function PhoneShell({
     };
   }, [open]);
 
-  const links = [
+  const links: { href: string; label: string; muted?: boolean }[] = given ?? [
     { href: `${base}${q}`, label: "Home" },
     { href: `${base}/journey${q}`, label: "Journey" },
     { href: `${base}/documents${q}`, label: "Documents" },
@@ -186,7 +198,7 @@ export default function PhoneShell({
         <ul className="ml-auto w-[62%] space-y-1 text-right">
           {links.map((l) => (
             <li key={l.label}>
-              <Link href={l.href} className="block py-2.5 text-[24px] font-bold leading-tight">
+              <Link href={l.href} className={`block py-2.5 text-[24px] font-bold leading-tight ${l.muted ? "text-ink/35" : ""}`}>
                 {l.label}
               </Link>
             </li>
@@ -195,7 +207,7 @@ export default function PhoneShell({
             {signedIn ? (
               signOut
             ) : (
-              <Link href="/landlord/sign-in" className="block py-2.5 text-right text-[24px] font-bold leading-tight text-muted">
+              <Link href={signInHref} className="block py-2.5 text-right text-[24px] font-bold leading-tight text-muted">
                 Sign in
               </Link>
             )}

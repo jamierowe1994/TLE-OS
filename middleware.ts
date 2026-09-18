@@ -351,6 +351,17 @@ export const config = {
        checks the tenant's own session (currentTenant) and acts only on that
        tenant's email; nothing under it reads anything a stranger could not
        already see on the website. Named in full, per the note at the top. */
-    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|visit|api/visit|rehearsal|api/rehearsal|proof|api/tenant/passport|api/tenant/feedback|api/tenant/homes|api/landlord|api/calendar|brand|email|rex|r|api/r|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$).*)",
+    /* The rest of the tenant portal's own API (18 Sep 2026). Found while
+       giving James a sign-in on the preview: a tenant could not sign in at
+       all - api/tenant/session/password answered a 307 to the STAFF sign-in,
+       on production as well - and repairs, documents and sign-out were behind
+       the same door. A tenant has no staff session and never will.
+         session       sign in (password, rate limited; or an emailed link,
+                       rate limited and spent once), who am I, sign out
+         maintenance   report and list their own repairs - currentTenant
+         documents     send us and fetch their own files - currentTenant
+       Every one of them answers only for the tenant in the cookie. Still NOT
+       api/tenant wholesale: reminders/run is a cron route with its own key. */
+    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|visit|api/visit|rehearsal|api/rehearsal|proof|api/tenant/passport|api/tenant/feedback|api/tenant/homes|api/tenant/session|api/tenant/maintenance|api/tenant/documents|api/landlord|api/calendar|brand|email|rex|r|api/r|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$).*)",
   ],
 };

@@ -2,8 +2,20 @@ import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import Spine from "@/components/landlord/Spine";
+import SpinePhone from "@/components/landlord/SpinePhone";
+import AgentSheet from "@/components/tenant/AgentSheet";
 import type { TenantHome, TenantProperty } from "@/lib/tenant-home-view";
-import { locksFor, phaseOf } from "@/lib/tenant-journey";
+import { DEAL, STAGE_UPDATE, locksFor, phaseOf } from "@/lib/tenant-journey";
+
+/* The line under the stop on the phone's ring (SpinePhone). */
+const RING_WORDS: Record<string, string> = {
+  find: "Pick the home you want. Ask about it here or on Rightmove and it appears on this page.",
+  viewing: "We agree a time and show you round. It takes about twenty minutes.",
+  offer: "Apply in one tap. Your passport is your application.",
+  referencing: "Your employer, your landlord and your credit, checked. Your passport has most of it.",
+  moving: "The agreement signed, the first rent paid and the keys in your hand.",
+  ...Object.fromEntries(DEAL.map((k) => [k, STAGE_UPDATE[k].blurb])),
+};
 
 /**
  * The tenant's home. Its shape follows where they are (lib/tenant-journey):
@@ -69,14 +81,17 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
   return (
     <div className="space-y-6">
       {/* ── greeting and the agent ── */}
+      {/* ON A PHONE the greeting is the whole of it, as on the landlord's:
+          no daypart, no strapline, no agent card, so the home is the first
+          thing on the screen. The agent is the tab bottom right (AgentSheet). */}
       <div className="grid items-start gap-6 lg:grid-cols-[1fr_auto]" style={rise(0)}>
-        <div className="pt-2">
-          <p className={eyebrow}>{welcome ? "Welcome" : v.daypart}</p>
-          <h1 className="mt-2 text-[44px] leading-[1.05]">{welcome ? `Welcome in, ${v.first}` : `Hello, ${v.first}`}</h1>
-          <p className="mt-3 max-w-xl text-[14.5px] text-muted">{lead}</p>
+        <div className="sm:pt-2">
+          <p className={`${eyebrow} hidden sm:block`}>{welcome ? "Welcome" : v.daypart}</p>
+          <h1 className="text-[32px] leading-[1.05] sm:mt-2 sm:text-[44px]">{welcome ? `Welcome in, ${v.first}` : `Hello, ${v.first}`}</h1>
+          <p className="mt-3 hidden max-w-xl text-[14.5px] text-muted sm:block">{lead}</p>
         </div>
         {v.agent && (
-          <div className={`${card} flex flex-wrap items-center gap-4 px-5 py-4`} data-search>
+          <div className={`${card} hidden flex-wrap items-center gap-4 px-5 py-4 sm:flex`} data-search>
             {v.agent.photo ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={v.agent.photo} alt="" className="h-16 w-16 shrink-0 rounded-full object-cover" />
@@ -104,6 +119,8 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
           </div>
         )}
       </div>
+
+      <AgentSheet agent={v.agent} messagesHref={to("/messages")} />
 
       {/* ── the property, and the one next step ── */}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
@@ -159,20 +176,22 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
           </div>
         </div>
 
-        <div className="relative overflow-hidden rounded-[22px] bg-accent-soft p-6 sm:p-7" data-search style={rise(2)}>
+        <div className="relative overflow-hidden rounded-[22px] bg-accent-soft p-5 sm:p-7" data-search style={rise(2)}>
           <div aria-hidden className="pointer-events-none absolute -bottom-24 -right-16 h-72 w-72 rounded-full bg-accent-dark/10" />
           <div aria-hidden className="pointer-events-none absolute -bottom-32 right-24 h-64 w-64 rounded-full bg-accent-dark/5" />
           <p className={eyebrow}>{phase === "living" ? "Right now" : "Your next step"}</p>
-          <div className="mt-3 flex gap-5">
-            <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/70 text-accent-dark">
+          <div className="mt-4 flex gap-5 sm:mt-3">
+            {/* No icon on a phone, as the landlord's: one sentence and one
+                button do not need a 64px picture beside them. */}
+            <span className="hidden h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/70 text-accent-dark sm:flex">
               <DoodleIcon name={nextIcon(v)} size={28} />
             </span>
             <div className="min-w-0">
-              <h2 className="text-[26px] font-bold leading-tight">{v.next.title}</h2>
-              <p className="mt-2 max-w-md text-[14.5px] leading-relaxed text-ink/70">{v.next.blurb}</p>
+              <h2 className="text-[21px] font-bold leading-tight sm:text-[26px]">{v.next.title}</h2>
+              <p className="mt-1.5 max-w-md text-[13px] leading-relaxed text-ink/70 sm:mt-2 sm:text-[14.5px]">{v.next.blurb}</p>
             </div>
           </div>
-          <div className="relative mt-6 flex flex-wrap items-center gap-x-5 gap-y-3">
+          <div className="relative mt-5 flex flex-wrap items-center gap-x-5 gap-y-3 sm:mt-6">
             {v.next.href.startsWith("http") ? (
               <a href={v.next.href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full bg-accent-dark px-6 py-3 text-[14px] font-semibold text-white">
                 {v.next.cta} <DoodleIcon name="trend-up" size={14} className="invert" />
@@ -192,7 +211,13 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
       </div>
 
       {/* ── the journey at a glance ── */}
-      <div className={`${card} px-6 py-5`} data-search style={rise(3)}>
+      {/* A PHONE gets the ring and no box, as the landlord's (SpinePhone): how
+          far along, and what is happening now. The row of stops from sm up. */}
+      <section className="sm:hidden" data-search style={rise(3)}>
+        <h2 className="mb-3 text-[16px] font-bold">{d ? "Your tenancy" : "Your journey"}</h2>
+        <SpinePhone stops={v.stops} href={d && !locks.tenancy ? to("/tenancy") : null} blurbs={RING_WORDS} />
+      </section>
+      <div className={`${card} hidden px-6 py-5 sm:block`} data-search style={rise(3)}>
         <div className="flex items-center justify-between gap-4">
           <h2 className="text-[19px] font-bold">{d ? "Your tenancy at a glance" : "Your journey at a glance"}</h2>
           {d && !locks.tenancy && (
@@ -218,7 +243,8 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
               See them all
             </Link>
           </div>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {/* On a phone, a row to swipe rather than three full-width cards. */}
+          <div className="-mx-5 mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2 [scrollbar-width:none] sm:mx-0 sm:grid sm:snap-none sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-3">
             {v.market.map((m) => (
               <MarketCard key={m.property} m={m} href={m.href ? href(m.href) : to("/homes")} />
             ))}
@@ -333,7 +359,7 @@ function Also({ v, first, homes }: { v: TenantHome; first: string; homes: string
 /** A home on the market: photo, address, rent, beds. Opens on Find a home. */
 function MarketCard({ m, href }: { m: TenantProperty; href: string }) {
   return (
-    <Link href={href} className={`${card} block p-3 transition-colors hover:border-ink/40`} data-search>
+    <Link href={href} className={`${card} block w-[74%] shrink-0 snap-start p-3 transition-colors hover:border-ink/40 sm:w-auto`} data-search>
       <PropertyPhoto src={m.photo} alt="" className="h-[150px] w-full rounded-[14px] object-cover" />
       <div className="px-1 pb-1 pt-3">
         <p className="text-[15px] font-bold leading-tight">{m.property}</p>
@@ -357,7 +383,7 @@ function MomentTile({ v, first, href, i, rise }: { v: TenantHome; first: string;
         <Tile icon="key" title="How it works" href={href("/tenant/homes")} action={null} i={i} rise={rise}>
           <Steps items={[
             ["Ask about a home", "From Find a home here, or by messaging " + first + "."],
-            ["View it", "Pick a time that suits you. " + first + " meets you there."],
+            ["View it", "Pick a time that suits you. " + first.charAt(0).toUpperCase() + first.slice(1) + " meets you there."],
             ["Make your offer", "One tap. Your passport is your application."],
             ["Move in", "Referencing, agreement, keys. We walk you through each."],
           ]} />

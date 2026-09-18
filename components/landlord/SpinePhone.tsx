@@ -29,7 +29,18 @@ const BLURB: Record<string, string> = {
   management: "Your tenant moves in. From here it is rent, repairs, inspections and renewals.",
 };
 
-export default function SpinePhone({ stops }: { stops: Stop[] }) {
+export default function SpinePhone({
+  stops,
+  href: given,
+  blurbs = BLURB,
+}: {
+  stops: Stop[];
+  /** Where a tap goes. The tenant portal passes its own (or null for none);
+   *  absent, the landlord's journey page, worked out below. */
+  href?: string | null;
+  /** The line under the stop, by stop id. The tenant portal passes its own. */
+  blurbs?: Record<string, string>;
+}) {
   /* Where the seven live. Worked out here rather than passed down: the demo
      and the live portal are the same component with a different base, and a
      page that forgets to pass it would send a landlord to the wrong portal. */
@@ -42,7 +53,7 @@ export default function SpinePhone({ stops }: { stops: Stop[] }) {
   const q = keep.size ? `?${keep.toString()}` : "";
   /* On the journey page itself there is nowhere to go, so it stops being a
      link rather than pretending to be one. */
-  const href = path.endsWith("/journey") ? null : `${base}/journey${q}`;
+  const href = given !== undefined ? given : path.endsWith("/journey") ? null : `${base}/journey${q}`;
   const at = Math.max(0, stops.findIndex((s) => s.state === "current"));
   const done = stops.filter((s) => s.state === "done").length;
   const here = stops[at];
@@ -82,7 +93,7 @@ export default function SpinePhone({ stops }: { stops: Stop[] }) {
       <div className="min-w-0 flex-1">
         <p className="text-[17px] font-bold leading-tight">{here.label}</p>
         <p className="mt-0.5 text-[12.5px] text-muted">{here.sub}</p>
-        <p className="mt-1.5 text-[12px] leading-relaxed text-muted">{BLURB[here.id] ?? ""}</p>
+        <p className="mt-1.5 text-[12px] leading-relaxed text-muted">{blurbs[here.id] ?? ""}</p>
       </div>
 
       {href && (

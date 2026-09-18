@@ -1,4 +1,9 @@
 import Spine from "@/components/landlord/Spine";
+import SpinePhone from "@/components/landlord/SpinePhone";
+import { DEAL, STAGE_UPDATE } from "@/lib/tenant-journey";
+
+/* The line under the stop on the phone's ring. */
+const RING_WORDS: Record<string, string> = Object.fromEntries(DEAL.map((k) => [k, STAGE_UPDATE[k].blurb]));
 import type { TenantHome } from "@/lib/tenant-home-view";
 import LockedView from "@/components/tenant/LockedView";
 import { locksFor } from "@/lib/tenant-journey";
@@ -30,7 +35,9 @@ export default function TenancyView({ v, base = "/tenant" }: { v: TenantHome; ba
           </div>
           <div className={`${card} p-6`} data-search>
             <h2 className="text-[19px] font-bold">Where it is up to</h2>
-            <div className="mt-5"><Spine stops={v.stops} /></div>
+            {/* The ring on a phone, as the landlord's journey page; the row from sm up. */}
+            <div className="mt-4 sm:hidden"><SpinePhone stops={v.stops} href={null} blurbs={RING_WORDS} /></div>
+            <div className="mt-5 hidden sm:block"><Spine stops={v.stops} /></div>
             <div className="mt-6 grid gap-4 md:grid-cols-2">
               <div className="rounded-[16px] bg-accent-soft p-5"><p className={eyebrow}>Now</p><p className="mt-1.5 text-[14.5px] leading-relaxed">{v.deal.now}</p></div>
               <div className="rounded-[16px] bg-panel p-5"><p className={eyebrow}>What you can do</p><p className="mt-1.5 text-[14.5px] leading-relaxed">{v.deal.next}</p></div>
