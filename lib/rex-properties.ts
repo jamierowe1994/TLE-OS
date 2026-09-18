@@ -138,6 +138,21 @@ export async function createProperty(
     };
   }
 
+  /* NEVER A TEST FILE (James, 17 Sep 2026: "we shouldn't be pushing the test
+     one, so just make sure that stays the same"). Contacts already refuse
+     their test flag; a property has none, so it is recognised by the test
+     address the kits all use and by a test owner. */
+  if (/\b14 Test Street\b/i.test(`${p.streetNumber ?? ""} ${p.streetName ?? ""}`) || /^M20\s*2RN$/i.test(p.postcode.trim())) {
+    return { ok: false, reason: "test_file", detail: "This is a test address from Admin -> Testing, so it stays in the OS and never goes to REX." };
+  }
+  if (p.ownerContactId) {
+    const { q } = await import("@/lib/db");
+    const test = await q<{ is_test: boolean }>(`SELECT is_test FROM os_contacts WHERE rex_id = $1 OR id = $1 LIMIT 1`, [p.ownerContactId]).catch(() => []);
+    if (test[0]?.is_test) {
+      return { ok: false, reason: "test_file", detail: "The owner is a test contact from Admin -> Testing, so this stays in the OS and never goes to REX." };
+    }
+  }
+
   const blocked = await blockedBecause();
   if (blocked) return { ok: false, ...blocked };
 
