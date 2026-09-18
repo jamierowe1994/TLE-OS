@@ -195,7 +195,7 @@ export default function PhoneIdCheck() {
 
   return (
     <main>
-      <PhoneTop title="Right to Rent ID" />
+      <PhoneTop title="Scan an ID" />
 
       {step !== "sent" && (
         <ol className="mb-5 flex gap-1.5" aria-label="Steps">

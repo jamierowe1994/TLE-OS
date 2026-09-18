@@ -19,10 +19,16 @@ export default function PhonePeople() {
   const [error, setError] = useState<string | null>(null);
   const [slowNote, setSlowNote] = useState<string | null>(null);
   const turn = useRef(0);
+  /* From the menu: Search for a Tenant, Search for a Landlord (18 Sep 2026).
+     Only the other side is left out - a lead or a plain contact could be either. */
+  const [side, setSide] = useState<"tenant" | "landlord" | null>(null);
 
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search).get("q");
+    const sp = new URLSearchParams(window.location.search);
+    const q = sp.get("q");
     if (q) setNeedle(q);
+    const w = sp.get("who");
+    setSide(w === "tenant" || w === "landlord" ? w : null);
   }, []);
 
   useEffect(() => {
@@ -57,13 +63,14 @@ export default function PhonePeople() {
   /* The slow half only adds people the fast half did not already show. */
   const shown = new Set((fast ?? []).map((p) => `${p.name.toLowerCase()}|${p.phone.replace(/\D/g, "")}|${p.email.toLowerCase()}`));
   const extra = (slow ?? []).filter((p) => !shown.has(`${p.name.toLowerCase()}|${p.phone.replace(/\D/g, "")}|${p.email.toLowerCase()}`));
-  const all = [...(fast ?? []), ...extra];
+  const other = side === "tenant" ? /landlord/i : side === "landlord" ? /tenant|applicant/i : null;
+  const all = [...(fast ?? []), ...extra].filter((p) => !other || !other.test(p.role));
   const searching = needle.trim().length >= 2;
 
   return (
     <main>
-      <PhoneTop title="Find a Person" />
-      <SearchBox value={needle} onChange={setNeedle} placeholder="Name, phone or email" />
+      <PhoneTop title={side === "tenant" ? "Search for a Tenant" : side === "landlord" ? "Search for a Landlord" : "Find a Person"} />
+      <SearchBox value={needle} onChange={setNeedle} placeholder={side ? `The ${side}'s name, phone or email` : "Name, phone or email"} />
 
       <div className="mt-4">
         {!searching ? (

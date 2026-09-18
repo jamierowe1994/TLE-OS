@@ -22,7 +22,7 @@ export function PhoneTop({ title, back = "/m" }: { title: string; back?: string 
           <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </Link>
-      <h1 className="hand text-[26px] leading-none">{title}</h1>
+      <h1 className="text-[25px] leading-tight">{title}</h1>
     </header>
   );
 }

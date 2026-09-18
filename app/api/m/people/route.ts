@@ -39,7 +39,7 @@ export const runtime = "nodejs";
 export interface PhonePerson {
   key: string;
   name: string;
-  /** "Lead", "Applicant", "Landlord", "Tenant", "Contact". */
+  /** "Tenant Lead", "Landlord Lead", "Applicant", "Landlord", "Tenant", "Contact". */
   role: string;
   /** The property or enquiry they belong to, when there is one. */
   context: string;
@@ -164,7 +164,9 @@ export async function GET(req: NextRequest) {
       found.add({
         key: `lead-${l.id}`,
         name: l.name,
-        role: "Lead",
+        /* Which side, so Search for a Tenant and Search for a Landlord can
+           each leave the other out (18 Sep 2026). */
+        role: l.enquiry === "Letting" ? "Tenant Lead" : "Landlord Lead",
         context: l.address || `${l.enquiry} enquiry`,
         phone: l.phone ?? "",
         email: l.email ?? "",
@@ -173,7 +175,7 @@ export async function GET(req: NextRequest) {
   }
   for (const c of contacts) {
     if (matches(needle, c.name, c.email, c.mobile)) {
-      found.add({ key: `os-${c.id}`, name: c.name, role: c.kind === "landlord" ? "Landlord" : "Contact", context: c.address, phone: c.mobile, email: c.email });
+      found.add({ key: `os-${c.id}`, name: c.name, role: c.kind === "landlord" ? "Landlord" : c.kind === "tenant" ? "Tenant" : "Contact", context: c.address, phone: c.mobile, email: c.email });
     }
   }
   for (const p of known) {

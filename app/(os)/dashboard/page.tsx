@@ -43,6 +43,21 @@ function greeting(name: string): string {
 }
 
 export default function Dashboard() {
+  /* ON A PHONE, THE DASHBOARD IS TODAY'S CALENDAR (James, 18 Sep 2026: "when
+     we log in on mobile view only, we should just show them what their diary
+     looks like today"). Width and a touch pointer together, the same test as
+     sign-in, so a narrow laptop window or a tablet never moves. "Open the
+     Full OS" in the phone menu comes here with ?full=1, which holds for the
+     rest of that visit. */
+  useEffect(() => {
+    try {
+      if (new URLSearchParams(window.location.search).get("full") === "1") sessionStorage.setItem("os-full", "1");
+      if (sessionStorage.getItem("os-full") === "1") return;
+    } catch {
+      /* No storage: the phone check alone decides. */
+    }
+    if (window.matchMedia("(max-width: 640px) and (pointer: coarse)").matches) window.location.replace("/m");
+  }, []);
   const [customising, setCustomising] = useState(false);
   const [name, setName] = useState("");
   useEffect(() => {
