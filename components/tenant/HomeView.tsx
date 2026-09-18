@@ -123,17 +123,18 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
 
       <AgentSheet agent={v.agent} messagesHref={to("/messages")} />
 
-      {/* ── ON A PHONE: the home small, the next step beside it ──
-          James, 18 Sep 2026: the property took the whole first screen. It is
-          a round photo and the address now, with See home raising every photo
-          and the facts in a sheet (HomeSheet), and the next step sits beside
-          it rather than a scroll below. */}
-      <div className="grid grid-cols-[112px_minmax(0,1fr)] gap-3 sm:hidden" style={rise(1)}>
-        <div className={`${card} flex flex-col items-center px-2.5 py-4 text-center`} data-search>
-          <PropertyPhoto src={home?.photo ?? null} alt="" className="h-[72px] w-[72px] shrink-0 rounded-full" />
-          <p className="mt-2.5 text-[13px] font-bold leading-tight">{home ? home.property : "Your next home"}</p>
-          {home?.locality && <p className="mt-0.5 text-[11px] leading-snug text-muted">{home.locality}</p>}
-          <div className="mt-auto w-full pt-3">
+      {/* ── ON A PHONE (James, 18 Sep 2026, second pass) ──
+          The home across the top, full width: a bigger round photo with the
+          address beside it, left-aligned, and See home raising every photo
+          and the facts in a sheet (HomeSheet). Under it, 50/50, where they
+          are on the journey and the one next step. */}
+      <div className={`${card} flex items-center gap-4 p-4 sm:hidden`} data-search style={rise(1)}>
+        <PropertyPhoto src={home?.photo ?? null} alt="" className="h-[92px] w-[92px] shrink-0 rounded-full" />
+        <div className="min-w-0 flex-1">
+          <p className={eyebrow}>{homeEyebrow(v, home)}</p>
+          <p className="mt-1 text-[18px] font-bold leading-tight">{home ? home.property : "Your next home"}</p>
+          {home?.locality && <p className="mt-0.5 text-[12.5px] text-muted">{home.locality}</p>}
+          <div className="mt-3">
             {home ? (
               <HomeSheet
                 property={home.property}
@@ -141,25 +142,32 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
                 photos={home.images?.length ? home.images : home.photo ? [home.photo] : []}
                 facts={homeFacts(v, home)}
                 href={home.href && /\/homes\/./.test(home.href) ? href(home.href) : null}
-                className="w-full rounded-full border border-line/80 py-2 text-[12px] font-semibold"
+                className="rounded-full border border-line/80 px-4 py-1.5 text-[12.5px] font-semibold"
               />
             ) : (
-              <Link href={to("/homes")} className="block w-full rounded-full border border-line/80 py-2 text-[12px] font-semibold">
+              <Link href={to("/homes")} className="inline-block rounded-full border border-line/80 px-4 py-1.5 text-[12.5px] font-semibold">
                 Find one
               </Link>
             )}
           </div>
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:hidden" style={rise(2)}>
+        <section className={`${card} flex flex-col p-4`} data-search>
+          <p className={`${eyebrow} mb-3`}>{d ? "Your tenancy" : "Your journey"}</p>
+          <SpinePhone stops={v.stops} href={d && !locks.tenancy ? to("/tenancy") : null} blurbs={RING_WORDS} stacked />
+        </section>
         <div className="relative flex flex-col overflow-hidden rounded-[22px] bg-accent-soft p-4" data-search>
           <p className={eyebrow}>{phase === "living" ? "Right now" : "Your next step"}</p>
-          <h2 className="mt-2 text-[17px] font-bold leading-tight">{viewingNow(v) ? "Viewing" : v.next.title}</h2>
+          <h2 className="mt-2 text-[16px] font-bold leading-tight">{viewingNow(v) ? "Viewing" : v.next.title}</h2>
           {viewingNow(v) ? (
             <ViewingRows v={v} compact />
           ) : (
-            <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink/70">{v.next.blurb}</p>
+            <p className="mt-1.5 text-[12px] leading-relaxed text-ink/70">{v.next.blurb}</p>
           )}
           <div className="mt-auto pt-3">
-            <NextCta v={v} href={href} className="flex w-full items-center justify-center gap-1.5 rounded-full bg-accent-dark px-3 py-2.5 text-[12.5px] font-semibold text-white" />
+            <NextCta v={v} href={href} arrow={false} className="flex w-full items-center justify-center rounded-full bg-accent-dark px-2.5 py-2.5 text-center text-[12px] font-semibold leading-tight text-white" />
           </div>
         </div>
       </div>
@@ -245,12 +253,8 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
       </div>
 
       {/* ── the journey at a glance ── */}
-      {/* A PHONE gets the ring and no box, as the landlord's (SpinePhone): how
-          far along, and what is happening now. The row of stops from sm up. */}
-      <section className="sm:hidden" data-search style={rise(3)}>
-        <h2 className="mb-3 text-[16px] font-bold">{d ? "Your tenancy" : "Your journey"}</h2>
-        <SpinePhone stops={v.stops} href={d && !locks.tenancy ? to("/tenancy") : null} blurbs={RING_WORDS} />
-      </section>
+      {/* The row of stops from sm up; a phone has the ring, beside the next
+          step, above. */}
       <div className={`${card} hidden px-6 py-5 sm:block`} data-search style={rise(3)}>
         <div className="flex items-center justify-between gap-4">
           <h2 className="text-[19px] font-bold">{d ? "Your tenancy at a glance" : "Your journey at a glance"}</h2>
@@ -517,10 +521,10 @@ function ViewingRows({ v, compact = false }: { v: TenantHome; compact?: boolean 
 
 /** The one thing to do. "#agent" raises the agent sheet; with no agent, it
  *  opens Messages instead. */
-function NextCta({ v, href, className }: { v: TenantHome; href: (h: string) => string; className: string }) {
+function NextCta({ v, href, className, arrow = true }: { v: TenantHome; href: (h: string) => string; className: string; arrow?: boolean }) {
   const label = (
     <>
-      {v.next.cta} <DoodleIcon name="trend-up" size={13} className="invert" />
+      {v.next.cta} {arrow && <DoodleIcon name="trend-up" size={13} className="invert" />}
     </>
   );
   const h = v.next.href;
@@ -549,4 +553,16 @@ function homeFacts(v: TenantHome, home: TenantProperty): [string, string][] {
   if (!d && v.offer) facts.push(["Your offer", `${money(v.offer.amount)} a month`]);
   if (!d && v.enquiry?.enquiredOn) facts.push(["You asked", longDate(v.enquiry.enquiredOn) ?? ""]);
   return facts;
+}
+
+/** The line over the home's name on the phone's card: what it is to them. */
+function homeEyebrow(v: TenantHome, home: TenantProperty | null): string {
+  if (!home) return "Finding home";
+  const phase = phaseOf(v.stage);
+  if (phase === "living") return "Your home";
+  if (phase === "tenancy") return "Your tenancy";
+  if (v.stage === "declined") return "Not this one";
+  if (v.offer) return "Your offer is in";
+  if (v.viewing) return v.viewing.status === "done" ? "You viewed" : "Your viewing";
+  return "You asked about";
 }

@@ -33,7 +33,11 @@ export default function SpinePhone({
   stops,
   href: given,
   blurbs = BLURB,
+  stacked = false,
 }: {
+  /** Ring above the words, centred, for half a phone's width (the tenant's
+   *  home, 18 Sep 2026). Off, the ring sits beside them as before. */
+  stacked?: boolean;
   stops: Stop[];
   /** Where a tap goes. The tenant portal passes its own (or null for none);
    *  absent, the landlord's journey page, worked out below. */
@@ -70,8 +74,8 @@ export default function SpinePhone({
   const c = 2 * Math.PI * r;
 
   return (
-    <Wrap href={href} label={`Your journey: ${here.label}, ${here.sub}`}>
-      <div className="relative h-[84px] w-[84px] shrink-0">
+    <Wrap href={href} label={`Your journey: ${here.label}, ${here.sub}`} stacked={stacked}>
+      <div className={`relative shrink-0 ${stacked ? "h-[78px] w-[78px]" : "h-[84px] w-[84px]"}`}>
         <svg viewBox="0 0 80 80" className="h-full w-full -rotate-90">
           <circle cx="40" cy="40" r={r} fill="none" stroke="var(--line)" strokeOpacity="0.5" strokeWidth="7" />
           <circle
@@ -94,13 +98,13 @@ export default function SpinePhone({
         </span>
       </div>
 
-      <div className="min-w-0 flex-1">
-        <p className="text-[17px] font-bold leading-tight">{here.label}</p>
-        <p className="mt-0.5 text-[12.5px] text-muted">{here.sub}</p>
-        <p className="mt-1.5 text-[12px] leading-relaxed text-muted">{blurbs[here.id] ?? ""}</p>
+      <div className={stacked ? "min-w-0" : "min-w-0 flex-1"}>
+        <p className={`${stacked ? "text-[15px]" : "text-[17px]"} font-bold leading-tight`}>{here.label}</p>
+        {here.sub && <p className="mt-0.5 text-[12px] text-muted">{here.sub}</p>}
+        <p className={`mt-1.5 leading-relaxed text-muted ${stacked ? "text-[11.5px]" : "text-[12px]"}`}>{blurbs[here.id] ?? ""}</p>
       </div>
 
-      {href && (
+      {href && !stacked && (
         <span aria-hidden className="shrink-0 text-[18px] text-muted">
           ›
         </span>
@@ -109,8 +113,8 @@ export default function SpinePhone({
   );
 }
 
-function Wrap({ href, label, children }: { href: string | null; label: string; children: React.ReactNode }) {
-  const cls = "flex items-center gap-4 sm:hidden";
+function Wrap({ href, label, stacked = false, children }: { href: string | null; label: string; stacked?: boolean; children: React.ReactNode }) {
+  const cls = stacked ? "flex flex-col items-center gap-3 text-center sm:hidden" : "flex items-center gap-4 sm:hidden";
   return href ? (
     <Link href={href} className={cls} aria-label={label}>
       {children}
