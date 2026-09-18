@@ -40,7 +40,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   if (!missing.length) return NextResponse.json({ ok: false, error: `${ma.landlord} has already sent everything.` }, { status: 409 });
 
   try {
-    const { token } = await startVerification(to, "landlord");
+    const { token } = await startVerification(to, "landlord", { keepOthers: true });
     const what = list(missing);
     const { subject, html } = renderTleEmail("landlord-docs-nudge", {
       firstName: ma.landlord.trim().split(/\s+/)[0] || "there",

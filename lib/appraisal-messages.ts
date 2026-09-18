@@ -128,7 +128,7 @@ export async function replyAsAgent(p: { ma: MarketAppraisal; me: OsUser; body: s
   let emailed = false;
   if (to) {
     try {
-      const { token } = await startVerification(to, "landlord");
+      const { token } = await startVerification(to, "landlord", { keepOthers: true });
       const agentFirst = (me.name || "Your agent").split(/\s+/)[0];
       const { subject, html } = renderTleEmail("landlord-message-reply", {
         firstName: ma.landlord.trim().split(/\s+/)[0] || "there",

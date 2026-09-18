@@ -15,6 +15,7 @@ import {
 import { gateFor, missingDocuments, PLC_CHECKS, scanSummary, sortFindings, type CheckId } from "@/lib/plc";
 import { scanCase, scanConfigured, type ScanOutcome } from "@/lib/plc-scan";
 import { actorName } from "@/lib/plc-actor";
+import { requireCapability } from "@/lib/admin";
 import { recordDecision, recordRecommendation } from "@/lib/plc-shadow";
 import { pushCaseToPropoly } from "@/lib/plc-propoly";
 import { pushCaseToRex } from "@/lib/plc-rex";
@@ -94,6 +95,22 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     body = await req.json();
   } catch {
     return NextResponse.json({ ok: false, error: "Expected JSON." }, { status: 400 });
+  }
+
+  /* WHO MAY SIGN IT OFF (18 Sep 2026). Nothing here checked a role: any agent
+     could open the harness page, flip it to "compliance" and approve their own
+     pack under their own name, and with Certificates into REX on, the approval
+     writes. The decision and the two pushes belong to pre-tenancy (Kirstie, and
+     the roles above her). A laptop with no production data keeps the dry run,
+     where one person has to play both sides. */
+  const COMPLIANCE_ONLY = new Set(["decide", "push-rex", "push-propoly"]);
+  if (process.env.NODE_ENV === "production" && COMPLIANCE_ONLY.has(body.action ?? "")) {
+    if (!(await requireCapability(req, "see:pretenancy"))) {
+      return NextResponse.json(
+        { ok: false, error: "Only pre-tenancy can sign a pack off. Send it to them and they will pick it up." },
+        { status: 403 }
+      );
+    }
   }
 
   try {

@@ -97,7 +97,7 @@ export async function runQuestionsChase(origin: string, now = new Date()): Promi
         continue;
       }
       await upsertLandlordAccount(match);
-      const { token } = await startVerification(to, "landlord");
+      const { token } = await startVerification(to, "landlord", { keepOthers: true });
       const asked = progress(answers);
       const { subject, html } = renderTleEmail("landlord-questions-chase", {
         firstName: ma.landlord.trim().split(/\s+/)[0] || "there",

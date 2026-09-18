@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { requireCapability } from "@/lib/admin";
+import { NextRequest, NextResponse } from "next/server";
 import { getGciHistory, hasEveryAgency } from "@/lib/business/gci-history";
 import { exVat, monthsThisYearToDate } from "@/lib/business/format";
 import { hasDb, q } from "@/lib/business/db";
@@ -96,7 +97,12 @@ async function warmIfStale(months: string[]): Promise<void> {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  /* Company money. Every other route under /api/business asks this; these two
+     did not, so any signed-in role could read them (18 Sep 2026). */
+  if (!(await requireCapability(req, "see:business"))) {
+    return NextResponse.json({ error: "This area is locked to the business owner." }, { status: 403 });
+  }
   /* The LIVE month included. It was months-to-last-complete, which on the 28th
      of August ends at July - see the note on the business page about why a
      closed-report rule is wrong on a screen Susan runs the business from. */

@@ -449,16 +449,28 @@ export interface TermsSigningPair {
  * one filed early is a lie.
  */
 export async function everybodySigned(submissionId: number | null): Promise<boolean> {
-  if (!submissionId) return false;
+  return (await whoHasSigned(submissionId)) === "all";
+}
+
+/**
+ * The same question with the third answer kept: "all", "not-yet", or
+ * "unknown" when DocuSeal could not be asked. The webhook needs the
+ * difference. It used to hear "not yet" for a DocuSeal that was merely slow,
+ * say thank-you, and DocuSeal - thanked - never sent the completion again: the
+ * contract was signed by everybody and never filed, the landlord and property
+ * never reached REX, and the nudges kept telling a signed landlord to sign.
+ */
+export async function whoHasSigned(submissionId: number | null): Promise<"all" | "not-yet" | "unknown"> {
+  if (!submissionId) return "not-yet";
   try {
     const sub = await ds<{ submitters?: Array<{ completed_at?: string | null }>; completed_at?: string | null }>(
       `/submissions/${submissionId}`
     );
-    if (sub?.completed_at) return true;
+    if (sub?.completed_at) return "all";
     const all = sub?.submitters ?? [];
-    return all.length > 0 && all.every((s) => Boolean(s.completed_at));
+    return all.length > 0 && all.every((s) => Boolean(s.completed_at)) ? "all" : "not-yet";
   } catch {
-    return false;
+    return "unknown";
   }
 }
 

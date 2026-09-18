@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { TLE_EMAILS } from "@/lib/email/tle-emails";
 import { hasDb, q } from "@/lib/db";
 import { SESSION_COOKIE, uid, verifySessionToken } from "@/lib/auth";
+import { requireOwner, requireCapability } from "@/lib/admin";
 import { CAMPAIGNS } from "@/lib/campaigns";
 
 /**
@@ -47,6 +48,15 @@ function me(req: NextRequest): string | null {
   return verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
 }
 
+/* Who may change the words (18 Sep 2026). These writes checked for a session
+   and nothing else, so any signed-in role could rewrite every customer email
+   or set a campaign live. The same catalogue is owner-or-marketing under
+   /api/admin/emails; this is that rule, on the road that skipped it. */
+async function mayEdit(req: NextRequest): Promise<boolean> {
+  return Boolean((await requireOwner(req)) ?? (await requireCapability(req, "see:marketing")));
+}
+const NOT_YOURS = { error: "Only marketing and the business owner can change these." };
+
 export async function GET(req: NextRequest) {
   if (!hasDb()) return NextResponse.json({ stored: false, templates: [] });
   const campaignId = new URL(req.url).searchParams.get("campaign");
@@ -77,6 +87,7 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const userId = me(req);
   if (!userId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  if (!(await mayEdit(req))) return NextResponse.json(NOT_YOURS, { status: 403 });
 
   let body: Partial<StoredTemplate>;
   try {
@@ -109,6 +120,7 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   if (!me(req)) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  if (!(await mayEdit(req))) return NextResponse.json(NOT_YOURS, { status: 403 });
   const url = new URL(req.url);
   const campaignId = url.searchParams.get("campaign") ?? "";
   const stepIndex = Number(url.searchParams.get("step"));

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { putInstructionInRex } from "@/lib/rex-instruct";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { fetchSigned, store, pushToRex } from "@/lib/signed-documents";
-import { everybodySigned } from "@/lib/docuseal";
+import { whoHasSigned } from "@/lib/docuseal";
 
 /**
  * A signed contract coming back from DocuSeal.
@@ -111,7 +111,13 @@ export async function POST(req: NextRequest) {
      before the landlord had seen it. Acknowledged so DocuSeal stops retrying,
      and nothing else. */
   const submissionId = d.submission?.id != null ? Number(d.submission.id) : null;
-  if (!(await everybodySigned(submissionId))) {
+  const signed = await whoHasSigned(submissionId);
+  /* Could not ask: say so with a 503, which DocuSeal retries. A 200 here is a
+     thank-you, and the completion never comes again (18 Sep 2026). */
+  if (signed === "unknown") {
+    return NextResponse.json({ error: "Could not confirm who has signed. Send it again." }, { status: 503 });
+  }
+  if (signed !== "all") {
     return NextResponse.json({ ok: true, waiting: "the other signer" });
   }
 

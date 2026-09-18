@@ -73,7 +73,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     }
     await upsertLandlordAccount(match);
 
-    const { token } = await startVerification(email, "landlord");
+    const { token } = await startVerification(email, "landlord", { keepOthers: true });
     const origin = process.env.OS_ORIGIN?.replace(/\/+$/, "") || req.nextUrl.origin;
     return NextResponse.json({
       ok: true,

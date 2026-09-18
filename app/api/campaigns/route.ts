@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hasDb, q } from "@/lib/db";
 import { SESSION_COOKIE, uid, verifySessionToken } from "@/lib/auth";
+import { requireOwner, requireCapability } from "@/lib/admin";
 import { CAMPAIGNS, type Campaign, type CampaignStep } from "@/lib/campaigns";
 import { loadCampaigns } from "@/lib/campaign-store";
 
@@ -57,9 +58,18 @@ export async function GET() {
   return NextResponse.json({ stored: hasDb(), campaigns: await loadCampaigns() });
 }
 
+/* Who may change a campaign (18 Sep 2026). These writes checked for a session
+   and nothing else, so any signed-in role could set a campaign live. Owner or
+   marketing, the same rule as the email catalogue under /api/admin/emails. */
+async function mayEdit(req: NextRequest): Promise<boolean> {
+  return Boolean((await requireOwner(req)) ?? (await requireCapability(req, "see:marketing")));
+}
+const NOT_YOURS = { error: "Only marketing and the business owner can change these." };
+
 export async function POST(req: NextRequest) {
   const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
   if (!userId) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  if (!(await mayEdit(req))) return NextResponse.json(NOT_YOURS, { status: 403 });
 
   let body: Partial<Campaign> & { id?: string };
   try {
@@ -115,6 +125,7 @@ export async function DELETE(req: NextRequest) {
   if (!verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value)) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
+  if (!(await mayEdit(req))) return NextResponse.json(NOT_YOURS, { status: 403 });
   const id = new URL(req.url).searchParams.get("id") ?? "";
   if (!hasDb()) return NextResponse.json({ saved: false, reason: "No database on this environment." });
 

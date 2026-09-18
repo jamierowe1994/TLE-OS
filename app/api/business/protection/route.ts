@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { requireCapability } from "@/lib/admin";
+import { NextRequest, NextResponse } from "next/server";
 import { getProtectionBook } from "@/lib/business/payprop-tags";
 import { getRlpTakeUp } from "@/lib/business/payprop-income";
 import { previousMonth } from "@/lib/business/format";
@@ -13,7 +14,12 @@ import { previousMonth } from "@/lib/business/format";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  /* Company money. Every other route under /api/business asks this; these two
+     did not, so any signed-in role could read them (18 Sep 2026). */
+  if (!(await requireCapability(req, "see:business"))) {
+    return NextResponse.json({ error: "This area is locked to the business owner." }, { status: 403 });
+  }
   try {
     /* Alongside the tags, the premium payments for the month just closed -
        the only RLP record E&W will currently let us read. See getRlpTakeUp.

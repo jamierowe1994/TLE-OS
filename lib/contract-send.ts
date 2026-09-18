@@ -89,7 +89,7 @@ export async function sendContractPack(p: {
   const match = await landlordByEmail(to);
   if (!match) throw new ContractSendRefused(`${ma.landlord}'s property file could not be opened, so there is nowhere for the contract to wait.`);
   await upsertLandlordAccount(match);
-  const { token } = await startVerification(to, "landlord");
+  const { token } = await startVerification(to, "landlord", { keepOthers: true });
 
   const level = SERVICE_LEVELS.find((s) => s.id === ma.serviceLevel)?.label;
   const agentName = me.name || ma.agent || "Your agent";

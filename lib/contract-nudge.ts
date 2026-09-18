@@ -1,7 +1,7 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { getAppraisal } from "@/lib/appraisal-store";
-import { contractSendRecord } from "@/lib/contract-send";
+import { contractSendReady, contractSendRecord } from "@/lib/contract-send";
 import { signedFor } from "@/lib/signed-documents";
 import { landlordByEmail, upsertLandlordAccount } from "@/lib/landlord-account";
 import { startVerification } from "@/lib/verification";
@@ -68,10 +68,33 @@ export async function sendContractNudge(p: {
   if (!sent) throw new NudgeRefused("The contract hasn't been sent to them yet, so there is nothing to nudge. Send it from Prepare and send first.");
   if ((await signedFor(ma.id)).some((r) => r.completed_at)) throw new NudgeRefused(`${ma.landlord} has already signed.`);
 
+  /* Asked BEFORE a link is minted (18 Sep 2026). With customer email off the
+     send below throws, nothing is recorded, and the timer comes back in five
+     minutes - minting a fresh link, and until today voiding the landlord's
+     live ones, every time. */
+  if (!(await contractSendReady(to))) throw new NudgeRefused("Email to landlords and tenants is switched off, so the nudge was not sent.");
+
   const match = await landlordByEmail(to);
   if (!match) throw new NudgeRefused(`${ma.landlord}'s property file could not be opened.`);
   await upsertLandlordAccount(match);
-  const { token } = await startVerification(to, "landlord");
+
+  /* The automatic nudge CLAIMS its turn before it sends: two runs overlapping
+     both passed the twenty-hour check and both emailed the landlord, and a
+     failed write after the send meant a nudge every five minutes all day. The
+     claim only lands if nobody has nudged in the last twenty hours. */
+  if (p.auto) {
+    const claimed = await q<{ record_id: string }>(
+      `INSERT INTO os_case_state (kind, record_id, payload, updated_at, updated_by)
+       VALUES ($1, $2, jsonb_build_object('count', 0, 'autoCount', 0, 'lastAt', to_jsonb(NOW()), 'lastBy', $3::text), NOW(), $3)
+       ON CONFLICT (kind, record_id) DO UPDATE
+         SET payload = os_case_state.payload || jsonb_build_object('lastAt', to_jsonb(NOW())), updated_at = NOW()
+         WHERE COALESCE((os_case_state.payload->>'lastAt')::timestamptz, 'epoch'::timestamptz) < NOW() - INTERVAL '20 hours'
+       RETURNING record_id`,
+      [KIND, ma.id, p.by]
+    );
+    if (!claimed.length) throw new NudgeRefused("Already nudged in the last day.");
+  }
+  const { token } = await startVerification(to, "landlord", { keepOthers: true });
   const agent = await recipientFor(ma.agent, { email: "", name: ma.agent ?? "" });
   const agentFirst = (agent.name || ma.agent || "your agent").split(/\s+/)[0];
 
