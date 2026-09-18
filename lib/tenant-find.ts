@@ -95,10 +95,7 @@ export async function makeEnquiry(p: {
 }): Promise<{ ok: true; sentTo: string | null } | { ok: false; error: string }> {
   if (!hasDb()) return { ok: false, error: "Enquiries can't be saved on this environment." };
 
-  let to: string | null = null;
-  const details = await readListingDetails(Number(p.home.id)).catch(() => null);
-  if (details?.agent.email) to = details.agent.email;
-  if (!to && p.passportAgentId) to = (await findUserById(p.passportAgentId).catch(() => null))?.email ?? null;
+  const to = await agentEmailFor(p.home.id, p.passportAgentId);
 
   const address = [p.home.name, p.home.locality].filter(Boolean).join(", ");
   const rent = `£${Math.round(p.home.rent).toLocaleString("en-GB")} ${p.home.rentPeriod === "week" ? "a week" : "a month"}`;
@@ -128,6 +125,41 @@ export async function makeEnquiry(p: {
   return { ok: true, sentTo: outcome === "sent" ? to : null };
 }
 
+/** Who hears about a home: the listing's own agent in REX; failing that, the
+ *  agent who sent the tenant their passport; failing both, nobody. */
+export async function agentEmailFor(listingId: string | null, passportAgentId: string | null): Promise<string | null> {
+  if (listingId && /^\d+$/.test(listingId)) {
+    const details = await readListingDetails(Number(listingId)).catch(() => null);
+    if (details?.agent.email) return details.agent.email;
+  }
+  if (passportAgentId) return (await findUserById(passportAgentId).catch(() => null))?.email ?? null;
+  return null;
+}
+
+/** A line on the tenant's Leads record (os_contacts, source Tenant area),
+ *  adding them if they are not on it yet. Used for anything a tenant does
+ *  from their area that the office should see on file. */
+export async function noteOnLeads(p: { email: string; name: string; phone: string; address: string; line: string }): Promise<string> {
+  const rows = await q<{ id: string; notes: string; mobile: string }>(
+    `SELECT id, notes, mobile FROM os_contacts WHERE kind = 'tenant' AND LOWER(email) = LOWER($1) AND source = 'Tenant area'
+      ORDER BY created_at DESC LIMIT 1`,
+    [p.email]
+  );
+  if (rows[0]) {
+    await updateContact(rows[0].id, {
+      address: p.address,
+      notes: `${p.line}\n\n${rows[0].notes ?? ""}`.slice(0, 8000),
+      ...(p.phone.trim() && !rows[0].mobile ? { mobile: p.phone } : {}),
+    });
+    return rows[0].id;
+  }
+  const c = await saveContact(
+    { kind: "tenant", name: p.name, email: p.email, mobile: p.phone, address: p.address, source: "Tenant area", enquiry: "Letting", notes: p.line },
+    "Tenant area"
+  );
+  return c.id;
+}
+
 /** The tenant on the Leads board: found by email, or added. Returns the
  *  os_contacts id. */
 async function fileOnLeads(p: { email: string; name: string; phone: string; message: string; address: string; rent: string; emailed: string }): Promise<string> {
@@ -137,24 +169,7 @@ async function fileOnLeads(p: { email: string; name: string; phone: string; mess
     p.message.trim() ? `"${p.message.trim().slice(0, 1000)}"` : null,
     p.emailed,
   ].filter(Boolean).join(" ");
-  const rows = await q<{ id: string; notes: string; mobile: string }>(
-    `SELECT id, notes, mobile FROM os_contacts WHERE kind = 'tenant' AND LOWER(email) = LOWER($1) AND source = 'Tenant area'
-      ORDER BY created_at DESC LIMIT 1`,
-    [p.email]
-  );
-  if (rows[0]) {
-    await updateContact(rows[0].id, {
-      address: p.address,
-      notes: `${line}\n\n${rows[0].notes ?? ""}`.slice(0, 8000),
-      ...(p.phone.trim() && !rows[0].mobile ? { mobile: p.phone } : {}),
-    });
-    return rows[0].id;
-  }
-  const c = await saveContact(
-    { kind: "tenant", name: p.name, email: p.email, mobile: p.phone, address: p.address, source: "Tenant area", enquiry: "Letting", notes: line },
-    "Tenant area"
-  );
-  return c.id;
+  return noteOnLeads({ email: p.email, name: p.name, phone: p.phone, address: p.address, line });
 }
 
 /* ── New-home alerts ────────────────────────────────────────────────────── */

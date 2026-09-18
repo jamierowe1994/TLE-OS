@@ -1086,6 +1086,24 @@ CREATE TABLE IF NOT EXISTS os_tenant_enquiries (
 ALTER TABLE os_tenant_enquiries ADD COLUMN IF NOT EXISTS contact_id TEXT;
 CREATE INDEX IF NOT EXISTS os_tenant_enquiries_email_idx ON os_tenant_enquiries (LOWER(email), created_at DESC);
 
+-- What a tenant said after a viewing, from their tenant area (18 Sep 2026):
+-- not for me (with the reasons), questions for the agent, or an offer. One
+-- row per answer; the agent is emailed at the moment it is made and the
+-- tenant's Leads record gets a note. kind: not_for_me | questions | offer.
+CREATE TABLE IF NOT EXISTS os_tenant_viewing_responses (
+  id           TEXT PRIMARY KEY,
+  email        TEXT NOT NULL,
+  name         TEXT NOT NULL DEFAULT '',
+  listing_id   TEXT,
+  address      TEXT NOT NULL DEFAULT '',
+  kind         TEXT NOT NULL,
+  payload      JSONB NOT NULL,
+  sent_to      TEXT,
+  outcome      TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_tenant_viewing_responses_email_idx ON os_tenant_viewing_responses (LOWER(email), created_at DESC);
+
 -- New-home alerts a tenant asked for, with the moment they agreed to the
 -- emails. consent_at is never set by us: the only way in is the tenant
 -- ticking the box. One alert per tenant; saving again replaces it.

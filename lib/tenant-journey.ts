@@ -142,9 +142,10 @@ export const STAGE_UPDATE: Record<TenantStageKey, StageUpdate> = {
   viewed: {
     label: "Viewed",
     title: "How was it?",
-    blurb: "Tell us what you thought of {property}. If it is the one, you can apply from here and your passport does the rest.",
-    next: "Apply for it, or tell us what was wrong and we will send others.",
-    cta: "Apply for this home", href: "/tenant/apply",
+    blurb: "Tell us what you thought of {property}. If it is the one, make your offer from here and your passport does the rest.",
+    next: "Make an offer, ask a question, or tell us what was wrong and we will send others.",
+    /* "#offer" raises the offer sheet (components/tenant/ViewedSheets). */
+    cta: "Make an offer", href: "#offer",
   },
   offer: {
     label: "Offer",

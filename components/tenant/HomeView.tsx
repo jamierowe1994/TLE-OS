@@ -5,6 +5,8 @@ import Spine from "@/components/landlord/Spine";
 import SpinePhone from "@/components/landlord/SpinePhone";
 import AgentSheet, { OpenAgentButton } from "@/components/tenant/AgentSheet";
 import HomeSheet from "@/components/tenant/HomeSheet";
+import ViewedSheets, { ViewedButton } from "@/components/tenant/ViewedSheets";
+import type { PassportData } from "@/lib/passport-shape";
 import type { TenantHome, TenantProperty } from "@/lib/tenant-home-view";
 import { DEAL, STAGE_UPDATE, locksFor, phaseOf } from "@/lib/tenant-journey";
 
@@ -122,6 +124,24 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
       </div>
 
       <AgentSheet agent={v.agent} messagesHref={to("/messages")} />
+      {v.stage === "viewed" && v.enquiry && (
+        <ViewedSheets
+          property={v.enquiry.property}
+          listingId={v.enquiry.href?.match(/\/homes\/(\d+)/)?.[1] ?? null}
+          askingPcm={v.enquiry.rentPcm}
+          agentFirst={first.charAt(0).toUpperCase() + first.slice(1)}
+          facts={passportFacts(v.passport.data)}
+          passportHref={v.passport.path}
+          household={{
+            adults: parseInt(v.passport.data?.numAdults ?? "", 10) || 1,
+            children: parseInt(v.passport.data?.numChildren ?? "", 10) || 0,
+            pets: v.passport.data?.pets === true,
+            petsNote: v.passport.data?.petsNote ?? "",
+          }}
+          sample={sample}
+          base={base}
+        />
+      )}
 
       {/* ── ON A PHONE (James, 18 Sep 2026, second pass) ──
           The home across the top, full width: a bigger round photo with the
@@ -344,7 +364,7 @@ function Also({ v, first, homes }: { v: TenantHome; first: string; homes: string
   switch (v.stage) {
     case "enquired": return link("See other homes", homes);
     case "viewing": return mail ? link("Can't make it?", `${mail}?subject=My viewing`) : null;
-    case "viewed": return link("Not for you? See what else is on", homes);
+    case "viewed": return <ViewedButton kind="not_for_me" className="text-[13px] font-semibold text-ink/70 underline decoration-ink/30 underline-offset-4 hover:text-ink">Not for you?</ViewedButton>;
     case "offer": return mail ? link(`Message ${first}`, mail) : null;
     case "referencing": return mail ? link("Been asked for something?", mail) : null;
     default: return null;
@@ -416,15 +436,17 @@ function MomentTile({ v, first, href, i, rise }: { v: TenantHome; first: string;
         <Tile icon="star" title="How was it?" href={href("/tenant/next")} action={null} i={i} rise={rise}>
           <p className="text-[13px] leading-relaxed text-muted">Tell {first} what you thought. It helps even if it is not the one.</p>
           <div className="mt-4 grid gap-2">
-            <Link href={href("/tenant/next")} className="flex items-center justify-between rounded-xl border border-accent-dark bg-accent-dark px-4 py-2.5 text-[13px] font-semibold text-white">
+            {/* Each raises its own bottom sheet (ViewedSheets) - they were
+                links that opened the tenant's own email app. */}
+            <ViewedButton kind="offer" className="flex items-center justify-between rounded-xl border border-accent-dark bg-accent-dark px-4 py-2.5 text-left text-[13px] font-semibold text-white">
               It&apos;s the one, make an offer <DoodleIcon name="trend-up" size={13} className="invert" />
-            </Link>
-            <a href={mail ? `mailto:${mail}?subject=8 Recreation Terrace: some thoughts` : "#"} className="flex items-center justify-between rounded-xl border border-line/80 px-4 py-2.5 text-[13px] font-semibold transition-colors hover:border-ink">
+            </ViewedButton>
+            <ViewedButton kind="questions" className="flex items-center justify-between rounded-xl border border-line/80 px-4 py-2.5 text-left text-[13px] font-semibold transition-colors hover:border-ink">
               I liked it, but I have questions <DoodleIcon name="message" size={13} />
-            </a>
-            <a href={mail ? `mailto:${mail}?subject=8 Recreation Terrace: not for me` : "#"} className="flex items-center justify-between rounded-xl border border-line/80 px-4 py-2.5 text-[13px] font-semibold transition-colors hover:border-ink">
+            </ViewedButton>
+            <ViewedButton kind="not_for_me" className="flex items-center justify-between rounded-xl border border-line/80 px-4 py-2.5 text-left text-[13px] font-semibold transition-colors hover:border-ink">
               Not for me <DoodleIcon name="cross" size={12} />
-            </a>
+            </ViewedButton>
           </div>
         </Tile>
       );
@@ -528,6 +550,7 @@ function NextCta({ v, href, className, arrow = true }: { v: TenantHome; href: (h
     </>
   );
   const h = v.next.href;
+  if (h === "#offer") return <ViewedButton kind="offer" className={className}>{label}</ViewedButton>;
   if (h === "#agent") {
     return v.agent ? (
       <OpenAgentButton className={className}>{label}</OpenAgentButton>
@@ -565,4 +588,20 @@ function homeEyebrow(v: TenantHome, home: TenantProperty | null): string {
   if (v.offer) return "Your offer is in";
   if (v.viewing) return v.viewing.status === "done" ? "You viewed" : "Your viewing";
   return "You asked about";
+}
+
+/** Their passport, as the offer sheet shows it back to them to confirm. */
+function passportFacts(d: PassportData | null): [string, string][] {
+  if (!d) return [["Your passport", "Not started"]];
+  const yn = (b: boolean | null) => (b == null ? "Not said" : b ? "Yes" : "No");
+  const income = Number((d.annualIncome ?? "").replace(/[£,\s]/g, ""));
+  return [
+    ["Working", d.applicantType || "Not said"],
+    ["Income", income ? `£${income.toLocaleString("en-GB")} a year` : "Not said"],
+    ["Right to rent", d.hasBritishPassport ? "British passport" : d.shareCode ? "Share code given" : "Not given yet"],
+    ["Landlord reference", yn(d.landlordRef)],
+    ["Guarantor", yn(d.guarantor)],
+    ["Adverse credit", yn(d.adverseCredit)],
+    ["Smoker", yn(d.smoker)],
+  ];
 }
