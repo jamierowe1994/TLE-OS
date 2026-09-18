@@ -1,4 +1,4 @@
-import { rexCall } from "./rex";
+import { rexCall, RexError } from "./rex";
 import { absoluteUrl, firstNameOf, type PresentAgent } from "./present";
 import { getTegPerson } from "./teg-people";
 
@@ -78,7 +78,14 @@ export async function allAgents(): Promise<RexAgent[]> {
   const out: RexAgent[] = [];
   for (let page = 0; page < MAX_PAGES; page++) {
     const res = await rexCall("AccountUsers", "search", { limit: PAGE, offset: page * PAGE });
-    if (!res.ok) break;
+    /* A short list must never be cached as the list: anybody on the missing
+       page read as "not a REX user" for half an hour, and an agent who is not
+       linked is an agent the OS shows nothing to. The last full list if there
+       is one, otherwise the error. */
+    if (!res.ok) {
+      if (cache) return cache.rows;
+      throw new RexError("AccountUsers/search", res);
+    }
     const rows = ((res.result as { rows?: Row[] } | Row[] | null) as { rows?: Row[] })?.rows
       ?? (Array.isArray(res.result) ? (res.result as Row[]) : []);
     if (!rows.length) break;

@@ -46,7 +46,25 @@ function set(next: DiaryState) {
   listeners.forEach((l) => l());
 }
 
+/** When the book on screen was last read. */
+let loadedAt = 0;
+let inFlight: Promise<void> | null = null;
+
+/* Old enough to read again when somebody comes back to the tab, and how often
+   to read again while they sit on it. */
+const STALE_ON_RETURN_MS = 2 * 60 * 1000;
+const WHILE_OPEN_MS = 5 * 60 * 1000;
+
 function load(): Promise<void> {
+  if (inFlight) return inFlight;
+  inFlight = read().finally(() => {
+    loadedAt = Date.now();
+    inFlight = null;
+  });
+  return inFlight;
+}
+
+function read(): Promise<void> {
   return fetch("/api/diary", { cache: "no-store" })
     .then((r) => r.json())
     .then((j) => {
@@ -75,6 +93,22 @@ function start() {
   if (started) return;
   started = true;
   void load();
+
+  /* KEPT FRESH (18 Sep 2026). This read once per tab and never again, and an
+     appointment's `day` is an offset from the day it was READ. The OS is an
+     installed app and tabs stay open: on Tuesday morning a tab opened on Monday
+     showed Monday's diary under "Today" and drew Tuesday's viewings on
+     Wednesday, so the booker offered taken slots as free. Anything put in the
+     diary elsewhere during the day never arrived at all. Now: read again when
+     somebody comes back to the tab, and every few minutes while it is open. */
+  const back = () => {
+    if (document.visibilityState === "visible" && Date.now() - loadedAt > STALE_ON_RETURN_MS) void load();
+  };
+  document.addEventListener("visibilitychange", back);
+  window.addEventListener("focus", back);
+  window.setInterval(() => {
+    if (document.visibilityState === "visible" && Date.now() - loadedAt > WHILE_OPEN_MS) void load();
+  }, 60 * 1000);
 }
 
 /**

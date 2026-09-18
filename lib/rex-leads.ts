@@ -1,5 +1,5 @@
 import "server-only";
-import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
+import { rexCall, rexConfigured, RexError, rexRows } from "@/lib/rex";
 import type { Lead, Stage } from "@/lib/leads-sample";
 
 /**
@@ -223,6 +223,7 @@ export async function fetchLeadBook(rexUserId?: string | null): Promise<LeadBook
   let scanned = 0;
   let total: number | null = null;
   let newestAt: string | null = null;
+  const seenIds = new Set<string>();
 
   for (let page = 0; page < PAGES; page++) {
     const res = await rexCall("Leads", "search", {
@@ -233,7 +234,14 @@ export async function fetchLeadBook(rexUserId?: string | null): Promise<LeadBook
         ? { criteria: [{ name: "lead.assignee_id", type: "=", value: rexUserId }] }
         : {}),
     });
-    if (!res.ok) break;
+    /* Page one refused is not "no leads" (18 Sep 2026): the scan wrote that
+       empty book over the owner's board cache, and the board read "Live" over
+       nothing. A later page refused keeps what it has - the ledger behind the
+       board already holds the rest. */
+    if (!res.ok) {
+      if (page === 0) throw new RexError("Leads/search", res);
+      break;
+    }
     if (total === null) {
       // REX hands `total` back as a string; left alone it reaches the screen
       // as "87800" with no thousands separator.
@@ -247,6 +255,12 @@ export async function fetchLeadBook(rexUserId?: string | null): Promise<LeadBook
     for (const row of rows) {
       // REX scores spam for us; no reason to make someone else read it.
       if (row.is_spam === "1") continue;
+      /* A lead arriving mid-walk pushes the last row of one page onto the top
+         of the next. Twice in one batch, and the ledger's upsert is refused
+         whole ("cannot affect row a second time"). */
+      const rid = String((row as { id?: unknown }).id ?? "");
+      if (rid && seenIds.has(rid)) continue;
+      if (rid) seenIds.add(rid);
       scanned++;
       if (!newestAt && row.system_ctime) {
         newestAt = new Date(Number(row.system_ctime) * 1000).toISOString();

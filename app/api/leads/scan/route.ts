@@ -34,7 +34,14 @@ export async function POST(req: NextRequest) {
   }
   if (!rexConfigured()) return NextResponse.json({ ok: false, error: "REX isn't connected on this environment." });
   const started = Date.now();
-  const book = await fetchLeadBook(null);
+  /* A read that failed writes nothing: not the ledger, and above all not the
+     board's cache, which this used to overwrite with an empty book. */
+  let book: Awaited<ReturnType<typeof fetchLeadBook>>;
+  try {
+    book = await fetchLeadBook(null);
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "The lead read failed." }, { status: 502 });
+  }
   const written = await recordLeads(book.leads);
   /* The board cache the page reads (app/api/leads/route.ts, key leads:v2:all):
      refreshed here so the next open is instant and current. */

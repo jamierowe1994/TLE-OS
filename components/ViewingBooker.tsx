@@ -696,6 +696,9 @@ export default function ViewingBooker({
         confirmation,
       });
       setResult(r ?? {});
+      /* So the slot just taken stops looking free, here and on every other
+         screen reading the same diary. */
+      void refreshDiary();
     } catch {
       setResult({ said: "Something went wrong saving it. Check the diary before booking it again." });
     } finally {

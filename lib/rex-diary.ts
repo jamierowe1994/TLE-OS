@@ -1,5 +1,6 @@
 import "server-only";
-import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
+import { isLondonMidnight, londonDayOffset, londonHHMM } from "@/lib/london-time";
+import { rexCall, rexConfigured, RexError, rexRows } from "@/lib/rex";
 import type { Appt, ApptKind } from "@/lib/diary";
 import { feedbackByIds } from "@/lib/rex-feedback";
 
@@ -93,18 +94,14 @@ function partsOf(title: string): { what: string; who: string } {
   return { what: what || clean, who };
 }
 
-/** Days from today, as the Appt type counts them. */
+/** Days from today, as the Appt type counts them - on the LONDON calendar.
+ *  See lib/london-time for why the server's own clock is the wrong one. */
 function dayOffset(iso: string): number {
-  const start = new Date(iso);
-  const today = new Date();
-  const a = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());
-  const b = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
-  return Math.round((a - b) / 86400000);
+  return londonDayOffset(iso);
 }
 
 function hhmm(iso: string): string {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return londonHHMM(iso);
 }
 
 /** The id of the feedback record REX has hung off this event, if any. */
@@ -141,11 +138,7 @@ function toAppt(e: RexEvent): Appt | null {
    * A 22-hour span with a 00:15 start is not caught, and shouldn't be: that
    * is a genuinely odd entry and seeing it is the right outcome.
    */
-  const startAt = new Date(startIso);
-  const allDay =
-    startAt.getHours() === 0 &&
-    startAt.getMinutes() === 0 &&
-    (!endIso || mins >= 20 * 60);
+  const allDay = isLondonMidnight(startIso) && (!endIso || mins >= 20 * 60);
 
   const owner = ownerOf(e);
   const priv = Boolean(e.is_private);
@@ -226,7 +219,9 @@ export async function fetchDiary(): Promise<DiaryBook> {
   const calIds: string[] = [];
   for (let page = 0; page < 3; page++) {
     const res = await rexCall("Calendars", "search", { limit: PAGE_SIZE, offset: page * PAGE_SIZE });
-    if (!res.ok) break;
+    /* Thrown, not skipped: with no calendar ids the search below runs across
+       all six businesses and stops, silently, a couple of days out. */
+    if (!res.ok) throw new RexError("Calendars/search", res);
     const rows = rexRows(res.result) as { id?: string; owner_user?: { email_address?: string } }[];
     for (const c of rows) {
       if ((c.owner_user?.email_address ?? "").toLowerCase().endsWith(`@${OUR_DOMAIN}`) && c.id) {
@@ -252,7 +247,11 @@ export async function fetchDiary(): Promise<DiaryBook> {
       ],
       order_by: { starts_at: "asc" },
     });
-    if (!res.ok) break;
+    /* A refusal is not an empty diary (18 Sep 2026). `break` on page one gave
+       "nothing booked" and every slot free, cached as live; part-way through
+       it dropped the rest of the book - the FUTURE, since this reads oldest
+       first. Thrown, the route serves the last true book or says it failed. */
+    if (!res.ok) throw new RexError("CalendarEvents/search", res);
     const batch = rexRows(res.result) as RexEvent[];
     rows.push(...batch);
     if (batch.length < PAGE_SIZE) break;

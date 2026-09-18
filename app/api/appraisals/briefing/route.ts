@@ -50,11 +50,14 @@ const pretty = (iso: string | null) =>
         month: "long",
         hour: "2-digit",
         minute: "2-digit",
+        /* The server is on UTC: without this the agent's briefing gave the
+           visit an hour early all summer. */
+        timeZone: "Europe/London",
       })
     : null;
 
 const prettyDay = (d: Date) =>
-  d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+  d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/London" });
 
 async function build(req: NextRequest, id: string) {
   const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);

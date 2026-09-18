@@ -1,3 +1,4 @@
+import { londonDayOffset, londonHHMM } from "@/lib/london-time";
 import { NextRequest, NextResponse } from "next/server";
 import { fetchDiary, type DiaryBook } from "@/lib/rex-diary";
 import { hasDb, q } from "@/lib/db";
@@ -17,7 +18,9 @@ import { osFeedbackFor } from "@/lib/viewing-feedback-store";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const CACHE_KEY = "diary:v1";
+/* v2, 18 Sep 2026: a held book carries times already worked out, and v1's were
+   worked out on the UTC clock - an hour early. A new key drops them at deploy. */
+const CACHE_KEY = "diary:v2";
 const FRESH_MS = 2 * 60 * 1000;
 const STALE_MS = 60 * 60 * 1000;
 
@@ -79,19 +82,16 @@ async function ours(authorId: string | null): Promise<Appt[]> {
       [authorId]
     );
 
-    const midnight = new Date();
-    midnight.setHours(0, 0, 0, 0);
-
     return rows.map((r) => {
       const at = new Date(r.starts_at);
-      const onDay = new Date(at.getFullYear(), at.getMonth(), at.getDate());
       return {
         id: `os-${r.id}`,
         // Whole days apart on the LOCAL clock. Subtracting raw timestamps
         // gets this wrong twice a year: the day the clocks change is 23 or
         // 25 hours long, and /86400000 rounds it onto the wrong column.
-        day: Math.round((onDay.getTime() - midnight.getTime()) / 86400000),
-        start: `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`,
+        // ...and on the LONDON clock, not the server's (lib/london-time).
+        day: londonDayOffset(at),
+        start: londonHHMM(at),
         mins: Math.min(Math.max(r.mins || 30, 15), 8 * 60),
         kind: (["viewing", "appraisal", "takeon", "movein", "inspection", "travel", "other"]
           .includes(r.kind) ? r.kind : "other") as ApptKind,
@@ -237,7 +237,12 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const held = memory ?? (await readStored());
+  /* A held book is only good on the day it was read: every appointment in it
+     carries `day` as an offset from THAT day, so yesterday's book puts
+     yesterday under "Today". Across midnight, or when REX has been down since
+     yesterday, it is dropped and the screen gets a read or an honest error. */
+  const found = memory ?? (await readStored());
+  const held = found && londonDayOffset(found.at) === 0 ? found : null;
   const age = held ? Date.now() - held.at : Infinity;
   if (held && age < FRESH_MS) {
     return NextResponse.json({ ok: true, live: true, ...(await withOsFeedback(merged(forScope(held.book, who), mine))), everything: scope.everything, ageMs: age });

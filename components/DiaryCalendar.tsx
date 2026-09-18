@@ -8,7 +8,7 @@ import DiaryGrid from "@/components/DiaryGrid";
 import { FlowTag } from "@/components/Wire";
 import { PressButton } from "@/components/Bits";
 import { KIND_META, minutesOf, type Appt } from "@/lib/diary";
-import { useDiary } from "@/lib/diary-store";
+import { useDiary, refreshDiary } from "@/lib/diary-store";
 
 /**
  * The full calendar — what the dashboard's Today box opens out into.
@@ -114,6 +114,9 @@ export default function DiaryCalendar({
         setMaking(null);
         setDraftTitle("");
         setDraftWhere("");
+        /* It said Saved and the entry was nowhere until a reload - and typing
+           it in again made two. */
+        void refreshDiary();
       }
     } catch {
       setMadeNote("Couldn't save it.");

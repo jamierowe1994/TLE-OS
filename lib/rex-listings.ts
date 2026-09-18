@@ -1,5 +1,5 @@
 import "server-only";
-import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
+import { rexCall, rexConfigured, RexError, rexRows } from "@/lib/rex";
 
 /**
  * The rental book, live from REX.
@@ -345,7 +345,12 @@ async function searchListings(state: string, rexUserId?: string | null): Promise
       order_by: { system_modtime: "desc" },
       extra_options: { extra_fields: ["related.listing_images", "related.listing_adverts"] },
     });
-    if (!res.ok) break;
+    /* A refusal is NOT the end of the list (18 Sep 2026). `break` here turned
+       a rate limit or a 500 into "that is everything": no listings, or the
+       first hundred of 268, cached as the live book for ten minutes, feeding
+       the tab counts, Find a home and Mail the database. Thrown, the cache
+       keeps the last true book and the screen gets an honest error. */
+    if (!res.ok) throw new RexError("Listings/search", res);
     const batch = rexRows(res.result) as RexListing[];
     rows.push(...batch);
     if (batch.length < PAGE_SIZE) break;
