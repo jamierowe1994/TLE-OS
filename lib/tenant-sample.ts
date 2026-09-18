@@ -1,7 +1,7 @@
 import type { Stop } from "@/lib/landlord-journey";
 import type { TenantHome, TenantProperty } from "@/lib/tenant-home-view";
 import { EMPTY_PASSPORT, type PassportData } from "@/lib/passport-shape";
-import { DEAL, STAGE_UPDATE, atLeast, fillUpdate, phaseOf, type TenantStageKey } from "@/lib/tenant-journey";
+import { DEAL, STAGE_UPDATE, atLeast, fillUpdate, findingRoad, phaseOf, type TenantStageKey } from "@/lib/tenant-journey";
 
 /**
  * The sample tenant, for the portal at /tenant/demo: Sophie, at whichever
@@ -15,7 +15,7 @@ import { DEAL, STAGE_UPDATE, atLeast, fillUpdate, phaseOf, type TenantStageKey }
  * fixed around 6 to 12 September 2026 so the activity reads as a story.
  */
 
-const SOPHIE_PASSPORT: PassportData = {
+export const SOPHIE_PASSPORT: PassportData = {
   ...EMPTY_PASSPORT,
   legalName: "Sophie Turner",
   knownAs: "Soph",
@@ -50,14 +50,15 @@ const HOME: TenantProperty = {
   rentPcm: 850,
   beds: 2,
   photo: "/brand/photo/property.jpg",
-  href: "https://thelettingexperts.co.uk",
+  /* An invented home, so it opens Find a home rather than a listing. */
+  href: "/tenant/homes",
 };
 
 /** What else Emily has on: three homes near Sophie's budget. */
 const MARKET: TenantProperty[] = [
-  { property: "14 Trent Bridge Court", locality: "West Bridgford NG2", rentPcm: 925, beds: 2, photo: "/brand/living-room.jpg", href: "https://thelettingexperts.co.uk" },
-  { property: "Flat 3, 61 Musters Road", locality: "West Bridgford NG2", rentPcm: 795, beds: 1, photo: null, href: "https://thelettingexperts.co.uk" },
-  { property: "27 Lady Bay Road", locality: "Lady Bay NG2", rentPcm: 875, beds: 2, photo: null, href: "https://thelettingexperts.co.uk" },
+  { property: "14 Trent Bridge Court", locality: "West Bridgford NG2", rentPcm: 925, beds: 2, photo: "/brand/living-room.jpg", href: "/tenant/homes" },
+  { property: "Flat 3, 61 Musters Road", locality: "West Bridgford NG2", rentPcm: 795, beds: 1, photo: null, href: "/tenant/homes" },
+  { property: "27 Lady Bay Road", locality: "Lady Bay NG2", rentPcm: 875, beds: 2, photo: null, href: "/tenant/homes" },
 ];
 
 const STAGES = [
@@ -141,37 +142,15 @@ export function sampleFor(stage: TenantStageKey): TenantHome {
     href: u.href,
   };
 
-  /* The spine. Before a deal, the road to one; with a deal, its eight. */
-  const road: [TenantStageKey, string, string][] = [
-    ["passport", "Passport", "Complete"],
-    ["enquired", "Enquire", enquiry ? "8 Recreation Terrace" : "Find the one"],
-    ["viewing", "View it", viewing ? "Tue 15 Sep" : ""],
-    ["offer", "Offer", offer ? "£850 a month" : ""],
-    ["deal_started", "Move in", ""],
-  ];
-  /* Where they are on the road. Three stages share a stop with another:
-     viewed sits on the viewing stop (done), matched on the enquire stop, and
-     a declined offer puts them back on it - they are looking again, not
-     further forward. */
-  const onRoad: TenantStageKey =
-    stage === "viewed" ? "viewing" : stage === "matched" || stage === "declined" ? "enquired" : stage;
-  const roadIdx = ["passport", "enquired", "viewing", "offer"].indexOf(onRoad);
-  /* "Passport" is done from the start; each later stop is current until the
-     one after it has happened. Viewed sits on the viewing stop, done. */
+  /* The spine. Before a deal, the road to one (lib/tenant-journey
+     findingRoad); with a deal, its eight. */
   const stops: Stop[] = inDeal
     ? deal!.stages.map((s) => ({ id: s.key, label: s.label, sub: s.key === "move_day" ? "1 Oct 2026" : "", state: s.state }))
-    : road.map(([id, label, sub], i) => ({
-        id,
-        label,
-        sub,
-        state: i === 0 ? "done" : i < roadIdx + 1 ? "done" : i === roadIdx + 1 ? "current" : "upcoming",
-      }));
-  if (!inDeal && stage === "viewed") {
-    const v = stops.find((s) => s.id === "viewing");
-    if (v) v.state = "done";
-    const o = stops.find((s) => s.id === "offer");
-    if (o) o.state = "current";
-  }
+    : findingRoad(stage, {
+        home: enquiry && stage !== "declined" ? HOME.property : null,
+        viewing: viewing ? "Tue 15 Sep" : null,
+        offer: offer ? "£850 a month" : null,
+      });
 
   const activity = ACTIVITY.filter((a) => atLeast(stage, a.at)).reverse();
   if (inDeal && stage !== "living") activity.unshift({ at: stage, label: DEAL_WORDS[stage].now, sub: HOME.property, when: "", tone: "live" });

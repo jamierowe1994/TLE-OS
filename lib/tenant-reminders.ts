@@ -7,6 +7,8 @@ import { renderTleEmailLive } from "@/lib/email/tle-emails";
 import { SITE } from "@/lib/email/tle-documents";
 import { presentAgentFor } from "@/lib/rex-agents";
 import { applicationEmails, feedbackRequests, matchesAgain, rebooks } from "@/lib/tenant-journey-emails";
+import { alertsDue } from "@/lib/tenant-find";
+import { homesOnMarket } from "@/lib/tenant-homes";
 
 /**
  * The tenant emails that go on a timer (16 Sep 2026).
@@ -221,6 +223,7 @@ export async function runTenantReminders(opts: { dry?: boolean; now?: Date } = {
     ["rebooks", () => rebooks(dry, run.results)],
     ["anything close", () => matchesAgain(dry, run.results)],
     ["applications", () => applicationEmails(dry, run.results)],
+    ["new-home alerts", () => homeAlerts(run.results)],
   ];
   const errors: string[] = [];
   for (const [name, job] of jobs) {
@@ -235,4 +238,27 @@ export async function runTenantReminders(opts: { dry?: boolean; now?: Date } = {
     run.error = errors.join("; ");
   }
   return run;
+}
+
+/**
+ * New-home alerts a tenant signed up to on Find a home (18 Sep 2026).
+ *
+ * REPORT ONLY, whatever the switch says: the email itself has not been
+ * written into the Emails gallery yet, so this lists who would get which
+ * homes and sends nothing. When the template exists, send through sendOne's
+ * pattern and stamp os_tenant_home_alerts.last_sent_at.
+ */
+async function homeAlerts(out: ReminderResult[]) {
+  const market = await homesOnMarket();
+  if (!market.ok) return;
+  for (const a of await alertsDue(market.homes)) {
+    out.push({
+      key: `tenant-home-alert:${a.email}`,
+      emailId: "tenant-home-alert",
+      to: a.email,
+      subject: "",
+      state: "would",
+      detail: `Would tell ${a.name || a.email} about ${a.homes.length} new home${a.homes.length === 1 ? "" : "s"}: ${a.homes.slice(0, 3).map((h) => h.name).join(", ")}. The alert email is not written yet.`,
+    });
+  }
 }

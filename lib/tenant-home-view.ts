@@ -4,7 +4,10 @@ import { findUserById } from "@/lib/users";
 import { completeness, type PassportData } from "@/lib/passport-shape";
 import type { PassportRecord } from "@/lib/passport";
 import { tenantDealViews, tenantPassport, type TenantAccount, type TenantDealView } from "@/lib/tenant-account";
-import { isStage, type TenantStageKey } from "@/lib/tenant-journey";
+import { STAGE_UPDATE, fillUpdate, findingRoad, isStage, type TenantStageKey } from "@/lib/tenant-journey";
+import { homeOnMarket, homesOnMarket } from "@/lib/tenant-homes";
+import { latestEnquiry, originFromPassport } from "@/lib/tenant-find";
+import { milesBetween, type MarketHome } from "@/lib/market-homes";
 
 /**
  * Everything the tenant's home needs, in one shape, from what we actually
@@ -22,7 +25,7 @@ export type TenantProperty = {
   rentPcm: number | null;
   beds: number | null;
   photo: string | null;
-  /** The listing on the website, if there is one. */
+  /** Where it opens: its page on Find a home, inside the portal. */
   href: string | null;
 };
 
@@ -57,7 +60,23 @@ export async function loadTenantHome(me: TenantAccount): Promise<TenantHome> {
   const data = record?.data ?? null;
   const { done, total } = data ? completeness(data) : { done: 0, total: 6 };
   const first = me.name.split(/\s+/)[0] || me.name;
-  const stage = stageOf(deal);
+  /* Before a deal: the home they asked about, from the portal or from
+     Rightmove and the rest (os_leads). Nearly everybody has one on day one,
+     which is what ticks Find a home off (James, 18 Sep 2026). */
+  const asked = deal ? null : await latestEnquiry(me.email).catch(() => null);
+  const stage: TenantStageKey = deal ? stageOf(deal) : asked ? "enquired" : "passport";
+  const [askedHome, market, origin] = deal
+    ? [null, null, null]
+    : await Promise.all([
+        asked ? homeOnMarket(asked.listingId).catch(() => null) : Promise.resolve(null),
+        homesOnMarket().catch(() => null),
+        originFromPassport(record).catch(() => null),
+      ]);
+  const enquiry: TenantHome["enquiry"] = asked
+    ? askedHome
+      ? { ...property(askedHome), enquiredOn: asked.at }
+      : { property: asked.address.split(",")[0] || "The home you asked about", locality: asked.address.split(",").slice(1).join(",").trim(), rentPcm: null, beds: null, photo: null, href: null, enquiredOn: asked.at }
+    : null;
 
   /* Their agent: the deal's, or the one who issued the passport. */
   let agent: TenantHome["agent"] = null;
@@ -74,28 +93,36 @@ export async function loadTenantHome(me: TenantAccount): Promise<TenantHome> {
 
   /* The one next step. */
   let next: TenantHome["next"];
-  if (deal) {
+  if (!deal && enquiry) {
+    const u = STAGE_UPDATE.enquired;
+    next = {
+      title: u.title,
+      blurb: fillUpdate(u.blurb, { property: enquiry.property, agent: agent?.name ?? null }) || "We have your enquiry and will come back to you with times to view.",
+      cta: enquiry.href ? "See the home" : "See other homes",
+      href: enquiry.href ?? "/tenant/homes",
+    };
+  } else if (deal) {
     const label = deal.stages.find((s) => s.state === "current")?.label ?? "Your tenancy";
     next = { title: label, blurb: deal.next, cta: "See your tenancy", href: "/tenant/tenancy" };
   } else if (data && done < total) {
     next = { title: "Finish your passport", blurb: `${total - done} of ${total} sections still to do. It is reused for every application, so it is worth finishing.`, cta: "Open my passport", href: passportPath ?? "/tenant" };
   } else {
-    next = { title: "Find your next home", blurb: "Your passport is ready. When you apply for a property with us, your tenancy appears here and this page fills in around it.", cta: "See properties to rent", href: "https://thelettingexperts.co.uk" };
+    next = { title: "Find your next home", blurb: "Your passport is ready. When you apply for a property with us, your tenancy appears here and this page fills in around it.", cta: "See properties to rent", href: "/tenant/homes" };
   }
 
-  /* The spine. With a deal, its eight stages; without, the road to one. */
+  /* The spine. With a deal, its eight stages; without, the road to one
+     (lib/tenant-journey findingRoad). */
   const stops: Stop[] = deal
     ? deal.stages.map((s) => ({ id: s.key, label: s.label, sub: s.key === "move_day" && deal.moveIn ? day(deal.moveIn) : "", state: s.state }))
-    : [
-        { id: "passport", label: "Passport", sub: done === total ? "Complete" : `${done} of ${total}`, state: done === total ? "done" : "current" },
-        { id: "find", label: "Find a home", sub: "Book viewings", state: done === total ? "current" : "upcoming" },
-        { id: "apply", label: "Apply", sub: "One tap", state: "upcoming" },
-        { id: "referencing", label: "Referencing", sub: "", state: "upcoming" },
-        { id: "sign", label: "Sign", sub: "", state: "upcoming" },
-        { id: "move", label: "Move in", sub: "", state: "upcoming" },
-      ];
+    : findingRoad(stage, { home: enquiry?.property ?? null });
+
+  /* What else is on: the nearest to their house, else the newest. */
+  const near = (h: MarketHome) => (origin && h.lat != null && h.lng != null ? milesBetween(origin, { lat: h.lat, lng: h.lng }) : 1e9);
+  const others = market && market.ok ? market.homes.filter((h) => h.id !== askedHome?.id) : [];
+  const onMarket = (origin ? [...others].sort((x, y) => near(x) - near(y)) : others).slice(0, 3).map(property);
 
   const activity: TenantHome["activity"] = [];
+  if (asked) activity.push({ label: `You asked about ${enquiry?.property ?? "a home"}`, sub: asked.via === "portal" ? "From Find a home" : "Your enquiry", when: day(asked.at), tone: "done" });
   if (me.activatedAt) activity.push({ label: "Your tenant area opened", sub: "Welcome in", when: day(me.activatedAt), tone: "done" });
   if (record?.submittedAt) activity.push({ label: "Passport finished", sub: `${total} of ${total} sections`, when: day(record.submittedAt), tone: "done" });
   if (record?.createdAt) activity.push({ label: "Passport started", sub: record.agentId ? "From your agent's invite" : "", when: day(record.createdAt), tone: "quiet" });
@@ -105,13 +132,12 @@ export async function loadTenantHome(me: TenantAccount): Promise<TenantHome> {
     first,
     daypart,
     stage,
-    /* Enquiries, viewings and offers are not read from REX for a signed-in
-       tenant yet, so before a deal the live home is the "find a home" shape
-       with nothing on it. The sample (lib/tenant-sample) shows every stage. */
-    enquiry: null,
+    /* The enquiry is read (above); viewings and offers are not yet read
+       for a signed-in tenant. The sample (lib/tenant-sample) shows every stage. */
+    enquiry,
     viewing: null,
     offer: null,
-    market: [],
+    market: onMarket,
     agent,
     deal,
     passport: { record, path: passportPath, done, total, data },
@@ -133,4 +159,9 @@ function stageOf(deal: TenantDealView | null): TenantStageKey {
 export async function tenantStage(me: TenantAccount): Promise<TenantStageKey> {
   const deals = await tenantDealViews(me).catch(() => []);
   return stageOf(deals[0] ?? null);
+}
+
+/** A home on the market as the home page's cards draw it. */
+function property(h: MarketHome): TenantProperty {
+  return { property: h.name, locality: h.locality, rentPcm: h.rentPeriod === "month" ? h.rent : null, beds: h.beds, photo: h.photo, href: `/tenant/homes/${h.id}` };
 }

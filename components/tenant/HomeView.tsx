@@ -140,9 +140,9 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
                     {phase === "living" ? "About your home" : "View property details"} <DoodleIcon name="trend-up" size={13} />
                   </Link>
                 ) : home.href ? (
-                  <a href={home.href} target="_blank" rel="noreferrer" className={`${pill} mt-5`}>
-                    View the listing <DoodleIcon name="trend-up" size={13} />
-                  </a>
+                  <Link href={href(home.href)} className={`${pill} mt-5`}>
+                    See the home <DoodleIcon name="trend-up" size={13} />
+                  </Link>
                 ) : null}
               </>
             ) : (
@@ -151,9 +151,9 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
                 <p className="mt-2 text-[13.5px] leading-relaxed text-muted">
                   When you ask about a property with us, it appears here with your viewing, your offer and then your tenancy.
                 </p>
-                <a href="https://thelettingexperts.co.uk" target="_blank" rel="noreferrer" className={`${pill} mt-5`}>
-                  All our homes to rent <DoodleIcon name="trend-up" size={13} />
-                </a>
+                <Link href={to("/homes")} className={`${pill} mt-5`}>
+                  See properties to rent <DoodleIcon name="trend-up" size={13} />
+                </Link>
               </>
             )}
           </div>
@@ -186,7 +186,7 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
                 {v.next.cta} <DoodleIcon name="trend-up" size={14} className="invert" />
               </Link>
             )}
-            <Also v={v} first={first} />
+            <Also v={v} first={first} homes={to("/homes")} />
           </div>
         </div>
       </div>
@@ -212,15 +212,15 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
           <div className="flex items-end justify-between gap-4 px-1">
             <div>
               <h2 className="text-[19px] font-bold">{v.enquiry ? "Also on the market" : "On the market now"}</h2>
-              <p className="mt-0.5 text-[13px] text-muted">{v.enquiry ? `More of ${first}'s homes near your budget.` : `${first}'s homes near your budget. Ask about any of them and it appears above.`}</p>
+              <p className="mt-0.5 text-[13px] text-muted">{v.enquiry ? "More homes near you." : "Homes near you. Ask about any of them and it appears above."}</p>
             </div>
-            <a href="https://thelettingexperts.co.uk" target="_blank" rel="noreferrer" className="shrink-0 rounded-full border border-line/80 px-4 py-1.5 text-[12.5px] font-semibold transition-colors hover:border-ink">
+            <Link href={to("/homes")} className="shrink-0 rounded-full border border-line/80 px-4 py-1.5 text-[12.5px] font-semibold transition-colors hover:border-ink">
               See them all
-            </a>
+            </Link>
           </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {v.market.map((m) => (
-              <MarketCard key={m.property} m={m} />
+              <MarketCard key={m.property} m={m} href={m.href ? href(m.href) : to("/homes")} />
             ))}
           </div>
         </section>
@@ -313,7 +313,7 @@ function nextIcon(v: TenantHome): string {
 
 /** The quiet second link beside the next step: the other thing they might
  *  want at this moment. */
-function Also({ v, first }: { v: TenantHome; first: string }) {
+function Also({ v, first, homes }: { v: TenantHome; first: string; homes: string }) {
   const mail = v.agent?.email ? `mailto:${v.agent.email}` : null;
   const link = (text: string, h: string, blank = false) => (
     <a href={h} target={blank ? "_blank" : undefined} rel={blank ? "noreferrer" : undefined} className="text-[13px] font-semibold text-ink/70 underline decoration-ink/30 underline-offset-4 hover:text-ink">
@@ -321,19 +321,19 @@ function Also({ v, first }: { v: TenantHome; first: string }) {
     </a>
   );
   switch (v.stage) {
-    case "enquired": return mail ? link(`Ask ${first} a question first`, mail) : null;
+    case "enquired": return link("See other homes", homes);
     case "viewing": return mail ? link("Can't make it?", `${mail}?subject=My viewing`) : null;
-    case "viewed": return link("Not for you? See what else is on", "https://thelettingexperts.co.uk", true);
+    case "viewed": return link("Not for you? See what else is on", homes);
     case "offer": return mail ? link(`Message ${first}`, mail) : null;
     case "referencing": return mail ? link("Been asked for something?", mail) : null;
     default: return null;
   }
 }
 
-/** A home on the market: photo, address, rent, beds. */
-function MarketCard({ m }: { m: TenantProperty }) {
-  const inner = (
-    <>
+/** A home on the market: photo, address, rent, beds. Opens on Find a home. */
+function MarketCard({ m, href }: { m: TenantProperty; href: string }) {
+  return (
+    <Link href={href} className={`${card} block p-3 transition-colors hover:border-ink/40`} data-search>
       <PropertyPhoto src={m.photo} alt="" className="h-[150px] w-full rounded-[14px] object-cover" />
       <div className="px-1 pb-1 pt-3">
         <p className="text-[15px] font-bold leading-tight">{m.property}</p>
@@ -343,12 +343,7 @@ function MarketCard({ m }: { m: TenantProperty }) {
           {m.beds ? <span className="text-muted"> · {m.beds} bed</span> : null}
         </p>
       </div>
-    </>
-  );
-  return m.href ? (
-    <a href={m.href} target="_blank" rel="noreferrer" className={`${card} block p-3 transition-colors hover:border-ink/40`} data-search>{inner}</a>
-  ) : (
-    <div className={`${card} p-3`} data-search>{inner}</div>
+    </Link>
   );
 }
 
@@ -359,9 +354,9 @@ function MomentTile({ v, first, href, i, rise }: { v: TenantHome; first: string;
   switch (v.stage) {
     case "passport":
       return (
-        <Tile icon="key" title="How it works" href="#market" action={null} i={i} rise={rise}>
+        <Tile icon="key" title="How it works" href={href("/tenant/homes")} action={null} i={i} rise={rise}>
           <Steps items={[
-            ["Ask about a home", "From the website, or by messaging " + first + "."],
+            ["Ask about a home", "From Find a home here, or by messaging " + first + "."],
             ["View it", "Pick a time that suits you. " + first + " meets you there."],
             ["Make your offer", "One tap. Your passport is your application."],
             ["Move in", "Referencing, agreement, keys. We walk you through each."],
@@ -374,7 +369,7 @@ function MomentTile({ v, first, href, i, rise }: { v: TenantHome; first: string;
           <Steps items={[
             ["Pick a time", "Viewings take about twenty minutes."],
             ["Bring some ID", "A passport or driving licence."],
-            ["Write down your questions", first + " will know the property and the landlord."],
+            ["Write down your questions", first.charAt(0).toUpperCase() + first.slice(1) + " will know the property and the landlord."],
           ]} />
         </Tile>
       );

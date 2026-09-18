@@ -345,6 +345,12 @@ export const config = {
        not hold, and the only thing it can write is that one inspection's
        access answer - a yes is refused unless it names one of the times we
        actually offered. See lib/inspections. */
-    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|visit|api/visit|rehearsal|api/rehearsal|proof|api/tenant/passport|api/tenant/feedback|api/landlord|api/calendar|brand|email|rex|r|api/r|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$).*)",
+    /* `api/tenant/homes` is Find a home in the tenant portal (18 Sep 2026):
+       enquire, alerts, and placing a typed postcode. A tenant has no staff
+       session, so behind the door every one of these would 401. Each route
+       checks the tenant's own session (currentTenant) and acts only on that
+       tenant's email; nothing under it reads anything a stranger could not
+       already see on the website. Named in full, per the note at the top. */
+    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|visit|api/visit|rehearsal|api/rehearsal|proof|api/tenant/passport|api/tenant/feedback|api/tenant/homes|api/landlord|api/calendar|brand|email|rex|r|api/r|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$).*)",
   ],
 };

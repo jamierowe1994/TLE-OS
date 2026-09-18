@@ -112,7 +112,7 @@ export const STAGE_UPDATE: Record<TenantStageKey, StageUpdate> = {
     title: "Find your next home",
     blurb: "Your passport is ready, so applying is one tap when you find the one. Have a look at what we have on now.",
     next: "Tell us what you are after and we will send you the homes that fit.",
-    cta: "See what's on the market", href: "#market",
+    cta: "See properties to rent", href: "/tenant/homes",
   },
   enquired: {
     label: "Enquire",
@@ -235,9 +235,43 @@ export function fillUpdate(text: string, vars: Partial<Record<"property" | "when
     .trim();
 }
 
+/* ── The road to a tenancy ─────────────────────────────────────────────── */
+
+/**
+ * The spine before there is a deal (James, 18 Sep 2026): Find a home, Book a
+ * viewing, Make an offer, Referencing, Moving. No Passport stop - nobody has
+ * an account without one, so it was always ticked.
+ *
+ * Nearly everybody arrives having already asked about a home, so Find a home
+ * is usually done on day one and the next step is the viewing. Where each
+ * stage sits:
+ *
+ *   passport, matched, declined   Find a home is current (declined puts them
+ *                                 back looking, not further forward)
+ *   enquired, viewing             Book a viewing is current
+ *   viewed, offer                 Make an offer is current
+ *
+ * Referencing and Moving are the deal's; once there is one, the portal draws
+ * the deal's own eight stages instead.
+ */
+export function findingRoad(
+  stage: TenantStageKey,
+  subs: { home?: string | null; viewing?: string | null; offer?: string | null } = {}
+): { id: string; label: string; sub: string; state: "done" | "current" | "upcoming" }[] {
+  const at = stage === "enquired" || stage === "viewing" ? 1 : stage === "viewed" || stage === "offer" ? 2 : 0;
+  const road: [string, string, string][] = [
+    ["find", "Find a home", at > 0 ? subs.home ?? "Done" : "Pick the one"],
+    ["viewing", "Book a viewing", subs.viewing ?? ""],
+    ["offer", "Make an offer", subs.offer ?? ""],
+    ["referencing", "Referencing", ""],
+    ["moving", "Moving", ""],
+  ];
+  return road.map(([id, label, sub], i) => ({ id, label, sub, state: i < at ? "done" : i === at ? "current" : "upcoming" }));
+}
+
 /* ── The nav ───────────────────────────────────────────────────────────── */
 
-export type NavKey = "home" | "documents" | "tenancy" | "maintenance" | "payments" | "messages";
+export type NavKey = "home" | "homes" | "documents" | "tenancy" | "maintenance" | "payments" | "messages";
 
 /**
  * Which pages are locked at this stage, and what unlocks each. In the order

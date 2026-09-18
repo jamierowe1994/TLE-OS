@@ -1062,6 +1062,46 @@ CREATE TABLE IF NOT EXISTS os_tenant_feedback (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS os_tenant_feedback_once ON os_tenant_feedback (viewing_id, email);
 
+-- Find a home, inside the tenant portal (18 Sep 2026).
+--
+-- An enquiry a signed-in tenant made on a home from the portal. The agent is
+-- emailed at the moment it is made; this row is what puts the home on the
+-- tenant's own page as "You asked about" and ticks Find a home off the spine.
+-- Enquiries from Rightmove and the rest are in os_leads already and are read
+-- beside these, by email.
+CREATE TABLE IF NOT EXISTS os_tenant_enquiries (
+  id           TEXT PRIMARY KEY,
+  email        TEXT NOT NULL,
+  name         TEXT NOT NULL DEFAULT '',
+  phone        TEXT,
+  listing_id   TEXT NOT NULL,
+  address      TEXT NOT NULL DEFAULT '',
+  message      TEXT NOT NULL DEFAULT '',
+  sent_to      TEXT,
+  outcome      TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_tenant_enquiries_email_idx ON os_tenant_enquiries (LOWER(email), created_at DESC);
+
+-- New-home alerts a tenant asked for, with the moment they agreed to the
+-- emails. consent_at is never set by us: the only way in is the tenant
+-- ticking the box. One alert per tenant; saving again replaces it.
+CREATE TABLE IF NOT EXISTS os_tenant_home_alerts (
+  email         TEXT PRIMARY KEY,
+  name          TEXT NOT NULL DEFAULT '',
+  place         TEXT,
+  lat           DOUBLE PRECISION,
+  lng           DOUBLE PRECISION,
+  radius_miles  INTEGER,
+  min_beds      INTEGER,
+  max_rent      INTEGER,
+  home_type     TEXT,
+  consent_at    TIMESTAMPTZ NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_sent_at  TIMESTAMPTZ,
+  stopped_at    TIMESTAMPTZ
+);
+
 -- Every application status the OS has seen, and when it first saw it. The
 -- declined email goes on a CHANGE to unsuccessful seen after the first run,
 -- never for the history that was already unsuccessful the day this shipped.
