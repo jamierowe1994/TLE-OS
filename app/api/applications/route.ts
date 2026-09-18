@@ -3,6 +3,7 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { rexTokenFor } from "@/lib/rex-user";
 import {
+  closedReasons,
   createApplication,
   getApplications,
   validateApplication,
@@ -50,9 +51,18 @@ export async function GET(req: NextRequest) {
        stageLabels(). It never fails the request: a list that says
        "Accepted" is worse than one that says "Signing & move-in monies",
        but it is far better than no list. */
-    const stages = await stageLabels(applications).catch(() => new Map<string, string>());
+    /* And which of them are really over, though REX still calls them open -
+       moved in, or the home gone to someone else. See closedReasons(). */
+    const [stages, closed] = await Promise.all([
+      stageLabels(applications).catch(() => new Map<string, string>()),
+      closedReasons(applications).catch(() => new Map<string, string>()),
+    ]);
     return NextResponse.json({
-      applications: applications.map((a) => ({ ...a, stageLabel: stages.get(a.id) ?? a.statusLabel })),
+      applications: applications.map((a) => ({
+        ...a,
+        stageLabel: stages.get(a.id) ?? a.statusLabel,
+        closed: closed.get(a.id) ?? null,
+      })),
       scope: scope.label,
       everything: scope.everything,
       pulledAt: new Date().toISOString(),

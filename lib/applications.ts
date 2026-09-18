@@ -143,6 +143,11 @@ export interface Application {
    * record read any other way, in which case statusLabel is all there is.
    */
   stageLabel?: string;
+  /**
+   * Why this one is no longer open, though REX still says it is. Filled by
+   * the list route from closedReasons(); null means it is genuinely in play.
+   */
+  closed?: string | null;
   listingId: number | null;
   /** The PROPERTY, not the listing. Compliance certificates hang off this. */
   propertyId: string | null;
@@ -639,4 +644,53 @@ export async function createApplication(a: NewApplication, actorToken: string | 
      just filed one must see it on the list they land back on. */
   appsCache.clear();
   return res.result;
+}
+
+/**
+ * Why an application REX still calls open is not open any more.
+ *
+ * REX never closes an application by itself. The tenant moves in, or the home
+ * goes to somebody else, and the application sits on "Accepted" or
+ * "Communicated" for ever. On 18 Sep 2026 that made the board say 162 open
+ * against 67 homes available: 52 had already moved in, 41 were on homes let
+ * to someone else or withdrawn. About 63 were real.
+ *
+ * Three reasons, each read off live data, nothing written back to REX:
+ *   - accepted, and the move-in date has come      → "Moved in"
+ *   - not accepted, and the home is now let        → "Home let"
+ *   - not accepted, and the listing was withdrawn  → "Listing withdrawn"
+ *
+ * An accepted one on a let home with move-in still ahead stays open - that
+ * is the let going through, which is exactly what the board is for.
+ *
+ * One Listings search per hundred listings, filtered AT REX to the let and
+ * withdrawn ones. If REX will not answer, the listing checks are skipped and
+ * only "Moved in" applies - a board that over-counts is better than none.
+ */
+export async function closedReasons(apps: Application[]): Promise<Map<string, string>> {
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+  const ids = [...new Set(apps.map((a) => a.listingId).filter((x): x is number => x != null))];
+  const state = new Map<number, string>();
+  for (let i = 0; i < ids.length; i += 100) {
+    const res = await rexCall("Listings", "search", {
+      criteria: [
+        { name: "id", type: "in", value: ids.slice(i, i + 100) },
+        { name: "system_listing_state", type: "in", value: ["leased", "withdrawn"] },
+      ],
+      limit: 100,
+    }).catch(() => null);
+    if (!res?.ok) break;
+    for (const r of rexRows(res.result)) state.set(Number(r.id), String(r.system_listing_state));
+  }
+
+  const out = new Map<string, string>();
+  for (const a of apps) {
+    if (a.status === "unsuccessful") continue;
+    const s = a.listingId != null ? state.get(a.listingId) : undefined;
+    if (a.status === "accepted") {
+      if (a.startDate && a.startDate.slice(0, 10) <= today) out.set(a.id, "Moved in");
+    } else if (s === "leased") out.set(a.id, "Home let");
+    else if (s === "withdrawn") out.set(a.id, "Listing withdrawn");
+  }
+  return out;
 }

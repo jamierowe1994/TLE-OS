@@ -31,7 +31,8 @@ export type StageTab<T extends string> = {
   id: T;
   label: string;
   icon: string;
-  count: number;
+  /** Null while the figures load - drawn as a dot, never as a false 0. */
+  count: number | null;
   /** One line on hover. What sitting at this stage actually means. */
   blurb?: string;
 };
@@ -80,7 +81,7 @@ export default function StageTabs<T extends string>({
               <span className={`flex items-center gap-1.5 ${on ? "text-accent-dark" : "text-muted"}`}>
                 <DoodleIcon name={st.icon} size={14} />
                 <span className="figures text-[19px] font-semibold leading-none text-ink">
-                  {st.count}
+                  {st.count ?? "•"}
                 </span>
               </span>
               <span className="mt-1.5 block text-[11.5px] leading-tight">{st.label}</span>

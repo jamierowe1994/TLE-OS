@@ -1107,7 +1107,9 @@ function ApplicationsWidget({ w, h }: { w: number; h: number }) {
     (j) => (Array.isArray(j.applications) && !j.error ? { applications: j.applications as Application[] } : null)
   );
   const apps = data?.applications ?? [];
-  const open = apps.filter((a) => a.status === "received" || a.status === "communicated");
+  /* Not the ones on a home that has since been let or withdrawn - REX leaves
+     those on "Communicated" for ever (see closedReasons in lib/applications). */
+  const open = apps.filter((a) => (a.status === "received" || a.status === "communicated") && !a.closed);
   const received = open.filter((a) => a.status === "received");
   const communicated = open.filter((a) => a.status === "communicated");
   const accepted30 = apps.filter((a) => a.status === "accepted" && (daysSince(a.dateAccepted ?? a.dateReceived, a.createdAt ? a.createdAt * 1000 : null) ?? 99) <= 30);

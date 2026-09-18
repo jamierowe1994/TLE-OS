@@ -26,25 +26,40 @@ const PER_PAGE = 25;
  *  button that promises a send and only opens a drawer teaches people the
  *  labels lie. Still strong while it is waiting on us or the landlord. */
 function nextAction(a: Application): { label: string; strong: boolean } {
+  if (a.closed) return { label: "View application", strong: false };
   if (a.status === "received" || a.status === "communicated") return { label: "Open application", strong: true };
   if (a.status === "accepted") return { label: "View progress", strong: false };
   return { label: "View application", strong: false };
 }
 
+/** Still in play: not turned down, not moved in, home not gone elsewhere. */
+const isOpen = (a: Application) => a.status !== "unsuccessful" && !a.closed;
+
 /** Something on this one needs a person: an unanswered statutory check, or
  *  rent the applicant may not carry. Counted from the record, never asserted. */
 function needsAttention(a: Application): string | null {
-  if (a.status === "unsuccessful") return null;
+  if (a.status === "unsuccessful" || a.closed) return null;
   /* Not right to rent: the form only asks the lead applicant, and James
      ruled that a gap in the form, not the agent's (10 Sep 2026). */
   if (a.affordabilityPct != null && a.affordabilityPct > 40) return `Rent is ${a.affordabilityPct.toFixed(0)}% of income`;
   const lead = a.applicants.find((p) => p.isPrimary) ?? a.applicants[0];
   if (lead?.keyInfo?.adverseCredit === true) return "Adverse credit disclosed";
+  /* Still live on paper, but two months without a landlord's answer is an
+     application that has quietly died. Worth a call either way. */
+  if (a.status !== "accepted" && ageDays(a) > STALE_DAYS) return `No landlord answer in ${STALE_DAYS}+ days`;
   return null;
+}
+
+const STALE_DAYS = 60;
+function ageDays(a: Application): number {
+  const from = a.dateReceived ? Date.parse(a.dateReceived) : a.createdAt ? a.createdAt * 1000 : NaN;
+  return Number.isFinite(from) ? (Date.now() - from) / 86_400_000 : 0;
 }
 
 function StatusPill({ a }: { a: Application }) {
   const text = a.stageLabel ?? a.statusLabel;
+  if (a.closed)
+    return <span className="whitespace-nowrap rounded-full bg-panel px-2.5 py-1 text-[11px] font-semibold text-muted">{a.closed}</span>;
   if (a.status === "accepted")
     return <span className="whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: SAGE_WASH, color: SAGE_INK }}>{text}</span>;
   if (a.status === "communicated")
@@ -89,7 +104,12 @@ const STAGES = [
   { key: "unsuccessful", label: "Unsuccessful", icon: "cross", blurb: "Turned down, or the applicant withdrew." },
 ] as const;
 
-type StageKey = (typeof STAGES)[number]["key"] | "attention";
+/* Closed: REX still calls these open and they are not - the tenant has moved
+   in, or the home went to someone else or came off the market. Worked out
+   live by the route (closedReasons in lib/applications); nothing is written
+   back to REX. Kept findable here rather than hidden, so a count that dropped
+   from 162 to 63 can be checked by anyone who doubts it. */
+type StageKey = (typeof STAGES)[number]["key"] | "attention" | "closed";
 
 const gbp = (n: number | null) => (n == null ? "—" : `£${n.toLocaleString("en-GB")}`);
 
@@ -193,19 +213,24 @@ export default function Applications() {
   const rows = useMemo(
     () =>
       stage === "open"
-        ? mine.filter((a) => a.status !== "unsuccessful")
+        ? mine.filter(isOpen)
         : stage === "attention"
           ? mine.filter((a) => needsAttention(a) !== null)
-          : mine.filter((a) => a.status === stage),
+          : stage === "closed"
+            ? mine.filter((a) => a.closed)
+            : stage === "unsuccessful"
+              ? mine.filter((a) => a.status === stage)
+              : mine.filter((a) => a.status === stage && !a.closed),
     [mine, stage]
   );
   useEffect(() => { setPage(0); }, [stage, fAgent]);
   const pages = Math.max(1, Math.ceil(rows.length / PER_PAGE));
   const shown = rows.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
   const counts = useMemo(() => ({
-    open: mine.filter((a) => a.status !== "unsuccessful").length,
+    open: mine.filter(isOpen).length,
     attention: mine.filter((a) => needsAttention(a) !== null).length,
-    by: (k: string) => mine.filter((a) => a.status === k).length,
+    closed: mine.filter((a) => a.closed).length,
+    by: (k: string) => mine.filter((a) => a.status === k && (k === "unsuccessful" || !a.closed)).length,
   }), [mine]);
   const open = all.find((a) => a.id === openId) ?? null;
 
@@ -261,22 +286,29 @@ export default function Applications() {
             id: "open" as const,
             label: "All open",
             icon: "analytics",
-            count: counts.open,
+            count: apps === null ? null : counts.open,
             blurb: "Everything still in play",
           },
           ...STAGES.map((st) => ({
             id: st.key as StageKey,
             label: st.label,
             icon: st.icon,
-            count: counts.by(st.key),
+            count: apps === null ? null : counts.by(st.key),
             blurb: st.blurb,
           })),
+          {
+            id: "closed" as const,
+            label: "Closed",
+            icon: "key",
+            count: apps === null ? null : counts.closed,
+            blurb: "Moved in, or the home went to someone else or came off the market.",
+          },
           {
             id: "attention" as const,
             label: "Needs attention",
             icon: "bell",
-            count: counts.attention,
-            blurb: "Rent over 40% of income, or adverse credit disclosed",
+            count: apps === null ? null : counts.attention,
+            blurb: "Rent over 40% of income, adverse credit, or no landlord answer in 60 days",
           },
         ]}
       />
@@ -289,7 +321,7 @@ export default function Applications() {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
             { id: "communicated" as const, icon: "clock", n: counts.by("communicated"), title: "Awaiting landlord decision", sub: "With the landlord. Chase the ones going quiet." },
-            { id: "attention" as const, icon: "bell", n: counts.attention, title: "Need attention", sub: "Rent over 40% of income, or credit to talk about." },
+            { id: "attention" as const, icon: "bell", n: counts.attention, title: "Need attention", sub: "Rent over 40% of income, credit to talk about, or gone quiet." },
             { id: "accepted" as const, icon: "checklist", n: counts.by("accepted"), title: "Ready to progress", sub: "The landlord has said yes. The deal opens from here." },
           ].map((f) => (
             <button
@@ -334,7 +366,9 @@ export default function Applications() {
                 ? "Open applications"
                 : stage === "attention"
                   ? "Needs attention"
-                  : STAGES.find((st) => st.key === stage)?.label}
+                  : stage === "closed"
+                    ? "Closed"
+                    : STAGES.find((st) => st.key === stage)?.label}
               <span className="figures ml-2 text-[14px] text-muted">{rows.length}</span>
             </h2>
             <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -515,6 +549,12 @@ export default function Applications() {
       <details className="mt-5 text-[11px] text-muted">
         <summary className="cursor-pointer select-none font-semibold hover:text-ink">About these figures</summary>
         <ul className="mt-3 space-y-1.5 text-[11px] leading-relaxed text-muted">
+          <li>
+            <span className="font-semibold">Open leaves out the ones that have finished.</span> An
+            application stays open on paper after the tenant moves in, or after the home goes to
+            someone else. Those sit under Closed: accepted with the move-in date passed, or not
+            accepted on a home that is now let or withdrawn. Open covers the latest 200 applications.
+          </li>
           <li>
             These are the four application statuses, live. Once an application is accepted, the{" "}
             <span className="font-semibold">eight pre-tenancy stages</span> (holding fee,
