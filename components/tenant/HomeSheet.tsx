@@ -49,7 +49,7 @@ export default function HomeSheet({
         }
       >
         {/* The photos, a row to swipe. */}
-        <div className="-mx-5 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-5 [scrollbar-width:none]">
+        <div className="-mx-5 flex snap-x snap-mandatory scroll-px-5 gap-2.5 overflow-x-auto px-5 [scrollbar-width:none]">
           {(photos.length ? photos : [""]).map((src, i) => (
             <PropertyPhoto key={src + i} src={src || null} alt="" className={`h-[210px] shrink-0 snap-start rounded-[16px] ${photos.length > 1 ? "w-[86%]" : "w-full"}`} />
           ))}

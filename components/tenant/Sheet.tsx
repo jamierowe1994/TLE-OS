@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 /**
  * A bottom sheet, the tenant portal's one (James, 18 Sep 2026: "we should be
@@ -12,6 +13,13 @@ import { useEffect } from "react";
  *
  * Kept mounted and slid away rather than unmounted, so what was typed in it
  * survives closing it.
+ *
+ * DRAWN ON document.body, not where it is written (18 Sep 2026). A fixed
+ * element is only fixed to the screen while no ancestor has a transform, and
+ * the home page's cards rise in with an animation that leaves one behind -
+ * so See home's sheet rose from the top of the home card, half off the
+ * screen, instead of from the foot of the phone. A portal takes it out of
+ * every card, whatever animates them next.
  */
 export default function Sheet({
   open,
@@ -39,8 +47,16 @@ export default function Sheet({
     };
   }, [open, onClose]);
 
-  return (
-    <>
+  /* The portal needs the document, which only exists once mounted. */
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
+  if (!ready) return null;
+
+  /* Wrapped in the tenant surface again: the palette (--accent-dark and the
+     rest) is set on app/tenant/layout's wrapper, and out on document.body the
+     sheet's buttons fell back to the OS's own accent. */
+  return createPortal(
+    <div data-surface="tenant" className="font-sans text-ink">
       <div
         onClick={onClose}
         className="fixed inset-0 z-[57] bg-[#2b201d]/45 transition-opacity duration-300"
@@ -72,6 +88,7 @@ export default function Sheet({
         )}
         {!footer && <div className="shrink-0" style={{ height: "calc(14px + env(safe-area-inset-bottom))" }} />}
       </div>
-    </>
+    </div>,
+    document.body
   );
 }

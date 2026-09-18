@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 
@@ -49,6 +50,12 @@ export default function AgentSheet({ agent, messagesHref }: { agent: SheetAgent 
     };
   }, [open]);
 
+  /* The sheet is drawn on document.body, like components/tenant/Sheet: a
+     fixed element under an animated card is fixed to the card, not the
+     screen. The button stays in the page, so it moves with it when the menu
+     slides the page aside. */
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
   if (!agent) return null;
   const first = agent.name.split(/\s+/)[0] || "your agent";
   const tel = (agent.phone ?? "").replace(/\s+/g, "");
@@ -78,6 +85,9 @@ export default function AgentSheet({ agent, messagesHref }: { agent: SheetAgent 
         <span className="text-[12.5px] font-semibold">{first}</span>
       </button>
 
+      {ready && createPortal(
+      /* The tenant palette again - see components/tenant/Sheet. */
+      <div data-surface="tenant" className="font-sans text-ink sm:hidden">
       <div
         onClick={() => setOpen(false)}
         className="fixed inset-0 z-[57] bg-[#2b201d]/45 transition-opacity duration-300"
@@ -132,6 +142,9 @@ export default function AgentSheet({ agent, messagesHref }: { agent: SheetAgent 
           )}
         </div>
       </div>
+      </div>,
+      document.body
+      )}
     </div>
   );
 }
