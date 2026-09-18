@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
+import { requireCapability } from "@/lib/admin";
 import { buildNudges, syncRexDoors } from "@/lib/bond-nudges";
 
 /**
@@ -19,13 +21,30 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-export async function GET() {
+/* The cron key, or somebody who may work the switches. This path skips the
+   sign-in door, and until 18 Sep 2026 nothing here checked anything: anybody on
+   the internet could start a minutes-long read of the whole book, over and
+   over, on our rate limit. */
+async function allowed(req: NextRequest): Promise<boolean> {
+  const secret = process.env.CRON_SECRET ?? "";
+  const given = req.headers.get("x-cron-key") ?? "";
+  if (secret && given) {
+    const a = Buffer.from(secret);
+    const b = Buffer.from(given);
+    if (a.length === b.length && timingSafeEqual(a, b)) return true;
+  }
+  return Boolean(await requireCapability(req, "manage:switches").catch(() => null));
+}
+
+export async function GET(req: NextRequest) {
+  if (!(await allowed(req))) return NextResponse.json({ ok: false, error: "unauthorised" }, { status: 401 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "no database" }, { status: 503 });
   const runs = await q<Record<string, unknown>>(`SELECT * FROM os_bond_rex_sync ORDER BY id DESC LIMIT 5`);
   return NextResponse.json({ ok: true, runs });
 }
 
 export async function POST(req: NextRequest) {
+  if (!(await allowed(req))) return NextResponse.json({ ok: false, error: "unauthorised" }, { status: 401 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "no database" }, { status: 503 });
   await q(`UPDATE os_bond_rex_sync SET status = 'failed', error = 'interrupted, most likely by a deploy', finished_at = NOW()
             WHERE status = 'running' AND started_at < NOW() - INTERVAL '40 minutes'`);

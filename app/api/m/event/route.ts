@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
-import { scopeFor } from "@/lib/scope";
+import { scopeFor, searchScope } from "@/lib/scope";
 import { searchPhoneProperties, type PhoneProperty } from "@/lib/m-properties";
 import { listAppraisals } from "@/lib/appraisal-store";
 import { accessLine } from "@/lib/takeon";
@@ -42,8 +42,9 @@ export async function GET(req: NextRequest) {
   /* The first line is what both books agree on; the rest is how each spells the town. */
   const firstLine = where.split(",")[0].trim();
   const scope = await scopeFor(req);
+  const mine = await searchScope(req, scope);
   const [found, appraisals] = await Promise.all([
-    searchPhoneProperties(scope.unlinked ? null : scope.rexUserId, firstLine).catch(() => null),
+    mine === false ? Promise.resolve(null) : searchPhoneProperties(mine, firstLine).catch(() => null),
     listAppraisals().catch(() => []),
   ]);
 

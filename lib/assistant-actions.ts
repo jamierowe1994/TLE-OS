@@ -8,6 +8,7 @@ import { previewMerge } from "@/lib/rex-mailmerge";
 import { MailboxNotConnected, msSendMail } from "@/lib/microsoft";
 import { rexTokenFor } from "@/lib/rex-user";
 import { switchOn } from "@/lib/switches";
+import { isInternalAddress } from "@/lib/email-policy";
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
 
@@ -254,6 +255,18 @@ async function doEmail(
 
   const who = await resolveRecipient(p.listingId, p.to);
   if ("error" in who) return { ok: false, message: who.error };
+
+  /* And the customer switch, now that we know who it is for (18 Sep 2026): the
+     Outlook switch alone let this write to a landlord with "Email to landlords
+     and tenants" off. */
+  if (!isInternalAddress(who.email) && !(await switchOn("customer_email"))) {
+    return {
+      ok: false,
+      blocked: true,
+      message:
+        "I can write it, but email to landlords and tenants is switched off, so I'm not sending it. Copy the draft out and send it yourself if it can't wait.",
+    };
+  }
 
   const html = toHtml(p.body);
 

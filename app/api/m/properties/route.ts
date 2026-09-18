@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
-import { scopeFor } from "@/lib/scope";
+import { scopeFor, searchScope } from "@/lib/scope";
 import { searchPhoneProperties } from "@/lib/m-properties";
 
 export type { PhoneProperty } from "@/lib/m-properties";
@@ -21,7 +21,9 @@ export async function GET(req: NextRequest) {
   const needle = (req.nextUrl.searchParams.get("q") ?? "").trim();
   if (needle.length < 2) return NextResponse.json({ ok: true, properties: [] });
   const scope = await scopeFor(req);
-  const out = await searchPhoneProperties(scope.unlinked ? null : scope.rexUserId, needle);
+  const mine = await searchScope(req, scope);
+  if (mine === false) return NextResponse.json({ ok: true, properties: [] });
+  const out = await searchPhoneProperties(mine, needle);
   if (!out) {
     return NextResponse.json({ ok: false, error: "The property book did not load. Try again in a moment." }, { status: 502 });
   }

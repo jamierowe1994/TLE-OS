@@ -71,8 +71,46 @@ type Due = {
   subject: string;
   body: string;
   html: string | null;
+  send_at: string;
   queued_by: string;
+  queued_by_id: string | null;
 };
+
+/** A timed email this late has missed its moment. "See you tomorrow" sent the
+ *  day after the visit is worse than no email. */
+const TOO_LATE_MS = 12 * 60 * 60 * 1000;
+
+/**
+ * Should a queued pre-appraisal still go? (18 Sep 2026)
+ *
+ * The row is written when the visit is booked and its words are frozen then,
+ * date and all. A visit that was since moved, lost or has already happened
+ * must not get it. `ref` is the appraisal's id or its lead's, depending on
+ * which screen queued it.
+ */
+async function preAppraisalStillStands(ref: string, sendAt: string): Promise<string | null> {
+  if (!ref) return null;
+  const rows = await q<{ stage: string; appointment_at: string | Date | null }>(
+    `SELECT stage, appointment_at FROM os_market_appraisals
+      WHERE id = $1 OR lead_id = $1 OR id = 'lead-' || $1
+      ORDER BY created_at DESC LIMIT 1`,
+    [ref]
+  ).catch(() => null);
+  /* Could not look: say nothing rather than cancel on a guess. */
+  if (rows === null) return null;
+  const ma = rows[0];
+  if (!ma) return null;
+  if (ma.stage === "lost") return "The appraisal was marked lost before this was due, so it was not sent.";
+  if (!ma.appointment_at) return null;
+  const visit = new Date(ma.appointment_at).getTime();
+  if (visit < Date.now()) return "The visit had already happened by the time this was due, so it was not sent.";
+  /* Queued for the day before. A visit now more than two days after the send
+     time has been moved, and the words in this email name the old date. */
+  if (visit - new Date(sendAt).getTime() > 2 * 24 * 60 * 60 * 1000) {
+    return "The visit was moved after this was written, so it was not sent. Queue it again from the appraisal.";
+  }
+  return null;
+}
 
 export async function POST(req: NextRequest) {
   /* READ-ONLY WHILE VIEWING AS. A write made wearing somebody else's face
@@ -104,7 +142,7 @@ export async function POST(req: NextRequest) {
          LIMIT 25
          FOR UPDATE SKIP LOCKED
       )
-      RETURNING id, kind, ref, to_email, contact_id, subject, body, html, queued_by`
+      RETURNING id, kind, ref, to_email, contact_id, subject, body, html, send_at, queued_by, queued_by_id`
   ).catch(() => []);
 
   const sent: string[] = [];
@@ -112,6 +150,21 @@ export async function POST(req: NextRequest) {
   const failed: { id: string; error: string }[] = [];
 
   for (const row of due) {
+    /* ── Too late, or overtaken by events: cancelled, never sent. Without this
+       a queue held back by a switch fires everything it ever held the minute
+       the switch goes on - the 20 August landlord email, again. ── */
+    const late = Date.now() - new Date(row.send_at).getTime() > TOO_LATE_MS;
+    const overtaken = late
+      ? "This was due more than twelve hours ago, so it was not sent."
+      : row.kind === "pre-appraisal"
+        ? await preAppraisalStillStands(row.ref, row.send_at)
+        : null;
+    if (overtaken) {
+      await q(`UPDATE os_scheduled_sends SET state = 'cancelled', error = $2 WHERE id = $1`, [row.id, overtaken]).catch(() => []);
+      skipped.push(row.id);
+      continue;
+    }
+
     /* ── The agent's video nudge: a colleague, by Resend, and checked again
        before it goes. Somebody who recorded on Monday must not be nagged on
        Tuesday for something already done - that check is the whole email. ── */
@@ -152,7 +205,11 @@ export async function POST(req: NextRequest) {
       /* Queued by a person, sent by a timer: it goes out as THEM, which is the
          point of queuing rather than sending. Whoever queued it must still be
          here - an email in a departed colleague's name is not ours to send. */
-      const queuer = row.queued_by ? await findUserById(row.queued_by).catch(() => null) : null;
+      /* By ID. This looked the person up by `queued_by`, which holds their
+         NAME, so nobody was ever found and every queued email - the automatic
+         pre-presentation among them - ended as "failed" (16-18 Sep 2026). */
+      const queuerId = row.queued_by_id || row.queued_by;
+      const queuer = queuerId ? await findUserById(queuerId).catch(() => null) : null;
       if (!queuer) {
         throw new Error("Whoever queued this no longer has an account here, so it cannot go out in their name.");
       }
@@ -205,8 +262,12 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, skipped: skipped.length, failed, decks, nudges, instructions });
 }
 
-/** A dry read: what is due, without sending it. */
-export async function GET() {
+/** A dry read: what is due, without sending it. Same key as the run: this
+ *  path skips the sign-in door, and the rows are landlords' addresses. */
+export async function GET(req: NextRequest) {
+  if (!authorised(req)) {
+    return NextResponse.json({ ok: false, error: "Not authorised." }, { status: 401 });
+  }
   if (!hasDb()) return NextResponse.json({ ok: true, due: 0, rows: [] });
   const rows = await q<{ id: string; to_email: string; subject: string; send_at: string }>(
     `SELECT id, to_email, subject, send_at

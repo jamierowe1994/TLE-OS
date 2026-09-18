@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
-import { scopeFor } from "@/lib/scope";
+import { scopeFor, searchScope } from "@/lib/scope";
 import { hasDb, q } from "@/lib/db";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { bookFor } from "@/lib/listings-cache";
@@ -66,7 +66,8 @@ export async function GET(req: NextRequest) {
   const miles = Math.min(Math.max(Number(sp.get("miles")) || 3, 0.25), 25);
 
   const scope = await scopeFor(req);
-  const rexUserId = scope.unlinked ? null : scope.rexUserId;
+  const rexUserId = await searchScope(req, scope);
+  if (rexUserId === false) return NextResponse.json({ ok: false, error: "Your account isn't linked to your agent record yet. Ask James to link it." }, { status: 403 });
   const [managed, leads, listings, contacts, appraisals] = await Promise.all([
     managedBookFor(rexUserId).then((m) => m.book).catch(() => null),
     cachedLeads(rexUserId),

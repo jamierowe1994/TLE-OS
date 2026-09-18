@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
-import { scopeFor } from "@/lib/scope";
+import { scopeFor, searchScope } from "@/lib/scope";
 import { hasDb, q } from "@/lib/db";
 import { getApplications } from "@/lib/applications";
 import { managedBookFor } from "@/lib/managed-book-cache";
@@ -99,7 +99,8 @@ export async function GET(req: NextRequest) {
   const needle = (req.nextUrl.searchParams.get("q") ?? "").trim();
   if (needle.length < 2) return NextResponse.json({ ok: true, people: [] });
   const scope = await scopeFor(req);
-  const rexUserId = scope.unlinked ? null : scope.rexUserId;
+  const rexUserId = await searchScope(req, scope);
+  if (rexUserId === false) return NextResponse.json({ ok: true, people: [] });
 
   if (req.nextUrl.searchParams.get("rex") === "1") {
     if (!rexConfigured()) return NextResponse.json({ ok: true, people: [] });

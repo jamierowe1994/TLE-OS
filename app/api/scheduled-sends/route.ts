@@ -87,6 +87,29 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  /* ONE queued email per kind, record and address (18 Sep 2026). The lead
+     drawer's Schedule button and the appraisal's own auto-queue both arrive
+     here for the same visit, and two rows is the landlord getting it twice.
+     Queuing again is how a moved visit gets its new date and new words. */
+  const kind = (body.kind ?? "pre-appraisal").trim();
+  const ref = (body.ref ?? "").trim();
+  if (ref) {
+    const again = await q<{ id: string }>(
+      `UPDATE os_scheduled_sends
+          SET subject = $4, body = $5, send_at = $6, queued_by = $7, queued_by_id = $8, contact_id = COALESCE($9, contact_id), error = NULL
+        WHERE id = (
+          SELECT id FROM os_scheduled_sends
+           WHERE state = 'queued' AND kind = $1 AND ref = $2 AND LOWER(to_email) = LOWER($3)
+           ORDER BY send_at DESC LIMIT 1
+        )
+        RETURNING id`,
+      [kind, ref, to, subject, text, when.toISOString(), me.name, me.id, body.contactId ?? null]
+    );
+    if (again[0]) {
+      return NextResponse.json({ ok: true, id: again[0].id, sendAt: when.toISOString(), updated: true });
+    }
+  }
+
   const id = randomBytes(9).toString("base64url");
   await q(
     `INSERT INTO os_scheduled_sends
@@ -111,8 +134,7 @@ export async function POST(req: NextRequest) {
      and never in the way: a nudge that cannot be queued is reported in the
      response, not thrown at the landlord's email. */
   let videoChase: { queued: boolean; sendAt?: string; reason?: string } | null = null;
-  const ref = (body.ref ?? "").trim();
-  if ((body.kind ?? "pre-appraisal") === "pre-appraisal" && ref) {
+  if (kind === "pre-appraisal" && ref) {
     try {
       const ma = await getAppraisal(appraisalIdForLead(ref));
       if (ma) {

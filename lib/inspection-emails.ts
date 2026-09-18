@@ -3,6 +3,7 @@ import { sendEmail, ResendBlocked } from "@/lib/resend";
 import { renderTleEmailLive } from "@/lib/email/tle-emails";
 import { msConnectionFor, msSendMail, MailboxNotConnected } from "@/lib/microsoft";
 import { switchOn } from "@/lib/switches";
+import { isInternalAddress } from "@/lib/email-policy";
 import { kindLabel, type Finding, type Inspection } from "@/lib/inspections";
 import type { OsUser } from "@/lib/users";
 
@@ -90,7 +91,12 @@ async function send(id: string, to: string, vars: Record<string, string>, me: Os
   }
   try {
     const conn = await msConnectionFor(me.id).catch(() => null);
-    if (conn?.connected && (await switchOn("assistant_email"))) {
+    /* The customer switch as well (18 Sep 2026). This road checked only the
+       Outlook switch, so with "Email to landlords and tenants" OFF a landlord
+       or tenant could still be written to from the agent's own mailbox - and
+       the works sweep comes down this road on a timer. Our own people pass. */
+    const mayWrite = isInternalAddress(address) || (await switchOn("customer_email"));
+    if (mayWrite && conn?.connected && (await switchOn("assistant_email"))) {
       await msSendMail(me.id, { to: { email: address }, subject, body: html, rexUserId: me.rexUserId });
       return { to: who, sent: true, address, via: "own mailbox" };
     }

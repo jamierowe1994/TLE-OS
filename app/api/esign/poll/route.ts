@@ -118,7 +118,11 @@ export async function POST(req: NextRequest) {
 }
 
 /** A dry read of the same thing, for a screen or for checking by hand. */
-export async function GET() {
+export async function GET(req: NextRequest) {
+  /* This path skips the sign-in door, so it checks the key itself. */
+  if (!authorised(req)) {
+    return NextResponse.json({ ok: false, error: "Not authorised." }, { status: 401 });
+  }
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database." }, { status: 503 });
   const rows = await q<Row & { completed_at: string | null; checked_at: string | null }>(
     `SELECT rex_id, listing_id, ref, template_name, sent_by, last_status, completed_at, checked_at

@@ -333,9 +333,14 @@ export async function switchOn(key: string): Promise<boolean> {
       );
       if (rows.length > 0) return rows[0].is_on === true;
     } catch {
-      /* Unreadable is not permission. Falling through to the env var means a
-         database wobble cannot silently arm anything, and cannot silently
-         disarm something that was armed the old way either. */
+      /* Unreadable is not permission, so unreadable is OFF (18 Sep 2026). This
+         used to fall through to the env var - and for Email to landlords and
+         tenants that var is RESEND_ALLOW_SEND, which has to be "yes" on
+         production or no staff email works. So one failed read, during a
+         deploy or a busy pool, answered ON while the switch itself was off,
+         and the timed sends ask every five minutes. Every switch guards
+         something that leaves the building; a missed run is the cheap side. */
+      return false;
     }
   }
   return (process.env[def.legacyEnv] ?? "").trim().toLowerCase() === def.legacyOn;

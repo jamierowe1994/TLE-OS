@@ -2,6 +2,7 @@ import "server-only";
 import type { NextRequest } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
+import { can } from "@/lib/roles";
 import { ensureRexLink } from "@/lib/users";
 import { readViewAs, VIEW_AS_COOKIE } from "@/lib/view-as";
 
@@ -108,4 +109,21 @@ export function scopeCriteria(
   field = "listing_agent_1_id"
 ): Array<{ name: string; type: string; value: string }> {
   return scope.rexUserId ? [{ name: field, type: "=", value: scope.rexUserId }] : [];
+}
+
+/**
+ * The REX id to SEARCH with, or `false` when this person may not search at all.
+ *
+ * The search routes used to write `scope.unlinked ? null : scope.rexUserId` -
+ * and downstream null means "the whole business". So the one person every data
+ * route refuses ("we can't tell who you are, and we won't show you everybody's")
+ * could find everybody's leads, tenants and landlords, phones and emails
+ * included, from the search bar (18 Sep 2026). An unlinked person searches
+ * nothing unless their ROLE is one that sees everything anyway.
+ */
+export async function searchScope(req: NextRequest, scope: Scope): Promise<string | null | false> {
+  if (!scope.unlinked) return scope.rexUserId;
+  if (!hasDb()) return null;
+  const { actor } = await whoIs(req);
+  return actor && can(actor.role, "see:everything") ? null : false;
 }

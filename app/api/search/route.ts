@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
-import { scopeFor } from "@/lib/scope";
+import { scopeFor, searchScope } from "@/lib/scope";
 import { hasDb, q } from "@/lib/db";
 import { bookFor } from "@/lib/listings-cache";
 import { managedBookFor } from "@/lib/managed-book-cache";
@@ -65,7 +65,8 @@ export async function GET(req: NextRequest) {
   const needle = (req.nextUrl.searchParams.get("q") ?? "").trim();
   if (needle.length < 2) return NextResponse.json({ ok: true, hits: [] });
   const scope = await scopeFor(req);
-  const rexUserId = scope.unlinked ? null : scope.rexUserId;
+  const rexUserId = await searchScope(req, scope);
+  if (rexUserId === false) return NextResponse.json({ ok: true, hits: [], reason: "Your account isn't linked to your agent record yet, so search has nothing of yours to look through. Ask James to link it." });
 
   const [book, managed, leads, compliance, deals, applications, known] = await Promise.all([
     bookFor(rexUserId).catch(() => null),
