@@ -591,15 +591,28 @@ function FinishStage({ data, phase, token, demo, onBack }: { data: PassportData;
   const slot = { left: PAD, top: TOP };
   const stageH = Math.max(dim.h, TOP + ch * 2 + GAP + 40);
   const ease = "cubic-bezier(0.22,1,0.36,1)";
+  const rise = "cubic-bezier(0.45,0,0.2,1)";
   const edge = `0 0 0 ${1.2 * scale}px ${CLAY}99, ${2.5 * scale}px ${2.5 * scale}px 0 ${CLAY}, ${5 * scale}px ${5 * scale}px 0 ${COVER}dd, ${7 * scale}px ${7 * scale}px 0 ${COVER}99, 0 30px 60px -30px rgba(74,54,50,0.45)`;
 
-  /* Focus the password once the panel has finished rising, without scrolling. */
-  const pwRef = useRef<HTMLInputElement>(null);
+  /* The page starts at the top: whatever they had scrolled to on the last
+     question would otherwise leave the rise playing half off the screen. */
   useEffect(() => {
-    if (!docked) return;
-    const id = window.setTimeout(() => pwRef.current?.focus({ preventScroll: true }), 1300);
-    return () => window.clearTimeout(id);
+    window.scrollTo(0, 0);
+  }, []);
+
+  /* Focus the password only once the panel has come to rest - never while it
+     is still below the fold, or the browser drags the page down to it
+     mid-rise (James, 18 Sep 2026). Not on a phone: that would throw the
+     keyboard up over the passport they are meant to be reading. */
+  const pwRef = useRef<HTMLInputElement>(null);
+  const [risen, setRisen] = useState(false);
+  useEffect(() => {
+    if (!docked) setRisen(false);
   }, [docked]);
+  useEffect(() => {
+    if (!risen || !window.matchMedia("(pointer: fine)").matches) return;
+    pwRef.current?.focus({ preventScroll: true });
+  }, [risen]);
 
   const ok = pw.length >= 8 && pw === pw2;
 
@@ -693,16 +706,26 @@ function FinishStage({ data, phase, token, demo, onBack }: { data: PassportData;
             {card(<PassportBack data={data} />)}
           </div>
 
-          {/* The panel, up from the bottom to sit level with the card. */}
+          {/* The panel, easing up from just below the screen to sit level
+              with the card. It starts from the bottom of what they can see,
+              not the bottom of the page, and on an ease-in-out: the old
+              ease-out threw it 500px in the first tenth of a second. */}
           <div
             className="absolute"
+            onTransitionEnd={(e) => {
+              if (e.target === e.currentTarget && e.propertyName === "transform" && docked) setRisen(true);
+            }}
             style={{
               left: PAD * 2 + cw,
               right: PAD,
               top: slot.top,
               height: ch * 2 + GAP,
-              transform: docked ? "translateY(0)" : `translateY(${stageH}px)`,
-              transition: `transform 850ms ${ease} 1350ms`,
+              opacity: docked ? 1 : 0,
+              transform: docked ? "translateY(0)" : `translateY(${dim.h - slot.top + 24}px)`,
+              transition: docked
+                ? `transform 1200ms ${rise} 1350ms, opacity 500ms ease-out 1350ms`
+                : "none",
+              willChange: "transform",
             }}
           >
             <div className="flex h-full flex-col overflow-y-auto rounded-[28px] bg-white px-[var(--pp-panel-x)] py-[var(--pp-panel-y)] shadow-[0_30px_70px_-40px_rgba(86,66,62,0.35)]">
