@@ -83,6 +83,7 @@ import {
   TENANT_PASSPORT_NUDGE_2,
   TENANT_MATCHES,
   TENANT_MATCHES_AGAIN,
+  TENANT_HOME_ALERT,
   VIEWING_REMINDER,
   VIEWING_REBOOK,
   VIEWING_FEEDBACK,
@@ -1251,6 +1252,23 @@ TLE_EMAILS.push(
     "Asks whether the brief has changed, shows what has come on since, and lets them stop the emails by saying they have found somewhere.",
     TENANT_MATCHES_AGAIN,
     { link: `${SITE}/tenant/welcome` }
+  ),
+  tenantEntry(
+    "tenant-home-alert",
+    "New Homes for You",
+    "A home comes on that fits a tenant's saved search on Find a home",
+    "Wired 18 Sep 2026. lib/tenant-reminders homeAlerts, hourly from 8am to 8pm London time and at most once a day per tenant: live homes published since their last alert that fit their saved search (the same rule the page filters with). Only to tenants who ticked the consent box. Sent from The Letting Experts. Needs the Automatic tenant emails switch and customer email.",
+    "The tenant who turned on alerts",
+    "How many have come on and what their search is, one line per home with the rent first and a link to its page in their tenant area, one button to see them all, and a one-click stop that needs no sign-in.",
+    TENANT_HOME_ALERT,
+    {
+      subjectLine: "2 new homes for you, Sophie",
+      introLine: "Two new homes have come on that fit your search: <strong>2+ bed homes within 5 miles of your home, up to £1,250 a month</strong>.",
+      link: `${SITE}/tenant/homes`,
+      stopLink: `${SITE}/api/tenant/homes/alert/stop?e=sample`,
+      homesList:
+        "<a href=\"#\" style=\"color:#56423e;text-decoration:none\"><strong>£1,195 a month</strong> · 2 bed apartment, Ancoats M4</a> · 1.2 miles away<br><a href=\"#\" style=\"color:#56423e;text-decoration:none\"><strong>£1,250 a month</strong> · 2 bed terraced house, Levenshulme M19</a> · 3.8 miles away",
+    }
   ),
   tenantEntry(
     "viewing-reminder",

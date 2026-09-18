@@ -5,7 +5,7 @@ import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import HomesMap from "@/components/tenant/HomesMap";
-import { fits, milesBetween, type HomeFilter, type MarketHome } from "@/lib/market-homes";
+import { describeSearch as describe, fits, milesBetween, type HomeFilter, type MarketHome } from "@/lib/market-homes";
 
 /**
  * FIND A HOME - every home on the market, inside the tenant's own area
@@ -339,15 +339,6 @@ function HomeCard({ h, miles, href, asked }: { h: MarketHome; miles: number | nu
 }
 
 /* ── New-home alerts ────────────────────────────────────────────────────── */
-
-function describe(f: { radiusMiles: number | null; minBeds: number | null; maxRent: number | null; type: "house" | "flat" | null }, place: string | null) {
-  const what = [f.minBeds ? `${f.minBeds}+ bed` : null, f.type === "house" ? "houses" : f.type === "flat" ? "flats" : "homes"].filter(Boolean).join(" ");
-  return [
-    what.charAt(0).toUpperCase() + what.slice(1),
-    f.radiusMiles && place ? `within ${f.radiusMiles} ${f.radiusMiles === 1 ? "mile" : "miles"} of ${place}` : "anywhere we let",
-    f.maxRent ? `up to ${pounds(f.maxRent)} a month` : null,
-  ].filter(Boolean).join(", ");
-}
 
 function Alerts({ filter, place, saved, sample }: { filter: HomeFilter; place: string | null; saved: SavedAlert; sample: boolean }) {
   const [on, setOn] = useState<SavedAlert>(saved);

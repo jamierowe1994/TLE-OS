@@ -60,3 +60,14 @@ export function fits(h: MarketHome, f: HomeFilter): boolean {
   }
   return true;
 }
+
+/** A search in words, the same on the page and in the alert email:
+ *  "2+ bed houses, within 5 miles of your home, up to £1,250 a month". */
+export function describeSearch(f: { radiusMiles: number | null; minBeds: number | null; maxRent: number | null; type: "house" | "flat" | null }, place: string | null): string {
+  const what = [f.minBeds ? `${f.minBeds}+ bed` : null, f.type === "house" ? "houses" : f.type === "flat" ? "flats" : "homes"].filter(Boolean).join(" ");
+  return [
+    what.charAt(0).toUpperCase() + what.slice(1),
+    f.radiusMiles && place ? `within ${f.radiusMiles} ${f.radiusMiles === 1 ? "mile" : "miles"} of ${place}` : "anywhere we let",
+    f.maxRent ? `up to £${f.maxRent.toLocaleString("en-GB")} a month` : null,
+  ].filter(Boolean).join(", ");
+}

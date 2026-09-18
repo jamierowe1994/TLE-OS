@@ -7,7 +7,7 @@ import { renderTleEmailLive } from "@/lib/email/tle-emails";
 import { SITE } from "@/lib/email/tle-documents";
 import { presentAgentFor } from "@/lib/rex-agents";
 import { applicationEmails, feedbackRequests, matchesAgain, rebooks } from "@/lib/tenant-journey-emails";
-import { alertsDue } from "@/lib/tenant-find";
+import { alertsDue, markAlertSent, stopLink } from "@/lib/tenant-find";
 import { homesOnMarket } from "@/lib/tenant-homes";
 
 /**
@@ -223,7 +223,7 @@ export async function runTenantReminders(opts: { dry?: boolean; now?: Date } = {
     ["rebooks", () => rebooks(dry, run.results)],
     ["anything close", () => matchesAgain(dry, run.results)],
     ["applications", () => applicationEmails(dry, run.results)],
-    ["new-home alerts", () => homeAlerts(run.results)],
+    ["new-home alerts", () => homeAlerts(dry, now, run.results)],
   ];
   const errors: string[] = [];
   for (const [name, job] of jobs) {
@@ -241,24 +241,51 @@ export async function runTenantReminders(opts: { dry?: boolean; now?: Date } = {
 }
 
 /**
- * New-home alerts a tenant signed up to on Find a home (18 Sep 2026).
- *
- * REPORT ONLY, whatever the switch says: the email itself has not been
- * written into the Emails gallery yet, so this lists who would get which
- * homes and sends nothing. When the template exists, send through sendOne's
- * pattern and stamp os_tenant_home_alerts.last_sent_at.
+ * New-home alerts a tenant signed up to on Find a home (18 Sep 2026), with
+ * their own tick. Hourly from 8am to 8pm London time, and at most once a day
+ * each: the key carries the date, so a busy day's new homes wait for
+ * tomorrow's email rather than arriving one at a time. Sent from The Letting
+ * Experts rather than an agent - an alert belongs to no single listing.
  */
-async function homeAlerts(out: ReminderResult[]) {
+async function homeAlerts(dry: boolean, now: Date, out: ReminderResult[]) {
+  const { date, hour } = london(now);
+  if (hour < 8 || hour >= 20) return;
   const market = await homesOnMarket();
   if (!market.ok) return;
+  const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const WORDS = ["No", "One", "Two", "Three", "Four", "Five", "Six"];
   for (const a of await alertsDue(market.homes)) {
-    out.push({
-      key: `tenant-home-alert:${a.email}`,
-      emailId: "tenant-home-alert",
-      to: a.email,
-      subject: "",
-      state: "would",
-      detail: `Would tell ${a.name || a.email} about ${a.homes.length} new home${a.homes.length === 1 ? "" : "s"}: ${a.homes.slice(0, 3).map((h) => h.name).join(", ")}. The alert email is not written yet.`,
-    });
+    const key = `tenant-home-alert:${a.email}:${date}`;
+    if (await alreadyDone(key)) continue;
+    if (!validEmail(a.email)) continue;
+    const n = a.homes.length;
+    const first = firstName(a.name);
+    const shown = a.homes.slice(0, 6);
+    const homesList =
+      shown
+        .map((h) => {
+          const rent = `£${Math.round(h.rent).toLocaleString("en-GB")} ${h.rentPeriod === "week" ? "a week" : "a month"}`;
+          const what = [h.beds != null ? (h.beds === 0 ? "Studio" : `${h.beds} bed`) : null, h.propertyType?.toLowerCase()].filter(Boolean).join(" ");
+          const miles = h.miles != null ? ` · ${h.miles < 10 ? h.miles.toFixed(1) : Math.round(h.miles)} miles away` : "";
+          return `<a href="${SITE}/tenant/homes/${h.id}" style="color:#56423e;text-decoration:none"><strong>${rent}</strong> · ${esc([what, h.name, h.locality].filter(Boolean).join(", "))}</a>${miles}`;
+        })
+        .join("<br>") + (n > shown.length ? `<br>And ${n - shown.length} more in your tenant area.` : "");
+    const vars = {
+      firstName: first,
+      subjectLine: n === 1 ? `A new home for you, ${first}` : `${n} new homes for you, ${first}`,
+      introLine: `${n < WORDS.length ? WORDS[n] : n} new ${n === 1 ? "home has" : "homes have"} come on that ${n === 1 ? "fits" : "fit"} your search: <strong>${esc(a.search)}</strong>.`,
+      homesList,
+      link: `${SITE}/tenant/homes`,
+      stopLink: stopLink(SITE, a.email),
+    };
+    const { subject, html } = await renderTleEmailLive("tenant-home-alert", vars);
+    if (dry) {
+      out.push({ key, emailId: "tenant-home-alert", to: a.email, subject, state: "would", detail: `Would tell ${a.name || a.email} about ${n} new home${n === 1 ? "" : "s"}: ${shown.slice(0, 3).map((h) => h.name).join(", ")}.` });
+      continue;
+    }
+    const r = await deliver({ agent: null, to: a.email, toName: a.name, subject, html });
+    if (r.final) await logDone(key, "tenant-home-alert", a.email, r.sent ? "sent" : "refused", r.detail, { homes: shown.map((h) => h.id) });
+    if (r.sent) await markAlertSent(a.email);
+    out.push({ key, emailId: "tenant-home-alert", to: a.email, subject, state: r.sent ? "sent" : "failed", detail: r.detail });
   }
 }

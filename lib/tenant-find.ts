@@ -7,7 +7,8 @@ import { sendEmail } from "@/lib/resend";
 import { readListingDetails } from "@/lib/listing-details";
 import { findUserById } from "@/lib/users";
 import { saveContact, updateContact } from "@/lib/contacts-store";
-import { fits, type HomeFilter, type MarketHome } from "@/lib/market-homes";
+import { describeSearch, fits, milesBetween, type HomeFilter, type MarketHome } from "@/lib/market-homes";
+import { payloadSignatureOk, signPayload } from "@/lib/auth";
 import type { PassportRecord } from "@/lib/passport";
 
 /**
@@ -214,14 +215,40 @@ export async function stopAlert(email: string): Promise<void> {
  * the same `fits` the page filters with, so the email can never show a home
  * the page would have hidden.
  */
-export async function alertsDue(homes: MarketHome[]): Promise<{ email: string; name: string; homes: MarketHome[] }[]> {
+export type DueAlert = { email: string; name: string; search: string; homes: (MarketHome & { miles: number | null })[] };
+
+export async function alertsDue(homes: MarketHome[]): Promise<DueAlert[]> {
   if (!hasDb()) return [];
   const rows = await q<AlertRow>(`SELECT * FROM os_tenant_home_alerts WHERE stopped_at IS NULL`).catch(() => []);
   return rows
     .map((r) => {
       const from = (r.last_sent_at ?? r.consent_at).toISOString().slice(0, 10);
-      const f: HomeFilter = { lat: r.lat, lng: r.lng, radiusMiles: r.radius_miles, minBeds: r.min_beds, maxRent: r.max_rent, type: toAlert(r).type };
-      return { email: r.email, name: r.name, homes: homes.filter((h) => (h.publishedAt ?? "") > from && fits(h, f)) };
+      const a = toAlert(r);
+      const f: HomeFilter = { lat: r.lat, lng: r.lng, radiusMiles: r.radius_miles, minBeds: r.min_beds, maxRent: r.max_rent, type: a.type };
+      const at = r.lat != null && r.lng != null ? { lat: r.lat, lng: r.lng } : null;
+      return {
+        email: r.email,
+        name: r.name,
+        search: describeSearch(f, r.place),
+        homes: homes
+          .filter((h) => (h.publishedAt ?? "") > from && fits(h, f))
+          .map((h) => ({ ...h, miles: at && h.lat != null && h.lng != null ? milesBetween(at, { lat: h.lat, lng: h.lng }) : null }))
+          .sort((x, y) => (x.miles ?? 1e9) - (y.miles ?? 1e9)),
+      };
     })
     .filter((a) => a.homes.length > 0);
+}
+
+/** Stamp the alert once it has gone, so the next one only carries what is new. */
+export async function markAlertSent(email: string): Promise<void> {
+  await q(`UPDATE os_tenant_home_alerts SET last_sent_at = NOW() WHERE LOWER(email) = LOWER($1)`, [email]);
+}
+
+/* The stop link: signed, so it works from the email with no sign-in and
+   cannot be used to stop anybody else's. */
+const stopData = (email: string) => `home-alert-stop:${email.trim().toLowerCase()}`;
+export const stopSignature = (email: string) => signPayload(stopData(email));
+export const stopSignatureOk = (email: string, sig: string | null) => payloadSignatureOk(stopData(email), sig);
+export function stopLink(site: string, email: string): string {
+  return `${site}/api/tenant/homes/alert/stop?e=${encodeURIComponent(email.trim().toLowerCase())}&s=${stopSignature(email)}`;
 }

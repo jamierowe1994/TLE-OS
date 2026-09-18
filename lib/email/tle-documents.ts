@@ -1306,6 +1306,33 @@ export const TENANT_MATCHES_AGAIN = {
   branding: { showSignoff: false },
 } as const
 
+/**
+ * New-home alerts from Find a home in the tenant portal (18 Sep 2026). Only
+ * ever to somebody who ticked "I'm happy to get emails" on their own search.
+ * {{introLine}} says how many and what the search is; {{homesList}} is one
+ * line per home, each a link to its page in their tenant area; {{stopLink}}
+ * stops the alerts in one click with no sign-in.
+ */
+export const TENANT_HOME_ALERT = {
+  subject: "{{subjectLine}}",
+  preheader: "Fresh on the market, and they fit what you're looking for.",
+  mode: "blocks",
+  blocks: [
+    H("tha1", "New homes for you"),
+    T("tha2", "Hi {{firstName}},<br><br>{{introLine}}"),
+    T("tha3", "{{homesList}}"),
+    SP("tha4", 8),
+    BTN("tha5", "See them in your tenant area", "{{link}}"),
+    SP("tha6", 8),
+    T("tha7", "Like the look of one? Open it and press Enquire, and we'll come back to you with times to view. Good homes tend to go within days."),
+    T("tha8", "Want something different? Change your search on Find a home and save the alert again. Or <a href=\"{{stopLink}}\" style=\"color:#56423e\">stop these emails</a>."),
+    SP("tha9", 8),
+    T("tha10", "The Letting Experts"),
+    FOOT("tha11", "You're getting this because you asked for new-home alerts in your tenant area. You can stop them at any time."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
 /** 7am on the day. {{timePretty}} {{meetLine}} {{contactLine}} {{mapLink}} */
 export const VIEWING_REMINDER = {
   subject: "Your viewing today at {{timePretty}}",
