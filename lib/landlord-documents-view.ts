@@ -50,8 +50,11 @@ const day = (iso: string | null | undefined) =>
 
 const kindLabel = (kind: DocKind) => DOC_KINDS.find((k) => k.id === kind)?.label ?? "Document";
 
-export async function loadLandlordDocuments(me: LandlordAccount): Promise<DocsView> {
-  const [{ open, compliance, docs }, managed] = await Promise.all([loadLandlordHome(me), landlordProperties(me)]);
+/** `pick` is the property chosen on the portal (?p=), so Documents shows the
+ *  same one as Home - it used to show the first open appraisal whatever was
+ *  picked (19 Sep 2026). */
+export async function loadLandlordDocuments(me: LandlordAccount, pick?: string | null): Promise<DocsView> {
+  const [{ open, compliance, docs }, managed] = await Promise.all([loadLandlordHome(me, pick), landlordProperties(me)]);
   const j = open[0] ?? null;
   const mine = j ? docs.filter((d) => !d.appraisalId || d.appraisalId === j.appraisal.id) : docs;
   const latest = j?.decks[0] ?? null;

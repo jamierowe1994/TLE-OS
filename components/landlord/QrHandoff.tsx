@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
 
 /**
@@ -39,6 +39,8 @@ const POLL_MS = 4000;
 
 export default function QrHandoff({ sample = false }: { sample?: boolean }) {
   const router = useRouter();
+  /* The property picked on the portal (?p=), so the phone sends to that one. */
+  const pick = useSearchParams().get("p");
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -65,7 +67,7 @@ export default function QrHandoff({ sample = false }: { sample?: boolean }) {
     setBusy(true);
     setErr(null);
     try {
-      const res = await fetch("/api/landlord/documents/handoff", { method: "POST" });
+      const res = await fetch("/api/landlord/documents/handoff", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ p: pick }) });
       const j = (await res.json()) as { ok?: boolean; path?: string; expiresAt?: string; error?: string };
       if (!j.ok || !j.path || !j.expiresAt) throw new Error(j.error ?? "Could not make a code.");
       const full = `${window.location.origin}${j.path}`;
@@ -115,7 +117,7 @@ export default function QrHandoff({ sample = false }: { sample?: boolean }) {
     let dead = false;
     const look = async () => {
       try {
-        const res = await fetch("/api/landlord/documents/status", { cache: "no-store" });
+        const res = await fetch(`/api/landlord/documents/status${pick ? `?p=${encodeURIComponent(pick)}` : ""}`, { cache: "no-store" });
         const j = (await res.json()) as { ok?: boolean; sent?: number };
         if (dead || !j.ok || typeof j.sent !== "number") return;
         if (baseline.current === null) {

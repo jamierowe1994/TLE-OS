@@ -40,7 +40,8 @@ export default async function SendPage({ params }: { params: Promise<{ token: st
   const me = await landlordAccountById(at.accountId);
   if (!me) return <Gone />;
 
-  const d = await loadLandlordDocuments(me);
+  /* The property the code was made for, not whichever the file opens first. */
+  const d = await loadLandlordDocuments(me, at.appraisalId ? `a:${at.appraisalId}` : null);
 
   return (
     <SendDocuments

@@ -36,6 +36,8 @@ export interface ContactRow {
   enquiry: string;
   notes: string;
   createdBy: string;
+  /** Their name on the staff list, when the API found one. */
+  createdByName?: string | null;
   createdAt: string;
   rexId: string | null;
   rexState: "held" | "sent" | "failed" | "linked";
@@ -99,7 +101,7 @@ export function contactToLead(c: ContactRow): Lead {
     preferred: c.address || "—",
     /* Whoever typed it in. The REX rows carry the managing agent here, and for
        a record somebody entered by hand that is the same question. */
-    agent: c.createdBy,
+    agent: c.createdByName || c.createdBy,
     notes: c.notes,
     address: c.address || undefined,
     contactId: c.rexId ?? undefined,

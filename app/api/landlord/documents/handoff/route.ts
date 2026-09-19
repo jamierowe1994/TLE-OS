@@ -20,12 +20,14 @@ import { hasDb } from "@/lib/db";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function POST() {
+export async function POST(req: Request) {
   const me = await currentLandlord();
   if (!me) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
 
-  const docs = await loadLandlordDocuments(me);
+  /* The property picked on the portal, so the code files to that one. */
+  const { p } = (await req.json().catch(() => ({}))) as { p?: string };
+  const docs = await loadLandlordDocuments(me, typeof p === "string" ? p : null);
   const minted = await mintHandoff(me.id, docs.appraisalId);
   if (!minted) return NextResponse.json({ ok: false, error: "Could not make a code. Try again." }, { status: 500 });
 

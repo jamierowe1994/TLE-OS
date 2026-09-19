@@ -2156,12 +2156,16 @@ export default function LeadDrawer({
                         <DoodleIcon name="magic-wand" size={15} className="text-accent-dark" />
                         At a glance
                       </p>
+                      {/* Newest first, as on a landlord lead (19 Sep 2026): what
+                          happened last, where it is up to, then the rest. */}
                       <ul className="mt-4 space-y-3.5">
-                        <Glance icon="target" title={receivedIso ? `Came in ${whenAgo(receivedIso)}` : `Came in ${lead.received}`} sub={`${receivedIso ? `${whenFull(receivedIso)} · ` : ""}via ${enquiry?.source || lead.source}`} />
+                        {latestTouch && (
+                          <Glance icon={touchIcon(latestTouch)} title={touchSentence(latestTouch)} sub={`${latestTouch.byName} · ${whenAgo(latestTouch.at)}`} />
+                        )}
                         <Glance
-                          icon="home"
-                          title={enqProperty && enqProperty !== "—" ? "Asked about one property" : "A general enquiry"}
-                          sub={enqProperty && enqProperty !== "—" ? enqProperty : "Not about one property - match them to the book"}
+                          icon="calendar"
+                          title={viewings.length ? `${viewings.length} viewing${viewings.length === 1 ? "" : "s"} booked` : "No viewing yet"}
+                          sub={track[Math.min(step, track.length - 1)]?.label ?? "Enquiry"}
                         />
                         <Glance
                           icon="doc"
@@ -2169,10 +2173,11 @@ export default function LeadDrawer({
                           sub={passport?.done ? "Their details are filled in below" : passportEmail ? "Send passport, top right" : "No email to send it to yet"}
                         />
                         <Glance
-                          icon="calendar"
-                          title={viewings.length ? `${viewings.length} viewing${viewings.length === 1 ? "" : "s"} booked` : "No viewing yet"}
-                          sub={track[Math.min(step, track.length - 1)]?.label ?? "Enquiry"}
+                          icon="home"
+                          title={enqProperty && enqProperty !== "—" ? "Asked about one property" : "A general enquiry"}
+                          sub={enqProperty && enqProperty !== "—" ? enqProperty : "Not about one property - match them to the book"}
                         />
+                        <Glance icon="target" title={receivedIso ? `Came in ${whenAgo(receivedIso)}` : `Came in ${lead.received}`} sub={`${receivedIso ? `${whenFull(receivedIso)} · ` : ""}via ${enquiry?.source || lead.source}`} />
                       </ul>
                     </aside>
                   </div>

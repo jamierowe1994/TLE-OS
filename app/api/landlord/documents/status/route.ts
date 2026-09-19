@@ -20,12 +20,12 @@ import { hasDb } from "@/lib/db";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(req: Request) {
   const me = await currentLandlord();
   if (!me) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
 
-  const d = await loadLandlordDocuments(me);
+  const d = await loadLandlordDocuments(me, new URL(req.url).searchParams.get("p"));
   return NextResponse.json({
     ok: true,
     have: d.progress.have,

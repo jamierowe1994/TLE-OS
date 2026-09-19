@@ -13,7 +13,7 @@ export default async function LandlordDocumentsPage({ searchParams }: { searchPa
   const me = (await currentLandlord())!;
   /* Which property, from the address bar. See PlacePicker. */
   const { p } = await searchParams;
-  const [{ view, first }, docs] = await Promise.all([loadLandlordHome(me, p), loadLandlordDocuments(me)]);
+  const [{ view, first }, docs] = await Promise.all([loadLandlordHome(me, p), loadLandlordDocuments(me, p)]);
   if (!view) {
     return (
       <div className="pt-4">

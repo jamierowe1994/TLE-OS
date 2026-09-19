@@ -43,6 +43,8 @@ export interface OsContact {
   enquiry: string;
   notes: string;
   createdBy: string;
+  /** Their name on the staff list, when they are on it. */
+  createdByName?: string | null;
   createdAt: string;
   rexId: string | null;
   rexState: RexState;
@@ -84,7 +86,7 @@ export function splitName(full: string): { first: string; last: string } {
 type Row = {
   id: string; kind: string; name: string; name_first: string; name_last: string;
   email: string; mobile: string; address: string; postcode: string; source: string;
-  enquiry: string; notes: string; created_by: string; created_at: string;
+  enquiry: string; notes: string; created_by: string; created_by_name?: string | null; created_at: string;
   rex_id: string | null; rex_state: string; rex_detail: string;
   rex_at: string | null; rex_by: string; is_test: boolean | null;
 };
@@ -104,6 +106,7 @@ function toContact(r: Row): OsContact {
     enquiry: r.enquiry,
     notes: r.notes,
     createdBy: r.created_by,
+    createdByName: r.created_by_name ?? null,
     createdAt: r.created_at,
     rexId: r.rex_id,
     rexState: (["held", "sent", "failed", "linked"] as const).includes(r.rex_state as RexState)
@@ -118,7 +121,8 @@ function toContact(r: Row): OsContact {
 
 const COLUMNS = `id, kind, name, name_first, name_last, email, mobile, address, postcode,
   source, enquiry, notes, created_by, created_at::text AS created_at,
-  rex_id, rex_state, rex_detail, rex_at::text AS rex_at, rex_by, is_test`;
+  rex_id, rex_state, rex_detail, rex_at::text AS rex_at, rex_by, is_test,
+  (SELECT NULLIF(u.name, '') FROM os_users u WHERE lower(u.email) = lower(os_contacts.created_by) LIMIT 1) AS created_by_name`;
 
 /** Write the record. Throws if there is no database — a Save that cannot save
  *  must say so rather than return a cheerful object nobody stored. */

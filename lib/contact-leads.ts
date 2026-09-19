@@ -38,6 +38,8 @@ type Row = {
   enquiry: string | null;
   notes: string | null;
   created_by: string | null;
+  /** Their name on the staff list, so the board says "For Rhiannon Dodge" rather than an email. */
+  created_by_name?: string | null;
   created_at: string;
   rex_id: string | null;
 };
@@ -69,7 +71,7 @@ function toLead(r: Row): Lead {
     stage: "New",
     moveDate: "",
     preferred: area,
-    agent: r.created_by ?? "",
+    agent: r.created_by_name || r.created_by || "",
     notes: r.notes ?? "",
     activity: [],
     address: r.address ?? undefined,
@@ -90,7 +92,8 @@ function toLead(r: Row): Lead {
 export async function contactsAsLeads(createdBy: string | null, limit = 200): Promise<Lead[]> {
   if (!hasDb()) return [];
   const cols = `id, kind, name, email, mobile, address, postcode, source, enquiry, notes,
-                created_by, created_at::text AS created_at, rex_id`;
+                created_by, created_at::text AS created_at, rex_id,
+                (SELECT NULLIF(u.name, '') FROM os_users u WHERE lower(u.email) = lower(os_contacts.created_by) LIMIT 1) AS created_by_name`;
   const rows = await q<Row>(
     createdBy
       ? `SELECT ${cols} FROM os_contacts WHERE created_by = $2 ORDER BY created_at DESC LIMIT $1`
