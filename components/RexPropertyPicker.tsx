@@ -96,7 +96,8 @@ export default function RexPropertyPicker({
   if (!open) {
     return (
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="text-[10.5px] uppercase tracking-wide text-muted">REX property</span>
+        {/* Agent screens never name the system behind the records (James, 15 Sep 2026). */}
+        <span className="text-[10.5px] uppercase tracking-wide text-muted">Property record</span>
         {appraisal.rexPropertyId ? (
           <>
             <span className="figures text-[12.5px]">#{appraisal.rexPropertyId}</span>
@@ -119,8 +120,8 @@ export default function RexPropertyPicker({
               Link it
             </button>
             <span className="w-full text-[10.5px] leading-snug text-muted">
-              Needed before terms can be signed — the contract attaches to a REX listing, and
-              a listing needs a property.
+              If this home has been on our books before, link it now. If it is new to us, its
+              record is set up when the terms are signed.
             </span>
           </>
         )}
@@ -131,7 +132,7 @@ export default function RexPropertyPicker({
   return (
     <div className="rounded-xl border border-line/80 bg-panel p-4">
       <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">
-        Find it in REX
+        Find the home on our books
       </p>
       <input
         autoFocus
@@ -141,13 +142,17 @@ export default function RexPropertyPicker({
         className="mt-2 w-full rounded-lg border border-line/80 bg-transparent px-3 py-2 text-[12.5px] outline-none focus:border-ink"
       />
 
-      {error && <p className="mt-2 text-[11.5px] text-accent-dark">{error}</p>}
-      {busy && <p className="mt-2 text-[11.5px] text-muted">Asking REX…</p>}
+      {error && (
+        <p className="mt-2 text-[11.5px] text-accent-dark">
+          {/\bREX\b/i.test(error) ? "The property records could not be reached. Try again in a moment." : error}
+        </p>
+      )}
+      {busy && <p className="mt-2 text-[11.5px] text-muted">Searching…</p>}
 
       {hits && hits.length === 0 && !busy && (
         <p className="mt-3 text-[11.5px] leading-relaxed text-muted">
-          Nothing in REX matches that. Try the street on its own, or the postcode. If the
-          property genuinely isn&apos;t in REX yet, it has to be created there first.
+          Nothing on our books matches that. Try the street on its own, or the postcode. If the
+          home is new to us, leave this - its record is set up when the terms are signed.
         </p>
       )}
 

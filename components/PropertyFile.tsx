@@ -214,12 +214,12 @@ export default function PropertyFile({
       {data?.match && !propertyId && (
         <p className="mb-3 text-[12px] leading-relaxed text-muted">
           {effectiveId ? (
-            <>In REX as <span className="font-semibold text-ink">{(data.match.targets.find((t) => t.id === effectiveId) ?? data.match.targets[0])?.name ?? `property ${effectiveId}`}</span>. Files attached here go on that property.</>
+            <>On our books as <span className="font-semibold text-ink">{(data.match.targets.find((t) => t.id === effectiveId) ?? data.match.targets[0])?.name ?? `property ${effectiveId}`}</span>. Files attached here go on that property.</>
           ) : data.match.verdict === "no match" && !data.match.possible.length ? (
-            <>Not in REX yet. A file attached here is held against the address and moves onto the property the day it is instructed.</>
+            <>Not on our books yet. A file attached here is held against the address and moves onto the property the day it is instructed.</>
           ) : (
             <>
-              REX has more than one home this could be. Which is it?
+              There is more than one home on our books this could be. Which is it?
               <span className="mt-1.5 flex flex-wrap gap-1.5">
                 {[...data.match.targets, ...data.match.possible].map((c) => (
                   <button key={c.id} type="button" onClick={() => void link(c)} className="rounded-full border border-line/80 px-3 py-1 text-[11.5px] hover:border-ink/40">
@@ -274,7 +274,7 @@ export default function PropertyFile({
               {pending.note && <p className="mt-2 text-[12px] text-accent-dark">{pending.note}</p>}
               <div className="mt-3 flex items-center gap-2">
                 <button type="button" disabled={pending.busy || !pending.type || !pending.expiry} onClick={() => void file()} className="rounded-full bg-accent-dark px-4 py-2 text-[12px] font-semibold text-page disabled:opacity-50">
-                  {pending.busy ? "Filing…" : effectiveId ? "File it in REX and here" : "Hold it against the address"}
+                  {pending.busy ? "Filing…" : effectiveId ? "File it on the property" : "Hold it against the address"}
                 </button>
                 <button type="button" onClick={() => setPending(null)} className="rounded-full border border-line/80 px-4 py-2 text-[12px]">Cancel</button>
               </div>
@@ -298,7 +298,7 @@ export default function PropertyFile({
         <p className="text-[12px] text-muted">Reading the file…</p>
       ) : !data.rows.length ? (
         <p className="text-[12px] leading-relaxed text-muted">
-          {effectiveId ? (data.checked ? "REX holds no certificates for this home yet." : "REX did not answer for this home, so nothing can be said about it.") : "Nothing held yet."}
+          {effectiveId ? (data.checked ? "No certificates held for this home yet." : "The records did not answer for this home, so nothing can be said about it.") : "Nothing held yet."}
         </p>
       ) : (
         <ul className="space-y-2">
@@ -311,7 +311,7 @@ export default function PropertyFile({
                   <Pill tone={s.tone}>{stateLabel(r)}</Pill>
                   <span className="text-[11px] text-muted">
                     {r.expiry ? `${r.state === "expired" ? "Expired" : "Expires"} ${day(r.expiry)}` : r.issued ? `Issued ${day(r.issued)}` : ""}
-                    {r.inRex && !r.fileInRex && r.expiry ? " · no document in REX" : ""}
+                    {r.inRex && !r.fileInRex && r.expiry ? " · no document on file" : ""}
                     {r.fromHouse ? ` · held on ${r.fromHouse}` : ""}
                   </span>
                   <button type="button" onClick={() => openPicker(r.type)} className="ml-auto rounded-full border border-line/80 px-3 py-1 text-[11px] hover:border-ink/40">
@@ -351,7 +351,7 @@ export default function PropertyFile({
         </ul>
       )}
       {data && !data.checked && effectiveId && data.rows.length > 0 && (
-        <p className="mt-2 text-[11px] text-muted">REX did not give a complete answer for this home; what is shown may be short.</p>
+        <p className="mt-2 text-[11px] text-muted">The records did not give a complete answer for this home; what is shown may be short.</p>
       )}
 
       {/* WHAT THE LANDLORD TOLD US, on the same panel as the certificates

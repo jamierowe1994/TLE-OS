@@ -327,7 +327,7 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
         {/* The landlord */}
         <section className={`fade-up flex flex-col ${card} p-5`}>
           <CardTitle icon="user">The landlord</CardTitle>
-          <dl className="mt-4 space-y-2.5 text-[13px]">
+          <dl className="mt-4 space-y-2.5 pb-4 text-[13px]">
             <Row k="Name">{ma.landlord}</Row>
             <Row k="Email">
               {ma.landlordEmail ? (

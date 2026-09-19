@@ -75,7 +75,7 @@ export interface AppraisalFacts {
 export function deriveAppraisalStage(ma: MarketAppraisal, f: AppraisalFacts): { stage: MaStage; why: string } {
   if (ma.stage === "lost") return { stage: "lost", why: "Marked lost." };
   if (ma.stage === "won") return { stage: "won", why: "Marked won." };
-  if (f.listed) return { stage: "won", why: "The property is listed in REX." };
+  if (f.listed) return { stage: "won", why: "The property is listed." };
   if (f.termsSigned && f.answered && f.landlordDocs) return { stage: "aml", why: "Terms signed, the property questions answered, and the landlord's ID and proof of ownership are on the portal." };
   if (f.termsSigned && !f.answered) return { stage: "takeon", why: "Terms signed. The landlord still has property questions to answer - they are chased by email until they do." };
   if (f.termsSigned) return { stage: "takeon", why: "Terms signed. Next is the take-on visit and photographs." };
@@ -218,7 +218,7 @@ async function signalsFor(ma: MarketAppraisal, listedIds: Set<string>, now: Date
   }
 
   /* won */
-  tick("won", "listed", "Listed in REX", listed, null);
+  tick("won", "listed", "Listed", listed, null);
 
   return { facts, ticks, videoState, preSend, nudgeAt };
 }

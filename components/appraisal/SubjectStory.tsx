@@ -147,7 +147,7 @@ export default function SubjectStory({
         ) : (
           <li className="text-[12px] leading-relaxed text-muted">
             {now ? "Not through our hands before." : "Not on our book before, and nobody is advertising it today."}
-            {ours === null && " (REX did not answer, so our own history could not be checked.)"}
+            {ours === null && " (Our records did not answer, so our own history could not be checked.)"}
           </li>
         )}
       </ul>

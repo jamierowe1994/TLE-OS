@@ -123,7 +123,7 @@ export function glanceFor(
     case "aml":
       return [docs, certs, terms];
     case "won":
-      return [{ icon: "star", title: "Won", sub: done("listed") ? "Listed in REX" : "Marked won on this file" }, figure, terms];
+      return [{ icon: "star", title: "Won", sub: done("listed") ? "Now a listing" : "Marked won on this file" }, figure, terms];
     case "lost":
       return [{ icon: "cross", title: "Marked lost", sub: "Reopen it from the top of the page if they call back" }, visit, figure];
   }
