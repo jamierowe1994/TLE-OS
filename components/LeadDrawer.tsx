@@ -1080,6 +1080,8 @@ export default function LeadDrawer({
      it being present - so a slow answer costs nothing but a moment of the old
      rail. */
   const sp = !isTenant ? spine : null;
+  /* The newest thing logged against the lead, whatever it was. */
+  const latestTouch = touches.length ? [...touches].sort((x, y) => y.at.localeCompare(x.at))[0] : null;
   const nurturing = sp?.nurture ?? null;
   const canNurture = Boolean(sp && !sp.booked && sp.attempts >= 1 && !nurturing);
 
@@ -2342,18 +2344,27 @@ export default function LeadDrawer({
                         <DoodleIcon name="magic-wand" size={15} className="text-accent-dark" />
                         At a glance
                       </p>
+                      {/* NEWEST FIRST (Susan, 19 Sep 2026: it showed old things
+                          rather than the brand new ones). What happened last,
+                          straight from the log, then what is next, then the
+                          property, then when they came in. */}
                       <ul className="mt-4 space-y-3.5">
-                        <Glance icon="target" title={receivedIso ? `Came in ${whenAgo(receivedIso)}` : `Came in ${lead.received}`} sub={`${receivedIso ? `${whenFull(receivedIso)} · ` : ""}via ${enquiry?.source || lead.source}`} />
+                        {latestTouch ? (
+                          <Glance icon={touchIcon(latestTouch)} title={touchSentence(latestTouch)} sub={`${latestTouch.byName} · ${whenAgo(latestTouch.at)}`} />
+                        ) : (
+                          <Glance icon="clock" title="Nothing logged yet" sub="Log a call, text, WhatsApp or email in Next up" />
+                        )}
+                        <Glance
+                          icon="calendar"
+                          title={sp?.booked ? "Appraisal booked" : nurturing ? "In nurture" : `Next: ${here.title}`}
+                          sub={sp?.booked ? "Carry on in Market Appraisals" : nurturing ? nurturing.reason : `${sp?.attempts ?? 0} contact attempt${(sp?.attempts ?? 0) === 1 ? "" : "s"} logged`}
+                        />
                         <Glance
                           icon="home"
                           title={!propAddress ? "No property address yet" : prop.matched === "rex" ? "Property matched in REX" : prop.matched === "pin" ? "Property pinned on the map" : "Property not looked up yet"}
                           sub={propAddress || "Add one and Find with AI does the rest"}
                         />
-                        <Glance
-                          icon="calendar"
-                          title={sp?.booked ? "Appraisal booked" : nurturing ? "In nurture" : here.title}
-                          sub={sp?.booked ? "Carry on in Market Appraisals" : nurturing ? nurturing.reason : `${sp?.attempts ?? 0} contact attempt${(sp?.attempts ?? 0) === 1 ? "" : "s"} logged`}
-                        />
+                        <Glance icon="target" title={receivedIso ? `Came in ${whenAgo(receivedIso)}` : `Came in ${lead.received}`} sub={`${receivedIso ? `${whenFull(receivedIso)} · ` : ""}via ${enquiry?.source || lead.source}`} />
                       </ul>
                     </aside>
                   </div>
