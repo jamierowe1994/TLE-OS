@@ -358,9 +358,13 @@ export default function Applications() {
               <p className="mt-1 text-[11px] leading-snug text-muted">
                 A quicker process means happier tenants and fewer fall-throughs. Every row opens the file with its next step.
               </p>
-              <button type="button" onClick={() => { setStage("open"); setFAgent(null); }} className={`${primary} mt-auto w-full pt-2`}>
-                View all applications <span aria-hidden>→</span>
-              </button>
+              {/* The gap sits OUTSIDE the button: pt-2 on the button padded its
+                  inside and left it touching the text (19 Sep 2026). */}
+              <div className="mt-auto pt-3">
+                <button type="button" onClick={() => { setStage("open"); setFAgent(null); }} className={`${primary} w-full`}>
+                  View all applications <span aria-hidden>→</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
