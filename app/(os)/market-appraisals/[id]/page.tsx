@@ -236,6 +236,10 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
             <a href={deck.url} target="_blank" rel="noreferrer" className={pill}>
               <DoodleIcon name="magic-wand" size={13} className="text-accent-dark" /> View presentation
             </a>
+            {/* A PDF to have with you at the appointment (Susan, 19 Sep 2026). */}
+            <a href={`${deck.url.split("?")[0]}/print`} target="_blank" rel="noreferrer" className={pill}>
+              <DoodleIcon name="upload" size={13} className="rotate-180 text-accent-dark" /> Download PDF
+            </a>
             <Link href={`/market-appraisals/${ma.id}/build`} className={pill} data-steve="appraisal.build">
               <DoodleIcon name="pencil" size={13} className="text-accent-dark" /> Update presentation
             </Link>

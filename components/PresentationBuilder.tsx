@@ -1437,6 +1437,14 @@ export default function PresentationBuilder({
                 >
                   View presentation
                 </a>
+                <a
+                  href={`${existing.url.split("?")[0]}/print`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] font-semibold transition-colors hover:border-ink/40"
+                >
+                  Download PDF
+                </a>
                 <SendToMe token={existing.token} appraisalId={appraisal?.id ?? null} compact />
               </>
             )}
@@ -2502,6 +2510,15 @@ function BuildProgress({
                   <span className="min-w-0 flex-1 text-left">
                     <span className="block text-[14px] font-semibold">View presentation</span>
                     <span className="block text-[12px] text-muted">Opens exactly as the landlord will see it.</span>
+                  </span>
+                </a>
+              )}
+              {url && (
+                <a href={`${url.split("?")[0]}/print`} target="_blank" rel="noreferrer" className={CHOICE}>
+                  <ChoiceIcon d="M12 3v12 M7 10l5 5 5-5 M4 19h16" />
+                  <span className="min-w-0 flex-1 text-left">
+                    <span className="block text-[14px] font-semibold">Download PDF</span>
+                    <span className="block text-[12px] text-muted">Every slide, one to a page, to have with you at the appointment.</span>
                   </span>
                 </a>
               )}
