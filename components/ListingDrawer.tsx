@@ -49,6 +49,7 @@ import type { ListingDetails } from "@/lib/listing-details";
 import { inputFromDetails, missing as missingForPortals } from "@/lib/listing-requirements";
 import { useListingTerms } from "@/lib/use-listing-terms";
 import { fetchMe } from "@/lib/me";
+import { WhatsAppButton } from "@/components/WhatsAppQr";
 
 /**
  * The property record — the leads drawer's shape, aimed at a thing instead of
@@ -759,6 +760,30 @@ export default function ListingDrawer({
                   <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <span className="font-semibold">{c.name}</span>
                     {c.phone && <a href={`tel:${c.phone.replace(/\s+/g, "")}`} className="text-muted hover:text-ink">{c.phone}</a>}
+                    {c.phone && (
+                      <WhatsAppButton
+                        phone={c.phone}
+                        name={c.name}
+                        /* Someone who is a lead has a log; a WhatsApp goes on it. */
+                        onSent={
+                          c.leadId
+                            ? async (message) => {
+                                const r = await fetch(`/api/leads/${encodeURIComponent(c.leadId as string)}/touches`, {
+                                  method: "POST",
+                                  headers: { "content-type": "application/json" },
+                                  body: JSON.stringify({ kind: "whatsapp", outcome: "sent", body: message }),
+                                });
+                                const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+                                return j?.ok ? null : (j?.error ?? "That didn't save.");
+                              }
+                            : undefined
+                        }
+                        className="flex items-center gap-1.5 rounded-full border border-line/80 px-2.5 py-0.5 text-[11px] hover:border-ink/40"
+                      >
+                        <DoodleIcon name="message-2" size={11} className="text-accent-dark" />
+                        WhatsApp
+                      </WhatsAppButton>
+                    )}
                     {c.email && <a href={`mailto:${c.email}`} className="text-muted hover:text-ink">{c.email}</a>}
                     {c.leadId && <a href={`/leads?open=${encodeURIComponent(c.leadId)}`} className="rounded-full border border-line/80 px-2.5 py-0.5 text-[11px] hover:border-ink/40">Open the lead</a>}
                     <button
@@ -1203,7 +1228,17 @@ export default function ListingDrawer({
                   <p className="hand mt-2 text-[22px] leading-tight">{landlord.landlord.name}</p>
                   <div className="mt-3 space-y-1.5 border-t border-line/50 pt-3 text-[13px]">
                     {landlord.landlord.phone ? (
-                      <a href={`tel:${landlord.landlord.phone.replace(/\s+/g, "")}`} className="flex items-center gap-2.5 hover:underline"><DoodleIcon name="call" size={13} className="text-accent-dark" />{landlord.landlord.phone}</a>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                        <a href={`tel:${landlord.landlord.phone.replace(/\s+/g, "")}`} className="flex items-center gap-2.5 whitespace-nowrap hover:underline"><DoodleIcon name="call" size={13} className="text-accent-dark" />{landlord.landlord.phone}</a>
+                        <WhatsAppButton
+                          phone={landlord.landlord.phone}
+                          name={landlord.landlord.name}
+                          className="flex shrink-0 items-center gap-1.5 rounded-full border border-line/70 px-2.5 py-1 text-[11.5px] font-semibold transition-colors hover:border-ink/40"
+                        >
+                          <DoodleIcon name="message-2" size={12} className="text-accent-dark" />
+                          WhatsApp
+                        </WhatsAppButton>
+                      </div>
                     ) : (
                       <p className="flex items-center gap-2.5 text-muted"><DoodleIcon name="call" size={13} />No number on file</p>
                     )}
