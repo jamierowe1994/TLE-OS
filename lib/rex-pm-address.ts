@@ -20,6 +20,8 @@ function tidy(raw: string): string {
   if((m=first.match(/^(flat|room|apartment|apt|unit|studio)\s*([\w]+(?:\/[\w]+)*)\/(\d+[a-z]?)\s+(.+)$/i)))return [`${cap(m[1])} ${m[2]}`,`${m[3]} ${street(m[4])}`,...parts.slice(1)].join(", ");
   // "9 Wilson Court/15 Wilson Street": flat 9 in Wilson Court, at 15 Wilson Street
   if((m=first.match(/^(\d+[a-z]?)\s+([a-z][a-z .'-]*?\b(?:court|house|mansions|lodge|building|buildings|place))\s*\/\s*(\d+[a-z]?)\s+(.+)$/i)))return [`Flat ${m[1]}`,m[2],`${m[3]} ${street(m[4])}`,...parts.slice(1)].join(", ");
+  // "Upper Grove Place 17/7": Edinburgh, street then number/flat, no floor code
+  if((m=first.match(/^([a-z][a-z .'-]+?)\s+(\d+[a-z]?)\/(\w+)$/i)))return [`Flat ${m[3]}`,`${m[2]} ${street(m[1])}`,...parts.slice(1)].join(", ");
   // "Ruskin Place 6": the number after the street
   if((m=first.match(/^([a-z][a-z .'-]+?)\s+(\d+[a-z]?)$/i)))return [`${m[2]} ${street(m[1])}`,...parts.slice(1)].join(", ");
   // "1 / 11 Station Road"
