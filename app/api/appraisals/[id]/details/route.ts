@@ -4,7 +4,7 @@ import { getAppraisal } from "@/lib/appraisal-store";
 import { readAnswers } from "@/lib/property-answers-store";
 import { presentationsFor } from "@/lib/present-store";
 import { epcForAddress } from "@/lib/epc";
-import { landlordAccountByEmail, landlordDocuments, REQUIRED_DOC_KINDS } from "@/lib/landlord-account";
+import { landlordAccountByEmail, landlordDocuments, requiredDocKindsFor } from "@/lib/landlord-account";
 import { DETAIL_FIELDS, saveTakeOnDetails, takeOnDetails } from "@/lib/takeon";
 
 /**
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const email = (ma.landlordEmail ?? "").trim().toLowerCase();
   const account = email ? await landlordAccountByEmail(email).catch(() => null) : null;
   const docs = account ? await landlordDocuments(account.id).catch(() => []) : [];
-  const missingDocs = REQUIRED_DOC_KINDS.filter((k) => !docs.some((d) => d.kind === k.id) && !(k.id === "epc" && (property?.epc || registerEpc))).map((k) => k.label);
+  const missingDocs = (await requiredDocKindsFor(ma.id)).filter((k) => !docs.some((d) => d.kind === k.id) && !(k.id === "epc" && (property?.epc || registerEpc))).map((k) => k.label);
 
   return NextResponse.json({
     ok: true,

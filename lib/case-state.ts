@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export type CaseKind = "appraisal" | "tenancy-link" | "access" | "listing-step";
+export type CaseKind = "appraisal" | "tenancy-link" | "access" | "listing-step" | "required-docs";
 
 export type CaseStatus = "loading" | "ready" | "saving" | "saved" | "offline" | "error";
 

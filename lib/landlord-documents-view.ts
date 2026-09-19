@@ -1,5 +1,5 @@
 import { DOC_KINDS, landlordProperties, type DocKind, type LandlordAccount } from "@/lib/landlord-account";
-import { loadLandlordHome, REQUIRED_DOCS } from "@/lib/landlord-home-view";
+import { loadLandlordHome, requiredDocsFor } from "@/lib/landlord-home-view";
 import { DECK_KINDS } from "@/lib/present";
 
 /**
@@ -59,8 +59,9 @@ export async function loadLandlordDocuments(me: LandlordAccount): Promise<DocsVi
 
   /* What the let still needs. Only asked while there is a let being set up:
      a landlord whose properties are all managed has nothing to send. */
+  const need = j ? await requiredDocsFor(j.appraisal.id) : [];
   const needed: DocRow[] = j
-    ? REQUIRED_DOCS.filter((r) => !mine.some((d) => d.kind === r.kind) && !(r.kind === "epc" && epcOnRegister)).map((r) => ({
+    ? need.filter((r) => !mine.some((d) => d.kind === r.kind) && !(r.kind === "epc" && epcOnRegister)).map((r) => ({
         title: r.title,
         sub: r.missing,
         state: "missing" as const,
@@ -68,7 +69,7 @@ export async function loadLandlordDocuments(me: LandlordAccount): Promise<DocsVi
         kind: r.kind,
       }))
     : [];
-  const total = j ? REQUIRED_DOCS.length : 0;
+  const total = need.length;
 
   const sent: DocRow[] = [
     ...mine.map((d) => ({

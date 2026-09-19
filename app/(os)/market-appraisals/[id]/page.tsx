@@ -1,5 +1,6 @@
 "use client";
 
+import RequiredDocs from "@/components/appraisal/RequiredDocs";
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -530,6 +531,9 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
           </span>
         </p>
       </section>
+
+      {/* What the landlord will be asked for, beyond the five (Susan, 19 Sep 2026). */}
+      <RequiredDocs appraisalId={ma.id} />
 
       {wizard && <TakeOnWizard ma={ma} onClose={() => setWizard(false)} onSaved={reload} />}
 

@@ -1,4 +1,5 @@
 import LandlordDashboard from "@/components/landlord/Dashboard";
+import { requiredDocsFor } from "@/lib/landlord-home-view";
 import LandlordDocuments from "@/components/LandlordDocuments";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { Pill } from "@/components/Wire";
@@ -31,6 +32,9 @@ export default async function LandlordHome({ searchParams }: { searchParams: Pro
     );
   }
 
+  /* What this let needs: the five and the agent's extras for the property. */
+  const needKinds = open[0] ? (await requiredDocsFor(open[0].appraisal.id)).map((r) => r.kind as string) : [];
+
   return (
     <LandlordDashboard
       view={view}
@@ -38,7 +42,8 @@ export default async function LandlordHome({ searchParams }: { searchParams: Pro
         open[0] ? (
           <LandlordDocuments
             appraisalId={open[0].appraisal.id}
-            wanted={(["id", "ownership", "gas", "eicr", "epc"] as const).filter((k) => !docs.some((d) => d.kind === k))}
+            wanted={needKinds.filter((k) => !docs.some((d) => d.kind === k))}
+            asked={needKinds}
           />
         ) : undefined
       }

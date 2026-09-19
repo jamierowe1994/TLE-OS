@@ -7,6 +7,7 @@ import {
   landlordOffers,
   landlordProgress,
   landlordProperties,
+  extraDocsFor,
   offerOf,
   testProgress,
   type AppraisalJourney,
@@ -23,6 +24,7 @@ import { STAGES, stepsForStage, type LandlordView, type Stage, type ViewOffer } 
 import { readAnswers } from "@/lib/property-answers-store";
 import { progress as answerProgress } from "@/lib/property-questions";
 import type { ManagedProperty } from "@/lib/portfolio-types";
+import { EXTRA_DOC_KINDS } from "@/lib/landlord-doc-kinds";
 import { testDealForAppraisal, testListingForAppraisal, testOffersForAppraisal, testViewingsForListing } from "@/lib/test-overlay";
 
 /**
@@ -237,7 +239,7 @@ function stageOf(j: AppraisalJourney, offers: ViewOffer[] = []): Stage {
   return "valuation";
 }
 
-/** The documents a let needs, in the order we ask for them. */
+/** The documents EVERY let needs, in the order we ask for them. */
 export const REQUIRED_DOCS: Array<{ kind: LandlordDocument["kind"]; title: string; missing: string }> = [
   { kind: "id", title: "Photo ID", missing: "Missing" },
   { kind: "ownership", title: "Proof of ownership", missing: "Missing  •  a title register or mortgage statement" },
@@ -245,6 +247,19 @@ export const REQUIRED_DOCS: Array<{ kind: LandlordDocument["kind"]; title: strin
   { kind: "eicr", title: "Electrical safety report (EICR)", missing: "Missing" },
   { kind: "epc", title: "Energy Performance Certificate (EPC)", missing: "Missing" },
 ];
+
+/**
+ * What THIS let needs: the five, then whatever the agent ticked for the
+ * property on the appraisal - an HMO licence, a fire risk assessment, a
+ * Scottish registration (Susan, 19 Sep 2026; lib/landlord-doc-kinds).
+ */
+export async function requiredDocsFor(appraisalId: string | null | undefined): Promise<typeof REQUIRED_DOCS> {
+  const extra: string[] = await extraDocsFor(appraisalId).catch(() => []);
+  return [
+    ...REQUIRED_DOCS,
+    ...EXTRA_DOC_KINDS.filter((k) => extra.includes(k.id)).map((k) => ({ kind: k.id as LandlordDocument["kind"], title: k.label, missing: `Missing  •  ${k.hint}` })),
+  ];
+}
 
 async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordDocument[], msgs: LandlordMessage[], offers: ViewOffer[] = [], landlordId: string | null = null): Promise<LandlordView> {
   const a = j.appraisal;
@@ -254,7 +269,7 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
      one, which is what we sent them - not whichever deck is newest. */
   const shown = post ?? latest;
   /* Their EPC on the public register, if there is a current one. */
-  const registerEpc = await epcForAddress(a.address, a.postcode ?? "").catch(() => null);
+  const [registerEpc, needDocs] = await Promise.all([epcForAddress(a.address, a.postcode ?? "").catch(() => null), requiredDocsFor(a.id)]);
   /* The photographs: what they have offered, and what has been booked. */
   const [photoTimes, takeOn] = await Promise.all([takeOnTimes(a.id).catch(() => null), takeOnBooking(a.id).catch(() => null)]);
   const readIt = shown && landlordId ? await deckReadBy(landlordId, shown.token) : false;
@@ -309,7 +324,7 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
       state: signed ? "uploaded" : "pending",
       href: signed ? `/api/landlord/signed/${j.signed[0].submitterId}` : null,
     },
-    ...REQUIRED_DOCS.map((r) => {
+    ...needDocs.map((r) => {
       const u = uploaded(r.kind);
       if (u) return { title: r.title, sub: `Uploaded  •  ${day(u.uploadedAt) ?? ""}`, state: "uploaded" as const, href: `/api/landlord/documents/${u.id}` };
       /* The national register counts. A current certificate is public and we
@@ -327,7 +342,7 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
     }),
     ...mine.filter((d) => d.kind === "other").map((d) => ({ title: d.name, sub: `Uploaded  •  ${day(d.uploadedAt) ?? ""}`, state: "uploaded" as const, href: `/api/landlord/documents/${d.id}` })),
   ];
-  const required = documents.filter((d) => REQUIRED_DOCS.some((r) => r.title === d.title));
+  const required = documents.filter((d) => needDocs.some((r) => r.title === d.title));
   const have = required.filter((d) => d.state === "uploaded").length;
   const allIn = have === required.length;
   /* Enough to book the photographs: everything in, or at the very least an
@@ -337,7 +352,7 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
   const readiness = Math.round(((at + have / required.length) / STAGES.length) * 100);
 
   const activity: LandlordView["activity"] = [
-    ...mine.map((d) => ({ title: `${REQUIRED_DOCS.find((r) => r.kind === d.kind)?.title ?? d.name} received`, sub: "Filed on your property", date: day(d.uploadedAt) ?? "", icon: "upload" })),
+    ...mine.map((d) => ({ title: `${needDocs.find((r) => r.kind === d.kind)?.title ?? d.name} received`, sub: "Filed on your property", date: day(d.uploadedAt) ?? "", icon: "upload" })),
     ...msgs.filter((m) => m.direction === "landlord").slice(-2).map((m) => ({ title: "Message sent", sub: m.body.length > 60 ? `${m.body.slice(0, 60)}…` : m.body, date: day(m.sentAt) ?? "", icon: "message" })),
     ...j.signed.map((s) => ({ title: "Terms signed", sub: s.name, date: day(s.signedAt) ?? "", icon: "pencil" })),
     ...j.decks.map((d) => ({

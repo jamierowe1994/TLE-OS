@@ -1,4 +1,5 @@
 import "server-only";
+import { EXTRA_DOC_KINDS, REQUIRED_DOCS_CASE, isExtraDocKind, type ExtraDocKind, type RequiredDocsCase } from "@/lib/landlord-doc-kinds";
 import { cookies } from "next/headers";
 import { hasDb, q } from "@/lib/db";
 import { LANDLORD_COOKIE, uid, verifyPortalToken } from "@/lib/auth";
@@ -641,21 +642,46 @@ export async function landlordOwnsAppraisal(a: LandlordAccount, appraisalId: str
 
 /* ----------------------------------------------------------- documents -- */
 
-export type DocKind = "id" | "ownership" | "gas" | "eicr" | "epc" | "other";
+type BaseDocKind = "id" | "ownership" | "gas" | "eicr" | "epc";
+export type DocKind = BaseDocKind | ExtraDocKind | "other";
 
-export const DOC_KINDS: Array<{ id: DocKind; label: string }> = [
+const BASE_DOC_KINDS: Array<{ id: BaseDocKind; label: string }> = [
   { id: "id", label: "Photo ID" },
   { id: "ownership", label: "Proof of ownership" },
   { id: "gas", label: "Gas safety certificate (CP12)" },
   { id: "eicr", label: "Electrical safety report (EICR)" },
   { id: "epc", label: "Energy Performance Certificate (EPC)" },
+];
+
+/** Every kind a landlord can send: the five, the extras an agent can ask
+ *  for (lib/landlord-doc-kinds), and "other". */
+export const DOC_KINDS: Array<{ id: DocKind; label: string }> = [
+  ...BASE_DOC_KINDS,
+  ...EXTRA_DOC_KINDS.map((k) => ({ id: k.id, label: k.label })),
   { id: "other", label: "Something else" },
 ];
 
 export const isDocKind = (v: string): v is DocKind => DOC_KINDS.some((k) => k.id === v);
 
-/** The ones a let actually needs, in the order we ask for them. */
-export const REQUIRED_DOC_KINDS = DOC_KINDS.filter((k) => k.id !== "other");
+/** The ones EVERY let needs, in the order we ask for them. */
+export const REQUIRED_DOC_KINDS = BASE_DOC_KINDS;
+
+/** The extras the agent ticked for this appraisal's property. */
+export async function extraDocsFor(appraisalId: string | null | undefined): Promise<ExtraDocKind[]> {
+  if (!appraisalId || !hasDb()) return [];
+  const rows = await q<{ payload: Partial<RequiredDocsCase> | null }>(
+    `SELECT payload FROM os_case_state WHERE kind = $1 AND record_id = $2`,
+    [REQUIRED_DOCS_CASE, appraisalId]
+  ).catch(() => []);
+  const extra = rows[0]?.payload?.extra;
+  return Array.isArray(extra) ? extra.filter(isExtraDocKind) : [];
+}
+
+/** What this appraisal's let needs: the five, then the agent's extras. */
+export async function requiredDocKindsFor(appraisalId: string | null | undefined): Promise<Array<{ id: DocKind; label: string }>> {
+  const extra = await extraDocsFor(appraisalId);
+  return [...BASE_DOC_KINDS, ...EXTRA_DOC_KINDS.filter((k) => extra.includes(k.id)).map((k) => ({ id: k.id, label: k.label }))];
+}
 
 export interface LandlordDocument {
   id: string;

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { getAppraisal } from "@/lib/appraisal-store";
-import { landlordAccountByEmail, landlordByEmail, landlordDocuments, REQUIRED_DOC_KINDS, upsertLandlordAccount } from "@/lib/landlord-account";
+import { landlordAccountByEmail, landlordByEmail, landlordDocuments, requiredDocKindsFor, upsertLandlordAccount } from "@/lib/landlord-account";
 import { epcForAddress } from "@/lib/epc";
 import { startVerification } from "@/lib/verification";
 import { renderTleEmail } from "@/lib/email/tle-emails";
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const account = await landlordAccountByEmail(to);
   const docs = account ? await landlordDocuments(account.id).catch(() => []) : [];
   const epc = await epcForAddress(ma.address, ma.postcode ?? "").catch(() => null);
-  const missing = REQUIRED_DOC_KINDS.filter((k) => !docs.some((d) => d.kind === k.id) && !(k.id === "epc" && epc)).map((k) => k.label.toLowerCase());
+  const missing = (await requiredDocKindsFor(ma.id)).filter((k) => !docs.some((d) => d.kind === k.id) && !(k.id === "epc" && epc)).map((k) => k.label.toLowerCase());
   if (!missing.length) return NextResponse.json({ ok: false, error: `${ma.landlord} has already sent everything.` }, { status: 409 });
 
   try {

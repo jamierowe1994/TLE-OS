@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
+import { EXTRA_DOC_KINDS } from "@/lib/landlord-doc-kinds";
 
 /**
  * Documents up, recorded.
@@ -14,26 +15,31 @@ import DoodleIcon from "@/components/DoodleIcon";
  * has no account behind it, so there the button explains rather than sends.
  */
 
-const KINDS: Array<{ id: string; label: string }> = [
+const BASE: Array<{ id: string; label: string }> = [
   { id: "id", label: "Photo ID" },
   { id: "ownership", label: "Proof of ownership" },
   { id: "gas", label: "Gas safety certificate (CP12)" },
   { id: "eicr", label: "Electrical safety report (EICR)" },
   { id: "epc", label: "Energy Performance Certificate (EPC)" },
-  { id: "other", label: "Something else" },
 ];
+const OTHER = { id: "other", label: "Something else" };
 
 export default function LandlordDocuments({
   appraisalId,
   sample = false,
   wanted = [],
+  asked = [],
 }: {
   appraisalId?: string | null;
   /** The Raj page: nothing behind it to file to. */
   sample?: boolean;
   /** Kinds still missing, so the picker starts on the first of them. */
   wanted?: string[];
+  /** Everything this let asks for, so the agent's extras (an HMO licence,
+   *  a fire risk assessment) are in the picker too. */
+  asked?: string[];
 }) {
+  const KINDS = [...BASE, ...EXTRA_DOC_KINDS.filter((k) => asked.includes(k.id)).map((k) => ({ id: k.id as string, label: k.label })), OTHER];
   const router = useRouter();
   const [kind, setKind] = useState<string>(wanted[0] && KINDS.some((k) => k.id === wanted[0]) ? wanted[0] : "id");
   const [busy, setBusy] = useState(false);
