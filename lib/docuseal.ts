@@ -490,6 +490,11 @@ export interface TermsParty {
   completedAt: string | null;
 }
 
+/** Submitters newest first, by DocuSeal's id - never by the order they arrive in. */
+function newestFirst<T extends { id?: number }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => Number(b.id ?? 0) - Number(a.id ?? 0));
+}
+
 /**
  * Both sides of one appraisal's contract, read from DocuSeal rather than
  * remembered here.
@@ -519,7 +524,12 @@ export async function termsParties(externalId: string): Promise<TermsParty[]> {
     }>;
   }>(`/submitters?external_id=${encodeURIComponent(externalId)}&limit=20`).catch(() => null);
 
-  const rows = [...(raw?.data ?? [])].reverse();
+  /* Newest first BY ID. DocuSeal already lists newest first; this read
+     reversed it believing the opposite, so every file read its OLDEST
+     contract - a test file reset and signed again six times still showed the
+     17 Sep one (James, 19 Sep 2026). Sorting says what we mean whatever
+     order they send. */
+  const rows = newestFirst(raw?.data ?? []);
   const base = signingBase(baseUrl() ?? "");
   const pick = (role: "agent" | "landlord"): TermsParty | null => {
     const r = rows.find((x) => (x.role ?? "").toLowerCase() === role && x.slug);
@@ -590,8 +600,8 @@ export async function findLandlordSigning(externalId: string): Promise<SigningSe
   ).catch(() => null);
   const rows = raw?.data ?? [];
   /* Newest first, so a contract re-sent after a correction wins over the one
-     it replaced. DocuSeal returns them in creation order. */
-  const landlord = [...rows].reverse().find((r) => (r.role ?? "").toLowerCase() === "landlord" && r.slug);
+     it replaced. */
+  const landlord = newestFirst(rows).find((r) => (r.role ?? "").toLowerCase() === "landlord" && r.slug);
   if (!landlord?.slug) return null;
   const base = signingBase(baseUrl() ?? "");
   return {
