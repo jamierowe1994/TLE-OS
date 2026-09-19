@@ -90,6 +90,33 @@ export async function ledgerBoard(rexUserId: string | null, limit = 500): Promis
   return rows.map((r) => r.payload);
 }
 
+/**
+ * Every lead on file matching what was typed, not just the newest 500 the
+ * board loads (Susan, 19 Sep 2026: "if a lead is missing, you don't want to
+ * have to click through every single person to find it"). Name, email,
+ * address, the agent it is for, and the phone by its digits alone. Lettings
+ * only, one agent's or the business's, newest first.
+ */
+export async function searchLedger(rexUserId: string | null, needle: string, limit = 60): Promise<Lead[]> {
+  const text = needle.trim();
+  if (!hasDb() || text.length < 3) return [];
+  const like = `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const digits = text.replace(/\D/g, "");
+  const params: unknown[] = [like, digits.length >= 5 ? `%${digits}%` : null, limit];
+  if (rexUserId) params.push(rexUserId);
+  const rows = await q<{ payload: Lead }>(
+    `SELECT payload FROM os_leads
+      WHERE ${NOT_SALES}
+        ${rexUserId ? "AND assignee_id = $4" : ""}
+        AND (name ILIKE $1 OR email ILIKE $1 OR address ILIKE $1 OR agent ILIKE $1
+             OR payload->>'area' ILIKE $1
+             OR ($2::text IS NOT NULL AND regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') LIKE $2))
+      ORDER BY received_at DESC NULLS LAST LIMIT $3`,
+    params
+  ).catch(() => []);
+  return rows.map((r) => r.payload);
+}
+
 export async function ledgerStats(): Promise<LedgerStats> {
   if (!hasDb()) return { onFile: 0, since: null };
   const rows = await q<{ n: string; since: Date | null }>(`SELECT COUNT(*)::text AS n, MIN(first_seen) AS since FROM os_leads`).catch(() => []);

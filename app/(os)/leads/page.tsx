@@ -252,6 +252,30 @@ export default function Leads() {
     return () => { gone = true; };
   }, [openId]);
 
+  /* ── Beyond the newest 500 ──────────────────────────────────────────────
+     The board loads the newest 500 leads; the file holds thousands. Three
+     letters typed and the whole file is searched too (Susan, 19 Sep 2026: a
+     missing lead should be findable without clicking through every agent),
+     and whatever it finds joins the list below. */
+  const [found, setFound] = useState<Lead[]>([]);
+  useEffect(() => {
+    const needle = q.trim();
+    if (needle.length < 3) return setFound([]);
+    let gone = false;
+    const t = window.setTimeout(() => {
+      fetch(`/api/leads/search?q=${encodeURIComponent(needle)}`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j: { ok?: boolean; leads?: Lead[] } | null) => {
+          if (!gone && j?.ok && Array.isArray(j.leads)) setFound(j.leads);
+        })
+        .catch(() => {});
+    }, 300);
+    return () => {
+      gone = true;
+      window.clearTimeout(t);
+    };
+  }, [q]);
+
   const ALL = useMemo(() => {
     /* The people added here arrive TWICE - once from /api/contacts, and again
        from the lead book, which folds them in server-side (16 Sep 2026: React
@@ -259,18 +283,19 @@ export default function Leads() {
        twice). The book's copy wins: it carries the spine and the enquiry. */
     const seen = new Set<string>();
     const out: Lead[] = [];
-    for (const l of [...source.leads, ...ours]) {
+    for (const l of [...source.leads, ...ours, ...found]) {
       if (seen.has(l.id) || removed.has(l.id) || hiddenIds.includes(l.id)) continue;
       seen.add(l.id);
       const label = spines[l.id]?.label;
       out.push(label ? { ...l, spineLabel: label } : l);
     }
     return out;
-  }, [ours, source.leads, spines, removed, hiddenIds]);
+  }, [ours, source.leads, found, spines, removed, hiddenIds]);
 
   // The dropdowns offer what the book actually contains — no imagined values.
   const sources = useMemo(() => [...new Set(ALL.map((l) => l.source))].sort(), [ALL]);
   const agents = useMemo(() => [...new Set(ALL.map((l) => l.agent))].sort(), [ALL]);
+  const manyAgents = agents.filter((a) => a && a !== "Unassigned").length > 1;
   const stages = useMemo(() => [...new Set(ALL.map((l) => l.spineLabel ?? l.stage))], [ALL]);
 
   // Tenant-side and landlord-side are different jobs with different questions,
@@ -289,7 +314,7 @@ export default function Leads() {
          system". Punctuation is stripped from both sides so 07876 703066 finds
          07876703066. */
       if (needle) {
-        const hay = `${l.name} ${l.email} ${l.area} ${l.preferred} ${l.phone} ${l.address ?? ""}`.toLowerCase();
+        const hay = `${l.name} ${l.email} ${l.area} ${l.preferred} ${l.phone} ${l.address ?? ""} ${l.agent}`.toLowerCase();
         const digits = needle.replace(/\D/g, "");
         const phoneHit = digits.length >= 5 && l.phone.replace(/\D/g, "").includes(digits);
         if (!hay.includes(needle) && !phoneHit) return false;
@@ -319,12 +344,20 @@ export default function Leads() {
     setPage(Math.floor(book.indexOf(next) / perPage));
   }
 
-  // Defined once — a fresh array each render would restart the prefs effect.
+  // Defined once (per board shape) — a fresh array each render would restart the prefs effect.
   const defs = useMemo<ColumnDef<Lead>[]>(
     () => [
       {
         key: "name", label: "Lead", required: true,
-        render: (l) => <span className="hand whitespace-nowrap text-[13px]">{l.name}</span>,
+        /* Who it is for, under the name, when the board is more than one
+           agent's - the owner's view (Susan, 19 Sep 2026). Here rather than
+           only in the Agent column, which is off unless switched on. */
+        render: (l) => (
+          <span className="block whitespace-nowrap">
+            <span className="hand text-[13px]">{l.name}</span>
+            {manyAgents && <span className="block text-[10.5px] text-muted">{l.agent && l.agent !== "Unassigned" ? `For ${l.agent}` : "Not assigned"}</span>}
+          </span>
+        ),
       },
       {
         key: "email", label: "Email",
@@ -353,7 +386,7 @@ export default function Leads() {
           ),
       },
     ],
-    []
+    [manyAgents]
   );
   const cols = useColumns<Lead>("leads", defs);
 
@@ -374,7 +407,7 @@ export default function Leads() {
       if (aside) bits.push(`${aside.toLocaleString("en-GB")} set aside as sales or unclear`);
       if (source.setAside.blank) bits.push(`${source.setAside.blank.toLocaleString("en-GB")} with no details at all`);
     }
-    if (source.onFile) bits.push(`${source.onFile.toLocaleString("en-GB")} kept on file in the OS`);
+    if (source.onFile) bits.push(`${source.onFile.toLocaleString("en-GB")} kept on file in the OS - the search at the top looks through all of them`);
     return bits.length ? `${bits.join(". ")}.` : null;
   }, [source]);
 
@@ -437,7 +470,7 @@ export default function Leads() {
            page (James, 6 Sep 2026). */
         searchValue={q}
         onSearch={setQ}
-        searchPlaceholder="Search leads…"
+        searchPlaceholder="Search every lead - name, phone, address or agent…"
         actions={
           <div className="flex flex-wrap items-center gap-2.5">
             {/* The shape switch sits BEFORE the button that makes a lead, and
