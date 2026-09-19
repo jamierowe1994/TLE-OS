@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { scopeFor } from "@/lib/scope";
 import { rexCall, rexConfigured } from "@/lib/rex";
+import { RULES } from "@/lib/staleness";
 
 /**
  * The numbers on an agent's own dashboard.
@@ -42,6 +43,8 @@ export const runtime = "nodejs";
 
 type Crit = Array<{ name: string; type?: string; value: string }>;
 
+const held = new Map<string, { at: number; figures: Record<string, number | null> }>();
+
 async function count(service: string, criteria: Crit): Promise<number | null> {
   try {
     const res = await rexCall(service, "search", { criteria, limit: 1 });
@@ -73,6 +76,19 @@ export async function GET(req: NextRequest) {
      array is how "no filter" is expressed, so the same code serves both. */
   const mine = (field: string): Crit => (me ? [{ name: field, type: "=", value: me }] : []);
 
+  /* Held for the figures rule's fifteen minutes (19 Sep 2026). These are five
+     all-time counts - 90,791 leads does not move inside a quarter of an hour -
+     and they were being asked of REX, five calls a time, on every dashboard
+     load by everybody. The answer carries `pulledAt`, so a held figure is
+     drawn with the time it was read, which is what the rule asks for. Only a
+     COMPLETE answer is held: a null is a call that failed, and that is asked
+     again next time. */
+  const key = me ?? "all";
+  const hit = held.get(key);
+  if (hit && Date.now() - hit.at < RULES.figures.freshMs) {
+    return NextResponse.json({ ok: true, scope: scope.label, everything: scope.everything, figures: hit.figures, pulledAt: new Date(hit.at).toISOString() });
+  }
+
   const [onMarket, managed, leads, appraisals, applications] = await Promise.all([
     count("Listings", [
       ...mine("listing_agent_1_id"),
@@ -89,11 +105,14 @@ export async function GET(req: NextRequest) {
     count("TenancyApplications", mine("application.agent_id")),
   ]);
 
+  const figures = { onMarket, managed, leads, appraisals, applications };
+  if (Object.values(figures).every((v) => v != null)) held.set(key, { at: Date.now(), figures });
+
   return NextResponse.json({
     ok: true,
     scope: scope.label,
     everything: scope.everything,
-    figures: { onMarket, managed, leads, appraisals, applications },
+    figures,
     pulledAt: new Date().toISOString(),
   });
 }

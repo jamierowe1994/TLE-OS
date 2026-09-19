@@ -357,6 +357,41 @@ body {
 }
 .reveal-rise { animation: reveal-rise 0.54s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
+/* A tile whose figures are late: the tile's own surface laid over its contents,
+   with three quiet bars on it, fading away when the real thing lands. It takes
+   the tile's background so it works on the white, the pink and the sage alike,
+   and in the dark. See components/Reveal. */
+.reveal-ghost {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  padding: 1.25rem;
+  border-radius: inherit;
+  background: inherit;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+.reveal-ghost-out { opacity: 0; }
+.reveal-bar {
+  display: block;
+  border-radius: 999px;
+  /* Neutral greys, so the bars read on white, pink, sage and charcoal alike. */
+  background: linear-gradient(90deg, rgba(128, 120, 116, 0.12) 25%, rgba(128, 120, 116, 0.24) 37%, rgba(128, 120, 116, 0.12) 63%);
+  background-size: 400% 100%;
+  animation: reveal-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes reveal-shimmer {
+  from { background-position: 100% 50%; }
+  to   { background-position: 0 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal-bar { animation: none; }
+  .reveal-ghost { transition: none; }
+}
+
 /* The welcome. The drawing arrives first and settles; the words follow a beat
    later, so it reads as one gesture rather than two things appearing at once.
    Slower and further than fade-up — this is the one moment in the app that is

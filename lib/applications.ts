@@ -425,20 +425,34 @@ export async function getApplications(limit = 100, rexUserId?: string | null): P
     }
   }
 
+  /* The pages SIDE BY SIDE (19 Sep 2026). They were asked for one after the
+     other - three REX calls end to end for the 300 the dashboard wants, which
+     is most of what a cold load cost. The offsets are known before anything
+     is asked, so nothing is gained by waiting; a page past the end comes back
+     empty and costs nothing. Same order, same refusal if any page is refused. */
+  const offsets: number[] = [];
+  for (let offset = 0; offset < limit; offset += 100) offsets.push(offset);
+  const pages = await Promise.all(
+    offsets.map(async (offset) => {
+      const res = await rexCall("TenancyApplications", "search", {
+        ...(rexUserId ? { criteria: [{ name: "application.agent_id", type: "=", value: rexUserId }] } : {}),
+        limit: Math.min(100, limit - offset),
+        offset,
+        order_by: { system_ctime: "desc" },
+      });
+      if (!res.ok) throw new Error(res.error ?? "REX wouldn't answer.");
+      return rexRows(res.result);
+    })
+  );
+  /* An application landing mid-read pushes one row onto the next page. Once each. */
+  const seen = new Set<string>();
   const out: Application[] = [];
-  for (let offset = 0; out.length < limit; offset += 100) {
-    const page = Math.min(100, limit - out.length);
-    const res = await rexCall("TenancyApplications", "search", {
-      ...(rexUserId ? { criteria: [{ name: "application.agent_id", type: "=", value: rexUserId }] } : {}),
-      limit: page,
-      offset,
-      order_by: { system_ctime: "desc" },
-    });
-    if (!res.ok) throw new Error(res.error ?? "REX wouldn't answer.");
-    const rows = rexRows(res.result);
-    if (!rows.length) break;
-    out.push(...rows.map(shapeApplication));
-    if (rows.length < page) break;
+  for (const rows of pages) {
+    for (const a of rows.map(shapeApplication)) {
+      if (seen.has(a.id)) continue;
+      seen.add(a.id);
+      out.push(a);
+    }
   }
   appsCache.set(key, { at: Date.now(), apps: out });
   return out;
@@ -667,21 +681,56 @@ export async function createApplication(a: NewApplication, actorToken: string | 
  * withdrawn ones. If REX will not answer, the listing checks are skipped and
  * only "Moved in" applies - a board that over-counts is better than none.
  */
+/* Which listings are let or withdrawn, remembered for a minute and asked for
+   side by side (19 Sep 2026). This ran on EVERY load of the board and of the
+   dashboard tile, one REX call after another - six to eight seconds each time,
+   with the applications themselves already held. Whether a home has been let
+   does not change inside a minute, which is the rule the applications keep. */
+const LISTING_STATE_TTL_MS = 60_000;
+const listingStateCache = new Map<number, { at: number; state: string | null }>();
+
+async function listingStates(ids: number[]): Promise<Map<number, string>> {
+  const now = Date.now();
+  const out = new Map<number, string>();
+  const ask: number[] = [];
+  for (const id of ids) {
+    const hit = listingStateCache.get(id);
+    if (hit && now - hit.at < LISTING_STATE_TTL_MS) {
+      if (hit.state) out.set(id, hit.state);
+    } else ask.push(id);
+  }
+  const chunks: number[][] = [];
+  for (let i = 0; i < ask.length; i += 100) chunks.push(ask.slice(i, i + 100));
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      const res = await rexCall("Listings", "search", {
+        criteria: [
+          { name: "id", type: "in", value: chunk },
+          { name: "system_listing_state", type: "in", value: ["leased", "withdrawn"] },
+        ],
+        limit: 100,
+      }).catch(() => null);
+      /* Not answered is not remembered: the next load asks again. */
+      if (!res?.ok) return;
+      const found = new Map<number, string>();
+      for (const r of rexRows(res.result)) found.set(Number(r.id), String(r.system_listing_state));
+      for (const id of chunk) {
+        const st = found.get(id) ?? null;
+        listingStateCache.set(id, { at: now, state: st });
+        if (st) out.set(id, st);
+      }
+    })
+  );
+  if (listingStateCache.size > 5_000) {
+    for (const [k, v] of listingStateCache) if (now - v.at >= LISTING_STATE_TTL_MS) listingStateCache.delete(k);
+  }
+  return out;
+}
+
 export async function closedReasons(apps: Application[]): Promise<Map<string, string>> {
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
   const ids = [...new Set(apps.map((a) => a.listingId).filter((x): x is number => x != null))];
-  const state = new Map<number, string>();
-  for (let i = 0; i < ids.length; i += 100) {
-    const res = await rexCall("Listings", "search", {
-      criteria: [
-        { name: "id", type: "in", value: ids.slice(i, i + 100) },
-        { name: "system_listing_state", type: "in", value: ["leased", "withdrawn"] },
-      ],
-      limit: 100,
-    }).catch(() => null);
-    if (!res?.ok) break;
-    for (const r of rexRows(res.result)) state.set(Number(r.id), String(r.system_listing_state));
-  }
+  const state = await listingStates(ids);
 
   const out = new Map<string, string>();
   for (const a of apps) {

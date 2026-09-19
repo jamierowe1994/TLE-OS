@@ -1,3 +1,4 @@
+import { warmDiary } from "@/lib/diary-cache";
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { requireCapability } from "@/lib/admin";
@@ -29,7 +30,12 @@ function cronAuthorised(req: NextRequest): boolean {
 export async function POST(req: NextRequest) {
   const owner = await requireCapability(req, "see:everything");
   if (!owner && !cronAuthorised(req)) return NextResponse.json({ ok: false, error: "Not authorised." }, { status: 401 });
+  /* The diary is kept warm from here (19 Sep 2026): this is the timer that
+     already runs every five minutes, and a cold diary is the half-minute hole
+     in the first dashboard of the morning. Started first so it runs beside the
+     reminders rather than after them; it never throws. */
+  const diaryWarm = warmDiary();
   const run = await runReminders();
   const works = await worksSweep().catch((e) => ({ doneRequests: 0, failed: e instanceof Error ? e.message : "failed" }));
-  return NextResponse.json({ ...run, works }, { status: run.ok ? 200 : 503 });
+  return NextResponse.json({ ...run, works, diary: await diaryWarm }, { status: run.ok ? 200 : 503 });
 }

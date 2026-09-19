@@ -1,4 +1,5 @@
 import { londonDayOffset, londonHHMM } from "@/lib/london-time";
+import { FRESH_MS, STALE_MS, heldDiary, refreshDiaryBook } from "@/lib/diary-cache";
 import { NextRequest, NextResponse } from "next/server";
 import { fetchDiary, type DiaryBook } from "@/lib/rex-diary";
 import { hasDb, q } from "@/lib/db";
@@ -17,40 +18,6 @@ import { osFeedbackFor } from "@/lib/viewing-feedback-store";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-/* v2, 18 Sep 2026: a held book carries times already worked out, and v1's were
-   worked out on the UTC clock - an hour early. A new key drops them at deploy. */
-const CACHE_KEY = "diary:v2";
-const FRESH_MS = 2 * 60 * 1000;
-const STALE_MS = 60 * 60 * 1000;
-
-interface Cached { book: DiaryBook; at: number }
-
-let memory: Cached | null = null;
-let refreshing: Promise<Cached> | null = null;
-
-async function readStored(): Promise<Cached | null> {
-  if (!hasDb()) return null;
-  try {
-    const rows = await q<{ payload: { book: DiaryBook }; computed_at: Date }>(
-      "SELECT payload, computed_at FROM os_cache WHERE key = $1",
-      [CACHE_KEY]
-    );
-    if (!rows[0]) return null;
-    return { book: rows[0].payload.book, at: new Date(rows[0].computed_at).getTime() };
-  } catch { return null; }
-}
-
-async function store(entry: Cached): Promise<void> {
-  if (!hasDb()) return;
-  try {
-    await q(
-      `INSERT INTO os_cache (key, payload, computed_at) VALUES ($1, $2, NOW())
-       ON CONFLICT (key) DO UPDATE SET payload = EXCLUDED.payload, computed_at = NOW()`,
-      [CACHE_KEY, JSON.stringify({ book: entry.book })]
-    );
-  } catch { /* slow, not broken */ }
-}
 
 /**
  * Appointments made HERE, folded in beside the REX ones.
@@ -131,20 +98,6 @@ function merged(book: DiaryBook, mine: Appt[]): DiaryBook {
     (a, b) => a.day - b.day || a.start.localeCompare(b.start)
   );
   return { ...book, appts };
-}
-
-function refresh(): Promise<Cached> {
-  if (!refreshing) {
-    refreshing = fetchDiary()
-      .then(async (book) => {
-        const entry = { book, at: Date.now() };
-        memory = entry;
-        await store(entry);
-        return entry;
-      })
-      .finally(() => { refreshing = null; });
-  }
-  return refreshing;
 }
 
 /**
@@ -241,18 +194,18 @@ export async function GET(req: NextRequest) {
      carries `day` as an offset from THAT day, so yesterday's book puts
      yesterday under "Today". Across midnight, or when REX has been down since
      yesterday, it is dropped and the screen gets a read or an honest error. */
-  const found = memory ?? (await readStored());
+  const found = await heldDiary();
   const held = found && londonDayOffset(found.at) === 0 ? found : null;
   const age = held ? Date.now() - held.at : Infinity;
   if (held && age < FRESH_MS) {
     return NextResponse.json({ ok: true, live: true, ...(await withOsFeedback(merged(forScope(held.book, who), mine))), everything: scope.everything, ageMs: age });
   }
   if (held && age < STALE_MS) {
-    void refresh();
+    void refreshDiaryBook();
     return NextResponse.json({ ok: true, live: true, ...(await withOsFeedback(merged(forScope(held.book, who), mine))), everything: scope.everything, ageMs: age, stale: true });
   }
   try {
-    const fresh = await refresh();
+    const fresh = await refreshDiaryBook();
     return NextResponse.json({ ok: true, live: true, ...(await withOsFeedback(merged(forScope(fresh.book, who), mine))), everything: scope.everything, ageMs: 0 });
   } catch (e) {
     if (held) {

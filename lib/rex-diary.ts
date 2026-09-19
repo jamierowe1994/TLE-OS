@@ -231,11 +231,15 @@ export async function fetchDiary(): Promise<DiaryBook> {
     if (rows.length < PAGE_SIZE) break;
   }
 
-  const rows: RexEvent[] = [];
-  for (let page = 0; page < MAX_PAGES; page++) {
+  /* PAGES SIDE BY SIDE (19 Sep 2026). This walked the book one page at a
+     time, each waiting for the last - ten or so REX calls end to end, which is
+     most of the half-minute a cold diary took. Page one says how many there
+     are; the rest go four at a time. Still oldest first, still stopping once a
+     page runs past the window, still refusing a refused page. */
+  const page = async (n: number) => {
     const res = await rexCall("CalendarEvents", "search", {
       limit: PAGE_SIZE,
-      offset: page * PAGE_SIZE,
+      offset: n * PAGE_SIZE,
       criteria: [
         // Only ">=" is supported for dates here — "between" 500s.
         { name: "starts_at", type: ">=", value: iso(from) },
@@ -252,11 +256,30 @@ export async function fetchDiary(): Promise<DiaryBook> {
        it dropped the rest of the book - the FUTURE, since this reads oldest
        first. Thrown, the route serves the last true book or says it failed. */
     if (!res.ok) throw new RexError("CalendarEvents/search", res);
-    const batch = rexRows(res.result) as RexEvent[];
-    rows.push(...batch);
-    if (batch.length < PAGE_SIZE) break;
+    const total = Number((res.result as { total?: number | string } | null)?.total ?? NaN);
+    return { batch: rexRows(res.result) as RexEvent[], total };
+  };
+  const pastWindow = (batch: RexEvent[]) => {
     const last = batch[batch.length - 1]?.starts_at?.time;
-    if (last && new Date(last) > to) break;
+    return Boolean(last && new Date(last) > to);
+  };
+
+  const rows: RexEvent[] = [];
+  const first = await page(0);
+  rows.push(...first.batch);
+  if (first.batch.length === PAGE_SIZE && !pastWindow(first.batch)) {
+    /* No total from REX means we cannot know how far to go, so walk it. */
+    const pages = Number.isFinite(first.total) ? Math.min(MAX_PAGES, Math.ceil(first.total / PAGE_SIZE)) : MAX_PAGES;
+    const ABREAST = Number.isFinite(first.total) ? 4 : 1;
+    walk: for (let n = 1; n < pages; n += ABREAST) {
+      const wave = await Promise.all(
+        Array.from({ length: Math.min(ABREAST, pages - n) }, (_, k) => page(n + k))
+      );
+      for (const w of wave) {
+        rows.push(...w.batch);
+        if (w.batch.length < PAGE_SIZE || pastWindow(w.batch)) break walk;
+      }
+    }
   }
 
   const inWindow = rows.filter((e) => {

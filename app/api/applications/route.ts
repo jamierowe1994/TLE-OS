@@ -26,6 +26,47 @@ import { whoIs } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * The applications with their stage and their closed reason, assembled ONCE a
+ * minute per book (19 Sep 2026). The dashboard tile and the board both ask for
+ * this, often at the same moment; each was running the whole thing itself, and
+ * the let-or-withdrawn lookup alone was six to eight seconds of REX every time.
+ * A minute is the rule applications have always kept (lib/staleness), and two
+ * callers arriving together share one read rather than racing two.
+ */
+type Assembled = { applications: Awaited<ReturnType<typeof getApplications>>; stages: Map<string, string>; closed: Map<string, string> };
+const ASSEMBLED_MS = 60_000;
+const assembledHeld = new Map<string, { at: number; value: Assembled }>();
+const assembling = new Map<string, Promise<Assembled>>();
+
+function assembled(limit: number, rexUserId: string | null): Promise<Assembled> {
+  const key = `${rexUserId ?? "all"}:${limit}`;
+  const hit = assembledHeld.get(key);
+  if (hit && Date.now() - hit.at < ASSEMBLED_MS) return Promise.resolve(hit.value);
+  const running = assembling.get(key);
+  if (running) return running;
+  const p = (async () => {
+    const applications = await getApplications(limit, rexUserId);
+    /* Where each one has actually GOT TO, rather than which of REX's four
+       statuses it is on. One Propoly call for the whole page - see
+       stageLabels(). It never fails the request: a list that says
+       "Accepted" is worse than one that says "Signing & move-in monies",
+       but it is far better than no list. */
+    /* And which of them are really over, though REX still calls them open -
+       moved in, or the home gone to someone else. See closedReasons(). */
+    const [stages, closed] = await Promise.all([
+      stageLabels(applications).catch(() => new Map<string, string>()),
+      closedReasons(applications).catch(() => new Map<string, string>()),
+    ]);
+    /* The tester's own test offers (lib/test-overlay), on top - never anyone else's. */
+    const value = { applications, stages, closed };
+    assembledHeld.set(key, { at: Date.now(), value });
+    return value;
+  })().finally(() => assembling.delete(key));
+  assembling.set(key, p);
+  return p;
+}
+
 export async function GET(req: NextRequest) {
   if (!rexConfigured()) {
     return NextResponse.json({ error: "Applications aren't connected here.", applications: [] }, { status: 503 });
@@ -47,19 +88,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const applications = await getApplications(limit, scope.rexUserId);
-    /* Where each one has actually GOT TO, rather than which of REX's four
-       statuses it is on. One Propoly call for the whole page - see
-       stageLabels(). It never fails the request: a list that says
-       "Accepted" is worse than one that says "Signing & move-in monies",
-       but it is far better than no list. */
-    /* And which of them are really over, though REX still calls them open -
-       moved in, or the home gone to someone else. See closedReasons(). */
-    const [stages, closed] = await Promise.all([
-      stageLabels(applications).catch(() => new Map<string, string>()),
-      closedReasons(applications).catch(() => new Map<string, string>()),
-    ]);
-    /* The tester's own test offers (lib/test-overlay), on top - never anyone else's. */
+    const { applications, stages, closed } = await assembled(limit, scope.rexUserId);
     const { actor } = await whoIs(req).catch(() => ({ actor: null }));
     const tests = (req.nextUrl.searchParams.get("tests") === "0" ? [] : await testApplicationsFor(actor?.email).catch(() => [])).map((a) => ({ ...a, stageLabel: a.stageLabel ?? a.statusLabel, test: true }));
     return NextResponse.json({
@@ -106,6 +135,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await createApplication(body, await rexTokenFor(me.id).catch(() => null));
+    /* One just made must be on the board now, not in a minute. */
+    assembledHeld.clear();
     return NextResponse.json({ ok: true, status: "received", result });
   } catch (e) {
     // RexWriteBlocked lands here carrying its own instructions for lifting it.

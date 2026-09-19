@@ -581,7 +581,13 @@ export function useMyFigures() {
     figuresPromise ??= fetch("/api/my/figures")
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null);
+    const mine = figuresPromise;
     void figuresPromise.then((j) => {
+      /* Shared between the tiles of one visit, then let go - see useShared. */
+      if (figuresPromise === mine) {
+        if (!(j?.figures)) figuresPromise = null;
+        else window.setTimeout(() => { if (figuresPromise === mine) figuresPromise = null; }, 3 * 60 * 1000);
+      }
       if (!alive) return;
       setState({
         figures: j?.figures ?? null,
@@ -595,6 +601,8 @@ export function useMyFigures() {
     };
   }, []);
 
+  /* Holds the tile until this lands, like every other feed - see lib/reveal. */
+  useReportReady(!state.loading);
   return state;
 }
 
@@ -630,7 +638,13 @@ function useManagedBook() {
     bookPromise ??= fetch("/api/portfolio")
       .then((r) => r.json())
       .catch(() => null);
+    const mine = bookPromise;
     void bookPromise.then((j) => {
+      /* Shared between the tiles of one visit, then let go - see useShared. */
+      if (bookPromise === mine) {
+        if (!(j?.ok && j.counts)) bookPromise = null;
+        else window.setTimeout(() => { if (bookPromise === mine) bookPromise = null; }, 3 * 60 * 1000);
+      }
       if (!alive) return;
       if (j?.ok && j.counts && j.properties) {
         setState({ book: { counts: j.counts, properties: j.properties }, loading: false, unlinked: false, error: null });
@@ -643,6 +657,8 @@ function useManagedBook() {
     };
   }, []);
 
+  /* Holds the tile until this lands, like every other feed - see lib/reveal. */
+  useReportReady(!state.loading);
   return state;
 }
 
