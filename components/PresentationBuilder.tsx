@@ -2177,28 +2177,104 @@ export default function PresentationBuilder({
  * The deck at a laptop's proportions, scaled to whatever width the Review
  * step can give it. The renderer lays out at 1280 x 800 and is scaled with a
  * transform, so type, spacing and the slide count are exactly the landlord's;
- * only the size differs. Its own sideways scroller and arrows still work.
+ * only the size differs.
+ *
+ * Its own Back and Next, underneath (James, 19 Sep 2026: the preview was
+ * "getting carved"). The deck's arrows are the landlord's and do not show in
+ * an embedded deck, so the only way through was a sideways scroll. And the
+ * frame grows to the slide on screen: seven slides are taller than 800, and
+ * at a quarter size scrolling inside one to see its foot is nobody's idea of
+ * checking it.
  */
+const PREVIEW_W = 1280;
+const PREVIEW_H = 800;
+
 function DeckPreview({ deck }: { deck: Deck }) {
   const box = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.5);
+  const [at, setAt] = useState(0);
+  const [tall, setTall] = useState(PREVIEW_H);
+  const slides = useMemo(() => slidesFor(deck), [deck]);
+  const scroller = () => box.current?.querySelector<HTMLElement>("[data-index]")?.parentElement ?? null;
+
   useEffect(() => {
     const el = box.current;
     if (!el) return;
-    const fit = () => setScale(el.clientWidth / 1280);
+    const fit = () => setScale(el.clientWidth / PREVIEW_W);
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  /* Which slide is showing, however it got there - these buttons, a swipe,
+     or the deck's own chapter rail. */
+  useEffect(() => {
+    let row: HTMLElement | null = null;
+    let raf = 0;
+    const onScroll = () => {
+      if (!row) return;
+      setAt(Math.round(row.scrollLeft / Math.max(1, row.clientWidth)));
+    };
+    const hook = () => {
+      row = scroller();
+      if (!row) return void (raf = requestAnimationFrame(hook));
+      row.addEventListener("scroll", onScroll, { passive: true });
+    };
+    hook();
+    return () => {
+      cancelAnimationFrame(raf);
+      row?.removeEventListener("scroll", onScroll);
+    };
+  }, [deck]);
+
+  /* The frame to the slide: back to 800 first, then measured, so a short
+     slide after a tall one shrinks the frame again rather than keeping it. */
+  useEffect(() => {
+    setTall(PREVIEW_H);
+    const raf = requestAnimationFrame(() => {
+      const cell = scroller()?.children[at] as HTMLElement | undefined;
+      if (cell) setTall(Math.max(PREVIEW_H, Math.min(cell.scrollHeight, PREVIEW_H * 2.5)));
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [at, deck]);
+
+  const go = (i: number) => {
+    const row = scroller();
+    if (!row) return;
+    const to = Math.max(0, Math.min(slides.length - 1, i));
+    row.scrollTo({ left: to * row.clientWidth, behavior: "smooth" });
+  };
+
   return (
-    <div
-      ref={box}
-      className="relative w-full overflow-hidden rounded-2xl border border-line/70 bg-box shadow-sm"
-      style={{ height: Math.round(800 * scale) }}
-    >
-      <div className="absolute left-0 top-0 h-[800px] w-[1280px] origin-top-left" style={{ transform: `scale(${scale})` }}>
-        <PresentDeck token="preview" deck={deck} slides={slidesFor(deck)} embedded />
+    <div>
+      <div
+        ref={box}
+        className="relative w-full overflow-hidden rounded-2xl border border-line/70 bg-box shadow-sm transition-[height] duration-300"
+        style={{ height: Math.round(tall * scale) }}
+      >
+        <div className="absolute left-0 top-0 w-[1280px] origin-top-left" style={{ height: tall, transform: `scale(${scale})` }}>
+          <PresentDeck token="preview" deck={deck} slides={slides} embedded />
+        </div>
+      </div>
+      <div className="mt-3 flex items-center justify-end gap-2">
+        <span className="mr-1 text-[11.5px] text-muted">
+          Slide {Math.min(at + 1, slides.length)} of {slides.length}
+        </span>
+        {([["Back", -1], ["Next", 1]] as const).map(([label, dir]) => {
+          const can = dir < 0 ? at > 0 : at < slides.length - 1;
+          return (
+            <button
+              key={label}
+              type="button"
+              onClick={() => go(at + dir)}
+              disabled={!can}
+              className="rounded-full border border-line/70 bg-white px-4 py-1.5 text-[12px] font-semibold transition-colors hover:border-ink/40 disabled:opacity-40"
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
