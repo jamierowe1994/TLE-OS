@@ -2,7 +2,8 @@ import "server-only";
 import type { AppraisalTick, MarketAppraisal, MaStage } from "@/lib/market-appraisal";
 import { presentationsFor } from "@/lib/present-store";
 import { signedFor } from "@/lib/signed-documents";
-import { landlordAccountByEmail, landlordDocuments } from "@/lib/landlord-account";
+import { extraDocsFor, landlordAccountByEmail, landlordDocuments } from "@/lib/landlord-account";
+import { EXTRA_DOC_KINDS } from "@/lib/landlord-doc-kinds";
 import { bookFor } from "@/lib/listings-cache";
 import { hasDb, q } from "@/lib/db";
 import { persistStage } from "@/lib/appraisal-store";
@@ -121,7 +122,7 @@ const dayWords = (v: string | null) => (v ? new Date(v).toLocaleDateString("en-G
 
 async function signalsFor(ma: MarketAppraisal, listedIds: Set<string>, now: Date): Promise<Signals> {
   const refs = [...new Set([ma.leadId, ma.id].filter((r): r is string => Boolean(r)))];
-  const [decks, signed, account, sends, esign, certs, answers] = await Promise.all([
+  const [decks, signed, account, sends, esign, certs, answers, extras] = await Promise.all([
     Promise.all(refs.map((r) => presentationsFor(r).catch(() => []))).then((d) => d.flat()),
     signedFor(ma.id).catch(() => []),
     ma.landlordEmail ? landlordAccountByEmail(ma.landlordEmail).catch(() => null) : Promise.resolve(null),
@@ -136,6 +137,7 @@ async function signalsFor(ma: MarketAppraisal, listedIds: Set<string>, now: Date
       : Promise.resolve([]),
     certificatesFor(ma),
     readAnswers(ma.id).catch(() => ({})),
+    extraDocsFor(ma.id).catch((): string[] => []),
   ]);
   const docs = account ? await landlordDocuments(account.id).catch(() => []) : [];
   const kinds = new Set(docs.map((d) => d.kind));
@@ -209,6 +211,11 @@ async function signalsFor(ma: MarketAppraisal, listedIds: Set<string>, now: Date
   tick("aml", "id", "ID on the landlord portal", kinds.has("id"), iso(docs.find((d) => d.kind === "id")?.uploadedAt ?? null));
   tick("aml", "ownership", "Proof of ownership on the portal", kinds.has("ownership"), iso(docs.find((d) => d.kind === "ownership")?.uploadedAt ?? null));
   for (const c of certs) tick("aml", `cert-${c.key}`, `${c.label} on file`, c.held, c.at, c.detail);
+  /* And whatever else the agent asked this property for (Documents This
+     Property Needs, on the appraisal). */
+  for (const k of EXTRA_DOC_KINDS.filter((x) => (extras as string[]).includes(x.id))) {
+    tick("aml", `extra-${k.id}`, `${k.label} on the portal`, kinds.has(k.id), iso(docs.find((d) => d.kind === k.id)?.uploadedAt ?? null));
+  }
 
   /* won */
   tick("won", "listed", "Listed in REX", listed, null);
