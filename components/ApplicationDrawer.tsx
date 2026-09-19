@@ -9,6 +9,7 @@ import { Pill } from "@/components/Wire";
 import { type SpineStop } from "@/components/StageSpine";
 import GuideButton from "@/components/GuideButton";
 import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-events";
+import { WhatsAppButton } from "@/components/WhatsAppQr";
 
 type JourneyAction = { id: string; label: string; detail: string; href: string | null; who: "you" | "kirstie" | "landlord" | "tenant" };
 type Journey = {
@@ -806,6 +807,12 @@ export default function ApplicationDrawer({
                           </a>
                         ) : (
                           <span className="text-muted">No phone</span>
+                        )}
+                        {p.phone && (
+                          <WhatsAppButton phone={p.phone} name={p.name} className="flex items-center gap-1.5 hover:underline">
+                            <DoodleIcon name="message-2" size={12} className="text-accent-dark" />
+                            WhatsApp
+                          </WhatsAppButton>
                         )}
                         {p.email ? (
                           <a href={`mailto:${p.email}`} className="flex min-w-0 items-center gap-1.5 hover:underline">

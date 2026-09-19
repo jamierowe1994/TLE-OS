@@ -45,6 +45,7 @@ import { saveLabel, useCaseState } from "@/lib/case-state";
 import { isStalled, NURTURE_BRANCH, startingStep, trackFor } from "@/lib/journey";
 import rexSample from "@/lib/rex-sample.json";
 import { fetchMe } from "@/lib/me";
+import { WhatsAppButton } from "@/components/WhatsAppQr";
 
 /**
  * The lead record, as a sheet that slides in from the right over a scrim.
@@ -1387,6 +1388,23 @@ export default function LeadDrawer({
   );
   /* On a landlord's contact step the log lives in the Next up card itself. */
   const logInline = (here.action === "log" || (isTenant && (here.id === "enquiry" || here.id === "qualify"))) && !stalled && !nurturing && !sp?.booked;
+  /* WhatsApp beside the mobile: a code to scan at a desk, the link itself on
+     a phone. The OS cannot see the phone, so the sheet asks, and a yes goes
+     on the log like any other attempt. */
+  const whatsAppEl = contact.phone ? (
+    <WhatsAppButton
+      phone={contact.phone}
+      name={lead?.name ?? ""}
+      onSent={async (message) => {
+        const j = await logTouch({ kind: "whatsapp", outcome: "sent", body: message });
+        return j?.ok ? null : ((j as { error?: string } | null)?.error ?? "That didn't save.");
+      }}
+      className="flex shrink-0 items-center gap-1.5 rounded-full border border-line/70 px-2.5 py-1 text-[11.5px] font-semibold transition-colors hover:border-ink/40"
+    >
+      <DoodleIcon name="message-2" size={12} className="text-accent-dark" />
+      WhatsApp
+    </WhatsAppButton>
+  ) : null;
   const nextActionEl = (
     <>
 
@@ -2168,7 +2186,7 @@ export default function LeadDrawer({
                       {passport?.done && <span className="rounded-full bg-sage/30 px-2 py-0.5 text-[10.5px] font-semibold">From their passport</span>}
                     </div>
                     <div className="mt-2 divide-y divide-line/50">
-                      <DetailRow icon="call" label="mobile" value={contact.phone} copyable onChange={(v) => { setContact((c) => ({ ...c, phone: v })); void saveField({ mobile: v }); }} />
+                      <DetailRow icon="call" label="mobile" value={contact.phone} copyable onChange={(v) => { setContact((c) => ({ ...c, phone: v })); void saveField({ mobile: v }); }} after={whatsAppEl} />
                       <DetailRow icon="mail" label="email" value={contact.email} copyable onChange={(v) => { setContact((c) => ({ ...c, email: v })); void saveField({ email: v }); }} />
                       <DetailRow
                         icon="home"
@@ -2374,7 +2392,7 @@ export default function LeadDrawer({
                   <section className="flex flex-col rounded-2xl border border-line/60 bg-card p-5">
                     <CardTitle icon="user">The landlord</CardTitle>
                     <div className="mt-3 divide-y divide-line/50">
-                      <DetailRow icon="call" label="mobile" value={contact.phone} copyable onChange={(v) => { setContact((c) => ({ ...c, phone: v })); void saveField({ mobile: v }); }} />
+                      <DetailRow icon="call" label="mobile" value={contact.phone} copyable onChange={(v) => { setContact((c) => ({ ...c, phone: v })); void saveField({ mobile: v }); }} after={whatsAppEl} />
                       <DetailRow icon="mail" label="email" value={contact.email} copyable onChange={(v) => { setContact((c) => ({ ...c, email: v })); void saveField({ email: v }); }} />
                       <DetailRow
                         icon="home"

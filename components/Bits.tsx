@@ -154,12 +154,15 @@ export function DetailRow({
   copyable,
   address,
   onResolved,
+  after,
 }: {
   icon: string;
   label: string;
   value: string;
   onChange?: (next: string) => void;
   copyable?: boolean;
+  /** One more thing to do with the value, beside the copy button. */
+  after?: React.ReactNode;
   /** Address rows look up as you type — suggestions from /api/address, and
    *  the pick commits geotagged. Everything else stays a plain inline edit. */
   address?: boolean;
@@ -188,6 +191,7 @@ export function DetailRow({
           value
         )}
       </span>
+      {after}
       {copyable && value && <CopyButton value={value} label={label} />}
     </div>
   );

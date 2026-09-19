@@ -20,6 +20,7 @@ import {
   needsValuation,
   type MarketAppraisal,
 } from "@/lib/market-appraisal";
+import { WhatsAppButton } from "@/components/WhatsAppQr";
 
 /**
  * The appraisal file, to James's mock of 11 Sep 2026.
@@ -338,9 +339,33 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
             </Row>
             <Row k="Mobile">
               {ma.landlordMobile ? (
-                <a href={`tel:${ma.landlordMobile}`} className="hover:underline">
-                  {ma.landlordMobile}
-                </a>
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                  <a href={`tel:${ma.landlordMobile}`} className="whitespace-nowrap hover:underline">
+                    {ma.landlordMobile}
+                  </a>
+                  <WhatsAppButton
+                    phone={ma.landlordMobile}
+                    name={ma.landlord}
+                    /* The appraisal came from a lead, and the lead keeps the log. */
+                    onSent={
+                      ma.leadId
+                        ? async (message) => {
+                            const r = await fetch(`/api/leads/${encodeURIComponent(ma.leadId as string)}/touches`, {
+                              method: "POST",
+                              headers: { "content-type": "application/json" },
+                              body: JSON.stringify({ kind: "whatsapp", outcome: "sent", body: message }),
+                            });
+                            const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+                            return j?.ok ? null : (j?.error ?? "That didn't save.");
+                          }
+                        : undefined
+                    }
+                    className="flex shrink-0 items-center gap-1.5 rounded-full border border-line/70 px-2.5 py-1 text-[11.5px] font-semibold transition-colors hover:border-ink/40"
+                  >
+                    <DoodleIcon name="message-2" size={12} className="text-accent-dark" />
+                    WhatsApp
+                  </WhatsAppButton>
+                </span>
               ) : (
                 <span className="text-muted">Not recorded</span>
               )}

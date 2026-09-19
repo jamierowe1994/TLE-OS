@@ -23,6 +23,7 @@ import {
   subjectOf,
   toneOf,
 } from "@/components/viewings/shared";
+import { WhatsAppButton } from "@/components/WhatsAppQr";
 
 /**
  * The quick look: what IS this, and what do I need to know before I go.
@@ -224,6 +225,10 @@ export default function AppointmentDrawer({
                   <DoodleIcon name="call" size={12} />
                   {appt.contact.phone}
                 </a>
+                <WhatsAppButton phone={appt.contact.phone} name={appt.who || ""} className={secondary}>
+                  <DoodleIcon name="message-2" size={12} />
+                  WhatsApp
+                </WhatsAppButton>
                 <a href={`mailto:${appt.contact.email}`} className={secondary}>
                   <DoodleIcon name="mail" size={12} />
                   Email
