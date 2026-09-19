@@ -28,10 +28,16 @@ import { asStyle, slidesFor, type PresentDeck } from "@/lib/present";
  * away - which is where the figure and the fee live and where a mistake
  * costs the instruction.
  *
- * ── Nothing leaves until four things are true ─────────────────────────────
+ * ── Nothing leaves until three things are true, in any order ────────────
  *
- * Read it, check the details, sign your half, then send. The Send button is
- * dead until then, and says which one is missing rather than just being grey.
+ * Open the booklet, tick the details, sign your half - then send. The Send
+ * button says which are still missing rather than just being grey.
+ *
+ * James, 19 Sep 2026, after going through it with Susan: agents must not be
+ * made to turn to the last page ("it should just be right"), and ticking and
+ * signing can happen either way round. Signing first used to lose the
+ * signature: shut the signing sheet with its close button and the page never
+ * asked DocuSeal again, so it still said "sign your half".
  */
 
 type Party = {
@@ -94,6 +100,13 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
     void pull();
   }, [pull]);
 
+  /* After the signing sheet closes, however it closes: ask DocuSeal again, a
+     few times, because it can take a moment to record the signature. */
+  const recheck = useCallback(() => {
+    void pull();
+    [1500, 4000, 8000].forEach((ms) => window.setTimeout(() => void pull(), ms));
+  }, [pull]);
+
   useEffect(() => {
     const measure = () => {
       setRoom(stage.current?.clientWidth ?? 0);
@@ -118,7 +131,7 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
      That is the whole point of putting it here. */
   const onSpread = useCallback((at: number, of: number) => {
     setPage({ at, of });
-    if (of > 0 && at >= of - 1) setRead(true);
+    if (of > 0 && at >= 0) setRead(true);
   }, []);
 
   async function openSigning(replace = false) {
@@ -171,13 +184,15 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
   const pages = deck ? slidesFor(deck).map((s) => s.id) : [];
   const open = page.at >= 0;
 
-  const blocking = !read
-    ? "Turn to the last page first."
-    : !checked
-      ? "Tick the details once you have read them."
-      : !signed
-        ? "Sign your half before it goes."
-        : null;
+  /* What is still missing, said together - none of it has to come first. */
+  const missing = [
+    !read && "open the presentation",
+    !checked && "tick the details",
+    !signed && "sign your half",
+  ].filter((x): x is string => Boolean(x));
+  const blocking = missing.length
+    ? `Still to do: ${missing.length > 1 ? `${missing.slice(0, -1).join(", ")} and ${missing[missing.length - 1]}` : missing[0]}.`
+    : null;
 
   const details: Array<[string, string | null]> = [
     ["Landlord", ma.landlord],
@@ -243,7 +258,7 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
                     );
                   })}
                   {!read && page.of > 0 && (
-                    <p className="ml-1 text-[11.5px] text-muted">Turn to the end - the figure and the fee are on the last pages.</p>
+                    <p className="ml-1 text-[11.5px] text-muted">Open it and look through as much as you like - the figure and the fee are on the last pages.</p>
                   )}
                 </div>
               </div>
@@ -260,7 +275,7 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
             sending on the right ── */}
       <div className="grid gap-6 lg:grid-cols-2">
         <ol className="space-y-6 rounded-[20px] border border-line/60 bg-white p-6">
-          {step(1, read, "Read it through", <p className="text-[12px] leading-relaxed text-muted">{read ? "You have been to the last page." : "Turn to the last page of the booklet."}</p>)}
+          {step(1, read, "Look through it", <p className="text-[12px] leading-relaxed text-muted">{read ? "Opened. Look through as much as you like." : "Open the booklet above. You don't have to read to the end."}</p>)}
 
           {step(
             2,
@@ -373,10 +388,13 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
           url={signing}
           steps={AGENT_SIGNING}
           closeLabel="Finish later"
-          onClose={() => setSigning(null)}
+          onClose={() => {
+            setSigning(null);
+            recheck();
+          }}
           onDone={() => {
             setSigning(null);
-            void pull();
+            recheck();
           }}
         />
       )}
