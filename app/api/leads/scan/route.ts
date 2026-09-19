@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { hasDb, q } from "@/lib/db";
 import { fetchLeadBook } from "@/lib/rex-leads";
-import { ledgerStats, recordLeads } from "@/lib/lead-ledger";
+import { ledgerStats, readNewValuations, recordLeads } from "@/lib/lead-ledger";
 import { rexConfigured } from "@/lib/rex";
 import { requireCapability } from "@/lib/admin";
 
@@ -43,6 +43,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "The lead read failed." }, { status: 502 });
   }
   const written = await recordLeads(book.leads);
+  /* The whole message for new valuation requests, so a sale is known as one
+     before anybody opens it (lib/lead-ledger readNewValuations). */
+  const valuationsRead = await readNewValuations().catch(() => 0);
   /* The board cache the page reads (app/api/leads/route.ts, key leads:v2:all):
      refreshed here so the next open is instant and current. */
   if (hasDb()) {
@@ -60,7 +63,7 @@ export async function POST(req: NextRequest) {
     .then((m) => m.enquiryReplies())
     .then((r) => ({ sent: r.filter((x) => x.state === "sent").length, would: r.filter((x) => x.state === "would").length, skipped: r.filter((x) => x.state === "skipped").length }))
     .catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
-  return NextResponse.json({ ok: true, scanned: book.scanned, kept: book.leads.length, written, onFile: stats.onFile, since: stats.since, newestAt: book.newestAt, replies, ms: Date.now() - started });
+  return NextResponse.json({ ok: true, scanned: book.scanned, kept: book.leads.length, written, valuationsRead, onFile: stats.onFile, since: stats.since, newestAt: book.newestAt, replies, ms: Date.now() - started });
 }
 
 export const GET = POST;

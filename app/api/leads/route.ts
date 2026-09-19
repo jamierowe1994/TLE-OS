@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchLeadBook, type LeadBook } from "@/lib/rex-leads";
 import { scopeFor } from "@/lib/scope";
-import { ledgerBoard, ledgerStats, recordLeads } from "@/lib/lead-ledger";
+import { ledgerBoard, ledgerStats, recordLeads, salesLeadIds } from "@/lib/lead-ledger";
 import { hiddenLeadIds } from "@/lib/hidden-leads";
 import { ago } from "@/lib/rex-leads";
 import { hasDb, q } from "@/lib/db";
@@ -133,6 +133,9 @@ export async function GET(req: NextRequest) {
   /* Leads removed from the OS by hand never leave the server, cached copy or
      not; the ids go with the answer so the page can hide its own records too. */
   const hidden = await hiddenLeadIds().catch(() => new Set<string>());
+  /* And every lead the ledger knows is a sale: the cached book is REX's own
+     list, whose snippets never say "sales" (lib/lead-ledger salesLeadIds). */
+  for (const id of await salesLeadIds().catch(() => new Set<string>())) hidden.add(id);
 
   /* CONTACTS ADDED BY HAND. Merged here rather than inside the cache, so one
      typed in ten seconds ago is on the board now instead of after the next

@@ -78,6 +78,47 @@ const NOT_SALES = `NOT (
           ~* '(enquiry type:\\s*sales|\\mfor sale\\M|\\mvendor\\M|estimated value|quoted fee)')
 )`;
 
+/**
+ * Every lead on file that reads as a sale (see NOT_SALES), for the board to
+ * drop whichever way it came - the scan's REX book carries only REX's short
+ * snippet, which never says "sales", so the board has to ask the ledger.
+ */
+export async function salesLeadIds(): Promise<Set<string>> {
+  if (!hasDb()) return new Set();
+  const rows = await q<{ id: string }>(`SELECT id FROM os_leads WHERE NOT ${NOT_SALES}`).catch(() => []);
+  return new Set(rows.map((r) => r.id));
+}
+
+/**
+ * Read the whole enquiry for new valuation requests, at the scan - not when
+ * somebody first opens one. Only the full message says "Enquiry type: sales"
+ * (19 Sep 2026: Sunny Brar and Cheryl M Jennings sat on the board as landlord
+ * leads for a day). A handful a day, twenty a run at most, READ-ONLY on REX.
+ */
+export async function readNewValuations(limit = 20): Promise<number> {
+  if (!hasDb()) return 0;
+  const { readEnquiry, ENQUIRY_VERSION } = await import("@/lib/rex-enquiry");
+  const rows = await q<{ id: string }>(
+    `SELECT id FROM os_leads
+      WHERE id LIKE 'rex-%' AND enquiry = 'Valuation'
+        AND (payload->>'enquiryFull' IS NULL OR COALESCE((payload->>'enquiryV')::int, 0) <> $1)
+        AND COALESCE(received_at, first_seen) > NOW() - INTERVAL '120 days'
+      ORDER BY received_at DESC NULLS LAST LIMIT $2`,
+    [ENQUIRY_VERSION, limit]
+  ).catch(() => []);
+  let n = 0;
+  for (const r of rows) {
+    const e = await readEnquiry(r.id.slice(4)).catch(() => null);
+    if (!e) continue;
+    await q(
+      `UPDATE os_leads SET payload = payload || jsonb_build_object('enquiryFull', $2::text, 'enquiryFields', $3::jsonb, 'enquirySource', $4::text, 'enquiryV', $5::int) WHERE id = $1`,
+      [r.id, e.message, JSON.stringify(e.fields), e.source, ENQUIRY_VERSION]
+    ).catch(() => {});
+    n++;
+  }
+  return n;
+}
+
 /** The newest leads on file, the whole business or one agent's. Lettings only. */
 export async function ledgerBoard(rexUserId: string | null, limit = 500): Promise<Lead[]> {
   if (!hasDb()) return [];
