@@ -254,8 +254,8 @@ export default function TestFilesTab() {
                           }
                           className="inline-flex items-center gap-2 rounded-full border border-line bg-white py-1 pl-1.5 pr-3 text-[12px] transition hover:border-ink/40 disabled:opacity-50"
                         >
-                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-[1px] text-[10.5px] text-amber-900">Landlord</span>
-                          {busy === `relink:${f.id}` ? "Making a link…" : "Open the landlord portal as them"}
+                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-[1px] text-[10.5px] text-amber-900">{f.side === "tenant" ? "Tenant" : "Landlord"}</span>
+                          {busy === `relink:${f.id}` ? "Making a link…" : f.side === "tenant" ? "Open the tenant area as them" : "Open the landlord portal as them"}
                         </button>
                       )}
                     </div>

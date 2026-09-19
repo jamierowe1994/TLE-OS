@@ -8,6 +8,7 @@ import { STAGE_UPDATE, fillUpdate, findingRoad, isStage, type TenantStageKey } f
 import { homeOnMarket, homesOnMarket } from "@/lib/tenant-homes";
 import { latestEnquiry, originFromPassport } from "@/lib/tenant-find";
 import { milesBetween, type MarketHome, type MarketHomeDetail } from "@/lib/market-homes";
+import { testListing, testOfferForTenant, testViewingForTenant } from "@/lib/test-overlay";
 
 /**
  * Everything the tenant's home needs, in one shape, from what we actually
@@ -66,7 +67,19 @@ export async function loadTenantHome(me: TenantAccount): Promise<TenantHome> {
      Rightmove and the rest (os_leads). Nearly everybody has one on day one,
      which is what ticks Find a home off (James, 18 Sep 2026). */
   const asked = deal ? null : await latestEnquiry(me.email).catch(() => null);
-  const stage: TenantStageKey = deal ? stageOf(deal) : asked ? "enquired" : "passport";
+  /* A test file past its viewing (lib/test-overlay): the viewing and the
+     offer the tester's own test tenant has, on a test listing. */
+  const [tView, tOffer] = deal
+    ? [null, null]
+    : await Promise.all([testViewingForTenant(me.email).catch(() => null), testOfferForTenant(me.email).catch(() => null)]);
+  const tHome = tView || tOffer ? await testListing((tOffer ?? tView)!.listingId).catch(() => null) : null;
+  const stage: TenantStageKey = deal
+    ? stageOf(deal)
+    : tOffer
+      ? "offer"
+      : tView
+        ? tView.done ? "viewed" : "viewing"
+        : asked ? "enquired" : "passport";
   const [askedHome, market, origin] = deal
     ? [null, null, null]
     : await Promise.all([
@@ -74,7 +87,9 @@ export async function loadTenantHome(me: TenantAccount): Promise<TenantHome> {
         homesOnMarket().catch(() => null),
         originFromPassport(record).catch(() => null),
       ]);
-  const enquiry: TenantHome["enquiry"] = asked
+  const enquiry: TenantHome["enquiry"] = tHome
+    ? { property: tHome.name, locality: `${tHome.locality} ${tHome.postcode}`.trim(), rentPcm: tHome.rent, beds: tHome.beds, photo: tHome.images[0] ?? null, images: tHome.images, href: null, enquiredOn: tView?.startsAt ?? tOffer?.received ?? null }
+    : asked
     ? askedHome
       ? { ...property(askedHome), enquiredOn: asked.at }
       : { property: asked.address.split(",")[0] || "The home you asked about", locality: asked.address.split(",").slice(1).join(",").trim(), rentPcm: null, beds: null, photo: null, href: null, enquiredOn: asked.at }
@@ -95,7 +110,18 @@ export async function loadTenantHome(me: TenantAccount): Promise<TenantHome> {
 
   /* The one next step. */
   let next: TenantHome["next"];
-  if (!deal && enquiry) {
+  const viewing: TenantHome["viewing"] = tView ? { when: tView.startsAt, withName: tView.withName, status: tView.done ? "done" : "booked" } : null;
+  const offer: TenantHome["offer"] = tOffer ? { amount: tOffer.amount, madeOn: tOffer.received, status: tOffer.status === "accepted" ? "accepted" : "with_landlord" } : null;
+  const whenWords = viewing ? new Date(viewing.when).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" }) : null;
+  if (!deal && (viewing || offer) && enquiry) {
+    const u = STAGE_UPDATE[stage];
+    next = {
+      title: u.title,
+      blurb: fillUpdate(u.blurb, { property: enquiry.property, agent: viewing?.withName ?? agent?.name ?? "your agent", when: whenWords, amount: offer ? `£${offer.amount.toLocaleString("en-GB")}` : null }),
+      cta: u.cta,
+      href: u.href,
+    };
+  } else if (!deal && enquiry) {
     const u = STAGE_UPDATE.enquired;
     next = {
       title: u.title,
@@ -120,7 +146,11 @@ export async function loadTenantHome(me: TenantAccount): Promise<TenantHome> {
      (lib/tenant-journey findingRoad). */
   const stops: Stop[] = deal
     ? deal.stages.map((s) => ({ id: s.key, label: s.label, sub: s.key === "move_day" && deal.moveIn ? day(deal.moveIn) : "", state: s.state }))
-    : findingRoad(stage, { home: enquiry?.property ?? null });
+    : findingRoad(stage, {
+        home: enquiry?.property ?? null,
+        viewing: viewing ? new Date(viewing.when).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) : null,
+        offer: offer ? `£${offer.amount.toLocaleString("en-GB")} a month` : null,
+      });
 
   /* What else is on: the nearest to their house, else the newest. */
   const near = (h: MarketHome) => (origin && h.lat != null && h.lng != null ? milesBetween(origin, { lat: h.lat, lng: h.lng }) : 1e9);
@@ -128,6 +158,8 @@ export async function loadTenantHome(me: TenantAccount): Promise<TenantHome> {
   const onMarket = (origin ? [...others].sort((x, y) => near(x) - near(y)) : others).slice(0, 3).map(property);
 
   const activity: TenantHome["activity"] = [];
+  if (offer) activity.push({ label: `Offer made: £${offer.amount.toLocaleString("en-GB")} a month`, sub: offer.status === "accepted" ? "Accepted" : "With the landlord", when: day(offer.madeOn), tone: "done" });
+  if (viewing) activity.push({ label: viewing.status === "done" ? "You viewed it" : "Viewing booked", sub: `${enquiry?.property ?? "The home"} with ${viewing.withName}`, when: day(viewing.when), tone: viewing.status === "done" ? "done" : "live" });
   if (asked) activity.push({ label: `You asked about ${enquiry?.property ?? "a home"}`, sub: asked.via === "portal" ? "From Find a home" : "Your enquiry", when: day(asked.at), tone: "done" });
   if (me.activatedAt) activity.push({ label: "Your tenant area opened", sub: "Welcome in", when: day(me.activatedAt), tone: "done" });
   if (record?.submittedAt) activity.push({ label: "Passport finished", sub: `${total} of ${total} sections`, when: day(record.submittedAt), tone: "done" });
@@ -138,11 +170,11 @@ export async function loadTenantHome(me: TenantAccount): Promise<TenantHome> {
     first,
     daypart,
     stage,
-    /* The enquiry is read (above); viewings and offers are not yet read
-       for a signed-in tenant. The sample (lib/tenant-sample) shows every stage. */
+    /* The enquiry is read (above). Viewings and offers are only read for a
+       test file so far (lib/test-overlay); the sample shows every stage. */
     enquiry,
-    viewing: null,
-    offer: null,
+    viewing,
+    offer,
     market: onMarket,
     agent,
     deal,
@@ -164,6 +196,11 @@ function stageOf(deal: TenantDealView | null): TenantStageKey {
 /** Just the stage, for the shell, which decides the nav from it. */
 export async function tenantStage(me: TenantAccount): Promise<TenantStageKey> {
   const deals = await tenantDealViews(me).catch(() => []);
+  if (!deals[0]) {
+    const [v, o] = await Promise.all([testViewingForTenant(me.email).catch(() => null), testOfferForTenant(me.email).catch(() => null)]);
+    if (o) return "offer";
+    if (v) return v.done ? "viewed" : "viewing";
+  }
   return stageOf(deals[0] ?? null);
 }
 

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { TEST_REFUSAL, testDetails, testLandlord, testListingViewings, testPortals, testPublication } from "@/lib/test-listing-answers";
+import { isTestId } from "@/lib/test-overlay";
 import { whoIs } from "@/lib/admin";
 import { accessFor } from "@/lib/area-access";
 import { AREA_DEFS, canAct, levelOf, lockedSentence } from "@/lib/area-map";
@@ -104,6 +106,11 @@ function listingId(v: unknown): number | null {
 }
 
 export async function GET(req: NextRequest) {
+  const testId = req.nextUrl.searchParams.get("id");
+  if (isTestId(testId)) {
+    const t = await testPublication(Number(testId));
+    return t ? NextResponse.json(t) : NextResponse.json({ ok: false, error: "That test listing has gone." }, { status: 404 });
+  }
   if (!rexConfigured()) return NextResponse.json({ ok: false, error: "The listings system isn't connected here." }, { status: 503 });
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
@@ -159,6 +166,7 @@ export async function POST(req: NextRequest) {
   }
 
   const b = (await req.json().catch(() => ({}))) as { id?: unknown; action?: unknown };
+  if (isTestId(b.id)) return NextResponse.json({ ok: false, error: TEST_REFUSAL, test: true }, { status: 409 });
   const id = listingId(b.id);
   const action = b.action === "publish" || b.action === "off" || b.action === "on" ? b.action : null;
   if (!id || !action) return NextResponse.json({ ok: false, error: "Which listing, and publish, off or on?" }, { status: 400 });

@@ -1086,6 +1086,23 @@ CREATE TABLE IF NOT EXISTS os_tenant_enquiries (
 ALTER TABLE os_tenant_enquiries ADD COLUMN IF NOT EXISTS contact_id TEXT;
 CREATE INDEX IF NOT EXISTS os_tenant_enquiries_email_idx ON os_tenant_enquiries (LOWER(email), created_at DESC);
 
+-- THE TEST OVERLAY (19 Sep 2026): the later stages of a test file - a
+-- listing live on the portals, offers, a deal moving through referencing -
+-- held here rather than in REX or Propoly, which are read-only to us. The
+-- screens that read REX and Propoly also read these rows, but only for the
+-- tester who owns the file (lib/test-overlay). kit_id is the os_test_kits
+-- row, and resetting or deleting the file deletes every row it made.
+CREATE TABLE IF NOT EXISTS os_test_records (
+  id           TEXT PRIMARY KEY,
+  kit_id       TEXT NOT NULL,
+  owner_email  TEXT NOT NULL,
+  kind         TEXT NOT NULL,
+  payload      JSONB NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_test_records_kit_idx ON os_test_records (kit_id);
+CREATE INDEX IF NOT EXISTS os_test_records_owner_idx ON os_test_records (owner_email, kind);
+
 -- What a tenant said after a viewing, from their tenant area (18 Sep 2026):
 -- not for me (with the reasons), questions for the agent, or an offer. One
 -- row per answer; the agent is emailed at the moment it is made and the

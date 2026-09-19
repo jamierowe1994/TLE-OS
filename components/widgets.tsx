@@ -1087,7 +1087,7 @@ function LeadsTodayWidget({ w, h }: { w: number; h: number }) {
  */
 function OnMarketWidget({ w, h }: { w: number; h: number }) {
   const { data, loading, unlinked, error } = useShared<{ listings: OsListing[]; draft: number }>(
-    listingsSlot, "/api/listings",
+    listingsSlot, "/api/listings?tests=0",
     (j) => (j.ok && j.live && Array.isArray(j.listings)
       ? { listings: j.listings as OsListing[], draft: Number((j.counts as { draft?: number } | undefined)?.draft ?? 0) }
       : null)
@@ -1151,7 +1151,7 @@ function OnMarketWidget({ w, h }: { w: number; h: number }) {
  */
 function ApplicationsWidget({ w, h }: { w: number; h: number }) {
   const { data, loading, unlinked, error } = useShared<{ applications: Application[] }>(
-    applicationsSlot, "/api/applications?limit=300",
+    applicationsSlot, "/api/applications?limit=300&tests=0",
     (j) => (Array.isArray(j.applications) && !j.error ? { applications: j.applications as Application[] } : null)
   );
   const apps = data?.applications ?? [];

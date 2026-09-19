@@ -1089,6 +1089,16 @@ export const TEST_FILE_SIDES: Record<TestFileSide, { label: string; add: string;
       { id: "signed", label: "Terms signed", says: "The contract is signed by both sides, so the file is at the take-on and the landlord is asked the property questions." },
       { id: "takeon-booked", label: "Take-on booked", says: "Signed, with the photographs visit in the diary for the day after tomorrow at 10am." },
       { id: "takeon-done", label: "Take-on done", says: "Signed, the visit happened yesterday and three photographs are on the file, so the advert is the next thing." },
+      /* Past the take-on nothing is real: REX and the portals are never
+         touched. The listing, viewings, offer and deal are a test overlay only
+         you can see (lib/test-overlay) - James, 19 Sep 2026. */
+      { id: "listed", label: "Listed", says: "Won, and a pretend listing is live on Rightmove, Zoopla and OnTheMarket. It shows on your Listings board and the landlord's portal, and nowhere else." },
+      { id: "viewings", label: "Viewings", says: "Listed, with one viewing done yesterday and another booked for tomorrow at 5:30pm, in your diary only." },
+      { id: "offer", label: "Offer received", says: "Listed and viewed, with an offer of £1,250 a month from a test tenant waiting for the landlord's answer." },
+      { id: "let-agreed", label: "Let agreed", says: "The offer is accepted and the deal is set up, holding fee next." },
+      { id: "referencing", label: "Referencing", says: "Let agreed and the tenant's references are being checked." },
+      { id: "compliance", label: "Compliance", says: "References back, and the property's certificates are being checked before anything is signed." },
+      { id: "move-in", label: "Move-in", says: "Everything is signed and paid. The tenant moves in on the date agreed." },
     ],
   },
   tenant: {
@@ -1097,6 +1107,14 @@ export const TEST_FILE_SIDES: Record<TestFileSide, { label: string; add: string;
     stages: [
       { id: "new", label: "New enquiry", says: "A tenant looking for a two-bed in Didsbury. Nothing booked or sent." },
       { id: "passport", label: "Passport made", says: "A tenant passport exists for them, not emailed. Send it from the lead." },
+      /* A pretend home and everything after it, visible only to you (lib/test-overlay). */
+      { id: "viewing", label: "Viewing booked", says: "Passport made, and a viewing at 7 Test Avenue tomorrow at 2:30pm, in your diary only. Open the tenant area as them to see it." },
+      { id: "viewed", label: "Viewed", says: "They viewed 7 Test Avenue yesterday, so the tenant area asks how it was and offers Make an offer." },
+      { id: "offer", label: "Offer made", says: "An offer of £1,250 a month on 7 Test Avenue, with the landlord. It is on your Applications board too." },
+      { id: "referencing", label: "Referencing", says: "The offer is accepted, the holding fee paid and referencing under way." },
+      { id: "compliance", label: "Compliance", says: "References back, and the pre-let compliance checks are being done." },
+      { id: "agreement", label: "Tenancy agreement", says: "The checks passed and the tenancy agreement is out for signing." },
+      { id: "move-in", label: "Move-in", says: "Signed and paid. Moving in on the agreed date." },
     ],
   },
   plc: {

@@ -6,6 +6,7 @@ import { saveContact } from "@/lib/contacts-store";
 import { createAppraisal } from "@/lib/appraisal-store";
 import { landlordByEmail, upsertLandlordAccount } from "@/lib/landlord-account";
 import { startVerification } from "@/lib/verification";
+import { upsertTenantAccount } from "@/lib/tenant-account";
 import { createPassport, markInvited } from "@/lib/passport";
 import { renderTleEmail } from "@/lib/email/tle-emails";
 import { sendEmail } from "@/lib/resend";
@@ -75,6 +76,10 @@ export interface Refs {
   passports?: string[];
   plcCases?: string[];
   landlordEmail?: string;
+  /** The tester's own address, signed in to the tenant area as their test tenant. */
+  tenantEmail?: string;
+  /** Diary rows (os_appointments) a later stage made: its viewings. */
+  appointments?: string[];
   /** Where the file was last put (lib/test-files). */
   stage?: string;
 }
@@ -106,6 +111,13 @@ export async function landlordLink(email: string, origin: string): Promise<strin
   await upsertLandlordAccount(match);
   const { token } = await startVerification(email, "landlord");
   return `${origin}/landlord/enter?token=${encodeURIComponent(token)}`;
+}
+
+/** A one-off sign-in to the tenant area as the tester's own test tenant. */
+export async function tenantLink(email: string, name: string, origin: string): Promise<string> {
+  await upsertTenantAccount({ email, name });
+  const { token } = await startVerification(email, "tenant");
+  return `${origin}/tenant/enter?token=${encodeURIComponent(token)}`;
 }
 
 /**
@@ -281,8 +293,18 @@ export async function relinkKit(id: string, me: OsUser, origin: string): Promise
     `SELECT refs FROM os_test_kits WHERE id = $1 AND created_by = $2 AND cleared_at IS NULL`,
     [id, email]
   );
-  if (!rows[0]?.refs?.landlordEmail) throw new KitRefused("That test has no landlord to sign in as.");
-  return landlordLink(email, origin);
+  const refs = rows[0]?.refs;
+  if (refs?.tenantEmail) {
+    const name = refs.contacts?.[0] ? (await q<{ name: string }>(`SELECT name FROM os_contacts WHERE id = $1`, [refs.contacts[0]]).catch(() => []))[0]?.name : null;
+    return tenantLink(email, name || email, origin);
+  }
+  if (!refs?.landlordEmail) throw new KitRefused("That test has no landlord or tenant to sign in as.");
+  /* Straight to this file's property: a tester with several landlord files
+     is one landlord with several appraisals, and the portal would otherwise
+     open whichever it puts first. */
+  const link = await landlordLink(email, origin);
+  const appraisal = refs.appraisals?.[0];
+  return appraisal ? `${link}&next=${encodeURIComponent(`/landlord?p=a:${appraisal}`)}` : link;
 }
 
 /**

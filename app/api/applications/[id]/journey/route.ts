@@ -4,6 +4,7 @@ import { findUserById } from "@/lib/users";
 import { getApplicationById } from "@/lib/applications";
 import { rexConfigured } from "@/lib/rex";
 import { journeyFor } from "@/lib/application-journey";
+import { isTestId, testApplication, testJourney } from "@/lib/test-overlay";
 
 /**
  * GET /api/applications/{id}/journey → the spine, the agent's actions, and
@@ -18,6 +19,10 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
   const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
   if (!userId || !(await findUserById(userId))) {
     return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
+  }
+  if (isTestId(id)) {
+    const t = await testApplication(id);
+    return t ? NextResponse.json({ ok: true, test: true, ...testJourney(t.app, t.deal) }) : NextResponse.json({ ok: false, error: "That test application has gone." }, { status: 404 });
   }
   if (!rexConfigured()) return NextResponse.json({ ok: false, error: "Applications aren't connected here." }, { status: 503 });
 

@@ -3,7 +3,7 @@ import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
 import { findUserByEmail, type OsUser } from "@/lib/users";
 import { getContact } from "@/lib/contacts-store";
-import { createAppraisal, markTermsSent, recordValuation } from "@/lib/appraisal-store";
+import { createAppraisal, markTermsSent, recordValuation, setOutcome } from "@/lib/appraisal-store";
 import { recordTakeOnBooked } from "@/lib/takeon";
 import { storePhoto } from "@/lib/property-photos";
 import { createPassport } from "@/lib/passport";
@@ -13,6 +13,7 @@ import { changeRexEvent } from "@/lib/rex-diary-write";
 import { archiveTermsFor, docusealConfigured } from "@/lib/docuseal";
 import { KITS, TEST_FILE_SIDES, sideOfKit, type KitId, type TestFileSide, type TestWho } from "@/lib/testing-journeys";
 import { KitRefused, londonAt, runKit, TEST_ADDRESS, TEST_POSTCODE, type Refs } from "@/lib/test-kits";
+import { clearTestRecords, newTestId, putTestRecord, type TestDeal, type TestListing, type TestOffer, type TestViewing } from "@/lib/test-overlay";
 
 /**
  * TEST FILES: add them, put them back to a stage, delete them, and clear the
@@ -113,7 +114,7 @@ async function toFile(r: Row): Promise<TestFile> {
     createdAt: new Date(r.created_at).toISOString(),
     links: Array.isArray(r.links) ? r.links : [],
     said: r.said,
-    canRelink: Boolean(refs.landlordEmail),
+    canRelink: Boolean(refs.landlordEmail || refs.tenantEmail),
   };
 }
 
@@ -157,7 +158,7 @@ export async function addTestFile(side: TestFileSide, me: OsUser, origin: string
  * Everything the flow did to this file, undone - the person stays.
  * `owner` is who made the file: their Outlook holds its diary entries.
  */
-async function unwind(refs: Refs, ownerEmail: string, since: Date | string): Promise<void> {
+async function unwind(refs: Refs, ownerEmail: string, since: Date | string, kitId?: string): Promise<void> {
   const contacts = refs.contacts ?? [];
   const leadIds = refs.leadIds ?? [];
   /* The kit's appraisal, and any appraisal booked from the lead in the flow
@@ -230,6 +231,17 @@ async function unwind(refs: Refs, ownerEmail: string, since: Date | string): Pro
   const needles = [...contacts, ...leadIds, ...tokens].map((x) => `%${x}%`);
   if (needles.length) await run(`DELETE FROM os_tenant_email_log WHERE key LIKE ANY($1)`, [needles]);
   await run(`DELETE FROM os_plc_cases WHERE id = ANY($1)`, [refs.plcCases ?? []]);
+  /* The test overlay past the take-on (lib/test-overlay): the pretend
+     listing, offers and deal, the diary rows for its viewings, their
+     feedback, and any comments left on the test application. */
+  const appts = refs.appointments ?? [];
+  await run(`DELETE FROM os_viewing_feedback WHERE viewing_id = ANY($1)`, [appts.map((a) => `os-${a}`)]);
+  await run(`DELETE FROM os_appointments WHERE id = ANY($1) AND rex_event_id IS NULL`, [appts]);
+  if (kitId) {
+    const apps = (await q<{ app: string }>(`SELECT payload->>'appId' AS app FROM os_test_records WHERE kit_id = $1 AND kind = 'offer'`, [kitId]).catch(() => [])).map((r) => r.app);
+    await run(`DELETE FROM os_application_comments WHERE application_id = ANY($1)`, [apps]);
+    await clearTestRecords(kitId);
+  }
 }
 
 /* ── putting a file at a stage ───────────────────────────────────────────── */
@@ -246,7 +258,7 @@ export async function resetTestFile(id: string, stageId: string, me: OsUser, ori
   if (!stage) throw new KitRefused("That is not a stage this file can go back to.");
 
   const refs = row.refs ?? {};
-  await unwind(refs, row.created_by, row.created_at);
+  await unwind(refs, row.created_by, row.created_at, row.id);
 
   const email = row.created_by;
   const maker = (await findUserByEmail(email).catch(() => null)) ?? me;
@@ -264,7 +276,8 @@ export async function resetTestFile(id: string, stageId: string, me: OsUser, ori
     /* Every stage from the booking onwards is the same appraisal, built up
        one step further (James, 17 Sep 2026: "a stage for each of these, so I
        can batter between the two of them"). Nothing is emailed by a reset. */
-    const LATER = ["booked", "visited", "valued", "signed", "takeon-booked", "takeon-done"];
+    const MARKET = ["listed", "viewings", "offer", "let-agreed", "referencing", "compliance", "move-in"];
+    const LATER = ["booked", "visited", "valued", "signed", "takeon-booked", "takeon-done", ...MARKET];
     if (LATER.includes(stage.id)) {
       const past = stage.id !== "booked";
       const ma = await createAppraisal({
@@ -280,10 +293,10 @@ export async function resetTestFile(id: string, stageId: string, me: OsUser, ori
       nextKit = "booked-appraisal";
       links.unshift({ who: "agent", label: "Open the appraisal", href: `/market-appraisals/${encodeURIComponent(ma.id)}` });
 
-      if (["valued", "signed", "takeon-booked", "takeon-done"].includes(stage.id)) {
+      if (["valued", "signed", "takeon-booked", "takeon-done", ...MARKET].includes(stage.id)) {
         await recordValuation(ma.id, { valuation: 1250, serviceLevel: "full_managed", feePct: 12, setupFee: 750 }, maker.name || email);
       }
-      if (["signed", "takeon-booked", "takeon-done"].includes(stage.id)) {
+      if (["signed", "takeon-booked", "takeon-done", ...MARKET].includes(stage.id)) {
         /* Signed by both sides. The row is what every screen reads for
            "signed"; no DocuSeal submission is made for a test file. The id is
            NEGATIVE - the column is DocuSeal's own bigint, and nothing real
@@ -300,29 +313,74 @@ export async function resetTestFile(id: string, stageId: string, me: OsUser, ori
         });
         await markTermsSent(ma.id).catch(() => null);
       }
-      if (stage.id === "takeon-booked" || stage.id === "takeon-done") {
+      if (stage.id === "takeon-booked" || stage.id === "takeon-done" || MARKET.includes(stage.id)) {
         await recordTakeOnBooked(ma.id, {
-          startsAt: stage.id === "takeon-booked" ? londonAt(2, 10) : londonAt(-1, 10),
+          startsAt: stage.id === "takeon-booked" ? londonAt(2, 10) : londonAt(MARKET.includes(stage.id) ? -8 : -1, 10),
           minutes: 60,
           by: maker.name || email,
           at: new Date().toISOString(),
         });
       }
-      if (stage.id === "takeon-done") {
+      if (stage.id === "takeon-done" || MARKET.includes(stage.id)) {
         /* Three photographs, so the advert has something to read. */
         await seedPhotos(ma.id, maker.name || email);
         links.push({ who: "agent", label: "The photographs", href: `/market-appraisals/${encodeURIComponent(ma.id)}?photos=1` });
+      }
+      if (MARKET.includes(stage.id)) {
+        /* On the market - pretend. Won on our side; the listing and all that
+           follows are the test overlay, seen by the tester alone. */
+        await setOutcome(ma.id, "won");
+        const built = await marketStages({
+          kitId: id,
+          owner: email,
+          maker,
+          appraisalId: ma.id,
+          name: TEST_ADDRESS.split(",")[0],
+          landlord: { name: contact.name, email },
+          tenant: { name: "Sophie Test (test tenant)", email: "sophie.test@example.invalid" },
+          upTo: stage.id as MarketStage,
+        });
+        next.appointments = built.appointments;
+        links.push({ who: "agent", label: "The listing", href: `/listings?open=${built.listingId}` });
+        if (built.appId) links.push({ who: "agent", label: "The offer", href: `/applications?open=${encodeURIComponent(built.appId)}` });
       }
     }
   } else if (side === "tenant") {
     if (!leadId || !contact) throw new KitRefused("This file has lost its lead, so it cannot be reset. Delete it and add another.");
     links.push({ who: "agent", label: "Open the lead", href: `/leads?side=tenant&open=${leadId}` });
     nextKit = "tenant-enquiry";
-    if (stage.id === "passport") {
+    const TENANT_LATER: Record<string, MarketStage> = {
+      viewing: "booked",
+      viewed: "viewed",
+      offer: "offer",
+      referencing: "referencing",
+      compliance: "compliance",
+      agreement: "agreement",
+      "move-in": "move-in",
+    };
+    if (stage.id === "passport" || TENANT_LATER[stage.id]) {
       const passport = await createPassport({ name: contact.name, email, contactId: contact.id, agentId: maker.id });
       next.passports = [passport.token];
       nextKit = "tenant-passport";
       links.push({ who: "tenant", label: "Open the passport", href: `/tenant/passport/${passport.token}` });
+    }
+    if (TENANT_LATER[stage.id]) {
+      /* A pretend home of their own, and the tester signs in to the tenant
+         area as this tenant (tenantEmail) to walk it. */
+      const built = await marketStages({
+        kitId: id,
+        owner: email,
+        maker,
+        appraisalId: null,
+        name: "7 Test Avenue",
+        landlord: { name: "Test Landlord", email: "landlord.test@example.invalid" },
+        tenant: { name: contact.name, email },
+        upTo: TENANT_LATER[stage.id],
+      });
+      next.appointments = built.appointments;
+      next.tenantEmail = email;
+      links.push({ who: "agent", label: "The listing", href: `/listings?open=${built.listingId}` });
+      if (built.appId) links.push({ who: "agent", label: "The application", href: `/applications?open=${encodeURIComponent(built.appId)}` });
     }
   } else {
     const ref = `TEST-${uid().slice(0, 6).toUpperCase()}`;
@@ -355,7 +413,7 @@ export async function deleteTestFile(id: string, me: OsUser): Promise<void> {
   if (!row) return;
   if (!mayTouch(row, me)) throw new KitRefused("That is somebody else's test file.");
   const refs = row.refs ?? {};
-  await unwind(refs, row.created_by, row.created_at);
+  await unwind(refs, row.created_by, row.created_at, row.id);
   await q(`DELETE FROM os_contacts WHERE id = ANY($1) AND is_test`, [refs.contacts ?? []]).catch(() => []);
   if (refs.landlordEmail) {
     /* The tester's landlord portal account and any unspent link, once none of
@@ -367,6 +425,18 @@ export async function deleteTestFile(id: string, me: OsUser): Promise<void> {
     if (!others[0]?.n) {
       await q(`DELETE FROM os_email_verifications WHERE email = $1 AND purpose = 'landlord'`, [row.created_by]).catch(() => []);
       await q(`DELETE FROM os_portal_accounts WHERE email = $1 AND kind = 'landlord'`, [row.created_by]).catch(() => []);
+    }
+  }
+  if (refs.tenantEmail) {
+    /* The same for the tenant area. Only the account the tester signed in
+       with - and only if Propoly holds no real deal for that address, which
+       for one of our own addresses it never should. */
+    const others = await q<{ n: number }>(
+      `SELECT count(*)::int AS n FROM os_test_kits WHERE created_by = $1 AND cleared_at IS NULL AND id <> $2 AND refs ? 'tenantEmail'`,
+      [row.created_by, id]
+    ).catch(() => [{ n: 1 }]);
+    if (!others[0]?.n) {
+      await q(`DELETE FROM os_email_verifications WHERE email = $1 AND purpose = 'tenant'`, [row.created_by]).catch(() => []);
     }
   }
   await q(`UPDATE os_test_kits SET cleared_at = NOW() WHERE id = $1`, [id]);
@@ -416,4 +486,138 @@ async function seedPhotos(appraisalId: string, by: string): Promise<void> {
       /* A test file without photographs is still a usable test file. */
     }
   }
+}
+
+/* ── past the take-on: the test overlay ──────────────────────────────────── */
+
+/**
+ * Every stage from the listing on, for either side, built as far as `upTo`:
+ * a pretend listing live on the portals, viewings in the tester's diary
+ * (os_appointments, never Outlook or REX), an offer, and a deal at one of
+ * Kirstie's stages. All of it lives in os_test_records under this file and
+ * is read only for the tester (lib/test-overlay). Nothing is emailed.
+ */
+type MarketStage =
+  | "listed" | "viewings" | "booked" | "viewed" | "offer"
+  | "let-agreed" | "referencing" | "compliance" | "agreement" | "move-in";
+
+const halfPast = (days: number, hour: number) => new Date(new Date(londonAt(days, hour)).getTime() + 30 * 60000).toISOString();
+
+const ORDER: MarketStage[] = ["listed", "booked", "viewings", "viewed", "offer", "let-agreed", "referencing", "compliance", "agreement", "move-in"];
+const DEAL_STAGE: Partial<Record<MarketStage, string>> = {
+  "let-agreed": "deal_started",
+  referencing: "referencing",
+  compliance: "plc",
+  agreement: "tenancy_agreement",
+  "move-in": "move_day",
+};
+
+async function marketStages(o: {
+  kitId: string;
+  owner: string;
+  maker: OsUser;
+  appraisalId: string | null;
+  name: string;
+  landlord: { name: string; email: string };
+  tenant: { name: string; email: string };
+  upTo: MarketStage;
+}): Promise<{ listingId: number; appId: string | null; appointments: string[] }> {
+  const at = (s: MarketStage) => ORDER.indexOf(o.upTo) >= ORDER.indexOf(s);
+  const agentName = o.maker.name || o.owner;
+  const listingId = newTestId();
+  const listing: TestListing = {
+    listingId,
+    appraisalId: o.appraisalId,
+    name: o.name,
+    locality: "Didsbury, Manchester",
+    postcode: TEST_POSTCODE,
+    rent: 1250,
+    beds: 2,
+    baths: 1,
+    propertyType: "Terraced house",
+    images: ["/brand/photo/property.jpg", "/brand/photo/cover-terrace.webp", "/brand/photo/marketing.jpg", "/brand/photo/property-sample.webp"],
+    heading: `Two bedroom terrace, ${o.name.replace(/^\d+\s+/, "")}, Didsbury`,
+    body: "A bright two bedroom terrace a short walk from Didsbury village and the tram. Two doubles, a newly fitted kitchen, a south-facing garden and gas central heating. Available now, unfurnished. (A test listing - it is not really on the portals.)",
+    publishedAt: new Date(Date.now() - 6 * 86400000).toISOString(),
+    portals: [
+      { portal: "Rightmove", url: "https://www.rightmove.co.uk/" },
+      { portal: "Zoopla", url: "https://www.zoopla.co.uk/" },
+      { portal: "OnTheMarket", url: "https://www.onthemarket.com/" },
+    ],
+    landlord: o.landlord,
+  };
+  await putTestRecord(o.kitId, o.owner, "listing", listing);
+
+  /* Viewings: one done, and (on the landlord's walk) one still to come. */
+  const appointments: string[] = [];
+  const view = async (startsAt: string, done: boolean, who: string, tenantEmail: string) => {
+    const aid = uid();
+    await q(
+      `INSERT INTO os_appointments (id, starts_at, mins, kind, title, where_at, who, author_id, author_name) VALUES ($1,$2,30,'viewing',$3,$4,$5,$6,$7)`,
+      [aid, startsAt, `Viewing: ${o.name} (test)`, `${o.name}, Didsbury, Manchester ${TEST_POSTCODE}`, who, o.maker.id, agentName]
+    );
+    appointments.push(aid);
+    const v: TestViewing = { appointmentId: aid, listingId, tenantEmail, startsAt, withName: agentName.split(/\s+/)[0], done };
+    await putTestRecord(o.kitId, o.owner, "viewing", v);
+    if (done) {
+      await q(
+        `INSERT INTO os_viewing_feedback (viewing_id, attended, choice, label, note, applicant, address, listing_id, starts_at, by_email, by_name)
+         VALUES ($1, TRUE, 'interested', 'Interested - wants to offer', 'Loved the garden. (Test feedback.)', $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (viewing_id) DO NOTHING`,
+        [`os-${aid}`, who, o.name, String(listingId), startsAt, o.owner, agentName]
+      ).catch(() => null);
+    }
+  };
+  const landlordSide = o.appraisalId !== null;
+  if (landlordSide) {
+    if (at("viewings")) {
+      await view(londonAt(-1, 17), true, o.tenant.name, o.tenant.email);
+      if (!at("offer")) await view(halfPast(1, 17), false, "Tom Test (test tenant)", "tom.test@example.invalid");
+    }
+  } else if (at("booked")) {
+    await view(halfPast(at("viewed") ? -1 : 1, 14), at("viewed"), o.tenant.name, o.tenant.email);
+  }
+
+  /* The offer, and the deal once it is accepted. */
+  let appId: string | null = null;
+  if (at("offer")) {
+    appId = String(newTestId());
+    const accepted = Boolean(DEAL_STAGE[o.upTo]);
+    const offer: TestOffer = {
+      appId,
+      listingId,
+      appraisalId: o.appraisalId,
+      applicantName: o.tenant.name,
+      applicantEmail: o.tenant.email,
+      amount: 1250,
+      moveIn: londonAt(21, 12).slice(0, 10),
+      months: 12,
+      adults: 2,
+      children: 0,
+      pets: false,
+      status: accepted ? "accepted" : "received",
+      received: new Date(Date.now() - 86400000).toISOString(),
+      accepted: accepted ? new Date().toISOString() : null,
+    };
+    await putTestRecord(o.kitId, o.owner, "offer", offer);
+    const stageKey = DEAL_STAGE[o.upTo];
+    if (stageKey) {
+      const deal: TestDeal = {
+        appId,
+        listingId,
+        appraisalId: o.appraisalId,
+        tenantName: o.tenant.name,
+        tenantEmail: o.tenant.email,
+        property: o.name,
+        locality: `Didsbury, Manchester ${TEST_POSTCODE}`,
+        rent: 1250,
+        moveIn: offer.moveIn,
+        stageKey,
+        agentName,
+        agentEmail: o.owner,
+      };
+      await putTestRecord(o.kitId, o.owner, "deal", deal);
+    }
+  }
+  return { listingId, appId, appointments };
 }

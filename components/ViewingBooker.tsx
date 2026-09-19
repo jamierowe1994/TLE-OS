@@ -205,7 +205,7 @@ export default function ViewingBooker({
   useEffect(() => {
     if (!open || mode !== "viewing") return;
     let live = true;
-    fetch("/api/listings", { cache: "no-store" })
+    fetch("/api/listings?tests=0", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => {
         if (!live || !j?.ok || !Array.isArray(j.listings)) return;

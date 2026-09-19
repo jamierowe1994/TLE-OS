@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { TEST_REFUSAL, testDetails, testLandlord, testListingViewings, testPortals, testPublication } from "@/lib/test-listing-answers";
+import { isTestId } from "@/lib/test-overlay";
 import { whoIs } from "@/lib/admin";
 import { rexConfigured } from "@/lib/rex";
 import { forAgent } from "@/lib/agent-words";
@@ -17,6 +19,11 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
+  const testId = req.nextUrl.searchParams.get("id");
+  if (isTestId(testId)) {
+    const t = await testListingViewings(Number(testId));
+    return t ? NextResponse.json(t) : NextResponse.json({ ok: false, error: "That test listing has gone." }, { status: 404 });
+  }
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const id = (req.nextUrl.searchParams.get("id") ?? "").trim();

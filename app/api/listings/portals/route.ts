@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { TEST_REFUSAL, testDetails, testLandlord, testListingViewings, testPortals, testPublication } from "@/lib/test-listing-answers";
+import { isTestId } from "@/lib/test-overlay";
 import { portalLinksFor } from "@/lib/rex-portal-links";
 import { rexConfigured } from "@/lib/rex";
 import { whoIs } from "@/lib/admin";
@@ -16,6 +18,11 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
+  const testId = req.nextUrl.searchParams.get("id");
+  if (isTestId(testId)) {
+    const t = await testPortals(Number(testId));
+    return t ? NextResponse.json(t) : NextResponse.json({ ok: false, error: "That test listing has gone." }, { status: 404 });
+  }
   const id = req.nextUrl.searchParams.get("id")?.trim() ?? "";
   if (!id) return NextResponse.json({ ok: false, error: "A listing id is required." }, { status: 400 });
   if (!rexConfigured()) {

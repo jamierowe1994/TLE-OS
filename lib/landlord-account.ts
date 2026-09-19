@@ -271,7 +271,7 @@ function firstName(n: string): string {
   return n.trim().split(/\s+/)[0] || "Applicant";
 }
 
-function offerOf(a: Application): ViewOffer {
+export function offerOf(a: Application): ViewOffer {
   const w = OFFER_WORDS[a.status] ?? OFFER_WORDS.received;
   const people: string[] = [];
   if (a.occupants != null) people.push(`${a.occupants} ${a.occupants === 1 ? "adult" : "adults"}`);
@@ -466,6 +466,22 @@ export async function landlordProgress(email: string, propertyNames: string[]): 
       label: LANDLORD_WORDS[s.key]?.label ?? s.label,
       state: i < idx ? "done" : i === idx ? "current" : "upcoming",
     })),
+    now: words.now,
+    next: words.next,
+  };
+}
+
+/** A test file's deal (lib/test-overlay) in the same landlord words as a real one. */
+export function testProgress(d: { property: string; locality: string; tenantName: string; moveIn: string; rent: number; stageKey: string }): ViewProgress {
+  const idx = Math.max(0, PORTAL_STAGES.findIndex((s) => s.key === d.stageKey));
+  const words = LANDLORD_WORDS[d.stageKey] ?? LANDLORD_WORDS.deal_started;
+  return {
+    property: [d.property, d.locality].filter(Boolean).join(", "),
+    tenants: d.tenantName.split(/\s+/)[0] || "The tenant",
+    moveIn: d.moveIn,
+    rentPcm: d.rent,
+    stageKey: d.stageKey,
+    stages: PORTAL_STAGES.map((s, i) => ({ key: s.key, label: LANDLORD_WORDS[s.key]?.label ?? s.label, state: i < idx ? "done" : i === idx ? "current" : "upcoming" })),
     now: words.now,
     next: words.next,
   };

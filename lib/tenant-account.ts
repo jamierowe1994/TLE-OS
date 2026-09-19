@@ -1,4 +1,5 @@
 import "server-only";
+import { testDealsForTenant } from "@/lib/test-overlay";
 import { cookies } from "next/headers";
 import { hasDb, q } from "@/lib/db";
 import { TENANT_COOKIE, hashPassword, uid, verifyPassword, verifyPortalToken } from "@/lib/auth";
@@ -243,6 +244,26 @@ export async function tenantDealViews(account: TenantAccount): Promise<TenantDea
       agent: { name: d.managerName, email: d.managerEmail },
       otherTenants: d.app.tenants.filter((t) => !(t.email && normaliseEmail(t.email) === account.email)).map((t) => t.name),
       flatfair: Boolean(d.app.propoly?.depositReplacement),
+    });
+  }
+  /* A test file's deal (lib/test-overlay), for the tester signed in as their
+     own test tenant - Propoly has never heard of it. */
+  for (const t of await testDealsForTenant(account.email).catch(() => [])) {
+    const idx = Math.max(0, PORTAL_STAGES.findIndex((s) => s.key === t.stageKey));
+    const words = TENANT_WORDS[t.stageKey] ?? TENANT_WORDS.deal_started;
+    out.push({
+      id: `test-${t.appId}`,
+      property: t.property,
+      locality: t.locality,
+      rentPcm: t.rent,
+      moveIn: t.moveIn,
+      stageKey: t.stageKey,
+      stages: PORTAL_STAGES.map((s, i) => ({ key: s.key, label: TENANT_WORDS[s.key]?.label ?? s.label, state: i < idx ? "done" : i === idx ? "current" : "upcoming" })),
+      now: words.now,
+      next: words.next,
+      agent: { name: t.agentName, email: t.agentEmail },
+      otherTenants: [],
+      flatfair: false,
     });
   }
   /* Nearest move-in first. */

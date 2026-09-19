@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { TEST_REFUSAL, testDetails, testLandlord, testListingViewings, testPortals, testPublication } from "@/lib/test-listing-answers";
+import { isTestId } from "@/lib/test-overlay";
 import { portalStatsFor } from "@/lib/rex-portal-stats";
 import { rexConfigured } from "@/lib/rex";
 import { whoIs } from "@/lib/admin";
@@ -19,6 +21,7 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id")?.trim() ?? "";
   if (!id) return NextResponse.json({ ok: false, error: "A listing id is required." }, { status: 400 });
+  if (isTestId(id)) return NextResponse.json({ ok: false, error: "A test listing has no portal figures - it was never really on them.", test: true }, { status: 409 });
   if (!rexConfigured()) {
     return NextResponse.json({ ok: false, error: "The listings system isn't connected here." }, { status: 503 });
   }

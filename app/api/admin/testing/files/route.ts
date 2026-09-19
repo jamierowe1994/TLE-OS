@@ -22,7 +22,7 @@ import {
  * POST { action: "add", side }           a new test landlord, tenant or PLC pack
  * POST { action: "reset", id, stage }    back to a stage; never sends an email
  * POST { action: "delete", id }
- * POST { action: "relink", id }          a fresh landlord portal link
+ * POST { action: "relink", id }          a fresh landlord portal or tenant area link
  * POST { action: "remove-all" }          owners: every tester's files
  * POST { action: "ready" }               owners: remove all, and close testing
  * POST { action: "reopen" }              owners

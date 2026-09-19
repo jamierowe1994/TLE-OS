@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { TEST_REFUSAL, testDetails, testLandlord, testListingViewings, testPortals, testPublication } from "@/lib/test-listing-answers";
+import { isTestId } from "@/lib/test-overlay";
 import { whoIs } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
@@ -139,6 +141,7 @@ export async function GET(req: NextRequest) {
   if (!actor) return NextResponse.json({ ok: false, said: "Sign in first." }, { status: 401 });
   const id = req.nextUrl.searchParams.get("id")?.trim() ?? "";
   if (!id) return NextResponse.json({ ok: false, said: "Which listing?" }, { status: 400 });
+  if (isTestId(id)) return NextResponse.json({ ok: false, said: TEST_REFUSAL, test: true }, { status: 409 });
   if (!hasDb()) return NextResponse.json({ ok: false, said: "The lead book is not on this environment, so there is nobody to match." }, { status: 503 });
 
   try {
@@ -160,6 +163,7 @@ export async function POST(req: NextRequest) {
 
   const b = (await req.json().catch(() => ({}))) as { id?: unknown; emails?: unknown; preview?: unknown };
   const id = typeof b.id === "string" || typeof b.id === "number" ? String(b.id) : "";
+  if (isTestId(id)) return NextResponse.json({ ok: false, said: TEST_REFUSAL, test: true }, { status: 409 });
   const wanted = new Set((Array.isArray(b.emails) ? b.emails : []).map((e) => String(e).trim().toLowerCase()).filter(Boolean));
   if (!id || !wanted.size) return NextResponse.json({ ok: false, said: "Pick at least one person." }, { status: 400 });
 

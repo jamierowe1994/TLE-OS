@@ -1000,6 +1000,8 @@ export default function ListingDrawer({
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   <Tag tone={status.tone}>{status.label}</Tag>
                   {listing.tenant && <Tag tone="neutral">Tenanted</Tag>}
+                  {/* A test file's listing (lib/test-overlay): negative id, never in REX. */}
+                  {Number(listing.id) < 0 && <Tag tone="neutral">Test listing - only you can see it</Tag>}
                   {/* Terms, as one word rather than a panel. The copy lives in Documents. */}
                   {terms.status === "ready" && (
                     <button

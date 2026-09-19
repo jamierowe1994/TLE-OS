@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { TEST_REFUSAL, testDetails, testLandlord, testListingViewings, testPortals, testPublication } from "@/lib/test-listing-answers";
+import { isTestId } from "@/lib/test-overlay";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { record } from "@/lib/audit";
 import { readListingDetails } from "@/lib/listing-details";
@@ -39,6 +41,7 @@ export async function POST(req: NextRequest) {
   const { actor } = gate;
 
   const b = (await req.json().catch(() => ({}))) as { id?: unknown; kind?: unknown; key?: unknown };
+  if (isTestId(b.id)) return NextResponse.json({ ok: false, error: TEST_REFUSAL, test: true }, { status: 409 });
   const id = Number(b.id);
   const kind = b.kind === "photo" || b.kind === "floorplan" ? b.kind : null;
   const key = typeof b.key === "string" ? b.key : "";

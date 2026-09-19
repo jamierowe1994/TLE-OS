@@ -5,6 +5,22 @@ import { withArchiveState } from "@/lib/listings-archive-view";
 import { rexConfigured } from "@/lib/rex";
 import { whoIs } from "@/lib/admin";
 import { forAgent } from "@/lib/agent-words";
+import { testListingsFor } from "@/lib/test-overlay";
+
+/**
+ * The tester's own test listings on the front of the book (lib/test-overlay):
+ * a test file past its take-on has a listing live on the portals that REX has
+ * never heard of. Only the person who made it sees it, and it is never in the
+ * counts that report the business.
+ */
+async function withTests<T extends { listings: unknown[] }>(req: NextRequest, payload: T): Promise<T> {
+  if (req.nextUrl.searchParams.get("tests") === "0") return payload;
+  const { actor } = await whoIs(req).catch(() => ({ actor: null }));
+  const tests = await testListingsFor(actor?.email).catch(() => []);
+  if (!tests.length) return payload;
+  const stamped = tests.map((l) => ({ ...l, archived: false, archiveReason: null, archivedSince: null, archiveAgeDays: null, test: true }));
+  return { ...payload, listings: [...stamped, ...payload.listings] };
+}
 
 /**
  * The rental book, cached — same two layers as the leads route (memory for
@@ -54,18 +70,18 @@ export async function GET(req: NextRequest) {
      instant somebody presses Archive, and a listing that stayed put for ten
      minutes after being archived would read as a button that does nothing. */
   if (held && age < FRESH_MS) {
-    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await withArchiveState(held.book)), ageMs: age });
+    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await withTests(req, await withArchiveState(held.book))), ageMs: age });
   }
   if (held && age < STALE_MS) {
     void refresh(key, scope.rexUserId);
-    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await withArchiveState(held.book)), ageMs: age, stale: true });
+    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await withTests(req, await withArchiveState(held.book))), ageMs: age, stale: true });
   }
 
   try {
     const fresh = await refresh(key, scope.rexUserId);
-    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await withArchiveState(fresh.book)), ageMs: 0 });
+    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await withTests(req, await withArchiveState(fresh.book))), ageMs: 0 });
   } catch (e) {
-    if (held) return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await withArchiveState(held.book)), ageMs: age, stale: true });
+    if (held) return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await withTests(req, await withArchiveState(held.book))), ageMs: age, stale: true });
     const { actor } = await whoIs(req).catch(() => ({ actor: null }));
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? forAgent(actor, e.message, "The listings system did not answer. Try again in a minute.") : "The listings system did not answer. Try again in a minute." },

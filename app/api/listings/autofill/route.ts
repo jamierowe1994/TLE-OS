@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { TEST_REFUSAL, testDetails, testLandlord, testListingViewings, testPortals, testPublication } from "@/lib/test-listing-answers";
+import { isTestId } from "@/lib/test-overlay";
 import { autofillListing } from "@/lib/listing-autofill";
 import { readListingDetails } from "@/lib/listing-details";
 import { gateListingWrite } from "@/lib/listing-gate";
@@ -28,6 +30,7 @@ export async function POST(req: NextRequest) {
   const gate = await gateListingWrite(req, "listing-edit");
   if ("refuse" in gate) return gate.refuse;
   const b = (await req.json().catch(() => ({}))) as { id?: unknown; copy?: unknown };
+  if (isTestId(b.id)) return NextResponse.json({ ok: false, error: TEST_REFUSAL, test: true }, { status: 409 });
   const id = Number(b.id);
   if (!Number.isInteger(id) || id <= 0) return NextResponse.json({ ok: false, error: "Which listing?" }, { status: 400 });
   try {

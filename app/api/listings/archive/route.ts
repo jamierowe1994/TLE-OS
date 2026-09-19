@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { TEST_REFUSAL, testDetails, testLandlord, testListingViewings, testPortals, testPublication } from "@/lib/test-listing-answers";
+import { isTestId } from "@/lib/test-overlay";
 import { scopeFor } from "@/lib/scope";
 import { whoIs } from "@/lib/admin";
 import { bookFor, retiredFor } from "@/lib/listings-cache";
@@ -81,6 +83,7 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json().catch(() => ({}))) as { id?: string; action?: string; note?: string };
   const id = String(body.id ?? "").trim();
+  if (isTestId(id)) return NextResponse.json({ ok: false, error: TEST_REFUSAL, test: true }, { status: 409 });
   const action = body.action === "restore" ? "restored" : body.action === "archive" ? "archived" : null;
   if (!id || !action) {
     return NextResponse.json({ ok: false, error: "Which listing, and archive or restore?" }, { status: 400 });

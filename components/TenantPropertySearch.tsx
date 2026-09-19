@@ -95,7 +95,7 @@ export default function TenantPropertySearch({
 
   useEffect(() => {
     let live = true;
-    fetch("/api/listings", { cache: "no-store" })
+    fetch("/api/listings?tests=0", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => {
         if (!live) return;

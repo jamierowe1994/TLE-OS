@@ -12,6 +12,8 @@ import {
 import { rexConfigured, rexWritesLocked } from "@/lib/rex";
 import { scopeFor } from "@/lib/scope";
 import { stageLabels } from "@/lib/application-journey";
+import { testApplicationsFor } from "@/lib/test-overlay";
+import { whoIs } from "@/lib/admin";
 
 /**
  * GET  /api/applications?limit=100  → the live book from REX, newest first
@@ -57,12 +59,15 @@ export async function GET(req: NextRequest) {
       stageLabels(applications).catch(() => new Map<string, string>()),
       closedReasons(applications).catch(() => new Map<string, string>()),
     ]);
+    /* The tester's own test offers (lib/test-overlay), on top - never anyone else's. */
+    const { actor } = await whoIs(req).catch(() => ({ actor: null }));
+    const tests = (req.nextUrl.searchParams.get("tests") === "0" ? [] : await testApplicationsFor(actor?.email).catch(() => [])).map((a) => ({ ...a, stageLabel: a.stageLabel ?? a.statusLabel, test: true }));
     return NextResponse.json({
-      applications: applications.map((a) => ({
+      applications: [...tests, ...applications.map((a) => ({
         ...a,
         stageLabel: stages.get(a.id) ?? a.statusLabel,
         closed: closed.get(a.id) ?? null,
-      })),
+      }))],
       scope: scope.label,
       everything: scope.everything,
       pulledAt: new Date().toISOString(),

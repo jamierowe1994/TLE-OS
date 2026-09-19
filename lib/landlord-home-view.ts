@@ -7,6 +7,8 @@ import {
   landlordOffers,
   landlordProgress,
   landlordProperties,
+  offerOf,
+  testProgress,
   type AppraisalJourney,
   type LandlordCompliance,
   type LandlordDocument,
@@ -21,6 +23,7 @@ import { STAGES, stepsForStage, type LandlordView, type Stage, type ViewOffer } 
 import { readAnswers } from "@/lib/property-answers-store";
 import { progress as answerProgress } from "@/lib/property-questions";
 import type { ManagedProperty } from "@/lib/portfolio-types";
+import { testDealForAppraisal, testListingForAppraisal, testOffersForAppraisal, testViewingsForListing } from "@/lib/test-overlay";
 
 /**
  * A signed-in landlord's view, live - built once here and read by every page
@@ -48,7 +51,28 @@ const dayTime = (iso: string | null | undefined) =>
  * Empty on any failure - the portal renders without it rather than hang.
  * Viewers are described, never named, before there is an offer.
  */
-async function marketingFor(rexPropertyId: string | null): Promise<{ marketing: ViewMarketing | null; viewings: ViewViewing[] }> {
+async function marketingFor(rexPropertyId: string | null, appraisalId?: string): Promise<{ marketing: ViewMarketing | null; viewings: ViewViewing[] }> {
+  /* A test file's listing (lib/test-overlay) - REX has never heard of it. */
+  const test = appraisalId ? await testListingForAppraisal(appraisalId).catch(() => null) : null;
+  if (test) {
+    const vs = await testViewingsForListing(test.listingId).catch(() => []);
+    return {
+      marketing: {
+        live: true,
+        liveSince: day(test.publishedAt),
+        portals: test.portals.map((p) => ({ name: p.portal, href: p.url })),
+        photos: test.images,
+        note: `${test.images.length} photographs`,
+      },
+      viewings: vs.map((v) => ({
+        id: `os-${v.appointmentId}`,
+        when: dayTime(v.startsAt) ?? "",
+        who: "A prospective tenant",
+        state: (v.done ? "done" : "booked") as ViewViewing["state"],
+        feedback: null,
+      })),
+    };
+  }
   if (!rexPropertyId || !rexConfigured()) return { marketing: null, viewings: [] };
   try {
     const book = await fetchListingBook();
@@ -154,7 +178,8 @@ export async function loadLandlordHome(me: Me, pick?: string | null) {
   const book = chosenM ? [chosenM, ...managed.filter((p) => p !== chosenM)] : managed;
 
   const lead = open[0] ?? null;
-  const [compliance, offers, progress, approved] = await Promise.all([
+  // eslint-disable-next-line prefer-const
+  let [compliance, offers, progress, approved] = await Promise.all([
     landlordCompliance(book),
     landlordOffers(
       lead ? [lead.appraisal.rexPropertyId] : book[0] ? [book[0].propertyId] : [],
@@ -173,6 +198,16 @@ export async function loadLandlordHome(me: Me, pick?: string | null) {
        lib/landlord-offers for why approving cannot move an application. */
     currentApproval(me.id).catch(() => null),
   ]);
+  /* A test file (lib/test-overlay): its fake offers and deal, on top of
+     whatever REX and Propoly said - which for a test is nothing. */
+  if (lead) {
+    const [tOffers, tDeal] = await Promise.all([
+      testOffersForAppraisal(lead.appraisal.id).catch(() => []),
+      testDealForAppraisal(lead.appraisal.id).catch(() => null),
+    ]);
+    offers.push(...tOffers.map(offerOf));
+    if (tDeal && !progress) progress = testProgress({ property: tDeal.property, locality: tDeal.locality, tenantName: tDeal.tenantName, moveIn: tDeal.moveIn, rent: tDeal.rent, stageKey: tDeal.stageKey });
+  }
   const first = me.name.split(/\s+/)[0] || me.name;
   const base = open[0]
     ? await appraisalView(open[0], first, docs, msgs, offers, me.id)
@@ -242,7 +277,7 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
 
   const geo = await geocode(`${a.address}, ${a.postcode}`).catch(() => null);
   const onMarket = at >= STAGES.findIndex((s) => s.id === "marketing");
-  const { marketing, viewings } = onMarket ? await marketingFor(a.rexPropertyId) : { marketing: null, viewings: [] as ViewViewing[] };
+  const { marketing, viewings } = onMarket ? await marketingFor(a.rexPropertyId, a.id) : { marketing: null, viewings: [] as ViewViewing[] };
 
   const deckLabel = latest ? (DECK_KINDS.find((k) => k.id === latest.kind)?.label ?? latest.kind) : null;
   const shownLabel = shown ? (DECK_KINDS.find((k) => k.id === shown.kind)?.label ?? shown.kind) : null;

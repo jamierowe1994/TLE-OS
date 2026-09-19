@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { TEST_REFUSAL, testDetails, testLandlord, testListingViewings, testPortals, testPublication } from "@/lib/test-listing-answers";
+import { isTestId } from "@/lib/test-overlay";
 import { whoIs } from "@/lib/admin";
 import { record } from "@/lib/audit";
 import { MAX_HIGHLIGHTS, planListingWrite, readListingDetails, type ListingEdit } from "@/lib/listing-details";
@@ -37,6 +39,11 @@ const listingId = (v: unknown): number | null => {
 };
 
 export async function GET(req: NextRequest) {
+  const testId = req.nextUrl.searchParams.get("id");
+  if (isTestId(testId)) {
+    const t = await testDetails(Number(testId));
+    return t ? NextResponse.json(t) : NextResponse.json({ ok: false, error: "That test listing has gone." }, { status: 404 });
+  }
   if (!rexConfigured()) return NextResponse.json({ ok: false, error: "The listings are not connected on this environment." }, { status: 503 });
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
@@ -73,6 +80,7 @@ export async function PATCH(req: NextRequest) {
   const { actor } = gate;
 
   const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  if (isTestId(b.id)) return NextResponse.json({ ok: false, error: TEST_REFUSAL, test: true }, { status: 409 });
   const id = listingId(b.id);
   if (!id) return NextResponse.json({ ok: false, error: "A numeric listing id is required." }, { status: 400 });
 
