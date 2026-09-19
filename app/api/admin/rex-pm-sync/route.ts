@@ -5,6 +5,7 @@ import { matchProperty } from "@/lib/property-match";
 import { createProperty } from "@/lib/rex-properties";
 import { splitAddress } from "@/lib/rex-instruct";
 import { writeCertificateRow } from "@/lib/certificate-intake";
+import { tidyAddress } from "@/lib/rex-pm-address";
 
 /**
  * THE REX HALF OF "EVERYTHING IN BOTH" (Susan, 19 Sep 2026; James: "do the
@@ -36,14 +37,14 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 type Home = { id: string; ref: string; address: string; postcode: string | null };
-type Plan = { id: string; ref: string; address: string; action: "link" | "create" | "hold"; why: string; rexId: string | null; candidates: string[] };
+type Plan = { id: string; ref: string; address: string; action: "link" | "create" | "hold"; why: string; rexId: string | null; candidates: string[]; asRex?: ReturnType<typeof splitAddress> };
 
 const lettings = (list: { id: string; name: string }[]) => list.filter((t) => /^\d+$/.test(t.id));
 
 async function homes(ids?: string[]): Promise<Home[]> {
   return q<Home>(
     `SELECT id, ref, address, postcode FROM os_properties
-      WHERE active AND rex_property_id IS NULL ${ids?.length ? "AND id = ANY($1)" : ""}
+      WHERE active AND rex_property_id IS NULL AND COALESCE(match_how, '') NOT LIKE 'sync failed%' ${ids?.length ? "AND id = ANY($1)" : ""}
       ORDER BY address`,
     ids?.length ? [ids] : []
   );
@@ -63,7 +64,7 @@ async function planFor(h: Home): Promise<Plan> {
     return { ...base, action: "hold", why: m.verdict === "confident" ? `REX holds ${targets.length} records that fit` : `REX may hold it (${m.how})`, rexId: null, candidates: [...targets, ...possible].map((t) => `${t.name} [${t.id}]`) };
   }
   if (m.how === "no postcode on the address") return { ...base, action: "hold", why: "no postcode", rexId: null, candidates: [] };
-  return { ...base, action: "create", why: "nothing in REX at this postcode", rexId: null, candidates: [] };
+  return { ...base, action: "create", why: "nothing in REX at this postcode", rexId: null, candidates: [], asRex: splitAddress(tidyAddress(full), h.postcode) };
 }
 
 /** Its certificates onto the REX property, then into REX's compliance tab. */
@@ -110,11 +111,14 @@ export async function POST(req: NextRequest) {
     let rexId = p.rexId;
     let outcome = "";
     if (p.action === "create") {
-      const made = await createProperty(splitAddress(h.address, h.postcode), me.id);
+      const made = await createProperty(p.asRex ?? splitAddress(tidyAddress(h.address), h.postcode), me.id);
       if (!made.ok) {
         done.push({ ...p, outcome: `not created: ${made.ownerDetail ?? made.detail}` });
-        /* A refusal that will refuse every home (switch, session) stops the run. */
+        /* A refusal that will refuse every home (switch, session) stops the run
+           and marks nothing. One that is about THIS home is set aside, so it
+           does not head every batch after it, and reported. */
         if (["switch_off", "writes_locked", "no_rex_session", "rex_session_expired", "rex_not_configured"].includes(made.reason)) break;
+        await q(`UPDATE os_properties SET match_how = $2, updated_at = NOW() WHERE id = $1`, [h.id, `sync failed: ${made.detail}`.slice(0, 300)]);
         continue;
       }
       rexId = made.propertyId;
