@@ -149,6 +149,11 @@ export default function PresentationBuilder({
   const [progress, setProgress] = useState<null | "building" | "done" | "error">(null);
   const [updatingRun, setUpdatingRun] = useState(false);
   const seeded = useRef(false);
+  /* The appraisal deck's own picks, for a post-appraisal deck being built for
+     the first time (Susan, 19 Sep 2026: the post-appraisal showed different
+     comparables from the ones the agent chose for the visit). Only seeds the
+     ticks - saving still makes the post-appraisal deck its own. */
+  const [inherited, setInherited] = useState<SavedDeck["builder"]>(null);
   /* The market picture is loaded by its own panel on its own step, and lifted
      here so the deck is built from exactly the object that was on screen when
      the agent ticked the blocks. See MarketPicturePanel's onLoaded. */
@@ -388,6 +393,11 @@ export default function PresentationBuilder({
       .then((j: { ok?: boolean; sent?: (SavedDeck & { kind: string })[] }) => {
         if (gone) return;
         const mine = j.ok ? (j.sent ?? []).find((s) => s.kind === kind) : null;
+        if (!mine && kind === "post-appraisal") {
+          const visit = (j.sent ?? []).find((s) => s.kind === "appraisal" && s.builder);
+          /* The picks, not which slides were switched off: the two decks have different slides. */
+          setInherited(visit?.builder ? { ...visit.builder, hidden: [] } : null);
+        }
         setExisting(mine ? { token: mine.token, url: mine.url, builder: mine.builder ?? null } : null);
       })
       .catch(() => !gone && setExisting(null));
@@ -401,14 +411,14 @@ export default function PresentationBuilder({
   useEffect(() => {
     if (seeded.current || !d || existing === undefined) return;
     seeded.current = true;
-    const b = existing?.builder;
+    const b = existing?.builder ?? inherited;
     if (!b) return;
     const ids = new Set(d.comparables.map((c) => c.id));
     setChosen(b.comparables.filter((id) => ids.has(id)));
     setPickedNearby(b.listings);
     if (b.market) setMarketSel({ area: b.market.area, blocks: b.market.blocks as MarketBlockId[] });
     setHidden(b.hidden);
-  }, [d, existing]);
+  }, [d, existing, inherited]);
 
   useEffect(() => {
     /* NO beds. The filter starts on "Any beds", so the first list must be any

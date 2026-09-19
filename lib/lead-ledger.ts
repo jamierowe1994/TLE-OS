@@ -64,13 +64,27 @@ export async function recordLeads(leads: Lead[]): Promise<number> {
   return leads.length;
 }
 
-/** The newest leads on file, the whole business or one agent's. */
+/**
+ * Sales valuations already on file, before the scan learned to set them aside
+ * (lib/rex-leads isSalesValuation). Read from what the row holds - the
+ * snippet, and the whole enquiry once somebody has opened it - so a lead
+ * opened for the first time drops off the board if it turns out to be a sale.
+ * The same pattern as the scan's, in Postgres's words.
+ */
+const NOT_SALES = `NOT (
+  COALESCE(source, '') ILIKE '%getagent%'
+  OR (COALESCE(enquiry, '') = 'Valuation'
+      AND concat_ws(' ', payload->>'subject', payload->>'enquiryMessage', payload->>'enquiryFull', payload->>'enquiryFields')
+          ~* '(enquiry type:\\s*sales|\\mfor sale\\M|\\mvendor\\M|estimated value|quoted fee)')
+)`;
+
+/** The newest leads on file, the whole business or one agent's. Lettings only. */
 export async function ledgerBoard(rexUserId: string | null, limit = 500): Promise<Lead[]> {
   if (!hasDb()) return [];
   const rows = await q<{ payload: Lead }>(
     rexUserId
-      ? `SELECT payload FROM os_leads WHERE assignee_id = $2 ORDER BY received_at DESC NULLS LAST LIMIT $1`
-      : `SELECT payload FROM os_leads ORDER BY received_at DESC NULLS LAST LIMIT $1`,
+      ? `SELECT payload FROM os_leads WHERE assignee_id = $2 AND ${NOT_SALES} ORDER BY received_at DESC NULLS LAST LIMIT $1`
+      : `SELECT payload FROM os_leads WHERE ${NOT_SALES} ORDER BY received_at DESC NULLS LAST LIMIT $1`,
     rexUserId ? [limit, rexUserId] : [limit]
   ).catch(() => []);
   return rows.map((r) => r.payload);

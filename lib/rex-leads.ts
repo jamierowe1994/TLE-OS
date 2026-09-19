@@ -64,6 +64,18 @@ const LETTINGS_WORDS = /\b(letting|lettings|tenant|tenancy|rent|rental|to let)\b
 const SALES_WORDS = /\b(sales enquiry|buyer|for sale|purchase|vendor|offers over)\b/i;
 const VALUATION_WORDS = /\b(valuation|appraisal|market appraisal|how much is)\b/i;
 
+/**
+ * A valuation that is somebody SELLING (Susan, 19 Sep 2026: "why have we got
+ * sales agents on there?"). REX tags neither side on a valuation request, so
+ * it is read from the words: OnTheMarket says "Enquiry type: sales",
+ * Rightmove describes the house "for sale" with a price, and every GetAgent
+ * lead is a vendor - "Estimated value £450,000", "Your quoted fee 2% + VAT".
+ * GetAgent sends nothing else, so its source alone settles it.
+ */
+export const SALES_VALUATION_WORDS = /enquiry type:\s*sales|\bfor sale\b|\bvendor\b|estimated value|quoted fee/i;
+export const isSalesValuation = (text: string, source?: string | null): boolean =>
+  /getagent/i.test(source ?? "") || SALES_VALUATION_WORDS.test(text);
+
 type Verdict = { keep: true; enquiry: Lead["enquiry"] } | { keep: false; why: "sales" | "unclear" | "blank" };
 
 /**
@@ -92,7 +104,11 @@ export function classify(l: RexLead): Verdict {
   const text = `${l.subject ?? ""} ${l.body_snippet ?? ""}`;
   const typeId = l.lead_type?.id ?? "";
 
+  /* Only ever a VALUATION is read as a sale: a tenant writing "my landlord
+     is selling" is still a lettings lead. */
+  if (/getagent/i.test(l.received_from_email ?? "")) return { keep: false, why: "sales" };
   if (typeId === "appraisal_request" || VALUATION_WORDS.test(text)) {
+    if (isSalesValuation(text)) return { keep: false, why: "sales" };
     // A valuation request is a would-be landlord (or vendor) — the landlord
     // side of the book either way, and worth someone's morning.
     return { keep: true, enquiry: "Valuation" };

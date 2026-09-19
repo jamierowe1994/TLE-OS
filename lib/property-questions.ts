@@ -31,8 +31,8 @@
  * dropdown offering one makes the agency the author of the discrimination
  * rather than the landlord. Pets are asked as the Act frames them - the tenant
  * has a statutory right to REQUEST, and the landlord may not unreasonably
- * refuse - so the question is how they would like requests handled, not
- * whether pets are banned.
+ * refuse - so pets are welcome by default and the only other answer is a
+ * genuine reason, written down for the agent to check.
  */
 
 export type QuestionKind = "choice" | "multi" | "text" | "long";
@@ -349,16 +349,28 @@ export const PROPERTY_QUESTIONS: QuestionStep[] = [
           { id: "furnished", label: "Furnished" },
         ],
       },
+      /* Susan, 19 Sep 2026: under the Renters' Rights Act a landlord cannot
+         refuse a pet without a genuine reason - a severe allergy, a head-lease
+         that forbids it. So nothing here offers "no". The old "I'd rather not"
+         answer (reluctant) is gone; a landlord who chose it answers again. */
       {
         id: "pets",
-        label: "If a tenant asks to keep a pet",
+        label: "Pets",
         kind: "choice",
-        help: "Tenants have a legal right to ask, and a refusal has to be reasonable - so this is how you'd like requests handled, not a yes or no.",
+        help: "Under the Renters' Rights Act a tenant can keep a pet unless there is a genuine reason they can't, such as a severe allergy or a lease that forbids it. You can ask for pet insurance.",
         options: [
-          { id: "open", label: "Happy to consider it" },
-          { id: "ask", label: "Ask me each time" },
-          { id: "reluctant", label: "I'd rather not, but ask me anyway" },
+          { id: "open", label: "Pets are welcome" },
+          { id: "ask", label: "Welcome - tell me about the pet first" },
+          { id: "reason", label: "There's a genuine reason a pet can't live here" },
         ],
+      },
+      {
+        id: "pets-reason",
+        label: "What's the reason?",
+        kind: "long",
+        help: "We'll check it counts as a reasonable refusal before we rely on it.",
+        suggestions: ["Severe allergy in the household", "The head-lease doesn't allow pets", "Building rules don't allow pets"],
+        showIf: { id: "pets", is: ["reason"] },
       },
       {
         id: "smoking",

@@ -59,7 +59,10 @@ const HEATING_FROM_ANSWER: Record<string, string> = {
   "gas-combi": "Gas central heating", "gas-system": "Gas central heating", electric: "Electric heating", "heat-pump": "Air source heat pump",
 };
 const FURNISHING_FROM_ANSWER: Record<string, string> = { unfurnished: "Unfurnished", part: "Part furnished", furnished: "Furnished" };
-const PETS_FROM_ANSWER: Record<string, string> = { open: "Considered", ask: "Considered", reluctant: "No pets" };
+/* Never "No pets" from the questionnaire: a refusal needs a genuine reason
+   the agent has checked (Renters' Rights Act; Susan, 19 Sep 2026), so the
+   agent sets that by hand if it applies. */
+const PETS_FROM_ANSWER: Record<string, string> = { open: "Considered", ask: "Considered", reason: "Considered", reluctant: "Considered" };
 
 /* ── Homesearch's words, in the form's ───────────────────────────────────── */
 
