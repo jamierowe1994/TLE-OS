@@ -6,6 +6,7 @@ import { isOsLead, osContactIdFrom } from "@/lib/contacts-as-leads";
 import { getContact, markRex } from "@/lib/contacts-store";
 import { pushContactToRex } from "@/lib/rex-contacts";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
+import { addTestViewing, isTestId } from "@/lib/test-overlay";
 
 /**
  * POST → a viewing booked in the OS, carried everywhere it needs to be
@@ -49,6 +50,31 @@ export async function POST(req: NextRequest) {
   const minutes = Number(b.minutes) || 30;
   const listingId = b.listingId != null && b.listingId !== "" ? String(b.listingId) : null;
   const unaccompanied = b.unaccompanied === true;
+
+  /* A TEST LISTING (negative id, lib/test-overlay): the viewing goes in the
+     tester's own diary and onto the test file, and stops there. Nothing
+     reaches Outlook, REX or the applicant, and it shows on the listing, the
+     landlord's portal and the tenant's like a real one. */
+  if (isTestId(listingId)) {
+    const made = await addTestViewing({
+      listingId: Number(listingId),
+      startsAt: b.startsAt,
+      mins: minutes,
+      who: applicantName,
+      tenantEmail: (b.applicantEmail ?? "").trim().toLowerCase(),
+      withName: (actor.name || "").split(/\s+/)[0] || actor.name || "",
+      authorId: actor.id,
+      authorName: actor.name ?? "",
+    }).catch(() => null);
+    return NextResponse.json({
+      ok: Boolean(made),
+      test: true,
+      said: made
+        ? "Test viewing. It is in your diary and on the test file - nothing went to Outlook, REX or the applicant."
+        : "That test listing has gone. Reset the test file and try again.",
+      outlook: { ok: false, detail: "Test viewing: nothing was put in Outlook." },
+    }, made ? undefined : { status: 404 });
+  }
 
   const outlook = await putInOutlook({
     userId: actor.id,

@@ -344,3 +344,58 @@ export function testJourney(app: Application, deal: TestDeal | null): Applicatio
     history: [],
   };
 }
+
+/**
+ * A viewing booked on a TEST listing (James, 20 Sep 2026: "hook the two up so
+ * I can book a test viewing into that property").
+ *
+ * It goes in the tester's own diary (os_appointments, the same row a real
+ * booking makes) and onto the test file, so the listing's Viewings tab, the
+ * landlord's portal and the tenant's all show it. Nothing reaches Outlook,
+ * REX or the applicant - the caller skips those for a test id.
+ *
+ * The appointment id is written onto the kit as well, so resetting or
+ * deleting the file takes the diary entry with it (lib/test-files unwind).
+ */
+export async function addTestViewing(p: {
+  listingId: number;
+  startsAt: string;
+  mins: number;
+  who: string;
+  tenantEmail: string;
+  withName: string;
+  authorId: string | null;
+  authorName: string;
+}): Promise<{ appointmentId: string; listing: TestListing } | null> {
+  if (!hasDb()) return null;
+  const rows = await q<{ kit_id: string; owner_email: string; payload: TestListing }>(
+    `SELECT kit_id, owner_email, payload FROM os_test_records WHERE kind = 'listing' AND (payload->>'listingId')::bigint = $1 LIMIT 1`,
+    [p.listingId]
+  ).catch(() => []);
+  const row = rows[0];
+  if (!row) return null;
+
+  const id = randomUUID();
+  const where = `${row.payload.name}, ${row.payload.locality} ${row.payload.postcode}`.trim();
+  await q(
+    `INSERT INTO os_appointments (id, starts_at, mins, kind, title, where_at, who, author_id, author_name) VALUES ($1,$2,$3,'viewing',$4,$5,$6,$7,$8)`,
+    [id, new Date(p.startsAt).toISOString(), p.mins, `Viewing: ${row.payload.name} (test)`, where, p.who.slice(0, 120), p.authorId, p.authorName]
+  );
+  const v: TestViewing = {
+    appointmentId: id,
+    listingId: p.listingId,
+    tenantEmail: p.tenantEmail,
+    startsAt: new Date(p.startsAt).toISOString(),
+    withName: p.withName,
+    done: new Date(p.startsAt).getTime() < Date.now(),
+  };
+  await putTestRecord(row.kit_id, row.owner_email, "viewing", v);
+  /* Onto the kit, so a reset or a delete takes the diary entry with it. */
+  await q(
+    `UPDATE os_test_kits
+        SET refs = jsonb_set(COALESCE(refs, '{}'::jsonb), '{appointments}', COALESCE(refs->'appointments', '[]'::jsonb) || to_jsonb($2::text))
+      WHERE id = $1`,
+    [row.kit_id, id]
+  ).catch(() => null);
+  return { appointmentId: id, listing: row.payload };
+}

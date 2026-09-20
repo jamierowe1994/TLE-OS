@@ -206,7 +206,9 @@ export default function ViewingBooker({
   useEffect(() => {
     if (!open || mode !== "viewing") return;
     let live = true;
-    fetch("/api/listings?tests=0", { cache: "no-store" })
+    /* Test listings included: a test file's home is booked here like any
+       other, and the booking stays in the test world (/api/viewings/book). */
+    fetch("/api/listings", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => {
         if (!live || !j?.ok || !Array.isArray(j.listings)) return;
