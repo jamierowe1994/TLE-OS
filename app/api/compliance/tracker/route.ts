@@ -3,6 +3,7 @@ import { getComplianceBook } from "@/lib/compliance-cache";
 import { buildQueue, buildTracker } from "@/lib/compliance-tracker";
 import { COMP_BOOK } from "@/lib/compliance";
 import { rexConfigured } from "@/lib/rex";
+import { hasDb, q } from "@/lib/db";
 
 /**
  * GET /api/compliance/tracker → what is outstanding, what is coming, who to chase.
@@ -16,6 +17,27 @@ import { rexConfigured } from "@/lib/rex";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+/**
+ * Which chases have actually gone, to whom and when.
+ *
+ * "If the renewals are coming up, he will need to check that they've been
+ * emailed and followed up on" (James, 20 Sep 2026). The send log has held this
+ * since the chase was built; no screen read it. Null, not an empty list, when
+ * it cannot be read - "nobody has been emailed" and "we could not look" are
+ * different answers and he would act on the first.
+ */
+async function chaseLog(): Promise<{ key: string; to: string; at: string }[] | null> {
+  if (!hasDb()) return null;
+  try {
+    const rows = await q<{ chase_key: string; sent_to: string; sent_at: Date }>(
+      `SELECT chase_key, sent_to, sent_at FROM os_compliance_chases_sent ORDER BY sent_at DESC LIMIT 2000`
+    );
+    return rows.map((r) => ({ key: r.chase_key, to: r.sent_to, at: new Date(r.sent_at).toISOString() }));
+  } catch {
+    return null;
+  }
+}
 
 export async function GET() {
   // Without REX the sample book still exercises every code path, which is what
@@ -41,6 +63,7 @@ export async function GET() {
       ...(stale ? { stale: true } : {}),
       ...tracker,
       queue: buildQueue(tracker),
+      chases: await chaseLog(),
     });
   } catch (e) {
     return NextResponse.json(

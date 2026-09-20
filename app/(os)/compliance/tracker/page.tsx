@@ -22,12 +22,27 @@ type Payload = TrackerBook & {
   reason?: string;
   stale?: boolean;
   queue: QueuedReminder[];
+  /** What has actually gone, from the send log. Null = it could not be read. */
+  chases?: { key: string; to: string; at: string }[] | null;
   error?: string;
 };
 
 const cell = "px-3 py-2 align-top";
 
-function Rows({ rows, empty }: { rows: ChaseRow[]; empty: string }) {
+type Sent = Map<string, { to: string; at: string }>;
+
+const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+
+/**
+ * Agent before landlord, and headed "Chase via". Michael never writes to a
+ * landlord: "he will always go through the agent" (James, 20 Sep 2026). The
+ * landlord is on the row so he knows whose home it is, not who to ring.
+ *
+ * `sent` draws the Emailed column, on Coming up only - an expired certificate
+ * is past its reminders and is a conversation, not an email. Undefined leaves
+ * the column off; null says the log could not be read.
+ */
+function Rows({ rows, empty, sent }: { rows: ChaseRow[]; empty: string; sent?: Sent | null }) {
   if (!rows.length) return <p className="py-6 text-[12.5px] text-muted">{empty}</p>;
   return (
     <div className="overflow-x-auto">
@@ -37,8 +52,9 @@ function Rows({ rows, empty }: { rows: ChaseRow[]; empty: string }) {
             <th className={cell}>Property</th>
             <th className={cell}>Certificate</th>
             <th className={cell}>State</th>
+            <th className={cell}>Chase via</th>
             <th className={cell}>Landlord</th>
-            <th className={cell}>Agent</th>
+            {sent !== undefined && <th className={cell}>Agent emailed</th>}
           </tr>
         </thead>
         <tbody>
@@ -61,10 +77,21 @@ function Rows({ rows, empty }: { rows: ChaseRow[]; empty: string }) {
                   {r.reason}
                 </span>
               </td>
-              <td className={cell}>{r.landlord}</td>
               <td className={cell}>
-                {r.agent ?? <span className="text-accent-dark">not recorded</span>}
+                {r.agent ?? <span className="text-accent-dark">no agent on record</span>}
               </td>
+              <td className={cell}>{r.landlord}</td>
+              {sent !== undefined && (
+                <td className={cell}>
+                  {sent === null ? (
+                    <span className="text-muted">could not read the log</span>
+                  ) : sent.get(`${r.propertyId}:${r.cert}:${r.band}`) ? (
+                    <Pill tone="good">{day(sent.get(`${r.propertyId}:${r.cert}:${r.band}`)!.at)}</Pill>
+                  ) : (
+                    <span className="text-accent-dark">not yet</span>
+                  )}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -98,11 +125,13 @@ export default function ComplianceTracker() {
     };
   }, []);
 
+  const sent: Sent | null = d?.chases ? new Map(d.chases.map((c) => [c.key, { to: c.to, at: c.at }])) : null;
+
   return (
     <>
       <PageHeader
         title="Compliance tracker"
-        blurb="What is outstanding, what is coming, and who to chase — across the whole book."
+        blurb="What is overdue, what is coming up, and which agent to chase, across every home we manage."
       />
 
       {error && (
@@ -132,7 +161,7 @@ export default function ComplianceTracker() {
               ["30 days", d.counts.band30, "chase due"],
               ["14 days", d.counts.band14, "chase due"],
               ["7 days", d.counts.band7, "chase due"],
-              ["No agent", d.counts.noAgent, "cannot chase properly"],
+              ["No agent", d.counts.noAgent, "nobody to chase through"],
             ].map(([label, n, sub]) => (
               <div key={label as string} className="rounded-2xl border border-line/80 bg-panel p-4">
                 <p className="figures text-[22px] leading-none">{n as number}</p>
@@ -184,15 +213,16 @@ export default function ComplianceTracker() {
               />
             )}
             {tab === "upcoming" && (
-              <Rows rows={d.upcoming} empty="Nothing falls due in the next 30 days." />
+              <Rows rows={d.upcoming} empty="Nothing falls due in the next 30 days." sent={sent} />
             )}
             {tab === "queue" && (
               <>
                 <p className="mb-3 text-[11.5px] leading-relaxed text-muted">
-                  What would go out, if sending were wired. It is not.{" "}
+                  The reminders owed today, at 30, 14 and 7 days. They go to the agent, who
+                  speaks to their landlord.{" "}
                   <span className="font-semibold text-ink">Nothing on this page can send.</span>{" "}
-                  Every reminder addresses the landlord and the agent together — an agent must
-                  never be surprised by a chase on their own file.
+                  The daily run sends them once James turns certificate chases on, and Coming up
+                  shows which have gone.
                 </p>
                 {d.queue.length === 0 ? (
                   <p className="py-6 text-[12.5px] text-muted">Nothing due to be chased today.</p>

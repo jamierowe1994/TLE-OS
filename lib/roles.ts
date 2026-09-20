@@ -112,7 +112,7 @@ export const ROLE_BLURB: Record<Role, string> = {
   support: "The pre-tenancy board only. Superseded by Pre-tenancy — use that instead.",
   pretenancy: "The run-up to a move-in, across every agent's deals. Nothing else.",
   marketing: "Campaigns, paid leads, templates and the file store. No business figures.",
-  compliance: "Michael. Every agent's own compliance - what each holds, what has run out - and the knowledge hub. Nothing else.",
+  compliance: "Michael. The compliance desk - overdue and renewing certificates, new documents to verify, every agent's own compliance, finished works orders - and the knowledge hub.",
   agent: "Their own book and nothing else.",
 };
 

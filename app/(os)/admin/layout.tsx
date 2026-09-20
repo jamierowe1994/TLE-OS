@@ -90,6 +90,9 @@ const GROUPS: Array<{
       { href: "/company-figures", label: "Susan's view", needs: "see:business" },
       { href: "/marketing-hub", label: "Francesca's view", needs: "see:marketing" },
       { href: "/pre-tenancy/dashboard", label: "Kirstie's view", needs: "see:pretenancy" },
+      /* The fourth (20 Sep 2026). Properties, new documents to verify, the
+         agents' own compliance and finished works orders, behind one door. */
+      { href: "/compliance-desk", label: "Michael's view", needs: "see:agent-compliance" },
     ],
   },
   {
@@ -120,8 +123,8 @@ const GROUPS: Array<{
          somebody sitting inside their own screen invites them to read it while
          deciding - which is exactly what would destroy the measurement. */
       { href: "/admin/plc-checks", label: "PLC checks", needs: "see:reports" },
-      /* Michael's list and grid: what every agent holds personally. */
-      { href: "/agent-compliance", label: "Agent compliance", needs: "see:agent-compliance" },
+      /* Agent compliance was here. It is inside Michael's view now, under
+         Agents - one route in, as with the other three. */
       { href: "/admin/todo", label: "To do", needs: "see:reports" },
       /* Deliberately NOT in the "Views" group: VIEW_PREFIXES is derived from
          that group, and any href in it unmounts this rail. Note /emails also

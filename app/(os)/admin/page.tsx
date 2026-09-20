@@ -173,11 +173,12 @@ export default function AdminOverview() {
       {/* ── the other people's screens, one door each ── */}
       <section className="mt-6">
         <p className={eyebrow}>Views</p>
-        <div className="mt-3 grid gap-4 sm:grid-cols-3">
+        <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
             { href: "/company-figures", icon: "analytics", title: "Susan's view", sub: "The business figures, live." },
             { href: "/marketing-hub", icon: "megaphone", title: "Francesca's view", sub: "Marketing, the portals and the posts." },
             { href: "/pre-tenancy/dashboard", icon: "key", title: "Kirstie's view", sub: "Every let on its way to a move-in." },
+            { href: "/compliance-desk", icon: "shield", title: "Michael's view", sub: "Certificates, new documents, agents and works orders." },
           ].map((v) => (
             <Link key={v.href} href={v.href} className={`fade-up flex items-center gap-3 ${card} p-4 transition-colors hover:border-ink/40`}>
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: SAGE_WASH, color: SAGE_INK }}>

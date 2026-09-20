@@ -1960,6 +1960,28 @@ CREATE UNIQUE INDEX IF NOT EXISTS os_certificate_sends_once
   ON os_certificate_sends (certificate_id, role, lower(address)) WHERE sent;
 CREATE INDEX IF NOT EXISTS os_certificate_sends_cert ON os_certificate_sends (certificate_id, at DESC);
 
+-- MICHAEL'S CHECK (20 Sep 2026). One row per thing he has looked at: a
+-- certificate an agent or a contractor filed, a document a landlord uploaded
+-- in their portal, a finished works order.
+--
+-- A table of its own rather than a verified_at column on each of the three,
+-- for the reason os_certificate_sends is one: "who checked this gas
+-- certificate, and when?" gets asked later by somebody who is not us. It also
+-- leaves the three source tables, and everything that maps their rows, alone.
+--
+-- state: verified (off his list) | queried (something is wrong with it; the
+-- note says what, and it stays on the list until a good one is verified).
+-- One row per subject - a second look replaces the first.
+CREATE TABLE IF NOT EXISTS os_compliance_checks (
+  kind        TEXT NOT NULL,
+  subject_id  TEXT NOT NULL,
+  state       TEXT NOT NULL,
+  note        TEXT NOT NULL DEFAULT '',
+  by_name     TEXT NOT NULL DEFAULT '',
+  at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (kind, subject_id)
+);
+
 -- THE OS'S OWN PROPERTY RECORD (6 Sep 2026). One row per REX PM property, linked
 -- to its REX CRM property where the address matched, "not on REX" where it did
 -- not. See lib/os-properties.ts for why it exists.

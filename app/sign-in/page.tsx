@@ -75,7 +75,8 @@ function SignIn() {
            one tap away from the phone view's menu. */
         const phone = window.matchMedia("(max-width: 640px) and (pointer: coarse)").matches;
         router.replace(
-          !asked && j.user?.role === "pretenancy" ? "/pre-tenancy/dashboard" : !asked && phone ? "/m" : next
+          /* Michael lands on his own dashboard, as Kirstie does on hers (20 Sep 2026). */
+          !asked && j.user?.role === "pretenancy" ? "/pre-tenancy/dashboard" : !asked && j.user?.role === "compliance" ? "/compliance-desk" : !asked && phone ? "/m" : next
         );
       } else {
         setError(j.error ?? "That didn't work.");

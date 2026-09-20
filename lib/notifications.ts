@@ -6,6 +6,7 @@ import { listDealEvents } from "@/lib/business/deal-watch";
 import { eventSentence, eventTone, hrefFor, type DealEventKind } from "@/lib/business/deal-events";
 import type { Notice } from "@/lib/notices";
 import { remindersFor } from "@/lib/reminders";
+import { verifyQueue, worksToCheck } from "@/lib/compliance-desk";
 
 /**
  * What the bell shows, gathered from the tables where things already happen.
@@ -34,6 +35,11 @@ import { remindersFor } from "@/lib/reminders";
  *                            (James, 7 Sep 2026)
  *   reminders                the person alone - worked out from their own
  *                            book by lib/reminders, never anybody else's
+ *   documents to verify,     the compliance role alone (Michael, 20 Sep 2026:
+ *   finished works orders    "he needs to also be notified"). Read from his
+ *                            own two lists, so a notice goes when he ticks the
+ *                            thing off. Not owners: James and Susan can open
+ *                            his desk, and neither wants a ping per upload
  *
  * ── Read state ────────────────────────────────────────────────────────────
  *
@@ -57,7 +63,9 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
   const office = can(me.role, "see:marketing") || me.role === "owner";
   const ops = me.role === "owner" || can(me.role, "see:pretenancy");
 
-  const [deals, steps, handovers, reminders] = await Promise.all([
+  const desk = me.role === "compliance";
+
+  const [deals, steps, handovers, reminders, toVerify, toCheck] = await Promise.all([
     listDealEvents({ agentEmail: whole ? null : me.email, limit }).catch(() => []),
     office
       ? q<{ id: string; campaign_id: string; subject: string; detail: string; at: Date; name: string }>(
@@ -78,6 +86,8 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
         ).catch(() => [])
       : [],
     remindersFor(me.id, limit).catch(() => []),
+    desk ? verifyQueue().catch(() => []) : [],
+    desk ? worksToCheck().catch(() => []) : [],
   ]);
 
   const out: Notice[] = [...reminders];
@@ -118,6 +128,28 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
       body: why ? `Application ${h.application_id}. ${why}` : `Application ${h.application_id}${h.status === "ok" ? " went through every step." : "."}`,
       href: `/applications?open=${encodeURIComponent(h.application_id)}`,
       tone: h.status === "ok" ? "ok" : "warn",
+    });
+  }
+  for (const v of toVerify) {
+    out.push({
+      id: `verify:${v.kind}:${v.id}`,
+      kind: "compliance",
+      at: v.addedAt,
+      title: v.property,
+      body: `${v.what} ${v.door === "Landlord" ? `uploaded by ${v.by}` : `filed by ${v.by || "somebody"}`} (${v.door.toLowerCase()}). Waiting for you to verify.`,
+      href: "/compliance-desk/verify",
+      tone: "warn",
+    });
+  }
+  for (const o of toCheck) {
+    out.push({
+      id: `works:${o.id}`,
+      kind: "compliance",
+      at: o.completedAt,
+      title: o.property || `Job #${o.ref}`,
+      body: `Job #${o.ref} is finished: ${o.title}${o.contractor ? `, ${o.contractor}` : ""}. Waiting for you to check.`,
+      href: "/compliance-desk/works",
+      tone: "warn",
     });
   }
   out.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));

@@ -224,6 +224,13 @@ export function buildTracker(
   rawBook: CompProperty[],
   agentFor: (propertyId: string) => string | null = () => null
 ): TrackerBook {
+  /* The book already names the agent on each home (the one on its latest
+     listing), and until 20 Sep 2026 nothing here read it: every caller took
+     the default above, so every row said "not recorded" and the No agent tile
+     counted the whole list. Michael never writes to a landlord - "he will
+     always go through the agent" - so the agent is the one column he cannot
+     work without. A caller's own lookup still wins where it has an answer. */
+  const whoFor = (p: CompProperty) => agentFor(p.id) ?? (p.agent?.trim() || null);
   /* Michael, 7 Sep 2026: once a home is let on a let-only basis its
      certificates are the landlord's duty. Nobody here can book an engineer
      for it, so it never enters his chase list or his counts. */
@@ -231,7 +238,7 @@ export function buildTracker(
   const duplicateAddresses = sameAddress(ours);
   const book = byProperty(ours);
   const collapsed = ours.length - book.length;
-  const rows = book.flatMap((p) => rowsFor(p, agentFor(p.id)));
+  const rows = book.flatMap((p) => rowsFor(p, whoFor(p)));
 
   const outstanding = rows
     .filter((r) => r.status === "expired" || r.status === "missing")

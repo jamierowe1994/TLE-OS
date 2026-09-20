@@ -185,33 +185,23 @@ const WORKSPACES: Workspace[] = [
     href: "/newsroom", label: "Newsroom", icon: "megaphone",
     needs: "edit:knowledge",
   },
-  /* Michael's screen (item 11, 5 Sep): what every agent has to hold, and
-     where each stands. His first screen; the owner's via the admin rail. */
-  {
-    href: "/agent-compliance", label: "Agent compliance", icon: "shield",
-    needs: "see:agent-compliance", primaryFor: ["compliance", "super_admin"],
-  },
   /**
-   * The other half of Michael's job, and it was in no navigation at all.
+   * Michael's workspace (20 Sep 2026): ONE door, his rail inside it.
    *
-   * James, 14 Sep 2026: "Michael does all of the compliance, so we would need
-   * to set him up to check all of the compliance for all properties that have
-   * lapses in compliance, as well as the actual agent compliance."
+   * He used to have two loose entries here - Agent compliance (item 11, 5 Sep)
+   * and Compliance chases (14 Sep) - which was two thirds of his job listed as
+   * though it were two features of an agent's sidebar. James, 20 Sep: "We need
+   * to sort out Michael's view." So he gets what Kirstie got on 12 Sep: a door
+   * that opens onto his own dashboard, with the rail drawn by
+   * app/(os)/compliance-desk/layout - Properties (the chases), To verify,
+   * Agents, Works orders. Both old addresses still open their screens.
    *
-   * The screen for the first half already existed - /compliance/tracker, built
-   * as "the back-office view: across the whole book, what needs a person today,
-   * and who do I chase". Nothing linked to it. Not from the rail, not from
-   * Compliance, not from anywhere: it could only be reached by typing the
-   * address, so in practice it did not exist.
-   *
-   * Two doors, deliberately, because they answer different questions. Portfolio
-   * > Compliance (on every agent's sidebar, and unscoped - it reads the whole
-   * managed book) answers "is THIS property compliant". This answers "what has
-   * lapsed across all of them, and who do I chase today", which is the one
-   * Michael opens in the morning.
+   * "Compliance desk", not "Compliance": Portfolio > Compliance is already on
+   * every agent's sidebar and answers "is THIS home compliant". Two entries
+   * with one name is how somebody ends up on the wrong one every morning.
    */
   {
-    href: "/compliance/tracker", label: "Compliance chases", icon: "clock",
+    href: "/compliance-desk", label: "Compliance desk", icon: "shield",
     needs: "see:agent-compliance", primaryFor: ["compliance", "super_admin"],
   },
 ];
