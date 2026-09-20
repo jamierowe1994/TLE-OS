@@ -302,6 +302,15 @@ export async function testOfferForTenant(email: string): Promise<TestOffer | nul
   return r[0]?.payload ?? null;
 }
 
+/** The landlord behind a test tenancy, for a job raised by its tenant. */
+export async function landlordForTestDeal(dealId: string): Promise<{ name: string; email: string } | null> {
+  const id = dealId.startsWith("test-") ? dealId.slice(5) : dealId;
+  const d = await rows<TestDeal>("deal", "payload->>'appId' = $2", [id]).then((r) => r[0]?.payload ?? null);
+  if (!d) return null;
+  const l = await testListing(d.listingId);
+  return l ? l.landlord : null;
+}
+
 /** Stages in order, with each one's state, for a deal at `stageKey`. */
 export function stagesAt(stageKey: string) {
   const idx = Math.max(0, PORTAL_STAGES.findIndex((s) => s.key === stageKey));

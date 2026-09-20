@@ -4,6 +4,7 @@ import { uid } from "@/lib/auth";
 import { findUserByEmail, type OsUser } from "@/lib/users";
 import { getContact } from "@/lib/contacts-store";
 import { createAppraisal, markTermsSent, recordValuation, setOutcome } from "@/lib/appraisal-store";
+import { createOrder } from "@/lib/works-orders";
 import { recordTakeOnBooked } from "@/lib/takeon";
 import { storePhoto } from "@/lib/property-photos";
 import { createPassport } from "@/lib/passport";
@@ -132,7 +133,7 @@ export async function listTestFiles(me: OsUser, everyone: boolean): Promise<Test
 
 /* ── adding ──────────────────────────────────────────────────────────────── */
 
-const KIT_FOR: Record<TestFileSide, KitId> = { landlord: "landlord-lead", tenant: "tenant-enquiry", plc: "plc-pack" };
+const KIT_FOR: Record<TestFileSide, KitId> = { landlord: "landlord-lead", tenant: "tenant-enquiry", plc: "plc-pack", tenancy: "live-tenancy" };
 
 export async function addTestFile(side: TestFileSide, me: OsUser, origin: string): Promise<TestFile> {
   const run = await runKit(KIT_FOR[side], me, origin);
@@ -234,6 +235,18 @@ async function unwind(refs: Refs, ownerEmail: string, since: Date | string, kitI
   /* The test overlay past the take-on (lib/test-overlay): the pretend
      listing, offers and deal, the diary rows for its viewings, their
      feedback, and any comments left on the test application. */
+  /* A live tenancy file: its property record, the jobs raised on it, and any
+     inspection that fell due for it. The property is deleted last, so a job
+     is never left pointing at a home that has gone. */
+  if (refs.osPropertyId) {
+    const prop = refs.osPropertyId;
+    await run(`DELETE FROM os_works_order_events WHERE order_id IN (SELECT id FROM os_works_orders WHERE property_id = $1)`, [prop]);
+    await run(`DELETE FROM os_works_orders WHERE property_id = $1`, [prop]);
+    await run(`DELETE FROM os_inspection_events WHERE inspection_id IN (SELECT id FROM os_inspections WHERE property_id = $1 OR os_property_id = $1)`, [prop]);
+    await run(`DELETE FROM os_inspection_findings WHERE inspection_id IN (SELECT id FROM os_inspections WHERE property_id = $1 OR os_property_id = $1)`, [prop]);
+    await run(`DELETE FROM os_inspections WHERE property_id = $1 OR os_property_id = $1`, [prop]);
+    await run(`DELETE FROM os_properties WHERE id = $1 AND source = 'test'`, [prop]);
+  }
   const appts = refs.appointments ?? [];
   await run(`DELETE FROM os_viewing_feedback WHERE viewing_id = ANY($1)`, [appts.map((a) => `os-${a}`)]);
   await run(`DELETE FROM os_appointments WHERE id = ANY($1) AND rex_event_id IS NULL`, [appts]);
@@ -382,6 +395,100 @@ export async function resetTestFile(id: string, stageId: string, me: OsUser, ori
       links.push({ who: "agent", label: "The listing", href: `/listings?open=${built.listingId}` });
       if (built.appId) links.push({ who: "agent", label: "The application", href: `/applications?open=${encodeURIComponent(built.appId)}` });
     }
+  } else if (side === "tenancy") {
+    /* BOTH SIDES OF ONE HOME, ALREADY LET (James, 20 Sep 2026). The landlord
+       and the tenant are both the tester; the home joins the OS's own
+       property record, which is what puts it in the managed book, the
+       compliance book and the maintenance screen's property picker. */
+    const landlord = contact;
+    const tenantId = refs.contacts?.[1] ?? null;
+    const tenantContact = tenantId ? await getContact(tenantId).catch(() => null) : null;
+    if (!leadId || !landlord || !tenantContact) throw new KitRefused("This file has lost one of its two people, so it cannot be reset. Delete it and add another.");
+
+    const ma = await createAppraisal({
+      leadId,
+      landlord: landlord.name,
+      address: TEST_ADDRESS,
+      postcode: TEST_POSTCODE,
+      agent: maker.name || email,
+      appointmentAt: londonAt(-40, 11),
+    });
+    next.appraisals = [ma.id];
+    next.landlordEmail = email;
+    next.tenantEmail = email;
+    await recordValuation(ma.id, { valuation: 1250, serviceLevel: "full_managed", feePct: 12, setupFee: 750 }, maker.name || email);
+    await markTermsSent(ma.id).catch(() => null);
+    await setOutcome(ma.id, "won");
+
+    const movedInOn = londonAt(-30, 12);
+    const built = await marketStages({
+      kitId: id,
+      owner: email,
+      maker,
+      appraisalId: ma.id,
+      name: TEST_ADDRESS.split(",")[0],
+      landlord: { name: landlord.name, email },
+      tenant: { name: tenantContact.name, email },
+      upTo: "move-in",
+      movedInOn,
+    });
+    next.appointments = built.appointments;
+
+    /* The property record: a home the OS holds itself, exactly as the REX PM
+       homes are held (lib/os-properties). Without it the maintenance screen
+       cannot offer the address and no inspection can fall due on it. */
+    const osPropertyId = `pm-test-${id}`;
+    await q(
+      `INSERT INTO os_properties (id, source, ref, address, name, locality, postcode, town, bedrooms, management, categories, hmo, no_gas, rex_property_id, match_how, active)
+       VALUES ($1,'test',$2,$3,$4,$5,$6,$7,2,'Active letting agreement','[]'::jsonb,FALSE,FALSE,NULL,'test file',TRUE)
+       ON CONFLICT (id) DO UPDATE SET address = EXCLUDED.address, active = TRUE, updated_at = NOW()`,
+      [osPropertyId, `TEST-${id.slice(0, 6).toUpperCase()}`, `${TEST_ADDRESS}, ${TEST_POSTCODE}`, TEST_ADDRESS.split(",")[0], "Didsbury, Manchester", TEST_POSTCODE, "Manchester"]
+    );
+    next.osPropertyId = osPropertyId;
+
+    const both = { propertyId: osPropertyId, propertyName: TEST_ADDRESS.split(",")[0], locality: `Didsbury, Manchester ${TEST_POSTCODE}` };
+    const orders: string[] = [];
+    if (stage.id === "repair") {
+      const o = await createOrder({
+        ...both,
+        kind: "repair",
+        title: "Kitchen tap - dripping and getting worse",
+        description: "The mixer tap in the kitchen drips constantly and the cold side has started to judder. (Test file.)",
+        category: "Plumbing",
+        urgency: "routine",
+        landlord: landlord.name,
+        landlordEmail: email,
+        tenant: tenantContact.name,
+        tenantEmail: email,
+        reportedBy: "Tenant",
+      }, maker.name || email).catch(() => null);
+      if (o) orders.push(o.id);
+    }
+    if (stage.id === "planned") {
+      const o = await createOrder({
+        ...both,
+        kind: "planned",
+        title: "Gas safety check (CP12)",
+        description: "The annual gas safety check. (Test file.)",
+        category: "Gas safety (CP12)",
+        dueAt: londonAt(7, 10),
+        landlord: landlord.name,
+        landlordEmail: email,
+        tenant: tenantContact.name,
+        tenantEmail: email,
+        reportedBy: "The office",
+      }, maker.name || email).catch(() => null);
+      if (o) orders.push(o.id);
+    }
+    if (orders.length) next.orders = orders;
+
+    nextKit = "live-tenancy";
+    links.length = 0;
+    links.push({ who: "agent", label: "Open the appraisal", href: `/market-appraisals/${encodeURIComponent(ma.id)}` });
+    links.push({ who: "agent", label: "The listing", href: `/listings?open=${built.listingId}` });
+    links.push({ who: "agent", label: "Maintenance", href: "/maintenance" });
+    links.push({ who: "agent", label: "Open the landlord", href: `/leads?side=landlord&open=${leadId}` });
+    links.push({ who: "agent", label: "Open the tenant", href: `/leads?side=tenant&open=os-${tenantContact.id}` });
   } else {
     const ref = `TEST-${uid().slice(0, 6).toUpperCase()}`;
     const pack = await createCase({
@@ -521,6 +628,8 @@ async function marketStages(o: {
   landlord: { name: string; email: string };
   tenant: { name: string; email: string };
   upTo: MarketStage;
+  /** A let that has already started, for a live tenancy file. */
+  movedInOn?: string;
 }): Promise<{ listingId: number; appId: string | null; appointments: string[] }> {
   const at = (s: MarketStage) => ORDER.indexOf(o.upTo) >= ORDER.indexOf(s);
   const agentName = o.maker.name || o.owner;
@@ -590,7 +699,7 @@ async function marketStages(o: {
       applicantName: o.tenant.name,
       applicantEmail: o.tenant.email,
       amount: 1250,
-      moveIn: londonAt(21, 12).slice(0, 10),
+      moveIn: (o.movedInOn ?? londonAt(21, 12)).slice(0, 10),
       months: 12,
       adults: 2,
       children: 0,

@@ -49,6 +49,7 @@ const SIDE_TONE: Record<TestFileSide, string> = {
   landlord: "border-amber-200 bg-amber-50 text-amber-900",
   tenant: "border-sky-200 bg-sky-50 text-sky-900",
   plc: "border-violet-200 bg-violet-50 text-violet-900",
+  tenancy: "border-emerald-200 bg-emerald-50 text-emerald-900",
 };
 
 const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -243,21 +244,25 @@ export default function TestFilesTab() {
                           {l.label}
                         </a>
                       ))}
-                      {f.canRelink && mine && (
+                      {/* A live tenancy is both people, so it gets both doors. */}
+                      {f.canRelink && mine && (f.side === "tenancy" ? (["landlord", "tenant"] as const) : [f.side === "tenant" ? ("tenant" as const) : ("landlord" as const)]).map((as) => (
                         <button
+                          key={as}
                           type="button"
                           disabled={busy !== null}
                           onClick={() =>
-                            void act(`relink:${f.id}`, { action: "relink", id: f.id }, (j) => {
+                            void act(`relink:${f.id}:${as}`, { action: "relink", id: f.id, as }, (j) => {
                               if (typeof j.url === "string") window.open(j.url, "_blank", "noreferrer");
                             })
                           }
                           className="inline-flex items-center gap-2 rounded-full border border-line bg-white py-1 pl-1.5 pr-3 text-[12px] transition hover:border-ink/40 disabled:opacity-50"
                         >
-                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-[1px] text-[10.5px] text-amber-900">{f.side === "tenant" ? "Tenant" : "Landlord"}</span>
-                          {busy === `relink:${f.id}` ? "Making a link…" : f.side === "tenant" ? "Open the tenant area as them" : "Open the landlord portal as them"}
+                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-[1px] text-[10.5px] text-amber-900">{as === "tenant" ? "Tenant" : "Landlord"}</span>
+                          {busy === `relink:${f.id}:${as}`
+                            ? "Making a link…"
+                            : as === "tenant" ? "Open the tenant area as them" : "Open the landlord portal as them"}
                         </button>
-                      )}
+                      ))}
                     </div>
                   )}
                 </li>

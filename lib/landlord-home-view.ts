@@ -180,6 +180,7 @@ export async function loadLandlordHome(me: Me, pick?: string | null) {
   const book = chosenM ? [chosenM, ...managed.filter((p) => p !== chosenM)] : managed;
 
   const lead = open[0] ?? null;
+  let movedIn = false;
   // eslint-disable-next-line prefer-const
   let [compliance, offers, progress, approved] = await Promise.all([
     landlordCompliance(book),
@@ -209,6 +210,9 @@ export async function loadLandlordHome(me: Me, pick?: string | null) {
     ]);
     offers.push(...tOffers.map(offerOf));
     if (tDeal && !progress) progress = testProgress({ property: tDeal.property, locality: tDeal.locality, tenantName: tDeal.tenantName, moveIn: tDeal.moveIn, rent: tDeal.rent, stageKey: tDeal.stageKey });
+    /* Moved in a month ago (a live tenancy test file): the file is a MANAGED
+       property from here, which is what opens maintenance on the portal. */
+    movedIn = Boolean(tDeal && tDeal.stageKey === "move_day" && tDeal.moveIn && new Date(tDeal.moveIn).getTime() < Date.now() - 24 * 3600 * 1000);
   }
   const first = me.name.split(/\s+/)[0] || me.name;
   const base = open[0]
@@ -216,7 +220,14 @@ export async function loadLandlordHome(me: Me, pick?: string | null) {
     : book[0]
       ? await managedView(book[0], first, compliance.get(book[0].propertyId ?? "") ?? null, offers)
       : null;
-  const view = base ? { ...base, progress, approvedOfferId: approved?.applicationId ?? null } : null;
+  const view = base
+    ? {
+        ...base,
+        progress,
+        approvedOfferId: approved?.applicationId ?? null,
+        ...(movedIn ? { stage: "managed" as const, property: { ...base.property, state: "Tenanted" } } : {}),
+      }
+    : null;
   const rest = open[0] ? book : book.slice(1);
   /* Which one this actually resolved to, so the shell can light the right row
      in the dropdown even when ?p= was absent or stale. */

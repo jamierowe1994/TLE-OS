@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { landlordForTestDeal } from "@/lib/test-overlay";
 import { currentTenant } from "@/lib/tenant-account";
 import { loadTenantHome } from "@/lib/tenant-home-view";
 import { createOrder, listOrders } from "@/lib/works-orders";
@@ -88,6 +89,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  /* A test tenancy's landlord (lib/test-overlay): a job the tester reports as
+     their own tenant should reach the landlord portal they also own. A real
+     deal carries no landlord here, so nothing changes for one. */
+  const testLandlord = deal.id.startsWith("test-") ? await landlordForTestDeal(deal.id).catch(() => null) : null;
   const order = await createOrder(
     {
       kind: "repair",
@@ -106,6 +111,7 @@ export async function POST(req: NextRequest) {
       category: "Other",
       urgency: "routine",
       reportedBy: "Tenant",
+      ...(testLandlord ? { landlord: testLandlord.name, landlordEmail: testLandlord.email } : {}),
     },
     me.name || me.email
   );

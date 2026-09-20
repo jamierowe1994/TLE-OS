@@ -76,6 +76,10 @@ export interface Refs {
   passports?: string[];
   plcCases?: string[];
   landlordEmail?: string;
+  /** The OS property a live-tenancy file made, so maintenance can hang off it. */
+  osPropertyId?: string;
+  /** Works orders the file made, cleared with it. */
+  orders?: string[];
   /** The tester's own address, signed in to the tenant area as their test tenant. */
   tenantEmail?: string;
   /** Diary rows (os_appointments) a later stage made: its viewings. */
@@ -159,6 +163,17 @@ export async function runKit(kit: KitId, me: OsUser, origin: string): Promise<Ki
     refs.leadIds = [...(refs.leadIds ?? []), `os-${c.id}`];
     return c;
   };
+
+  /* Both sides of one home, on the tester's own email (James, 20 Sep 2026).
+     The rest - the appraisal, the listing, the let and the property record -
+     is built by the reset, so every stage takes the same road. */
+  if (kit === "live-tenancy") {
+    const l = await contact("landlord");
+    const t = await contact("tenant");
+    stored.push({ who: "agent", label: "Open the landlord", href: `/leads?side=landlord&open=os-${l.id}` });
+    stored.push({ who: "agent", label: "Open the tenant", href: `/leads?side=tenant&open=os-${t.id}` });
+    said.push(`Made ${l.name} and ${t.name}, both on ${email}. Reset it to Moved in to build the tenancy.`);
+  }
 
   if (kit === "tenant-enquiry" || kit === "landlord-lead") {
     const kind = kit === "tenant-enquiry" ? "tenant" : "landlord";
@@ -286,7 +301,7 @@ export async function myKits(email: string): Promise<KitRun[]> {
 }
 
 /** A fresh landlord portal link for one of this person's booked-appraisal tests. */
-export async function relinkKit(id: string, me: OsUser, origin: string): Promise<string> {
+export async function relinkKit(id: string, me: OsUser, origin: string, as?: "landlord" | "tenant"): Promise<string> {
   if (!hasDb()) throw new KitRefused("There is no database here.");
   const email = me.email.trim().toLowerCase();
   const rows = await q<{ refs: Refs }>(
@@ -294,8 +309,19 @@ export async function relinkKit(id: string, me: OsUser, origin: string): Promise
     [id, email]
   );
   const refs = rows[0]?.refs;
-  if (refs?.tenantEmail) {
-    const name = refs.contacts?.[0] ? (await q<{ name: string }>(`SELECT name FROM os_contacts WHERE id = $1`, [refs.contacts[0]]).catch(() => []))[0]?.name : null;
+  /* A live tenancy is both, so the screen says which one it wants. */
+  if (as === "landlord") {
+    if (!refs?.landlordEmail) throw new KitRefused("That test has no landlord to sign in as.");
+    const link = await landlordLink(email, origin);
+    const appraisal = refs.appraisals?.[0];
+    return appraisal ? `${link}&next=${encodeURIComponent(`/landlord?p=a:${appraisal}`)}` : link;
+  }
+  if (refs?.tenantEmail && (as === "tenant" || !refs.landlordEmail)) {
+    /* The TENANT's name, which on a live tenancy is the second contact - the
+       first is the landlord (20 Sep 2026: the tenant area greeted the tester
+       as their own landlord). */
+    const who = refs.contacts?.[1] ?? refs.contacts?.[0];
+    const name = who ? (await q<{ name: string }>(`SELECT name FROM os_contacts WHERE id = $1`, [who]).catch(() => []))[0]?.name : null;
     return tenantLink(email, name || email, origin);
   }
   if (!refs?.landlordEmail) throw new KitRefused("That test has no landlord or tenant to sign in as.");

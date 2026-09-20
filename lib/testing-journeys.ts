@@ -1018,7 +1018,7 @@ export const WHO_WORDS: Record<TestWho, string> = {
   office: "Office",
 };
 
-export type KitId = "tenant-enquiry" | "landlord-lead" | "booked-appraisal" | "tenant-passport" | "plc-pack";
+export type KitId = "tenant-enquiry" | "landlord-lead" | "booked-appraisal" | "tenant-passport" | "plc-pack" | "live-tenancy";
 
 export interface KitDef {
   id: KitId;
@@ -1055,6 +1055,13 @@ export const KITS: Record<KitId, KitDef> = {
     makes: "A tenant lead with your email, a fresh passport, and the Viewing Booked invite sent to you with the link in it.",
     emails: true,
   },
+  "live-tenancy": {
+    id: "live-tenancy",
+    label: "Create a live tenancy",
+    makes:
+      "One home with BOTH sides on your email: you as the landlord and you as the tenant, moved in a month ago. The property joins the managed book, so the maintenance screen can raise a repair or a planned job on it, the tenant area can report one, and both portals show it.",
+    emails: false,
+  },
   "plc-pack": {
     id: "plc-pack",
     label: "Create a PLC pack",
@@ -1068,7 +1075,7 @@ export const KITS: Record<KitId, KitDef> = {
  * each of which can be put back to a stage and walked again, as many times as
  * it takes to find what breaks. lib/test-files does the work.
  */
-export type TestFileSide = "landlord" | "tenant" | "plc";
+export type TestFileSide = "landlord" | "tenant" | "plc" | "tenancy";
 
 export interface TestFileStage {
   id: string;
@@ -1117,6 +1124,18 @@ export const TEST_FILE_SIDES: Record<TestFileSide, { label: string; add: string;
       { id: "move-in", label: "Move-in", says: "Signed and paid. Moving in on the agreed date." },
     ],
   },
+  /* Both sides of one home, already let (James, 20 Sep 2026: "it will make a
+     tenant and a landlord property for me at the same time that are currently
+     moved in"), for maintenance, repairs, planned jobs and compliance. */
+  tenancy: {
+    label: "Live tenancy",
+    add: "Add a live tenancy (both sides)",
+    stages: [
+      { id: "moved-in", says: "You are the landlord AND the tenant of 14 Test Street, moved in a month ago. The home is on the managed book, so a repair or a planned job can be raised on it, and both portals are open.", label: "Moved in" },
+      { id: "repair", label: "Repair reported", says: "Moved in, with a repair the tenant has reported sitting on the maintenance board, waiting to be told to the landlord." },
+      { id: "planned", label: "Planned job due", says: "Moved in, with a planned job (the gas safety check) on the board for next week." },
+    ],
+  },
   plc: {
     label: "PLC pack",
     add: "Add a test PLC pack",
@@ -1125,7 +1144,10 @@ export const TEST_FILE_SIDES: Record<TestFileSide, { label: string; add: string;
 };
 
 export function sideOfKit(kit: KitId): TestFileSide {
-  return kit === "tenant-enquiry" || kit === "tenant-passport" ? "tenant" : kit === "plc-pack" ? "plc" : "landlord";
+  if (kit === "tenant-enquiry" || kit === "tenant-passport") return "tenant";
+  if (kit === "plc-pack") return "plc";
+  if (kit === "live-tenancy") return "tenancy";
+  return "landlord";
 }
 
 export type TestAreaId =

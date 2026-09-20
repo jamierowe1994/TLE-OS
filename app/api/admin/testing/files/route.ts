@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     throw e;
   }
 
-  const b = (await req.json().catch(() => ({}))) as { action?: string; side?: string; id?: string; stage?: string };
+  const b = (await req.json().catch(() => ({}))) as { action?: string; side?: string; id?: string; stage?: string; as?: string };
   const origin = publicOrigin(req);
   try {
     switch (b.action) {
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
       }
       case "relink": {
         if (!b.id) return NextResponse.json({ ok: false, error: "Which file?" }, { status: 400 });
-        return NextResponse.json({ ok: true, url: await relinkKit(b.id, me, origin) });
+        return NextResponse.json({ ok: true, url: await relinkKit(b.id, me, origin, b.as === "landlord" || b.as === "tenant" ? b.as : undefined) });
       }
       case "remove-all":
         return NextResponse.json({ ok: true, removed: await removeAllTesting(me) });
