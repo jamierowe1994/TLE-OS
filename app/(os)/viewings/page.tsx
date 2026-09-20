@@ -1,5 +1,6 @@
 "use client";
 
+import AccessBoard from "@/components/viewings/AccessBoard";
 import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
@@ -251,6 +252,12 @@ export default function Viewings() {
           </div>
         }
       />
+
+      {/* What still has to be sorted before somebody can be let in - on every
+          view, because it is the thing that stops a viewing happening. */}
+      <div className="mt-4">
+        <AccessBoard />
+      </div>
 
       {view === "feedback" ? (
         <div className="mt-4">
