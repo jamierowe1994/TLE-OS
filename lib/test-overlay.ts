@@ -291,6 +291,12 @@ export async function testViewingForTenant(email: string): Promise<TestViewing |
   return r[0]?.payload ?? null;
 }
 
+/** All of them, newest first - their record shows everywhere they have been. */
+export async function testViewingsForTenant(email: string): Promise<TestViewing[]> {
+  const r = await rows<TestViewing>("viewing", "LOWER(payload->>'tenantEmail') = LOWER($2)", [email]);
+  return r.map((x) => x.payload).sort((a, b) => b.startsAt.localeCompare(a.startsAt));
+}
+
 export async function testOfferForTenant(email: string): Promise<TestOffer | null> {
   const r = await rows<TestOffer>("offer", "LOWER(payload->>'applicantEmail') = LOWER($2)", [email]);
   return r[0]?.payload ?? null;

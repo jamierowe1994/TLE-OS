@@ -758,7 +758,15 @@ export default function ListingDrawer({
               <ul className="mt-2.5 space-y-1.5">
                 {v.contacts.map((c) => (
                   <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span className="font-semibold">{c.name}</span>
+                    {/* The name IS the way in to them (James, 20 Sep 2026:
+                        "we can't click into the tenant itself"). */}
+                    {c.leadId ? (
+                      <a href={`/leads?open=${encodeURIComponent(c.leadId)}`} className="font-semibold underline decoration-line underline-offset-2 hover:decoration-ink">
+                        {c.name}
+                      </a>
+                    ) : (
+                      <span className="font-semibold">{c.name}</span>
+                    )}
                     {c.phone && <a href={`tel:${c.phone.replace(/\s+/g, "")}`} className="text-muted hover:text-ink">{c.phone}</a>}
                     {c.phone && (
                       <WhatsAppButton
@@ -785,7 +793,7 @@ export default function ListingDrawer({
                       </WhatsAppButton>
                     )}
                     {c.email && <a href={`mailto:${c.email}`} className="text-muted hover:text-ink">{c.email}</a>}
-                    {c.leadId && <a href={`/leads?open=${encodeURIComponent(c.leadId)}`} className="rounded-full border border-line/80 px-2.5 py-0.5 text-[11px] hover:border-ink/40">Open the lead</a>}
+                    {c.leadId && <a href={`/leads?open=${encodeURIComponent(c.leadId)}`} className="rounded-full border border-line/80 px-2.5 py-0.5 text-[11px] hover:border-ink/40">Open the tenant</a>}
                     <button
                       type="button"
                       onClick={() => applyFor({ id: c.id, name: c.name, phone: c.phone })}

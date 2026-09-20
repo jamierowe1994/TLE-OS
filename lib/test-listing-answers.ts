@@ -81,6 +81,17 @@ export async function testListingViewings(id: number) {
   const l: TestListing | null = await testListing(id);
   if (!l) return null;
   const vs = await testViewingsForListing(id);
+  /* The tenant behind each one, so their name on the listing opens their
+     record like a real applicant's (James, 20 Sep 2026). A test file's
+     tenant is an OS contact, whose lead id is "os-<contact id>". */
+  const leadFor = new Map<string, string>();
+  if (hasDb() && vs.length) {
+    const emails = [...new Set(vs.map((v) => v.tenantEmail.toLowerCase()).filter(Boolean))];
+    const found = emails.length
+      ? await q<{ id: string; email: string }>(`SELECT id, LOWER(email) AS email FROM os_contacts WHERE LOWER(email) = ANY($1) AND is_test`, [emails]).catch(() => [])
+      : [];
+    for (const c of found) if (!leadFor.has(c.email)) leadFor.set(c.email, `os-${c.id}`);
+  }
   const names = hasDb() && vs.length
     ? new Map((await q<{ id: string; who: string; mins: number }>(`SELECT id, who, mins FROM os_appointments WHERE id = ANY($1)`, [vs.map((v) => v.appointmentId)]).catch(() => [])).map((r) => [r.id, r]))
     : new Map<string, { id: string; who: string; mins: number }>();
@@ -101,7 +112,7 @@ export async function testListingViewings(id: number) {
       status: v.done ? "completed" : "booked",
       cancelled: false,
       agent: v.withName,
-      contacts: [{ id: `test-${v.appointmentId}`, name: row?.who || "Test applicant", email: v.tenantEmail, phone: null, leadId: null }],
+      contacts: [{ id: `test-${v.appointmentId}`, name: row?.who || "Test applicant", email: v.tenantEmail, phone: null, leadId: leadFor.get(v.tenantEmail.toLowerCase()) ?? null }],
       feedbackId: null,
       description: null,
     };

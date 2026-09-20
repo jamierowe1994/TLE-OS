@@ -22,6 +22,7 @@ import ViewingBooker from "@/components/ViewingBooker";
 import MailThread from "@/components/MailThread";
 import TenantPropertySearch from "@/components/TenantPropertySearch";
 import LogTouch, { type LogMode } from "@/components/LogTouch";
+import type { PersonViewing } from "@/lib/person-viewings";
 import { ATTEMPT_KINDS, touchIcon, touchSentence, whenAgo, type LeadTouch, type Spine, type SpineId } from "@/lib/lead-spine";
 import { Pill } from "@/components/Wire";
 import { leadSide } from "@/lib/leads-sample";
@@ -56,22 +57,25 @@ import { WhatsAppButton } from "@/components/WhatsAppQr";
  * looking at (Properties), and what have they sent us (Documents).
  */
 
-type TabKey = "activity" | "tasks" | "documents" | "properties";
+type TabKey = "activity" | "tasks" | "viewings" | "documents" | "properties";
 
 /**
  * The side questions live in the top bar, not under the record: click one and
  * its panel takes the person box over; click it again and the contact details
  * come back. Null means "the record itself", which is the resting state.
  *
- * Viewings deliberately has no tab — at the appointment stage there is no
- * property to view, and a tab that's usually irrelevant teaches people to
- * stop reading tabs. Booked viewings surface in Activity, where they're news.
+ * Viewings earns a tab on a TENANT (James, 20 Sep 2026: "there's literally
+ * nowhere that I can view what properties they've already viewed"). On a
+ * landlord there is nothing to view, so it is left off - see `tabsFor`.
  */
 const TABS: { key: TabKey; label: string }[] = [
   { key: "tasks", label: "Tasks" },
+  { key: "viewings", label: "Viewings" },
   { key: "documents", label: "Documents" },
   { key: "properties", label: "Properties" },
 ];
+
+const tabsFor = (tenant: boolean) => (tenant ? TABS : TABS.filter((t) => t.key !== "viewings"));
 
 type Listing = {
   id: string; name: string; locality: string; rent: number | null; image: string | null;
@@ -528,6 +532,44 @@ function CardTitle({ icon, children }: { icon: string; children: React.ReactNode
     </h3>
   );
 }
+/** One viewing on a person's record: when, where, how it went, and the way in. */
+function ViewingLine({ v }: { v: PersonViewing }) {
+  const been = new Date(v.startsAt).getTime() < Date.now();
+  const when = new Date(v.startsAt).toLocaleString("en-GB", {
+    timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+  });
+  return (
+    <li className="flex items-start gap-3 rounded-2xl border border-line/60 p-3">
+      <span className="mt-[2px] flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft/60">
+        <DoodleIcon name="calendar" size={14} className="text-accent-dark" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13px] font-semibold">{v.address}</span>
+        <span className="block text-[11.5px] text-muted">
+          {when}
+          {v.agent ? ` · with ${v.agent}` : ""}
+          {v.test ? " · test file" : ""}
+        </span>
+      </span>
+      <span className="flex shrink-0 items-center gap-2">
+        <Pill tone={been ? (v.feedback ? "good" : "neutral") : "accent"}>
+          {been ? (v.feedback ? "Feedback in" : "Been") : "Booked"}
+        </Pill>
+        {v.listingId && (
+          <a
+            href={`/listings?open=${encodeURIComponent(v.listingId)}`}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-full border border-line/80 px-3 py-1 text-[11.5px] font-semibold transition-colors hover:border-ink/40"
+          >
+            The property
+          </a>
+        )}
+      </span>
+    </li>
+  );
+}
+
 function Glance({ icon, title, sub }: { icon: string; title: string; sub: string }) {
   return (
     <li className="flex items-start gap-3">
@@ -1044,6 +1086,30 @@ export default function LeadDrawer({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [lead, onClose, onStep, onTop]);
+
+  /* Every viewing this person has, live (lib/person-viewings) - what they
+     have seen and what is booked. `booked` is what was just made in this
+     session, before the ledger has read it back from REX. */
+  const [theirs, setTheirs] = useState<{ upcoming: PersonViewing[]; past: PersonViewing[] }>({ upcoming: [], past: [] });
+  useEffect(() => {
+    if (!lead || leadSide(lead) !== "tenant") return setTheirs({ upcoming: [], past: [] });
+    const q = new URLSearchParams();
+    if (lead.contactId) q.set("contact", String(lead.contactId));
+    if (contact.email || lead.email) q.set("email", contact.email || lead.email);
+    if (![...q.keys()].length) return;
+    let live = true;
+    fetch(`/api/viewings/person?${q}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { ok?: boolean; upcoming?: PersonViewing[]; past?: PersonViewing[] } | null) => {
+        if (live && j?.ok) setTheirs({ upcoming: j.upcoming ?? [], past: j.past ?? [] });
+      })
+      .catch(() => { /* the record reads fine without it */ });
+    return () => { live = false; };
+    /* Re-read when a booking is made here, so the new one appears at once. */
+  }, [lead, contact.email, booked.length]);
+  const theirViewings = [...theirs.upcoming, ...theirs.past];
+  const nextViewing = theirs.upcoming[0] ?? null;
+
 
   if (!lead || !detail) return null;
 
@@ -1566,8 +1632,29 @@ export default function LeadDrawer({
   );
 
   /* The side questions - tasks, documents, properties - in a pop-out. */
+  /** Their viewings, newest first, each opening the property it was on. */
+  const viewingsPanel = (
+    <div>
+      {theirViewings.length === 0 ? (
+        <p className="text-[13px] text-muted">Nothing booked, and nothing viewed yet. Book one from the top of the record.</p>
+      ) : (
+        <ul className="space-y-2.5">
+          {theirs.upcoming.length > 0 && <li className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">Coming up</li>}
+          {theirs.upcoming.map((v) => (
+            <ViewingLine key={v.id} v={v} />
+          ))}
+          {theirs.past.length > 0 && <li className="pt-2 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">Been to</li>}
+          {theirs.past.map((v) => (
+            <ViewingLine key={v.id} v={v} />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+
   const tabPanel = (
 <div>
+                {tab === "viewings" && viewingsPanel}
                 {tab === "tasks" && (
                   <>
                     {/* Real tasks, kept. Anything typed here is still here
@@ -1979,10 +2066,11 @@ export default function LeadDrawer({
           {/* The side questions, centre stage. A tab toggles: open its panel
               in the person box, or click again to put the record back. */}
           <div className="hidden items-center gap-2 sm:flex">
-            {TABS.map((t) => {
+            {tabsFor(isTenant).map((t) => {
               const count =
                 t.key === "tasks"
                   ? tasks.filter((x) => !x.done).length + (realTasks ?? []).filter((x) => !x.done).length
+                : t.key === "viewings" ? theirViewings.length
                 : t.key === "documents" ? docs.length
                 : t.key === "properties" ? shortlist.length
                 : 0;
@@ -2162,10 +2250,24 @@ export default function LeadDrawer({
                         {latestTouch && (
                           <Glance icon={touchIcon(latestTouch)} title={touchSentence(latestTouch)} sub={`${latestTouch.byName} · ${whenAgo(latestTouch.at)}`} />
                         )}
+                        {/* The viewing, at the top and in full when there is
+                            one (James, 20 Sep 2026). */}
                         <Glance
                           icon="calendar"
-                          title={viewings.length ? `${viewings.length} viewing${viewings.length === 1 ? "" : "s"} booked` : "No viewing yet"}
-                          sub={track[Math.min(step, track.length - 1)]?.label ?? "Enquiry"}
+                          title={
+                            nextViewing
+                              ? `Viewing ${whenFull(nextViewing.startsAt)}`
+                              : theirs.past.length
+                                ? `${theirs.past.length} viewing${theirs.past.length === 1 ? "" : "s"} been`
+                                : "No viewing booked"
+                          }
+                          sub={
+                            nextViewing
+                              ? `${nextViewing.address}${nextViewing.agent ? ` · with ${nextViewing.agent}` : ""}`
+                              : theirs.past.length
+                                ? `Last: ${theirs.past[0].address}`
+                                : (track[Math.min(step, track.length - 1)]?.label ?? "Enquiry")
+                          }
                         />
                         <Glance
                           icon="doc"
