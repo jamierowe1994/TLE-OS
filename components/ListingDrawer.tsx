@@ -15,6 +15,7 @@ import ViewingBooker, { type Person } from "@/components/ViewingBooker";
 import { CopyButton, DoneTick, PressButton } from "@/components/Bits";
 import { Tag } from "@/components/ListingTags";
 import { ARCHIVE_AFTER_DAYS, archiveLabel, archiveWhy, type ArchiveReason } from "@/lib/listing-archive";
+import ViewingSheet from "@/components/listing/ViewingSheet";
 import AccessRequest, { AccessSettings, NO_ACCESS, type Access } from "@/components/listing/AccessRequest";
 import DropZone, { type DropKind } from "@/components/listing/DropZone";
 import Doodles from "@/components/Doodles";
@@ -733,11 +734,12 @@ export default function ListingDrawer({
     const end = v.endsAt ? new Date(v.endsAt) : null;
     const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
     const who = v.contacts.map((c) => c.name).join(", ");
-    const open = openViewing === v.id;
     const past = start.getTime() < Date.now();
     return (
       <li key={v.id} className="border-b border-line/40 last:border-0">
-        <button type="button" onClick={() => setOpenViewing(open ? null : v.id)} className="flex w-full items-center gap-3 py-2.5 text-left transition-colors hover:bg-page">
+        {/* The whole row opens the viewing (James, 20 Sep 2026): its details
+            and, above all, whether we can get in. */}
+        <button type="button" onClick={() => setOpenViewing(v.id)} className="flex w-full items-center gap-3 py-2.5 text-left transition-colors hover:bg-page">
           <span className="w-28 shrink-0 text-[11px] text-muted">
             {start.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: past ? undefined : undefined })} · {hhmm(start)}
           </span>
@@ -745,105 +747,16 @@ export default function ListingDrawer({
           <Tag tone={v.cancelled ? "neutral" : past ? (v.feedbackId ? "good" : "accent") : "good"}>
             {v.cancelled ? "Cancelled" : past ? (v.feedbackId ? "Feedback in" : "Viewed") : v.status ?? "Booked"}
           </Tag>
+          {/* Whether we can actually get in, on the row - the list is read to
+              find the ones that still need chasing (James, 20 Sep 2026). */}
+          {!past && !v.cancelled && (() => {
+            const r = (access.requests ?? {})[v.id];
+            if (access.kind === "vacant") return <Tag tone={access.keysCollected ? "good" : "neutral"}>{access.keysCollected ? "Keys in" : "Keys to collect"}</Tag>;
+            if (!access.kind) return <Tag tone="accent">No access details</Tag>;
+            if (r?.grantedAt) return <Tag tone="good">Access confirmed</Tag>;
+            return <Tag tone="accent">{r ? "Access asked" : "Access to ask"}</Tag>;
+          })()}
         </button>
-        {open && (
-          <div className="mb-3 rounded-xl border border-line/50 bg-page px-4 py-3 text-[12px]">
-            <p className="text-[13px]">
-              {v.mins} minute {v.kind === "viewing" ? "viewing" : v.kind}, {start.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}, {hhmm(start)}{end ? ` to ${hhmm(end)}` : ""}
-            </p>
-            <p className="mt-1 text-muted">
-              {v.type ?? v.title}{v.agent ? ` · taken by ${v.agent}` : ""}{v.status ? ` · ${v.status}` : ""}
-            </p>
-            {v.contacts.length > 0 && (
-              <ul className="mt-2.5 space-y-1.5">
-                {v.contacts.map((c) => (
-                  <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    {/* The name IS the way in to them (James, 20 Sep 2026:
-                        "we can't click into the tenant itself"). */}
-                    {c.leadId ? (
-                      <a href={`/leads?open=${encodeURIComponent(c.leadId)}`} className="font-semibold underline decoration-line underline-offset-2 hover:decoration-ink">
-                        {c.name}
-                      </a>
-                    ) : (
-                      <span className="font-semibold">{c.name}</span>
-                    )}
-                    {c.phone && <a href={`tel:${c.phone.replace(/\s+/g, "")}`} className="text-muted hover:text-ink">{c.phone}</a>}
-                    {c.phone && (
-                      <WhatsAppButton
-                        phone={c.phone}
-                        name={c.name}
-                        /* Someone who is a lead has a log; a WhatsApp goes on it. */
-                        onSent={
-                          c.leadId
-                            ? async (message) => {
-                                const r = await fetch(`/api/leads/${encodeURIComponent(c.leadId as string)}/touches`, {
-                                  method: "POST",
-                                  headers: { "content-type": "application/json" },
-                                  body: JSON.stringify({ kind: "whatsapp", outcome: "sent", body: message }),
-                                });
-                                const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
-                                return j?.ok ? null : (j?.error ?? "That didn't save.");
-                              }
-                            : undefined
-                        }
-                        className="flex items-center gap-1.5 rounded-full border border-line/80 px-2.5 py-0.5 text-[11px] hover:border-ink/40"
-                      >
-                        <DoodleIcon name="message-2" size={11} className="text-accent-dark" />
-                        WhatsApp
-                      </WhatsAppButton>
-                    )}
-                    {c.email && <a href={`mailto:${c.email}`} className="text-muted hover:text-ink">{c.email}</a>}
-                    {c.leadId && <a href={`/leads?open=${encodeURIComponent(c.leadId)}`} className="rounded-full border border-line/80 px-2.5 py-0.5 text-[11px] hover:border-ink/40">Open the tenant</a>}
-                    <button
-                      type="button"
-                      onClick={() => applyFor({ id: c.id, name: c.name, phone: c.phone })}
-                      className="rounded-full border border-accent-dark/50 px-2.5 py-0.5 text-[11px] font-semibold text-accent-dark hover:border-accent-dark"
-                    >
-                      Make an application
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {v.description && <p className="mt-2 whitespace-pre-line text-muted">{v.description}</p>}
-            {/* Access to the property for THIS viewing, where it goes through
-                a person. Asked by email from the record; granted by hand when
-                they ring, text or reply. */}
-            {access.kind && access.kind !== "vacant" && !past && (
-              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line/50 pt-2.5">
-                {(() => {
-                  const r = (access.requests ?? {})[v.id];
-                  const who = access.kind === "tenant" ? "tenant" : "landlord";
-                  return (
-                    <>
-                      <Tag tone={r?.grantedAt ? "good" : r ? "accent" : "neutral"}>
-                        {r?.grantedAt ? `Access granted ${new Date(r.grantedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : r ? `Access requested ${new Date(r.requestedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : "Access not asked for yet"}
-                      </Tag>
-                      {!r?.grantedAt && (
-                        <button
-                          type="button"
-                          onClick={() => setAccess({ ...access, requests: { ...(access.requests ?? {}), [v.id]: { viewingId: v.id, when: v.startsAt, to: r?.to ?? access.email, requestedAt: r?.requestedAt ?? new Date().toISOString(), grantedAt: new Date().toISOString() } } })}
-                          className="rounded-full border border-line/60 bg-white px-2.5 py-1 text-[11px] font-semibold transition-colors hover:border-ink/40"
-                        >
-                          The {who} has granted access
-                        </button>
-                      )}
-                      {!r && (
-                        <button
-                          type="button"
-                          onClick={() => setAccess({ ...access, requests: { ...(access.requests ?? {}), [v.id]: { viewingId: v.id, when: v.startsAt, to: access.email, requestedAt: new Date().toISOString(), grantedAt: null } } })}
-                          className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-muted hover:text-ink"
-                        >
-                          Mark as requested
-                        </button>
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
-            )}
-          </div>
-        )}
       </li>
     );
   };
@@ -2165,6 +2078,38 @@ export default function ListingDrawer({
       )}
 
       <EmailToTenants open={emailing} onClose={() => setEmailing(false)} listing={listing} />
+
+      {/* One viewing, opened from the Viewings tab: its details and access. */}
+      {(() => {
+        const all = [...(viewings?.upcoming ?? []), ...(viewings?.past ?? [])];
+        const v = all.find((x) => x.id === openViewing);
+        if (!v) return null;
+        return (
+          <ViewingSheet
+            viewing={{
+              id: v.id,
+              startsAt: v.startsAt,
+              mins: v.mins,
+              type: v.type ?? null,
+              status: v.status ?? null,
+              cancelled: v.cancelled,
+              agent: v.agent ?? null,
+              description: v.description ?? null,
+              feedbackId: v.feedbackId ?? null,
+              contacts: v.contacts,
+            }}
+            address={listing.name}
+            agent={me}
+            access={access}
+            onAccess={setAccess}
+            accessLoading={accessStatus === "loading"}
+            tenant={listing.tenant ?? null}
+            landlord={landlord.status === "known" ? landlord.landlord : null}
+            onApply={(p) => { setOpenViewing(null); applyFor(p); }}
+            onClose={() => setOpenViewing(null)}
+          />
+        );
+      })()}
 
       <ViewingBooker
         open={booking}

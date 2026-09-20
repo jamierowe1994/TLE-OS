@@ -157,7 +157,7 @@ export default function AccessRequest({
       </button>
 
       {choosing && (
-        <Sheet title="How do we get in?" onClose={() => setChoosing(false)}>
+        <AccessSheet title="How do we get in?" onClose={() => setChoosing(false)}>
           <AccessSettings
             value={access}
             onChange={setAccess}
@@ -165,12 +165,12 @@ export default function AccessRequest({
             landlord={landlord}
             onDone={() => setChoosing(false)}
           />
-        </Sheet>
+        </AccessSheet>
       )}
 
       {composing && access.kind && access.kind !== "vacant" && (
-        <Sheet title={access.kind === "tenant" ? "Ask the tenant for access" : "Ask the landlord for access"} onClose={() => setComposing(false)} wide>
-          <Composer
+        <AccessSheet title={access.kind === "tenant" ? "Ask the tenant for access" : "Ask the landlord for access"} onClose={() => setComposing(false)} wide>
+          <AccessComposer
             access={access}
             address={address}
             agent={agent}
@@ -182,7 +182,7 @@ export default function AccessRequest({
             }}
             onClose={() => setComposing(false)}
           />
-        </Sheet>
+        </AccessSheet>
       )}
     </>
   );
@@ -270,7 +270,7 @@ export function AccessSettings({
 
 /* ── the email, drafted and previewed ──────────────────────────────────── */
 
-function Composer({
+export function AccessComposer({
   access,
   address,
   agent,
@@ -420,7 +420,7 @@ function Composer({
 
 /* ── a sheet over the drawer ───────────────────────────────────────────── */
 
-function Sheet({ title, wide, children, onClose }: { title: string; wide?: boolean; children: React.ReactNode; onClose: () => void }) {
+export function AccessSheet({ title, wide, children, onClose }: { title: string; wide?: boolean; children: React.ReactNode; onClose: () => void }) {
   const [shown, setShown] = useState(false);
   useEffect(() => {
     const t = requestAnimationFrame(() => setShown(true));
