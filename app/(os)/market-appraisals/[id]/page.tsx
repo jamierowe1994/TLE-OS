@@ -93,6 +93,21 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
 
   /* The decks, read once here for the quick links and the Next up box. */
   const refId = ma ? (ma.leadId ?? ma.id) : null;
+  /* The property type as the lead's property card holds it - "HMO" is one of
+     its choices, and that is what decides the HMO documents (20 Sep 2026). */
+  const [propertyType, setPropertyType] = useState<string | null>(null);
+  useEffect(() => {
+    const leadId = ma?.leadId;
+    if (!leadId) return;
+    let live = true;
+    fetch(`/api/leads/${encodeURIComponent(leadId)}/facts`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { ok?: boolean; property?: { type?: string | null } | null } | null) => {
+        if (live && j?.ok) setPropertyType(j.property?.type ?? null);
+      })
+      .catch(() => { /* the card still offers the full list */ });
+    return () => { live = false; };
+  }, [ma?.leadId]);
   const [decks, setDecks] = useState<SentDeck[] | null | undefined>(undefined);
   const loadDecks = useCallback(() => {
     if (!refId) return;
@@ -533,7 +548,7 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
       </section>
 
       {/* What the landlord will be asked for, beyond the five (Susan, 19 Sep 2026). */}
-      <RequiredDocs appraisalId={ma.id} />
+      <RequiredDocs appraisalId={ma.id} address={ma.address} postcode={ma.postcode} propertyType={propertyType} />
 
       {wizard && <TakeOnWizard ma={ma} onClose={() => setWizard(false)} onSaved={reload} />}
 

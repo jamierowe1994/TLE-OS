@@ -4,6 +4,7 @@ import { useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import { useCaseState } from "@/lib/case-state";
 import { EXTRA_DOC_KINDS, type ExtraDocKind, type RequiredDocsCase } from "@/lib/landlord-doc-kinds";
+import { isHmoType, isScottish } from "@/lib/property-flags";
 
 /**
  * WHAT THIS PROPERTY NEEDS, on the appraisal (Susan, 19 Sep 2026).
@@ -17,11 +18,34 @@ import { EXTRA_DOC_KINDS, type ExtraDocKind, type RequiredDocsCase } from "@/lib
 
 const GROUPS = ["HMO", "Scotland", "Any property"] as const;
 
-export default function RequiredDocs({ appraisalId }: { appraisalId: string }) {
+/** What the property itself suggests: Scotland by postcode, HMO by type. */
+const SCOTLAND_SET: ExtraDocKind[] = ["legionella", "landlord-reg"];
+const HMO_SET: ExtraDocKind[] = ["licence", "fire", "pat", "alarms"];
+
+export default function RequiredDocs({
+  appraisalId,
+  address,
+  postcode,
+  propertyType,
+}: {
+  appraisalId: string;
+  address?: string | null;
+  postcode?: string | null;
+  /** From the property card on the lead - "HMO" is one of its types. */
+  propertyType?: string | null;
+}) {
   const [value, save, status] = useCaseState<RequiredDocsCase>("required-docs", appraisalId, { extra: [] });
   const [open, setOpen] = useState(false);
   const picked = value.extra ?? [];
   const toggle = (id: ExtraDocKind) => save({ extra: picked.includes(id) ? picked.filter((x) => x !== id) : [...picked, id] });
+  const addAll = (ids: ExtraDocKind[]) => save({ extra: [...new Set([...picked, ...ids])] });
+
+  /* What this property suggests. Offered as one press, never ticked for
+     them (lib/property-flags). */
+  const scottish = isScottish(postcode, address);
+  const hmo = isHmoType(propertyType);
+  const missingScotland = scottish ? SCOTLAND_SET.filter((k) => !picked.includes(k)) : [];
+  const missingHmo = hmo ? HMO_SET.filter((k) => !picked.includes(k)) : [];
 
   return (
     <section className="fade-up rounded-[22px] border border-line/50 bg-white p-5">
@@ -44,6 +68,31 @@ export default function RequiredDocs({ appraisalId }: { appraisalId: string }) {
           {open ? "Done" : picked.length ? "Change" : "Add documents"}
         </button>
       </div>
+
+      {(missingScotland.length > 0 || missingHmo.length > 0) && (
+        <div className="mt-3 space-y-2">
+          {missingScotland.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2.5 rounded-2xl bg-accent-soft/50 px-3.5 py-2.5">
+              <span className="text-[12.5px] leading-snug">
+                This postcode is in <span className="font-semibold">Scotland</span>, where a legionella assessment and the landlord&rsquo;s registration number are asked for.
+              </span>
+              <button type="button" onClick={() => addAll(SCOTLAND_SET)} className="ml-auto shrink-0 rounded-full bg-accent-dark px-3.5 py-1.5 text-[11.5px] font-semibold text-white transition-opacity hover:opacity-90">
+                Add the Scottish ones
+              </button>
+            </div>
+          )}
+          {missingHmo.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2.5 rounded-2xl bg-accent-soft/50 px-3.5 py-2.5">
+              <span className="text-[12.5px] leading-snug">
+                The property type says <span className="font-semibold">HMO</span>, which needs a licence, a fire risk assessment, PAT and the alarm check.
+              </span>
+              <button type="button" onClick={() => addAll(HMO_SET)} className="ml-auto shrink-0 rounded-full bg-accent-dark px-3.5 py-1.5 text-[11.5px] font-semibold text-white transition-opacity hover:opacity-90">
+                Add the HMO ones
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {!open && (
         <div className="mt-3 flex flex-wrap gap-2">
