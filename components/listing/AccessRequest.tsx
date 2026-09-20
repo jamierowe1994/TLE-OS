@@ -17,8 +17,9 @@ import DoodleIcon from "@/components/DoodleIcon";
  *                       the record, editable, and previewed in the OS's
  *                       branded shell before it goes
  *
- * The arrangement is kept in os_case_state under "access", so it is set
- * once - here, or on the Documents tab - and read everywhere.
+ * The arrangement is kept in os_case_state under "access", against the
+ * PROPERTY (lib/access-key), so it is set once - here, or on the Documents
+ * tab - read everywhere, and still there when the home is re-let.
  */
 
 export type AccessKind = "vacant" | "tenant" | "landlord";

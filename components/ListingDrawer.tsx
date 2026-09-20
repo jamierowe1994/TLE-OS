@@ -15,6 +15,7 @@ import ViewingBooker, { type Person } from "@/components/ViewingBooker";
 import { CopyButton, DoneTick, PressButton } from "@/components/Bits";
 import { Tag } from "@/components/ListingTags";
 import { ARCHIVE_AFTER_DAYS, archiveLabel, archiveWhy, type ArchiveReason } from "@/lib/listing-archive";
+import { accessKeyFor } from "@/lib/access-key";
 import ViewingSheet from "@/components/listing/ViewingSheet";
 import AccessRequest, { AccessSettings, NO_ACCESS, type Access } from "@/components/listing/AccessRequest";
 import DropZone, { type DropKind } from "@/components/listing/DropZone";
@@ -223,7 +224,24 @@ export default function ListingDrawer({
   const [lightbox, setLightbox] = useState<number | null>(null);
   /* How we get into the property - vacant, tenant or landlord - kept on
      the record so the hero button and the Documents tab agree. */
-  const [access, setAccess, accessStatus] = useCaseState<Access>("access", listing?.id ?? null, NO_ACCESS);
+  /* Against the PROPERTY, so a re-let keeps it (lib/access-key). */
+  const accessKey = listing ? accessKeyFor({ listingId: listing.id, propertyId: listing.propertyId }) : null;
+  const [access, setAccess, accessStatus] = useCaseState<Access>("access", accessKey, NO_ACCESS);
+  /* Anything recorded under the listing before the move: copied onto the
+     property once, the first time this listing is opened with it empty. */
+  const moved = useRef<string | null>(null);
+  useEffect(() => {
+    if (!listing || !accessKey || accessKey === listing.id) return;
+    if (accessStatus !== "ready" || access.kind) return;
+    if (moved.current === listing.id) return;
+    moved.current = listing.id;
+    fetch(`/api/case-state?kind=access&id=${encodeURIComponent(listing.id)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { payload?: Access | null } | null) => {
+        if (j?.payload?.kind) setAccess({ ...NO_ACCESS, ...j.payload });
+      })
+      .catch(() => { /* nothing to move, or nothing to move it with */ });
+  }, [listing, accessKey, accessStatus, access.kind, setAccess]);
   /* Photographs added here, out of R2, shown beside REX's. */
   const [uploaded, setUploaded] = useState<{ key: string; url: string }[]>([]);
   const [drop, setDrop] = useState<DropKind | null>(null);

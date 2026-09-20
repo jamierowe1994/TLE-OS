@@ -2,15 +2,16 @@ import "server-only";
 import { hasDb, q } from "@/lib/db";
 import type { Access } from "@/components/listing/AccessRequest";
 import { isTestId, testListing, testViewingsForListing } from "@/lib/test-overlay";
+import { accessKeyFor } from "@/lib/access-key";
 
 /**
  * CAN WE GET IN? - every viewing coming up, and whether access is sorted.
  *
  * James, 20 Sep 2026: "this whole access thing is going to be really
  * important for us to track which ones do and don't have access, as well as
- * what the most important ones are". A listing holds the arrangement
- * (os_case_state "access", set on the listing's own screen); the diary holds
- * the viewings. Neither on its own answers "what do I have to chase today".
+ * what the most important ones are". The PROPERTY holds the arrangement
+ * (os_case_state "access", keyed by lib/access-key); the diary holds the
+ * viewings. Neither on its own answers "what do I have to chase today".
  *
  * Most important = soonest. A viewing on Thursday with no access is worse
  * than one next month, and a viewing nobody can get into is worse than one
@@ -44,7 +45,7 @@ export interface AccessRow {
   test?: boolean;
 }
 
-type ViewRow = { id: string; listing_id: string; starts_at: Date; agent: string | null; contacts: Array<{ name?: string }> | null; title: string; payload: { listingLabel?: string | null } | null };
+type ViewRow = { id: string; listing_id: string; property_id: string | null; starts_at: Date; agent: string | null; contacts: Array<{ name?: string }> | null; title: string; payload: { listingLabel?: string | null } | null };
 
 const stateOf = (a: Access | null, viewingId: string): { state: AccessState; through: string | null; askedAt: string | null } => {
   if (!a || !a.kind) return { state: "none", through: null, askedAt: null };
@@ -60,7 +61,7 @@ const stateOf = (a: Access | null, viewingId: string): { state: AccessState; thr
 export async function accessBoard(days = 14): Promise<AccessRow[]> {
   if (!hasDb()) return [];
   const rows = await q<ViewRow>(
-    `SELECT id, listing_id, starts_at, agent, contacts, title, payload
+    `SELECT id, listing_id, property_id, starts_at, agent, contacts, title, payload
        FROM os_viewings
       WHERE kind = 'viewing' AND NOT cancelled AND listing_id IS NOT NULL
         AND starts_at BETWEEN NOW() AND NOW() + ($1 || ' days')::interval
@@ -97,19 +98,30 @@ export async function accessBoard(days = 14): Promise<AccessRow[]> {
     }
   }
 
-  const ids = [...new Set([...rows.map((r) => r.listing_id), ...test.map((t) => t.listingId)])];
+  /* The property's arrangement first (lib/access-key), the listing's own for
+     a home REX has no property for - and for anything recorded before the
+     move. */
+  const keys = [
+    ...rows.map((r) => accessKeyFor({ listingId: r.listing_id, propertyId: r.property_id })),
+    ...rows.map((r) => r.listing_id),
+    ...test.map((t) => t.listingId),
+  ].filter((k): k is string => Boolean(k));
   const access = new Map<string, Access>();
-  if (ids.length) {
+  if (keys.length) {
     const held = await q<{ record_id: string; payload: Access }>(
       `SELECT record_id, payload FROM os_case_state WHERE kind = 'access' AND record_id = ANY($1)`,
-      [ids]
+      [[...new Set(keys)]]
     ).catch(() => []);
     for (const h of held) access.set(h.record_id, h.payload);
   }
+  const accessFor = (listingId: string, propertyId: string | null): Access | null => {
+    const k = accessKeyFor({ listingId, propertyId });
+    return (k ? access.get(k) : null) ?? access.get(listingId) ?? null;
+  };
 
   const out: AccessRow[] = [
     ...rows.map((r) => {
-      const a = access.get(r.listing_id) ?? null;
+      const a = accessFor(r.listing_id, r.property_id);
       const who = (r.contacts ?? []).map((c) => c?.name).filter(Boolean).join(", ");
       return {
         viewingId: r.id,
@@ -121,7 +133,7 @@ export async function accessBoard(days = 14): Promise<AccessRow[]> {
         ...stateOf(a, r.id),
       };
     }),
-    ...test.map((t) => ({ ...t, ...stateOf(access.get(t.listingId) ?? null, t.viewingId) })),
+    ...test.map((t) => ({ ...t, ...stateOf(accessFor(t.listingId, null), t.viewingId) })),
   ];
 
   return out.sort((a, b) => a.startsAt.localeCompare(b.startsAt));
