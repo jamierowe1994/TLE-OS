@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { minutesOf } from "@/lib/diary";
+import { minutesOf, type Appt } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
 import { dayKey } from "@/lib/weather";
 import { milesBetween } from "@/components/PeopleFilter";
@@ -155,6 +155,7 @@ export default function DiaryGrid({
   onPickMins,
   origin = null,
   weather,
+  appts,
 }: {
   week: number;
   /** Vertical scale — the booker runs slightly tighter than the diary. */
@@ -174,8 +175,17 @@ export default function DiaryGrid({
   origin?: { lat: number; lng: number } | null;
   /** Per-day forecast, keyed by lib/weather dayKey — big, in the header. */
   weather?: Record<string, Wx | undefined>;
+  /**
+   * The appointments to draw, when the caller has already decided which.
+   * The booker passes ONE PERSON'S day (19 Sep 2026: an owner booking an
+   * appraisal was shown the whole company's week, so every slot looked
+   * taken). Left out, the grid draws whatever the signed-in person's diary
+   * holds, which is what the Viewings screen wants.
+   */
+  appts?: Appt[];
 }) {
-  const { appts: DIARY } = useDiary();
+  const { appts: whole } = useDiary();
+  const DIARY = appts ?? whole;
   const columns = weekOffsets(week);
 
   // The window: the base day, widened to hold anything outside it — but only

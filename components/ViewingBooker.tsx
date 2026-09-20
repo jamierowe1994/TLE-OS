@@ -11,6 +11,7 @@ import SendFlow, { type Outgoing } from "@/components/SendFlow";
 import { VIEWING_SENDS_LIVE } from "@/lib/viewing-sends";
 import { dayKey, useForecast } from "@/lib/weather";
 import type { Landlord } from "@/lib/rex-landlord";
+import { fetchMe } from "@/lib/me";
 import { minutesOf, type Appt } from "@/lib/diary";
 import { useDiary, refreshDiary } from "@/lib/diary-store";
 import { usePref } from "@/lib/prefs-store";
@@ -278,7 +279,18 @@ export default function ViewingBooker({
     return at.toISOString();
   })();
 
-  const { appts: allAppts } = useDiary();
+  const { appts: allAppts, everything } = useDiary();
+  const [profile] = usePref<BaseProfile | null>(PROFILE_KEY, null);
+  /* Who is doing the booking, for when no agent name is given. */
+  const [meName, setMeName] = useState<string>("");
+  useEffect(() => {
+    if (!open) return;
+    let live = true;
+    fetchMe()
+      .then((j) => { if (live && j?.user?.name) setMeName(j.user.name); })
+      .catch(() => { /* the grid falls back to the whole book */ });
+    return () => { live = false; };
+  }, [open]);
   /**
    * WHOSE DIARY IS ON THE GRID.
    *
@@ -294,16 +306,21 @@ export default function ViewingBooker({
    * busy costs a phone call, one wrongly shown as free costs a double booking.
    */
   const appts = useMemo(() => {
-    const want = agent.trim().toLowerCase();
+    /* No name given: the person doing the booking (19 Sep 2026 - an owner was
+       shown the whole company's week while booking their own appraisal). */
+    const want = (agent.trim() || meName.trim()).toLowerCase();
     if (!want) return allAppts;
     const first = want.split(" ")[0];
     return allAppts.filter((a) => {
       const who = (a.agent ?? "").trim().toLowerCase();
-      if (!who) return true;
+      /* An entry nobody owns: on an agent's diary the book is already theirs,
+         so it is theirs and stays. On the WHOLE company's book (an owner) it
+         is somebody else's far more often than not, and a grid full of other
+         people's days is what made this unusable. */
+      if (!who) return !everything;
       return who === want || who.split(" ")[0] === first;
     });
-  }, [allAppts, agent]);
-  const [profile] = usePref<BaseProfile | null>(PROFILE_KEY, null);
+  }, [allAppts, agent, meName, everything]);
 
   /**
    * The property's REAL landlord, from REX.
@@ -1142,6 +1159,8 @@ export default function ViewingBooker({
                 <DiaryGrid
                   week={week}
                   hourPx={52}
+                  /* Whose day: the agent this booking is for (see `appts`). */
+                  appts={appts}
                   pick={day && slot ? { day: offsetOf(day), slot } : null}
                   onPick={(o, t) => {
                     setDay(dateFromOffset(o));

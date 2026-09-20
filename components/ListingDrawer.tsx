@@ -2165,7 +2165,9 @@ export default function ListingDrawer({
         applicants={APPLICANTS}
         occupant={listing.tenant ?? null}
         properties={[listing]}
-        agent="Kirstie"
+        /* Whose diary the grid shows: the person booking it. It said
+           "Kirstie" - a name left over from the sample (19 Sep 2026). */
+        agent=""
         onBooked={(v) => setBooked((cur) => [{ when: v.when, who: v.who }, ...cur])}
       />
       {lightbox != null && <PhotoLightbox photos={photos} start={lightbox} name={listing.name} onClose={() => setLightbox(null)} />}
