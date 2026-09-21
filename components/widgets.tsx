@@ -8,7 +8,7 @@ import DiaryGrid from "@/components/DiaryGrid";
 import LeadSourceChart from "@/components/LeadSourceChart";
 import OutstandingTermsWidget from "@/components/OutstandingTerms";
 import DealFeed from "@/components/DealFeed";
-import { FlowTag, Pill } from "@/components/Wire";
+import { DiaryOwnerTag, FlowTag, Pill } from "@/components/Wire";
 /* `todaysAppts` and `DIARY as SAMPLE_DIARY` used to be imported here. Both are
    gone on purpose: the sample book must not be reachable from the dashboard,
    or the next tile added quietly reaches for it too. SAMPLE_DIARY had already
@@ -292,7 +292,7 @@ function DiaryWidget({ w, h }: { w: number; h: number }) {
 /* ── The Today widget carries its own calendar modal. ── */
 function TodayWidget({ w, h }: { w: number; h: number }) {
   const [open, setOpen] = useState(false);
-  const { appts, loading, error } = useMyDiary();
+  const { appts, loading, error, whose } = useMyDiary();
   /**
    * IN TIME ORDER, all-day first.
    *
@@ -327,7 +327,7 @@ function TodayWidget({ w, h }: { w: number; h: number }) {
       <button type="button" onClick={() => setOpen(true)} className="block w-full text-left">
         <div className="flex items-center justify-between gap-2">
           <Head icon="calendar" label="Today" />
-          {w >= 2 && <FlowTag from="365 calendar (sign-in TBC)" />}
+          {w >= 2 && <DiaryOwnerTag whose={whose} />}
         </div>
         {h === 1 ? (
           <BigCount value={loading ? "•" : error ? "—" : String(today.length)} hint={loading ? "reading your diary…" : error ? error : `next at ${nextUp}`} />

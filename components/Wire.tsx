@@ -191,3 +191,30 @@ export function Table({
     </div>
   );
 }
+
+/**
+ * Whose diary this is, and the address it is matched on.
+ *
+ * In place of "Their own 365 calendar (sign-in TBC)" - a note to ourselves
+ * that had reached the screen. James, 21 Sep 2026: "show what calendar it's
+ * showing... so you can see what diary that is pulling from."
+ */
+export function DiaryOwnerTag({ whose }: { whose: { name: string; email: string } | null }) {
+  if (!whose || (!whose.name && !whose.email)) return null;
+  const first = whose.name.trim().split(/\s+/)[0] ?? "";
+  return (
+    <span
+      title={whose.email ? `Matched on ${whose.email}` : undefined}
+      className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border border-line bg-page px-2 py-0.5 text-[10px] font-semibold tracking-wide text-muted"
+    >
+      <span className="shrink-0">{first ? `${first}'s diary` : "Your diary"}</span>
+      {whose.email && (
+        <>
+          <span className="text-line">·</span>
+          <span className="truncate font-normal">{whose.email}</span>
+        </>
+      )}
+    </span>
+  );
+}
+

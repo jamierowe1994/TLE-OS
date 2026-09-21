@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import DiaryGrid from "@/components/DiaryGrid";
-import { FlowTag } from "@/components/Wire";
+import { DiaryOwnerTag } from "@/components/Wire";
 import { PressButton } from "@/components/Bits";
 import { KIND_META, minutesOf, type Appt } from "@/lib/diary";
 import { useMyDiary, refreshDiary } from "@/lib/diary-store";
@@ -78,7 +78,7 @@ export default function DiaryCalendar({
   onClose: () => void;
 }) {
   /* Opened from the dashboard's tiles only, so it is MY calendar - see useMyDiary. */
-  const { appts: DIARY } = useMyDiary();
+  const { appts: DIARY, whose } = useMyDiary();
   const [week, setWeek] = useState(0);
   /** A slot the user clicked, waiting to become something. */
   const [making, setMaking] = useState<{ day: number; slot: string } | null>(null);
@@ -203,7 +203,7 @@ export default function DiaryCalendar({
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            <FlowTag from="Their own 365 calendar (sign-in TBC)" />
+            <DiaryOwnerTag whose={whose} />
             <button
               type="button"
               onClick={() => setWeek((w) => w - 1)}

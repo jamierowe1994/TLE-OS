@@ -208,10 +208,16 @@ export async function GET(req: NextRequest) {
     name: person.name || null,
     rexEmail: rexLogin[0]?.rex_email?.toLowerCase() ?? null,
   };
+  /* Whose diary "mine" is, and the address it is matched on - so the screen
+     can say so instead of "Their own 365 calendar (sign-in TBC)", which was a
+     note to ourselves that reached the page (James, 21 Sep 2026). The REX
+     login when there is one, because that is the address a calendar is
+     actually filed under; otherwise the account's own. */
+  const whose = { name: person.name || "", email: self.rexEmail ?? self.email ?? "" };
   /* An agent's book is already only theirs; marking it would say nothing. */
-  const shaped = (book: DiaryBook) => {
+  const shaped = async (book: DiaryBook) => {
     const scoped = merged(forScope(book, who), mine);
-    return withOsFeedback(mineOnly ? scoped : own(scoped, self));
+    return { ...(await withOsFeedback(mineOnly ? scoped : own(scoped, self))), whose };
   };
 
   if (!rexConfigured()) {
@@ -223,6 +229,7 @@ export async function GET(req: NextRequest) {
       ok: true,
       live: false,
       mine,
+      whose,
       everything: scope.everything,
       reason: "REX isn't connected here.",
     });

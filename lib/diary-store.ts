@@ -30,12 +30,14 @@ interface DiaryState {
   everything: boolean;
   /** Why the diary is not live, for the screens to say so. */
   error: string | null;
+  /** Whose diary "mine" is and the address it is matched on. Null until read. */
+  whose: { name: string; email: string } | null;
 }
 
 /** The server (and first client) snapshot must be the SAME object every
  *  time it's read — returning a fresh literal makes React re-render forever
  *  looking for a stable value. */
-const INITIAL: DiaryState = { appts: [], live: false, loading: true, agents: [], everything: false, error: null };
+const INITIAL: DiaryState = { appts: [], live: false, loading: true, agents: [], everything: false, error: null, whose: null };
 
 let state: DiaryState = INITIAL;
 const listeners = new Set<() => void>();
@@ -70,7 +72,7 @@ function read(): Promise<void> {
     .then((j) => {
       if (j.ok && j.live && Array.isArray(j.appts)) {
         // Live book — the server has already merged our own appointments in.
-        set({ appts: j.appts, live: true, loading: false, agents: j.agents ?? [], everything: Boolean(j.everything), error: null });
+        set({ appts: j.appts, live: true, loading: false, agents: j.agents ?? [], everything: Boolean(j.everything), error: null, whose: j.whose ?? null });
       } else if (j.ok && Array.isArray(j.mine)) {
         /* No REX on this environment. Appointments made HERE are real and
            still show; nothing stands in for the rest. */
@@ -81,6 +83,7 @@ function read(): Promise<void> {
           agents: state.agents,
           everything: Boolean(j.everything),
           error: j.reason ?? "REX isn't connected on this environment.",
+          whose: j.whose ?? null,
         });
       } else {
         set({ ...state, loading: false, error: j.error ?? j.reason ?? "REX didn't answer." });
