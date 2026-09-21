@@ -7,6 +7,7 @@ import WorkspaceLoading from "@/components/WorkspaceLoading";
 import PreTenancyHero from "@/components/pretenancy/Hero";
 import { GREEN, RED, waited } from "@/components/compliance-desk/CheckRow";
 import { useDesk } from "@/components/compliance-desk/useDesk";
+import TodoCard from "@/components/compliance-desk/TodoCard";
 import type { ChaseRow, TrackerBook } from "@/lib/compliance-tracker";
 
 /**
@@ -218,6 +219,9 @@ export default function ComplianceDashboard() {
           )}
         </section>
       </div>
+
+      {/* ── his own list: the jobs for a person rather than a queue ── */}
+      <TodoCard />
 
       {/* ── coming up, and the agents ── */}
       <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
