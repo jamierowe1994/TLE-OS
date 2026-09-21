@@ -14,7 +14,7 @@ import { FlowTag, Pill } from "@/components/Wire";
    or the next tile added quietly reaches for it too. SAMPLE_DIARY had already
    been dead for a while and nobody noticed. */
 import { minutesOf, feedbackLabel, type Appt } from "@/lib/diary";
-import { useDiary } from "@/lib/diary-store";
+import { useMyDiary } from "@/lib/diary-store";
 import { dueWithin, CERT_META, type CompProperty } from "@/lib/compliance";
 import type { Lead } from "@/lib/leads-sample";
 import type { Notice } from "@/lib/notices";
@@ -223,7 +223,7 @@ function DiaryWidget({ w, h }: { w: number; h: number }) {
    * and an appraisal you had just booked appeared in neither of the narrow
    * ones. Same rule as every other figure in this product: live, or say so.
    */
-  const { appts, loading } = useDiary();
+  const { appts, loading } = useMyDiary();
   const today = appts
     .filter((a) => a.day === 0)
     .sort((a, b) => minutesOf(a.start) - minutesOf(b.start));
@@ -282,7 +282,7 @@ function DiaryWidget({ w, h }: { w: number; h: number }) {
         </button>
       </div>
       <div className="mt-3 min-h-0 flex-1 overflow-auto rounded-lg border border-line/50">
-        <DiaryGrid week={0} hourPx={hourPx} onAppt={() => setOpen(true)} />
+        <DiaryGrid week={0} hourPx={hourPx} appts={appts} onAppt={() => setOpen(true)} />
       </div>
       <DiaryCalendar open={open} onClose={() => setOpen(false)} />
     </div>
@@ -292,7 +292,7 @@ function DiaryWidget({ w, h }: { w: number; h: number }) {
 /* ── The Today widget carries its own calendar modal. ── */
 function TodayWidget({ w, h }: { w: number; h: number }) {
   const [open, setOpen] = useState(false);
-  const { appts, loading, error } = useDiary();
+  const { appts, loading, error } = useMyDiary();
   /**
    * IN TIME ORDER, all-day first.
    *
@@ -1458,7 +1458,7 @@ export const DEFAULT_LAYOUT: { id: string; type: string; w: number; h: number }[
 /* ── Viewings this week, plus what the last ones said. A component rather
       than an inline renderer so it can read the live diary. ── */
 function ViewingsWeekWidget({ w, h }: { w: number; h: number }) {
-  const { appts } = useDiary();
+  const { appts } = useMyDiary();
   const week = appts.filter((a) => a.kind === "viewing" && a.day >= 0 && a.day <= 6);
   const past = appts.filter((a) => a.kind === "viewing" && a.day < 0).sort((a, b) => b.day - a.day);
       const rows = (list: typeof week, upcoming: boolean) =>

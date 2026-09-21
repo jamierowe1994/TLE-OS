@@ -32,7 +32,7 @@ export const runtime = "nodejs";
  * you have to see the thing you just saved, and the REX pull is the slow half
  * that the cache exists for. This is one indexed query against our own table.
  */
-async function ours(authorId: string | null): Promise<Appt[]> {
+async function ours(authorId: string | null, selfId: string): Promise<Appt[]> {
   if (!hasDb()) return [];
   try {
     const rows = await q<{
@@ -67,6 +67,7 @@ async function ours(authorId: string | null): Promise<Appt[]> {
         who: r.who ?? "",
         agent: r.author_name ?? "",
         comms: [],
+        ...(r.author_id === selfId ? { own: true } : {}),
       } satisfies Appt;
     });
   } catch {
@@ -139,6 +140,33 @@ function forScope(book: DiaryBook, who: { email: string | null; name: string | n
   return { ...book, appts, agents: [...new Set(appts.map((a) => a.agent).filter(Boolean))] };
 }
 
+/**
+ * Which of the team's entries are the signed-in person's own.
+ *
+ * James, 21 Sep 2026: "on the dashboard, the diary is showing everybody's
+ * things... we should only be able to see our own diaries."
+ *
+ * An owner is sent the whole team's book, on purpose: the Viewings screen has
+ * a person picker and the booker needs everybody's week. But the dashboard's
+ * Diary, Today and Viewings tiles read the same book and never narrowed it, so
+ * James's "today" was twenty people's. The book stays whole; each entry that
+ * is theirs is marked, and the dashboard asks for those (useMyDiary).
+ *
+ * Marked here rather than matched in the browser because only the server
+ * knows the REX login, and a REX calendar is owned by THAT address - the same
+ * reason `forScope` reads it. The name is the last resort, as it is there.
+ */
+function own(book: DiaryBook, self: { email: string | null; name: string | null; rexEmail: string | null }): DiaryBook {
+  const name = self.name?.trim().toLowerCase() || null;
+  const theirs = (a: Appt) => {
+    if (a.own) return true;
+    const owner = (a.agentEmail ?? "").toLowerCase();
+    if (owner) return owner === self.email || owner === self.rexEmail;
+    return Boolean(name) && (a.agent ?? "").trim().toLowerCase() === name;
+  };
+  return { ...book, appts: book.appts.map((a) => (theirs(a) ? { ...a, own: true } : a)) };
+}
+
 export async function GET(req: NextRequest) {
   const scope = await scopeFor(req);
   const { actor, subject, viewingAs } = await whoIs(req);
@@ -163,7 +191,7 @@ export async function GET(req: NextRequest) {
   }
   const mineOnly = !scope.everything;
   const person = viewingAs && subject ? subject : actor;
-  const rexLogin = mineOnly && hasDb()
+  const rexLogin = hasDb()
     ? await q<{ rex_email: string }>(`SELECT rex_email FROM os_rex_tokens WHERE user_id = $1`, [person.id]).catch(() => [])
     : [];
   const who = mineOnly
@@ -174,7 +202,17 @@ export async function GET(req: NextRequest) {
      for the slow REX pull; applying it to our own table would mean saving a
      travel buffer and watching the diary insist it isn't there for another
      minute and a half. */
-  const mine = await ours(mineOnly ? person.id : null);
+  const mine = await ours(mineOnly ? person.id : null, person.id);
+  const self = {
+    email: (person.email ?? "").toLowerCase() || null,
+    name: person.name || null,
+    rexEmail: rexLogin[0]?.rex_email?.toLowerCase() ?? null,
+  };
+  /* An agent's book is already only theirs; marking it would say nothing. */
+  const shaped = (book: DiaryBook) => {
+    const scoped = merged(forScope(book, who), mine);
+    return withOsFeedback(mineOnly ? scoped : own(scoped, self));
+  };
 
   if (!rexConfigured()) {
     /* No REX here, so the client is showing the sample book. Hand our own
@@ -198,18 +236,18 @@ export async function GET(req: NextRequest) {
   const held = found && londonDayOffset(found.at) === 0 ? found : null;
   const age = held ? Date.now() - held.at : Infinity;
   if (held && age < FRESH_MS) {
-    return NextResponse.json({ ok: true, live: true, ...(await withOsFeedback(merged(forScope(held.book, who), mine))), everything: scope.everything, ageMs: age });
+    return NextResponse.json({ ok: true, live: true, ...(await shaped(held.book)), everything: scope.everything, ageMs: age });
   }
   if (held && age < STALE_MS) {
     void refreshDiaryBook();
-    return NextResponse.json({ ok: true, live: true, ...(await withOsFeedback(merged(forScope(held.book, who), mine))), everything: scope.everything, ageMs: age, stale: true });
+    return NextResponse.json({ ok: true, live: true, ...(await shaped(held.book)), everything: scope.everything, ageMs: age, stale: true });
   }
   try {
     const fresh = await refreshDiaryBook();
-    return NextResponse.json({ ok: true, live: true, ...(await withOsFeedback(merged(forScope(fresh.book, who), mine))), everything: scope.everything, ageMs: 0 });
+    return NextResponse.json({ ok: true, live: true, ...(await shaped(fresh.book)), everything: scope.everything, ageMs: 0 });
   } catch (e) {
     if (held) {
-      return NextResponse.json({ ok: true, live: true, ...(await withOsFeedback(merged(forScope(held.book, who), mine))), everything: scope.everything, ageMs: age, stale: true });
+      return NextResponse.json({ ok: true, live: true, ...(await shaped(held.book)), everything: scope.everything, ageMs: age, stale: true });
     }
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Couldn't reach REX." }, { status: 502 });
   }

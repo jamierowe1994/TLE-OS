@@ -50,6 +50,12 @@ export type Appt = {
    * only thing REX gives us that is actually the person, so scoping uses it.
    */
   agentEmail?: string;
+  /**
+   * This is the signed-in person's OWN entry. Only set when the diary they were
+   * sent is the whole team's (an owner's), so that a screen which means "my
+   * day" - the dashboard - can say so. See `own` in app/api/diary/route.ts.
+   */
+  own?: boolean;
   /** Where it is, roughly — so a booking calendar can say how far this
    *  appointment is from the one being booked. Town-level is enough. */
   lat?: number;

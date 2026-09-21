@@ -141,3 +141,23 @@ export function useDiary(): DiaryState {
   useReportReady(!snap.loading);
   return snap;
 }
+
+/**
+ * MY day, whoever I am.
+ *
+ * An agent's diary is already only theirs. An owner's is the whole team's -
+ * the Viewings screen and the booker need that - and until 21 Sep 2026 the
+ * dashboard's tiles read it as it came, so James's "today" was everybody's.
+ * The server marks which entries are the signed-in person's (`own`), because
+ * only it knows the REX login they are filed under; this keeps those.
+ *
+ * For the dashboard and anything else that means "mine". A screen with a
+ * person picker wants useDiary.
+ */
+export function useMyDiary(): DiaryState {
+  const d = useDiary();
+  if (!d.everything) return d;
+  const appts = d.appts.filter((a) => a.own);
+  return { ...d, appts, agents: [...new Set(appts.map((a) => a.agent).filter(Boolean))] };
+}
+

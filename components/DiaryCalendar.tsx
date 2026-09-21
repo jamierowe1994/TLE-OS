@@ -8,7 +8,7 @@ import DiaryGrid from "@/components/DiaryGrid";
 import { FlowTag } from "@/components/Wire";
 import { PressButton } from "@/components/Bits";
 import { KIND_META, minutesOf, type Appt } from "@/lib/diary";
-import { useDiary, refreshDiary } from "@/lib/diary-store";
+import { useMyDiary, refreshDiary } from "@/lib/diary-store";
 
 /**
  * The full calendar — what the dashboard's Today box opens out into.
@@ -77,7 +77,8 @@ export default function DiaryCalendar({
   open: boolean;
   onClose: () => void;
 }) {
-  const { appts: DIARY } = useDiary();
+  /* Opened from the dashboard's tiles only, so it is MY calendar - see useMyDiary. */
+  const { appts: DIARY } = useMyDiary();
   const [week, setWeek] = useState(0);
   /** A slot the user clicked, waiting to become something. */
   const [making, setMaking] = useState<{ day: number; slot: string } | null>(null);
@@ -244,6 +245,7 @@ export default function DiaryCalendar({
             <DiaryGrid
               week={week}
               hourPx={hourPx}
+              appts={DIARY}
               selApptId={selId}
               onAppt={(id) => setSelId(selId === id ? null : id)}
               onPick={(day, slot) => setMaking({ day, slot })}

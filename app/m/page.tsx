@@ -54,11 +54,14 @@ export default function PhoneHome() {
     setAppts(null);
     try {
       const r = await fetch("/api/diary", { cache: "no-store" });
-      const j = (await r.json()) as { ok?: boolean; error?: string; live?: boolean; appts?: Appt[]; mine?: Appt[]; reason?: string };
+      const j = (await r.json()) as { ok?: boolean; error?: string; live?: boolean; appts?: Appt[]; mine?: Appt[]; reason?: string; everything?: boolean };
       if (!r.ok || !j.ok) throw new Error(j.error ?? "Your calendar did not load.");
       /* No sample book on a phone. When the full diary is not connected, what
          the OS itself holds is shown and the screen says that is all it is. */
-      const list = j.live ? j.appts ?? [] : j.mine ?? [];
+      const all = j.live ? j.appts ?? [] : j.mine ?? [];
+      /* An owner is sent the whole team's book; the phone is MY day, the same
+         as the dashboard (21 Sep 2026). `own` is marked by the diary route. */
+      const list = j.everything ? all.filter((a) => a.own) : all;
       setNote(!j.live && j.reason ? "Only appointments made in the OS are showing." : null);
       setAppts(list);
       try {
