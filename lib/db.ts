@@ -282,6 +282,22 @@ CREATE TABLE IF NOT EXISTS os_bug_shots (
 );
 CREATE INDEX IF NOT EXISTS os_bug_shots_at ON os_bug_shots (created_at);
 
+-- What somebody ADDED to a report: a recording of their screen, or pictures
+-- of their own. The file is in R2 under bug-reports/ and only the key is here.
+-- That prefix is deliberately not one of the upload scopes, so the general
+-- file route refuses it and the only way to a recording is the reports screen.
+-- Same 30 days as the pictures above, for the same reason.
+CREATE TABLE IF NOT EXISTS os_bug_media (
+  id         TEXT PRIMARY KEY,
+  bug_id     TEXT NOT NULL,
+  r2_key     TEXT NOT NULL,
+  mime       TEXT NOT NULL,
+  bytes      INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_bug_media_bug ON os_bug_media (bug_id);
+CREATE INDEX IF NOT EXISTS os_bug_media_at ON os_bug_media (created_at);
+
 -- CUSTOM ATTRIBUTES — fields a person invents for themselves.
 --
 -- Two tables, because a definition and a value are different lifetimes. Rename

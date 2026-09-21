@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import AssistantCharacter, { type Mood } from "@/components/AssistantCharacter";
 import { captureScreen } from "@/lib/screenshot";
+import { clockFace, MAX_SECONDS, useScreenRecording } from "@/lib/screen-record";
 import AssistantSays, { type Screen } from "@/components/AssistantSays";
 import DoodleIcon from "@/components/DoodleIcon";
 import Segmented from "@/components/Segmented";
@@ -330,6 +331,21 @@ export default function HelpDock() {
   const [kind, setKind] = useState("bug");
   const [fb, setFb] = useState("");
   const [sent, setSent] = useState(false);
+  /* What the person adds to a report themselves (21 Sep 2026, for Howard's
+     testing): pictures of their own, and a recording of the screen. Both go
+     up AFTER the words, to /api/bugs/media - see sendFeedback. */
+  const [pics, setPics] = useState<File[]>([]);
+  const [voice, setVoice] = useState(false);
+  const [sending, setSending] = useState("");
+  const [lost, setLost] = useState("");
+  const [owner, setOwner] = useState(false);
+  const shotPicker = useRef<HTMLInputElement>(null);
+  /* A finished recording brings the form back, with the recording on it. The
+     bubble was closed so that it would not be IN the recording. */
+  const rec = useScreenRecording(() => {
+    setTab("feedback");
+    setOpen(true);
+  });
 
   const [mood, setMood] = useState<Mood>("idle");
   /* Mid-performance for the new-starter tour: the gesture loops instead of
@@ -354,7 +370,10 @@ export default function HelpDock() {
            three steps of the new-starter tour - the ones that teach somebody
            how to report a fault, which is the whole point of a pre-launch -
            could not be looked at before they shipped. */
-        setSignedIn(Boolean(j?.user) || j?.hasDb === false)
+        {
+          setSignedIn(Boolean(j?.user) || j?.hasDb === false);
+          setOwner(Boolean(j?.isOwner));
+        }
       )
       .catch(() => {});
   }, []);
@@ -836,32 +855,81 @@ export default function HelpDock() {
        without it: somebody who has just hit a bug must not then hit a second
        one trying to tell us about the first. */
     const shot = await captureScreen();
+    const extras = [...(rec.clip ? [rec.clip.file] : []), ...pics];
 
-    await fetch("/api/bugs", {
+    const filed = await fetch("/api/bugs", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        body: fb,
+        /* A recording with no words is still a report: somebody who talked it
+           through out loud has already said what happened. */
+        body: fb.trim() || (rec.clip ? "Screen recording attached." : "Picture attached."),
         path,
         kind,
         shot,
         context: {
           viewport: `${window.innerWidth}x${window.innerHeight}`,
           ua: navigator.userAgent.slice(0, 160),
+          ...(extras.length ? { attached: extras.length } : {}),
         },
       }),
-    }).catch(() => {});
+    })
+      .then((x) => (x.ok ? x.json() : null))
+      .catch(() => null);
+
+    /* The words are in. Now what they added, one file at a time so the line
+       under the button can say which. A file that will not go is SAID, not
+       swallowed: a tester who believes a recording arrived will not describe
+       the fault in words as well, and then there is nothing. */
+    let dropped = 0;
+    if (filed?.id) {
+      for (const [i, file] of extras.entries()) {
+        setSending(
+          file.type.startsWith("video/") ? "Sending your recording…" : `Sending picture ${i + (rec.clip ? 0 : 1)}…`
+        );
+        const form = new FormData();
+        form.set("id", filed.id);
+        form.set("file", file);
+        const ok = await fetch("/api/bugs/media", { method: "POST", body: form })
+          .then((x) => x.ok)
+          .catch(() => false);
+        if (!ok) dropped += 1;
+      }
+    } else {
+      dropped = extras.length;
+    }
+    setSending("");
+    setLost(
+      dropped
+        ? `Your words are logged, but ${dropped === 1 ? "one attachment" : `${dropped} attachments`} didn't upload.`
+        : ""
+    );
     setBusy(false);
     setSent(true);
     setFb("");
+    setPics([]);
+    rec.clear();
     /* A bow for a bug or a confusion, the hop for an idea - see SENT_MOOD. */
     setMood(SENT_MOOD[kind] ?? "happy");
     setTimeout(() => {
       setSent(false);
+      setLost("");
       setOpen(false);
       setMood("idle");
       rest();
-    }, 2400);
+    }, dropped ? 6000 : 2400);
+  }
+
+  /** Pictures somebody chose or pasted. Images only, four at most. */
+  function addPics(list: Iterable<File>) {
+    const images = [...list].filter((f) => /^image\/(png|jpeg|webp)$/.test(f.type));
+    if (images.length) setPics((p) => [...p, ...images].slice(0, 4));
+  }
+
+  async function record() {
+    const started = await rec.start(voice);
+    /* Out of the way, so the recording is of the OS and not of this form. */
+    if (started) setOpen(false);
   }
 
   /** A file size somebody can read, rather than bytes. */
@@ -872,6 +940,36 @@ export default function HelpDock() {
 
   return (
     <>
+      {/* While a recording runs this is the only thing of ours on the screen,
+          and it is IN the recording - which is fine: whoever watches it back
+          sees exactly when it was stopped. */}
+      {rec.recording && (
+        <button
+          type="button"
+          onClick={rec.stop}
+          className="fixed bottom-6 right-[96px] z-[191] flex items-center gap-2 rounded-full bg-[#C4412F] px-4 py-2.5 text-[12.5px] font-semibold text-white shadow-[0_10px_30px_-10px_rgba(0,0,0,0.5)]"
+        >
+          <span aria-hidden className="h-2.5 w-2.5 animate-pulse rounded-full bg-white" />
+          Recording {clockFace(rec.seconds)} · Stop
+        </button>
+      )}
+      {/* One press to the report form, for the people whose job is finding
+          faults (James, 21 Sep 2026: Howard tests everything). Owners only:
+          for everybody else the form is the third tab, where it has been. */}
+      {owner && !open && !rec.recording && (
+        <button
+          type="button"
+          data-hide-from-shot
+          onClick={() => {
+            setTab("feedback");
+            if (!open) void toggle();
+          }}
+          className="fixed bottom-6 right-[96px] z-[189] hidden items-center gap-1.5 rounded-full border border-line/80 bg-panel px-3.5 py-2 text-[11.5px] font-semibold text-ink shadow-[0_10px_30px_-14px_rgba(0,0,0,0.45)] transition-colors hover:border-ink sm:flex"
+        >
+          <span aria-hidden className="h-2 w-2 rounded-full bg-[#C4412F]" />
+          Report a problem
+        </button>
+      )}
       <button
         type="button"
         onClick={toggle}
@@ -902,7 +1000,9 @@ export default function HelpDock() {
              than beside it, and so the bubble does not sit directly over him. */
           data-hide-from-shot
           data-os-steve-bubble
-          className="fade-up fixed bottom-[104px] right-[68px] z-[190] w-[min(392px,calc(100vw-2.5rem))]"
+          /* On a phone the 68px shift pushed the left edge off the screen
+             (375 - 68 - 335 is less than nothing). Found 21 Sep 2026. */
+          className="fade-up fixed bottom-[104px] right-5 z-[190] w-[min(392px,calc(100vw-2.5rem))] sm:right-[68px]"
         >
           <div className="relative rounded-[22px] border border-line/80 bg-panel p-4 shadow-[0_20px_50px_-16px_rgba(0,0,0,0.4)]">
             {/* The tail. Two stacked squares — the outer one carries the border
@@ -1408,12 +1508,14 @@ export default function HelpDock() {
                   </div>
                 </div>
               ) : sent ? (
-                <p className="py-5 text-center text-[13px]">Thanks — that&apos;s logged.</p>
+                <p className="py-5 text-center text-[13px]">
+                  {lost || "Thanks - that's logged."}
+                </p>
               ) : (
                 <>
                   <p className="mt-3 text-[13.5px]">Tell us what happened</p>
                   <p className="mt-1 text-[11px] text-muted">
-                    On {path}. We capture the page and your browser, so no need to describe them.
+                    On {path}. We take a picture of the page when you send, so no need to describe it.
                   </p>
                   {/* Three kinds, not one. A pilot produces far more "confusing"
                       than "broken", and collapsing them means the most useful
@@ -1437,15 +1539,108 @@ export default function HelpDock() {
                     onChange={(e) => setFb(e.target.value)}
                     rows={4}
                     placeholder="What were you doing, and what happened?"
+                    onPaste={(e) => {
+                      /* A screenshot taken with the keyboard lands on the
+                         clipboard, so pasting it here is the shortest road. */
+                      const pasted = [...e.clipboardData.files];
+                      if (pasted.some((f) => f.type.startsWith("image/"))) {
+                        e.preventDefault();
+                        addPics(pasted);
+                      }
+                    }}
                     className="mt-3 w-full rounded-2xl border border-line/80 bg-box p-3 text-[12.5px] outline-none transition-colors focus:border-ink"
                   />
+
+                  {/* Show us, as well as tell us. A recording for anything
+                      that only goes wrong while you are doing it; a picture
+                      for anything the automatic one would miss. */}
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    {rec.supported && (
+                      <button
+                        type="button"
+                        disabled={busy || Boolean(rec.clip)}
+                        onClick={record}
+                        className="flex items-center justify-center gap-1.5 rounded-full border border-line/80 bg-box py-2 text-[11.5px] font-semibold transition-colors hover:border-ink disabled:opacity-40"
+                      >
+                        <span aria-hidden className="h-2 w-2 rounded-full bg-[#C4412F]" />
+                        Record my screen
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={busy || pics.length >= 4}
+                      onClick={() => shotPicker.current?.click()}
+                      className={`flex items-center justify-center gap-1.5 rounded-full border border-line/80 bg-box py-2 text-[11.5px] font-semibold transition-colors hover:border-ink disabled:opacity-40 ${rec.supported ? "" : "col-span-2"}`}
+                    >
+                      <DoodleIcon name="camera" size={13} />
+                      Add a screenshot
+                    </button>
+                    <input
+                      ref={shotPicker}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      multiple
+                      hidden
+                      onChange={(e) => {
+                        addPics(e.target.files ?? []);
+                        e.target.value = "";
+                      }}
+                    />
+                  </div>
+                  {rec.supported && !rec.clip && (
+                    <label className="mt-2 flex cursor-pointer items-center gap-2 text-[11px] text-muted">
+                      <input
+                        type="checkbox"
+                        checked={voice}
+                        onChange={(e) => setVoice(e.target.checked)}
+                        className="h-3.5 w-3.5 accent-[var(--color-accent-dark)]"
+                      />
+                      Record my voice too, so I can talk it through
+                    </label>
+                  )}
+                  <p className="mt-1.5 text-[10.5px] leading-relaxed text-muted">
+                    {rec.supported
+                      ? `Recording: this box closes, you show us what goes wrong, then press Stop. Up to ${MAX_SECONDS / 60} minutes. You can also paste a screenshot straight into the box above.`
+                      : "You can also paste a screenshot straight into the box above."}
+                  </p>
+                  {rec.problem && <p className="mt-1.5 text-[11px] text-[#C4412F]">{rec.problem}</p>}
+
+                  {(rec.clip || pics.length > 0) && (
+                    <ul className="mt-2 space-y-1.5">
+                      {rec.clip && (
+                        <li className="flex items-center gap-2 rounded-xl border border-line/80 bg-box px-3 py-2 text-[11.5px]">
+                          <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[#C4412F]" />
+                          <span className="min-w-0 flex-1 truncate">
+                            Screen recording · {clockFace(rec.clip.seconds)} · {weigh(rec.clip.file.size)}
+                          </span>
+                          <button type="button" onClick={rec.clear} className="text-muted underline underline-offset-2 hover:text-ink">
+                            Remove
+                          </button>
+                        </li>
+                      )}
+                      {pics.map((f, i) => (
+                        <li key={`${f.name}-${i}`} className="flex items-center gap-2 rounded-xl border border-line/80 bg-box px-3 py-2 text-[11.5px]">
+                          <DoodleIcon name="camera" size={12} className="shrink-0" />
+                          <span className="min-w-0 flex-1 truncate">{f.name || "Pasted screenshot"} · {weigh(f.size)}</span>
+                          <button
+                            type="button"
+                            onClick={() => setPics((p) => p.filter((_, n) => n !== i))}
+                            className="text-muted underline underline-offset-2 hover:text-ink"
+                          >
+                            Remove
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
                   <button
                     type="button"
-                    disabled={busy || !fb.trim()}
+                    disabled={busy || !(fb.trim() || rec.clip || pics.length)}
                     onClick={sendFeedback}
                     className="mt-2 w-full rounded-full bg-accent-dark py-2.5 text-[12.5px] font-semibold text-white transition-opacity disabled:opacity-40"
                   >
-                    {busy ? "Sending…" : "Send it"}
+                    {busy ? sending || "Sending…" : "Send it"}
                   </button>
                 </>
               )}

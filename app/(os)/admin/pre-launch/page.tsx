@@ -69,6 +69,8 @@ type Bug = {
   botNote?: string;
   botPr?: string;
   botAt?: string | null;
+  /** Recordings and pictures the person added themselves. */
+  media?: number;
 };
 
 const when = (iso: string | null) =>
@@ -137,6 +139,18 @@ export default function PreLaunch() {
      with a different permission, and a slow Graph-backed list should not hold
      up the page that tells James who has found a bug. */
   const [mail, setMail] = useState<{ configured: boolean; people: Mailbox[] } | null>(null);
+
+  /* What they ADDED - a screen recording, their own pictures. Links last five
+     minutes (lib/bug-media), so these are fetched when opened, never cached. */
+  const [media, setMedia] = useState<Record<string, Array<{ id: string; mime: string; url: string }> | null>>({});
+
+  async function loadMedia(id: string) {
+    setMedia((m) => ({ ...m, [id]: null }));
+    const j = await fetch(`/api/bugs/media?id=${encodeURIComponent(id)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+    setMedia((m) => ({ ...m, [id]: j?.media ?? [] }));
+  }
 
   async function loadShot(id: string) {
     if (id in shots) return;
@@ -424,6 +438,21 @@ export default function PreLaunch() {
             >
               Add and send
             </button>
+            {/* The same hand-delivered link the roster rows offer. Our own mail
+                lands in Microsoft quarantine often enough that, for somebody
+                who must get in today, the link is the dependable road. */}
+            <button
+              type="button"
+              disabled={busy !== null || !manual.email.trim()}
+              onClick={() => {
+                const email = manual.email.trim();
+                if (!email.includes("@")) return setFlash("That doesn't look like an email address.");
+                void makeLink({ email, name: manual.name.trim(), role: manual.role } as Candidate);
+              }}
+              className="rounded-lg border border-line/80 px-3 py-1.5 text-[11.5px] disabled:opacity-40"
+            >
+              Get a link
+            </button>
           </div>
         </div>
 
@@ -668,6 +697,31 @@ export default function PreLaunch() {
                     See their screen
                   </button>
                 )}
+                {(b.media ?? 0) > 0 &&
+                  (media[b.id] ? (
+                    media[b.id]!.length ? (
+                      <div className="mt-2 space-y-2">
+                        {media[b.id]!.map((m) =>
+                          m.mime.startsWith("video/") ? (
+                            <video key={m.id} src={m.url} controls playsInline className="w-full rounded-lg border border-line/70" />
+                          ) : (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img key={m.id} src={m.url} alt={`Added by ${b.reporterEmail}`} className="w-full rounded-lg border border-line/70" />
+                          )
+                        )}
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-[11px] text-muted">What they added could not be opened.</p>
+                    )
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void loadMedia(b.id)}
+                      className="ml-3 mt-2 text-[11px] font-semibold text-accent-dark underline"
+                    >
+                      {b.id in media ? "Opening…" : `Watch what they added (${b.media})`}
+                    </button>
+                  ))}
 
                 <div className="mt-2 flex gap-2">
                   {(["ack", "fixed", "wontfix"] as const)

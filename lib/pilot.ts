@@ -189,6 +189,8 @@ export interface Bug {
   botNote: string;
   botPr: string;
   botAt: string | null;
+  /** How many recordings or pictures the person added themselves (lib/bug-media). */
+  media: number;
 }
 
 export async function logBug(p: {
@@ -276,9 +278,11 @@ export async function bugs(limit = 100): Promise<Bug[]> {
     kind: string; state: string; context: Record<string, unknown> | null; created_at: Date;
     occurrences: number | null; last_seen_at: Date | null;
     bot_state: string | null; bot_note: string | null; bot_pr: string | null; bot_at: Date | null;
+    media: string | null;
   }>(
     `select id, reporter_email, body, path, kind, state, context, created_at, occurrences, last_seen_at,
-            bot_state, bot_note, bot_pr, bot_at
+            bot_state, bot_note, bot_pr, bot_at,
+            (select count(*) from os_bug_media m where m.bug_id = os_bugs.id)::text as media
        from os_bugs order by case state when 'open' then 0 when 'ack' then 1 else 2 end,
        coalesce(last_seen_at, created_at) desc limit $1`,
     [limit]
@@ -298,6 +302,7 @@ export async function bugs(limit = 100): Promise<Bug[]> {
     botNote: r.bot_note ?? "",
     botPr: r.bot_pr ?? "",
     botAt: r.bot_at ? new Date(r.bot_at).toISOString() : null,
+    media: Number(r.media ?? 0),
   }));
 }
 
