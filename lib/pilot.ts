@@ -306,6 +306,55 @@ export async function bugs(limit = 100): Promise<Bug[]> {
   }));
 }
 
+export interface MyReport {
+  id: string;
+  body: string;
+  path: string;
+  kind: string;
+  at: string;
+  /** Where it has got to, in words the person who reported it would use. */
+  status: "logged" | "looking" | "on-the-list" | "with-james" | "not-a-fault" | "fixed" | "closed";
+}
+
+/**
+ * What one person has reported, and where each has got to.
+ *
+ * James, 21 Sep 2026, for Howard: the reports he files should link up with the
+ * bug bot's work. Until now a report went in and the next thing anybody heard
+ * was a "Fixed" email, possibly weeks later - so a tester could not tell a
+ * report that was being worked on from one that had vanished, and the natural
+ * response to that is to report it again.
+ *
+ * The bot's NOTE is deliberately not here. It is written for whoever fixes the
+ * fault - files, functions, what the change touches - and the person who found
+ * it needs only the state.
+ */
+export async function myReports(reporterId: string, limit = 30): Promise<MyReport[]> {
+  if (!hasDb()) return [];
+  const rows = await q<{
+    id: string; body: string; path: string; kind: string; state: string; bot_state: string | null; created_at: Date;
+  }>(
+    `select id, body, path, kind, state, bot_state, created_at from os_bugs
+      where reporter_id = $1 and kind <> 'auto' order by created_at desc limit $2`,
+    [reporterId, limit]
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    body: r.body.length > 160 ? `${r.body.slice(0, 160)}…` : r.body,
+    path: r.path,
+    kind: r.kind,
+    at: new Date(r.created_at).toISOString(),
+    status:
+      r.state === "fixed" ? "fixed"
+      : r.state === "wontfix" ? "closed"
+      : r.bot_state === "looking" ? "looking"
+      : r.bot_state === "to_fix" || r.bot_state === "fix_ready" ? "on-the-list"
+      : r.bot_state === "needs_you" ? "with-james"
+      : r.bot_state === "not_a_bug" ? "not-a-fault"
+      : "logged",
+  }));
+}
+
 export async function setBugState(id: string, state: string): Promise<void> {
   if (!hasDb()) return;
   await q(`update os_bugs set state = $1 where id = $2`, [state, id]);

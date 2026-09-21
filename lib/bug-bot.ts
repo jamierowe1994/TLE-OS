@@ -64,6 +64,10 @@ export interface QueuedBug {
   createdAt: string;
   lastSeenAt: string | null;
   hasShot: boolean;
+  /** Who told us, when it was a person. Empty for a bug that logged itself. */
+  reportedBy: string;
+  /** Recordings and pictures the person added (lib/bug-media). `api.sh media <id>` fetches them. */
+  media: number;
   /** What the bot said last time, when a bug comes back round (it was reopened). */
   previousNote: string;
 }
@@ -73,17 +77,25 @@ export async function takeQueue(limit = 3): Promise<QueuedBug[]> {
   const rows = await q<{
     id: string; kind: string; body: string; path: string; context: Record<string, unknown> | null;
     occurrences: number | null; created_at: Date; last_seen_at: Date | null; has_shot: boolean; bot_note: string;
+    reporter_email: string | null; media: string | null;
   }>(
+    /* People before machines (21 Sep 2026). The queue was newest first and
+       nothing else, so with Howard testing all day his reports would have
+       waited behind whatever the OS had logged about itself in the same hour,
+       three at a time. A person's report is somebody waiting for an answer;
+       an automatic one is not. */
     `UPDATE os_bugs b SET bot_state = 'looking', bot_at = NOW()
       WHERE b.id IN (
         SELECT id FROM os_bugs
          WHERE state IN ('open','ack') AND kind <> 'idea'
            AND (bot_state = '' OR (bot_state = 'looking' AND bot_at < NOW() - INTERVAL '${STALE_HOURS} hours'))
-         ORDER BY coalesce(last_seen_at, created_at) DESC
+         ORDER BY (kind <> 'auto' AND reporter_id IS NOT NULL) DESC, coalesce(last_seen_at, created_at) DESC
          LIMIT $1
          FOR UPDATE SKIP LOCKED)
       RETURNING b.id, b.kind, b.body, b.path, b.context, b.occurrences, b.created_at, b.last_seen_at, b.bot_note,
-                EXISTS (SELECT 1 FROM os_bug_shots s WHERE s.bug_id = b.id) AS has_shot`,
+                b.reporter_email,
+                EXISTS (SELECT 1 FROM os_bug_shots s WHERE s.bug_id = b.id) AS has_shot,
+                (SELECT count(*) FROM os_bug_media m WHERE m.bug_id = b.id)::text AS media`,
     [Math.min(Math.max(limit, 1), 10)]
   );
   return rows.map((r) => ({
@@ -96,8 +108,13 @@ export async function takeQueue(limit = 3): Promise<QueuedBug[]> {
     createdAt: new Date(r.created_at).toISOString(),
     lastSeenAt: r.last_seen_at ? new Date(r.last_seen_at).toISOString() : null,
     hasShot: r.has_shot,
+    reportedBy: r.kind === "auto" ? "" : (r.reporter_email ?? ""),
+    media: Number(r.media ?? 0),
     previousNote: r.bot_note,
-  }));
+  }))
+    /* RETURNING comes back in whatever order the update touched the rows, so
+       the ordering above chooses WHICH bugs and this puts them in that order. */
+    .sort((a, b) => Number(Boolean(b.reportedBy)) - Number(Boolean(a.reportedBy)));
 }
 
 export interface ListedBug {
@@ -108,6 +125,8 @@ export interface ListedBug {
   lastSeenAt: string;
   note: string;
   foundAt: string | null;
+  /** Who told us, when it was a person - so the list can say "Howard found this". */
+  reportedBy: string;
 }
 
 /** The bot's list: every open bug it has diagnosed and nobody has fixed yet, newest first. */
@@ -116,10 +135,11 @@ export async function listToFix(): Promise<ListedBug[]> {
   const rows = await q<{
     id: string; body: string; path: string; occurrences: number | null;
     created_at: Date; last_seen_at: Date | null; bot_note: string; bot_at: Date | null;
+    kind: string; reporter_email: string | null;
   }>(
-    `SELECT id, body, path, occurrences, created_at, last_seen_at, bot_note, bot_at FROM os_bugs
+    `SELECT id, body, path, occurrences, created_at, last_seen_at, bot_note, bot_at, kind, reporter_email FROM os_bugs
       WHERE state IN ('open','ack') AND bot_state = 'to_fix'
-      ORDER BY coalesce(last_seen_at, created_at) DESC`
+      ORDER BY (kind <> 'auto' AND reporter_id IS NOT NULL) DESC, coalesce(last_seen_at, created_at) DESC`
   );
   return rows.map((r) => ({
     id: r.id,
@@ -129,6 +149,7 @@ export async function listToFix(): Promise<ListedBug[]> {
     lastSeenAt: new Date(r.last_seen_at ?? r.created_at).toISOString(),
     note: r.bot_note,
     foundAt: r.bot_at ? new Date(r.bot_at).toISOString() : null,
+    reportedBy: r.kind === "auto" ? "" : (r.reporter_email ?? ""),
   }));
 }
 

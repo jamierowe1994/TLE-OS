@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { requireOwner } from "@/lib/admin";
-import { logBug, bugs, setBugState, attachShot } from "@/lib/pilot";
+import { logBug, bugs, setBugState, attachShot, myReports } from "@/lib/pilot";
 import { tellReporter } from "@/lib/bug-bot";
 import { publicOrigin } from "@/lib/origin";
 
@@ -14,7 +14,7 @@ import { publicOrigin } from "@/lib/origin";
  * the frustrations somebody was still angry about ten minutes later, which is
  * a biased and much smaller sample.
  *
- * GET and PATCH are owner-only.
+ * GET ?mine=1 is each person's own reports. GET and PATCH are otherwise owner-only.
  */
 
 export const dynamic = "force-dynamic";
@@ -83,6 +83,13 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  /* Your own reports, and where each has got to. Any signed-in person, and
+     only ever the ACTOR's: a view-as must not show somebody else's. */
+  if (req.nextUrl.searchParams.get("mine") === "1") {
+    const { actor } = await whoIs(req);
+    if (!actor) return NextResponse.json({ ok: false, error: "Not signed in." }, { status: 401 });
+    return NextResponse.json({ ok: true, reports: await myReports(actor.id) });
+  }
   if (!(await requireOwner(req))) return new NextResponse(null, { status: 404 });
   return NextResponse.json({ bugs: await bugs(200) });
 }

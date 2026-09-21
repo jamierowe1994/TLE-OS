@@ -226,6 +226,17 @@ type Proposal = {
 
 /* What each card says on it. Kept out of the markup so the promise a button
    makes and the words next to it can never drift apart. */
+/** Where a report has got to, as the person who filed it would say it. */
+const REPORT_STATUS: Record<string, string> = {
+  logged: "Logged",
+  looking: "Being looked at",
+  "on-the-list": "Cause found, on the list to fix",
+  "with-james": "With James",
+  "not-a-fault": "Checked, working as intended",
+  fixed: "Fixed",
+  closed: "Closed",
+};
+
 const CARD_TITLE: Record<Proposal["kind"], string> = {
   /* Never actually drawn — a fill-compose is applied on arrival and its card
      suppressed, because the result is visible in the boxes themselves. Present
@@ -339,6 +350,22 @@ export default function HelpDock() {
   const [sending, setSending] = useState("");
   const [lost, setLost] = useState("");
   const [owner, setOwner] = useState(false);
+  /* What this person has reported before, and where each has got to - see
+     myReports in lib/pilot. Null until read; read each time the tab opens, so
+     a report just sent is in it and a state the bot has changed is current. */
+  const [mine, setMine] = useState<
+    Array<{ id: string; body: string; path: string; at: string; status: string }> | null
+  >(null);
+  const [showMine, setShowMine] = useState(false);
+  /* Up here, above the signed-out return further down: a hook below it runs
+     on some renders and not others. */
+  useEffect(() => {
+    if (!open || tab !== "feedback" || sent) return;
+    fetch("/api/bugs?mine=1", { cache: "no-store" })
+      .then((x) => (x.ok ? x.json() : null))
+      .then((j) => setMine(Array.isArray(j?.reports) ? j.reports : []))
+      .catch(() => setMine([]));
+  }, [open, tab, sent]);
   const shotPicker = useRef<HTMLInputElement>(null);
   /* A finished recording brings the form back, with the recording on it. The
      bubble was closed so that it would not be IN the recording. */
@@ -1642,6 +1669,50 @@ export default function HelpDock() {
                   >
                     {busy ? sending || "Sending…" : "Send it"}
                   </button>
+
+                  {/* Where the earlier ones have got to. Closed by default:
+                      the form is what somebody came for, and a tester with
+                      thirty reports should not have to scroll past them. */}
+                  {mine && mine.length > 0 && (
+                    <div className="mt-3 border-t border-line/70 pt-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setShowMine((v) => !v)}
+                        aria-expanded={showMine}
+                        className="flex w-full items-center justify-between text-[11.5px] font-semibold"
+                      >
+                        <span>Your reports ({mine.length})</span>
+                        <span className="text-[11px] font-normal text-muted">
+                          {mine.filter((r) => r.status === "fixed").length} fixed ·{" "}
+                          {mine.filter((r) => r.status !== "fixed" && r.status !== "closed" && r.status !== "not-a-fault").length} open
+                        </span>
+                      </button>
+                      {showMine && (
+                        <ul className="mt-2 max-h-[190px] space-y-1.5 overflow-y-auto pr-1">
+                          {mine.map((r) => (
+                            <li key={r.id} className="rounded-xl border border-line/70 bg-box px-3 py-2">
+                              <p className="text-[11.5px] leading-snug">{r.body}</p>
+                              <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[10.5px] text-muted">
+                                <span
+                                  className={`rounded-full px-2 py-[1px] font-semibold ${
+                                    r.status === "fixed"
+                                      ? "bg-[#DCE8D2] text-[#2F4A22]"
+                                      : r.status === "logged"
+                                        ? "bg-line/60 text-ink"
+                                        : "bg-accent/25 text-accent-dark"
+                                  }`}
+                                >
+                                  {REPORT_STATUS[r.status] ?? "Logged"}
+                                </span>
+                                <span>{r.path}</span>
+                                <span>{whenAgo(r.at)}</span>
+                              </p>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
             </div>
