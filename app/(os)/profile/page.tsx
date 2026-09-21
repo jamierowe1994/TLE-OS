@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import EmailFooterSetup from "@/components/EmailFooterSetup";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import CustomAttributes from "@/components/CustomAttributes";
@@ -710,6 +711,11 @@ export default function ProfilePage() {
                   message actually leaves and arrives. One fixed message to an
                   address they choose - usually their own. */}
               {setup?.emailConnected === true && <MailboxTest defaultTo={setup?.email ?? ""} />}
+
+              {/* Their own footer, under everything the OS sends from their
+                  mailbox (James, 21 Sep 2026). Only once the mailbox is
+                  connected: the quick road reads it out of that mailbox. */}
+              {setup?.emailConnected === true && <EmailFooterSetup mailbox={setup?.email ?? ""} />}
 
               {/* REX signs in with their own credentials, so it brings its own
                   form. Same tile shape as the other two. */}

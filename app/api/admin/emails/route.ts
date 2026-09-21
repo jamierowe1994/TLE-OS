@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { whoIs } from "@/lib/admin";
+import { footerFor, footerPreviewHtml, withFooter } from "@/lib/email-footer";
 import { requireOwner, requireCapability } from "@/lib/admin";
 import { TLE_EMAILS } from "@/lib/email/tle-emails";
 import { hasDb, q } from "@/lib/db";
@@ -82,7 +84,16 @@ export async function GET(req: NextRequest) {
            live site yet, so the preview of the email being worked on is the
            one place it would never appear. Pointed at whatever origin this
            page was served from, the preview shows the files on disk. */
-        html: html.replaceAll(LIVE_ORIGIN, req.nextUrl.origin),
+        /* ?footer=1: with the signed-in person's own email footer under it,
+           as it would leave their mailbox (lib/email-footer). For looking at
+           how a footer sits under a designed mail before anybody receives one. */
+        html: await (async () => {
+          const shown = html.replaceAll(LIVE_ORIGIN, req.nextUrl.origin);
+          if (req.nextUrl.searchParams.get("footer") !== "1") return shown;
+          const { actor } = await whoIs(req);
+          const f = actor ? await footerFor(actor.id) : null;
+          return f ? withFooter(shown, { ...f, html: footerPreviewHtml(f) }) : shown;
+        })(),
         index: TLE_EMAILS.indexOf(entry),
         /* The document as it stands, so the builder opens on what is on
            screen rather than on the version in code. */

@@ -1,4 +1,5 @@
 import "server-only";
+import { footerFor, withFooter } from "@/lib/email-footer";
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { rexCall, rexConfigured } from "@/lib/rex";
@@ -355,26 +356,46 @@ export async function msSendMail(userId: string, msg: GraphSend): Promise<{ bccd
   const token = await msAccessTokenFor(userId);
   const bcc = await rexDropboxFor(msg.rexUserId ?? null);
 
+  /* Their own footer, under everything that leaves their mailbox (James,
+     21 Sep 2026). Here and not in the callers, because this is the one door
+     every mailbox send goes through - confirmations, works orders,
+     inspections, Steve's drafts, the test mail - so none of them can forget.
+     Nobody has one until they set it on their Profile, and a footer that will
+     not load must never stop a viewing being confirmed. */
+  const footer = await footerFor(userId).catch(() => null);
+  const content = footer ? withFooter(msg.body, footer) : msg.body;
+  const inline = (footer?.images ?? []).map((img) => ({
+    "@odata.type": "#microsoft.graph.fileAttachment",
+    name: `${img.cid}.${img.mime.split("/")[1] ?? "png"}`,
+    contentType: img.mime,
+    contentBytes: img.data,
+    contentId: img.cid,
+    isInline: true,
+  }));
+
   const res = await fetch(`${GRAPH}/me/sendMail`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       message: {
         subject: msg.subject,
-        body: { contentType: "HTML", content: msg.body },
+        body: { contentType: "HTML", content },
         toRecipients: [{ emailAddress: { address: msg.to.email, name: msg.to.name } }],
         ...(bcc ? { bccRecipients: [{ emailAddress: { address: bcc } }] } : {}),
         /* Graph wants the type named on every attachment, and the bytes inline.
            Fine for what we send here - a calendar file is under a kilobyte.
            Anything over 3MB needs an upload session, which nothing does yet. */
-        ...(msg.attachments?.length
+        ...(msg.attachments?.length || inline.length
           ? {
-              attachments: msg.attachments.map((a) => ({
-                "@odata.type": "#microsoft.graph.fileAttachment",
-                name: a.filename,
-                contentType: a.contentType ?? "application/octet-stream",
-                contentBytes: a.content,
-              })),
+              attachments: [
+                ...(msg.attachments ?? []).map((a) => ({
+                  "@odata.type": "#microsoft.graph.fileAttachment",
+                  name: a.filename,
+                  contentType: a.contentType ?? "application/octet-stream",
+                  contentBytes: a.content,
+                })),
+                ...inline,
+              ],
             }
           : {}),
       },

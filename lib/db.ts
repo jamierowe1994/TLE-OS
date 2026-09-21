@@ -298,6 +298,20 @@ CREATE TABLE IF NOT EXISTS os_bug_media (
 CREATE INDEX IF NOT EXISTS os_bug_media_bug ON os_bug_media (bug_id);
 CREATE INDEX IF NOT EXISTS os_bug_media_at ON os_bug_media (created_at);
 
+-- EMAIL FOOTERS - the signature each person's own Outlook puts under a mail,
+-- kept here so the mail the OS sends from their mailbox ends the same way
+-- (lib/email-footer). One per person. The pictures in it are small (a logo,
+-- a badge) and are kept beside the HTML as base64, because they go out INSIDE
+-- each mail as inline attachments, exactly as Outlook sends them - not as
+-- links, which Outlook hides until somebody presses "download pictures".
+CREATE TABLE IF NOT EXISTS os_email_footers (
+  user_id    TEXT PRIMARY KEY,
+  html       TEXT NOT NULL,
+  images     JSONB NOT NULL DEFAULT '[]',
+  source     TEXT NOT NULL DEFAULT 'mailbox',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- CUSTOM ATTRIBUTES — fields a person invents for themselves.
 --
 -- Two tables, because a definition and a value are different lifetimes. Rename
