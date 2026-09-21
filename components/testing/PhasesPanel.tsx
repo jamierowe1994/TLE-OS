@@ -20,7 +20,7 @@ type Level = string;
 type Preview = {
   areas: { id: string; label: string; from: Level; to: Level }[];
   switches: { key: string; label: string; from: boolean; to: boolean }[];
-  roster: { email: string; name: string; rexId: string; hasAccount: boolean; invitedAt: string | null }[];
+  roster: { email: string; name: string; rexId: string; hasAccount: boolean; invitedAt: string | null; inPilot: boolean }[];
   announceTo: number;
   testFiles: number;
   sendingLocked: boolean;
@@ -45,6 +45,8 @@ export default function PhasesPanel() {
   const [busy, setBusy] = useState<number | null>(null);
   const [said, setSaid] = useState<{ ok: boolean; text: string } | null>(null);
   const [result, setResult] = useState<Result | null>(null);
+  const [savingList, setSavingList] = useState(false);
+  const [showRest, setShowRest] = useState(false);
 
   const load = useCallback(() => {
     fetch("/api/admin/phases", { cache: "no-store" })
@@ -52,13 +54,31 @@ export default function PhasesPanel() {
       .then((j) => {
         if (!j?.ok) return setFailed(true);
         setData({ state: j.state, phases: j.phases });
-        /* Everybody without an account, ticked. James unticks; nobody is
-           invited that he did not leave ticked. */
-        setTicked((t) => t ?? new Set((j.phases[0]?.preview.roster ?? []).filter((p: { hasAccount: boolean }) => !p.hasAccount).map((p: { email: string }) => p.email)));
+        /* The saved pilot list, and nobody else. It used to tick the whole
+           roster and leave James to untick (21 Sep 2026: "this is trying to
+           include everybody"). Now a tick IS membership of the pilot: it is
+           saved as he makes it, it starts empty, and the server invites
+           nobody who is not on the saved list whatever this screen sends. */
+        setTicked((t) => t ?? new Set((j.phases[0]?.preview.roster ?? []).filter((p: { inPilot: boolean }) => p.inPilot).map((p: { email: string }) => p.email)));
       })
       .catch(() => setFailed(true));
   }, []);
   useEffect(load, [load]);
+
+  /** A tick is membership of the pilot, saved straight away. */
+  async function savePilot(next: Set<string>) {
+    setTicked(next);
+    setSavingList(true);
+    const j = await fetch("/api/admin/phases", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ pilot: [...next] }),
+    })
+      .then((r) => r.json())
+      .catch(() => null);
+    setSavingList(false);
+    if (!j?.ok) setSaid({ ok: false, text: j?.error ?? "The pilot list did not save. Nobody new would be invited." });
+  }
 
   async function press(p: Phase) {
     setBusy(p.id);
@@ -122,8 +142,7 @@ export default function PhasesPanel() {
           const current = here === p.id;
           const nothing = p.preview.areas.length === 0 && p.preview.switches.length === 0;
           const ready = (typed[p.id] ?? "").trim().toUpperCase() === p.confirm;
-          const inviting = p.id === 1 ? (ticked?.size ?? 0) : 0;
-          return (
+                    return (
             <section
               key={p.id}
               className={`flex flex-col rounded-2xl border p-5 ${current ? "border-accent-dark bg-accent-soft/30" : "border-line/80 bg-panel"}`}
@@ -173,53 +192,68 @@ export default function PhasesPanel() {
                 )}
               </div>
 
-              {p.id === 1 && (
-                <div className="mt-3 rounded-xl border border-line/70 bg-box p-3">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">Who is invited ({inviting})</p>
-                    <button
-                      type="button"
-                      onClick={() => setTicked((t) => (t && t.size ? new Set() : new Set(p.preview.roster.filter((r) => !r.hasAccount).map((r) => r.email))))}
-                      className="text-[11px] text-muted underline underline-offset-2 hover:text-ink"
-                    >
-                      {ticked && ticked.size ? "Untick all" : "Tick all"}
-                    </button>
+              {p.id === 1 && (() => {
+                const row = (r: Preview["roster"][number]) => (
+                  <li key={r.email}>
+                    <label className="flex cursor-pointer items-center gap-2 rounded-lg px-1 py-1 text-[11.5px] hover:bg-panel">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(ticked?.has(r.email))}
+                        onChange={(e) => {
+                          const next = new Set(ticked ?? []);
+                          if (e.target.checked) next.add(r.email);
+                          else next.delete(r.email);
+                          void savePilot(next);
+                        }}
+                        className="h-3.5 w-3.5 accent-[var(--accent-dark)]"
+                      />
+                      <span className="min-w-0 flex-1 truncate">{r.name}</span>
+                      <span className="shrink-0 text-[10.5px] text-muted">
+                        {r.hasAccount ? "has an account, not emailed" : r.invitedAt ? "invited before, sent again" : ""}
+                      </span>
+                    </label>
+                  </li>
+                );
+                const inPilot = p.preview.roster.filter((r) => ticked?.has(r.email));
+                const rest = p.preview.roster.filter((r) => !ticked?.has(r.email));
+                const toEmail = inPilot.filter((r) => !r.hasAccount).length;
+                return (
+                  <div className="mt-3 rounded-xl border border-line/70 bg-box p-3">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+                        The pilot list ({inPilot.length}) - {toEmail} will be emailed
+                      </p>
+                      <span className="text-[10.5px] text-muted">{savingList ? "Saving…" : "Saved"}</span>
+                    </div>
+                    {p.preview.roster.length === 0 ? (
+                      <p className="mt-1.5 text-[11.5px] text-muted">The lettings roster could not be read, so nobody would be invited.</p>
+                    ) : inPilot.length === 0 ? (
+                      <p className="mt-1.5 text-[11.5px] leading-relaxed text-accent-dark">
+                        Nobody is on the pilot list, so Phase 1 would invite nobody. Tick the people you and Susan agreed, below.
+                      </p>
+                    ) : (
+                      <ul className="mt-1.5 space-y-0.5">{inPilot.map(row)}</ul>
+                    )}
+                    {rest.length > 0 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setShowRest((v) => !v)}
+                          aria-expanded={showRest}
+                          className="mt-2 text-[11px] text-muted underline underline-offset-2 hover:text-ink"
+                        >
+                          {showRest ? "Hide" : "Show"} the {rest.length} not in the pilot
+                        </button>
+                        {showRest && <ul className="mt-1.5 max-h-[200px] space-y-0.5 overflow-y-auto pr-1">{rest.map(row)}</ul>}
+                      </>
+                    )}
+                    <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
+                      Only this list is ever invited. Somebody who is not a lettings agent in REX is added from Pre-launch, Someone not on the roster.
+                      Our invitations sometimes land in Microsoft quarantine: for anybody who does not get theirs, Pre-launch, Get a link.
+                    </p>
                   </div>
-                  {p.preview.roster.length === 0 ? (
-                    <p className="mt-1.5 text-[11.5px] text-muted">The lettings roster could not be read, so nobody would be invited.</p>
-                  ) : (
-                    <ul className="mt-1.5 max-h-[220px] space-y-0.5 overflow-y-auto pr-1">
-                      {p.preview.roster.map((r) => (
-                        <li key={r.email}>
-                          <label className={`flex items-center gap-2 rounded-lg px-1 py-1 text-[11.5px] ${r.hasAccount ? "text-muted" : "cursor-pointer hover:bg-panel"}`}>
-                            <input
-                              type="checkbox"
-                              disabled={r.hasAccount}
-                              checked={!r.hasAccount && Boolean(ticked?.has(r.email))}
-                              onChange={(e) =>
-                                setTicked((t) => {
-                                  const next = new Set(t ?? []);
-                                  if (e.target.checked) next.add(r.email);
-                                  else next.delete(r.email);
-                                  return next;
-                                })
-                              }
-                              className="h-3.5 w-3.5 accent-[var(--accent-dark)]"
-                            />
-                            <span className="min-w-0 flex-1 truncate">{r.name}</span>
-                            <span className="shrink-0 text-[10.5px] text-muted">
-                              {r.hasAccount ? "has an account" : r.invitedAt ? "invited before, sent again" : ""}
-                            </span>
-                          </label>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
-                    Our invitations sometimes land in Microsoft quarantine. Anybody who does not get theirs: Pre-launch, Get a link.
-                  </p>
-                </div>
-              )}
+                );
+              })()}
 
               {p.id !== 1 && (
                 <label className="mt-3 flex cursor-pointer items-center gap-2 text-[11.5px]">

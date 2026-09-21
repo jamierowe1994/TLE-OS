@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireCapability, whoIs } from "@/lib/admin";
-import { applyPhase, PhaseRefused, PHASES, phaseState, previewPhase, type PhaseId } from "@/lib/phases";
+import { applyPhase, PhaseRefused, PHASES, phaseState, previewPhase, setPilotList, type PhaseId } from "@/lib/phases";
 import { publicOrigin } from "@/lib/origin";
 
 /**
@@ -52,5 +52,22 @@ export async function POST(req: NextRequest) {
     if (e instanceof PhaseRefused) return NextResponse.json({ ok: false, error: e.message }, { status: 400 });
     console.error("phase failed", e);
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "That did not finish. Check Admin, Switches to see what was set." }, { status: 500 });
+  }
+}
+
+
+/** Save who is in the pilot. { pilot: string[] } - the whole list, each time. */
+export async function PATCH(req: NextRequest) {
+  const me = await requireCapability(req, "manage:switches");
+  if (!me) return new NextResponse(null, { status: 404 });
+  const { viewingAs } = await whoIs(req);
+  if (viewingAs) return NextResponse.json({ ok: false, error: "Stop viewing as somebody first." }, { status: 403 });
+  const b = (await req.json().catch(() => ({}))) as { pilot?: unknown };
+  if (!Array.isArray(b.pilot)) return NextResponse.json({ ok: false, error: "Who is in the pilot?" }, { status: 400 });
+  try {
+    const saved = await setPilotList(b.pilot.filter((v): v is string => typeof v === "string"), me);
+    return NextResponse.json({ ok: true, pilot: saved });
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "That did not save." }, { status: 400 });
   }
 }

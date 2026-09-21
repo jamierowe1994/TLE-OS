@@ -28,7 +28,7 @@ import { record } from "@/lib/audit";
  * screen that describes the button and the thing that actually happens are
  * the same list and cannot drift apart.
  *
- *   1  Practice   Everybody is invited. The front office opens in PRACTICE:
+ *   1  Practice   The pilot list is invited. The front office opens in PRACTICE:
  *                 real records are look only, each person's own test files
  *                 work in full and can be reset. Nothing reaches a customer,
  *                 REX or Propoly. The back office stays hidden.
@@ -87,13 +87,13 @@ export const PHASES: PhaseDef[] = [
     id: 1,
     name: "Practice",
     confirm: "PHASE 1",
-    says: "Everybody is invited and can explore. Real records are look only; their own test files work in full. Nothing goes out.",
+    says: "The pilot list is invited and can explore. Real records are look only; their own test files work in full. Nothing goes out.",
     areas: { ...all(FRONT, "practice"), ...all(BACK_ALL, "hidden") },
     switches: Object.fromEntries(OUTWARD_OFF_IN_1.map((k) => [k, false])),
     steps: [
       "Turns OFF everything that reaches a customer, REX or Propoly.",
       "Puts Dashboard, Leads, Market appraisals, Listings, Viewings and Applications on Practice. Hides Portfolio, Emails, Finances and Tools.",
-      "Only then: adds the people you ticked to the pilot and emails each their invitation.",
+      "Only then: emails an invitation to the people on the pilot list below, and to nobody else.",
       "They can connect their email, write their bio, open every front-office screen, and add and reset their own test files.",
     ],
   },
@@ -147,13 +147,53 @@ export async function phaseState(): Promise<PhaseState> {
   return { phase: Number(v.phase) as PhaseId, at: v.at ?? null, by: v.by ?? null, history: Array.isArray(v.history) ? v.history : [] };
 }
 
+/* ── who the pilot is ────────────────────────────────────────────────────── */
+
+/**
+ * THE PILOT LIST (James, 21 Sep 2026, the same afternoon phases went live).
+ *
+ * "It shouldn't go out to everybody. It should go out to a selected pilot
+ * list... this is trying to include everybody."
+ *
+ * The first version of the Phase 1 card ticked the whole lettings roster and
+ * left James to untick - which puts the mistake one missed checkbox away from
+ * twenty people who were never meant to be asked. It is the other way round
+ * now: NOBODY is invited unless they are on this list, the list starts empty,
+ * and it is checked again on the server when the button is pressed, so a
+ * browser tab left open from before cannot invite anybody who has since been
+ * taken off.
+ *
+ * Who is on it was agreed between James and Susan, and it is theirs to keep:
+ * it is saved from the Phases screen, not written into the code.
+ */
+const LIST_KEY = "pilot_list";
+
+export async function pilotList(): Promise<string[]> {
+  if (!hasDb()) return [];
+  const rows = await q<{ value: { emails?: unknown } | null }>(`SELECT value FROM os_settings WHERE key = $1`, [LIST_KEY]).catch(() => []);
+  const emails = rows[0]?.value?.emails;
+  return Array.isArray(emails) ? emails.filter((e): e is string => typeof e === "string").map((e) => e.toLowerCase()) : [];
+}
+
+export async function setPilotList(emails: string[], me: OsUser): Promise<string[]> {
+  if (me.role !== "owner") throw new PhaseRefused("Only an owner can change the pilot list.");
+  const clean = [...new Set(emails.map((e) => e.trim().toLowerCase()).filter((e) => e.includes("@") && isInternalAddress(e)))].slice(0, 60);
+  await q(
+    `INSERT INTO os_settings (key, value, updated_at, updated_by) VALUES ($1, $2::jsonb, NOW(), $3)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW(), updated_by = EXCLUDED.updated_by`,
+    [LIST_KEY, JSON.stringify({ emails: clean }), me.email]
+  );
+  await record({ kind: "phase_changed", actorId: me.id, actorEmail: me.email, detail: `Pilot list set: ${clean.length} people` });
+  return clean;
+}
+
 /* ── what pressing it would do, before it is pressed ─────────────────────── */
 
 export interface PhasePreview {
   areas: { id: string; label: string; from: AreaLevel; to: AreaLevel }[];
   switches: { key: string; label: string; from: boolean; to: boolean }[];
   /** Phase 1 only: the lettings roster, and where each person stands. */
-  roster: { email: string; name: string; rexId: string; hasAccount: boolean; invitedAt: string | null }[];
+  roster: { email: string; name: string; rexId: string; hasAccount: boolean; invitedAt: string | null; inPilot: boolean }[];
   /** Phases 2 and 3: who the announcement goes to. */
   announceTo: number;
   testFiles: number;
@@ -172,7 +212,8 @@ export async function previewPhase(id: PhaseId): Promise<PhasePreview> {
 
   let roster: PhasePreview["roster"] = [];
   if (id === 1) {
-    const [agents, invited] = await Promise.all([lettingsAgents().catch(() => []), invites().catch(() => [])]);
+    const [agents, invited, list] = await Promise.all([lettingsAgents().catch(() => []), invites().catch(() => []), pilotList()]);
+    const pilot = new Set(list);
     const sent = new Map(invited.map((i) => [i.email.toLowerCase(), i.sentAt ?? null]));
     roster = await Promise.all(
       agents.map(async (a) => ({
@@ -181,6 +222,7 @@ export async function previewPhase(id: PhaseId): Promise<PhasePreview> {
         rexId: a.id,
         hasAccount: Boolean(await findUserByEmail(a.email).catch(() => null)),
         invitedAt: sent.get(a.email.toLowerCase()) ?? null,
+        inPilot: pilot.has(a.email.toLowerCase()),
       }))
     );
   }
@@ -250,8 +292,11 @@ export async function applyPhase(p: {
   const inviteFailed: PhaseResult["inviteFailed"] = [];
   if (p.id === 1 && p.invite?.length) {
     const roster = new Map((await lettingsAgents()).map((a) => [a.email.toLowerCase(), a]));
+    /* The saved list is the authority, not what the browser sent - see pilotList. */
+    const pilot = new Set(await pilotList());
     for (const raw of p.invite) {
       const email = raw.trim().toLowerCase();
+      if (!pilot.has(email)) { inviteFailed.push({ email, why: "not on the pilot list" }); continue; }
       const agent = roster.get(email);
       /* Only somebody on the lettings roster, only one of our own addresses,
          and never somebody who already has an account. */
