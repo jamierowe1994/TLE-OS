@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireCapability } from "@/lib/admin";
+import { requireCapability, whoIs } from "@/lib/admin";
+import { phaseState } from "@/lib/phases";
+import type { OsUser } from "@/lib/users";
 import { publicOrigin } from "@/lib/origin";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 import { TEST_FILE_SIDES, type TestFileSide } from "@/lib/testing-journeys";
@@ -35,17 +37,41 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
+/**
+ * Who may use test files.
+ *
+ * It was `see:wiring` - the owner and a developer - because test files were a
+ * thing James made to test with. In PHASE 1 of the pilot (lib/phases) they
+ * become the playground: every agent gets a few of their own, to work and
+ * reset, while real records are look only. So during phase 1, and only then,
+ * anybody signed in may add, reset, delete and re-link THEIR OWN files.
+ * `mayTouch` in lib/test-files already keeps a person to their own; the
+ * owner-only actions below stay owner-only; and a cap stops practice turning
+ * into a few hundred invented landlords.
+ */
+const PRACTICE_CAP = 4;
+
+async function tester(req: NextRequest): Promise<{ me: OsUser; practising: boolean } | null> {
+  const wired = await requireCapability(req, "see:wiring");
+  if (wired) return { me: wired, practising: false };
+  const { actor } = await whoIs(req);
+  if (!actor) return null;
+  return (await phaseState()).phase === 1 ? { me: actor, practising: true } : null;
+}
+
 export async function GET(req: NextRequest) {
-  const me = await requireCapability(req, "see:wiring");
-  if (!me) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
-  const everyone = req.nextUrl.searchParams.get("everyone") === "1";
+  const who = await tester(req);
+  if (!who) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  const { me } = who;
+  const everyone = !who.practising && req.nextUrl.searchParams.get("everyone") === "1";
   const [files, closed] = await Promise.all([listTestFiles(me, everyone).catch(() => []), testingClosed()]);
   return NextResponse.json({ ok: true, files, closed, owner: me.role === "owner", me: me.email });
 }
 
 export async function POST(req: NextRequest) {
-  const me = await requireCapability(req, "see:wiring");
-  if (!me) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  const who = await tester(req);
+  if (!who) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  const { me } = who;
   try {
     assertNotViewingAs(req.cookies.get(VIEW_AS_COOKIE)?.value);
   } catch (e) {
@@ -59,6 +85,9 @@ export async function POST(req: NextRequest) {
     switch (b.action) {
       case "add": {
         if (!b.side || !(b.side in TEST_FILE_SIDES)) return NextResponse.json({ ok: false, error: "Which kind of file?" }, { status: 400 });
+        if (who.practising && (await listTestFiles(me, false).catch(() => [])).length >= PRACTICE_CAP) {
+          return NextResponse.json({ ok: false, error: `You have ${PRACTICE_CAP} test files already. Reset one to start again, or delete one to make room.` }, { status: 409 });
+        }
         const file = await addTestFile(b.side as TestFileSide, me, origin);
         return NextResponse.json({ ok: true, file });
       }

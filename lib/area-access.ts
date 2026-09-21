@@ -13,7 +13,7 @@ import type { OsUser } from "@/lib/users";
  * a hiccup in them must never lock the whole pilot out of the product.
  */
 
-const LEVELS: AreaLevel[] = ["hidden", "look", "testers", "everyone"];
+const LEVELS: AreaLevel[] = ["hidden", "look", "practice", "testers", "everyone"];
 export const isLevel = (v: unknown): v is AreaLevel => LEVELS.includes(v as AreaLevel);
 
 export interface AreaRow {

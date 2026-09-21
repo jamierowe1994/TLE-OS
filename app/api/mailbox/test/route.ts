@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { MailboxNotConnected, msConnectionFor, msSendMail } from "@/lib/microsoft";
+import { isInternalAddress } from "@/lib/email-policy";
 
 /**
  * "Does my mailbox actually send?"
@@ -44,6 +45,19 @@ export async function POST(req: NextRequest) {
   const to = (body.to ?? "").trim() || me.email;
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
     return NextResponse.json({ ok: false, error: "That doesn't look like an email address." }, { status: 400 });
+  }
+
+  /* "Send YOURSELF a test" - and for anybody but an owner it now means it
+     (21 Sep 2026). The address box took anything, and this route is
+     deliberately outside SENDING_LOCKED, so during a phase where nothing may
+     leave the building any agent with a connected mailbox could still put a
+     mail from a Letting Experts address in front of anybody. One of our own
+     addresses only; an owner proving delivery to an outside inbox still can. */
+  if (me.role !== "owner" && !isInternalAddress(to)) {
+    return NextResponse.json(
+      { ok: false, error: "The test goes to your own address, or a colleague's. Put a Letting Experts address in the box." },
+      { status: 400 }
+    );
   }
 
   const conn = await msConnectionFor(userId);

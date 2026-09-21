@@ -44,6 +44,7 @@ export type AuditKind =
      Leads go live, and who pressed it" is the question when something that
      was not tested starts being used. */
   | "area_changed"
+  | "phase_changed"
   /* Somebody made a tester, or stopped being one. A tester can act where
      every other agent can only look. */
   | "area_tester_changed"

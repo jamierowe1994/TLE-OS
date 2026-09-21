@@ -26,6 +26,7 @@ type Area = {
 const BUTTON_SAYS: Record<AreaLevel, string> = {
   hidden: "The button is not there for agents.",
   look: "Agents see the button, and it will not press.",
+  practice: "It presses on an agent's own test file, and nowhere else.",
   testers: "Testers can press it. Every other agent sees it and cannot.",
   everyone: "Live for every agent.",
 };

@@ -8,6 +8,9 @@ import DoodleIcon from "@/components/DoodleIcon";
 import { readTheme, type ThemeChoice } from "@/lib/theme";
 import { FRONT, BACK, railFor, type NavItem } from "@/lib/nav";
 import { AREA_DEFS, areaForPage, canAct, canSee, levelOf, lockedSentence, type AreaAccess } from "@/lib/area-map";
+
+/** See `practising` below. Not in lib/nav: it is there for three days. */
+const PRACTICE_ITEM: NavItem = { href: "/practice", label: "Practice Files", icon: "checklist" };
 import { fetchMe } from "@/lib/me";
 
 /**
@@ -188,6 +191,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     return !area || canSee(areaAccess, area);
   };
   const hereArea = areaForPage(pathname);
+  /* Phase 1 of the pilot (lib/phases): while any area is on Practice, an
+     agent's own test files are one press away, under the screens they are
+     practising on. Gone from the rail the moment nothing is on Practice. */
+  const practising = Boolean(areaAccess?.gated && Object.values(areaAccess.levels).includes("practice"));
   const hereLocked = hereArea && areaAccess?.gated && canSee(areaAccess, hereArea) && !canAct(areaAccess, hereArea) ? hereArea : null;
   const closedArea = pathname === "/dashboard" ? AREA_DEFS.find((a) => a.id === search.get("closed")) ?? null : null;
   /* Matches .page-leaving .os-mast in globals.css: the fall is 400ms, and
@@ -379,7 +386,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         {/* The break bar, then the nav sits a touch lower. */}
         <div className="mt-4 border-t border-line/70" />
         <nav className="os-rail mt-4 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden pb-2">
-          {FRONT.filter(visible).map((item) => (
+          {[...FRONT, ...(practising ? [PRACTICE_ITEM] : [])].filter(visible).map((item) => (
             <NavLink
               key={item.href}
               item={item}
@@ -565,7 +572,12 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               has already been told why nothing will happen. */}
           {(hereLocked || closedArea) && (
             <p role="status" className="mb-5 rounded-xl border border-line/80 bg-card px-4 py-2.5 text-[12.5px] leading-relaxed text-muted">
-              {hereLocked
+              {hereLocked && levelOf(areaAccess, hereLocked.id) === "practice" ? (
+                <>
+                  {hereLocked.label} is in practice mode: real records are look only for now, and your own test files work in full.{" "}
+                  <Link href="/practice" className="font-semibold text-accent-dark underline underline-offset-2">Open your practice files</Link>
+                </>
+              ) : hereLocked
                 ? lockedSentence(hereLocked, levelOf(areaAccess, hereLocked.id))
                 : `${closedArea!.label} is not switched on for you yet. It opens as testing finishes.`}
             </p>

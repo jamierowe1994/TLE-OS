@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { areaForPage, areaForWrite, canAct, canSee, levelOf, lockedSentence, type AreaAccess } from "@/lib/area-map";
+import { areaForPage, areaForWrite, canAct, canSee, levelOf, lockedSentence, needsTargetCheck, type AreaAccess } from "@/lib/area-map";
 
 /**
  * The door.
@@ -118,9 +118,14 @@ async function sessionUserId(token: string | undefined, secret: string | undefin
    /api/area-access and is held for a few seconds per person. Two rules keep it
    from ever becoming the thing that breaks the pilot:
 
-     FAIL OPEN. If the check does not answer, the request goes through. The
-     switches control a rollout; an outage in them must not lock every agent
-     out of every screen.
+     PAGES FAIL OPEN, WRITES DO NOT (21 Sep 2026). If the check does not
+     answer, a page still opens: the switches control a rollout, and an outage
+     in them must not lock every agent out of every screen. A WRITE is
+     different. It used to go through as well, which meant that for as long as
+     the check was slow, look only was not. With a whole agency about to be
+     let in to practise on real data, "nothing sends" has to hold on a bad day
+     too - so a write with no answer falls back to the last answer this person
+     got, and with no answer at all it is refused and asked to try again.
 
      WRITES AND PAGES ONLY. Reads are never refused, because the dashboard
      reads from half the areas and a hidden Finances must not blank its tiles. */
@@ -129,6 +134,8 @@ async function sessionUserId(token: string | undefined, secret: string | undefin
 const DEV_SECRET = "dev-only-secret-not-for-production";
 const ACCESS_TTL_MS = 15_000;
 const accessCache = new Map<string, { at: number; access: AreaAccess | null }>();
+/** The last answer that WAS an answer, per person. Never expires: see above. */
+const lastGood = new Map<string, AreaAccess>();
 
 async function accessOf(req: NextRequest, userId: string): Promise<AreaAccess | null> {
   const hit = accessCache.get(userId);
@@ -151,7 +158,65 @@ async function accessOf(req: NextRequest, userId: string): Promise<AreaAccess | 
   }
   if (accessCache.size > 2_000) accessCache.clear();
   accessCache.set(userId, { at: Date.now(), access });
+  if (access) {
+    if (lastGood.size > 2_000) lastGood.clear();
+    lastGood.set(userId, access);
+  }
   return access;
+}
+
+/**
+ * Everything on a request that could be the id of a record: the path, the
+ * query and a JSON body, to three levels. For an area on practice, where the
+ * answer depends on WHAT is being written to (lib/practice-target). Generic on
+ * purpose - a hundred write routes name their target a hundred ways, and a
+ * list of field names would be a list with holes in it.
+ */
+async function candidateIds(req: NextRequest): Promise<string[]> {
+  const out = new Set<string>();
+  const take = (v: unknown) => {
+    if (typeof v === "number" && Number.isFinite(v)) out.add(String(v));
+    else if (typeof v === "string" && v.length > 0 && v.length <= 80) out.add(v);
+  };
+  req.nextUrl.pathname.split("/").slice(2).forEach((seg) => take(decodeURIComponent(seg)));
+  req.nextUrl.searchParams.forEach((v) => take(v));
+
+  const type = req.headers.get("content-type") ?? "";
+  const size = Number(req.headers.get("content-length") ?? 0);
+  if (type.includes("application/json") && size > 0 && size < 200_000) {
+    const walk = (v: unknown, depth: number) => {
+      if (out.size > 80) return;
+      if (Array.isArray(v)) v.slice(0, 20).forEach((x) => walk(x, depth + 1));
+      else if (v && typeof v === "object") {
+        if (depth < 3) Object.values(v as Record<string, unknown>).forEach((x) => walk(x, depth + 1));
+      } else take(v);
+    };
+    try {
+      walk(await req.clone().json(), 0);
+    } catch {
+      /* Not JSON after all. The path and query are still looked at. */
+    }
+  }
+  return [...out].slice(0, 80);
+}
+
+/** Does this write name one of the caller's own test files? False on any doubt. */
+async function aimsAtOwnTestFile(req: NextRequest): Promise<boolean> {
+  try {
+    const ids = await candidateIds(req);
+    if (!ids.length) return false;
+    const res = await fetch(new URL("/api/area-access/target", req.nextUrl.origin), {
+      method: "POST",
+      headers: { cookie: req.headers.get("cookie") ?? "", "content-type": "application/json" },
+      body: JSON.stringify({ ids }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(2_500),
+    });
+    const j = res.ok ? ((await res.json()) as { test?: boolean }) : null;
+    return j?.test === true;
+  } catch {
+    return false;
+  }
 }
 
 async function areaGate(req: NextRequest): Promise<NextResponse | null> {
@@ -164,11 +229,23 @@ async function areaGate(req: NextRequest): Promise<NextResponse | null> {
   const userId = await sessionUserId(req.cookies.get("os_session")?.value, secret);
   if (!userId) return null;
 
-  const access = await accessOf(req, userId);
-  if (!access?.gated) return null;
+  const answered = await accessOf(req, userId);
+  /* No answer: a page opens regardless; a write uses the last answer this
+     person got, and is refused if there has never been one. */
+  const access = answered ?? (isApi ? (lastGood.get(userId) ?? null) : null);
+  if (!access) {
+    if (!isApi) return null;
+    return NextResponse.json(
+      { ok: false, error: "We couldn't check whether this is switched on for you just now. Nothing was saved - try again in a moment." },
+      { status: 503 }
+    );
+  }
+  if (!access.gated) return null;
 
   if (isApi) {
     if (canAct(access, area)) return null;
+    /* Practice: a real record is look only, the caller's own test file works. */
+    if (needsTargetCheck(access, area) && (await aimsAtOwnTestFile(req))) return null;
     /* 423 Locked, in the shape every screen already prints: { ok, error }. */
     return NextResponse.json(
       { ok: false, areaLocked: area.id, error: lockedSentence(area, levelOf(access, area.id)) },
