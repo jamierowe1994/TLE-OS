@@ -23,6 +23,9 @@ import {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+/** A document or a check is a piece of paper; training and declarations are a date. */
+const wantsFile = (i: ComplianceItem) => i.requirement.kind === "document" || i.requirement.kind === "check";
+
 function tone(state: ComplianceItem["state"]): "good" | "accent" | "neutral" {
   if (state === "verified") return "good";
   if (state === "held") return "neutral";
@@ -157,6 +160,19 @@ export default function PersonalCompliance() {
                       ) : (
                         <span className="text-[11px] text-muted">no record</span>
                       )}
+                      {/* What they put on file, there to open again. It was
+                          stored and then never shown back to them. */}
+                      {i.link && (
+                        <a
+                          href={i.link}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1 flex items-center gap-1 text-[10.5px] font-semibold text-accent-dark underline decoration-accent-dark/40 underline-offset-2"
+                        >
+                          <DoodleIcon name="doc" size={10} />
+                          View document
+                        </a>
+                      )}
                     </td>
                     <td className="px-4 py-3.5">
                       <Pill tone={tone(i.state)}>{STATE_WORDS[i.state]}</Pill>
@@ -174,7 +190,12 @@ export default function PersonalCompliance() {
                             : "border border-ink/25 hover:border-ink"
                         }`}
                       >
-                        {i.doneAt ? "Update" : "Mark it done"}
+                        {/* Says what you will actually do (James, 21 Sep 2026:
+                            "there's no way of them uploading them themselves").
+                            The upload was always in this panel, behind a button
+                            that said "Mark it done" and a field that said
+                            "optional" - so nobody found it. */}
+                        {i.doneAt ? "Update" : wantsFile(i) ? "Upload" : "Mark it done"}
                       </button>
                     </td>
                   </tr>
@@ -213,7 +234,9 @@ export default function PersonalCompliance() {
             <label className="mt-3 flex cursor-pointer items-center gap-2.5 rounded-xl border border-dashed border-line/80 px-3 py-2.5 text-[12.5px] transition-colors hover:border-ink/40">
               <DoodleIcon name="upload" size={14} className="shrink-0 text-accent-dark" />
               <span className="min-w-0 flex-1 truncate">
-                {uploading ? "Uploading\u2026" : fileName || "Upload the certificate (optional)"}
+                {uploading
+                  ? "Uploading\u2026"
+                  : fileName || (wantsFile(marking) ? "Upload the document (PDF or a photo)" : "Upload a certificate (optional)")}
               </span>
               {fileName && !uploading && (
                 <span className="shrink-0 text-[11px] font-semibold text-muted">Replace</span>

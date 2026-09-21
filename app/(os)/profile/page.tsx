@@ -16,6 +16,7 @@ import {
   CHARCOALS, DARK_BG_DEFAULT, DARK_BG_KEY, DARK_BOX_DEFAULT, DARK_BOX_KEY,
   readDarkStep, writeDarkStep,
   type ThemeChoice,
+  THEME_LOCKED,
 } from "@/lib/theme";
 import { fetchMe, invalidateMe } from "@/lib/me";
 
@@ -26,6 +27,9 @@ import { fetchMe, invalidateMe } from "@/lib/me";
  * Email is shown but never editable — it's the identity the whole login
  * hangs off. Everything else is theirs to write.
  */
+
+/** In the doodle set; the pack has none. */
+const LOCK_ICON = "lock";
 
 type TabKey = "info" | "appearance" | "custom" | "compliance" | "connections" | "ads";
 
@@ -268,6 +272,8 @@ export default function ProfilePage() {
   /** Geocoding the Hub's address after they accept it. */
   const [placing, setPlacing] = useState(false);
   const [theme, setTheme] = useState<ThemeChoice>("auto");
+  /** Somebody pressed a locked theme: the line underneath answers them. */
+  const [soon, setSoon] = useState(false);
   const [darkBg, setDarkBg] = useState(DARK_BG_DEFAULT);
   const [darkBox, setDarkBox] = useState(DARK_BOX_DEFAULT);
   /* Who you are follows the account. Theme
@@ -361,6 +367,9 @@ export default function ProfilePage() {
             }`}
           >
             {t.label}
+            {t.key === "appearance" && THEME_LOCKED && (
+              <DoodleIcon name={LOCK_ICON} size={11} className="ml-1.5 -translate-y-px opacity-60" />
+            )}
             {tab === t.key && (
               <span className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-accent-dark" />
             )}
@@ -590,7 +599,43 @@ export default function ProfilePage() {
         )}
 
         {/* ══ APPEARANCE ══ */}
-        {tab === "appearance" && (
+        {/* Light only for now - THEME_LOCKED in lib/theme (James, 21 Sep 2026:
+            "I haven't gone through and tested every single part of it"). The
+            choices stay on the page so people can see they are coming; Dark
+            and Auto say so and do nothing. The full picker is the branch
+            below, untouched, for the day the lock comes off. */}
+        {tab === "appearance" && THEME_LOCKED && (
+          <div className="max-w-md">
+            <p className={label}>Theme</p>
+            <div className="flex gap-2">
+              <div className="flex-1 rounded-xl border border-accent-dark bg-accent-soft px-3 py-3 text-center text-[12.5px] font-medium text-accent-dark">
+                Light
+              </div>
+              {(["Dark", "Auto"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setSoon(true)}
+                  aria-disabled
+                  className="flex flex-1 cursor-not-allowed flex-col items-center gap-1 rounded-xl border border-dashed border-line/80 px-3 py-2 text-[12.5px] font-medium text-muted"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <DoodleIcon name={LOCK_ICON} size={11} />
+                    {t}
+                  </span>
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.08em]">Coming soon</span>
+                </button>
+              ))}
+            </div>
+            <p className="mt-2.5 text-[11.5px] leading-relaxed text-muted">
+              {soon
+                ? "Dark and Auto are coming soon. For now TLE OS is in Light for everybody."
+                : "TLE OS is in Light for everybody for now. Dark and Auto are coming soon."}
+            </p>
+          </div>
+        )}
+
+        {tab === "appearance" && !THEME_LOCKED && (
           <div className="max-w-md">
             <p className={label}>Theme</p>
             <div className="flex gap-2">

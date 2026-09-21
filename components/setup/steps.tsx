@@ -62,9 +62,8 @@ export function Welcome({ name, onNext }: { name: string; onNext: () => void }) 
         {first ? `Hello, ${first}.` : "Hello there."}
       </h1>
       <p className="mt-3 text-[13px] leading-relaxed">
-        Your password is set, so your account exists. Four more things and the OS
-        is yours: your REX, your email, how this pre-launch works, and how you
-        want it to look.
+        Your password is set, so your account exists. Three more things and the OS
+        is yours: your REX, your email, and how this pre-launch works.
       </p>
       <p className="mt-3 text-[12px] leading-relaxed text-muted">
         One at a time, and it takes about three minutes. Nothing here is

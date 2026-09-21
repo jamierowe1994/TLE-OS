@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Pill } from "@/components/Wire";
+import Segmented from "@/components/Segmented";
 
 /**
  * Custom attributes — a TAB on the profile, not a page of its own.
@@ -41,6 +42,11 @@ const PASSPORT = "tenant_passport";
 
 export default function CustomAttributes() {
   const [defs, setDefs] = useState<Def[] | null>(null);
+  /* One at a time (James, 21 Sep 2026: the two stacked "looks a little bit
+     overwhelming"). They were always two different jobs - a column you fill in
+     yourself, and a question a tenant answers - so they are two views of this
+     tab rather than two cards down one page. */
+  const [view, setView] = useState<"attributes" | "passport">("attributes");
   const [entity, setEntity] = useState<string>("leads");
   const [label, setLabel] = useState("");
   const [kind, setKind] = useState<string>("text");
@@ -130,18 +136,42 @@ export default function CustomAttributes() {
 
   const byEntity = (id: string) => (defs ?? []).filter((d) => d.entity === id);
 
-  return (
-    <>
+  const passportCount = byEntity(PASSPORT).length;
+  const attributeCount = (defs ?? []).length - passportCount;
 
-      <section className="fade-up mt-8 rounded-2xl border border-line/80 bg-panel p-5">
+  return (
+    <div className="max-w-3xl">
+      <Segmented
+        className="w-full max-w-md"
+        options={[
+          { id: "attributes", label: `Custom attributes${attributeCount ? ` (${attributeCount})` : ""}` },
+          {
+            id: "passport",
+            title: "Tenant passport questions",
+            /* The full name does not fit half a phone's width; "Tenant" is the
+               word it can lose, because the card underneath says it in full. */
+            label: (
+              <>
+                <span className="sm:hidden">Passport questions</span>
+                <span className="hidden sm:inline">Tenant passport questions</span>
+                {passportCount ? ` (${passportCount})` : ""}
+              </>
+            ),
+          },
+        ]}
+        value={view}
+        onChange={setView}
+      />
+
+      {view === "attributes" && (
+      <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-[15px]">Custom attributes</h2>
           <Pill tone="neutral">Only you see these</Pill>
         </div>
         <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
-          Your own fields on leads, listings, viewings and appraisals — and something to filter
-          by. They stay on your account: nobody else gets the column, and you don&apos;t get
-          theirs.
+          Your own extra fields on leads, listings, viewings and appraisals, which you can also
+          filter by.
         </p>
 
         {flash && (
@@ -220,15 +250,19 @@ export default function CustomAttributes() {
         {defs === null ? (
           <p className="mt-4 text-[12.5px] text-muted">Loading…</p>
         ) : (
+          attributeCount === 0 ? (
+            /* One line, not four. "Nothing yet." under each of four headings
+               was most of what made this page look busy while being empty. */
+            <p className="mt-4 text-[12px] text-muted">None yet. Add your first one above.</p>
+          ) : (
           <div className="mt-4 space-y-4">
             {ENTITIES.map((e) => {
               const mine = byEntity(e.id);
+              if (mine.length === 0) return null;
               return (
                 <div key={e.id}>
                   <p className="text-[10.5px] font-semibold">{e.label}</p>
-                  {mine.length === 0 ? (
-                    <p className="mt-1 text-[11.5px] text-muted">Nothing yet.</p>
-                  ) : (
+                  {(
                     <ul className="mt-1.5 space-y-1">
                       {mine.map((d) => (
                         <li
@@ -259,30 +293,32 @@ export default function CustomAttributes() {
               );
             })}
           </div>
+          )
         )}
 
-        <p className="mt-4 border-t border-line/70 pt-3 text-[11px] leading-relaxed text-muted">
-          Removing a field takes its answers with it — there is nothing left to keep once the
-          question is gone, and a stored answer to a question nobody can see is worse than none.
-        </p>
+        {attributeCount > 0 && (
+          <p className="mt-4 border-t border-line/70 pt-3 text-[11px] leading-relaxed text-muted">
+            Removing a field removes its answers too.
+          </p>
+        )}
       </section>
+      )}
 
       {/* ══ Questions bolted onto the tenant passport ══════════════════════
           Separate section rather than a fifth option in the picker above.
           Everything above is a column YOU fill in on your own records; this
           is a question somebody else answers, on a public form, and mixing
           the two would make "Add" mean two different things on one screen. */}
+      {view === "passport" && (
       <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-[15px]">Your tenant passport questions</h2>
+          <h2 className="text-[15px]">Tenant passport questions</h2>
           <Pill tone="neutral">Only on your properties</Pill>
         </div>
         <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
-          Anything extra you want asked when a tenant fills in a passport for one
-          of your properties. They are added to the end of the standard passport,
-          and they only ever appear on yours: if somebody applies through another
-          agent, they see that agent&apos;s questions and never yours. Add none and
-          the passport is exactly as it is today.
+          Extra questions for tenants you send a passport to. They go on the end of the
+          standard passport, and only on passports you send. Add none and your passport is
+          the standard one.
         </p>
 
         {pFlash && (
@@ -406,12 +442,11 @@ export default function CustomAttributes() {
             and a note claiming otherwise would be a lie somebody discovers at
             the worst moment. */}
         <p className="mt-4 border-t border-line/70 pt-3 text-[11px] leading-relaxed text-muted">
-          The list is read afresh each time somebody opens their passport, so a
-          question you add now also appears on links you have already sent, as
-          long as the tenant has not finished. Removing one takes its answers
-          with it.
+          A new question also shows on passports you have already sent, until the tenant
+          finishes. Removing one removes its answers too.
         </p>
       </section>
-    </>
+      )}
+    </div>
   );
 }

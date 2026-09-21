@@ -82,7 +82,10 @@ export type SetupView = {
   state: SetupState;
 };
 
-export const STEP_ORDER: SetupStepId[] = ["password", "rex", "email", "how", "look"];
+/* "look" was the fifth - choose light, dark or automatic. Taken out of the
+   order on 21 Sep 2026 while the OS is light only (THEME_LOCKED, lib/theme).
+   The id stays in the type so the answer people already gave still reads. */
+export const STEP_ORDER: SetupStepId[] = ["password", "rex", "email", "how"];
 
 /**
  * Email is the only one somebody may pass over.
@@ -95,7 +98,6 @@ export const REQUIRED: ReadonlySet<SetupStepId> = new Set<SetupStepId>([
   "password",
   "rex",
   "how",
-  "look",
 ]);
 
 export type StepMeta = {
@@ -134,12 +136,6 @@ export const STEPS: StepMeta[] = [
     short: "How this works",
     title: "How the pre-launch works",
     blurb: "The one screen worth reading. It is short.",
-  },
-  {
-    id: "look",
-    short: "Look",
-    title: "Make it yours",
-    blurb: "No wrong answers here, and you can change it whenever you like.",
   },
 ];
 

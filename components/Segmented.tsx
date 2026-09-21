@@ -38,7 +38,9 @@ export default function Segmented<T extends string>({
   onChange,
   className = "",
 }: {
-  options: { id: T; label?: string; icon?: React.ReactNode; title?: string }[];
+  /* `label` may be markup, so a long one can carry a shorter wording for a
+     phone (see the Custom tab on the profile). A plain string still works. */
+  options: { id: T; label?: React.ReactNode; icon?: React.ReactNode; title?: string }[];
   value: T;
   onChange: (v: T) => void;
   className?: string;

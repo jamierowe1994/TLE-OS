@@ -6,6 +6,7 @@ import {
   applyTheme,
   isNight,
   readTheme,
+  THEME_LOCKED,
   resolve,
   writeTheme,
   type ThemeChoice,
@@ -135,7 +136,8 @@ export default function ThemeGate({ children }: { children: React.ReactNode }) {
       choice.current = saved;
       applyTheme(saved);
     }
-    if (!localStorage.getItem(CHOSEN_KEY)) {
+    /* Locked to light: nobody is asked. See THEME_LOCKED in lib/theme. */
+    if (!THEME_LOCKED && !localStorage.getItem(CHOSEN_KEY)) {
       // Preview the automatic answer behind the chooser, so the split screen
       // isn't sitting on an arbitrary theme.
       applyTheme("auto");
@@ -162,6 +164,7 @@ export default function ThemeGate({ children }: { children: React.ReactNode }) {
         choice: ThemeChoice;
         origin?: { x: number; y: number };
       };
+      if (THEME_LOCKED) return;
       choice.current = detail.choice;
       writeTheme(detail.choice);
       run(detail.choice, detail.origin);

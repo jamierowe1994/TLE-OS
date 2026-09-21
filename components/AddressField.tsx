@@ -39,9 +39,16 @@ export default function AddressField({
   const [busy, setBusy] = useState(false);
   const [pin, setPin] = useState<ResolvedAddress | null>(null);
   const box = useRef<HTMLDivElement>(null);
+  /* Only what somebody TYPES is looked up. A saved address arriving in `value`
+     used to be searched like a keystroke, so the Profile page opened with its
+     home-address list already hanging open over the form (James, 21 Sep 2026:
+     "this could lead to people accidentally clicking on stuff"). It also paid
+     for a lookup nobody asked for, on every visit. */
+  const typed = useRef(false);
 
   // Debounced: a lookup per keystroke is a lookup you pay for per keystroke.
   useEffect(() => {
+    if (!typed.current) return;
     if (!value.trim() || value.length < 3 || pin?.address === value) return;
     const id = window.setTimeout(async () => {
       setBusy(true);
@@ -113,6 +120,7 @@ export default function AddressField({
         <input
           value={value}
           onChange={(e) => {
+            typed.current = true;
             onChange(e.target.value);
             setPin(null);
           }}

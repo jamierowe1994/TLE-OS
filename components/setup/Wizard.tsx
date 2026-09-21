@@ -107,7 +107,7 @@ export default function Wizard({
   async function complete(step: SetupStepId, opts: { skip?: boolean } = {}) {
     if (dry) setRan((s) => new Set(s).add(step));
     else await save({ step, skip: opts.skip });
-    const order: Screen[] = ["rex", "email", "how", "look", "finished"];
+    const order: Screen[] = ["rex", "email", "how", "finished"];
     go(order[order.indexOf(step) + 1] ?? "finished");
   }
 

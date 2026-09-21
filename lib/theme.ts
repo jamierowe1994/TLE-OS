@@ -8,6 +8,23 @@ export type ThemeChoice = "light" | "dark" | "auto";
 export const THEME_KEY = "os-theme";
 
 /**
+ * LIGHT ONLY, FOR NOW (James, 21 Sep 2026).
+ *
+ * "We're only going to allow light theme... I haven't gone through and tested
+ * every single part of it. I'm just conscious that we're going to give guys
+ * access to something that I haven't fully checked over."
+ *
+ * One switch, here, because this file is the one definition of what a theme
+ * means. While it is on: every choice resolves to light, a saved "dark" or
+ * "auto" is ignored rather than deleted (so it comes back the day this is
+ * turned off), the first-run chooser and the setup wizard's Look step never
+ * appear, and Appearance on the Profile says "Coming soon".
+ *
+ * To bring dark back: set this to false. Nothing else was removed.
+ */
+export const THEME_LOCKED = true;
+
+/**
  * Automatic follows the clock, not the operating system.
  *
  * Deliberate: an agent doing viewings until eight wants the screen to soften
@@ -21,6 +38,7 @@ export function isNight(now = new Date()): boolean {
 
 /** What a choice resolves to right now. */
 export function resolve(choice: ThemeChoice): "light" | "dark" {
+  if (THEME_LOCKED) return "light";
   if (choice === "auto") return isNight() ? "dark" : "light";
   return choice;
 }
@@ -33,6 +51,7 @@ export function applyTheme(choice: ThemeChoice) {
 }
 
 export function readTheme(): ThemeChoice | null {
+  if (THEME_LOCKED) return "light";
   try {
     const v = localStorage.getItem(THEME_KEY);
     return v === "light" || v === "dark" || v === "auto" ? v : null;
