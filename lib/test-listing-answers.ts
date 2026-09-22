@@ -114,6 +114,7 @@ export async function testListingViewings(id: number) {
       agent: v.withName,
       contacts: [{ id: `test-${v.appointmentId}`, name: row?.who || "Test applicant", email: v.tenantEmail, phone: null, leadId: leadFor.get(v.tenantEmail.toLowerCase()) ?? null }],
       feedbackId: null,
+      bookedAt: null,
       description: null,
     };
   });

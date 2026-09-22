@@ -46,6 +46,8 @@ export interface Viewing {
   contacts: ViewingContact[];
   feedbackId: string | null;
   description: string | null;
+  /** When the event was put in REX's diary (system_ctime), when REX says. */
+  bookedAt: string | null;
 }
 
 interface RexRecord {
@@ -66,6 +68,8 @@ interface RexEvent {
   organiser_user?: { name?: string } | null;
   calendar?: { owner_user?: { name?: string } | null } | null;
   records?: RexRecord[] | null;
+  /** Unix seconds, as every REX record carries it. */
+  system_ctime?: number | string | null;
 }
 
 function kindOf(title: string, type: string | null): string {
@@ -106,6 +110,7 @@ function toViewing(e: RexEvent): Viewing | null {
     title,
     type,
     status: e.status?.text ?? null,
+    bookedAt: Number(e.system_ctime) > 0 ? new Date(Number(e.system_ctime) * 1000).toISOString() : null,
     cancelled: Boolean(e.is_cancelled) || e.status?.id === "cancelled",
     agent: e.organiser_user?.name ?? e.calendar?.owner_user?.name ?? null,
     contacts,
@@ -198,6 +203,12 @@ export async function recordViewings(incoming: Viewing[]): Promise<void> {
   for (const [id, { c, v }] of contacts) {
     if (have.has(id)) continue;
     const when = new Date(v.startsAt);
+    /* A lead is received when the viewing was BOOKED, not when it happens:
+       dated by the appointment, a viewer booked for next month sat at the top
+       of the Leads board as "received 20 October" for a month (22 Sep 2026).
+       REX's creation time when it says; otherwise the appointment, capped at
+       now. */
+    const received = v.bookedAt ? new Date(v.bookedAt) : new Date(Math.min(when.getTime(), Date.now()));
     fresh.push({
       id: `contact-${id}`,
       name: c.name,
@@ -207,14 +218,14 @@ export async function recordViewings(incoming: Viewing[]): Promise<void> {
       area: v.listingLabel?.split(",").slice(-1)[0]?.trim() ?? "—",
       budget: "—",
       source: "REX diary",
-      received: when.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+      received: received.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
       stage: v.cancelled ? "New" : when.getTime() < Date.now() ? "Contacted" : "Viewing booked",
       moveDate: "—",
       preferred: v.listingLabel ?? "—",
       agent: v.agent ?? "Unassigned",
       notes: "",
       activity: [{ icon: "calendar", text: `${v.kind === "viewing" ? "Viewing" : v.title} at ${v.listingLabel ?? "the property"} in REX's diary`, when: when.toLocaleDateString("en-GB", { day: "numeric", month: "short" }) }],
-      receivedAt: v.startsAt,
+      receivedAt: received.toISOString(),
       address: v.listingLabel ?? undefined,
       listingId: v.listingId != null ? Number(v.listingId) : undefined,
       contactId: id,
