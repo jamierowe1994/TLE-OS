@@ -34,7 +34,8 @@ import { record } from "@/lib/audit";
  *                 REX or Propoly. The back office stays hidden.
  *   2  Working    The front office is real, nothing outward goes, test files stay:
  *                 what an agent does is real, and email reaches customers.
- *   3  Launch     Test files cleared, email and portals on, back office open.
+ *   3  Go live    Test files cleared, email and portals on, back office hidden.
+ *   4  Back office  Portfolio, Emails, Finances and Tools open.
  *
  * ── What a phase deliberately does NOT touch ──────────────────────────────
  *
@@ -56,7 +57,7 @@ import { record } from "@/lib/audit";
  * nobody invited. Nobody can arrive in a building that is not yet locked.
  */
 
-export type PhaseId = 1 | 2 | 3;
+export type PhaseId = 1 | 2 | 3 | 4;
 
 const FRONT = ["dashboard", "leads", "appraisals", "listings", "listing-edit", "listing-publish", "viewings", "applications"];
 /* Everything but Push to the portals: that is the one front-office door that
@@ -125,18 +126,34 @@ export const PHASES: PhaseDef[] = [
       "Emails everybody with an account to say Phase 2 has started.",
     ],
   },
+  /* FOUR, not three (James, 22 Sep 2026, evening): "rather than launch, we
+     would then turn on the landlord and tenant emails and agents from
+     Outlook, and push the portals. We would still keep compliance,
+     maintenance and inspections back, and do that on a fourth push." */
   {
     id: 3,
-    name: "Launch",
+    name: "Go live",
     confirm: "PHASE 3",
-    says: "Test files are cleared, email reaches landlords and tenants, the portals can be pushed to, and Portfolio, Emails, Finances and Tools open to everybody.",
-    areas: { ...all(FRONT, "everyone"), ...all(BACK_ALL, "everyone") },
-    switches: { customer_email: true },
+    says: "Test files are cleared. Email reaches landlords and tenants from the agent's own Outlook, and listings can be pushed to the portals. The back office stays hidden.",
+    areas: { ...all(FRONT, "everyone"), ...all(BACK_ALL, "hidden") },
+    switches: { customer_email: true, assistant_email: true },
     steps: [
       "Removes every tester's test files, so nothing from practice is left behind.",
       "Turns ON email to landlords and tenants, from the agent's own Outlook.",
-      "Puts Push to the portals, Portfolio (with Compliance, Maintenance and Inspections), Emails, Finances and Tools on Everyone.",
+      "Puts Push to the portals on Everyone. Portfolio, Emails, Finances and Tools stay hidden.",
       "Emails everybody with an account to say Phase 3 has started. The automatic tenant emails, campaigns, certificate sharing and the Propoly handover are still armed one at a time on Switches.",
+    ],
+  },
+  {
+    id: 4,
+    name: "Back office",
+    confirm: "PHASE 4",
+    says: "Portfolio, with Compliance, Maintenance and Inspections, plus Emails, Finances and Tools open to everybody.",
+    areas: all(BACK_ALL, "everyone"),
+    switches: {},
+    steps: [
+      "Puts Portfolio (with Compliance, Maintenance and Inspections), Emails, Finances and Tools on Everyone.",
+      "Emails everybody with an account to say Phase 4 has started.",
     ],
   },
 ];
@@ -210,7 +227,7 @@ export interface PhasePreview {
   switches: { key: string; label: string; from: boolean; to: boolean }[];
   /** Phase 1 only: the lettings roster, and where each person stands. */
   roster: { email: string; name: string; rexId: string; hasAccount: boolean; invitedAt: string | null; inPilot: boolean }[];
-  /** Phases 2 and 3: who the announcement goes to. */
+  /** Phases 2 to 4: who the announcement goes to. */
   announceTo: number;
   testFiles: number;
   sendingLocked: boolean;
@@ -228,9 +245,17 @@ export async function previewPhase(id: PhaseId): Promise<PhasePreview> {
 
   let roster: PhasePreview["roster"] = [];
   if (id === 1) {
-    const [agents, invited, list] = await Promise.all([lettingsAgents().catch(() => []), invites().catch(() => []), pilotList()]);
+    const [lettings, invited, list] = await Promise.all([lettingsAgents().catch(() => []), invites().catch(() => []), pilotList()]);
     const pilot = new Set(list);
     const sent = new Map(invited.map((i) => [i.email.toLowerCase(), i.sentAt ?? null]));
+    /* Somebody invited by hand from Pre-launch as an agent (James Crumpton is
+       at The Property Experts, so not on the lettings roster) belongs on this
+       card with the same tick as everybody else (James, 22 Sep 2026). */
+    const known = new Set(lettings.map((a) => a.email.toLowerCase()));
+    const byHand = invited
+      .filter((i) => (i.role ?? "agent") === "agent" && !known.has(i.email.toLowerCase()))
+      .map((i) => ({ id: i.rexUserId ?? "", name: i.name || i.email, email: i.email.toLowerCase() }));
+    const agents = [...lettings, ...byHand];
     roster = await Promise.all(
       agents.map(async (a) => ({
         email: a.email.toLowerCase(),

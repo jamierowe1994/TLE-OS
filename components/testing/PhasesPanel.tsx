@@ -25,7 +25,7 @@ type Preview = {
   testFiles: number;
   sendingLocked: boolean;
 };
-type Phase = { id: 1 | 2 | 3; name: string; confirm: string; says: string; steps: string[]; preview: Preview };
+type Phase = { id: 1 | 2 | 3 | 4; name: string; confirm: string; says: string; steps: string[]; preview: Preview };
 type State = { phase: 0 | 1 | 2 | 3; at: string | null; by: string | null };
 type Result = { phase: number; invited: string[]; inviteFailed: { email: string; why: string }[]; announced: number; filesRemoved: number };
 
@@ -130,14 +130,14 @@ export default function PhasesPanel() {
               {result.inviteFailed.map((f) => (
                 <li key={f.email} className="text-accent-dark">{f.email}: {f.why}. Use Get a link on Pre-launch for this one.</li>
               ))}
-              {result.phase === 2 && <li>{result.filesRemoved} test files removed.</li>}
+              {result.phase === 3 && <li>{result.filesRemoved} test files removed.</li>}
               {result.phase !== 1 && <li>{result.announced} people told by email.</li>}
             </ul>
           )}
         </div>
       )}
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+      <div className="mt-4 grid gap-4 lg:grid-cols-2 2xl:grid-cols-4">
         {data.phases.map((p) => {
           const current = here === p.id;
           const nothing = p.preview.areas.length === 0 && p.preview.switches.length === 0;
@@ -184,7 +184,7 @@ export default function PhasesPanel() {
                     ))}
                   </ul>
                 )}
-                {p.id === 2 && p.preview.testFiles > 0 && (
+                {p.id === 3 && p.preview.testFiles > 0 && (
                   <p className="mt-2 border-t border-line/60 pt-2 text-[11.5px]">{p.preview.testFiles} test files will be removed, including your own.</p>
                 )}
                 {p.preview.sendingLocked && Object.values(p.preview.switches).some((s) => s.to) && (
