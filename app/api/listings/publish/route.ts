@@ -7,6 +7,7 @@ import { AREA_DEFS, canAct, levelOf, lockedSentence } from "@/lib/area-map";
 import { record } from "@/lib/audit";
 import { invalidateListingBook } from "@/lib/listings-cache";
 import { readListingDetails } from "@/lib/listing-details";
+import { listingIsTheirs } from "@/lib/listing-gate";
 import { publishGaps } from "@/lib/listing-publish-check";
 import { isExpiredToken, rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
 import { rexTokenFor } from "@/lib/rex-user";
@@ -170,6 +171,10 @@ export async function POST(req: NextRequest) {
   const id = listingId(b.id);
   const action = b.action === "publish" || b.action === "off" || b.action === "on" ? b.action : null;
   if (!id || !action) return NextResponse.json({ ok: false, error: "Which listing, and publish, off or on?" }, { status: 400 });
+  /* Off and on as well as publish: taking a colleague's advert off Rightmove
+     is the one that bites (18 Sep sweep, item 4). */
+  const notTheirs = await listingIsTheirs(actor, id);
+  if (notTheirs) return NextResponse.json({ ok: false, error: notTheirs }, { status: 403 });
 
   try {
     const before = await rexCall("ListingPublication", "getPublicationStatus", { listing_id: id });

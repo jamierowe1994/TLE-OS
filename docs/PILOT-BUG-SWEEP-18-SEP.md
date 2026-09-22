@@ -88,12 +88,12 @@ driven locally were driven. Branch `pilot-bug-sweep`, cut from `origin/main` at 
 2. ~~**"Continuing X's record" in New lead still creates a second REX contact**~~ **DONE 22 Sep** - linked, never created. - armed since 18 Sep. (S/M)
 3. ~~**An appraisal booked from a REX lead never has a landlord email**~~ **DONE 22 Sep** - read from os_leads., so confirmation,
    pre-presentation, contract and nudge all refuse. Read it from `os_leads`. (S/M)
-4. **No ownership check by listing id** on details / media / publish / archive; any agent can take
+4. **DONE 22 Sep (listing writes and viewing changes; hide-lead and the application journey read still open).** ~~No ownership check by listing id~~ on details / media / publish / archive; any agent can take
    another's advert off. Same shape: `/api/viewings/change` (cancel or move any REX event by id, with
    an office-token fallback - locked today only by the REX allowlist), hide any lead, read any
    application's journey. (M)
-5. **`/api/r2/file` and `/list`: any signed-in role can list and open every landlord's and tenant's
-   documents and every signed contract.** (M)
+5. ~~**`/api/r2/file` and `/list`: any signed-in role can list and open every landlord's and tenant's
+   documents and every signed contract.**~~ **DONE 22 Sep** - lib/r2-access: agents get property paperwork and their own packs only.
 6. ~~**A booking made in the OS is not in the OS diary unless the REX copy succeeded**~~ **DONE 22 Sep** - every real booking is an os_appointments row. - which it never
    does for a test file or an unlinked agent, i.e. every practice booking in the pilot. (M)
 7. **Landlord "Report a problem"** never becomes a job, can go to the wrong agent, and says Sent

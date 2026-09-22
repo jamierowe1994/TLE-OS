@@ -1,6 +1,7 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
-import type { OsUser } from "@/lib/users";
+import { ensureRexLink, type OsUser } from "@/lib/users";
+import { rexCall } from "@/lib/rex";
 import { changeRexEvent } from "@/lib/rex-diary-write";
 import { putInOutlook, removeFromOutlook, icsFile } from "@/lib/outlook-calendar";
 import { renderTleEmail } from "@/lib/email/tle-emails";
@@ -49,6 +50,23 @@ export async function changeViewing(me: OsUser, p: ViewingChangeInput): Promise<
 
   /* REX: the diary id is rex-<event id> for anything REX holds. */
   const eventId = p.viewingId.startsWith("rex-") ? p.viewingId.slice(4) : null;
+  /* WHOSE VIEWING. Any agent could cancel or move any REX event by its id
+     (18 Sep sweep, item 4). An agent changes their own diary: the event's
+     organiser by REX id, or by name when REX gives no id. Owners and the
+     office are not gated. A refusal changes nothing and emails nobody. */
+  if (eventId && me.role === "agent") {
+    const read = await rexCall("CalendarEvents", "read", { id: eventId }).catch(() => null);
+    const ev = (read?.ok ? read.result : null) as { organiser_user?: { id?: unknown; name?: string | null } | null; calendar?: { owner_user?: { id?: unknown; name?: string | null } | null } | null } | null;
+    if (!ev) return { said: "That viewing could not be read just now, so nothing was changed. Try again in a minute.", steps: { rex: "Not read." } };
+    const who = ev.organiser_user ?? ev.calendar?.owner_user ?? null;
+    const mine = await ensureRexLink(me).catch(() => null);
+    const byId = who?.id != null && mine ? String(who.id) === String(mine) : null;
+    const byName = (who?.name ?? "").trim().toLowerCase() === (me.name ?? "").trim().toLowerCase() && Boolean(me.name);
+    if (!(byId === true || (byId === null && byName))) {
+      const first = (who?.name ?? "").trim().split(/\s+/)[0];
+      return { said: first ? `That viewing is ${first}'s. Only they can cancel or move it.` : "That viewing is another agent's. Only they can cancel or move it.", steps: { rex: "Not changed." } };
+    }
+  }
   if (eventId) {
     const r = await changeRexEvent({
       userId: me.id,

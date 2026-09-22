@@ -9,6 +9,7 @@ import { setArchive } from "@/lib/listing-archive-store";
 import { archiveOf } from "@/lib/listing-archive";
 import { rexConfigured } from "@/lib/rex";
 import { forAgent } from "@/lib/agent-words";
+import { listingIsTheirs } from "@/lib/listing-gate";
 
 /**
  * THE ARCHIVE: everything that stopped moving.
@@ -87,6 +88,10 @@ export async function POST(req: NextRequest) {
   const action = body.action === "restore" ? "restored" : body.action === "archive" ? "archived" : null;
   if (!id || !action) {
     return NextResponse.json({ ok: false, error: "Which listing, and archive or restore?" }, { status: 400 });
+  }
+  if (/^\d+$/.test(id)) {
+    const notTheirs = await listingIsTheirs(me, Number(id));
+    if (notTheirs) return NextResponse.json({ ok: false, error: notTheirs }, { status: 403 });
   }
 
   /* A live advert and a let-agreed property are never archivable - the rule

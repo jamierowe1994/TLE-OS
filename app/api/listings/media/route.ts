@@ -4,7 +4,7 @@ import { isTestId } from "@/lib/test-overlay";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { record } from "@/lib/audit";
 import { readListingDetails } from "@/lib/listing-details";
-import { gateListingWrite } from "@/lib/listing-gate";
+import { gateListingWrite, listingIsTheirs } from "@/lib/listing-gate";
 import { invalidateListingBook } from "@/lib/listings-cache";
 import { R2_BUCKET, withR2 } from "@/lib/r2";
 import { rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
@@ -46,6 +46,8 @@ export async function POST(req: NextRequest) {
   const kind = b.kind === "photo" || b.kind === "floorplan" ? b.kind : null;
   const key = typeof b.key === "string" ? b.key : "";
   if (!Number.isInteger(id) || id <= 0 || !kind) return NextResponse.json({ ok: false, error: "Which listing, and a photo or a floor plan?" }, { status: 400 });
+  const notTheirs = await listingIsTheirs(actor, id);
+  if (notTheirs) return NextResponse.json({ ok: false, error: notTheirs }, { status: 403 });
   /* Only a file the drop zone put under THIS listing. A key from anywhere
      else in the bucket - a tenant's ID, a signed contract - must never be
      one request away from a public advert. */

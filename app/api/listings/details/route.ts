@@ -4,7 +4,7 @@ import { isTestId } from "@/lib/test-overlay";
 import { whoIs } from "@/lib/admin";
 import { record } from "@/lib/audit";
 import { MAX_HIGHLIGHTS, planListingWrite, readListingDetails, type ListingEdit } from "@/lib/listing-details";
-import { gateListingWrite } from "@/lib/listing-gate";
+import { gateListingWrite, listingIsTheirs } from "@/lib/listing-gate";
 import { invalidateListingBook } from "@/lib/listings-cache";
 import { saveMarketingFacts, type MarketingFacts } from "@/lib/listing-marketing-store";
 import { OPTIONS } from "@/lib/listing-requirements";
@@ -83,6 +83,8 @@ export async function PATCH(req: NextRequest) {
   if (isTestId(b.id)) return NextResponse.json({ ok: false, error: TEST_REFUSAL, test: true }, { status: 409 });
   const id = listingId(b.id);
   if (!id) return NextResponse.json({ ok: false, error: "A numeric listing id is required." }, { status: 400 });
+  const notTheirs = await listingIsTheirs(actor, id);
+  if (notTheirs) return NextResponse.json({ ok: false, error: notTheirs }, { status: 403 });
 
   const edit: ListingEdit = {};
   const bad: string[] = [];
