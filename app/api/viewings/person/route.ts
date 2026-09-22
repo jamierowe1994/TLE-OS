@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const contactId = req.nextUrl.searchParams.get("contact");
   const email = req.nextUrl.searchParams.get("email");
-  const { upcoming, past } = await viewingsForPerson({ contactId, email }).catch(() => ({ upcoming: [], past: [] }));
+  const leadId = req.nextUrl.searchParams.get("lead");
+  const { upcoming, past } = await viewingsForPerson({ contactId, email, leadId }).catch(() => ({ upcoming: [], past: [] }));
   return NextResponse.json({ ok: true, upcoming, past });
 }

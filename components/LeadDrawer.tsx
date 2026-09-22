@@ -533,7 +533,7 @@ function CardTitle({ icon, children }: { icon: string; children: React.ReactNode
   );
 }
 /** One viewing on a person's record: when, where, how it went, and the way in. */
-function ViewingLine({ v }: { v: PersonViewing }) {
+function ViewingLine({ v, onConfirm }: { v: PersonViewing; onConfirm?: (v: PersonViewing) => void }) {
   const been = new Date(v.startsAt).getTime() < Date.now();
   const when = new Date(v.startsAt).toLocaleString("en-GB", {
     timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
@@ -550,6 +550,18 @@ function ViewingLine({ v }: { v: PersonViewing }) {
           {v.agent ? ` · with ${v.agent}` : ""}
           {v.test ? " · test file" : ""}
         </span>
+        {v.confirmed && <span className="mt-0.5 block text-[10.5px] leading-snug text-muted">{v.confirmed}</span>}
+        {/* Booked in the OS and never confirmed: the button used to live only
+            in the drawer that made the booking, and went with it (22 Sep 2026). */}
+        {!been && v.booking && !v.confirmed && onConfirm && (
+          <button
+            type="button"
+            onClick={() => onConfirm(v)}
+            className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-line/80 px-2.5 py-1 text-[10.5px] font-semibold transition-colors hover:border-accent-dark hover:text-accent-dark"
+          >
+            <DoodleIcon name="mail" size={11} /> Send confirmation
+          </button>
+        )}
       </span>
       <span className="flex shrink-0 items-center gap-2">
         <Pill tone={been ? (v.feedback ? "good" : "neutral") : "accent"}>
@@ -1091,11 +1103,15 @@ export default function LeadDrawer({
      have seen and what is booked. `booked` is what was just made in this
      session, before the ledger has read it back from REX. */
   const [theirs, setTheirs] = useState<{ upcoming: PersonViewing[]; past: PersonViewing[] }>({ upcoming: [], past: [] });
+  /* Bumped when a confirmation is sent from the Viewings tab, so the line
+     re-reads and says so. */
+  const [confirmTick, setConfirmTick] = useState(0);
   useEffect(() => {
     if (!lead || leadSide(lead) !== "tenant") return setTheirs({ upcoming: [], past: [] });
     const q = new URLSearchParams();
     if (lead.contactId) q.set("contact", String(lead.contactId));
     if (contact.email || lead.email) q.set("email", contact.email || lead.email);
+    q.set("lead", lead.id);
     if (![...q.keys()].length) return;
     let live = true;
     fetch(`/api/viewings/person?${q}`, { cache: "no-store" })
@@ -1106,7 +1122,7 @@ export default function LeadDrawer({
       .catch(() => { /* the record reads fine without it */ });
     return () => { live = false; };
     /* Re-read when a booking is made here, so the new one appears at once. */
-  }, [lead, contact.email, booked.length]);
+  }, [lead, contact.email, booked.length, confirmTick]);
   const theirViewings = [...theirs.upcoming, ...theirs.past];
   const nextViewing = theirs.upcoming[0] ?? null;
 
@@ -1641,7 +1657,21 @@ export default function LeadDrawer({
         <ul className="space-y-2.5">
           {theirs.upcoming.length > 0 && <li className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">Coming up</li>}
           {theirs.upcoming.map((v) => (
-            <ViewingLine key={v.id} v={v} />
+            <ViewingLine
+              key={v.id}
+              v={v}
+              onConfirm={(pv) =>
+                pv.booking &&
+                setConfirming({
+                  id: pv.id,
+                  when: whenFull(pv.startsAt) ?? "",
+                  property: pv.address,
+                  locality: "",
+                  outcome: "Booked",
+                  confirm: pv.booking,
+                })
+              }
+            />
           ))}
           {theirs.past.length > 0 && <li className="pt-2 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">Been to</li>}
           {theirs.past.map((v) => (
@@ -3071,6 +3101,7 @@ export default function LeadDrawer({
           onSent={(detail) => {
             const id = confirming.id;
             setBooked((cur) => cur.map((b) => (b.id === id ? { ...b, confirmed: `Confirmation sent. ${detail}` } : b)));
+            setConfirmTick((t) => t + 1);
           }}
         />
       )}

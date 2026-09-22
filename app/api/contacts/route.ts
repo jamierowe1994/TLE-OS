@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ error: whyNoActor() }, { status: 401 });
 
-  const body = (await req.json().catch(() => null)) as (NewContact & { pushToRex?: boolean }) | null;
+  const body = (await req.json().catch(() => null)) as (NewContact & { pushToRex?: boolean; rexId?: string | null }) | null;
   if (!body || typeof body.name !== "string" || !body.name.trim()) {
     return NextResponse.json({ error: "A name is the one thing needed." }, { status: 400 });
   }
@@ -104,6 +104,20 @@ export async function POST(req: NextRequest) {
     await import("@/lib/tenant-journey-emails")
       .then((m) => m.sendAddedWelcome({ contactId: saved.id, name: saved.name ?? draft.name, email: String(draft.email), by: actor }))
       .catch(() => null);
+  }
+
+  /* "CONTINUING X'S RECORD" (22 Sep 2026). The panel offered the REX contact
+     it matched and the agent chose to carry on with them - and the route then
+     created a second REX contact anyway, because the choice never reached it.
+     A chosen record is linked, and REX is not written to. */
+  const rexId = typeof body.rexId === "string" && /^\d+$/.test(body.rexId.trim()) ? body.rexId.trim() : null;
+  if (rexId) {
+    const detail = `Carried on REX contact ${rexId} - nothing new was created in REX.`;
+    await markRex(saved.id, "linked", detail, rexId, actor.email);
+    return NextResponse.json({
+      contact: { ...saved, rexState: "linked", rexDetail: detail, rexId },
+      rex: { ok: true, reason: "linked", rexId, detail },
+    });
   }
 
   /* Opt out with pushToRex: false — useful for entering a backlog without

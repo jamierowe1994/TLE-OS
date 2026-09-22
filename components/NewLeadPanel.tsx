@@ -325,6 +325,9 @@ export default function NewLeadPanel({
           source: d.source,
           enquiry: d.enquiry,
           notes: d.notes,
+          /* "Continuing X's record": the REX contact they chose. The record is
+             linked to it, and nothing new is created in REX (22 Sep 2026). */
+          rexId: continuing?.id ?? null,
         }),
       });
       const j = await r.json();

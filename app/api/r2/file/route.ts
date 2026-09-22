@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { keyIsOurs, R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
+import { whoIs } from "@/lib/admin";
+import { refOf, refusal } from "@/lib/r2-access";
 
 /**
  * Handing a file back.
@@ -15,11 +17,13 @@ import { keyIsOurs, R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
  * finish loading a certificate; short enough that a URL pasted into an email
  * has already expired.
  *
- * NOTE, and it matters: right now the only check is "does this key belong to
- * us". Everything sits behind the shared access code, which is fine for a
- * two-person preview and NOT fine once there are real users — at that point
- * this route has to ask whether THIS person may see THIS record's files. That
- * check goes here, before the signature.
+ * The check that note below asked for is now here (22 Sep 2026): who is
+ * asking, and whether THIS person may see THIS record's files - the rule is
+ * in lib/r2-access. It runs before the signature.
+ *
+ * (Was: right now the only check is "does this key belong to us". Everything
+ * sits behind the shared access code, which is fine for a two-person preview
+ * and NOT fine once there are real users.)
  */
 
 export const dynamic = "force-dynamic";
@@ -36,6 +40,11 @@ export async function GET(req: NextRequest) {
   if (!keyIsOurs(key)) {
     return NextResponse.json({ ok: false, error: "Not a valid file reference." }, { status: 400 });
   }
+  const { actor } = await whoIs(req);
+  if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
+  const under = refOf(key);
+  const no = under ? await refusal(actor, under.scope, under.ref) : "Not a valid file reference.";
+  if (no) return NextResponse.json({ ok: false, error: no }, { status: 403 });
 
   try {
     /* ?save=1: the document sheet's Save button. The browser is told to

@@ -1377,6 +1377,14 @@ CREATE INDEX IF NOT EXISTS os_appointments_when ON os_appointments (starts_at);
 -- the two are one appointment: this is the REX event it became, so the diary
 -- and the listing never show it twice (James, 7 Sep 2026).
 ALTER TABLE os_appointments ADD COLUMN IF NOT EXISTS rex_event_id TEXT;
+-- A viewing booked in the OS is an OS appointment first (22 Sep 2026): who it
+-- is for and what its confirmation needs, so the diary and the person's record
+-- hold it whether or not REX took the copy. Until now it lived only in Outlook
+-- and REX, and an agent whose REX copy failed had it in neither diary we draw.
+ALTER TABLE os_appointments ADD COLUMN IF NOT EXISTS lead_id TEXT;
+ALTER TABLE os_appointments ADD COLUMN IF NOT EXISTS contact_email TEXT;
+ALTER TABLE os_appointments ADD COLUMN IF NOT EXISTS booking JSONB;
+CREATE INDEX IF NOT EXISTS os_appointments_lead ON os_appointments (lead_id);
 
 -- Presentations sent to landlords — the pre-appraisal deck they open from a
 -- link in the confirmation email.

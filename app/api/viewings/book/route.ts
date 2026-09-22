@@ -7,6 +7,8 @@ import { getContact, markRex } from "@/lib/contacts-store";
 import { pushContactToRex } from "@/lib/rex-contacts";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 import { addTestViewing, isTestId } from "@/lib/test-overlay";
+import { hasDb, q } from "@/lib/db";
+import { uid } from "@/lib/auth";
 
 /**
  * POST → a viewing booked in the OS, carried everywhere it needs to be
@@ -123,6 +125,32 @@ export async function POST(req: NextRequest) {
     minutes,
     unaccompanied,
   }).catch(() => ({ ok: false as const, reason: "refused" as const, detail: "Could not reach REX." }));
+
+  /* THE OS'S OWN RECORD (22 Sep 2026). The booking used to live only in
+     Outlook and REX: an agent whose REX copy failed - every unlinked agent in
+     the pilot - had the viewing in neither diary the OS draws, and the Send
+     confirmation button went with the drawer that made it. The row carries
+     what the confirmation needs, so it can be sent from the record later.
+     When REX did take it, the REX id is written on so nothing shows twice. */
+  const rexEventId = rex.ok && "eventId" in rex && rex.eventId != null ? String(rex.eventId) : null;
+  const booking = {
+    leadId: String(b.leadId),
+    listingId,
+    applicantName,
+    applicantEmail: (b.applicantEmail ?? "").trim().toLowerCase() || null,
+    address,
+    startsAt: new Date(b.startsAt).toISOString(),
+    minutes,
+    unaccompanied,
+  };
+  if (hasDb()) {
+    await q(
+      `INSERT INTO os_appointments (id, starts_at, mins, kind, title, where_at, who, author_id, author_name, rex_event_id, synced_at, lead_id, contact_email, booking)
+       VALUES ($1, $2, $3, 'viewing', $4, $5, $6, $7, $8, $9, CASE WHEN $9::text IS NULL THEN NULL ELSE NOW() END, $10, $11, $12::jsonb)`,
+      [uid(), booking.startsAt, minutes, `${unaccompanied ? "Unaccompanied viewing" : "Viewing"} - ${address} with ${applicantName}`.slice(0, 200),
+       address.slice(0, 200), applicantName.slice(0, 120), actor.id, actor.name ?? "", rexEventId, booking.leadId, booking.applicantEmail, JSON.stringify(booking)]
+    ).catch(() => null);
+  }
 
   /* For the agent's row: their diary and the email. The REX mirror is in the
      response for owners, never in the words an agent reads. */

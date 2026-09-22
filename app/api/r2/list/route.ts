@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { isScope, R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
+import { whoIs } from "@/lib/admin";
+import { refusal } from "@/lib/r2-access";
 
 /**
  * What's already filed against a record.
@@ -45,6 +47,11 @@ export async function GET(req: NextRequest) {
   if (!refRaw || !ref) {
     return NextResponse.json({ ok: false, error: "Which record?" }, { status: 400 });
   }
+  /* Who is asking, and may they (lib/r2-access, 22 Sep 2026). */
+  const { actor } = await whoIs(req);
+  if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
+  const no = await refusal(actor, scopeRaw, ref);
+  if (no) return NextResponse.json({ ok: false, error: no }, { status: 403 });
 
   if (!r2Configured) {
     // Not an error the user needs to see — the screen simply shows nothing
