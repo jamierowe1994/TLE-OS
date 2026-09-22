@@ -39,11 +39,12 @@ export default function ReportIssue({ properties, sample = false, agentFirst }: 
     setBusy(true);
     setNote(null);
     try {
-      const body = `Maintenance request (${urgency.toLowerCase()})${property ? ` at ${property}` : ""}:\n${what}`;
-      const res = await fetch("/api/landlord/messages", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: body }) });
-      const j = (await res.json()) as { ok?: boolean; error?: string };
+      /* A job on the maintenance board first, a note to the agent second
+         (22 Sep 2026). It used to be a message only, and said Sent regardless. */
+      const res = await fetch("/api/landlord/report", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: what, urgency, property }) });
+      const j = (await res.json()) as { ok?: boolean; error?: string; ref?: string };
       if (!j.ok) throw new Error(j.error ?? "That didn't send.");
-      setNote({ text: `Sent to ${agentFirst}. We'll be in touch the same working day, and it will show here as a job.`, err: false });
+      setNote({ text: `Logged as job ${j.ref ?? ""} and sent to ${agentFirst}. We'll be in touch the same working day, and it shows below.`.replace("  ", " "), err: false });
       setText("");
       router.refresh();
     } catch (e) {

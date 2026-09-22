@@ -96,16 +96,16 @@ driven locally were driven. Branch `pilot-bug-sweep`, cut from `origin/main` at 
    documents and every signed contract.**~~ **DONE 22 Sep** - lib/r2-access: agents get property paperwork and their own packs only.
 6. ~~**A booking made in the OS is not in the OS diary unless the REX copy succeeded**~~ **DONE 22 Sep** - every real booking is an os_appointments row. - which it never
    does for a test file or an unlinked agent, i.e. every practice booking in the pilot. (M)
-7. **Landlord "Report a problem"** never becomes a job, can go to the wrong agent, and says Sent
+7. **DONE 22 Sep (a works order, a note on the file)** ~~**Landlord "Report a problem"** never becomes a job, can go to the wrong agent, and says Sent~~
    regardless. (M)
-8. **The dashboard's Pipeline row disagrees with the tiles above it** (all-time totals beside live
+8. ~~**The dashboard's Pipeline row disagrees with the tiles above it**~~ **DONE 22 Sep** - leads and appraisals are this month's. (all-time totals beside live
    counts), and Applications means two different things on the tile and the screen. (M)
-9. Application-to-deal matching is a substring test ("12 High St" inside "112 High St"; Scottish
+9. **DONE 22 Sep** ~~Application-to-deal matching is a substring test~~ ("12 High St" inside "112 High St"; Scottish
    "29/9" never matches) and the watcher opens PLC packs on it. One shared matcher. (M)
-10. A pack Kirstie sends back is a dead end for the agent and her note is never shown; the agent's
+10. **DONE 22 Sep** ~~A pack Kirstie sends back is a dead end for the agent~~ and her note is never shown; the agent's
     bell links to Kirstie's workspace and bounces. (S each)
-11. Pulled listings appear on every agent's board and may reach tenants when already let. (S)
-12. No per-email throttle on landlord / tenant magic links; **no rate limit at all on staff sign-in**;
+11. **DONE 22 Sep** ~~Pulled listings appear on every agent's board~~ and may reach tenants when already let. (S)
+12. **DONE 22 Sep (throttle and sign-in limit; revoking sessions still open)** ~~No per-email throttle on landlord / tenant magic links; **no rate limit at all on staff sign-in**~~;
     sessions cannot be revoked. (S, S, M)
 13. Timed customer sends still check-send-mark (tenant reminders, questions chase, works sweep);
     tenant reminders run off last night's copy of the diary; "unsuccessful" application emails have

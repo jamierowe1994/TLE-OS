@@ -126,12 +126,30 @@ export async function startVerification(
     );
   }
 
+  /* PER-ADDRESS THROTTLE (18 Sep sweep, item 12). Nothing stopped a script
+     asking for a landlord link for the same address every second, each one
+     an email under our name. Five in ten minutes is more than any person
+     needs; the sixth is refused, and the caller's neutral answer does not
+     say so. Counted on created_at, so earlier links are EXPIRED rather than
+     deleted when a newer one is minted - single use and "the newest is the
+     one that works" both still hold, because consume refuses an expired row. */
+  const recent = await q<{ n: string }>(
+    `select count(*)::text as n from os_email_verifications
+      where email = $1 and purpose = $2 and created_at > now() - interval '10 minutes'`,
+    [email, purpose]
+  ).catch(() => []);
+  if (Number(recent[0]?.n ?? 0) >= 5) {
+    throw new VerificationError("Five links have gone to that address in the last ten minutes. Use the newest, or wait a little and ask again.");
+  }
+
   const token = mintToken();
   const expires = new Date(Date.now() + TTL_BY_PURPOSE[purpose]).toISOString();
 
   if (!opts.keepOthers) {
-    await q(`delete from os_email_verifications where email = $1 and purpose = $2`, [email, purpose]);
+    await q(`update os_email_verifications set expires_at = now() where email = $1 and purpose = $2 and expires_at > now()`, [email, purpose]);
   }
+  /* Yesterday's dead rows go, so the table does not grow with every ask. */
+  await q(`delete from os_email_verifications where expires_at < now() - interval '1 day'`).catch(() => null);
   await q(
     `insert into os_email_verifications (email, token_hash, purpose, expires_at, created_at)
      values ($1, $2, $3, $4, now())`,
