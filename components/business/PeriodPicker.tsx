@@ -151,7 +151,7 @@ export default function PeriodPicker({
   const [mode, setMode] = useState<"preset" | "month" | "custom">("preset");
   const [presetKey, setPresetKey] = useState("this-month");
   const [selectedMonth, setSelectedMonth] = useState(ANCHOR);
-  const [from, setFrom] = useState("2026-04");
+  const [from, setFrom] = useState(`${YEAR}-01`);
   const [to, setTo] = useState(ANCHOR);
   const [openMenu, setOpenMenu] = useState<"preset" | "month" | null>(null);
   const [closingMenu, setClosingMenu] = useState<"preset" | "month" | null>(null);
@@ -282,8 +282,8 @@ export default function PeriodPicker({
                   From
                   <input
                     type="month"
-                    min="2026-01"
-                    max="2026-12"
+                    min={`${YEAR}-01`}
+                    max={`${YEAR}-12`}
                     value={from}
                     onChange={(e) => {
                       setFrom(e.target.value);
@@ -297,8 +297,8 @@ export default function PeriodPicker({
                   To
                   <input
                     type="month"
-                    min="2026-01"
-                    max="2026-12"
+                    min={`${YEAR}-01`}
+                    max={`${YEAR}-12`}
                     value={to}
                     onChange={(e) => {
                       setTo(e.target.value);

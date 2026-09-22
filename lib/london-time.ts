@@ -41,6 +41,18 @@ export function londonParts(at: Date | string | number): LondonParts {
 }
 
 /** "09:30", on the London clock. */
+/**
+ * The instant that is HH:MM on a London calendar day. The server's clock is
+ * UTC, so `setHours(9)` meant 10am in summer (18 Sep sweep, item 15); this
+ * asks what London reads at the guess and corrects by the difference.
+ */
+export function londonTime(year: number, month: number, day: number, hour: number, minute = 0): Date {
+  const guess = Date.UTC(year, month - 1, day, hour, minute);
+  const p = londonParts(guess);
+  const readMinutes = (Date.UTC(p.year, p.month - 1, p.day) - Date.UTC(year, month - 1, day)) / 60000 + p.hour * 60 + p.minute;
+  return new Date(guess - (readMinutes - (hour * 60 + minute)) * 60000);
+}
+
 export function londonHHMM(at: Date | string | number): string {
   const p = londonParts(at);
   return `${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")}`;

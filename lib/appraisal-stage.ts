@@ -11,6 +11,7 @@ import { getComplianceItemsFor } from "@/lib/business/rex-stats";
 import { listVault } from "@/lib/vault";
 import { pendingKeyFor } from "@/lib/property-match";
 import { PRE_APPRAISAL_LEAD_DAYS } from "@/lib/appraisal-email";
+import { londonParts, londonTime } from "@/lib/london-time";
 import { readAnswers } from "@/lib/property-answers-store";
 import { allDone, progress } from "@/lib/property-questions";
 
@@ -110,9 +111,9 @@ function preSendMoment(ma: MarketAppraisal, now: Date): string | null {
   if (!ma.appointmentAt) return null;
   const visit = new Date(ma.appointmentAt);
   if (Number.isNaN(visit.valueOf()) || visit <= now) return null;
-  const when = new Date(visit);
-  when.setDate(when.getDate() - PRE_APPRAISAL_LEAD_DAYS);
-  when.setHours(9, 0, 0, 0);
+  /* 9am London on the day before, whatever clock the server keeps. */
+  const v = londonParts(visit);
+  const when = londonTime(v.year, v.month, v.day - PRE_APPRAISAL_LEAD_DAYS, 9, 0);
   const soon = new Date(now.getTime() + 60 * 60 * 1000);
   return (when < soon ? soon : when).toISOString();
 }

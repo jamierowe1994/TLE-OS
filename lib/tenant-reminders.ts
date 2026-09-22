@@ -2,7 +2,7 @@ import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { switchOn } from "@/lib/switches";
 import { findUserById, type OsUser } from "@/lib/users";
-import { alreadyDone, deliver, firstName, logDone, london, validEmail } from "@/lib/tenant-email-send";
+import { alreadyDone, claim, deliver, firstName, logDone, london, release, validEmail } from "@/lib/tenant-email-send";
 import { renderTleEmailLive } from "@/lib/email/tle-emails";
 import { SITE } from "@/lib/email/tle-documents";
 import { presentAgentFor } from "@/lib/rex-agents";
@@ -103,8 +103,11 @@ async function passportNudges(dry: boolean, out: ReminderResult[]) {
         continue;
       }
       if (p.agent_id && !agents.has(p.agent_id)) agents.set(p.agent_id, await findUserById(p.agent_id).catch(() => null));
+      /* Claim it, then send it: a second run finds the claim and leaves it. */
+      if (!(await claim(key, round.emailId, to))) continue;
       const r = await deliver({ agent: p.agent_id ? agents.get(p.agent_id) ?? null : null, to, toName: p.name, subject, html });
       if (r.final) await logDone(key, round.emailId, to, r.sent ? "sent" : "refused", r.detail);
+      else await release(key);
       out.push({ key, emailId: round.emailId, to, subject, state: r.sent ? "sent" : "failed", detail: r.detail });
     }
   }
@@ -197,8 +200,10 @@ async function viewingReminders(dry: boolean, now: Date, out: ReminderResult[]) 
         out.push({ key, emailId: "viewing-reminder", to, subject, state: "would", detail: `Would remind ${c.name ?? to} about ${address} at ${timePretty}.` });
         continue;
       }
+      if (!(await claim(key, "viewing-reminder", to))) continue;
       const r = await deliver({ agent: agent.user, to, toName: c.name ?? "", subject, html });
       if (r.final) await logDone(key, "viewing-reminder", to, r.sent ? "sent" : "refused", r.detail);
+      else await release(key);
       out.push({ key, emailId: "viewing-reminder", to, subject, state: r.sent ? "sent" : "failed", detail: r.detail });
     }
   }

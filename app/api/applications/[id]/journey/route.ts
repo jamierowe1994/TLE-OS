@@ -30,6 +30,12 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
      behaves, which is why every reader here pulls and matches. */
   const app = await getApplicationById(id);
   if (!app) return NextResponse.json({ ok: false, error: `No application ${id}.` }, { status: 404 });
+  /* An agent reads their own applications (18 Sep sweep, item 4). The
+     application names its agent; owners and the office are not gated. */
+  const me = await findUserById(userId);
+  if (me?.role === "agent" && app.agent && app.agent.trim().toLowerCase() !== (me.name ?? "").trim().toLowerCase()) {
+    return NextResponse.json({ ok: false, error: `That application is ${app.agent.split(/\s+/)[0]}'s.` }, { status: 403 });
+  }
 
   try {
     return NextResponse.json({ ok: true, ...(await journeyFor(app)) });

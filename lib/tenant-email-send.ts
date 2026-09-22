@@ -30,9 +30,35 @@ export async function alreadyDone(key: string): Promise<boolean> {
 export async function logDone(key: string, emailId: string, to: string, outcome: string, detail: string, meta?: unknown) {
   await q(
     `INSERT INTO os_tenant_email_log (key, email_id, sent_to, outcome, detail, meta) VALUES ($1,$2,$3,$4,$5,$6::jsonb)
-     ON CONFLICT (key) DO NOTHING`,
+     ON CONFLICT (key) DO UPDATE SET outcome = EXCLUDED.outcome, detail = EXCLUDED.detail, sent_to = EXCLUDED.sent_to,
+       meta = COALESCE(EXCLUDED.meta, os_tenant_email_log.meta), sent_at = NOW()
+     WHERE os_tenant_email_log.outcome = 'claimed'`,
     [key, emailId, to, outcome, detail, meta == null ? null : JSON.stringify(meta)]
   );
+}
+
+/**
+ * CLAIM BEFORE SENDING (18 Sep sweep, item 13). Every timed send went
+ * check, send, mark: two runs of the cron overlapping - or one run and a
+ * hand-pressed one - both saw "not sent" and both sent. The row is written
+ * FIRST as a claim; only the run that wrote it goes on to send, and logDone
+ * turns the claim into the outcome. A claim older than an hour is a run that
+ * died mid-send and is taken over.
+ */
+export async function claim(key: string, emailId: string, to: string): Promise<boolean> {
+  const rows = await q<{ key: string }>(
+    `INSERT INTO os_tenant_email_log (key, email_id, sent_to, outcome, detail) VALUES ($1,$2,$3,'claimed','')
+     ON CONFLICT (key) DO UPDATE SET sent_at = NOW()
+       WHERE os_tenant_email_log.outcome = 'claimed' AND os_tenant_email_log.sent_at < NOW() - INTERVAL '1 hour'
+     RETURNING key`,
+    [key, emailId, to]
+  );
+  return rows.length > 0;
+}
+
+/** A send that is worth another go next hour gives its claim back. */
+export async function release(key: string): Promise<void> {
+  await q(`DELETE FROM os_tenant_email_log WHERE key = $1 AND outcome = 'claimed'`, [key]).catch(() => null);
 }
 
 /**

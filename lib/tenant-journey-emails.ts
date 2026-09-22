@@ -9,7 +9,7 @@ import { createPassport, findPassportByEmail } from "@/lib/passport";
 import { getApplications } from "@/lib/applications";
 import { rexConfigured } from "@/lib/rex";
 import type { ReminderResult } from "@/lib/tenant-reminders";
-import { alreadyDone, deliver, firstName, logDone, london, userByName, validEmail } from "@/lib/tenant-email-send";
+import { alreadyDone, claim, deliver, firstName, logDone, london, release, userByName, validEmail } from "@/lib/tenant-email-send";
 import {
   findListing,
   holdingFeeIfYes,
@@ -85,8 +85,11 @@ async function sendOne(
     out.push({ key: p.key, emailId: p.emailId, to: p.to, subject, state: "would", detail: p.would });
     return;
   }
+  /* Claim it, then send it: a second run finds the claim and leaves it. */
+  if (!(await claim(p.key, p.emailId, p.to))) return;
   const r = await deliver({ agent: p.agent, to: p.to, toName: p.toName, subject, html });
   if (r.final) await logDone(p.key, p.emailId, p.to, r.sent ? "sent" : "refused", r.detail, p.meta);
+  else await release(p.key);
   out.push({ key: p.key, emailId: p.emailId, to: p.to, subject, state: r.sent ? "sent" : "failed", detail: r.detail });
 }
 

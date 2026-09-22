@@ -88,7 +88,7 @@ driven locally were driven. Branch `pilot-bug-sweep`, cut from `origin/main` at 
 2. ~~**"Continuing X's record" in New lead still creates a second REX contact**~~ **DONE 22 Sep** - linked, never created. - armed since 18 Sep. (S/M)
 3. ~~**An appraisal booked from a REX lead never has a landlord email**~~ **DONE 22 Sep** - read from os_leads., so confirmation,
    pre-presentation, contract and nudge all refuse. Read it from `os_leads`. (S/M)
-4. **DONE 22 Sep (listing writes and viewing changes; hide-lead and the application journey read still open).** ~~No ownership check by listing id~~ on details / media / publish / archive; any agent can take
+4. **DONE 22 Sep.** ~~No ownership check by listing id~~ on details / media / publish / archive; any agent can take
    another's advert off. Same shape: `/api/viewings/change` (cancel or move any REX event by id, with
    an office-token fallback - locked today only by the REX allowlist), hide any lead, read any
    application's journey. (M)
@@ -107,13 +107,13 @@ driven locally were driven. Branch `pilot-bug-sweep`, cut from `origin/main` at 
 11. **DONE 22 Sep** ~~Pulled listings appear on every agent's board~~ and may reach tenants when already let. (S)
 12. **DONE 22 Sep (throttle and sign-in limit; revoking sessions still open)** ~~No per-email throttle on landlord / tenant magic links; **no rate limit at all on staff sign-in**~~;
     sessions cannot be revoked. (S, S, M)
-13. **PART DONE 22 Sep (the age guard on unsuccessful; the check-send-mark and last-night's-diary parts still open).** Timed customer sends still check-send-mark (tenant reminders, questions chase, works sweep);
+13. **DONE 22 Sep except the last-night's-diary copy** (claim-before-send on every timed tenant send; age guard on unsuccessful). Timed customer sends still check-send-mark (tenant reminders, questions chase, works sweep);
     tenant reminders run off last night's copy of the diary; "unsuccessful" application emails have
     no age guard - tidying old applications in REX would email every applicant "no". All behind
     switches that are off. **Fix before turning Automatic tenant emails on.** (M)
 14. **DONE 22 Sep** ~~Handover: a failed Propoly read is recorded as "not in Propoly, would create"; nothing stops a~~
     second live run. **STOP before `handover_live`.** (S)
-15. Smaller: moving a take-on visit leaves the old Outlook entry; an appraisal is always 60 minutes
+15. Smaller (**22 Sep: the 9am-in-summer nudge and the PeriodPicker year are done**): moving a take-on visit leaves the old Outlook entry; an appraisal is always 60 minutes
     in Outlook; "9am the day before" is 10am in summer; listing cards say "Viewings 0" from sample
     data; drawer failures read as 0; board stale after publish; multi-property landlords' Questions
     and Documents act on the default property; Stannp sends keep no record; PeriodPicker stops at
