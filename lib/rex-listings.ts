@@ -385,15 +385,29 @@ export async function fetchRetiredListings(rexUserId?: string | null): Promise<O
  * the address of - which is what was already true when they found it.
  */
 async function pulledIntoBook(have: string[], rexUserId?: string | null): Promise<OsListing[]> {
-  const { pulledListingIds } = await import("@/lib/pulled-listings");
-  const wanted = (await pulledListingIds()).filter((id) => !have.includes(id));
+  const { pulledListings } = await import("@/lib/pulled-listings");
+  let pulls = await pulledListings(500);
+  /* THE PULLER'S OWN BOARD (18 Sep sweep, item 11). A pull went onto every
+     agent's board, because the table has no idea whose book it was pulled
+     into. On an agent's book, only the pulls that agent made; the whole
+     business's book keeps them all. */
+  if (rexUserId) {
+    const { findUserByRexId } = await import("@/lib/users");
+    const who = await findUserByRexId(rexUserId).catch(() => null);
+    const keys = new Set([who?.email?.toLowerCase(), who?.id].filter(Boolean) as string[]);
+    pulls = pulls.filter((p) => p.byUser && keys.has(p.byUser.toLowerCase()));
+  }
+  const wanted = pulls.map((p) => p.listingId).filter((id) => !have.includes(id));
   if (wanted.length === 0) return [];
   const res = await rexCall("Listings", "search", {
     criteria: [{ name: "id", type: "in", value: wanted }],
     limit: Math.min(wanted.length, 100),
   }).catch(() => null);
   if (!res?.ok) return [];
-  return rexRows(res.result).map((r) => toListing(r as unknown as RexListing));
+  /* A pulled home that has since let is not on the market: REX's own
+     "current" filter would have dropped it, so the pull must too, or it
+     reaches tenants as somewhere to enquire about. */
+  return rexRows(res.result).map((r) => toListing(r as unknown as RexListing)).filter((l) => !l.letAgreed);
 }
 
 export async function fetchListingBook(rexUserId?: string | null): Promise<ListingBook> {

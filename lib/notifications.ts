@@ -99,7 +99,12 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
       at: e.at,
       title: e.property || "A deal",
       body: eventSentence(e),
-      href: hrefFor(e),
+      /* An agent's bell used to send them to Kirstie's workspace for their
+         own pack and bounce (18 Sep sweep, item 10): a pack event opens the
+         agent's wizard for them, the queue for pre-tenancy and the office. */
+      href: me.role === "agent" && (e.event === "plc_submitted" || e.event === "plc_decided")
+        ? `/plc/start?application=${encodeURIComponent(e.dealId.replace(/^plc-/, ""))}`
+        : hrefFor(e),
       tone: eventTone(e.event),
     });
   }

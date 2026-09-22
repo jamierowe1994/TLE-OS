@@ -19,6 +19,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Expected an email and a password." }, { status: 400 });
   }
 
+  const email = (body.email ?? "").trim().toLowerCase();
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
+  /* NO RATE LIMIT AT ALL on staff sign-in until 22 Sep 2026 (18 Sep sweep,
+     item 12). The audit trail already holds every failed attempt with the
+     address and the IP, so the limit reads from it: eight wrong goes against
+     one address or from one IP in a quarter of an hour, and the door waits.
+     Counted before the password is checked, so a locked address costs the
+     attacker nothing to learn and us nothing to serve. */
+  const recent = await q<{ n: string }>(
+    `SELECT COUNT(*)::text AS n FROM os_audit
+      WHERE kind = 'sign_in_failed' AND at > NOW() - INTERVAL '15 minutes'
+        AND (actor_email = $1 OR ($2 <> '' AND ip = $2))`,
+    [email, ip]
+  ).catch(() => []);
+  if (Number(recent[0]?.n ?? 0) >= 8) {
+    return NextResponse.json({ ok: false, error: "Too many attempts. Wait fifteen minutes and try again." }, { status: 429 });
+  }
+
   const user = await authenticate(body.email ?? "", body.password ?? "");
   if (!user) {
     // One message for both wrong-address and wrong-password: saying which

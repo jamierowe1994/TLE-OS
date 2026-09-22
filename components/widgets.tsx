@@ -774,8 +774,8 @@ function PipelineWidget({ w, h }: { w: number; h: number }) {
          number that could be on this screen. */
       const { figures, unlinked, loading } = useMyFigures();
       const STAGES = [
-        { label: "Leads", value: figures?.leads ?? null, href: "/leads" },
-        { label: "Appraisals", value: figures?.appraisals ?? null, href: "/market-appraisals" },
+        { label: "Leads this month", value: figures?.leads ?? null, href: "/leads" },
+        { label: "Appraisals this month", value: figures?.appraisals ?? null, href: "/market-appraisals" },
         { label: "On market", value: figures?.onMarket ?? null, href: "/listings" },
         { label: "Applications", value: figures?.applications ?? null, href: "/applications" },
         { label: "Managed", value: figures?.managed ?? null, href: "/portfolio" },

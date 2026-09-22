@@ -89,6 +89,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, scope: scope.label, everything: scope.everything, figures: hit.figures, pulledAt: new Date(hit.at).toISOString() });
   }
 
+  /* Leads and appraisals are month figures, like every tile above them:
+     90,791 all-time leads beside this month's viewings was the most
+     misleading number on the first screen anybody sees (18 Sep sweep, item
+     8). Scoped to now() and rolling over on its own, per the figures rule. */
+  const now = new Date();
+  const monthStart = String(Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000));
+  const thisMonth: Crit = [{ name: "system_ctime", type: ">=", value: monthStart }];
+
   const [onMarket, managed, leads, appraisals, applications] = await Promise.all([
     count("Listings", [
       ...mine("listing_agent_1_id"),
@@ -100,8 +108,8 @@ export async function GET(req: NextRequest) {
       { name: "system_listing_state", type: "=", value: "leased" },
       { name: "listing_category_id", type: "=", value: "residential_rental" },
     ]),
-    count("Leads", mine("lead.assignee_id")),
-    count("Appraisals", mine("agent_1_id")),
+    count("Leads", [...mine("lead.assignee_id"), ...thisMonth]),
+    count("Appraisals", [...mine("agent_1_id"), ...thisMonth]),
     count("TenancyApplications", mine("application.agent_id")),
   ]);
 
