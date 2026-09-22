@@ -32,9 +32,9 @@ import { record } from "@/lib/audit";
  *                 real records are look only, each person's own test files
  *                 work in full and can be reset. Nothing reaches a customer,
  *                 REX or Propoly. The back office stays hidden.
- *   2  Live       Every test file is removed. The front office goes live:
+ *   2  Working    The front office is real, nothing outward goes, test files stay:
  *                 what an agent does is real, and email reaches customers.
- *   3  Back office  Portfolio, Finances and Tools open.
+ *   3  Launch     Test files cleared, email and portals on, back office open.
  *
  * ── What a phase deliberately does NOT touch ──────────────────────────────
  *
@@ -59,7 +59,9 @@ import { record } from "@/lib/audit";
 export type PhaseId = 1 | 2 | 3;
 
 const FRONT = ["dashboard", "leads", "appraisals", "listings", "listing-edit", "listing-publish", "viewings", "applications"];
-const BACK_OPENED_IN_3 = ["portfolio", "finances", "tools"];
+/* Everything but Push to the portals: that is the one front-office door that
+   reaches the public, and it stays shut until launch (James, 22 Sep 2026). */
+const FRONT_WITHOUT_PORTALS = FRONT.filter((a) => a !== "listing-publish");
 const BACK_ALL = ["portfolio", "emails", "finances", "tools"];
 
 const all = (ids: string[], level: AreaLevel) => Object.fromEntries(ids.map((id) => [id, level])) as Record<string, AreaLevel>;
@@ -97,30 +99,44 @@ export const PHASES: PhaseDef[] = [
       "They can connect their email, write their bio, open every front-office screen, and add and reset their own test files.",
     ],
   },
+  /* REDRAWN 22 Sep 2026, launch morning. Practice was too tight: an agent
+     could not open the presenter on a file, or see what the landlord would
+     see. James: "give them some access to stuff, maybe just not emailing
+     landlords and tenants, and maybe not pushing to portals". So 2 is the
+     real front office with the two outward doors shut and the test files
+     kept (that is how they walk the landlord's and tenant's portals), and 3
+     is launch: email on, portals on, back office open, test files cleared. */
   {
     id: 2,
-    name: "Live",
+    name: "Working",
     confirm: "PHASE 2",
-    says: "Test files are cleared and the front office is real: what an agent does saves, and email reaches landlords and tenants.",
-    areas: all(FRONT, "everyone"),
-    switches: { customer_email: true, assistant_email: true, rex_contact_create: true, rex_property_create: true },
+    says: "The front office is real: what an agent does saves, and reaches REX. Nothing is emailed to a landlord or a tenant, nothing is pushed to the portals, and their test files stay so they can walk both portals.",
+    areas: { ...all(FRONT_WITHOUT_PORTALS, "everyone"), "listing-publish": "hidden", ...all(BACK_ALL, "hidden") },
+    switches: {
+      customer_email: false, tenant_reminders: false, campaign_sending: false, certificate_share: false,
+      handover_live: false, propoly_documents: false,
+      assistant_email: true, rex_contact_create: true, rex_property_create: true,
+    },
     steps: [
-      "Removes every tester's test files, so nothing from practice is left behind.",
-      "Turns ON email to landlords and tenants, sending from the agent's own Outlook, and creating contacts and properties in REX.",
-      "Puts the whole front office, including Edit the advert and Push to the portals, on Everyone.",
-      "Emails everybody with an account to say Phase 2 has started. The back office stays hidden.",
+      "Keeps OFF every email to a landlord or a tenant, the automatic tenant emails, campaigns and certificate sharing. Handover into Propoly stays off.",
+      "Turns ON creating contacts and properties in REX, so what an agent does is real.",
+      "Puts Dashboard, Leads, Market appraisals, Listings (with Edit the advert), Viewings and Applications on Everyone. Push to the portals stays hidden. Portfolio, Emails, Finances and Tools stay hidden.",
+      "Keeps everybody's test files, and Practice Files on the rail, so an agent can open the landlord's and the tenant's portal on their own file.",
+      "Emails everybody with an account to say Phase 2 has started.",
     ],
   },
   {
     id: 3,
-    name: "Back office",
+    name: "Launch",
     confirm: "PHASE 3",
-    says: "Portfolio, Finances and Tools open to everybody. Emails stays hidden.",
-    areas: all(BACK_OPENED_IN_3, "everyone"),
-    switches: {},
+    says: "Test files are cleared, email reaches landlords and tenants, the portals can be pushed to, and Portfolio, Emails, Finances and Tools open to everybody.",
+    areas: { ...all(FRONT, "everyone"), ...all(BACK_ALL, "everyone") },
+    switches: { customer_email: true },
     steps: [
-      "Puts Portfolio (with Compliance, Maintenance and Inspections), Finances and Tools on Everyone.",
-      "Emails everybody with an account to say Phase 3 has started.",
+      "Removes every tester's test files, so nothing from practice is left behind.",
+      "Turns ON email to landlords and tenants, from the agent's own Outlook.",
+      "Puts Push to the portals, Portfolio (with Compliance, Maintenance and Inspections), Emails, Finances and Tools on Everyone.",
+      "Emails everybody with an account to say Phase 3 has started. The automatic tenant emails, campaigns, certificate sharing and the Propoly handover are still armed one at a time on Switches.",
     ],
   },
 ];
@@ -267,10 +283,12 @@ export async function applyPhase(p: {
 
   const who = p.me.email;
 
-  /* 2 clears practice away BEFORE anything goes live, so a test landlord can
-     never receive a real email. It never sends one itself (lib/test-files). */
+  /* 3 clears practice away BEFORE customer email goes on, so a test landlord
+     can never receive a real email. It never sends one itself (lib/test-files).
+     2 keeps them: with nothing outward switched on they are how an agent
+     walks both portals. */
   let filesRemoved = 0;
-  if (p.id === 2) filesRemoved = (await removeAllTesting(p.me)).files;
+  if (p.id === 3) filesRemoved = (await removeAllTesting(p.me)).files;
 
   /* Locks. OFF before ON, switches before areas: at every moment on the way
      through, less is possible than at the end, never more. */

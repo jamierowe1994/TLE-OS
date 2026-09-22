@@ -201,6 +201,17 @@ export async function record(
   if ((p.state === "to_fix" || p.state === "needs_you" || p.state === "not_a_bug") && !note) {
     throw new BotRefused("Say why, in a sentence James can act on.");
   }
+  /* The letter James sorts by (lib/pilot priorityFor): broken is an A, a
+     decision a B, not a fault a C. An idea is already a C, and a letter set
+     by hand on Tickets is left alone. */
+  {
+    const { priorityFor } = await import("@/lib/pilot");
+    const row = await q<{ kind: string; priority: string | null }>(`SELECT kind, priority FROM os_bugs WHERE id = $1`, [id]).catch(() => []);
+    if (row[0] && !row[0].priority) {
+      const letter = priorityFor({ kind: row[0].kind, botState: p.state });
+      if (letter) await q(`UPDATE os_bugs SET priority = $1 WHERE id = $2 AND priority IS NULL`, [letter, id]).catch(() => null);
+    }
+  }
 
   const rows = await q<{ body: string; path: string; bot_state: string }>(
     `SELECT body, path, bot_state FROM os_bugs WHERE id = $1`,

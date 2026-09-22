@@ -194,7 +194,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   /* Phase 1 of the pilot (lib/phases): while any area is on Practice, an
      agent's own test files are one press away, under the screens they are
      practising on. Gone from the rail the moment nothing is on Practice. */
-  const practising = Boolean(areaAccess?.gated && Object.values(areaAccess.levels).includes("practice"));
+  /* On the rail for anybody the areas gate (an agent in phases 1 and 2), not
+     only while a level reads "practice": in phase 2 nothing does, and the
+     files are still how they walk both portals (22 Sep 2026). Owners are
+     never gated and have the Testing page instead. */
+  const practising = Boolean(areaAccess?.gated);
   const hereLocked = hereArea && areaAccess?.gated && canSee(areaAccess, hereArea) && !canAct(areaAccess, hereArea) ? hereArea : null;
   const closedArea = pathname === "/dashboard" ? AREA_DEFS.find((a) => a.id === search.get("closed")) ?? null : null;
   /* Matches .page-leaving .os-mast in globals.css: the fall is 400ms, and

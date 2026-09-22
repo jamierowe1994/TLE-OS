@@ -262,6 +262,10 @@ ALTER TABLE os_bugs ADD COLUMN IF NOT EXISTS bot_branch TEXT NOT NULL DEFAULT ''
 ALTER TABLE os_bugs ADD COLUMN IF NOT EXISTS bot_pr     TEXT NOT NULL DEFAULT '';
 ALTER TABLE os_bugs ADD COLUMN IF NOT EXISTS bot_at     TIMESTAMPTZ;
 ALTER TABLE os_bugs ADD COLUMN IF NOT EXISTS told_at    TIMESTAMPTZ;
+-- A, B or C (James, 22 Sep 2026): A is broken, C is a recommendation, B is
+-- everything else. Set from the bot's verdict and the kind, changed by hand
+-- on Admin, System, Tickets.
+ALTER TABLE os_bugs ADD COLUMN IF NOT EXISTS priority   TEXT;
 
 -- The screen as it looked when they reported it.
 --

@@ -56,7 +56,10 @@ async function tester(req: NextRequest): Promise<{ me: OsUser; practising: boole
   if (wired) return { me: wired, practising: false };
   const { actor } = await whoIs(req);
   if (!actor) return null;
-  return (await phaseState()).phase === 1 ? { me: actor, practising: true } : null;
+  /* Phases 1 AND 2 (22 Sep 2026): in 2 nothing outward is on, and the test
+     files are how an agent sees the landlord's and the tenant's portal. */
+  const phase = (await phaseState()).phase;
+  return phase === 1 || phase === 2 ? { me: actor, practising: true } : null;
 }
 
 export async function GET(req: NextRequest) {

@@ -108,6 +108,9 @@ const GROUPS: Array<{
          the red, amber, green James asked for on 4 Sep so that the run-up to
          agents being let in is a list of walks, not a feeling. */
       { href: "/admin/testing", label: "Testing", needs: "see:wiring" },
+      /* What the pilot agents raise, sorted A (broken), B (a decision or
+         anything else) and C (a recommendation). James, 22 Sep 2026. */
+      { href: "/admin/tickets", label: "Tickets", needs: "see:prelaunch" },
       /* Separate from Wiring on purpose. Wiring reports and never changes
          anything - its own note says a page that could arm a send is a page
          that can arm one by accident. This is the one that arms, and it is

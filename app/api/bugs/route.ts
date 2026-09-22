@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { requireOwner } from "@/lib/admin";
-import { logBug, bugs, setBugState, attachShot, myReports } from "@/lib/pilot";
+import { logBug, bugs, setBugState, attachShot, myReports, setBugPriority } from "@/lib/pilot";
 import { tellReporter } from "@/lib/bug-bot";
 import { publicOrigin } from "@/lib/origin";
 
@@ -96,8 +96,15 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   if (!(await requireOwner(req))) return new NextResponse(null, { status: 404 });
-  const { id, state } = (await req.json().catch(() => ({}))) as { id?: string; state?: string };
-  if (!id || !["open", "ack", "fixed", "wontfix"].includes(state ?? "")) {
+  const { id, state, priority } = (await req.json().catch(() => ({}))) as { id?: string; state?: string; priority?: string | null };
+  if (!id) return NextResponse.json({ ok: false, error: "Bad request." }, { status: 400 });
+  /* The letter alone, from Tickets: A broken, B everything else, C a recommendation. */
+  if (priority !== undefined && !state) {
+    if (priority !== null && !["A", "B", "C"].includes(priority)) return NextResponse.json({ ok: false, error: "A, B or C." }, { status: 400 });
+    await setBugPriority(id, (priority ?? null) as "A" | "B" | "C" | null);
+    return NextResponse.json({ ok: true });
+  }
+  if (!["open", "ack", "fixed", "wontfix"].includes(state ?? "")) {
     return NextResponse.json({ ok: false, error: "Bad request." }, { status: 400 });
   }
   await setBugState(id, state!);
