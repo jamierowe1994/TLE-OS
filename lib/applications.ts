@@ -172,6 +172,8 @@ export interface Application {
   applicants: Applicant[];
   createdBy: string | null;
   createdAt: number | null;
+  /** REX's system_modtime, seconds. */
+  updatedAt: number | null;
   /** True when nobody has recorded Right to Rent for every adult applicant. */
   rightToRentIncomplete: boolean;
 }
@@ -367,6 +369,7 @@ export function shapeApplication(r: Row): Application {
     applicants,
     createdBy: str((r.system_created_user as Row | null)?.name),
     createdAt: num(r.system_ctime),
+    updatedAt: num(r.system_modtime),
     // The whole point of the exercise. One "Yes" on the primary is not a
     // Right to Rent check on a household of three.
     rightToRentIncomplete:

@@ -235,6 +235,7 @@ function toApplication(o: TestOffer, l: TestListing | null, deal: TestDeal | nul
     ],
     createdBy: "Test file",
     createdAt: new Date(o.received).getTime(),
+    updatedAt: null,
     rightToRentIncomplete: false,
   };
 }

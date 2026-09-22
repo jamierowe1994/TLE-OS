@@ -442,6 +442,19 @@ export async function applicationEmails(dry: boolean, out: Out) {
       }
     }
 
+    /* AGE GUARD on "unsuccessful" (18 Sep sweep, item 13). Tidying a year of
+       old applications in REX moves every one to unsuccessful in an afternoon,
+       and each was newly seen: every applicant would have been told "no" for
+       a home they enquired about last spring. An application received more
+       than 60 days ago is closed as housekeeping, and hears nothing. */
+    if (a.status === "unsuccessful") {
+      const received = a.dateReceived ? new Date(a.dateReceived).getTime() : (a.createdAt ?? 0) * 1000;
+      if (!received || Date.now() - received > 60 * 86_400_000) {
+        if (!dry) await q(`INSERT INTO os_application_status_seen (application_id, status) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [a.id, a.status]);
+        continue;
+      }
+    }
+
     const listing = findListing(book, a.listingId);
     const scottish = isScottish(listing?.postcode ?? a.locality);
     const address = [a.property, a.locality].filter(Boolean).join(", ");

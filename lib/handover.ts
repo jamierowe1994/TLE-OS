@@ -173,6 +173,19 @@ export async function runHandover(
   const mode: HandoverMode = opts.mode === "shadow" ? "shadow" : switchMode;
   const live = mode === "live";
 
+  /* NEVER TWICE (18 Sep sweep, item 14). A live run that finished is a deal
+     in Propoly; a second one would make another. Force is the only way past,
+     and it is a person pressing it with the first run in front of them. */
+  if (live && !opts.force) {
+    const prior = await q<{ id: string; finished_at: Date | null }>(
+      `SELECT id, finished_at FROM os_handovers WHERE application_id = $1 AND mode = 'live' AND status = 'ok' ORDER BY started_at DESC LIMIT 1`,
+      [applicationId]
+    ).catch(() => []);
+    if (prior.length) {
+      throw new Error(`This application was already handed over live (run ${prior[0].id}). Nothing was sent again - open that run, and use force only if it really has to go twice.`);
+    }
+  }
+
   const packet = await handoffFor(applicationId);
   if (!packet) throw new Error(`No application ${applicationId}.`);
 
@@ -319,6 +332,22 @@ export async function runHandover(
       /* Page Propoly's properties, matching on normalised postcode and first line - Howard's match. */
       for (let page = 1; page <= MAX_PROPERTY_PAGES && !propertyUuid; page++) {
         const res = await propolyGet(`/api/v1/properties?page=${page}&per_page=25`);
+        /* A refused or failed page is NOT "not in Propoly" (18 Sep sweep, item
+           14): it was being recorded as "would create", and live would have
+           created a second home. Not knowing stops a live run. */
+        if (res.status >= 400 || res.status === 0) {
+          await rec.add({
+            id: "property",
+            label: "Property in Propoly",
+            state: live ? "blocked" : "would",
+            detail: `Propoly would not list its properties (answered ${res.status || "nothing"} on page ${page}), so it is not known whether this home is already there. Not created. Try again in a few minutes.`,
+          });
+          if (live) {
+            status = "blocked";
+            throw new Stop();
+          }
+          break;
+        }
         const items = listOf(res.body);
         if (!items.length) break;
         const hit = items.find(

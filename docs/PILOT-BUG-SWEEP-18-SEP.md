@@ -107,11 +107,11 @@ driven locally were driven. Branch `pilot-bug-sweep`, cut from `origin/main` at 
 11. **DONE 22 Sep** ~~Pulled listings appear on every agent's board~~ and may reach tenants when already let. (S)
 12. **DONE 22 Sep (throttle and sign-in limit; revoking sessions still open)** ~~No per-email throttle on landlord / tenant magic links; **no rate limit at all on staff sign-in**~~;
     sessions cannot be revoked. (S, S, M)
-13. Timed customer sends still check-send-mark (tenant reminders, questions chase, works sweep);
+13. **PART DONE 22 Sep (the age guard on unsuccessful; the check-send-mark and last-night's-diary parts still open).** Timed customer sends still check-send-mark (tenant reminders, questions chase, works sweep);
     tenant reminders run off last night's copy of the diary; "unsuccessful" application emails have
     no age guard - tidying old applications in REX would email every applicant "no". All behind
     switches that are off. **Fix before turning Automatic tenant emails on.** (M)
-14. Handover: a failed Propoly read is recorded as "not in Propoly, would create"; nothing stops a
+14. **DONE 22 Sep** ~~Handover: a failed Propoly read is recorded as "not in Propoly, would create"; nothing stops a~~
     second live run. **STOP before `handover_live`.** (S)
 15. Smaller: moving a take-on visit leaves the old Outlook entry; an appraisal is always 60 minutes
     in Outlook; "9am the day before" is 10am in summer; listing cards say "Viewings 0" from sample
