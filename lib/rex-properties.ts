@@ -1,6 +1,6 @@
 import "server-only";
 import { isTestFile, TEST_REFUSAL } from "@/lib/test-guard";
-import { rexCall, rexConfigured, rexWritesLocked, isExpiredToken } from "@/lib/rex";
+import { rexCall, rexConfigured, rexRows, rexWritesLocked, isExpiredToken } from "@/lib/rex";
 import { rexTokenFor } from "@/lib/rex-user";
 import { switchOn } from "@/lib/switches";
 
@@ -68,7 +68,32 @@ export interface NewProperty {
 /** `detail` is safe for any agent to read; `ownerDetail`, when there is one, names the lock. */
 export type CreateOutcome =
   | { ok: true; propertyId: string; ownerDropped?: boolean }
-  | { ok: false; reason: string; detail: string; ownerDetail?: string };
+  | {
+      ok: false;
+      reason: string;
+      detail: string;
+      ownerDetail?: string;
+      /** reason "already_in_rex": the record(s) REX holds at this address, when it would say. */
+      existing?: { id: string; name: string }[];
+    };
+
+/**
+ * REX refused the create because it already holds the address. Ask its index
+ * for the record so the agent can link it rather than search for it.
+ */
+async function alreadyHeld(p: NewProperty, token: string): Promise<{ id: string; name: string }[]> {
+  const pc = p.postcode.trim().toUpperCase().replace(/\s+/g, "");
+  const res = await rexCall(
+    "Properties",
+    "autocomplete",
+    { search_string: `${p.streetNumber} ${p.streetName}`.trim().slice(0, 120), limit: 12 },
+    token
+  ).catch(() => null);
+  if (!res?.ok) return [];
+  return (rexRows(res.result) as { id?: unknown; address?: unknown }[])
+    .map((r) => ({ id: String(r.id ?? ""), name: String(r.address ?? "").trim() }))
+    .filter((r) => r.id && r.name.toUpperCase().replace(/\s+/g, "").includes(pc));
+}
 
 /** Everything that has to be true before a property can be written. */
 async function blockedBecause(): Promise<{ reason: string; detail: string; ownerDetail?: string } | null> {
@@ -135,8 +160,12 @@ export async function createProperty(
   p: NewProperty,
   userId: string | null
 ): Promise<CreateOutcome> {
-  const WORDS = { streetName: "a street name", town: "a town", postcode: "a postcode" } as const;
-  const missing = (["streetName", "town", "postcode"] as const).filter((k) => !p[k]?.trim());
+  /* The street number is required too: REX refuses a property without one
+     ("You cannot save a property without specifying a Street Number", bug
+     3b357e55, 19 Sep 2026), so the OS says so first, in its own words. A
+     house name counts - REX keeps it in the same field. */
+  const WORDS = { streetNumber: "a house number or name", streetName: "a street name", town: "a town", postcode: "a postcode" } as const;
+  const missing = (["streetNumber", "streetName", "town", "postcode"] as const).filter((k) => !p[k]?.trim());
   if (missing.length) {
     return {
       ok: false,
@@ -180,7 +209,11 @@ export async function createProperty(
      it, the home still matters more than the join: make it without, and the
      owner can be added in REX by hand. */
   let ownerDropped = false;
-  if (!res.ok && !isExpiredToken(res) && p.ownerContactId) {
+  /* Only when the refusal is about the owner join. A duplicate address or a
+     refused field fails the same way without the owner, and used to log every
+     home twice (bug 52e65579, 19 Sep 2026). */
+  const aboutOwner = /owner|contact|reln/i.test(res.error ?? "") && !/duplicate|already exists/i.test(res.error ?? "");
+  if (!res.ok && !isExpiredToken(res) && p.ownerContactId && aboutOwner) {
     const bare = await rexCall("Properties", "create", { data: buildPayload({ ...p, ownerContactId: null }), return_id: true }, token);
     if (bare.ok) {
       res = bare;
@@ -193,6 +226,19 @@ export async function createProperty(
       ok: false,
       reason: "rex_session_expired",
       detail: "Your sign-in to the listings system has lapsed. Reconnect it on your Profile and try again.",
+    };
+  }
+  if (!res.ok && /duplicate|already exists/i.test(res.error ?? "")) {
+    /* REX already holds the address: the matcher did not recognise it, REX
+       did. Not a failed address, a record to link. */
+    const existing = await alreadyHeld(p, token);
+    const named = existing.length ? ` REX has it as ${existing.map((e) => `${e.name} (${e.id})`).join("; ")}.` : "";
+    return {
+      ok: false,
+      reason: "already_in_rex",
+      detail: `REX already holds this address, so it was not added again. Pick it with Link it.${named}`,
+      ownerDetail: `REX refused the create as a duplicate (${res.error ?? "DuplicateRecordException"}).${named} The address matcher did not recognise it - worth a look at why.`,
+      existing,
     };
   }
   if (!res.ok) {

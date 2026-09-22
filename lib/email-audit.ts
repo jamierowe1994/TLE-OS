@@ -85,6 +85,9 @@ export interface EmailAudit {
     templated: number;
   };
   pulledAt: string;
+  /** How much of the log was read. Fewer read than asked means REX was slow
+   *  and the window above is shorter than usual, not that anything failed. */
+  pages: { asked: number; read: number; cutShort: boolean };
 }
 
 /** The account is shared. Everything here is scoped by the SENDER's domain —
@@ -142,32 +145,55 @@ export async function auditEmails(pages = 10): Promise<EmailAudit> {
   // Offsets are independent, so these go out together — serially, ten pages
   // took about fifty seconds.
   //
-  // THREE, not six. This log is slow (~5s a page on its own) and rexPost
-  // aborts any single call at ten seconds. At six in flight every call
-  // exceeded that ceiling and the whole request came back "This operation was
-  // aborted" — which reads like a browser giving up and is actually our own
-  // timeout firing. Three keeps each call inside it.
+  // THREE, not six. This log is slow (~5s a page on its own, and the slowest
+  // class on the account) and rexCall aborts any single call at twenty
+  // seconds. At six in flight every call exceeded that ceiling and the whole
+  // request came back "This operation was aborted" — which reads like a
+  // browser giving up and is actually our own timeout firing. Three keeps each
+  // call inside it on a normal day.
+  //
+  // ON A SLOW DAY ONE PAGE GOING OVER USED TO KILL ALL TEN. The route turned
+  // that into a 502 carrying REX's abort message, and the screen filed it as
+  // our own server breaking - two tickets for one slow REX minute (bug
+  // 8bda2b06, 20 Sep 2026). Now a page that fails is retried once on its own,
+  // and if it still will not come the walk ends there: the pages that did
+  // arrive are the audit, and the caller is told how far it got.
   const CONCURRENCY = 3;
   const rows: Row[] = [];
-  for (let start = 0; start < pages; start += CONCURRENCY) {
+  const page = async (i: number): Promise<Row[] | null> => {
+    try {
+      const res = await rexCall("MailMergeEventLogs", "search", {
+        limit: PAGE,
+        offset: i * PAGE,
+        order_by: { system_ctime: "desc" },
+      });
+      return res.ok ? rexRows(res.result) : null;
+    } catch {
+      return null;
+    }
+  };
+  let read = 0;
+  let cutShort = false;
+  walk: for (let start = 0; start < pages; start += CONCURRENCY) {
     const batch = Array.from(
       { length: Math.min(CONCURRENCY, pages - start) },
       (_, i) => start + i
     );
-    const results = await Promise.all(
-      batch.map(async (i) => {
-        const res = await rexCall("MailMergeEventLogs", "search", {
-          limit: PAGE,
-          offset: i * PAGE,
-          order_by: { system_ctime: "desc" },
-        });
-        if (!res.ok) throw new Error(res.error ?? "REX wouldn't answer.");
-        return rexRows(res.result);
-      })
-    );
-    for (const page of results) rows.push(...page);
-    // A short page means we've reached the end of the log.
-    if (results.some((p) => p.length < PAGE)) break;
+    const results = await Promise.all(batch.map(page));
+    for (let k = 0; k < results.length; k++) {
+      // Once more, alone, now the other two are out of its way.
+      if (results[k] === null) results[k] = await page(batch[k]);
+    }
+    for (const p of results) {
+      if (p === null) {
+        cutShort = true;
+        break walk;
+      }
+      rows.push(...p);
+      read++;
+      // A short page means we've reached the end of the log.
+      if (p.length < PAGE) break walk;
+    }
   }
 
   const times = rows
@@ -212,5 +238,6 @@ export async function auditEmails(pages = 10): Promise<EmailAudit> {
       templated: tle.filter((r) => (r.template as Row | null)?.template_name).length + automatedTle.length,
     },
     pulledAt: new Date().toISOString(),
+    pages: { asked: pages, read, cutShort },
   };
 }

@@ -61,6 +61,8 @@ let cached: { token: string; clientName: string | null; expiresAt: number } | nu
 // After a 429 from the token endpoint, don't ask again for a minute —
 // re-requesting immediately just extends the rate-limit window.
 let tokenBackoffUntil = 0;
+/** The token request in flight, shared by everyone who asks while it runs. */
+let inFlight: Promise<string> | null = null;
 
 /** Best-effort JWT expiry (ms epoch); falls back to a 50-minute lifetime. */
 function jwtExpiry(token: string): number {
@@ -78,13 +80,34 @@ function jwtExpiry(token: string): number {
   return Date.now() + 50 * 60_000;
 }
 
-async function getToken(force = false): Promise<string> {
+/**
+ * ONE TOKEN REQUEST AT A TIME.
+ *
+ * The cache is per process, and the moment it is cold or the token expires,
+ * every waiting call arrived here together: a deals read alone fires thirty
+ * requests, each asked Propoly for its own token in the same second, and
+ * Propoly answered 429 to most of them - 589 tickets in a day (22 Sep 2026,
+ * bug 009d19cf). Same cure as oneWalk gave the list walks: the second and
+ * later callers wait on the request already running instead of starting one.
+ *
+ * `stale` is the token a caller has just been refused with (401). If somebody
+ * else has already replaced it, the replacement is handed back without another
+ * request; only a token nobody has refreshed yet is fetched again.
+ */
+async function getToken(stale: string | null = null): Promise<string> {
   if (!propolyConfigured()) throw new Error("Propoly is not configured");
-  if (!force && cached && Date.now() < cached.expiresAt) return cached.token;
+  if (cached && Date.now() < cached.expiresAt && cached.token !== stale) return cached.token;
+  if (inFlight) return inFlight;
   if (Date.now() < tokenBackoffUntil) {
     throw new Error("Propoly token requests are rate-limited — backing off");
   }
+  inFlight = fetchToken().finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
+}
 
+async function fetchToken(): Promise<string> {
   const res = await fetch(`${BASE}/api/v1/token`, {
     headers: {
       "x-api-key": apiKey(),
@@ -150,8 +173,10 @@ export async function propolyOptions(
   path: string
 ): Promise<{ status: number; allow: string | null }> {
   const keyHeaders = { "x-api-key": apiKey(), "agent-name": agentName() };
-  const token = await getToken();
   try {
+    /* Inside the try: a token Propoly will not give us is the same answer as
+       a path that will not connect, not a reason to end the caller. */
+    const token = await getToken();
     const res = await fetch(`${BASE}${path}`, {
       method: "OPTIONS",
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...keyHeaders },
@@ -203,7 +228,7 @@ export async function propolyGet(path: string, opts?: { probe?: boolean }): Prom
     cache: "no-store",
   });
   if (res.status === 401) {
-    token = await getToken(true);
+    token = await getToken(token);
     res = await fetch(`${BASE}${path}`, {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...keyHeaders },
       cache: "no-store",
@@ -251,8 +276,9 @@ async function propolyWrite(method: "POST" | "PATCH", path: string, payload: unk
       body: JSON.stringify(payload),
       cache: "no-store",
     });
-  let res = await send(await getToken());
-  if (res.status === 401) res = await send(await getToken(true));
+  const token = await getToken();
+  let res = await send(token);
+  if (res.status === 401) res = await send(await getToken(token));
   let body: unknown = null;
   try {
     body = await res.json();
@@ -284,8 +310,9 @@ export async function propolyUpload(path: string, form: FormData): Promise<Propo
       body: form,
       cache: "no-store",
     });
-  let res = await send(await getToken());
-  if (res.status === 401) res = await send(await getToken(true));
+  const token = await getToken();
+  let res = await send(token);
+  if (res.status === 401) res = await send(await getToken(token));
   let body: unknown = null;
   try {
     body = await res.json();

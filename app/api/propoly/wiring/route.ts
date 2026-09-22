@@ -73,6 +73,22 @@ const norm = (p: string) => p.replace(/\{[^}]+\}/g, "{id}");
 export async function GET() {
   const blocked = diagnosticsBlocked();
   if (blocked) return blocked;
+  /* Nothing below throws on purpose, but the token call under every probe does
+     when Propoly rate-limits us - and a thrown error here came back as Next's
+     HTML 500, which the sheet could not read and filed as "did not answer"
+     (bug 4e8f126d, 21 Sep 2026). The reason is the finding: say it. */
+  try {
+    return await sheet();
+  } catch (e) {
+    return NextResponse.json({
+      configured: true,
+      specRead: false,
+      note: `Propoly would not give us a token just now, so nothing could be asked: ${(e as Error).message}. Try again in a minute.`,
+    });
+  }
+}
+
+async function sheet() {
 
   if (!propolyConfigured()) {
     return NextResponse.json({

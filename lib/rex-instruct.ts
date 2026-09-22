@@ -88,6 +88,25 @@ export function splitAddress(address: string, postcode: string | null) {
     .filter(Boolean);
   const at = parts.findIndex((s) => /^\d+[a-z]?(\s*-\s*\d+[a-z]?)?\s+\S/i.test(s));
   if (at < 0) {
+    /* "Upper Grove Place 17/7, Edinburgh": street first, then number and flat,
+       the Scottish way (same rule as lib/rex-pm-address, 79e511b). Without it
+       the number was blank and REX refused the home (bug 3b357e55). */
+    const tail = parts.findIndex(
+      (s) => /^[a-z][a-z .'-]+?\s+\d+[a-z]?(?:\/\w+)?$/i.test(s) && !/^(flat|apartment|apt|unit|room|studio)\b/i.test(s)
+    );
+    if (tail >= 0) {
+      const m = parts[tail].match(/^(.+?)\s+(\d+[a-z]?)(?:\/(\w+))?$/i)!;
+      const before = parts.slice(0, tail).join(", ");
+      const unit = /^(flat|apartment|apt|unit|room|studio)\b/i.test(before) ? before : m[3] ? `Flat ${m[3]}` : "";
+      const after = parts.slice(tail + 1);
+      return {
+        unitNumber: unit || null,
+        streetNumber: before && !unit ? `${before}, ${m[2]}` : m[2],
+        streetName: m[1],
+        town: after.length ? after[after.length - 1] : "",
+        postcode: pc,
+      };
+    }
     /* "Rose Cottage, Mill Lane, Stockport": the name, then the street. */
     return parts.length >= 3
       ? { streetNumber: parts[0], streetName: parts[1], town: parts[parts.length - 1], postcode: pc }
@@ -169,6 +188,10 @@ export async function putInstructionInRex(appraisalId: string, opts: { userId?: 
         propertyId = made.propertyId;
         how = owner.id && !made.ownerDropped ? "created in REX with the landlord as owner" : "created in REX";
         if (made.ownerDropped) notes.push("REX would not join the landlord as owner, so add them on the property in REX.");
+      } else if (made.reason === "already_in_rex") {
+        /* REX's own duplicate check found what the matcher missed. Nearly sure
+           is still not sure: leave it for the agent to pick on the file. */
+        notes.unshift(made.detail);
       } else {
         notes.unshift(`Property not created: ${made.ownerDetail ?? made.detail}`);
       }

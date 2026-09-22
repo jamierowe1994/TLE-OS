@@ -172,6 +172,11 @@ export default function Emails() {
           <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5 lg:max-w-[80%]">
             <div className="flex flex-wrap items-baseline justify-between gap-3">
               <h2 className="text-[15px]">{a.from} to {a.to}</h2>
+              {a.pages?.cutShort && (
+                <p className="w-full text-[11.5px] text-muted">
+                  The listings system was slow, so this covers {a.pages.read} of {a.pages.asked} pages of the log. The window is shorter than usual. Reload in a minute for the rest.
+                </p>
+              )}
               <p className="flex items-center gap-3 text-[11px] text-muted">
                 {a.totals.account} sends on the account
                 {depth < DEEP && (
