@@ -128,26 +128,41 @@ async function sessionUserId(token: string | undefined, secret: string | undefin
      got, and with no answer at all it is refused and asked to try again.
 
      WRITES AND PAGES ONLY. Reads are never refused, because the dashboard
-     reads from half the areas and a hidden Finances must not blank its tiles. */
+     reads from half the areas and a hidden Finances must not blank its tiles.
+
+   A WRITE WAITS LONGER THAN A PAGE (23 Sep 2026). Five saves were refused on
+   22 Sep with "we couldn't check", and none of them was an outage: each was a
+   fresh instance after a deploy, where the first database query also builds
+   the schema, and the check could not answer inside 2.5 seconds. The last
+   good answer lives in this process only, so a fresh one has none to fall
+   back on. Now a write with nothing to fall back on gives the check eight
+   seconds - the save behind it would pay the same cold start anyway - and the
+   schema is built at boot (instrumentation.ts) so there is less cold to pay.
+   Pages keep 2.5 seconds: they fail open, so waiting buys them nothing. */
 
 /** lib/auth's development fallback, so the gate can be tried on a laptop. */
 const DEV_SECRET = "dev-only-secret-not-for-production";
 const ACCESS_TTL_MS = 15_000;
+const CHECK_MS = 2_500;
+/** A write with no last good answer to fall back on. See above. */
+const PATIENT_CHECK_MS = 8_000;
 const accessCache = new Map<string, { at: number; access: AreaAccess | null }>();
 /** The last answer that WAS an answer, per person. Never expires: see above. */
 const lastGood = new Map<string, AreaAccess>();
 
-async function accessOf(req: NextRequest, userId: string): Promise<AreaAccess | null> {
+async function accessOf(req: NextRequest, userId: string, write: boolean): Promise<AreaAccess | null> {
   const hit = accessCache.get(userId);
+  const patient = write && !lastGood.has(userId);
   /* A failed check is only remembered briefly, so a blip is not fifteen
-     seconds of the gate standing open. */
-  if (hit && Date.now() - hit.at < (hit.access ? ACCESS_TTL_MS : 3_000)) return hit.access;
+     seconds of the gate standing open. A write with nothing to fall back on
+     does not settle for a remembered failure: it asks again, patiently. */
+  if (hit && Date.now() - hit.at < (hit.access ? ACCESS_TTL_MS : 3_000) && (hit.access || !patient)) return hit.access;
   let access: AreaAccess | null = null;
   try {
     const res = await fetch(new URL("/api/area-access", req.nextUrl.origin), {
       headers: { cookie: req.headers.get("cookie") ?? "" },
       cache: "no-store",
-      signal: AbortSignal.timeout(2_500),
+      signal: AbortSignal.timeout(patient ? PATIENT_CHECK_MS : CHECK_MS),
     });
     const j = res.ok ? ((await res.json()) as Partial<AreaAccess>) : null;
     if (j && typeof j.gated === "boolean") {
@@ -229,7 +244,7 @@ async function areaGate(req: NextRequest): Promise<NextResponse | null> {
   const userId = await sessionUserId(req.cookies.get("os_session")?.value, secret);
   if (!userId) return null;
 
-  const answered = await accessOf(req, userId);
+  const answered = await accessOf(req, userId, isApi);
   /* No answer: a page opens regardless; a write uses the last answer this
      person got, and is refused if there has never been one. */
   const access = answered ?? (isApi ? (lastGood.get(userId) ?? null) : null);

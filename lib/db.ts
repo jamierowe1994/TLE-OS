@@ -3073,6 +3073,12 @@ function ensureSchema(): Promise<void> {
   return globalThis.__osSchemaReady;
 }
 
+/** Run the schema now rather than inside the first request - instrumentation.ts,
+ *  at boot. Harmless without a database, and a failure is retried by the next query. */
+export function warmSchema(): Promise<void> {
+  return hasDb() ? ensureSchema() : Promise.resolve();
+}
+
 /* --------------------------------------------------------------------------
    ⚠️ THIS DATABASE IS SHARED WITH THE TLE PORTAL.
 

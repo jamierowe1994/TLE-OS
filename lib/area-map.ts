@@ -154,6 +154,11 @@ export const READ_ONLY_POSTS = [
   "/api/record",
   "/api/esign/poll",
   "/api/listings/describe",
+  /* Reads the dates off a certificate and saves nothing - filing it is a
+     separate write to /api/compliance/certificates, which stays gated. As a
+     "write" it was refused whenever the switch check was slow (Kirstie on
+     Listings, 22 Sep), for no protection at all. */
+  "/api/compliance/certificates/read",
 ];
 
 const owns = (path: string, prefix: string) => path === prefix || path.startsWith(prefix + "/");
