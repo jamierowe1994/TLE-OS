@@ -156,7 +156,19 @@ function sameSig(expected: string, sig: string): boolean {
    prefix, bound to the session's user id, and only ever read when the check
    did not answer - it can stand in for an answer, never overrule one. A
    patient write also gets a second try inside its eight seconds, so a check
-   cut off by a cold start is asked again rather than given up on. */
+   cut off by a cold start is asked again rather than given up on.
+
+   AND IT ASKS THE SERVER BY ITS OWN ADDRESS (23 Sep 2026). The real reason
+   for every one of those 503s, found in Railway's request log afterwards:
+   they came back in 4 to 36 milliseconds - no timeout, no cold start - and
+   not one of the middleware's checks ever reached the server. On 23 Sep
+   every gated save on the live site, 37 of 37, was refused. The check
+   fetched req.nextUrl.origin, which under next start is the listening
+   address, http://localhost:8080, and inside Railway's container that
+   fails at once (it works on a Mac, which is why no local test caught it).
+   The pages never showed it because they fail open. Now it tries
+   127.0.0.1, then ::1, then the old origin, keeps whichever answered, and
+   says in the log when none did. */
 
 /** lib/auth's development fallback, so the gate can be tried on a laptop. */
 const DEV_SECRET = "dev-only-secret-not-for-production";
@@ -200,20 +212,70 @@ async function openAccess(secret: string, userId: string, cookie: string | undef
   }
 }
 
+/** The address that last answered. Tried first next time. */
+let selfOrigin: string | null = null;
+let lastWarnAt = 0;
+
+/** Where this server can reach itself: its own socket first, the listening origin last. */
+function selfOrigins(req: NextRequest): string[] {
+  const port = process.env.PORT || req.nextUrl.port;
+  const all = [
+    ...(selfOrigin ? [selfOrigin] : []),
+    ...(port ? [`http://127.0.0.1:${port}`, `http://[::1]:${port}`] : []),
+    req.nextUrl.origin,
+  ];
+  return [...new Set(all)];
+}
+
+/** A failed check is said out loud, once a minute at most, so it is never silent again. */
+function warnCheck(msg: string) {
+  if (Date.now() - lastWarnAt < 60_000) return;
+  lastWarnAt = Date.now();
+  console.warn(`[area-gate] ${msg}`);
+}
+
+/**
+ * Ask this server a question, from the middleware. Each address in turn
+ * until one answers, all inside `ms`. Null on anything but a 2xx.
+ */
+async function askSelf(req: NextRequest, path: string, ms: number, init: RequestInit = {}): Promise<Response | null> {
+  const deadline = Date.now() + ms;
+  const failures: string[] = [];
+  for (const origin of selfOrigins(req)) {
+    const left = deadline - Date.now();
+    if (left < 100) break;
+    try {
+      const res = await fetch(new URL(path, origin), {
+        ...init,
+        headers: { cookie: req.headers.get("cookie") ?? "", ...(init.headers as Record<string, string> | undefined) },
+        cache: "no-store",
+        redirect: "manual",
+        signal: AbortSignal.timeout(left),
+      });
+      if (res.ok) {
+        selfOrigin = origin;
+        return res;
+      }
+      failures.push(`${origin} ${res.status}`);
+    } catch (e) {
+      const cause = (e as { cause?: { code?: string } })?.cause?.code;
+      failures.push(`${origin} ${cause ?? (e instanceof Error ? e.name : "failed")}`);
+    }
+  }
+  warnCheck(`${path} did not answer in ${ms}ms: ${failures.join(", ") || "no time to ask"}`);
+  return null;
+}
+
 /** One question to /api/area-access, with a ceiling. Null on anything but a real answer. */
 async function askOnce(req: NextRequest, ms: number): Promise<AreaAccess | null> {
   try {
-    const res = await fetch(new URL("/api/area-access", req.nextUrl.origin), {
-      headers: { cookie: req.headers.get("cookie") ?? "" },
-      cache: "no-store",
-      signal: AbortSignal.timeout(ms),
-    });
-    const j = res.ok ? ((await res.json()) as Partial<AreaAccess>) : null;
+    const res = await askSelf(req, "/api/area-access", ms);
+    const j = res ? ((await res.json()) as Partial<AreaAccess>) : null;
     if (j && typeof j.gated === "boolean") {
       return { gated: j.gated, tester: Boolean(j.tester), levels: (j.levels ?? {}) as AreaAccess["levels"] };
     }
   } catch {
-    /* Timed out or refused: no answer. */
+    /* Not JSON: no answer. */
   }
   return null;
 }
@@ -293,14 +355,12 @@ async function aimsAtOwnTestFile(req: NextRequest): Promise<boolean> {
   try {
     const ids = await candidateIds(req);
     if (!ids.length) return false;
-    const res = await fetch(new URL("/api/area-access/target", req.nextUrl.origin), {
+    const res = await askSelf(req, "/api/area-access/target", 2_500, {
       method: "POST",
-      headers: { cookie: req.headers.get("cookie") ?? "", "content-type": "application/json" },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ ids }),
-      cache: "no-store",
-      signal: AbortSignal.timeout(2_500),
     });
-    const j = res.ok ? ((await res.json()) as { test?: boolean }) : null;
+    const j = res ? ((await res.json()) as { test?: boolean }) : null;
     return j?.test === true;
   } catch {
     return false;
