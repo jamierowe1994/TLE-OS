@@ -1,5 +1,6 @@
 import "server-only";
 import { noteFailure } from "@/lib/auto-bugs";
+import { hasDb, q } from "@/lib/db";
 
 // Propoly (tenancy progression) client — the third live integration, after
 // REX and Meta. Auth flow per their Swagger (prod.propoly.com/api-docs):
@@ -57,12 +58,73 @@ interface TokenResponse {
   client_name?: string;
 }
 
-let cached: { token: string; clientName: string | null; expiresAt: number } | null = null;
-// After a 429 from the token endpoint, don't ask again for a minute —
-// re-requesting immediately just extends the rate-limit window.
-let tokenBackoffUntil = 0;
-/** The token request in flight, shared by everyone who asks while it runs. */
-let inFlight: Promise<string> | null = null;
+interface HeldToken {
+  token: string;
+  clientName: string | null;
+  expiresAt: number;
+}
+
+/**
+ * ONE TOKEN FOR THE WHOLE SERVER, AND IT OUTLIVES A DEPLOY (23 Sep 2026).
+ *
+ * This state used to be three module-level variables, and the build carries
+ * this file in six places - four routes inline it, two shared chunks hold it -
+ * so the live server had six caches, six "one at a time" rules and six
+ * one-minute back-offs that knew nothing of each other. After a 429 the other
+ * five went straight on asking, which is what keeps a rate-limit window open,
+ * and every deploy (five on 23 Sep) started all six cold. The token ticket
+ * (b59189a2) kept ticking at about one every fifteen minutes after the 22 Sep
+ * fix for exactly this reason.
+ *
+ * Now the state hangs off globalThis, so every copy in the process shares it,
+ * and the token and any back-off are also kept in os_cache, so a fresh
+ * process picks up the token the last one was given instead of asking again.
+ * The database is only a convenience here: if it does not answer, the token
+ * is simply asked for, as before.
+ */
+interface TokenState {
+  cached: HeldToken | null;
+  /** After a 429 from the token endpoint, nobody asks again until this. */
+  backoffUntil: number;
+  /** The token request in flight, shared by everyone who asks while it runs. */
+  inFlight: Promise<string> | null;
+}
+declare global {
+  // eslint-disable-next-line no-var
+  var __propolyToken: TokenState | undefined;
+}
+const state: TokenState = (globalThis.__propolyToken ??= { cached: null, backoffUntil: 0, inFlight: null });
+
+const TOKEN_ROW = "propoly:token";
+const MIN_BACKOFF_MS = 60_000;
+
+/** What the last process kept: a token, or a back-off still running. Null on any doubt. */
+async function readKept(): Promise<{ held: HeldToken | null; backoffUntil: number } | null> {
+  if (!hasDb()) return null;
+  try {
+    const rows = await q<{ payload: { token?: string; clientName?: string | null; expiresAt?: number; backoffUntil?: number } }>(
+      "SELECT payload FROM os_cache WHERE key = $1",
+      [TOKEN_ROW]
+    );
+    const p = rows[0]?.payload;
+    if (!p) return null;
+    const held = p.token && Number(p.expiresAt) > Date.now()
+      ? { token: p.token, clientName: p.clientName ?? null, expiresAt: Number(p.expiresAt) }
+      : null;
+    return { held, backoffUntil: Number(p.backoffUntil) || 0 };
+  } catch {
+    return null;
+  }
+}
+
+async function keep(held: HeldToken | null, backoffUntil: number): Promise<void> {
+  if (!hasDb()) return;
+  await q(
+    `INSERT INTO os_cache (key, payload, computed_at) VALUES ($1, $2, NOW())
+     ON CONFLICT (key) DO UPDATE SET payload = EXCLUDED.payload, computed_at = NOW()`,
+    [TOKEN_ROW, JSON.stringify({ ...(held ?? {}), backoffUntil })]
+  ).catch(() => {});
+}
 
 /** Best-effort JWT expiry (ms epoch); falls back to a 50-minute lifetime. */
 function jwtExpiry(token: string): number {
@@ -96,15 +158,30 @@ function jwtExpiry(token: string): number {
  */
 async function getToken(stale: string | null = null): Promise<string> {
   if (!propolyConfigured()) throw new Error("Propoly is not configured");
-  if (cached && Date.now() < cached.expiresAt && cached.token !== stale) return cached.token;
-  if (inFlight) return inFlight;
-  if (Date.now() < tokenBackoffUntil) {
+  const c = state.cached;
+  if (c && Date.now() < c.expiresAt && c.token !== stale) return c.token;
+  if (state.inFlight) return state.inFlight;
+  if (Date.now() < state.backoffUntil) {
     throw new Error("Propoly token requests are rate-limited — backing off");
   }
-  inFlight = fetchToken().finally(() => {
-    inFlight = null;
+  state.inFlight = obtainToken(stale).finally(() => {
+    state.inFlight = null;
   });
-  return inFlight;
+  return state.inFlight;
+}
+
+/** The kept token if there is a good one, otherwise one from Propoly. */
+async function obtainToken(stale: string | null): Promise<string> {
+  const kept = await readKept();
+  if (kept?.held && kept.held.token !== stale) {
+    state.cached = kept.held;
+    return kept.held.token;
+  }
+  if (kept && Date.now() < kept.backoffUntil) {
+    state.backoffUntil = kept.backoffUntil;
+    throw new Error("Propoly token requests are rate-limited — backing off");
+  }
+  return fetchToken();
 }
 
 async function fetchToken(): Promise<string> {
@@ -117,7 +194,10 @@ async function fetchToken(): Promise<string> {
     cache: "no-store",
   });
   if (res.status === 429) {
-    tokenBackoffUntil = Date.now() + 60_000;
+    /* Their Retry-After when they give one, never less than a minute. */
+    const retryAfter = Number(res.headers.get("retry-after")) * 1000;
+    state.backoffUntil = Date.now() + Math.max(MIN_BACKOFF_MS, Number.isFinite(retryAfter) ? retryAfter : 0);
+    await keep(null, state.backoffUntil);
     noteFailure({ source: "Propoly", what: "token", status: 429, message: "rate limited - backing off for a minute" });
     throw new Error("Propoly token request failed: 429 (rate limited)");
   }
@@ -127,12 +207,10 @@ async function fetchToken(): Promise<string> {
   }
   const data = (await res.json()) as TokenResponse;
   if (!data.token) throw new Error("Propoly token response had no token");
-  cached = {
-    token: data.token,
-    clientName: data.client_name ?? null,
-    expiresAt: jwtExpiry(data.token),
-  };
-  return cached.token;
+  const held = { token: data.token, clientName: data.client_name ?? null, expiresAt: jwtExpiry(data.token) };
+  state.cached = held;
+  await keep(held, 0);
+  return held.token;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -325,7 +403,7 @@ export async function propolyUpload(path: string, form: FormData): Promise<Propo
 export const propolyPatch = (path: string, payload: unknown) => propolyWrite("PATCH", path, payload);
 
 export function propolyClientName(): string | null {
-  return cached?.clientName ?? null;
+  return state.cached?.clientName ?? null;
 }
 
 /* ------------------------------------------------------------------------ */
