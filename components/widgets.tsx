@@ -48,6 +48,9 @@ export type WidgetDef = {
   /** A wash for the tile - the odd one in colour. Pink for the box that asks
    *  for a hand, sage for the day's money. Everything else stays white. */
   tint?: string;
+  /** The screen the tile opens when clicked (outside Customise). A tile that
+   *  looks like a way in and is not was Howard's note on 23 Sep 2026. */
+  href?: string;
   render: (w: number, h: number) => React.ReactNode;
 };
 
@@ -318,6 +321,15 @@ function TodayWidget({ w, h }: { w: number; h: number }) {
      which still shows everything. */
   const work = appts.filter((a) => a.kind !== "other");
   const today = inOrder(work.filter((a) => a.day === 0));
+  /* Said, not hidden (Howard, 23 Sep 2026): his REX diary was full and the
+     tile said "Nothing in the diary today", because none of it was a viewing
+     or an appraisal. The rest of the day is counted, and the full calendar
+     shows it. */
+  const otherToday = appts.filter((a) => a.day === 0 && a.kind === "other").length;
+  const emptyLine =
+    otherToday > 0
+      ? `Nothing booked in today - ${otherToday} other ${otherToday === 1 ? "entry" : "entries"} in your diary.`
+      : "Nothing in the diary today.";
   const tomorrow = inOrder(work.filter((a) => a.day === 1));
   const showTomorrow = w >= 2 || h >= 3;
   /** The next thing with an actual time on it. */
@@ -339,7 +351,7 @@ function TodayWidget({ w, h }: { w: number; h: number }) {
         ) : (
           <div className={showTomorrow && w >= 2 ? "mt-5 grid grid-cols-2 gap-4" : "mt-5"}>
             <ul className="space-y-2.5">
-              {today.length === 0 && <li className="text-[11.5px] text-muted">Nothing in the diary today.</li>}
+              {today.length === 0 && <li className="text-[11.5px] text-muted">{emptyLine}</li>}
               {today.slice(0, 4).map((t) => (
                 <li key={t.id} className="flex items-baseline gap-3">
                   <span className={`w-11 shrink-0 text-accent-dark ${t.allDay ? "text-[9.5px] uppercase tracking-wide" : "figures text-[13px]"}`}>
@@ -1233,18 +1245,21 @@ function ApplicationsWidget({ w, h }: { w: number; h: number }) {
 export const WIDGETS: Record<string, WidgetDef> = {
   "leads-today": {
     label: "Leads today", icon: "pack/target", hint: "count → trend → the names themselves",
+    href: "/leads",
     defaultW: 1, defaultH: 1,
     render: (w, h) => <LeadsTodayWidget w={w} h={h} />,
   },
 
   "on-market": {
     label: "On market", icon: "pack/house", hint: "count → by status → the slow movers",
+    href: "/listings",
     defaultW: 1, defaultH: 1,
     render: (w, h) => <OnMarketWidget w={w} h={h} />,
   },
 
   applications: {
     label: "Applications", icon: "pack/checklist", hint: "count → by stage → the stalled",
+    href: "/applications",
     defaultW: 1, defaultH: 1,
     render: (w, h) => <ApplicationsWidget w={w} h={h} />,
   },
@@ -1370,6 +1385,7 @@ export const WIDGETS: Record<string, WidgetDef> = {
 
   portfolio: {
     label: "Portfolio size", icon: "folder", hint: "the managed book, and what joined it",
+    href: "/portfolio",
     defaultW: 1, defaultH: 1,
     render: (w, h) => <PortfolioWidget w={w} h={h} />,
   },

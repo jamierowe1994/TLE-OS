@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { stepsFor, type TourId, type TourStep } from "@/lib/tour";
 import { useSetup } from "@/lib/setup-store";
@@ -70,6 +70,15 @@ function measure(step: TourStep): Box | null {
     width: right - left + pad * 2,
     height: bottom - top + pad * 2,
   };
+}
+
+/** False for a menu step whose every target is missing from a menu that IS
+ *  drawn - that screen is switched off for this person. */
+function onScreen(step: TourStep): boolean {
+  if (typeof document === "undefined" || !step.target?.length) return true;
+  if (!step.target.every((t) => t.startsWith("[data-nav="))) return true;
+  if (!document.querySelector("[data-nav]")) return true;
+  return step.target.some((t) => document.querySelector(t));
 }
 
 /** Where the card goes: the side of the hole with room for it. */
@@ -146,6 +155,15 @@ export default function Tour({
     if (preview || asked || (setupFinished(view) && !view.state.tour)) {
       offered.current = true;
       setChoosing(true);
+      /* The end of setup lands on /dashboard?tour=choose, and the query stayed
+         in the address bar: every refresh after that was "asked" again, even
+         with an answer saved (Howard, 23 Sep 2026 - skipped at 09:08, offered
+         again at 09:11). The link is spent once it has opened the chooser. */
+      if (asked) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("tour");
+        window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+      }
     }
   }, [ready, asked, view, tour, preview]);
 
@@ -164,7 +182,10 @@ export default function Tour({
     return () => window.removeEventListener("os-tour", again);
   }, []);
 
-  const steps = tour ? stepsFor(tour) : [];
+  /* Only the screens this person actually has. A step for a screen the
+     switches hide pointed at nothing and floated mid-screen; with no rail at
+     all (a phone) the rail steps still show, centred, as they always did. */
+  const steps = useMemo(() => (tour ? stepsFor(tour).filter(onScreen) : []), [tour]);
   const step: TourStep | undefined = steps[at];
 
   /* Ask the shell and Steve to reveal whatever this step points at, BEFORE
@@ -238,12 +259,12 @@ export default function Tour({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") void finish(tour ?? "skipped");
       if (!tour) return;
-      if (e.key === "ArrowRight") setAt((i) => Math.min(i + 1, stepsFor(tour).length - 1));
+      if (e.key === "ArrowRight") setAt((i) => Math.min(i + 1, steps.length - 1));
       if (e.key === "ArrowLeft") setAt((i) => Math.max(i - 1, 0));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [tour, choosing, finish]);
+  }, [tour, choosing, finish, steps.length]);
 
   if (choosing) return <Chooser onPick={(id) => { setTour(id); setAt(0); setChoosing(false); }} onSkip={() => void finish("skipped")} />;
   if (!tour || !step) return null;

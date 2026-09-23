@@ -151,9 +151,12 @@ export const FULL: TourStep[] = [
   },
   {
     id: "compliance",
-    target: ['[data-nav="/compliance"]'],
+    /* Compliance lives inside the Portfolio group, which is usually shut, so
+       the step fell back to a card floating mid-screen (Howard, 23 Sep 2026).
+       The group's own row is the fallback, and the words say where it is. */
+    target: ['[data-nav="/compliance"]', '[data-nav="/portfolio"]'],
     title: "Compliance",
-    body: "What is outstanding across your properties, and booking a contractor in to deal with it.",
+    body: "Under Portfolio: what is outstanding across your properties, and booking a contractor in to deal with it.",
   },
   {
     id: "emails",

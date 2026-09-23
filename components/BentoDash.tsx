@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
 import { PressButton } from "@/components/Bits";
 import type { WidgetDef } from "@/components/widgets";
@@ -123,6 +124,7 @@ export default function BentoDash({
    *  own header row instead of the board carrying one. */
   control?: { on: boolean; set: (b: boolean) => void };
 }) {
+  const router = useRouter();
   const WIDGETS = registry;
   const DEFAULT_LAYOUT = defaultLayout;
   const TRAY_GROUPS = trayGroups;
@@ -502,6 +504,15 @@ export default function BentoDash({
           const sizes = def.sizes ?? DEFAULT_SIZES;
           /* The registry may name its own wash; the dashboard's two live here. */
           const tint = def.tint ?? TINT[item.type];
+          /* A tile with a screen behind it opens it. Not while customising,
+             where a press picks the tile up, and never over a link or button
+             of the tile's own - those keep doing what they say. */
+          const href = customise ? undefined : def.href;
+          const open = (e: React.MouseEvent | React.KeyboardEvent) => {
+            if (!href) return;
+            if ((e.target as HTMLElement).closest("a, button, input, select, textarea, label")) return;
+            router.push(href);
+          };
           return (
             <Reveal
               key={item.id}
@@ -514,7 +525,12 @@ export default function BentoDash({
                 beginDrag(e, item.id, false, r.width, r.height);
               }}
               index={idx}
-              className={`relative rounded-2xl border p-5 ${isDragged ? "bg-ink/[0.07]" : (tint ?? "bg-card")} ${
+              onClick={href ? open : undefined}
+              onKeyDown={href ? (e: React.KeyboardEvent) => { if (e.key === "Enter") open(e); } : undefined}
+              role={href ? "link" : undefined}
+              tabIndex={href ? 0 : undefined}
+              aria-label={href ? `${def.label} - open` : undefined}
+              className={`relative rounded-2xl border p-5 ${href ? "cursor-pointer" : ""} ${isDragged ? "bg-ink/[0.07]" : (tint ?? "bg-card")} ${
                 customise
                   ? `cursor-grab select-none border-dashed ${
                       /* The wiggle rests while anything is being moved or

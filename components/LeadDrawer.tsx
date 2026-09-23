@@ -796,10 +796,58 @@ export default function LeadDrawer({
       .catch(() => {});
     return () => { live = false; };
   }, [enquiryLeadId]);
-  const saveFacts = (patch: { tags?: string[]; property?: PropertyFactsData }) => {
+  /* SAID, AND IN ORDER (Howard, 23 Sep 2026). Every +/- fired its own save
+     and threw the answer away, so when the saves were refused his bedrooms
+     and bathrooms quietly went back to 0 the next time he opened the lead -
+     no error, nothing to tell him to try again. Now the changes are gathered
+     for a moment and sent one save at a time (newest wins, never an older one
+     landing last), the card says Saved or why not with a Try again, and
+     anything still waiting goes when the drawer closes or the lead changes. */
+  type FactsPatch = { tags?: string[]; property?: PropertyFactsData };
+  const [factsSync, setFactsSync] = useState<{ busy: boolean; text: string; bad?: boolean } | null>(null);
+  const factsPending = useRef<{ id: string; patch: FactsPatch } | null>(null);
+  const factsBusy = useRef(false);
+  const factsTimer = useRef<number | null>(null);
+  const flushFacts = useCallback(async (): Promise<void> => {
+    if (factsTimer.current) { window.clearTimeout(factsTimer.current); factsTimer.current = null; }
+    const job = factsPending.current;
+    if (!job || factsBusy.current) return;
+    factsPending.current = null;
+    factsBusy.current = true;
+    setFactsSync({ busy: true, text: "Saving…" });
+    let bad: string | null = null;
+    try {
+      const r = await fetch(`/api/leads/${encodeURIComponent(job.id)}/facts`, {
+        method: "PATCH", keepalive: true, headers: { "content-type": "application/json" }, body: JSON.stringify(job.patch),
+      });
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j?.ok) bad = j?.error ?? "That didn't save.";
+    } catch {
+      bad = "That didn't save - the connection dropped.";
+    }
+    factsBusy.current = false;
+    const next = factsPending.current as { id: string; patch: FactsPatch } | null;
+    if (bad) {
+      /* Kept for Try again, under anything changed since on the same lead. */
+      if (!next || next.id === job.id) factsPending.current = { id: job.id, patch: { ...job.patch, ...(next?.patch ?? {}) } };
+      setFactsSync({ busy: false, text: bad, bad: true });
+      return;
+    }
+    if (next) return flushFacts();
+    setFactsSync({ busy: false, text: "Saved" });
+  }, []);
+  const saveFacts = (patch: FactsPatch) => {
     if (!enquiryLeadId) return;
-    void fetch(`/api/leads/${encodeURIComponent(enquiryLeadId)}/facts`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(patch) }).catch(() => {});
+    const cur = factsPending.current;
+    factsPending.current = { id: enquiryLeadId, patch: cur && cur.id === enquiryLeadId ? { ...cur.patch, ...patch } : patch };
+    if (factsTimer.current) window.clearTimeout(factsTimer.current);
+    factsTimer.current = window.setTimeout(() => void flushFacts(), 400);
   };
+  /* Nothing waiting is lost to closing the drawer or moving to another lead. */
+  useEffect(() => {
+    setFactsSync(null);
+    return () => { void flushFacts(); };
+  }, [enquiryLeadId, flushFacts]);
   const changeTags = (next: string[]) => { setTags(next); saveFacts({ tags: next }); };
   const changeProp = (next: PropertyFactsData) => { setProp(next); saveFacts({ property: next }); };
 
@@ -2546,6 +2594,14 @@ export default function LeadDrawer({
                   {/* The property: the facts, and the wand that fills them in. */}
                   <section className="relative rounded-2xl border border-line/60 bg-card p-5">
                     <CardTitle icon="home">The property</CardTitle>
+                    {/* Which home these facts are for. A landlord can have more
+                        than one, and Howard could not tell whether the card was
+                        Bloomsbury or Test Street (23 Sep 2026). */}
+                    {propAddress && (
+                      <p className="mt-1 truncate pl-12 pr-10 text-[11.5px] text-muted" title={propAddress}>
+                        {propAddress}
+                      </p>
+                    )}
                     <button
                       type="button"
                       onClick={() => void fillPage()}
@@ -2570,6 +2626,21 @@ export default function LeadDrawer({
                       />
                     </div>
                     {prop.epc && <p className="mt-1.5 text-[11.5px] text-muted">EPC rating {prop.epc}</p>}
+                    {factsSync && (
+                      <p className={`mt-2 flex items-center gap-1.5 text-[11px] ${factsSync.bad ? "text-accent-dark" : "text-muted"}`} aria-live="polite">
+                        {factsSync.busy ? (
+                          <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+                        ) : !factsSync.bad ? (
+                          <span aria-hidden className="text-[#1e7a3c]">✓</span>
+                        ) : null}
+                        {factsSync.text}
+                        {factsSync.bad && (
+                          <button type="button" onClick={() => void flushFacts()} className="ml-1 shrink-0 whitespace-nowrap font-semibold underline underline-offset-2">
+                            Try again
+                          </button>
+                        )}
+                      </p>
+                    )}
                     {fillNote && <p className="mt-2 text-[11.5px] leading-relaxed text-muted">{fillNote}</p>}
                     {nearMisses.length > 0 && (
                       <div className="mt-2 rounded-xl bg-panel p-2.5">
