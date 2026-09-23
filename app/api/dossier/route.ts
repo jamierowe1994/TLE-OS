@@ -65,6 +65,14 @@ function sharesNumber(a: string, b: string): boolean {
   return false;
 }
 
+/** The same house: a shared number, or for a house with a name and no number
+ *  ("Rose Cottage, Mill Lane") the same name at the front of both. */
+function sameHouse(ours: string, theirs: string): boolean {
+  if (addressNumbers(ours).size) return sharesNumber(ours, theirs);
+  const name = ours.split(",")[0].trim().toLowerCase();
+  return name.length > 3 && theirs.toLowerCase().includes(name);
+}
+
 /** Zoopla history prices: small numbers are rents, big ones are sale prices. */
 function looksLikeRent(price: number): boolean {
   return price > 0 && price < 10000;
@@ -239,11 +247,16 @@ export async function GET(req: NextRequest) {
     );
     const rmHasSubstance =
       rm?.detail && (rm.detail.propertyUrl || rm.detail.branch?.displayName || rm.detail.price?.primary);
-    if (rmHasSubstance) {
-      const resolved: string = rm.resolvedAddress ?? rm.detail.address ?? "";
-      const exact = sharesNumber(address, resolved);
+    const resolved: string = rmHasSubstance ? (rm.resolvedAddress ?? rm.detail.address ?? "") : "";
+    /* THIS HOUSE OR NOTHING (Howard, 23 Sep 2026). A resolved address without
+       our number is Rightmove handing back some other listing on the road, and
+       we showed it anyway as "A live listing on this road": a sold, £100,000
+       commercial block against the home he had picked. A different size and
+       type of property tells the agent nothing about this one, and the rule at
+       the top of this file already says such a match does not count. */
+    if (rmHasSubstance && sameHouse(address, resolved)) {
       out.currentListing = {
-        confidence: exact ? "exact" : "street",
+        confidence: "exact",
         address: resolved,
         price: rm.detail.price?.primary ?? null,
         kind: rm.detail.transactionType === "RENT" ? "rent" : "sale",
