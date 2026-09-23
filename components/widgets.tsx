@@ -939,9 +939,13 @@ function LeadSourcesWidget({ w, h }: { w: number; h: number }) {
       ) : error ? (
         <p className="mt-5 text-[11.5px] text-accent-dark">{error}</p>
       ) : (
-        <div className="mt-2">
-          <LeadSourceChart leads={leads} />
-          <Link href="/leads" className="mt-3 block text-[11px] font-semibold text-muted transition-colors hover:text-ink">
+        /* The tile's own height, less the head: the chart shares what is left
+           and the link keeps its line at the foot, never under the edge. */
+        <div className="mt-2 flex min-h-0 flex-col" style={{ height: "calc(100% - 28px)" }}>
+          <div className="min-h-0 flex-1">
+            <LeadSourceChart leads={leads} />
+          </div>
+          <Link href="/leads" className="mt-3 block shrink-0 text-[11px] font-semibold text-muted transition-colors hover:text-ink">
             All leads →
           </Link>
         </div>

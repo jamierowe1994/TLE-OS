@@ -116,14 +116,18 @@ export default function LeadSourceChart({ leads }: { leads: Lead[] }) {
     : null;
   const lead = bars.find((b) => b.key === (hot ?? mover?.key)) ?? null;
 
+  /* Fills whatever the tile gives it (23 Sep 2026). The columns were a fixed
+     104px, which with the sentence under them ran past the foot of a 2x2 tile
+     and cut "All leads" in half on Howard's screen - and further on the 1x2,
+     where the sentence wraps. Now the columns take what is left. */
   return (
-    <div>
-      <div className="flex items-baseline justify-between gap-3">
+    <div className="flex h-full flex-col">
+      <div className="flex shrink-0 items-baseline justify-between gap-3">
         <p className="figures text-[26px] leading-none">{total}</p>
         <p className="text-[10.5px] text-muted">leads this month</p>
       </div>
 
-      <div className="mt-4 flex items-end gap-2">
+      <div className="mt-4 flex min-h-0 flex-1 items-stretch gap-2">
         {bars.map((b) => {
           const lit = hot === b.key;
           const isMover = !hot && b.key === mover?.key;
@@ -148,7 +152,7 @@ export default function LeadSourceChart({ leads }: { leads: Lead[] }) {
               </span>
 
               <span
-                className="relative block h-[104px] w-full overflow-hidden rounded-lg"
+                className="relative block min-h-[36px] w-full flex-1 overflow-hidden rounded-lg"
                 style={{ backgroundImage: HATCH }}
               >
                 {/* Last month, as a rule you can see the bar against - only
@@ -182,7 +186,7 @@ export default function LeadSourceChart({ leads }: { leads: Lead[] }) {
 
       {/* One sentence under the chart, because a number nobody reads out loud
           is a number nobody acts on. */}
-      <p className="mt-3.5 border-t border-line/60 pt-3 text-[11px] leading-relaxed text-muted">
+      <p className="mt-3.5 shrink-0 border-t border-line/60 pt-3 text-[11px] leading-relaxed text-muted">
         {!haveLast ? (
           <>
             {total} lead{total === 1 ? "" : "s"} so far this month · last month is not in the book yet
