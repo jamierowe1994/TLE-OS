@@ -92,6 +92,10 @@ async function sessionUserId(token: string | undefined, secret: string | undefin
   const [userId, exp, sig] = parts;
   if (!Number(exp) || Number(exp) < Date.now()) return null;
 
+  return sameSig(await hmac(secret, `${userId}.${exp}`), sig) ? userId : null;
+}
+
+async function hmac(secret: string, text: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(secret),
@@ -99,12 +103,15 @@ async function sessionUserId(token: string | undefined, secret: string | undefin
     false,
     ["sign"]
   );
-  const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${userId}.${exp}`));
-  const expected = b64url(mac);
-  if (expected.length !== sig.length) return null;
+  return b64url(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(text)));
+}
+
+/** Constant time, so a forged signature learns nothing from how long it took. */
+function sameSig(expected: string, sig: string): boolean {
+  if (expected.length !== sig.length) return false;
   let diff = 0;
   for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
-  return diff === 0 ? userId : null;
+  return diff === 0;
 }
 
 /* ── The area switches (15 Sep 2026) ───────────────────────────────────────
@@ -138,7 +145,18 @@ async function sessionUserId(token: string | undefined, secret: string | undefin
    back on. Now a write with nothing to fall back on gives the check eight
    seconds - the save behind it would pay the same cold start anyway - and the
    schema is built at boot (instrumentation.ts) so there is less cold to pay.
-   Pages keep 2.5 seconds: they fail open, so waiting buys them nothing. */
+   Pages keep 2.5 seconds: they fail open, so waiting buys them nothing.
+
+   THE LAST GOOD ANSWER TRAVELS WITH THE PERSON (23 Sep 2026). Held only in
+   this process, it was empty on every fresh instance and never shared between
+   replicas, so after a restart somebody's first save was the one refused.
+   Every real answer is now also written into a signed cookie (os_area), good
+   for an hour, and a write with no answer falls back on whichever is newer:
+   this process's memory or the cookie. Signed with AUTH_SECRET under its own
+   prefix, bound to the session's user id, and only ever read when the check
+   did not answer - it can stand in for an answer, never overrule one. A
+   patient write also gets a second try inside its eight seconds, so a check
+   cut off by a cold start is asked again rather than given up on. */
 
 /** lib/auth's development fallback, so the gate can be tried on a laptop. */
 const DEV_SECRET = "dev-only-secret-not-for-production";
@@ -147,37 +165,92 @@ const CHECK_MS = 2_500;
 /** A write with no last good answer to fall back on. See above. */
 const PATIENT_CHECK_MS = 8_000;
 const accessCache = new Map<string, { at: number; access: AreaAccess | null }>();
-/** The last answer that WAS an answer, per person. Never expires: see above. */
-const lastGood = new Map<string, AreaAccess>();
+/** The last answer that WAS an answer, per person, in this process. Never expires: see above. */
+const lastGood = new Map<string, { at: number; access: AreaAccess }>();
 
-async function accessOf(req: NextRequest, userId: string, write: boolean): Promise<AreaAccess | null> {
-  const hit = accessCache.get(userId);
-  const patient = write && !lastGood.has(userId);
-  /* A failed check is only remembered briefly, so a blip is not fifteen
-     seconds of the gate standing open. A write with nothing to fall back on
-     does not settle for a remembered failure: it asks again, patiently. */
-  if (hit && Date.now() - hit.at < (hit.access ? ACCESS_TTL_MS : 3_000) && (hit.access || !patient)) return hit.access;
-  let access: AreaAccess | null = null;
+const AREA_COOKIE = "os_area";
+const AREA_COOKIE_MS = 60 * 60_000;
+
+interface Held {
+  at: number;
+  access: AreaAccess;
+}
+
+/** `<payload>.<signature>`, the payload being { u, at, a } as base64url JSON. */
+async function sealAccess(secret: string, userId: string, held: Held): Promise<string> {
+  const payload = btoa(JSON.stringify({ u: userId, at: held.at, a: held.access }))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return `${payload}.${await hmac(secret, `area.${payload}`)}`;
+}
+
+/** The cookie's answer, if it is signed, this person's, and under an hour old. */
+async function openAccess(secret: string, userId: string, cookie: string | undefined): Promise<Held | null> {
+  if (!cookie || cookie.length > 4_000) return null;
+  const [payload, sig, extra] = cookie.split(".");
+  if (!payload || !sig || extra !== undefined) return null;
+  if (!sameSig(await hmac(secret, `area.${payload}`), sig)) return null;
+  try {
+    const j = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/"))) as { u?: unknown; at?: unknown; a?: Partial<AreaAccess> };
+    const at = Number(j.at);
+    if (j.u !== userId || !at || Date.now() - at > AREA_COOKIE_MS || at > Date.now() + 60_000) return null;
+    if (!j.a || typeof j.a.gated !== "boolean") return null;
+    return { at, access: { gated: j.a.gated, tester: Boolean(j.a.tester), levels: (j.a.levels ?? {}) as AreaAccess["levels"] } };
+  } catch {
+    return null;
+  }
+}
+
+/** One question to /api/area-access, with a ceiling. Null on anything but a real answer. */
+async function askOnce(req: NextRequest, ms: number): Promise<AreaAccess | null> {
   try {
     const res = await fetch(new URL("/api/area-access", req.nextUrl.origin), {
       headers: { cookie: req.headers.get("cookie") ?? "" },
       cache: "no-store",
-      signal: AbortSignal.timeout(patient ? PATIENT_CHECK_MS : CHECK_MS),
+      signal: AbortSignal.timeout(ms),
     });
     const j = res.ok ? ((await res.json()) as Partial<AreaAccess>) : null;
     if (j && typeof j.gated === "boolean") {
-      access = { gated: j.gated, tester: Boolean(j.tester), levels: (j.levels ?? {}) as AreaAccess["levels"] };
+      return { gated: j.gated, tester: Boolean(j.tester), levels: (j.levels ?? {}) as AreaAccess["levels"] };
     }
   } catch {
-    access = null;
+    /* Timed out or refused: no answer. */
+  }
+  return null;
+}
+
+/**
+ * Asks, and says whether the answer is new - a new one is what goes into the
+ * cookie. `fallback` is whether there is a last good answer to use instead.
+ */
+async function accessOf(
+  req: NextRequest,
+  userId: string,
+  write: boolean,
+  fallback: boolean
+): Promise<{ access: AreaAccess | null; fresh: boolean }> {
+  const hit = accessCache.get(userId);
+  const patient = write && !fallback;
+  /* A failed check is only remembered briefly, so a blip is not fifteen
+     seconds of the gate standing open. A write with nothing to fall back on
+     does not settle for a remembered failure: it asks again, patiently. */
+  if (hit && Date.now() - hit.at < (hit.access ? ACCESS_TTL_MS : 3_000) && (hit.access || !patient)) {
+    return { access: hit.access, fresh: false };
+  }
+  /* Patient: a first try at the usual ceiling, then one more with what is
+     left of the eight seconds. A cold instance usually answers the second. */
+  const started = Date.now();
+  let access = await askOnce(req, CHECK_MS);
+  if (!access && patient) {
+    const left = PATIENT_CHECK_MS - (Date.now() - started);
+    if (left > 500) access = await askOnce(req, left);
   }
   if (accessCache.size > 2_000) accessCache.clear();
   accessCache.set(userId, { at: Date.now(), access });
   if (access) {
     if (lastGood.size > 2_000) lastGood.clear();
-    lastGood.set(userId, access);
+    lastGood.set(userId, { at: Date.now(), access });
   }
-  return access;
+  return { access, fresh: access !== null };
 }
 
 /**
@@ -234,44 +307,61 @@ async function aimsAtOwnTestFile(req: NextRequest): Promise<boolean> {
   }
 }
 
-async function areaGate(req: NextRequest): Promise<NextResponse | null> {
+/**
+ * `closed` is the refusal, if there is one. `cookie` is a new os_area value
+ * for the response, whichever way it goes, when the check gave a new answer.
+ */
+async function areaGate(req: NextRequest): Promise<{ closed: NextResponse | null; cookie: string | null }> {
+  const open = { closed: null, cookie: null };
   const path = req.nextUrl.pathname;
   const isApi = path.startsWith("/api/");
   const area = isApi ? areaForWrite(path, req.method) : req.method === "GET" ? areaForPage(path) : null;
-  if (!area) return null;
+  if (!area) return open;
 
   const secret = process.env.AUTH_SECRET || (process.env.NODE_ENV !== "production" ? DEV_SECRET : undefined);
   const userId = await sessionUserId(req.cookies.get("os_session")?.value, secret);
-  if (!userId) return null;
+  if (!userId || !secret) return open;
 
-  const answered = await accessOf(req, userId, isApi);
+  /* The newer of this process's memory and the cookie the person carries. */
+  const inMemory = lastGood.get(userId) ?? null;
+  const carried = isApi ? await openAccess(secret, userId, req.cookies.get(AREA_COOKIE)?.value) : null;
+  const held = inMemory && carried ? (inMemory.at >= carried.at ? inMemory : carried) : (inMemory ?? carried);
+
+  const { access: answered, fresh } = await accessOf(req, userId, isApi, held !== null);
+  const cookie = fresh && answered ? await sealAccess(secret, userId, { at: Date.now(), access: answered }) : null;
+  const done = (closed: NextResponse | null) => ({ closed, cookie });
+
   /* No answer: a page opens regardless; a write uses the last answer this
      person got, and is refused if there has never been one. */
-  const access = answered ?? (isApi ? (lastGood.get(userId) ?? null) : null);
+  const access = answered ?? (isApi ? (held?.access ?? null) : null);
   if (!access) {
-    if (!isApi) return null;
-    return NextResponse.json(
-      { ok: false, error: "We couldn't check whether this is switched on for you just now. Nothing was saved - try again in a moment." },
-      { status: 503 }
+    if (!isApi) return done(null);
+    return done(
+      NextResponse.json(
+        { ok: false, error: "We couldn't check whether this is switched on for you just now. Nothing was saved - try again in a moment." },
+        { status: 503 }
+      )
     );
   }
-  if (!access.gated) return null;
+  if (!access.gated) return done(null);
 
   if (isApi) {
-    if (canAct(access, area)) return null;
+    if (canAct(access, area)) return done(null);
     /* Practice: a real record is look only, the caller's own test file works. */
-    if (needsTargetCheck(access, area) && (await aimsAtOwnTestFile(req))) return null;
+    if (needsTargetCheck(access, area) && (await aimsAtOwnTestFile(req))) return done(null);
     /* 423 Locked, in the shape every screen already prints: { ok, error }. */
-    return NextResponse.json(
-      { ok: false, areaLocked: area.id, error: lockedSentence(area, levelOf(access, area.id)) },
-      { status: 423 }
+    return done(
+      NextResponse.json(
+        { ok: false, areaLocked: area.id, error: lockedSentence(area, levelOf(access, area.id)) },
+        { status: 423 }
+      )
     );
   }
-  if (canSee(access, area)) return null;
+  if (canSee(access, area)) return done(null);
   const url = req.nextUrl.clone();
   url.pathname = "/dashboard";
   url.search = `?closed=${area.id}`;
-  return NextResponse.redirect(url);
+  return done(NextResponse.redirect(url));
 }
 
 /**
@@ -374,9 +464,27 @@ export async function middleware(req: NextRequest) {
 
   /* Before the sign-in check, so it also runs on a laptop with no AUTH_SECRET.
      It only ever acts on a valid session, so it can never let anybody in. */
-  const closed = await areaGate(req);
-  if (closed) return closed;
+  const gate = await areaGate(req);
+  if (gate.cookie) {
+    const cookie = gate.cookie;
+    const carry = (res: NextResponse) => {
+      res.cookies.set(AREA_COOKIE, cookie, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: AREA_COOKIE_MS / 1000,
+      });
+      return res;
+    };
+    return carry(gate.closed ?? (await doorAfterGate(req)));
+  }
+  if (gate.closed) return gate.closed;
+  return doorAfterGate(req);
+}
 
+/** The sign-in half of the door, after the area switches have had their say. */
+async function doorAfterGate(req: NextRequest): Promise<NextResponse> {
   /**
    * With no AUTH_SECRET the door stands open — local dev only.
    *
