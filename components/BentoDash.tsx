@@ -72,6 +72,10 @@ const ROW_PX = 150;
 const GAP_PX = 16;
 const MAX_H = 3;
 const DRAG_THRESHOLD = 8;
+/** insertionIndex's answer when the pointer is over the held tile's own slot. */
+const STAY = -1;
+/** How far the hand must move after a reorder before the next one. */
+const SETTLE_PX = 24;
 
 /** Global S/M/L, unless the widget names its own shapes. */
 const DEFAULT_SIZES: Record<"s" | "m" | "l", [number, number]> = {
@@ -150,7 +154,8 @@ export default function BentoDash({
   // spot. Fast passes across the board move nothing.
   const pendingRef = useRef<{ index: number; since: number } | null>(null);
   const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [pendingIndex, setPendingIndex] = useState<number | null>(null);
+  /** Where the pointer was when the slot last moved. See moveDraggedTo. */
+  const settledRef = useRef<{ x: number; y: number } | null>(null);
   const rectsRef = useRef(new Map<string, { x: number; y: number }>());
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
@@ -220,10 +225,11 @@ export default function BentoDash({
       const from = visual ?? rectsRef.current.get(id) ?? null;
       const dx = from ? from.x - final.x : 0;
       const dy = from ? from.y - final.y : 0;
-      if (from && (Math.abs(dx) > 1 || Math.abs(dy) > 1) && id !== dragRef.current?.id) {
+      /* The held tile's grey slot glides too - it IS the "lands here" mark. */
+      if (from && (Math.abs(dx) > 1 || Math.abs(dy) > 1)) {
         el.animate(
           [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }],
-          { duration: 320, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }
+          { duration: 220, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }
         );
       }
       rectsRef.current.set(id, { x: final.x, y: final.y });
@@ -234,17 +240,30 @@ export default function BentoDash({
   function insertionIndex(px: number, py: number, excludeId: string): number | null {
     const grid = gridRef.current;
     if (!grid) return null;
-    const tiles = [...grid.querySelectorAll<HTMLElement>("[data-bid]")].filter(
-      (el) => el.dataset.bid !== excludeId
-    );
+    /* Resting positions, not drawn ones. getBoundingClientRect includes the
+       FLIP slide, so measuring a tile mid-glide aimed at where it had been and
+       a quick reorder chased its own tail. offsetLeft/Top ignore transforms. */
+    const g = grid.getBoundingClientRect();
+    const rest = (el: HTMLElement) => ({ x: g.x + el.offsetLeft, y: g.y + el.offsetTop, width: el.offsetWidth, height: el.offsetHeight });
+    const inside = (r: ReturnType<typeof rest>) => px >= r.x && px <= r.x + r.width && py >= r.y && py <= r.y + r.height;
+    const all = [...grid.querySelectorAll<HTMLElement>("[data-bid]")];
+    const own = all.find((el) => el.dataset.bid === excludeId);
+    /* Over its own grey slot, it is already where the hand is. Without this a
+       tall tile at the edge was measured against a neighbour's centre, moved,
+       then measured back again, and flickered between two places. */
+    if (own && inside(rest(own))) return STAY;
+    const tiles = all.filter((el) => el !== own);
     if (!tiles.length) return 0;
     let best: { idx: number; d: number; before: boolean } | null = null;
     tiles.forEach((el) => {
-      const r = el.getBoundingClientRect();
+      const r = rest(el);
+      const bottom = r.y + r.height;
       const cx = r.x + r.width / 2;
       const cy = r.y + r.height / 2;
-      const d = Math.hypot(px - cx, py - cy);
-      const before = py < r.y || (py <= r.bottom && px < cx);
+      /* The tile under the pointer wins outright; in a gap, the nearest one. */
+      const under = inside(r);
+      const d = under ? -1 : Math.hypot(px - cx, py - cy);
+      const before = under ? px < cx : py < r.y || (py <= bottom && px < cx);
       const idx = layoutRef.current.findIndex((i) => i.id === el.dataset.bid);
       if (!best || d < best.d) best = { idx, d, before };
     });
@@ -253,11 +272,14 @@ export default function BentoDash({
     return b.before ? b.idx : b.idx + 1;
   }
 
-  const DWELL_MS = 1300;
+  /* Was 1300ms. Howard, 23 Sep 2026: the board took too long to show where a
+     tile would land, and letting go before then put it back where it started.
+     A fifth of a second still ignores a hand sweeping across the board (the
+     8 Aug rule below), but the others part as soon as you pause. */
+  const DWELL_MS = 200;
 
   function clearPending() {
     pendingRef.current = null;
-    setPendingIndex(null);
     if (commitTimer.current) {
       clearTimeout(commitTimer.current);
       commitTimer.current = null;
@@ -276,6 +298,7 @@ export default function BentoDash({
       next.splice(Math.max(0, Math.min(next.length, p.index)), 0, m);
       return next;
     });
+    settledRef.current = { x: d.x, y: d.y };
     clearPending();
   }
 
@@ -285,7 +308,14 @@ export default function BentoDash({
   function moveDraggedTo(px: number, py: number) {
     const d = dragRef.current;
     if (!d) return;
+    /* After a move the board reflows under a still hand - tiles of mixed
+       sizes can leave the pointer over a different neighbour, which asked for
+       a second move, then a third. The slot stays put until the hand moves on. */
+    const s = settledRef.current;
+    if (s && Math.hypot(px - s.x, py - s.y) < SETTLE_PX) return;
+    settledRef.current = null;
     const target = insertionIndex(px, py, d.id);
+    if (target === STAY) return clearPending();
     if (target == null) return;
     const from = layoutRef.current.findIndex((i) => i.id === d.id);
     let to = target > from ? target - 1 : target;
@@ -298,7 +328,6 @@ export default function BentoDash({
     if (p && p.index === to) return; // timer's already running on this spot
     clearPending();
     pendingRef.current = { index: to, since: performance.now() };
-    setPendingIndex(to);
     // The timeout does the committing, so holding perfectly STILL over a
     // spot works too — pointer events stop when the hand does.
     commitTimer.current = setTimeout(commitPending, DWELL_MS);
@@ -323,6 +352,7 @@ export default function BentoDash({
       pw, ph, x: startX, y: startY, moved: false,
     };
     dragRef.current = state;
+    settledRef.current = null;
     setDrag(state);
 
     const onMove = (ev: PointerEvent) => {
@@ -344,6 +374,12 @@ export default function BentoDash({
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
+      /* Let go on a spot = land there, even inside the dwell. It used to
+         throw the pending move away, so a quick drop snapped back home. */
+      if (ev.type === "pointerup" && dragRef.current?.moved && !isOffBoard(ev.clientX, ev.clientY)) {
+        moveDraggedTo(ev.clientX, ev.clientY);
+        commitPending();
+      }
       const d = dragRef.current;
       dragRef.current = null;
       clearPending();
@@ -478,17 +514,17 @@ export default function BentoDash({
                 beginDrag(e, item.id, false, r.width, r.height);
               }}
               index={idx}
-              className={`relative rounded-2xl border p-5 ${tint ?? "bg-card"} ${
+              className={`relative rounded-2xl border p-5 ${isDragged ? "bg-ink/[0.07]" : (tint ?? "bg-card")} ${
                 customise
-                  ? `cursor-grab select-none border-dashed border-ink/40 ${
+                  ? `cursor-grab select-none border-dashed ${
                       /* The wiggle rests while anything is being moved or
                          resized — hands need still targets. */
                       drag?.moved || resize ? "" : "wiggle"
-                    } ${isDragged ? "opacity-30" : ""} ${
-                      /* Where the held tile will squeeze in when you settle. */
-                      drag?.moved && pendingIndex === idx && !isDragged
-                        ? "ring-2 ring-accent-dark/60"
-                        : ""
+                    } ${
+                      /* The held tile leaves a grey slot the size of itself,
+                         and the slot travels to wherever it will land - the
+                         others part around it (Howard, 23 Sep 2026). */
+                      isDragged ? "border-ink/35" : "border-ink/40"
                     }`
                   /* The slab is the board's hover language — it went missing
                      on 8 Aug when the request was to drop it from the WIDE
@@ -505,7 +541,7 @@ export default function BentoDash({
                 overflow: sizeMenu === item.id ? "visible" : "hidden",
               }}
             >
-              <div className={customise ? "pointer-events-none h-full select-none" : "h-full"}>
+              <div className={customise ? `pointer-events-none h-full select-none ${isDragged ? "invisible" : ""}` : "h-full"}>
                 {/* The DRAWN width, not the stored one. A widget decides its
                     own inside from `w` - the pipeline goes to seven columns at
                     four wide - and on a phone a four-wide tile is drawn two
@@ -515,7 +551,7 @@ export default function BentoDash({
                 {def.render(Math.min(item.w, cols), item.h)}
               </div>
 
-              {customise && (
+              {customise && !isDragged && (
                 <>
                   {/* ✕ badge — generous target, straight off the home screen. */}
                   <button
@@ -618,7 +654,7 @@ export default function BentoDash({
       {dragged && drag && (
         <div
           className={`pointer-events-none fixed z-[160] rounded-2xl border bg-page p-5 shadow-[0_30px_60px_-20px_rgba(0,0,0,0.45)] transition-[opacity,transform] duration-200 ${
-            offBoard ? "border-accent-dark opacity-60" : "border-ink/50 opacity-95"
+            offBoard ? "border-accent-dark opacity-60" : "border-ink/50"
           }`}
           style={{
             left: drag.x - drag.dx,
