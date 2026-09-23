@@ -522,6 +522,19 @@ type EnquiryState = { message: string; fields: Array<[string, string]>; received
 const ENQUIRY_CACHE = new Map<string, EnquiryState | null>();
 
 /* The market appraisal page's small pieces, so the two files rhyme. */
+/**
+ * The first line of an address, as a reminder of which home a card is about:
+ * "14 Test Street, Didsbury, Manchester M20 2RN" is "14 Test Street". A flat
+ * on its own is no reminder at all, so "Apartment 10, Bloomsbury Court, ..."
+ * keeps its building: "Apartment 10, Bloomsbury Court".
+ */
+function firstLine(address: string): string {
+  const parts = address.split(",").map((p) => p.trim()).filter(Boolean);
+  if (!parts.length) return address;
+  const unitOnly = /^(flat|apartment|apt|unit|room|studio|suite|floor)\b[\s\w/-]{0,8}$|^\d+[a-z]?$/i;
+  return unitOnly.test(parts[0]) && parts[1] ? `${parts[0]}, ${parts[1]}` : parts[0];
+}
+
 function CardTitle({ icon, children }: { icon: string; children: React.ReactNode }) {
   return (
     <h3 className="hand flex items-start gap-3 text-[17px] leading-tight">
@@ -2598,8 +2611,8 @@ export default function LeadDrawer({
                         than one, and Howard could not tell whether the card was
                         Bloomsbury or Test Street (23 Sep 2026). */}
                     {propAddress && (
-                      <p className="mt-1 truncate pl-12 pr-10 text-[11.5px] text-muted" title={propAddress}>
-                        {propAddress}
+                      <p className="mt-1 truncate pl-12 pr-10 text-[12.5px] font-medium text-ink/80" title={propAddress}>
+                        {firstLine(propAddress)}
                       </p>
                     )}
                     <button
