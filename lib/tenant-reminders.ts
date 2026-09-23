@@ -2,7 +2,7 @@ import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { switchOn } from "@/lib/switches";
 import { findUserById, type OsUser } from "@/lib/users";
-import { alreadyDone, claim, deliver, firstName, logDone, london, release, validEmail } from "@/lib/tenant-email-send";
+import { alreadyDone, claim, deliver, dryFor, firstName, logDone, london, release, validEmail, type Dry } from "@/lib/tenant-email-send";
 import { renderTleEmailLive } from "@/lib/email/tle-emails";
 import { SITE } from "@/lib/email/tle-documents";
 import { presentAgentFor } from "@/lib/rex-agents";
@@ -78,7 +78,7 @@ async function untouchedInvites(fromDays: number, toDays: number): Promise<Passp
   );
 }
 
-async function passportNudges(dry: boolean, out: ReminderResult[]) {
+async function passportNudges(dry: Dry, out: ReminderResult[]) {
   const rounds: { n: 1 | 2; emailId: string; from: number; to: number }[] = [
     { n: 1, emailId: "tenant-passport-nudge-1", from: 2, to: 5 },
     { n: 2, emailId: "tenant-passport-nudge-2", from: 7, to: 10 },
@@ -98,7 +98,7 @@ async function passportNudges(dry: boolean, out: ReminderResult[]) {
         out.push({ key, emailId: round.emailId, to, subject, state: "skipped", detail: "No usable email address on the passport." });
         continue;
       }
-      if (dry) {
+      if (dryFor(dry, to)) {
         out.push({ key, emailId: round.emailId, to, subject, state: "would", detail: `Would send nudge ${round.n}.` });
         continue;
       }
@@ -137,7 +137,7 @@ type ViewingRow = {
  * afternoon viewing has already gone at 7 and anything booked since was
  * confirmed minutes ago.
  */
-async function viewingReminders(dry: boolean, now: Date, out: ReminderResult[]) {
+async function viewingReminders(dry: Dry, now: Date, out: ReminderResult[]) {
   const { date, hour } = london(now);
   if (hour < 7 || hour >= 13) return;
   const rows = await q<ViewingRow>(
@@ -196,7 +196,7 @@ async function viewingReminders(dry: boolean, now: Date, out: ReminderResult[]) 
         out.push({ key, emailId: "viewing-reminder", to, subject, state: "skipped", detail: `${c.name ?? "The applicant"} has no usable email address.` });
         continue;
       }
-      if (dry) {
+      if (dryFor(dry, to)) {
         out.push({ key, emailId: "viewing-reminder", to, subject, state: "would", detail: `Would remind ${c.name ?? to} about ${address} at ${timePretty}.` });
         continue;
       }
@@ -216,8 +216,9 @@ async function viewingReminders(dry: boolean, now: Date, out: ReminderResult[]) 
 export async function runTenantReminders(opts: { dry?: boolean; now?: Date } = {}): Promise<ReminderRun> {
   const now = opts.now ?? new Date();
   const on = await switchOn("tenant_reminders");
-  const dry = Boolean(opts.dry) || !on;
-  const run: ReminderRun = { ok: true, on, dry, ukHour: london(now).hour, results: [] };
+  /* Off is "held": nothing goes, except to the people in ALWAYS_SEND_TO. */
+  const dry: Dry = opts.dry ? true : on ? false : "held";
+  const run: ReminderRun = { ok: true, on, dry: dry !== false, ukHour: london(now).hour, results: [] };
   if (!hasDb()) return { ...run, ok: false, error: "No database is connected." };
   /* Each job on its own: one that throws (REX not answering the application
      read, say) must not stop the passport nudges going. */
@@ -252,7 +253,7 @@ export async function runTenantReminders(opts: { dry?: boolean; now?: Date } = {
  * tomorrow's email rather than arriving one at a time. Sent from The Letting
  * Experts rather than an agent - an alert belongs to no single listing.
  */
-async function homeAlerts(dry: boolean, now: Date, out: ReminderResult[]) {
+async function homeAlerts(dry: Dry, now: Date, out: ReminderResult[]) {
   const { date, hour } = london(now);
   if (hour < 8 || hour >= 20) return;
   const market = await homesOnMarket();
@@ -284,7 +285,7 @@ async function homeAlerts(dry: boolean, now: Date, out: ReminderResult[]) {
       stopLink: stopLink(SITE, a.email),
     };
     const { subject, html } = await renderTleEmailLive("tenant-home-alert", vars);
-    if (dry) {
+    if (dryFor(dry, a.email)) {
       out.push({ key, emailId: "tenant-home-alert", to: a.email, subject, state: "would", detail: `Would tell ${a.name || a.email} about ${n} new home${n === 1 ? "" : "s"}: ${shown.slice(0, 3).map((h) => h.name).join(", ")}.` });
       continue;
     }

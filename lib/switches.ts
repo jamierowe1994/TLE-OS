@@ -346,6 +346,25 @@ export async function switchOn(key: string): Promise<boolean> {
   return (process.env[def.legacyEnv] ?? "").trim().toLowerCase() === def.legacyOn;
 }
 
+/**
+ * People who get every automatic email while its switch is still off.
+ *
+ * James, 23 Sep 2026: Howard tests everything, and a switch that is off sends
+ * nothing at all - not even to him, on his own test files. So a send
+ * ADDRESSED to somebody here goes anyway. It is by recipient, never by who is
+ * signed in: an off switch still holds every landlord and tenant, whoever
+ * pressed the button. The brake still stops these too.
+ *
+ * In code rather than a setting, so adding a name is a deploy with a trail.
+ */
+export const ALWAYS_SEND_TO = ["howard.russell@theexpertsgroup.co.uk"];
+
+export function sendsAnyway(to: string | null | undefined): boolean {
+  if (sendingLocked()) return false;
+  const e = (to ?? "").trim().toLowerCase();
+  return e !== "" && ALWAYS_SEND_TO.includes(e);
+}
+
 export interface SwitchState extends Switch {
   on: boolean;
   /** True while no row exists — the env var is still deciding. */

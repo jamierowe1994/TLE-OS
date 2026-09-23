@@ -3,12 +3,25 @@ import { q } from "@/lib/db";
 import type { OsUser } from "@/lib/users";
 import { sendAsAgent } from "@/lib/send-as-agent";
 import { sendEmail, ResendBlocked } from "@/lib/resend";
+import { sendsAnyway } from "@/lib/switches";
 
 /**
  * What every automatic tenant email shares: the send-once log and the send
  * itself. Used by lib/tenant-reminders (the timed ones) and
  * lib/tenant-journey-emails (the ones that follow something happening).
  */
+
+/**
+ * How a run treats its sends. `true` sends nothing (a preview). `"held"` is
+ * the Automatic tenant emails switch being off: nothing goes, except to the
+ * people in ALWAYS_SEND_TO (lib/switches). A plain `if (dry)` reads "held"
+ * as dry, which is the safe way round - only `dryFor` lets one through.
+ */
+export type Dry = boolean | "held";
+
+export function dryFor(dry: Dry, to: string): boolean {
+  return dry === "held" ? !sendsAnyway(to) : dry;
+}
 
 export const firstName = (name: string) => name.trim().split(/\s+/)[0] || "there";
 export const validEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());

@@ -9,7 +9,7 @@ import { createPassport, findPassportByEmail } from "@/lib/passport";
 import { getApplications } from "@/lib/applications";
 import { rexConfigured } from "@/lib/rex";
 import type { ReminderResult } from "@/lib/tenant-reminders";
-import { alreadyDone, claim, deliver, firstName, logDone, london, release, userByName, validEmail } from "@/lib/tenant-email-send";
+import { alreadyDone, claim, deliver, dryFor, firstName, logDone, london, release, userByName, validEmail, type Dry } from "@/lib/tenant-email-send";
 import {
   findListing,
   holdingFeeIfYes,
@@ -51,6 +51,11 @@ export async function automaticOn(): Promise<boolean> {
   return switchOn("tenant_reminders");
 }
 
+/** Off is "held": nothing goes, except to the people in ALWAYS_SEND_TO. */
+async function automaticDry(): Promise<Dry> {
+  return (await automaticOn()) ? false : "held";
+}
+
 /** The tenant's passport link, minting one if they have none. Only on a real send. */
 async function passportLink(p: { name: string; email: string; agentId: string | null }): Promise<string> {
   const existing = await findPassportByEmail(p.email, p.agentId).catch(() => null);
@@ -61,7 +66,7 @@ async function passportLink(p: { name: string; email: string; agentId: string | 
 /** One send, logged when settled, reported either way. */
 async function sendOne(
   out: Out,
-  dry: boolean,
+  dry: Dry,
   p: {
     key: string;
     emailId: string;
@@ -79,9 +84,10 @@ async function sendOne(
     out.push({ key: p.key, emailId: p.emailId, to: p.to, subject: "", state: "skipped", detail: `${p.toName || "They"} have no usable email address.` });
     return;
   }
-  const vars = await p.vars(!dry);
+  const held = dryFor(dry, p.to);
+  const vars = await p.vars(!held);
   const { subject, html } = await renderTleEmailLive(p.emailId, vars);
-  if (dry) {
+  if (held) {
     out.push({ key: p.key, emailId: p.emailId, to: p.to, subject, state: "would", detail: p.would });
     return;
   }
@@ -106,7 +112,7 @@ type LeadRow = { id: string; name: string | null; email: string | null; listing_
 export async function enquiryReplies(opts: { dry?: boolean } = {}): Promise<Out> {
   const out: Out = [];
   if (!hasDb()) return out;
-  const dry = Boolean(opts.dry) || !(await automaticOn());
+  const dry: Dry = opts.dry ? true : await automaticDry();
   const leads = await q<LeadRow>(
     `SELECT id, name, email, listing_id, agent FROM os_leads
       WHERE enquiry = 'Letting'
@@ -164,7 +170,7 @@ export async function enquiryReplies(opts: { dry?: boolean } = {}): Promise<Out>
 export async function sendAddedWelcome(p: { contactId: string; name: string; email: string; by: OsUser }): Promise<ReminderResult | null> {
   if (!hasDb()) return null;
   const out: Out = [];
-  const dry = !(await automaticOn());
+  const dry = await automaticDry();
   const book = await liveBook();
   await sendOne(out, dry, {
     key: `tenant-added-welcome:${p.contactId}`,
@@ -211,7 +217,7 @@ function whenSaid(at: Date, now: Date): string {
  * Rebook? instead. The link is a fresh per-applicant token on
  * os_tenant_feedback, so the page opens on the home they actually saw.
  */
-export async function feedbackRequests(dry: boolean, now: Date, out: Out) {
+export async function feedbackRequests(dry: Dry, now: Date, out: Out) {
   const rows = await q<ViewingRow>(
     `SELECT v.id, v.starts_at, v.mins, v.listing_id, v.agent, v.contacts, v.payload->>'listingLabel' AS label
        FROM os_viewings v
@@ -281,7 +287,7 @@ export async function sendNotForThem(token: string): Promise<ReminderResult | nu
   const f = rows[0];
   if (!f) return null;
   const out: Out = [];
-  const dry = !(await automaticOn());
+  const dry = await automaticDry();
   const book = await liveBook();
   const seen = findListing(book, f.listing_id);
   const homes = similarHomes(book, seen ? [seen] : [{ locality: f.address }], { exclude: [f.listing_id ?? ""] });
@@ -313,7 +319,7 @@ export async function sendNotForThem(token: string): Promise<ReminderResult | nu
 /* ── Shall we rebook? ──────────────────────────────────────────────────── */
 
 /** Two hours to three days after an agent records a no-show. */
-export async function rebooks(dry: boolean, out: Out) {
+export async function rebooks(dry: Dry, out: Out) {
   const rows = await q<{ viewing_id: string; address: string; starts_at: Date | null; by_email: string | null; contacts: { name?: string; email?: string | null }[] | null; label: string | null }>(
     `SELECT f.viewing_id, f.address, f.starts_at, f.by_email, v.contacts, v.payload->>'listingLabel' AS label
        FROM os_viewing_feedback f
@@ -355,7 +361,7 @@ type MatchesMeta = { name?: string; agentId?: string | null; homes?: { id?: stri
  * on a viewing since and something new has come on near the homes we sent.
  * Nothing new is a real answer: the log says so and nothing is sent.
  */
-export async function matchesAgain(dry: boolean, out: Out) {
+export async function matchesAgain(dry: Dry, out: Out) {
   const sent = await q<{ key: string; sent_to: string; sent_at: Date; meta: MatchesMeta | null }>(
     `SELECT key, sent_to, sent_at, meta FROM os_tenant_email_log
       WHERE email_id = 'tenant-matches' AND outcome = 'sent'
@@ -414,7 +420,10 @@ export async function matchesAgain(dry: boolean, out: Out) {
  *   received      newly seen, and received in the last three days
  *   unsuccessful  newly seen after the baseline
  */
-export async function applicationEmails(dry: boolean, out: Out) {
+export async function applicationEmails(given: Dry, out: Out) {
+  /* Applications come from REX and a test file never reaches REX, so nothing
+     here can be addressed to a tester: held is simply dry. */
+  const dry = given !== false;
   if (!rexConfigured()) return;
   const apps = await getApplications(300);
   const [{ n }] = await q<{ n: number }>(`SELECT COUNT(*)::int AS n FROM os_application_status_seen`);
