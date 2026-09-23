@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
+import { record } from "@/lib/audit";
 import { publicOrigin } from "@/lib/origin";
 import {
   msExchangeCode,
@@ -91,18 +92,28 @@ export async function GET(req: NextRequest) {
      still the wrong person. */
   if (state.split(".")[0] !== userId) { note("nonce belongs to another account"); return back(req, { mail: "wronguser" }); }
 
+  /* WHY IT FAILED, KEPT (23 Sep 2026). Howard tried four times in a minute
+     and every attempt bounced with the reason only in the address bar, which
+     he did not read and nobody else could see. The reason (Microsoft's own
+     words, never a token) goes to the log and the audit trail, so the next
+     "it loops" can be answered from Activity rather than guessed at. */
+  const failed = async (mail: string, why: string) => {
+    console.warn(`[ms-callback] ${mail}: ${why}`);
+    await record({ kind: "mailbox_connect_failed", actorId: userId, detail: `${mail}: ${why}`.slice(0, 300) }).catch(() => null);
+    return back(req, { mail, ...(why ? { detail: why.slice(0, 200) } : {}) });
+  };
   try {
     const tokens = await msExchangeCode(code);
     if (!tokens.refresh_token) {
       /* No refresh token means offline_access was not granted, and the
          connection would die within the hour with no way to renew it. Better
          to refuse now than to look connected until it silently isn't. */
-      return back(req, { mail: "norefresh" });
+      return failed("norefresh", "Microsoft returned no refresh token (offline_access not granted).");
     }
     const me = await msGetMe(tokens.access_token as string);
     await msStore(userId, me.email, tokens.refresh_token);
     return back(req, { mail: "connected", as: me.email });
   } catch (e) {
-    return back(req, { mail: "failed", detail: (e instanceof Error ? e.message : "").slice(0, 200) });
+    return failed("failed", e instanceof Error ? e.message : "unknown error");
   }
 }

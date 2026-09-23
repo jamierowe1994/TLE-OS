@@ -45,6 +45,8 @@ export type AuditKind =
      was not tested starts being used. */
   | "area_changed"
   | "phase_changed"
+  /* A Microsoft connect that bounced, with Microsoft's reason (23 Sep 2026). */
+  | "mailbox_connect_failed"
   /* Somebody made a tester, or stopped being one. A tester can act where
      every other agent can only look. */
   | "area_tester_changed"
