@@ -38,8 +38,14 @@ const GRAPH = "https://graph.microsoft.com/v1.0";
 
 /** A signature is a few lines and a logo. Past this it is not a signature. */
 const MAX_HTML = 60_000;
-const MAX_IMAGES = 6;
+/* Was 6 (21 Sep 2026). Howard's real signature, 24 Sep, has 18: three contact
+   icons, social badges, nine award tiles and a banner. The first six were kept
+   and the other twelve went out as broken-picture boxes. A banner-and-badges
+   signature is normal, so the cap is by total weight, not by count alone. */
+const MAX_IMAGES = 30;
 const MAX_IMAGE_BYTES = 600 * 1024;
+/** All the pictures together. Graph refuses a send much past 4MB. */
+const MAX_TOTAL_BYTES = 2_500 * 1024;
 const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 
 export interface FooterImage {
@@ -65,9 +71,10 @@ export async function footerFor(userId: string): Promise<EmailFooter | null> {
   ).catch(() => []);
   const r = rows[0];
   if (!r) return null;
+  const images = Array.isArray(r.images) ? r.images : [];
   return {
-    html: r.html,
-    images: Array.isArray(r.images) ? r.images : [],
+    html: withoutMissingPictures(r.html, images),
+    images,
     source: r.source === "upload" ? "upload" : "mailbox",
     updatedAt: new Date(r.updated_at).toISOString(),
   };
@@ -101,6 +108,18 @@ export function cleanFooterHtml(raw: string): string {
   /* A blank email opens with the empty lines the cursor sat on. Off the top. */
   h = h.replace(/^(\s|<br\s*\/?>|<(p|div)[^>]*>(\s|&nbsp;|<br\s*\/?>)*<\/\2>)+/i, "");
   return h.trim();
+}
+
+/**
+ * Takes out any picture the footer points at but we do not hold. Left in, it
+ * is a broken-picture box under a customer's email. Applied on read, so a
+ * footer saved before the cap was raised stops showing boxes straight away.
+ */
+function withoutMissingPictures(html: string, images: FooterImage[]): string {
+  const held = new Set(images.map((i) => i.cid.toLowerCase()));
+  return html.replace(/<img\b[^>]*\bsrc\s*=\s*("|')cid:([^"']+)\1[^>]*>/gi, (tag, _q, cid: string) =>
+    held.has(cid.toLowerCase()) ? tag : ""
+  );
 }
 
 /** Is there anything here a person would recognise as a footer? */
@@ -164,20 +183,26 @@ export async function findFooterInMailbox(userId: string, ownEmail: string, toke
 
   const images: FooterImage[] = [];
   if (/cid:/i.test(html)) {
-    const res = await fetch(`${GRAPH}/me/messages/${found.id}/attachments?$top=20`, {
-      headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
-    });
-    if (res.ok) {
-      const j = (await res.json()) as { value?: Array<{ contentId?: string | null; contentType?: string; contentBytes?: string; size?: number }> };
+    /* Every page of them: $top was 20, and a signature can carry more. */
+    type Att = { contentId?: string | null; contentType?: string; contentBytes?: string; size?: number };
+    let next: string | null = `${GRAPH}/me/messages/${found.id}/attachments?$top=50`;
+    let total = 0;
+    for (let page = 0; next && page < 5; page++) {
+      const res: Response = await fetch(next, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+      if (!res.ok) break;
+      const j = (await res.json()) as { value?: Att[]; "@odata.nextLink"?: string };
       for (const a of j.value ?? []) {
         const cid = (a.contentId ?? "").replace(/^<|>$/g, "");
         const mime = (a.contentType ?? "").toLowerCase();
         if (!cid || !a.contentBytes || !IMAGE_TYPES.includes(mime)) continue;
-        if ((a.size ?? 0) > MAX_IMAGE_BYTES || images.length >= MAX_IMAGES) continue;
+        const bytes = a.size ?? Math.ceil((a.contentBytes.length * 3) / 4);
+        if (bytes > MAX_IMAGE_BYTES || images.length >= MAX_IMAGES || total + bytes > MAX_TOTAL_BYTES) continue;
         /* Only pictures the footer actually shows. */
         if (!html.toLowerCase().includes(`cid:${cid.toLowerCase()}`)) continue;
         images.push({ cid, mime, data: a.contentBytes });
+        total += bytes;
       }
+      next = j["@odata.nextLink"] ?? null;
     }
   }
 

@@ -11,6 +11,7 @@ import DocumentSheet from "@/components/DocumentSheet";
 import GuideLayer from "@/components/GuideLayer";
 import Watchdog from "@/components/Watchdog";
 import Toaster from "@/components/Toaster";
+import MailLinksNewTab from "@/components/MailLinksNewTab";
 
 export default function OsLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -59,6 +60,9 @@ export default function OsLayout({ children }: { children: React.ReactNode }) {
         {/* Keeps the trail of what somebody did, and notices a call that
             never comes back. Renders nothing until something goes wrong. */}
         <Watchdog />
+        {/* Email links open in a new tab, so Outlook on the web never takes
+            the agent's place in the OS. */}
+        <MailLinksNewTab />
         {/* "Saved", said at the foot of the screen (lib/toast). Here rather
             than in a drawer, so a save that lands as a drawer closes is still
             heard. */}
