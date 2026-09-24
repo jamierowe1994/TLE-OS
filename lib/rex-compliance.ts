@@ -416,6 +416,9 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
        where REX CRM has nobody. REX still wins wherever it has a name. */
     if (p.landlord === "—" && f.landlordName) p.landlord = f.landlordName;
     if (!p.agent && f.agentName) p.agent = f.agentName;
+    /* The sheet is PayProp's let book, so a tenant on it is a tenant in, even
+       where REX's own record says vacant. */
+    if (!p.tenant && f.tenantNames) p.tenant = f.tenantNames;
   }
 
   /* Homes REX CRM has no property for. The OS is their record: its own
@@ -434,6 +437,7 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
       p.hmo = o.hmo; p.hasGas = !o.noGas; p.gasAnswered = o.noGas || Boolean(p.certs.gas);
       if (p.landlord === "—" && o.landlordName) p.landlord = o.landlordName;
       if (!p.agent && o.agentName) p.agent = o.agentName;
+      if (!p.tenant && o.tenantNames) p.tenant = o.tenantNames;
       /* A home added from the clean sweep carries PayProp's service level. */
       if (!p.service && /let\s*only/i.test(o.management ?? "")) p.service = "Let Only";
     }
@@ -447,8 +451,8 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
       locality: o.locality,
       landlord: o.landlordName || "—",
       agent: o.agentName,
+      tenant: o.tenantNames ?? undefined,
       ...(/let\s*only/i.test(o.management ?? "") ? { service: "Let Only" } : {}),
-      tenant: undefined,
       hmo: o.hmo,
       hasGas: !o.noGas,
       gasAnswered: o.noGas || Boolean(certs.gas),

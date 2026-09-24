@@ -40,6 +40,8 @@ export interface OsProperty {
   landlordName: string | null;
   agentName: string | null;
   paypropNo: string | null;
+  /** The tenants in residence, from the same sheet, "A, B". */
+  tenantNames: string | null;
 }
 
 type Row = {
@@ -62,6 +64,7 @@ type Row = {
   landlord_name?: string | null;
   agent_name?: string | null;
   payprop_no?: string | null;
+  tenant_names?: string | null;
 };
 
 const rowTo = (r: Row): OsProperty => ({
@@ -84,6 +87,7 @@ const rowTo = (r: Row): OsProperty => ({
   landlordName: r.landlord_name?.trim() || null,
   agentName: r.agent_name?.trim() || null,
   paypropNo: r.payprop_no ?? null,
+  tenantNames: r.tenant_names?.trim() || null,
 });
 
 export const isOsPropertyId = (id: string | null | undefined): boolean => /^pm-[0-9a-f-]+$/i.test(String(id ?? ""));
@@ -108,7 +112,7 @@ export async function activeOsProperties(): Promise<OsProperty[]> {
   return rows.map(rowTo);
 }
 
-type OsFacts = { hmo: boolean; noGas: boolean; ref: string; landlordName: string | null; agentName: string | null };
+type OsFacts = { hmo: boolean; noGas: boolean; ref: string; landlordName: string | null; agentName: string | null; tenantNames: string | null };
 
 /** What the OS knows about a REX property from its own record: HMO, no gas, and who owns and looks after it. */
 export async function factsByRexId(): Promise<Map<string, OsFacts>> {
@@ -123,6 +127,7 @@ export async function factsByRexId(): Promise<Map<string, OsFacts>> {
       ref: r.ref,
       landlordName: held?.landlordName || r.landlord_name?.trim() || null,
       agentName: held?.agentName || r.agent_name?.trim() || null,
+      tenantNames: held?.tenantNames || r.tenant_names?.trim() || null,
     });
   }
   return out;

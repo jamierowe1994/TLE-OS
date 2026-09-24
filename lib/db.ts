@@ -2076,6 +2076,8 @@ CREATE INDEX IF NOT EXISTS os_properties_rex ON os_properties (rex_property_id);
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS landlord_name TEXT;
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS agent_name TEXT;
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS payprop_no TEXT;
+-- The tenants in residence, from the same sheet (24 Sep 2026), where REX CRM holds none.
+ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS tenant_names TEXT;
 CREATE INDEX IF NOT EXISTS os_plc_cases_agent ON os_plc_cases (lower(agent_email), created_at DESC);
 
 -- The shadow log: what the rules recommended, and what the person decided.
