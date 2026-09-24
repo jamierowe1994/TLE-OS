@@ -12,7 +12,9 @@ import { hasDb, q } from "@/lib/db";
  *
  * Sources, in the order they are tried: REX PM, then Propoly (which also
  * cross-checks what REX PM gave), then PayProp, then 'manual' - the checker,
- * home by home. A value found in the first source stays attributed to it;
+ * home by home. Susan's own sheet counts as a source too ('Susan's sheet'),
+ * for what only her merged reports hold (deposit reference, amount, date
+ * protected). A value found in the first source stays attributed to it;
  * a later source that agrees is noted in checked_against, not written over.
  */
 
@@ -76,6 +78,7 @@ export const FIELDS: FactField[] = [
   { key: "doc_rtr_evidence", label: "Right to Rent evidence", group: "Documents", kind: "file" },
   { key: "doc_landlord_id_ownership", label: "Landlord ID & proof of ownership", group: "Documents", kind: "file" },
   { key: "doc_nrl1", label: "NRL1 approval letter", group: "Documents", kind: "file", when: "nrl" },
+  { key: "doc_guarantor", label: "Guarantor documents", group: "Documents", kind: "file" },
   { key: "doc_licence", label: "Licence", group: "Documents", kind: "file", when: "hmo" },
   { key: "doc_rra_sheet", label: "RRA information sheet", group: "Documents", kind: "file" },
 ];
