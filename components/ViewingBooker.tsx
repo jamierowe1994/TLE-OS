@@ -281,7 +281,7 @@ export default function ViewingBooker({
     return at.toISOString();
   })();
 
-  const { appts: allAppts, everything } = useDiary();
+  const { appts: allAppts, everything, outlook } = useDiary();
   const [profile] = usePref<BaseProfile | null>(PROFILE_KEY, null);
   /* Who is doing the booking, for when no agent name is given. */
   const [meName, setMeName] = useState<string>("");
@@ -307,6 +307,8 @@ export default function ViewingBooker({
    * cannot read at all is kept rather than dropped: a slot wrongly shown as
    * busy costs a phone call, one wrongly shown as free costs a double booking.
    */
+  /* Booking into your own day (no agent named, or the agent is you). */
+  const bookingOwn = !agent.trim() || (meName.trim() !== "" && agent.trim().toLowerCase().split(" ")[0] === meName.trim().toLowerCase().split(" ")[0]);
   const appts = useMemo(() => {
     /* No name given: the person doing the booking (19 Sep 2026 - an owner was
        shown the whole company's week while booking their own appraisal). */
@@ -1182,6 +1184,21 @@ export default function ViewingBooker({
                 drawn in, so a clash is visible before it happens.
                 {slot && " Drag the bar at the bottom of your booking to make it longer."}
               </p>
+              {/* Their Outlook, read in beside the diary (24 Sep 2026). Said only
+                  on their OWN grid: nobody else's Outlook is ever read, so on
+                  somebody else's day there is nothing to say about it. */}
+              {bookingOwn && outlook && outlook.state !== "not_yours" && (
+                outlook.state === "connected" ? (
+                  <p className="mt-1 text-[10.5px] text-muted">Your Outlook calendar is drawn in too, so time you blocked out there shows as busy.</p>
+                ) : (
+                  <p className="mt-1 text-[10.5px] text-accent-dark">
+                    {outlook.reason ?? "Your Outlook calendar isn't shown."}{" "}
+                    <a href="/api/auth/microsoft/start?from=profile" className="font-semibold underline underline-offset-2">
+                      Connect Outlook
+                    </a>
+                  </p>
+                )
+              )}
               </div>
 
               {day && slot && (

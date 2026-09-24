@@ -84,6 +84,10 @@ export type Appt = {
    *  appointment has no confirmation trail and no occupancy on it, and the
    *  screen must say so rather than imply all is well. */
   fromRex?: boolean;
+  /** Read in from the person's own Outlook calendar (lib/outlook-diary). */
+  fromOutlook?: boolean;
+  /** An Outlook entry the OS itself put there (tagged "TLE OS"). */
+  fromOs?: boolean;
   /**
    * The REX listing and property this appointment is attached to.
    *

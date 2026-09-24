@@ -3,6 +3,7 @@ import { isLondonMidnight, londonDayOffset, londonHHMM } from "@/lib/london-time
 import { rexCall, rexConfigured, RexError, rexRows } from "@/lib/rex";
 import type { Appt, ApptKind } from "@/lib/diary";
 import { feedbackByIds } from "@/lib/rex-feedback";
+import { hasDb, q } from "@/lib/db";
 
 /**
  * The lettings team's diary, live from REX.
@@ -59,9 +60,37 @@ function ownerOf(e: RexEvent): { name: string; email: string } {
   return { name: u?.name ?? "—", email: (u?.email_address ?? "").toLowerCase() };
 }
 
-/** Ours if the calendar belongs to a lettings mailbox. */
-export function isOurs(e: RexEvent): boolean {
-  return ownerOf(e).email.endsWith(`@${OUR_DOMAIN}`);
+/**
+ * EVERYBODY WITH AN ACCOUNT, WHATEVER THEIR ADDRESS (24 Sep 2026).
+ *
+ * The lettings domain was the only door, so Howard (theexpertsgroup.co.uk)
+ * and James Crumpton (thepropertyexperts.co.uk) each saw an empty diary over
+ * a full REX calendar. James: "it shouldn't be locked down to the Letting
+ * Experts". The other businesses on this REX account stay out - only people
+ * who have an OS account come in - and each still sees only their own
+ * (app/api/diary). Keyed by address, with their OS name: REX may call the
+ * calendar something else ("Automated System" is Howard's).
+ */
+async function accountPeople(): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (!hasDb()) return out;
+  const rows = await q<{ email: string; name: string; rex_email: string | null }>(
+    `SELECT u.email, u.name, t.rex_email FROM os_users u LEFT JOIN os_rex_tokens t ON t.user_id = u.id`
+  ).catch(() => []);
+  for (const r of rows) {
+    const name = (r.name ?? "").trim();
+    for (const e of [r.email, r.rex_email]) {
+      const k = (e ?? "").trim().toLowerCase();
+      if (k && !k.endsWith(`@${OUR_DOMAIN}`)) out.set(k, name);
+    }
+  }
+  return out;
+}
+
+/** Ours if the calendar belongs to a lettings mailbox, or to somebody with an account. */
+export function isOurs(e: RexEvent, accounts?: Map<string, string>): boolean {
+  const email = ownerOf(e).email;
+  return email.endsWith(`@${OUR_DOMAIN}`) || Boolean(accounts?.has(email));
 }
 
 /**
@@ -116,7 +145,7 @@ function linked(e: RexEvent, service: string): { id: string; label: string | nul
   return r?.id != null ? { id: String(r.id), label: r.label ?? null } : null;
 }
 
-function toAppt(e: RexEvent): Appt | null {
+function toAppt(e: RexEvent, accounts?: Map<string, string>): Appt | null {
   const startIso = e.starts_at?.time;
   if (!startIso) return null;
   const endIso = e.ends_at?.time;
@@ -161,7 +190,9 @@ function toAppt(e: RexEvent): Appt | null {
     what: priv ? "Busy" : what || "(untitled)",
     where: priv ? "" : loc,
     who: priv ? "" : who,
-    agent: owner.name,
+    /* Their OS name for anybody let in by account: the booker narrows on
+       the name, and "Automated System" would never match "Howard Russell". */
+    agent: accounts?.get(owner.email) || owner.name,
     agentEmail: owner.email || undefined,
     ...(Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : {}),
     // We do NOT know from a calendar entry whether the confirmations went,
@@ -212,6 +243,7 @@ export async function fetchDiary(): Promise<DiaryBook> {
   }
 
   const iso = (d: Date) => d.toISOString().slice(0, 19).replace("T", " ");
+  const accounts = await accountPeople();
 
   // Step one: which calendars are ours? 134 exist across the six businesses
   // sharing this REX account; 22 belong to lettings mailboxes. Asking REX for
@@ -224,7 +256,8 @@ export async function fetchDiary(): Promise<DiaryBook> {
     if (!res.ok) throw new RexError("Calendars/search", res);
     const rows = rexRows(res.result) as { id?: string; owner_user?: { email_address?: string } }[];
     for (const c of rows) {
-      if ((c.owner_user?.email_address ?? "").toLowerCase().endsWith(`@${OUR_DOMAIN}`) && c.id) {
+      const owner = (c.owner_user?.email_address ?? "").toLowerCase();
+      if ((owner.endsWith(`@${OUR_DOMAIN}`) || accounts.has(owner)) && c.id) {
         calIds.push(c.id);
       }
     }
@@ -286,8 +319,8 @@ export async function fetchDiary(): Promise<DiaryBook> {
     const s = e.starts_at?.time;
     return s && new Date(s) <= to;
   });
-  const ours = inWindow.filter((e) => isOurs(e) && !e.is_cancelled);
-  const appts = ours.map(toAppt).filter((a): a is Appt => a !== null);
+  const ours = inWindow.filter((e) => isOurs(e, accounts) && !e.is_cancelled);
+  const appts = ours.map((e) => toAppt(e, accounts)).filter((a): a is Appt => a !== null);
 
   /* ── WHAT WAS SAID AFTERWARDS ────────────────────────────────────────────
      REX puts feedback in its own service and hangs only an id off the event,
@@ -300,7 +333,7 @@ export async function fetchDiary(): Promise<DiaryBook> {
      screen distinguishes "not looked" from "looked, nothing there". */
   const wants = new Map<string, string>(); // appt id -> feedback id
   for (const e of ours) {
-    const a = toAppt(e);
+    const a = toAppt(e, accounts);
     if (!a || a.kind !== "viewing" || a.day >= 0) continue;
     const fid = feedbackIdOf(e);
     if (fid) wants.set(a.id, fid);
@@ -317,7 +350,7 @@ export async function fetchDiary(): Promise<DiaryBook> {
 
   return {
     appts,
-    agents: [...new Set(ours.map((e) => ownerOf(e).name))].sort(),
+    agents: [...new Set(ours.map((e) => accounts.get(ownerOf(e).email) || ownerOf(e).name))].sort(),
     scanned: inWindow.length,
     ours: ours.length,
     from: from.toISOString(),

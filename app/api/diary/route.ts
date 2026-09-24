@@ -8,6 +8,7 @@ import type { Appt, ApptKind } from "@/lib/diary";
 import { scopeFor } from "@/lib/scope";
 import { whoIs } from "@/lib/admin";
 import { osFeedbackFor } from "@/lib/viewing-feedback-store";
+import { outlookDiaryFor, type OutlookRead } from "@/lib/outlook-diary";
 
 /**
  * The team's diary, cached — same manners as leads and listings.
@@ -167,6 +168,38 @@ function own(book: DiaryBook, self: { email: string | null; name: string | null;
   return { ...book, appts: book.appts.map((a) => (theirs(a) ? { ...a, own: true } : a)) };
 }
 
+/**
+ * THEIR OUTLOOK, FOLDED IN (24 Sep 2026) - see lib/outlook-diary.
+ *
+ * Only ever the signed-in person's own. An owner viewing as somebody gets
+ * none: that would be reading another person's Outlook, and James was plain
+ * that nobody sees anybody else's diary.
+ *
+ * A booking made here is in Outlook AND in REX (or our own table), so the
+ * Outlook copy of anything the OS made, or anything sitting at exactly the
+ * same time and length as one of their own entries, is dropped rather than
+ * drawn twice.
+ */
+function withOutlook(book: DiaryBook, outlook: OutlookRead | null, mineOnly: boolean): DiaryBook {
+  if (!outlook?.appts.length) return book;
+  /* An agent's book is all theirs; an owner's is the team's, with theirs marked. */
+  const theirs = mineOnly ? book.appts : book.appts.filter((a) => a.own);
+  const sameAs = (o: Appt) =>
+    theirs.some((a) => {
+      if (a.day !== o.day) return false;
+      const gap = Math.abs(minutesOf(a.start) - minutesOf(o.start));
+      return o.fromOs ? gap <= 2 : gap === 0 && a.mins === o.mins;
+    });
+  const extra = outlook.appts.filter((o) => !sameAs(o));
+  if (!extra.length) return book;
+  const appts = [...book.appts, ...extra].sort((a, b) => a.day - b.day || a.start.localeCompare(b.start));
+  return { ...book, appts };
+}
+const minutesOf = (hhmm: string) => {
+  const [h, m] = hhmm.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+};
+
 export async function GET(req: NextRequest) {
   const scope = await scopeFor(req);
   const { actor, subject, viewingAs } = await whoIs(req);
@@ -214,10 +247,22 @@ export async function GET(req: NextRequest) {
      login when there is one, because that is the address a calendar is
      actually filed under; otherwise the account's own. */
   const whose = { name: person.name || "", email: self.rexEmail ?? self.email ?? "" };
+  /* Their Outlook: asked for now, beside the REX book, and waited on as it is shaped. */
+  const outlookP: Promise<OutlookRead | null> = viewingAs
+    ? Promise.resolve(null)
+    : outlookDiaryFor({ id: actor.id, name: actor.name || "", email: actor.email || "" }).catch(() => ({
+        state: "failed" as const,
+        appts: [],
+        reason: "Your Outlook calendar couldn't be read just now.",
+      }));
+  const outlookSaid = (o: OutlookRead | null) =>
+    o ? { state: o.state, ...(o.reason ? { reason: o.reason } : {}) } : { state: "not_yours" as const };
   /* An agent's book is already only theirs; marking it would say nothing. */
   const shaped = async (book: DiaryBook) => {
     const scoped = merged(forScope(book, who), mine);
-    return { ...(await withOsFeedback(mineOnly ? scoped : own(scoped, self))), whose };
+    const marked = await withOsFeedback(mineOnly ? scoped : own(scoped, self));
+    const outlook = await outlookP;
+    return { ...withOutlook(marked, outlook, mineOnly), whose, outlook: outlookSaid(outlook) };
   };
 
   if (!rexConfigured()) {
@@ -225,11 +270,13 @@ export async function GET(req: NextRequest) {
        entries over separately for it to merge on top — they are real, and
        dropping them because the demo diary is standing in would lose work
        somebody actually did. */
+    const outlook = await outlookP;
     return NextResponse.json({
       ok: true,
       live: false,
-      mine,
+      mine: [...mine, ...(outlook?.appts ?? [])],
       whose,
+      outlook: outlookSaid(outlook),
       everything: scope.everything,
       reason: "REX isn't connected here.",
     });

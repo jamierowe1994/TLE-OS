@@ -1,6 +1,7 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { msAccessTokenFor, MailboxNotConnected } from "@/lib/microsoft";
+import { forgetOutlookDiary } from "@/lib/outlook-diary";
 
 /**
  * EVERY APPOINTMENT GOES INTO THE AGENT'S OWN OUTLOOK DIARY (15 Sep 2026).
@@ -136,6 +137,8 @@ export async function putInOutlook(p: {
       [KIND, p.key, JSON.stringify({ eventId, startsAt: p.startsAt }), p.userId]
     ).catch(() => null);
   }
+  /* The diary reads Outlook back in (lib/outlook-diary): let it see this now. */
+  forgetOutlookDiary(p.userId);
   return { ok: true, eventId, moved: Boolean(before), duplicate: false };
 }
 
@@ -186,5 +189,6 @@ export async function removeFromOutlook(userId: string, key: string): Promise<{ 
   }).catch(() => null);
   if (!res || (!res.ok && res.status !== 404)) return { ok: false, detail: "Outlook would not take it out - remove it from your calendar yourself." };
   await q(`DELETE FROM os_case_state WHERE kind = $1 AND record_id = $2`, [KIND, key]).catch(() => null);
+  forgetOutlookDiary(userId);
   return { ok: true, detail: "Taken out of your Outlook calendar." };
 }
