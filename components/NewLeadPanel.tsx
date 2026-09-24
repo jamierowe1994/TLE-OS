@@ -551,6 +551,20 @@ export default function NewLeadPanel({
                   What next?
                 </p>
                 <div className="grid grid-cols-2 gap-2.5">
+                  {/* The next step in the process, first and biggest (Howard,
+                      24 Sep 2026): a landlord's is the market appraisal, a
+                      tenant's the viewing. It opens the new record with the
+                      booker already up. */}
+                  {savedId && (
+                    <a
+                      href={`/leads?open=os-${savedId}&side=${kind === "landlord" ? "landlord" : "tenant"}&book=${kind === "landlord" ? "appraisal" : "viewing"}`}
+                      className="col-span-2 flex items-center gap-3 rounded-xl bg-brown px-4 py-3.5 text-left text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+                    >
+                      <DoodleIcon name="calendar" size={17} className="shrink-0" />
+                      {kind === "landlord" ? "Book a market appraisal" : "Book a viewing"}
+                      <span className="ml-auto text-[15px]">→</span>
+                    </a>
+                  )}
                   <a
                     href={`/leads?open=os-${savedId ?? ""}&side=${kind === "landlord" ? "landlord" : "tenant"}`}
                     className="flex items-center gap-2.5 rounded-xl border border-line/80 px-3.5 py-3 text-left text-[12.5px] transition-colors hover:border-ink/40"

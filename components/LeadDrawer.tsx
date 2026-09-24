@@ -16,6 +16,7 @@ import PhotoBox from "@/components/PhotoBox";
 import ProcessTimeline from "@/components/ProcessTimeline";
 import PropertyFacts from "@/components/PropertyFacts";
 import PinMap from "@/components/PinMap";
+import AddressField from "@/components/AddressField";
 import { EMPTY_PROPERTY, type PropertyFactsData } from "@/lib/lead-facts-shape";
 import ReferToAgent, { isSalesIntent, SALES_TAGS } from "@/components/ReferToAgent";
 import SignaturePanel, { type Signer } from "@/components/SignaturePanel";
@@ -46,7 +47,6 @@ import ConfirmSheet from "@/components/ConfirmSheet";
 import { EMPTY_CASE, type AppraisalCase } from "@/lib/appraisal";
 import { saveLabel, useCaseState } from "@/lib/case-state";
 import { isStalled, NURTURE_BRANCH, startingStep, TENANT_TRACK, trackFor } from "@/lib/journey";
-import rexSample from "@/lib/rex-sample.json";
 import { fetchMe } from "@/lib/me";
 import { WhatsAppButton } from "@/components/WhatsAppQr";
 
@@ -82,7 +82,6 @@ const tabsFor = (tenant: boolean) => (tenant ? TABS : TABS.filter((t) => t.key !
 type Listing = {
   id: string; name: string; locality: string; rent: number | null; image: string | null;
 };
-const LISTINGS = rexSample.listings as Listing[];
 
 type TaskRow = {
   id: string; title: string; detail: string; dueAt: string | null; done: boolean; kind: string; createdBy: string;
@@ -1060,6 +1059,54 @@ function LeadDrawerBody({
   /** The campaign the lead is on, named - what nurture actually did. */
   const [campaign, setCampaign] = useState<{ id: string; name: string; since: string; step: number } | null>(null);
   const leadId = lead?.id ?? null;
+  /* A landlord's other homes, typed in on the Properties tab and kept in
+     os_lead_properties (Howard, 24 Sep 2026) - the home they enquired about
+     is the lead's own address. */
+  type LeadHome = { id: string; address: string; postcode: string; byName: string; at: string };
+  const [leadHomes, setLeadHomes] = useState<LeadHome[]>([]);
+  const [addingHome, setAddingHome] = useState(false);
+  const [homeDraft, setHomeDraft] = useState("");
+  const [homePc, setHomePc] = useState("");
+  const [homeBusy, setHomeBusy] = useState(false);
+  const [homeSaid, setHomeSaid] = useState<string | null>(null);
+  const [justAddedHome, setJustAddedHome] = useState(false);
+  useEffect(() => {
+    setLeadHomes([]); setAddingHome(false); setHomeDraft(""); setHomePc(""); setHomeSaid(null); setJustAddedHome(false);
+    if (!leadId || !lead || leadSide(lead) !== "landlord") return;
+    let live = true;
+    fetch(`/api/leads/${encodeURIComponent(leadId)}/properties`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (live && j?.ok && Array.isArray(j.homes)) setLeadHomes(j.homes); })
+      .catch(() => {});
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leadId]);
+  async function attachHome() {
+    if (!leadId || homeBusy) return;
+    setHomeBusy(true);
+    setHomeSaid(null);
+    try {
+      const r = await fetch(`/api/leads/${encodeURIComponent(leadId)}/properties`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ address: homeDraft, postcode: homePc }),
+      });
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j?.ok) { setHomeSaid(j?.error ?? "That didn't save."); return; }
+      setLeadHomes(j.homes ?? []);
+      setAddingHome(false); setHomeDraft(""); setHomePc(""); setJustAddedHome(true);
+    } catch {
+      setHomeSaid("That didn't save - the connection dropped.");
+    } finally {
+      setHomeBusy(false);
+    }
+  }
+  async function removeHome(id: string) {
+    if (!leadId) return;
+    const j = await fetch(`/api/leads/${encodeURIComponent(leadId)}/properties?home=${encodeURIComponent(id)}`, { method: "DELETE" })
+      .then((r) => r.json()).catch(() => null);
+    if (j?.ok) setLeadHomes(j.homes ?? []);
+  }
   /** What happened to the last note in REX, shown under the Save button. */
   const [noteRex, setNoteRex] = useState<{ ok: boolean; text: string } | null>(null);
   useEffect(() => setNoteRex(null), [leadId]);
@@ -1136,6 +1183,23 @@ function LeadDrawerBody({
   const [tagging, setTagging] = useState(false);
   // The booker serves two jobs; which one is decided at fire time.
   const [bookMode, setBookMode] = useState<"viewing" | "appraisal" | "takeon">("viewing");
+  /* "Book a market appraisal" / "Book a viewing" on the new-lead screen land
+     here as ?book=: open the booker once, then spend the link so a refresh
+     does not open it again. */
+  useEffect(() => {
+    if (!leadId || typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const want = url.searchParams.get("book");
+    if (want !== "appraisal" && want !== "viewing") return;
+    setBookMode(want);
+    setBooking(true);
+    url.searchParams.delete("book");
+    /* Through Next's router, not window.history: a history-only change left
+       Next's own copy of the address holding ?book=, and the next thing that
+       rewrote the address put it back - so a refresh reopened the booker. */
+    router.replace(url.pathname + url.search + url.hash, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leadId]);
   const [appraising, setAppraising] = useState(false);
   // The take-on is two moves in one step: book the visit, then capture what
   // it produced. This remembers which half we're on.
@@ -1349,9 +1413,10 @@ function LeadDrawerBody({
      objects come back with the click rather than being looked up in a sample
      file whose ids do not match (which silently emptied the list). Anyone
      else still reads the demo book, which is all they have. */
-  const shortlist = isTenant
-    ? addedListings
-    : LISTINGS.filter((l) => detail.interested.includes(l.id) || added.includes(l.id));
+  /* A landlord's homes are the lead's address and os_lead_properties - never
+     the demo book, which attached "Apartment 10, Bloomsbury Court" to Howard's
+     test landlord (24 Sep 2026). */
+  const shortlist = isTenant ? addedListings : [];
 
   const track = trackFor(lead);
 
@@ -2181,36 +2246,69 @@ function LeadDrawerBody({
                           onBook={() => { setBookMode("viewing"); setBooking(true); }}
                         />
                       </>
-                    ) : shortlist.length ? (
-                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                        {shortlist.map((p) => (
-                          <div key={p.id} className="overflow-hidden rounded-2xl border border-line/60">
-                            <PropertyPhoto src={p.image} className="h-32 w-full" />
-                            <div className="p-3.5">
-                              <p className="hand truncate text-[13px]">{p.name}</p>
-                              <p className="mt-0.5 truncate text-[10.5px] text-muted">{p.locality}</p>
-                              <p className="figures mt-2 text-[15px]">
-                                £{p.rent?.toLocaleString("en-GB")}
-                                <span className="text-[10px] text-muted"> pcm</span>
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
                     ) : (
-                      <Empty>Nothing attached to this record yet.</Empty>
+                      <>
+                        {/* The home they enquired about is the lead itself; the
+                            rest are the ones typed in below. */}
+                        <ul className="space-y-3">
+                          {propAddress && (
+                            <li className="flex items-center gap-3.5 rounded-2xl border border-line/60 p-3">
+                              <div className="h-16 w-20 shrink-0 overflow-hidden rounded-xl">
+                                {prop.image ? (
+                                  <PropertyPhoto src={prop.image} className="h-full w-full" />
+                                ) : prop.lat != null && prop.lng != null ? (
+                                  <PinMap lat={prop.lat} lng={prop.lng} className="h-full w-full" />
+                                ) : (
+                                  <PropertyPhoto src={null} className="h-full w-full" />
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="hand truncate text-[13.5px]">{firstLine(propAddress)}</p>
+                                <p className="truncate text-[11px] text-muted" title={propAddress}>{propAddress}</p>
+                                <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-accent-dark">The home they enquired about</p>
+                              </div>
+                            </li>
+                          )}
+                          {leadHomes.map((h) => (
+                            <li key={h.id} className="flex items-center gap-3.5 rounded-2xl border border-line/60 p-3">
+                              <div className="h-16 w-20 shrink-0 overflow-hidden rounded-xl">
+                                <PropertyPhoto src={null} className="h-full w-full" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="hand truncate text-[13.5px]">{firstLine(h.address)}</p>
+                                <p className="truncate text-[11px] text-muted" title={h.address}>{h.address}</p>
+                                <p className="mt-1 text-[10.5px] text-muted">Added by {h.byName} · {whenAgo(h.at)}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => void removeHome(h.id)}
+                                className="shrink-0 rounded-full px-2.5 py-1 text-[11px] text-muted transition-colors hover:text-accent-dark"
+                                aria-label={`Remove ${h.address}`}
+                              >
+                                Remove
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                        {!propAddress && !leadHomes.length && !addingHome && (
+                          <Empty>No home on this lead yet. Add the one they want to let below.</Empty>
+                        )}
+                      </>
                     )}
 
                     {/* Confirmation is the point: attaching a property is the
-                        moment a lead becomes a viewing, so it gets a tick and
-                        the two things you'd obviously do next. */}
-                    {justAdded ? (
+                        moment a lead becomes a viewing (a tenant) or an
+                        appraisal (a landlord), so it gets a tick and the two
+                        things you'd obviously do next. */}
+                    {(isTenant ? justAdded : justAddedHome) ? (
                       <div className="fade-up mt-4 flex flex-col items-center rounded-2xl border border-line/70 py-5">
                         <DoneTick size={44} />
                         <p className="mt-2.5 text-[12.5px] font-semibold">Property attached</p>
                         <div className="mt-3 flex flex-wrap justify-center gap-2">
                           {[
-                            { label: "Schedule a viewing", icon: "calendar", go: () => setBooking(true) },
+                            isTenant
+                              ? { label: "Schedule a viewing", icon: "calendar", go: () => { setBookMode("viewing"); setBooking(true); } }
+                              : { label: "Book a market appraisal", icon: "calendar", go: () => { setBookMode("appraisal"); setBooking(true); } },
                             {
                               label: isTenant ? "Send details" : "Write an email",
                               icon: "mail",
@@ -2229,27 +2327,42 @@ function LeadDrawerBody({
                         </div>
                         <button
                           type="button"
-                          onClick={() => setJustAdded(false)}
+                          onClick={() => (isTenant ? setJustAdded(false) : (setJustAddedHome(false), setAddingHome(true)))}
                           className="mt-3 text-[11px] font-semibold text-muted transition-colors hover:text-ink"
                         >
                           + Add another
                         </button>
                       </div>
-                    ) : (
+                    ) : !isTenant && addingHome ? (
+                      <div className="fade-up mt-4 rounded-2xl border border-line/70 p-3.5">
+                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">Another home of theirs</p>
+                        <AddressField value={homeDraft} onChange={setHomeDraft} onResolved={(a) => setHomePc(a.postcode ?? "")} />
+                        {homeSaid && <p className="mt-2 text-[11.5px] text-accent-dark">{homeSaid}</p>}
+                        <div className="mt-3 flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => { setAddingHome(false); setHomeDraft(""); setHomeSaid(null); }}
+                            className="rounded-full px-3.5 py-2 text-[12px] text-muted transition-colors hover:text-ink"
+                          >
+                            Cancel
+                          </button>
+                          <PressButton
+                            onClick={() => void attachHome()}
+                            disabled={homeBusy || homeDraft.trim().length < 6}
+                            className="rounded-full bg-accent-dark px-4 py-2 text-[12px] font-semibold text-page disabled:opacity-40"
+                          >
+                            {homeBusy ? "Attaching…" : "Attach this home"}
+                          </PressButton>
+                        </div>
+                      </div>
+                    ) : !isTenant ? (
                       <PressButton
-                        onClick={() => {
-                          const next = LISTINGS.find(
-                            (l) => !shortlist.some((p) => p.id === l.id)
-                          );
-                          if (!next) return;
-                          setAdded((cur) => [...cur, next.id]);
-                          setJustAdded(true);
-                        }}
+                        onClick={() => setAddingHome(true)}
                         className="mt-4 w-full rounded-xl border border-dashed border-line py-2.5 text-[12px] font-medium text-muted transition-colors hover:border-ink/40 hover:text-ink"
                       >
                         + Add property
                       </PressButton>
-                    )}
+                    ) : null}
                   </>
                 )}
               </div>
@@ -2399,7 +2512,7 @@ function LeadDrawerBody({
                   ? tasks.filter((x) => !x.done).length + (realTasks ?? []).filter((x) => !x.done).length
                 : t.key === "viewings" ? theirViewings.length
                 : t.key === "documents" ? docs.length
-                : t.key === "properties" ? shortlist.length
+                : t.key === "properties" ? (isTenant ? shortlist.length : (propAddress ? 1 : 0) + leadHomes.length)
                 : 0;
               const active = tab === t.key;
               return (
@@ -3487,7 +3600,7 @@ function LeadDrawerBody({
         }}
         /* Their shortlist, and the home they asked about first; the booker
            reads the rest of the live book itself. No sample rows. */
-        properties={bookMode === "viewing" ? shortlist : (shortlist.length ? shortlist : LISTINGS.slice(0, 4))}
+        properties={bookMode === "viewing" ? shortlist : []}
         firstId={lead.listingId != null ? String(lead.listingId) : null}
         leadId={lead.id}
         /* Whose diary the grid shows. An unassigned lead is being booked by

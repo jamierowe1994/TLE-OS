@@ -693,6 +693,21 @@ CREATE TABLE IF NOT EXISTS os_lead_touches (
   at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS os_lead_touches_lead_idx ON os_lead_touches (lead_id, at DESC);
+
+-- The other homes a landlord lead has told us about (Howard, 24 Sep 2026).
+-- The one they enquired about is the lead's own address; these are the rest,
+-- typed in on the Properties tab. Replaced a sample list that attached a
+-- made-up home and saved nothing.
+CREATE TABLE IF NOT EXISTS os_lead_properties (
+  id          TEXT PRIMARY KEY,
+  lead_id     TEXT NOT NULL,
+  address     TEXT NOT NULL,
+  postcode    TEXT NOT NULL DEFAULT '',
+  by_id       TEXT,
+  by_name     TEXT NOT NULL DEFAULT '',
+  at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_lead_properties_lead_idx ON os_lead_properties (lead_id, at);
 -- The note's twin in REX, once it has been written there (24 Sep 2026).
 ALTER TABLE os_lead_touches ADD COLUMN IF NOT EXISTS rex_note_id TEXT;
 
