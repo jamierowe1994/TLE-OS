@@ -3493,6 +3493,14 @@ function LeadDrawerBody({
               .catch(() => null);
             const id = res?.appraisal?.id;
             if (!id) return { said: `The appraisal did not save: ${res?.error ?? "the connection dropped"}. Try again.` };
+            /* The rail reads "booked" from the appraisal that now exists, and
+               the log was only read when the drawer opened - so an agent who
+               stayed on the lead saw it still on Email sent (Howard, 24 Sep
+               2026). Read it again now the appraisal is written. */
+            void fetch(`/api/leads/${encodeURIComponent(lead.id)}/touches`, { cache: "no-store" })
+              .then((r) => (r.ok ? r.json() : null))
+              .then((j) => { if (j?.ok) takeLog(j); })
+              .catch(() => { /* the rail catches up next time the lead opens */ });
             said.push(res?.outlook?.ok ? "In your Outlook calendar." : (res?.outlook?.detail ?? "Booked."));
             if (v.confirmation?.send) {
               const c = await fetch("/api/confirmations", {
