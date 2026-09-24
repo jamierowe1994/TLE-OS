@@ -412,6 +412,10 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
     if (!f) continue;
     if (f.hmo) p.hmo = true;
     if (f.noGas && p.certs.gas?.expires == null) { p.hasGas = false; p.gasAnswered = true; }
+    /* Susan's PayProp clean sweep (24 Sep 2026) names the landlord and agent
+       where REX CRM has nobody. REX still wins wherever it has a name. */
+    if (p.landlord === "—" && f.landlordName) p.landlord = f.landlordName;
+    if (!p.agent && f.agentName) p.agent = f.agentName;
   }
 
   /* Homes REX CRM has no property for. The OS is their record: its own
@@ -426,7 +430,13 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
     p.certs = extraCerts.get(p.id) ?? {};
     p.onRex = false;
     const o = extra.find((x) => x.id === p.id);
-    if (o) { p.hmo = o.hmo; p.hasGas = !o.noGas; p.gasAnswered = o.noGas || Boolean(p.certs.gas); }
+    if (o) {
+      p.hmo = o.hmo; p.hasGas = !o.noGas; p.gasAnswered = o.noGas || Boolean(p.certs.gas);
+      if (p.landlord === "—" && o.landlordName) p.landlord = o.landlordName;
+      if (!p.agent && o.agentName) p.agent = o.agentName;
+      /* A home added from the clean sweep carries PayProp's service level. */
+      if (!p.service && /let\s*only/i.test(o.management ?? "")) p.service = "Let Only";
+    }
   }
   for (const o of extra) {
     if (listings.some((l) => l.propertyId === o.id)) continue;
@@ -435,7 +445,9 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
       id: o.id,
       name: o.name || o.address,
       locality: o.locality,
-      landlord: "—",
+      landlord: o.landlordName || "—",
+      agent: o.agentName,
+      ...(/let\s*only/i.test(o.management ?? "") ? { service: "Let Only" } : {}),
       tenant: undefined,
       hmo: o.hmo,
       hasGas: !o.noGas,

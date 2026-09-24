@@ -2070,6 +2070,12 @@ CREATE TABLE IF NOT EXISTS os_properties (
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS os_properties_rex ON os_properties (rex_property_id);
+-- Who owns it and who looks after it, from Susan's PayProp clean sweep (24 Sep
+-- 2026): the compliance book falls back to these where REX CRM names nobody.
+-- payprop_no is the six-digit number on her sheet, kept for the next pass.
+ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS landlord_name TEXT;
+ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS agent_name TEXT;
+ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS payprop_no TEXT;
 CREATE INDEX IF NOT EXISTS os_plc_cases_agent ON os_plc_cases (lower(agent_email), created_at DESC);
 
 -- The shadow log: what the rules recommended, and what the person decided.

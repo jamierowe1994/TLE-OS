@@ -36,6 +36,10 @@ export interface OsProperty {
   rexPropertyId: string | null;
   matchHow: string | null;
   active: boolean;
+  /** From Susan's PayProp clean sweep (24 Sep 2026), where REX names nobody. */
+  landlordName: string | null;
+  agentName: string | null;
+  paypropNo: string | null;
 }
 
 type Row = {
@@ -55,6 +59,9 @@ type Row = {
   rex_property_id: string | null;
   match_how: string | null;
   active: boolean;
+  landlord_name?: string | null;
+  agent_name?: string | null;
+  payprop_no?: string | null;
 };
 
 const rowTo = (r: Row): OsProperty => ({
@@ -74,6 +81,9 @@ const rowTo = (r: Row): OsProperty => ({
   rexPropertyId: r.rex_property_id,
   matchHow: r.match_how,
   active: Boolean(r.active),
+  landlordName: r.landlord_name?.trim() || null,
+  agentName: r.agent_name?.trim() || null,
+  paypropNo: r.payprop_no ?? null,
 });
 
 export const isOsPropertyId = (id: string | null | undefined): boolean => /^pm-[0-9a-f-]+$/i.test(String(id ?? ""));
@@ -98,14 +108,22 @@ export async function activeOsProperties(): Promise<OsProperty[]> {
   return rows.map(rowTo);
 }
 
-/** What the OS knows about a REX property from its own record: HMO, no gas. */
-export async function factsByRexId(): Promise<Map<string, { hmo: boolean; noGas: boolean; ref: string }>> {
-  const out = new Map<string, { hmo: boolean; noGas: boolean; ref: string }>();
+type OsFacts = { hmo: boolean; noGas: boolean; ref: string; landlordName: string | null; agentName: string | null };
+
+/** What the OS knows about a REX property from its own record: HMO, no gas, and who owns and looks after it. */
+export async function factsByRexId(): Promise<Map<string, OsFacts>> {
+  const out = new Map<string, OsFacts>();
   if (!hasDb()) return out;
   const rows = await q<Row>(`SELECT * FROM os_properties WHERE rex_property_id IS NOT NULL AND rex_property_id <> ''`).catch(() => []);
   for (const r of rows) {
     const held = out.get(r.rex_property_id as string);
-    out.set(r.rex_property_id as string, { hmo: Boolean(r.hmo) || Boolean(held?.hmo), noGas: Boolean(r.no_gas) || Boolean(held?.noGas), ref: r.ref });
+    out.set(r.rex_property_id as string, {
+      hmo: Boolean(r.hmo) || Boolean(held?.hmo),
+      noGas: Boolean(r.no_gas) || Boolean(held?.noGas),
+      ref: r.ref,
+      landlordName: held?.landlordName || r.landlord_name?.trim() || null,
+      agentName: held?.agentName || r.agent_name?.trim() || null,
+    });
   }
   return out;
 }
