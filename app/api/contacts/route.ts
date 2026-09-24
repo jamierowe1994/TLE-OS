@@ -73,6 +73,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "A name is the one thing needed." }, { status: 400 });
   }
 
+  /* A landlord is registered with a source, or not at all (Howard, 24 Sep
+     2026). Checked here as well as on the panel, so no other way in skips it. */
+  if (body.kind === "landlord" && !String(body.source ?? "").trim()) {
+    return NextResponse.json({ error: "Choose where this landlord came from before saving." }, { status: 400 });
+  }
+
   const draft: NewContact = {
     kind: body.kind === "landlord" ? "landlord" : "tenant",
     name: body.name,

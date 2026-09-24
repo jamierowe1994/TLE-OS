@@ -291,7 +291,17 @@ export default function NewLeadPanel({
 
   if (!open) return null;
 
-  const ready = d.name.trim() && d.mobile.trim();
+  /* A landlord cannot be registered without saying where they came from
+     (Howard, 24 Sep 2026): the lead sources figures are only as good as this
+     answer, and a blank one is a lead nobody can credit. The route checks it
+     too. A tenant still only needs a name and a mobile. */
+  const needsSource = kind === "landlord";
+  const missing = [
+    !d.name.trim() && "a name",
+    !d.mobile.trim() && "a mobile",
+    needsSource && !d.source.trim() && "where they came from",
+  ].filter(Boolean) as string[];
+  const ready = missing.length === 0;
   const set = (k: keyof Draft) => (v: string) => setD((cur) => ({ ...cur, [k]: v }));
 
   /**
@@ -360,7 +370,9 @@ export default function NewLeadPanel({
       </PressButton>
       {!ready && (
         <p className="mt-2 text-center text-[11px] text-muted">
-          A name and a mobile is enough to start.
+          {needsSource
+            ? `Add ${missing.length > 1 ? `${missing.slice(0, -1).join(", ")} and ${missing[missing.length - 1]}` : missing[0]} to save.`
+            : "A name and a mobile is enough to start."}
         </p>
       )}
       {saveError && (
@@ -901,13 +913,22 @@ export default function NewLeadPanel({
                     </label>
                   </div>
                   <label className="block">
-                    <span className={label}>Source</span>
+                    <span className={label}>
+                      Source <span className="normal-case tracking-normal text-accent-dark">- needed to save</span>
+                    </span>
                     <select
                       value={d.source}
                       onChange={(e) => set("source")(e.target.value)}
-                      className={field}
+                      required
+                      aria-required="true"
+                      className={!d.source ? field.replace("border-line/80", "border-accent-dark/50") : field}
                     >
                       <option value="">How did they find us?</option>
+                      {/* Arrived with one the list does not hold (Landlord Radar
+                          sends its own): shown, so it reads as chosen. */}
+                      {d.source && !LEAD_SOURCES.some((g) => g.options.includes(d.source)) && (
+                        <option value={d.source}>{d.source}</option>
+                      )}
                       {LEAD_SOURCES.map((g) => (
                         <optgroup key={g.group} label={g.group}>
                           {g.options.map((o) => (
