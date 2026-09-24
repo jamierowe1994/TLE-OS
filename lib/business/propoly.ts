@@ -62,6 +62,8 @@ interface HeldToken {
   token: string;
   clientName: string | null;
   expiresAt: number;
+  /** When Propoly gave it to us - how old a token was when it was cancelled. */
+  issuedAt?: number;
 }
 
 /**
@@ -88,41 +90,88 @@ interface TokenState {
   backoffUntil: number;
   /** The token request in flight, shared by everyone who asks while it runs. */
   inFlight: Promise<string> | null;
+  /** When Propoly last answered us properly - a token, or a read it took. */
+  lastGoodAt: number;
 }
 declare global {
   // eslint-disable-next-line no-var
   var __propolyToken: TokenState | undefined;
 }
-const state: TokenState = (globalThis.__propolyToken ??= { cached: null, backoffUntil: 0, inFlight: null });
+const state: TokenState = (globalThis.__propolyToken ??= { cached: null, backoffUntil: 0, inFlight: null, lastGoodAt: 0 });
+state.lastGoodAt ??= 0;
 
 const TOKEN_ROW = "propoly:token";
 const MIN_BACKOFF_MS = 60_000;
+
+/**
+ * A REFUSED TOKEN IS NOT AN OUTAGE (24 Sep 2026, ticket b59189a2).
+ *
+ * After the shared token went in, the ticket still came in about every
+ * fifteen minutes - one per watcher run - while the watcher went on reading
+ * its deals: 28 in the three hours to 19:30 on 23 Sep. What was refused was a
+ * REPLACEMENT token, asked for when Propoly said no to one we still thought
+ * good (a 401 mid-life); Propoly then said we had asked too recently. The
+ * likeliest reason is that Propoly keeps one live token per login and TLE-OS
+ * and the TLE portal share a login (same key, fingerprinted 23 Sep), so the
+ * other side signing in cancels ours.
+ *
+ * So a refusal is only a bug once Propoly has been out of reach for a while:
+ * no token and no read it would take for OUTAGE_MS. Before that it is the
+ * back-off doing its job, and it is logged, not ticketed. The log says how
+ * long each token lasts and how old one was when Propoly cancelled it, which
+ * is what proves or disproves the shared-login reading.
+ */
+const OUTAGE_MS = 10 * 60_000;
+
+function markGood(): void {
+  state.lastGoodAt = Date.now();
+}
+
+/** True once Propoly has given us nothing usable for OUTAGE_MS. */
+function outOfReach(lastGoodAt: number): boolean {
+  return lastGoodAt > 0 ? Date.now() - lastGoodAt > OUTAGE_MS : process.uptime() * 1000 > OUTAGE_MS;
+}
+
+/** One line in the service log, at most once a minute per kind. */
+const saidAt = new Map<string, number>();
+function say(kind: string, line: string): void {
+  const last = saidAt.get(kind) ?? 0;
+  if (Date.now() - last < 60_000) return;
+  saidAt.set(kind, Date.now());
+  console.log(`[propoly] ${line}`);
+}
 
 /** What the last process kept: a token, or a back-off still running. Null on any doubt. */
 async function readKept(): Promise<{ held: HeldToken | null; backoffUntil: number } | null> {
   if (!hasDb()) return null;
   try {
-    const rows = await q<{ payload: { token?: string; clientName?: string | null; expiresAt?: number; backoffUntil?: number } }>(
+    const rows = await q<{ payload: { token?: string; clientName?: string | null; expiresAt?: number; issuedAt?: number; backoffUntil?: number; lastGoodAt?: number } }>(
       "SELECT payload FROM os_cache WHERE key = $1",
       [TOKEN_ROW]
     );
     const p = rows[0]?.payload;
     if (!p) return null;
     const held = p.token && Number(p.expiresAt) > Date.now()
-      ? { token: p.token, clientName: p.clientName ?? null, expiresAt: Number(p.expiresAt) }
+      ? { token: p.token, clientName: p.clientName ?? null, expiresAt: Number(p.expiresAt), issuedAt: Number(p.issuedAt) || undefined }
       : null;
+    state.lastGoodAt = Math.max(state.lastGoodAt, Number(p.lastGoodAt) || 0);
     return { held, backoffUntil: Number(p.backoffUntil) || 0 };
   } catch {
     return null;
   }
 }
 
-async function keep(held: HeldToken | null, backoffUntil: number): Promise<void> {
+/**
+ * Written as a merge. A refusal used to write the row as `{ backoffUntil }`
+ * alone, wiping the token another process had just been given and every
+ * other thing we knew; now a refusal adds its back-off and leaves the rest.
+ */
+async function keep(change: Partial<HeldToken> & { backoffUntil?: number; lastGoodAt?: number }): Promise<void> {
   if (!hasDb()) return;
   await q(
-    `INSERT INTO os_cache (key, payload, computed_at) VALUES ($1, $2, NOW())
-     ON CONFLICT (key) DO UPDATE SET payload = EXCLUDED.payload, computed_at = NOW()`,
-    [TOKEN_ROW, JSON.stringify({ ...(held ?? {}), backoffUntil })]
+    `INSERT INTO os_cache (key, payload, computed_at) VALUES ($1, $2::jsonb, NOW())
+     ON CONFLICT (key) DO UPDATE SET payload = os_cache.payload || EXCLUDED.payload, computed_at = NOW()`,
+    [TOKEN_ROW, JSON.stringify(change)]
   ).catch(() => {});
 }
 
@@ -172,6 +221,11 @@ async function getToken(stale: string | null = null): Promise<string> {
 
 /** The kept token if there is a good one, otherwise one from Propoly. */
 async function obtainToken(stale: string | null): Promise<string> {
+  if (stale && state.cached?.token === stale) {
+    const age = state.cached.issuedAt ? Math.round((Date.now() - state.cached.issuedAt) / 60_000) : null;
+    const left = Math.round((state.cached.expiresAt - Date.now()) / 60_000);
+    say("cancelled", `Propoly refused a token ${age == null ? "of unknown age" : `${age} min old`} with ${left} min still to run - something else signed in with the same login?`);
+  }
   const kept = await readKept();
   if (kept?.held && kept.held.token !== stale) {
     state.cached = kept.held;
@@ -197,19 +251,30 @@ async function fetchToken(): Promise<string> {
     /* Their Retry-After when they give one, never less than a minute. */
     const retryAfter = Number(res.headers.get("retry-after")) * 1000;
     state.backoffUntil = Date.now() + Math.max(MIN_BACKOFF_MS, Number.isFinite(retryAfter) ? retryAfter : 0);
-    await keep(null, state.backoffUntil);
-    noteFailure({ source: "Propoly", what: "token", status: 429, message: "rate limited - backing off for a minute" });
+    await keep({ backoffUntil: state.backoffUntil });
+    if (outOfReach(state.lastGoodAt)) {
+      noteFailure({ source: "Propoly", what: "token", status: 429, message: "no token for over ten minutes - Propoly keeps saying we asked too recently" });
+    } else {
+      say("429", `token refused (429), backing off ${Math.round((state.backoffUntil - Date.now()) / 1000)}s - last good answer ${Math.round((Date.now() - state.lastGoodAt) / 1000)}s ago`);
+    }
     throw new Error("Propoly token request failed: 429 (rate limited)");
   }
   if (!res.ok) {
-    noteFailure({ source: "Propoly", what: "token", status: res.status, message: "would not give us a token" });
+    /* A 403 here is the key itself being refused: that is never the back-off. */
+    if (res.status === 403 || outOfReach(state.lastGoodAt)) {
+      noteFailure({ source: "Propoly", what: "token", status: res.status, message: "would not give us a token" });
+    } else {
+      say("token-fail", `token request failed (${res.status}) - last good answer ${Math.round((Date.now() - state.lastGoodAt) / 1000)}s ago`);
+    }
     throw new Error(`Propoly token request failed: ${res.status}`);
   }
   const data = (await res.json()) as TokenResponse;
   if (!data.token) throw new Error("Propoly token response had no token");
-  const held = { token: data.token, clientName: data.client_name ?? null, expiresAt: jwtExpiry(data.token) };
+  const held: HeldToken = { token: data.token, clientName: data.client_name ?? null, expiresAt: jwtExpiry(data.token), issuedAt: Date.now() };
   state.cached = held;
-  await keep(held, 0);
+  markGood();
+  await keep({ ...held, backoffUntil: 0, lastGoodAt: state.lastGoodAt });
+  say("issued", `new token, good for ${Math.round((held.expiresAt + 60_000 - held.issuedAt!) / 60_000)} min`);
   return held.token;
 }
 
@@ -318,8 +383,18 @@ export async function propolyGet(path: string, opts?: { probe?: boolean }): Prom
   } catch {
     body = null;
   }
+  if (res.ok) noteGoodRead();
   if (!opts?.probe) reportPropoly("GET", path, res.status);
   return { status: res.status, body };
+}
+
+/** A read Propoly took. Kept on the row at most once a minute, for the next process. */
+let goodKeptAt = 0;
+function noteGoodRead(): void {
+  markGood();
+  if (Date.now() - goodKeptAt < 60_000) return;
+  goodKeptAt = Date.now();
+  void keep({ lastGoodAt: state.lastGoodAt });
 }
 
 /** The client name Propoly reported with the last token (null until fetched). */
