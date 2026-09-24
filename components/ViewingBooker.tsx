@@ -336,10 +336,14 @@ export default function ViewingBooker({
    * busy costs a phone call, one wrongly shown as free costs a double booking.
    */
   /* Booking into your own day (no agent named, or the agent is you). */
-  const bookingOwn = !agent.trim() || (meName.trim() !== "" && agent.trim().toLowerCase().split(" ")[0] === meName.trim().toLowerCase().split(" ")[0]);
+  const bookingOwn = !everything || !agent.trim() || (meName.trim() !== "" && agent.trim().toLowerCase().split(" ")[0] === meName.trim().toLowerCase().split(" ")[0]);
   const appts = useMemo(() => {
     /* No name given: the person doing the booking (19 Sep 2026 - an owner was
        shown the whole company's week while booking their own appraisal). */
+    /* The diary is only ever the signed-in person's own now (24 Sep 2026),
+       so there is nobody else's day to narrow away - and narrowing an owner's
+       own day to the lead's agent's NAME would leave the grid empty. */
+    if (!everything) return allAppts;
     const want = (agent.trim() || meName.trim()).toLowerCase();
     if (!want) return allAppts;
     const first = want.split(" ")[0];

@@ -223,13 +223,18 @@ export async function GET(req: NextRequest) {
       reason: "No diary: this person has no account here and no REX record to read one from.",
     });
   }
-  const mineOnly = !scope.everything;
+  /* EVERYBODY SEES THEIR OWN DIARY - owners too (James, 24 Sep 2026:
+     "owners should only see their own diaries"). An owner used to be sent the
+     whole team's book, for the Viewings screen's person picker and the
+     booker; nobody's diary leaves them now. The owner-shaped paths below stay
+     for the day that is reversed, and `everything` is always false. */
+  const mineOnly = true;
   const person = viewingAs && subject ? subject : actor;
   const rexLogin = hasDb()
     ? await q<{ rex_email: string }>(`SELECT rex_email FROM os_rex_tokens WHERE user_id = $1`, [person.id]).catch(() => [])
     : [];
   const who = mineOnly
-    ? { email: (person.email ?? "").toLowerCase() || null, name: scope.label || null, rexEmail: rexLogin[0]?.rex_email ?? null }
+    ? { email: (person.email ?? "").toLowerCase() || null, name: (scope.everything ? person.name : scope.label) || null, rexEmail: rexLogin[0]?.rex_email ?? null }
     : { email: null, name: null };
 
   /* Ours are read OUTSIDE the cache, every time. The two-minute hold exists
@@ -283,7 +288,7 @@ export async function GET(req: NextRequest) {
       mine: [...mine, ...(outlook?.appts ?? [])],
       whose,
       outlook: outlookSaid(outlook),
-      everything: scope.everything,
+      everything: false,
       reason: "REX isn't connected here.",
     });
   }
@@ -296,18 +301,18 @@ export async function GET(req: NextRequest) {
   const held = found && londonDayOffset(found.at) === 0 ? found : null;
   const age = held ? Date.now() - held.at : Infinity;
   if (held && age < FRESH_MS) {
-    return NextResponse.json({ ok: true, live: true, ...(await shaped(held.book)), everything: scope.everything, ageMs: age });
+    return NextResponse.json({ ok: true, live: true, ...(await shaped(held.book)), everything: false, ageMs: age });
   }
   if (held && age < STALE_MS) {
     void refreshDiaryBook();
-    return NextResponse.json({ ok: true, live: true, ...(await shaped(held.book)), everything: scope.everything, ageMs: age, stale: true });
+    return NextResponse.json({ ok: true, live: true, ...(await shaped(held.book)), everything: false, ageMs: age, stale: true });
   }
   try {
     const fresh = await refreshDiaryBook();
-    return NextResponse.json({ ok: true, live: true, ...(await shaped(fresh.book)), everything: scope.everything, ageMs: 0 });
+    return NextResponse.json({ ok: true, live: true, ...(await shaped(fresh.book)), everything: false, ageMs: 0 });
   } catch (e) {
     if (held) {
-      return NextResponse.json({ ok: true, live: true, ...(await shaped(held.book)), everything: scope.everything, ageMs: age, stale: true });
+      return NextResponse.json({ ok: true, live: true, ...(await shaped(held.book)), everything: false, ageMs: age, stale: true });
     }
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Couldn't reach REX." }, { status: 502 });
   }
