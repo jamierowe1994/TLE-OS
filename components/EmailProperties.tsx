@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { DoneTick, PressButton } from "@/components/Bits";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
+import { note } from "@/lib/trail";
 
 /**
  * Sending someone properties — the thing an agent does more than anything
@@ -38,27 +39,51 @@ export default function EmailProperties({
   /* The live book, loaded when the picker opens, and whatever was ticked from it. */
   const [book, setBook] = useState<Listing[] | null>(null);
   const [bookFailed, setBookFailed] = useState(false);
+  /* Bumped by Try again. A failed read used to be final for as long as the
+     lead stayed open: Howard, 24 Sep 2026, "No option to select properties",
+     on a day every one of his list reads the server saw came back whole. One
+     that went wrong in his browser left him with no list and no way back. */
+  const [bookTry, setBookTry] = useState(0);
   const [find, setFind] = useState("");
   const [extra, setExtra] = useState<Listing[]>([]);
   useEffect(() => {
     if (!open || book) return;
     let live = true;
-    fetch("/api/listings?tests=0", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => {
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    setBookFailed(false);
+    const read = async (again: boolean) => {
+      let why = "";
+      try {
+        const r = await fetch("/api/listings?tests=0", { cache: "no-store" });
+        const j = await r.json().catch(() => null);
         if (!live) return;
         if (j?.ok && Array.isArray(j.listings)) {
           const rows = (j.listings as Array<Listing & { letAgreed?: boolean; publicationStatus?: string | null }>)
-            .filter((l) => !l.letAgreed)
+            .filter((l) => l && !l.letAgreed)
             .map((l) => ({ id: String(l.id), name: l.name, locality: l.locality, rent: l.rent, image: l.image }));
           setBook(rows);
-        } else setBookFailed(true);
-      })
-      .catch(() => live && setBookFailed(true));
+          return;
+        }
+        why = j ? j.error || j.reason || "no list in the answer" : `unreadable answer, ${r.status}`;
+      } catch (e) {
+        why = (e as Error)?.message || "no answer";
+      }
+      if (!live) return;
+      /* One quiet second go: most of these are a blip, and nobody should
+         see a failure the next request would have fixed. */
+      if (again) {
+        retry = setTimeout(() => void read(false), 1200);
+        return;
+      }
+      note("failed", `home list: ${why}`);
+      setBookFailed(true);
+    };
+    void read(true);
     return () => {
       live = false;
+      if (retry) clearTimeout(retry);
     };
-  }, [open, book]);
+  }, [open, book, bookTry]);
   const [stage, setStage] = useState<"pick" | "review" | "sent">("pick");
   /* THE REAL SEND (16 Sep 2026). This modal used to move to "Sent" without a
      request leaving the browser. Now Review renders the email the server will
@@ -240,7 +265,18 @@ export default function EmailProperties({
                   className="mt-2 w-full rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[12.5px] outline-none focus:border-ink"
                 />
                 {book === null && !bookFailed && <p className="mt-3 text-[12px] text-muted">Loading the live book…</p>}
-                {bookFailed && <p className="mt-3 text-[12px] text-muted">We could not read the wider list just now, so only the shortlist can be sent.</p>}
+                {bookFailed && (
+                  <p className="mt-3 text-[12px] text-muted">
+                    We could not load the list of homes just now.{" "}
+                    <button
+                      type="button"
+                      onClick={() => setBookTry((n) => n + 1)}
+                      className="font-semibold text-ink underline underline-offset-2"
+                    >
+                      Try again
+                    </button>
+                  </p>
+                )}
                 {book && (
                   <ul className="mt-3 space-y-2">
                     {results.map((p) => (
