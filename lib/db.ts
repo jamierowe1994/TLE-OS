@@ -2078,6 +2078,23 @@ ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS agent_name TEXT;
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS payprop_no TEXT;
 -- The tenants in residence, from the same sheet (24 Sep 2026), where REX CRM holds none.
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS tenant_names TEXT;
+
+-- Every column of Susan's clean-sweep sheet, per home (24 Sep 2026): a word, a
+-- date, a number or a file, and where it came from. One row per home per field
+-- (lib/property-facts FIELDS). Filled from REX PM and Propoly first; whatever no
+-- system holds is added by hand by the checker, source 'manual'.
+CREATE TABLE IF NOT EXISTS os_property_facts (
+  property_id     TEXT NOT NULL,
+  field           TEXT NOT NULL,
+  value           TEXT,
+  file_key        TEXT,
+  source          TEXT NOT NULL,
+  source_ref      TEXT,
+  checked_against TEXT,
+  captured_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  captured_by     TEXT,
+  PRIMARY KEY (property_id, field)
+);
 CREATE INDEX IF NOT EXISTS os_plc_cases_agent ON os_plc_cases (lower(agent_email), created_at DESC);
 
 -- The shadow log: what the rules recommended, and what the person decided.
