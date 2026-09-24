@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { putViewingInRexDiary } from "@/lib/rex-diary-write";
+import { rexCopiesToOutlook } from "@/lib/rex-outlook-sync";
 import { putInOutlook } from "@/lib/outlook-calendar";
 import { isOsLead, osContactIdFrom } from "@/lib/contacts-as-leads";
 import { getContact, markRex } from "@/lib/contacts-store";
@@ -78,19 +79,6 @@ export async function POST(req: NextRequest) {
     }, made ? undefined : { status: 404 });
   }
 
-  const outlook = await putInOutlook({
-    userId: actor.id,
-    key: `viewing|${b.leadId}|${listingId ?? "-"}|${new Date(b.startsAt).toISOString()}`,
-    subject: `${unaccompanied ? "Unaccompanied viewing" : "Viewing"} - ${address} with ${applicantName}`,
-    body: `Booked in TLE OS.${unaccompanied ? " Unaccompanied - nobody from us is going." : ""}\nApplicant: ${applicantName}${b.applicantEmail ? ` (${b.applicantEmail})` : ""}`,
-    /* An unaccompanied viewing is in the agent's diary so they know it is
-       happening, but it does not take their time. */
-    showAs: unaccompanied ? "free" : "busy",
-    location: address,
-    startsAt: b.startsAt,
-    minutes,
-  }).catch(() => ({ ok: false as const, reason: "refused" as const, detail: "Could not reach Outlook." }));
-
   /* The applicant goes into REX with the viewing (James, 18 Sep 2026: "if a
      tenant goes for a viewing, it should then push that"). An OS lead with no
      REX contact yet is pushed now, so the diary entry is joined to them.
@@ -125,6 +113,26 @@ export async function POST(req: NextRequest) {
     minutes,
     unaccompanied,
   }).catch(() => ({ ok: false as const, reason: "refused" as const, detail: "Could not reach REX." }));
+
+  /* INTO OUTLOOK - unless their REX already copies its diary there (Howard,
+     24 Sep 2026: two of every viewing). Then REX's copy is the one, and this
+     only stands aside once REX has actually taken the entry; see
+     lib/rex-outlook-sync. */
+  const viaRex = rex.ok && (await rexCopiesToOutlook(actor.id));
+  const outlook = viaRex
+    ? { ok: true as const, viaRex: true, detail: "In your Outlook calendar through REX's own copy." }
+    : await putInOutlook({
+    userId: actor.id,
+    key: `viewing|${b.leadId}|${listingId ?? "-"}|${new Date(b.startsAt).toISOString()}`,
+    subject: `${unaccompanied ? "Unaccompanied viewing" : "Viewing"} - ${address} with ${applicantName}`,
+    body: `Booked in TLE OS.${unaccompanied ? " Unaccompanied - nobody from us is going." : ""}\nApplicant: ${applicantName}${b.applicantEmail ? ` (${b.applicantEmail})` : ""}`,
+    /* An unaccompanied viewing is in the agent's diary so they know it is
+       happening, but it does not take their time. */
+    showAs: unaccompanied ? "free" : "busy",
+    location: address,
+    startsAt: b.startsAt,
+    minutes,
+  }).catch(() => ({ ok: false as const, reason: "refused" as const, detail: "Could not reach Outlook." }));
 
   /* THE OS'S OWN RECORD (22 Sep 2026). The booking used to live only in
      Outlook and REX: an agent whose REX copy failed - every unlinked agent in

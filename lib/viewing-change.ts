@@ -3,6 +3,7 @@ import { hasDb, q } from "@/lib/db";
 import { ensureRexLink, type OsUser } from "@/lib/users";
 import { rexCall } from "@/lib/rex";
 import { changeRexEvent } from "@/lib/rex-diary-write";
+import { rexCopiesToOutlook } from "@/lib/rex-outlook-sync";
 import { putInOutlook, removeFromOutlook, icsFile } from "@/lib/outlook-calendar";
 import { renderTleEmail } from "@/lib/email/tle-emails";
 import { sendAsAgent } from "@/lib/send-as-agent";
@@ -85,7 +86,13 @@ export async function changeViewing(me: OsUser, p: ViewingChangeInput): Promise<
       [eventId]
     ).catch(() => []);
     const outlookKey = rows[0] ? `viewing|${rows[0].record_id}` : null;
-    if (outlookKey) {
+    /* Their REX copies its diary into Outlook (lib/rex-outlook-sync): REX's
+       copy moves or goes with the change above, and ours, if there is one
+       from before that was known, is the duplicate - taken out, not moved. */
+    if (outlookKey && steps.rex?.startsWith(p.action === "cancel" ? "Cancelled" : "Moved") && (await rexCopiesToOutlook(me.id))) {
+      const gone = await removeFromOutlook(me.id, outlookKey).catch(() => null);
+      steps.outlook = gone?.ok ? "Your Outlook follows REX; the extra copy was taken out." : "Your Outlook follows REX.";
+    } else if (outlookKey) {
       if (p.action === "cancel") {
         steps.outlook = (await removeFromOutlook(me.id, outlookKey)).detail;
       } else if (p.newStartsAt) {

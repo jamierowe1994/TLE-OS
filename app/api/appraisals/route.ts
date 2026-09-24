@@ -12,7 +12,8 @@ import { publicOrigin } from "@/lib/origin";
 import type { ConfirmationResult } from "@/lib/appraisal-confirm";
 
 import { putAppraisalInRexDiary, type DiaryOutcome } from "@/lib/rex-diary-write";
-import { putInOutlook, type OutlookOutcome } from "@/lib/outlook-calendar";
+import { rexCopiesToOutlook } from "@/lib/rex-outlook-sync";
+import { putInOutlook, type OutlookOutcome, removeFromOutlook } from "@/lib/outlook-calendar";
 /**
  * The appraisals the OS has booked.
  *
@@ -107,10 +108,25 @@ export async function POST(req: NextRequest) {
         } catch {
           videoChase = { queued: false, reason: "Couldn't queue the video nudge." };
         }
-        /* Into the agent's own Outlook calendar first (lib/outlook-calendar,
+        /* REX's diary, as the silent mirror (lib/rex-diary-write). Never the
+           reason a booking fails. First, so Outlook below knows whether REX
+           will copy it there itself. */
+        try {
+          rexDiary = await putAppraisalInRexDiary({ ma: appraisal, userId: me.id });
+        } catch (e) {
+          rexDiary = { ok: false, reason: "refused", detail: e instanceof Error ? e.message : "Couldn't reach REX." };
+        }
+        /* Into the agent's own Outlook calendar (lib/outlook-calendar,
            15 Sep 2026) - that is their diary. James: nobody should need REX's
            calendar sync, which often does not save. */
-        try {
+        /* Unless their REX already copies its diary into Outlook (Howard, 24
+           Sep 2026: two of everything) - then REX's copy is the one, once REX
+           has taken it. See lib/rex-outlook-sync. */
+        if (rexDiary?.ok && (await rexCopiesToOutlook(me.id))) {
+          /* One we made before this was known is the duplicate: take it out. */
+          await removeFromOutlook(me.id, `appraisal|${appraisal.id}`).catch(() => null);
+          outlook = { ok: true, eventId: "", moved: false, duplicate: false, viaRex: true } as OutlookOutcome;
+        } else try {
           const where = [appraisal.address, appraisal.postcode].filter((x) => x && !appraisal.address.includes(x)).join(", ") || appraisal.address;
           outlook = await putInOutlook({
             userId: me.id,
@@ -123,13 +139,6 @@ export async function POST(req: NextRequest) {
           });
         } catch (e) {
           outlook = { ok: false, reason: "refused", detail: e instanceof Error ? e.message : "Couldn't reach Outlook." };
-        }
-        /* And REX's diary, as the silent mirror (lib/rex-diary-write). Never
-           the reason a booking fails. */
-        try {
-          rexDiary = await putAppraisalInRexDiary({ ma: appraisal, userId: me.id });
-        } catch (e) {
-          rexDiary = { ok: false, reason: "refused", detail: e instanceof Error ? e.message : "Couldn't reach REX." };
         }
       } else {
         confirmation = { sent: false, reason: "Not signed in, so the confirmation could not go out in anybody's name." };

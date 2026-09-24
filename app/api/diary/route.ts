@@ -9,6 +9,7 @@ import { scopeFor } from "@/lib/scope";
 import { whoIs } from "@/lib/admin";
 import { osFeedbackFor } from "@/lib/viewing-feedback-store";
 import { outlookDiaryFor, type OutlookRead } from "@/lib/outlook-diary";
+import { noteRexOutlookSync } from "@/lib/rex-outlook-sync";
 
 /**
  * The team's diary, cached — same manners as leads and listings.
@@ -262,6 +263,11 @@ export async function GET(req: NextRequest) {
     const scoped = merged(forScope(book, who), mine);
     const marked = await withOsFeedback(mineOnly ? scoped : own(scoped, self));
     const outlook = await outlookP;
+    /* Both calendars side by side: note whether their REX copies into their
+       Outlook, so a booking is not put there twice (lib/rex-outlook-sync). */
+    if (outlook?.state === "connected") {
+      void noteRexOutlookSync(actor.id, mineOnly ? marked.appts : marked.appts.filter((a) => a.own), outlook.appts);
+    }
     return { ...withOutlook(marked, outlook, mineOnly), whose, outlook: outlookSaid(outlook) };
   };
 
