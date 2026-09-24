@@ -5,6 +5,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import { PressButton } from "@/components/Bits";
 import {
   NURTURE_REASONS,
+  TENANT_NURTURE_REASONS,
   OUTCOMES,
   TOUCH_KINDS,
   type TouchKind,
@@ -39,6 +40,7 @@ export default function LogTouch({
   inline = false,
   tried,
   askBooked = true,
+  audience = "landlord",
 }: {
   leadId: string;
   leadName: string;
@@ -60,11 +62,15 @@ export default function LogTouch({
   tried?: { label: string; done: boolean }[];
   /** A tenant is not booking a valuation: skip that frame. */
   askBooked?: boolean;
+  /** Whose nurture: a tenant gets its own reasons and is never put on a
+   *  landlord campaign (Howard, 24 Sep 2026). */
+  audience?: "landlord" | "tenant";
 }) {
+  const reasons = audience === "tenant" ? TENANT_NURTURE_REASONS : NURTURE_REASONS;
   const [kind, setKind] = useState<TouchKind>(initialKind);
   const [outcome, setOutcome] = useState<TouchOutcome | null>(null);
   const [body, setBody] = useState("");
-  const [reason, setReason] = useState(NURTURE_REASONS[0]);
+  const [reason, setReason] = useState(reasons[0]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /* The attempt walks through frames (James, 11 Sep 2026): how you reached
@@ -107,7 +113,7 @@ export default function LogTouch({
         headers: { "content-type": "application/json" },
         body: JSON.stringify(
           mode === "nurture"
-            ? { kind: "nurture", reason, body, lead: leadFacts }
+            ? { kind: "nurture", reason, body, lead: leadFacts, side: audience }
             : { kind, outcome, body: booked ? `Booked the valuation.${body ? ` ${body}` : ""}` : body }
         ),
       });
@@ -225,8 +231,9 @@ export default function LogTouch({
           <>
             <h2 className="hand text-[20px]">{tried ? `Send ${first} to nurture?` : "Add to nurture"}</h2>
             <p className="mt-1 text-[12.5px] text-muted">
-              {first} is not saying no and not answering. The reason picks the campaign that keeps them warm,
-              and they come straight back on the spine the moment they reply.
+              {audience === "tenant"
+                ? `${first} stays on your list as in nurture, and comes straight back the moment they answer or reply. No emails go to tenants from nurture yet.`
+                : `${first} is not saying no and not answering. The reason picks the campaign that keeps them warm, and they come straight back on the spine the moment they reply.`}
             </p>
             {tried && (
               <div className="mt-4 rounded-2xl border border-line/70 bg-card p-3.5">
@@ -241,13 +248,13 @@ export default function LogTouch({
                   ))}
                 </ul>
                 {tried.some((t) => !t.done) && (
-                  <p className="mt-2.5 text-[11.5px] text-muted">Nurture keeps them warm by email. A call or a message you have not tried yet is still worth one go first.</p>
+                  <p className="mt-2.5 text-[11.5px] text-muted">{audience === "tenant" ? "A call or a message you have not tried yet is still worth one go first." : "Nurture keeps them warm by email. A call or a message you have not tried yet is still worth one go first."}</p>
                 )}
               </div>
             )}
             <p className="mt-4 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Why</p>
             <div className="mt-1.5 flex flex-wrap gap-2">
-              {NURTURE_REASONS.map((r) => (
+              {reasons.map((r) => (
                 <button
                   key={r}
                   type="button"

@@ -24,7 +24,7 @@ import MailThread from "@/components/MailThread";
 import TenantPropertySearch from "@/components/TenantPropertySearch";
 import LogTouch, { type LogMode } from "@/components/LogTouch";
 import type { PersonViewing } from "@/lib/person-viewings";
-import { ATTEMPT_KINDS, touchIcon, touchSentence, whenAgo, type LeadTouch, type Spine, type SpineId } from "@/lib/lead-spine";
+import { ATTEMPT_KINDS, CONTACT_TRIES, tenantContact, touchIcon, touchSentence, whenAgo, type LeadTouch, type Spine, type SpineId } from "@/lib/lead-spine";
 import { Pill } from "@/components/Wire";
 import { leadSide } from "@/lib/leads-sample";
 import { isOsLead, osContactIdFrom } from "@/lib/contacts-as-leads";
@@ -44,7 +44,7 @@ import AppraisalTrack from "@/components/AppraisalTrack";
 import ConfirmSheet from "@/components/ConfirmSheet";
 import { EMPTY_CASE, type AppraisalCase } from "@/lib/appraisal";
 import { saveLabel, useCaseState } from "@/lib/case-state";
-import { isStalled, NURTURE_BRANCH, startingStep, trackFor } from "@/lib/journey";
+import { isStalled, NURTURE_BRANCH, startingStep, TENANT_TRACK, trackFor } from "@/lib/journey";
 import rexSample from "@/lib/rex-sample.json";
 import { fetchMe } from "@/lib/me";
 import { WhatsAppButton } from "@/components/WhatsAppQr";
@@ -1106,6 +1106,17 @@ function LeadDrawerBody({
   useEffect(() => {
     if (lead && spine && leadSide(lead) === "landlord") setStep(spine.stepIndex);
   }, [lead, spine]);
+  /* A tenant moves on the log too, and only as far as it earns: any try puts
+     them on the qualifying call, and only speaking to them (or a reply) moves
+     them to Shortlists. Forwards only - a later step REX already knows about
+     is never pulled back. */
+  useEffect(() => {
+    if (!lead || leadSide(lead) !== "tenant") return;
+    const c = tenantContact(touches);
+    const ids = TENANT_TRACK.map((t) => t.id);
+    const floor = c.reached ? ids.indexOf("shortlist") : c.attempts > 0 ? ids.indexOf("qualify") : 0;
+    setStep((s) => Math.max(s, floor));
+  }, [lead, touches]);
 
   useEffect(() => {
     if (!lead) return;
@@ -1278,8 +1289,13 @@ function LeadDrawerBody({
   const sp = !isTenant ? spine : null;
   /* The newest thing logged against the lead, whatever it was. */
   const latestTouch = touches.length ? [...touches].sort((x, y) => y.at.localeCompare(x.at))[0] : null;
-  const nurturing = sp?.nurture ?? null;
-  const canNurture = Boolean(sp && !sp.booked && sp.attempts >= 1 && !nurturing);
+  /* The tenant's reading of the same log: tries, whether anybody actually
+     spoke to them, and nurture (Howard, 24 Sep 2026). */
+  const tc = isTenant ? tenantContact(touches) : null;
+  const nurturing = sp?.nurture ?? tc?.nurture ?? null;
+  const canNurture = isTenant
+    ? Boolean(tc && !tc.reached && tc.attempts >= 1 && !nurturing)
+    : Boolean(sp && !sp.booked && sp.attempts >= 1 && !nurturing);
 
   /* At the appraisal step the appraisal itself takes the screen — the lead's
      timeline and the notes step aside for it. An escape hatch rather than a
@@ -1587,7 +1603,9 @@ function LeadDrawerBody({
             />
   );
   /* On a landlord's contact step the log lives in the Next up card itself. */
-  const logInline = (here.action === "log" || (isTenant && (here.id === "enquiry" || here.id === "qualify"))) && !stalled && !nurturing && !sp?.booked;
+  /* A tenant in nurture keeps the log: the call they finally answer is what
+     brings them back, so it has to stay where the agent can reach it. */
+  const logInline = (here.action === "log" || (isTenant && (here.id === "enquiry" || here.id === "qualify"))) && !stalled && (!nurturing || isTenant) && !sp?.booked;
   /* WhatsApp beside the mobile: a code to scan at a desk, the link itself on
      a phone. The OS cannot see the phone, so the sheet asks, and a yes goes
      on the log like any other attempt. */
@@ -1626,9 +1644,11 @@ function LeadDrawerBody({
                     </p>
                     <p className="mt-2 flex items-center gap-2 text-[11.5px] font-medium text-accent-dark">
                       <DoodleIcon name="mail" size={13} />
-                      {campaign
-                        ? `On ${campaign.name}${campaign.step > 0 ? ` - step ${campaign.step} sent` : " - first step to come"}`
-                        : "No campaign fits that reason yet - marketing can write one on the Marketing screen."}
+                      {isTenant
+                        ? "No emails go to tenants from nurture yet - they wait here until they answer."
+                        : campaign
+                          ? `On ${campaign.name}${campaign.step > 0 ? ` - step ${campaign.step} sent` : " - first step to come"}`
+                          : "No campaign fits that reason yet - marketing can write one on the Marketing screen."}
                     </p>
                   </>
                 ) : sp?.booked ? (
@@ -2521,9 +2541,48 @@ function LeadDrawerBody({
                             leadFacts={{ name: lead.name, email: contact.email || lead.email, contactId: lead.contactId ?? null }}
                             mode="attempt"
                             onClose={() => undefined}
-                            onLogged={(j) => { takeLog(j as { touches?: LeadTouch[]; spine?: Spine | null; campaign?: typeof campaign }); advance(); }}
+                            audience="tenant"
+                            onLogged={(j) => { takeLog(j as { touches?: LeadTouch[]; spine?: Spine | null; campaign?: typeof campaign }); }}
                           />
                         </div>
+                        {/* Not reached yet: which try this is, and nurture on
+                            offer from the first one that went unanswered. */}
+                        {tc?.nurture ? (
+                          <div className="mt-4 border-t border-brown/15 pt-3.5">
+                            <p className="flex items-center gap-2 text-[12.5px] font-semibold text-brown">
+                              <DoodleIcon name="clock" size={13} />
+                              In nurture since {whenAgo(tc.nurture.at)}
+                            </p>
+                            <p className="mt-1 text-[12px] leading-relaxed text-muted">
+                              {tc.nurture.reason}. Added by {tc.nurture.byName}. A call they answer or a reply brings them straight back. No emails go to tenants from nurture yet.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => void logTouch({ kind: "rejoin" })}
+                              className="mt-2.5 rounded-full border border-brown/40 px-4 py-2 text-[12px] font-semibold text-brown transition-colors hover:border-brown"
+                            >
+                              Back on the track
+                            </button>
+                          </div>
+                        ) : tc && !tc.reached && tc.attempts > 0 && (
+                          <div className="mt-4 border-t border-brown/15 pt-3.5">
+                            <p className="text-[12.5px] leading-relaxed text-muted">
+                              {tc.attempts >= CONTACT_TRIES
+                                ? `${tc.attempts} tries and no answer yet. Send ${lead.name.split(" ")[0]} to nurture, or try once more.`
+                                : `No answer yet - that was try ${tc.attempts} of ${CONTACT_TRIES}.`}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setLogging("nurture")}
+                              className={`mt-2.5 flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-semibold transition-colors ${
+                                tc.attempts >= CONTACT_TRIES ? "bg-brown text-white hover:opacity-90" : "border border-brown/40 text-brown hover:border-brown"
+                              }`}
+                            >
+                              <DoodleIcon name="clock" size={13} />
+                              Send to nurture
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="mt-3 flex flex-col gap-4 [&>div:first-child>p:first-child]:hidden [&>div:first-child>p.hand]:mt-0 [&>div:last-child]:items-start [&_.press-ring]:bg-brown [&_.press-ring]:text-white">{nextActionEl}</div>
@@ -3540,8 +3599,9 @@ function LeadDrawerBody({
           leadName={lead.name}
           leadFacts={{ name: lead.name, email: contact.email || lead.email, contactId: lead.contactId ?? null }}
           mode={logging}
+          audience={isTenant ? "tenant" : "landlord"}
           tried={
-            logging === "nurture" && !isTenant
+            logging === "nurture"
               ? [
                   { label: "Called them", done: touches.some((t) => t.kind === "call") },
                   { label: "Texted or WhatsApped", done: touches.some((t) => t.kind === "text" || t.kind === "whatsapp") },

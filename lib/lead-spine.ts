@@ -65,6 +65,52 @@ export const NURTURE_REASONS = [
   "Other",
 ];
 
+/**
+ * A tenant's reasons (Howard, 24 Sep 2026). Not the landlord list: "Selling
+ * instead" means nothing to somebody renting. No campaign is written for a
+ * tenant yet, so these only say why - the touches route never enrols a
+ * tenant on a landlord campaign.
+ */
+export const TENANT_NURTURE_REASONS = [
+  "Not answering",
+  "Not ready to move yet",
+  "Found somewhere",
+  "Other",
+];
+
+/** Tries before the drawer says "send them to nurture". The landlord spine's three. */
+export const CONTACT_TRIES = 3;
+
+/**
+ * Where a TENANT lead is with being reached, read from the log.
+ *
+ * The tenant track moved on whenever anything was logged, so a call nobody
+ * answered sent the lead to Shortlists as if they had been qualified (Howard,
+ * 24 Sep 2026). This is the landlord spine's reading of the same log: every
+ * call, text or WhatsApp is an attempt, and only "spoke to them" or "they
+ * replied" counts as reached. Nurture works as it does for a landlord - on
+ * with a reason, off the moment they answer or somebody puts them back.
+ */
+export interface TenantContact {
+  attempts: number;
+  reached: boolean;
+  nurture: { at: string; reason: string; byName: string } | null;
+}
+
+export function tenantContact(touches: LeadTouch[]): TenantContact {
+  const log = sortTouches(touches).reverse();
+  let attempts = 0;
+  let reached = false;
+  let nurture: TenantContact["nurture"] = null;
+  for (const t of log) {
+    if (ATTEMPT_KINDS.includes(t.kind)) attempts++;
+    if (t.outcome === "spoke" || t.outcome === "replied") reached = true;
+    if (t.kind === "nurture") nurture = { at: t.at, reason: t.body, byName: t.byName };
+    if (t.kind === "rejoin" || t.outcome === "spoke" || t.outcome === "replied") nurture = null;
+  }
+  return { attempts, reached, nurture };
+}
+
 /** Landlord spine ids, in order. Mirrors LANDLORD_TRACK in lib/journey. */
 export const SPINE_IDS = ["lead", "contacted", "email", "contact2", "contact3", "appraisal_booked"] as const;
 export type SpineId = (typeof SPINE_IDS)[number];

@@ -6,6 +6,7 @@ import { campaignOn, enrolLead, stopLeadCampaigns } from "@/lib/campaign-store";
 import {
   ATTEMPT_KINDS,
   NURTURE_REASONS,
+  TENANT_NURTURE_REASONS,
   OUTCOMES,
   type TouchKind,
   type TouchOutcome,
@@ -56,7 +57,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     reason?: string;
     /** Who the lead is, for the campaign enrolment. The drawer holds this. */
     lead?: { name?: string; email?: string; contactId?: string | null };
+    /** A tenant's nurture is recorded but never enrols: every campaign is a landlord's. */
+    side?: "tenant" | "landlord";
   };
+  const tenant = body.side === "tenant";
   const kind = body.kind as TouchKind;
   if (!KINDS.includes(kind)) {
     return NextResponse.json({ ok: false, error: "Say what it was: a call, a text, a visit, an email or a note." }, { status: 400 });
@@ -75,7 +79,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   }
   let reason: string | null = null;
   if (kind === "nurture") {
-    reason = NURTURE_REASONS.includes(body.reason ?? "") ? (body.reason as string) : null;
+    reason = (tenant ? TENANT_NURTURE_REASONS : NURTURE_REASONS).includes(body.reason ?? "") ? (body.reason as string) : null;
     if (!reason) return NextResponse.json({ ok: false, error: "Say why they are going to nurture." }, { status: 400 });
     /* The row reads "Not answering - try again after the 20th": the reason
        first, so the spine can show it, then whatever was added. */
@@ -95,7 +99,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   /* ── The campaigns ─────────────────────────────────────────────────────── */
   let enrolled: Awaited<ReturnType<typeof enrolLead>> = null;
   let stopped = 0;
-  if (kind === "nurture" && reason) {
+  /* Never a tenant: "Gone quiet - never spoken to" is written to a landlord
+     about letting their property (Howard's tenant nurture, 24 Sep 2026). */
+  if (kind === "nurture" && reason && !tenant) {
     enrolled = await enrolLead(
       {
         leadId: id,
