@@ -5,6 +5,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import Doodles from "@/components/Doodles";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import PropertyFile from "@/components/PropertyFile";
+import SaveChip, { SaveScopeProvider, useSaveScope } from "@/components/SaveChip";
 import { Pill } from "@/components/Wire";
 import { type SpineStop } from "@/components/StageSpine";
 import GuideButton from "@/components/GuideButton";
@@ -292,6 +293,9 @@ export default function ApplicationDrawer({
 }) {
   const [shown, setShown] = useState(false);
   const [tab, setTab] = useState<TabKey>("home");
+  /* The Auto save chip by the close button (23 Sep 2026): the comment, the
+     property file and whatever the stage adds below report to it. */
+  const saves = useSaveScope(app.id);
   /* The people on this application, and which of them the OS already has a
      lead for. Asked once when the drawer opens. */
   const [leadIds, setLeadIds] = useState<Record<string, string>>({});
@@ -389,22 +393,31 @@ export default function ApplicationDrawer({
     if (!text || posting) return;
     setPosting(true);
     setPostError(null);
+    /* The draft stays in the box until the comment has landed. Try again on
+       the chip only where the OS said no, so nothing was posted; after a
+       dropped connection it may have landed, and a resend would post it
+       twice - the words are still in the box to post again. */
+    const settle = saves.reporter.begin("Comment");
     try {
       const r = await fetch(`/api/applications/${encodeURIComponent(app.id)}/comments`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ text }),
       });
-      const j = (await r.json()) as { ok?: boolean; error?: string; comment?: { body: string; authorName: string; createdAt: string } };
-      if (!j.ok || !j.comment) {
-        setPostError(j.error ?? "That didn't save.");
+      const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string; comment?: { body: string; authorName: string; createdAt: string } } | null;
+      if (!r.ok || !j?.ok || !j.comment) {
+        const problem = j?.error ?? "That didn't save.";
+        setPostError(problem);
+        settle({ ok: false, problem, retry: () => void post() });
         return;
       }
       const c = j.comment;
       setComments((cs) => [...(cs ?? []), { when: whenWords(c.createdAt), what: c.body, by: c.authorName, note: true }]);
       setDraft("");
+      settle({ ok: true });
     } catch {
       setPostError("That didn't save. Try again in a moment.");
+      settle({ ok: false, problem: "the connection dropped." });
     } finally {
       setPosting(false);
     }
@@ -414,6 +427,7 @@ export default function ApplicationDrawer({
   const whiteButton = "press-ring inline-flex items-center gap-2 rounded-full border border-line/60 bg-white px-4 py-2.5 text-[12.5px] font-semibold transition-colors hover:border-ink/40";
 
   return (
+    <SaveScopeProvider scope={saves}>
     <div className="fixed inset-0 z-[130]" data-steve="application.drawer">
       <button
         aria-label="Close"
@@ -442,6 +456,7 @@ export default function ApplicationDrawer({
             >
               ✕
             </button>
+            <SaveChip scope={saves} />
             <div className="ml-auto flex min-w-0 max-w-full gap-2 overflow-x-auto pb-0.5">
               {TABS.map((t) => {
                 const count = t.key === "people" ? people.length : 0;
@@ -866,5 +881,6 @@ export default function ApplicationDrawer({
         </div>
       </aside>
     </div>
+    </SaveScopeProvider>
   );
 }

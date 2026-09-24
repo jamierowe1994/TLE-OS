@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyFile from "@/components/PropertyFile";
+import SaveChip, { SaveScopeProvider, useSaveScope } from "@/components/SaveChip";
 import { Pill } from "@/components/Wire";
 import { CERT_META, isLetOnly, requiredCerts, statusOf, type CertKey, type CompProperty } from "@/lib/compliance";
 import { COMPLIANCE_READERS as R, houseByListing, housesIn, pickerOption, roomLabel, tabLabel, type House } from "@/lib/houses";
@@ -80,6 +81,9 @@ export default function ComplianceDrawer({
    */
   const [people, setPeople] = useState<{ landlord: Party | null; tenants: Party[] } | null>(null);
   const docOpen = useDocumentOpen();
+  /* The Auto save chip by the close button (23 Sep 2026). The saves here are
+     the property file's - filing a certificate - and they report to it. */
+  const saves = useSaveScope(property?.id ?? null);
 
   const houses = useMemo(() => housesIn(book, R), [book]);
   const houseOf = useMemo(() => houseByListing(houses, R), [houses]);
@@ -137,6 +141,7 @@ export default function ComplianceDrawer({
   };
 
   return (
+    <SaveScopeProvider scope={saves}>
     <div className="fixed inset-0 z-[130]">
       <button
         aria-label="Close"
@@ -148,7 +153,8 @@ export default function ComplianceDrawer({
         style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
       >
         <div className="shrink-0 border-b border-line/70 px-6 pt-5">
-          <div className="flex items-start justify-between gap-3 pb-5">
+          {/* Buttons above the title on a phone, so the chip is never squeezed. */}
+          <div className="flex flex-col-reverse gap-3 pb-5 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <h2 className="text-[20px] leading-tight">{title}</h2>
               <p className="mt-1 text-[12px] text-muted">
@@ -158,9 +164,12 @@ export default function ComplianceDrawer({
                 {p.onRex === false && " · not on the book"}
               </p>
             </div>
-            <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">
-              ✕
-            </button>
+            <div className="flex items-center justify-end gap-2 sm:shrink-0">
+              <SaveChip scope={saves} />
+              <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">
+                ✕
+              </button>
+            </div>
           </div>
           {house && (
             <div className="flex flex-wrap items-center gap-2 pb-4">
@@ -297,5 +306,6 @@ export default function ComplianceDrawer({
         </div>
       </aside>
     </div>
+    </SaveScopeProvider>
   );
 }

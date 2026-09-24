@@ -46,6 +46,7 @@ import { stageEvidence } from "@/lib/business/stage-evidence";
 import { dealAlerts, type DealAlert } from "@/lib/business/deal-alerts";
 import WorkspaceLoading from "@/components/WorkspaceLoading";
 import PreTenancyHero from "@/components/pretenancy/Hero";
+import SaveChip, { SaveScopeProvider, useSaveReporter, useSaveScope } from "@/components/SaveChip";
 import { fetchMe } from "@/lib/me";
 
 /* ------------------------------- data shapes ------------------------------- */
@@ -1132,6 +1133,10 @@ function DealWorkspace({
   // The checklist drops out of the Outstanding tile rather than living on the
   // page. It is a thing you go and do, not a thing you read.
   const [checklistOpen, setChecklistOpen] = useState(false);
+  /* AUTO SAVE, BY THE CLOSE BUTTON (James, 23 Sep 2026) - the shared chip in
+     components/SaveChip. Every tick, stage move, note and follow-up on this
+     deal says it landed, or says plainly that it did not. */
+  const saves = useSaveScope(deal.app.id);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -1199,9 +1204,18 @@ function DealWorkspace({
     });
   }
 
+  /** What a meta save is called in the chip's toast, in Kirstie's words. */
+  function metaLabel(body: Record<string, unknown>): string {
+    if ("checklist" in body) return "Checklist";
+    if ("depositScheme" in body) return "Deposit scheme";
+    if ("stage" in body) return "Stage";
+    return "Deal";
+  }
+
   async function postMeta(body: Record<string, unknown>) {
     setBusy(true);
     setActionError(null);
+    const settle = saves.reporter.begin(metaLabel(body));
     try {
       const res = await fetch(`/api/deals/${deal.app.id}/meta`, {
         method: "POST",
@@ -1218,9 +1232,14 @@ function DealWorkspace({
       // Propoly status — raw statuses are not portal stage keys, and pushing
       // one into the board made the card vanish from every column (review).
       applyMeta(d.meta, d.effectiveStatusKey ?? effective);
+      settle({ ok: true });
       void fetchNotes(); // pick up the auto-logged activity line
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : "That didn't save.");
+      const problem = e instanceof Error ? e.message : "That didn't save.";
+      setActionError(problem);
+      /* Try again goes back through here, so a save that lands on the retry
+         still ticks the box and moves the card. */
+      settle({ ok: false, problem, retry: () => void postMeta(body) });
     } finally {
       setBusy(false);
     }
@@ -1231,6 +1250,10 @@ function DealWorkspace({
     if (!text.trim() || busy) return false;
     setBusy(true);
     setActionError(null);
+    /* No Try again on the chip: the words stay in the box when a note is
+       refused, and Send is the retry. A chip retry as well would post it
+       twice. */
+    const settle = saves.reporter.begin(kind === "private" ? "Private note" : "Note");
     try {
       const res = await fetch(`/api/deals/${deal.app.id}/notes`, {
         method: "POST",
@@ -1239,6 +1262,7 @@ function DealWorkspace({
       });
       const d = (await res.json()) as { note?: DealNote; error?: string };
       if (!res.ok || !d.note) throw new Error(d.error ?? "Couldn't add the note.");
+      settle({ ok: true });
       if (kind === "private") {
         setPrivateNotes((prev) => [...(prev ?? []), d.note!]);
         return true;
@@ -1261,7 +1285,9 @@ function DealWorkspace({
       });
       return true;
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : "Couldn't add the note.");
+      const problem = e instanceof Error ? e.message : "Couldn't add the note.";
+      setActionError(problem);
+      settle({ ok: false, problem });
       return false;
     } finally {
       setBusy(false);
@@ -1306,6 +1332,7 @@ function DealWorkspace({
      their own scroll, because a long thread should not push the people off
      the bottom. */
   return (
+    <SaveScopeProvider scope={saves}>
     <div className="fixed inset-0 z-50 bg-[#2b201d]/40" onClick={onClose}>
       <div
         className="drawer-in fixed inset-y-0 right-0 flex w-full max-w-[1320px] flex-col overflow-hidden bg-page shadow-[-20px_0_60px_-30px_rgba(40,25,20,0.5)] lg:w-[86vw] lg:rounded-l-[28px]"
@@ -1452,6 +1479,8 @@ function DealWorkspace({
                 <button type="button" onClick={onOpenMailbox} title="Connect your mailbox for the Emails tab" className="btn-press flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-card text-muted transition hover:text-ink">
                   <DoodleIcon name="mail" size={15} />
                 </button>
+                {/* Beside the X, so it is the last thing read before leaving. */}
+                <SaveChip scope={saves} />
                 <button onClick={onClose} aria-label="Close" className="flex h-10 w-10 items-center justify-center rounded-xl text-muted transition hover:bg-card hover:text-ink">
                   <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" fill="none" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
@@ -1935,6 +1964,7 @@ function DealWorkspace({
         </div>
       </div>
     </div>
+    </SaveScopeProvider>
   );
 }
 
@@ -2696,6 +2726,35 @@ function DatePicker({ value, onChange }: { value: string; onChange: (iso: string
   );
 }
 
+/**
+ * One follow-up ticked or unticked, reported. Answers whether it landed, so
+ * the caller can take the tick back off. Try again goes through the caller,
+ * which puts the tick back on first.
+ */
+async function trackTaskTick(
+  reporter: ReturnType<typeof useSaveReporter>,
+  id: string,
+  done: boolean,
+  again: () => void
+): Promise<boolean> {
+  const settle = reporter.begin("Task");
+  let problem: string | null = null;
+  try {
+    const res = await fetch("/api/my/deal-tasks", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, done }),
+    });
+    const d = (await res.json().catch(() => null)) as { task?: DealTask; error?: string } | null;
+    if (!res.ok || !d?.task) problem = d?.error ?? "That didn't save.";
+  } catch {
+    problem = "That didn't save - the connection dropped.";
+  }
+  if (problem) settle({ ok: false, problem, retry: again });
+  else settle({ ok: true });
+  return !problem;
+}
+
 function TasksTab({
   deal,
   onActivityChanged,
@@ -2708,6 +2767,7 @@ function TasksTab({
   const [due, setDue] = useState(today());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const reporter = useSaveReporter();
 
   useEffect(() => {
     let cancelled = false;
@@ -2724,6 +2784,9 @@ function TasksTab({
     if (!title.trim() || busy) return;
     setBusy(true);
     setError(null);
+    /* No Try again on the chip: the title stays in the box on a refusal and
+       Add is the retry, so a chip retry could file it twice. */
+    const settle = reporter.begin("Task");
     try {
       const res = await fetch(`/api/deals/${deal.app.id}/tasks`, {
         method: "POST",
@@ -2734,9 +2797,12 @@ function TasksTab({
       if (!res.ok || !d.task) throw new Error(d.error ?? "Couldn't add the follow-up.");
       setTasks((prev) => [...(prev ?? []), d.task!]);
       setTitle("");
+      settle({ ok: true });
       onActivityChanged(); // the follow-up is logged as an activity line
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't add the follow-up.");
+      const problem = e instanceof Error ? e.message : "Couldn't add the follow-up.";
+      setError(problem);
+      settle({ ok: false, problem });
     } finally {
       setBusy(false);
     }
@@ -2746,14 +2812,11 @@ function TasksTab({
     setTasks((prev) =>
       prev ? prev.map((t) => (t.id === task.id ? { ...t, done } : t)) : prev
     );
-    try {
-      await fetch("/api/my/deal-tasks", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: task.id, done }),
-      });
-    } catch {
-      // revert on failure
+    /* The tick shows at once and comes back off if the save is refused. It
+       only rolled back on a dropped connection before (23 Sep 2026) - a 404
+       or a 500 left the box ticked on a task that was never done. */
+    const r = await trackTaskTick(reporter, task.id, done, () => toggle(task, done));
+    if (!r) {
       setTasks((prev) =>
         prev ? prev.map((t) => (t.id === task.id ? { ...t, done: !done } : t)) : prev
       );
@@ -2989,6 +3052,8 @@ function TasksTodayModal({
   onOpenDeal: (dealId: string) => void;
 }) {
   const [tasks, setTasks] = useState<DealTask[] | null>(null);
+  /* No deal open here, so no chip: outside a scope this is the toast alone. */
+  const reporter = useSaveReporter();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -3011,13 +3076,11 @@ function TasksTodayModal({
     setTasks((prev) =>
       prev ? prev.map((t) => (t.id === task.id ? { ...t, done } : t)) : prev
     );
-    try {
-      await fetch("/api/my/deal-tasks", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: task.id, done }),
-      });
-    } catch {
+    /* The tick shows at once and comes back off if the save is refused. It
+       only rolled back on a dropped connection before (23 Sep 2026) - a 404
+       or a 500 left the box ticked on a task that was never done. */
+    const r = await trackTaskTick(reporter, task.id, done, () => toggle(task, done));
+    if (!r) {
       setTasks((prev) =>
         prev ? prev.map((t) => (t.id === task.id ? { ...t, done: !done } : t)) : prev
       );

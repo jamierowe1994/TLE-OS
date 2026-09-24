@@ -13,6 +13,7 @@ import type { Contractor, WorksOrder, WorksEvent, WorksSummary, Kind, Move, Stat
 import { PLANNED_CATEGORIES, REPAIR_CATEGORIES, URGENCIES } from "@/lib/works-catalogue";
 import { STEPS, stepOf } from "@/lib/works-steps";
 import { WorksNow, ContractorForm, BLANK_CONTRACTOR } from "@/components/WorksNow";
+import SaveChip, { SaveScopeProvider, useSaveScope } from "@/components/SaveChip";
 
 /**
  * Maintenance: every job on the managed book, reported through paid.
@@ -668,6 +669,11 @@ function JobDrawer({ order, contractors, canCorporate, onClose, onChanged }: { o
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [f, setF] = useState<Record<string, string>>({});
+  /* The Auto save chip by the close button (components/SaveChip), 23 Sep
+     2026: every move on the job - the Now card's and the More menu's - says
+     whether it landed, on the chip and in a toast. */
+  const saves = useSaveScope(order.id);
+  const reporter = saves.reporter;
 
   useEffect(() => setO(order), [order]);
   useEffect(() => {
@@ -681,17 +687,24 @@ function JobDrawer({ order, contractors, canCorporate, onClose, onChanged }: { o
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, act]);
 
-  async function move(m: Move) {
+  async function move(m: Move, label = "Job") {
     setBusy(true);
     setErr(null);
+    const settle = reporter.begin(label);
     const r = await fetch(`/api/works-orders/${o.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(m) }).then((x) => x.json()).catch(() => null);
     setBusy(false);
-    if (!r?.ok) return setErr(r?.error ?? "That didn't work.");
+    if (!r?.ok) {
+      const problem = r?.error ?? "That didn't work.";
+      setErr(problem);
+      settle({ ok: false, problem });
+      return;
+    }
     setO(r.order);
     setEvents(r.events ?? []);
     setAct(null);
     setF({});
     onChanged(r.order);
+    settle({ ok: true });
   }
 
   async function upload(file: File) {
@@ -702,8 +715,13 @@ function JobDrawer({ order, contractors, canCorporate, onClose, onChanged }: { o
     setBusy(true);
     const r = await fetch("/api/r2/upload", { method: "POST", body: fd }).then((x) => x.json()).catch(() => null);
     setBusy(false);
-    if (!r?.ok) return setErr(r?.error ?? "The file did not upload.");
-    await move({ action: "file", file: { key: r.key, name: r.name, type: r.type } });
+    if (!r?.ok) {
+      const problem = r?.error ?? "The file did not upload.";
+      setErr(problem);
+      reporter.begin("File")({ ok: false, problem });
+      return;
+    }
+    await move({ action: "file", file: { key: r.key, name: r.name, type: r.type } }, "File");
   }
 
   const open = OPEN.includes(o.status);
@@ -730,13 +748,21 @@ function JobDrawer({ order, contractors, canCorporate, onClose, onChanged }: { o
 
   async function invoiceLandlord() {
     setBusy(true);
+    const settle = reporter.begin("Invoice");
     const r = await fetch("/api/invoices", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ orderId: o.id }) }).then((x) => x.json()).catch(() => null);
     setBusy(false);
-    if (!r?.ok) return setErr(r?.error ?? "Could not draft the invoice.");
+    if (!r?.ok) {
+      const problem = r?.error ?? "Could not draft the invoice.";
+      setErr(problem);
+      settle({ ok: false, problem });
+      return;
+    }
+    settle({ ok: true });
     window.location.href = `/maintenance/invoices/${r.invoice.id}`;
   }
 
   return (
+    <SaveScopeProvider scope={saves}>
     <div className="fixed inset-0 z-[130]">
       <button aria-label="Close" onClick={onClose} className={`absolute inset-0 cursor-default bg-ink/35 transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0"}`} />
       <aside
@@ -744,7 +770,8 @@ function JobDrawer({ order, contractors, canCorporate, onClose, onChanged }: { o
         style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
       >
         <div className="shrink-0 border-b border-line/70 px-6 pt-5">
-          <div className="flex items-start justify-between gap-3 pb-5">
+          {/* Buttons above the title on a phone, so the chip is never squeezed. */}
+          <div className="flex flex-col-reverse gap-3 pb-5 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted">
                 Job #{o.ref} · {o.kind === "repair" ? "Repair" : "Planned"} · {STATUS_LABEL[o.status]}
@@ -754,7 +781,10 @@ function JobDrawer({ order, contractors, canCorporate, onClose, onChanged }: { o
                 {o.propertyName}{o.locality ? `, ${o.locality}` : ""}{o.landlord ? ` · landlord ${o.landlord}` : ""}{o.tenant ? ` · ${o.tenant}` : ""}
               </p>
             </div>
-            <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted hover:text-ink">✕</button>
+            <div className="flex items-center justify-end gap-2 sm:shrink-0">
+              <SaveChip scope={saves} />
+              <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted hover:text-ink">✕</button>
+            </div>
           </div>
         </div>
 
@@ -954,6 +984,7 @@ function JobDrawer({ order, contractors, canCorporate, onClose, onChanged }: { o
         </div>
       </aside>
     </div>
+    </SaveScopeProvider>
   );
 }
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import { useSaveReporter } from "@/components/SaveChip";
 
 /**
  * The landlord conversation, on the appraisal file (James, 17 Sep 2026).
@@ -20,6 +21,7 @@ export default function AppraisalMessages({ appraisalId, landlord, onRead }: { a
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const list = useRef<HTMLDivElement | null>(null);
+  const reporter = useSaveReporter();
 
   const load = useCallback(async () => {
     try {
@@ -45,6 +47,9 @@ export default function AppraisalMessages({ appraisalId, landlord, onRead }: { a
     if (!body || busy) return;
     setBusy(true);
     setNote(null);
+    /* No Try again from the chip: a reply that landed before the connection
+       dropped would reach the landlord twice. */
+    const settle = reporter.begin("Message");
     try {
       const r = await fetch(`/api/appraisals/${encodeURIComponent(appraisalId)}/messages`, {
         method: "POST",
@@ -53,11 +58,14 @@ export default function AppraisalMessages({ appraisalId, landlord, onRead }: { a
       });
       const j = (await r.json()) as { ok?: boolean; message?: Msg; emailed?: boolean; to?: string | null; error?: string };
       if (!j.ok || !j.message) throw new Error(j.error ?? "It didn't send.");
+      settle({ ok: true });
       setMessages((m) => [...(m ?? []), j.message!]);
       setText("");
       setNote(j.emailed ? `Sent, and emailed to ${j.to}.` : "Saved to their file. The email didn't go - customer email may be switched off.");
     } catch (e) {
-      setNote(e instanceof Error ? e.message : "It didn't send.");
+      const problem = e instanceof Error ? e.message : "It didn't send.";
+      setNote(problem);
+      settle({ ok: false, problem });
     } finally {
       setBusy(false);
     }

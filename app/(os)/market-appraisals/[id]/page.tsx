@@ -7,6 +7,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import GuideButton from "@/components/GuideButton";
 import RexPropertyPicker from "@/components/RexPropertyPicker";
 import PropertyFile from "@/components/PropertyFile";
+import SaveChip, { SaveScopeProvider, useSaveScope } from "@/components/SaveChip";
 import AppraisalMessages from "@/components/appraisal/AppraisalMessages";
 import PhotosPanel from "@/components/appraisal/PhotosPanel";
 import TakeOnWizard from "@/components/appraisal/TakeOnWizard";
@@ -72,6 +73,10 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
      appraisal" at somebody who has just this second booked one. */
   const [booked, setBooked] = useState<MarketAppraisal | null | undefined>(undefined);
   const ma = booked ?? null;
+  /* The Auto save chip beside the back link (23 Sep 2026). The documents
+     checklist, the photographs, the take-on pop-out and the property file
+     all report their saves to it. */
+  const saves = useSaveScope(id);
 
   const reload = useCallback(() => {
     let gone = false;
@@ -235,12 +240,16 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
   };
 
   return (
+    <SaveScopeProvider scope={saves}>
     <div className="space-y-5">
       {/* ── 0. back, and the quick links ────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-2">
-        <Link href="/market-appraisals" className="mr-auto inline-flex items-center gap-1.5 text-[12.5px] text-muted hover:text-ink">
-          <span aria-hidden>←</span> Market Appraisals
-        </Link>
+        <div className="mr-auto flex min-w-0 items-center gap-3">
+          <Link href="/market-appraisals" className="inline-flex shrink-0 items-center gap-1.5 text-[12.5px] text-muted hover:text-ink">
+            <span aria-hidden>←</span> Market Appraisals
+          </Link>
+          <SaveChip scope={saves} className="bg-white" />
+        </div>
         {pre && (
           <a href={pre.url} target="_blank" rel="noreferrer" className={pill}>
             <DoodleIcon name="mail" size={13} className="text-accent-dark" /> Pre-appraisal deck
@@ -366,13 +375,24 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
                     onSent={
                       ma.leadId
                         ? async (message) => {
-                            const r = await fetch(`/api/leads/${encodeURIComponent(ma.leadId as string)}/touches`, {
-                              method: "POST",
-                              headers: { "content-type": "application/json" },
-                              body: JSON.stringify({ kind: "whatsapp", outcome: "sent", body: message }),
-                            });
-                            const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
-                            return j?.ok ? null : (j?.error ?? "That didn't save.");
+                            /* The page makes the scope, so it reports to it directly. No
+                               Try again: a log that landed before the connection dropped
+                               would go down twice. */
+                            const settle = saves.reporter.begin("WhatsApp log");
+                            let problem: string | null;
+                            try {
+                              const r = await fetch(`/api/leads/${encodeURIComponent(ma.leadId as string)}/touches`, {
+                                method: "POST",
+                                headers: { "content-type": "application/json" },
+                                body: JSON.stringify({ kind: "whatsapp", outcome: "sent", body: message }),
+                              });
+                              const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+                              problem = j?.ok ? null : (j?.error ?? "That didn't save.");
+                            } catch {
+                              problem = "That didn't save - the connection dropped.";
+                            }
+                            settle(problem ? { ok: false, problem } : { ok: true });
+                            return problem;
                           }
                         : undefined
                     }
@@ -575,6 +595,7 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
         </div>
       )}
     </div>
+    </SaveScopeProvider>
   );
 }
 

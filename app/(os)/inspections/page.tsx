@@ -11,6 +11,7 @@ import { STEPS, stepOf, type StepId } from "@/lib/inspection-steps";
 import type { DueVisit, Finding, Inspection, InspectionEvent, InspectionRules } from "@/lib/inspections";
 import ReportSheet from "@/components/inspections/ReportSheet";
 import { REPAIR_CATEGORIES, URGENCIES } from "@/lib/works-catalogue";
+import SaveChip, { SaveScopeProvider, useSaveReporter, useSaveScope } from "@/components/SaveChip";
 
 /**
  * Inspections: the visits we owe the book, and the permission that lets us in.
@@ -277,10 +278,17 @@ function List({ rows, onOpen, empty }: { rows: Inspection[]; onOpen: (id: string
 
 /* ── one inspection ──────────────────────────────────────────────────────── */
 
+/** One save on the visit. Answers whether it landed, so a form clears only then. */
+type Move = (body: unknown, label?: string) => Promise<boolean>;
+
 function Sheet({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
   const [held, setHeld] = useState<{ inspection: Inspection; findings: Finding[]; events: InspectionEvent[] } | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  /* The Auto save chip in the header (components/SaveChip), 23 Sep 2026:
+     every step, finding, photo and note on the visit says whether it landed. */
+  const saves = useSaveScope(id);
+  const reporter = saves.reporter;
 
   const read = useCallback(() => {
     fetch(`/api/inspections/${id}`, { cache: "no-store" })
@@ -290,35 +298,45 @@ function Sheet({ id, onClose, onChanged }: { id: string; onClose: () => void; on
   }, [id]);
   useEffect(read, [read]);
 
-  async function move(body: unknown) {
+  const move: Move = async (body, label = "Inspection") => {
     setBusy(true);
+    const settle = reporter.begin(label);
     const r = await fetch(`/api/inspections/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
       .then((x) => x.json())
       .catch(() => null);
     setBusy(false);
-    if (!r?.ok) return setErr(r?.error ?? "That didn't work.");
+    if (!r?.ok) {
+      const problem = r?.error ?? "That didn't work.";
+      setErr(problem);
+      settle({ ok: false, problem });
+      return false;
+    }
     setErr(null);
     setHeld(r);
     onChanged();
-  }
+    settle({ ok: true });
+    return true;
+  };
 
   const i = held?.inspection;
   const step: StepId | null = i ? i.step ?? stepOf({ ...i, openActions: i.openActions ?? 0 }) : null;
 
   return (
+    <SaveScopeProvider scope={saves}>
     <div className="fixed inset-0 z-50 flex justify-end bg-ink/20" onClick={onClose}>
       <aside className="h-full w-full max-w-xl overflow-y-auto bg-page p-6 shadow-xl md:p-8" onClick={(e) => e.stopPropagation()}>
         {!i ? (
           <p className="text-[12.5px] text-muted">{err ?? "Opening…"}</p>
         ) : (
           <>
-            <div className="flex items-start justify-between gap-4">
+            {/* Buttons above the title on a phone, so the chip is never squeezed. */}
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
               <div className="min-w-0">
                 <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">{kindLabel(i.kind)} · #{i.ref}</p>
                 <h2 className="hand mt-1 truncate text-[22px]">{i.propertyName}</h2>
                 <p className="text-[11.5px] text-muted">{i.locality}{i.tenant ? ` · ${i.tenant}` : ""}{i.landlord ? ` · landlord ${i.landlord}` : ""}</p>
               </div>
-              <div className="flex shrink-0 items-center gap-3">
+              <div className="flex flex-wrap items-center justify-end gap-3 sm:shrink-0">
                 {/* Only once it has been written up. Printing a visit that has
                     not happened produces a sheet saying "Not recorded" under
                     every heading, which looks like a broken report rather than
@@ -333,6 +351,7 @@ function Sheet({ id, onClose, onChanged }: { id: string; onClose: () => void; on
                     Print the report
                   </button>
                 )}
+                <SaveChip scope={saves} />
                 <button type="button" onClick={onClose} className="text-[12px] text-muted underline">Close</button>
               </div>
             </div>
@@ -391,12 +410,13 @@ function Sheet({ id, onClose, onChanged }: { id: string; onClose: () => void; on
                 ))}
                 {held.events.length === 0 && <li className="text-[12px] text-muted">Nothing yet.</li>}
               </ul>
-              <NoteBox busy={busy} onSend={(text) => move({ action: "note", text })} />
+              <NoteBox busy={busy} onSend={(text) => move({ action: "note", text }, "Note")} />
             </section>
           </>
         )}
       </aside>
     </div>
+    </SaveScopeProvider>
   );
 }
 
@@ -408,7 +428,7 @@ const Row = ({ k, v }: { k: string; v: string }) => (
 );
 
 /** The one card. Everything else on the sheet is a record; this is the doing. */
-function Now({ step, inspection, busy, onMove }: { step: StepId; inspection: Inspection; busy: boolean; onMove: (b: unknown) => void }) {
+function Now({ step, inspection, busy, onMove }: { step: StepId; inspection: Inspection; busy: boolean; onMove: Move }) {
   const soon = (days: number, hour: number) => { const d = new Date(); d.setDate(d.getDate() + days); d.setHours(hour, 0, 0, 0); return forInput(d); };
   const [slots, setSlots] = useState<string[]>([soon(3, 10), soon(4, 14), soon(5, 9)]);
   const [at, setAt] = useState(soon(3, 10));
@@ -538,9 +558,10 @@ function Now({ step, inspection, busy, onMove }: { step: StepId; inspection: Ins
  * rather than the browser. They are filed under the INSPECTION's ref, so every
  * picture from one visit sits under one prefix.
  */
-function FindingPhotos({ finding, busy, onMove }: { finding: Finding; busy: boolean; onMove: (b: unknown) => void }) {
+function FindingPhotos({ finding, busy, onMove }: { finding: Finding; busy: boolean; onMove: Move }) {
   const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const reporter = useSaveReporter();
   const photos = finding.photos ?? [];
 
   async function add(files: FileList | null) {
@@ -560,9 +581,11 @@ function FindingPhotos({ finding, busy, onMove }: { finding: Finding; busy: bool
       }
       /* Saved through the finding's own save, so one picture cannot end up in
          storage with nothing on the record pointing at it. */
-      onMove({ finding: { ...finding, photos: [...photos, ...added] } });
+      void onMove({ finding: { ...finding, photos: [...photos, ...added] } }, "Photo");
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "That picture would not upload.");
+      const problem = e instanceof Error ? e.message : "That picture would not upload.";
+      setErr(problem);
+      reporter.begin("Photo")({ ok: false, problem });
     } finally {
       setUploading(false);
     }
@@ -604,7 +627,7 @@ function FindingPhotos({ finding, busy, onMove }: { finding: Finding; busy: bool
  * standing in front of it. Defaulting them would put a wrong trade on a real
  * job and make somebody's diary wrong.
  */
-function RaiseWorksOrder({ finding, busy, onMove }: { finding: Finding; busy: boolean; onMove: (b: unknown) => void }) {
+function RaiseWorksOrder({ finding, busy, onMove }: { finding: Finding; busy: boolean; onMove: Move }) {
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<string>(REPAIR_CATEGORIES[0]);
   const [urgency, setUrgency] = useState<string>("routine");
@@ -637,7 +660,7 @@ function RaiseWorksOrder({ finding, busy, onMove }: { finding: Finding; busy: bo
       </select>
       <PressButton
         disabled={busy}
-        onClick={() => onMove({ raiseWorksOrder: { findingId: finding.id, category, urgency } })}
+        onClick={() => void onMove({ raiseWorksOrder: { findingId: finding.id, category, urgency } }, "Works order")}
         className="rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-semibold text-page"
       >
         Raise it
@@ -647,7 +670,7 @@ function RaiseWorksOrder({ finding, busy, onMove }: { finding: Finding; busy: bo
   );
 }
 
-function Findings({ inspection, findings, busy, onMove }: { inspection: Inspection; findings: Finding[]; busy: boolean; onMove: (b: unknown) => void }) {
+function Findings({ inspection, findings, busy, onMove }: { inspection: Inspection; findings: Finding[]; busy: boolean; onMove: Move }) {
   const [room, setRoom] = useState(ROOMS[0]);
   const [item, setItem] = useState("");
   const [note, setNote] = useState("");
@@ -701,7 +724,12 @@ function Findings({ inspection, findings, busy, onMove }: { inspection: Inspecti
             </select>
             <PressButton
               disabled={busy || !room}
-              onClick={() => { onMove({ finding: { room, item, note, condition, action } }); setItem(""); setNote(""); setAction("none"); setCondition("good"); }}
+              onClick={async () => {
+                /* Cleared once it has landed, not before - a refused finding
+                   used to take what was typed with it. */
+                if (!(await onMove({ finding: { room, item, note, condition, action } }, "Finding"))) return;
+                setItem(""); setNote(""); setAction("none"); setCondition("good");
+              }}
               className="rounded-full border border-line/80 px-4 py-2 text-[12.5px] font-semibold"
             >
               Add it
@@ -713,12 +741,13 @@ function Findings({ inspection, findings, busy, onMove }: { inspection: Inspecti
   );
 }
 
-function NoteBox({ busy, onSend }: { busy: boolean; onSend: (text: string) => void }) {
+function NoteBox({ busy, onSend }: { busy: boolean; onSend: (text: string) => Promise<boolean> }) {
   const [text, setText] = useState("");
   return (
     <div className="mt-4 flex gap-2">
       <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Add a note…" className="min-w-0 flex-1 rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]" />
-      <PressButton disabled={busy || !text.trim()} onClick={() => { onSend(text.trim()); setText(""); }} className="rounded-full border border-line/80 px-4 py-2 text-[12.5px] font-semibold">
+      {/* The box empties once the note has landed; refused, the words stay. */}
+      <PressButton disabled={busy || !text.trim()} onClick={async () => { if (await onSend(text.trim())) setText(""); }} className="rounded-full border border-line/80 px-4 py-2 text-[12.5px] font-semibold">
         Add
       </PressButton>
     </div>

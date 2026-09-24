@@ -52,6 +52,7 @@ import { inputFromDetails, missing as missingForPortals } from "@/lib/listing-re
 import { useListingTerms } from "@/lib/use-listing-terms";
 import { fetchMe } from "@/lib/me";
 import { WhatsAppButton } from "@/components/WhatsAppQr";
+import SaveChip, { SaveScopeProvider, useSaveScope, type SaveScope } from "@/components/SaveChip";
 
 /**
  * The property record — the leads drawer's shape, aimed at a thing instead of
@@ -181,13 +182,33 @@ const APPLICANTS: Person[] = LEADS.filter((l) => leadSide(l) === "tenant").map((
   lng: l.lng,
 }));
 
-export default function ListingDrawer({
+/**
+ * The drawer, inside its Auto save scope (James, 23 Sep 2026: every file says
+ * when a change saved, by the close button). The scope is made out here, one
+ * level up, because the drawer's own useCaseState saves - access, the step,
+ * the tenancy link - read the scope from context, and a component cannot read
+ * a provider it renders itself. Made in the body, they would toast and never
+ * reach the chip.
+ */
+export default function ListingDrawer(props: Omit<Parameters<typeof ListingDrawerBody>[0], "saves">) {
+  const saves = useSaveScope(props.listing?.id ?? null);
+  return (
+    <SaveScopeProvider scope={saves}>
+      <ListingDrawerBody {...props} saves={saves} />
+    </SaveScopeProvider>
+  );
+}
+
+function ListingDrawerBody({
   listing,
   onClose,
   onStep,
   onArchive,
   archiveBusy,
+  saves,
 }: {
+  /** Every save on this listing, for the chip by the close button. */
+  saves: SaveScope;
   listing: Listing | null;
   onClose: () => void;
   onStep: (delta: number) => void;
@@ -854,6 +875,7 @@ export default function ListingDrawer({
           >
             ✕
           </button>
+          <SaveChip scope={saves} />
           <div className="ml-auto flex min-w-0 max-w-full gap-2 overflow-x-auto pb-0.5">
             {TABS.map((t) => {
               const count =

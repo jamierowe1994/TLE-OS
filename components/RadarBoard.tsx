@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import NewLeadPanel from "@/components/NewLeadPanel";
 import RadarMap from "@/components/RadarMap";
 import { PressButton } from "@/components/Bits";
+import SaveChip, { SaveScopeProvider, useSaveReporter, useSaveScope } from "@/components/SaveChip";
 import { Pill } from "@/components/Wire";
 import { ColumnCustomiser, DataTable, useColumns, type ColumnDef } from "@/components/TableColumns";
 import {
@@ -711,8 +712,12 @@ function ProspectPanel({
   const [notes, setNotes] = useState(prospect.notes);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [savedAt, setSavedAt] = useState<number | null>(null);
   const [booking, setBooking] = useState(false);
+  /* The Auto save chip by the close button (components/SaveChip), 23 Sep
+     2026. The panel's own "Saved" line folded into it: the chip carries the
+     time, and every save - this form, the owner form - toasts. */
+  const saves = useSaveScope(prospect.property_key);
+  const reporter = saves.reporter;
 
   useEffect(() => {
     const id = requestAnimationFrame(() => setShown(true));
@@ -723,39 +728,81 @@ function ProspectPanel({
 
   const dirty = stage !== prospect.stage || assigned !== (prospect.assigned_to ?? "") || notes !== prospect.notes;
 
-  async function save(patch?: { stage?: Stage }) {
+  /* What is on its way (23 Sep 2026 review): a stage sent by Book appraisal
+     is not in `stage` until it lands, so a close in between must carry it
+     rather than send the old stage back over it, and must not send again
+     what is already in flight. */
+  const inFlight = useRef<{ stage: Stage; assigned: string; notes: string } | null>(null);
+  async function save(patch?: { stage?: Stage }, keepalive = false) {
     setSaving(true);
     setSaveError(null);
+    const settle = reporter.begin("Prospect");
+    let problem: string | null = null;
+    const sending = { stage: patch?.stage ?? inFlight.current?.stage ?? stage, assigned, notes };
+    inFlight.current = sending;
     try {
       const r = await fetch("/api/radar/prospects", {
         method: "PATCH",
+        keepalive,
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           property_key: prospect.property_key,
-          stage: patch?.stage ?? stage,
-          assigned_to: assigned,
-          notes,
+          stage: sending.stage,
+          assigned_to: sending.assigned,
+          notes: sending.notes,
         }),
       });
       const j = await r.json();
       if (!r.ok || !j.ok) {
-        setSaveError(j.error ?? "That did not save.");
-        return;
+        problem = j.error ?? "That did not save.";
+      } else {
+        if (patch?.stage) setStage(patch.stage);
+        /* Landed. If the board drops this row before the panel draws again,
+           the close must not send the same thing twice. */
+        const now = latest.current;
+        if (now.stage === (patch?.stage ?? stage) && now.assigned === assigned && now.notes === notes) now.dirty = false;
+        onPatched(j.prospect as Prospect);
       }
-      if (patch?.stage) setStage(patch.stage);
-      onPatched(j.prospect as Prospect);
-      setSavedAt(Date.now());
     } catch {
-      setSaveError("That did not save.");
+      problem = "That did not save.";
     } finally {
+      if (inFlight.current === sending) inFlight.current = null;
       setSaving(false);
     }
+    if (problem) {
+      setSaveError(problem);
+      settle({ ok: false, problem, retry: () => void save(patch) });
+    } else settle({ ok: true });
   }
+
+  /* The stage, the name and the notes wait for Save. The chip's Save sends
+     them too, and closing the panel with them unsaved sends them on the way
+     out (its toast says whether they landed) - before 23 Sep closing just
+     dropped them, which is the lost change Howard kept finding. */
+  const latest = useRef({ dirty, save, stage, assigned, notes });
+  latest.current = { dirty, save, stage, assigned, notes };
+  useEffect(
+    () => reporter.waiting(() => {
+      if (!latest.current.dirty) return false;
+      void latest.current.save();
+      return true;
+    }),
+    [reporter]
+  );
+  useEffect(() => () => {
+    const now = latest.current;
+    if (!now.dirty) return;
+    /* Already on its way with these very words: nothing new to send. */
+    const going = inFlight.current;
+    if (going && going.assigned === now.assigned && going.notes === now.notes) return;
+    void now.save(undefined, true);
+  }, []);
 
   const days = daysOn(prospect.listed_on);
   const address = fullAddress(prospect);
 
   return (
+    <SaveScopeProvider scope={saves}>
     <div className="fixed inset-0 z-[120]">
       <button
         aria-label="Close"
@@ -769,15 +816,18 @@ function ProspectPanel({
         style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
       >
         <div className="flex shrink-0 items-center justify-between gap-3 px-6 pt-5">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink"
-            title="Close (Esc)"
-          >
-            ✕
-          </button>
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink"
+              title="Close (Esc)"
+            >
+              ✕
+            </button>
+            <SaveChip scope={saves} />
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
             {onAsk && (
               <button
                 type="button"
@@ -979,11 +1029,7 @@ function ProspectPanel({
               >
                 Book appraisal
               </PressButton>
-              {saveError ? (
-                <span className="text-[12px] text-red-700">{saveError}</span>
-              ) : savedAt ? (
-                <span className="text-[12px] text-muted">Saved</span>
-              ) : null}
+              {saveError ? <span className="text-[12px] text-red-700">{saveError}</span> : null}
             </div>
             {prospect.last_action_at ? (
               <p className="text-[11px] text-muted">Last worked {when(prospect.last_action_at)}</p>
@@ -1008,6 +1054,7 @@ function ProspectPanel({
         }}
       />
     </div>
+    </SaveScopeProvider>
   );
 }
 
@@ -1183,10 +1230,12 @@ function OwnerBlock({ prospect, onPatched }: { prospect: Prospect; onPatched: (p
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const reporter = useSaveReporter();
 
   async function save() {
     setBusy(true);
     setError(null);
+    const settle = reporter.begin("Owner");
     try {
       const r = await fetch("/api/bond/owner-manual", {
         method: "POST",
@@ -1196,13 +1245,16 @@ function OwnerBlock({ prospect, onPatched }: { prospect: Prospect; onPatched: (p
       const j = await r.json();
       if (!r.ok || !j.ok) {
         setError(j.error ?? "That did not save.");
+        settle({ ok: false, problem: j.error ?? "That did not save.", retry: () => void save() });
         return;
       }
       onPatched(j.prospect as Prospect);
       setOpen(false);
       setName(""); setAddress(""); setTitle(""); setNote("");
+      settle({ ok: true });
     } catch {
       setError("That did not save.");
+      settle({ ok: false, problem: "That did not save.", retry: () => void save() });
     } finally {
       setBusy(false);
     }

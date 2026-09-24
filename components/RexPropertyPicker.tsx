@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { MarketAppraisal } from "@/lib/market-appraisal";
+import { useSaveReporter } from "@/components/SaveChip";
 
 /**
  * WHICH PROPERTY IN REX THIS APPRAISAL IS ABOUT — chosen by a person.
@@ -47,6 +48,7 @@ export default function RexPropertyPicker({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const seq = useRef(0);
+  const reporter = useSaveReporter();
 
   /* Debounced, and last-request-wins. Typing an address fires a REX call per
      keystroke otherwise, and a slow early response can land after a fast late
@@ -77,6 +79,9 @@ export default function RexPropertyPicker({
 
   async function choose(id: string | null) {
     setError(null);
+    /* Setting the same link twice lands the same, so the chip can send it again. */
+    const settle = reporter.begin("Property record");
+    const again = () => void choose(id);
     try {
       const r = await fetch("/api/appraisals", {
         method: "PATCH",
@@ -85,11 +90,22 @@ export default function RexPropertyPicker({
       });
       const j = (await r.json()) as { appraisal?: MarketAppraisal; error?: string };
       if (j.appraisal) {
+        settle({ ok: true });
         onSaved(j.appraisal);
         setOpen(false);
-      } else setError(j.error ?? "Couldn't save that.");
+      } else {
+        const why = j.error ?? "Couldn't save that.";
+        setError(why);
+        /* The toast is on an agent's screen too, so the system is not named there either. */
+        settle({
+          ok: false,
+          problem: /\bREX\b/i.test(why) ? "The property records could not be reached. Try again in a moment." : why,
+          retry: again,
+        });
+      }
     } catch (e) {
       setError((e as Error).message);
+      settle({ ok: false, problem: "That didn't save - the connection dropped.", retry: again });
     }
   }
 

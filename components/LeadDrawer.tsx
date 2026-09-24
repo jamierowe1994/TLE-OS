@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { handoverTarget } from "@/lib/market-appraisal";
 import DoodleIcon from "@/components/DoodleIcon";
+import SaveChip, { SaveScopeProvider, trackSave, useSaveScope, type SaveScope } from "@/components/SaveChip";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { ConfettiBurst, DetailRow, DoneTick, PressButton, SectionHead } from "@/components/Bits";
 import Compose from "@/components/Compose";
@@ -619,16 +620,31 @@ const whenFull = (iso: string | null | undefined) => {
   return `${day}, ${time}`;
 };
 
-export default function LeadDrawer({
-  lead,
-  onClose,
-  onStep,
-}: {
+type LeadDrawerProps = {
   lead: Lead | null;
   onClose: () => void;
   /** −1 / +1 through the list, so you can work a queue without going back. */
   onStep: (delta: number) => void;
-}) {
+};
+
+/* The save scope sits OUTSIDE the drawer's body, so the saves made by the
+   body's own hooks (the appraisal's case state among them) reach the Auto
+   save chip - a hook cannot hear a provider its own component renders. */
+export default function LeadDrawer(props: LeadDrawerProps) {
+  const saves = useSaveScope(props.lead?.id ?? null);
+  return (
+    <SaveScopeProvider scope={saves}>
+      <LeadDrawerBody {...props} saves={saves} />
+    </SaveScopeProvider>
+  );
+}
+
+function LeadDrawerBody({
+  lead,
+  onClose,
+  onStep,
+  saves,
+}: LeadDrawerProps & { saves: SaveScope }) {
   const router = useRouter();
   const [shown, setShown] = useState(false);
   const [tab, setTab] = useState<TabKey | null>(null);
@@ -687,12 +703,17 @@ export default function LeadDrawer({
     if (!lead || !title.trim()) return;
     setTaskBusy(true);
     try {
-      const j = await fetch("/api/tasks", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title, detail, kind, leadId: lead.id, listingId: lead.listingId ?? null }),
-      }).then((r) => r.json());
-      if (j?.ok) { setRealTasks((cur) => [j.task as TaskRow, ...(cur ?? [])]); setNewTask(""); }
+      /* Reported on the Auto save chip: a refused task used to vanish in silence. */
+      const r = await trackSave<{ ok?: boolean; task?: TaskRow }>(reporter, "Task", () =>
+        fetch("/api/tasks", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ title, detail, kind, leadId: lead.id, listingId: lead.listingId ?? null }),
+        }),
+        /* A create: Try again could file it twice, and Add is right there. */
+        { retry: false }
+      );
+      if (r.ok && r.body?.task) { setRealTasks((cur) => [r.body!.task as TaskRow, ...(cur ?? [])]); setNewTask(""); }
     } finally {
       setTaskBusy(false);
     }
@@ -700,11 +721,15 @@ export default function LeadDrawer({
 
   async function toggleTask(t: TaskRow) {
     setRealTasks((cur) => (cur ?? []).map((x) => (x.id === t.id ? { ...x, done: !x.done } : x)));
-    await fetch("/api/tasks", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id: t.id, done: !t.done }),
-    }).catch(() => loadTasks());
+    const r = await trackSave(reporter, "Task", () =>
+      fetch("/api/tasks", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: t.id, done: !t.done }),
+      })
+    );
+    /* Refused: put the tick back the way the server has it. */
+    if (!r.ok) loadTasks();
   }
   const [notes, setNotes] = useState<Note[]>([]);
   const [docs, setDocs] = useState<Doc[]>([]);
@@ -817,8 +842,12 @@ export default function LeadDrawer({
      landing last), the card says Saved or why not with a Try again, and
      anything still waiting goes when the drawer closes or the lead changes. */
   type FactsPatch = { tags?: string[]; property?: PropertyFactsData };
+  type FactsJob = { id: string; patch: FactsPatch; who: string };
   const [factsSync, setFactsSync] = useState<{ busy: boolean; text: string; bad?: boolean } | null>(null);
-  const factsPending = useRef<{ id: string; patch: FactsPatch } | null>(null);
+  /* Every save on this file reports to the Auto save chip by the close
+     button (components/SaveChip), through the scope LeadDrawer made. */
+  const reporter = saves.reporter;
+  const factsPending = useRef<FactsJob | null>(null);
   const factsBusy = useRef(false);
   const factsTimer = useRef<number | null>(null);
   const flushFacts = useCallback(async (): Promise<void> => {
@@ -828,6 +857,7 @@ export default function LeadDrawer({
     factsPending.current = null;
     factsBusy.current = true;
     setFactsSync({ busy: true, text: "Saving…" });
+    const settle = reporter.begin(`Property details${job.who ? ` for ${job.who}` : ""}`);
     let bad: string | null = null;
     try {
       const r = await fetch(`/api/leads/${encodeURIComponent(job.id)}/facts`, {
@@ -839,24 +869,42 @@ export default function LeadDrawer({
       bad = "That didn't save - the connection dropped.";
     }
     factsBusy.current = false;
-    const next = factsPending.current as { id: string; patch: FactsPatch } | null;
+    const next = factsPending.current as FactsJob | null;
+    /* Said out loud (James, 23 Sep 2026): a save nobody sees reads as one
+       that did not happen - on the chip, and in a toast that outlives the
+       drawer, which matters most for the save sent as it closes. */
     if (bad) {
       /* Kept for Try again, under anything changed since on the same lead. */
-      if (!next || next.id === job.id) factsPending.current = { id: job.id, patch: { ...job.patch, ...(next?.patch ?? {}) } };
+      if (!next || next.id === job.id) factsPending.current = { ...job, patch: { ...job.patch, ...(next?.patch ?? {}) } };
       setFactsSync({ busy: false, text: bad, bad: true });
+      settle({ ok: false, problem: bad, retry: () => void flushFacts() });
       return;
     }
+    settle({ ok: true });
     if (next) return flushFacts();
     setFactsSync({ busy: false, text: "Saved" });
-  }, []);
+  }, [reporter]);
   const saveFacts = (patch: FactsPatch) => {
     if (!enquiryLeadId) return;
     const cur = factsPending.current;
-    factsPending.current = { id: enquiryLeadId, patch: cur && cur.id === enquiryLeadId ? { ...cur.patch, ...patch } : patch };
+    factsPending.current = {
+      id: enquiryLeadId,
+      patch: cur && cur.id === enquiryLeadId ? { ...cur.patch, ...patch } : patch,
+      who: (lead?.name ?? "").trim(),
+    };
     if (factsTimer.current) window.clearTimeout(factsTimer.current);
     factsTimer.current = window.setTimeout(() => void flushFacts(), 400);
   };
   /* Nothing waiting is lost to closing the drawer or moving to another lead. */
+  /* Save on the chip sends what is waiting straight away. */
+  useEffect(
+    () => reporter.waiting(() => {
+      if (!factsPending.current || factsBusy.current) return false;
+      void flushFacts();
+      return true;
+    }),
+    [reporter, flushFacts]
+  );
   useEffect(() => {
     setFactsSync(null);
     return () => { void flushFacts(); };
@@ -1100,6 +1148,7 @@ export default function LeadDrawer({
     if (!lead || !ours) return;
     editedRef.current = true;
     setSync({ busy: true, text: "Saving…" });
+    const settle = reporter.begin(`${lead.name ? `${lead.name}'s details` : "Contact details"}`);
     try {
       const r = await fetch(`/api/contacts/${osContactIdFrom(lead.id)}`, {
         method: "PATCH",
@@ -1109,8 +1158,10 @@ export default function LeadDrawer({
       const j = (await r.json()) as { error?: string; sync?: { ok?: boolean; detail?: string } };
       if (!r.ok) {
         setSync({ busy: false, text: j.error ?? "That didn't save.", bad: true });
+        settle({ ok: false, problem: j.error ?? "That didn't save." });
         return;
       }
+      settle({ ok: true });
       /* Saved here is the fact that matters; the mirror is reported after it,
          and a mirror that failed must not read as a failed save. */
       setSync(
@@ -1121,6 +1172,7 @@ export default function LeadDrawer({
       );
     } catch {
       setSync({ busy: false, text: "That didn't save - the connection dropped.", bad: true });
+      settle({ ok: false, problem: "That didn't save - the connection dropped." });
     }
   }
 
@@ -1471,6 +1523,11 @@ export default function LeadDrawer({
       {sync.text}
     </p>
   ) : null;
+
+  /* AUTO SAVE, BY THE CLOSE BUTTON (James, 23 Sep 2026, from Howard's list) -
+     the shared chip in components/SaveChip. Saving, Saved and when, or why
+     not; Save sends anything still waiting straight away. */
+  const autoSaveChip = enquiryLeadId ? <SaveChip scope={saves} /> : null;
 
   const pickRex = (h: { id: string; address: string; image: string | null }) => {
     changeProp({ ...prop, rexPropertyId: h.id, address: h.address, image: h.image ?? prop.image, matched: "rex" });
@@ -2146,6 +2203,7 @@ export default function LeadDrawer({
       >
         {/* ── Sheet chrome ── */}
         <div className="flex shrink-0 items-center justify-between gap-3 px-6 pt-5">
+          <div className="flex min-w-0 items-center gap-2">
           <button
             type="button"
             onClick={onClose}
@@ -2154,6 +2212,8 @@ export default function LeadDrawer({
           >
             ✕
           </button>
+          {autoSaveChip}
+          </div>
           {/* The side questions, centre stage. A tab toggles: open its panel
               in the person box, or click again to put the record back. */}
           <div className="hidden items-center gap-2 sm:flex">
@@ -2639,7 +2699,9 @@ export default function LeadDrawer({
                       />
                     </div>
                     {prop.epc && <p className="mt-1.5 text-[11.5px] text-muted">EPC rating {prop.epc}</p>}
-                    {factsSync && (
+                    {/* Only a problem shows here now: Saving and Saved are on
+                        the Auto save chip by the close button, and in a toast. */}
+                    {factsSync?.bad && (
                       <p className={`mt-2 flex items-center gap-1.5 text-[11px] ${factsSync.bad ? "text-accent-dark" : "text-muted"}`} aria-live="polite">
                         {factsSync.busy ? (
                           <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
+import { trackSave, useSaveReporter } from "@/components/SaveChip";
 import type { MarketAppraisal } from "@/lib/market-appraisal";
 
 /**
@@ -26,6 +27,9 @@ type Suggestion = { id: string; value: string; why: string };
 export default function TakeOnWizard({ ma, onClose, onSaved }: { ma: MarketAppraisal; onClose: () => void; onSaved?: () => void }) {
   const [step, setStep] = useState(0);
   const [mounted, setMounted] = useState(false);
+  /* The file's scope: the portal keeps the page's context, so the page's
+     Auto save chip and its toasts hear the wizard's saves (23 Sep 2026). */
+  const reporter = useSaveReporter();
   useEffect(() => setMounted(true), []);
 
   /* ── photographs ── */
@@ -165,14 +169,26 @@ export default function TakeOnWizard({ ma, onClose, onSaved }: { ma: MarketAppra
   }
 
   const [saving, setSaving] = useState(false);
+  const [saveProblem, setSaveProblem] = useState<string | null>(null);
   async function save(next: number) {
+    if (saving) return;
     setSaving(true);
-    await fetch(`/api/appraisals/${encodeURIComponent(ma.id)}/details`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ fields: values, advert: advert?.body?.trim() ? advert : null }),
-    }).catch(() => null);
+    setSaveProblem(null);
+    /* It used to swallow a refusal and move on to "That is the visit written
+       up" regardless (23 Sep 2026). Now a refusal keeps the agent here, with
+       everything they typed, and says why. */
+    const r = await trackSave<{ ok?: boolean; error?: string }>(reporter, "Take-on details", () =>
+      fetch(`/api/appraisals/${encodeURIComponent(ma.id)}/details`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ fields: values, advert: advert?.body?.trim() ? advert : null }),
+      })
+    );
     setSaving(false);
+    if (!r.ok) {
+      setSaveProblem(`${r.body?.error ?? "That didn't save."} Your answers are still here - press Save and finish again.`);
+      return;
+    }
     setStep(next);
     onSaved?.();
   }
@@ -291,7 +307,9 @@ export default function TakeOnWizard({ ma, onClose, onSaved }: { ma: MarketAppra
                       <button
                         type="button"
                         onClick={async () => {
-                          await fetch(`/api/appraisals/${encodeURIComponent(ma.id)}/photos?photo=${encodeURIComponent(p.id)}`, { method: "DELETE" });
+                          await trackSave(reporter, "Photo", () =>
+                            fetch(`/api/appraisals/${encodeURIComponent(ma.id)}/photos?photo=${encodeURIComponent(p.id)}`, { method: "DELETE" })
+                          );
                           void load();
                         }}
                         aria-label={`Remove ${p.name}`}
@@ -455,6 +473,7 @@ export default function TakeOnWizard({ ma, onClose, onSaved }: { ma: MarketAppra
               ← Back
             </button>
           )}
+          {saveProblem && step === 2 && <span className="text-[11.5px] leading-snug text-accent-dark">{saveProblem}</span>}
           <span className="ml-auto" />
           {step < 2 && (
             <button type="button" onClick={() => setStep(step + 1)} disabled={busy} className={primary}>

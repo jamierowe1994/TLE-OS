@@ -16,6 +16,8 @@ import { CopyButton, DoneTick, PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
 import { TENANT_TRACK } from "@/lib/journey";
 import { minutesOf, type Appt } from "@/lib/diary";
+import SaveChip, { SaveScopeProvider, useSaveScope, type SaveScope } from "@/components/SaveChip";
+import { useCaseState } from "@/lib/case-state";
 
 /**
  * One viewing, at full record width — and the machine that moves an
@@ -114,23 +116,51 @@ function Modal({
   );
 }
 
-export default function ViewingDrawer({
-  appt,
-  outcome,
-  onClose,
-  sentExtra,
-  onSend,
-}: {
+type DrawerProps = {
   appt: Appt | null;
   outcome?: Outcome;
   onClose: () => void;
   sentExtra: Set<string>;
   onSend: (apptId: string, label: string) => void;
-}) {
+};
+
+/* The OS's own notes on a viewing, kept in os_case_state under kind
+   "viewing". REX has nowhere for them. */
+type ViewingCase = { notes: string[]; coupled: boolean };
+const EMPTY_VIEWING: ViewingCase = { notes: [], coupled: true };
+
+/* The scope sits out here, above the drawer, so the notes' own saves
+   (useCaseState, inside) report to the Auto save chip by the close button as
+   well as the feedback and the cancel / move (23 Sep 2026). */
+export default function ViewingDrawer(props: DrawerProps) {
+  const saves = useSaveScope(props.appt?.id ?? null);
+  return (
+    <SaveScopeProvider scope={saves}>
+      <ViewingDrawerBody {...props} saves={saves} />
+    </SaveScopeProvider>
+  );
+}
+
+function ViewingDrawerBody({
+  appt,
+  outcome,
+  onClose,
+  sentExtra,
+  onSend,
+  saves,
+}: DrawerProps & { saves: SaveScope }) {
   const [shown, setShown] = useState(false);
-  const [coupled, setCoupled] = useState(true);
+  /* Notes and the coupling used to live on this screen only, so both were
+     lost the moment it closed - "press Enter to keep it" kept nothing
+     (23 Sep 2026). Now they are saved against the viewing. */
+  const [viewingCase, setViewingCase, viewingCaseStatus] = useCaseState<ViewingCase>(
+    "viewing",
+    appt?.id ?? null,
+    EMPTY_VIEWING
+  );
+  const notes = viewingCase.notes;
+  const coupled = viewingCase.coupled;
   const [note, setNote] = useState("");
-  const [notes, setNotes] = useState<string[]>([]);
   const [cancelled, setCancelled] = useState(false);
   const [cancelFlow, setCancelFlow] = useState(false);
   const [rescheduling, setRescheduling] = useState(false);
@@ -159,9 +189,7 @@ export default function ViewingDrawer({
 
   useEffect(() => {
     if (!appt) { setShown(false); return; }
-    setCoupled(true);
     setNote("");
-    setNotes([]);
     setCancelled(false);
     setCancelFlow(false);
     setRescheduling(false);
@@ -247,11 +275,18 @@ export default function ViewingDrawer({
     return d.toISOString();
   };
 
-  /* Cancel or move, for real (lib/viewing-change). Answers with what happened
-     in words, or null when it did not go - and then says why. */
-  const changeIt = async (c: { action: "cancel" | "move"; newStartsAt?: string; reason?: "organiser" | "applicant"; reasonText?: string }): Promise<string | null> => {
+  /* Cancel or move, for real (lib/viewing-change). On success `after` gets
+     what happened in words; when it did not go it says why, inline and on the
+     Auto save chip. Try again on the chip runs the whole step again, `after`
+     included, so the screen moves with it rather than the chip saying Saved
+     over a drawer that still shows the old time (23 Sep 2026). */
+  type Change = { action: "cancel" | "move"; newStartsAt?: string; reason?: "organiser" | "applicant"; reasonText?: string };
+  const changeIt = async (c: Change, after: (said: string) => void): Promise<void> => {
+    const settle = saves.reporter.begin("Viewing");
     setChangeBusy(true);
     setChangeError(null);
+    let problem: string | null = null;
+    let said = "";
     try {
       const r = await fetch("/api/viewings/change", {
         method: "POST",
@@ -268,28 +303,37 @@ export default function ViewingDrawer({
         }),
       });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; said?: string };
-      if (!j.ok) {
-        setChangeError(j.said ?? "That did not go through. Try again.");
-        return null;
-      }
-      void refreshDiary();
-      return j.said ?? "";
+      if (!r.ok || !j.ok) problem = j.said ?? "That did not go through. Try again.";
+      else said = j.said ?? "";
     } catch {
-      setChangeError("That did not go through - the connection dropped. Try again.");
-      return null;
+      problem = "That did not go through - the connection dropped. Try again.";
     } finally {
       setChangeBusy(false);
     }
+    if (problem) {
+      setChangeError(problem);
+      settle({ ok: false, problem });
+      return;
+    }
+    void refreshDiary();
+    settle({ ok: true });
+    after(said);
   };
 
   /* SAVED, not just said (15 Sep 2026). Both answers used to live on this
      screen only, so a written-up viewing stayed "Feedback due" for ever. Now
      they go to /api/viewings/feedback and the diary is reread, so the tile and
      the list move the moment it is saved. A save that fails says so and keeps
-     the form, rather than pretending. */
-  const saveFeedback = async (f: { attended: boolean; choice: string; label: string; note: string }): Promise<boolean> => {
+     the form, rather than pretending. Reported to the Auto save chip too, and
+     its Try again runs `after` as well, like the cancel and move above. */
+  const saveFeedback = async (
+    f: { attended: boolean; choice: string; label: string; note: string },
+    after: () => void
+  ): Promise<void> => {
+    const settle = saves.reporter.begin("Feedback");
     setFbSaving(true);
     setFbError(null);
+    let problem: string | null = null;
     try {
       const r = await fetch("/api/viewings/feedback", {
         method: "POST",
@@ -303,18 +347,20 @@ export default function ViewingDrawer({
         }),
       });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-      if (!j.ok) {
-        setFbError(j.error ?? "That did not save. Try again.");
-        return false;
-      }
-      void refreshDiary();
-      return true;
+      if (!r.ok || !j.ok) problem = j.error ?? "That did not save. Try again.";
     } catch {
-      setFbError("That did not save - the connection dropped. Try again.");
-      return false;
+      problem = "That did not save - the connection dropped. Try again.";
     } finally {
       setFbSaving(false);
     }
+    if (problem) {
+      setFbError(problem);
+      settle({ ok: false, problem });
+      return;
+    }
+    void refreshDiary();
+    settle({ ok: true });
+    after();
   };
 
   const sendPassportInvite = async (again = false) => {
@@ -418,7 +464,9 @@ export default function ViewingDrawer({
         }`}
         style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
       >
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-line/70 px-6 py-5">
+        {/* On a phone the buttons take their own row above the title - side
+            by side they crushed the title to one word a line (23 Sep 2026). */}
+        <div className="flex shrink-0 flex-col-reverse gap-3 border-b border-line/70 px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
               {cancelled ? "Viewing — cancelled" : past ? "Viewing — happened" : "Viewing — booked"}
@@ -439,7 +487,7 @@ export default function ViewingDrawer({
               {property} · {appt.who} · {appt.agent} accompanying
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2 sm:shrink-0">
             {/* Live again (15 Sep 2026): cancelling and moving now really tell
                 the applicant, move the agent's Outlook and REX's copy
                 (lib/viewing-change). They were hidden while they sent nothing. */}
@@ -474,6 +522,8 @@ export default function ViewingDrawer({
                 because it is not a send. Hidden rather than wired: what a
                 review IS has never been decided, and a button that books
                 nothing is worse than no button. */}
+            {/* Beside the close, on its inner side, so the X keeps the corner. */}
+            <SaveChip scope={saves} />
             <button
               type="button"
               onClick={onClose}
@@ -690,17 +740,22 @@ export default function ViewingDrawer({
               </Card>
 
               <Card title="Notes" icon="note">
+                {/* Held shut until the viewing's saved notes are back: a note
+                    kept before then would show on screen and never be saved
+                    (lib/case-state will not write over a record it has not
+                    read). */}
                 <input data-steve="viewing.note"
                   value={note}
+                  disabled={viewingCaseStatus === "loading"}
                   onChange={(e) => setNote(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && note.trim()) {
-                      setNotes((cur) => [note.trim(), ...cur]);
+                      setViewingCase({ ...viewingCase, notes: [note.trim(), ...notes] });
                       log(`Note: ${note.trim()}`);
                       setNote("");
                     }
                   }}
-                  placeholder="Anything worth remembering — press Enter to keep it"
+                  placeholder={viewingCaseStatus === "loading" ? "Loading the notes…" : "Anything worth remembering - press Enter to keep it"}
                   className="w-full rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[12px] outline-none transition-colors focus:border-ink"
                 />
                 {notes.length > 0 && (
@@ -793,8 +848,8 @@ export default function ViewingDrawer({
                     </PressButton>
                     <PressButton
                       onClick={() => {
-                        void saveFeedback({ attended: false, choice: "", label: "No-show", note: "" }).then((ok) => {
-                          if (!ok) return;
+                        if (fbSaving) return;
+                        void saveFeedback({ attended: false, choice: "", label: "No-show", note: "" }, () => {
                           setLocalOutcome("No-show");
                           setCompleting("done");
                           log("Marked as NO-SHOW");
@@ -842,11 +897,11 @@ export default function ViewingDrawer({
                     onClick={() => {
                       const opt = FEEDBACK_OPTIONS.find((o) => o.id === fbChoice);
                       if (!opt || fbSaving) return;
-                      void saveFeedback({ attended: true, choice: opt.id, label: opt.label, note: fbNotes.trim() }).then((ok) => {
-                        if (!ok) return;
+                      const said = fbNotes.trim();
+                      void saveFeedback({ attended: true, choice: opt.id, label: opt.label, note: said }, () => {
                         setLocalOutcome(opt.outcome);
                         setCompleting("done");
-                        log(`Feedback recorded: ${opt.label}${fbNotes.trim() ? ` — "${fbNotes.trim()}"` : ""}`);
+                        log(`Feedback recorded: ${opt.label}${said ? ` — "${said}"` : ""}`);
                         if (opt.outcome === "Applying") log(`${appt.who} moved to Application on the spine`);
                       });
                     }}
@@ -945,7 +1000,7 @@ export default function ViewingDrawer({
                   <button
                     type="button"
                     onClick={() => {
-                      setCoupled((c) => !c);
+                      setViewingCase({ ...viewingCase, coupled: !coupled });
                       log(coupled ? "Records uncoupled — application fell through" : "Records re-coupled");
                     }}
                     className="mt-3 text-[11px] font-semibold text-muted transition-colors hover:text-ink"
@@ -1018,8 +1073,7 @@ export default function ViewingDrawer({
               onClick={() => {
                 if (!rePick || changeBusy) return;
                 const pick = rePick;
-                void changeIt({ action: "move", newStartsAt: isoAt(pick.day, pick.slot) }).then((said) => {
-                  if (said === null) return;
+                void changeIt({ action: "move", newStartsAt: isoAt(pick.day, pick.slot) }, (said) => {
                   setMoved(pick);
                   setRescheduling(false);
                   log(`Moved to ${dayLabel(pick.day)}, ${pick.slot}. ${said}`);
@@ -1074,8 +1128,7 @@ export default function ViewingDrawer({
           <PressButton
             onClick={() => {
               if (changeBusy) return;
-              void changeIt({ action: "cancel", reason: cancelReason, reasonText: cancelNote }).then((said) => {
-                if (said === null) return;
+              void changeIt({ action: "cancel", reason: cancelReason, reasonText: cancelNote }, (said) => {
                 setCancelled(true);
                 setCancelFlow(false);
                 log(`Viewing cancelled. ${said}`);

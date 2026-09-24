@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Check, CheckId, Finding, PlcCase } from "@/lib/plc";
+import SaveChip, { SaveScopeProvider, trackSave, useSaveReporter, useSaveScope } from "@/components/SaveChip";
 
 /**
  * The PLC handover, both sides of it, on one screen.
@@ -59,20 +60,30 @@ function AgentSide({
   const [moveIn, setMoveIn] = useState(c.moveInDate ?? "");
   const [note, setNote] = useState(c.agentNote);
   const files = useRef<Record<string, HTMLInputElement | null>>({});
+  const reporter = useSaveReporter();
 
   useEffect(() => {
     setMoveIn(c.moveInDate ?? "");
     setNote(c.agentNote);
   }, [c.id, c.moveInDate, c.agentNote]);
 
+  /* Reported to the chip by the h1 (23 Sep 2026). The reload rides inside
+     the send, so a save that lands on the chip's Try again refreshes the case
+     as well. The line above the page still says why, as it always did. */
   const saveDetails = async (patch: { moveInDate?: string; agentNote?: string }) => {
     say(null);
-    try {
-      await api(`/api/plc/${c.id}`, { method: "PATCH", body: JSON.stringify(patch) });
-      await reload();
-    } catch (e) {
-      say((e as Error).message);
-    }
+    const label = "moveInDate" in patch ? "Move-in date" : "Note";
+    const r = await trackSave<{ error?: string }>(reporter, label, () =>
+      fetch(`/api/plc/${c.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      }).then((res) => {
+        if (res.ok) void reload();
+        return res;
+      })
+    );
+    if (!r.ok) say(r.body?.error ?? "That didn't save.");
   };
 
   /* Upload first, then file the key against the check. Two calls, because the
@@ -81,6 +92,7 @@ function AgentSide({
   const attach = async (checkId: CheckId, file: File) => {
     setBusy(checkId);
     say(null);
+    const settle = reporter.begin("Document");
     try {
       const form = new FormData();
       form.append("file", file);
@@ -93,9 +105,11 @@ function AgentSide({
         method: "POST",
         body: JSON.stringify({ checkId, name: stored.name, key: stored.key }),
       });
+      settle({ ok: true });
       await reload();
     } catch (e) {
       say((e as Error).message);
+      settle({ ok: false, problem: (e as Error).message });
     } finally {
       setBusy(null);
     }
@@ -104,11 +118,14 @@ function AgentSide({
   const unfile = async (key: string) => {
     setBusy(key);
     say(null);
+    const settle = reporter.begin("Document removal");
     try {
       await api(`/api/plc/${c.id}/documents?key=${encodeURIComponent(key)}`, { method: "DELETE" });
+      settle({ ok: true });
       await reload();
     } catch (e) {
       say((e as Error).message);
+      settle({ ok: false, problem: (e as Error).message, retry: () => void unfile(key) });
     } finally {
       setBusy(null);
     }
@@ -364,6 +381,9 @@ export default function PlcDryRun() {
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [form, setForm] = useState({ applicationRef: "", address: "", moveInDate: "" });
+  /* AUTO SAVE, BY THE TITLE (James, 23 Sep 2026) - the agent's side saves as
+     it goes, so the chip beside the h1 says each save landed, per case. */
+  const saves = useSaveScope(id);
 
   const loadList = useCallback(async () => {
     try {
@@ -427,9 +447,12 @@ export default function PlcDryRun() {
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
       <header className="mb-6">
         <p className="text-xs uppercase tracking-[0.18em] text-muted">Dry run</p>
-        <h1 className="mt-1 text-2xl tracking-normal text-ink">
-          PLC Handover
-        </h1>
+        <div className="mt-1 flex flex-wrap items-center gap-3">
+          <h1 className="text-2xl tracking-normal text-ink">
+            PLC Handover
+          </h1>
+          {data && role === "agent" ? <SaveChip scope={saves} /> : null}
+        </div>
         <p className="mt-2 max-w-2xl text-sm text-muted">
           Both sides of the handover on one screen. Submitting takes you to the compliance view;
           deciding sends you back to the agent. Everything you press writes to the real store.
@@ -525,12 +548,14 @@ export default function PlcDryRun() {
           {cases.length ? "Loading…" : "Nothing yet. Start a handover above."}
         </p>
       ) : role === "agent" ? (
-        <AgentSide
-          data={data}
-          reload={reload}
-          say={setError}
-          onSubmitted={() => setRole("compliance")}
-        />
+        <SaveScopeProvider scope={saves}>
+          <AgentSide
+            data={data}
+            reload={reload}
+            say={setError}
+            onSubmitted={() => setRole("compliance")}
+          />
+        </SaveScopeProvider>
       ) : (
         <ComplianceSide
           data={data}

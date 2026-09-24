@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import InvoiceDoc, { docTotals, gbp, type DocData, type DocLine } from "@/components/InvoiceDoc";
 import { PressButton } from "@/components/Bits";
+import SaveChip, { SaveScopeProvider, useSaveScope } from "@/components/SaveChip";
 
 /**
  * The invoice editor: the document on the left, the same fields in a rail
@@ -32,13 +33,18 @@ export default function InvoiceEditor() {
   const [inv, setInv] = useState<Inv | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
-  const [saving, setSaving] = useState<"idle" | "saving" | "saved">("idle");
+  const [saveErr, setSaveErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [sendTo, setSendTo] = useState("");
   const [asking, setAsking] = useState<null | "send" | "paid" | "void">(null);
   const [note, setNote] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pending = useRef<Partial<DocData>>({});
+  /* The Auto save chip beside the title (components/SaveChip), 23 Sep 2026.
+     Every write on this page - the typed edits and the four buttons - reports
+     to it and to a toast, so nobody has to wonder whether an edit landed. */
+  const saves = useSaveScope(id);
+  const reporter = saves.reporter;
 
   useEffect(() => {
     fetch(`/api/invoices/${id}`, { cache: "no-store" })
@@ -49,34 +55,74 @@ export default function InvoiceEditor() {
 
   const locked = !inv || inv.status === "sent" || inv.status === "paid" || inv.status === "void";
 
+  /* Sends whatever edits are waiting, now. Null when nothing was waiting.
+     A refused save puts its edits BACK in the queue (under anything typed
+     since, which is newer) - until 23 Sep a failure emptied the queue first,
+     so the edits were gone from the server's copy while still showing on
+     screen, and Try again had nothing to send. */
+  const sendNow = useCallback((keepalive = false): Promise<boolean> | null => {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    const fields = pending.current;
+    if (Object.keys(fields).length === 0) return null;
+    pending.current = {};
+    const settle = reporter.begin("Invoice");
+    return fetch(`/api/invoices/${id}`, { method: "PATCH", keepalive, headers: { "content-type": "application/json" }, body: JSON.stringify({ fields }) })
+      .then((x) => x.json())
+      .catch(() => null)
+      .then((r) => {
+        if (!r?.ok) {
+          pending.current = { ...fields, ...pending.current };
+          const problem = r?.error ?? "Could not save.";
+          setSaveErr(problem);
+          settle({ ok: false, problem, retry: () => void sendNow() });
+          return false;
+        }
+        /* The server's copy, with anything typed while it was on its way laid back over it. */
+        setInv((cur) => (cur ? { ...cur, ...r.invoice, lines: r.invoice.lines, ...pending.current } : cur));
+        setSaveErr(null);
+        settle({ ok: true });
+        return true;
+      });
+  }, [id, reporter]);
+
+  /* The chip's Save sends the waiting edits at once rather than after the pause. */
+  useEffect(() => reporter.waiting(() => sendNow() !== null), [reporter, sendNow]);
+  /* Leaving the page inside the pause used to drop the last edit. Now it goes
+     as the page closes, and its toast says whether it landed. */
+  useEffect(() => () => void sendNow(true), [sendNow]);
+
   /* One object, two views. Every edit lands here, is drawn at once, and is
      saved a moment later - batched, so typing a description is one write. */
   const change = useCallback((patch: Partial<DocData>) => {
     if (locked) return;
     setInv((cur) => (cur ? { ...cur, ...patch } : cur));
     pending.current = { ...pending.current, ...patch };
-    setSaving("saving");
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(async () => {
-      const fields = pending.current;
-      pending.current = {};
-      const r = await fetch(`/api/invoices/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ fields }) }).then((x) => x.json()).catch(() => null);
-      if (!r?.ok) { setErr(r?.error ?? "Could not save."); setSaving("idle"); return; }
-      setInv((cur) => (cur ? { ...cur, ...r.invoice, lines: r.invoice.lines } : cur));
-      setSaving("saved");
-    }, 600);
-  }, [id, locked]);
+    timer.current = setTimeout(() => void sendNow(), 600);
+  }, [locked, sendNow]);
 
   async function act(action: "issue" | "send" | "paid" | "void") {
     setBusy(true);
     setErr(null);
+    /* Edits still in the pause go first, so Produce and Send never work
+       from a copy missing the last line typed. If they are refused, stop. */
+    const waiting = sendNow();
+    if (waiting && !(await waiting)) { setBusy(false); return; }
+    const settle = reporter.begin("Invoice");
     const r = await fetch(`/api/invoices/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, note, to: sendTo }) }).then((x) => x.json()).catch(() => null);
     setBusy(false);
-    if (!r?.ok) { setErr(r?.error ?? "That didn't work."); if (r?.invoice) setInv(r.invoice); return; }
+    if (!r?.ok) {
+      const problem = r?.error ?? "That didn't work.";
+      setErr(problem);
+      if (r?.invoice) setInv(r.invoice);
+      settle({ ok: false, problem });
+      return;
+    }
     setInv(r.invoice);
     setAsking(null);
     setNote("");
     setFlash(action === "issue" ? `Produced as ${r.invoice.number}.` : action === "send" ? `Sent to ${r.sentTo}.` : action === "paid" ? "Marked paid." : "Voided.");
+    settle({ ok: true });
   }
 
   if (err && !inv) return <p className="mt-8 text-[12.5px] text-accent-dark">{err}</p>;
@@ -87,14 +133,16 @@ export default function InvoiceEditor() {
   const setLine = (i: number, patch: Partial<DocLine>) => change({ lines: inv.lines.map((l, k) => (k === i ? { ...l, ...patch } : l)) });
 
   return (
-    <>
+    <SaveScopeProvider scope={saves}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <Link href="/maintenance?section=invoices" className="text-[11.5px] text-muted hover:text-ink">← Invoices</Link>
-          <h1 className="mt-1 text-[24px] leading-tight">{inv.number ?? "New invoice"} <span className="ml-2 text-[13px] text-muted">{STATUS[inv.status]}</span></h1>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-2">
+            <h1 className="text-[24px] leading-tight">{inv.number ?? "New invoice"} <span className="ml-2 text-[13px] text-muted">{STATUS[inv.status]}</span></h1>
+            <SaveChip scope={saves} />
+          </div>
           <p className="mt-0.5 text-[12px] text-muted">
             {inv.toName ? `To ${inv.toName}` : "Nobody yet"}{inv.orderRef ? ` · job #${inv.orderRef}` : ""} · {gbp(t.total)}
-            {saving === "saving" ? " · saving…" : saving === "saved" ? " · saved" : ""}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -109,6 +157,7 @@ export default function InvoiceEditor() {
 
       {flash && <p className="mt-4 rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-3 text-[12.5px]">{flash}</p>}
       {err && <p className="mt-4 text-[12.5px] text-accent-dark">{err}</p>}
+      {saveErr && <p className="mt-4 text-[12.5px] text-accent-dark">Your last edits are not saved - {saveErr}</p>}
 
       {asking && (
         <div className="mt-4 rounded-2xl border border-line/80 bg-panel p-4">
@@ -182,6 +231,6 @@ export default function InvoiceEditor() {
           </section>
         </aside>
       </div>
-    </>
+    </SaveScopeProvider>
   );
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
+import { trackSave, useSaveReporter } from "@/components/SaveChip";
 import type { MarketAppraisal } from "@/lib/market-appraisal";
 
 /**
@@ -28,6 +29,8 @@ const size = (n: number | null) => (n == null ? "" : n > 1024 * 1024 ? `${(n / 1
 
 export default function PhotosPanel({ ma }: { ma: MarketAppraisal }) {
   const [photos, setPhotos] = useState<Photo[] | null>(null);
+  /* The file's Auto save chip hears the removals (23 Sep 2026). */
+  const reporter = useSaveReporter();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [over, setOver] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
@@ -212,7 +215,11 @@ export default function PhotosPanel({ ma }: { ma: MarketAppraisal }) {
                 <button
                   type="button"
                   onClick={async () => {
-                    await fetch(`/api/appraisals/${encodeURIComponent(ma.id)}/photos?photo=${encodeURIComponent(p.id)}`, { method: "DELETE" });
+                    /* A removal that was refused used to vanish without a
+                       word, and the photograph came back on the next read. */
+                    await trackSave(reporter, "Photo", () =>
+                      fetch(`/api/appraisals/${encodeURIComponent(ma.id)}/photos?photo=${encodeURIComponent(p.id)}`, { method: "DELETE" })
+                    );
                     void load();
                   }}
                   aria-label={`Remove ${p.name}`}

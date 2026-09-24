@@ -7,6 +7,7 @@ import PropertyPhoto from "@/components/PropertyPhoto";
 import PortfolioMap from "@/components/PortfolioMap";
 import FindingData from "@/components/business/FindingData";
 import PropertyFile from "@/components/PropertyFile";
+import SaveChip, { SaveScopeProvider, useSaveScope } from "@/components/SaveChip";
 import PropertyAnswers from "@/components/PropertyAnswers";
 import { Pill } from "@/components/Wire";
 import { rexContactUrl, rexListingUrl } from "@/lib/business/rex-links";
@@ -176,6 +177,9 @@ function PropertyPanel({
   const [tab, setTab] = useState<string>("house");
   /* A certificate is up from the bottom: slide aside until it goes. */
   const docOpen = useDocumentOpen();
+  /* The Auto save chip by the close button (23 Sep 2026). The saves here are
+     the property file's; the scope starts again as ‹ › step to the next home. */
+  const saves = useSaveScope(property.listingId);
 
   useEffect(() => {
     const t = requestAnimationFrame(() => setShown(true));
@@ -251,6 +255,7 @@ function PropertyPanel({
   );
 
   return (
+    <SaveScopeProvider scope={saves}>
     <div className="fixed inset-0 z-[130]">
       <button
         aria-label="Close"
@@ -262,15 +267,17 @@ function PropertyPanel({
         style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
       >
         <div className="shrink-0 border-b border-line/70 px-6 pt-5">
-          <div className="flex items-start justify-between gap-3 pb-5">
+          {/* Buttons above the title on a phone, so the chip is never squeezed. */}
+          <div className="flex flex-col-reverse gap-3 pb-5 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <h2 className="text-[20px] leading-tight">{title}</h2>
               <p className="mt-1 text-[12px] text-muted">{sub}</p>
             </div>
-            <div className="flex shrink-0 items-center gap-1.5">
-              <button type="button" aria-label="Previous property" onClick={() => onStep(-1)} className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">‹</button>
-              <button type="button" aria-label="Next property" onClick={() => onStep(1)} className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">›</button>
-              <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">✕</button>
+            <div className="flex items-center justify-end gap-1.5 sm:shrink-0">
+              <SaveChip scope={saves} className="mr-0.5" />
+              <button type="button" aria-label="Previous property" onClick={() => onStep(-1)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">‹</button>
+              <button type="button" aria-label="Next property" onClick={() => onStep(1)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">›</button>
+              <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">✕</button>
             </div>
           </div>
           {house && (
@@ -456,6 +463,7 @@ function PropertyPanel({
       </aside>
       {lightbox != null && <PhotoLightbox photos={shots} start={lightbox} name={house ? house.name : p.name} onClose={() => setLightbox(null)} />}
     </div>
+    </SaveScopeProvider>
   );
 }
 

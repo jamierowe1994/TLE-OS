@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSaveReporter } from "@/components/SaveChip";
 
 /**
  * The two hand moves an appraisal has: won, and lost. Everything else is
@@ -23,10 +24,13 @@ export default function AppraisalOutcome({
   const big = size === "large";
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const reporter = useSaveReporter();
 
   const set = async (outcome: "won" | "lost" | null) => {
     setBusy(true);
     setError(null);
+    /* Won, lost or reopened lands the same however often it is sent. */
+    const settle = reporter.begin("Outcome");
     try {
       const res = await fetch("/api/appraisals", {
         method: "PATCH",
@@ -35,9 +39,12 @@ export default function AppraisalOutcome({
       });
       const j = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || j.ok === false) throw new Error(j.error ?? "That didn't save.");
+      settle({ ok: true });
       window.location.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "That didn't save.");
+      const problem = e instanceof Error ? e.message : "That didn't save.";
+      setError(problem);
+      settle({ ok: false, problem, retry: () => void set(outcome) });
       setBusy(false);
     }
   };

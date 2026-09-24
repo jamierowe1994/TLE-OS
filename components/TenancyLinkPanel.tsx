@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import { useSaveReporter } from "@/components/SaveChip";
 import {
   describe,
   isLive,
@@ -33,22 +34,33 @@ export default function TenancyLinkPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const live = isLive(link);
+  /* The drawer's Auto save chip and a toast (23 Sep 2026). The link itself
+     saves in the OS through onChange; this is the tenancy going on to the
+     agency's records, which can be refused on its own. */
+  const reporter = useSaveReporter();
 
   async function push(next: TenancyLink) {
     onChange(next);
     setSaving(true);
     setError(null);
+    /* Try again goes through push, not a bare resend: a first create that
+       lands must keep the id it comes back with, or the next change makes a
+       second application instead of updating the first. */
+    const settle = reporter.begin("Tenancy");
     try {
       const res = await fetch("/api/tenancy-link", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(next),
       });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error ?? "REX refused the link.");
+      const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; rexApplicationId?: string };
+      if (!res.ok || !j.ok) throw new Error(j.error ?? "REX refused the link.");
       if (j.rexApplicationId) onChange({ ...next, rexApplicationId: j.rexApplicationId });
+      settle({ ok: true });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't reach REX.");
+      const why = e instanceof Error ? e.message : "Couldn't reach REX.";
+      setError(why);
+      settle({ ok: false, problem: why });
     } finally {
       setSaving(false);
     }
@@ -123,7 +135,7 @@ export default function TenancyLinkPanel({
             Unlink…
           </button>
           <p className="text-[10.5px] leading-relaxed text-muted">
-            Referencing, deposit and signing all happen under this link — none of them break it.
+            Referencing, deposit and signing all happen under this link - none of them break it.
           </p>
         </div>
       )}

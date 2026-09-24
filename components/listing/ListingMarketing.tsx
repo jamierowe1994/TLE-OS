@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import DropZone from "@/components/listing/DropZone";
 import PortalPreview, { PORTAL_TABS, type Portal } from "@/components/listing/PortalPreview";
 import { CHANGE_WORDS, changesIn, draftFrom, fiveWeeks, money, orderedImages, type Draft, type FactField } from "@/components/listing/listing-draft";
 import type { ListingDetails } from "@/lib/listing-details";
 import GuideButton from "@/components/GuideButton";
+import { toast } from "@/lib/toast";
+import { useSaveReporter } from "@/components/SaveChip";
 import { MIN_FEATURES, OPTIONS, REQUIREMENTS, isRequired, type RequirementInput } from "@/lib/listing-requirements";
 
 /**
@@ -65,6 +67,18 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
   const [filling, setFilling] = useState<"all" | "copy" | null>(null);
   const [fillNote, setFillNote] = useState<string | null>(null);
   const [sources, setSources] = useState<Record<string, string>>({});
+  /* THE ADVERT IS THE ONE THING THE CHIP NEVER SENDS (23 Sep 2026). Its
+     Save writes to the live portals, so it goes only from its own button,
+     after a read. But an edited advert must not let the chip say everything
+     is saved either: pressing the chip's Save says it is waiting instead.
+     Refs, because the draft is read after the loading returns below and a
+     hook cannot sit there. */
+  const reporter = useSaveReporter();
+  const sendWaiting = useRef<(() => boolean) | null>(null);
+  useEffect(() => reporter.waiting(() => sendWaiting.current?.() ?? false), [reporter]);
+  /* Cleared every render and set again once the draft is known, so a listing
+     still loading can never send the one before it. */
+  sendWaiting.current = null;
 
   const load = useCallback(async () => {
     setError(null);
@@ -134,6 +148,7 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
     if (!details || !changed.length) return;
     setSaving(true);
     setNote(null);
+    const settle = reporter.begin("Advert");
     try {
       const r = await fetch("/api/listings/details", {
         method: "PATCH",
@@ -151,12 +166,23 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
         setSources({});
       }
       setNote(j.ok ? { tone: "good", text: "Saved. Live adverts update within about 10 minutes." } : { tone: "bad", text: j.error ?? "That did not save." });
+      /* No Try again on the chip: the advert goes out only from its own Save. */
+      settle(j.ok ? { ok: true } : { ok: false, problem: j.error ?? "That did not save." });
     } catch {
       setNote({ tone: "bad", text: "The connection dropped. Nothing is lost here - try again." });
+      settle({ ok: false, problem: "The connection dropped. Nothing is lost here." });
     } finally {
       setSaving(false);
     }
   }
+
+  sendWaiting.current =
+    canEdit && changed.length > 0 && !saving
+      ? () => {
+          toast("The advert is not saved yet - check it, then press Save on the Marketing tab.", "bad");
+          return true;
+        }
+      : null;
 
   /** The magic button. "all" fills only what is empty; "copy" rewrites the advert. */
   async function fill(mode: "all" | "copy") {
@@ -212,22 +238,25 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
     }
   }
 
-  async function sendToListing(kind: "photo" | "floorplan", key?: string): Promise<string> {
-    if (!key) return "Saved here, and could not be added to the listing.";
+  /* Whether it went on the listing travels back with the words, so the drop
+     zone's one Photos / Floor plan save on the chip is told the truth rather
+     than guessing from the wording. */
+  async function sendToListing(kind: "photo" | "floorplan", key?: string): Promise<{ ok: boolean; note: string }> {
+    if (!key) return { ok: false, note: "Saved here, and could not be added to the listing." };
     const r = await fetch("/api/listings/media", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ id: details!.id, kind, key }),
     });
     const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; details?: ListingDetails | null };
-    if (j.ok && j.details) {
+    if (r.ok && j.ok && j.details) {
       const fresh = j.details;
       setDetails(fresh);
       setDraftState((d) => (d ? { ...d, imageOrder: [...d.imageOrder, ...fresh.images.map((i) => i.id).filter((id) => !d.imageOrder.includes(id))] } : d));
       onSaved?.(fresh);
-      return "Added";
+      return { ok: true, note: "Added" };
     }
-    return j.error ?? "It did not go on the listing.";
+    return { ok: false, note: j.error ?? "It did not go on the listing." };
   }
 
   /* ── pieces ────────────────────────────────────────────────────────── */

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import { useSaveReporter } from "@/components/SaveChip";
 
 /**
  * THE DROP ZONE (James, 11 Sep 2026): "Upload photos" or "File the EPC"
@@ -55,9 +56,10 @@ export default function DropZone({
   onClose: () => void;
   /** Every file that landed, as it lands. */
   onLanded?: (f: Landed) => void;
-  /** Sends each landed image on (to REX, 15 Sep 2026); what it answers is
-   *  written under the file, so a refusal is seen where it happened. */
-  afterUpload?: (f: Landed) => Promise<string | undefined>;
+  /** Sends each landed image on (to REX, 15 Sep 2026); the note is written
+   *  under the file, so a refusal is seen where it happened, and `ok` says
+   *  whether it counts as saved on the Auto save chip. */
+  afterUpload?: (f: Landed) => Promise<{ ok: boolean; note: string }>;
 }) {
   const [shown, setShown] = useState(false);
   const [over, setOver] = useState(false);
@@ -67,6 +69,9 @@ export default function DropZone({
   const [expiry, setExpiry] = useState("");
   const [pendingEpc, setPendingEpc] = useState<{ file: File; note: string } | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  /* The file's Auto save chip and a toast (23 Sep 2026): one save per drop,
+     not one per photo, and only called saved once every file is on. */
+  const reporter = useSaveReporter();
 
   useEffect(() => {
     const t = requestAnimationFrame(() => setShown(true));
@@ -119,6 +124,8 @@ export default function DropZone({
          photos actually uploaded, and the natural thing to do was drop them
          again and put every photo on the advert twice. */
       const base = queue.length;
+      const settle = reporter.begin(kind === "floorplan" ? "Floor plan" : "Photos");
+      let failed = 0;
       for (const [n, f] of list.entries()) {
         const i = base + n;
         setQueue((q) => [...q, { name: f.name, pct: 0, done: false }]);
@@ -136,14 +143,25 @@ export default function DropZone({
               : r
           )
         );
+        if (!j.ok) failed += 1;
         if (j.ok) {
           const landed = { name: f.name, url: String(j.url), key: typeof j.key === "string" ? j.key : undefined };
           onLanded?.(landed);
           if (afterUpload) {
-            const note = await afterUpload(landed).catch(() => "Saved here, and not yet on the listing.");
-            setQueue((q) => q.map((r, k) => (k === i ? { ...r, note } : r)));
+            const sent = await afterUpload(landed).catch(() => ({ ok: false, note: "Saved here, and not yet on the listing." }));
+            if (!sent.ok) failed += 1;
+            setQueue((q) => q.map((r, k) => (k === i ? { ...r, note: sent.note } : r)));
           }
         }
+      }
+      /* No Try again: the files went with the drop. The rows above say which. */
+      if (!failed) settle({ ok: true });
+      else {
+        const which =
+          failed === list.length
+            ? list.length === 1 ? "it did not land" : `none of the ${list.length} landed`
+            : `${failed} of ${list.length} did not land`;
+        settle({ ok: false, problem: `${which}. Drop ${failed === 1 ? "it" : "them"} in again.` });
       }
       return;
     }
@@ -165,6 +183,7 @@ export default function DropZone({
 
   async function file(f: File, exp: string, issue: string) {
     setQueue([{ name: f.name, pct: 70, done: false, note: "Filing it…" }]);
+    const settle = reporter.begin("EPC");
     const body = new FormData();
     body.set("file", f);
     if (propertyId) body.set("propertyId", propertyId);
@@ -181,6 +200,7 @@ export default function DropZone({
         : { name: f.name, pct: 100, done: true, error: String(j.error ?? "The upload did not land.") },
     ]);
     setPendingEpc(null);
+    settle(j.ok ? { ok: true } : { ok: false, problem: String(j.error ?? "The upload did not land."), retry: () => void file(f, exp, issue) });
     if (j.ok) onLanded?.({ name: f.name, note: `expires ${exp}` });
   }
 

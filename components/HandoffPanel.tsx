@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Pill } from "@/components/Wire";
+import { useSaveReporter } from "@/components/SaveChip";
 
 /**
  * Offer accepted → the deal.
@@ -97,6 +98,7 @@ export default function HandoffPanel({ applicationId }: { applicationId: string 
   const [result, setResult] = useState<string | null>(null);
   const [runs, setRuns] = useState<Run[]>([]);
   const [openRun, setOpenRun] = useState<string | null>(null);
+  const reporter = useSaveReporter();
 
   useEffect(() => {
     let live = true;
@@ -121,6 +123,11 @@ export default function HandoffPanel({ applicationId }: { applicationId: string 
   async function send(rehearse: boolean) {
     setSending(true);
     setResult(null);
+    /* A rehearsal writes nothing but its own record, so the chip may send it
+       again. A live run may have written part of the handover before it
+       stopped, so it is never sent again from here. */
+    const settle = reporter.begin(rehearse ? "Rehearsal" : "Handover");
+    const retry = rehearse ? () => void send(true) : undefined;
     try {
       const r = await fetch("/api/handoff", {
         method: "POST",
@@ -131,7 +138,7 @@ export default function HandoffPanel({ applicationId }: { applicationId: string 
       if (d.run) {
         setRuns((rs) => [d.run as Run, ...rs].slice(0, 5));
         setOpenRun(d.run.id);
-        setResult(
+        const words =
           d.run.mode === "shadow"
             ? d.run.status === "ok"
               ? "Rehearsed. Nothing was written - this is what a live run would do."
@@ -140,13 +147,19 @@ export default function HandoffPanel({ applicationId }: { applicationId: string 
               ? "Handed over."
               : d.run.status === "blocked"
                 ? "Not sent - something is missing. See above."
-                : "Something failed part-way. See the steps."
-        );
+                : "Something failed part-way. See the steps.";
+        setResult(words);
+        /* A rehearsal is kept whatever it found; a live run that stopped short is refused. */
+        if (d.run.mode === "shadow" || d.run.status === "ok") settle({ ok: true });
+        else settle({ ok: false, problem: words, retry });
       } else {
-        setResult(d.error ?? "That didn't go through.");
+        const problem = d.error ?? "That didn't go through.";
+        setResult(problem);
+        settle({ ok: false, problem, retry });
       }
     } catch (e) {
       setResult((e as Error).message);
+      settle({ ok: false, problem: "That didn't go through - the connection dropped.", retry });
     } finally {
       setSending(false);
     }

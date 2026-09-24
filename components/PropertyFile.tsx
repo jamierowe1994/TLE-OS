@@ -5,6 +5,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import { Pill } from "@/components/Wire";
 import { openDocument } from "@/lib/doc-sheet";
 import PropertyAnswers from "@/components/PropertyAnswers";
+import { useSaveReporter } from "@/components/SaveChip";
 
 /**
  * The property file: one panel, the same wherever a home is opened.
@@ -120,14 +121,9 @@ export default function PropertyFile({
   const key = propertyId ? `property=${encodeURIComponent(propertyId)}` : address ? `address=${encodeURIComponent(address)}` : null;
   const effectiveId = propertyId ?? pick ?? data?.propertyId ?? null;
 
-  /* Given both a property and the address it was known by before, anything
-     held against the address moves onto the property - once, idempotent. */
-  const linked = useRef<string | null>(null);
-  useEffect(() => {
-    if (!propertyId || !address || linked.current === `${propertyId}|${address}`) return;
-    linked.current = `${propertyId}|${address}`;
-    void fetch("/api/property-file/link", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address, propertyId }) }).catch(() => null);
-  }, [propertyId, address]);
+  /* Whichever screen this panel sits on hears its saves on that screen's
+     Auto save chip; on its own it still toasts (23 Sep 2026). */
+  const reporter = useSaveReporter();
 
   const load = useCallback(() => {
     if (!key) return;
@@ -146,6 +142,41 @@ export default function PropertyFile({
     setData(null);
     load();
   }, [load]);
+
+  /* Moving what was held against the address onto the property. Both callers
+     used to throw the answer away, so a move that failed (no vault, signed
+     out, the connection) looked exactly like one that worked (23 Sep 2026).
+     `loud` is the agent's own click; the automatic move on opening only
+     speaks up when it fails, or every visit to the file would toast. */
+  const moveHeld = useCallback(
+    async (pid: string, addr: string, loud: boolean): Promise<boolean> => {
+      const settle = loud ? reporter.begin("Property link") : null;
+      let problem: string | null = null;
+      try {
+        const r = await fetch("/api/property-file/link", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address: addr, propertyId: pid }) });
+        const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+        if (!r.ok || !j?.ok) problem = j?.error ?? "The files held against the address did not move onto the property.";
+      } catch {
+        problem = "The files held against the address did not move - the connection dropped.";
+      }
+      if (problem) {
+        (settle ?? reporter.begin("Property link"))({ ok: false, problem, retry: () => void moveHeld(pid, addr, true) });
+        return false;
+      }
+      settle?.({ ok: true });
+      return true;
+    },
+    [reporter]
+  );
+
+  /* Given both a property and the address it was known by before, anything
+     held against the address moves onto the property - once, idempotent. */
+  const linked = useRef<string | null>(null);
+  useEffect(() => {
+    if (!propertyId || !address || linked.current === `${propertyId}|${address}`) return;
+    linked.current = `${propertyId}|${address}`;
+    void moveHeld(propertyId, address, false);
+  }, [propertyId, address, moveHeld]);
 
   async function chose(file: File) {
     setWent(null);
@@ -171,11 +202,24 @@ export default function PropertyFile({
     if (pending.issue) body.set("issue", pending.issue);
     if (address) body.set("propertyName", address);
     body.set("source", `${pending.how}, on ${screen}`);
-    const j = await fetch("/api/compliance/certificates", { method: "POST", body }).then((r) => r.json()).catch(() => ({ ok: false, error: "The upload did not land." }));
+    /* Reported to the screen's Auto save chip as well as the line under the
+       form, which stays: it is where the agent is looking. A failure keeps
+       the form and what was typed into it. */
+    const settle = reporter.begin("Certificate");
+    type Filed = { ok?: boolean; error?: string; duplicate?: boolean; share?: { line?: string } };
+    const j: Filed = await fetch("/api/compliance/certificates", { method: "POST", body })
+      .then(async (r) => {
+        const b = (await r.json().catch(() => null)) as Filed | null;
+        return r.ok && b?.ok ? b : { ok: false, error: b?.error };
+      })
+      .catch(() => ({ ok: false, error: "The upload did not land." }));
     if (!j.ok) {
-      setPending((p) => (p ? { ...p, busy: false, note: j.error ?? "The upload did not land." } : p));
+      const problem = j.error ?? "The upload did not land.";
+      settle({ ok: false, problem, retry: () => void file() });
+      setPending((p) => (p ? { ...p, busy: false, note: problem } : p));
       return;
     }
+    settle({ ok: true });
     setPending(null);
     setWent(j.duplicate ? "That certificate is already on this home; nothing was sent again." : (j.share?.line ?? null));
     load();
@@ -183,7 +227,7 @@ export default function PropertyFile({
 
   async function link(candidate: Candidate) {
     setPick(candidate.id);
-    if (address) await fetch("/api/property-file/link", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address, propertyId: candidate.id }) }).catch(() => null);
+    if (address) await moveHeld(candidate.id, address, true);
   }
 
   const openPicker = (type: string | null) => {

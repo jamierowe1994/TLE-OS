@@ -7,6 +7,7 @@ import TermsCard from "@/components/appraisal/TermsCard";
 import TakeOnCard from "@/components/appraisal/TakeOnCard";
 import ValuationSteps from "@/components/appraisal/ValuationSteps";
 import WelcomeVideoRecorder from "@/components/WelcomeVideoRecorder";
+import { useSaveReporter } from "@/components/SaveChip";
 import { mintPreAppraisalDeck } from "@/components/DeckRail";
 import { PRE_APPRAISAL_LEAD_WORDS, bodyFor, subjectFor } from "@/lib/appraisal-email";
 import { effectiveStage, needsValuation, type MarketAppraisal } from "@/lib/market-appraisal";
@@ -60,6 +61,7 @@ export default function NextUp({
   const refId = ma.leadId ?? ma.id;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const reporter = useSaveReporter();
 
   const latest = (kind: string) => decks?.find((s) => s.kind === kind) ?? null;
   const pre = latest("pre-appraisal");
@@ -72,12 +74,22 @@ export default function NextUp({
   const tick = (id: string) => (ma.ticks ?? []).find((t) => t.id === id)?.done ?? false;
   const termsSigned = tick("terms-signed") || stage === "takeon" || stage === "aml" || stage === "won";
 
-  async function makePre() {
+  /* Made by hand (Make it anyway), it is reported like any save. Made on its
+     own as the file opens, only a failure is, so opening a file does not toast
+     every visit. No Try again: a deck that was made before the answer got lost
+     would be made twice. */
+  async function makePre(byHand = true) {
     setBusy(true);
     setError(null);
+    const settle = byHand ? reporter.begin("Pre-presentation") : null;
     const r = await mintPreAppraisalDeck({ refId, landlord: ma.landlord, address: ma.address, postcode: ma.postcode, appointmentAt: ma.appointmentAt });
-    if (!r.ok) setError(r.error);
-    else onDecksChanged?.();
+    if (!r.ok) {
+      setError(r.error);
+      (settle ?? reporter.begin("Pre-presentation"))({ ok: false, problem: r.error });
+    } else {
+      settle?.({ ok: true });
+      onDecksChanged?.();
+    }
     setBusy(false);
   }
 
@@ -92,7 +104,7 @@ export default function NextUp({
     if (minted.current || decks === undefined || pre || !ma.appointmentAt || busy) return;
     if (stage !== "pre_appraisal" || new Date(ma.appointmentAt) <= new Date()) return;
     minted.current = true;
-    void makePre();
+    void makePre(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decks, pre, ma.appointmentAt, stage]);
 
@@ -122,8 +134,17 @@ export default function NextUp({
       }),
     })
       .then((r) => r.json())
-      .then((j: { ok?: boolean; error?: string }) => { if (j.ok) onDecksChanged?.(); else setError(j.error ?? "Couldn't schedule the pre-presentation."); })
-      .catch(() => setError("Couldn't schedule the pre-presentation."));
+      .then((j: { ok?: boolean; error?: string }) => {
+        if (j.ok) onDecksChanged?.();
+        else refused(j.error ?? "Couldn't schedule the pre-presentation.");
+      })
+      .catch(() => refused("Couldn't schedule the pre-presentation."));
+    /* Nobody pressed anything, so a landed one says nothing; a refused one is
+       told to the chip and the toast as well as the card. */
+    function refused(problem: string) {
+      setError(problem);
+      reporter.begin("Pre-appraisal email")({ ok: false, problem });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pre, ma.landlordEmail, ma.preSend?.state, stage]);
 
@@ -131,12 +152,19 @@ export default function NextUp({
   async function decline() {
     setDeclining(true);
     setError(null);
+    /* No Try again: declining sends the pre-presentation on its way. */
+    const settle = reporter.begin("Video choice");
     const r = await fetch("/api/appraisals/video-chase", {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ id: ma.id, mode: "decline" }),
     }).then((x) => x.json()).catch(() => ({ ok: false, error: "That didn't save." }));
-    if (!r.ok) setError(r.error ?? "That didn't save.");
-    else onDecksChanged?.();
+    if (!r.ok) {
+      setError(r.error ?? "That didn't save.");
+      settle({ ok: false, problem: r.error ?? "That didn't save." });
+    } else {
+      settle({ ok: true });
+      onDecksChanged?.();
+    }
     setDeclining(false);
   }
 
@@ -281,7 +309,7 @@ export default function NextUp({
           title: "Make the pre-presentation",
           sub: ma.appointmentAt ? "The visit has been, so it will not go out on its own." : "There is no date on this appraisal, so it cannot be scheduled.",
           body: (
-            <button type="button" onClick={makePre} disabled={busy} className={primary}>
+            <button type="button" onClick={() => void makePre()} disabled={busy} className={primary}>
               {busy ? "Making it…" : "Make it anyway"}
             </button>
           ),
