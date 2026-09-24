@@ -16,6 +16,10 @@ import { hasDb, q } from "@/lib/db";
  * for what only her merged reports hold (deposit reference, amount, date
  * protected). A value found in the first source stays attributed to it;
  * a later source that agrees is noted in checked_against, not written over.
+ *
+ * Files: file_key is the R2 folder documents/property-<id>/<field>/ that holds
+ * every file for that column (a referencing pack is several). Propoly's files
+ * come from its deals, so a folder can include an earlier tenancy's papers.
  */
 
 export type FactKind = "word" | "date" | "number" | "money" | "file";
