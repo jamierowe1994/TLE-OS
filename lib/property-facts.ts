@@ -27,7 +27,7 @@ export type FactKind = "word" | "date" | "number" | "money" | "file";
 export interface FactField {
   key: string;
   label: string;
-  group: "Property" | "Landlord & service" | "Tenancy" | "Guarantors" | "Deposit" | "Compliance" | "Documents";
+  group: "Property" | "Landlord & service" | "Tenancy" | "Guarantors" | "Deposit" | "Compliance" | "Documents" | "Sign-off";
   kind: FactKind;
   /** Only some homes need it (an HMO, a Welsh home, an NRL landlord). */
   when?: "hmo" | "wales" | "nrl";
@@ -83,6 +83,9 @@ export const FIELDS: FactField[] = [
   { key: "doc_landlord_id_ownership", label: "Landlord ID & proof of ownership", group: "Documents", kind: "file" },
   { key: "doc_nrl1", label: "NRL1 approval letter", group: "Documents", kind: "file", when: "nrl" },
   { key: "doc_guarantor", label: "Guarantor documents", group: "Documents", kind: "file" },
+  { key: "propoly_deal", label: "Propoly deal", group: "Sign-off", kind: "word" },
+  { key: "check_signed_off", label: "Checked", group: "Sign-off", kind: "date" },
+  { key: "check_notes", label: "Discrepancy notes", group: "Sign-off", kind: "word" },
   { key: "doc_licence", label: "Licence", group: "Documents", kind: "file", when: "hmo" },
   { key: "doc_rra_sheet", label: "RRA information sheet", group: "Documents", kind: "file" },
 ];

@@ -30,6 +30,8 @@ const RAIL: RailGroup[] = [
     rule: true,
     items: [{ href: "/pre-tenancy/knowledge", label: "Knowledge", icon: "note" }],
   },
+  /* Kirstie oversees the checker's clean sweep day to day (24 Sep 2026). */
+  { title: "Migration", items: [{ href: "/clean-sweep", label: "Clean sweep", icon: "checklist" }] },
 ];
 
 export default function PreTenancyLayout({ children }: { children: React.ReactNode }) {

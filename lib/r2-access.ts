@@ -42,6 +42,9 @@ export async function refusal(actor: Pick<OsUser, "role" | "email" | "id">, scop
   if (/^steve-/i.test(ref)) return "Those files went to Steve, and stay with the office.";
   if (/^(passport|tenant)-/i.test(ref)) return "A tenant's passport documents are held by pre-tenancy.";
   if (/^agent-compliance-/i.test(ref)) return "Another person's compliance documents are theirs and the office's.";
+  /* A home's clean-sweep papers (24 Sep 2026): landlord ID, passports, AML,
+     references. Held by the office, never opened from an agent's screen. */
+  if (/^property-/i.test(ref)) return "Those documents are held by the office.";
   /* A PLC pack: the agent who assembled it, and pre-tenancy. Nobody else. */
   if (hasDb()) {
     const mine = await q<{ n: string }>(

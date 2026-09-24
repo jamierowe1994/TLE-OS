@@ -32,6 +32,9 @@ const RAIL: RailGroup[] = [
       { href: "/compliance-desk/works", label: "Works orders", icon: "setting" },
     ],
   },
+  /* The REX PM clean sweep (24 Sep 2026) - the checker's screen, which
+     Michael oversees for the compliance half. */
+  { title: "Migration", items: [{ href: "/clean-sweep", label: "Clean sweep", icon: "checklist" }] },
 ];
 
 export default function ComplianceDeskLayout({ children }: { children: React.ReactNode }) {

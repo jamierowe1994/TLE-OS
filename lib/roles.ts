@@ -133,14 +133,15 @@ export type Capability =
   | "manage:roles"      // CHANGE who holds what
   | "manage:switches"   // arm a live send. Owner only, deliberately.
   | "edit:knowledge"    // feed Steve and the Guides shelf - Susan, Francesca, Michael, Kirstie
-  | "see:agent-compliance"; // every agent's personal compliance, and the list that defines it - Michael
+  | "see:agent-compliance" // every agent's personal compliance, and the list that defines it - Michael
+  | "see:clean-sweep";    // the REX PM clean sweep: every home's facts and papers, checked one by one (24 Sep 2026)
 
 const MATRIX: Record<Role, Capability[]> = {
   owner: [
     "admin:open", "staff:internal", "see:people", "see:business", "see:marketing",
     "see:wiring", "see:reports", "see:prelaunch", "see:pretenancy", "see:everything",
     "see:roles", "manage:people", "manage:roles", "manage:switches", "edit:knowledge",
-    "see:agent-compliance",
+    "see:agent-compliance", "see:clean-sweep",
   ],
   /* Susan runs the business, so she sees all of it, unscoped — and since
      4 Sep she also has a short admin of her own. Seven entries, and the list
@@ -163,7 +164,7 @@ const MATRIX: Record<Role, Capability[]> = {
   super_admin: [
     "admin:open", "staff:internal", "see:people", "see:business", "see:marketing",
     "see:prelaunch", "see:pretenancy", "see:everything", "see:roles", "edit:knowledge",
-    "see:agent-compliance",
+    "see:agent-compliance", "see:clean-sweep",
   ],
   /* The mirror image. A contractor brought in to debug REX needs the
      connections page and has no business reading anybody's earnings. */
@@ -176,7 +177,7 @@ const MATRIX: Record<Role, Capability[]> = {
 
      `see:everything` is not a generosity here, it is the job — she works every
      agent's deals, not her own book, and without it her board would be empty. */
-  pretenancy: ["staff:internal", "see:pretenancy", "see:everything", "edit:knowledge"],
+  pretenancy: ["staff:internal", "see:pretenancy", "see:everything", "edit:knowledge", "see:clean-sweep"],
   /* Francesca. Deliberately NOT `see:business`, which is what her view used to
      demand: /admin/marketing asked for the capability that also opens GCI,
      arrears and every partner's earnings, so there was no way to give her
@@ -184,7 +185,9 @@ const MATRIX: Record<Role, Capability[]> = {
   marketing: ["staff:internal", "see:marketing", "edit:knowledge"],
   /* Michael. The agents' own compliance is his; the properties' certificates
      are on the Compliance page every agent already has. */
-  compliance: ["staff:internal", "see:agent-compliance", "edit:knowledge"],
+  /* The clean sweep (24 Sep 2026) sits with compliance too: the checker going
+     home by home is given this role, and Kirstie oversees through her own. */
+  compliance: ["staff:internal", "see:agent-compliance", "edit:knowledge", "see:clean-sweep"],
   agent: [],
 };
 
