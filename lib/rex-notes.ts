@@ -25,7 +25,7 @@ import { isTestFile, TEST_REFUSAL } from "@/lib/test-guard";
 export type RexNoteResult = { ok: true; id: string } | { ok: false; why: string };
 
 /** The REX contact behind a lead: a REX enquiry carries it, an OS lead is os-<our contact id>. */
-async function rexContactFor(leadId: string, contactId: string | null): Promise<string | null> {
+export async function rexContactFor(leadId: string, contactId: string | null): Promise<string | null> {
   if (leadId.startsWith("os-")) {
     if (!hasDb()) return null;
     const rows = await q<{ rex_id: string | null }>(

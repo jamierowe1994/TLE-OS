@@ -696,6 +696,26 @@ CREATE INDEX IF NOT EXISTS os_lead_touches_lead_idx ON os_lead_touches (lead_id,
 -- The note's twin in REX, once it has been written there (24 Sep 2026).
 ALTER TABLE os_lead_touches ADD COLUMN IF NOT EXISTS rex_note_id TEXT;
 
+-- A document on a lead, uploaded from the lead's Documents tab (Howard, 24 Sep
+-- 2026: "still no document uploads on leads for TT or LL"). The file is in R2
+-- under documents/lead-<id>/; REX gets a copy on the person's contact
+-- (related.contact_documents), and rex_at says when it arrived there.
+CREATE TABLE IF NOT EXISTS os_lead_documents (
+  id             TEXT PRIMARY KEY,
+  lead_id        TEXT NOT NULL,
+  name           TEXT NOT NULL,
+  tag            TEXT NOT NULL DEFAULT 'Other',
+  r2_key         TEXT NOT NULL,
+  mime           TEXT NOT NULL DEFAULT '',
+  size_bytes     INTEGER NOT NULL DEFAULT 0,
+  by_id          TEXT,
+  by_name        TEXT NOT NULL DEFAULT '',
+  at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  rex_at         TIMESTAMPTZ,
+  rex_error      TEXT
+);
+CREATE INDEX IF NOT EXISTS os_lead_documents_lead_idx ON os_lead_documents (lead_id, at DESC);
+
 -- The OS's own working state on a record REX has no field for: the appraisal
 -- sub-case on a lead, the landlord-property-tenant link on a listing.
 --

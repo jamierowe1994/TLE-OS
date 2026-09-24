@@ -31,6 +31,7 @@ import { isOsLead, osContactIdFrom } from "@/lib/contacts-as-leads";
 import { InlineField } from "@/components/Bits";
 import {
   DOC_TAGS,
+  LANDLORD_DOC_TAGS,
   leadDetail,
   STAGE_TONE,
   type Doc,
@@ -733,6 +734,92 @@ function LeadDrawerBody({
   }
   const [notes, setNotes] = useState<Note[]>([]);
   const [docs, setDocs] = useState<Doc[]>([]);
+  /* ── Documents, uploaded and kept (Howard, 24 Sep 2026) ─────────────────
+     The tab had a list and nothing behind it. Files now go to the lead's own
+     store (/api/leads/<id>/documents) and REX gets a copy on the contact. */
+  const [docsBusy, setDocsBusy] = useState(false);
+  const [docsSaid, setDocsSaid] = useState<{ ok: boolean; text: string } | null>(null);
+  const [docRexBusy, setDocRexBusy] = useState<string | null>(null);
+  const docInput = useRef<HTMLInputElement | null>(null);
+  type ServerDoc = { id: string; name: string; tag: string; sizeBytes: number; at: string; url: string; rexAt: string | null; rexError: string | null; rexNever?: boolean };
+  const fromServer = (d: ServerDoc): Doc => ({
+    id: d.id,
+    name: d.name,
+    tag: d.tag as DocTag,
+    size: d.sizeBytes >= 1024 * 1024 ? `${(d.sizeBytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(d.sizeBytes / 1024))} KB`,
+    when: new Date(d.at).toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
+    url: d.url,
+    rexAt: d.rexAt,
+    rexError: d.rexError,
+    rexNever: !!d.rexNever,
+  });
+  const docsUrl = lead ? `/api/leads/${encodeURIComponent(lead.id)}/documents` : null;
+  useEffect(() => {
+    setDocsSaid(null);
+    if (!docsUrl) return;
+    let live = true;
+    fetch(docsUrl, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (live && j?.ok && Array.isArray(j.docs)) setDocs((j.docs as ServerDoc[]).map(fromServer)); })
+      .catch(() => {});
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docsUrl]);
+
+  async function uploadDocs(files: FileList | null) {
+    if (!files?.length || !docsUrl || docsBusy) return;
+    setDocsBusy(true);
+    setDocsSaid(null);
+    let said: { ok: boolean; text: string } | null = null;
+    for (const f of Array.from(files)) {
+      const fd = new FormData();
+      fd.append("file", f);
+      fd.append("tag", "Other");
+      if (lead?.contactId) fd.append("contactId", String(lead.contactId));
+      /* A create is never retried on its own: a second press would file it twice. */
+      const r = await trackSave<{ docs?: ServerDoc[]; rex?: { ok: boolean; why?: string } | null; error?: string }>(
+        reporter, "Document", () => fetch(docsUrl, { method: "POST", body: fd }), { retry: false }
+      );
+      if (!r.ok) {
+        said = { ok: false, text: r.body?.error ?? `${f.name} did not upload.` };
+        continue;
+      }
+      if (Array.isArray(r.body?.docs)) setDocs(r.body!.docs!.map(fromServer));
+      said = r.body?.rex?.ok
+        ? { ok: true, text: "Uploaded, and in REX on their contact too." }
+        : { ok: false, text: `Uploaded to the OS. ${r.body?.rex?.why ?? "Not in REX."}` };
+    }
+    setDocsSaid(said);
+    setDocsBusy(false);
+    if (docInput.current) docInput.current.value = "";
+  }
+
+  function changeDoc(id: string, patch: { name?: string; tag?: DocTag }) {
+    setDocs((cur) => cur.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+    if (!docsUrl) return;
+    void trackSave(reporter, "Document", () =>
+      fetch(docsUrl, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ docId: id, ...patch }) })
+    );
+  }
+
+  async function docToRex(id: string) {
+    if (!docsUrl || docRexBusy) return;
+    setDocRexBusy(id);
+    try {
+      const r = await fetch(docsUrl, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ docId: id, sendToRex: true, contactId: lead?.contactId ?? null }),
+      });
+      const j = (await r.json().catch(() => null)) as { docs?: ServerDoc[]; rex?: { ok: boolean; why?: string } } | null;
+      if (Array.isArray(j?.docs)) setDocs(j!.docs!.map(fromServer));
+      setDocsSaid(j?.rex?.ok ? { ok: true, text: "In REX on their contact now." } : { ok: false, text: j?.rex?.why ?? "REX did not take it." });
+    } catch {
+      setDocsSaid({ ok: false, text: "REX could not be reached. Try again in a minute." });
+    } finally {
+      setDocRexBusy(null);
+    }
+  }
   const [tags, setTags] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -1089,7 +1176,8 @@ function LeadDrawerBody({
     if (!detail) return;
     setTasks(detail.tasks);
     setNotes(detail.notes);
-    setDocs(detail.docs);
+    /* Documents come from the lead's own store (loadDocs), never a sample. */
+    setDocs([]);
     /* A lead with no area carries "—" as a value; it is not a tag. */
     setTags(detail.tags.filter((t) => t && t.trim() !== "—"));
     setTab(null);
@@ -1924,6 +2012,40 @@ function LeadDrawerBody({
 
                 {tab === "documents" && (
                   <>
+                    {/* Upload (Howard, 24 Sep 2026). A PDF or a photo, as many
+                        at once as they like; each is kept on the lead and
+                        copied to REX on the person's contact. */}
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[11.5px] text-muted">
+                        {isTenant ? "Right to rent, income, references, ID." : "ID, proof of ownership, certificates."} A PDF or a photo.
+                      </p>
+                      <input
+                        ref={docInput}
+                        type="file"
+                        multiple
+                        accept="application/pdf,image/jpeg,image/png,image/webp,image/heic"
+                        className="hidden"
+                        onChange={(e) => void uploadDocs(e.target.files)}
+                      />
+                      <PressButton
+                        onClick={() => docInput.current?.click()}
+                        disabled={docsBusy}
+                        className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-3.5 py-1.5 text-[11.5px] font-semibold text-page disabled:opacity-60"
+                      >
+                        <DoodleIcon name="upload" size={13} />
+                        {docsBusy ? "Uploading..." : "Upload a document"}
+                      </PressButton>
+                    </div>
+                    {/* A test file says it once, not under every document. */}
+                    {!docsSaid && docs.some((d) => d.rexNever) && (
+                      <p className="mb-3 text-[11px] leading-snug text-muted">A test file, so its documents stay in the OS and never go to REX.</p>
+                    )}
+                    {docsSaid && (
+                      <p className={`mb-3 text-[11px] leading-snug ${docsSaid.ok ? "text-muted" : "text-accent-dark"}`} aria-live="polite">
+                        {docsSaid.ok && <span aria-hidden className="mr-1 text-[#1e7a3c]">✓</span>}
+                        {docsSaid.text}
+                      </p>
+                    )}
                     {docs.length ? (
                       <ul className="space-y-2.5">
                         {docs.map((d) => (
@@ -1942,7 +2064,7 @@ function LeadDrawerBody({
                                   defaultValue={d.name}
                                   onBlur={(e) => {
                                     const v = e.target.value.trim();
-                                    if (v) setDocs((cur) => cur.map((x) => (x.id === d.id ? { ...x, name: v } : x)));
+                                    if (v && v !== d.name) changeDoc(d.id, { name: v });
                                     setRenaming(null);
                                   }}
                                   onKeyDown={(e) => {
@@ -1963,7 +2085,34 @@ function LeadDrawerBody({
                               )}
                               <span className="block text-[10.5px] text-muted">
                                 {d.size} · {d.when}
+                                {d.url && (
+                                  <>
+                                    {" · "}
+                                    <a href={d.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-ink/80 hover:underline">
+                                      Open
+                                    </a>
+                                  </>
+                                )}
+                                {d.rexAt ? (
+                                  <span className="ml-1.5 rounded-full bg-sage/40 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wide text-ink/70">In REX</span>
+                                ) : d.url && !d.rexNever ? (
+                                  <>
+                                    {" · "}
+                                    <button
+                                      type="button"
+                                      onClick={() => void docToRex(d.id)}
+                                      disabled={docRexBusy === d.id}
+                                      title={d.rexError ?? undefined}
+                                      className="font-semibold text-accent-dark hover:underline disabled:opacity-60"
+                                    >
+                                      {docRexBusy === d.id ? "Sending..." : "Send to REX"}
+                                    </button>
+                                  </>
+                                ) : null}
                               </span>
+                              {!d.rexAt && d.rexError && !d.rexNever && (
+                                <span className="mt-0.5 block text-[10.5px] leading-snug text-muted">{d.rexError}</span>
+                              )}
                             </span>
 
                             {/* The tag IS the filing system — a document
@@ -1971,16 +2120,10 @@ function LeadDrawerBody({
                                 find later. */}
                             <select
                               value={d.tag}
-                              onChange={(e) =>
-                                setDocs((cur) =>
-                                  cur.map((x) =>
-                                    x.id === d.id ? { ...x, tag: e.target.value as DocTag } : x
-                                  )
-                                )
-                              }
+                              onChange={(e) => changeDoc(d.id, { tag: e.target.value as DocTag })}
                               className="shrink-0 rounded-full border border-line/80 bg-transparent px-3 py-1.5 text-[11px] outline-none focus:border-ink"
                             >
-                              {DOC_TAGS.map((t) => (
+                              {(isTenant ? DOC_TAGS : LANDLORD_DOC_TAGS).map((t) => (
                                 <option key={t} value={t}>
                                   {t}
                                 </option>
@@ -1990,12 +2133,14 @@ function LeadDrawerBody({
                         ))}
                       </ul>
                     ) : (
-                      <Empty>No documents yet. Upload right-to-rent, income proof or references.</Empty>
+                      <Empty>No documents yet.</Empty>
                     )}
-                    <p className="mt-4 border-t border-line/70 pt-3 text-[10.5px] leading-relaxed text-muted">
-                      Lettings tags only — right to rent, income, references, guarantor. No AML
-                      here: that&apos;s a sales-side check and doesn&apos;t belong on a tenant record.
-                    </p>
+                    {isTenant && (
+                      <p className="mt-4 border-t border-line/70 pt-3 text-[10.5px] leading-relaxed text-muted">
+                        Lettings tags only - right to rent, income, references, guarantor. No AML
+                        here: that&apos;s a sales-side check and doesn&apos;t belong on a tenant record.
+                      </p>
+                    )}
                   </>
                 )}
 

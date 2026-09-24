@@ -199,6 +199,7 @@ async function unwind(refs: Refs, ownerEmail: string, since: Date | string, kitI
     [refIds, leadIds]
   );
   await run(`DELETE FROM os_lead_touches WHERE lead_id = ANY($1)`, [leadIds]);
+  await run(`DELETE FROM os_lead_documents WHERE lead_id = ANY($1)`, [leadIds]);
   await run(`DELETE FROM os_tasks WHERE lead_id = ANY($1)`, [leadIds]);
   await run(`DELETE FROM os_lead_facts WHERE lead_id = ANY($1)`, [leadIds]);
   await run(`DELETE FROM os_campaign_sends WHERE enrolment_id IN (SELECT id FROM os_campaign_enrolments WHERE record_id = ANY($1))`, [leadIds]);

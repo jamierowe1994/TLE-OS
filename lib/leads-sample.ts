@@ -285,8 +285,23 @@ export type DocTag =
   | "ID"
   | "Bank statement"
   | "Guarantor"
+  | "Proof of address"
+  | "Proof of ownership"
+  | "AML check"
+  | "EPC"
+  | "Gas safety"
+  | "EICR"
   | "Other";
-export type Doc = { id: string; name: string; tag: DocTag; size: string; when: string };
+export type Doc = {
+  id: string; name: string; tag: DocTag; size: string; when: string;
+  /** Where the OS serves the file, once it is really stored (24 Sep 2026). */
+  url?: string;
+  /** When REX took its copy on the person's contact, and why not if it has not. */
+  rexAt?: string | null;
+  rexError?: string | null;
+  /** A test file: never goes to REX. */
+  rexNever?: boolean;
+};
 export type LeadViewing = {
   id: string;
   when: string;
@@ -303,6 +318,10 @@ export type LeadViewing = {
 export const DOC_TAGS: DocTag[] = [
   "Right to Rent", "Proof of income", "Reference", "Tenancy agreement",
   "ID", "Bank statement", "Guarantor", "Other",
+];
+/** A landlord's papers: who they are, that it is theirs, and the home's certificates. */
+export const LANDLORD_DOC_TAGS: DocTag[] = [
+  "ID", "Proof of address", "Proof of ownership", "AML check", "EPC", "Gas safety", "EICR", "Other",
 ];
 
 export type LeadDetail = {
