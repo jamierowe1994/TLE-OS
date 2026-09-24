@@ -37,6 +37,32 @@ type Listing = {
   propertyId?: string | null;
 };
 
+/* What the booker's own Starts and Length boxes offer: the grid's whole
+   window in quarter hours, and up to the four hours a drag allows. */
+const START_TIMES = Array.from({ length: (22 - 6) * 4 }, (_, i) => {
+  const m = 6 * 60 + i * 15;
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+});
+const LENGTHS = Array.from({ length: 16 }, (_, i) => (i + 1) * 15);
+
+function lengthWords(n: number): string {
+  const h = Math.floor(n / 60);
+  const m = n % 60;
+  if (!h) return `${m} min`;
+  return m ? `${h} hr ${m} min` : `${h} hr`;
+}
+
+function endOf(slot: string, mins: number): string {
+  const [h, m] = slot.split(":").map(Number);
+  const e = h * 60 + m + mins;
+  return `${String(Math.floor(e / 60) % 24).padStart(2, "0")}:${String(e % 60).padStart(2, "0")}`;
+}
+
+/** A local day as the "YYYY-MM-DD" a date box wants. */
+function isoDay(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function startOfDay(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
@@ -266,6 +292,8 @@ export default function ViewingBooker({
      this repo, so nothing catches that but reading it. */
 
   const offsetOf = (d: Date) => Math.round((startOfDay(d).getTime() - today.getTime()) / 86400000);
+  /** Which week of the grid (0 = this one, Monday first) holds a day. */
+  const weekOf = (o: number) => Math.max(0, Math.floor((o + ((today.getDay() + 6) % 7)) / 7));
   const dateFromOffset = (o: number) => {
     const d = new Date(today);
     d.setDate(d.getDate() + o);
@@ -1182,7 +1210,7 @@ export default function ViewingBooker({
               <p className="mt-2 text-[10.5px] text-muted">
                 Click an empty half-hour to book it — the other appointments are already
                 drawn in, so a clash is visible before it happens.
-                {slot && " Drag the bar at the bottom of your booking to make it longer."}
+                {slot && " Drag your booking to move it, and pull the tab underneath to make it longer. Or set the date, start and length in the boxes with the booking."}
               </p>
               {/* Their Outlook, read in beside the diary (24 Sep 2026). Said only
                   on their OWN grid: nobody else's Outlook is ever read, so on
@@ -1221,8 +1249,55 @@ export default function ViewingBooker({
                         {mode === "appraisal" ? "Market appraisal" : mode === "takeon" ? "Take-on visit" : "Viewing"}
                       </p>
                       <p className="hand mt-1 text-[20px] leading-tight">{whenPretty}</p>
-                      <p className="mt-0.5 text-[12px] text-muted">
-                        {howLong.charAt(0).toUpperCase() + howLong.slice(1)}
+                      {/* The date, start and length, set here or on the grid:
+                          both move the same booking (Howard, 24 Sep 2026). */}
+                      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-[1.35fr_1fr_1fr]">
+                        <label className="col-span-2 flex min-w-0 flex-col gap-1 text-[11px] text-muted sm:col-span-1">
+                          Date
+                          <input
+                            type="date"
+                            value={isoDay(day)}
+                            min={isoDay(today)}
+                            onChange={(e) => {
+                              const [y, m, d] = e.target.value.split("-").map(Number);
+                              if (!y || !m || !d) return;
+                              const next = new Date(y, m - 1, d);
+                              if (offsetOf(next) < 0) return;
+                              setDay(next);
+                              setWeek(weekOf(offsetOf(next)));
+                            }}
+                            className="w-full min-w-0 rounded-lg border border-line/80 bg-card px-2.5 py-2 text-[13px] text-ink"
+                          />
+                        </label>
+                        <label className="flex min-w-0 flex-col gap-1 text-[11px] text-muted">
+                          Starts
+                          <select
+                            value={slot}
+                            onChange={(e) => setSlot(e.target.value)}
+                            className="figures w-full min-w-0 rounded-lg border border-line/80 bg-card px-2.5 py-2 text-[13px] text-ink"
+                          >
+                            {(START_TIMES.includes(slot) ? START_TIMES : [...START_TIMES, slot].sort()).map((t) => (
+                              <option key={t} value={t}>{t}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="flex min-w-0 flex-col gap-1 text-[11px] text-muted">
+                          Length
+                          <select
+                            value={mins}
+                            onChange={(e) => setMins(Number(e.target.value))}
+                            className="w-full min-w-0 rounded-lg border border-line/80 bg-card px-2.5 py-2 text-[13px] text-ink"
+                          >
+                            {(LENGTHS.includes(mins) ? LENGTHS : [...LENGTHS, mins].sort((a, b) => a - b)).map((n) => (
+                              <option key={n} value={n}>{lengthWords(n)}</option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                      <p className="mt-2 text-[12px] text-muted">
+                        <span className="figures">{slot}–{endOf(slot, mins)}</span>
+                        {" · "}
+                        {howLong}
                         {day && forecast[dayKey(day)] ? ` · ${forecast[dayKey(day)].glyph} ${forecast[dayKey(day)].word.toLowerCase()}, ${forecast[dayKey(day)].temp}°` : ""}
                       </p>
                     </div>

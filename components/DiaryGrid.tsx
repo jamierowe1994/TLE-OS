@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { minutesOf, type Appt } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
 import { dayKey } from "@/lib/weather";
@@ -192,8 +192,12 @@ export default function DiaryGrid({
   // by TIMED entries, and only as far as FLOOR/CEILING allow.
   const visible = columns.flatMap((c) => DIARY.filter((a) => a.day === c.offset));
   const timed = visible.filter((a) => !a.allDay);
-  const earliest = timed.reduce((m, a) => Math.min(m, minutesOf(a.start)), BASE_START);
-  const latest = timed.reduce((m, a) => Math.max(m, minutesOf(a.start) + a.mins), BASE_END);
+  /* The booking itself widens the window too: a start typed into the booker
+     as 07:00 has to be drawn, not hung off the top of the grid. */
+  const pickHere = pick && columns.some((c) => c.offset === pick.day) ? pick : null;
+  const pickSpan = pickHere ? [{ start: pickHere.slot, mins: pickMins }] : [];
+  const earliest = [...timed, ...pickSpan].reduce((m, a) => Math.min(m, minutesOf(a.start)), BASE_START);
+  const latest = [...timed, ...pickSpan].reduce((m, a) => Math.max(m, minutesOf(a.start) + a.mins), BASE_END);
   const DAY_START = Math.max(FLOOR, Math.floor(earliest / 60) * 60);
   const DAY_END = Math.min(CEILING, Math.ceil(latest / 60) * 60);
 
@@ -210,6 +214,104 @@ export default function DiaryGrid({
    * afterwards from the common ancestor of press and release.
    */
   const dragged = useRef(false);
+  const body = useRef<HTMLDivElement>(null);
+  /**
+   * The booking while it is being dragged. Held here and handed up only on
+   * release: every change of time re-drafts the email and re-measures the
+   * drive beside the grid, and that should happen once, not per pixel.
+   */
+  const [live, setLive] = useState<{ day: number; start: number; mins: number } | null>(null);
+  const shown = live ?? (pick ? { day: pick.day, start: minutesOf(pick.slot), mins: pickMins } : null);
+  const hhmm = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+  function afterDrag() {
+    // Set on release, read by the click that follows it. Cleared on a timer
+    // as well as by the click, so a drag that ends without one (released
+    // off-screen) cannot swallow somebody's next real booking.
+    dragged.current = true;
+    setTimeout(() => {
+      dragged.current = false;
+    }, 300);
+  }
+
+  /**
+   * Pick the booking up and put it somewhere else: up and down the day in
+   * quarter hours, and across to another day (Howard, 24 Sep 2026: "drag and
+   * drop appointment"). Pointer events, so the same handler works under a
+   * finger.
+   */
+  function startMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!onPick || !shown || e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    /* Listened for on the window, not the block: crossing into another day
+       redraws the block in that day's column, and listeners (and pointer
+       capture) on the old one would go with it, leaving it stuck mid-drag. */
+    const x0 = e.clientX;
+    const y0 = e.clientY;
+    const from = shown;
+    const box = body.current?.getBoundingClientRect();
+    let cur = from;
+    let moved = false;
+    const move = (ev: PointerEvent) => {
+      // A few pixels of wobble is a click, not a drag.
+      if (!moved && Math.abs(ev.clientY - y0) < 4 && Math.abs(ev.clientX - x0) < 4) return;
+      moved = true;
+      const start = Math.max(
+        DAY_START,
+        Math.min(DAY_END - Math.min(from.mins, DAY_END - DAY_START), Math.round((from.start + (ev.clientY - y0) / PX) / 15) * 15)
+      );
+      let day = from.day;
+      if (box) {
+        const colW = (box.width - 52) / 7;
+        const i = Math.max(0, Math.min(6, Math.floor((ev.clientX - box.left - 52) / colW)));
+        // Days behind us cannot be clicked, so they cannot be dropped on.
+        if (columns[i].offset >= 0) day = columns[i].offset;
+      }
+      cur = { day, start, mins: from.mins };
+      setLive(cur);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      setLive(null);
+      if (!moved) return;
+      afterDrag();
+      if (cur.day !== from.day || cur.start !== from.start) onPick(cur.day, hhmm(cur.start));
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  }
+
+  /** Pull the tab under the booking to make it longer or shorter. */
+  function startStretch(e: React.PointerEvent<HTMLDivElement>) {
+    if (!onPickMins || !shown || e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const y0 = e.clientY;
+    const from = shown;
+    let cur = from;
+    const move = (ev: PointerEvent) => {
+      // Snapped to the quarter hour: a diary that can hold 47 minutes is a
+      // diary nobody trusts.
+      const next = Math.round((from.mins + (ev.clientY - y0) / PX) / 15) * 15;
+      cur = { ...from, mins: Math.min(240, Math.max(15, next)) };
+      setLive(cur);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      setLive(null);
+      afterDrag();
+      if (cur.mins !== from.mins) onPickMins(cur.mins);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  }
 
   function pickAt(e: React.MouseEvent<HTMLDivElement>, offset: number) {
     if (dragged.current) {
@@ -275,7 +377,7 @@ export default function DiaryGrid({
       </div>
 
       {/* Hours down, days across. */}
-      <div className="grid grid-cols-[52px_repeat(7,minmax(0,1fr))]">
+      <div ref={body} className="grid grid-cols-[52px_repeat(7,minmax(0,1fr))]">
         <div className="relative" style={{ height: gridH }}>
           {hours.map((h) => (
             <span
@@ -301,7 +403,7 @@ export default function DiaryGrid({
              that already happened is a real job (James, 17 Sep 2026). The
              booker says it is in the past before anything is sent. */
           const pickable = Boolean(onPick);
-          const picked = pick && pick.day === c.offset ? pick : null;
+          const picked = shown && shown.day === c.offset ? shown : null;
           return (
             <div
               key={i}
@@ -425,64 +527,46 @@ export default function DiaryGrid({
                   point of booking on a calendar instead of in a form. */}
               {picked && (
                 <div
-                  className="absolute inset-x-1 z-10 rounded-lg bg-accent-dark px-1.5 py-1 text-page shadow-[0_8px_18px_-8px_rgba(0,0,0,0.4)]"
+                  onPointerDown={startMove}
+                  onClick={(e) => e.stopPropagation()}
+                  title={onPick ? "Drag to move it" : undefined}
+                  className={`group absolute inset-x-1 z-10 select-none rounded-lg bg-accent-dark px-1.5 py-1 text-page ${
+                    live ? "shadow-[0_14px_28px_-10px_rgba(0,0,0,0.55)] ring-2 ring-page/70" : "shadow-[0_8px_18px_-8px_rgba(0,0,0,0.4)]"
+                  } ${onPick ? (live ? "cursor-grabbing" : "cursor-grab") : ""}`}
                   style={{
-                    top: (minutesOf(picked.slot) - DAY_START) * PX + 1,
-                    height: Math.max(pickMins * PX, 26),
-                    pointerEvents: onPickMins ? "auto" : "none",
+                    top: (picked.start - DAY_START) * PX + 1,
+                    height: Math.max(picked.mins * PX, 26),
+                    pointerEvents: onPick ? "auto" : "none",
+                    touchAction: "none",
                   }}
                 >
-                  <span className="figures block text-[9px] leading-none">{picked.slot}</span>
+                  {/* The span, not just the start: while it is being dragged
+                      this is where the agent reads where it will land. */}
+                  <span className="figures block text-[9px] leading-none">
+                    {hhmm(picked.start)}–{hhmm(picked.start + picked.mins)}
+                  </span>
                   <span className="hand block truncate text-[10.5px] leading-tight">{pickLabel}</span>
-                  {pickMins !== 30 && (
-                    <span className="figures absolute right-1.5 top-1 text-[9px] leading-none opacity-80">
-                      {pickMins >= 60
-                        ? `${Math.floor(pickMins / 60)}h${pickMins % 60 ? ` ${pickMins % 60}m` : ""}`
-                        : `${pickMins}m`}
-                    </span>
+                  {picked.mins * PX >= 40 && (
+                    <span className="figures block text-[9px] leading-none opacity-80">{lengthLabel(picked.mins)}</span>
                   )}
 
                   {onPickMins && (
-                    /* Pointer events, not mouse: the same handler then works
-                       under a finger, and setPointerCapture means the drag
-                       survives the cursor leaving the little handle — which
-                       it does immediately, because the handle is 10px tall
-                       and the gesture is vertical. */
+                    /* A tab that sits proud of the block, so it reads as a
+                       handle at a glance. The old one was a faint bar inside
+                       the bottom edge and testers never found it (Howard,
+                       24 Sep 2026). */
                     <div
                       role="separator"
                       aria-label="Drag to change how long"
-                      onPointerDown={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        const el = e.currentTarget;
-                        el.setPointerCapture(e.pointerId);
-                        const startY = e.clientY;
-                        const startMins = pickMins;
-                        const move = (ev: PointerEvent) => {
-                          const delta = (ev.clientY - startY) / PX;
-                          // Snapped to the quarter hour: a diary that can hold
-                          // 47 minutes is a diary nobody trusts.
-                          const next = Math.round((startMins + delta) / 15) * 15;
-                          onPickMins(Math.min(240, Math.max(15, next)));
-                        };
-                        const up = () => {
-                          el.removeEventListener("pointermove", move);
-                          el.removeEventListener("pointerup", up);
-                          // Set on release, read by the click that follows it.
-                          // Cleared on a timer as well as by the click, so a
-                          // drag that ends without one (released off-screen)
-                          // cannot swallow somebody's next real booking.
-                          dragged.current = true;
-                          setTimeout(() => {
-                            dragged.current = false;
-                          }, 300);
-                        };
-                        el.addEventListener("pointermove", move);
-                        el.addEventListener("pointerup", up);
-                      }}
-                      className="absolute inset-x-0 -bottom-1 flex h-3 cursor-ns-resize items-end justify-center"
+                      title="Drag to make it longer or shorter"
+                      onPointerDown={startStretch}
+                      className="absolute inset-x-0 -bottom-4 flex h-5 cursor-ns-resize items-center justify-center"
+                      style={{ touchAction: "none" }}
                     >
-                      <span className="h-1 w-7 rounded-full bg-page/70" />
+                      <span className="flex h-3.5 w-10 flex-col items-center justify-center gap-[2px] rounded-full border border-accent-dark bg-page shadow-[0_2px_6px_-1px_rgba(0,0,0,0.35)] transition-transform group-hover:scale-110">
+                        <span className="block h-px w-4 bg-accent-dark" />
+                        <span className="block h-px w-4 bg-accent-dark" />
+                      </span>
                     </div>
                   )}
                 </div>
