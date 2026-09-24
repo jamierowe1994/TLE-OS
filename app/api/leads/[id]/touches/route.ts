@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
-import { addTouch, spineFor } from "@/lib/lead-touches";
+import { addTouch, setRexNoteId, spineFor } from "@/lib/lead-touches";
+import { noteToRex, type RexNoteResult } from "@/lib/rex-notes";
 import { campaignOn, enrolLead, stopLeadCampaigns } from "@/lib/campaign-store";
 import {
   ATTEMPT_KINDS,
@@ -96,6 +97,22 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     byName: who.name || who.email,
   });
 
+  /* ── A note goes to REX as well (Howard, 24 Sep 2026) ──────────────────────
+     Written by the person actually signed in. Viewing as somebody else, it
+     stays in the OS: REX would put the note under the wrong name. */
+  let rex: RexNoteResult | null = null;
+  if (kind === "note") {
+    rex = subject && subject.id !== actor.id
+      ? { ok: false, why: "Not sent to REX while you are viewing as somebody else." }
+      : await noteToRex({
+          leadId: id,
+          contactId: body.lead?.contactId ? String(body.lead.contactId) : null,
+          text,
+          byUserId: actor.id,
+        });
+    if (rex.ok) await setRexNoteId(touch.id, rex.id);
+  }
+
   /* ── The campaigns ─────────────────────────────────────────────────────── */
   let enrolled: Awaited<ReturnType<typeof enrolLead>> = null;
   let stopped = 0;
@@ -131,5 +148,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
        is not left thinking a campaign is running. */
     noCampaign: kind === "nurture" && !enrolled,
     stopped,
+    /* A note only: whether it reached REX, and in words if it did not. */
+    rex: rex ? (rex.ok ? { ok: true, id: rex.id } : { ok: false, why: rex.why }) : null,
   });
 }

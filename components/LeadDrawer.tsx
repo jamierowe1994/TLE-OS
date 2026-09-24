@@ -973,6 +973,9 @@ function LeadDrawerBody({
   /** The campaign the lead is on, named - what nurture actually did. */
   const [campaign, setCampaign] = useState<{ id: string; name: string; since: string; step: number } | null>(null);
   const leadId = lead?.id ?? null;
+  /** What happened to the last note in REX, shown under the Save button. */
+  const [noteRex, setNoteRex] = useState<{ ok: boolean; text: string } | null>(null);
+  useEffect(() => setNoteRex(null), [leadId]);
   useEffect(() => {
     if (!leadId) return;
     let gone = false;
@@ -1364,15 +1367,23 @@ function LeadDrawerBody({
     setDraft("");
     /* Written to the log, so it is still there tomorrow and on somebody
        else's screen. Only if the log cannot take it does it stay local. */
-    const j = await logTouch({ kind: "note", body: text }).catch(() => null);
+    setNoteRex(null);
+    const j = (await logTouch({
+      kind: "note",
+      body: text,
+      lead: { name: lead?.name ?? "", email: contact.email || lead?.email || "", contactId: lead?.contactId ?? null },
+    }).catch(() => null)) as { ok?: boolean; rex?: { ok: boolean; why?: string } | null } | null;
     if (!j?.ok) {
       setNotes((n) => [{ id: `n${Date.now()}`, author: "You", when: "Just now", text }, ...n]);
+      return;
     }
+    /* Said once, under the box: in REX too, or why it is not. */
+    if (j.rex) setNoteRex(j.rex.ok ? { ok: true, text: "Saved, and in REX on their contact too." } : { ok: false, text: j.rex.why ?? "Saved here, but not in REX." });
   }
-  const noteRows: Note[] = [
+  const noteRows: (Note & { inRex?: boolean })[] = [
     ...touches
       .filter((t) => t.kind === "note")
-      .map((t) => ({ id: `touch-${t.id}`, author: t.byName, when: whenAgo(t.at), text: t.body })),
+      .map((t) => ({ id: `touch-${t.id}`, author: t.byName, when: whenAgo(t.at), text: t.body, inRex: Boolean(t.rexNoteId) })),
     ...notes,
   ];
 
@@ -2975,6 +2986,12 @@ function LeadDrawerBody({
                     Save note
                   </button>
                 </div>
+                {noteRex && (
+                  <p className={`pt-1.5 text-[11px] leading-snug ${noteRex.ok ? "text-muted" : "text-accent-dark"}`} aria-live="polite">
+                    {noteRex.ok && <span aria-hidden className="mr-1 text-[#1e7a3c]">✓</span>}
+                    {noteRex.text}
+                  </p>
+                )}
               </div>
 
               <ul className="min-h-0 space-y-3 overflow-y-auto pr-1">
@@ -3003,6 +3020,7 @@ function LeadDrawerBody({
                     <div className="mt-2 flex items-center justify-between gap-3">
                       <span className="text-[10.5px] text-muted">
                         {n.author} · {n.when}
+                        {n.inRex && <span className="ml-1.5 rounded-full bg-sage/40 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wide text-ink/70">In REX</span>}
                       </span>
                       {!n.id.startsWith("touch-") && (
                         <button

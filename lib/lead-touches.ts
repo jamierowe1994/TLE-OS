@@ -25,6 +25,7 @@ interface Row extends Record<string, unknown> {
   body: string;
   by_name: string;
   at: Date;
+  rex_note_id?: string | null;
 }
 
 const toTouch = (r: Row): LeadTouch => ({
@@ -35,12 +36,13 @@ const toTouch = (r: Row): LeadTouch => ({
   body: r.body,
   byName: r.by_name,
   at: new Date(r.at).toISOString(),
+  rexNoteId: r.rex_note_id ?? null,
 });
 
 export async function listTouches(leadId: string): Promise<LeadTouch[]> {
   if (!hasDb()) return [];
   const rows = await q<Row>(
-    `select id, lead_id, kind, outcome, body, by_name, at
+    `select id, lead_id, kind, outcome, body, by_name, at, rex_note_id
        from os_lead_touches where lead_id = $1 order by at desc`,
     [leadId]
   );
@@ -62,6 +64,12 @@ export async function addTouch(p: {
     [uid(), p.leadId, p.kind, p.outcome, p.body.trim(), p.byId, p.byName]
   );
   return toTouch(rows[0]);
+}
+
+/** Remember a note's REX twin, so the drawer can say it is in REX. */
+export async function setRexNoteId(touchId: string, rexNoteId: string): Promise<void> {
+  if (!hasDb()) return;
+  await q(`update os_lead_touches set rex_note_id = $2 where id = $1`, [touchId, rexNoteId]).catch(() => {});
 }
 
 /** Whether an appraisal has been booked off this lead. */

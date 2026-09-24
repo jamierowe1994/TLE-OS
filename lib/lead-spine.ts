@@ -27,6 +27,8 @@ export interface LeadTouch {
   byName: string;
   /** ISO. */
   at: string;
+  /** A note that also went to REX: its id there. */
+  rexNoteId?: string | null;
 }
 
 export const TOUCH_KINDS: { id: TouchKind; label: string; icon: string }[] = [

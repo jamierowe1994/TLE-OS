@@ -693,6 +693,8 @@ CREATE TABLE IF NOT EXISTS os_lead_touches (
   at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS os_lead_touches_lead_idx ON os_lead_touches (lead_id, at DESC);
+-- The note's twin in REX, once it has been written there (24 Sep 2026).
+ALTER TABLE os_lead_touches ADD COLUMN IF NOT EXISTS rex_note_id TEXT;
 
 -- The OS's own working state on a record REX has no field for: the appraisal
 -- sub-case on a lead, the landlord-property-tenant link on a listing.
