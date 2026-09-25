@@ -21,6 +21,19 @@ import { getComplianceBook } from "@/lib/compliance-cache";
  * list and the red rows in the detail can never disagree: licence, PAT, alarms
  * and legionella only on an HMO; an NRL1 letter only for an NRL landlord; Rent
  * Smart Wales only in Wales; guarantor details only where there is one.
+ *
+ * Agreed with Susan, Kirstie and Michael on 25 Sep, and the same rules the
+ * Clean Sweep Check report scores by:
+ *  - Tenant-find / let-only ("market only") homes carry no compliance,
+ *    Right to Rent, inventory, visits or rent reviews: the landlord's duty.
+ *  - Right to Rent and the Renters' Rights Act sheet are English law, so never
+ *    asked of a Scottish home.
+ *  - In Scotland the Repairing Standard puts PAT, interlinked alarms and a
+ *    legionella assessment on every managed home, not only HMOs; Scottish
+ *    homes also need the landlord registration and the PRT's easy read notes.
+ *  - AML checks began in May 2025, so older agreements are not asked for one.
+ *  - Smoke and CO alarms are recorded on the gas safety record, so a gas
+ *    certificate on file answers that column.
  */
 
 /** Columns that are information, not something the sheet asks us to hold. */
@@ -49,12 +62,34 @@ export interface SweepHome {
 }
 
 type PropRow = {
-  id: string; address: string; ref: string; postcode: string | null; hmo: boolean; categories: string[] | null;
+  id: string; address: string; ref: string; postcode: string | null; hmo: boolean; categories: string[] | null; management: string | null; rex_property_id: string | null;
   landlord_name: string | null; agent_name: string | null; tenant_names: string | null; payprop_no: string | null;
 };
 type FactRow = { property_id: string; field: string; value: string | null; file_key: string | null; source: string; source_ref: string | null; checked_against: string | null; captured_at: Date; captured_by: string | null };
 
 const isWales = (pc: string | null) => /^(CF|SA|NP|LD|LL)\d/i.test((pc ?? "").trim());
+/** Scottish postcode areas; the address decides when the sheet gave no postcode. */
+const isScotland = (p: PropRow) =>
+  /^(AB|DD|DG|EH|FK|G\d|HS|IV|KA|KW|KY|ML|PA|PH|TD|ZE)/i.test((p.postcode ?? "").trim()) ||
+  (!p.postcode && /\b(edinburgh|glasgow)\b/i.test(p.address));
+
+/** Tenant-find / let only: the landlord keeps the compliance. */
+function isManaged(p: PropRow, facts: Map<string, FactRow>): boolean {
+  const service = facts.get("service_package")?.value || p.management || "";
+  return !/tenant.?find|let.?only|no letting agreement/i.test(service);
+}
+
+/** Only asked of a home we manage. */
+const MANAGED_ONLY = new Set([
+  "licence_type", "licence_number", "licence_expiry", "doc_licence", "pat_expiry", "alarms_expiry", "legionella_expiry",
+  "rtr_expiry", "rtr_checked", "doc_rtr_evidence", "rra_sheet_served", "doc_rra_sheet", "visit_next", "rent_review_last",
+  "doc_inventory", "repairing_standard", "doc_prt_notes",
+]);
+/** English law: never asked in Scotland. */
+const ENGLAND_ONLY = new Set(["rtr_expiry", "rtr_checked", "doc_rtr_evidence", "rra_sheet_served", "doc_rra_sheet"]);
+/** The Repairing Standard: every managed Scottish home, HMO or not. */
+const SCOTLAND_EVERY_HOME = new Set(["pat_expiry", "alarms_expiry", "legionella_expiry"]);
+const AML_FROM = "2025-05-01";
 
 function homeIsHmo(p: PropRow, facts: Map<string, FactRow>): boolean {
   if (p.hmo) return true;
@@ -65,28 +100,51 @@ function homeIsHmo(p: PropRow, facts: Map<string, FactRow>): boolean {
 /** The columns this home must hold, in catalogue order. */
 export function neededFields(p: PropRow, facts: Map<string, FactRow>): FactField[] {
   const hmo = homeIsHmo(p, facts);
+  const scot = isScotland(p);
+  const managed = isManaged(p, facts);
   const nrl = /^nrl/i.test(facts.get("nrl_status")?.value ?? "");
   const guarantors = Number(facts.get("guarantors_count")?.value ?? 0) > 0;
+  const since = facts.get("letting_agreement_start")?.value ?? "";
   return FIELDS.filter((f) => {
     if (INFO.has(f.key)) return false;
-    if (f.when === "hmo" && !hmo) return false;
+    if (MANAGED_ONLY.has(f.key) && !managed) return false;
+    if (ENGLAND_ONLY.has(f.key) && scot) return false;
+    if (f.when === "hmo" && !hmo && !(scot && SCOTLAND_EVERY_HOME.has(f.key))) return false;
     if (f.when === "nrl" && !nrl) return false;
     if (f.when === "wales" && !isWales(p.postcode)) return false;
+    if (f.when === "scotland" && !scot) return false;
+    if (f.key === "landlord_aml" && since < AML_FROM) return false;
     if ((f.key === "guarantor_names" || f.key === "guarantor_contacts") && !guarantors) return false;
     return true;
   });
 }
 
-/** Held means a value or a file. Landlord ID / AML is one column on the sheet: either answers it. */
-function held(key: string, facts: Map<string, FactRow>): boolean {
+/**
+ * Held means a value or a file. Landlord ID / AML is one column on the sheet:
+ * either answers it. Alarms are answered by a gas safety certificate on file.
+ */
+function held(key: string, facts: Map<string, FactRow>, gasOnFile = false): boolean {
   const has = (k: string) => { const f = facts.get(k); return Boolean(f && (f.value || f.file_key)); };
   if (key === "landlord_aml") return has("landlord_aml") || has("landlord_photo_id");
+  if (key === "alarms_expiry") return has(key) || gasOnFile;
   return has(key);
 }
 
+/** Homes with a gas safety certificate on file, from the compliance book (cached; skipped if it is cold). */
+async function gasCertified(): Promise<Set<string>> {
+  try {
+    const got = await Promise.race([getComplianceBook(), new Promise<null>((r) => setTimeout(() => r(null), 3000))]);
+    if (!got) return new Set();
+    return new Set(got.book.properties.filter((e) => e.certs?.gas?.expires != null || e.certs?.gas?.attached).map((e) => String(e.id)));
+  } catch {
+    return new Set();
+  }
+}
+const gasFor = (p: PropRow, gas: Set<string>) => gas.has(String(p.rex_property_id ?? "")) || gas.has(p.id);
+
 async function load(): Promise<{ props: PropRow[]; facts: Map<string, Map<string, FactRow>> }> {
   const props = await q<PropRow>(
-    `SELECT id, address, ref, postcode, hmo, categories, landlord_name, agent_name, tenant_names, payprop_no
+    `SELECT id, address, ref, postcode, hmo, categories, management, rex_property_id, landlord_name, agent_name, tenant_names, payprop_no
        FROM os_properties WHERE active`
   );
   const rows = await q<FactRow>(`SELECT * FROM os_property_facts`).catch(() => []);
@@ -97,7 +155,7 @@ async function load(): Promise<{ props: PropRow[]; facts: Map<string, Map<string
 
 export async function sweepList(): Promise<SweepHome[]> {
   if (!hasDb()) return [];
-  const { props, facts } = await load();
+  const [{ props, facts }, gas] = await Promise.all([load(), gasCertified()]);
   const out: SweepHome[] = props.map((p) => {
     const f = facts.get(p.id) ?? new Map<string, FactRow>();
     const need = neededFields(p, f);
@@ -114,7 +172,7 @@ export async function sweepList(): Promise<SweepHome[]> {
       since: f.get("letting_agreement_start")?.value ?? f.get("tenancy_start")?.value ?? null,
       hmo: homeIsHmo(p, f),
       needed: need.length,
-      missing: need.filter((n) => !held(n.key, f)).length,
+      missing: need.filter((n) => !held(n.key, f, gasFor(p, gas))).length,
       checkedAt: signed?.value ?? null,
       checkedBy: signed?.captured_by ?? null,
     };
@@ -127,6 +185,8 @@ export interface SweepFact {
   key: string; label: string; group: string; kind: string; needed: boolean; held: boolean;
   value: string | null; source: string | null; sourceRef: string | null; checkedAgainst: string | null;
   capturedAt: string | null; capturedBy: string | null; files: { key: string; name: string }[];
+  /** Why a column with no value of its own still counts as held. */
+  note: string | null;
 }
 
 export interface SweepDetail {
@@ -158,7 +218,7 @@ const CERT_LABEL: Record<string, string> = { gas: "Gas safety", eicr: "EICR", ep
 export async function sweepDetail(id: string): Promise<SweepDetail | null> {
   if (!hasDb()) return null;
   const props = await q<PropRow & { rex_property_id: string | null }>(
-    `SELECT id, address, ref, postcode, hmo, categories, landlord_name, agent_name, tenant_names, payprop_no, rex_property_id FROM os_properties WHERE id = $1`,
+    `SELECT id, address, ref, postcode, hmo, categories, management, rex_property_id, landlord_name, agent_name, tenant_names, payprop_no FROM os_properties WHERE id = $1`,
     [id]
   );
   const p = props[0];
@@ -188,10 +248,13 @@ export async function sweepDetail(id: string): Promise<SweepDetail | null> {
     certs = null;
   }
 
+  const gasOnFile = Boolean(certs?.find((c) => c.key === "gas" && (c.days != null || c.file)));
   const facts: SweepFact[] = FIELDS.filter((x) => x.group !== "Sign-off").map((x) => {
     const r = f.get(x.key);
+    const byGas = x.key === "alarms_expiry" && !(r?.value || r?.file_key) && gasOnFile;
     return {
-      key: x.key, label: x.label, group: x.group, kind: x.kind, needed: need.has(x.key), held: held(x.key, f),
+      key: x.key, label: x.label, group: x.group, kind: x.kind, needed: need.has(x.key), held: held(x.key, f, gasOnFile),
+      note: byGas ? "Covered by the gas safety record" : null,
       value: r?.value ?? null, source: r?.source ?? null, sourceRef: r?.source_ref ?? null, checkedAgainst: r?.checked_against ?? null,
       capturedAt: r ? new Date(r.captured_at).toISOString() : null, capturedBy: r?.captured_by ?? null,
       files: byField.get(x.key) ?? [],

@@ -29,8 +29,8 @@ export interface FactField {
   label: string;
   group: "Property" | "Landlord & service" | "Tenancy" | "Guarantors" | "Deposit" | "Compliance" | "Documents" | "Sign-off";
   kind: FactKind;
-  /** Only some homes need it (an HMO, a Welsh home, an NRL landlord). */
-  when?: "hmo" | "wales" | "nrl";
+  /** Only some homes need it (an HMO, a Welsh or Scottish home, an NRL landlord). */
+  when?: "hmo" | "wales" | "scotland" | "nrl";
 }
 
 export const FIELDS: FactField[] = [
@@ -48,6 +48,7 @@ export const FIELDS: FactField[] = [
   { key: "landlord_proof_of_ownership", label: "Proof of ownership", group: "Landlord & service", kind: "word" },
   { key: "landlord_proof_of_address", label: "Landlord proof of address", group: "Landlord & service", kind: "word" },
   { key: "rent_smart_wales", label: "Rent Smart Wales number", group: "Landlord & service", kind: "word", when: "wales" },
+  { key: "landlord_registration", label: "Scottish landlord registration number", group: "Landlord & service", kind: "word", when: "scotland" },
   { key: "tenants_count", label: "Number of tenants", group: "Tenancy", kind: "number" },
   { key: "tenancy_type", label: "Tenancy type", group: "Tenancy", kind: "word" },
   { key: "tenancy_start", label: "Tenancy start", group: "Tenancy", kind: "date" },
@@ -74,6 +75,7 @@ export const FIELDS: FactField[] = [
   { key: "pat_expiry", label: "PAT expiry", group: "Compliance", kind: "date", when: "hmo" },
   { key: "alarms_expiry", label: "Smoke & CO alarms", group: "Compliance", kind: "date", when: "hmo" },
   { key: "legionella_expiry", label: "Legionella risk assessment", group: "Compliance", kind: "date", when: "hmo" },
+  { key: "repairing_standard", label: "Repairing Standard checked", group: "Compliance", kind: "date", when: "scotland" },
   { key: "doc_tenancy_agreement", label: "Tenancy agreement", group: "Documents", kind: "file" },
   { key: "doc_terms_of_business", label: "Terms of business", group: "Documents", kind: "file" },
   { key: "doc_deposit_cert", label: "Deposit certificate & prescribed info", group: "Documents", kind: "file" },
@@ -88,6 +90,8 @@ export const FIELDS: FactField[] = [
   { key: "check_notes", label: "Discrepancy notes", group: "Sign-off", kind: "word" },
   { key: "doc_licence", label: "Licence", group: "Documents", kind: "file", when: "hmo" },
   { key: "doc_rra_sheet", label: "RRA information sheet", group: "Documents", kind: "file" },
+  { key: "doc_landlord_registration", label: "Landlord registration evidence", group: "Documents", kind: "file", when: "scotland" },
+  { key: "doc_prt_notes", label: "PRT easy read / supporting notes", group: "Documents", kind: "file", when: "scotland" },
 ];
 
 export const FIELD_BY_KEY = new Map(FIELDS.map((f) => [f.key, f]));

@@ -23,7 +23,7 @@ type Home = {
 type Fact = {
   key: string; label: string; group: string; kind: string; needed: boolean; held: boolean;
   value: string | null; source: string | null; sourceRef: string | null; checkedAgainst: string | null;
-  capturedAt: string | null; capturedBy: string | null; files: { key: string; name: string }[];
+  capturedAt: string | null; capturedBy: string | null; files: { key: string; name: string }[]; note: string | null;
 };
 type Detail = {
   home: Home & { postcode: string | null; rexPropertyId: string | null };
@@ -326,6 +326,8 @@ function FactRow({ homeId, f, onSaved }: { homeId: string; f: Fact; onSaved: (d:
           <p className="text-[12.5px] font-semibold">{f.label}</p>
           {f.value ? (
             <p className="mt-0.5 break-words text-[13px]">{f.kind === "date" ? fmtDate(f.value) : f.value}</p>
+          ) : f.note ? (
+            <p className="mt-0.5 text-[12.5px] text-muted">{f.note}</p>
           ) : f.needed && !f.held ? (
             <span className="mt-1 inline-block rounded-full bg-[#f6e1dd] px-2 py-0.5 text-[11px] font-semibold text-[#9d4340]">Missing</span>
           ) : (
