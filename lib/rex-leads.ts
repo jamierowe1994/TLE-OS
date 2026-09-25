@@ -241,15 +241,37 @@ export async function fetchLeadBook(rexUserId?: string | null): Promise<LeadBook
   let newestAt: string | null = null;
   const seenIds = new Set<string>();
 
+  const search = (page: number, quiet: boolean) =>
+    rexCall(
+      "Leads",
+      "search",
+      {
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+        order_by: { system_ctime: "desc" }, // an OBJECT here — the array form 400s
+        ...(rexUserId
+          ? { criteria: [{ name: "lead.assignee_id", type: "=", value: rexUserId }] }
+          : {}),
+      },
+      null,
+      { quiet }
+    );
+
   for (let page = 0; page < PAGES; page++) {
-    const res = await rexCall("Leads", "search", {
-      limit: PAGE_SIZE,
-      offset: page * PAGE_SIZE,
-      order_by: { system_ctime: "desc" }, // an OBJECT here — the array form 400s
-      ...(rexUserId
-        ? { criteria: [{ name: "lead.assignee_id", type: "=", value: rexUserId }] }
-        : {}),
-    });
+    /* ONE MORE GO (25 Sep 2026). The overnight scan hit REX slow a few
+       times ("REX Leads/search was slow or busy"). A page is asked twice,
+       quietly the first time; only the second failure is a ticket. A timeout
+       past page one now keeps what it has, like a refusal always did. */
+    let res = await search(page, true).catch(() => null);
+    if (!res?.ok) {
+      await new Promise((r) => setTimeout(r, 2000));
+      try {
+        res = await search(page, false);
+      } catch (e) {
+        if (page === 0) throw e;
+        break;
+      }
+    }
     /* Page one refused is not "no leads" (18 Sep 2026): the scan wrote that
        empty book over the owner's board cache, and the board read "Live" over
        nothing. A later page refused keeps what it has - the ledger behind the
