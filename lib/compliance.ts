@@ -192,9 +192,20 @@ export function requiredCerts(p: CompProperty): CertKey[] {
     "eicr" as const,
     ...(p.hasGas ? ["gas" as const] : []),
     "epc" as const,
-    ...(p.hmo ? [...HMO_SET, ...QUIET_SET] : []),
+    ...(p.hmo ? [...HMO_SET, ...QUIET_SET].filter((k) => !(k === "pat" && patLongLapsed(p))) : []),
   ];
 }
+
+/**
+ * James, 25 Sep 2026: a PAT test that ran out more than 1,000 days ago was
+ * plainly never needed there (PAT is not mandatory everywhere; it depends on
+ * the council and the licence), so it is not required rather than overdue.
+ */
+export const PAT_LAPSED_DAYS = 1000;
+export const patLongLapsed = (p: CompProperty): boolean => {
+  const e = (p.certs as Record<string, { expires?: number | null } | undefined>).pat?.expires;
+  return e != null && e < -PAT_LAPSED_DAYS;
+};
 
 export type CertStatus = "expired" | "urgent" | "watch" | "ok" | "missing";
 

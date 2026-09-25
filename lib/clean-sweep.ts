@@ -158,9 +158,24 @@ async function load(): Promise<{ props: PropRow[]; facts: Map<string, Map<string
   return { props, facts };
 }
 
+/**
+ * No tenant has moved in yet (James, 25 Sep 2026): nobody named in any system
+ * and no tenant count, or a tenancy that starts in the future. These are
+ * parked, off the lists and out of the missing count, until somebody moves in.
+ */
+export function notLetYet(p: PropRow & { tenant_names?: string | null }, facts: Map<string, FactRow>): boolean {
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+  const start = (facts.get("tenancy_start")?.value ?? "").slice(0, 10);
+  if (start && start > today) return true;
+  const named = Boolean((p.tenant_names ?? "").trim());
+  const counted = Number(facts.get("tenants_count")?.value ?? 0) > 0;
+  return !named && !counted;
+}
+
 export async function sweepList(): Promise<SweepHome[]> {
   if (!hasDb()) return [];
-  const [{ props, facts }, gas] = await Promise.all([load(), gasCertified()]);
+  const [{ props: all, facts }, gas] = await Promise.all([load(), gasCertified()]);
+  const props = all.filter((p) => !notLetYet(p, facts.get(p.id) ?? new Map()));
   const out: SweepHome[] = props.map((p) => {
     const f = facts.get(p.id) ?? new Map<string, FactRow>();
     const need = neededFields(p, f);
@@ -338,7 +353,7 @@ export async function sectionQueue(section: SectionKey): Promise<QueueHome[]> {
   const [{ props, facts }, gas] = await Promise.all([load(), gasCertified()]);
   const own = new Set(sec.fields);
   return props
-    .filter((p) => p.payprop_no)
+    .filter((p) => p.payprop_no && !notLetYet(p, facts.get(p.id) ?? new Map()))
     .map((p) => {
       const f = facts.get(p.id) ?? new Map<string, FactRow>();
       const need = neededFields(p, f).filter((n) => own.has(n.key));
