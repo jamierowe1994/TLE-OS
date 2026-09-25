@@ -1,5 +1,6 @@
 "use client";
 
+import { onPhotosChanged, photosChanged } from "@/lib/photo-events";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
@@ -48,6 +49,8 @@ export default function TakeOnWizard({ ma, onClose, onSaved }: { ma: MarketAppra
   useEffect(() => {
     void load();
   }, [load]);
+  /* The other photograph box on this file says when it adds or removes one. */
+  useEffect(() => onPhotosChanged(ma.id, () => void load()), [ma.id, load]);
 
   const upload = (file: File, at: number) =>
     new Promise<void>((resolve) => {
@@ -86,6 +89,7 @@ export default function TakeOnWizard({ ma, onClose, onSaved }: { ma: MarketAppra
     for (let i = 0; i < pics.length; i += 3) {
       await Promise.all(pics.slice(i, i + 3).map((f, n) => upload(f, from + i + n)));
       await load();
+      photosChanged(ma.id);
     }
   }
 
@@ -311,6 +315,7 @@ export default function TakeOnWizard({ ma, onClose, onSaved }: { ma: MarketAppra
                             fetch(`/api/appraisals/${encodeURIComponent(ma.id)}/photos?photo=${encodeURIComponent(p.id)}`, { method: "DELETE" })
                           );
                           void load();
+                          photosChanged(ma.id);
                         }}
                         aria-label={`Remove ${p.name}`}
                         className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-[13px] text-muted opacity-0 transition-opacity hover:text-ink group-hover:opacity-100"

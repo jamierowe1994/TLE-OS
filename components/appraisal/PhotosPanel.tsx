@@ -1,5 +1,6 @@
 "use client";
 
+import { onPhotosChanged, photosChanged } from "@/lib/photo-events";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -54,6 +55,8 @@ export default function PhotosPanel({ ma }: { ma: MarketAppraisal }) {
   useEffect(() => {
     void load();
   }, [load]);
+  /* The other photograph box on this file says when it adds or removes one. */
+  useEffect(() => onPhotosChanged(ma.id, () => void load()), [ma.id, load]);
 
   /** One photograph, with its own progress. */
   const upload = (file: File, at: number) =>
@@ -95,6 +98,7 @@ export default function PhotosPanel({ ma }: { ma: MarketAppraisal }) {
     for (let i = 0; i < pics.length; i += 3) {
       await Promise.all(pics.slice(i, i + 3).map((f, n) => upload(f, from + i + n)));
       await load();
+      photosChanged(ma.id);
     }
   }
 
@@ -221,6 +225,7 @@ export default function PhotosPanel({ ma }: { ma: MarketAppraisal }) {
                       fetch(`/api/appraisals/${encodeURIComponent(ma.id)}/photos?photo=${encodeURIComponent(p.id)}`, { method: "DELETE" })
                     );
                     void load();
+                    photosChanged(ma.id);
                   }}
                   aria-label={`Remove ${p.name}`}
                   className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-[13px] text-muted opacity-0 transition-opacity hover:text-ink group-hover:opacity-100"
