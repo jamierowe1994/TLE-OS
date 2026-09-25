@@ -84,6 +84,8 @@ const MANAGED_ONLY = new Set([
   "licence_type", "licence_number", "licence_expiry", "doc_licence", "pat_expiry", "alarms_expiry", "legionella_expiry",
   "rtr_expiry", "rtr_checked", "doc_rtr_evidence", "rra_sheet_served", "doc_rra_sheet", "visit_next", "rent_review_last",
   "doc_inventory", "repairing_standard", "doc_prt_notes",
+  /* Tenant-find pays a one-off set-up fee, not a management percentage. */
+  "fee_management",
 ]);
 /** English law: never asked in Scotland. */
 const ENGLAND_ONLY = new Set(["rtr_expiry", "rtr_checked", "doc_rtr_evidence", "rra_sheet_served", "doc_rra_sheet"]);
