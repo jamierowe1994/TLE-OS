@@ -16,7 +16,7 @@ import { DiaryOwnerTag, FlowTag, Pill } from "@/components/Wire";
 import { minutesOf, feedbackLabel, type Appt } from "@/lib/diary";
 import { useMyDiary } from "@/lib/diary-store";
 import { dueWithin, CERT_META, type CompProperty } from "@/lib/compliance";
-import type { Lead } from "@/lib/leads-sample";
+import { leadSide, type Lead } from "@/lib/leads-sample";
 import type { Notice } from "@/lib/notices";
 import type { Application } from "@/lib/applications";
 import type { OsListing } from "@/lib/rex-listings";
@@ -928,7 +928,12 @@ function LeadSourcesWidget({ w, h }: { w: number; h: number }) {
     leadsSlot, "/api/leads",
     (j) => (j.ok && Array.isArray(j.leads) ? { leads: j.leads as Lead[] } : null)
   );
-  const leads = data?.leads ?? [];
+  /* TENANTS OR LANDLORDS (Howard, 24 Sep 2026: "toggle this between property
+     enquiries (viewings) and potential MAs"). The same split as the Leads
+     menu; the chart, the count and the top source all follow it. */
+  const [side, setSide] = useState<"all" | "tenant" | "landlord">("all");
+  const all = data?.leads ?? [];
+  const leads = side === "all" ? all : all.filter((l) => leadSide(l) === side);
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
   const month = leads.filter((l) => l.receivedAt && new Date(l.receivedAt).getTime() >= start);
@@ -954,11 +959,41 @@ function LeadSourcesWidget({ w, h }: { w: number; h: number }) {
         /* The tile's own height, less the head: the chart shares what is left
            and the link keeps its line at the foot, never under the edge. */
         <div className="mt-2 flex min-h-0 flex-col" style={{ height: "calc(100% - 28px)" }}>
+          <div className="mb-2 flex shrink-0 gap-1" role="tablist" aria-label="Which leads">
+            {(
+              [
+                ["all", "All"],
+                ["tenant", "Tenants"],
+                ["landlord", "Landlords"],
+              ] as const
+            ).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                role="tab"
+                aria-selected={side === k}
+                /* Not the tile's own click: the tile opens Leads. */
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setSide(k);
+                }}
+                className={`rounded-full px-2.5 py-1 text-[10.5px] font-semibold transition-colors ${
+                  side === k ? "bg-ink text-page" : "bg-panel text-muted hover:text-ink"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="min-h-0 flex-1">
             <LeadSourceChart leads={leads} />
           </div>
-          <Link href="/leads" className="mt-3 block shrink-0 text-[11px] font-semibold text-muted transition-colors hover:text-ink">
-            All leads →
+          <Link
+            href={side === "all" ? "/leads" : `/leads?side=${side}`}
+            className="mt-3 block shrink-0 text-[11px] font-semibold text-muted transition-colors hover:text-ink"
+          >
+            {side === "all" ? "All leads" : side === "tenant" ? "Tenant leads" : "Landlord leads"} →
           </Link>
         </div>
       )}
