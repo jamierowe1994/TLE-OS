@@ -1,3 +1,4 @@
+import { noDashes } from "@/lib/no-dashes";
 import "server-only";
 import type { Scope } from "@/lib/scope";
 import { bookFor, invalidateListingBook } from "@/lib/listings-cache";
@@ -185,7 +186,7 @@ async function doWriteUp(
     const res = await rexCall("Listings", "update", {
       data: {
         id: Number(p.listingId),
-        related: { listing_adverts: [{ advert_type: "internet", advert_heading: p.heading, advert_body: p.body }] },
+        related: { listing_adverts: [{ advert_type: "internet", advert_heading: noDashes(p.heading), advert_body: noDashes(p.body) }] },
       },
     }, actorToken);
     if (!res.ok) {

@@ -1,3 +1,4 @@
+import { noDashes } from "@/lib/no-dashes";
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
@@ -93,7 +94,7 @@ export async function POST(req: NextRequest) {
         (b.steer?.trim()
           ? `The agent who visited asked for this, and they saw the property:\n"""\n${b.steer.trim().slice(0, 1200)}\n"""\nFollow it where it does not conflict with the facts or the photographs. It does not permit inventing anything.\n\n`
           : "") +
-        `Rules: British English. Warm, plain, confident; no clichés like "stunning" or "must-see". Do not invent rooms, features, dimensions, transport links or schools that are not in the facts or visible in the photographs; if you do not know the number of bedrooms, do not state one. Say what is there, then who it suits, then how to arrange a viewing with The Letting Experts. Use the write_advert tool to hand the advert back.`,
+        `Rules: British English. Warm, plain, confident; no clichés like "stunning" or "must-see"; never use an em dash. Do not invent rooms, features, dimensions, transport links or schools that are not in the facts or visible in the photographs; if you do not know the number of bedrooms, do not state one. Say what is there, then who it suits, then how to arrange a viewing with The Letting Experts. Use the write_advert tool to hand the advert back.`,
     },
   ];
 
@@ -114,7 +115,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: text ? "The writer answered in prose rather than an advert. Try again." : "Nothing came back." }, { status: 502 });
     }
     const out = call.input as { heading: string; body: string };
-    return NextResponse.json({ ok: true, heading: out.heading.trim(), body: out.body.trim(), model: res.model });
+    return NextResponse.json({ ok: true, heading: noDashes(out.heading).trim(), body: noDashes(out.body).trim(), model: res.model });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "The writer could not be reached.";
     const { actor: who } = await whoIs(req).catch(() => ({ actor: null }));

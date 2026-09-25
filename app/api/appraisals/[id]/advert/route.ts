@@ -1,3 +1,4 @@
+import { noDashes } from "@/lib/no-dashes";
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { whoIs } from "@/lib/admin";
@@ -148,7 +149,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       });
       const call = res.content.find((c): c is Anthropic.ToolUseBlock => c.type === "tool_use" && c.name === "fill_gaps");
       const out = (call?.input as { fields?: Array<{ id: string; value: string; why: string }> } | undefined)?.fields ?? [];
-      return NextResponse.json({ ok: true, fields: out.filter((f) => missing.some((m) => m.id === f.id)) });
+      return NextResponse.json({
+        ok: true,
+        fields: out.filter((f) => missing.some((m) => m.id === f.id)).map((f) => ({ ...f, value: noDashes(f.value ?? "") })),
+      });
     }
 
     const res = await client.messages.create({
@@ -172,7 +176,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                 (body.steer?.trim()
                   ? `The agent who visited asked for this, and they saw the property:\n"""\n${body.steer.trim().slice(0, 1200)}\n"""\nFollow it where it does not conflict with the facts or the photographs. It does not permit inventing anything.\n\n`
                   : "") +
-                `Rules: British English. Warm, plain, confident; no clichés like "stunning" or "must-see". Say what is there, room by room where the photographs show it, then the practical facts a tenant asks about - what is included, parking, the garden, council tax band, EPC, and when it is available (say so plainly if it is let until a date). Do not invent rooms, dimensions, transport links or schools. Close with how to arrange a viewing with The Letting Experts. Use the write_advert tool.`,
+                `Rules: British English. Warm, plain, confident; no clichés like "stunning" or "must-see"; never use an em dash. Say what is there, room by room where the photographs show it, then the practical facts a tenant asks about - what is included, parking, the garden, council tax band, EPC, and when it is available (say so plainly if it is let until a date). Do not invent rooms, dimensions, transport links or schools. Close with how to arrange a viewing with The Letting Experts. Use the write_advert tool.`,
             },
           ],
         },
@@ -182,7 +186,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const call = res.content.find((c): c is Anthropic.ToolUseBlock => c.type === "tool_use" && c.name === "write_advert");
     if (!call) return NextResponse.json({ ok: false, error: "The writer answered in prose rather than an advert. Try again." }, { status: 502 });
     const out = call.input as { heading: string; body: string };
-    return NextResponse.json({ ok: true, heading: out.heading.trim(), body: out.body.trim(), photos: images.length, facts: facts.length });
+    return NextResponse.json({ ok: true, heading: noDashes(out.heading).trim(), body: noDashes(out.body).trim(), photos: images.length, facts: facts.length });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "The writer could not be reached.";
     console.error("[advert]", msg);

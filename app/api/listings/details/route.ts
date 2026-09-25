@@ -1,3 +1,4 @@
+import { noDashes } from "@/lib/no-dashes";
 import { NextRequest, NextResponse } from "next/server";
 import { TEST_REFUSAL, testDetails, testLandlord, testListingViewings, testPortals, testPublication } from "@/lib/test-listing-answers";
 import { isTestId } from "@/lib/test-overlay";
@@ -104,16 +105,17 @@ export async function PATCH(req: NextRequest) {
     else bad.push("availableFrom");
   }
   if (b.heading !== undefined) {
-    if (typeof b.heading === "string" && b.heading.length <= 255) edit.heading = b.heading.trim();
+    /* No em dashes reach a portal, whoever typed them (24 Sep 2026). */
+    if (typeof b.heading === "string" && b.heading.length <= 255) edit.heading = noDashes(b.heading).trim();
     else bad.push("heading (255 characters at most - Zoopla refuses longer)");
   }
   if (b.body !== undefined) {
-    if (typeof b.body === "string" && b.body.length <= 20_000) edit.body = b.body;
+    if (typeof b.body === "string" && b.body.length <= 20_000) edit.body = noDashes(b.body);
     else bad.push("body");
   }
   if (b.highlights !== undefined) {
     if (Array.isArray(b.highlights) && b.highlights.every((h) => typeof h === "string" && h.length <= 200) && b.highlights.length <= MAX_HIGHLIGHTS) {
-      edit.highlights = b.highlights as string[];
+      edit.highlights = (b.highlights as string[]).map(noDashes);
     } else bad.push(`key features (${MAX_HIGHLIGHTS} at most, 200 characters each)`);
   }
   if (b.imageOrder !== undefined) {

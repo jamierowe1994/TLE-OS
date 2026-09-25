@@ -1,3 +1,4 @@
+import { noDashes } from "@/lib/no-dashes";
 import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { OpenSurface } from "@/lib/open-record";
@@ -535,7 +536,7 @@ const proposeReminder: AssistantTool = {
 const proposeWriteUp: AssistantTool = {
   name: "propose_write_up",
   description:
-    "Rewrite a property's portal advert. Call this when somebody wants the description improved, rewritten, or written from scratch. Read the property with property_detail first so the copy is true — never invent a bedroom count, a garden, or a feature the record doesn't have. Shows them the new copy to approve; it is NOT saved until they press the button. Saving publishes to Rightmove, Zoopla and OnTheMarket within about five to ten minutes, so say that.",
+    "Rewrite a property's portal advert. Call this when somebody wants the description improved, rewritten, or written from scratch. Read the property with property_detail first so the copy is true. Never use an em dash in it, and never invent a bedroom count, a garden, or a feature the record doesn't have. Shows them the new copy to approve; it is NOT saved until they press the button. Saving publishes to Rightmove, Zoopla and OnTheMarket within about five to ten minutes, so say that.",
   input_schema: {
     type: "object",
     properties: {
@@ -549,8 +550,9 @@ const proposeWriteUp: AssistantTool = {
   async run(input, ctx) {
     const got = await scopedListing(str(input.listingId), ctx);
     if ("error" in got) return got;
-    const heading = str(input.heading);
-    const body = str(input.body);
+    /* No em dashes in an advert (24 Sep 2026), whoever wrote it. */
+    const heading = noDashes(str(input.heading));
+    const body = noDashes(str(input.body));
     if (!heading || !body) return { error: "An advert needs both a headline and a body." };
     if (body.length > 20_000) return { error: "That write-up is longer than REX will take." };
     return proposed(

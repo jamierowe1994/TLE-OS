@@ -1,3 +1,4 @@
+import { noDashes } from "@/lib/no-dashes";
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { hs } from "@/lib/bond";
@@ -362,7 +363,7 @@ async function writeCopy(d: ListingDetails, facts: AutofillResult["facts"], cont
   const call = res.content.find((c): c is Anthropic.ToolUseBlock => c.type === "tool_use" && c.name === "fill_listing");
   if (!call) throw new Error("The writer did not hand anything back.");
   const out = call.input as { heading: string; body: string; highlights: string[]; facts: Record<string, string> };
-  const clean = (s: string) => s.replace(/—/g, "-").trim();
+  const clean = (s: string) => noDashes(s).trim();
   return {
     heading: clean(out.heading).slice(0, 255),
     body: clean(out.body),
