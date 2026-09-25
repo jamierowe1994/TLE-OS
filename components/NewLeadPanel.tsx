@@ -9,7 +9,6 @@ import type { ScoredMatch } from "@/lib/contact-match";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { LEAD_SOURCES } from "@/lib/leads-sample";
 import { rexContactUrl } from "@/lib/business/rex-links";
-import rexSample from "@/lib/rex-sample.json";
 
 /** They chose an existing REX record to carry on with, rather than a new one. */
 function Continuing({ match, onClear }: { match: ScoredMatch | null; onClear: () => void }) {
@@ -41,9 +40,9 @@ function Continuing({ match, onClear }: { match: ScoredMatch | null; onClear: ()
  */
 
 type Listing = {
-  id: string; name: string; locality: string; rent: number | null; image: string | null;
+  id: string; name: string; locality: string; postcode?: string | null; rent: number | null; image: string | null;
+  publicationStatus?: string | null; letAgreed?: boolean;
 };
-const LISTINGS = rexSample.listings as Listing[];
 
 type Draft = {
   name: string;
@@ -158,6 +157,14 @@ export default function NewLeadPanel({
   // The shortlist, and the picker you drag from.
   const [picked, setPicked] = useState<string[]>([]);
   const [picking, setPicking] = useState(false);
+  /* THE LIVE BOOK (Howard, 24 Sep 2026: "add search into here for bigger
+     lists"). This picker read rex-sample.json - a fixed handful of homes, some
+     long gone - so there was nothing to search and nothing true to pick. It
+     reads the same book as the lead file's finder now: on the market, not let
+     agreed, and searchable by street, town or postcode. */
+  const [market, setMarket] = useState<Listing[] | null>(null);
+  const [marketError, setMarketError] = useState<string | null>(null);
+  const [marketQ, setMarketQ] = useState("");
   const [dragId, setDragId] = useState<string | null>(null);
 
   /* Duplicate check. Runs while they type, against REX, read-only — four
@@ -289,6 +296,21 @@ export default function NewLeadPanel({
   const add = (id: string) => setPicked((cur) => (cur.includes(id) ? cur : [...cur, id]));
   const remove = (id: string) => setPicked((cur) => cur.filter((x) => x !== id));
 
+  /* Read once, the first time the picker opens. */
+  useEffect(() => {
+    if (!picking || market) return;
+    let live = true;
+    fetch("/api/listings?tests=0", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!live) return;
+        if (j?.ok && Array.isArray(j.listings)) setMarket(j.listings as Listing[]);
+        else setMarketError(j?.error ?? j?.reason ?? "The listings did not load.");
+      })
+      .catch(() => live && setMarketError("The listings did not load."));
+    return () => { live = false; };
+  }, [picking, market]);
+
   if (!open) return null;
 
   /* A landlord cannot be registered without saying where they came from
@@ -409,8 +431,12 @@ export default function NewLeadPanel({
       setDossierBusy(false);
     }
   }
-  const shortlist = LISTINGS.filter((l) => picked.includes(l.id));
-  const available = LISTINGS.filter((l) => !picked.includes(l.id));
+  const onMarket = (market ?? []).filter((l) => l.publicationStatus === "published" && !l.letAgreed);
+  const shortlist = picked.map((id) => onMarket.find((l) => l.id === id)).filter((l): l is Listing => Boolean(l));
+  const words = marketQ.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const available = onMarket.filter(
+    (l) => !picked.includes(l.id) && words.every((w) => `${l.name} ${l.locality} ${l.postcode ?? ""}`.toLowerCase().includes(w))
+  );
 
   const field =
     "w-full rounded-xl border border-line/80 bg-transparent px-3.5 py-2.5 text-[13.5px] outline-none transition-colors focus:border-ink";
@@ -1151,7 +1177,7 @@ export default function NewLeadPanel({
                     >
                       <div className="mb-3 flex items-center justify-between gap-3">
                         <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
-                          On the market
+                          On the market{market ? ` · ${onMarket.length}` : ""}
                         </p>
                         <button
                           type="button"
@@ -1161,7 +1187,21 @@ export default function NewLeadPanel({
                           Done
                         </button>
                       </div>
+                      <input
+                        value={marketQ}
+                        onChange={(e) => setMarketQ(e.target.value)}
+                        placeholder="Search by street, town or postcode"
+                        aria-label="Search the homes on the market"
+                        className="mb-3 w-full rounded-xl border border-line/80 bg-transparent px-3.5 py-2 text-[12.5px] outline-none transition-colors focus:border-ink"
+                      />
                       <ul className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                        {!market && !marketError && (
+                          <p className="flex items-center justify-center gap-2 py-6 text-center text-[12px] text-muted">
+                            <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+                            Reading the homes on the market…
+                          </p>
+                        )}
+                        {marketError && <p className="py-6 text-center text-[12px] text-accent-dark">{marketError}</p>}
                         {available.map((p) => (
                           <li
                             key={p.id}
@@ -1186,9 +1226,9 @@ export default function NewLeadPanel({
                             </span>
                           </li>
                         ))}
-                        {!available.length && (
+                        {market && !available.length && (
                           <p className="py-6 text-center text-[12px] text-muted">
-                            Everything on the market is shortlisted.
+                            {words.length ? `Nothing on the market matches "${marketQ.trim()}".` : "Everything on the market is shortlisted."}
                           </p>
                         )}
                       </ul>
