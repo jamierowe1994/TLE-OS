@@ -76,6 +76,17 @@ export function publicFromAddress(): string | null {
 
 export type Audience = "internal" | "customer";
 
+/**
+ * Sends James has ordered by name that must go while the customer_email switch
+ * stays off for the pilot. Each is one statutory mailing, not a flow: turning
+ * the switch on to let it through would also wake every automatic tenant and
+ * landlord email.
+ *   rra-sheet-2026: the government's Renters' Rights Act Information Sheet to
+ *   the tenants of the England homes we manage (James, 25 Sep 2026).
+ */
+export const ONE_OFF_SENDS = ["rra-sheet-2026"] as const;
+export type OneOffSend = (typeof ONE_OFF_SENDS)[number];
+
 export interface SendResult {
   id: string;
 }
@@ -143,6 +154,12 @@ export async function sendEmail(msg: {
   audience?: Audience;
   /** Files to go with it, base64. A certificate out of the vault, say. */
   attachments?: { filename: string; content: string }[];
+  /**
+   * A named one-off send James has ordered while customer email is switched
+   * off (see ONE_OFF_SENDS). It passes the customer_email switch and nothing
+   * else: the sending lock, the sender and the archive all still apply.
+   */
+  oneOff?: OneOffSend;
 }): Promise<SendResult> {
   const audience: Audience = msg.audience ?? "internal";
   if (!process.env.RESEND_API_KEY) {
@@ -159,7 +176,8 @@ export async function sendEmail(msg: {
      It cannot reach a customer: the address is ours. SENDING_LOCKED still
      stops it, because that brake means nothing leaves. */
   const toStaff = isInternalAddress(msg.to) && !sendingLocked();
-  if (audience === "customer" && !toStaff && !(await switchOn("customer_email"))) {
+  const ordered = Boolean(msg.oneOff && ONE_OFF_SENDS.includes(msg.oneOff));
+  if (audience === "customer" && !toStaff && !ordered && !(await switchOn("customer_email"))) {
     throw new ResendBlocked(
       "Email to landlords and tenants is switched off on Admin → Switches. Turn it on there to send this."
     );
