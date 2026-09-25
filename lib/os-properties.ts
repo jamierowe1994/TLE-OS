@@ -42,6 +42,12 @@ export interface OsProperty {
   paypropNo: string | null;
   /** The tenants in residence, from the same sheet, "A, B". */
   tenantNames: string | null;
+  /**
+   * 'managed' or 'market_only' (tenant-find / let only), decided by the OS
+   * from whichever of REX PM and PayProp changed most recently (James, 25 Sep).
+   * It outranks REX CRM's listing service type, which is often blank or stale.
+   */
+  serviceLevel: "managed" | "market_only" | null;
 }
 
 type Row = {
@@ -65,6 +71,7 @@ type Row = {
   agent_name?: string | null;
   payprop_no?: string | null;
   tenant_names?: string | null;
+  service_level?: string | null;
 };
 
 const rowTo = (r: Row): OsProperty => ({
@@ -88,6 +95,7 @@ const rowTo = (r: Row): OsProperty => ({
   agentName: r.agent_name?.trim() || null,
   paypropNo: r.payprop_no ?? null,
   tenantNames: r.tenant_names?.trim() || null,
+  serviceLevel: r.service_level === "managed" || r.service_level === "market_only" ? r.service_level : null,
 });
 
 export const isOsPropertyId = (id: string | null | undefined): boolean => /^pm-[0-9a-f-]+$/i.test(String(id ?? ""));
@@ -112,7 +120,7 @@ export async function activeOsProperties(): Promise<OsProperty[]> {
   return rows.map(rowTo);
 }
 
-type OsFacts = { hmo: boolean; noGas: boolean; ref: string; landlordName: string | null; agentName: string | null; tenantNames: string | null };
+type OsFacts = { hmo: boolean; noGas: boolean; ref: string; landlordName: string | null; agentName: string | null; tenantNames: string | null; serviceLevel: string | null };
 
 /** What the OS knows about a REX property from its own record: HMO, no gas, and who owns and looks after it. */
 export async function factsByRexId(): Promise<Map<string, OsFacts>> {
@@ -128,6 +136,7 @@ export async function factsByRexId(): Promise<Map<string, OsFacts>> {
       landlordName: held?.landlordName || r.landlord_name?.trim() || null,
       agentName: held?.agentName || r.agent_name?.trim() || null,
       tenantNames: held?.tenantNames || r.tenant_names?.trim() || null,
+      serviceLevel: held?.serviceLevel || r.service_level || null,
     });
   }
   return out;

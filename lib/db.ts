@@ -2078,6 +2078,10 @@ ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS agent_name TEXT;
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS payprop_no TEXT;
 -- The tenants in residence, from the same sheet (24 Sep 2026), where REX CRM holds none.
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS tenant_names TEXT;
+-- Whether we manage the home or only found the tenant (25 Sep 2026): decided
+-- by the OS from the newest of REX PM's agreement and PayProp's let, and why.
+ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS service_level TEXT;
+ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS service_basis TEXT;
 
 -- Every column of Susan's clean-sweep sheet, per home (24 Sep 2026): a word, a
 -- date, a number or a file, and where it came from. One row per home per field

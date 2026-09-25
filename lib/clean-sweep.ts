@@ -62,7 +62,7 @@ export interface SweepHome {
 }
 
 type PropRow = {
-  id: string; address: string; ref: string; postcode: string | null; hmo: boolean; categories: string[] | null; management: string | null; rex_property_id: string | null;
+  id: string; address: string; ref: string; postcode: string | null; hmo: boolean; categories: string[] | null; management: string | null; rex_property_id: string | null; service_level?: string | null;
   landlord_name: string | null; agent_name: string | null; tenant_names: string | null; payprop_no: string | null;
 };
 type FactRow = { property_id: string; field: string; value: string | null; file_key: string | null; source: string; source_ref: string | null; checked_against: string | null; captured_at: Date; captured_by: string | null; verified_at?: Date | null; verified_by?: string | null };
@@ -75,6 +75,9 @@ const isScotland = (p: PropRow) =>
 
 /** Tenant-find / let only: the landlord keeps the compliance. */
 function isManaged(p: PropRow, facts: Map<string, FactRow>): boolean {
+  /* The OS's own decision (newest of REX PM and PayProp) comes first. */
+  if (p.service_level === "managed") return true;
+  if (p.service_level === "market_only") return false;
   const service = facts.get("service_package")?.value || p.management || "";
   return !/tenant.?find|let.?only|no letting agreement/i.test(service);
 }
@@ -146,7 +149,7 @@ const gasFor = (p: PropRow, gas: Set<string>) => gas.has(String(p.rex_property_i
 
 async function load(): Promise<{ props: PropRow[]; facts: Map<string, Map<string, FactRow>> }> {
   const props = await q<PropRow>(
-    `SELECT id, address, ref, postcode, hmo, categories, management, rex_property_id, landlord_name, agent_name, tenant_names, payprop_no
+    `SELECT id, address, ref, postcode, hmo, categories, management, rex_property_id, service_level, landlord_name, agent_name, tenant_names, payprop_no
        FROM os_properties WHERE active`
   );
   const rows = await q<FactRow>(`SELECT * FROM os_property_facts`).catch(() => []);
@@ -226,7 +229,7 @@ const CERT_LABEL: Record<string, string> = { gas: "Gas safety", eicr: "EICR", ep
 export async function sweepDetail(id: string): Promise<SweepDetail | null> {
   if (!hasDb()) return null;
   const props = await q<PropRow & { rex_property_id: string | null }>(
-    `SELECT id, address, ref, postcode, hmo, categories, management, rex_property_id, landlord_name, agent_name, tenant_names, payprop_no FROM os_properties WHERE id = $1`,
+    `SELECT id, address, ref, postcode, hmo, categories, management, rex_property_id, service_level, landlord_name, agent_name, tenant_names, payprop_no FROM os_properties WHERE id = $1`,
     [id]
   );
   const p = props[0];

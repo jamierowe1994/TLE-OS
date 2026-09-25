@@ -429,6 +429,11 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
     /* The sheet is PayProp's let book, so a tenant on it is a tenant in, even
        where REX's own record says vacant. */
     if (!p.tenant && f.tenantNames) p.tenant = f.tenantNames;
+    /* The OS's own service decision (25 Sep 2026) beats REX CRM's listing:
+       tenant-find and let-only homes are the landlord's duty, so an expired
+       certificate there is not ours to chase. */
+    if (f.serviceLevel === "market_only") p.service = "Let Only";
+    else if (f.serviceLevel === "managed" && p.service === "Let Only") p.service = "Managed";
   }
 
   /* Homes REX CRM has no property for. The OS is their record: its own
@@ -450,6 +455,7 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
       if (!p.tenant && o.tenantNames) p.tenant = o.tenantNames;
       /* A home added from the clean sweep carries PayProp's service level. */
       if (!p.service && /let\s*only/i.test(o.management ?? "")) p.service = "Let Only";
+      if (o.serviceLevel === "market_only") p.service = "Let Only";
     }
   }
   for (const o of extra) {
@@ -462,7 +468,7 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
       landlord: o.landlordName || "—",
       agent: o.agentName,
       tenant: o.tenantNames ?? undefined,
-      ...(/let\s*only/i.test(o.management ?? "") ? { service: "Let Only" } : {}),
+      ...(/let\s*only/i.test(o.management ?? "") || o.serviceLevel === "market_only" ? { service: "Let Only" } : {}),
       hmo: o.hmo,
       hasGas: !o.noGas,
       gasAnswered: o.noGas || Boolean(certs.gas),
