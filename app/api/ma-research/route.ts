@@ -31,6 +31,11 @@ export async function GET(req: NextRequest) {
      Homesearch has no all-sizes average, so they keep the old default. */
   const askedBeds = Math.min(6, Math.max(0, Math.round(Number(p.get("beds") ?? 0)) || 0));
   const statsBeds = askedBeds || 2;
+  /* The agent's own pick of the Homesearch record (?hsId=&hsLabel=), when the
+     automatic match could not find the address. */
+  const hsId = Number(p.get("hsId") ?? 0);
+  const hsLabel = (p.get("hsLabel") ?? "").trim().slice(0, 200);
+  const picked = Number.isInteger(hsId) && hsId > 0 && hsLabel ? { hsId, label: hsLabel } : null;
   try {
     return NextResponse.json(await getResearch(address, postcode, statsBeds, {
       radiusMiles: Number.isFinite(radius) && radius > 0 ? radius : undefined,
@@ -38,7 +43,7 @@ export async function GET(req: NextRequest) {
       minRent: minRent > 0 ? minRent : undefined,
       maxRent: maxRent > 0 ? maxRent : undefined,
       type,
-    }));
+    }, picked));
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 502 });
   }

@@ -6,6 +6,8 @@ import Link from "next/link";
 import MaterialInfoPanel from "@/components/MaterialInfoPanel";
 import SubjectStory from "@/components/appraisal/SubjectStory";
 import StreetView from "@/components/appraisal/StreetView";
+import AddressPicker from "@/components/appraisal/AddressPicker";
+import { useCaseState } from "@/lib/case-state";
 import MarketMap from "@/components/MarketMap";
 import MarketPicturePanel, {
   type MarketBlockId,
@@ -93,6 +95,8 @@ function tileUrl(lat: number, lon: number, z = 15): string {
   return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${z}/${y}/${x}`;
 }
 
+const NO_MATCH = { hsId: 0, label: "" };
+
 export default function PresentationBuilder({
   address,
   postcode,
@@ -132,6 +136,18 @@ export default function PresentationBuilder({
 }) {
   const [step, setStep] = useState(0);
   const [d, setD] = useState<MaResearch | null>(null);
+  /* THE AGENT'S OWN MATCH (Howard, 24 Sep 2026). When Homesearch cannot find
+     the address, the agent picks the property from what it does hold, and the
+     pick is kept on the record so the next visit, and the deck, use it too.
+     hsId 0 is "none": the store refuses an empty payload. */
+  const [match, setMatch, matchStatus] = useCaseState<{ hsId: number; label: string }>(
+    "property-match",
+    refId ?? null,
+    NO_MATCH
+  );
+  const matchReady = !refId || matchStatus !== "loading";
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [rematching, setRematching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chosen, setChosen] = useState<string[]>([]);
   /* Slides switched off on the Review step. Written onto the deck as
@@ -420,13 +436,19 @@ export default function PresentationBuilder({
     setHidden(b.hidden);
   }, [d, existing, inherited]);
 
+  const opened = useRef(false);
   useEffect(() => {
+    /* Waits for the saved match, so a picked property opens as itself rather
+       than flashing "couldn't find" and then changing under the agent. */
+    if (!matchReady) return;
     /* NO beds. The filter starts on "Any beds", so the first list must be any
        size too — sending 2 here meant the screen opened already filtered to
        two-bed while the control said Any, and setting the control BACK to Any
-       changed nothing because it sent 2 as well. */
-    const q = new URLSearchParams({ address, postcode });
+       changed nothing because it sent 2 as well. A new pick keeps whatever
+       the agent has filtered to since. */
+    const q = researchQuery(opened.current ? filtersRef.current : null);
     const mine = ++reqSeq.current;
+    setRematching(opened.current);
     fetch(`/api/ma-research?${q}`)
       .then((r) => r.json())
       .then((j: MaResearch & { error?: string }) => {
@@ -436,10 +458,17 @@ export default function PresentationBuilder({
         if (j.error) return setError(j.error);
         setD(j);
         // Only same-sector start ticked — a pre-ticked box is a recommendation.
-        setChosen(defaultSelection(j.comparables));
+        // Once only: a new pick changes the property's facts, not the comparables.
+        if (!opened.current) setChosen(defaultSelection(j.comparables));
+        opened.current = true;
       })
-      .catch((e: Error) => setError(e.message));
-  }, [address, postcode]);
+      .catch((e: Error) => setError(e.message))
+      .finally(() => {
+        if (mine === reqSeq.current) setRematching(false);
+      });
+    // researchQuery reads address, postcode and the match, all listed here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address, postcode, matchReady, match.hsId]);
 
   /* Homesearch's live market — the whole sector including other agents'
      stock, and the only source that carries photographs. Picked separately
@@ -668,17 +697,29 @@ export default function PresentationBuilder({
    * more. It is read and discarded.
    */
   const reqSeq = useRef(0);
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+
+  /** The research request: the address, the agent's pick if any, and the filters. */
+  function researchQuery(f: typeof filters | null): URLSearchParams {
+    const q = new URLSearchParams({ address, postcode });
+    if (match.hsId) {
+      q.set("hsId", String(match.hsId));
+      q.set("hsLabel", match.label);
+    }
+    if (f?.radius) q.set("radius", String(f.radius));
+    if (f?.beds) q.set("beds", String(f.beds));
+    if (f?.minRent) q.set("minRent", String(f.minRent));
+    if (f?.maxRent) q.set("maxRent", String(f.maxRent));
+    if (f?.type) q.set("type", f.type);
+    return q;
+  }
 
   async function applyFilters(next: typeof filters) {
     setFilters(next);
     setRefiltering(true);
     const mine = ++reqSeq.current;
-    const q = new URLSearchParams({ address, postcode });
-    if (next.radius) q.set("radius", String(next.radius));
-    if (next.beds) q.set("beds", String(next.beds));
-    if (next.minRent) q.set("minRent", String(next.minRent));
-    if (next.maxRent) q.set("maxRent", String(next.maxRent));
-    if (next.type) q.set("type", next.type);
+    const q = researchQuery(next);
     try {
       const r = await fetch(`/api/ma-research?${q}`);
       const j = (await r.json()) as MaResearch & { error?: string };
@@ -1511,6 +1552,38 @@ export default function PresentationBuilder({
               {d.addressWarning && (
                 <p className="rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-3 text-[12px] leading-relaxed">
                   {d.addressWarning}
+                </p>
+              )}
+              {d.subject?.picked && !pickerOpen && (
+                <p className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-line/70 bg-card p-3 text-[12px] leading-relaxed">
+                  <span className="min-w-0 flex-1">
+                    Matched by hand to <span className="font-semibold">{d.subject.label}</span>. Check it is the landlord&apos;s
+                    home before you quote anything from it.
+                  </span>
+                  <button type="button" onClick={() => setPickerOpen(true)} className="text-[11.5px] font-semibold text-accent-dark hover:underline">
+                    Change
+                  </button>
+                  <button type="button" onClick={() => setMatch(NO_MATCH)} className="text-[11.5px] text-muted hover:text-ink">
+                    Undo
+                  </button>
+                </p>
+              )}
+              {(pickerOpen || (!d.subject && d.addressWarning)) && (
+                <AddressPicker
+                  postcode={postcode}
+                  asked={address}
+                  busy={rematching}
+                  onPick={(a) => {
+                    setPickerOpen(false);
+                    setMatch(a);
+                  }}
+                  onCancel={d.subject?.picked ? () => setPickerOpen(false) : undefined}
+                />
+              )}
+              {rematching && (
+                <p className="flex items-center gap-2 text-[12px] text-muted">
+                  <span className="block h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+                  Loading the property&apos;s facts…
                 </p>
               )}
               {/* The same panel the appraisal file shows. One component rather

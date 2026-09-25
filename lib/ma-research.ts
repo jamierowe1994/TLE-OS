@@ -139,6 +139,52 @@ export function matchIsTrustworthy(asked: string, askedPc: string, got: string):
   return false;
 }
 
+/** One address Homesearch holds, for the agent to pick from. */
+export interface HsAddress {
+  hsId: number;
+  label: string;
+}
+
+/**
+ * The addresses Homesearch holds, for when match_address cannot find ours.
+ *
+ * Howard, 24 Sep 2026: "52a Moor Street, WR1 3DB" matched nothing, and the
+ * builder could only say so. Homesearch holds "52 Moor Street" at that
+ * postcode, so the agent can find it; what they could not do was pick it.
+ *
+ * With a postcode: every address at it (50 a page, read to the last page, 59
+ * at WR1 3DB). With a query: Homesearch's own type-ahead, three characters or
+ * more, up to 100. A 404 or 422 is "none", not a failure.
+ */
+export async function findAddresses(opts: { postcode?: string; query?: string }): Promise<HsAddress[]> {
+  const shape = (rows: unknown): HsAddress[] => {
+    const list = Array.isArray(rows) ? rows : [];
+    return list
+      .map((r) => r as { hs_id?: number; address_label?: string })
+      .filter((r) => typeof r.hs_id === "number" && typeof r.address_label === "string")
+      .map((r) => ({ hsId: r.hs_id as number, label: (r.address_label as string).trim() }));
+  };
+  const query = (opts.query ?? "").trim();
+  if (query.length >= 3) {
+    const res = await hsFetch<unknown>(`find_addresses?query=${encodeURIComponent(query)}`);
+    return res.ok ? shape(res.data) : [];
+  }
+  const pc = spacedPc(opts.postcode ?? "");
+  if (!/^[A-Z]{1,2}\d[A-Z\d]? \d[A-Z]{2}$/.test(pc)) return [];
+  const out: HsAddress[] = [];
+  for (let page = 1; page <= 6; page++) {
+    const res = await hsFetch<{ data?: unknown; meta?: { last_page?: number } } | unknown[]>(
+      `find_addresses/${encodeURIComponent(pc)}?page=${page}`
+    );
+    if (!res.ok || !res.data) break;
+    const body = res.data;
+    out.push(...shape(Array.isArray(body) ? body : body.data));
+    const last = Array.isArray(body) ? 1 : Number(body.meta?.last_page ?? 1);
+    if (page >= last) break;
+  }
+  return out;
+}
+
 /** "LU2 7QP" → "LU2 7", the sector Homesearch's area stats are keyed on. */
 export function sectorOf(postcode: string): string | null {
   const m = postcode.trim().toUpperCase().match(/^([A-Z]{1,2}\d[A-Z\d]?)\s*(\d)/);
@@ -906,8 +952,9 @@ export interface MaResearch {
   address: string;
   postcode: string;
   sector: string | null;
-  /** Null when Homesearch could not be trusted — see matchIsTrustworthy. */
-  subject: { hsId: number; label: string } | null;
+  /** Null when Homesearch could not be trusted — see matchIsTrustworthy.
+   *  `picked` means the agent chose it by hand from findAddresses. */
+  subject: { hsId: number; label: string; picked?: boolean } | null;
   addressWarning: string | null;
   /** Homesearch average asking rent for this sector and bed count. */
   areaAverage: { beds: number; avgRent: number } | null;
@@ -977,17 +1024,25 @@ export async function getResearch(
   address: string,
   postcode: string,
   beds = 2,
-  filters: MarketFilters = {}
+  filters: MarketFilters = {},
+  /** The agent's own pick, when Homesearch could not match the address. */
+  picked: HsAddress | null = null
 ): Promise<MaResearch> {
   const sector = sectorOf(postcode);
 
-  /* subject — trusted only if it survives the address check */
+  /* subject — trusted only if it survives the address check, or if the agent
+     picked it themselves. A pick is theirs to vouch for, and the page says it
+     was chosen by hand; the automatic match still never passes a neighbour. */
   let subject: MaResearch["subject"] = null;
   let addressWarning: string | null = null;
-  const matched = await hsJson<{ hs_id?: number; address_label?: string }>(
-    `match_address?address=${encodeURIComponent(`${address} ${postcode}`)}`
-  );
-  if (matched?.hs_id && matched.address_label) {
+  const matched = picked
+    ? null
+    : await hsJson<{ hs_id?: number; address_label?: string }>(
+        `match_address?address=${encodeURIComponent(`${address} ${postcode}`)}`
+      );
+  if (picked) {
+    subject = { hsId: picked.hsId, label: picked.label, picked: true };
+  } else if (matched?.hs_id && matched.address_label) {
     if (matchIsTrustworthy(address, postcode, matched.address_label)) {
       subject = { hsId: matched.hs_id, label: matched.address_label };
     } else {
