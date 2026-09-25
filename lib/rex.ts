@@ -292,7 +292,10 @@ export async function rexCall(
   service: string,
   method: string,
   body?: unknown,
-  actorToken?: string | null
+  actorToken?: string | null,
+  /** `quiet`: a first try the caller will make again - its failure is not a
+   *  ticket yet (lib/rex-compliance, 25 Sep 2026). */
+  opts?: { quiet?: boolean }
 ): Promise<RexResponse> {
   if (!rexConfigured()) {
     throw new Error("Rex isn't connected yet (missing REX_API_EMAIL/PASSWORD).");
@@ -323,7 +326,7 @@ export async function rexCall(
   } catch (e) {
     const name = (e as Error)?.name ?? "";
     const gaveUpWaiting = name === "AbortError";
-    noteFailure({
+    if (!opts?.quiet) noteFailure({
       source: "REX",
       what: path,
       status: null,
@@ -334,7 +337,7 @@ export async function rexCall(
     });
     throw e;
   }
-  if (!res.ok && worthReporting(res, service, method, Boolean(actorToken))) {
+  if (!res.ok && !opts?.quiet && worthReporting(res, service, method, Boolean(actorToken))) {
     noteFailure({ source: "REX", what: path, status: res.status, message: res.error ?? `answered ${res.status}` });
   }
   return res;

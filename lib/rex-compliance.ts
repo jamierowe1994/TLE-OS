@@ -198,12 +198,22 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
   const chunks: string[][] = [];
   for (let i = 0; i < ids.length; i += CHUNK) chunks.push(ids.slice(i, i + CHUNK));
 
+  /* ONE MORE GO, THEN STOP - NEVER A BLANK (25 Sep 2026). One slow chunk
+     in fifty timed out a few times a day ("REX ComplianceEntries/search was
+     slow or busy"), which threw the whole refresh away; and a chunk REX
+     answered with an error came back as NO certificates for its ten homes,
+     which would have put them all under "No record". Now a chunk is asked
+     twice, quietly the first time, and one that still fails fails the read,
+     so the last good book stands rather than a wrong one. */
+  const search = (chunk: string[], quiet: boolean) =>
+    rexCall("ComplianceEntries", "search", { criteria: [{ name: "parent_object_id", type: "in", value: chunk }], limit: 100 }, null, { quiet });
   const results = await inBatches(chunks, CONCURRENCY, async (chunk) => {
-    const res = await rexCall("ComplianceEntries", "search", {
-      criteria: [{ name: "parent_object_id", type: "in", value: chunk }],
-      limit: 100,
-    });
-    return res.ok ? (rexRows(res.result) as RexEntry[]) : [];
+    const first = await search(chunk, true).catch(() => null);
+    if (first?.ok) return rexRows(first.result) as RexEntry[];
+    await new Promise((r) => setTimeout(r, 2000));
+    const again = await search(chunk, false);
+    if (!again.ok) throw new Error(`REX did not give the certificates for ${chunk.length} homes (${again.error ?? again.status}).`);
+    return rexRows(again.result) as RexEntry[];
   });
   const entries = results.flat();
 
