@@ -65,7 +65,7 @@ type PropRow = {
   id: string; address: string; ref: string; postcode: string | null; hmo: boolean; categories: string[] | null; management: string | null; rex_property_id: string | null;
   landlord_name: string | null; agent_name: string | null; tenant_names: string | null; payprop_no: string | null;
 };
-type FactRow = { property_id: string; field: string; value: string | null; file_key: string | null; source: string; source_ref: string | null; checked_against: string | null; captured_at: Date; captured_by: string | null };
+type FactRow = { property_id: string; field: string; value: string | null; file_key: string | null; source: string; source_ref: string | null; checked_against: string | null; captured_at: Date; captured_by: string | null; verified_at?: Date | null; verified_by?: string | null };
 
 const isWales = (pc: string | null) => /^(CF|SA|NP|LD|LL)\d/i.test((pc ?? "").trim());
 /** Scottish postcode areas; the address decides when the sheet gave no postcode. */
@@ -108,7 +108,7 @@ export function neededFields(p: PropRow, facts: Map<string, FactRow>): FactField
   const guarantors = Number(facts.get("guarantors_count")?.value ?? 0) > 0;
   const since = facts.get("letting_agreement_start")?.value ?? "";
   return FIELDS.filter((f) => {
-    if (INFO.has(f.key)) return false;
+    if (INFO.has(f.key) || f.group === "Sign-off") return false;
     if (MANAGED_ONLY.has(f.key) && !managed) return false;
     if (ENGLAND_ONLY.has(f.key) && scot) return false;
     if (f.when === "hmo" && !hmo && !(scot && SCOTLAND_EVERY_HOME.has(f.key))) return false;
@@ -189,13 +189,19 @@ export interface SweepFact {
   capturedAt: string | null; capturedBy: string | null; files: { key: string; name: string }[];
   /** Why a column with no value of its own still counts as held. */
   note: string | null;
+  /** Ticked as right by a person in the second pass. */
+  verifiedAt: string | null;
+  verifiedBy: string | null;
 }
 
 export interface SweepDetail {
   home: SweepHome & { postcode: string | null; rexPropertyId: string | null };
   facts: SweepFact[];
-  certs: { key: string; label: string; days: number | null; file: boolean }[] | null;
-  links: { rexPm: string | null; propoly: string | null };
+  certs: { key: string; label: string; days: number | null; file: boolean; expiresOn: string | null; fileUrl: string | null; notRequired: boolean; checkedBy: string | null }[] | null;
+  /** Who signed each section off, and when (the second pass). */
+  sections: Record<string, { at: string; by: string | null } | null>;
+  sectionNotes: Record<string, string | null>;
+  links: { rexPm: string | null; propoly: string | null; payprop: string | null };
   notes: string | null;
 }
 
@@ -245,7 +251,13 @@ export async function sweepDetail(id: string): Promise<SweepDetail | null> {
     if (!got) throw new Error("book not ready");
     const { book } = got;
     const e = book.properties.find((x) => x.id === (p.rex_property_id ?? "") || x.id === id);
-    if (e) certs = Object.entries(e.certs).map(([k, c]) => ({ key: k, label: CERT_LABEL[k] ?? k, days: c?.expires ?? null, file: Boolean(c?.attached || c?.fileUrl) }));
+    if (e) certs = Object.entries(e.certs).map(([k, c]) => {
+      const days = c?.expires ?? null;
+      const on = days == null ? null : new Date(Date.now() + days * 864e5).toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+      const chk = f.get(`verify_cert_${k}`);
+      return { key: k, label: CERT_LABEL[k] ?? k, days, file: Boolean(c?.attached || c?.fileUrl), expiresOn: on, fileUrl: c?.fileUrl ?? null,
+        notRequired: Boolean((c as { notRequired?: boolean } | undefined)?.notRequired), checkedBy: chk ? `${chk.captured_by ?? ""}` : null };
+    });
   } catch {
     certs = null;
   }
@@ -257,6 +269,7 @@ export async function sweepDetail(id: string): Promise<SweepDetail | null> {
     return {
       key: x.key, label: x.label, group: x.group, kind: x.kind, needed: need.has(x.key), held: held(x.key, f, gasOnFile),
       note: byGas ? "Covered by the gas safety record" : null,
+      verifiedAt: r?.verified_at ? new Date(r.verified_at).toISOString() : null, verifiedBy: r?.verified_by ?? null,
       value: r?.value ?? null, source: r?.source ?? null, sourceRef: r?.source_ref ?? null, checkedAgainst: r?.checked_against ?? null,
       capturedAt: r ? new Date(r.captured_at).toISOString() : null, capturedBy: r?.captured_by ?? null,
       files: byField.get(x.key) ?? [],
@@ -271,9 +284,68 @@ export async function sweepDetail(id: string): Promise<SweepDetail | null> {
     links: {
       rexPm: uuid ? `https://alfie.app.rexsoftware.com/property/${uuid}` : null,
       propoly: deal ? `https://tle.propoly.com/deals/${deal}` : null,
+      /* Susan's sheets carry PayProp's own property number, which is the id in its web links. */
+      payprop: p.payprop_no && /^\d+$/.test(p.payprop_no) ? `https://uk.payprop.com/c/property/${p.payprop_no}` : null,
     },
     notes: f.get("check_notes")?.value ?? null,
+    sections: Object.fromEntries((["compliance", "tenancy", "landlord"] as const).map((k) => {
+      const r = f.get(`check_${k}`);
+      return [k, r?.value ? { at: r.value, by: r.captured_by } : null];
+    })),
+    sectionNotes: Object.fromEntries((["compliance", "tenancy", "landlord"] as const).map((k) => [k, f.get(`check_notes_${k}`)?.value ?? null])),
   };
 }
 
 export const isFactKey = (k: string) => FIELD_BY_KEY.has(k);
+
+/* ── The second pass: three people, three sections of every home ─────────────
+ *
+ * James, 25 Sep: Michael, Kirstie and Joe each go through every home on
+ * Susan's sheets, checking their own section against REX PM, Propoly and
+ * PayProp, ticking what is right, fixing what is not and uploading what is
+ * missing. One pass, then the OS is the source of truth.
+ */
+export type SectionKey = "compliance" | "tenancy" | "landlord";
+export const SECTIONS: { key: SectionKey; label: string; who: string; fields: string[]; certs?: boolean }[] = [
+  {
+    key: "compliance", label: "Compliance", who: "Michael", certs: true,
+    fields: ["epc_rating", "pat_expiry", "alarms_expiry", "legionella_expiry", "repairing_standard", "licence_type", "licence_number", "licence_expiry", "doc_licence"],
+  },
+  {
+    key: "tenancy", label: "Tenancy & tenants", who: "Kirstie",
+    fields: ["tenants_count", "tenancy_type", "tenancy_start", "tenancy_end", "rent_matches_agreement", "rent_review_last", "visit_next",
+      "rtr_expiry", "rtr_checked", "doc_rtr_evidence", "guarantors_count", "guarantor_names", "guarantor_contacts", "doc_guarantor",
+      "doc_tenancy_agreement", "doc_prt_notes", "doc_tenant_referencing", "doc_inventory", "rra_sheet_served", "doc_rra_sheet"],
+  },
+  {
+    key: "landlord", label: "Landlord, fees & deposit", who: "Joe",
+    fields: ["service_package", "fee_management", "fee_setup", "letting_agreement_start", "doc_terms_of_business", "nrl_status", "doc_nrl1",
+      "landlord_aml", "landlord_photo_id", "doc_landlord_id_ownership", "landlord_registration", "doc_landlord_registration", "rent_smart_wales",
+      "deposit_ref", "deposit_amount", "deposit_protected_on", "doc_deposit_cert"],
+  },
+];
+export const SECTION_BY_KEY = new Map(SECTIONS.map((x) => [x.key, x]));
+
+export interface QueueHome { id: string; address: string; landlord: string | null; since: string | null; missing: number; doneAt: string | null; doneBy: string | null }
+
+/** Susan's homes, oldest first, with how much of this section each still lacks and whether it is signed off. */
+export async function sectionQueue(section: SectionKey): Promise<QueueHome[]> {
+  if (!hasDb()) return [];
+  const sec = SECTION_BY_KEY.get(section)!;
+  const [{ props, facts }, gas] = await Promise.all([load(), gasCertified()]);
+  const own = new Set(sec.fields);
+  return props
+    .filter((p) => p.payprop_no)
+    .map((p) => {
+      const f = facts.get(p.id) ?? new Map<string, FactRow>();
+      const need = neededFields(p, f).filter((n) => own.has(n.key));
+      const done = f.get(`check_${section}`);
+      return {
+        id: p.id, address: p.address, landlord: p.landlord_name,
+        since: f.get("letting_agreement_start")?.value ?? f.get("tenancy_start")?.value ?? null,
+        missing: need.filter((n) => !held(n.key, f, gasFor(p, gas))).length,
+        doneAt: done?.value ?? null, doneBy: done?.captured_by ?? null,
+      };
+    })
+    .sort((a, b) => (a.since ?? "9999").localeCompare(b.since ?? "9999") || a.address.localeCompare(b.address));
+}

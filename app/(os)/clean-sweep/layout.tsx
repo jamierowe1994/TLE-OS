@@ -7,7 +7,10 @@ import type { RailGroup } from "@/components/WorkspaceRail";
  * from their own rails; the checker is given the compliance role.
  */
 const RAIL: RailGroup[] = [
-  { title: null, items: [{ href: "/clean-sweep", label: "Clean sweep", exact: true, icon: "checklist" }] },
+  { title: null, items: [
+    { href: "/clean-sweep/check", label: "Check my section", exact: true, icon: "checklist" },
+    { href: "/clean-sweep", label: "All homes", exact: true, icon: "home" },
+  ] },
   { title: "Elsewhere", items: [{ href: "/compliance-desk", label: "Compliance desk", icon: "shield" }] },
 ];
 

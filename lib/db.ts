@@ -2095,6 +2095,11 @@ CREATE TABLE IF NOT EXISTS os_property_facts (
   captured_by     TEXT,
   PRIMARY KEY (property_id, field)
 );
+-- The clean sweep's second pass (25 Sep 2026): a person ticks each value as
+-- checked against REX PM, Propoly and PayProp. Kept apart from captured_by so
+-- "found in REX PM" and "checked by Michael" are both still true.
+ALTER TABLE os_property_facts ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ;
+ALTER TABLE os_property_facts ADD COLUMN IF NOT EXISTS verified_by TEXT;
 CREATE INDEX IF NOT EXISTS os_plc_cases_agent ON os_plc_cases (lower(agent_email), created_at DESC);
 
 -- The shadow log: what the rules recommended, and what the person decided.

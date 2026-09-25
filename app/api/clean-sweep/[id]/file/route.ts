@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { whoIs } from "@/lib/admin";
 import { can } from "@/lib/roles";
-import { hasDb } from "@/lib/db";
+import { hasDb, q } from "@/lib/db";
 import { isFactKey, sweepDetail } from "@/lib/clean-sweep";
 import { recordFact } from "@/lib/property-facts";
 import { R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
@@ -46,5 +46,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const detail = await sweepDetail(id);
   const count = detail?.facts.find((f) => f.key === field)?.files.length ?? 1;
   await recordFact({ propertyId: id, field, value: `${count} file${count === 1 ? "" : "s"}`, fileKey: prefix, source: "manual", by });
+  await q(`UPDATE os_property_facts SET verified_at = NOW(), verified_by = $3 WHERE property_id = $1 AND field = $2`, [id, field, by]);
   return NextResponse.json({ ok: true, ...(await sweepDetail(id)) });
 }
