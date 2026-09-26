@@ -98,6 +98,14 @@ const AML_FROM = "2025-05-01";
 const DEPOSIT = new Set(["deposit_ref", "deposit_amount", "deposit_protected_on", "doc_deposit_cert"]);
 /** Tenant-find: we did the let, not the running of it, so these are the landlord's (James, 26 Sep). */
 const NOT_ON_MARKET_ONLY = new Set(["rent_matches_agreement", "guarantor_contacts"]);
+/**
+ * The RRA Information Sheet 2026 is for tenancies that already existed on
+ * 1 May 2026; a tenancy begun on or after it gets a written statement of terms
+ * instead (the tenancy agreement column). A company let is not an assured
+ * tenancy, so the sheet is not asked of it either.
+ */
+const RRA_SHEET = new Set(["rra_sheet_served", "doc_rra_sheet"]);
+const RRA_FROM = "2026-05-01";
 
 function homeIsHmo(p: PropRow, facts: Map<string, FactRow>): boolean {
   if (p.hmo) return true;
@@ -116,7 +124,7 @@ export function neededFields(p: PropRow, facts: Map<string, FactRow>): FactField
   return FIELDS.filter((f) => {
     if (INFO.has(f.key) || f.group === "Sign-off") return false;
     if (MANAGED_ONLY.has(f.key) && !managed) return false;
-    if (ENGLAND_ONLY.has(f.key) && scot) return false;
+    if (ENGLAND_ONLY.has(f.key) && (scot || isWales(p.postcode))) return false;
     if (f.when === "hmo" && !hmo && !(scot && SCOTLAND_EVERY_HOME.has(f.key))) return false;
     if (f.when === "nrl" && !nrl) return false;
     if (f.when === "wales" && !isWales(p.postcode)) return false;
@@ -127,6 +135,13 @@ export function neededFields(p: PropRow, facts: Map<string, FactRow>): FactField
        own scheme, or a tenant-find let we did not register, is theirs. */
     const depBy = (facts.get("deposit_registered_by")?.value ?? "").toLowerCase();
     if (DEPOSIT.has(f.key) && (depBy === "landlord" || (!managed && depBy !== "agent"))) return false;
+    /* A Flatfair plan or a let with no deposit taken has nothing to protect. */
+    if (DEPOSIT.has(f.key) && /^no deposit/i.test(facts.get("deposit_status")?.value ?? "")) return false;
+    if (RRA_SHEET.has(f.key)) {
+      const start = facts.get("tenancy_start")?.value ?? "";
+      if (start >= RRA_FROM) return false;
+      if (/^company/i.test(facts.get("tenancy_type")?.value ?? "")) return false;
+    }
     if ((f.key === "guarantor_names" || f.key === "guarantor_contacts") && !guarantors) return false;
     return true;
   });
