@@ -41,7 +41,7 @@ const INFO = new Set([
   "property_type", "service_package", "fee_setup", "letting_agreement_start", "landlord_proof_of_address",
   "tenancy_end", "tenancy_signed", "occupants", "rent_rex_pm", "rent_review_next", "visit_last",
   "deposit_status", "landlord_photo_id", "landlord_proof_of_ownership", "doc_guarantor",
-  "propoly_deal", "check_signed_off", "check_notes",
+  "propoly_deal", "check_signed_off", "check_notes", "deposit_registered_by",
 ]);
 
 export interface SweepHome {
@@ -95,6 +95,9 @@ const ENGLAND_ONLY = new Set(["rtr_expiry", "rtr_checked", "doc_rtr_evidence", "
 /** The Repairing Standard: every managed Scottish home, HMO or not. */
 const SCOTLAND_EVERY_HOME = new Set(["pat_expiry", "alarms_expiry", "legionella_expiry"]);
 const AML_FROM = "2025-05-01";
+const DEPOSIT = new Set(["deposit_ref", "deposit_amount", "deposit_protected_on", "doc_deposit_cert"]);
+/** Tenant-find: we did the let, not the running of it, so these are the landlord's (James, 26 Sep). */
+const NOT_ON_MARKET_ONLY = new Set(["rent_matches_agreement", "guarantor_contacts"]);
 
 function homeIsHmo(p: PropRow, facts: Map<string, FactRow>): boolean {
   if (p.hmo) return true;
@@ -119,6 +122,11 @@ export function neededFields(p: PropRow, facts: Map<string, FactRow>): FactField
     if (f.when === "wales" && !isWales(p.postcode)) return false;
     if (f.when === "scotland" && !scot) return false;
     if (f.key === "landlord_aml" && since < AML_FROM) return false;
+    if (!managed && NOT_ON_MARKET_ONLY.has(f.key)) return false;
+    /* The deposit is ours to evidence only where we registered it: a landlord's
+       own scheme, or a tenant-find let we did not register, is theirs. */
+    const depBy = (facts.get("deposit_registered_by")?.value ?? "").toLowerCase();
+    if (DEPOSIT.has(f.key) && (depBy === "landlord" || (!managed && depBy !== "agent"))) return false;
     if ((f.key === "guarantor_names" || f.key === "guarantor_contacts") && !guarantors) return false;
     return true;
   });
