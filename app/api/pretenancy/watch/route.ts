@@ -4,6 +4,8 @@ import { requireCapability } from "@/lib/admin";
 import { publicOrigin } from "@/lib/origin";
 import { watchDeals, watchStatus, listDealEvents } from "@/lib/business/deal-watch";
 import { switchOn } from "@/lib/switches";
+import { refreshPropolyBooks, propolyDealsSavedAt } from "@/lib/business/propoly-deals";
+import { dayUsage } from "@/lib/business/propoly-meter";
 
 /**
  * The Propoly watcher.
@@ -15,9 +17,12 @@ import { switchOn } from "@/lib/switches";
  *
  *   curl -X POST -H "x-cron-key: $CRON_SECRET" https://tle-os.co.uk/api/pretenancy/watch
  *
- * Run it every five minutes. Propoly's deal list is cached for a minute and
- * Kirstie moves a deal a few times a day, so five minutes is prompt without
- * being a load. The first run seeds silently; see lib/business/deal-watch.
+ * Run it every five minutes. Since 27 Sep this is also THE one reader of
+ * Propoly: each run first re-reads whichever books are due (deals every five
+ * minutes in office hours, half-hourly otherwise; managers daily; completed
+ * deals hourly) into the saved copy every screen reads, then compares. See
+ * lib/business/propoly-deals. The first run seeds silently; see
+ * lib/business/deal-watch.
  */
 
 export const dynamic = "force-dynamic";
@@ -37,15 +42,22 @@ export async function GET(req: NextRequest) {
   if (!cronAuthorised(req) && !(await requireCapability(req, "see:pretenancy"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const [status, latest, armed] = await Promise.all([watchStatus(), listDealEvents({ limit: 20 }), switchOn("deal_watch_notify")]);
-  return NextResponse.json({ ok: true, ...status, tellingAgents: armed, latest });
+  const [status, latest, armed, usage, savedAt] = await Promise.all([
+    watchStatus(),
+    listDealEvents({ limit: 20 }),
+    switchOn("deal_watch_notify"),
+    dayUsage(),
+    propolyDealsSavedAt(),
+  ]);
+  return NextResponse.json({ ok: true, ...status, tellingAgents: armed, latest, dealsSavedAt: savedAt ? new Date(savedAt).toISOString() : null, propolyCallsToday: usage });
 }
 
 export async function POST(req: NextRequest) {
   if (!cronAuthorised(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   try {
+    const read = await refreshPropolyBooks();
     const result = await watchDeals({ origin: publicOrigin(req) });
-    return NextResponse.json(result, { status: result.ok ? 200 : 503 });
+    return NextResponse.json({ ...result, read }, { status: result.ok ? 200 : 503 });
   } catch (e) {
     return NextResponse.json({ ok: false, reason: e instanceof Error ? e.message : "watch failed" }, { status: 500 });
   }

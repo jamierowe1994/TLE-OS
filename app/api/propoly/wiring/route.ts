@@ -70,6 +70,12 @@ interface Op {
 /** Normalise `/api/v1/deals/{dealId}` and `/api/v1/deals/{id}` to one key. */
 const norm = (p: string) => p.replace(/\{[^}]+\}/g, "{id}");
 
+const WIRING_KEEP_MS = 6 * 60 * 60_000;
+declare global {
+  // eslint-disable-next-line no-var
+  var __propolyWiring: { at: number; body: Record<string, unknown> } | undefined;
+}
+
 export async function GET() {
   const blocked = diagnosticsBlocked();
   if (blocked) return blocked;
@@ -77,8 +83,17 @@ export async function GET() {
      when Propoly rate-limits us - and a thrown error here came back as Next's
      HTML 500, which the sheet could not read and filed as "did not answer"
      (bug 4e8f126d, 21 Sep 2026). The reason is the finding: say it. */
+  /* The sheet is about 39 Propoly calls, and it was run every time the
+     connections page opened. Propoly's spec and the shape of its answers do
+     not change by the hour, so a good reading is kept for six hours (27 Sep
+     2026, the quota work - see lib/business/propoly-deals). */
+  const held = globalThis.__propolyWiring;
+  if (held && Date.now() - held.at < WIRING_KEEP_MS) return NextResponse.json({ ...held.body, keptFrom: new Date(held.at).toISOString() });
   try {
-    return await sheet();
+    const res = await sheet();
+    const body = (await res.clone().json().catch(() => null)) as Record<string, unknown> | null;
+    if (body?.specRead) globalThis.__propolyWiring = { at: Date.now(), body };
+    return res;
   } catch (e) {
     return NextResponse.json({
       configured: true,

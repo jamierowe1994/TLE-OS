@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireCapability } from "@/lib/admin";
-import { getAllPropolyDeals, getPropolyMoveInForecast } from "@/lib/business/propoly-deals";
+import { getAllPropolyDeals, getPropolyMoveInForecast, propolyDealsSavedAt } from "@/lib/business/propoly-deals";
 import {
   getBusinessPhotoIndex,
   matchListingConfident,
@@ -421,5 +421,7 @@ export async function GET(req: NextRequest) {
     },
   };
 
-  return NextResponse.json({ configured: true, deals: out, summary, compliancePending });
+  /* When these deals were read from Propoly: the board says "Updated 3 min ago". */
+  const savedAt = await propolyDealsSavedAt().catch(() => null);
+  return NextResponse.json({ configured: true, deals: out, summary, compliancePending, savedAt: savedAt ? new Date(savedAt).toISOString() : null });
 }

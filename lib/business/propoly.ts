@@ -1,6 +1,14 @@
 import "server-only";
 import { noteFailure } from "@/lib/auto-bugs";
 import { hasDb, q } from "@/lib/db";
+import { countPropolyCall } from "@/lib/business/propoly-meter";
+
+/** Every request to Propoly goes through here, so every one is counted against the quota. */
+async function pfetch(url: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(url, init);
+  countPropolyCall(res.status);
+  return res;
+}
 
 // Propoly (tenancy progression) client — the third live integration, after
 // REX and Meta. Auth flow per their Swagger (prod.propoly.com/api-docs):
@@ -239,7 +247,7 @@ async function obtainToken(stale: string | null): Promise<string> {
 }
 
 async function fetchToken(): Promise<string> {
-  const res = await fetch(`${BASE}/api/v1/token`, {
+  const res = await pfetch(`${BASE}/api/v1/token`, {
     headers: {
       "x-api-key": apiKey(),
       "agent-name": agentName(),
@@ -320,7 +328,7 @@ export async function propolyOptions(
     /* Inside the try: a token Propoly will not give us is the same answer as
        a path that will not connect, not a reason to end the caller. */
     const token = await getToken();
-    const res = await fetch(`${BASE}${path}`, {
+    const res = await pfetch(`${BASE}${path}`, {
       method: "OPTIONS",
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...keyHeaders },
       cache: "no-store",
@@ -366,13 +374,13 @@ function reportPropoly(method: string, path: string, status: number): void {
 export async function propolyGet(path: string, opts?: { probe?: boolean }): Promise<PropolyResult> {
   const keyHeaders = { "x-api-key": apiKey(), "agent-name": agentName() };
   let token = await getToken();
-  let res = await fetch(`${BASE}${path}`, {
+  let res = await pfetch(`${BASE}${path}`, {
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...keyHeaders },
     cache: "no-store",
   });
   if (res.status === 401) {
     token = await getToken(token);
-    res = await fetch(`${BASE}${path}`, {
+    res = await pfetch(`${BASE}${path}`, {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...keyHeaders },
       cache: "no-store",
     });
@@ -418,7 +426,7 @@ async function propolyWrite(method: "POST" | "PATCH", path: string, payload: unk
   if (!(await switchOn("handover_live"))) throw new PropolyWriteBlocked(method, path);
   const keyHeaders = { "x-api-key": apiKey(), "agent-name": agentName() };
   const send = async (token: string) =>
-    fetch(`${BASE}${path}`, {
+    pfetch(`${BASE}${path}`, {
       method,
       headers: {
         Authorization: `Bearer ${token}`,
@@ -457,7 +465,7 @@ export async function propolyUpload(path: string, form: FormData): Promise<Propo
   }
   const keyHeaders = { "x-api-key": apiKey(), "agent-name": agentName() };
   const send = async (token: string) =>
-    fetch(`${BASE}${path}`, {
+    pfetch(`${BASE}${path}`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...keyHeaders },
       body: form,

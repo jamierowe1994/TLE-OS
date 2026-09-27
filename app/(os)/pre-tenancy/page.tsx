@@ -301,6 +301,15 @@ function stageProgress(key: string): { done: number; total: number } {
 /* Gaps before asking REX for the certificates again, in ms. */
 const CHASE_AFTER = [6_000, 15_000, 30_000];
 
+/** "Updated just now" / "Updated 4 min ago" / "Updated at 14:05", for the refresh button. */
+function updatedLabel(savedAt: string | null): string {
+  if (!savedAt) return "Refresh now";
+  const mins = Math.floor((Date.now() - new Date(savedAt).getTime()) / 60_000);
+  if (mins < 1) return "Updated just now";
+  if (mins < 60) return `Updated ${mins} min ago`;
+  return `Updated at ${new Date(savedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })}`;
+}
+
 export default function PreTenancyPage() {
   const [user, setUser] = useState<UserProfile | undefined>(undefined);
 
@@ -407,6 +416,15 @@ function Board({ user }: { user: UserProfile }) {
     void refreshTodayCount();
   }, [refreshTodayCount]);
 
+  /** When the deals on screen were read from Propoly, and a clock to age that label. */
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
   /** How long to leave REX before asking again for the certificates. */
   const chased = useRef(0);
   const load = useCallback(async (): Promise<boolean> => {
@@ -421,6 +439,7 @@ function Board({ user }: { user: UserProfile }) {
            board was served. It is cached by the time we ask again, so one
            quiet second pass fills the certificates in. */
         compliancePending?: boolean;
+        savedAt?: string | null;
       };
       /* The local preview, with Propoly not connected: ?sample=1 draws the
          board on invented deals so the layout can be looked at. Never in
@@ -452,6 +471,7 @@ function Board({ user }: { user: UserProfile }) {
         /* fine */
       }
       setSummary(d.summary);
+      setSavedAt(d.savedAt ?? null);
       setError(null);
       /* The board is already on screen and usable; these just fill the
          certificates in as REX answers. Three tries, spaced out, then it
@@ -481,6 +501,25 @@ function Board({ user }: { user: UserProfile }) {
     return () => {
       cancelled = true;
     };
+  }, [load]);
+
+  /* The deals are re-read from Propoly every five minutes in office hours and
+     saved; the board picks the new copy up on the same beat. Reading the saved
+     copy costs Propoly nothing. */
+  useEffect(() => {
+    const t = setInterval(() => void load(), 5 * 60_000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  /** "Refresh now": read Propoly out of turn (at most once a minute, whoever asks), then reload. */
+  const refreshNow = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await fetch("/api/pretenancy/refresh", { method: "POST" });
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
   }, [load]);
 
   /** Patch one deal's overlay/effective stage in place after a panel action. */
@@ -657,6 +696,16 @@ function Board({ user }: { user: UserProfile }) {
         <button type="button" onClick={() => setMailboxOpen(true)} className="btn-press flex items-center gap-2 rounded-full border border-line bg-card px-3.5 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-black/30" title="Connect your mailbox for the Emails tab">
           <span className="text-accent-dark"><DoodleIcon name="mail" size={14} /></span>
           Mailbox
+        </button>
+        <button
+          type="button"
+          onClick={() => void refreshNow()}
+          disabled={refreshing}
+          className="btn-press flex items-center gap-2 rounded-full border border-line bg-card px-3.5 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-black/30 disabled:opacity-60"
+          title="Deals are read from Propoly every five minutes in office hours. Click to read them again now."
+        >
+          <span className={`text-accent-dark ${refreshing ? "animate-spin" : ""}`}><DoodleIcon name="clock" size={14} /></span>
+          {refreshing ? "Refreshing" : updatedLabel(savedAt)}
         </button>
         <Link href="/pre-tenancy/knowledge?guide=board" className="flex items-center gap-2 rounded-full border border-line/80 bg-card px-3.5 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-ink/40">
           <span className="text-accent-dark"><DoodleIcon name="note" size={14} /></span>

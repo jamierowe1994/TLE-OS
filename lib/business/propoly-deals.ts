@@ -1,6 +1,7 @@
 import "server-only";
 import { propolyConfigured, propolyGet } from "@/lib/business/propoly";
 import { loadSnapshot, saveSnapshot } from "@/lib/business/propoly-snapshot";
+import { hasDb, q } from "@/lib/business/db";
 import { agentKeysForName } from "@/lib/business/roster";
 import type {
   AgentApplication,
@@ -73,15 +74,65 @@ import type {
 // the caller can fall back; cache so a dashboard load doesn't hammer them.
 
 const PER_PAGE = 25;
-const DEALS_TTL_MS = 60_000; // active pipeline — changes during the day
-// Beyond the minute, serve the stale list and refresh behind the request —
-// but only up to two minutes old. The pipeline is not photos: Kirstie moves a
-// deal and expects the board to agree with her, so "stale" has to stay short
-// enough that she never sees yesterday's answer. Past two minutes the caller
-// waits (~1s) rather than being shown something that old.
-const DEALS_STALE_MAX_MS = 2 * 60_000;
-const PROPS_TTL_MS = 10 * 60_000; // property→manager map — changes rarely
 const OVERALL_DEADLINE_MS = 15_000; // cold cache is ~30 parallel calls
+/** Pages of one list asked for at once. 23 at once is how a walk trips a rate limit. */
+const PAGE_CONCURRENCY = 4;
+
+/**
+ * ONE READER OF PROPOLY, EVERY SCREEN READS ITS COPY (27 Sep 2026).
+ *
+ * Propoly caps our key (40,000 calls, the last they told us) and gives us no
+ * webhooks, so we have to poll - and we were polling from everywhere. Every
+ * screen that showed a deal walked Propoly itself when its own copy was a
+ * minute old: the board, each drawer tab, applications, the portals, company
+ * figures, and the TLE portal next door doing the same with the same key.
+ * Around 10,000-15,000 calls on a working day, and the key ran dry on 21 Sep.
+ *
+ * Now the watcher cron is the one reader. Every five minutes in office hours
+ * (every half hour otherwise) it walks the deals and saves them in
+ * propoly_cache; the property->manager book once a day; completed deals once
+ * an hour. Everything else reads the saved copy - which the TLE portal reads
+ * too - and checks the database for a newer one every thirty seconds. That is
+ * about 1,500 calls a day however many people have the board open.
+ *
+ * A screen walks Propoly itself only when the saved copy is well past due
+ * (the cron has stopped), and then only one walk runs at a time across every
+ * process of both products, because the walker claims a row first. A walk
+ * that fails holds its claim, which is the back-off: nobody re-walks into a
+ * rate limit straight away. "Refresh now" on the board asks for a walk out of
+ * turn, at most once a minute.
+ */
+type Book = "deals" | "managers" | "completes";
+const SNAPSHOT_KEY: Record<Book, string> = { deals: "deals_v3", managers: "managers", completes: "completes-v4" };
+const CHECK_STORE_MS = 30_000;
+const CLAIM_MS = 3 * 60_000;
+const MIN = 60_000;
+/** How often the cron re-reads each book: [in office hours, outside them]. */
+const DUE_MS: Record<Book, [number, number]> = {
+  deals: [4 * MIN, 30 * MIN],
+  managers: [24 * 60 * MIN, 24 * 60 * MIN],
+  completes: [60 * MIN, 3 * 60 * MIN],
+};
+/** How old a saved copy may get before a screen stops trusting the cron and reads Propoly itself. */
+const FALLBACK_MS: Record<Book, [number, number]> = {
+  deals: [20 * MIN, 90 * MIN],
+  managers: [36 * 60 * MIN, 36 * 60 * MIN],
+  completes: [3 * 60 * MIN, 6 * 60 * MIN],
+};
+
+/** Office hours in London: Monday to Friday 8 till 7, Saturday 9 till 5. */
+export function propolyOfficeHours(at = new Date()): boolean {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", weekday: "short", hour: "2-digit", hour12: false })
+      .formatToParts(at)
+      .map((p) => [p.type, p.value])
+  );
+  const h = Number(parts.hour) % 24;
+  if (parts.weekday === "Sun") return false;
+  if (parts.weekday === "Sat") return h >= 9 && h < 17;
+  return h >= 8 && h < 19;
+}
+const pick = (pair: [number, number]) => pair[propolyOfficeHours() ? 0 : 1];
 
 // Progression order (order asc = earliest stage). complete is excluded —
 // those are move-ins, not pipeline; cancelled feeds the page's hidden
@@ -156,14 +207,16 @@ async function listAllInner(
     typeof env.per_page === "number" && env.per_page > 0 ? env.per_page : PER_PAGE;
   const pages = Math.min(Math.ceil(total / perPage), maxPages);
   if (pages > 1) {
-    const rest = await Promise.all(
-      Array.from({ length: pages - 1 }, (_, i) =>
-        propolyGet(`${basePath}${sep}per_page=${PER_PAGE}&page=${i + 2}`)
-      )
-    );
-    for (const res of rest) {
-      const more = res.status === 200 ? rowsOf(res.body) : null;
-      if (more) rows.push(...more);
+    /* A few pages at a time, and the first refusal stops the walk: the rest
+       would only be refused too, and each refusal still counts against the quota. */
+    for (let from = 2; from <= pages; from += PAGE_CONCURRENCY) {
+      const batch = Array.from({ length: Math.min(PAGE_CONCURRENCY, pages - from + 1) }, (_, i) => from + i);
+      const rest = await Promise.all(batch.map((n) => propolyGet(`${basePath}${sep}per_page=${PER_PAGE}&page=${n}`)));
+      for (const res of rest) {
+        const more = res.status === 200 ? rowsOf(res.body) : null;
+        if (!more) return null;
+        rows.push(...more);
+      }
     }
   }
   // A silently-dropped page must fail the whole fetch — callers CACHE these
@@ -183,20 +236,134 @@ interface Manager {
   name: string;
 }
 
-let propCache: { at: number; map: Map<string, Manager> } | null = null;
+/* Every copy of this module in the build shares one set of books (the build
+   carries it several times over; see lib/business/propoly.ts on the token). */
+interface Held<T> {
+  at: number; // when this copy was read from Propoly
+  checkedAt: number; // when we last asked the database for a newer one
+  data: T;
+}
+interface Books {
+  deals: Held<CachedDeal[]> | null;
+  managers: Held<Map<string, Manager>> | null;
+  completes: Held<CompletedDeal[]> | null;
+  inflight: Map<string, Promise<unknown>>;
+}
+declare global {
+  // eslint-disable-next-line no-var
+  var __propolyBooks: Books | undefined;
+}
+const books: Books = (globalThis.__propolyBooks ??= { deals: null, managers: null, completes: null, inflight: new Map() });
 
-async function propertyManagers(): Promise<Map<string, Manager> | null> {
-  if (propCache && Date.now() - propCache.at < PROPS_TTL_MS) return propCache.map;
-  // Cold start (fresh deploy): seed from the persisted last-good pull so we
-  // only ask Propoly for the refresh, not the whole 23-page book.
-  if (!propCache) {
-    const snap = await loadSnapshot<[string, Manager][]>("managers");
+/** When the saved copy of a book was written, or null if there is none. */
+async function storedAt(book: Book): Promise<number | null> {
+  if (!hasDb()) return books[book]?.at ?? null;
+  const rows = await q<{ updated_at: string | Date }>(`SELECT updated_at FROM propoly_cache WHERE key = $1`, [SNAPSHOT_KEY[book]]).catch(() => []);
+  return rows[0] ? new Date(rows[0].updated_at).getTime() : null;
+}
+
+/** Take this book's saved copy into memory if it is newer than ours. */
+async function adoptStored(book: Book): Promise<void> {
+  const held = books[book] as Held<unknown> | null;
+  const at = await storedAt(book);
+  if (at != null && (!held || at > held.at)) {
+    const snap = await loadSnapshot<unknown>(SNAPSHOT_KEY[book]);
     if (snap) {
-      propCache = { at: snap.savedAt, map: new Map(snap.data) };
-      if (Date.now() - snap.savedAt < PROPS_TTL_MS) return propCache.map;
+      const data = book === "managers" ? new Map(snap.data as [string, Manager][]) : snap.data;
+      (books as unknown as Record<Book, Held<unknown>>)[book] = { at: snap.savedAt, checkedAt: Date.now(), data };
+      return;
     }
   }
-  return oneWalk("managers", refreshManagers);
+  if (held) held.checkedAt = Date.now();
+}
+
+/**
+ * The claim that makes one walker across every process of both products: a
+ * row in propoly_cache that only one of them can take in any CLAIM_MS. It is
+ * not given back when a walk fails - that is the back-off.
+ */
+async function claimWalk(book: Book, holdMs = CLAIM_MS): Promise<boolean> {
+  if (!hasDb()) return true;
+  const rows = await q<{ key: string }>(
+    `INSERT INTO propoly_cache (key, data, updated_at) VALUES ($1, '{}', NOW())
+     ON CONFLICT (key) DO UPDATE SET updated_at = NOW()
+       WHERE propoly_cache.updated_at < NOW() - ($2::int * INTERVAL '1 millisecond')
+     RETURNING key`,
+    [`claim:${book}`, holdMs]
+  ).catch(() => undefined);
+  /* The database not answering must not stop Propoly being read at all:
+     fail open, and the in-process guard still keeps it to one walk here. */
+  if (rows === undefined) return true;
+  return rows.length > 0;
+}
+
+const WALKERS: Record<Book, () => Promise<unknown>> = {
+  deals: () => runDealsFetch(),
+  managers: () => refreshManagers(),
+  completes: () => refreshCompletes(),
+};
+
+/** Read one book from Propoly now, if nobody else is. Null when we did not walk or it failed. */
+async function walkBook<T>(book: Book, holdMs?: number): Promise<T | null> {
+  return oneWalk(`walk:${book}`, async () => {
+    if (!(await claimWalk(book, holdMs))) return null;
+    return (await WALKERS[book]()) as T | null;
+  });
+}
+
+/**
+ * A book as a screen sees it: the saved copy, re-checked against the database
+ * every thirty seconds. Propoly itself only when that copy is long overdue.
+ */
+async function readBook<T>(book: Book): Promise<T | null> {
+  const now = Date.now();
+  let held = books[book] as Held<T> | null;
+  if (!held || now - held.checkedAt >= CHECK_STORE_MS) {
+    await adoptStored(book);
+    held = books[book] as Held<T> | null;
+  }
+  if (held && Date.now() - held.at <= pick(FALLBACK_MS[book])) return held.data;
+  const fresh = await walkBook<T>(book);
+  return fresh ?? (books[book] as Held<T> | null)?.data ?? null;
+}
+
+/**
+ * The cron's turn: re-read whichever books are due, then hand back what was
+ * done. Deals every five minutes in office hours and half-hourly outside,
+ * managers daily, completed deals hourly.
+ */
+export async function refreshPropolyBooks(): Promise<Record<Book, string>> {
+  const out = {} as Record<Book, string>;
+  for (const book of ["managers", "deals", "completes"] as Book[]) {
+    const at = await storedAt(book);
+    const age = at == null ? Infinity : Date.now() - at;
+    if (age < pick(DUE_MS[book])) {
+      out[book] = `fresh (${Math.round(age / MIN)} min old)`;
+      continue;
+    }
+    const got = await walkBook(book);
+    out[book] = got ? "read from Propoly" : "not read (someone else is reading it, or Propoly refused)";
+    await adoptStored(book);
+  }
+  return out;
+}
+
+/** "Refresh now" on the board: a walk of the deals out of turn, at most once a minute. */
+export async function refreshPropolyDealsNow(): Promise<{ savedAt: number | null; walked: boolean }> {
+  const at = await storedAt("deals");
+  let walked = false;
+  if (at == null || Date.now() - at >= MIN) walked = Boolean(await walkBook("deals", MIN));
+  await adoptStored("deals");
+  return { savedAt: books.deals?.at ?? null, walked };
+}
+
+/** When the deals the screens are showing were read from Propoly. */
+export async function propolyDealsSavedAt(): Promise<number | null> {
+  return storedAt("deals");
+}
+
+async function propertyManagers(): Promise<Map<string, Manager> | null> {
+  return readBook<Map<string, Manager>>("managers");
 }
 
 /**
@@ -211,7 +378,7 @@ async function propertyManagers(): Promise<Map<string, Manager> | null> {
  * Propoly answered with 429s: 37 in one minute on the morning of 16 Sep. The
  * second caller now waits for the first walk instead of starting its own.
  */
-const inflight = new Map<string, Promise<unknown>>();
+const inflight = books.inflight;
 
 function oneWalk<T>(key: string, walk: () => Promise<T>): Promise<T> {
   const running = inflight.get(key) as Promise<T> | undefined;
@@ -228,7 +395,7 @@ function oneWalk<T>(key: string, walk: () => Promise<T>): Promise<T> {
 
 async function refreshManagers(): Promise<Map<string, Manager> | null> {
   const rows = await listAll("/api/v1/properties", 40); // 574 props ≈ 23 pages
-  if (!rows) return propCache?.map ?? null; // stale beats nothing
+  if (!rows) return null;
   const map = new Map<string, Manager>();
   for (const p of rows) {
     const uuid = typeof p.uuid === "string" ? p.uuid : null;
@@ -241,8 +408,8 @@ async function refreshManagers(): Promise<Map<string, Manager> | null> {
       .trim();
     map.set(uuid, { email, name });
   }
-  propCache = { at: Date.now(), map };
-  void saveSnapshot("managers", [...map.entries()]);
+  books.managers = { at: Date.now(), checkedAt: Date.now(), data: map };
+  await saveSnapshot("managers", [...map.entries()]);
   return map;
 }
 
@@ -256,8 +423,6 @@ interface CachedDeal {
   managerEmail: string | null;
   managerName: string | null;
 }
-
-let dealsCache: { at: number; deals: CachedDeal[] } | null = null;
 
 const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -430,41 +595,8 @@ function firstParty(
   return (leadAt >= 0 ? list[leadAt] : list[0]) ?? null;
 }
 
-let dealsInflight: Promise<CachedDeal[] | null> | null = null;
-
 async function fetchAllDeals(): Promise<CachedDeal[] | null> {
-  if (dealsCache && Date.now() - dealsCache.at < DEALS_TTL_MS) return dealsCache.deals;
-  if (!dealsCache) {
-    const snap = await loadSnapshot<CachedDeal[]>("deals_v3");
-    if (snap) {
-      dealsCache = { at: snap.savedAt, deals: snap.data };
-      if (Date.now() - snap.savedAt < DEALS_TTL_MS) return dealsCache.deals;
-    }
-  }
-
-  // Stale but recent: hand it back now and refresh behind the request, so a
-  // board opened a minute after the last one is instant instead of paying the
-  // ~1s round trip again.
-  if (dealsCache && Date.now() - dealsCache.at < DEALS_STALE_MAX_MS) {
-    void startDealsRefresh().catch(() => null);
-    return dealsCache.deals;
-  }
-  return startDealsRefresh();
-}
-
-// One walk at a time. There was no inflight guard here at all: two people
-// opening the board within the same second each fired their own ~30-call
-// Propoly fetch, and so did every tab of the agent dashboard.
-function startDealsRefresh(): Promise<CachedDeal[] | null> {
-  if (dealsInflight) return dealsInflight;
-  const work = runDealsFetch();
-  dealsInflight = work;
-  void work
-    .catch(() => null)
-    .finally(() => {
-      if (dealsInflight === work) dealsInflight = null;
-    });
-  return work;
+  return readBook<CachedDeal[]>("deals");
 }
 
 async function runDealsFetch(): Promise<CachedDeal[] | null> {
@@ -475,9 +607,9 @@ async function runDealsFetch(): Promise<CachedDeal[] | null> {
     listAll("/api/v1/deals?tenancy_status=cancelled", 1),
   ]);
   const keys = [...ACTIVE_STATUSES, "cancelled"];
-  // Any missing status list would under-count that stage for the cache TTL —
-  // serve the previous complete snapshot instead (stale beats silently wrong).
-  if (statusLists.some((l) => l == null)) return dealsCache?.deals ?? null;
+  // Any missing status list would under-count that stage — keep the previous
+  // complete copy (the readers fall back to it) rather than save a short one.
+  if (statusLists.some((l) => l == null)) return null;
 
   const deals: CachedDeal[] = [];
   statusLists.forEach((rows, i) => {
@@ -495,8 +627,8 @@ async function runDealsFetch(): Promise<CachedDeal[] | null> {
     }
   });
 
-  dealsCache = { at: Date.now(), deals };
-  void saveSnapshot("deals_v3", deals);
+  books.deals = { at: Date.now(), checkedAt: Date.now(), data: deals };
+  await saveSnapshot("deals_v3", deals);
   return deals;
 }
 
@@ -626,64 +758,48 @@ interface CompletedDeal {
   uuid: string | null;
 }
 
-let completesCache: { at: number; completes: CompletedDeal[] } | null = null;
-const COMPLETES_TTL_MS = 10 * 60_000;
-
+// Saved as "completes-v4". v2 lacked address/rent; v3 was written by the
+// mapper that read Propoly's pre-6-Sep field names, so a stored v3 blob has a
+// null date and null agent on every row — the silent-zero shape.
 async function ensureCompletes(): Promise<CompletedDeal[] | null> {
-  if (completesCache && Date.now() - completesCache.at < COMPLETES_TTL_MS) {
-    return completesCache.completes;
-  }
-  if (!completesCache) {
-    // v4 snapshot key. v2 lacked address/rent; v3 was written by the mapper
-    // that read Propoly's pre-6-Sep field names, so a stored v3 blob has a
-    // null date and null agent on every row — the silent-zero shape. Both
-    // need a clean re-pull rather than a migration.
-    const snap = await loadSnapshot<CompletedDeal[]>("completes-v4");
-    if (snap) {
-      completesCache = { at: snap.savedAt, completes: snap.data };
-      if (Date.now() - snap.savedAt < COMPLETES_TTL_MS) return completesCache.completes;
-    }
-  }
-  return oneWalk("completes", refreshCompletes);
+  return readBook<CompletedDeal[]>("completes");
 }
 
 async function refreshCompletes(): Promise<CompletedDeal[] | null> {
   const rows = await listAll("/api/v1/deals?tenancy_status=complete", 40);
-  if (!rows) return completesCache?.completes ?? null;
-  completesCache = {
-    at: Date.now(),
-    /* Same reshape as the pipeline above (see the header note) — these are
-       /deals rows too, just the completed ones. Worth spelling out why this
-       mattered more than the board did: `date` feeds a [start, end] window and
-       `propertyUuid` feeds the agent join, and BOTH of those fail closed. A
-       null date is skipped by the window test and a null uuid is skipped by
-       `if (!mgr) continue`, so a shape change here does not error and does not
-       blank a screen — it quietly reports every agent as having moved nobody
-       in. Zero is a plausible-looking figure, which is exactly what makes it
-       the dangerous kind of wrong. */
-    completes: rows.map((r) => {
-      const terms = obj(r.terms);
-      const address = str(obj(r.property).address) ?? str(r.property_address);
-      return {
-        date: str(terms.move_in_date) ?? str(r.move_in_date),
-        // Propoly stopped sending this on 6 Sep; null until they say otherwise.
-        service: str(r.tenancy_service_level),
-        propertyUuid: propertyUuidOf(r),
-        // Multi-line in the old shape, comma-separated in the new. Flattened
-        // either way so a table cell does not have to care.
-        address: address
-          ? address.replace(/\s*\n\s*/g, ", ").replace(/,\s*,/g, ",").trim()
-          : null,
-        rentPcm: (() => {
-          const pence = num(terms.price_pcm_pence) ?? num(r.price_pcm_pence);
-          return pence == null ? null : Math.round(pence) / 100;
-        })(),
-        uuid: str(r.uuid),
-      };
-    }),
-  };
-  void saveSnapshot("completes-v4", completesCache.completes);
-  return completesCache.completes;
+  if (!rows) return null;
+  /* Same reshape as the pipeline above (see the header note) — these are
+     /deals rows too, just the completed ones. Worth spelling out why this
+     mattered more than the board did: `date` feeds a [start, end] window and
+     `propertyUuid` feeds the agent join, and BOTH of those fail closed. A
+     null date is skipped by the window test and a null uuid is skipped by
+     `if (!mgr) continue`, so a shape change here does not error and does not
+     blank a screen — it quietly reports every agent as having moved nobody
+     in. Zero is a plausible-looking figure, which is exactly what makes it
+     the dangerous kind of wrong. */
+  const completes: CompletedDeal[] = rows.map((r) => {
+    const terms = obj(r.terms);
+    const address = str(obj(r.property).address) ?? str(r.property_address);
+    return {
+      date: str(terms.move_in_date) ?? str(r.move_in_date),
+      // Propoly stopped sending this on 6 Sep; null until they say otherwise.
+      service: str(r.tenancy_service_level),
+      propertyUuid: propertyUuidOf(r),
+      // Multi-line in the old shape, comma-separated in the new. Flattened
+      // either way so a table cell does not have to care.
+      address: address
+        ? address.replace(/\s*\n\s*/g, ", ").replace(/,\s*,/g, ",").trim()
+        : null,
+      rentPcm: (() => {
+        const pence = num(terms.price_pcm_pence) ?? num(r.price_pcm_pence);
+        return pence == null ? null : Math.round(pence) / 100;
+      })(),
+      uuid: str(r.uuid),
+    };
+  });
+  books.completes = { at: Date.now(), checkedAt: Date.now(), data: completes };
+  await saveSnapshot("completes-v4", completes);
+  return completes;
 }
 
 const normName = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -846,7 +962,7 @@ export async function getPropolyBusinessStats(
     const deals = await fetchAllDeals();
     if (!deals) return null;
 
-    await ensureCompletes();
+    const completes = await ensureCompletes();
 
     const active = deals.filter((d) => d.statusKey !== "cancelled");
     return {
@@ -857,7 +973,7 @@ export async function getPropolyBusinessStats(
         label: STATUS_INFO[key].label,
         count: active.filter((d) => d.statusKey === key).length,
       })),
-      moveInsThisMonth: (completesCache?.completes ?? []).filter((c) =>
+      moveInsThisMonth: (completes ?? []).filter((c) =>
         c.date?.startsWith(month)
       ).length,
       generatedAt: new Date().toISOString(),
