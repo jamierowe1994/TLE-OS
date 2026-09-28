@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import Segmented from "@/components/Segmented";
 import DoodleIcon from "@/components/DoodleIcon";
+import { AGENT_GUIDES } from "@/lib/agent-guides";
+import { openGuide } from "@/lib/guide-sheet";
 import { SAMPLE_WHO, SIDES, STEPS_FOR, type ShowroomScreen, type ShowroomSide, type ShowroomStep } from "@/lib/showroom/content";
 
 /**
@@ -22,6 +24,7 @@ import { SAMPLE_WHO, SIDES, STEPS_FOR, type ShowroomScreen, type ShowroomSide, t
 type EmailMeta = {
   id: string;
   name: string;
+  to: string;
   when: string;
   summary: string;
   status: { key: "live" | "ready" | "built" | "written" | "planned"; says: string };
@@ -177,8 +180,9 @@ function StepView({
       </section>
 
       {step.screens.length > 0 && <Screens side={side} screens={step.screens} token={token} />}
+      {step.guide && <GuideShots guideId={step.guide} href={step.agent.href} />}
 
-      <Emails ids={step.emails} />
+      <Emails ids={step.emails} showTo={side === "agent"} />
 
       <section className="grid gap-5 md:grid-cols-2">
         <div className="rounded-3xl border border-line/70 bg-card p-5">
@@ -310,9 +314,59 @@ function Screens({ side, screens, token }: { side: ShowroomSide; screens: Showro
   );
 }
 
+/* ─────────────────────── the agent's screens ─────────────────────── */
+
+/**
+ * An agent's screens are their own live OS, so rather than frame a real
+ * record the step shows the screenshots its pop-up guide was written round
+ * (lib/agent-guides), one at a time with the guide's own words, and a button
+ * that opens the whole guide over the page.
+ */
+function GuideShots({ guideId, href }: { guideId: string; href?: string }) {
+  const guide = AGENT_GUIDES.find((g) => g.id === guideId);
+  const shots = (guide?.steps ?? []).filter((s) => s.image);
+  const [i, setI] = useState(0);
+  if (!guide || !shots.length) return null;
+  const shot = shots[Math.min(i, shots.length - 1)];
+  return (
+    <section className="rounded-3xl border border-line/70 bg-card p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted">
+          <DoodleIcon name="home" size={13} /> What you see
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => openGuide(guide.id)} className="rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-semibold text-page">
+            Walk me through it
+          </button>
+          {href && (
+            <Link href={href} className="rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] text-muted transition-colors hover:text-ink">
+              Open the real screen
+            </Link>
+          )}
+        </div>
+      </div>
+      <div className="mt-4 overflow-hidden rounded-xl border border-line/80 bg-page">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={shot.image} alt={shot.title} className="block w-full" />
+      </div>
+      <div className="mt-3 flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-[14px]">{shot.title}</p>
+          <p className="mt-1 text-[12.5px] leading-relaxed text-muted">{shot.body}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button type="button" onClick={() => setI((n) => Math.max(0, n - 1))} disabled={i === 0} aria-label="Previous screen" className="flex h-8 w-8 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted disabled:opacity-40">‹</button>
+          <span className="figures text-[11.5px] text-muted">{i + 1} / {shots.length}</span>
+          <button type="button" onClick={() => setI((n) => Math.min(shots.length - 1, n + 1))} disabled={i >= shots.length - 1} aria-label="Next screen" className="flex h-8 w-8 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted disabled:opacity-40">›</button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* ─────────────────────────── the emails ─────────────────────────── */
 
-function Emails({ ids }: { ids: string[] }) {
+function Emails({ ids, showTo = false }: { ids: string[]; showTo?: boolean }) {
   const [rows, setRows] = useState<EmailMeta[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<EmailMeta | null>(null);
@@ -334,7 +388,7 @@ function Emails({ ids }: { ids: string[] }) {
   return (
     <section className="rounded-3xl border border-line/70 bg-card p-5">
       <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted">
-        <DoodleIcon name="mail" size={13} /> The emails they get
+        <DoodleIcon name="mail" size={13} /> {showTo ? "The emails at this step" : "The emails they get"}
       </p>
       {!ids.length ? (
         <p className="mt-2 text-[13px] text-muted">No email goes out at this step.</p>
@@ -350,7 +404,10 @@ function Emails({ ids }: { ids: string[] }) {
           {rows.map((e) => (
             <li key={e.id} className="flex flex-wrap items-start gap-x-4 gap-y-2 py-3">
               <div className="min-w-0 flex-1">
-                <p className="text-[14px]">{e.name}</p>
+                <p className="text-[14px]">
+                  {e.name}
+                  {showTo && <span className="ml-2 rounded-full bg-panel px-2 py-0.5 align-middle text-[10.5px] font-semibold text-muted">{e.to}</span>}
+                </p>
                 <p className="mt-0.5 text-[12px] text-muted">{e.when}</p>
                 <p className="mt-1.5 text-[12.5px] leading-relaxed">{e.summary}</p>
               </div>

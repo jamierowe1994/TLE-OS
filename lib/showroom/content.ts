@@ -51,6 +51,8 @@ export interface ShowroomStep {
   screens: ShowroomScreen[];
   /** Catalogue ids, in the order they go. */
   emails: string[];
+  /** Agent steps: the pop-up guide (lib/agent-guides) whose screenshots show the screen. */
+  guide?: string;
   /** Named honestly: what is not there yet. */
   notYet?: string[];
 }
@@ -58,7 +60,7 @@ export interface ShowroomStep {
 export const SIDES: { id: ShowroomSide; label: string; says: string; ready: boolean }[] = [
   { id: "tenant", label: "Tenant", says: "From the first email to the day they get the keys.", ready: true },
   { id: "landlord", label: "Landlord", says: "From the valuation enquiry to a let and managed home.", ready: true },
-  { id: "agent", label: "Agent", says: "The same journeys from your side of the desk. Coming after the landlord.", ready: false },
+  { id: "agent", label: "Agent", says: "The same journeys from your side of the desk: the screens you work in, the emails you send, and the ones that come to you.", ready: true },
 ];
 
 export const TENANT_STEPS: ShowroomStep[] = [
@@ -108,6 +110,20 @@ export const TENANT_STEPS: ShowroomStep[] = [
       { label: "On a phone", href: "/tenant/demo", stage: "matched", device: "phone" },
     ],
     emails: [],
+  },
+  {
+    id: "homes",
+    title: "Their first email, and homes that fit",
+    lead: "The first thing a tenant hears depends on how they reached us: an enquiry about one home gets an answer about that home, and someone registered with no home in mind gets \"let's find you a home\". Then the homes that fit.",
+    sees: [
+      "About the home they asked about: is it still there, the rent, and what moving in costs - within five minutes.",
+      "\"Let's find you a home\" when an agent adds them with nothing in mind.",
+      "The homes the agent picks for them, then a follow-up if they go quiet.",
+      "New homes by email, at most once a day, if they save a search in their area.",
+    ],
+    agent: { says: "Qualify them on the lead, then press Email properties with the homes ticked.", href: "/leads?side=tenant" },
+    screens: [{ label: "Homes in their area", href: "/tenant/demo/homes", stage: "matched", device: "desktop" }],
+    emails: ["tenant-enquiry-reply", "tenant-added-welcome", "tenant-matches", "tenant-matches-again", "tenant-home-alert"],
   },
   {
     id: "viewing",
@@ -428,15 +444,143 @@ Object.assign(EMAIL_WORDS, {
   "landlord-message-reply": { when: "When you reply to their message", says: "Your reply, and a button back to their messages.", status: "live" },
 });
 
-/** The steps for a side; the agent's are still to come. */
-export const STEPS_FOR: Record<ShowroomSide, ShowroomStep[]> = { tenant: TENANT_STEPS, landlord: LANDLORD_STEPS, agent: [] };
+/* ─────────────────────────── the agent ─────────────────────────── */
+
+export const AGENT_STEPS: ShowroomStep[] = [
+  {
+    id: "account",
+    title: "Your account",
+    lead: "You get an invitation, set a password, connect your Outlook and write the few lines about you that go on every presentation.",
+    sees: [
+      "The invitation email, and a link to set your password.",
+      "Setup: your Outlook calendar and email, and your bio.",
+      "A reset link whenever you ask for one.",
+    ],
+    agent: { says: "Everything about you is on your profile.", href: "/profile" },
+    screens: [],
+    emails: ["pilot-invite", "account-verify", "account-reset"],
+  },
+  {
+    id: "leads",
+    title: "A new lead",
+    lead: "Every enquiry lands on Leads within five minutes, tenant and landlord apart. Ring them, log how it went in Next up, and the track along the bottom moves on its own.",
+    sees: [
+      "Leads, split into tenant and landlord, newest first.",
+      "The lead's file: who they are, what they asked, and Next up telling you the one thing to do.",
+      "Three tries, then nurture - never nothing.",
+    ],
+    agent: { says: "Open a lead from Leads, or add one with Add new lead.", href: "/leads" },
+    screens: [],
+    emails: ["tenant-enquiry-reply", "tenant-added-welcome", "tenant-matches"],
+  },
+  {
+    id: "appraisals",
+    title: "Market appraisals",
+    lead: "From booking the visit to a signed landlord: the confirmation, the presentation, the figure, and the terms to sign.",
+    sees: [
+      "The appraisals board, worst first.",
+      "The appraisal file, with Next up.",
+      "Building the presentation: the market, what has let, and your best-price guide.",
+    ],
+    agent: { says: "Book from the lead, then work it from Market Appraisals.", href: "/market-appraisals" },
+    guide: "appraisals",
+    screens: [],
+    emails: ["appraisal-confirm", "appraisal-video-chase", "appraisal-post", "landlord-contract-pack", "landlord-contract-nudge"],
+  },
+  {
+    id: "listings",
+    title: "Getting a listing live",
+    lead: "From a signed landlord to live on Rightmove, Zoopla and OnTheMarket: the photos, the advert, and the push.",
+    sees: [
+      "The listings board, and drafts that go cold.",
+      "The advert, with a writer that drafts it for you.",
+      "Push it live, portal by portal.",
+    ],
+    agent: { says: "Open the listing from Listings.", href: "/listings" },
+    guide: "listings",
+    screens: [],
+    emails: [],
+  },
+  {
+    id: "viewings",
+    title: "Viewings",
+    lead: "Booking a viewing into your own Outlook, the confirmation you check and send, your day, and what happened afterwards.",
+    sees: [
+      "Booking from the lead: the property, the time, and your diary around it.",
+      "Your day and your week on Viewings.",
+      "Did they turn up, how did it land, and feedback for the landlord.",
+    ],
+    agent: { says: "Book from the lead; your day is on Viewings.", href: "/viewings" },
+    guide: "viewings",
+    screens: [],
+    emails: ["tenant-passport-invite", "viewing-moved", "viewing-cancelled", "viewing-rebook"],
+  },
+  {
+    id: "applications",
+    title: "Applications and the handover",
+    lead: "Every application on one board. When the landlord says yes, you hand it over to the deal and the tenant, the landlord and pre-tenancy all hear.",
+    sees: [
+      "The applications board and each application's file.",
+      "Hand over to the deal, once it is a yes.",
+      "An email to you when your deal moves on.",
+    ],
+    agent: { says: "Open an application from Applications.", href: "/applications" },
+    guide: "applications",
+    screens: [],
+    emails: ["application-its-yours", "application-accepted-landlord", "deal-moved"],
+  },
+  {
+    id: "plc",
+    title: "Handing over the PLC pack",
+    lead: "The landlord's documents, the tenant and the tenancy, checked by you and sent to the compliance team, who approve it or send it back with a reason.",
+    sees: [
+      "The pack, section by section, with what is missing.",
+      "Ready to send, and what happens with compliance.",
+      "If it comes back, what to fix.",
+    ],
+    agent: { says: "It starts from the application.", href: "/applications" },
+    guide: "agent-plc",
+    screens: [],
+    emails: [],
+  },
+  {
+    id: "compliance",
+    title: "Certificates and your own compliance",
+    lead: "Two kinds of reminder come to you: the homes you look after with a certificate running out, and the things you hold personally - your training and checks.",
+    sees: [
+      "A morning email when a certificate on one of your homes is due.",
+      "A reminder when something of your own is missing or running out.",
+    ],
+    agent: { says: "The certificates are on Compliance; your own are on your profile.", href: "/compliance" },
+    screens: [],
+    emails: ["compliance-chase-agent", "own-compliance"],
+  },
+];
+
+Object.assign(EMAIL_WORDS, {
+  "tenant-enquiry-reply": { when: "Within five minutes of an enquiry about one home", says: "Is it still available, the rent, what moving in costs, and how to arrange a viewing." },
+  "tenant-added-welcome": { when: "When you add a tenant with no home in mind", says: "What we need to know, the passport to tell us in, and a promise to send what fits." },
+  "tenant-matches": { when: "When you press Email properties on the lead", says: "The homes you ticked, from you, with a button to their passport." },
+  "tenant-matches-again": { when: "Four days after the homes went, if nothing is booked", says: "Have things changed, and what has come on near the homes we sent." },
+  "tenant-home-alert": { when: "At most once a day, when a new home fits their saved search", says: "The new homes that fit, with a one-click way to stop them." },
+  "pilot-invite": { when: "When you are invited to the OS", says: "Your invitation, and a link to set up your account.", status: "live" },
+  "account-verify": { when: "When you set up your account", says: "A link to confirm it is you.", status: "live" },
+  "account-reset": { when: "When you ask to reset your password", says: "A link to choose a new one.", status: "live" },
+  "appraisal-video-chase": { when: "Two days before an appraisal, if you have not recorded a video", says: "To you: scan the code, record a hello on your phone, and it goes out with the presentation." },
+  "deal-moved": { when: "When your deal moves on - references back, agreement out, complete", says: "To you: which deal, what moved, and what happens next.", status: "live" },
+  "compliance-chase-agent": { when: "Each morning a certificate on your homes is 30, 14 or 7 days from running out", says: "To you: which homes, which certificates, and when they run out.", status: "ready" },
+  "own-compliance": { when: "Each morning something of your own is missing or running out", says: "To you: what it is, and when.", status: "ready" },
+});
+
+/** The steps for each side. */
+export const STEPS_FOR: Record<ShowroomSide, ShowroomStep[]> = { tenant: TENANT_STEPS, landlord: LANDLORD_STEPS, agent: AGENT_STEPS };
 
 /** Who the sample is, on each side's screens. */
 export const SAMPLE_WHO: Record<ShowroomSide, string> = {
   tenant: "The sample tenant, Sophie",
   landlord: "The sample landlord, Raj",
-  agent: "A sample agent",
+  agent: "Screens from the agent guides",
 };
 
 /** Every email the showroom shows - the only ones its preview route will render. */
-export const SHOWROOM_EMAIL_IDS: ReadonlySet<string> = new Set([...TENANT_STEPS, ...LANDLORD_STEPS].flatMap((s) => s.emails));
+export const SHOWROOM_EMAIL_IDS: ReadonlySet<string> = new Set([...TENANT_STEPS, ...LANDLORD_STEPS, ...AGENT_STEPS].flatMap((s) => s.emails));

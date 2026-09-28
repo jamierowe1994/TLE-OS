@@ -63,7 +63,8 @@ export function showroomEmailMeta(id: string) {
   const entry = TLE_EMAILS.find((e) => e.id === id);
   if (!entry) return null;
   const words = EMAIL_WORDS[id];
-  return { id, name: entry.name, when: words?.when ?? entry.trigger, summary: words?.says ?? entry.summary, status: statusOf(id) };
+  const to = entry.audience === "tenant" ? "To the tenant" : entry.audience === "landlord" ? "To the landlord" : "To you";
+  return { id, name: entry.name, when: words?.when ?? entry.trigger, summary: words?.says ?? entry.summary, to, status: statusOf(id) };
 }
 
 export async function renderShowroomEmail(id: string): Promise<{ subject: string; html: string } | null> {

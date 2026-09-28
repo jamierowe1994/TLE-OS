@@ -166,7 +166,7 @@ const COMPLIANCE_SAMPLE: Record<string, string> = {
      reviewer cannot check by eye, and a dead one is only found by a customer. */
   link: `${SITE}/tenant/welcome`,
   rows: [
-    "<strong>41 Harewood Road</strong> — Gas safety, expires in 12 days",
+    "<strong>8 Recreation Terrace</strong> — Gas safety, expires in 12 days",
     "<strong>8 Lower Station Road</strong> — EICR, expires in 26 days",
     "<strong>2 Norwich Street</strong> — EPC, no certificate on file",
   ]
@@ -304,7 +304,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
     summary:
       "One line and one button: they're in, and here's the way in. Stripped back from a full block document on 29 Aug — everything else it used to say belongs in the first conversation, not the doorway. Hand-rolled on the shared shell, so it is no longer editable in the builder.",
     render: () => {
-      const m = pilotInviteEmail(`${SITE}/join?token=example`, "Rhiannon");
+      const m = pilotInviteEmail(`${SITE}/join?token=example`, "Sam");
       return { subject: m.subject, html: m.html };
     },
   },
@@ -337,7 +337,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
     /* No `doc` since 6 Sep 2026: it is on the shared TLE OS shell with the
        other agent emails, hand-rolled, so the builder no longer owns it. */
     render: () => {
-      const m = certificateChaseEmail({ firstName: "Helen", lines: COMPLIANCE_SAMPLE.rows.split("<br>") });
+      const m = certificateChaseEmail({ firstName: "Sam", lines: COMPLIANCE_SAMPLE.rows.split("<br>") });
       return { subject: m.subject, html: m.html };
     },
   },
@@ -353,7 +353,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
       "Michael's list, read back to each agent: what they hold personally that is not on file or running out. Marking it done on the profile stops the reminder.",
     render: () => {
       const m = ownComplianceEmail({
-        firstName: "Helen",
+        firstName: "Sam",
         lines: ["Right to Rent training - expired 2026-08-30", "Professional indemnity - runs out 2026-09-28 (22 days)", "DBS check - not on file"],
       });
       return { subject: m.subject, html: m.html };
@@ -391,7 +391,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
       "One event, one email: what happened and what the agent does next. Held until the Tell agents switch is on; the feed records every move regardless.",
     render: () => {
       const m = dealMovedEmail(
-        { id: 1, dealId: "d1", property: "12 Test Street, Northampton", event: "references_back", fromStatus: "references", toStatus: "plc", at: new Date().toISOString(), amount: null, agentEmail: null, agentName: "Rhiannon" } as never,
+        { id: 1, dealId: "d1", property: "8 Recreation Terrace, Nottingham", event: "references_back", fromStatus: "references", toStatus: "plc", at: new Date().toISOString(), amount: null, agentEmail: null, agentName: "Rhiannon" } as never,
         SITE
       );
       return { subject: m.subject, html: m.html };
@@ -589,8 +589,8 @@ export const TLE_EMAILS: CatalogEntry[] = [
     render: () => {
       const m = videoChaseEmail({
         link: `${SITE}/market-appraisals/ma4`,
-        address: "12 Dover Close, Northampton NN5 4WJ",
-        firstName: "Rhiannon",
+        address: "8 Recreation Terrace, Nottingham NG2 3AB",
+        firstName: "Sam",
         whenPretty: "on Thursday",
       });
       return { subject: m.subject, html: m.html };
