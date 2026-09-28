@@ -149,28 +149,60 @@ export function neededFields(p: PropRow, facts: Map<string, FactRow>): FactField
   });
 }
 
+/** What the compliance book holds for a home, where the sweep's columns lean on it. */
+interface CertsOnFile {
+  /** A gas safety record on file (it answers the alarms column). */
+  gas: boolean;
+  /** Gas in date, or the landlord's no-gas flag. */
+  gasOk: boolean;
+  /** An EICR on file and in date. */
+  eicrOk: boolean;
+}
+const NO_CERTS: CertsOnFile = { gas: false, gasOk: false, eicrOk: false };
+/**
+ * The Repairing Standard (James, 28 Sep 2026): a Scottish home counts as
+ * checked when every certificate the standard rests on is held - an in-date
+ * EICR, gas in date (or no gas), and the PAT, alarms and legionella columns.
+ */
+const STANDARD_COLUMNS = ["pat_expiry", "alarms_expiry", "legionella_expiry"];
+
 /**
  * Held means a value or a file. Landlord ID / AML is one column on the sheet:
  * either answers it. Alarms are answered by a gas safety certificate on file.
  */
-function held(key: string, facts: Map<string, FactRow>, gasOnFile = false): boolean {
+function held(key: string, facts: Map<string, FactRow>, certs: CertsOnFile = NO_CERTS): boolean {
   const has = (k: string) => { const f = facts.get(k); return Boolean(f && (f.value || f.file_key)); };
   if (key === "landlord_aml") return has("landlord_aml") || has("landlord_photo_id");
-  if (key === "alarms_expiry") return has(key) || gasOnFile;
+  if (key === "alarms_expiry") return has(key) || certs.gas;
+  if (key === "repairing_standard") return has(key) || standardMet(facts, certs);
   return has(key);
 }
 
-/** Homes with a gas safety certificate on file, from the compliance book (cached; skipped if it is cold). */
-async function gasCertified(): Promise<Set<string>> {
+function standardMet(facts: Map<string, FactRow>, certs: CertsOnFile): boolean {
+  return certs.eicrOk && certs.gasOk && STANDARD_COLUMNS.every((k) => held(k, facts, certs));
+}
+
+type CertIndex = Map<string, CertsOnFile>;
+
+/** What each home holds in the compliance book (cached; skipped if it is cold). */
+async function certified(): Promise<CertIndex> {
   try {
     const got = await Promise.race([getComplianceBook(), new Promise<null>((r) => setTimeout(() => r(null), 3000))]);
-    if (!got) return new Set();
-    return new Set(got.book.properties.filter((e) => e.certs?.gas?.expires != null || e.certs?.gas?.attached).map((e) => String(e.id)));
+    if (!got) return new Map();
+    return new Map(got.book.properties.map((e) => {
+      const gas = e.certs?.gas; const eicr = e.certs?.eicr;
+      return [String(e.id), {
+        gas: gas?.expires != null || Boolean(gas?.attached),
+        gasOk: Boolean(gas?.notRequired) || (gas?.expires != null && gas.expires >= 0),
+        eicrOk: eicr?.expires != null && eicr.expires >= 0,
+      }];
+    }));
   } catch {
-    return new Set();
+    return new Map();
   }
 }
-const gasFor = (p: PropRow, gas: Set<string>) => gas.has(String(p.rex_property_id ?? "")) || gas.has(p.id);
+const certsFor = (p: PropRow, book: CertIndex): CertsOnFile =>
+  book.get(String(p.rex_property_id ?? "")) ?? book.get(p.id) ?? NO_CERTS;
 
 async function load(): Promise<{ props: PropRow[]; facts: Map<string, Map<string, FactRow>> }> {
   const props = await q<PropRow>(
@@ -225,7 +257,7 @@ export function tidyAddress(a: string | null | undefined): string {
 
 export async function sweepList(): Promise<SweepHome[]> {
   if (!hasDb()) return [];
-  const [{ props: all, facts }, gas] = await Promise.all([load(), gasCertified()]);
+  const [{ props: all, facts }, gas] = await Promise.all([load(), certified()]);
   const props = all.filter((p) => !notLetYet(p, facts.get(p.id) ?? new Map()));
   const out: SweepHome[] = props.map((p) => {
     const f = facts.get(p.id) ?? new Map<string, FactRow>();
@@ -243,7 +275,7 @@ export async function sweepList(): Promise<SweepHome[]> {
       since: f.get("letting_agreement_start")?.value ?? f.get("tenancy_start")?.value ?? null,
       hmo: homeIsHmo(p, f),
       needed: need.length,
-      missing: need.filter((n) => !held(n.key, f, gasFor(p, gas))).length,
+      missing: need.filter((n) => !held(n.key, f, certsFor(p, gas))).length,
       checkedAt: signed?.value ?? null,
       checkedBy: signed?.captured_by ?? null,
     };
@@ -333,13 +365,22 @@ export async function sweepDetail(id: string): Promise<SweepDetail | null> {
     certs = null;
   }
 
-  const gasOnFile = Boolean(certs?.find((c) => c.key === "gas" && (c.days != null || c.file)));
+  const gasCert = certs?.find((c) => c.key === "gas");
+  const eicrCert = certs?.find((c) => c.key === "eicr");
+  const onFile: CertsOnFile = {
+    gas: Boolean(gasCert && (gasCert.days != null || gasCert.file)),
+    gasOk: Boolean(gasCert?.notRequired) || (gasCert?.days != null && gasCert.days >= 0),
+    eicrOk: eicrCert?.days != null && eicrCert.days >= 0,
+  };
   const facts: SweepFact[] = FIELDS.filter((x) => x.group !== "Sign-off").map((x) => {
     const r = f.get(x.key);
-    const byGas = x.key === "alarms_expiry" && !(r?.value || r?.file_key) && gasOnFile;
+    const own = Boolean(r?.value || r?.file_key);
+    const byGas = x.key === "alarms_expiry" && !own && onFile.gas;
+    const byStandard = x.key === "repairing_standard" && !own && standardMet(f, onFile);
     return {
-      key: x.key, label: x.label, group: x.group, kind: x.kind, needed: need.has(x.key), held: held(x.key, f, gasOnFile),
-      note: byGas ? "Covered by the gas safety record" : null,
+      key: x.key, label: x.label, group: x.group, kind: x.kind, needed: need.has(x.key), held: held(x.key, f, onFile),
+      note: byGas ? "Covered by the gas safety record"
+        : byStandard ? "Met on the certificates held: EICR and gas in date, PAT, alarms and legionella on file" : null,
       verifiedAt: r?.verified_at ? new Date(r.verified_at).toISOString() : null, verifiedBy: r?.verified_by ?? null,
       value: r?.value ?? null, source: r?.source ?? null, sourceRef: r?.source_ref ?? null, checkedAgainst: r?.checked_against ?? null,
       capturedAt: r ? new Date(r.captured_at).toISOString() : null, capturedBy: r?.captured_by ?? null,
@@ -408,7 +449,7 @@ export interface QueueHome { id: string; address: string; landlord: string | nul
 export async function sectionQueue(section: SectionKey): Promise<QueueHome[]> {
   if (!hasDb()) return [];
   const sec = SECTION_BY_KEY.get(section)!;
-  const [{ props, facts }, gas] = await Promise.all([load(), gasCertified()]);
+  const [{ props, facts }, gas] = await Promise.all([load(), certified()]);
   const own = new Set(sec.fields);
   return props
     .filter((p) => p.payprop_no && !notLetYet(p, facts.get(p.id) ?? new Map()))
@@ -419,7 +460,7 @@ export async function sectionQueue(section: SectionKey): Promise<QueueHome[]> {
       return {
         id: p.id, address: tidyAddress(p.address), landlord: p.landlord_name,
         since: f.get("letting_agreement_start")?.value ?? f.get("tenancy_start")?.value ?? null,
-        missing: need.filter((n) => !held(n.key, f, gasFor(p, gas))).length,
+        missing: need.filter((n) => !held(n.key, f, certsFor(p, gas))).length,
         doneAt: done?.value ?? null, doneBy: done?.captured_by ?? null,
       };
     })
@@ -447,13 +488,13 @@ export interface SweepSummary {
 /** Every let home on the sheets, and for each column how many still lack it. */
 async function missingByColumn(): Promise<Record<string, number>> {
   if (!hasDb()) return {};
-  const [{ props, facts }, gas] = await Promise.all([load(), gasCertified()]);
+  const [{ props, facts }, gas] = await Promise.all([load(), certified()]);
   const out: Record<string, number> = {};
   for (const p of props) {
     if (!p.payprop_no) continue;
     const f = facts.get(p.id) ?? new Map<string, FactRow>();
     if (notLetYet(p, f)) continue;
-    for (const n of neededFields(p, f)) if (!held(n.key, f, gasFor(p, gas))) out[n.label] = (out[n.label] ?? 0) + 1;
+    for (const n of neededFields(p, f)) if (!held(n.key, f, certsFor(p, gas))) out[n.label] = (out[n.label] ?? 0) + 1;
   }
   return out;
 }
