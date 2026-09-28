@@ -1756,7 +1756,7 @@ export default function PassportForm({
           {/* The progress bar: one segment per section, every segment a
               button, so any section can be jumped to. Nothing is gated. */}
           <div className="mt-[var(--pp-foot)]">
-            <div className="flex items-baseline justify-between text-[12.5px] text-muted">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-[12.5px] text-muted">
               <span>
                 Step {step + 1} of {sections.length}
                 <span className="text-ink"> · {sections[step].title}</span>
@@ -1791,7 +1791,8 @@ export default function PassportForm({
         <div className="hidden h-full lg:block lg:p-4 xl:p-6">
           <PassportScene data={d} focus={focus} side={step === 0 ? "front" : "back"} />
         </div>
-        <div className="px-5 py-10 sm:px-10 lg:hidden">
+        {/* Capped, so on a tablet the card is a card and not a wall. */}
+        <div className="mx-auto max-w-[480px] px-5 py-10 sm:px-10 lg:hidden">
           <PassportFlat data={d} focus={focus} side={step === 0 ? "front" : "back"} />
           <p className="mt-6 text-[12.5px] leading-relaxed text-muted">Nothing here is shared with a landlord unless you apply for their property.</p>
         </div>

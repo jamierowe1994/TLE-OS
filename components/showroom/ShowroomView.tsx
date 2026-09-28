@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
+import QRCode from "qrcode";
 import { useRouter, useSearchParams } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import Segmented from "@/components/Segmented";
@@ -38,7 +39,7 @@ const STATUS_TONE: Record<EmailMeta["status"]["key"], string> = {
   planned: "bg-accent-soft text-accent-dark",
 };
 
-export default function ShowroomView({ token }: { token: string }) {
+export default function ShowroomView({ token, phoneOrigin }: { token: string; phoneOrigin: string | null }) {
   const router = useRouter();
   const params = useSearchParams();
   const side = (SIDES.find((s) => s.id === params.get("side"))?.id ?? "tenant") as ShowroomSide;
@@ -136,6 +137,7 @@ export default function ShowroomView({ token }: { token: string }) {
             step={step}
             number={at + 1}
             token={token}
+            phoneOrigin={phoneOrigin}
             prev={at > 0 ? steps[at - 1] : null}
             next={at < steps.length - 1 ? steps[at + 1] : null}
             onGo={(id) => go({ step: id })}
@@ -151,6 +153,7 @@ function StepView({
   step,
   number,
   token,
+  phoneOrigin,
   prev,
   next,
   onGo,
@@ -159,6 +162,7 @@ function StepView({
   step: ShowroomStep;
   number: number;
   token: string;
+  phoneOrigin: string | null;
   prev: ShowroomStep | null;
   next: ShowroomStep | null;
   onGo: (id: string) => void;
@@ -179,7 +183,7 @@ function StepView({
         </ul>
       </section>
 
-      {step.screens.length > 0 && <Screens side={side} screens={step.screens} token={token} />}
+      {step.screens.length > 0 && <Screens side={side} screens={step.screens} token={token} phoneOrigin={phoneOrigin} />}
       {step.guide && <GuideShots guideId={step.guide} href={step.agent.href} />}
 
       <Emails ids={step.emails} showTo={side === "agent"} />
@@ -240,12 +244,23 @@ function srcOf(s: ShowroomScreen, token: string): string {
   return s.stage ? `/tenant/demo/stage?to=${s.stage}&back=${encodeURIComponent(path)}` : path;
 }
 
-function Screens({ side, screens, token }: { side: ShowroomSide; screens: ShowroomScreen[]; token: string }) {
+function Screens({
+  side,
+  screens,
+  token,
+  phoneOrigin,
+}: {
+  side: ShowroomSide;
+  screens: ShowroomScreen[];
+  token: string;
+  phoneOrigin: string | null;
+}) {
   const [i, setI] = useState(0);
   const screen = screens[Math.min(i, screens.length - 1)];
   const [device, setDevice] = useState<"phone" | "desktop">(screen.device ?? "desktop");
   useEffect(() => setDevice(screen.device ?? "desktop"), [screen]);
   const src = srcOf(screen, token);
+  const [scan, setScan] = useState(false);
 
   /* Scaled to fit the column: the page inside is drawn at its real size. */
   const box = useRef<HTMLDivElement>(null);
@@ -277,8 +292,19 @@ function Screens({ side, screens, token }: { side: ShowroomSide; screens: Showro
           <a href={src} target="_blank" rel="noopener noreferrer" className="rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] text-muted transition-colors hover:text-ink">
             Open it full size
           </a>
+          <button
+            type="button"
+            onClick={() => setScan((v) => !v)}
+            aria-expanded={scan}
+            className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[12px] transition-colors ${
+              scan ? "border-ink bg-ink text-page" : "border-line/80 text-muted hover:text-ink"
+            }`}
+          >
+            <DoodleIcon name="camera" size={13} /> On your phone
+          </button>
         </div>
       </div>
+      {scan && <PhoneCode path={src} origin={phoneOrigin} label={screen.label} />}
       {screens.length > 1 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {screens.map((s, n) => (
@@ -311,6 +337,45 @@ function Screens({ side, screens, token }: { side: ShowroomSide; screens: Showro
         {SAMPLE_WHO[side]}. Click around - nothing here is real and nothing is saved.
       </p>
     </section>
+  );
+}
+
+/**
+ * The same screen on a real phone: a code to scan with the camera. Every
+ * screen here is a public demo page (the passport preview, Sophie's area,
+ * Raj's portal, the decks), so the phone opens it with nothing to sign in to.
+ * The code follows the screen picked above it, stage and all.
+ */
+function PhoneCode({ path, origin, label }: { path: string; origin: string | null; label: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [png, setPng] = useState<string | null>(null);
+  useEffect(() => {
+    const full = new URL(path, origin ?? window.location.origin).toString();
+    setUrl(full);
+    let live = true;
+    QRCode.toDataURL(full, { errorCorrectionLevel: "M", margin: 0, scale: 8, color: { dark: "#101014", light: "#ffffff" } })
+      .then((d) => live && setPng(d))
+      .catch(() => live && setPng(null));
+    return () => {
+      live = false;
+    };
+  }, [path, origin]);
+  const local = url ? /^http:\/\/(10|172|192)\./.test(url) : false;
+
+  return (
+    <div className="mt-4 flex flex-col items-center gap-4 rounded-2xl bg-panel p-4 sm:flex-row sm:items-center">
+      <div className="flex h-[132px] w-[132px] shrink-0 items-center justify-center rounded-xl bg-white p-2.5">
+        {png ? <img src={png} alt={`A code that opens ${label} on a phone`} className="h-full w-full" /> : <span aria-label="Making the code" className="block h-5 w-5 animate-spin rounded-full border-2 border-line border-t-accent-dark" />}
+      </div>
+      <div className="min-w-0 text-center sm:text-left">
+        <p className="text-[13.5px]">Scan it with your phone&apos;s camera</p>
+        <p className="mt-1 text-[12px] leading-relaxed text-muted">
+          Opens {label.toLowerCase()} on the phone itself, at this same step. Nothing to sign in to.
+          {local && " Your phone needs to be on the same wifi as this computer."}
+        </p>
+        {url && <p className="mt-2 break-all text-[11px] text-muted/80">{url}</p>}
+      </div>
+    </div>
   );
 }
 
