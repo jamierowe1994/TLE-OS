@@ -513,6 +513,9 @@ const MACHINE_ROUTES = [
   /* The clean sweep's running count (28 Sep 2026): counts only, and it checks
      the cron key or a session itself, failing shut without CRON_SECRET. */
   "/api/clean-sweep/summary",
+  /* PayProp's files, read only (28 Sep 2026): cron key or see:wiring, checked
+     in the route, failing shut without CRON_SECRET. */
+  "/api/payprop/attachments",
   "/api/reminders/run",
 ];
 

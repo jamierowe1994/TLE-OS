@@ -83,44 +83,9 @@ export async function payPropGet(
   path: string,
   params?: Record<string, string>
 ): Promise<PayPropResponse> {
-  // An API key if we have one; otherwise borrow a bearer token from the
-  // portal, which owns the single OAuth connection.
-  const key = payPropKeyFor(account);
-  let auth: string | null = null;
-  if (key) {
-    if (!payPropKeyLooksValid(key)) {
-      return {
-        status: 0, ok: false, result: null,
-        error: "The key set for this agency isn't shaped like a PayProp key (they are 60-character padded base64) — refusing to send it, in case it belongs to another system.",
-      };
-    }
-    auth = `APIkey ${key}`;
-  } else {
-    /* Our own OAuth connection first (the shared payprop_tokens row, refreshed
-       with the client id and secret on THIS service), and the portal's bridge
-       only as the fallback it used to be. 5 Sep: the OS owns the connection
-       now; the portal is on its way out. */
-    try {
-      const { payPropAccessToken, payPropClient } = await import("@/lib/business/payprop");
-      if (payPropClient(account)) {
-        const own = await payPropAccessToken(account);
-        if (own) auth = `Bearer ${own}`;
-      }
-    } catch {
-      /* fall through to the bridge */
-    }
-  }
-  if (!auth) {
-    const { payPropBearer, bridgeConfigured } = await import("@/lib/payprop-bridge");
-    if (!bridgeConfigured()) {
-      return { status: 0, ok: false, result: null, error: "No PayProp access on this environment — set PORTAL_ORIGIN and OS_BRIDGE_SECRET, or an API key." };
-    }
-    const bearer = await payPropBearer(account);
-    if (!bearer) {
-      return { status: 0, ok: false, result: null, error: "The portal wouldn't lend a PayProp token — check OS_BRIDGE_SECRET matches on both." };
-    }
-    auth = `Bearer ${bearer}`;
-  }
+  const got = await authFor(account);
+  if (!got.auth) return { status: 0, ok: false, result: null, error: got.error ?? "No PayProp access." };
+  const auth = got.auth;
 
   const url = new URL(`${base()}/${path.replace(/^\//, "")}`);
   for (const [k, v] of Object.entries(params ?? {})) url.searchParams.set(k, v);
@@ -152,4 +117,66 @@ export async function payPropGet(
       `HTTP ${res.status}`)
     : null;
   return { status: res.status, ok: res.ok, result: data, error: errText };
+}
+
+/** How we sign a request to this agency's PayProp: its API key, our own OAuth connection, or the portal's bridge. */
+async function authFor(account: PayPropAccountId): Promise<{ auth: string | null; error?: string }> {
+  // An API key if we have one; otherwise borrow a bearer token from the
+  // portal, which owns the single OAuth connection.
+  const key = payPropKeyFor(account);
+  let auth: string | null = null;
+  if (key) {
+    if (!payPropKeyLooksValid(key)) {
+      return { auth: null, error: "The key set for this agency isn't shaped like a PayProp key (they are 60-character padded base64) — refusing to send it, in case it belongs to another system.",
+      };
+    }
+    auth = `APIkey ${key}`;
+  } else {
+    /* Our own OAuth connection first (the shared payprop_tokens row, refreshed
+       with the client id and secret on THIS service), and the portal's bridge
+       only as the fallback it used to be. 5 Sep: the OS owns the connection
+       now; the portal is on its way out. */
+    try {
+      const { payPropAccessToken, payPropClient } = await import("@/lib/business/payprop");
+      if (payPropClient(account)) {
+        const own = await payPropAccessToken(account);
+        if (own) auth = `Bearer ${own}`;
+      }
+    } catch {
+      /* fall through to the bridge */
+    }
+  }
+  if (!auth) {
+    const { payPropBearer, bridgeConfigured } = await import("@/lib/payprop-bridge");
+    if (!bridgeConfigured()) {
+      return { auth: null, error: "No PayProp access on this environment — set PORTAL_ORIGIN and OS_BRIDGE_SECRET, or an API key." };
+    }
+    const bearer = await payPropBearer(account);
+    if (!bearer) {
+      return { auth: null, error: "The portal wouldn't lend a PayProp token — check OS_BRIDGE_SECRET matches on both." };
+    }
+    auth = `Bearer ${bearer}`;
+  }
+
+  return { auth };
+}
+
+/**
+ * A PayProp file, as bytes (28 Sep 2026: the clean sweep files each home's
+ * PayProp documents onto the home). Signed exactly as payPropGet signs, so the
+ * E&W OAuth token is refreshed by the one refresher and never anywhere else.
+ */
+export async function payPropGetRaw(
+  account: PayPropAccountId,
+  path: string
+): Promise<{ status: number; ok: boolean; body: ArrayBuffer | null; contentType: string | null; error: string | null }> {
+  const got = await authFor(account);
+  if (!got.auth) return { status: 0, ok: false, body: null, contentType: null, error: got.error ?? "No PayProp access." };
+  try {
+    const res = await fetch(`${base()}/${path.replace(/^\//, "")}`, { headers: { Authorization: got.auth }, cache: "no-store" });
+    const body = await res.arrayBuffer();
+    return { status: res.status, ok: res.ok, body, contentType: res.headers.get("content-type"), error: res.ok ? null : `HTTP ${res.status}` };
+  } catch (e) {
+    return { status: 0, ok: false, body: null, contentType: null, error: e instanceof Error ? e.message : "network error" };
+  }
 }
