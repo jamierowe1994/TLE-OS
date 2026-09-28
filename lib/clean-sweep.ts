@@ -64,6 +64,8 @@ export interface SweepHome {
 type PropRow = {
   id: string; address: string; ref: string; postcode: string | null; hmo: boolean; categories: string[] | null; management: string | null; rex_property_id: string | null; service_level?: string | null;
   landlord_name: string | null; agent_name: string | null; tenant_names: string | null; payprop_no: string | null;
+  /** The landlord's signed terms say there is no gas at the home. */
+  no_gas?: boolean | null;
 };
 type FactRow = { property_id: string; field: string; value: string | null; file_key: string | null; source: string; source_ref: string | null; checked_against: string | null; captured_at: Date; captured_by: string | null; verified_at?: Date | null; verified_by?: string | null };
 
@@ -157,8 +159,10 @@ interface CertsOnFile {
   gasOk: boolean;
   /** An EICR on file and in date. */
   eicrOk: boolean;
+  /** Scotland: an in-date EICR answers the smoke and CO alarms column (James, 28 Sep 2026). */
+  eicrAlarms: boolean;
 }
-const NO_CERTS: CertsOnFile = { gas: false, gasOk: false, eicrOk: false };
+const NO_CERTS: CertsOnFile = { gas: false, gasOk: false, eicrOk: false, eicrAlarms: false };
 /**
  * The Repairing Standard (James, 28 Sep 2026): a Scottish home counts as
  * checked when every certificate the standard rests on is held - an in-date
@@ -173,7 +177,7 @@ const STANDARD_COLUMNS = ["pat_expiry", "alarms_expiry", "legionella_expiry"];
 function held(key: string, facts: Map<string, FactRow>, certs: CertsOnFile = NO_CERTS): boolean {
   const has = (k: string) => { const f = facts.get(k); return Boolean(f && (f.value || f.file_key)); };
   if (key === "landlord_aml") return has("landlord_aml") || has("landlord_photo_id");
-  if (key === "alarms_expiry") return has(key) || certs.gas;
+  if (key === "alarms_expiry") return has(key) || certs.gas || certs.eicrAlarms;
   if (key === "repairing_standard") return has(key) || standardMet(facts, certs);
   return has(key);
 }
@@ -195,18 +199,21 @@ async function certified(): Promise<CertIndex> {
         gas: gas?.expires != null || Boolean(gas?.attached),
         gasOk: Boolean(gas?.notRequired) || (gas?.expires != null && gas.expires >= 0),
         eicrOk: eicr?.expires != null && eicr.expires >= 0,
+        eicrAlarms: false,
       }];
     }));
   } catch {
     return new Map();
   }
 }
-const certsFor = (p: PropRow, book: CertIndex): CertsOnFile =>
-  book.get(String(p.rex_property_id ?? "")) ?? book.get(p.id) ?? NO_CERTS;
+function certsFor(p: PropRow, book: CertIndex): CertsOnFile {
+  const c = book.get(String(p.rex_property_id ?? "")) ?? book.get(p.id) ?? NO_CERTS;
+  return { ...c, gasOk: c.gasOk || Boolean(p.no_gas), eicrAlarms: isScotland(p) && c.eicrOk };
+}
 
 async function load(): Promise<{ props: PropRow[]; facts: Map<string, Map<string, FactRow>> }> {
   const props = await q<PropRow>(
-    `SELECT id, address, ref, postcode, hmo, categories, management, rex_property_id, service_level, landlord_name, agent_name, tenant_names, payprop_no
+    `SELECT id, address, ref, postcode, hmo, categories, management, rex_property_id, service_level, landlord_name, agent_name, tenant_names, payprop_no, no_gas
        FROM os_properties WHERE active`
   );
   const rows = await q<FactRow>(`SELECT * FROM os_property_facts`).catch(() => []);
@@ -329,7 +336,7 @@ const CERT_LABEL: Record<string, string> = { gas: "Gas safety", eicr: "EICR", ep
 export async function sweepDetail(id: string): Promise<SweepDetail | null> {
   if (!hasDb()) return null;
   const props = await q<PropRow & { rex_property_id: string | null }>(
-    `SELECT id, address, ref, postcode, hmo, categories, management, rex_property_id, service_level, landlord_name, agent_name, tenant_names, payprop_no FROM os_properties WHERE id = $1`,
+    `SELECT id, address, ref, postcode, hmo, categories, management, rex_property_id, service_level, landlord_name, agent_name, tenant_names, payprop_no, no_gas FROM os_properties WHERE id = $1`,
     [id]
   );
   const p = props[0];
@@ -369,18 +376,22 @@ export async function sweepDetail(id: string): Promise<SweepDetail | null> {
   const eicrCert = certs?.find((c) => c.key === "eicr");
   const onFile: CertsOnFile = {
     gas: Boolean(gasCert && (gasCert.days != null || gasCert.file)),
-    gasOk: Boolean(gasCert?.notRequired) || (gasCert?.days != null && gasCert.days >= 0),
+    gasOk: Boolean(gasCert?.notRequired) || Boolean(p.no_gas) || (gasCert?.days != null && gasCert.days >= 0),
     eicrOk: eicrCert?.days != null && eicrCert.days >= 0,
+    eicrAlarms: false,
   };
+  onFile.eicrAlarms = isScotland(p) && onFile.eicrOk;
   const facts: SweepFact[] = FIELDS.filter((x) => x.group !== "Sign-off").map((x) => {
     const r = f.get(x.key);
     const own = Boolean(r?.value || r?.file_key);
     const byGas = x.key === "alarms_expiry" && !own && onFile.gas;
+    const byEicr = x.key === "alarms_expiry" && !own && !onFile.gas && onFile.eicrAlarms;
     const byStandard = x.key === "repairing_standard" && !own && standardMet(f, onFile);
     return {
       key: x.key, label: x.label, group: x.group, kind: x.kind, needed: need.has(x.key), held: held(x.key, f, onFile),
       note: byGas ? "Covered by the gas safety record"
-        : byStandard ? "Met on the certificates held: EICR and gas in date, PAT, alarms and legionella on file" : null,
+        : byEicr ? "Covered by the in-date EICR"
+        : byStandard ? "Met on the certificates held: EICR and gas in date (or no gas), PAT, alarms and legionella on file" : null,
       verifiedAt: r?.verified_at ? new Date(r.verified_at).toISOString() : null, verifiedBy: r?.verified_by ?? null,
       value: r?.value ?? null, source: r?.source ?? null, sourceRef: r?.source_ref ?? null, checkedAgainst: r?.checked_against ?? null,
       capturedAt: r ? new Date(r.captured_at).toISOString() : null, capturedBy: r?.captured_by ?? null,
