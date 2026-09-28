@@ -2,6 +2,7 @@ import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { TLE_EMAILS } from "@/lib/email/tle-emails";
 import { TENANT_PROCESS } from "@/lib/process/tenant";
+import { LANDLORD_PROCESS } from "@/lib/process/landlord";
 import { STATUS_RANK, type ProcessStatus } from "@/lib/process/types";
 import { EMAIL_WORDS, SHOWROOM_EMAIL_IDS } from "@/lib/showroom/content";
 
@@ -40,8 +41,15 @@ const SAID: Record<ProcessStatus, { key: "live" | "ready" | "built" | "written" 
 
 /* One email can sit at two points on the map (the passport invite IS the
    viewing confirmation), so the furthest along of them is the answer. */
+const BY_KEY = {
+  live: SAID.live, ready: SAID.reworked, built: SAID.built, written: SAID.written, planned: SAID.planned,
+} as const;
+
 export function statusOf(id: string) {
-  const nodes = TENANT_PROCESS.nodes.filter((n) => n.emailId === id);
+  /* Said outright where the process maps do not carry the email. */
+  const told = EMAIL_WORDS[id]?.status;
+  if (told) return BY_KEY[told];
+  const nodes = [...TENANT_PROCESS.nodes, ...LANDLORD_PROCESS.nodes].filter((n) => n.emailId === id);
   if (!nodes.length) return { key: "built" as const, says: "Built, being finished" };
   const best = nodes.reduce((a, b) => ((STATUS_RANK[b.status] ?? 0) > (STATUS_RANK[a.status] ?? 0) ? b : a));
   return SAID[best.status];

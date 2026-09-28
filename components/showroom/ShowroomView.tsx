@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import Segmented from "@/components/Segmented";
 import DoodleIcon from "@/components/DoodleIcon";
-import { SIDES, TENANT_STEPS, type ShowroomScreen, type ShowroomSide, type ShowroomStep } from "@/lib/showroom/content";
+import { SAMPLE_WHO, SIDES, STEPS_FOR, type ShowroomScreen, type ShowroomSide, type ShowroomStep } from "@/lib/showroom/content";
 
 /**
  * The Showroom's screen (lib/showroom/content says what and why).
@@ -39,7 +39,7 @@ export default function ShowroomView({ token }: { token: string }) {
   const router = useRouter();
   const params = useSearchParams();
   const side = (SIDES.find((s) => s.id === params.get("side"))?.id ?? "tenant") as ShowroomSide;
-  const steps = side === "tenant" ? TENANT_STEPS : [];
+  const steps = STEPS_FOR[side];
   const step = steps.find((s) => s.id === params.get("step")) ?? steps[0] ?? null;
   const at = step ? steps.indexOf(step) : -1;
 
@@ -128,7 +128,8 @@ export default function ShowroomView({ token }: { token: string }) {
 
           {/* ── The step ── */}
           <StepView
-            key={step.id}
+            key={`${side}-${step.id}`}
+            side={side}
             step={step}
             number={at + 1}
             token={token}
@@ -143,6 +144,7 @@ export default function ShowroomView({ token }: { token: string }) {
 }
 
 function StepView({
+  side,
   step,
   number,
   token,
@@ -150,6 +152,7 @@ function StepView({
   next,
   onGo,
 }: {
+  side: ShowroomSide;
   step: ShowroomStep;
   number: number;
   token: string;
@@ -173,7 +176,7 @@ function StepView({
         </ul>
       </section>
 
-      {step.screens.length > 0 && <Screens screens={step.screens} token={token} />}
+      {step.screens.length > 0 && <Screens side={side} screens={step.screens} token={token} />}
 
       <Emails ids={step.emails} />
 
@@ -205,7 +208,7 @@ function StepView({
         </div>
       </section>
 
-      <Feedback step={step} />
+      <Feedback side={side} step={step} />
 
       <div className="flex items-center justify-between gap-3 pt-1">
         {prev ? (
@@ -233,7 +236,7 @@ function srcOf(s: ShowroomScreen, token: string): string {
   return s.stage ? `/tenant/demo/stage?to=${s.stage}&back=${encodeURIComponent(path)}` : path;
 }
 
-function Screens({ screens, token }: { screens: ShowroomScreen[]; token: string }) {
+function Screens({ side, screens, token }: { side: ShowroomSide; screens: ShowroomScreen[]; token: string }) {
   const [i, setI] = useState(0);
   const screen = screens[Math.min(i, screens.length - 1)];
   const [device, setDevice] = useState<"phone" | "desktop">(screen.device ?? "desktop");
@@ -294,14 +297,14 @@ function Screens({ screens, token }: { screens: ShowroomScreen[]; token: string 
           <iframe
             key={src + device}
             src={src}
-            title={`${screen.label}, as the tenant sees it`}
+            title={`${screen.label}, as the ${side} sees it`}
             style={{ width: f.w, height: f.h, transform: `scale(${scale})`, transformOrigin: "0 0" }}
             className="absolute left-0 top-0 border-0"
           />
         </div>
       </div>
       <p className="mt-3 text-center text-[11.5px] text-muted">
-        The sample tenant, Sophie. Click around - nothing here is real and nothing is saved.
+        {SAMPLE_WHO[side]}. Click around - nothing here is real and nothing is saved.
       </p>
     </section>
   );
@@ -427,7 +430,7 @@ function EmailSheet({ meta, onClose }: { meta: EmailMeta; onClose: () => void })
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-line/70 px-6 py-3.5">
           <p className={`text-[12px] ${sent ? (sent.ok ? "text-[#2f5d2a]" : "text-accent-dark") : "text-muted"}`}>
-            {sent ? sent.text : "Filled in with the sample tenant's details."}
+            {sent ? sent.text : "Filled in with sample details, as it goes out."}
           </p>
           <button
             type="button"
@@ -445,7 +448,7 @@ function EmailSheet({ meta, onClose }: { meta: EmailMeta; onClose: () => void })
 
 /* ─────────────────────────── feedback ─────────────────────────── */
 
-function Feedback({ step }: { step: ShowroomStep }) {
+function Feedback({ side, step }: { side: ShowroomSide; step: ShowroomStep }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<{ ok: boolean; text: string } | null>(null);
@@ -459,10 +462,10 @@ function Feedback({ step }: { step: ShowroomStep }) {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          body: `Showroom, tenant: ${step.title}\n\n${text.trim()}`,
-          path: `/showroom?side=tenant&step=${step.id}`,
+          body: `Showroom, ${side}: ${step.title}\n\n${text.trim()}`,
+          path: `/showroom?side=${side}&step=${step.id}`,
           kind: "idea",
-          context: { showroom: "tenant", step: step.id },
+          context: { showroom: side, step: step.id },
         }),
       });
       if (!r.ok) throw new Error();
@@ -480,7 +483,7 @@ function Feedback({ step }: { step: ShowroomStep }) {
       <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted">
         <DoodleIcon name="message" size={13} /> Something not right here?
       </p>
-      <p className="mt-1 text-[12.5px] text-muted">A word that is wrong, a step that is missing, something a tenant would trip over. It goes straight onto the list with this step attached.</p>
+      <p className="mt-1 text-[12.5px] text-muted">A word that is wrong, a step that is missing, something a {side} would trip over. It goes straight onto the list with this step attached.</p>
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}

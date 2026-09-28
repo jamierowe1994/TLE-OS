@@ -31,7 +31,8 @@ export type ShowroomSide = "tenant" | "landlord" | "agent";
 
 export interface ShowroomScreen {
   label: string;
-  /** A tenant demo page. Opened through the stage switch when `stage` is set. */
+  /** A demo page. A tenant one opens through the stage switch when `stage` is
+   *  set; a landlord one carries its stage in the address (?stage=). */
   href: string;
   stage?: TenantStageKey;
   /** Which frame suits it best to begin with. The viewer can switch. */
@@ -56,7 +57,7 @@ export interface ShowroomStep {
 
 export const SIDES: { id: ShowroomSide; label: string; says: string; ready: boolean }[] = [
   { id: "tenant", label: "Tenant", says: "From the first email to the day they get the keys.", ready: true },
-  { id: "landlord", label: "Landlord", says: "From the valuation to a let and managed home. Coming next.", ready: false },
+  { id: "landlord", label: "Landlord", says: "From the valuation enquiry to a let and managed home.", ready: true },
   { id: "agent", label: "Agent", says: "The same journeys from your side of the desk. Coming after the landlord.", ready: false },
 ];
 
@@ -214,7 +215,7 @@ export const TENANT_STEPS: ShowroomStep[] = [
  * keeps its own notes, written for whoever is building it ("our rewrite of
  * the acceptance email"); these are what the Showroom shows instead.
  */
-export const EMAIL_WORDS: Record<string, { when: string; says: string }> = {
+export const EMAIL_WORDS: Record<string, { when: string; says: string; status?: "live" | "ready" | "built" | "written" | "planned" }> = {
   "tenant-passport-invite": { when: "The moment you book a viewing, or send the passport from a lead", says: "The viewing details and a calendar invite, and a button to their passport. Fill it in once and it answers every application." },
   "tenant-passport-nudge-1": { when: "Two days after the invite, if they have not started", says: "A short nudge: it takes about ten minutes, and nothing is shared until they apply." },
   "tenant-passport-nudge-2": { when: "A week after the invite, still not started", says: "Why it helps them: the same details for every home, and ready applications go first. The last reminder." },
@@ -233,5 +234,209 @@ export const EMAIL_WORDS: Record<string, { when: string; says: string }> = {
   "referencing-chase": { when: "Three days into referencing, with forms still missing", says: "What is still missing, by name, and why today matters." },
 };
 
+/* ─────────────────────────── the landlord ─────────────────────────── */
+
+/** The sample landlord is Raj (lib/landlord-sample); ?stage= puts him at that point. */
+const raj = (stage: string, page = "") => `/landlord/demo${page}?stage=${stage}`;
+
+export const LANDLORD_STEPS: ShowroomStep[] = [
+  {
+    id: "enquiry",
+    title: "The valuation enquiry",
+    lead: "A landlord asks for a valuation - on a portal, the website or the phone. They have almost certainly asked two other agents the same morning, so the first call wins it.",
+    sees: [
+      "Today, the first thing they hear from us is the agent ringing them.",
+      "Three tries; if they do not answer, they go to nurture rather than to nothing.",
+    ],
+    agent: { says: "The enquiry lands on Leads within five minutes. Ring them, log how it went in Next up, and book the appraisal.", href: "/leads?side=landlord" },
+    screens: [],
+    emails: [],
+    notYet: [
+      "No \"thanks for asking, here is what happens next\" email straight after the enquiry.",
+      "The nurture emails for a landlord who goes quiet are planned, not written.",
+    ],
+  },
+  {
+    id: "booked",
+    title: "Booking the appraisal",
+    lead: "Once the visit is booked, the landlord gets one confirmation: the date, the time, the address and who is coming, with a calendar invite.",
+    sees: ["\"Appointment confirmed\", from the agent's own email, with the calendar file."],
+    agent: { says: "Book it from the lead. The confirmation is shown to you straight after - read it, change anything, and send it.", href: "/market-appraisals" },
+    screens: [],
+    emails: ["appraisal-confirm"],
+  },
+  {
+    id: "before",
+    title: "The day before the visit",
+    lead: "A short presentation arrives the day before: who is coming, what will happen and how long it takes. It opens without an account.",
+    sees: [
+      "\"Before the visit\", with a button to their presentation.",
+      "The pre-appraisal presentation - five or six pages about us and the visit.",
+    ],
+    agent: { says: "It goes on its own the day before. You can send it sooner from the appraisal's Pre-appraisal step.", href: "/market-appraisals" },
+    screens: [{ label: "The pre-appraisal presentation", href: "/present/sample?kind=pre-appraisal", device: "desktop" }],
+    emails: ["appraisal-pre"],
+  },
+  {
+    id: "visit",
+    title: "The visit",
+    lead: "The agent walks the home with the appraisal presentation on a tablet: what has let nearby, the market, and what their home could let for.",
+    sees: ["The appraisal presentation, on the agent's tablet, at their kitchen table."],
+    agent: { says: "Open the presentation from the appraisal, walk them through it, then record the figure, the service and the fee.", href: "/market-appraisals" },
+    screens: [{ label: "The appraisal presentation", href: "/present/sample?kind=appraisal", device: "desktop" }],
+    emails: [],
+  },
+  {
+    id: "after",
+    title: "After the visit: the figure and the contract",
+    lead: "The same day: great to meet you, the figure in writing, and one link to their own file - the presentation and the terms of business side by side.",
+    sees: [
+      "\"After the visit\" with the figure in writing.",
+      "\"Your presentation and your contract\" - one link to their own file.",
+      "Their own area opening for the first time, with the booklet to page through.",
+    ],
+    agent: { says: "Record the valuation on the appraisal, then Prepare and send. You read the presentation and the contract before it goes.", href: "/market-appraisals" },
+    screens: [
+      { label: "The booklet they page through", href: "/present/sample?kind=post-appraisal", device: "desktop" },
+      { label: "Their own area", href: raj("valuation"), device: "desktop" },
+      { label: "On a phone", href: raj("valuation"), device: "phone" },
+    ],
+    emails: ["appraisal-post", "landlord-contract-pack"],
+  },
+  {
+    id: "signing",
+    title: "Signing the terms",
+    lead: "Instructing us is signing. The contract is filled in from the valuation; the agent signs first, then the landlord signs from their own area.",
+    sees: [
+      "The terms of business in their area, ready to sign.",
+      "A reminder if it sits unsigned: when the agent presses Nudge, and on its own after two, five and nine days.",
+    ],
+    agent: { says: "Sign your half on the appraisal. Press Nudge to sign if it sits there.", href: "/market-appraisals" },
+    screens: [{ label: "Ready to sign", href: raj("instruction"), device: "desktop" }],
+    emails: ["landlord-contract-nudge", "terms-chase"],
+    notYet: ["Signing has been proven in the sandbox but never run with a real landlord."],
+  },
+  {
+    id: "paperwork",
+    title: "Signed: questions and paperwork",
+    lead: "Once they have signed, their area asks what we need to know about the home and collects the certificates a let needs.",
+    sees: [
+      "Questions about the home in their area - meters, gas, who owns it.",
+      "The certificates still to send, one by one.",
+      "Reminders after two, five and nine days while questions are unanswered.",
+    ],
+    agent: { says: "Book the take-on visit and the photos. Press Send a nudge for the documents if they stall.", href: "/market-appraisals" },
+    screens: [
+      { label: "What is still needed", href: raj("compliance"), device: "desktop" },
+      { label: "The questions", href: raj("compliance", "/questions"), device: "desktop" },
+      { label: "Their documents", href: raj("compliance", "/documents"), device: "desktop" },
+    ],
+    emails: ["landlord-questions-chase", "landlord-docs-nudge"],
+  },
+  {
+    id: "marketing",
+    title: "On the market",
+    lead: "Photographed, written up and live on Rightmove, Zoopla and OnTheMarket. Their area shows the advert and what is happening.",
+    sees: ["Their area moving to Marketing, with viewings as they are booked."],
+    agent: { says: "Write the advert and push it live from the listing.", href: "/listings" },
+    screens: [{ label: "Live on the portals", href: raj("marketing"), device: "desktop" }],
+    emails: [],
+    notYet: ["No \"your property is live\" email with the portal links - the one a landlord most wants on the day."],
+  },
+  {
+    id: "offers",
+    title: "Viewings and offers",
+    lead: "Tenants through the door, and offers coming in. Their area shows who has been and the offers waiting on them.",
+    sees: ["The viewings, and the offers to review, in their area."],
+    agent: { says: "Book viewings from the listing; offers arrive on Applications.", href: "/applications" },
+    screens: [{ label: "Offers in", href: raj("viewings"), device: "desktop" }],
+    emails: [],
+    notYet: [
+      "No weekly \"how the viewings went\" email yet.",
+      "The \"an offer on your property\" email is hidden for the pilot - the landlord's answer comes back by phone.",
+    ],
+  },
+  {
+    id: "let",
+    title: "Let agreed",
+    lead: "The landlord says yes. Referencing, the compliance check, the agreement and move-in follow, and their area shows each one.",
+    sees: [
+      "\"Application accepted\" - who, the rent, and what happens next.",
+      "Their area following the deal to move-in day.",
+    ],
+    agent: { says: "Once it is a yes, press Hand over to the deal on the application.", href: "/applications" },
+    screens: [{ label: "Let agreed", href: raj("let"), device: "desktop" }],
+    emails: ["application-accepted-landlord"],
+    notYet: ["No \"your property is let\" email on move-in day."],
+  },
+  {
+    id: "managed",
+    title: "Managed: their home, looked after",
+    lead: "Their area becomes where they see the home being run: the tenancy, repairs, visits, certificates and invoices.",
+    sees: [
+      "Repairs as they are reported, quotes to approve, and when they are booked in.",
+      "The visit report, room by room.",
+      "Renewed certificates, and a reminder before one runs out.",
+      "Invoices, worked out from the rent and the service.",
+    ],
+    agent: { says: "It follows the jobs, visits and certificates on Portfolio. Nothing to press here.", href: "/portfolio" },
+    screens: [
+      { label: "Their home", href: raj("managed"), device: "desktop" },
+      { label: "Repairs", href: raj("managed", "/maintenance"), device: "desktop" },
+      { label: "Documents", href: raj("managed", "/documents"), device: "desktop" },
+    ],
+    emails: [
+      "works-landlord-report", "works-landlord-approval", "works-landlord-arranged",
+      "inspection-landlord-report", "certificate-shared-landlord", "compliance-chase-landlord", "invoice-sent",
+    ],
+  },
+  {
+    id: "sign-in",
+    title: "Signing in and messages",
+    lead: "No password to remember: they ask for a link and it signs them straight in. They can message their agent from their area, and the reply comes by email.",
+    sees: [
+      "The sign-in page and the link email.",
+      "Messages to their agent, and the agent's reply.",
+    ],
+    agent: { says: "Their messages show on the appraisal. Reply from the Messages panel.", href: "/market-appraisals" },
+    screens: [
+      { label: "The sign-in page", href: "/landlord/sign-in", device: "phone" },
+      { label: "Messages", href: raj("marketing", "/messages"), device: "desktop" },
+    ],
+    emails: ["landlord-sign-in", "landlord-message-reply"],
+  },
+];
+
+Object.assign(EMAIL_WORDS, {
+  "appraisal-confirm": { when: "When you send the confirmation after booking", says: "The date, the time, the address and who is coming, each on its own line, with a calendar invite." },
+  "appraisal-pre": { when: "The day before the visit", says: "A button to their pre-appraisal presentation: who is coming, what happens and how long it takes." },
+  "appraisal-post": { when: "The same day, after you record the valuation", says: "Great to meet you, the figure in writing, and what happens next." },
+  "landlord-contract-pack": { when: "When you press Send on Prepare and send", says: "One link to their own file: the presentation they saw and the terms of business side by side.", status: "live" },
+  "landlord-contract-nudge": { when: "When you press Nudge to sign, and on its own after 2, 5 and 9 days", says: "A friendly reminder, with a button straight to the contract.", status: "live" },
+  "terms-chase": { when: "When you press Send reminder on terms still to sign", says: "A short reminder that the terms are waiting, and where to sign them." },
+  "landlord-questions-chase": { when: "2, 5 and 9 days after signing, while questions are unanswered", says: "What is still to answer about the home, and a button back to it.", status: "built" },
+  "landlord-docs-nudge": { when: "When you press Send a nudge for the documents", says: "Just the paperwork left: which certificates we still need.", status: "built" },
+  "application-accepted-landlord": { when: "When an offer is accepted and handed over", says: "Who is moving in, the rent and the dates, and what happens between now and move-in.", status: "ready" },
+  "works-landlord-report": { when: "When a repair is reported", says: "What is wrong, the two ways forward, and what happens next." },
+  "works-landlord-approval": { when: "When a quote is over what they have said we can spend", says: "The quote, and a button to approve it.", status: "built" },
+  "works-landlord-arranged": { when: "Once the repair has a date", says: "Who is coming, and when.", status: "built" },
+  "inspection-landlord-report": { when: "When the visit report is sent", says: "How the home is being kept, room by room, and what happens about each thing found." },
+  "certificate-shared-landlord": { when: "When a renewed certificate is filed on their home", says: "The new certificate, attached, and when it next runs out.", status: "ready" },
+  "compliance-chase-landlord": { when: "Before a certificate runs out", says: "Which certificate, when it runs out, and how to get it renewed - their agent copied in." },
+  "invoice-sent": { when: "When an invoice is sent", says: "The invoice, worked out from the rent and the service." },
+  "landlord-sign-in": { when: "When a landlord asks for a link on the sign-in page", says: "A link that signs them straight in. It works once and lasts a day." },
+  "landlord-message-reply": { when: "When you reply to their message", says: "Your reply, and a button back to their messages.", status: "live" },
+});
+
+/** The steps for a side; the agent's are still to come. */
+export const STEPS_FOR: Record<ShowroomSide, ShowroomStep[]> = { tenant: TENANT_STEPS, landlord: LANDLORD_STEPS, agent: [] };
+
+/** Who the sample is, on each side's screens. */
+export const SAMPLE_WHO: Record<ShowroomSide, string> = {
+  tenant: "The sample tenant, Sophie",
+  landlord: "The sample landlord, Raj",
+  agent: "A sample agent",
+};
+
 /** Every email the showroom shows - the only ones its preview route will render. */
-export const SHOWROOM_EMAIL_IDS: ReadonlySet<string> = new Set(TENANT_STEPS.flatMap((s) => s.emails));
+export const SHOWROOM_EMAIL_IDS: ReadonlySet<string> = new Set([...TENANT_STEPS, ...LANDLORD_STEPS].flatMap((s) => s.emails));
