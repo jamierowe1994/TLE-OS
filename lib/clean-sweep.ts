@@ -195,6 +195,8 @@ export function notLetYet(p: PropRow & { tenant_names?: string | null }, facts: 
      for files that were never going to exist. rex_pm_status is read from
      REX PM's own property record. */
   if (/^(archived|vacant, no letting agreement)/i.test(facts.get("rex_pm_status")?.value ?? "")) return true;
+  /* Susan's deposit report (28 Sep) marks homes archived or sold, to come off PayProp. */
+  if (/^archived/i.test(facts.get("deposit_status")?.value ?? "")) return true;
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
   const start = (facts.get("tenancy_start")?.value ?? "").slice(0, 10);
   if (start && start > today) return true;
