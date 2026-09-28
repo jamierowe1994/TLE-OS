@@ -1081,6 +1081,31 @@ function LeadDrawerBody({
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leadId]);
+  /* A tenant's shortlist is stored (Howard, 24 Sep 2026): the homes picked on
+     the new-lead screen, and anything shortlisted here. It used to live only
+     in this state, so it was gone on close - and it carried over to the next
+     lead opened, because nothing emptied it. */
+  useEffect(() => {
+    setAddedListings([]);
+    if (!leadId || !lead || leadSide(lead) !== "tenant") return;
+    let live = true;
+    fetch(`/api/leads/${encodeURIComponent(leadId)}/shortlist`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (live && j?.ok && Array.isArray(j.homes)) setAddedListings(j.homes as Listing[]); })
+      .catch(() => {});
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leadId]);
+  function keepOnList(l: { id: string; name: string; locality: string; postcode?: string | null; rent: number | null; image: string | null }) {
+    setAddedListings((cur) => (cur.some((x) => x.id === l.id) ? cur : [...cur, l as unknown as Listing]));
+    setAdded((cur) => (cur.includes(l.id) ? cur : [...cur, l.id]));
+    if (!leadId) return;
+    void fetch(`/api/leads/${encodeURIComponent(leadId)}/shortlist`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ homes: [{ id: l.id, name: l.name, locality: l.locality, postcode: l.postcode ?? null, rent: l.rent, image: l.image }] }),
+    }).catch(() => {});
+  }
   async function attachHome() {
     if (!leadId || homeBusy) return;
     setHomeBusy(true);
@@ -1275,7 +1300,7 @@ function LeadDrawerBody({
 
   useEffect(() => {
     if (!lead) return;
-    setContact({ phone: lead.phone, email: lead.email, area: lead.preferred });
+    setContact({ phone: lead.phone, email: lead.email, area: isOsLead(lead.id) && leadSide(lead) === "tenant" ? lead.address ?? "" : lead.preferred });
     setPersonName(lead.name);
     setSync(null);
     editedRef.current = false;
@@ -1610,7 +1635,17 @@ function LeadDrawerBody({
   const previewOk = Boolean(lead.enquiryMessage && !/^[A-Z][A-Za-z ]{1,30}:/.test(lead.enquiryMessage));
   const enqMessage = enquiry?.message || (enquiry === undefined && previewOk ? lead.enquiryMessage ?? "" : "");
   const receivedIso = enquiry?.receivedAt ?? lead.receivedAt ?? null;
-  const enqProperty = lead.address || enquiry?.fields.find(([k]) => /property address|listing address/i.test(k))?.[1] || lead.preferred;
+  /* A tenant added by hand carries THEIR OWN address on the record, not a
+     home they asked about (Howard, 24 Sep 2026: "this is showing as if the
+     tenant's property is the one we are working on"). What they're
+     interested in is their shortlist. */
+  const ownAddressOnly = isTenant && isOsLead(lead.id);
+  const enqProperty = ownAddressOnly
+    ? ""
+    : lead.address || enquiry?.fields.find(([k]) => /property address|listing address/i.test(k))?.[1] || lead.preferred;
+  const interestedIn = !(enqProperty && enqProperty.trim() !== "—") && isTenant && shortlist.length
+    ? `Interested in ${shortlist.length === 1 ? shortlist[0].name : `${shortlist.length} homes`}`
+    : "";
   const real = (v?: string | null) => (v && v.trim() !== "—" ? v.trim() : "");
 
   /* The address to look the property up by, on a landlord lead. */
@@ -2239,8 +2274,7 @@ function LeadDrawerBody({
                           originListingId={lead.listingId != null ? String(lead.listingId) : null}
                           shortlisted={shortlist.map((p) => p.id)}
                           onShortlist={(l) => {
-                            setAddedListings((cur) => (cur.some((x) => x.id === l.id) ? cur : [...cur, l as unknown as Listing]));
-                            setAdded((cur) => (cur.includes(l.id) ? cur : [...cur, l.id]));
+                            keepOnList(l);
                             setJustAdded(true);
                           }}
                           onBook={() => { setBookMode("viewing"); setBooking(true); }}
@@ -2617,7 +2651,7 @@ function LeadDrawerBody({
                         )}
                       </div>
                       <p className="mt-1.5 text-[13.5px] text-muted">
-                        {enqProperty && enqProperty !== "—" ? enqProperty : "General enquiry"} · via {enquiry?.source || lead.source}
+                        {enqProperty && enqProperty !== "—" ? enqProperty : interestedIn || "General enquiry"} · via {enquiry?.source || lead.source}
                         {receivedIso ? ` · ${whenAgo(receivedIso)}` : ""}
                       </p>
                       {/* Their own words - the first thing anyone should read. */}
@@ -2716,8 +2750,8 @@ function LeadDrawerBody({
                         />
                         <Glance
                           icon="home"
-                          title={enqProperty && enqProperty !== "—" ? "Asked about one property" : "A general enquiry"}
-                          sub={enqProperty && enqProperty !== "—" ? enqProperty : "Not about one property - match them to the book"}
+                          title={enqProperty && enqProperty !== "—" ? "Asked about one property" : shortlist.length ? `Interested in ${shortlist.length} home${shortlist.length === 1 ? "" : "s"}` : "A general enquiry"}
+                          sub={enqProperty && enqProperty !== "—" ? enqProperty : shortlist.length ? shortlist.map((h) => h.name).join(" · ") : "Not about one property - match them to the book"}
                         />
                         <Glance icon="target" title={receivedIso ? `Came in ${whenAgo(receivedIso)}` : `Came in ${lead.received}`} sub={`${receivedIso ? `${whenFull(receivedIso)} · ` : ""}via ${enquiry?.source || lead.source}`} />
                       </ul>
@@ -2789,6 +2823,28 @@ function LeadDrawerBody({
                           {lead.office && <p className="mt-1 text-[11.5px] text-muted">{lead.office}</p>}
                         </div>
                       </div>
+                    ) : shortlist.length ? (
+                      /* A tenant added by hand: the homes on their list. */
+                      <ul className="mt-3 space-y-2.5">
+                        {shortlist.slice(0, 3).map((h) => (
+                          <li key={h.id} className="flex gap-3">
+                            <PropertyPhoto src={h.image ?? null} className="h-[52px] w-[70px] shrink-0 rounded-lg" />
+                            <div className="min-w-0">
+                              <Link href={`/listings?open=${encodeURIComponent(h.id)}`} className="block truncate text-[13px] font-semibold leading-snug hover:underline">{h.name}</Link>
+                              <p className="mt-0.5 truncate text-[11.5px] text-muted">
+                                {[h.locality, h.rent != null ? `£${h.rent.toLocaleString("en-GB")} pcm` : ""].filter(Boolean).join(" · ")}
+                              </p>
+                            </div>
+                          </li>
+                        ))}
+                        {shortlist.length > 3 && (
+                          <li>
+                            <button type="button" onClick={() => setTab("properties")} className="text-[11.5px] font-semibold text-muted hover:text-ink">
+                              And {shortlist.length - 3} more on their list
+                            </button>
+                          </li>
+                        )}
+                      </ul>
                     ) : (
                       <p className="mt-3 text-[12.5px] text-muted">A general enquiry - not about one property.</p>
                     )}
@@ -3456,8 +3512,7 @@ function LeadDrawerBody({
                 originListingId={lead.listingId != null ? String(lead.listingId) : null}
                 shortlisted={shortlist.map((p) => p.id)}
                 onShortlist={(l) => {
-                  setAddedListings((cur) => (cur.some((x) => x.id === l.id) ? cur : [...cur, l as unknown as Listing]));
-                  setAdded((cur) => (cur.includes(l.id) ? cur : [...cur, l.id]));
+                  keepOnList(l);
                 }}
                 onBook={() => { setFinderOpen(false); setBookMode("viewing"); setBooking(true); }}
               />

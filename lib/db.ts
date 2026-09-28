@@ -708,6 +708,23 @@ CREATE TABLE IF NOT EXISTS os_lead_properties (
   at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS os_lead_properties_lead_idx ON os_lead_properties (lead_id, at);
+-- The homes a tenant lead is interested in: picked on the new-lead screen or
+-- shortlisted on the lead's Properties tab (Howard, 24 Sep 2026: the picks were
+-- dropped on save, and the tenant's own address stood in as "the property").
+-- A copy of what the card needs, so the list reads even once a home is let.
+CREATE TABLE IF NOT EXISTS os_lead_shortlist (
+  lead_id     TEXT NOT NULL,
+  listing_id  TEXT NOT NULL,
+  name        TEXT NOT NULL DEFAULT '',
+  locality    TEXT NOT NULL DEFAULT '',
+  postcode    TEXT NOT NULL DEFAULT '',
+  rent        NUMERIC,
+  image       TEXT,
+  by_id       TEXT,
+  by_name     TEXT NOT NULL DEFAULT '',
+  at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (lead_id, listing_id)
+);
 -- The note's twin in REX, once it has been written there (24 Sep 2026).
 ALTER TABLE os_lead_touches ADD COLUMN IF NOT EXISTS rex_note_id TEXT;
 

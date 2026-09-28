@@ -63,7 +63,7 @@ function ago(iso: string): string {
 }
 
 /** The town out of a formatted address — the Area column, without a guess. */
-function areaOf(address: string, postcode: string): string {
+export function areaOf(address: string, postcode: string): string {
   if (!address) return postcode || "—";
   /* The town is the last part that is neither the country nor a postcode.
      Google does not always give the postcode its own comma — "W Balsdon
@@ -98,7 +98,10 @@ export function contactToLead(c: ContactRow): Lead {
     receivedAt: c.createdAt,
     stage: "New",
     moveDate: "—",
-    preferred: c.address || "—",
+    /* "Preferred" is the home a lead asked about. A landlord's is their own
+       address; a tenant's own address is where they live, not what they want
+       (Howard, 24 Sep 2026) - their homes are the shortlist. */
+    preferred: c.kind === "landlord" ? c.address || "—" : "—",
     /* Whoever typed it in. The REX rows carry the managing agent here, and for
        a record somebody entered by hand that is the same question. */
     agent: c.createdByName || c.createdBy,

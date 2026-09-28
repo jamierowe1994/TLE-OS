@@ -1,6 +1,7 @@
 import { hasDb, q } from "@/lib/db";
 import { ago } from "@/lib/rex-leads";
 import type { Lead } from "@/lib/leads-sample";
+import { areaOf } from "@/lib/contacts-as-leads";
 
 /**
  * Contacts added by hand, read back as leads.
@@ -55,7 +56,11 @@ export const contactIdOf = (leadId: string): string => leadId.slice(OS_LEAD_PREF
 function toLead(r: Row): Lead {
   const landlord = r.kind === "landlord";
   const when = new Date(r.created_at);
-  const area = [r.address, r.postcode].filter(Boolean).join(", ");
+  const full = [r.address, r.postcode].filter(Boolean).join(", ");
+  /* A tenant's own address is where they live, not a home they asked about
+     (Howard, 24 Sep 2026): their area is the town, and the homes they want
+     are their shortlist. A landlord's address IS the property. */
+  const area = landlord ? full : areaOf(r.address ?? "", r.postcode ?? "");
   return {
     id: OS_LEAD_PREFIX + r.id,
     name: r.name,
@@ -70,7 +75,7 @@ function toLead(r: Row): Lead {
     receivedAt: when.toISOString(),
     stage: "New",
     moveDate: "",
-    preferred: area,
+    preferred: landlord ? full : "—",
     agent: r.created_by_name || r.created_by || "",
     notes: r.notes ?? "",
     activity: [],

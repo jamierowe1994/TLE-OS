@@ -9,6 +9,7 @@ import type { ScoredMatch } from "@/lib/contact-match";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { LEAD_SOURCES } from "@/lib/leads-sample";
 import { rexContactUrl } from "@/lib/business/rex-links";
+import { OS_LEAD_PREFIX } from "@/lib/contacts-as-leads";
 
 /** They chose an existing REX record to carry on with, rather than a new one. */
 function Continuing({ match, onClear }: { match: ScoredMatch | null; onClear: () => void }) {
@@ -142,6 +143,8 @@ export default function NewLeadPanel({
      never happened. */
   const [saveError, setSaveError] = useState<string | null>(null);
   const [rexNote, setRexNote] = useState<{ ok: boolean; detail: string } | null>(null);
+  /** How many of the picked homes landed on their list, or "failed". */
+  const [listSaved, setListSaved] = useState<number | "failed" | null>(null);
   const [emailPreview, setEmailPreview] = useState(false);
   /** REX's own id for the contact we just pushed, so "Open in REX" can go somewhere. */
   const [rexId, setRexId] = useState<string | null>(null);
@@ -195,6 +198,7 @@ export default function NewLeadPanel({
     setSaving(false);
     setSaveError(null);
     setRexNote(null);
+    setListSaved(null);
     setPicked([]);
     setPicking(false);
     setKind(initialKind ?? null);
@@ -370,6 +374,22 @@ export default function NewLeadPanel({
       setRexNote(j.rex ? { ok: Boolean(j.rex.ok), detail: String(j.rex.detail ?? "") } : null);
       setRexId(j.contact?.rexId ? String(j.contact.rexId) : null);
       setSavedId(j.contact?.id ? String(j.contact.id) : null);
+      /* The homes they're interested in go onto their file (Howard, 24 Sep
+         2026: the picks were dropped here and the lead then read the
+         tenant's own address as the home they'd asked about). The person is
+         saved whatever happens to the list, and the screen says which. */
+      if (kind !== "landlord" && shortlist.length && j.contact?.id) {
+        const ok = await fetch(`/api/leads/${OS_LEAD_PREFIX}${encodeURIComponent(String(j.contact.id))}/shortlist`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            homes: shortlist.map((l) => ({ id: l.id, name: l.name, locality: l.locality, postcode: l.postcode ?? null, rent: l.rent, image: l.image })),
+          }),
+        })
+          .then((r) => r.ok)
+          .catch(() => false);
+        setListSaved(ok ? shortlist.length : "failed");
+      }
       onCreated?.(d);
       setSaved(true);
     } catch {
@@ -500,11 +520,17 @@ export default function NewLeadPanel({
                 {/* "Saved to Leads" was never true: the Leads table is REX's
                     book, and this row lives in the OS until it is pushed. */}
                 Saved in the OS{d.source ? ` · ${d.source}` : ""}
-                {shortlist.length
-                  ? ` · ${shortlist.length} propert${shortlist.length === 1 ? "y" : "ies"} shortlisted`
+                {typeof listSaved === "number"
+                  ? ` · ${listSaved} home${listSaved === 1 ? "" : "s"} on their list`
                   : ""}
                 .
               </p>
+              {listSaved === "failed" && (
+                <p className="mt-3 w-full rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-3 text-left text-[11.5px] leading-relaxed">
+                  <span className="font-semibold">The homes they picked did not save. </span>
+                  Add them again on the lead&apos;s Properties tab.
+                </p>
+              )}
 
               {/* Whether REX has them is a SEPARATE fact from whether we do,
                   and it is the one an agent will act on — they'll go looking
