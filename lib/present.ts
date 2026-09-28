@@ -385,13 +385,16 @@ export const VISIT_STEPS: { title: string; body: string }[] = [
     title: "A proper walk round",
     body: "We'll look at the rooms, outside space and practical details that help us understand the property properly.",
   },
-  {
-    title: "What it could let for",
-    body: "A realistic rental figure, with the local evidence and reasoning behind it.",
-  },
+  /* The market before the figure (Howard, 24 Sep 2026): the landlord hears
+     who is renting nearby and what similar homes achieve, then the number
+     that evidence points to. */
   {
     title: "The local market",
     body: "Who's renting nearby, what similar homes are achieving and what demand currently looks like.",
+  },
+  {
+    title: "What it could let for",
+    body: "A realistic rental figure, with the local evidence and reasoning behind it.",
   },
   {
     title: "Preparing it to let",

@@ -460,7 +460,7 @@ export type IconName =
   | "camera";
 
 /** Which icon belongs to which beat of the visit, in order. */
-export const STEP_ICONS: IconName[] = ["home", "chart", "people", "star"];
+export const STEP_ICONS: IconName[] = ["home", "people", "chart", "star"];
 
 const PATHS: Record<IconName, React.ReactNode> = {
   camera: (
