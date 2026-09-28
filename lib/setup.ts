@@ -47,6 +47,8 @@ export type SetupState = {
   done: Partial<Record<SetupStepId, string>>;
   /** Email was passed over rather than connected. Recorded so we can ask again. */
   emailSkipped?: boolean;
+  /** "I don't use REX" - only offered to people whose job is not in REX (see rexOptional). */
+  rexSkipped?: boolean;
   finishedAt?: string;
   tour?: TourChoice;
   tourAt?: string;
@@ -78,9 +80,20 @@ export type SetupView = {
   name: string;
   email: string;
   rexConnected: boolean;
+  /**
+   * REX is where an agent's work lives, so for them the step cannot be passed.
+   * Marketing, compliance, pre-tenancy and the office are not all in REX - a
+   * marketing account has no REX login at all - so for them it is offered and
+   * can be answered "I don't use REX" (28 Sep 2026: Francesca could not get
+   * past this screen). Decided on the server from the person's role.
+   */
+  rexOptional: boolean;
   emailConnected: boolean;
   state: SetupState;
 };
+
+/** Roles whose work is read out of REX: for them the REX step is required. */
+export const REX_ROLES: ReadonlySet<string> = new Set(["agent"]);
 
 /* "look" was the fifth - choose light, dark or automatic. Taken out of the
    order on 21 Sep 2026 while the OS is light only (THEME_LOCKED, lib/theme).
@@ -152,7 +165,7 @@ export function isStepDone(id: SetupStepId, view: SetupView): boolean {
      first pip sat unticked on a step that had demonstrably happened, which
      made the whole rail look broken before anybody had answered anything. */
   if (id === "password") return true;
-  if (id === "rex") return view.rexConnected;
+  if (id === "rex") return view.rexConnected || (view.rexOptional && Boolean(view.state.rexSkipped));
   if (id === "email") return view.emailConnected || Boolean(view.state.emailSkipped);
   return Boolean(view.state.done[id]);
 }

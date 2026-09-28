@@ -50,7 +50,16 @@ function Problem({ children }: { children: React.ReactNode }) {
    against their invite. Being greeted by name is the cheapest possible proof
    that this was set up for them and not a form they wandered into. */
 
-export function Welcome({ name, onNext }: { name: string; onNext: () => void }) {
+export function Welcome({
+  name,
+  rexOptional = false,
+  onNext,
+}: {
+  name: string;
+  /** Not an agent: REX is offered rather than required, so say so. */
+  rexOptional?: boolean;
+  onNext: () => void;
+}) {
   /* "Hello, Susan." but "Hello there." - the comma belongs to a name and
      reads as a stumble without one. The fallback is only ever seen in the
      preview, where there is no account to have a name on. */
@@ -62,8 +71,9 @@ export function Welcome({ name, onNext }: { name: string; onNext: () => void }) 
         {first ? `Hello, ${first}.` : "Hello there."}
       </h1>
       <p className="mt-3 text-[13px] leading-relaxed">
-        Your password is set, so your account exists. Three more things and the OS
-        is yours: your REX, your email, and how this pre-launch works.
+        {rexOptional
+          ? "Your password is set, so your account exists. A few more things and the OS is yours: your REX if you use it, your email, and how this pre-launch works."
+          : "Your password is set, so your account exists. Three more things and the OS is yours: your REX, your email, and how this pre-launch works."}
       </p>
       <p className="mt-3 text-[12px] leading-relaxed text-muted">
         One at a time, and it takes about three minutes. Nothing here is
@@ -84,11 +94,17 @@ export function Welcome({ name, onNext }: { name: string; onNext: () => void }) 
 
 export function StepRex({
   preview,
+  optional = false,
   onDone,
+  onSkip,
 }: {
   /** Previewing rather than joining: no database, or an owner replaying. */
   preview: boolean;
+  /** Not an agent (marketing, compliance, pre-tenancy, the office): REX can be passed over. */
+  optional?: boolean;
   onDone: () => void;
+  /** "I don't use REX" - recorded as the answer, so the setup gate lets them through. */
+  onSkip?: () => void;
 }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -184,6 +200,11 @@ export function StepRex({
           dev machine there is no database to keep a REX token in, and an owner
           replaying the flow is already connected and should not have to type
           their password again to see the next screen. */}
+      {optional && !preview && onSkip && (
+        <button type="button" onClick={onSkip} className={`${GHOST} mt-3`}>
+          I don&apos;t use REX, skip this
+        </button>
+      )}
       {preview && (
         <button type="button" onClick={onDone} className={`${GHOST} mt-3`}>
           Skip, I am only looking

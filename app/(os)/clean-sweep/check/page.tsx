@@ -7,7 +7,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 /**
  * THE SECOND PASS (James, 25 Sep 2026).
  *
- * Michael, Kirstie and Joe each go through every home on Susan's sheets, once,
+ * Michael, Kirstie and Josel each go through every home on Susan's sheets, once,
  * checking their own section: compliance, the tenancy, or the landlord, fees
  * and deposit. What the OS holds is laid out row by row; REX PM, Propoly and
  * PayProp open beside it in the same three tabs every time. Tick what is
@@ -25,11 +25,23 @@ const SECTIONS: { key: SectionKey; label: string; who: string; fields: string[];
     fields: ["tenants_count", "tenancy_type", "tenancy_start", "tenancy_end", "rent_matches_agreement", "rent_review_last", "visit_next",
       "rtr_expiry", "rtr_checked", "doc_rtr_evidence", "guarantors_count", "guarantor_names", "guarantor_contacts", "doc_guarantor",
       "doc_tenancy_agreement", "doc_prt_notes", "doc_tenant_referencing", "doc_inventory", "rra_sheet_served", "doc_rra_sheet"] },
-  { key: "landlord", label: "Landlord, fees & deposit", who: "Joe",
+  { key: "landlord", label: "Landlord, fees & deposit", who: "Josel",
     fields: ["service_package", "fee_management", "fee_setup", "letting_agreement_start", "doc_terms_of_business", "nrl_status", "doc_nrl1",
       "landlord_aml", "landlord_photo_id", "doc_landlord_id_ownership", "landlord_registration", "doc_landlord_registration", "rent_smart_wales",
       "deposit_ref", "deposit_amount", "deposit_protected_on", "doc_deposit_cert"] },
 ];
+
+/** Who does which section (James, 28 Sep 2026). */
+const SECTION_BY_EMAIL: Record<string, SectionKey> = {
+  "michael.healy@thelettingexperts.co.uk": "compliance",
+  "kirstie.mulholland@thelettingexperts.co.uk": "tenancy",
+  "josel.banagua@thelettingexperts.co.uk": "landlord",
+};
+
+type Tally = {
+  countedAt: string; homes: number; missing: number;
+  sections: { key: SectionKey; label: string; who: string; homes: number; missing: number; signedOff: number }[];
+};
 
 type QueueHome = { id: string; address: string; landlord: string | null; since: string | null; missing: number; doneAt: string | null; doneBy: string | null };
 type Fact = {
@@ -61,16 +73,38 @@ export default function SecondPass() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [jump, setJump] = useState("");
+  /* The running count across all three sections (28 Sep 2026): counted live on
+     load, every five minutes, and on Refresh. */
+  const [tally, setTally] = useState<Tally | null>(null);
+  const [counting, setCounting] = useState(false);
+  const count = useCallback(async () => {
+    setCounting(true);
+    try {
+      const r = await fetch("/api/clean-sweep/summary", { cache: "no-store" });
+      const j = await r.json();
+      if (j.ok) setTally(j as Tally);
+    } catch { /* the strip keeps its last count */ }
+    setCounting(false);
+  }, []);
+  useEffect(() => {
+    void count();
+    const t = setInterval(() => void count(), 5 * 60_000);
+    return () => clearInterval(t);
+  }, [count]);
   const sec = SECTIONS.find((s) => s.key === section) ?? null;
 
-  /* Start each person in their own section: compliance for Michael, the tenancy for Kirstie, the rest for Joe. */
+  /* Start each person in their own section: compliance for Michael, the tenancy for Kirstie, the
+     landlord side for Josel. By address first - Josel is on the compliance team, so her role alone
+     would put her in Michael's section - then by role. */
   useEffect(() => {
     let saved: string | null = null;
     try { saved = localStorage.getItem("clean-sweep-section"); } catch { /* private window */ }
     if (saved && SECTIONS.some((s) => s.key === saved)) { setSection(saved as SectionKey); return; }
     fetch("/api/auth/me", { cache: "no-store" }).then((r) => r.json()).then((j) => {
       const role = String(j?.user?.role ?? j?.role ?? "");
-      setSection(role === "compliance" ? "compliance" : role === "pretenancy" ? "tenancy" : "landlord");
+      const email = String(j?.user?.email ?? j?.email ?? "").toLowerCase();
+      const mine = SECTION_BY_EMAIL[email];
+      setSection(mine ?? (role === "compliance" ? "compliance" : role === "pretenancy" ? "tenancy" : "landlord"));
     }).catch(() => setSection("landlord"));
   }, []);
 
@@ -173,6 +207,26 @@ export default function SecondPass() {
 
   return (
     <div className="mx-auto max-w-[1180px] pb-40">
+      {/* What is still missing, all three sections together, counted live */}
+      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-2xl border border-line bg-white px-4 py-2.5 text-[12.5px] text-muted">
+        {tally ? (
+          <>
+            <span><b className="text-[15px] text-ink">{tally.missing.toLocaleString("en-GB")}</b> still missing across {tally.homes} homes</span>
+            {tally.sections.map((t) => (
+              <span key={t.key}>{t.who}: <b className="text-ink">{t.missing.toLocaleString("en-GB")}</b> left · {t.signedOff} of {t.homes} homes signed off</span>
+            ))}
+          </>
+        ) : (
+          <span>Counting what is left…</span>
+        )}
+        <span className="ml-auto flex items-center gap-2">
+          {tally && <span>Counted {new Date(tally.countedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })}</span>}
+          <button onClick={() => void count()} disabled={counting} className="rounded-full border border-line px-3 py-1 font-semibold text-ink hover:border-ink disabled:opacity-60">
+            {counting ? "Counting" : "Refresh"}
+          </button>
+        </span>
+      </div>
+
       {/* Section tabs and progress */}
       <div className="flex flex-wrap items-center gap-2">
         {SECTIONS.map((s) => (

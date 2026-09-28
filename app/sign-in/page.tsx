@@ -75,8 +75,10 @@ function SignIn() {
            one tap away from the phone view's menu. */
         const phone = window.matchMedia("(max-width: 640px) and (pointer: coarse)").matches;
         router.replace(
-          /* Michael lands on his own dashboard, as Kirstie does on hers (20 Sep 2026). */
-          !asked && j.user?.role === "pretenancy" ? "/pre-tenancy/dashboard" : !asked && j.user?.role === "compliance" ? "/compliance-desk" : !asked && phone ? "/m" : next
+          /* Michael lands on his own dashboard, as Kirstie does on hers (20 Sep 2026),
+             and marketing on the Marketing Hub (28 Sep 2026): the dashboard is an
+             agent's REX work, and a marketing account has no REX. */
+          !asked && j.user?.role === "pretenancy" ? "/pre-tenancy/dashboard" : !asked && j.user?.role === "compliance" ? "/compliance-desk" : !asked && j.user?.role === "marketing" ? "/marketing-hub" : !asked && phone ? "/m" : next
         );
       } else {
         setError(j.error ?? "That didn't work.");

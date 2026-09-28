@@ -510,6 +510,9 @@ const MACHINE_ROUTES = [
      comparison fails and the route answers 401, so the redirect was never
      what protected it. */
   "/api/tenant/reminders/run",        // passport nudges and the morning viewing reminder, hourly
+  /* The clean sweep's running count (28 Sep 2026): counts only, and it checks
+     the cron key or a session itself, failing shut without CRON_SECRET. */
+  "/api/clean-sweep/summary",
   "/api/reminders/run",
 ];
 

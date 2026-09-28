@@ -6,6 +6,7 @@ import { rexSessionFor } from "@/lib/rex-user";
 import { msConnectionFor } from "@/lib/microsoft";
 import {
   EMPTY_SETUP,
+  REX_ROLES,
   STEP_ORDER,
   type SetupState,
   type SetupStepId,
@@ -64,6 +65,7 @@ function coerce(raw: unknown): SetupState {
   return {
     done,
     emailSkipped: r.emailSkipped === true,
+    rexSkipped: r.rexSkipped === true,
     finishedAt: typeof r.finishedAt === "string" ? r.finishedAt : undefined,
     tour,
     tourAt: typeof r.tourAt === "string" ? r.tourAt : undefined,
@@ -94,6 +96,7 @@ const SIGNED_OUT: SetupView = {
   name: "",
   email: "",
   rexConnected: false,
+  rexOptional: false,
   emailConnected: false,
   state: { ...EMPTY_SETUP, done: {} },
 };
@@ -123,6 +126,7 @@ export async function GET(req: NextRequest) {
       name: user?.name ?? "",
       email: user?.email ?? "",
       rexConnected: rex.connected,
+      rexOptional: !REX_ROLES.has(user?.role ?? "agent"),
       emailConnected: ms.connected,
       /* The password step is implied rather than recorded: they cannot be
          holding a session without having set one. Stamping it on read means
@@ -186,6 +190,17 @@ export async function PATCH(req: NextRequest) {
       /* Connecting email after skipping it clears the skip, so the profile
          stops offering to finish something that is finished. */
       if (body.step === "email") next.emailSkipped = body.skip === true;
+      /* Only somebody whose job is not in REX may pass over it; an agent's
+         "skip" is refused here as well as never being offered. */
+      if (body.step === "rex") {
+        if (body.skip === true) {
+          const who = await findUserById(userId);
+          if (REX_ROLES.has(who?.role ?? "agent")) {
+            return NextResponse.json({ ok: false, error: "Agents connect REX: it is where their work is." }, { status: 400 });
+          }
+        }
+        next.rexSkipped = body.skip === true;
+      }
     }
     if (body.finished) next.finishedAt = now;
     if (body.tour) {

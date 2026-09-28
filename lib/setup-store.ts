@@ -76,6 +76,7 @@ function apply(state: SetupState, change: SetupChange): SetupState {
   if (change.step) {
     next.done[change.step] = now;
     if (change.step === "email") next.emailSkipped = change.skip === true;
+    if (change.step === "rex") next.rexSkipped = change.skip === true;
   }
   if (change.finished) next.finishedAt = now;
   if (change.tour) {
@@ -92,6 +93,7 @@ const BLANK: SetupView = {
   name: "",
   email: "",
   rexConnected: false,
+  rexOptional: false,
   emailConnected: false,
   state: { ...EMPTY_SETUP, done: {} },
 };

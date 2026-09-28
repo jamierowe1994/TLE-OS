@@ -341,7 +341,7 @@ export const isFactKey = (k: string) => FIELD_BY_KEY.has(k);
 
 /* ── The second pass: three people, three sections of every home ─────────────
  *
- * James, 25 Sep: Michael, Kirstie and Joe each go through every home on
+ * James, 25 Sep: Michael, Kirstie and Josel (28 Sep; first written as Joe) each go through every home on
  * Susan's sheets, checking their own section against REX PM, Propoly and
  * PayProp, ticking what is right, fixing what is not and uploading what is
  * missing. One pass, then the OS is the source of truth.
@@ -359,7 +359,7 @@ export const SECTIONS: { key: SectionKey; label: string; who: string; fields: st
       "doc_tenancy_agreement", "doc_prt_notes", "doc_tenant_referencing", "doc_inventory", "rra_sheet_served", "doc_rra_sheet"],
   },
   {
-    key: "landlord", label: "Landlord, fees & deposit", who: "Joe",
+    key: "landlord", label: "Landlord, fees & deposit", who: "Josel",
     fields: ["service_package", "fee_management", "fee_setup", "letting_agreement_start", "doc_terms_of_business", "nrl_status", "doc_nrl1",
       "landlord_aml", "landlord_photo_id", "doc_landlord_id_ownership", "landlord_registration", "doc_landlord_registration", "rent_smart_wales",
       "deposit_ref", "deposit_amount", "deposit_protected_on", "doc_deposit_cert"],
@@ -389,4 +389,55 @@ export async function sectionQueue(section: SectionKey): Promise<QueueHome[]> {
       };
     })
     .sort((a, b) => (a.since ?? "9999").localeCompare(b.since ?? "9999") || a.address.localeCompare(b.address));
+}
+
+/**
+ * HOW MANY ARE LEFT, COUNTED NOW (28 Sep 2026).
+ *
+ * James: the three of them work through the gaps, and the count should keep up
+ * as the files change. Counted live, the same way the checker does: what is
+ * still missing across every let home on Susan's sheets, and for each section
+ * how much is missing and how many homes are signed off. Counts only - no
+ * addresses or names - so the two-hourly cron may read it with its key.
+ */
+export interface SweepSummary {
+  countedAt: string;
+  homes: number;
+  missing: number;
+  sections: { key: SectionKey; label: string; who: string; homes: number; missing: number; signedOff: number }[];
+  /** What is missing, column by column (by the column's label), across the same homes. */
+  byColumn: Record<string, number>;
+}
+
+/** Every let home on the sheets, and for each column how many still lack it. */
+async function missingByColumn(): Promise<Record<string, number>> {
+  if (!hasDb()) return {};
+  const [{ props, facts }, gas] = await Promise.all([load(), gasCertified()]);
+  const out: Record<string, number> = {};
+  for (const p of props) {
+    if (!p.payprop_no) continue;
+    const f = facts.get(p.id) ?? new Map<string, FactRow>();
+    if (notLetYet(p, f)) continue;
+    for (const n of neededFields(p, f)) if (!held(n.key, f, gasFor(p, gas))) out[n.label] = (out[n.label] ?? 0) + 1;
+  }
+  return out;
+}
+
+export async function sweepSummary(): Promise<SweepSummary> {
+  const [homes, byColumn, ...queues] = await Promise.all([sweepList(), missingByColumn(), ...SECTIONS.map((s) => sectionQueue(s.key))]);
+  const onSheet = homes.filter((h) => h.onSheet);
+  return {
+    countedAt: new Date().toISOString(),
+    homes: onSheet.length,
+    missing: onSheet.reduce((n, h) => n + h.missing, 0),
+    sections: SECTIONS.map((s, i) => ({
+      key: s.key,
+      label: s.label,
+      who: s.who,
+      homes: queues[i].length,
+      missing: queues[i].reduce((n, h) => n + h.missing, 0),
+      signedOff: queues[i].filter((h) => h.doneAt).length,
+    })),
+    byColumn,
+  };
 }

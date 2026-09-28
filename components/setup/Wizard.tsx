@@ -137,11 +137,20 @@ export default function Wizard({
       demo={demo && !forceDemo}
     >
       {screen === "welcome" && (
-        <Welcome name={view.name} onNext={() => go(view.rexConnected ? "email" : "rex")} />
+        <Welcome
+          name={view.name}
+          rexOptional={view.rexOptional}
+          onNext={() => go(isStepDone("rex", view) ? "email" : "rex")}
+        />
       )}
 
       {screen === "rex" && (
-        <StepRex preview={demo || dry} onDone={() => void complete("rex")} />
+        <StepRex
+          preview={demo || dry}
+          optional={view.rexOptional}
+          onDone={() => void complete("rex")}
+          onSkip={() => void complete("rex", { skip: true })}
+        />
       )}
 
       {screen === "email" && (
