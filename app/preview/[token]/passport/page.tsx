@@ -54,7 +54,7 @@ export default async function PreviewPassport({ params }: { params: Promise<{ to
       <header className="border-b border-black/10">
         <div className="flex h-16 w-full items-center justify-between px-5 sm:px-8 lg:px-12">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/tle-logo.png" alt="The Letting Experts" className="h-11 w-auto" />
+          <img src="/brand/tle-logo-coral.png" alt="The Letting Experts" className="h-9 w-auto sm:h-11" />
           <nav className="flex items-center gap-4 text-[12.5px] font-medium text-black/60">
             <span className="hidden sm:inline">A sample passport. Type in it freely - nothing is saved and it is about nobody.</span>
             <Link href={`/preview/${token}`} className="rounded-full border border-black/15 px-3.5 py-1.5 transition-colors hover:border-black/40 hover:text-black">

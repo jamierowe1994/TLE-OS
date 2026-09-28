@@ -39,7 +39,7 @@ export default async function TenantPublicLayout({ children }: { children: React
             <img
               src="/brand/tle-logo-coral.png"
               alt="The Letting Experts"
-              className="h-11 w-auto"
+              className="h-9 w-auto sm:h-11"
             />
           </Link>
           <nav className="flex items-center gap-5 text-[12.5px] font-medium text-black/60">
