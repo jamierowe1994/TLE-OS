@@ -253,8 +253,12 @@ export default function SecondPass() {
             )}
           </div>
           <div className="flex flex-wrap gap-2">
-            {detail?.links.rexPm && <a href={detail.links.rexPm} target="tle-sweep-rexpm" rel="noopener" className="rounded-full border border-line px-3 py-1.5 text-[12.5px] font-semibold hover:border-ink">REX PM ↗</a>}
-            {detail?.links.propoly && <a href={detail.links.propoly} target="tle-sweep-propoly" rel="noopener" className="rounded-full border border-line px-3 py-1.5 text-[12.5px] font-semibold hover:border-ink">Propoly ↗</a>}
+            {detail && (detail.links.rexPm
+              ? <a href={detail.links.rexPm} target="tle-sweep-rexpm" rel="noopener" className="rounded-full border border-line px-3 py-1.5 text-[12.5px] font-semibold hover:border-ink">REX PM ↗</a>
+              : <span title="REX PM does not hold this home" className="rounded-full border border-dashed border-line px-3 py-1.5 text-[12.5px] font-semibold text-muted">Not in REX PM</span>)}
+            {detail && (detail.links.propoly
+              ? <a href={detail.links.propoly} target="tle-sweep-propoly" rel="noopener" className="rounded-full border border-line px-3 py-1.5 text-[12.5px] font-semibold hover:border-ink">Propoly ↗</a>
+              : <span title="Propoly holds no deal or property for this home" className="rounded-full border border-dashed border-line px-3 py-1.5 text-[12.5px] font-semibold text-muted">Not in Propoly</span>)}
             {detail?.links.payprop && <a href={detail.links.payprop} target="tle-sweep-payprop" rel="noopener" className="rounded-full border border-line px-3 py-1.5 text-[12.5px] font-semibold hover:border-ink">PayProp ↗</a>}
           </div>
         </div>

@@ -29,7 +29,7 @@ type Detail = {
   home: Home & { postcode: string | null; rexPropertyId: string | null };
   facts: Fact[];
   certs: { key: string; label: string; days: number | null; file: boolean }[] | null;
-  links: { rexPm: string | null; propoly: string | null };
+  links: { rexPm: string | null; propoly: string | null; payprop?: string | null };
   notes: string | null;
 };
 
@@ -205,22 +205,38 @@ function HomePanel({ id, onBack, onChanged }: { id: string; onBack: () => void; 
     <div className="fade-up space-y-4">
       <div className="rounded-[22px] border border-line/70 bg-card p-5">
         <button type="button" onClick={onBack} className="mb-2 text-[12px] font-semibold text-muted lg:hidden">← All homes</button>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
             <h2 className="text-[20px] leading-tight">{h.address}</h2>
             <p className="mt-1 text-[12px] text-muted">
               {h.ref}{h.paypropNo ? ` · PayProp ${h.paypropNo}` : ""}{h.since ? ` · since ${fmtDate(h.since)}` : ""}{h.hmo ? " · HMO" : ""}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {d.links.rexPm && (
-              <a href={d.links.rexPm} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-full bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-page">
+          {/* The files live in REX PM and Propoly, so both are always here: a
+              home either system does not hold says so rather than hiding the
+              button (James, 28 Sep 2026). */}
+          <div className="flex shrink-0 flex-col items-stretch gap-1.5">
+            {d.links.rexPm ? (
+              <a href={d.links.rexPm} target="tle-sweep-rexpm" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-full bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-page">
                 <DoodleIcon name="link" size={12} /> Open in REX PM
               </a>
+            ) : (
+              <span title="REX PM does not hold this home" className="flex cursor-not-allowed items-center gap-1.5 rounded-full border border-dashed border-line px-3.5 py-1.5 text-[12px] font-semibold text-muted">
+                Not in REX PM
+              </span>
             )}
-            {d.links.propoly && (
-              <a href={d.links.propoly} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] font-semibold hover:border-ink">
+            {d.links.propoly ? (
+              <a href={d.links.propoly} target="tle-sweep-propoly" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] font-semibold hover:border-ink">
                 <DoodleIcon name="link" size={12} /> Open in Propoly
+              </a>
+            ) : (
+              <span title="Propoly holds no deal or property for this home" className="flex cursor-not-allowed items-center gap-1.5 rounded-full border border-dashed border-line px-3.5 py-1.5 text-[12px] font-semibold text-muted">
+                Not in Propoly
+              </span>
+            )}
+            {d.links.payprop && (
+              <a href={d.links.payprop} target="tle-sweep-payprop" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] font-semibold hover:border-ink">
+                <DoodleIcon name="link" size={12} /> PayProp
               </a>
             )}
           </div>

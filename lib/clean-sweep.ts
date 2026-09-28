@@ -316,15 +316,19 @@ export async function sweepDetail(id: string): Promise<SweepDetail | null> {
       files: byField.get(x.key) ?? [],
     };
   });
-  const uuid = id.startsWith("pm-") && !id.startsWith("pm-0000-") ? id.slice(3) : null;
+  /* REX PM's own id is in ours for the homes read from it; a home added from
+     Susan's sheets and found in REX PM later carries it as a fact (28 Sep). */
+  const uuid = (id.startsWith("pm-") && !id.startsWith("pm-0000-") ? id.slice(3) : null) ?? f.get("rex_pm_property")?.value ?? null;
   const deal = f.get("propoly_deal")?.value ?? null;
+  /* No deal: the Propoly property page instead (a room's is its house's). */
+  const propolyProperty = f.get("propoly_property")?.value ?? null;
   return {
     home: { ...list, postcode: p.postcode, rexPropertyId: p.rex_property_id },
     facts,
     certs,
     links: {
       rexPm: uuid ? `https://alfie.app.rexsoftware.com/property/${uuid}` : null,
-      propoly: deal ? `https://tle.propoly.com/deals/${deal}` : null,
+      propoly: deal ? `https://tle.propoly.com/deals/${deal}` : propolyProperty ? `https://tle.propoly.com/properties/${propolyProperty}` : null,
       /* Susan's sheets carry PayProp's own property number, which is the id in its web links. */
       payprop: p.payprop_no && /^\d+$/.test(p.payprop_no) ? `https://uk.payprop.com/c/property/${p.payprop_no}` : null,
     },
