@@ -1,3 +1,5 @@
+import { sameSite } from "@/lib/email/preview-origin";
+import { publicOrigin } from "@/lib/origin";
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { isShowroomEmail, renderShowroomEmail, showroomEmailMeta } from "@/lib/showroom/emails";
@@ -13,7 +15,6 @@ import { isShowroomEmail, renderShowroomEmail, showroomEmailMeta } from "@/lib/s
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const LIVE_ORIGIN = (process.env.OS_ORIGIN ?? "https://tle-os.co.uk").replace(/\/+$/, "");
 
 export async function GET(req: NextRequest) {
   const { actor } = await whoIs(req);
@@ -25,8 +26,12 @@ export async function GET(req: NextRequest) {
     try {
       const out = await renderShowroomEmail(id);
       if (!out) return NextResponse.json({ ok: false, error: "No such email." }, { status: 404 });
-      /* Pictures from this site, not the live one, so a preview shows what is on disk (as /api/admin/emails). */
-      return NextResponse.json({ ok: true, id, subject: out.subject, html: out.html.replaceAll(LIVE_ORIGIN, req.nextUrl.origin) });
+      /* Pictures from this site's own public address (lib/origin): the files
+         on disk on a laptop, the live site on Railway. NOT the request's
+         origin - behind Railway that is localhost:8080, and every picture in
+         every preview pointed there and showed as a broken box (James, 28 Sep
+         2026). */
+      return NextResponse.json({ ok: true, id, subject: out.subject, html: sameSite(out.html, publicOrigin(req)) });
     } catch (e) {
       return NextResponse.json({ ok: false, error: `That email did not render: ${e instanceof Error ? e.message : "unknown"}` }, { status: 500 });
     }

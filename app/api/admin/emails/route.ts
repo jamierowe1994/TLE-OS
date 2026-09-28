@@ -1,3 +1,5 @@
+import { sameSite } from "@/lib/email/preview-origin";
+import { publicOrigin } from "@/lib/origin";
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { footerFor, footerPreviewHtml, withFooter } from "@/lib/email-footer";
@@ -17,7 +19,6 @@ import { uid } from "@/lib/auth";
 const CATALOG = "email-catalog";
 
 /** The absolute origin the email templates bake into every image src. */
-const LIVE_ORIGIN = (process.env.OS_ORIGIN ?? "https://tle-os.co.uk").replace(/\/+$/, "");
 
 /**
  * Owner, or marketing. James, 7 Sep 2026: the maintenance and invoice
@@ -82,13 +83,16 @@ export async function GET(req: NextRequest) {
            a relative one resolves against the mail client. That is right in an
            inbox and wrong here: a picture added today does not exist on the
            live site yet, so the preview of the email being worked on is the
-           one place it would never appear. Pointed at whatever origin this
-           page was served from, the preview shows the files on disk. */
+           one place it would never appear. Pointed at this site's own public
+           address (lib/origin), the preview shows the files on disk on a
+           laptop and the live site on Railway - never the request's origin,
+           which behind Railway is localhost:8080 and broke every picture
+           (28 Sep 2026). */
         /* ?footer=1: with the signed-in person's own email footer under it,
            as it would leave their mailbox (lib/email-footer). For looking at
            how a footer sits under a designed mail before anybody receives one. */
         html: await (async () => {
-          const shown = html.replaceAll(LIVE_ORIGIN, req.nextUrl.origin);
+          const shown = sameSite(html, publicOrigin(req));
           if (req.nextUrl.searchParams.get("footer") !== "1") return shown;
           const { actor } = await whoIs(req);
           const f = actor ? await footerFor(actor.id) : null;

@@ -32,7 +32,7 @@ import type { CampaignStep } from "./campaigns";
  * wordmark: a missing logo reads as restraint, a broken image reads as a
  * broken company.
  */
-function assetOrigin(): string {
+export function assetOrigin(): string {
   /* Falls back to the custom domain rather than "" (11 Sep 2026): production
      never had NEXT_PUBLIC_OS_ORIGIN set, so every landlord and tenant email
      went out with no logo and the serif fallback wordmark instead. A constant
