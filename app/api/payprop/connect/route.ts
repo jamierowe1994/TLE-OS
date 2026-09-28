@@ -60,10 +60,15 @@ export async function GET(req: NextRequest) {
   }
   const state = crypto.randomBytes(16).toString("hex");
   const redirectUri = `${origin}/api/payprop/callback`;
-  const current = await payPropGet(account, "meta/me").catch(() => null);
+  const current = req.nextUrl.searchParams.get("files") === "1" ? await payPropGet(account, "meta/me").catch(() => null) : null;
   const had = ((current?.result as { scopes?: string[] } | null)?.scopes ?? []).filter((x) => typeof x === "string");
-  /* Only when we know what is held already: asking for two scopes alone would narrow the connection to them. */
-  const scope = had.length ? [...new Set([...had, ...WANTED_SCOPES])].join(" ") : undefined;
+  /* Only on request (?files=1), and only when we know what is held already:
+     asking for two scopes alone would narrow the connection to them. PayProp
+     refuses the whole connect ("client lacks scope") when the client is not
+     allowed a scope, as the E&W client was on 28 Sep, so the everyday Connect
+     asks for PayProp's defaults, as it always did. */
+  const wantFiles = req.nextUrl.searchParams.get("files") === "1";
+  const scope = wantFiles && had.length ? [...new Set([...had, ...WANTED_SCOPES])].join(" ") : undefined;
   const res = NextResponse.redirect(payPropAuthorizeUrl({ clientId: creds.id, redirectUri, state, scope }));
   res.cookies.set("payprop_oauth", JSON.stringify({ state, account }), {
     httpOnly: true,
