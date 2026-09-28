@@ -137,6 +137,8 @@ export function neededFields(p: PropRow, facts: Map<string, FactRow>): FactField
     if (DEPOSIT.has(f.key) && (depBy === "landlord" || (!managed && depBy !== "agent"))) return false;
     /* A Flatfair plan or a let with no deposit taken has nothing to protect. */
     if (DEPOSIT.has(f.key) && /^no deposit/i.test(facts.get("deposit_status")?.value ?? "")) return false;
+    /* The sheet itself is only asked for once the answer is Yes. */
+    if (f.key === "doc_rra_sheet" && /^no\b/i.test(facts.get("rra_sheet_served")?.value ?? "")) return false;
     if (RRA_SHEET.has(f.key)) {
       const start = facts.get("tenancy_start")?.value ?? "";
       if (start >= RRA_FROM) return false;
@@ -187,12 +189,36 @@ async function load(): Promise<{ props: PropRow[]; facts: Map<string, Map<string
  * parked, off the lists and out of the missing count, until somebody moves in.
  */
 export function notLetYet(p: PropRow & { tenant_names?: string | null }, facts: Map<string, FactRow>): boolean {
+  /* Not with us any more (James, 28 Sep 2026): REX PM has the home archived,
+     or vacant with no letting agreement. Susan's sheets still list some of
+     them, which is how 24 Ann Street and 278 Rowan Road showed 17 gaps each
+     for files that were never going to exist. rex_pm_status is read from
+     REX PM's own property record. */
+  if (/^(archived|vacant, no letting agreement)/i.test(facts.get("rex_pm_status")?.value ?? "")) return true;
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
   const start = (facts.get("tenancy_start")?.value ?? "").slice(0, 10);
   if (start && start > today) return true;
   const named = Boolean((p.tenant_names ?? "").trim());
   const counted = Number(facts.get("tenants_count")?.value ?? 0) > 0;
   return !named && !counted;
+}
+
+/**
+ * An address as a person would write it (James, 28 Sep 2026): the sheets and
+ * REX PM carry doubled commas ("278 Rowan Road,, Cumbernauld"), stray dashes
+ * and postcodes run together ("ML30NE"). Display only; the record is not
+ * rewritten, so every match against REX PM, Propoly and PayProp is unchanged.
+ */
+export function tidyAddress(a: string | null | undefined): string {
+  return String(a ?? "")
+    .replace(/\s*-{2,}\s*/g, " - ")
+    .replace(/\s*,(\s*,)+/g, ",")
+    .replace(/\s+,/g, ",")
+    .replace(/,(\S)/g, ", $1")
+    .replace(/\s{2,}/g, " ")
+    .replace(/[\s,]+$/, "")
+    .replace(/\b([A-Z]{1,2}\d[A-Z\d]?)\s*(\d[A-Z]{2})$/i, (_m, a1: string, a2: string) => `${a1.toUpperCase()} ${a2.toUpperCase()}`)
+    .trim();
 }
 
 export async function sweepList(): Promise<SweepHome[]> {
@@ -205,7 +231,7 @@ export async function sweepList(): Promise<SweepHome[]> {
     const signed = f.get("check_signed_off");
     return {
       id: p.id,
-      address: p.address,
+      address: tidyAddress(p.address),
       ref: p.ref,
       paypropNo: p.payprop_no,
       onSheet: Boolean(p.payprop_no),
@@ -228,6 +254,8 @@ export interface SweepFact {
   key: string; label: string; group: string; kind: string; needed: boolean; held: boolean;
   value: string | null; source: string | null; sourceRef: string | null; checkedAgainst: string | null;
   capturedAt: string | null; capturedBy: string | null; files: { key: string; name: string }[];
+  /** Set answers to pick from, where the column is a question (see FactField.choices). */
+  choices: string[] | null;
   /** Why a column with no value of its own still counts as held. */
   note: string | null;
   /** Ticked as right by a person in the second pass. */
@@ -314,6 +342,7 @@ export async function sweepDetail(id: string): Promise<SweepDetail | null> {
       value: r?.value ?? null, source: r?.source ?? null, sourceRef: r?.source_ref ?? null, checkedAgainst: r?.checked_against ?? null,
       capturedAt: r ? new Date(r.captured_at).toISOString() : null, capturedBy: r?.captured_by ?? null,
       files: byField.get(x.key) ?? [],
+      choices: x.choices ?? null,
     };
   });
   /* REX PM's own id is in ours for the homes read from it; a home added from
@@ -386,7 +415,7 @@ export async function sectionQueue(section: SectionKey): Promise<QueueHome[]> {
       const need = neededFields(p, f).filter((n) => own.has(n.key));
       const done = f.get(`check_${section}`);
       return {
-        id: p.id, address: p.address, landlord: p.landlord_name,
+        id: p.id, address: tidyAddress(p.address), landlord: p.landlord_name,
         since: f.get("letting_agreement_start")?.value ?? f.get("tenancy_start")?.value ?? null,
         missing: need.filter((n) => !held(n.key, f, gasFor(p, gas))).length,
         doneAt: done?.value ?? null, doneBy: done?.captured_by ?? null,

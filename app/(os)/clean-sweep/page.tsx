@@ -24,6 +24,7 @@ type Fact = {
   key: string; label: string; group: string; kind: string; needed: boolean; held: boolean;
   value: string | null; source: string | null; sourceRef: string | null; checkedAgainst: string | null;
   capturedAt: string | null; capturedBy: string | null; files: { key: string; name: string }[]; note: string | null;
+  choices?: string[] | null;
 };
 type Detail = {
   home: Home & { postcode: string | null; rexPropertyId: string | null };
@@ -313,10 +314,10 @@ function FactRow({ homeId, f, onSaved }: { homeId: string; f: Fact; onSaved: (d:
   const fileRef = useRef<HTMLInputElement | null>(null);
   const differs = /differs/i.test(f.checkedAgainst ?? "");
 
-  async function save() {
+  async function save(pick?: string) {
     setBusy(true); setErr(null);
     try {
-      const r = await fetch(`/api/clean-sweep/${encodeURIComponent(homeId)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ field: f.key, value: val }) });
+      const r = await fetch(`/api/clean-sweep/${encodeURIComponent(homeId)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ field: f.key, value: pick ?? val }) });
       const j = await r.json();
       if (j.ok) { setEditing(false); onSaved(j); } else setErr(j.error || "That did not save.");
     } catch { setErr("That did not save - the OS could not be reached."); } finally { setBusy(false); }
@@ -367,7 +368,7 @@ function FactRow({ homeId, f, onSaved }: { homeId: string; f: Fact; onSaved: (d:
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {f.kind !== "file" && !editing && (
+          {f.kind !== "file" && !editing && !f.choices?.length && (
             <button type="button" onClick={() => setEditing(true)} className="rounded-full border border-line/80 px-3 py-1 text-[11.5px] font-semibold hover:border-ink">{f.value ? "Edit" : "Add"}</button>
           )}
           <input ref={fileRef} type="file" multiple className="hidden" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic" onChange={(e) => void upload(e.target.files)} />
@@ -376,7 +377,13 @@ function FactRow({ homeId, f, onSaved }: { homeId: string; f: Fact; onSaved: (d:
           </button>
         </div>
       </div>
-      {editing && (
+      {f.choices?.length ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {f.choices.map((c) => (
+            <button key={c} type="button" disabled={busy} onClick={() => void save(c)} className={`rounded-full px-4 py-1.5 text-[12px] font-semibold disabled:opacity-60 ${f.value === c ? "bg-accent-dark text-page" : "border border-line/80 hover:border-ink"}`}>{c}</button>
+          ))}
+        </div>
+      ) : editing && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <input
             autoFocus

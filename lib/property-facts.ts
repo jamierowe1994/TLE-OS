@@ -31,6 +31,8 @@ export interface FactField {
   kind: FactKind;
   /** Only some homes need it (an HMO, a Welsh or Scottish home, an NRL landlord). */
   when?: "hmo" | "wales" | "scotland" | "nrl";
+  /** A question with set answers: the checker picks one instead of typing. */
+  choices?: string[];
 }
 
 export const FIELDS: FactField[] = [
@@ -63,7 +65,9 @@ export const FIELDS: FactField[] = [
   { key: "visit_next", label: "Next property visit due", group: "Tenancy", kind: "date" },
   { key: "rtr_expiry", label: "Right to Rent expiry (earliest)", group: "Tenancy", kind: "date" },
   { key: "rtr_checked", label: "Right to Rent checked", group: "Tenancy", kind: "word" },
-  { key: "rra_sheet_served", label: "RRA information sheet served", group: "Tenancy", kind: "date" },
+  /* Yes or No (James, 28 Sep 2026): every home reads No unless the sheet is on
+     file; a Yes then asks for the sheet itself. It was a date nobody held. */
+  { key: "rra_sheet_served", label: "RRA information sheet served", group: "Tenancy", kind: "word", choices: ["Yes", "No"] },
   { key: "guarantors_count", label: "Number of guarantors", group: "Guarantors", kind: "number" },
   { key: "guarantor_names", label: "Guarantors", group: "Guarantors", kind: "word" },
   { key: "guarantor_contacts", label: "Guarantor contact details", group: "Guarantors", kind: "word" },

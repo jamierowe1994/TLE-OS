@@ -48,6 +48,7 @@ type Fact = {
   key: string; label: string; kind: string; needed: boolean; held: boolean; value: string | null; source: string | null;
   capturedBy: string | null; checkedAgainst: string | null; files: { key: string; name: string }[]; note: string | null;
   verifiedAt: string | null; verifiedBy: string | null;
+  choices?: string[] | null;
 };
 type Cert = { key: string; label: string; days: number | null; file: boolean; expiresOn: string | null; fileUrl: string | null; notRequired: boolean; checkedBy: string | null };
 type Detail = {
@@ -323,9 +324,9 @@ function FactRow({ f, homeId, ticked, onTick, onSaved, post, setMsg }: {
   const inputType = f.kind === "date" ? "date" : f.kind === "number" ? "number" : "text";
   const differs = /differs/i.test(f.checkedAgainst ?? "");
 
-  async function save(na = false) {
+  async function save(na = false, pick?: string) {
     setBusy(true);
-    const d = await post(na ? { field: f.key, na: true } : { field: f.key, value: val });
+    const d = await post(na ? { field: f.key, na: true } : { field: f.key, value: pick ?? val });
     setBusy(false);
     if (d) { setEditing(false); onSaved(d); }
   }
@@ -349,7 +350,16 @@ function FactRow({ f, homeId, ticked, onTick, onSaved, post, setMsg }: {
         {f.needed && !f.held && <span className="mt-0.5 inline-block rounded-full bg-[#f6e1dd] px-2 py-px text-[10.5px] font-semibold text-[#9d4340]">Missing</span>}
       </div>
       <div className="min-w-0 text-[13px]">
-        {editing ? (
+        {f.choices?.length ? (
+          <div>
+            <div className="flex items-center gap-2">
+              {f.choices.map((c) => (
+                <button key={c} onClick={() => void save(false, c)} disabled={busy} className={`rounded-full px-4 py-1 text-[12px] font-semibold ${f.value === c ? "bg-ink text-white" : "border border-line hover:border-ink"}`}>{c}</button>
+              ))}
+            </div>
+            {f.source && <p className="mt-0.5 text-[11px] text-muted">{f.source === "manual" ? `Added by ${f.capturedBy ?? "the office"}` : f.source}</p>}
+          </div>
+        ) : editing ? (
           <div className="flex items-center gap-2">
             <input autoFocus type={inputType} value={val} onChange={(e) => setVal(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void save(); } if (e.key === "Escape") setEditing(false); }} className="w-64 rounded-lg border border-line px-2 py-1 text-[13px]" />
             <button onClick={() => void save()} disabled={busy} className="rounded-full bg-ink px-3 py-1 text-[12px] font-semibold text-white">Save</button>
@@ -378,7 +388,7 @@ function FactRow({ f, homeId, ticked, onTick, onSaved, post, setMsg }: {
         )}
       </div>
       <div className="flex justify-end gap-1.5">
-        {f.kind !== "file" && !editing && <button onClick={() => { setVal(f.kind === "date" ? (f.value && /^\d{4}-\d{2}-\d{2}/.test(f.value) ? f.value.slice(0, 10) : "") : f.value ?? ""); setEditing(true); }} className="rounded-full border border-line px-3 py-1 text-[12px] hover:border-ink">{f.value ? "Edit" : "Add"}</button>}
+        {f.kind !== "file" && !editing && !f.choices?.length && <button onClick={() => { setVal(f.kind === "date" ? (f.value && /^\d{4}-\d{2}-\d{2}/.test(f.value) ? f.value.slice(0, 10) : "") : f.value ?? ""); setEditing(true); }} className="rounded-full border border-line px-3 py-1 text-[12px] hover:border-ink">{f.value ? "Edit" : "Add"}</button>}
         {!editing && <button onClick={() => void save(true)} disabled={busy} className="rounded-full border border-line px-2.5 py-1 text-[12px] text-muted hover:border-ink" title="This column does not apply to this home">N/A</button>}
         <button onClick={() => fileRef.current?.click()} disabled={busy} className="rounded-full border border-line px-3 py-1 text-[12px] hover:border-ink">{busy ? "…" : "Upload"}</button>
         <input ref={fileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void upload(file); e.target.value = ""; }} />
