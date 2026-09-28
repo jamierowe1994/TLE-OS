@@ -3,6 +3,16 @@ import crypto from "node:crypto";
 import { requireCapability } from "@/lib/admin";
 import { payPropAuthorizeUrl, payPropClient, type PayPropAccountId } from "@/lib/business/payprop";
 import { publicOrigin } from "@/lib/origin";
+import { payPropGet } from "@/lib/payprop";
+
+/**
+ * What we ask PayProp for (28 Sep 2026). Left blank, PayProp grants the
+ * client's defaults, which for E&W came to 13 permissions and did not include
+ * reading a property's files - so the clean sweep could read Scotland's PRTs
+ * and deposit certificates (API key, 40 permissions) but not England's. We ask
+ * for whatever the connection already has, plus these. All read only.
+ */
+const WANTED_SCOPES = ["read:attachment:list", "read:attachment:download"];
 
 /**
  * GET /api/payprop/connect?account=uk → off to PayProp to authorise.
@@ -50,7 +60,11 @@ export async function GET(req: NextRequest) {
   }
   const state = crypto.randomBytes(16).toString("hex");
   const redirectUri = `${origin}/api/payprop/callback`;
-  const res = NextResponse.redirect(payPropAuthorizeUrl({ clientId: creds.id, redirectUri, state }));
+  const current = await payPropGet(account, "meta/me").catch(() => null);
+  const had = ((current?.result as { scopes?: string[] } | null)?.scopes ?? []).filter((x) => typeof x === "string");
+  /* Only when we know what is held already: asking for two scopes alone would narrow the connection to them. */
+  const scope = had.length ? [...new Set([...had, ...WANTED_SCOPES])].join(" ") : undefined;
+  const res = NextResponse.redirect(payPropAuthorizeUrl({ clientId: creds.id, redirectUri, state, scope }));
   res.cookies.set("payprop_oauth", JSON.stringify({ state, account }), {
     httpOnly: true,
     sameSite: "lax",
