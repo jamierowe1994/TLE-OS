@@ -52,6 +52,9 @@ export const FRONT: NavItem[] = [
   { href: "/listings", label: "Listings", icon: "home" },
   { href: "/viewings", label: "Viewings", icon: "calendar" },
   { href: "/applications", label: "Applications", icon: "checklist" },
+  /* Every journey from the other side of the glass (James, 28 Sep 2026) -
+     lib/showroom. Hidden from agents until Phase 3; owners see it now. */
+  { href: "/showroom", label: "Showroom", icon: "magic-wand" },
 ];
 
 /** BACK OFFICE — the book being run. */
@@ -287,6 +290,7 @@ export const AGENT_ROUTES = [
   "/listings",
   "/viewings",
   "/applications",
+  "/showroom",
   "/compliance",
   "/maintenance",
   "/inspections",

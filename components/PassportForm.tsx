@@ -159,13 +159,23 @@ function Chips<T extends string | number>({ options, value, onPick, label }: { o
   );
 }
 
+/**
+ * The demo passport is drawn inside the Showroom (lib/showroom), and a box
+ * that takes the cursor as it appears pulls the whole Showroom page down to it
+ * (28 Sep 2026). So the demo never takes the cursor; a tenant's own passport
+ * still does. The main form reads `demo` directly; the pieces it is built
+ * from ask this.
+ */
+const QuietFocus = createContext(false);
+
 /** Four digits, and nothing else. */
 function YearInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+  const quiet = useContext(QuietFocus);
   return (
     <input
       inputMode="numeric"
       maxLength={4}
-      autoFocus
+      autoFocus={!quiet}
       className={`${input.replace("w-full", "w-[132px]")} text-center text-[18px] tracking-[0.08em]`}
       placeholder={placeholder}
       value={value}
@@ -264,6 +274,7 @@ function looksLikeADoor(a: string): boolean {
 const PassportToken = createContext("");
 
 function TenantAddress({ label, hint, value, onChange, onEnter, onPicked }: { label: string; hint?: string; value: string; onChange: (v: string) => void; onEnter?: () => void; onPicked?: () => void }) {
+  const quiet = useContext(QuietFocus);
   const [matches, setMatches] = useState<{ id: string; label: string }[]>([]);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -336,7 +347,7 @@ function TenantAddress({ label, hint, value, onChange, onEnter, onPicked }: { la
           <input
             className={`${input} pr-11`}
             value={value}
-            autoFocus
+            autoFocus={!quiet}
             placeholder="Start typing your address or postcode"
             autoComplete="off"
             onChange={(e) => { picked.current = null; onChange(e.target.value); }}
@@ -360,7 +371,7 @@ function TenantAddress({ label, hint, value, onChange, onEnter, onPicked }: { la
             <div className="mt-2 flex gap-2">
               <input
                 className={input}
-                autoFocus
+                autoFocus={!quiet}
                 value={houseNumber}
                 placeholder="e.g. 12, or Flat 2"
                 onChange={(e) => setHouseNumber(e.target.value)}
@@ -1117,7 +1128,7 @@ export default function PassportForm({
             node: (
               <>
                 <Field label="Full legal name" hint="As it appears on your passport or driving licence.">
-                  <input className={input} value={d.legalName} placeholder="e.g. Samantha Jones" autoFocus onChange={(e) => set("legalName", e.target.value)} {...lit("legalName")} {...onEnter} />
+                  <input className={input} value={d.legalName} placeholder="e.g. Samantha Jones" autoFocus={!demo} onChange={(e) => set("legalName", e.target.value)} {...lit("legalName")} {...onEnter} />
                 </Field>
                 <Field label="Known as (optional)" hint="If you go by something else.">
                   <input className={input} value={d.knownAs} placeholder="e.g. Sam" onChange={(e) => set("knownAs", e.target.value)} {...lit("knownAs")} {...onEnter} />
@@ -1190,7 +1201,7 @@ export default function PassportForm({
               <>
                 {born && <Note>{born.long}. Cool, you were born on a {born.weekday}.</Note>}
                 <Field label="What's your nationality?">
-                  <input className={input} list="passport-nationalities" autoFocus value={d.nationality} placeholder="Start typing" onChange={(e) => set("nationality", e.target.value)} {...lit("nationality")} {...onEnter} />
+                  <input className={input} list="passport-nationalities" autoFocus={!demo} value={d.nationality} placeholder="Start typing" onChange={(e) => set("nationality", e.target.value)} {...lit("nationality")} {...onEnter} />
                   <datalist id="passport-nationalities">
                     {NATIONALITIES.map((n) => <option key={n} value={n} />)}
                   </datalist>
@@ -1256,7 +1267,7 @@ export default function PassportForm({
               summary: <>Share code <strong>{d.shareCode.trim()}</strong></>,
               node: (
                 <Field label="Your share code" hint="Free from gov.uk/prove-right-to-rent. It takes about two minutes and lasts 90 days. With this we can do the whole check online, today.">
-                  <input className={input} autoFocus value={d.shareCode} placeholder="e.g. W12 A34 B56" onChange={(e) => set("shareCode", e.target.value)} {...onEnter} />
+                  <input className={input} autoFocus={!demo} value={d.shareCode} placeholder="e.g. W12 A34 B56" onChange={(e) => set("shareCode", e.target.value)} {...onEnter} />
                 </Field>
               ),
             },
@@ -1286,7 +1297,7 @@ export default function PassportForm({
               node: (
                 <div className="grid gap-5 sm:grid-cols-2">
                   <Field label="Annual income" hint="Before tax. If you are not sure, your monthly pay times twelve is close enough.">
-                    <input className={input} inputMode="decimal" autoFocus value={d.annualIncome} placeholder="32,000" onChange={(e) => set("annualIncome", e.target.value)} {...onEnter} />
+                    <input className={input} inputMode="decimal" autoFocus={!demo} value={d.annualIncome} placeholder="32,000" onChange={(e) => set("annualIncome", e.target.value)} {...onEnter} />
                   </Field>
                   <Field label="Savings" hint="Optional. It is what rescues a borderline application, so it is worth putting in.">
                     <input className={input} inputMode="decimal" value={d.savings} placeholder="4,000" onChange={(e) => set("savings", e.target.value)} {...onEnter} />
@@ -1324,7 +1335,7 @@ export default function PassportForm({
             node: (
               <div className="grid gap-5 sm:grid-cols-2">
                 <Field label="How many adults are moving in, including you?">
-                  <input type="number" min={1} max={9} autoFocus className={input} value={d.numAdults} placeholder="1" onChange={(e) => set("numAdults", e.target.value)} {...onEnter} />
+                  <input type="number" min={1} max={9} autoFocus={!demo} className={input} value={d.numAdults} placeholder="1" onChange={(e) => set("numAdults", e.target.value)} {...onEnter} />
                 </Field>
                 <Field label="And children?">
                   <input type="number" min={0} max={12} className={input} value={d.numChildren} placeholder="0" onChange={(e) => set("numChildren", e.target.value)} {...onEnter} />
@@ -1353,7 +1364,7 @@ export default function PassportForm({
                   {k === 0 ? you : <Note>{row(k - 1).name || `Adult ${k + 1}`} added. Their income counts towards the total.</Note>}
                   <div className="grid gap-5 sm:grid-cols-2">
                     <Field label={adults === 2 ? "Who else is moving in?" : `Adult ${k + 2} of ${adults}`}>
-                      <input className={input} autoFocus value={r.name} placeholder="Their name" onChange={(e) => write(k, { name: e.target.value })} {...onEnter} />
+                      <input className={input} autoFocus={!demo} value={r.name} placeholder="Their name" onChange={(e) => write(k, { name: e.target.value })} {...onEnter} />
                     </Field>
                     <Field label="Income towards the total" hint="A year, before tax.">
                       <input className={input} inputMode="decimal" value={r.income} placeholder="24,000" onChange={(e) => write(k, { income: e.target.value })} {...onEnter} />
@@ -1461,7 +1472,7 @@ export default function PassportForm({
                 summary: <span className="text-muted">{d.adverseCreditNote.trim()}</span>,
                 node: (
                   <Field label="Tell us about it" hint="A couple of sentences. Context helps, and it is rarely a no on its own.">
-                    <textarea rows={3} autoFocus className={`${input} resize-none leading-relaxed`} value={d.adverseCreditNote} onChange={(e) => set("adverseCreditNote", e.target.value)} />
+                    <textarea rows={3} autoFocus={!demo} className={`${input} resize-none leading-relaxed`} value={d.adverseCreditNote} onChange={(e) => set("adverseCreditNote", e.target.value)} />
                   </Field>
                 ),
               },
@@ -1487,7 +1498,7 @@ export default function PassportForm({
                 summary: <>{d.petsNote.trim()}</>,
                 node: (
                   <Field label="What kind?">
-                    <input className={input} autoFocus value={d.petsNote} placeholder="e.g. one cat" onChange={(e) => set("petsNote", e.target.value)} {...onEnter} />
+                    <input className={input} autoFocus={!demo} value={d.petsNote} placeholder="e.g. one cat" onChange={(e) => set("petsNote", e.target.value)} {...onEnter} />
                   </Field>
                 ),
               },
@@ -1520,7 +1531,7 @@ export default function PassportForm({
                 typed: true,
                 node: (
                   <Field label={label}>
-                    <input className={input} autoFocus value={value} onChange={(e) => put(e.target.value)} {...onEnter} />
+                    <input className={input} autoFocus={!demo} value={value} onChange={(e) => put(e.target.value)} {...onEnter} />
                   </Field>
                 ),
               };
@@ -1648,6 +1659,7 @@ export default function PassportForm({
   }
 
   return (
+    <QuietFocus.Provider value={demo}>
     <PassportToken.Provider value={token}>
     <div
       data-passport-page
@@ -1786,5 +1798,6 @@ export default function PassportForm({
       </aside>
     </div>
     </PassportToken.Provider>
+    </QuietFocus.Provider>
   );
 }

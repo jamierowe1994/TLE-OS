@@ -125,6 +125,10 @@ export const AREA_DEFS: AreaDef[] = [
      confirmations, and it was under no area - the one door out of a look-only
      Viewings screen that reached a tenant's inbox. */
   { id: "viewings", label: "Viewings", phase: 1, pages: ["/viewings"], apis: ["/api/viewings", "/api/appointments", "/api/confirmations"], canHide: true },
+  /* The Showroom (lib/showroom). Hidden from agents until Phase 3 - see the
+     row lib/db stores for it, and lib/phases. Its only write is "email it to
+     me", to the person pressing it. */
+  { id: "showroom", label: "Showroom", phase: 1, pages: ["/showroom"], apis: ["/api/showroom"], canHide: true },
   {
     id: "applications", label: "Applications", phase: 1, pages: ["/applications", "/plc"],
     apis: ["/api/applications", "/api/plc", "/api/pretenancy", "/api/handoff", "/api/handover", "/api/deals", "/api/tenancy-link"],

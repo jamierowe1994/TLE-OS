@@ -992,6 +992,11 @@ CREATE TABLE IF NOT EXISTS os_area_access (
   changed_by     TEXT NOT NULL DEFAULT '',
   changed_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- The Showroom arrives HIDDEN (James, 28 Sep 2026: "it'll be hidden until
+-- phase 3"). No row would mean everyone the moment it deploys, so it is given
+-- one - once, never over a position somebody has since chosen. Phase 3 opens it.
+INSERT INTO os_area_access (area, level, changed_by) VALUES ('showroom', 'hidden', 'Arrives hidden until Phase 3')
+  ON CONFLICT (area) DO NOTHING;
 
 -- Who counts as a tester when an area is at testers. By email rather than
 -- user id so somebody can be named before their account exists.

@@ -91,7 +91,7 @@ export const PHASES: PhaseDef[] = [
     name: "Practice",
     confirm: "PHASE 1",
     says: "The pilot list is invited and can explore. Real records are look only; their own test files work in full. Nothing goes out.",
-    areas: { ...all(FRONT, "practice"), ...all(BACK_ALL, "hidden") },
+    areas: { ...all(FRONT, "practice"), ...all(BACK_ALL, "hidden"), showroom: "hidden" },
     switches: Object.fromEntries(OUTWARD_OFF_IN_1.map((k) => [k, false])),
     steps: [
       "Turns OFF everything that reaches a customer, REX or Propoly.",
@@ -112,7 +112,7 @@ export const PHASES: PhaseDef[] = [
     name: "Working",
     confirm: "PHASE 2",
     says: "The front office is real: what an agent does saves, and reaches REX. Nothing is emailed to a landlord or a tenant, nothing is pushed to the portals, and their test files stay so they can walk both portals.",
-    areas: { ...all(FRONT_WITHOUT_PORTALS, "everyone"), "listing-publish": "hidden", ...all(BACK_ALL, "hidden") },
+    areas: { ...all(FRONT_WITHOUT_PORTALS, "everyone"), "listing-publish": "hidden", ...all(BACK_ALL, "hidden"), showroom: "hidden" },
     switches: {
       customer_email: false, tenant_reminders: false, campaign_sending: false, certificate_share: false,
       handover_live: false, propoly_documents: false,
@@ -135,12 +135,13 @@ export const PHASES: PhaseDef[] = [
     name: "Go live",
     confirm: "PHASE 3",
     says: "Test files are cleared. Email reaches landlords and tenants from the agent's own Outlook, and listings can be pushed to the portals. The back office stays hidden.",
-    areas: { ...all(FRONT, "everyone"), ...all(BACK_ALL, "hidden") },
+    /* The Showroom opens with the front office (James, 28 Sep 2026). */
+    areas: { ...all(FRONT, "everyone"), ...all(BACK_ALL, "hidden"), showroom: "everyone" },
     switches: { customer_email: true, assistant_email: true },
     steps: [
       "Removes every tester's test files, so nothing from practice is left behind.",
       "Turns ON email to landlords and tenants, from the agent's own Outlook.",
-      "Puts Push to the portals on Everyone. Portfolio, Emails, Finances and Tools stay hidden.",
+      "Puts Push to the portals and the Showroom on Everyone. Portfolio, Emails, Finances and Tools stay hidden.",
       "Emails everybody with an account to say Phase 3 has started. The automatic tenant emails, campaigns, certificate sharing and the Propoly handover are still armed one at a time on Switches.",
     ],
   },

@@ -202,6 +202,22 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     next: "A viewing that goes well produces an application.",
   },
 
+  "/showroom": {
+    purpose: "Every journey from the other side of the glass: what the tenant sees at each step, every email that goes out to them, and a place to say what is not right. Landlord and agent tabs come next.",
+    does: [
+      "Pick Tenant, Landlord or Agent across the top, and a step down the side.",
+      "Look at the tenant's own screen for that step, on a computer or a phone - it is the sample tenant, Sophie, and nothing is saved.",
+      "Open any email that goes out at that step, and press Email it to me to get it in your own inbox.",
+      "Read what the agent does to set the step off, and what is not built yet.",
+      "Write what is not right in the box at the bottom; it goes on the list with the step attached.",
+    ],
+    wiring: "live",
+    caveats: [
+      "Only the Tenant tab is filled in so far.",
+      "Email it to me sends the sample version, with Sophie's details, to your own address only.",
+    ],
+  },
+
   "/applications": {
     purpose: "Every application on REX's four statuses, live, with the pre-tenancy stages once one is accepted.",
     does: [
