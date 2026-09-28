@@ -13,7 +13,7 @@
  */
 
 /** What an agent can log against a lead. */
-export type TouchKind = "call" | "text" | "whatsapp" | "email" | "visit" | "note" | "nurture" | "rejoin";
+export type TouchKind = "call" | "text" | "whatsapp" | "email" | "visit" | "note" | "nurture" | "rejoin" | "lost";
 
 /** How a contact attempt went. Only the contact kinds carry one. */
 export type TouchOutcome = "spoke" | "no_answer" | "voicemail" | "replied" | "sent";
@@ -80,6 +80,29 @@ export const TENANT_NURTURE_REASONS = [
   "Other",
 ];
 
+/**
+ * Why a lead is lost (Howard, 24 Sep 2026: "can't see a way just to mark it
+ * as lost"). Lost is the end of the line, not a pause: nurture is for somebody
+ * who may come back, lost is for somebody who will not. Either side can be
+ * brought back from the drawer.
+ */
+export const LOST_REASONS = [
+  "Went with another agent",
+  "Not letting it any more",
+  "Selling instead",
+  "Could not reach them",
+  "Not a real enquiry",
+  "Other",
+];
+export const TENANT_LOST_REASONS = [
+  "Found somewhere",
+  "Not moving any more",
+  "Could not reach them",
+  "Did not pass our checks",
+  "Not a real enquiry",
+  "Other",
+];
+
 /** Tries before the drawer says "send them to nurture". The landlord spine's three. */
 export const CONTACT_TRIES = 3;
 
@@ -97,6 +120,7 @@ export interface TenantContact {
   attempts: number;
   reached: boolean;
   nurture: { at: string; reason: string; byName: string } | null;
+  lost: { at: string; reason: string; byName: string } | null;
 }
 
 export function tenantContact(touches: LeadTouch[]): TenantContact {
@@ -104,13 +128,16 @@ export function tenantContact(touches: LeadTouch[]): TenantContact {
   let attempts = 0;
   let reached = false;
   let nurture: TenantContact["nurture"] = null;
+  let lost: TenantContact["lost"] = null;
   for (const t of log) {
     if (ATTEMPT_KINDS.includes(t.kind)) attempts++;
     if (t.outcome === "spoke" || t.outcome === "replied") reached = true;
     if (t.kind === "nurture") nurture = { at: t.at, reason: t.body, byName: t.byName };
     if (t.kind === "rejoin" || t.outcome === "spoke" || t.outcome === "replied") nurture = null;
+    if (t.kind === "lost") { lost = { at: t.at, reason: t.body, byName: t.byName }; nurture = null; }
+    if (t.kind === "rejoin") lost = null;
   }
-  return { attempts, reached, nurture };
+  return { attempts, reached, nurture, lost };
 }
 
 /** Landlord spine ids, in order. Mirrors LANDLORD_TRACK in lib/journey. */
@@ -138,6 +165,8 @@ export interface Spine {
   booked: boolean;
   /** Set while the lead sits on the nurture branch. */
   nurture: { at: string; reason: string; byName: string } | null;
+  /** Set once the lead is marked lost, until somebody brings it back. */
+  lost: { at: string; reason: string; byName: string } | null;
   lastTouch: LeadTouch | null;
   /** One or two words for the list's Stage column, or null to keep REX's. */
   label: string | null;
@@ -158,6 +187,7 @@ export function foldSpine(touches: LeadTouch[], booked: boolean): Spine {
   let attempts = 0;
   let emailSentAt: string | null = null;
   let nurture: Spine["nurture"] = null;
+  let lost: Spine["lost"] = null;
   for (const t of log) {
     if (ATTEMPT_KINDS.includes(t.kind)) attempts++;
     if (t.kind === "email" && !emailSentAt) emailSentAt = t.at;
@@ -165,6 +195,9 @@ export function foldSpine(touches: LeadTouch[], booked: boolean): Spine {
     /* Back on the spine: an explicit rejoin, or the landlord actually
        engaging - spoke or replied - which is the same thing said by events. */
     if (t.kind === "rejoin" || t.outcome === "spoke" || t.outcome === "replied") nurture = null;
+    /* Lost ends nurture, and only an explicit Bring back undoes it. */
+    if (t.kind === "lost") { lost = { at: t.at, reason: t.body, byName: t.byName }; nurture = null; }
+    if (t.kind === "rejoin") lost = null;
   }
 
   const done: Record<SpineId, boolean> = {
@@ -190,7 +223,8 @@ export function foldSpine(touches: LeadTouch[], booked: boolean): Spine {
   const lastTouch = log.length ? log[log.length - 1] : null;
 
   let label: string | null = null;
-  if (booked) label = SPINE_LABEL.appraisal_booked;
+  if (lost) label = "Lost";
+  else if (booked) label = SPINE_LABEL.appraisal_booked;
   else if (nurture) label = "Nurture";
   else if (attempts >= 3) label = SPINE_LABEL.contact3;
   else if (attempts >= 2) label = SPINE_LABEL.contact2;
@@ -205,6 +239,7 @@ export function foldSpine(touches: LeadTouch[], booked: boolean): Spine {
     emailSentAt,
     booked,
     nurture,
+    lost,
     lastTouch,
     label,
   };
@@ -230,6 +265,8 @@ export function touchSentence(t: LeadTouch): string {
       return `Added to nurture${t.body ? ` - ${t.body}` : ""}`;
     case "rejoin":
       return "Back on the spine";
+    case "lost":
+      return `Marked as lost${t.body ? ` - ${t.body}` : ""}`;
   }
 }
 
@@ -243,6 +280,7 @@ export function touchIcon(t: LeadTouch): string {
     case "note": return "doc";
     case "nurture": return "clock";
     case "rejoin": return "target";
+    case "lost": return "cross";
   }
 }
 

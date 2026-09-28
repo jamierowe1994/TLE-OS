@@ -1474,6 +1474,9 @@ function LeadDrawerBody({
      spoke to them, and nurture (Howard, 24 Sep 2026). */
   const tc = isTenant ? tenantContact(touches) : null;
   const nurturing = sp?.nurture ?? tc?.nurture ?? null;
+  /* Marked as lost (Howard, 24 Sep 2026): off the working list, reason kept,
+     and one press brings them back. */
+  const lostNow = sp?.lost ?? tc?.lost ?? null;
   const canNurture = isTenant
     ? Boolean(tc && !tc.reached && tc.attempts >= 1 && !nurturing)
     : Boolean(sp && !sp.booked && sp.attempts >= 1 && !nurturing);
@@ -1635,6 +1638,32 @@ function LeadDrawerBody({
   const previewOk = Boolean(lead.enquiryMessage && !/^[A-Z][A-Za-z ]{1,30}:/.test(lead.enquiryMessage));
   const enqMessage = enquiry?.message || (enquiry === undefined && previewOk ? lead.enquiryMessage ?? "" : "");
   const receivedIso = enquiry?.receivedAt ?? lead.receivedAt ?? null;
+  const lostButton = (
+    <button
+      type="button"
+      onClick={() => setLogging("lost")}
+      className="inline-flex items-center gap-2 rounded-full px-3 py-2.5 text-[12.5px] font-semibold text-muted transition-colors hover:text-ink"
+    >
+      <DoodleIcon name="cross" size={12} />
+      Mark as lost
+    </button>
+  );
+  const lostRow = lostNow ? (
+    <div className="mt-4 flex max-w-xl flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/70 bg-white/80 px-4 py-3">
+      <p className="text-[12.5px] leading-relaxed">
+        <span className="font-semibold">Lost</span> {whenAgo(lostNow.at)} · {lostNow.reason}
+        <span className="text-muted"> · marked by {lostNow.byName}</span>
+      </p>
+      <button
+        type="button"
+        onClick={() => void logTouch({ kind: "rejoin" })}
+        className="rounded-full border border-line/80 px-4 py-1.5 text-[12px] font-semibold transition-colors hover:border-ink/40"
+      >
+        Bring them back
+      </button>
+    </div>
+  ) : null;
+
   /* A tenant added by hand carries THEIR OWN address on the record, not a
      home they asked about (Howard, 24 Sep 2026: "this is showing as if the
      tenant's property is the one we are working on"). What they're
@@ -2643,7 +2672,7 @@ function LeadDrawerBody({
                         ) : (
                           <h2 className="hand text-[32px] leading-[1.1]">{lead.name}</h2>
                         )}
-                        <Pill tone={STAGE_TONE[lead.stage]}>{lead.stage}</Pill>
+                        {lostNow ? <Pill tone="neutral">Lost</Pill> : <Pill tone={STAGE_TONE[lead.stage]}>{lead.stage}</Pill>}
                         {passport?.done && passport.path && (
                           <a href={passport.path} target="_blank" rel="noreferrer" className="rounded-full bg-sage/40 px-2.5 py-1 text-[11px] font-semibold transition-opacity hover:opacity-80" title="Open their passport">
                             ✓ Passport done
@@ -2651,7 +2680,7 @@ function LeadDrawerBody({
                         )}
                       </div>
                       <p className="mt-1.5 text-[13.5px] text-muted">
-                        {enqProperty && enqProperty !== "—" ? enqProperty : interestedIn || "General enquiry"} · via {enquiry?.source || lead.source}
+                        {enqProperty && enqProperty !== "—" ? enqProperty : interestedIn || (lead.subject === "Viewing enquiry" ? "Viewing enquiry" : "General enquiry")} · via {enquiry?.source || lead.source}
                         {receivedIso ? ` · ${whenAgo(receivedIso)}` : ""}
                       </p>
                       {/* Their own words - the first thing anyone should read. */}
@@ -2706,7 +2735,9 @@ function LeadDrawerBody({
                           <DoodleIcon name="mail" size={14} />
                           Send properties
                         </PressButton>
+                        {!lostNow && lostButton}
                       </div>
+                      {lostRow}
                       <div className="mt-4 [&>div]:mt-0 [&>div]:border-t-0 [&>div]:pt-0 [&_button]:px-2.5 [&_button]:py-1 [&_button]:text-[11px]">{tagsRow}</div>
                     </div>
 
@@ -2750,8 +2781,8 @@ function LeadDrawerBody({
                         />
                         <Glance
                           icon="home"
-                          title={enqProperty && enqProperty !== "—" ? "Asked about one property" : shortlist.length ? `Interested in ${shortlist.length} home${shortlist.length === 1 ? "" : "s"}` : "A general enquiry"}
-                          sub={enqProperty && enqProperty !== "—" ? enqProperty : shortlist.length ? shortlist.map((h) => h.name).join(" · ") : "Not about one property - match them to the book"}
+                          title={enqProperty && enqProperty !== "—" ? "Asked about one property" : shortlist.length ? `Interested in ${shortlist.length} home${shortlist.length === 1 ? "" : "s"}` : lead.subject === "Viewing enquiry" ? "Wants a viewing" : "A general enquiry"}
+                          sub={enqProperty && enqProperty !== "—" ? enqProperty : shortlist.length ? shortlist.map((h) => h.name).join(" · ") : lead.subject === "Viewing enquiry" ? "No home picked yet - add one on Properties" : "Not about one property - match them to the book"}
                         />
                         <Glance icon="target" title={receivedIso ? `Came in ${whenAgo(receivedIso)}` : `Came in ${lead.received}`} sub={`${receivedIso ? `${whenFull(receivedIso)} · ` : ""}via ${enquiry?.source || lead.source}`} />
                       </ul>
@@ -2956,7 +2987,7 @@ function LeadDrawerBody({
                           <h2 className="hand text-[32px] leading-[1.1]">{lead.name}</h2>
                         )}
                         {sp?.label ? (
-                          <Pill tone={sp.booked ? "good" : sp.nurture ? "neutral" : "accent"}>{sp.label}</Pill>
+                          <Pill tone={sp.lost ? "neutral" : sp.booked ? "good" : sp.nurture ? "neutral" : "accent"}>{sp.label}</Pill>
                         ) : (
                           <Pill tone={STAGE_TONE[lead.stage]}>{lead.stage}</Pill>
                         )}
@@ -2992,7 +3023,9 @@ function LeadDrawerBody({
                           <DoodleIcon name="clock" size={14} />
                           {nurturing ? "In nurture" : "Send to nurture"}
                         </button>
+                        {!lostNow && lostButton}
                       </div>
+                      {lostRow}
                       <div className="mt-4 [&>div]:mt-0 [&>div]:border-t-0 [&>div]:pt-0 [&_button]:px-2.5 [&_button]:py-1 [&_button]:text-[11px]">{tagsRow}</div>
                     </div>
 

@@ -307,6 +307,9 @@ export default function Leads() {
       if (fSource && l.source !== fSource) return false;
       if (fAgent && l.agent !== fAgent) return false;
       if (fStage && (l.spineLabel ?? l.stage) !== fStage) return false;
+      /* Lost is off the working list (Howard, 24 Sep 2026). It is still one
+         Stage filter or a search away, and brought back from the lead. */
+      if (!fStage && !needle && l.spineLabel === "Lost") return false;
       if (fTags.length) { const mine = tagsOf(l); if (!fTags.every((t) => mine.includes(t))) return false; }
       /* Phone and address are in the needle too. Somebody looking a landlord up
          mid-call has the number in front of them far more often than the town,
@@ -378,7 +381,7 @@ export default function Leads() {
         key: "stage", label: "Stage", cell: "whitespace-nowrap",
         render: (l) =>
           l.spineLabel ? (
-            <Pill tone={l.spineLabel === "Appraisal booked" ? "good" : l.spineLabel === "Nurture" ? "neutral" : "accent"}>
+            <Pill tone={l.spineLabel === "Appraisal booked" ? "good" : l.spineLabel === "Nurture" || l.spineLabel === "Lost" ? "neutral" : "accent"}>
               {l.spineLabel}
             </Pill>
           ) : (

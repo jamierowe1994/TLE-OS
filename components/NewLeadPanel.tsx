@@ -51,13 +51,16 @@ type Draft = {
   email: string;
   address: string;
   source: string;
-  enquiry: "Letting" | "Landlord" | "Valuation";
+  /* A tenant's is Viewing or General (Howard, 24 Sep 2026: the tenant form
+     offered Letting, Landlord and Valuation, and Valuation flipped a tenant
+     onto the landlord side). A landlord's is Landlord or Valuation. */
+  enquiry: "Viewing" | "General" | "Letting" | "Landlord" | "Valuation";
   notes: string;
 };
 
 const EMPTY: Draft = {
   name: "", mobile: "", email: "", address: "",
-  source: "", enquiry: "Letting", notes: "",
+  source: "", enquiry: "General", notes: "",
 };
 
 /** What /api/dossier hands back — every field optional, absence is normal. */
@@ -716,7 +719,7 @@ export default function NewLeadPanel({
                   key={c.k}
                   onClick={() => {
                     setKind(c.k);
-                    if (c.k === "landlord") set("enquiry")("Landlord");
+                    set("enquiry")(c.k === "landlord" ? "Landlord" : "General");
                   }}
                   className={`group flex min-h-0 flex-1 items-center gap-10 px-8 py-6 text-left ${
                     i === 1 ? "border-t border-line/70" : ""
@@ -1073,13 +1076,12 @@ export default function NewLeadPanel({
                     <label className="block">
                       <span className={label}>Enquiry</span>
                       <select
-                        value={d.enquiry}
+                        value={d.enquiry === "Viewing" ? "Viewing" : "General"}
                         onChange={(e) => set("enquiry")(e.target.value)}
                         className={field}
                       >
-                        <option>Letting</option>
-                        <option>Landlord</option>
-                        <option>Valuation</option>
+                        <option value="Viewing">Viewing - wants to see a home</option>
+                        <option value="General">General - looking for a home</option>
                       </select>
                     </label>
                     <label className="block">

@@ -8,6 +8,8 @@ import {
   ATTEMPT_KINDS,
   NURTURE_REASONS,
   TENANT_NURTURE_REASONS,
+  LOST_REASONS,
+  TENANT_LOST_REASONS,
   OUTCOMES,
   type TouchKind,
   type TouchOutcome,
@@ -32,7 +34,7 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const KINDS: TouchKind[] = ["call", "text", "whatsapp", "email", "visit", "note", "nurture", "rejoin"];
+const KINDS: TouchKind[] = ["call", "text", "whatsapp", "email", "visit", "note", "nurture", "rejoin", "lost"];
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { actor } = await whoIs(req);
@@ -86,6 +88,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
        first, so the spine can show it, then whatever was added. */
     text = text.trim() ? `${reason} - ${text.trim()}` : reason;
   }
+  if (kind === "lost") {
+    reason = (tenant ? TENANT_LOST_REASONS : LOST_REASONS).includes(body.reason ?? "") ? (body.reason as string) : null;
+    if (!reason) return NextResponse.json({ ok: false, error: "Say why the lead is lost." }, { status: 400 });
+    text = text.trim() ? `${reason} - ${text.trim()}` : reason;
+  }
 
   const who = subject ?? actor;
   const touch = await addTouch({
@@ -130,6 +137,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       "nurture",
       "lead-spine"
     ).catch(() => null);
+  } else if (kind === "lost") {
+    /* A lost lead gets no more nurture emails. */
+    stopped = await stopLeadCampaigns(id, "marked as lost").catch(() => 0);
   } else if (kind === "rejoin" || outcome === "spoke" || outcome === "replied") {
     stopped = await stopLeadCampaigns(id, kind === "rejoin" ? "back on the spine" : "replied").catch(() => 0);
   }

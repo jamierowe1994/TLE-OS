@@ -6,6 +6,8 @@ import { PressButton } from "@/components/Bits";
 import {
   NURTURE_REASONS,
   TENANT_NURTURE_REASONS,
+  LOST_REASONS,
+  TENANT_LOST_REASONS,
   OUTCOMES,
   TOUCH_KINDS,
   type TouchKind,
@@ -26,7 +28,7 @@ import {
  * the screen assumed.
  */
 
-export type LogMode = "attempt" | "nurture";
+export type LogMode = "attempt" | "nurture" | "lost";
 
 export default function LogTouch({
   leadId,
@@ -66,11 +68,15 @@ export default function LogTouch({
    *  landlord campaign (Howard, 24 Sep 2026). */
   audience?: "landlord" | "tenant";
 }) {
-  const reasons = audience === "tenant" ? TENANT_NURTURE_REASONS : NURTURE_REASONS;
+  const reasons =
+    mode === "lost"
+      ? audience === "tenant" ? TENANT_LOST_REASONS : LOST_REASONS
+      : audience === "tenant" ? TENANT_NURTURE_REASONS : NURTURE_REASONS;
   const [kind, setKind] = useState<TouchKind>(initialKind);
   const [outcome, setOutcome] = useState<TouchOutcome | null>(null);
   const [body, setBody] = useState("");
-  const [reason, setReason] = useState(reasons[0]);
+  /* Lost is never pre-chosen: the reason is the whole point of the record. */
+  const [reason, setReason] = useState(mode === "lost" ? "" : reasons[0]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /* The attempt walks through frames (James, 11 Sep 2026): how you reached
@@ -101,7 +107,7 @@ export default function LogTouch({
   const chosen = inline ? "border-brown bg-brown/10" : "border-accent-dark bg-accent-soft/40";
   const kindIcon = inline ? "bg-brown text-white" : "bg-accent-soft text-accent-dark";
 
-  const canSave = mode === "nurture" ? Boolean(reason) : Boolean(outcome);
+  const canSave = mode === "attempt" ? Boolean(outcome) : Boolean(reason);
 
   async function save() {
     if (!canSave || busy) return;
@@ -114,7 +120,9 @@ export default function LogTouch({
         body: JSON.stringify(
           mode === "nurture"
             ? { kind: "nurture", reason, body, lead: leadFacts, side: audience }
-            : { kind, outcome, body: booked ? `Booked the valuation.${body ? ` ${body}` : ""}` : body }
+            : mode === "lost"
+              ? { kind: "lost", reason, body, side: audience }
+              : { kind, outcome, body: booked ? `Booked the valuation.${body ? ` ${body}` : ""}` : body }
         ),
       });
       const j = await r.json().catch(() => null);
@@ -229,13 +237,15 @@ export default function LogTouch({
           </>
         ) : (
           <>
-            <h2 className="hand text-[20px]">{tried ? `Send ${first} to nurture?` : "Add to nurture"}</h2>
+            <h2 className="hand text-[20px]">{mode === "lost" ? `Mark ${first} as lost?` : tried ? `Send ${first} to nurture?` : "Add to nurture"}</h2>
             <p className="mt-1 text-[12.5px] text-muted">
-              {audience === "tenant"
+              {mode === "lost"
+                ? `${first} comes off your working list and shows as Lost, with the reason. Nothing is sent to them. Bring them back from the lead at any time.`
+                : audience === "tenant"
                 ? `${first} stays on your list as in nurture, and comes straight back the moment they answer or reply. No emails go to tenants from nurture yet.`
                 : `${first} is not saying no and not answering. The reason picks the campaign that keeps them warm, and they come straight back on the spine the moment they reply.`}
             </p>
-            {tried && (
+            {tried && mode === "nurture" && (
               <div className="mt-4 rounded-2xl border border-line/70 bg-card p-3.5">
                 <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">Have you tried</p>
                 <ul className="mt-2 space-y-1.5">
@@ -272,7 +282,7 @@ export default function LogTouch({
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder="Anything else - when to try again, what they are waiting on…"
+              placeholder={mode === "lost" ? "Anything worth knowing - who they went with, what would win them back…" : "Anything else - when to try again, what they are waiting on…"}
               rows={2}
               className="mt-4 w-full resize-none rounded-xl border border-line/80 bg-transparent px-3 py-2.5 text-[12.5px] leading-relaxed outline-none placeholder:text-muted/70 focus:border-ink"
             />
@@ -289,7 +299,7 @@ export default function LogTouch({
           >
             {mode === "attempt" && frame > 1 ? "← Back" : "Cancel"}
           </button>
-          {(mode === "nurture" || frame === 4) && (
+          {(mode !== "attempt" || frame === 4) && (
           <PressButton
             onClick={save}
             disabled={!canSave || busy}
@@ -297,8 +307,8 @@ export default function LogTouch({
               canSave && !busy ? primary : "cursor-not-allowed bg-line/40 text-muted"
             }`}
           >
-            <DoodleIcon name={mode === "nurture" ? "clock" : "checklist"} size={14} />
-            {busy ? "Saving…" : mode === "nurture" ? (tried ? "Yes, send to nurture" : "Add to nurture") : booked ? "Log it and book" : "Log it"}
+            <DoodleIcon name={mode === "lost" ? "cross" : mode === "nurture" ? "clock" : "checklist"} size={14} />
+            {busy ? "Saving…" : mode === "lost" ? "Mark as lost" : mode === "nurture" ? (tried ? "Yes, send to nurture" : "Add to nurture") : booked ? "Log it and book" : "Log it"}
           </PressButton>
           )}
         </div>

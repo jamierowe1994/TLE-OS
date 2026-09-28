@@ -83,7 +83,7 @@ export function contactToLead(c: ContactRow): Lead {
   /* enquiry drives leadSide(), which decides whether they show under Tenant or
      Landlord. "Letting" is the tenant side; anything else is the landlord one. */
   const enquiry: Lead["enquiry"] =
-    c.kind === "landlord" ? "Landlord" : c.enquiry === "Valuation" ? "Valuation" : "Letting";
+    c.kind === "landlord" ? "Landlord" : "Letting";
 
   return {
     id: `${OS_LEAD_PREFIX}${c.id}`,
@@ -108,6 +108,7 @@ export function contactToLead(c: ContactRow): Lead {
     notes: c.notes,
     address: c.address || undefined,
     contactId: c.rexId ?? undefined,
+    subject: c.kind !== "landlord" && c.enquiry === "Viewing" ? "Viewing enquiry" : undefined,
     activity: [
       {
         icon: "user",

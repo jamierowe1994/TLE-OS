@@ -221,7 +221,7 @@ export default function LeadGroups({
                         <SourceMark source={l.source} />
                         <span className="whitespace-nowrap text-[11px] text-muted">{l.received}</span>
                         {l.spineLabel ? (
-                          <Pill tone={l.spineLabel === "Appraisal booked" ? "good" : l.spineLabel === "Nurture" ? "neutral" : "accent"}>
+                          <Pill tone={l.spineLabel === "Appraisal booked" ? "good" : l.spineLabel === "Nurture" || l.spineLabel === "Lost" ? "neutral" : "accent"}>
                             {l.spineLabel}
                           </Pill>
                         ) : (

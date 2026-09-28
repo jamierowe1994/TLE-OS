@@ -53,6 +53,8 @@ export const isOsContactLead = (id: string): boolean => id.startsWith(OS_LEAD_PR
 /** The contact id behind an `os-` lead id. */
 export const contactIdOf = (leadId: string): string => leadId.slice(OS_LEAD_PREFIX.length);
 
+const ENQUIRY_TYPES = new Set(["Viewing", "General", "Letting", "Landlord", "Valuation"]);
+
 function toLead(r: Row): Lead {
   const landlord = r.kind === "landlord";
   const when = new Date(r.created_at);
@@ -83,7 +85,11 @@ function toLead(r: Row): Lead {
     /* Their REX contact, when the push landed - so email and campaigns have
        something to file against, exactly as a REX lead does. */
     contactId: r.rex_id ?? undefined,
-    enquiryMessage: r.enquiry?.trim() || undefined,
+    /* The new-lead form stores the enquiry TYPE here (Viewing, General);
+       Landlord Radar and the portals store what they said. Only words are a
+       message. */
+    subject: !landlord && r.enquiry?.trim() === "Viewing" ? "Viewing enquiry" : undefined,
+    enquiryMessage: ENQUIRY_TYPES.has(r.enquiry?.trim() ?? "") ? undefined : r.enquiry?.trim() || undefined,
   };
 }
 

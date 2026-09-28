@@ -30,8 +30,14 @@ export interface LeadFacts {
 }
 
 /** The tags a lead starts with, before anyone touches them. */
-export function defaultTags(l: Pick<Lead, "enquiry" | "area" | "source">): string[] {
-  return [l.enquiry === "Landlord" ? "Landlord" : l.enquiry === "Valuation" ? "Valuation" : "Looking to rent", l.area, l.source]
+export function defaultTags(l: Pick<Lead, "enquiry" | "area" | "source"> & { subject?: string }): string[] {
+  const kind =
+    l.enquiry === "Landlord" ? "Landlord"
+      : l.enquiry === "Valuation" ? "Valuation"
+        /* A tenant added by hand as a viewing enquiry says so (Howard, 24 Sep 2026). */
+        : l.subject === "Viewing enquiry" ? "Viewing enquiry"
+          : "Looking to rent";
+  return [kind, l.area, l.source]
     .filter((t) => t && t.trim() && t.trim() !== "—");
 }
 
