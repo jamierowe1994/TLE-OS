@@ -127,13 +127,13 @@ export type CatalogEntry = {
 
 /** Stand-in appointment, so the appraisal emails render as a real example. */
 const SAMPLE_INVITE: AppraisalInvite = {
-  landlordName: "Helen Bosworth",
-  address: "12 Chorlton Road, Manchester M15 4AZ",
+  landlordName: "Raj Chauhan",
+  address: "8 Recreation Terrace, Nottingham NG2 3AB",
   whenPretty: "Tuesday 20 October at 2:00pm",
   startsAt: "2026-10-20T13:00:00.000Z",
   minutes: 60,
-  agentName: "Rhiannon Dodge",
-  agentPhone: "0161 883 2525",
+  agentName: "Sam Whitaker",
+  agentPhone: "0115 123 4567",
   presentationUrl: `${SITE}/present/example`,
 };
 
@@ -151,12 +151,12 @@ const SAMPLE_INVITE: AppraisalInvite = {
 const COMPLIANCE_SAMPLE: Record<string, string> = {
   count: "3",
   certLabel: "Gas safety certificate",
-  address: "41 Harewood Road, Coventry CV4 8LP",
+  address: "8 Recreation Terrace, Nottingham NG2 3AB",
   expires: "12 September 2026",
   whenPretty: "12 September",
   daysLeft: "14",
-  agentName: "Michael Healy",
-  firstName: "Helen",
+  agentName: "Sam Whitaker",
+  firstName: "Raj",
   /* The renewed-certificate fan-out: the one line that changes per recipient,
      so the preview has to show it rather than leave a placeholder in the
      middle of a paragraph. */
@@ -496,14 +496,14 @@ export const TLE_EMAILS: CatalogEntry[] = [
     render: () => {
       const m = certificateSharedEmail({
         label: "Gas safety (CP12)",
-        propertyName: "41 Harewood Road, Coventry CV4 8LP",
+        propertyName: "8 Recreation Terrace, Nottingham NG2 3AB",
         expiry: "12 September 2027",
-        fileName: "CP12-41-Harewood-Road.pdf",
+        fileName: "CP12-8-Recreation-Terrace.pdf",
         source: "the contractor's page",
         armed: true,
         link: `${SITE}/portfolio`,
         outcomes: [
-          { role: "landlord", name: "Helen Prior", address: "helen.prior@example.com", sent: true, note: "sent with the certificate attached" },
+          { role: "landlord", name: "Raj Chauhan", address: "raj.chauhan@example.com", sent: true, note: "sent with the certificate attached" },
           { role: "tenant", name: "Sophie Adeyemi", address: "sophie.a@example.com", sent: true, note: "sent with the certificate attached" },
           { role: "contractor", name: "Redland Plumbing & Heating", address: "dev@redlandph.example.com", sent: true, note: "sent with the certificate attached" },
         ],
@@ -630,13 +630,13 @@ export const TLE_EMAILS: CatalogEntry[] = [
     render: (o) =>
       blocksAs("landlord")(
         withSample(o ?? LANDLORD_CONTRACT_PACK, {
-          firstName: "Helen",
-          address: "12 Chorlton Road",
+          firstName: "Raj",
+          address: "8 Recreation Terrace",
           rent: "£1,300",
           serviceLevel: "Fully managed",
           serviceLine: "a fully managed service",
-          agentName: "Rhiannon Dodge",
-          agentFirst: "Rhiannon",
+          agentName: "Sam Whitaker",
+          agentFirst: "Sam",
           deckLink: `${SITE}/present/example`,
           link: `${SITE}/landlord/enter?token=example`,
         })
@@ -655,8 +655,8 @@ export const TLE_EMAILS: CatalogEntry[] = [
     render: (o) =>
       blocksAs("landlord")(
         withSample(o ?? LANDLORD_DOCS_NUDGE, {
-          firstName: "Helen",
-          address: "12 Chorlton Road",
+          firstName: "Raj",
+          address: "8 Recreation Terrace",
           what: "your EPC and your gas safety certificate",
           whatCap: "Your EPC and your gas safety certificate",
           link: `${SITE}/landlord/enter?token=example&next=/landlord/documents`,
@@ -676,9 +676,9 @@ export const TLE_EMAILS: CatalogEntry[] = [
     render: (o) =>
       blocksAs("landlord")(
         withSample(o ?? LANDLORD_MESSAGE_REPLY, {
-          firstName: "Helen",
-          agentFirst: "Rhiannon",
-          address: "12 Chorlton Road",
+          firstName: "Raj",
+          agentFirst: "Sam",
+          address: "8 Recreation Terrace",
           preview: "Yes, Thursday works - I'll bring the keys.",
           bodyHtml: "Yes, Thursday works - I'll bring the keys.",
           link: `${SITE}/landlord/enter?token=example&next=/landlord/messages`,
@@ -699,9 +699,9 @@ export const TLE_EMAILS: CatalogEntry[] = [
     render: (o) =>
       blocksAs("landlord")(
         withSample(o ?? LANDLORD_CONTRACT_NUDGE, {
-          firstName: "Helen",
-          address: "12 Chorlton Road",
-          agentFirst: "Rhiannon",
+          firstName: "Raj",
+          address: "8 Recreation Terrace",
+          agentFirst: "Sam",
           link: `${SITE}/landlord/enter?token=example`,
         })
       )(),
@@ -720,8 +720,8 @@ export const TLE_EMAILS: CatalogEntry[] = [
     render: (o) =>
       blocksAs("landlord")(
         withSample(o ?? LANDLORD_QUESTIONS_CHASE, {
-          firstName: "Helen",
-          address: "12 Chorlton Road, Manchester M15 4AZ",
+          firstName: "Raj",
+          address: "8 Recreation Terrace, Nottingham NG2 3AB",
           left: "three short parts",
           leftCap: "Three short parts",
           link: `${SITE}/landlord/enter?token=example&next=/landlord/questions`,
@@ -740,17 +740,17 @@ export const TLE_EMAILS: CatalogEntry[] = [
       "A nudge, not a resend. REX exposes no resend and no signing URL, so this points at the DocuSign email already in their inbox and offers to send it again.",
     render: () =>
       renderPlain(
-        "Your terms of business - 12 Chorlton Road, Manchester M15 4AZ",
-        `Hi Helen,
+        "Your terms of business - 8 Recreation Terrace, Nottingham NG2 3AB",
+        `Hi Raj,
 
-Just a quick note - the terms of business for 12 Chorlton Road, Manchester M15 4AZ are still waiting on your signature.
+Just a quick note - the terms of business for 8 Recreation Terrace, Nottingham NG2 3AB are still waiting on your signature.
 
 They went out on 1 October from DocuSign, so the email will be in your inbox under "The Letting Experts". It's worth a look in your junk folder too; that is where it usually is.
 
-If you can't find it, reply to this and I'll send it straight out again. And if there's anything in it you'd like to talk through first, ring me on 0161 883 2525 - that's often quicker than email.
+If you can't find it, reply to this and I'll send it straight out again. And if there's anything in it you'd like to talk through first, ring me on 0115 123 4567 - that's often quicker than email.
 
 Kind regards,
-Rhiannon Dodge
+Sam Whitaker
 The Letting Experts`
       ),
   },
@@ -777,12 +777,12 @@ The Letting Experts`
       blocksAs("landlord")(
         withSample(o ?? APPLICATION_ACCEPTED_LANDLORD, {
           landlordName: "Mr Raj Patel",
-          address: "Flat 2, Mercer Street, Manchester M4 1SL",
+          address: "8 Recreation Terrace, Nottingham NG2 3AB",
           detailsList:
-            "Offer amount: £1,250 pcm<br>Start date: 01/10/2026<br>Length of tenancy: 12 months<br>Conditions: none<br>Date received: 16/09/2026<br>Has pets: No<br>Number of occupants: 2<br>Tenant names: Sophie Clark, Daniel Clark",
-          agentName: "Rhiannon Dodge",
-          agentPhone: "0161 883 2525",
-          agentEmail: "rhiannon@thelettingexperts.co.uk",
+            "Offer amount: £850 pcm<br>Start date: 01/10/2026<br>Length of tenancy: 12 months<br>Conditions: none<br>Date received: 16/09/2026<br>Has pets: No<br>Number of occupants: 2<br>Tenant names: Sophie Turner, Daniel Turner",
+          agentName: "Sam Whitaker",
+          agentPhone: "0115 123 4567",
+          agentEmail: "sam@thelettingexperts.co.uk",
         })
       )(),
   },
@@ -800,15 +800,15 @@ The Letting Experts`
     render: (o) =>
       blocksAs("tenant")(
         withSample(o ?? APPLICATION_ACCEPTED_TENANT, {
-          tenantName: "Sophie Clark",
-          address: "Flat 2, Mercer Street, Manchester M4 1SL",
+          tenantName: "Sophie Turner",
+          address: "8 Recreation Terrace, Nottingham NG2 3AB",
           detailsList:
-            "Offer amount: £1,250 pcm<br>Start date: 01/10/2026<br>Length of tenancy: 12 months<br>Conditions: none<br>Date received: 16/09/2026<br>Has pets: No<br>Number of occupants: 2<br>Tenant names: Sophie Clark, Daniel Clark",
+            "Offer amount: £850 pcm<br>Start date: 01/10/2026<br>Length of tenancy: 12 months<br>Conditions: none<br>Date received: 16/09/2026<br>Has pets: No<br>Number of occupants: 2<br>Tenant names: Sophie Turner, Daniel Turner",
           payLine:
             "You will now receive an invite from Propoly to pay the holding fee, if applicable, and to complete your referencing information.",
-          agentName: "Rhiannon Dodge",
-          agentPhone: "0161 883 2525",
-          agentEmail: "rhiannon@thelettingexperts.co.uk",
+          agentName: "Sam Whitaker",
+          agentPhone: "0115 123 4567",
+          agentEmail: "sam@thelettingexperts.co.uk",
         })
       )(),
   },
@@ -826,10 +826,10 @@ The Letting Experts`
       blocksAs("tenant")(
         withSample(o ?? VIEWING_CANCELLED, {
           firstName: "Sophie",
-          address: "Flat 2, Mercer Street, Manchester M4 1SL",
+          address: "8 Recreation Terrace, Nottingham NG2 3AB",
           whenPretty: "Thursday 4 September at 5:30pm",
           reasonLine: "The landlord needs the property that afternoon.",
-          agentName: "Rhiannon Dodge",
+          agentName: "Sam Whitaker",
         })
       )(),
   },
@@ -847,11 +847,11 @@ The Letting Experts`
       blocksAs("tenant")(
         withSample(o ?? VIEWING_MOVED, {
           firstName: "Sophie",
-          address: "Flat 2, Mercer Street, Manchester M4 1SL",
+          address: "8 Recreation Terrace, Nottingham NG2 3AB",
           oldWhen: "Thursday 4 September at 5:30pm",
           whenPretty: "Friday 5 September at 12:30pm",
-          agentName: "Rhiannon Dodge",
-          meetLine: "Rhiannon Dodge will meet you there.",
+          agentName: "Sam Whitaker",
+          meetLine: "Sam Whitaker will meet you there.",
         })
       )(),
   },
@@ -873,10 +873,10 @@ The Letting Experts`
       blocksAs("tenant")(
         withSample(o ?? TENANT_PASSPORT_INVITE, {
           firstName: "Sophie",
-          address: "Flat 2, Mercer Street, Manchester M4 1SL",
+          address: "8 Recreation Terrace, Nottingham NG2 3AB",
           whenPretty: "Thursday 4 September at 5:30pm",
-          agentName: "Rhiannon Dodge",
-          meetLine: "Rhiannon Dodge will meet you there.",
+          agentName: "Sam Whitaker",
+          meetLine: "Sam Whitaker will meet you there.",
           link: `${SITE}/tenant/welcome`,
         })
       )(),
@@ -896,7 +896,7 @@ The Letting Experts`
     render: (o) =>
       blocksAs("landlord")(
         withSample(o ?? LANDLORD_SIGN_IN, {
-          firstName: "Helen",
+          firstName: "Raj",
           link: `${SITE}/landlord/enter?token=sample`,
         })
       )(),
@@ -926,12 +926,12 @@ The Letting Experts`
 
 /* One worked job, so every maintenance email previews as a real one. */
 const WORKS_SAMPLE: Record<string, string> = {
-  ref: "1042", title: "Boiler not firing, no hot water", address: "41 Harewood Road, Coventry CV4 8LP", category: "Heating & boiler",
+  ref: "1042", title: "Boiler not firing, no hot water", address: "8 Recreation Terrace, Nottingham NG2 3AB", category: "Heating & boiler",
   urgency: "Urgent", dueBy: "Thursday 10 September, 09:00", scheduledAt: "Tuesday 8 September, 10:00", contractorName: "R. Holt Heating", contractorGreeting: "Rob",
-  contractorPhone: "07700 900123", tenantName: "Marcus", tenantPhone: "07700 900456", landlordName: "Helen", access: "Tenant home after 5pm; dog in the garden",
+  contractorPhone: "07700 900123", tenantName: "Sophie", tenantPhone: "07700 900456", landlordName: "Raj", access: "Tenant home after 5pm; dog in the garden",
   description: "Tenant rang at 8am. Pressure gauge reads zero, boiler shows fault code F22.", quote: "£240", authority: "£150",
-  agentName: "Michael Healy", agentEmail: "michael@thelettingexperts.co.uk", agentPhone: "0115 123 4567", completionNote: "PCB replaced, system repressurised and tested.",
-  number: "INV-00042", toName: "Helen", total: "£264", dueDate: "21 September 2026", reference: "job #1042, boiler repair", link: `${SITE}/invoice/sample`,
+  agentName: "Sam Whitaker", agentEmail: "sam@thelettingexperts.co.uk", agentPhone: "0115 123 4567", completionNote: "PCB replaced, system repressurised and tested.",
+  number: "INV-00042", toName: "Raj", total: "£264", dueDate: "21 September 2026", reference: "job #1042, boiler repair", link: `${SITE}/invoice/sample`,
   contractorLink: `${SITE}/contractor/sample`, happyLink: `${SITE}/repair/sample?happy=yes`, notHappyLink: `${SITE}/repair/sample?happy=no`,
 };
 const worksEntry = (id: string, name: string, audience: CatalogEntry["audience"], trigger: string, to: string, summary: string, doc: EmailDoc, group = "Maintenance"): CatalogEntry => ({
@@ -957,13 +957,13 @@ TLE_EMAILS.push(
 
 /* One worked visit, so the inspection emails preview as real ones. */
 const INSPECTION_SAMPLE: Record<string, string> = {
-  address: "41 Harewood Road, Coventry CV4 8LP", tenantName: "Marcus", landlordName: "Helen", inspector: "Rhiannon Dodge",
+  address: "8 Recreation Terrace, Nottingham NG2 3AB", tenantName: "Sophie", landlordName: "Raj", inspector: "Sam Whitaker",
   howLong: "20 minutes", noticeHours: "24", whenPretty: "Tuesday 22 September at 10:00", conditionWord: "in good order",
   slots: "Tuesday 22 September, 10:00<br>Wednesday 23 September, 14:00<br>Friday 25 September, 09:30",
   summary: "The property is being looked after. The garden is tidy, no damp anywhere and the alarms all tested fine.",
   findings: "Kitchen - extractor fan noisy, we will get somebody out.<br>Bathroom - sealant around the bath going black, on the list.<br>Outside - gutter above the front door needs clearing.",
   accessLink: `${SITE}/visit/sample`, reportLink: `${SITE}/inspections?open=sample`,
-  agentName: "Rhiannon Dodge", agentPhone: "0115 123 4567",
+  agentName: "Sam Whitaker", agentPhone: "0115 123 4567",
 };
 const inspectionEntry = (id: string, name: string, audience: CatalogEntry["audience"], trigger: string, to: string, summary: string, doc: EmailDoc): CatalogEntry => ({
   id, group: "Inspections", name, audience, trigger, fires: "lib/inspection-emails, from the inspection's own moves", to, summary, doc,
@@ -1138,34 +1138,34 @@ TLE_EMAILS.push(
 
 const TENANT_SAMPLE: Record<string, string> = {
   firstName: "Sophie",
-  tenantName: "Sophie Clark",
-  address: "Flat 2, Mercer Street, Manchester M4 1SL",
-  rent: "£1,250 pcm",
-  agentName: "Rhiannon Dodge",
-  agentPhone: "0161 883 2525",
-  agentEmail: "rhiannon@thelettingexperts.co.uk",
+  tenantName: "Sophie Turner",
+  address: "8 Recreation Terrace, Nottingham NG2 3AB",
+  rent: "£850 pcm",
+  agentName: "Sam Whitaker",
+  agentPhone: "0115 123 4567",
+  agentEmail: "sam@thelettingexperts.co.uk",
   link: `${SITE}/tenant/next`,
   passportLink: `${SITE}/tenant/welcome`,
   whenPretty: "Thursday 4 September at 5:30pm",
   timePretty: "5:30pm",
   viewedOn: "this afternoon",
-  meetLine: "Rhiannon Dodge will meet you at the front door.",
-  contactLine: "Call Rhiannon on <strong>0161 883 2525</strong> or reply to this email, and we'll move it.",
-  mapLink: "https://www.google.com/maps/search/?api=1&query=Mercer+Street+Manchester+M4+1SL",
+  meetLine: "Sam Whitaker will meet you at the front door.",
+  contactLine: "Call Sam on <strong>0115 123 4567</strong> or reply to this email, and we'll move it.",
+  mapLink: "https://www.google.com/maps/search/?api=1&query=8+Recreation+Terrace+Nottingham+NG2+3AB",
   count: "3",
   availableLine: "Good news: it's still available, from 1 October.",
   moveInList:
-    "Holding fee (one week's rent): <strong>£288</strong><br>Deposit (five weeks' rent): <strong>£1,442</strong><br>First month's rent: <strong>£1,250</strong>",
+    "Holding fee (one week's rent): <strong>£196</strong><br>Deposit (five weeks' rent): <strong>£980</strong><br>First month's rent: <strong>£850</strong>",
   slotsList: "<strong>Thursday 4 September</strong>, 5:30pm<br><strong>Friday 5 September</strong>, 12:30pm<br><strong>Saturday 6 September</strong>, 10:00am",
-  onNowLine: "We have 14 homes on in Manchester right now.",
+  onNowLine: "We have 14 homes on in Nottingham right now.",
   homesList:
-    "<strong>£1,195 pcm</strong> · 2 bed apartment, Ancoats M4<br><strong>£1,250 pcm</strong> · 2 bed apartment, Northern Quarter M1<br><strong>£1,100 pcm</strong> · 1 bed apartment with parking, Castlefield M3",
+    "<strong>£825 pcm</strong> · 2 bed terraced house, Sneinton NG2<br><strong>£875 pcm</strong> · 2 bed apartment, West Bridgford NG2<br><strong>£795 pcm</strong> · 1 bed apartment with parking, Lace Market NG1",
   reasonLine: "You said the second bedroom was too small for a desk.",
-  offerLine: "You offered <strong>£1,250 pcm</strong>, from <strong>1 October</strong>, for 12 months.",
-  holdingFee: "£288",
+  offerLine: "You offered <strong>£850 pcm</strong>, from <strong>1 October</strong>, for 12 months.",
+  holdingFee: "£196",
   adultsLine: "Everyone over 18 who is moving in gets their own link and fills in their own form.",
   termLine: "The tenancy is for 12 months from 1 October.",
-  missingList: "<strong>Your employer's contact email</strong><br><strong>Your address history</strong> for 2023 and 2024<br><strong>Daniel Clark</strong> hasn't started his form yet",
+  missingList: "<strong>Your employer's contact email</strong><br><strong>Your address history</strong> for 2023 and 2024<br><strong>Daniel Turner</strong> hasn't started his form yet",
 };
 
 const tenantEntry = (
@@ -1263,11 +1263,11 @@ TLE_EMAILS.push(
     TENANT_HOME_ALERT,
     {
       subjectLine: "2 new homes for you, Sophie",
-      introLine: "Two new homes have come on that fit your search: <strong>2+ bed homes within 5 miles of your home, up to £1,250 a month</strong>.",
+      introLine: "Two new homes have come on that fit your search: <strong>2+ bed homes within 5 miles of your home, up to £900 a month</strong>.",
       link: `${SITE}/tenant/homes`,
       stopLink: `${SITE}/api/tenant/homes/alert/stop?e=sample`,
       homesList:
-        "<a href=\"#\" style=\"color:#56423e;text-decoration:none\"><strong>£1,195 a month</strong> · 2 bed apartment, Ancoats M4</a> · 1.2 miles away<br><a href=\"#\" style=\"color:#56423e;text-decoration:none\"><strong>£1,250 a month</strong> · 2 bed terraced house, Levenshulme M19</a> · 3.8 miles away",
+        "<a href=\"#\" style=\"color:#56423e;text-decoration:none\"><strong>£825 a month</strong> · 2 bed terraced house, Sneinton NG2</a> · 1.2 miles away<br><a href=\"#\" style=\"color:#56423e;text-decoration:none\"><strong>£875 a month</strong> · 2 bed apartment, West Bridgford NG2</a> · 3.8 miles away",
     }
   ),
   tenantEntry(
@@ -1317,7 +1317,7 @@ TLE_EMAILS.push(
     "The tenant who applied",
     "What we do with it, when they will hear (the moment the landlord answers, either way), the holding fee if it is a yes, and the four things to have ready for referencing.",
     APPLICATION_RECEIVED,
-    { holdingFeeLine: HOLDING_FEE_WORDING.england.ifYes("£288.46") }
+    { holdingFeeLine: HOLDING_FEE_WORDING.england.ifYes("£196.15") }
   ),
   tenantEntry(
     "application-declined",
@@ -1337,7 +1337,7 @@ TLE_EMAILS.push(
     "Each tenant on the application",
     "Our rewrite of the acceptance email: the yes, the holding fee (what it is, where it goes, when it comes back and when it can be kept), then every step to the keys in order, with the tenancy page as the place to watch it happen.",
     APPLICATION_ITS_YOURS,
-    { holdingFeeLine: HOLDING_FEE_WORDING.england.accepted("£288"), weekAheadList: WEEK_AHEAD_LINES, link: `${SITE}/tenant/tenancy` }
+    { holdingFeeLine: HOLDING_FEE_WORDING.england.accepted("£196"), weekAheadList: WEEK_AHEAD_LINES, link: `${SITE}/tenant/tenancy` }
   ),
   tenantEntry(
     "referencing-invite",

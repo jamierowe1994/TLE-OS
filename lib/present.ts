@@ -1074,7 +1074,9 @@ export const money = (n: number) => `\u00a3${Math.round(n).toLocaleString("en-GB
  */
 export const SAMPLE_DECK: PresentDeck = {
   kind: "pre-appraisal",
-  recipientName: "Sample Landlord",
+  /* Raj and his home, the same sample as the landlord's portal and the emails
+     (lib/landlord-sample), so the Showroom tells one story (28 Sep 2026). */
+  recipientName: "Raj Chauhan",
   /* Real figures from the live book (L34 5, 23 Aug 2026) rather than invented
      ones, so /present/sample shows the comparables slide as a landlord would
      actually receive it — including its caveat when there is one. */
@@ -1229,16 +1231,16 @@ export const SAMPLE_DECK: PresentDeck = {
   },
   propertyVideoUrl: null,
   property: {
-    address: "12 Example Street, Lincoln",
-    postcode: "LN5 9AB",
+    address: "8 Recreation Terrace, Nottingham",
+    postcode: "NG2 3AB",
     /* A stand-in for the SAMPLE only, so the property slide can be judged
        with a photograph in it. Real decks carry the property's own image,
        or the drawn street when there is none. */
     image: "/brand/photo/property-sample.webp",
-    beds: 3,
+    beds: 2,
     baths: 1,
-    sqft: 912,
-    propertyType: "Semi-detached",
+    sqft: 764,
+    propertyType: "Terraced house",
     epc: "C",
   },
   whenPretty: "Tuesday 19 August at 2:00pm",
@@ -1251,8 +1253,8 @@ export const SAMPLE_DECK: PresentDeck = {
     name: "Sam Whitaker",
     firstName: "Sam",
     title: "Property Expert",
-    email: "you@thelettingexperts.co.uk",
-    phone: "07000 000000",
+    email: "sam@thelettingexperts.co.uk",
+    phone: "0115 123 4567",
     /* A stand-in portrait for the SAMPLE only, so the house look's agent
        slide can be judged with a photograph in it. Real decks carry the
        agent's REX profile photo, or initials when there is none. */

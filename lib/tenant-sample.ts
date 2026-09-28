@@ -42,7 +42,10 @@ export const SOPHIE_PASSPORT: PassportData = {
   smoker: false,
 };
 
-const AGENT = { name: "Emily Watson", email: "sample.agent@example.com", phone: "0115 123 4567", photo: null };
+/* The same agent as Raj's (lib/landlord-sample): one home, one landlord, one
+   tenant, one agent, so the Showroom's screens and emails tell one story
+   (James, 28 Sep 2026). */
+const AGENT = { name: "Sam Whitaker", email: "sam@thelettingexperts.co.uk", phone: "0115 123 4567", photo: null };
 
 const HOME: TenantProperty = {
   property: "8 Recreation Terrace",
@@ -55,7 +58,7 @@ const HOME: TenantProperty = {
   href: "/tenant/homes",
 };
 
-/** What else Emily has on: three homes near Sophie's budget. */
+/** What else Sam has on: three homes near Sophie's budget. */
 const MARKET: TenantProperty[] = [
   { property: "14 Trent Bridge Court", locality: "West Bridgford NG2", rentPcm: 925, beds: 2, photo: "/brand/living-room.jpg", href: "/tenant/homes" },
   { property: "Flat 3, 61 Musters Road", locality: "West Bridgford NG2", rentPcm: 795, beds: 1, photo: null, href: "/tenant/homes" },
@@ -82,9 +85,9 @@ const DEAL_WORDS: Record<string, { now: string; next: string }> = Object.fromEnt
 const ACTIVITY: { at: TenantStageKey; label: string; sub: string; when: string; tone: "done" | "live" | "quiet" }[] = [
   { at: "passport", label: "Passport finished", sub: "6 of 6 sections", when: "6 Sep 2026", tone: "done" },
   { at: "passport", label: "Your tenant area opened", sub: "Welcome in", when: "6 Sep 2026", tone: "quiet" },
-  { at: "enquired", label: "You enquired about 8 Recreation Terrace", sub: "Emily has it", when: "8 Sep 2026", tone: "done" },
+  { at: "enquired", label: "You enquired about 8 Recreation Terrace", sub: "Sam has it", when: "8 Sep 2026", tone: "done" },
   { at: "matched", label: "Four homes sent to you", sub: "Matched to your budget and area", when: "8 Sep 2026", tone: "done" },
-  { at: "viewing", label: "Viewing booked", sub: "Tue 15 Sep, 2:30pm with Emily", when: "9 Sep 2026", tone: "done" },
+  { at: "viewing", label: "Viewing booked", sub: "Tue 15 Sep, 2:30pm with Sam", when: "9 Sep 2026", tone: "done" },
   { at: "viewed", label: "You viewed 8 Recreation Terrace", sub: "How was it?", when: "15 Sep 2026", tone: "done" },
   { at: "offer", label: "Offer made: £850 a month", sub: "With the landlord", when: "15 Sep 2026", tone: "done" },
   { at: "declined", label: "The landlord went with another application", sub: "Others sent the same day", when: "16 Sep 2026", tone: "done" },
@@ -105,7 +108,7 @@ export function sampleFor(stage: TenantStageKey): TenantHome {
 
   /* Before the deal: the home she is after, once she has asked about it. */
   const enquiry = atLeast(stage, "enquired") ? { ...HOME, enquiredOn: "2026-09-08" } : null;
-  const viewing = atLeast(stage, "viewing") ? { when: "2026-09-15T14:30:00", withName: "Emily", status: (atLeast(stage, "viewed") ? "done" : "booked") as "done" | "booked" } : null;
+  const viewing = atLeast(stage, "viewing") ? { when: "2026-09-15T14:30:00", withName: "Sam", status: (atLeast(stage, "viewed") ? "done" : "booked") as "done" | "booked" } : null;
   const offer = atLeast(stage, "offer") ? { amount: 850, madeOn: "2026-09-15", status: (inDeal ? "accepted" : "with_landlord") as "accepted" | "with_landlord" } : null;
 
   /* The deal, once there is one. Living is every stage done. */
