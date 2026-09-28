@@ -273,16 +273,21 @@ export async function createProperty(
  * A read, and a necessary one: the ids are account-specific numbers ("26529"
  * is Terraced House HERE and means nothing anywhere else), so a hardcoded list
  * would be wrong the day somebody adds one. The form asks REX.
+ *
+ * It is a system list, SystemValues/getCategoryValues "property_subcategory".
+ * This used to call a PropertySubcategories service REX does not have, so the
+ * list always came back empty (bug list, 28 Sep 2026). Each row says whether
+ * it is residential or commercial; we let homes, so the commercial ones (Bar,
+ * Petrol Station, Science Park...) stay out of the picker.
  */
 export async function propertySubcategories(): Promise<Array<{ id: string; text: string }>> {
-  const res = await rexCall("PropertySubcategories", "search", { limit: 100 });
-  if (!res.ok) return [];
-  const rows = ((res.result as { rows?: unknown[] } | undefined)?.rows ?? []) as Array<{
-    id?: unknown;
-    text?: unknown;
-    name?: unknown;
-  }>;
+  const res = await rexCall("SystemValues", "getCategoryValues", { list_name: "property_subcategory" });
+  if (!res.ok || !Array.isArray(res.result)) return [];
+  const rows = res.result as Array<{ id?: unknown; text?: unknown; metadata?: { property_category_id?: unknown } | null }>;
+  const seen = new Set<string>();
   return rows
-    .map((r) => ({ id: String(r.id ?? ""), text: String(r.text ?? r.name ?? "") }))
-    .filter((r) => r.id && r.text);
+    .filter((r) => (r.metadata?.property_category_id ?? "residential") === "residential")
+    .map((r) => ({ id: String(r.id ?? ""), text: String(r.text ?? "").trim() }))
+    .filter((r) => r.id && r.text && !/^not specified$/i.test(r.text) && !seen.has(r.text.toLowerCase()) && seen.add(r.text.toLowerCase()))
+    .sort((a, b) => a.text.localeCompare(b.text));
 }
