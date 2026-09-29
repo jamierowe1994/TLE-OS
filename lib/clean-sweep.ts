@@ -141,7 +141,8 @@ export function neededFields(p: PropRow, facts: Map<string, FactRow>): FactField
     const depBy = (facts.get("deposit_registered_by")?.value ?? "").toLowerCase();
     if (DEPOSIT.has(f.key) && (depBy === "landlord" || (!managed && depBy !== "agent"))) return false;
     /* A Flatfair plan or a let with no deposit taken has nothing to protect. */
-    if (DEPOSIT.has(f.key) && /^no deposit/i.test(facts.get("deposit_status")?.value ?? "")) return false;
+    /* Anywhere in the status: Susan's report says "TLE - flatfair No Deposit" (29 Sep 2026). */
+    if (DEPOSIT.has(f.key) && /\bno deposit\b/i.test(facts.get("deposit_status")?.value ?? "")) return false;
     /* The sheet itself is only asked for once the answer is Yes. */
     if (f.key === "doc_rra_sheet" && /^no\b/i.test(facts.get("rra_sheet_served")?.value ?? "")) return false;
     if (RRA_SHEET.has(f.key)) {
