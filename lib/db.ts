@@ -754,6 +754,18 @@ CREATE TABLE IF NOT EXISTS os_flatbond_docs (
   PRIMARY KEY (env, id)
 );
 CREATE INDEX IF NOT EXISTS os_flatbond_docs_bond_idx ON os_flatbond_docs (env, flatbond_id);
+-- A deal sent to Flatfair as a draft (lib/flatfair-draft), one per deal per
+-- environment, so the button cannot make two.
+CREATE TABLE IF NOT EXISTS os_flatfair_drafts (
+  deal_id   TEXT NOT NULL,
+  env       TEXT NOT NULL,
+  draft_id  INTEGER NOT NULL,
+  by_id     TEXT,
+  by_name   TEXT NOT NULL DEFAULT '',
+  payload   JSONB NOT NULL,
+  at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (deal_id, env)
+);
 -- The homes a tenant lead is interested in: picked on the new-lead screen or
 -- shortlisted on the lead's Properties tab (Howard, 24 Sep 2026: the picks were
 -- dropped on save, and the tenant's own address stood in as "the property").

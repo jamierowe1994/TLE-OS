@@ -39,6 +39,12 @@ interface Payload {
   url?: string;
   deal?: Facts;
   done?: { by: string; at: string } | null;
+  /** Sending the deal to Flatfair as a draft instead of copying it (29 Sep 2026). */
+  draftSend?: {
+    available: boolean;
+    env: string;
+    sent: { draftId: number; by: string; at: string; test: boolean } | null;
+  };
 }
 
 const gbp = (n: number | null) => (n == null ? "—" : `£${Math.round(n).toLocaleString("en-GB")}`);
@@ -87,6 +93,7 @@ export default function FlatfairHandoff({ dealId }: { dealId: string }) {
   const [data, setData] = useState<Payload | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [problems, setProblems] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -118,6 +125,29 @@ export default function FlatfairHandoff({ dealId }: { dealId: string }) {
       setData((d) => (d ? { ...d, done: body.done ?? null } : d));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save that.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sendDraft = async () => {
+    setBusy(true);
+    setError(null);
+    setProblems([]);
+    try {
+      const res = await fetch("/api/pretenancy/flatfair", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deal: dealId, action: "draft" }),
+      });
+      const body = (await res.json()) as { ok: boolean; error?: string; problems?: string[] };
+      if (!body.ok) {
+        setProblems(body.problems ?? []);
+        throw new Error(body.error ?? "Flatfair did not take it.");
+      }
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Flatfair did not take it.");
     } finally {
       setBusy(false);
     }
@@ -186,6 +216,45 @@ export default function FlatfairHandoff({ dealId }: { dealId: string }) {
         >
           Copy everything
         </button>
+
+        {data.draftSend?.available && (
+          <div className="rounded-2xl border border-line bg-card p-4">
+            {data.draftSend.sent ? (
+              <>
+                <p className="text-[13px] font-semibold">Sent to Flatfair as a draft</p>
+                <p className="mt-1 text-[12px] text-muted">
+                  Draft {data.draftSend.sent.draftId}, by {data.draftSend.sent.by},{" "}
+                  {new Date(data.draftSend.sent.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}.
+                  {data.draftSend.sent.test
+                    ? " This went to Flatfair's test system, with every email address swapped for yours."
+                    : " Check it in Flatfair and submit it there."}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-[13px] font-semibold">Or send it across in one go</p>
+                <p className="mt-1 text-[12px] text-muted">
+                  {data.draftSend.env === "live"
+                    ? "Every line above goes to Flatfair as a draft. It waits there for you to check and submit it."
+                    : "Flatfair's test system: every email address is swapped for yours, so nobody on the deal hears a thing."}
+                </p>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void sendDraft()}
+                  className="mt-3 w-full rounded-full bg-ink px-4 py-2 text-[13px] font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+                >
+                  {busy ? "Sending…" : "Send to Flatfair as a draft"}
+                </button>
+                {problems.length > 0 && (
+                  <ul className="mt-2 list-disc pl-4 text-[12px] text-red-600">
+                    {problems.map((p) => <li key={p}>{p}</li>)}
+                  </ul>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
         <div className="rounded-2xl border border-line bg-card p-4">
           {data.done ? (

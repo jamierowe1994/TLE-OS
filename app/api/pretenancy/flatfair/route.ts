@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveDealAccess } from "@/lib/business/deal-access";
 import { getMeta, logSystemEvent, setChecklistItem } from "@/lib/business/deal-store";
 import { PLATFORMS } from "@/lib/business/platforms";
+import { flatfairConfigured, flatfairEnv } from "@/lib/flatfair";
+import { draftFor, sendDraft, type DraftFacts } from "@/lib/flatfair-draft";
+import { switchOn } from "@/lib/switches";
+import { can } from "@/lib/roles";
 
 /**
  * The Flatfair hand-off, until Flatfair gives us an API.
@@ -57,11 +61,35 @@ export async function GET(req: NextRequest) {
       agent: access.deal.managerName,
     },
     done: tick?.done ? { by: tick.by, at: tick.at } : null,
+    /* Sending it as a draft instead of copying it across (29 Sep 2026). */
+    draftSend: {
+      /* On Flatfair's test system it is for the owners to try, not agents mid-pilot. */
+      available: flatfairConfigured() && (flatfairEnv() === "live" ? await switchOn("flatfair_drafts") : can(access.user.role, "see:wiring")),
+      env: flatfairEnv(),
+      sent: await draftFor(id),
+    },
   });
 }
 
+function factsOf(dealId: string, app: import("@/lib/business/rex-stats").AgentApplication): DraftFacts {
+  const p = app.propoly;
+  return {
+    dealId,
+    propertyName: app.propertyName,
+    locality: app.locality,
+    rentPcm: app.offer,
+    deposit: p?.deposit ?? null,
+    startDate: app.startDate,
+    service: p?.service ?? null,
+    depositReplacement: Boolean(p?.depositReplacement),
+    tenants: app.tenants.map((t) => ({ name: t.name ?? null, email: t.email ?? null, phone: t.phone ?? null })),
+    guarantors: p?.guarantors ?? [],
+    landlord: p?.landlord ?? null,
+  };
+}
+
 export async function POST(req: NextRequest) {
-  let body: { deal?: string; done?: boolean };
+  let body: { deal?: string; done?: boolean; action?: string };
   try {
     body = await req.json();
   } catch {
@@ -73,6 +101,20 @@ export async function POST(req: NextRequest) {
   if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
 
   const byName = access.user.name || access.user.email;
+  if (body.action === "draft") {
+    if (flatfairEnv() !== "live" && !can(access.user.role, "see:wiring")) {
+      return NextResponse.json({ ok: false, error: "Flatfair is on its test system; only the owners can try this for now." }, { status: 403 });
+    }
+    const out = await sendDraft(factsOf(id, access.deal.app), { id: access.user.id, name: access.user.name ?? "", email: access.user.email });
+    if (out.ok) {
+      await logSystemEvent(
+        id,
+        { id: access.user.id, name: byName, role: access.role },
+        `sent the deal to Flatfair as draft ${out.draft.draftId}${out.draft.test ? " (Flatfair's test system)" : ""}`
+      ).catch(() => undefined);
+    }
+    return NextResponse.json(out, { status: out.ok ? 200 : 400 });
+  }
   const done = body.done !== false;
   await setChecklistItem(id, ITEM, done, byName);
   await logSystemEvent(

@@ -296,6 +296,20 @@ export const SWITCHES: Switch[] = [
     legacyOn: "on",
   },
   {
+    /**
+     * A deal sent to LIVE Flatfair as a draft (29 Sep 2026). On Flatfair's
+     * demo environment the button works without this - every address is
+     * swapped for the sender's own - so it can be tried safely first.
+     */
+    key: "flatfair_drafts",
+    label: "Send deals to Flatfair as drafts",
+    what: "Adds 'Send to Flatfair as a draft' on the Set up in Flatfair screen: the deal's address, rent, move-in, tenants, guarantors and landlord go to Flatfair as a draft for a person to check there.",
+    who: "Flatfair is WRITTEN TO: one draft per deal. Flatfair say a draft waits in their app until somebody there submits it.",
+    confirm: "SEND DRAFTS",
+    legacyEnv: "FLATFAIR_DRAFTS",
+    legacyOn: "on",
+  },
+  {
     key: "campaign_sending",
     label: "Nurture campaigns",
     what: "Lets the scheduler send campaign steps as they fall due.",
