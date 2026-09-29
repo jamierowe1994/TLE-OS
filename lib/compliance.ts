@@ -192,9 +192,17 @@ export function requiredCerts(p: CompProperty): CertKey[] {
     "eicr" as const,
     ...(p.hasGas ? ["gas" as const] : []),
     "epc" as const,
-    ...(p.hmo ? [...HMO_SET, ...QUIET_SET].filter((k) => !(k === "pat" && patLongLapsed(p))) : []),
+    ...(p.hmo ? [...HMO_SET, "alarms" as const].filter((k) => !(k === "pat" && patLongLapsed(p))) : []),
+    /* Legionella is a Scottish duty only (Michael, 29 Sep 2026), and there it
+       is every let home, HMO or not - the Repairing Standard. */
+    ...(isScottishHome(p) ? ["legionella" as const] : []),
   ];
 }
+
+/** A Scottish postcode (or Edinburgh / Glasgow) anywhere in the home's name or area. */
+export const isScottishHome = (p: Pick<CompProperty, "name" | "locality">): boolean =>
+  /\b(AB|DD|DG|EH|FK|G|HS|IV|KA|KW|KY|ML|PA|PH|TD|ZE)\d{1,2}[A-Z]?\s*\d[A-Z]{2}\b/i.test(`${p.name} ${p.locality}`) ||
+  /\b(edinburgh|glasgow)\b/i.test(`${p.name} ${p.locality}`);
 
 /**
  * James, 25 Sep 2026: a PAT test that ran out more than 1,000 days ago was

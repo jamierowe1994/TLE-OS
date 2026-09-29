@@ -128,6 +128,9 @@ export function neededFields(p: PropRow, facts: Map<string, FactRow>): FactField
     if (MANAGED_ONLY.has(f.key) && !managed) return false;
     if (ENGLAND_ONLY.has(f.key) && (scot || isWales(p.postcode))) return false;
     if (f.when === "hmo" && !hmo && !(scot && SCOTLAND_EVERY_HOME.has(f.key))) return false;
+    /* Legionella is only asked in Scotland (Michael, 29 Sep 2026): the
+       English HMOs were flagging a risk assessment nobody holds them to. */
+    if (f.key === "legionella_expiry" && !scot) return false;
     if (f.when === "nrl" && !nrl) return false;
     if (f.when === "wales" && !isWales(p.postcode)) return false;
     if (f.when === "scotland" && !scot) return false;
