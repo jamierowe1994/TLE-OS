@@ -165,7 +165,8 @@ export const listBranches = () => all<FfBranch>("/organisation/branch/");
 export const listFlatbonds = () => all<FfFlatbond>("/flatbond/");
 export const getFlatbond = (id: number) => flatfairGet<FfFlatbond>(`/flatbond/${id}/`);
 export const listFlatbondDocuments = (flatbondId: number) => all<FfDocument>(`/document/?flatbond=${flatbondId}`);
-export const getDocument = (id: number) => flatfairGet<FfDocument>(`/document/${id}/`);
+/** One document with its download link. Flatfair refuses this without the flatbond too ("Filter by flatbond is mandatory"), whatever the docs say. */
+export const getDocument = (id: number, flatbondId: number) => flatfairGet<FfDocument>(`/document/${id}/?flatbond=${flatbondId}`);
 
 /**
  * A write. Only for callers that have already checked the Flatfair switch -
