@@ -69,7 +69,8 @@ export function buildDraft(f: DraftFacts, testInbox: string | null): { payload: 
   const tenants = f.tenants.filter((t) => t.email || t.name).map((t, i) => ({
     ...splitName(t.name),
     email: addr(t.email, "tenant"),
-    ...(t.phone ? { phone_number: t.phone } : {}),
+    /* A test system gets no real phone number either - it could text it. */
+    ...(t.phone && !testInbox ? { phone_number: t.phone } : {}),
     is_lead_tenant: i === 0,
   }));
   if (!tenants.length || tenants.some((t) => !t.email)) problems.push("Every tenant needs an email address.");
