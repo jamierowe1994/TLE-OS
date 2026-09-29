@@ -18,7 +18,7 @@
 
 export type WiringState = "live" | "proven" | "untested" | "blocked" | "manual";
 
-export type SystemKey = "rex" | "propoly" | "payprop" | "storage" | "sends" | "foundations";
+export type SystemKey = "rex" | "propoly" | "payprop" | "flatfair" | "storage" | "sends" | "foundations";
 
 export interface WiringRow {
   system: SystemKey;
@@ -68,6 +68,13 @@ export const SYSTEMS: {
     endpoint: "/api/payprop/wiring",
   },
   {
+    key: "flatfair",
+    label: "Flatfair",
+    blurb:
+      "Deposits and no-deposit plans: every flatbond, its scheme, registration number and certificates. Read through its own API since 29 Sep 2026; nothing is written there yet.",
+    endpoint: "/api/flatfair/wiring",
+  },
+  {
     key: "storage",
     label: "Storage (R2)",
     blurb: "Our own vault for certificates, documents and photos.",
@@ -88,6 +95,35 @@ export const SYSTEMS: {
 ];
 
 export const WIRING: WiringRow[] = [
+  // ═══ Flatfair ═══
+  {
+    system: "flatfair",
+    area: "Reading",
+    item: "Every flatbond, its deposit and its documents, copied into the OS",
+    state: "proven",
+    note: "Built 29 Sep 2026 against Flatfair's demo environment: lib/flatfair reads, lib/flatfair-sync keeps our copy (os_flatbonds, os_flatbond_docs), one call per hundred flatbonds and documents only when a flatbond changes. Each row carries its environment, and only live rows ever reach the clean sweep. Waiting on a LIVE token: the first one Flatfair gave us is demo's.",
+  },
+  {
+    system: "flatfair",
+    area: "Reading",
+    item: "Flatfair tells us when a flatbond changes (webhook)",
+    state: "untested",
+    note: "POST /api/flatfair/webhook?key=<FLATFAIR_WEBHOOK_SECRET>. The call is not signed by Flatfair, so the body is only a pointer: the flatbond is re-read from their API. Flatfair switch it on per organisation, on request.",
+  },
+  {
+    system: "flatfair",
+    area: "Writing",
+    item: "Create a flatbond (as a draft first) from the Set up in Flatfair screen",
+    state: "manual",
+    note: "Agents key deals in by hand today. Agreed with Flatfair (28 Sep): drafts first, checked by a person in Flatfair, then direct creation once proven. Not built to write yet.",
+  },
+  {
+    system: "flatfair",
+    area: "Writing",
+    item: "Referencing applications through Flatfair",
+    state: "proven",
+    note: "The v2 API can open a referencing application per property and report each tenant's identity, residence, income and credit checks. A decision for James and Susan before anything is built.",
+  },
   // ═══ REX ═══
   {
     system: "rex",

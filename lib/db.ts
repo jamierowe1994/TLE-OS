@@ -708,6 +708,52 @@ CREATE TABLE IF NOT EXISTS os_lead_properties (
   at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS os_lead_properties_lead_idx ON os_lead_properties (lead_id, at);
+-- Flatfair's flatbonds, as its API gives them (29 Sep 2026). Our own copy:
+-- refreshed by the sync and by Flatfair's webhook, read by the clean sweep
+-- and the pre-tenancy screens. env keeps demo test data apart from live -
+-- a token belongs to one Flatfair environment, and only 'live' rows are
+-- ever used as fact. id is Flatfair's own flatbond id.
+CREATE TABLE IF NOT EXISTS os_flatbonds (
+  env                  TEXT NOT NULL,
+  id                   INTEGER NOT NULL,
+  branch_id            INTEGER,
+  branch_name          TEXT,
+  status               TEXT NOT NULL DEFAULT '',
+  product_type         TEXT,
+  managed_by           TEXT,
+  tenancy_type         TEXT,
+  address              TEXT,
+  city                 TEXT,
+  postcode             TEXT,
+  rent_pence           INTEGER,
+  deposit_amount       INTEGER,
+  deposit_provider     TEXT,
+  deposit_type         TEXT,
+  deposit_registered   BOOLEAN,
+  registration_number  TEXT,
+  start_date           DATE,
+  close_date           DATE,
+  landlord_email       TEXT,
+  tenant_emails        TEXT[] NOT NULL DEFAULT '{}',
+  external_tenancy_id  TEXT,
+  raw                  JSONB NOT NULL,
+  raw_hash             TEXT NOT NULL,
+  fetched_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  changed_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  docs_at              TIMESTAMPTZ,
+  PRIMARY KEY (env, id)
+);
+CREATE INDEX IF NOT EXISTS os_flatbonds_postcode_idx ON os_flatbonds (env, postcode);
+CREATE TABLE IF NOT EXISTS os_flatbond_docs (
+  env          TEXT NOT NULL,
+  id           INTEGER NOT NULL,
+  flatbond_id  INTEGER NOT NULL,
+  type         TEXT NOT NULL DEFAULT 'unknown',
+  file_name    TEXT,
+  fetched_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (env, id)
+);
+CREATE INDEX IF NOT EXISTS os_flatbond_docs_bond_idx ON os_flatbond_docs (env, flatbond_id);
 -- The homes a tenant lead is interested in: picked on the new-lead screen or
 -- shortlisted on the lead's Properties tab (Howard, 24 Sep 2026: the picks were
 -- dropped on save, and the tenant's own address stood in as "the property").

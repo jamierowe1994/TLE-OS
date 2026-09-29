@@ -36,7 +36,7 @@ import { uid } from "@/lib/auth";
  * message, never the request body.
  */
 
-export type FailureSource = "REX" | "Propoly" | "Resend" | "Screen";
+export type FailureSource = "REX" | "Propoly" | "Resend" | "Screen" | "Flatfair";
 
 export interface Failure {
   source: FailureSource;
