@@ -33,6 +33,8 @@ export interface FactField {
   when?: "hmo" | "wales" | "scotland" | "nrl";
   /** A question with set answers: the checker picks one instead of typing. */
   choices?: string[];
+  /** A one-press answer beside Add, for a date column whose usual answer is a word (saved as `value`). */
+  quick?: { label: string; value: string; hint: string };
 }
 
 export const FIELDS: FactField[] = [
@@ -63,7 +65,10 @@ export const FIELDS: FactField[] = [
   { key: "rent_review_next", label: "Next rent review", group: "Tenancy", kind: "date" },
   { key: "visit_last", label: "Last property visit", group: "Tenancy", kind: "date" },
   { key: "visit_next", label: "Next property visit due", group: "Tenancy", kind: "date" },
-  { key: "rtr_expiry", label: "Right to Rent expiry (earliest)", group: "Tenancy", kind: "date" },
+  /* Not required = every tenant British, Irish or settled: no follow-up check,
+     saved as "No time limit" like the 140 homes read from documents (James, 30 Sep 2026). */
+  { key: "rtr_expiry", label: "Right to Rent expiry (earliest)", group: "Tenancy", kind: "date",
+    quick: { label: "Not required", value: "No time limit", hint: "Every tenant is British, Irish or settled, so no follow-up check is due" } },
   { key: "rtr_checked", label: "Right to Rent checked", group: "Tenancy", kind: "word" },
   /* Yes or No (James, 28 Sep 2026): every home reads No unless the sheet is on
      file; a Yes then asks for the sheet itself. It was a date nobody held. */

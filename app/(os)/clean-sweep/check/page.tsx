@@ -49,6 +49,7 @@ type Fact = {
   capturedBy: string | null; checkedAgainst: string | null; files: { key: string; name: string }[]; note: string | null;
   verifiedAt: string | null; verifiedBy: string | null;
   choices?: string[] | null;
+  quick?: { label: string; value: string; hint: string } | null;
 };
 type Cert = { key: string; label: string; days: number | null; file: boolean; expiresOn: string | null; fileUrl: string | null; notRequired: boolean; checkedBy: string | null };
 type Detail = {
@@ -281,7 +282,7 @@ export default function SecondPass() {
       {msg && <p className="mt-3 rounded-xl bg-[#f6e1dd] px-4 py-2 text-[13px] text-[#9d4340]">{msg}</p>}
       {!detail ? <div className="mt-6"><WorkspaceLoading /></div> : (
         <div className="mt-4 overflow-hidden rounded-2xl border border-line bg-white">
-          <div className="grid grid-cols-[34px_220px_1fr_210px] gap-3 border-b border-line bg-[#f5f0ea] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.07em] text-muted">
+          <div className="grid grid-cols-[34px_220px_1fr_270px] gap-3 border-b border-line bg-[#f5f0ea] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.07em] text-muted">
             <span>OK</span><span>Column</span><span>What the OS holds</span><span className="text-right">Fix</span>
           </div>
           {certs.map((c) => (
@@ -343,7 +344,7 @@ function FactRow({ f, homeId, ticked, onTick, onSaved, post, setMsg }: {
   return (
     <div onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
       onDrop={(e) => { e.preventDefault(); setDrag(false); const file = e.dataTransfer.files?.[0]; if (file) void upload(file); }}
-      className={`grid grid-cols-[34px_220px_1fr_210px] items-start gap-3 border-b border-line/70 px-4 py-2.5 ${drag ? "bg-[#eef3e8]" : ""}`}>
+      className={`grid grid-cols-[34px_220px_1fr_270px] items-start gap-3 border-b border-line/70 px-4 py-2.5 ${drag ? "bg-[#eef3e8]" : ""}`}>
       <input type="checkbox" checked={ticked} onChange={(e) => onTick(e.target.checked)} disabled={!(f.value || f.files.length || f.note)} className="mt-1 h-4 w-4 accent-[#56634a]" aria-label={`${f.label} is right`} />
       <div>
         <p className="text-[13px] font-semibold">{f.label}</p>
@@ -389,6 +390,7 @@ function FactRow({ f, homeId, ticked, onTick, onSaved, post, setMsg }: {
       </div>
       <div className="flex justify-end gap-1.5">
         {f.kind !== "file" && !editing && !f.choices?.length && <button onClick={() => { setVal(f.kind === "date" ? (f.value && /^\d{4}-\d{2}-\d{2}/.test(f.value) ? f.value.slice(0, 10) : "") : f.value ?? ""); setEditing(true); }} className="rounded-full border border-line px-3 py-1 text-[12px] hover:border-ink">{f.value ? "Edit" : "Add"}</button>}
+        {f.quick && !editing && f.value !== f.quick.value && <button onClick={() => void save(false, f.quick!.value)} disabled={busy} title={f.quick.hint} className="whitespace-nowrap rounded-full border border-line px-3 py-1 text-[12px] hover:border-ink">{f.quick.label}</button>}
         {!editing && <button onClick={() => void save(true)} disabled={busy} className="rounded-full border border-line px-2.5 py-1 text-[12px] text-muted hover:border-ink" title="This column does not apply to this home">N/A</button>}
         <button onClick={() => fileRef.current?.click()} disabled={busy} className="rounded-full border border-line px-3 py-1 text-[12px] hover:border-ink">{busy ? "…" : "Upload"}</button>
         <input ref={fileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void upload(file); e.target.value = ""; }} />
@@ -421,7 +423,7 @@ function CertRow({ c, ticked, onTick, home, onSaved, setMsg }: {
   }
 
   return (
-    <div className="grid grid-cols-[34px_220px_1fr_210px] items-start gap-3 border-b border-line/70 bg-[#fbf8f4] px-4 py-2.5">
+    <div className="grid grid-cols-[34px_220px_1fr_270px] items-start gap-3 border-b border-line/70 bg-[#fbf8f4] px-4 py-2.5">
       <input type="checkbox" checked={ticked} onChange={(e) => onTick(e.target.checked)} className="mt-1 h-4 w-4 accent-[#56634a]" aria-label={`${c.label} is right`} />
       <p className="text-[13px] font-semibold">{c.label} certificate</p>
       <div className="text-[13px]">

@@ -84,10 +84,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const field = String(body.field ?? "");
   if (!isFactKey(field)) return NextResponse.json({ ok: false, error: "That is not one of the columns." }, { status: 400 });
   const kind = FIELD_BY_KEY.get(field)!.kind;
+  const quick = FIELD_BY_KEY.get(field)!.quick;
   /* "Not applicable" is an answer too: the column does not apply to this home. */
   const value = body.na ? "Not applicable" : String(body.value ?? "").trim().slice(0, 500);
   if (!value) return NextResponse.json({ ok: false, error: "Type something first." }, { status: 400 });
-  if (!body.na && kind === "date" && !YMD.test(value)) return NextResponse.json({ ok: false, error: "Pick a date." }, { status: 400 });
+  if (!body.na && kind === "date" && !YMD.test(value) && value !== quick?.value) return NextResponse.json({ ok: false, error: "Pick a date." }, { status: 400 });
   if (!body.na && kind === "number" && !/^\d+$/.test(value)) return NextResponse.json({ ok: false, error: "A whole number, please." }, { status: 400 });
   await recordFact({ propertyId: id, field, value, source: "manual", by });
   /* A person typed it, so it is checked. */

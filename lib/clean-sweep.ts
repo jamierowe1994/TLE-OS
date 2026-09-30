@@ -301,6 +301,8 @@ export interface SweepFact {
   capturedAt: string | null; capturedBy: string | null; files: { key: string; name: string }[];
   /** Set answers to pick from, where the column is a question (see FactField.choices). */
   choices: string[] | null;
+  /** A one-press answer beside Add (see FactField.quick). */
+  quick: { label: string; value: string; hint: string } | null;
   /** Why a column with no value of its own still counts as held. */
   note: string | null;
   /** Ticked as right by a person in the second pass. */
@@ -401,6 +403,7 @@ export async function sweepDetail(id: string): Promise<SweepDetail | null> {
       capturedAt: r ? new Date(r.captured_at).toISOString() : null, capturedBy: r?.captured_by ?? null,
       files: byField.get(x.key) ?? [],
       choices: x.choices ?? null,
+      quick: x.quick ?? null,
     };
   });
   /* REX PM's own id is in ours for the homes read from it; a home added from
