@@ -166,7 +166,7 @@ const WORKSPACES: Workspace[] = [
     href: "/pre-tenancy/dashboard", label: "Pre-tenancy", icon: "checklist",
     /* `support` too: it is deprecated in favour of `pretenancy` but anybody
        still carrying it keeps the board they had. */
-    needs: "see:pretenancy", primaryFor: ["pretenancy", "support"],
+    needs: "see:pretenancy", primaryFor: ["pretenancy", "support", "compliance"],
   },
   {
     href: "/marketing-hub", label: "Marketing", icon: "megaphone",
@@ -205,7 +205,7 @@ const WORKSPACES: Workspace[] = [
    */
   {
     href: "/compliance-desk", label: "Compliance desk", icon: "shield",
-    needs: "see:agent-compliance", primaryFor: ["compliance", "super_admin"],
+    needs: "see:agent-compliance", primaryFor: ["compliance", "pretenancy", "super_admin"],
   },
 ];
 

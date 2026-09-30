@@ -63,7 +63,9 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
   const office = can(me.role, "see:marketing") || me.role === "owner";
   const ops = me.role === "owner" || can(me.role, "see:pretenancy");
 
-  const desk = me.role === "compliance";
+  /* The office covers for each other (James, 30 Sep 2026): Kirstie gets the
+     desk's notices as well as Michael and Josel. */
+  const desk = me.role === "compliance" || me.role === "pretenancy";
 
   const [deals, steps, handovers, reminders, toVerify, toCheck] = await Promise.all([
     listDealEvents({ agentEmail: whole ? null : me.email, limit }).catch(() => []),

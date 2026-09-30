@@ -32,6 +32,8 @@ const RAIL: RailGroup[] = [
   },
   /* Kirstie oversees the checker's clean sweep day to day (24 Sep 2026). */
   { title: "Migration", items: [{ href: "/clean-sweep", label: "Clean sweep", icon: "checklist" }] },
+  /* One office (30 Sep 2026): Michael's desk is a click away, and his is hers. */
+  { title: "Elsewhere", items: [{ href: "/compliance-desk", label: "Compliance desk", icon: "shield" }] },
 ];
 
 export default function PreTenancyLayout({ children }: { children: React.ReactNode }) {

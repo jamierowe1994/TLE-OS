@@ -110,9 +110,9 @@ export const ROLE_BLURB: Record<Role, string> = {
   super_admin: "Company figures, plus a short admin: people, permissions (read-only) and pre-launch.",
   developer: "The wiring: connections, health, diagnostics. Not the money.",
   support: "The pre-tenancy board only. Superseded by Pre-tenancy — use that instead.",
-  pretenancy: "The run-up to a move-in, across every agent's deals. Nothing else.",
+  pretenancy: "Kirstie. Lands on the pre-tenancy board; sees exactly what Compliance sees too (the compliance desk and the clean sweep), so the office can cover for each other.",
   marketing: "Campaigns, paid leads, templates and the file store. No business figures.",
-  compliance: "Michael. The compliance desk - overdue and renewing certificates, new documents to verify, every agent's own compliance, finished works orders - and the knowledge hub.",
+  compliance: "Michael and Josel. Land on the compliance desk; see exactly what Pre-tenancy sees too (the pre-tenancy board and the clean sweep), so the office can cover for each other.",
   agent: "Their own book and nothing else.",
 };
 
@@ -135,6 +135,18 @@ export type Capability =
   | "edit:knowledge"    // feed Steve and the Guides shelf - Susan, Francesca, Michael, Kirstie
   | "see:agent-compliance" // every agent's personal compliance, and the list that defines it - Michael
   | "see:clean-sweep";    // the REX PM clean sweep: every home's facts and papers, checked one by one (24 Sep 2026)
+
+/*
+ * The office (James, 30 Sep 2026): Kirstie, Michael and Josel cover for each
+ * other on holiday, so pre-tenancy and compliance hold ONE set. Each sees the
+ * pre-tenancy board, the compliance desk (reminders, documents to verify,
+ * every agent's compliance, works orders) and the clean sweep, across every
+ * agent. Their roles stay separate only so each lands on their own screen
+ * first and their own clean sweep section opens by default.
+ */
+const OFFICE: Capability[] = [
+  "staff:internal", "see:pretenancy", "see:everything", "edit:knowledge", "see:agent-compliance", "see:clean-sweep",
+];
 
 const MATRIX: Record<Role, Capability[]> = {
   owner: [
@@ -177,7 +189,7 @@ const MATRIX: Record<Role, Capability[]> = {
 
      `see:everything` is not a generosity here, it is the job — she works every
      agent's deals, not her own book, and without it her board would be empty. */
-  pretenancy: ["staff:internal", "see:pretenancy", "see:everything", "edit:knowledge", "see:clean-sweep"],
+  pretenancy: OFFICE,
   /* Francesca. Deliberately NOT `see:business`, which is what her view used to
      demand: /admin/marketing asked for the capability that also opens GCI,
      arrears and every partner's earnings, so there was no way to give her
@@ -187,7 +199,7 @@ const MATRIX: Record<Role, Capability[]> = {
      are on the Compliance page every agent already has. */
   /* The clean sweep (24 Sep 2026) sits with compliance too: the checker going
      home by home is given this role, and Kirstie oversees through her own. */
-  compliance: ["staff:internal", "see:agent-compliance", "edit:knowledge", "see:clean-sweep"],
+  compliance: OFFICE,
   agent: [],
 };
 

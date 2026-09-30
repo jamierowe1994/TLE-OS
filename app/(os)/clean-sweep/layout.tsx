@@ -11,7 +11,10 @@ const RAIL: RailGroup[] = [
     { href: "/clean-sweep/check", label: "Check my section", exact: true, icon: "checklist" },
     { href: "/clean-sweep", label: "All homes", exact: true, icon: "home" },
   ] },
-  { title: "Elsewhere", items: [{ href: "/compliance-desk", label: "Compliance desk", icon: "shield" }] },
+  { title: "Elsewhere", items: [
+    { href: "/compliance-desk", label: "Compliance desk", icon: "shield" },
+    { href: "/pre-tenancy/dashboard", label: "Pre-tenancy", icon: "checklist" },
+  ] },
 ];
 
 export default function CleanSweepLayout({ children }: { children: React.ReactNode }) {
