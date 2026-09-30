@@ -331,6 +331,15 @@ function FactRow({ f, homeId, ticked, onTick, onSaved, post, setMsg }: {
     setBusy(false);
     if (d) { setEditing(false); onSaved(d); }
   }
+  async function remove(x: { key: string; name: string }) {
+    if (!window.confirm(`Delete ${x.name} from this home? This cannot be undone.`)) return;
+    setBusy(true); setMsg(null);
+    try {
+      const r = await fetch(`/api/clean-sweep/${encodeURIComponent(homeId)}/file`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: x.key }) });
+      const j = await r.json();
+      if (!j.ok) setMsg(j.error || "That did not delete."); else onSaved(j);
+    } catch { setMsg("That did not delete - the OS could not be reached."); } finally { setBusy(false); }
+  }
   async function upload(file: File) {
     setBusy(true); setMsg(null);
     const fd = new FormData(); fd.append("file", file); fd.append("field", f.key);
@@ -378,9 +387,12 @@ function FactRow({ f, homeId, ticked, onTick, onSaved, post, setMsg }: {
             {f.files.length > 0 && (
               <div className="mt-1 flex flex-wrap gap-1.5">
                 {f.files.slice(0, 10).map((x) => (
-                  <a key={x.key} href={`/api/r2/file?key=${encodeURIComponent(x.key)}`} target="tle-sweep-file" rel="noopener" className="flex max-w-[240px] items-center gap-1 rounded-full border border-line/80 px-2 py-0.5 text-[11px] hover:border-ink">
-                    <DoodleIcon name="doc" size={11} /><span className="truncate">{x.name}</span>
-                  </a>
+                  <span key={x.key} className="flex max-w-[260px] items-center rounded-full border border-line/80 text-[11px] hover:border-ink">
+                    <a href={`/api/r2/file?key=${encodeURIComponent(x.key)}`} target="tle-sweep-file" rel="noopener" className="flex min-w-0 items-center gap-1 py-0.5 pl-2 pr-1">
+                      <DoodleIcon name="doc" size={11} /><span className="truncate">{x.name}</span>
+                    </a>
+                    <button onClick={() => void remove(x)} disabled={busy} title={`Delete ${x.name}`} aria-label={`Delete ${x.name}`} className="mr-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full text-muted hover:bg-[#f6e1dd] hover:text-[#9d4340]">×</button>
+                  </span>
                 ))}
                 {f.files.length > 10 && <span className="text-[11px] text-muted">+{f.files.length - 10} more</span>}
               </div>

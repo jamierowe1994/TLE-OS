@@ -329,7 +329,7 @@ async function filesUnder(prefix: string): Promise<{ key: string; name: string }
     const res = await withR2((c) => c.send(new ListObjectsV2Command({ Bucket: R2_BUCKET, Prefix: prefix, ContinuationToken: token })));
     for (const o of res.Contents ?? []) {
       if (!o.Key) continue;
-      const base = o.Key.slice(o.Key.lastIndexOf("/") + 1).replace(/^(rexpm|propoly|manual)-\d+-/, "");
+      const base = o.Key.slice(o.Key.lastIndexOf("/") + 1).replace(/^(rexpm|propoly|manual)-(\d+-)?/, "");
       out.push({ key: o.Key, name: base });
     }
     token = res.IsTruncated ? res.NextContinuationToken : undefined;

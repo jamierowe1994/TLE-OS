@@ -322,6 +322,15 @@ function FactRow({ homeId, f, onSaved }: { homeId: string; f: Fact; onSaved: (d:
       if (j.ok) { setEditing(false); onSaved(j); } else setErr(j.error || "That did not save.");
     } catch { setErr("That did not save - the OS could not be reached."); } finally { setBusy(false); }
   }
+  async function remove(x: { key: string; name: string }) {
+    if (!window.confirm(`Delete ${x.name} from this home? This cannot be undone.`)) return;
+    setBusy(true); setErr(null);
+    try {
+      const r = await fetch(`/api/clean-sweep/${encodeURIComponent(homeId)}/file`, { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ key: x.key }) });
+      const j = await r.json();
+      if (j.ok) onSaved(j); else setErr(j.error || "That did not delete.");
+    } catch { setErr("That did not delete - the OS could not be reached."); } finally { setBusy(false); }
+  }
   async function upload(list: FileList | null) {
     if (!list?.length) return;
     setBusy(true); setErr(null);
@@ -357,10 +366,11 @@ function FactRow({ homeId, f, onSaved }: { homeId: string; f: Fact; onSaved: (d:
           {f.files.length > 0 && (
             <ul className="mt-1.5 flex flex-wrap gap-1.5">
               {f.files.slice(0, 12).map((x) => (
-                <li key={x.key}>
-                  <a href={`/api/r2/file?key=${encodeURIComponent(x.key)}`} target="_blank" rel="noopener noreferrer" className="flex max-w-[220px] items-center gap-1 rounded-full border border-line/80 px-2 py-0.5 text-[11px] hover:border-ink">
+                <li key={x.key} className="flex max-w-[240px] items-center rounded-full border border-line/80 text-[11px] hover:border-ink">
+                  <a href={`/api/r2/file?key=${encodeURIComponent(x.key)}`} target="_blank" rel="noopener noreferrer" className="flex min-w-0 items-center gap-1 py-0.5 pl-2 pr-1">
                     <DoodleIcon name="doc" size={11} /><span className="truncate">{x.name}</span>
                   </a>
+                  <button type="button" onClick={() => void remove(x)} disabled={busy} title={`Delete ${x.name}`} aria-label={`Delete ${x.name}`} className="mr-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full text-muted hover:bg-[#f6e1dd] hover:text-[#9d4340]">×</button>
                 </li>
               ))}
               {f.files.length > 12 && <li className="text-[11px] text-muted">+{f.files.length - 12} more</li>}
