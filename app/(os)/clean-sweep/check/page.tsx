@@ -130,7 +130,9 @@ export default function SecondPass() {
     setDetail(d);
     setNotes((section && d.sectionNotes?.[section]) ?? "");
     const t = new Set<string>();
-    for (const f of d.facts) if (f.verifiedAt) t.add(f.key);
+    /* A column with its document on file counts as ticked (James, 30 Sep 2026):
+       no separate approve for documents; Save & next records the check. */
+    for (const f of d.facts) if (f.verifiedAt || f.files.length) t.add(f.key);
     for (const c of d.certs ?? []) if (c.checkedBy) t.add(`cert_${c.key}`);
     setTicks(t);
   }, [section]);
