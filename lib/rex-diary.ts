@@ -171,8 +171,22 @@ function toAppt(e: RexEvent, accounts?: Map<string, string>): Appt | null {
 
   const owner = ownerOf(e);
   const priv = Boolean(e.is_private);
-  const title = (e.title ?? "").trim();
-  const { what, who } = partsOf(title);
+  /* A REX "General Appointment" is always titled "Appointment"; what it is
+     lives in the description the agent typed ("BNI", "HMO Fire alarm",
+     "meet jack for move in at fore street"). Every one of Rhiannon's read as a
+     blank "Appointment" until 30 Sep 2026, recurring ones included, so it
+     looked as though they had not come through at all. */
+  const notes = (e.description ?? "").trim();
+  const rawTitle = (e.title ?? "").trim();
+  const generic = !rawTitle || /^(general\s+)?appointment$/i.test(rawTitle) ||
+    rawTitle.toLowerCase() === (e.appointment_type?.name ?? "").trim().toLowerCase();
+  const firstLine = notes.split(/\r?\n/).map((l) => l.trim()).find(Boolean) ?? "";
+  const title = generic && firstLine
+    ? (firstLine.length > 80 ? `${firstLine.slice(0, 77).trimEnd()}...` : firstLine).replace(/^./, (c) => c.toUpperCase())
+    : rawTitle;
+  /* Their own words stay whole: partsOf reads REX's "Viewing at X with Y"
+     pattern, and would cut "Meg at dog groomers" down to "Meg". */
+  const { what, who } = generic && firstLine ? { what: title, who: "" } : partsOf(title);
   const loc = e.event_location?.description ?? "";
   const lat = e.event_location?.latitude ? Number(e.event_location.latitude) : undefined;
   const lng = e.event_location?.longitude ? Number(e.event_location.longitude) : undefined;
@@ -188,6 +202,8 @@ function toAppt(e: RexEvent, accounts?: Map<string, string>): Appt | null {
       ? { unaccompanied: true }
       : {}),
     what: priv ? "Busy" : what || "(untitled)",
+    /* The full note, unless the title already says all of it. */
+    ...(!priv && notes && notes.toLowerCase() !== title.toLowerCase() ? { notes } : {}),
     where: priv ? "" : loc,
     who: priv ? "" : who,
     /* Their OS name for anybody let in by account: the booker narrows on

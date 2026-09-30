@@ -38,6 +38,10 @@ export type Appt = {
   mins: number;
   kind: ApptKind;
   what: string;
+  /** The words the person typed on the entry itself (REX's description), shown
+   *  in the drawer. A REX "General Appointment" carries its whole meaning here:
+   *  its title is only ever "Appointment" (Rhiannon's ticket, 30 Sep 2026). */
+  notes?: string;
   where: string;
   who: string;
   agent: string;

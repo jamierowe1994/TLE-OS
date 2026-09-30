@@ -17,7 +17,7 @@ import { londonDayOffset, londonParts } from "@/lib/london-time";
 
 /* v2, 18 Sep 2026: a held book carries times already worked out, and v1's were
    worked out on the UTC clock - an hour early. A new key drops them at deploy. */
-const CACHE_KEY = "diary:v2";
+const CACHE_KEY = "diary:v3"; // v3 (30 Sep 2026): general appointments carry the words typed on them
 export const FRESH_MS = 2 * 60 * 1000;
 export const STALE_MS = 60 * 60 * 1000;
 

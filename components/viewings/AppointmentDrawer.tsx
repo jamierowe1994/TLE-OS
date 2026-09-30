@@ -216,6 +216,13 @@ export default function AppointmentDrawer({
             )}
           </Section>
 
+          {/* ── What they wrote on it ── */}
+          {appt.notes && (
+            <Section icon="note" title="Notes">
+              <p className="whitespace-pre-line leading-relaxed">{appt.notes}</p>
+            </Section>
+          )}
+
           {/* ── Who ── */}
           <Section icon="user" title={appt.kind === "viewing" ? (past ? "Who viewed" : "Who's coming") : "Who it's with"}>
             {appt.who ? <p className="font-semibold">{appt.who}</p> : <p className="text-muted">Nobody named on this entry.</p>}
