@@ -212,6 +212,55 @@ export async function consumeVerification(
   return { email: row.email, expiresAt: expiresAt.toISOString() };
 }
 
+/**
+ * Two halves of "replace a link only once the new one has been delivered".
+ *
+ * Found testing Reissue, 30 Sep 2026: minting expires every earlier link
+ * straight away, so when the invite email then FAILED to send, the person was
+ * left with no working link at all - the one they had was dead and the new
+ * one never arrived. A sender that mints with keepOthers, then calls
+ * retireOtherLinks after a successful send (or dropLink after a failed one),
+ * cannot strand anybody.
+ */
+export async function retireOtherLinks(rawEmail: string, purpose: Purpose, keepToken: string): Promise<void> {
+  await q(
+    `update os_email_verifications set expires_at = now()
+      where email = $1 and purpose = $2 and token_hash <> $3 and expires_at > now()`,
+    [normaliseEmail(rawEmail), purpose, hashToken(keepToken)]
+  );
+}
+
+export async function dropLink(token: string): Promise<void> {
+  await q(`delete from os_email_verifications where token_hash = $1`, [hashToken(token)]);
+}
+
+/**
+ * The newest join link's expiry for each address, for the Pre-launch list.
+ *
+ * Josel, 30 Sep 2026: her invite link had died of old age and nothing on the
+ * screen said so - she found out by clicking it. This lets the list say
+ * "live until" or "expired" before anybody has to.
+ *
+ * The newest row is the one that counts, because minting a link expires every
+ * earlier one for that address. Dead rows linger a day and then go, and a used
+ * link is deleted outright, so an invited address with no row at all means
+ * the link is gone either way - the caller decides what to call that.
+ */
+export async function latestJoinLinks(emails: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const wanted = [...new Set(emails.map((e) => e.trim().toLowerCase()).filter(Boolean))];
+  if (!wanted.length || !hasDb()) return out;
+  const rows = await q<{ email: string; expires_at: Date | string }>(
+    `select lower(email) as email, max(expires_at) as expires_at
+       from os_email_verifications
+      where purpose = 'join' and lower(email) = any($1)
+      group by lower(email)`,
+    [wanted]
+  ).catch(() => []);
+  for (const r of rows) out.set(r.email, new Date(r.expires_at).toISOString());
+  return out;
+}
+
 /** Housekeeping: drop anything already dead. Safe to call whenever. */
 export async function purgeExpired(): Promise<number> {
   if (!hasDb()) return 0;

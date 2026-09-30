@@ -5,6 +5,7 @@ import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
 import { ROLES, ROLE_LABEL } from "@/lib/roles";
 import { mailboxProblem } from "@/lib/mailbox-outcome";
+import { londonDayOffset, londonHHMM } from "@/lib/london-time";
 
 /* Both role pickers on this screen used to be a hand-typed list of five
    options. It was already wrong before this change — `pretenancy` existed and
@@ -38,6 +39,8 @@ type Candidate = {
   email: string;
   invited: boolean;
   sentAt: string | null;
+  /** When their newest join link dies (or died). Null: no link on record. */
+  linkExpiresAt: string | null;
   hasAccount: boolean;
   /** What they were invited as. Null on invites made before roles existed. */
   role: string | null;
@@ -72,6 +75,30 @@ type Bug = {
   /** Recordings and pictures the person added themselves. */
   media?: number;
 };
+
+/**
+ * Where somebody's join link stands (30 Sep 2026). Josel's had expired and
+ * nothing here said so; she found out by clicking it.
+ *
+ *   live     - a link is out and still works
+ *   expired  - one went out and has died, or been used without an account
+ *              appearing; either way the only road in is a fresh one
+ *   null     - nothing to say: signed up, not invited, or never sent
+ */
+function linkState(c: Candidate): "live" | "expired" | null {
+  if (c.hasAccount || !c.invited) return null;
+  if (c.linkExpiresAt && Date.parse(c.linkExpiresAt) > Date.now()) return "live";
+  if (c.sentAt || c.linkExpiresAt) return "expired";
+  return null;
+}
+
+/** "11:31 today", "11:31 tomorrow", or a date beyond that - London time. */
+function until(iso: string): string {
+  const d = londonDayOffset(iso);
+  if (d === 0) return `${londonHHMM(iso)} today`;
+  if (d === 1) return `${londonHHMM(iso)} tomorrow`;
+  return new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
 
 const when = (iso: string | null) =>
   !iso
@@ -263,7 +290,7 @@ export default function PreLaunch() {
     setMagic({ email: c.email, url: j.url });
     try {
       await navigator.clipboard.writeText(j.url);
-      setFlash(`Link copied. It works once and lasts 24 hours.`);
+      setFlash(`Link copied. It works once and lasts 24 hours; any earlier link no longer works.`);
     } catch {
       // Clipboard refused (Safari without a user gesture, an insecure origin).
       // The link is on screen either way, so this is a nudge and not a failure.
@@ -468,9 +495,15 @@ export default function PreLaunch() {
               </span>
               <span className="flex shrink-0 items-center gap-2">
                 {c.hasAccount ? (
-                  <Pill tone="accent">Signed up</Pill>
-                ) : c.sentAt ? (
-                  <Pill tone="neutral">Invited {when(c.sentAt)}</Pill>
+                  <Pill tone="good">Signed up</Pill>
+                ) : linkState(c) === "live" ? (
+                  <span title={c.sentAt ? `Invite sent ${when(c.sentAt)}` : "Link made by hand, not emailed"}>
+                    <Pill tone="neutral">Link live until {until(c.linkExpiresAt as string)}</Pill>
+                  </span>
+                ) : linkState(c) === "expired" ? (
+                  <span title={c.sentAt ? `Invite sent ${when(c.sentAt)}` : undefined}>
+                    <Pill tone="accent">Link expired</Pill>
+                  </span>
                 ) : c.invited ? (
                   <Pill tone="neutral">On the list</Pill>
                 ) : null}
@@ -489,16 +522,28 @@ export default function PreLaunch() {
                     {ROLE_OPTIONS}
                   </select>
                 )}
-                {!c.hasAccount && (
-                  <button
-                    type="button"
-                    disabled={busy !== null}
-                    onClick={() => invite(c, c.invited)}
-                    className="rounded-lg border border-line/80 px-3 py-1.5 text-[11.5px] disabled:opacity-40"
-                  >
-                    {c.invited ? "Send invite" : "Add to pilot"}
-                  </button>
-                )}
+                {!c.hasAccount && (() => {
+                  /* Once an invite has gone, sending again is a REISSUE: a
+                     fresh link by email, and the old one stops working. It
+                     always did exactly that; it just said "Send invite", so
+                     nobody could tell a first send from a rescue. Loudest when
+                     the link has died, because that is when it is needed. */
+                  const state = linkState(c);
+                  const reissue = c.invited && (Boolean(c.sentAt) || state !== null);
+                  return (
+                    <button
+                      type="button"
+                      disabled={busy !== null}
+                      onClick={() => invite(c, c.invited)}
+                      title={reissue ? "Emails a fresh invite link. The old link stops working." : undefined}
+                      className={`rounded-lg border px-3 py-1.5 text-[11.5px] disabled:opacity-40 ${
+                        state === "expired" ? "border-accent-dark/50 font-semibold text-accent-dark" : "border-line/80"
+                      }`}
+                    >
+                      {!c.invited ? "Add to pilot" : reissue ? "Reissue link" : "Send invite"}
+                    </button>
+                  );
+                })()}
                 {!c.hasAccount && (
                   <button
                     type="button"

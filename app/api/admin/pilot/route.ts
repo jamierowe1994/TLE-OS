@@ -4,7 +4,7 @@ import { asRole } from "@/lib/roles";
 import { addInvite, invites, markInviteSent, removeInvite, tabUsage, bugs } from "@/lib/pilot";
 import { lettingsAgents } from "@/lib/rex-agents";
 import { accountsByEmail, findUserByEmail } from "@/lib/users";
-import { startVerification } from "@/lib/verification";
+import { dropLink, latestJoinLinks, retireOtherLinks, startVerification } from "@/lib/verification";
 import { pilotInviteEmail } from "@/lib/email/pilot-email";
 import { sendEmail } from "@/lib/resend";
 import { record } from "@/lib/audit";
@@ -36,6 +36,9 @@ export async function GET(req: NextRequest) {
      a page that already waits on REX. */
   const accounts = await accountsByEmail(roster.map((r) => r.email));
 
+  /* Whether each person's join link is still alive - see latestJoinLinks. */
+  const links = await latestJoinLinks([...roster.map((r) => r.email), ...invited.map((i) => i.email)]);
+
   const candidates = roster.map((r) => {
     const inv = byEmail.get(r.email.toLowerCase());
     const acct = accounts.get(r.email.toLowerCase());
@@ -43,6 +46,7 @@ export async function GET(req: NextRequest) {
       ...r,
       invited: Boolean(inv),
       sentAt: inv?.sentAt ?? null,
+      linkExpiresAt: links.get(r.email.toLowerCase()) ?? null,
       /* THE ACCOUNT FIRST, the invite only as a fallback.
          This read `inv?.role` alone, so it showed what somebody was invited AS
          rather than what they ARE. Francesca was invited as an agent on 4 Sep
@@ -75,6 +79,7 @@ export async function GET(req: NextRequest) {
         email: i.email,
         invited: true,
         sentAt: i.sentAt,
+        linkExpiresAt: links.get(i.email.toLowerCase()) ?? null,
         role: i.role,
         hasAccount: Boolean(await findUserByEmail(i.email)),
         lastSeenAt: (await accountsByEmail([i.email])).get(i.email.toLowerCase())?.lastSeenAt ?? null,
@@ -146,8 +151,19 @@ export async function POST(req: NextRequest) {
   /* Sending is a separate act from inviting, so a list can be built up over a
      week and fired in one go — and so a mis-click adds a row rather than an
      email somebody has to be told to ignore. */
+  /* Sent before? Then this is a reissue: the fresh link replaces the old one
+     once it has gone (retireOtherLinks below), and the message says so. */
+  const reissue = Boolean((await invites()).find((i) => i.email.toLowerCase() === email.trim().toLowerCase())?.sentAt);
+  /* The old link survives until the new one has actually been sent - see
+     retireOtherLinks. Minting normally kills it on the spot, and a send that
+     then failed left the person with nothing that worked. */
+  let token: string;
   try {
-    const { token } = await startVerification(email, "join");
+    ({ token } = await startVerification(email, "join", { keepOthers: true }));
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 400 });
+  }
+  try {
     const origin = process.env.OS_ORIGIN?.replace(/\/+$/, "") || req.nextUrl.origin;
     /* The PILOT invitation, not the account-verification email.
      
@@ -163,16 +179,24 @@ export async function POST(req: NextRequest) {
       (name ?? "").trim().split(/\s+/)[0] || undefined
     );
     await sendEmail({ to: email, subject: mail.subject, html: mail.html, text: mail.text });
+    await retireOtherLinks(email, "join", token);
     await markInviteSent(email);
     await record({
       kind: "password_reset",
       actorId: owner.id, actorEmail: owner.email, subjectEmail: email,
-      detail: "pilot invite sent",
+      detail: reissue ? "pilot invite reissued with a fresh link" : "pilot invite sent",
     });
   } catch (e) {
+    /* Not sent, so the new link goes and the old one - untouched - still works. */
+    await dropLink(token).catch(() => null);
     return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 502 });
   }
-  return NextResponse.json({ ok: true, message: `Invite sent to ${email}.` });
+  return NextResponse.json({
+    ok: true,
+    message: reissue
+      ? `New link sent to ${email}. It works once and lasts 24 hours; the old one no longer works.`
+      : `Invite sent to ${email}.`,
+  });
 }
 
 export async function DELETE(req: NextRequest) {
