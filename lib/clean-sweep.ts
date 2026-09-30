@@ -474,7 +474,11 @@ export async function sectionQueue(section: SectionKey): Promise<QueueHome[]> {
     .map((p) => {
       const f = facts.get(p.id) ?? new Map<string, FactRow>();
       const need = neededFields(p, f).filter((n) => own.has(n.key));
-      const done = f.get(`check_${section}`);
+      /* A home marked checked on All homes counts for the section of whoever
+         marked it: Kirstie's 65 there are her tenancy checks (James, 30 Sep 2026). */
+      const whole = f.get("check_signed_off");
+      const wholeMine = whole?.value && (whole.captured_by ?? "").trim().split(/\s+/)[0]?.toLowerCase() === sec.who.toLowerCase() ? whole : undefined;
+      const done = f.get(`check_${section}`) ?? wholeMine;
       return {
         id: p.id, address: tidyAddress(p.address), landlord: p.landlord_name,
         since: f.get("letting_agreement_start")?.value ?? f.get("tenancy_start")?.value ?? null,
