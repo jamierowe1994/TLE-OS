@@ -68,12 +68,7 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
   const desk = me.role === "compliance" || me.role === "pretenancy";
 
   const [deals, steps, handovers, reminders, toVerify, toCheck] = await Promise.all([
-    /* The compliance desk (Josel, Michael) sees every pack that reaches the
-       PLC queue and nothing else off the deal feed (30 Sep 2026). */
-    (desk && !whole
-      ? listDealEvents({ events: ["plc_submitted", "plc_checked"], limit })
-      : listDealEvents({ agentEmail: whole ? null : me.email, limit })
-    ).catch(() => []),
+    listDealEvents({ agentEmail: whole ? null : me.email, limit }).catch(() => []),
     office
       ? q<{ id: string; campaign_id: string; subject: string; detail: string; at: Date; name: string }>(
           `SELECT s.id, s.campaign_id, s.subject, s.detail, s.at, e.name
@@ -111,9 +106,7 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
          agent's wizard for them, the queue for pre-tenancy and the office. */
       href: me.role === "agent" && (e.event === "plc_submitted" || e.event === "plc_decided")
         ? `/plc/start?application=${encodeURIComponent(e.dealId.replace(/^plc-/, ""))}`
-        : desk && !whole && PLC.includes(e.event)
-          ? `/compliance-desk/plc?case=${encodeURIComponent(e.dealId)}`
-          : hrefFor(e),
+        : hrefFor(e),
       tone: eventTone(e.event),
     });
   }

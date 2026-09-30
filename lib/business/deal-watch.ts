@@ -536,28 +536,15 @@ export async function recordActivity(e: {
 
 /* ───────────────────────────── reading ─────────────────────────────────── */
 
-export async function listDealEvents(
-  opts: { agentEmail?: string | null; limit?: number; events?: DealEventKind[] } = {}
-): Promise<DealEvent[]> {
+export async function listDealEvents(opts: { agentEmail?: string | null; limit?: number } = {}): Promise<DealEvent[]> {
   if (!hasDb()) return [];
   const limit = Math.min(Math.max(opts.limit ?? 60, 1), 300);
-  /* `events` narrows to some kinds: the compliance desk sees every PLC pack
-     that reaches the queue, and none of the money or stage rows. */
-  const where: string[] = [];
-  const params: unknown[] = [];
-  if (opts.agentEmail) {
-    params.push(opts.agentEmail);
-    where.push(`LOWER(agent_email) = LOWER($${params.length})`);
-  }
-  if (opts.events?.length) {
-    params.push(opts.events);
-    where.push(`event = ANY($${params.length})`);
-  }
-  params.push(limit);
-  const rows = await q<EventRow>(
-    `SELECT * FROM os_deal_events ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY at DESC, id DESC LIMIT $${params.length}`,
-    params
-  );
+  const rows = opts.agentEmail
+    ? await q<EventRow>(`SELECT * FROM os_deal_events WHERE LOWER(agent_email) = LOWER($1) ORDER BY at DESC, id DESC LIMIT $2`, [
+        opts.agentEmail,
+        limit,
+      ])
+    : await q<EventRow>(`SELECT * FROM os_deal_events ORDER BY at DESC, id DESC LIMIT $1`, [limit]);
   return rows.map(rowToEvent);
 }
 
