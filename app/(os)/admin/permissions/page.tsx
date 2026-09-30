@@ -41,6 +41,7 @@ const CAP_LABEL: Record<Capability, string> = {
   "edit:knowledge": "Write the guides and feed Steve",
   "see:agent-compliance": "Every agent's own compliance",
   "see:clean-sweep": "The REX PM clean sweep",
+  "work:plc": "The PLC queue: first checks",
 };
 
 /* `developer`'s capabilities are real but its one screen (Wiring) is still

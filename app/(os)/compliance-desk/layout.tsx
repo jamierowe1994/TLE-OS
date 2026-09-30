@@ -28,6 +28,7 @@ const RAIL: RailGroup[] = [
       { href: "/compliance-desk", label: "Dashboard", exact: true, icon: "home" },
       { href: "/compliance-desk/properties", label: "Properties", icon: "shield" },
       { href: "/compliance-desk/verify", label: "To verify", icon: "checklist" },
+      { href: "/compliance-desk/plc", label: "PLC queue", icon: "list" },
       { href: "/compliance-desk/agents", label: "Agents", icon: "user" },
       { href: "/compliance-desk/works", label: "Works orders", icon: "setting" },
     ],

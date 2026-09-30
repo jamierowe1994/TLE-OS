@@ -11,6 +11,7 @@ import {
   guessCheck,
   PLC_CHECKS,
   gateFor,
+  rlpAnswered,
   waiverFor,
   type CheckId,
   type PlcCase,
@@ -694,6 +695,25 @@ export default function PlcWizard({
     }
   };
 
+  /** Rent and Legal Protection, yes or no. Saved the moment it is picked. */
+  const answerRlp = async (wanted: boolean) => {
+    if (!kase) return;
+    setError(null);
+    if (demo) {
+      setKase({ ...kase, rlpWanted: wanted });
+      return;
+    }
+    try {
+      const res = await api<{ case: PlcCase }>(`/api/plc/${kase.id}`, {
+        method: "POST",
+        body: JSON.stringify({ action: "rlp", wanted }),
+      });
+      setKase(res.case);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
   /** "Not needed, because…" against one conditional check. */
   const waive = async (checkId: CheckId, undo = false) => {
     if (!kase) return;
@@ -921,7 +941,7 @@ export default function PlcWizard({
           return (
           <div>
             <h1 className="text-2xl tracking-normal text-ink">
-              {gate.ready && blockers.length === 0 ? "Ready to Send" : "Not Ready to Send Yet"}
+              {gate.ready && blockers.length === 0 && rlpAnswered(kase) ? "Ready to Send" : "Not Ready to Send Yet"}
             </h1>
             <p className="mt-2 text-sm text-muted">
               {kase.address} · moving in {prettyDate(kase.moveInDate) ?? "date not set"}
@@ -1038,6 +1058,34 @@ export default function PlcWizard({
               </p>
             )}
 
+            {/* ── Rent and Legal Protection (James, 30 Sep 2026) ──
+                Asked here because it used to be a tick on Propoly's PLC form.
+                It is a request: compliance check the referencing qualifies
+                before it goes to Legal for Landlords. */}
+            <fieldset className="mt-6">
+              <legend className="text-sm text-ink">Does the landlord want Rent and Legal Protection?</legend>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {([true, false] as const).map((v) => (
+                  <button
+                    key={String(v)}
+                    type="button"
+                    onClick={() => void answerRlp(v)}
+                    aria-pressed={kase.rlpWanted === v}
+                    className={`rounded-lg border px-4 py-2 text-sm transition ${
+                      kase.rlpWanted === v ? "border-ink bg-ink text-white" : "border-line hover:bg-box"
+                    }`}
+                  >
+                    {v ? "Yes" : "No"}
+                  </button>
+                ))}
+              </div>
+              <span className="mt-1 block text-xs text-muted">
+                {kase.rlpWanted === true
+                  ? "Compliance request it once the pack is approved and the referencing qualifies."
+                  : "Needed before the pack can go."}
+              </span>
+            </fieldset>
+
             {/* ── The note ──
                 Optional, and the one place to tell compliance what the files
                 cannot: a landlord abroad, a certificate booked for Tuesday.
@@ -1064,8 +1112,14 @@ export default function PlcWizard({
               <button
                 type="button"
                 onClick={submit}
-                disabled={!gate.ready}
-                title={gate.ready ? undefined : "Attach what is needed, or say why it is not, first"}
+                disabled={!gate.ready || !rlpAnswered(kase)}
+                title={
+                  !gate.ready
+                    ? "Attach what is needed, or say why it is not, first"
+                    : !rlpAnswered(kase)
+                      ? "Say whether the landlord wants Rent and Legal Protection first"
+                      : undefined
+                }
                 className="rounded-lg border border-ink bg-ink px-4 py-2.5 text-sm text-white transition hover:bg-box disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Send to the compliance team
@@ -1172,7 +1226,8 @@ export default function PlcWizard({
               {demo ? (
                 kase.state === "deferred" ? null : (kase.state === "submitted" ||
                   kase.state === "scanning" ||
-                  kase.state === "reviewing") && demo.onSeeCompliance ? (
+                  kase.state === "reviewing" ||
+                  kase.state === "checked") && demo.onSeeCompliance ? (
                   <button
                     type="button"
                     onClick={demo.onSeeCompliance}

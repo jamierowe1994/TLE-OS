@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  checkCase,
   decideCase,
   getCase,
   markScanning,
@@ -7,14 +8,18 @@ import {
   recordPreflight,
   recordScan,
   reopenCase,
+  setRlpWanted,
   submitCase,
   unwaiveCheck,
   updateDetails,
   waiveCheck,
 } from "@/lib/plc-store";
-import { gateFor, missingDocuments, PLC_CHECKS, scanSummary, sortFindings, type CheckId } from "@/lib/plc";
+import { gateFor, missingDocuments, PLC_CHECKS, rlpAnswered, scanSummary, sortFindings, type CheckId, type PlcCase } from "@/lib/plc";
 import { scanCase, scanConfigured, type ScanOutcome } from "@/lib/plc-scan";
-import { actorName } from "@/lib/plc-actor";
+import { actorName, currentUser } from "@/lib/plc-actor";
+import { isPlcApprover } from "@/lib/plc-approvers";
+import { rlpEmail, rlpTeamEmail, sendRlpRequest } from "@/lib/plc-rlp";
+import { can } from "@/lib/roles";
 import { requireCapability } from "@/lib/admin";
 import { recordDecision, recordRecommendation } from "@/lib/plc-shadow";
 import { pushCaseToPropoly } from "@/lib/plc-propoly";
@@ -25,7 +30,7 @@ import { switchOn } from "@/lib/switches";
 /**
  * GET   /api/plc/<id>  → the case, its findings in reading order, what's short
  * PATCH /api/plc/<id>  → move-in date and the agent's note, while it's theirs
- * POST  /api/plc/<id>  → one of the moves: submit, scan, decide, reopen
+ * POST  /api/plc/<id>  → one of the moves: submit, scan, check, decide, reopen, rlp
  *
  * The moves are one route with an `action` rather than four sibling files,
  * because they are all the same shape -- ask the store, catch a refusal,
@@ -46,24 +51,42 @@ export const maxDuration = 300;
 
 type Ctx = { params: Promise<{ id: string }> };
 
-function payload(c: Awaited<ReturnType<typeof getCase>>) {
+async function payload(c: PlcCase | null, req: NextRequest) {
   if (!c) return null;
+  /* What the person looking may do, so the panel offers the right step
+     rather than a button the server will refuse. The server still decides:
+     this only saves somebody pressing Approve to be told no. */
+  const me = await currentUser(req);
+  const email = me?.email?.toLowerCase() ?? null;
+  const dryRun = process.env.NODE_ENV !== "production";
+  const checker = Boolean(email && c.checkedByEmail && email === c.checkedByEmail);
+  const canApprove = dryRun || ((await isPlcApprover(email)) && !checker);
+  const rlpOn = c.rlpWanted ? await switchOn("rlp_requests") : false;
   return {
     case: { ...c, findings: sortFindings(c.findings) },
     checks: PLC_CHECKS,
     missing: missingDocuments(c).map((m) => m.id),
     summary: c.scannedAt ? scanSummary(c.findings) : null,
     scanConfigured: scanConfigured(),
+    me: {
+      canCheck: dryRun || Boolean(me && can(me.role, "work:plc")),
+      canApprove,
+      /* Why not, in a sentence, when they cannot. */
+      approveBlocked: canApprove ? null : checker ? "You did the first check, so the final approval has to be somebody else." : "The final approval is Kirstie's or Michael's.",
+    },
+    rlp: c.rlpWanted
+      ? { preview: rlpEmail(c), teamSet: Boolean(rlpTeamEmail()), switchOn: rlpOn }
+      : null,
   };
 }
 
-export async function GET(_req: NextRequest, ctx: Ctx) {
+export async function GET(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
   const found = await getCase(id);
   if (!found) {
     return NextResponse.json({ ok: false, error: "No handover with that reference." }, { status: 404 });
   }
-  return NextResponse.json({ ok: true, ...payload(found) });
+  return NextResponse.json({ ok: true, ...(await payload(found, req)) });
 }
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
@@ -76,7 +99,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   }
   try {
     const updated = await updateDetails(id, body);
-    return NextResponse.json({ ok: true, ...payload(updated) });
+    return NextResponse.json({ ok: true, ...(await payload(updated, req)) });
   } catch (e) {
     return fail(e);
   }
@@ -90,6 +113,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     note?: string;
     checkId?: string;
     reason?: string;
+    wanted?: boolean;
+    test?: boolean;
   };
   try {
     body = await req.json();
@@ -100,14 +125,34 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   /* WHO MAY SIGN IT OFF (18 Sep 2026). Nothing here checked a role: any agent
      could open the harness page, flip it to "compliance" and approve their own
      pack under their own name, and with Certificates into REX on, the approval
-     writes. The decision and the two pushes belong to pre-tenancy (Kirstie, and
-     the roles above her). A laptop with no production data keeps the dry run,
-     where one person has to play both sides. */
-  const COMPLIANCE_ONLY = new Set(["decide", "push-rex", "push-propoly"]);
-  if (process.env.NODE_ENV === "production" && COMPLIANCE_ONLY.has(body.action ?? "")) {
-    if (!(await requireCapability(req, "see:pretenancy"))) {
+     writes. A laptop with no production data keeps the dry run, where one
+     person has to play every side.
+
+     Two steps since 30 Sep 2026 (James): anybody holding work:plc may do the
+     first check, defer or decline; the final approval is a short named list
+     (Kirstie and Michael, lib/plc-approvers), and never the person who did
+     the first check on the same pack. */
+  const COMPLIANCE_ONLY = new Set(["check", "decide", "push-rex", "push-propoly", "rlp-send"]);
+  const prod = process.env.NODE_ENV === "production";
+  if (prod && COMPLIANCE_ONLY.has(body.action ?? "")) {
+    if (!(await requireCapability(req, "work:plc"))) {
       return NextResponse.json(
-        { ok: false, error: "Only pre-tenancy can sign a pack off. Send it to them and they will pick it up." },
+        { ok: false, error: "Only the compliance team can work a pack. Send it to them and they will pick it up." },
+        { status: 403 }
+      );
+    }
+  }
+  const APPROVER_ONLY = body.action === "decide" && body.decision === "approved";
+  if (prod && (APPROVER_ONLY || body.action === "push-rex" || body.action === "push-propoly" || body.action === "rlp-send")) {
+    const me = await currentUser(req);
+    const current = await getCase(id);
+    const email = me?.email?.toLowerCase() ?? "";
+    if (!(await isPlcApprover(email))) {
+      return NextResponse.json({ ok: false, error: "The final approval is Kirstie's or Michael's." }, { status: 403 });
+    }
+    if (APPROVER_ONLY && current?.checkedByEmail && current.checkedByEmail === email) {
+      return NextResponse.json(
+        { ok: false, error: "You did the first check on this one, so the final approval has to be somebody else." },
         { status: 403 }
       );
     }
@@ -128,6 +173,12 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         if (!current) {
           return NextResponse.json({ ok: false, error: "That handover no longer exists." }, { status: 404 });
         }
+        if (!rlpAnswered(current)) {
+          return NextResponse.json(
+            { ok: false, error: "Say whether the landlord wants Rent and Legal Protection first.", ...(await payload(current, req)) },
+            { status: 409 }
+          );
+        }
         const gate = gateFor(current);
         if (!gate.ready) {
           return NextResponse.json(
@@ -137,7 +188,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
                 ? `Can't send without: ${gate.blocked.map((k) => k.label).join(", ")}.`
                 : `Say why these aren't needed, or attach them: ${gate.askWhy.map((k) => k.label).join(", ")}.`,
               gate: { blocked: gate.blocked.map((k) => k.id), askWhy: gate.askWhy.map((k) => k.id) },
-              ...payload(current),
+              ...(await payload(current, req)),
             },
             { status: 409 }
           );
@@ -164,7 +215,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
                 error: `The reader found ${blockers.length} thing${blockers.length === 1 ? "" : "s"} that would fail the check. Fix ${
                   blockers.length === 1 ? "it" : "them"
                 } and send again.`,
-                ...payload(held),
+                ...(await payload(held, req)),
               },
               { status: 409 }
             );
@@ -181,7 +232,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           from: current.decidedAt ? "deferred" : null,
           to: "submitted",
         });
-        if (!outcome) return NextResponse.json({ ok: true, ...payload(submitted) });
+        if (!outcome) return NextResponse.json({ ok: true, ...(await payload(submitted, req)) });
 
         await markScanning(id);
         const scanned = await recordScan(id, outcome.findings);
@@ -195,7 +246,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
             submittedAt: scanned.submittedAt,
           });
         }
-        return NextResponse.json({ ok: true, ...payload(scanned) });
+        return NextResponse.json({ ok: true, ...(await payload(scanned, req)) });
       }
 
       case "push-rex": {
@@ -208,7 +259,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "push failed" }, { status: 409 });
         }
         const pushed = await getCase(id);
-        return NextResponse.json({ ok: true, ...payload(pushed!) });
+        return NextResponse.json({ ok: true, ...(await payload(pushed!, req)) });
       }
 
       case "push-propoly": {
@@ -221,23 +272,68 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "push failed" }, { status: 409 });
         }
         const pushed = await getCase(id);
-        return NextResponse.json({ ok: true, ...payload(pushed!) });
+        return NextResponse.json({ ok: true, ...(await payload(pushed!, req)) });
+      }
+
+      case "check": {
+        /* The first check. Passes the pack to Kirstie or Michael; nothing
+           leaves the building and the agent is not told anything yet. */
+        const me = await currentUser(req);
+        const by = await actorName(req, "Compliance");
+        const checked = await checkCase(id, { name: by, email: me?.email ?? null }, body.note ?? "");
+        await recordActivity({
+          id: checked.id,
+          property: checked.address,
+          agentEmail: checked.agentEmail || null,
+          agentName: checked.agentName,
+          event: "plc_checked",
+          from: "reviewing",
+          to: "checked",
+        });
+        return NextResponse.json({ ok: true, ...(await payload(checked, req)) });
+      }
+
+      case "rlp": {
+        /* The agent's yes or no, while the pack is still theirs. */
+        if (typeof body.wanted !== "boolean") {
+          return NextResponse.json({ ok: false, error: "Yes or no." }, { status: 400 });
+        }
+        const set = await setRlpWanted(id, body.wanted);
+        return NextResponse.json({ ok: true, ...(await payload(set, req)) });
+      }
+
+      case "rlp-send": {
+        /* The RLP request to Legal for Landlords, or with test: true a copy
+           to the sender's own inbox. From their own Outlook either way. */
+        const me = await currentUser(req);
+        if (!me) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
+        try {
+          const sent = await sendRlpRequest(id, { id: me.id, name: me.name, email: me.email }, { test: body.test === true });
+          const fresh = await getCase(id);
+          return NextResponse.json({ ok: true, sentTo: sent.sentTo, ...(await payload(fresh, req)) });
+        } catch (e) {
+          const fresh = await getCase(id);
+          return NextResponse.json(
+            { ok: false, error: e instanceof Error ? e.message : "The send failed.", ...(await payload(fresh, req)) },
+            { status: 409 }
+          );
+        }
       }
 
       case "waive": {
         const by = await actorName(req, "Agent");
         const waived = await waiveCheck(id, (body.checkId ?? "") as CheckId, body.reason ?? "", by);
-        return NextResponse.json({ ok: true, ...payload(waived) });
+        return NextResponse.json({ ok: true, ...(await payload(waived, req)) });
       }
 
       case "unwaive": {
         const back = await unwaiveCheck(id, (body.checkId ?? "") as CheckId);
-        return NextResponse.json({ ok: true, ...payload(back) });
+        return NextResponse.json({ ok: true, ...(await payload(back, req)) });
       }
 
       case "reopen": {
         const reopened = await reopenCase(id);
-        return NextResponse.json({ ok: true, ...payload(reopened) });
+        return NextResponse.json({ ok: true, ...(await payload(reopened, req)) });
       }
 
       case "scan": {
@@ -280,7 +376,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
             submittedAt: scanned.submittedAt,
           });
         }
-        return NextResponse.json({ ok: true, ...payload(scanned) });
+        return NextResponse.json({ ok: true, ...(await payload(scanned, req)) });
       }
 
       case "skip-scan": {
@@ -288,7 +384,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
            submitted → reviewing precisely for this: no API key, or a pack
            Kirstie would rather just read. */
         const skipped = await recordScan(id, []);
-        return NextResponse.json({ ok: true, ...payload(skipped) });
+        return NextResponse.json({ ok: true, ...(await payload(skipped, req)) });
       }
 
       case "decide": {
@@ -300,6 +396,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           );
         }
         const by = await actorName(req, "Compliance");
+        const before = await getCase(id);
         const decided = await decideCase(id, decision, by, body.note ?? "");
         /* After the decision lands, never before. Recording cannot throw, so a
            log failure can never cost Kirstie an approval. */
@@ -310,7 +407,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           agentEmail: decided.agentEmail || null,
           agentName: decided.agentName,
           event: "plc_decided",
-          from: "reviewing",
+          from: before?.state ?? "checked",
           to: decision,
         });
         /* Approved, and the switch is on: the pack goes into Propoly's slots
@@ -338,9 +435,9 @@ export async function POST(req: NextRequest, ctx: Ctx) {
             }
           }
           const after = await getCase(id);
-          return NextResponse.json({ ok: true, ...payload(after ?? decided) });
+          return NextResponse.json({ ok: true, ...(await payload(after ?? decided, req)) });
         }
-        return NextResponse.json({ ok: true, ...payload(decided) });
+        return NextResponse.json({ ok: true, ...(await payload(decided, req)) });
       }
 
       default:

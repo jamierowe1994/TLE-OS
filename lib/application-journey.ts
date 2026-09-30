@@ -295,8 +295,8 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
       actions.push({ id: "plc-query", label: "Answer Kirstie on the PLC pack", detail: queries.map((f) => f.message).join(" "), href: `/plc/start?application=${encodeURIComponent(app.id)}`, who: "you" });
     } else if (plcCase.state === "declined") {
       actions.push({ id: "plc-declined", label: "The PLC pack was declined", detail: plcCase.decisionNote || "See Kirstie's note on the pack.", href: `/plc/start?application=${encodeURIComponent(app.id)}`, who: "you" });
-    } else if (plcCase.state === "submitted" || plcCase.state === "scanning" || plcCase.state === "reviewing") {
-      actions.push({ id: "plc-wait", label: "PLC pack is with compliance", detail: `${st?.label ?? plcCase.state} - nothing for you until Kirstie answers.`, href: null, who: "kirstie" });
+    } else if (plcCase.state === "submitted" || plcCase.state === "scanning" || plcCase.state === "reviewing" || plcCase.state === "checked") {
+      actions.push({ id: "plc-wait", label: "PLC pack is with compliance", detail: `${st?.label ?? plcCase.state} - nothing for you until compliance answer.`, href: null, who: "kirstie" });
     } else if (plcCase.state === "approved" && deal?.app.propoly?.depositReplacement) {
       /* PLC passed, and the deal is on Flatfair rather than a cash deposit.
          Kirstie (4 Sep): the agent keys it into Flatfair by hand and she

@@ -110,6 +110,22 @@ export const SWITCHES: Switch[] = [
     legacyOn: "on",
   },
   {
+    /**
+     * Rent and Legal Protection requests (30 Sep 2026). After the final PLC
+     * approval, the approver presses Send and the request goes from their own
+     * Outlook to Legal for Landlords' RLP team, with the referencing
+     * attached. Also needs RLP_TEAM_EMAIL set. A test to their own inbox
+     * works with this off.
+     */
+    key: "rlp_requests",
+    label: "Rent guarantee requests",
+    what: "After a PLC pack gets its final approval and the agent asked for Rent and Legal Protection, lets Kirstie or Michael email the request to Legal for Landlords with the referencing attached.",
+    who: "LEGAL FOR LANDLORDS' RLP TEAM, at the address in RLP_TEAM_EMAIL, from the approver's own mailbox.",
+    confirm: "SEND RLP",
+    legacyEnv: "RLP_REQUESTS",
+    legacyOn: "on",
+  },
+  {
     key: "pretenancy_alerts",
     label: "Pre-tenancy digest",
     what: "Emails a daily list of deals where the pipeline and PayProp disagree.",
@@ -289,7 +305,7 @@ export const SWITCHES: Switch[] = [
      */
     key: "propoly_documents",
     label: "Push approved PLC documents into Propoly",
-    what: "When Kirstie approves a PLC pack, uploads each file into the matching Propoly deal's document slot (gas, EPC, EICR, landlord ID, reference report and so on). Can also be pressed by hand on the pack.",
+    what: "When a PLC pack gets its final approval, uploads each file into the matching Propoly deal's document slot (gas, EPC, EICR, landlord ID, reference report and so on). Can also be pressed by hand on the pack.",
     who: "Propoly is WRITTEN TO: one document per slot on the deal. Nobody is emailed.",
     confirm: "PUSH DOCUMENTS",
     legacyEnv: "PROPOLY_DOCUMENTS",

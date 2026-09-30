@@ -2058,6 +2058,14 @@ ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS waivers JSONB NOT NULL DEFAULT
 ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS propoly_push JSONB;
 -- The last write of the approved pack's certificates into REX's compliance table (5 Sep 2026).
 ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS rex_push JSONB;
+-- Two-step sign-off (30 Sep 2026): the first check, then Kirstie or Michael.
+ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS checked_at TIMESTAMPTZ;
+ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS checked_by TEXT;
+ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS checked_by_email TEXT;
+ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS check_note TEXT NOT NULL DEFAULT '';
+-- Rent and Legal Protection: the agent's answer, and the request sent to Legal for Landlords.
+ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS rlp_wanted BOOLEAN;
+ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS rlp_request JSONB;
 
 -- Certificates that came in OUTSIDE a PLC pack (5 Sep 2026): the backlog
 -- downloaded out of Propoly and dropped in, batch by batch. The OS keeps the

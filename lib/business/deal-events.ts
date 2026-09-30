@@ -31,6 +31,8 @@ export type DealEventKind =
   /* The PLC pack, the other thing that lands on Kirstie's desk. dealId on
      these rows is the case id, not a Propoly uuid; hrefFor knows. */
   | "plc_submitted"
+  /* The first check passed (30 Sep 2026): waiting on Kirstie or Michael. */
+  | "plc_checked"
   | "plc_decided"
   /* Opened by the watcher the moment references come back, so the agent's
      application already has a pack waiting rather than a button to press. */
@@ -128,6 +130,8 @@ export function eventSentence(e: Pick<DealEvent, "event" | "toStatus" | "fromSta
       return "Signed off: compliant and ready to move in";
     case "plc_submitted":
       return e.fromStatus === "deferred" ? "PLC pack back with you, resubmitted" : "PLC pack sent to you for checking";
+    case "plc_checked":
+      return "PLC pack checked, ready for the final approval";
     case "plc_decided":
       return e.toStatus === "approved"
         ? "PLC pack approved"
@@ -143,7 +147,7 @@ export function eventSentence(e: Pick<DealEvent, "event" | "toStatus" | "fromSta
  * has.
  */
 export function hrefFor(e: Pick<DealEvent, "event" | "dealId">): string | null {
-  if (e.event === "plc_submitted" || e.event === "plc_decided") {
+  if (e.event === "plc_submitted" || e.event === "plc_checked" || e.event === "plc_decided") {
     return `/pre-tenancy/plc?case=${encodeURIComponent(e.dealId)}`;
   }
   if (e.event === "plc_opened") {
@@ -185,6 +189,6 @@ export function eventTone(kind: DealEventKind): "ok" | "warn" | "none" {
   )
     return "ok";
   /* A pack landing on her desk is amber: it is the one row that waits on her. */
-  if (kind === "cancelled" || kind === "moved_back" || kind === "gone" || kind === "plc_submitted") return "warn";
+  if (kind === "cancelled" || kind === "moved_back" || kind === "gone" || kind === "plc_submitted" || kind === "plc_checked") return "warn";
   return "none";
 }

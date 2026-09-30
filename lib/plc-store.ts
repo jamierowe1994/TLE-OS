@@ -10,6 +10,7 @@ import {
   checkById,
   noteAsSent,
   gateFor,
+  rlpAnswered,
   type CheckId,
   type Finding,
   type PlcCase,
@@ -17,6 +18,7 @@ import {
   type PlcState,
   type PropolyPush,
   type RexPush,
+  type RlpRequest,
   type Waiver,
 } from "@/lib/plc";
 
@@ -59,6 +61,12 @@ interface Row extends Record<string, unknown> {
   waivers: Waiver[] | null;
   propoly_push: PropolyPush | null;
   rex_push: RexPush | null;
+  checked_at: string | Date | null;
+  checked_by: string | null;
+  checked_by_email: string | null;
+  check_note: string | null;
+  rlp_wanted: boolean | null;
+  rlp_request: RlpRequest | null;
   submitted_at: string | Date | null;
   scanned_at: string | Date | null;
   decided_at: string | Date | null;
@@ -98,6 +106,12 @@ function rowTo(r: Row): PlcCase {
     waivers: Array.isArray(r.waivers) ? r.waivers : [],
     propolyPush: r.propoly_push ?? null,
     rexPush: r.rex_push ?? null,
+    checkedAt: iso(r.checked_at),
+    checkedBy: r.checked_by ?? null,
+    checkedByEmail: r.checked_by_email ?? null,
+    checkNote: r.check_note ?? "",
+    rlpWanted: r.rlp_wanted ?? null,
+    rlpRequest: r.rlp_request ?? null,
     submittedAt: iso(r.submitted_at),
     scannedAt: iso(r.scanned_at),
     decidedAt: iso(r.decided_at),
@@ -109,7 +123,8 @@ function rowTo(r: Row): PlcCase {
 
 const COLS = `id, application_ref, address, agent_name, agent_email, state,
               move_in_date, agent_note, documents, findings, waivers, propoly_push, rex_push, submitted_at,
-              scanned_at, decided_at, decided_by, decision_note, created_at`;
+              scanned_at, decided_at, decided_by, decision_note, created_at,
+              checked_at, checked_by, checked_by_email, check_note, rlp_wanted, rlp_request`;
 
 /* ──────────────────────────── the file backend ──────────────────────────── */
 
@@ -147,6 +162,8 @@ async function mutate(id: string, fn: (c: PlcCase) => PlcCase): Promise<PlcCase>
               submitted_at = $7, scanned_at = $8,
               decided_at = $9, decided_by = $10, decision_note = $11,
               waivers = $12::jsonb, propoly_push = $13::jsonb, rex_push = $14::jsonb,
+              checked_at = $15, checked_by = $16, checked_by_email = $17, check_note = $18,
+              rlp_wanted = $19, rlp_request = $20::jsonb,
               updated_at = NOW()
         WHERE id = $1
         RETURNING ${COLS}`,
@@ -165,6 +182,12 @@ async function mutate(id: string, fn: (c: PlcCase) => PlcCase): Promise<PlcCase>
         JSON.stringify(next.waivers ?? []),
         next.propolyPush ? JSON.stringify(next.propolyPush) : null,
         next.rexPush ? JSON.stringify(next.rexPush) : null,
+        next.checkedAt ?? null,
+        next.checkedBy ?? null,
+        next.checkedByEmail ?? null,
+        next.checkNote ?? "",
+        next.rlpWanted ?? null,
+        next.rlpRequest ? JSON.stringify(next.rlpRequest) : null,
       ]
     );
     return rowTo(saved[0]);
@@ -221,7 +244,7 @@ export async function getCase(id: string): Promise<PlcCase | null> {
  * that has been waiting longest, and that case is somebody's move-in date.
  */
 export async function reviewQueue(): Promise<PlcCase[]> {
-  const open: PlcState[] = ["submitted", "scanning", "reviewing"];
+  const open: PlcState[] = ["submitted", "scanning", "reviewing", "checked"];
   const all = await listCases();
   return all
     .filter((c) => open.includes(c.state))
@@ -270,6 +293,7 @@ export async function createCase(input: NewCase): Promise<PlcCase> {
     findings: [],
     waivers: [],
     propolyPush: null,
+    rlpWanted: null,
     submittedAt: null,
     scannedAt: null,
     decidedAt: null,
@@ -397,6 +421,9 @@ export async function submitCase(id: string): Promise<PlcCase> {
         `Say why these aren't needed, or attach them: ${gate.askWhy.map((k) => k.label).join(", ")}.`
       );
     }
+    if (!rlpAnswered(c)) {
+      throw new PlcRefused("Say whether the landlord wants Rent and Legal Protection first.");
+    }
     return {
       ...c,
       state: "submitted",
@@ -482,7 +509,18 @@ export async function reopenCase(id: string): Promise<PlcCase> {
     /* Findings are cleared on reopen. They describe documents that are about
        to change, and a stale blocker against a certificate that has since been
        replaced is worse than no finding at all. */
-    return { ...c, state: "assembling", findings: [], scannedAt: null };
+    /* The first check goes too: it was of the pack that came back, and the
+       fixed one has to be read again from the start. */
+    return {
+      ...c,
+      state: "assembling",
+      findings: [],
+      scannedAt: null,
+      checkedAt: null,
+      checkedBy: null,
+      checkedByEmail: null,
+      checkNote: "",
+    };
   });
 }
 
@@ -519,7 +557,46 @@ export async function recordScan(id: string, findings: Finding[]): Promise<PlcCa
 }
 
 /**
- * Kirstie's decision.
+ * The first check (James, 30 Sep 2026).
+ *
+ * Josel reads every document against the pack and passes it on. It is not
+ * an approval and nothing leaves the building on it: the case moves to
+ * `checked` and waits for Kirstie or Michael. The name AND the email go on
+ * the record, because the final approver must be somebody else and a
+ * display name is not proof of that.
+ */
+export async function checkCase(
+  id: string,
+  by: { name: string; email: string | null },
+  note: string
+): Promise<PlcCase> {
+  return mutate(id, (c) => {
+    if (!canMove(c.state, "checked")) {
+      throw new PlcRefused(
+        c.state === "checked"
+          ? "This has already had its first check. It is waiting on the final approval."
+          : c.state === "submitted" || c.state === "scanning"
+            ? "Read the pack first: run the scan, or skip it."
+            : "This has already been decided."
+      );
+    }
+    return {
+      ...c,
+      state: "checked",
+      checkedAt: new Date().toISOString(),
+      checkedBy: by.name,
+      checkedByEmail: by.email ? by.email.toLowerCase() : null,
+      checkNote: note.trim(),
+    };
+  });
+}
+
+/**
+ * The decision: approve, defer or decline.
+ *
+ * Approval only follows the first check (the transition table says so).
+ * Deferring or declining can happen at either step, because whoever spots
+ * the problem should be able to send it back without passing it on first.
  *
  * A note is required on anything other than an approval, because "deferred"
  * with no reason sends the agent back to a pack of nine documents with no idea
@@ -544,7 +621,9 @@ export async function decideCase(
       throw new PlcRefused(
         c.state === "approved" || c.state === "declined" || c.state === "deferred"
           ? "This has already been decided."
-          : "This pack hasn't been reviewed yet."
+          : c.state === "reviewing"
+            ? "This needs its first check before it can be approved."
+            : "This pack hasn't been read yet."
       );
     }
     return {
@@ -555,6 +634,21 @@ export async function decideCase(
       decisionNote: trimmed,
     };
   });
+}
+
+/** The agent's answer on Rent and Legal Protection, while the pack is theirs. */
+export async function setRlpWanted(id: string, wanted: boolean): Promise<PlcCase> {
+  return mutate(id, (c) => {
+    if (c.state !== "assembling") {
+      throw new PlcRefused("This pack is with compliance, so it can't be changed here.");
+    }
+    return { ...c, rlpWanted: wanted };
+  });
+}
+
+/** What happened when the RLP request was emailed. Recorded either way. */
+export async function recordRlpRequest(id: string, req: RlpRequest): Promise<PlcCase> {
+  return mutate(id, (c) => ({ ...c, rlpRequest: req }));
 }
 
 /** For a fresh case created outside an application, in a demo or a test. */

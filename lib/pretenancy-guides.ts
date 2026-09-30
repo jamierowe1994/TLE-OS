@@ -210,7 +210,7 @@ export const GUIDES: Guide[] = [
       },
       {
         title: "Read the pack",
-        body: "A pack that has just arrived offers a scan. The scan reads dates and names out of the documents and tells you what it found. It does not decide anything. Skip it if you would rather read the documents yourself; you still approve, defer or decline either way.",
+        body: "A pack that has just arrived offers a scan. The scan reads dates and names out of the documents and tells you what it found. It does not decide anything. Skip it if you would rather read the documents yourself; a person still checks and approves either way.",
         image: img("plc-read"),
       },
       {
@@ -224,13 +224,13 @@ export const GUIDES: Guide[] = [
         image: img("plc-pack"),
       },
       {
-        title: "Your decision",
-        body: "Write what is missing, or why it is fine, and choose. Approve clears the property to be let. Defer sends it back to the agent to fix and re-submit. Decline ends it. What you write goes to the agent exactly as written; it is the only thing they see. A deferral or a decline needs a reason. An approval does not.",
+        title: "Two steps: check, then approve",
+        body: "Every pack is checked twice. First Josel checks every document against the pack and presses Checked, pass for approval. Then Kirstie or Michael gives the final approval. The person who did the first check can never also approve the same pack. Either of you can send it back to the agent or decline it at your step; that needs a reason, and the agent reads it exactly as written.",
         image: img("plc-decision"),
       },
       {
         title: "After approval",
-        body: "Your name and the time go on the pack. The approved documents can then be pushed into the deal's document slots in Propoly, so the agreement is generated without uploading them again, and the certificates written to REX with their expiry dates, so the tracker stops calling them missing. Both run on approval when their switch is on; the buttons run them by hand and show what happened file by file.",
+        body: "Your name and the time go on the pack. If the agent asked for Rent and Legal Protection, only approve when the referencing qualifies; the request to Legal for Landlords then goes from the pack, from your own Outlook, with the referencing attached. Send yourself a test first to see it. The approved documents can then be pushed into the deal's document slots in Propoly, so the agreement is generated without uploading them again, and the certificates written to REX with their expiry dates, so the tracker stops calling them missing. Both run on approval when their switch is on; the buttons run them by hand and show what happened file by file.",
         image: img("plc-push"),
       },
     ],

@@ -208,7 +208,7 @@ function AgentSide({
         </div>
       )}
 
-      {(c.state === "submitted" || c.state === "scanning" || c.state === "reviewing") && (
+      {(c.state === "submitted" || c.state === "scanning" || c.state === "reviewing" || c.state === "checked") && (
         <div className="rounded-xl border border-line bg-box p-4 text-sm text-muted">
           With compliance since {prettyWhen(c.submittedAt)}. You will get it back with a decision.
         </div>

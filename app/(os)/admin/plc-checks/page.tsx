@@ -82,6 +82,78 @@ function Big({
   );
 }
 
+/**
+ * Who gives the final approval (James, 30 Sep 2026: Kirstie or Michael).
+ * The first check is anybody on the compliance team; this list is the
+ * second step. Hidden from anybody who cannot change it.
+ */
+function Approvers() {
+  const [emails, setEmails] = useState<string[] | null>(null);
+  const [draft, setDraft] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/plc/approvers")
+      .then((r) => r.json())
+      .then((b) => {
+        if (b.ok) {
+          setEmails(b.emails);
+          setDraft(b.emails.join("\n"));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  if (!emails) return null;
+
+  const save = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/plc/approvers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emails: draft.split(/[\s,;]+/).filter(Boolean) }),
+      });
+      const b = await res.json();
+      if (!b.ok) throw new Error(b.error ?? "Couldn't save.");
+      setEmails(b.emails);
+      setDraft(b.emails.join("\n"));
+      setMsg("Saved.");
+    } catch (e) {
+      setMsg((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Panel
+      title="Final Approval"
+      blurb="Every pack gets a first check from the compliance team, then one of these people approves it. Never the same person who did the first check. One email per line."
+    >
+      <textarea
+        rows={3}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink"
+      />
+      <div className="mt-2 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={save}
+          disabled={busy}
+          className="rounded-lg border border-ink bg-ink px-4 py-2 text-sm text-white disabled:opacity-40"
+        >
+          {busy ? "Saving…" : "Save"}
+        </button>
+        {msg && <span className="text-sm text-muted">{msg}</span>}
+      </div>
+    </Panel>
+  );
+}
+
 export default function PlcChecksAdmin() {
   const [s, setS] = useState<ShadowStats | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -103,6 +175,10 @@ export default function PlcChecksAdmin() {
         What the scan recommended on every pack, recorded before anybody saw it, against what the
         compliance team actually decided. Nothing here changes a decision.
       </p>
+
+      <div className="mt-6">
+        <Approvers />
+      </div>
 
       {error && <p className="mt-4 text-sm text-rose-700">{error}</p>}
       {!s && !error && <p className="mt-6 text-sm text-muted">Reading the log…</p>}

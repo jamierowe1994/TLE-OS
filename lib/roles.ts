@@ -134,7 +134,8 @@ export type Capability =
   | "manage:switches"   // arm a live send. Owner only, deliberately.
   | "edit:knowledge"    // feed Steve and the Guides shelf - Susan, Francesca, Michael, Kirstie
   | "see:agent-compliance" // every agent's personal compliance, and the list that defines it - Michael
-  | "see:clean-sweep";    // the REX PM clean sweep: every home's facts and papers, checked one by one (24 Sep 2026)
+  | "see:clean-sweep"     // the REX PM clean sweep: every home's facts and papers, checked one by one (24 Sep 2026)
+  | "work:plc";          // the PLC queue: first check, defer, decline. Final approval is a named list (30 Sep 2026)
 
 /*
  * The office (James, 30 Sep 2026): Kirstie, Michael and Josel cover for each
@@ -146,6 +147,9 @@ export type Capability =
  */
 const OFFICE: Capability[] = [
   "staff:internal", "see:pretenancy", "see:everything", "edit:knowledge", "see:agent-compliance", "see:clean-sweep",
+  /* The PLC queue (30 Sep 2026): Josel does the first check on every pack;
+     the final approval is a named list (Kirstie and Michael), not a role. */
+  "work:plc",
 ];
 
 const MATRIX: Record<Role, Capability[]> = {
@@ -153,7 +157,7 @@ const MATRIX: Record<Role, Capability[]> = {
     "admin:open", "staff:internal", "see:people", "see:business", "see:marketing",
     "see:wiring", "see:reports", "see:prelaunch", "see:pretenancy", "see:everything",
     "see:roles", "manage:people", "manage:roles", "manage:switches", "edit:knowledge",
-    "see:agent-compliance", "see:clean-sweep",
+    "see:agent-compliance", "see:clean-sweep", "work:plc",
   ],
   /* Susan runs the business, so she sees all of it, unscoped — and since
      4 Sep she also has a short admin of her own. Seven entries, and the list

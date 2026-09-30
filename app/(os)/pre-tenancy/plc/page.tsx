@@ -270,6 +270,7 @@ export default function PlcQueuePage() {
                       perform={sample ? async (action, extra) => {
                         const c = sample.cases.find((x) => x.id === openCase.id)!;
                         if (action === "scan" || action === "skip-scan") Object.assign(c, { state: "reviewing", scannedAt: new Date().toISOString() });
+                        if (action === "check") Object.assign(c, { state: "checked", checkedAt: new Date().toISOString(), checkedBy: "You, in the sample", checkNote: String(extra.note ?? "") });
                         if (action === "decide") Object.assign(c, { state: String(extra.decision ?? "approved"), decidedAt: new Date().toISOString(), decidedBy: "You, in the sample", decisionNote: String(extra.note ?? "") });
                       } : undefined}
                       /* Closing on a decision is the right end to the gesture:

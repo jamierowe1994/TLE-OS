@@ -25,6 +25,11 @@ export type Loaded = {
   missing: CheckId[];
   summary: string | null;
   scanConfigured: boolean;
+  /** What the person looking may do. Absent on the practice and preview
+   *  screens, where one person plays every part. */
+  me?: { canCheck: boolean; canApprove: boolean; approveBlocked: string | null };
+  /** The RLP request as it would go, when the agent asked for cover. */
+  rlp?: { preview: { subject: string; html: string; files: string[] }; teamSet: boolean; switchOn: boolean } | null;
 };
 
 export async function api<T>(url: string, init?: RequestInit): Promise<T> {
@@ -73,6 +78,7 @@ export function Pill({ state }: { state: PlcCase["state"] }) {
     submitted: PLC_AMBER,
     scanning: PLC_AMBER,
     reviewing: PLC_RED,
+    checked: PLC_AMBER,
     approved: PLC_GREEN,
     deferred: PLC_AMBER,
     declined: PLC_RED,
@@ -81,7 +87,8 @@ export function Pill({ state }: { state: PlcCase["state"] }) {
     assembling: "Assembling",
     submitted: "Submitted",
     scanning: "Scanning",
-    reviewing: "Ready to review",
+    reviewing: "First check",
+    checked: "Final approval",
     approved: "Approved",
     deferred: "Deferred",
     declined: "Declined",
@@ -218,7 +225,7 @@ export function ComplianceSide({
         });
       }
       await reload();
-      if (action === "decide") onDecided();
+      if (action === "decide" || action === "check") onDecided();
     } catch (e) {
       say((e as Error).message);
     } finally {
@@ -227,14 +234,17 @@ export function ComplianceSide({
   };
 
   const decided = c.state === "approved" || c.state === "deferred" || c.state === "declined";
+  const canCheck = data.me?.canCheck ?? true;
+  const canApprove = data.me?.canApprove ?? true;
 
   return (
     <div className="space-y-4">
       <section className="rounded-[18px] border border-line/70 bg-card p-5">
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-4">
           <Fact label="From" value={c.agentName} />
           <Fact label="Move-in" value={prettyDate(c.moveInDate)} />
           <Fact label="Handed over" value={prettyWhen(c.submittedAt)} />
+          <Fact label="Rent guarantee" value={c.rlpWanted === true ? "Asked for" : c.rlpWanted === false ? "Not wanted" : "Not answered"} />
         </div>
         {c.agentNote && (
           <p className="mt-4 whitespace-pre-wrap rounded-xl bg-page px-4 py-3 text-[13px] leading-relaxed text-ink/80">
@@ -248,7 +258,7 @@ export function ComplianceSide({
           <Head icon="search" title="Read the pack" />
           <p className="mt-3 text-[13px] leading-relaxed text-muted">
             The scan reads dates and names out of the documents and tells you what it found. It does
-            not decide anything. You still approve, defer or decline.
+            not decide anything. A person still checks it, and then Kirstie or Michael approves it.
           </p>
           {!data.scanConfigured && (
             <p className="mt-2 text-sm text-amber-700">
@@ -370,9 +380,56 @@ export function ComplianceSide({
         </ul>
       </section>
 
+      {/* ── Step one: the first check (James, 30 Sep 2026) ──
+          Josel reads every document against the pack. Passing it on is not
+          an approval: nothing leaves the building and the agent is not told.
+          Anything wrong goes back to the agent from here, without waiting. */}
       {c.state === "reviewing" && (
         <section className="rounded-[18px] bg-accent-soft p-5">
-          <Head icon="pencil" title="Your decision" tone="pink" />
+          <Head icon="checklist" title="First check" tone="pink" />
+          <p className="mt-3 text-[13px] leading-relaxed text-ink/70">
+            Check every document against the pack. When it is right, pass it to Kirstie or Michael for
+            the final approval. If something is wrong, send it back to {who(c.agentName)} now.
+          </p>
+          <textarea
+            rows={3}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="For the approver: anything you checked twice. For the agent: what is missing."
+            className="mt-3 w-full rounded-xl border border-line/70 bg-white px-4 py-3 text-[13.5px] outline-none transition focus:border-ink/40"
+          />
+          <div className="mt-3 flex flex-wrap gap-3">
+            <Btn onClick={() => act("check", { note })} busy={busy === "check"} tone="primary" disabled={!canCheck}>
+              Checked, pass for approval
+            </Btn>
+            <Btn onClick={() => act("decide", { decision: "deferred", note })} busy={busy === "decide"} disabled={!canCheck}>
+              Send back
+            </Btn>
+            <Btn onClick={() => act("decide", { decision: "declined", note })} busy={busy === "decide"} tone="danger" disabled={!canCheck}>
+              Decline
+            </Btn>
+          </div>
+          <p className="mt-2 text-[12px] text-ink/60">
+            Sending back or declining needs a reason: the agent reads it exactly as written.
+          </p>
+        </section>
+      )}
+
+      {/* The first check, on the record, once it is done. */}
+      {c.checkedAt && (
+        <section className="rounded-[18px] border border-line/70 bg-card p-5 text-[13.5px]">
+          <p className="font-semibold text-ink">
+            First check by {c.checkedBy} on {prettyWhen(c.checkedAt)}.
+          </p>
+          {c.checkNote && <p className="mt-1 whitespace-pre-wrap text-ink/70">{c.checkNote}</p>}
+        </section>
+      )}
+
+      {/* ── Step two: the final approval ── Kirstie or Michael, and never the
+          person who did the first check. */}
+      {c.state === "checked" && (
+        <section className="rounded-[18px] bg-accent-soft p-5">
+          <Head icon="pencil" title="Final approval" tone="pink" />
           <p className="mt-3 text-[13px] leading-relaxed text-ink/70">
             This goes back to {who(c.agentName)} exactly as you write it. It is the only thing they
             see.
@@ -389,22 +446,28 @@ export function ComplianceSide({
               onClick={() => act("decide", { decision: "approved", note })}
               busy={busy === "decide"}
               tone="primary"
+              disabled={!canApprove}
             >
               Approve
             </Btn>
-            <Btn onClick={() => act("decide", { decision: "deferred", note })} busy={busy === "decide"}>
-              Defer
+            <Btn onClick={() => act("decide", { decision: "deferred", note })} busy={busy === "decide"} disabled={!canCheck}>
+              Send back
             </Btn>
             <Btn
               onClick={() => act("decide", { decision: "declined", note })}
               busy={busy === "decide"}
               tone="danger"
+              disabled={!canCheck}
             >
               Decline
             </Btn>
           </div>
           <p className="mt-2 text-[12px] text-ink/60">
-            A deferral or a decline needs a reason. An approval does not.
+            {!canApprove && data.me?.approveBlocked
+              ? data.me.approveBlocked
+              : c.rlpWanted
+                ? "The agent asked for Rent and Legal Protection. After approving, only send the request if the referencing qualifies: every tenant, or their guarantor, at an acceptable grade."
+                : "Sending back or declining needs a reason. An approval does not."}
           </p>
         </section>
       )}
@@ -416,6 +479,52 @@ export function ComplianceSide({
             {c.decidedBy} on {prettyWhen(c.decidedAt)}.
           </p>
           {c.decisionNote && <p className="mt-1 text-ink/70">{c.decisionNote}</p>}
+        </section>
+      )}
+
+      {/* ── Rent and Legal Protection ──
+          Only when the agent asked for it, and only after the final
+          approval. An email from the approver's own Outlook to Legal for
+          Landlords' RLP team, with the referencing attached. There is no API
+          to request cover, so this is the step (James, 30 Sep 2026). */}
+      {c.state === "approved" && c.rlpWanted && data.rlp && (
+        <section className="rounded-[18px] border border-line/70 bg-card p-5 text-[13px]">
+          <Head icon="shield" title="Rent and Legal Protection" />
+          <p className="mt-1.5 text-[12px] text-muted">
+            {c.rlpRequest
+              ? c.rlpRequest.outcome === "sent"
+                ? `Requested by ${c.rlpRequest.by} on ${prettyWhen(c.rlpRequest.at)}, to ${c.rlpRequest.to}. ${c.rlpRequest.note}.`
+                : `The last try by ${c.rlpRequest.by} on ${prettyWhen(c.rlpRequest.at)} did not go: ${c.rlpRequest.note}`
+              : "The agent asked for cover. Not requested yet."}
+          </p>
+          <div className="mt-3 rounded-xl bg-page px-4 py-3">
+            <p className="text-[12px] text-muted">Subject</p>
+            <p className="font-semibold">{data.rlp.preview.subject}</p>
+            <div
+              className="mt-2 text-[13px] leading-relaxed text-ink/80 [&_p]:mt-2 [&_table]:mt-2"
+              dangerouslySetInnerHTML={{ __html: data.rlp.preview.html }}
+            />
+          </div>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <Btn
+              onClick={() => act("rlp-send", {})}
+              busy={busy === "rlp-send"}
+              tone="primary"
+              disabled={!data.rlp.teamSet || !data.rlp.switchOn || !canApprove || c.rlpRequest?.outcome === "sent"}
+            >
+              {c.rlpRequest?.outcome === "sent" ? "Requested" : "Send to Legal for Landlords"}
+            </Btn>
+            <Btn onClick={() => act("rlp-send", { test: true })} busy={busy === "rlp-send"}>
+              Send a test to me
+            </Btn>
+          </div>
+          {(!data.rlp.teamSet || !data.rlp.switchOn) && (
+            <p className="mt-2 text-[12px] text-muted">
+              {!data.rlp.teamSet
+                ? "The RLP team's address isn't set yet, so only a test can go."
+                : "RLP requests are switched off, so only a test can go."}
+            </p>
+          )}
         </section>
       )}
 

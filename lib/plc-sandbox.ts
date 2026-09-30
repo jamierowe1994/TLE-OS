@@ -131,6 +131,16 @@ export function usePlcSandbox(): PlcSandbox {
         setKase((k) => ({ ...k, state: "reviewing" }));
         return;
       }
+      if (action === "check") {
+        setKase((k) => ({
+          ...k,
+          state: "checked",
+          checkedAt: new Date().toISOString(),
+          checkedBy: "You, in the practice run",
+          checkNote: String(extra.note ?? "").trim(),
+        }));
+        return;
+      }
       if (action === "decide") {
         const decision = String(extra.decision ?? "approved");
         /* The same refusal the store makes, so the practice teaches the rule. */
@@ -168,7 +178,7 @@ export function usePlcSandbox(): PlcSandbox {
   /* Returned as well as stored: the wizard carries on with the reopened pack
      straight away, without waiting for this state to come back round. */
   const reopen = useCallback((): PlcCase => {
-    const reopened: PlcCase = { ...kase, state: "assembling", findings: [], scannedAt: null };
+    const reopened: PlcCase = { ...kase, state: "assembling", findings: [], scannedAt: null, checkedAt: null, checkedBy: null, checkNote: "" };
     setKase(reopened);
     setHandedIn(true);
     return reopened;

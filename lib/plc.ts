@@ -232,8 +232,10 @@ export type PlcState =
   | "submitted"
   /** The model is reading the documents. */
   | "scanning"
-  /** Findings are in and Kirstie has not looked yet. */
+  /** Findings are in. The first check (Josel) has not passed it yet. */
   | "reviewing"
+  /** First check done. Waiting on Kirstie or Michael for the final approval. */
+  | "checked"
   | "approved"
   /** Something is missing or wrong; it goes back to the agent to fix. */
   | "deferred"
@@ -246,8 +248,10 @@ export const PLC_STATES: { id: PlcState; label: string; who: string; blurb: stri
     blurb: "With the PLC team. Locked to the agent from here." },
   { id: "scanning", label: "Scanning", who: "The OS",
     blurb: "Reading the documents for dates and details." },
-  { id: "reviewing", label: "Ready to review", who: "Kirstie",
-    blurb: "Findings are in. A person decides from here, not the scan." },
+  { id: "reviewing", label: "First check", who: "Compliance",
+    blurb: "Findings are in. Josel checks every document against the pack before it goes further." },
+  { id: "checked", label: "Final approval", who: "Kirstie or Michael",
+    blurb: "Checked once. Kirstie or Michael gives the final approval." },
   { id: "approved", label: "Approved", who: "Agent",
     blurb: "Cleared. The property can be let." },
   { id: "deferred", label: "Deferred", who: "Agent",
@@ -272,7 +276,12 @@ export const PLC_TRANSITIONS: Record<PlcState, PlcState[]> = {
   assembling: ["submitted"],
   submitted: ["scanning", "reviewing"], // scanning is skippable when there is no key
   scanning: ["reviewing"],
-  reviewing: ["approved", "deferred", "declined"],
+  /* Two people, in order (James, 30 Sep 2026): the first check reads every
+     document, then Kirstie or Michael signs it off. Approval straight from
+     reviewing is not in the table, so it cannot happen. Either of them can
+     still send it back or decline it at their step. */
+  reviewing: ["checked", "deferred", "declined"],
+  checked: ["approved", "deferred", "declined"],
   approved: [],
   deferred: ["assembling"],
   declined: [],
@@ -376,6 +385,17 @@ export type RexPush = {
   results: PushResult[];
 };
 
+/** One send of the RLP request to Legal for Landlords. */
+export type RlpRequest = {
+  at: string;
+  by: string;
+  to: string;
+  outcome: "sent" | "failed";
+  /** What went with it, or why it did not go. */
+  note: string;
+  files: string[];
+};
+
 export type PlcCase = {
   id: string;
   /** The application this came from. */
@@ -398,7 +418,25 @@ export type PlcCase = {
   rexPush?: RexPush | null;
   scannedAt: string | null;
   findings: Finding[];
-  /** Kirstie's decision, her words, and her name against it. */
+  /**
+   * The first check (James, 30 Sep 2026): who read the pack before it went
+   * for final approval, and what they wrote. The email is kept beside the
+   * name because the final approver may not be the same person, and names
+   * are not unique enough to prove that.
+   */
+  checkedAt?: string | null;
+  checkedBy?: string | null;
+  checkedByEmail?: string | null;
+  checkNote?: string;
+  /**
+   * Rent and Legal Protection, as the agent asked for it. Null until they
+   * answer, and the pack cannot be sent until they do. It is a request, not
+   * cover: the referencing has to qualify, which is compliance's call.
+   */
+  rlpWanted?: boolean | null;
+  /** The last request sent to Legal for Landlords' RLP team. */
+  rlpRequest?: RlpRequest | null;
+  /** The final decision, the words, and the name against it. */
   decidedAt: string | null;
   decidedBy: string | null;
   decisionNote: string;
@@ -438,6 +476,20 @@ export function gateFor(c: Pick<PlcCase, "documents" | "waivers">): {
   const askWhy = short.filter((k) => k.gate === "conditional");
   return { blocked, askWhy, ready: blocked.length === 0 && askWhy.length === 0 };
 }
+
+/**
+ * Who gives the final approval, until Admin says otherwise (James, 30 Sep
+ * 2026: "Kirstie or Michael"). Emails, because a name on a record is not
+ * proof of who pressed the button. The list can be changed from Admin > PLC
+ * checks; this is what applies when nobody has.
+ */
+export const DEFAULT_PLC_APPROVERS = [
+  "kirstie.mulholland@thelettingexperts.co.uk",
+  "michael.healy@thelettingexperts.co.uk",
+];
+
+/** Has the agent said yes or no to Rent and Legal Protection? */
+export const rlpAnswered = (c: Pick<PlcCase, "rlpWanted">) => c.rlpWanted === true || c.rlpWanted === false;
 
 export const waiverFor = (c: Pick<PlcCase, "waivers">, id: CheckId): Waiver | null =>
   (c.waivers ?? []).find((w) => w.checkId === id) ?? null;
