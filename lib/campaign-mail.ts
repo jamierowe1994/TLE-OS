@@ -67,9 +67,10 @@ export function tleBrand(audience: EmailAudience = "landlord") {
     companyName: "The Letting Experts",
     signatureName: "The Letting Experts",
     website: "https://thelettingexperts.co.uk",
-    /* Customers get the pink mark their portal and presentations carry; the
-       team and the trades keep the red (James, 16 Sep 2026). */
-    logo: origin ? `${origin}/brand/${customer ? "tle-logo-coral.png" : "tle-logo.png"}` : "",
+    /* The pink mark for everybody (James, 30 Sep 2026): the red has gone
+       from the palette. It used to be customers pink, and the team and the
+       trades red (16 Sep). */
+    logo: origin ? `${origin}/brand/tle-logo-coral.png` : "",
     headingFont: "manrope",
     bodyFont: "inter",
     buttonFont: "inter",
@@ -93,9 +94,9 @@ export function tleBrand(audience: EmailAudience = "landlord") {
               }
             : undefined,
         }
-      : // The red off the logo itself: an email to the team or a trade is
-        // still the company, just not the customer-facing palette.
-        { accentColor: "#e31f36", bgColor: "#f6f4f2" }),
+      : // The team and the trades: the same brown buttons, on the warm grey
+        // page. Red until 30 Sep 2026, when James dropped it from the palette.
+        { accentColor: "#56423e", bgColor: "#f6f4f2" }),
   };
 }
 

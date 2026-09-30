@@ -1296,11 +1296,11 @@ export default function NewLeadPanel({
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-6">
-              {/* Rendered in the CUSTOMER brand — red, plain type — because
+              {/* Rendered in the CUSTOMER brand - brown, plain type - because
                   that is what actually lands in their inbox. */}
               <div className="overflow-hidden rounded-xl border border-line/60 bg-white text-[#16181d]">
                 <div className="px-6 pt-6">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-[#e31f36] text-[12px] font-extrabold text-white">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-[#56423e] text-[12px] font-extrabold text-white">
                     TLE
                   </span>
                   <p className="mt-4 text-[15px] font-bold">
@@ -1323,7 +1323,7 @@ export default function NewLeadPanel({
                     href="/tenant/welcome"
                     target="_blank"
                     rel="noreferrer"
-                    className="mt-4 inline-block rounded-lg bg-[#e31f36] px-6 py-3 text-[13px] font-bold text-white"
+                    className="mt-4 inline-block rounded-lg bg-[#56423e] px-6 py-3 text-[13px] font-bold text-white"
                   >
                     Set up my account
                   </a>

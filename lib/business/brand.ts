@@ -5,9 +5,11 @@
 export const BRAND = {
   name: "The Lettings Expert",
   shortName: "TLE",
-  accent: "#E31F36",
-  accentDark: "#C11A2E",
-  accentSoft: "#FEF2F2",
+  /* The house brown since 30 Sep 2026 (James: the red is "not part of the
+     palette anymore"). Was Expert Red #E31F36 / #C11A2E / #FEF2F2. */
+  accent: "#56423E",
+  accentDark: "#3F302D",
+  accentSoft: "#F6F1EE",
   logo: "/brand-logos/TLE - Icon.png",
   logoColour: "/brand-logos/TLE - Colour.png",
   logoWhite: "/brand-logos/TLE - White.png",

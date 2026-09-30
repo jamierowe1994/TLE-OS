@@ -29,8 +29,9 @@ export const LABEL: Record<string, string> = {
   footer: "Footer",
 };
 
-/* The house palette first, so the brand colours are one click away. */
-const SWATCHES = ["#101014", "#56423e", "#de968f", "#e31f36", "#a85a51", "#b3bea5", "#56634a", "#fdefec", "#f6f4f2", "#ffffff"];
+/* The house palette, so the brand colours are one click away. No red: it
+   left the palette on 30 Sep 2026. */
+const SWATCHES = ["#101014", "#56423e", "#a85a51", "#de968f", "#cfa096", "#b3bea5", "#56634a", "#fdefec", "#f6f4f2", "#ffffff"];
 
 type Patch = (field: string, value: unknown) => void;
 
@@ -82,7 +83,7 @@ function Colour({ value, onChange, allowNone }: { value: string; onChange: (v: s
     <div>
       <div className="flex flex-wrap gap-1.5">
         {allowNone && (
-          <button type="button" onClick={() => onChange("")} title="None" className={`h-7 w-7 rounded-full border ${!value ? "ring-2 ring-[#56423e] ring-offset-1" : "border-[#e4dfdb]"} bg-[linear-gradient(135deg,#fff_45%,#e31f36_45%,#e31f36_55%,#fff_55%)]`} />
+          <button type="button" onClick={() => onChange("")} title="None" className={`h-7 w-7 rounded-full border ${!value ? "ring-2 ring-[#56423e] ring-offset-1" : "border-[#e4dfdb]"} bg-[linear-gradient(135deg,#fff_45%,#b9b0aa_45%,#b9b0aa_55%,#fff_55%)]`} />
         )}
         {SWATCHES.map((c) => (
           <button

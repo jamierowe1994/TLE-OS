@@ -34,7 +34,7 @@ export function rentCheckHtml(page: LandingPage, opts: { firstName: string; orig
   const { link, check, beds, property_type } = page;
   const short = link.address.split(",")[0];
   const bookUrl = `${opts.origin}/r/${link.token}?book=1`;
-  const logo = `${opts.origin}/brand/tle-logo.png`;
+  const logo = `${opts.origin}/brand/tle-logo-coral.png`;
   const muted = "color:#6b6b70;";
   const body = "font-family:Montserrat,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1a1a1a;";
 

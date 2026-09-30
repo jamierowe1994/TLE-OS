@@ -43,7 +43,7 @@ export default async function RentCheckPage({ params, searchParams }: { params: 
       <header className="flex items-center gap-3 px-5 pt-6 sm:px-10">
         <span
           className="block h-8 w-[19px]"
-          style={{ backgroundImage: "url(/brand/tle-logo.png)", backgroundRepeat: "no-repeat", backgroundPosition: "left center", backgroundSize: "auto 100%" }}
+          style={{ backgroundImage: "url(/brand/tle-logo-coral.png)", backgroundRepeat: "no-repeat", backgroundPosition: "left center", backgroundSize: "auto 100%" }}
         />
         <span className="text-[12.5px] font-semibold uppercase tracking-[0.28em]">The Letting Experts</span>
       </header>

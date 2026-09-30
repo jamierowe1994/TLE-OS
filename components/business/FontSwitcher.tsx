@@ -123,7 +123,7 @@ export default function FontSwitcher() {
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
                   <path
                     d="M3 8.5l3.5 3.5L13 5"
-                    stroke="#e31f36"
+                    stroke="#56423e"
                     strokeWidth="1.8"
                     strokeLinecap="round"
                     strokeLinejoin="round"

@@ -99,12 +99,13 @@ export const PILOT_INVITE: EmailDoc = {
       /* The OS's own heading face - Manrope since 11 Sep 2026 - so the email
          and the product look like one thing. Gmail and Outlook on Windows
          strip web fonts, so a good half of the list reads the fallback,
-         which is why the wordmark is still TYPE and still red: it reads
-         either way. See FONT_STACKS in render.js. */
+         which is why the wordmark is still TYPE: it reads either way. Brown
+         since 30 Sep 2026, when the red left the palette. See FONT_STACKS in
+         render.js. */
       font: "manrope",
       letterSpacing: 0,
       lineHeight: 1.15,
-      color: "#E31F36",
+      color: "#56423E",
     },
     H2C("p0b", "is nearly here, and you're first through the door"),
     SP("p0c", 4),

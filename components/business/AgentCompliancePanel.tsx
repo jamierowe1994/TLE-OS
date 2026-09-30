@@ -215,7 +215,7 @@ export default function AgentCompliancePanel() {
             type="checkbox"
             checked={remind}
             onChange={(e) => setRemind(e.target.checked)}
-            className="h-3.5 w-3.5 accent-[#e31f36]"
+            className="h-3.5 w-3.5 accent-[#56423e]"
           />
           Remind me a month before it expires
         </label>

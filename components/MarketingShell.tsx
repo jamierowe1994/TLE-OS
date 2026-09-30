@@ -35,7 +35,7 @@ export default function MarketingShell({ children }: { children: React.ReactNode
           <span
             className="block h-8 w-[19px]"
             style={{
-              backgroundImage: "url(/brand/tle-logo.png)",
+              backgroundImage: "url(/brand/tle-logo-coral.png)",
               backgroundRepeat: "no-repeat",
               backgroundPosition: "left center",
               backgroundSize: "auto 32px",

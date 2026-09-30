@@ -15,7 +15,7 @@ const page = (title: string, line: string) =>
     `<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title></head>
 <body style="margin:0;padding:0 16px;background:#fdf2ef;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#1c1917">
 <div style="max-width:440px;margin:12vh auto;padding:32px 28px;background:#fff;border-radius:22px;text-align:center">
-<img src="/brand/tle-logo.png" alt="The Letting Experts" style="height:44px;width:auto">
+<img src="/brand/tle-logo-coral.png" alt="The Letting Experts" style="height:44px;width:auto">
 <h1 style="font-family:Manrope,Helvetica,Arial,sans-serif;font-size:24px;margin:22px 0 8px">${title}</h1>
 <p style="font-size:14.5px;line-height:1.6;color:#57534e;margin:0">${line}</p>
 <a href="/tenant/homes" style="display:inline-block;margin-top:22px;padding:12px 22px;border-radius:30px;background:#56423e;color:#fff;font-weight:600;font-size:14px;text-decoration:none">Find a home</a>

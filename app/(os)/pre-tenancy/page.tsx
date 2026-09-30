@@ -1657,7 +1657,7 @@ function DealWorkspace({
                         onChange={(e) =>
                           void postMeta({ checklist: { key: item.key, done: e.target.checked } })
                         }
-                        className="mt-0.5 h-4 w-4 shrink-0 rounded border-line accent-[#E31F36]"
+                        className="mt-0.5 h-4 w-4 shrink-0 rounded border-line accent-[#56423e]"
                       />
                       <span className="min-w-0 text-[12.5px] leading-5">
                         <span className={tick?.done ? "text-muted line-through" : ""}>
@@ -2894,7 +2894,7 @@ function TasksTab({
                 type="checkbox"
                 checked={t.done}
                 onChange={(e) => void toggle(t, e.target.checked)}
-                className="h-4 w-4 shrink-0 rounded border-line accent-[#E31F36]"
+                className="h-4 w-4 shrink-0 rounded border-line accent-[#56423e]"
               />
               <div className="min-w-0 flex-1">
                 <p className={`truncate text-[13px] ${t.done ? "text-muted line-through" : "font-medium"}`}>
@@ -3182,7 +3182,7 @@ function TasksTodayModal({
                   type="checkbox"
                   checked={t.done}
                   onChange={(e) => void toggle(t, e.target.checked)}
-                  className="h-4 w-4 shrink-0 rounded border-line accent-[#E31F36]"
+                  className="h-4 w-4 shrink-0 rounded border-line accent-[#56423e]"
                 />
                 <div className="min-w-0 flex-1">
                   <p className={`truncate text-[13px] ${t.done ? "text-muted line-through" : "font-medium"}`}>
