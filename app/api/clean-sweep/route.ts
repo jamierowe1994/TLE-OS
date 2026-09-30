@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     if (!SECTION_BY_KEY.has(section)) return NextResponse.json({ ok: false, error: "No such section." }, { status: 400 });
     const queue = await sectionQueue(section);
     const day = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
-    return NextResponse.json({ ok: true, stored: true, queue, progress: { total: queue.length, done: queue.filter((h) => h.doneAt).length, today: queue.filter((h) => h.doneAt === day).length } });
+    return NextResponse.json({ ok: true, stored: true, queue, progress: { total: queue.length, done: queue.filter((h) => h.doneAt || h.complete).length, today: queue.filter((h) => h.doneAt === day).length } });
   }
   const homes = await sweepList();
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     homes,
     progress: {
       total: homes.filter((h) => h.onSheet).length,
-      checked: homes.filter((h) => h.onSheet && h.checkedAt).length,
+      checked: homes.filter((h) => h.onSheet && (h.checkedAt || h.missing === 0)).length,
       today: homes.filter((h) => h.checkedAt === today).length,
     },
   });

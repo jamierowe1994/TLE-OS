@@ -465,7 +465,9 @@ export const SECTIONS: { key: SectionKey; label: string; who: string; fields: st
 ];
 export const SECTION_BY_KEY = new Map(SECTIONS.map((x) => [x.key, x]));
 
-export interface QueueHome { id: string; address: string; landlord: string | null; since: string | null; missing: number; doneAt: string | null; doneBy: string | null }
+export interface QueueHome { id: string; address: string; landlord: string | null; since: string | null; missing: number; doneAt: string | null; doneBy: string | null;
+  /** Nothing in this section is missing: done without anyone pressing anything (James, 30 Sep 2026). */
+  complete: boolean }
 
 /** Susan's homes, oldest first, with how much of this section each still lacks and whether it is signed off. */
 export async function sectionQueue(section: SectionKey): Promise<QueueHome[]> {
@@ -488,8 +490,10 @@ export async function sectionQueue(section: SectionKey): Promise<QueueHome[]> {
         since: f.get("letting_agreement_start")?.value ?? f.get("tenancy_start")?.value ?? null,
         missing: need.filter((n) => !held(n.key, f, certsFor(p, gas))).length,
         doneAt: done?.value ?? null, doneBy: done?.captured_by ?? null,
+        complete: false,
       };
     })
+    .map((h) => ({ ...h, complete: h.missing === 0 }))
     .sort((a, b) => (a.since ?? "9999").localeCompare(b.since ?? "9999") || a.address.localeCompare(b.address));
 }
 
@@ -538,7 +542,7 @@ export async function sweepSummary(): Promise<SweepSummary> {
       who: s.who,
       homes: queues[i].length,
       missing: queues[i].reduce((n, h) => n + h.missing, 0),
-      signedOff: queues[i].filter((h) => h.doneAt).length,
+      signedOff: queues[i].filter((h) => h.doneAt || h.complete).length,
     })),
     byColumn,
   };

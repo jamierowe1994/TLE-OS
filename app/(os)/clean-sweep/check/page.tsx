@@ -43,7 +43,7 @@ type Tally = {
   sections: { key: SectionKey; label: string; who: string; homes: number; missing: number; signedOff: number }[];
 };
 
-type QueueHome = { id: string; address: string; landlord: string | null; since: string | null; missing: number; doneAt: string | null; doneBy: string | null };
+type QueueHome = { id: string; address: string; landlord: string | null; since: string | null; missing: number; doneAt: string | null; doneBy: string | null; complete?: boolean };
 type Fact = {
   key: string; label: string; kind: string; needed: boolean; held: boolean; value: string | null; source: string | null;
   capturedBy: string | null; checkedAgainst: string | null; files: { key: string; name: string }[]; note: string | null;
@@ -116,7 +116,7 @@ export default function SecondPass() {
     const j = await r.json();
     if (!j.ok) { setMsg(j.error || "The list would not load."); setQueue([]); return; }
     setQueue(j.queue); setProgress(j.progress);
-    const first = (j.queue as QueueHome[]).findIndex((h) => !h.doneAt);
+    const first = (j.queue as QueueHome[]).findIndex((h) => !h.doneAt && !h.complete);
     setIdx(first < 0 ? 0 : first);
   }, []);
   useEffect(() => {
@@ -161,7 +161,7 @@ export default function SecondPass() {
   }, [queue]);
   const nextOpen = useCallback((from: number) => {
     if (!queue) return from;
-    for (let i = from + 1; i < queue.length; i++) if (!queue[i].doneAt) return i;
+    for (let i = from + 1; i < queue.length; i++) if (!queue[i].doneAt && !queue[i].complete) return i;
     return Math.min(from + 1, queue.length - 1);
   }, [queue]);
 
@@ -181,7 +181,7 @@ export default function SecondPass() {
     if (!d) return;
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
     setQueue((q) => (q ?? []).map((h, i) => (i === idx ? { ...h, doneAt: today, doneBy: "you" } : h)));
-    setProgress((p) => (p && !current.doneAt ? { ...p, done: p.done + 1, today: p.today + 1 } : p));
+    setProgress((p) => (p && !current.doneAt && !current.complete ? { ...p, done: p.done + 1, today: p.today + 1 } : p));
     setIdx(nextOpen(idx));
   }, [current, section, busy, post, ticks, notes, idx, nextOpen]);
 
@@ -239,7 +239,7 @@ export default function SecondPass() {
           </button>
         ))}
         <div className="ml-auto flex items-center gap-3 text-[12.5px] text-muted">
-          {progress && <span><b className="text-ink">{progress.done}</b> of {progress.total} checked · {progress.today} today</span>}
+          {progress && <span><b className="text-ink">{progress.done}</b> of {progress.total} done · {progress.today} today</span>}
           <div className="h-1.5 w-40 overflow-hidden rounded-full bg-line/60"><div className="h-full bg-[#56634a]" style={{ width: `${progress?.total ? (100 * progress.done) / progress.total : 0}%` }} /></div>
         </div>
       </div>
@@ -248,7 +248,7 @@ export default function SecondPass() {
       <div className="mt-4 rounded-2xl border border-line bg-white p-5">
         <div className="flex flex-wrap items-start gap-4">
           <div className="min-w-0 flex-1">
-            <p className="text-[12px] text-muted">Home {idx + 1} of {queue.length}{current?.doneAt ? ` · checked ${fmtDate(current.doneAt)}` : ""}</p>
+            <p className="text-[12px] text-muted">Home {idx + 1} of {queue.length}{current?.doneAt ? ` · checked ${fmtDate(current.doneAt)}` : current?.complete ? " · all held, done" : ""}</p>
             <h1 className="mt-0.5 text-[21px] font-extrabold tracking-[-0.02em]">{current?.address ?? "Nothing on the list"}</h1>
             {detail && (
               <p className="mt-1 text-[12.5px] text-muted">
@@ -273,7 +273,7 @@ export default function SecondPass() {
           {matches.length > 0 && (
             <ul className="absolute left-24 top-9 z-20 w-96 rounded-xl border border-line bg-white py-1 shadow-lg">
               {matches.map(({ h, i }) => (
-                <li key={h.id}><button onClick={() => { setIdx(i); setJump(""); }} className="block w-full px-3 py-1.5 text-left text-[12.5px] hover:bg-[#f5f0ea]">{h.address}{h.doneAt ? " · checked" : ""}</button></li>
+                <li key={h.id}><button onClick={() => { setIdx(i); setJump(""); }} className="block w-full px-3 py-1.5 text-left text-[12.5px] hover:bg-[#f5f0ea]">{h.address}{h.doneAt ? " · checked" : h.complete ? " · done" : ""}</button></li>
               ))}
             </ul>
           )}

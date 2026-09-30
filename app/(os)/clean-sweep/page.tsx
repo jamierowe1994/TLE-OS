@@ -69,7 +69,7 @@ export default function CleanSweep() {
     const n = search.trim().toLowerCase();
     return (homes ?? []).filter((h) =>
       (!sheetOnly || h.onSheet) &&
-      (filter === "all" || (filter === "done" ? Boolean(h.checkedAt) : !h.checkedAt)) &&
+      (filter === "all" || (filter === "done" ? Boolean(h.checkedAt) || h.missing === 0 : !h.checkedAt && h.missing > 0)) &&
       (!n || `${h.address} ${h.landlord ?? ""} ${h.agent ?? ""} ${h.tenants ?? ""} ${h.paypropNo ?? ""}`.toLowerCase().includes(n))
     );
   }, [homes, filter, sheetOnly, search]);
@@ -90,7 +90,7 @@ export default function CleanSweep() {
     <>
       <PageHeader
         title="Clean Sweep"
-        blurb="Every let home, oldest first. Open REX PM beside it, check what the OS holds, add what is missing, then mark it checked."
+        blurb="Every let home, oldest first. Open REX PM beside it, check what the OS holds, add or upload what is missing. A home is done once everything it needs is held."
         search
         searchValue={search}
         onSearch={setSearch}
@@ -103,7 +103,7 @@ export default function CleanSweep() {
           <div className="min-w-[220px] flex-1">
             <p className="text-[12px] text-muted">Susan's list</p>
             <p className="mt-0.5 text-[15px] font-semibold">
-              {progress.checked} of {progress.total} checked
+              {progress.checked} of {progress.total} done
               <span className="ml-2 text-[12.5px] font-normal text-muted">{progress.today} today</span>
             </p>
             <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-line/50">
@@ -118,7 +118,7 @@ export default function CleanSweep() {
                 onClick={() => setFilter(f)}
                 className={`rounded-full border px-3.5 py-1.5 text-[12px] font-semibold transition-colors ${filter === f ? "border-accent-dark bg-accent-dark text-page" : "border-line/80 text-muted hover:text-ink"}`}
               >
-                {f === "todo" ? "To check" : f === "done" ? "Checked" : "All"}
+                {f === "todo" ? "To do" : f === "done" ? "Done" : "All"}
               </button>
             ))}
             <label className="ml-1 flex cursor-pointer items-center gap-2 text-[12px] text-muted">
@@ -152,7 +152,7 @@ export default function CleanSweep() {
                   ) : h.missing ? (
                     <span className="shrink-0 rounded-full bg-[#f6e1dd] px-2 py-0.5 text-[11px] font-semibold text-[#9d4340]">{h.missing} missing</span>
                   ) : (
-                    <span className="shrink-0 rounded-full bg-[#e3ead9] px-2 py-0.5 text-[11px] font-semibold text-[#56634a]">All held</span>
+                    <span className="flex shrink-0 items-center gap-1 rounded-full bg-[#e3ead9] px-2 py-0.5 text-[11px] font-semibold text-[#56634a]"><span className="h-1.5 w-1.5 rounded-full bg-[#56634a]" /> Done</span>
                   )}
                 </span>
               </button>
