@@ -145,12 +145,18 @@ export const SCOPES = {
       // PowerPoint
       "application/vnd.ms-powerpoint",
       "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      // Marketing video and animation (30 Sep 2026: Francesca's 135MB file)
+      "video/mp4",
+      "video/quicktime",
+      "image/gif",
     ],
-    /* Same ceiling as documents on purpose. The upload route buffers the whole
-       file in memory before it goes to R2, so this number is also how much RAM
-       one upload costs the container. Raising it for big decks is a one-line
-       change, but it is a resource decision rather than a policy one. */
-    maxBytes: 25 * 1024 * 1024,
+    /* 500MB since 30 Sep 2026. The shelf no longer goes through
+       /api/r2/upload: that route buffers the whole file, and Next cuts any
+       request body off at 10MB once middleware has seen it, so nothing over
+       10MB ever arrived whatever this said. The shelf now sends 8MB pieces
+       to /api/r2/library/upload, one R2 multipart upload per file, so the
+       container never holds more than one piece at a time. */
+    maxBytes: 500 * 1024 * 1024,
   },
   /**
    * What somebody attaches to a question for Steve.
