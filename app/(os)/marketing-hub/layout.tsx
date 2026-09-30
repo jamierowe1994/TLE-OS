@@ -41,7 +41,9 @@ const GROUPS = [
     items: [
       { href: "/marketing-hub/templates", label: "Email templates" },
       { href: "/marketing-hub/storage", label: "File storage" },
-      { href: "/marketing-hub/assistant", label: "The assistant" },
+      /* Steve's knowledge base, the real one (30 Sep 2026). It replaced "The
+         assistant", a placeholder for exactly this that was never built. */
+      { href: "/marketing-hub/knowledge", label: "Steve's knowledge" },
     ],
   },
 ];
