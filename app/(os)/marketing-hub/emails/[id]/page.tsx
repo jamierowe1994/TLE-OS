@@ -3,7 +3,9 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import EmailBuilder from "@/components/EmailBuilder";
+import Studio from "@/components/email-studio/Studio";
+import type { Block } from "@/components/email-studio/tree";
+import { renderNewsletter } from "@/lib/newsletter-render";
 import { Pill } from "@/components/Wire";
 import { tleBrand } from "@/lib/campaign-mail";
 import { londonParts, londonTime } from "@/lib/london-time";
@@ -24,8 +26,6 @@ import { statusLine, whenText } from "../status";
  */
 
 type Loaded = { newsletter: Newsletter; preview: string };
-
-const BUILDER_TOKENS = [{ token: "{{firstName}}", label: "First name" }];
 
 export default function EmailPageWrapper() {
   return (
@@ -218,16 +218,11 @@ function EmailPage() {
       )}
 
       {designing && draft && (
-        <EmailBuilder
-          campaignId={`newsletter:${n.id}`}
-          stepIndex={0}
-          step={{ day: 0, channel: "email", subject: n.subject, gist: "", body: [] }}
-          initial={{ subject: n.subject, blocks: n.blocks }}
-          heading={n.kind === "event" ? "Event email" : "Newsletter"}
-          hint="Drag blocks in from the left. Words are typed straight onto the email."
-          footNote="The footer is added when it sends. There is no unsubscribe: this only ever goes to the team."
+        <Studio
+          title={n.name || "Untitled"}
+          kindLabel={n.kind === "event" ? "Event email" : "Newsletter"}
+          initial={{ subject: n.subject, preheader: n.preheader, blocks: n.blocks as Block[] }}
           brand={tleBrand("internal")}
-          mergeTokens={BUILDER_TOKENS}
           uploadImage={async (file) => {
             const fd = new FormData();
             fd.append("file", file);
@@ -235,11 +230,17 @@ function EmailPage() {
             if (!j.ok) throw new Error(j.error || "That didn't upload.");
             return j.url as string;
           }}
-          saveTo={async (copy) => {
-            const j = await (await fetch(`/api/newsletters/${id}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ subject: copy.subject, blocks: copy.blocks }) })).json().catch(() => ({ ok: false }));
+          previewHtml={(copy) => renderNewsletter(copy, { email: "", name: "Sam Example" }).html}
+          onSave={async (copy) => {
+            const j = await (await fetch(`/api/newsletters/${id}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(copy) })).json().catch(() => ({ ok: false }));
+            if (j.ok) void load().catch(() => null);
             return j.ok ? null : j.error || "It didn't save.";
           }}
-          onSaved={() => void load().catch(() => null)}
+          onSendTest={async () => {
+            const j = await (await fetch(`/api/newsletters/${id}/test`, { method: "POST" })).json();
+            if (!j.ok) throw new Error(j.error || "The test didn't send.");
+            return j.message as string;
+          }}
           onClose={() => {
             setDesigning(false);
             if (search.get("design")) router.replace(`/marketing-hub/emails/${id}`);

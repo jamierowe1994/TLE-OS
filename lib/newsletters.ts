@@ -32,8 +32,8 @@
 
 import { randomUUID } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
-import { renderTemplate, renderTokens, mergeContextFor } from "@/lib/email/render.js";
-import { tleBrand } from "@/lib/campaign-mail";
+import { renderNewsletter } from "@/lib/newsletter-render";
+export { renderNewsletter };
 import { isInternalAddress } from "@/lib/email-policy";
 import { lettingsAgents } from "@/lib/rex-agents";
 import { invites } from "@/lib/pilot";
@@ -110,38 +110,9 @@ export const STARTER_SUBJECT: Record<NewsletterKind, string> = {
   event: "You're Invited",
 };
 
-/* ── Rendering ───────────────────────────────────────────────────────────── */
-
-/** The standard footer: who sent it. No unsubscribe - this is the team. */
-function footer(): Record<string, unknown> {
-  return {
-    type: "footer",
-    id: bid(),
-    note: "Sent to the TLE team from TLE OS.",
-    address: "The Letting Experts",
-    showSocial: false,
-    unsubscribe: false,
-  };
-}
-
-/**
- * One recipient's copy. The team's letterhead (tleBrand "internal": the red
- * off the logo, as every staff email has had since 16 Sep 2026).
- */
-export function renderNewsletter(
-  n: Pick<Newsletter, "subject" | "preheader" | "blocks">,
-  to: Recipient
-): { subject: string; html: string } {
-  const brand = tleBrand("internal");
-  const blocks = n.blocks.some((b) => b?.type === "footer") ? [...n.blocks] : [...n.blocks, footer()];
-  const ctx = mergeContextFor({ name: to.name, email: to.email }, brand) as Record<string, unknown>;
-  const mergeCtx = { ...ctx, firstName: (ctx.firstName as string) || "there" };
-  const subjectLine = n.subject.trim() || "A message from The Letting Experts";
-  const out = renderTemplate({ name: subjectLine, subject: subjectLine, preheader: n.preheader, blocks }, { brand, mergeCtx });
-  const raw = typeof out === "string" ? out : (out?.html ?? "");
-  const subject = typeof out === "string" ? subjectLine : (out?.subject ?? subjectLine);
-  return { subject: renderTokens(subject, mergeCtx), html: renderTokens(raw, mergeCtx) };
-}
+/* ── Rendering ─────────────────────────────────────────────────────────────
+   In lib/newsletter-render, which has no server imports, so the studio's
+   preview in the browser runs exactly the code that sends. */
 
 /* ── Who it can go to ────────────────────────────────────────────────────── */
 
