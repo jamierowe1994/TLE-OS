@@ -81,6 +81,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return NextResponse.json({ ok: true, ...(await sweepDetail(id)) });
   }
 
+  /* Notes on their own, from All homes (no Mark checked since 30 Sep 2026). */
+  if (body.notes !== undefined && body.field === undefined) {
+    await recordFact({ propertyId: id, field: "check_notes", value: body.notes.trim().slice(0, 2000) || null, source: "manual", by });
+    return NextResponse.json({ ok: true, ...(await sweepDetail(id)) });
+  }
+
   const field = String(body.field ?? "");
   if (!isFactKey(field)) return NextResponse.json({ ok: false, error: "That is not one of the columns." }, { status: 400 });
   const kind = FIELD_BY_KEY.get(field)!.kind;

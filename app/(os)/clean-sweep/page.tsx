@@ -188,10 +188,11 @@ function HomePanel({ id, onBack, onChanged }: { id: string; onBack: () => void; 
 
   const apply = useCallback((j: Detail) => { setD(j); onChanged(j); }, [onChanged]);
 
-  async function signOff(on: boolean) {
+  /* No Mark checked (James, 30 Sep 2026): uploading is the check. Notes still save. */
+  async function saveNotes() {
     setBusy(true);
     try {
-      const r = await fetch(`/api/clean-sweep/${encodeURIComponent(id)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ signOff: on, notes }) });
+      const r = await fetch(`/api/clean-sweep/${encodeURIComponent(id)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ notes }) });
       const j = await r.json();
       if (j.ok) apply(j); else setError(j.error || "That did not save.");
     } finally { setBusy(false); }
@@ -277,7 +278,7 @@ function HomePanel({ id, onBack, onChanged }: { id: string; onBack: () => void; 
       })}
 
       <section className="rounded-[22px] border border-line/70 bg-card p-5">
-        <h3 className="text-[15px]">Sign-off</h3>
+        <h3 className="text-[15px]">Notes</h3>
         <label htmlFor="sweep-notes" className="mt-3 block text-[11.5px] text-muted">Discrepancy notes - anything that did not match, or needs somebody else</label>
         <textarea
           id="sweep-notes"
@@ -290,16 +291,11 @@ function HomePanel({ id, onBack, onChanged }: { id: string; onBack: () => void; 
           {h.checkedAt ? (
             <p className="text-[12.5px] text-[#56634a]">Checked by {h.checkedBy ?? "the office"} on {fmtDate(h.checkedAt)}.</p>
           ) : (
-            <p className="text-[12.5px] text-muted">{missingNow ? `${missingNow} still missing - add them, or say why in the notes.` : "Everything is held."}</p>
+            <p className="text-[12.5px] text-muted">{missingNow ? `${missingNow} still missing - upload or add them, or say why in the notes.` : "Everything is held."}</p>
           )}
-          <div className="flex gap-2">
-            {h.checkedAt ? (
-              <button type="button" disabled={busy} onClick={() => signOff(false)} className="rounded-full border border-line/80 px-4 py-2 text-[12.5px] font-semibold hover:border-ink disabled:opacity-60">Undo checked</button>
-            ) : null}
-            <button type="button" disabled={busy} onClick={() => signOff(true)} className="rounded-full bg-accent-dark px-5 py-2 text-[12.5px] font-semibold text-page disabled:opacity-60">
-              {h.checkedAt ? "Save notes" : "Mark checked"}
-            </button>
-          </div>
+          <button type="button" disabled={busy} onClick={() => void saveNotes()} className="rounded-full bg-accent-dark px-5 py-2 text-[12.5px] font-semibold text-page disabled:opacity-60">
+            {busy ? "Saving…" : "Save notes"}
+          </button>
         </div>
       </section>
     </div>
