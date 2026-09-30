@@ -182,7 +182,9 @@ function held(key: string, facts: Map<string, FactRow>, certs: CertsOnFile = NO_
   const has = (k: string) => { const f = facts.get(k); return Boolean(f && (f.value || f.file_key)); };
   if (key === "landlord_aml") return has("landlord_aml") || has("landlord_photo_id");
   if (key === "alarms_expiry") return has(key) || certs.gas || certs.eicrAlarms;
-  if (key === "repairing_standard") return has(key) || standardMet(facts, certs);
+  /* Or the landlord signed our terms of business, which bind them to the
+     Repairing Standard (James, 30 Sep 2026). */
+  if (key === "repairing_standard") return has(key) || has("doc_terms_of_business") || standardMet(facts, certs);
   return has(key);
 }
 
@@ -392,11 +394,13 @@ export async function sweepDetail(id: string): Promise<SweepDetail | null> {
     const own = Boolean(r?.value || r?.file_key);
     const byGas = x.key === "alarms_expiry" && !own && onFile.gas;
     const byEicr = x.key === "alarms_expiry" && !own && !onFile.gas && onFile.eicrAlarms;
-    const byStandard = x.key === "repairing_standard" && !own && standardMet(f, onFile);
+    const byTerms = x.key === "repairing_standard" && !own && Boolean(f.get("doc_terms_of_business")?.value || f.get("doc_terms_of_business")?.file_key);
+    const byStandard = x.key === "repairing_standard" && !own && !byTerms && standardMet(f, onFile);
     return {
       key: x.key, label: x.label, group: x.group, kind: x.kind, needed: need.has(x.key), held: held(x.key, f, onFile),
       note: byGas ? "Covered by the gas safety record"
         : byEicr ? "Covered by the in-date EICR"
+        : byTerms ? "Agreed in the landlord's terms of business, which bind them to the Repairing Standard"
         : byStandard ? "Met on the certificates held: EICR and gas in date (or no gas), PAT, alarms and legionella on file" : null,
       verifiedAt: r?.verified_at ? new Date(r.verified_at).toISOString() : null, verifiedBy: r?.verified_by ?? null,
       value: r?.value ?? null, source: r?.source ?? null, sourceRef: r?.source_ref ?? null, checkedAgainst: r?.checked_against ?? null,
