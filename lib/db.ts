@@ -3215,6 +3215,39 @@ SELECT md5(m.journey || '/' || m.step || '/' || m.at::text), m.journey, m.step, 
 ALTER TABLE os_contacts ADD COLUMN IF NOT EXISTS is_test BOOLEAN NOT NULL DEFAULT false;
 CREATE INDEX IF NOT EXISTS os_deal_events_deal ON os_deal_events (deal_id, at DESC);
 CREATE INDEX IF NOT EXISTS os_deal_events_agent ON os_deal_events (agent_email, at DESC);
+
+-- Francesca's newsletters and event emails (30 Sep 2026): designed in the
+-- block builder, sent to a list of the team from the TLE OS address, now or
+-- at a time she picks. One row per email; recipients chosen by hand are held
+-- on it, and every send is its own row below, so a run that stops half way
+-- picks up where it left off and nobody gets it twice.
+CREATE TABLE IF NOT EXISTS os_newsletters (
+  id            TEXT PRIMARY KEY,
+  kind          TEXT NOT NULL DEFAULT 'newsletter',
+  name          TEXT NOT NULL DEFAULT '',
+  subject       TEXT NOT NULL DEFAULT '',
+  preheader     TEXT NOT NULL DEFAULT '',
+  blocks        JSONB NOT NULL DEFAULT '[]'::jsonb,
+  recipients    JSONB NOT NULL DEFAULT '[]'::jsonb,
+  send_at       TIMESTAMPTZ,
+  status        TEXT NOT NULL DEFAULT 'draft',
+  created_by    TEXT NOT NULL DEFAULT '',
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  published_by  TEXT,
+  published_at  TIMESTAMPTZ,
+  finished_at   TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS os_newsletters_due ON os_newsletters (send_at) WHERE status IN ('scheduled', 'sending');
+CREATE TABLE IF NOT EXISTS os_newsletter_sends (
+  newsletter_id TEXT NOT NULL,
+  email         TEXT NOT NULL,
+  name          TEXT NOT NULL DEFAULT '',
+  state         TEXT NOT NULL DEFAULT 'queued',
+  sent_at       TIMESTAMPTZ,
+  error         TEXT,
+  PRIMARY KEY (newsletter_id, email)
+);
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a

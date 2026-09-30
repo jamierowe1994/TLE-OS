@@ -334,6 +334,20 @@ export const SWITCHES: Switch[] = [
     legacyEnv: "CAMPAIGN_SENDING",
     legacyOn: "on",
   },
+  {
+    /* Francesca's newsletters and event emails (30 Sep 2026). Staff only -
+       the sender refuses anybody outside our own domains - but it is still
+       one press to the whole team, so it waits for James to arm it. Until
+       then a published email sits Held at its time and goes the moment this
+       is switched on, if it is not more than a day late. */
+    key: "newsletter_sending",
+    label: "Newsletters and event emails",
+    what: "Lets Marketing's published newsletters and event emails go out at their scheduled time.",
+    who: "THE TEAM: whoever Francesca picks, agents and office staff, from the TLE OS address. Never landlords or tenants.",
+    confirm: "SEND NEWSLETTERS",
+    legacyEnv: "NEWSLETTER_SENDING",
+    legacyOn: "on",
+  },
 ];
 
 const byKey = new Map(SWITCHES.map((s) => [s.key, s]));

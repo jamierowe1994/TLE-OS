@@ -1,6 +1,7 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { CampaignStep } from "@/lib/campaigns";
 import { blocksFor, tleBrand, type StepCopy } from "@/lib/campaign-mail";
 // The ported TMKE renderer — the same module that sends, drawing the canvas.
@@ -185,6 +186,11 @@ function listFor(blocks: Block[], path: Path): Block[] {
     deliberately unreadable. */
 type Drag = { kind: "new"; type: string } | { kind: "move"; type: string; path: Path };
 
+/* A picture upload, when whoever opened the builder can host one (newsletters:
+   30 Sep 2026). Context rather than a prop because the image field sits
+   three components down, inside the inspector's big switch. */
+const UploadContext = createContext<((file: File) => Promise<string>) | null>(null);
+
 export default function EmailBuilder({
   campaignId,
   stepIndex,
@@ -192,6 +198,13 @@ export default function EmailBuilder({
   initial,
   onClose,
   onSaved,
+  heading,
+  hint,
+  saveTo,
+  brand: brandProp,
+  mergeTokens,
+  footNote,
+  uploadImage,
 }: {
   campaignId: string;
   stepIndex: number;
@@ -199,6 +212,21 @@ export default function EmailBuilder({
   initial: StepCopy | null;
   onClose: () => void;
   onSaved: (copy: StepCopy | null) => void;
+  /* ── Optional, for a document that is not a campaign step (newsletters,
+     30 Sep 2026). Left out, the builder behaves exactly as it always has. ── */
+  /** The line above the note, in place of "Day 3 · email". */
+  heading?: string;
+  /** The resting note, in place of "Saved copy overrides the campaign in code." */
+  hint?: string;
+  /** Saves somewhere else. Resolves to an error sentence, or null when saved. No Revert is offered. */
+  saveTo?: (copy: StepCopy) => Promise<string | null>;
+  /** The letterhead to draw the canvas in. Defaults to the landlord one. */
+  brand?: Record<string, unknown>;
+  mergeTokens?: { token: string; label: string }[];
+  /** The note under the rail about what is added at send time. */
+  footNote?: string;
+  /** Uploads a picture and resolves to the address to put in the email. */
+  uploadImage?: (file: File) => Promise<string>;
 }) {
   const [subject, setSubject] = useState(initial?.subject || step.subject);
   const [blocks, setBlocks] = useState<Block[]>(() =>
@@ -219,7 +247,8 @@ export default function EmailBuilder({
   const dragging = useRef<Drag | null>(null);
   const [dropAt, setDropAt] = useState<Drop | null>(null);
 
-  const brand = useMemo(() => tleBrand(), []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const brand = useMemo(() => (brandProp ?? tleBrand()) as ReturnType<typeof tleBrand>, []);
   const ctx = useMemo(
     () =>
       ({
@@ -379,6 +408,22 @@ export default function EmailBuilder({
   async function save() {
     setSaving(true);
     setNote("");
+    if (saveTo) {
+      try {
+        const err = await saveTo({ subject, blocks });
+        if (err) setNote(err);
+        else {
+          setDirty(false);
+          setNote("Saved.");
+          onSaved({ subject, blocks });
+        }
+      } catch {
+        setNote("It didn't save.");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     try {
       const res = await fetch("/api/email-templates", {
         method: "PUT",
@@ -430,17 +475,23 @@ export default function EmailBuilder({
 
   const sel = getAt(blocks, selected);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 p-0 backdrop-blur-sm sm:p-3">
+  /* Portalled to <body> (30 Sep 2026). Drawn in place, it sat inside the
+     workspace's content column, whose styling makes `fixed` relative to the
+     column rather than the window: the rail, the back pill and Steve all
+     showed over the canvas. A builder is the whole screen or it is cramped. */
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <UploadContext.Provider value={uploadImage ?? null}>
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-ink/30 p-0 backdrop-blur-sm sm:p-3">
       <div className="flex h-full w-full flex-col overflow-hidden border-line bg-panel shadow-2xl sm:rounded-2xl sm:border">
         {/* ── top ── */}
         <div className="flex flex-wrap items-center gap-3 border-b border-line/70 px-4 py-3">
           <div className="min-w-0">
             <p className="text-[11px] uppercase tracking-wide text-muted">
-              Day {step.day} · {step.channel}
+              {heading ?? `Day ${step.day} · ${step.channel}`}
             </p>
             <p className="text-[12px] text-muted">
-              {note || (dirty ? "Unsaved changes" : "Saved copy overrides the campaign in code.")}
+              {note || (dirty ? "Unsaved changes" : (hint ?? "Saved copy overrides the campaign in code."))}
             </p>
           </div>
           <div className="ml-auto flex items-center gap-2">
@@ -451,14 +502,16 @@ export default function EmailBuilder({
             >
               {railOpen ? "Hide tools" : "Add & edit"}
             </button>
-            <button
-              type="button"
-              onClick={revert}
-              disabled={saving}
-              className="rounded-lg border border-line/70 px-2.5 py-1.5 text-[11.5px] hover:border-ink/30 disabled:opacity-50"
-            >
-              Revert
-            </button>
+            {!saveTo && (
+              <button
+                type="button"
+                onClick={revert}
+                disabled={saving}
+                className="rounded-lg border border-line/70 px-2.5 py-1.5 text-[11.5px] hover:border-ink/30 disabled:opacity-50"
+              >
+                Revert
+              </button>
+            )}
             <button
               type="button"
               onClick={onClose}
@@ -539,8 +592,7 @@ export default function EmailBuilder({
             </div>
 
             <p className="mt-5 border-t border-line/60 pt-4 text-[10.5px] leading-relaxed text-muted">
-              The footer and the unsubscribe are added when it sends — they can&apos;t be
-              forgotten and don&apos;t need writing.
+              {footNote ?? "The footer and the unsubscribe are added when it sends — they can't be forgotten and don't need writing."}
             </p>
           </aside>
 
@@ -589,7 +641,7 @@ export default function EmailBuilder({
 
               <div className="mt-3 flex flex-wrap items-center gap-1.5">
                 <span className="text-[10.5px] text-muted">Type these in anywhere:</span>
-                {MERGE.map((m) => (
+                {(mergeTokens ?? MERGE).map((m) => (
                   <code
                     key={m.token}
                     className="rounded-md border border-line/70 px-1.5 py-0.5 text-[10.5px] text-muted"
@@ -602,6 +654,45 @@ export default function EmailBuilder({
           </div>
         </div>
       </div>
+    </div>
+    </UploadContext.Provider>,
+    document.body
+  );
+}
+
+/** Upload a picture from this computer, when the builder was given somewhere to put it. */
+function ImageUpload({ onUrl }: { onUrl: (url: string) => void }) {
+  const upload = useContext(UploadContext);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  if (!upload) return null;
+  return (
+    <div className="mb-3">
+      <label className="flex cursor-pointer items-center justify-center rounded-lg border border-dashed border-line px-3 py-2.5 text-[11.5px] font-semibold hover:border-ink/40">
+        {busy ? "Uploading…" : "Upload a picture"}
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/gif,image/webp"
+          className="hidden"
+          disabled={busy}
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (!file) return;
+            setBusy(true);
+            setErr("");
+            try {
+              onUrl(await upload(file));
+            } catch (x) {
+              setErr(x instanceof Error ? x.message : "That didn't upload.");
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
+      </label>
+      {err && <p className="mt-1 text-[11px] text-accent-dark">{err}</p>}
+      <p className="mt-1 text-[10.5px] text-muted">JPG, PNG, GIF or WebP, up to 5MB. Or paste an address below.</p>
     </div>
   );
 }
@@ -1078,6 +1169,7 @@ function Fields({
     case "image":
       return (
         <>
+          <ImageUpload onUrl={(url) => patch(block.id, "url", url)} />
           <label className="block">
             {label("Image URL")}
             <input

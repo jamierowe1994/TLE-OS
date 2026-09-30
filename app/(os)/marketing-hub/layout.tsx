@@ -39,6 +39,8 @@ const GROUPS = [
     title: "Content",
     rule: true,
     items: [
+      /* Newsletters and event invites: design, pick who, send (30 Sep 2026). */
+      { href: "/marketing-hub/emails", label: "Emails & events" },
       { href: "/marketing-hub/templates", label: "Email templates" },
       { href: "/marketing-hub/storage", label: "File storage" },
       /* Steve's knowledge base, the real one (30 Sep 2026). It replaced "The

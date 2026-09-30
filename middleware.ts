@@ -633,6 +633,10 @@ export const config = {
          documents     send us and fetch their own files - currentTenant
        Every one of them answers only for the tenant in the cookie. Still NOT
        api/tenant wholesale: reminders/run is a cron route with its own key. */
-    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|visit|api/visit|rehearsal|api/rehearsal|proof|send|api/tenant/passport|api/tenant/feedback|api/tenant/homes|api/tenant/session|api/tenant/maintenance|api/tenant/documents|api/landlord|api/calendar|brand|email|rex|r|api/r|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$).*)",
+    /* `mail-img` is a newsletter picture (30 Sep 2026): fetched by the mail
+       client of whoever opens the email, which has no session. Safe because
+       the route only serves a uuid name from its own R2 prefix - see
+       app/mail-img/[name]. */
+    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|visit|api/visit|rehearsal|api/rehearsal|proof|send|api/tenant/passport|api/tenant/feedback|api/tenant/homes|api/tenant/session|api/tenant/maintenance|api/tenant/documents|api/landlord|api/calendar|brand|email|mail-img|rex|r|api/r|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$).*)",
   ],
 };

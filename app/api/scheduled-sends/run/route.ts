@@ -1,3 +1,4 @@
+import { runNewsletters } from "@/lib/newsletters";
 import { NextRequest, NextResponse } from "next/server";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 import { timingSafeEqual } from "node:crypto";
@@ -259,7 +260,10 @@ export async function POST(req: NextRequest) {
 
   /* Signed files REX still has no property for (lib/rex-instruct). */
   const instructions = await runInstructionSweep().catch((e) => ({ tried: 0, linked: 0, failed: [e instanceof Error ? e.message : "Sweep failed."] }));
-  return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, skipped: skipped.length, failed, decks, nudges, instructions });
+
+  /* Marketing's newsletters and event emails that have come due (lib/newsletters). */
+  const newsletters = await runNewsletters().catch((e) => ({ error: e instanceof Error ? e.message : "Newsletters failed." }));
+  return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, skipped: skipped.length, failed, decks, nudges, instructions, newsletters });
 }
 
 /** A dry read: what is due, without sending it. Same key as the run: this
