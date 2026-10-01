@@ -21,9 +21,9 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 type Row = {
-  id: string; email: string; name: string; address: string; kind: string; sent_to: string | null; outcome: string | null; created_at: Date;
+  id: string; email: string; name: string; address: string; listing_id: string | null; kind: string; sent_to: string | null; outcome: string | null; created_at: Date;
   payload: {
-    amount?: number; asking?: number | null; moveIn?: string; term?: string; movingIn?: string[]; works?: string[]; recordedBy?: { name: string; email: string; how: string }; adults?: number; children?: number; pets?: boolean; petsNote?: string; note?: string;
+    amount?: number; asking?: number | null; moveIn?: string; term?: string; movingIn?: string[]; works?: string[]; recordedBy?: { name: string; email: string; how: string }; source?: string; adults?: number; children?: number; pets?: boolean; petsNote?: string; note?: string;
     passport?: OfferPassport; changes?: OfferChange[];
     reasons?: string[]; topics?: string[]; message?: string;
   };
@@ -87,6 +87,19 @@ export default async function OfferPage({ params }: { params: Promise<{ id: stri
           <div className="grid gap-5 lg:grid-cols-2">
             <section className={card}>
               <p className={eyebrow}>The offer</p>
+              {p.source === "application-form" && (
+                <div className="mt-2 rounded-[12px] bg-accent-soft/60 px-3.5 py-2.5 text-[12.5px] leading-snug">
+                  From the application form. The landlord doesn&apos;t see it until you put it forward.{" "}
+                  {r.listing_id && (
+                    <a
+                      href={`/offers/new?${new URLSearchParams({ listing: String(r.listing_id), name: r.name || "", email: r.email })}`}
+                      className="font-semibold text-accent-dark underline underline-offset-2"
+                    >
+                      Put it forward
+                    </a>
+                  )}
+                </div>
+              )}
               {p.recordedBy && (
                 <p className="mt-1 text-[12.5px] text-muted">
                   Put forward by {p.recordedBy.name}, {p.recordedBy.how.toLowerCase()}, with the tenant&apos;s agreement.
@@ -126,7 +139,7 @@ export default async function OfferPage({ params }: { params: Promise<{ id: stri
 
             <section className={card}>
               <div className="flex items-start justify-between gap-4">
-                <p className={eyebrow}>Their passport, as confirmed</p>
+                <p className={eyebrow}>{p.source === "application-form" ? "From their application" : "Their passport, as confirmed"}</p>
                 {changes.length > 0 && (
                   <span className={`shrink-0 rounded-full px-3 py-1 text-[11.5px] font-semibold ${changes.some((c) => c.watch) ? "bg-[#fbeee0] text-[#a35a12]" : "bg-panel text-muted"}`}>
                     {changes.length} changed with the offer

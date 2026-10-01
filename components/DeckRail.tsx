@@ -342,9 +342,9 @@ export default function DeckRail({
               </button>
             </div>
             <p className="mt-2 text-[11px] leading-relaxed text-muted">
-              The landlord&apos;s copy goes to them the day before, from the agent, through REX, so it lands on their
-              timeline. This button does not send that. It tells the agent it is on its way, and it can only ever reach
-              a Letting Experts address.
+              The landlord&apos;s copy goes to them when the visit is booked, from the agent&apos;s own mailbox. This
+              button does not send that. It tells the agent it is on its way, and it can only ever reach a Letting
+              Experts address.
             </p>
             {briefing && <p className="mt-2 text-[11px] text-muted">{briefing}</p>}
             {/* THE RECORDER MOVES HERE from the lead drawer, where it only
@@ -361,9 +361,8 @@ export default function DeckRail({
           </button>
         )}
         <p className="mt-3 text-[10.5px] leading-relaxed text-muted">
-          This is the one that goes out on its own, the day before. Sending is switched off
-          across the OS, so nothing reaches a landlord yet — the deck and the video can be
-          prepared and reviewed now.
+          This is the one that goes out when the visit is booked: straight away if you booked it, or two hours
+          later if someone booked it for you.
         </p>
       </Card>
 

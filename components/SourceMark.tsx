@@ -43,7 +43,9 @@ const DOODLE: Record<string, string> = {
 const SIZE = 20;
 
 function key(source: string): string {
-  return source.toLowerCase().replace(/[^a-z]/g, "");
+  /* A lead with no source at all must draw the unknown mark, not take the
+     board down with it. */
+  return (source ?? "").toLowerCase().replace(/[^a-z]/g, "");
 }
 
 /** Which family a source belongs to — the matching is deliberately loose,

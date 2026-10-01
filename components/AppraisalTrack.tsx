@@ -1,5 +1,6 @@
 "use client";
 
+import { PRE_SEND_HOLD_MS, PRE_SEND_SOON_MS } from "@/lib/pre-send-time";
 import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import {
@@ -10,8 +11,6 @@ import {
   postBodyFor,
   postSubjectFor,
   subjectFor,
-  PRE_APPRAISAL_LEAD_DAYS,
-  PRE_APPRAISAL_LEAD_WORDS,
   type AppraisalInvite,
 } from "@/lib/appraisal-email";
 import EmailPopout from "@/components/EmailPopout";
@@ -441,11 +440,10 @@ export default function AppraisalTrack({
     if (!c.bookedAt) return null;
     const visit = new Date(c.bookedAt);
     if (Number.isNaN(visit.valueOf())) return null;
-    const when = new Date(visit);
-    when.setDate(when.getDate() - PRE_APPRAISAL_LEAD_DAYS);
-    when.setHours(9, 0, 0, 0);
-    const soon = new Date(Date.now() + 60 * 60 * 1000);
-    return (when < soon ? soon : when).toISOString();
+    /* Two hours from now, or straight away when the visit is close
+       (Howard, 1 Oct 2026: the day before was too late). lib/pre-send-time. */
+    const now = Date.now();
+    return new Date(visit.getTime() - now < PRE_SEND_SOON_MS ? now : now + PRE_SEND_HOLD_MS).toISOString();
   })();
 
   const scheduleWords = scheduleFor
@@ -759,7 +757,7 @@ export default function AppraisalTrack({
                         icon="clock"
                         row
                         title={scheduleFor ? `Schedule for ${scheduleWords}` : "Schedule it"}
-                        body={`Sent on its own, ${PRE_APPRAISAL_LEAD_WORDS} — when it's useful rather than convenient.`}
+                        body="Sent on its own in two hours, unless you send it sooner."
                         onClick={schedulePre}
                         disabled={!invite || !scheduleFor || scheduling}
                         note={

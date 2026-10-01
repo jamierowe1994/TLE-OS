@@ -428,7 +428,9 @@ async function osOffers(props: Set<string>, lists: Set<string>): Promise<ViewOff
   if (!listingIds.size) return [];
   const rows = await q<{ id: string; name: string; listing_id: string; payload: Record<string, unknown>; created_at: string | Date }>(
     `SELECT id, name, listing_id, payload, created_at FROM os_tenant_viewing_responses
-      WHERE kind = 'offer' AND listing_id = ANY($1::text[]) ORDER BY created_at DESC LIMIT 50`,
+      WHERE kind = 'offer' AND listing_id = ANY($1::text[])
+        AND COALESCE(payload->>'source', '') <> 'application-form'
+      ORDER BY created_at DESC LIMIT 50`,
     [[...listingIds]]
   );
   return rows.map((r) => osOfferOf(r.id, r.name, r.payload, new Date(r.created_at).toISOString()));

@@ -164,6 +164,10 @@ export async function POST(req: NextRequest) {
   };
   const householdIncome = applicants.reduce((t, a) => t + a.income, 0);
   const payload = {
+    /* Agent first (James, 1 Oct 2026): a form sent in from a link stays with
+       the agent. It reaches the landlord only when the agent puts it forward
+       (lib/landlord-account osOffers skips this source). */
+    source: "application-form",
     amount: app.offerAmount,
     asking: home.askingPcm || null,
     moveIn: app.startDate,
