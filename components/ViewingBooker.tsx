@@ -1347,7 +1347,7 @@ export default function ViewingBooker({
                                 ? "To the landlord, with the calendar invite. Change any of the words first."
                                 : mode === "takeon"
                                   ? "To the landlord, with the calendar invite and what to expect on the day. Change any of the words first."
-                                  : "To the applicant, with the calendar invite and their passport link. Change any of the words first."}
+                                  : "To the applicant, with the calendar invite. Change any of the words first."}
                               {" "}Untick to book without telling them.
                             </span>
                           </span>
