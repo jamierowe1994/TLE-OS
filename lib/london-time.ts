@@ -72,3 +72,10 @@ export function isLondonMidnight(at: Date | string | number): boolean {
   const p = londonParts(at);
   return p.hour === 0 && p.minute === 0;
 }
+
+/** The London calendar date, "2026-10-01". For comparing against a DATE
+ *  column (a follow-up day) without the UTC server reading tomorrow at 11pm. */
+export function londonDate(at: Date | string | number = new Date()): string {
+  const p = londonParts(at);
+  return `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
+}
