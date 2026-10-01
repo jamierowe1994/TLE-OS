@@ -3315,6 +3315,27 @@ CREATE TABLE IF NOT EXISTS os_newsletter_sends (
   error         TEXT,
   PRIMARY KEY (newsletter_id, email)
 );
+-- What happened to each copy (1 Oct 2026, Francesca: open rate, clicks, did
+-- it get there). token rides in the open pixel and every link; resend_id is
+-- how Resend's delivered / bounced webhook finds the row.
+ALTER TABLE os_newsletter_sends ADD COLUMN IF NOT EXISTS token TEXT;
+ALTER TABLE os_newsletter_sends ADD COLUMN IF NOT EXISTS resend_id TEXT;
+ALTER TABLE os_newsletter_sends ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ;
+ALTER TABLE os_newsletter_sends ADD COLUMN IF NOT EXISTS bounced_at TIMESTAMPTZ;
+ALTER TABLE os_newsletter_sends ADD COLUMN IF NOT EXISTS bounce_reason TEXT;
+ALTER TABLE os_newsletter_sends ADD COLUMN IF NOT EXISTS opened_at TIMESTAMPTZ;
+ALTER TABLE os_newsletter_sends ADD COLUMN IF NOT EXISTS opens INT NOT NULL DEFAULT 0;
+ALTER TABLE os_newsletter_sends ADD COLUMN IF NOT EXISTS clicked_at TIMESTAMPTZ;
+ALTER TABLE os_newsletter_sends ADD COLUMN IF NOT EXISTS clicks INT NOT NULL DEFAULT 0;
+CREATE UNIQUE INDEX IF NOT EXISTS os_newsletter_sends_token ON os_newsletter_sends (token) WHERE token IS NOT NULL;
+CREATE INDEX IF NOT EXISTS os_newsletter_sends_resend ON os_newsletter_sends (resend_id) WHERE resend_id IS NOT NULL;
+CREATE TABLE IF NOT EXISTS os_newsletter_clicks (
+  newsletter_id TEXT NOT NULL,
+  email         TEXT NOT NULL,
+  url           TEXT NOT NULL,
+  at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS os_newsletter_clicks_by ON os_newsletter_clicks (newsletter_id, url);
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a

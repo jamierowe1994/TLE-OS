@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Studio from "@/components/email-studio/Studio";
+import Results from "@/components/newsletter/Results";
 import type { Block } from "@/components/email-studio/tree";
 import { renderNewsletter } from "@/lib/newsletter-render";
 import { Pill } from "@/components/Wire";
@@ -159,6 +160,8 @@ function EmailPage() {
       {flash && <p className="mt-4 rounded-xl border border-line bg-panel p-3 text-[12.5px]">{flash}</p>}
 
       {!draft && <Published n={n} armed={armed} busy={busy} onUnpublish={() => act("unpublish", () => fetch(`/api/newsletters/${id}/publish`, { method: "DELETE" }), () => setFlash("Back to a draft. Nothing was sent."))} />}
+
+      {(n.status === "sent" || n.status === "sending") && <Results id={id} live={n.status === "sending"} />}
 
       {/* ── 1 Design ── */}
       <Step n={1} title="Design">

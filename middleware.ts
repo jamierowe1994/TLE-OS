@@ -458,6 +458,7 @@ const MACHINE_ROUTES = [
   "/api/campaigns/run",               // nurture sends
   "/api/esign/poll",                  // DocuSeal envelope status
   "/api/scheduled-sends/run",         // queued email
+  "/api/resend/webhook",              // Resend: delivered / bounced, signed by Resend
   "/api/pretenancy/alerts/run",       // the pre-tenancy digest
   "/api/pretenancy/watch",            // the Propoly watcher, every five minutes
   "/api/compliance/warm",             // sweeps the book before anybody asks
@@ -636,7 +637,9 @@ export const config = {
     /* `mail-img` is a newsletter picture (30 Sep 2026): fetched by the mail
        client of whoever opens the email, which has no session. Safe because
        the route only serves a uuid name from its own R2 prefix - see
-       app/mail-img/[name]. */
-    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|visit|api/visit|rehearsal|api/rehearsal|proof|send|api/tenant/passport|api/tenant/feedback|api/tenant/homes|api/tenant/session|api/tenant/maintenance|api/tenant/documents|api/landlord|api/calendar|brand|email|mail-img|rex|r|api/r|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$).*)",
+       app/mail-img/[name]. `nl` is the same reader's open pixel and link
+       clicks (1 Oct 2026, app/nl/*): a token, never a session, and a signed
+       link that only ever leads to an address that was in the email. */
+    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|visit|api/visit|rehearsal|api/rehearsal|proof|send|api/tenant/passport|api/tenant/feedback|api/tenant/homes|api/tenant/session|api/tenant/maintenance|api/tenant/documents|api/landlord|api/calendar|brand|email|mail-img|nl|rex|r|api/r|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$).*)",
   ],
 };

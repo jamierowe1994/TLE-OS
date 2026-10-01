@@ -39,6 +39,8 @@ import { lettingsAgents } from "@/lib/rex-agents";
 import { invites } from "@/lib/pilot";
 import { sendEmail, ResendBlocked } from "@/lib/resend";
 import { switchOn } from "@/lib/switches";
+import { newTrackToken, trackHtml } from "@/lib/newsletter-track";
+import { assetOrigin } from "@/lib/campaign-mail";
 
 export type NewsletterKind = "newsletter" | "event";
 export type NewsletterStatus = "draft" | "scheduled" | "sending" | "sent" | "cancelled" | "missed";
@@ -367,8 +369,18 @@ export async function runNewsletters(): Promise<{ held: number; missed: number; 
     for (const r of batch) {
       try {
         const mail = renderNewsletter(n, r);
-        await sendEmail({ to: r.email, subject: mail.subject, html: mail.html, audience: "internal" });
-        await q(`update os_newsletter_sends set state = 'sent', sent_at = now(), error = null where newsletter_id = $1 and email = $2`, [d.id, r.email]);
+        /* Each copy gets its own token for the open pixel and the links
+           (lib/newsletter-track), kept if a retry comes round again. */
+        const tok = await q<{ token: string }>(
+          `update os_newsletter_sends set token = coalesce(token, $3) where newsletter_id = $1 and email = $2 returning token`,
+          [d.id, r.email, newTrackToken()]
+        );
+        const html = tok[0]?.token ? trackHtml(mail.html, tok[0].token, assetOrigin()) : mail.html;
+        const res = await sendEmail({ to: r.email, subject: mail.subject, html, audience: "internal" });
+        await q(
+          `update os_newsletter_sends set state = 'sent', sent_at = now(), error = null, resend_id = $3 where newsletter_id = $1 and email = $2`,
+          [d.id, r.email, res?.id ?? null]
+        );
         out.sent += 1;
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
