@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { renderBlock, resolveMargin } from "@/lib/email/render.js";
+import { renderBlock, resolveMargin, WEBFONT_HREF } from "@/lib/email/render.js";
 import {
   cellsOf,
   childPath,
@@ -250,6 +250,20 @@ export default function Studio({
     },
     remove: (p: Path) => change(editAt(blocks, p, () => null), ""),
   };
+
+  /* ── The email's own fonts on the canvas (1 Oct 2026) ────────────────────
+     Blocks are drawn straight into the page, where next/font has renamed
+     every family, so "Bricolage Grotesque" named in a block found nothing and
+     the canvas showed Arial. One stylesheet, once, the same one the email
+     carries. */
+  useEffect(() => {
+    if (document.querySelector('link[data-email-fonts]')) return;
+    const l = document.createElement("link");
+    l.rel = "stylesheet";
+    l.href = WEBFONT_HREF;
+    l.setAttribute("data-email-fonts", "");
+    document.head.appendChild(l);
+  }, []);
 
   /* ── Keys ─────────────────────────────────────────────────────────────── */
   useEffect(() => {
