@@ -42,6 +42,7 @@ import {
   type AppraisalInvite,
 } from "@/lib/appraisal-email";
 import { renderPlain } from "@/lib/campaign-mail";
+import { homeCardsHtml } from "@/lib/home-cards";
 import {
   LAUNCH_ANNOUNCEMENT,
   COMPLIANCE_CHASE_LANDLORD,
@@ -198,6 +199,8 @@ const withSample = (doc: EmailDoc, extra?: Record<string, string>): EmailDoc => 
          "{{link}}" - which renders as a button that looks right and goes
          nowhere, the one defect a reviewer cannot see by reading. */
       if (typeof anyB.url === "string") next.url = fill(anyB.url);
+      /* A raw-HTML block's placeholder (Homes That Fit's cards). */
+      if (anyB.type === "code" && typeof anyB.html === "string") next.html = fill(anyB.html);
       return next as unknown as (typeof doc.blocks)[number];
     }),
   };
@@ -231,7 +234,7 @@ export function renderTleEmail(
     blocks: doc.blocks.map((b) => {
       const anyB = b as unknown as Record<string, unknown>;
       const next: Record<string, unknown> = { ...anyB };
-      for (const key of ["text", "label", "href", "url"]) {
+      for (const key of ["text", "label", "href", "url", "html"]) {
         if (typeof anyB[key] === "string") next[key] = fill(anyB[key] as string);
       }
       return next as unknown as EmailDoc["blocks"][number];
@@ -275,7 +278,7 @@ export async function renderTleEmailLive(id: string, vars: Record<string, string
     blocks: doc.blocks.map((b) => {
       const anyB = b as unknown as Record<string, unknown>;
       const next: Record<string, unknown> = { ...anyB };
-      for (const key of ["text", "label", "href", "url"]) {
+      for (const key of ["text", "label", "href", "url", "html"]) {
         if (typeof anyB[key] === "string") next[key] = fill(anyB[key] as string);
       }
       return next as unknown as EmailDoc["blocks"][number];
@@ -1309,7 +1312,19 @@ TLE_EMAILS.push(
     "The tenant on the lead",
     "The homes the agent ticked, one line each with the rent first, and one ask: reply with the ones to see.",
     TENANT_MATCHES,
-    { introLine: "Here are the homes on with us right now that I think fit what you're after.", link: `${SITE}/tenant/welcome` }
+    {
+      introLine: "Here are the homes on with us right now that I think fit what you're after.",
+      link: `${SITE}/tenant/welcome`,
+      /* The cards, drawn by the same function the send uses. */
+      homesList: homeCardsHtml(
+        [
+          { name: "8 Recreation Terrace", locality: "Nottingham NG9", rent: 850, image: "/rex/295547.jpg", beds: "2 bedrooms", propertyType: "Terraced house", blurb: "A bright two bedroom terrace with a south-facing garden, ten minutes from the tram." },
+          { name: "183 Walesby Lane", locality: "Newark NG22", rent: 750, image: "/rex/295517.jpg", beds: "2 bedrooms", propertyType: "Semi-detached house", blurb: "Village semi with off-road parking and a new kitchen, close to the A1." },
+          { name: "57 Brindley Court", locality: "Derby DE24", rent: 400, image: "/rex/299698.jpg", beds: "Room in a shared house", blurb: "An ensuite room in a modern house share, bills included." },
+        ],
+        SITE
+      ),
+    }
   ),
   tenantEntry(
     "tenant-matches-again",
