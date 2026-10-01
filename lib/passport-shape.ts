@@ -64,6 +64,16 @@ export interface PassportData {
   applicantType: string;
   annualIncome: string;
   savings: string;
+  /* ── The work questions referencing turns on (Rhiannon, 1 Oct 2026) ──
+     Only asked when they apply. Employed: still on probation (may need a
+     guarantor), a zero-hours contract (referencing declines it), full or
+     part-time. Self-employed or a director: how long trading (under a year
+     may need a guarantor). They travel to the offer and the landlord sees
+     them, so nobody finds out at referencing. */
+  onProbation: boolean | null;
+  zeroHours: boolean | null;
+  workHours: string;
+  tradingFor: string;
 
   /* ── Who is moving in ──
      Other adults' incomes count towards the household total, which is what the
@@ -101,6 +111,7 @@ export const EMPTY_PASSPORT: PassportData = {
   legalName: "", knownAs: "", dob: "", nationality: "", email: "", mobile: "", photo: "", photoFocus: "",
   hasBritishPassport: null, shareCode: "",
   applicantType: "", annualIncome: "", savings: "",
+  onProbation: null, zeroHours: null, workHours: "", tradingFor: "",
   numAdults: "", numChildren: "", coOccupantIncomes: "",
   rentedLast12Months: null, rentOnTime: null, landlordRef: null,
   currentAddress: "", movedIn: "", livedThreeYears: null, previousAddress: "",
@@ -120,6 +131,57 @@ export const APPLICANT_TYPES = [
   "On benefits",
   "Not working",
 ] as const;
+
+/**
+ * The people on the passport, by name where it has one: them, the other
+ * adults from the household page, and the children, who are counted rather
+ * than named. The offer ticks these, all on by default.
+ */
+export function householdPeople(d: Pick<PassportData, "legalName" | "numAdults" | "numChildren" | "coOccupantIncomes">): { id: string; name: string; who: string }[] {
+  const adults = Math.max(1, parseInt(d.numAdults, 10) || 1);
+  const children = Math.max(0, parseInt(d.numChildren, 10) || 0);
+  const lines = d.coOccupantIncomes.split("\n").map((l) => l.split(" - ")[0].trim());
+  const out = [{ id: "you", name: d.legalName.trim() || "The applicant", who: "Lead tenant" }];
+  for (let k = 0; k < adults - 1; k++) out.push({ id: `adult-${k + 2}`, name: lines[k] || `Adult ${k + 2}`, who: "Adult" });
+  for (let k = 0; k < children; k++) out.push({ id: `child-${k + 1}`, name: children === 1 ? "Child" : `Child ${k + 1}`, who: "Child" });
+  return out;
+}
+
+export const WORK_HOURS = ["Full-time", "Part-time"] as const;
+export const TRADING_FOR = ["Under a year", "1 to 2 years", "Over 2 years"] as const;
+
+/** Who gets the employed questions, and who gets asked how long they've traded. */
+export const isEmployed = (d: Pick<PassportData, "applicantType">) => d.applicantType === "Employed";
+export const isTrading = (d: Pick<PassportData, "applicantType">) => d.applicantType === "Self-employed" || d.applicantType === "Company director";
+
+/**
+ * Their work in one line, the way a landlord reads it: "Employed, full-time,
+ * past probation" or "Self-employed, trading over 2 years".
+ */
+export function workLine(d: Pick<PassportData, "applicantType" | "onProbation" | "zeroHours" | "workHours" | "tradingFor">): string {
+  if (!d.applicantType) return "Not said";
+  const bits: string[] = [d.applicantType];
+  if (isEmployed(d)) {
+    if (d.workHours) bits.push(d.workHours.toLowerCase());
+    if (d.zeroHours === true) bits.push("zero-hours contract");
+    if (d.onProbation === true) bits.push("on probation");
+    if (d.onProbation === false) bits.push("past probation");
+  }
+  if (isTrading(d) && d.tradingFor) bits.push(`trading ${d.tradingFor.toLowerCase()}`);
+  return bits.join(", ");
+}
+
+/**
+ * What referencing will make of their work, said before it is found out
+ * there. Warnings, never a refusal: the agent and the landlord decide.
+ */
+export function workFlags(d: Pick<PassportData, "applicantType" | "onProbation" | "zeroHours" | "tradingFor">): string[] {
+  const out: string[] = [];
+  if (isEmployed(d) && d.zeroHours === true) out.push("Zero-hours contract: referencing declines these, so a guarantor will be needed.");
+  if (isEmployed(d) && d.onProbation === true) out.push("Still on probation: may need a guarantor.");
+  if (isTrading(d) && d.tradingFor === "Under a year") out.push("Trading under a year: may need a guarantor.");
+  return out;
+}
 
 /** Money as typed - "32,000", "£32k", "32000" - read as a number, or null. */
 export function money(v: string): number | null {
@@ -236,6 +298,8 @@ export function answered(d: PassportData): { done: number; total: number; pct: n
   const optional = new Set<keyof PassportData>([
     "knownAs", "photo", "photoFocus", "movedIn", "shareCode", "savings", "coOccupantIncomes", "previousAddress",
     "adverseCreditNote", "petsNote", "rentOnTime", "landlordRef", "numChildren",
+    /* Only asked of some people, by what they do. */
+    "onProbation", "zeroHours", "workHours", "tradingFor",
   ]);
   const keys = (Object.keys(EMPTY_PASSPORT) as (keyof PassportData)[]).filter((k) => !optional.has(k));
   const filled = keys.filter((k) => {

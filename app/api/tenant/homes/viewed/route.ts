@@ -6,7 +6,7 @@ import { homeOnMarket } from "@/lib/tenant-homes";
 import { agentEmailFor, noteOnLeads } from "@/lib/tenant-find";
 import { proseEmail } from "@/lib/email/prose";
 import { sendEmail } from "@/lib/resend";
-import { APPLICANT_TYPES, type PassportData } from "@/lib/passport-shape";
+import { APPLICANT_TYPES, TRADING_FOR, WORK_HOURS, workFlags, workLine, type PassportData } from "@/lib/passport-shape";
 import { savePassport } from "@/lib/passport";
 import { diffOffer, offerSubset, show, type OfferChange, type OfferPassport } from "@/lib/offer-passport";
 
@@ -51,7 +51,8 @@ function passportLines(d: OfferPassport, changes: OfferChange[]): string[] {
     return c ? `${line} *  (was: ${c.from})${c.watch ? "  - worth a look" : ""}` : line;
   };
   return [
-    mark("applicantType", `Working: ${show("applicantType", d.applicantType)}`),
+    mark("applicantType", `Working: ${workLine(d)}`),
+    ...workFlags(d).map((f) => `  ! ${f}`),
     mark("annualIncome", `Income: ${show("annualIncome", d.annualIncome)}`),
     mark("hasBritishPassport", `British or Irish passport: ${show("hasBritishPassport", d.hasBritishPassport)}`),
     ...(d.hasBritishPassport ? [] : [mark("shareCode", `Share code: ${show("shareCode", d.shareCode)}`)]),
@@ -70,6 +71,10 @@ function cleanPassport(raw: unknown, was: OfferPassport): OfferPassport {
   const type = text("applicantType", 40);
   return {
     applicantType: (APPLICANT_TYPES as readonly string[]).includes(type) || type === "" ? type : was.applicantType,
+    workHours: (WORK_HOURS as readonly string[]).includes(text("workHours", 20)) ? text("workHours", 20) : "",
+    zeroHours: bool("zeroHours"),
+    onProbation: bool("onProbation"),
+    tradingFor: (TRADING_FOR as readonly string[]).includes(text("tradingFor", 20)) ? text("tradingFor", 20) : "",
     annualIncome: text("annualIncome", 20),
     hasBritishPassport: bool("hasBritishPassport"),
     shareCode: text("shareCode", 20),
@@ -133,7 +138,12 @@ export async function POST(req: NextRequest) {
       amount,
       asking,
       moveIn: str(o.moveIn, 10),
-      term: str(o.term, 20) || "12 months",
+      /* No term (1 Oct 2026): tenancies are rolling under the new rules, so
+         there is nothing to choose. Who is moving in, ticked off the
+         passport, and the works they want done before moving day, which the
+         landlord accepts with the offer. */
+      movingIn: list(o.movingIn),
+      works: list(o.works),
       adults: Number(after.numAdults),
       children: Number(after.numChildren),
       pets: after.pets === true,
@@ -162,12 +172,13 @@ export async function POST(req: NextRequest) {
     subject = `Questions from ${who} on ${address}`;
     body = [`${who} liked ${address} but has some questions before they decide.`, topics ? `About: ${topics}.` : "", `Their questions:\n${payload.message}`, "Reply to this email to answer them."];
   } else {
-    const p = payload as { amount: number; asking: number | null; moveIn: string; term: string; adults: number; children: number; pets: boolean; petsNote: string; note: string; passport: OfferPassport; changes: OfferChange[] };
+    const p = payload as { amount: number; asking: number | null; moveIn: string; movingIn: string[]; works: string[]; adults: number; children: number; pets: boolean; petsNote: string; note: string; passport: OfferPassport; changes: OfferChange[] };
     const moveIn = new Date(p.moveIn).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
     subject = `Offer from ${who}: ${gbp(p.amount)} a month on ${address}`;
     body = [
       `${who} would like to offer on ${address}.`,
-      [`Offer: ${gbp(p.amount)} a month${p.asking ? ` (advertised at ${gbp(p.asking)})` : ""}`, `Move in: ${moveIn}`, `Term: ${p.term}`, `Moving in: ${p.adults} adult${p.adults === 1 ? "" : "s"}${p.children ? `, ${p.children} child${p.children === 1 ? "" : "ren"}` : ""}${p.pets ? `, with pets${p.petsNote ? ` (${p.petsNote})` : ""}` : ", no pets"}`].join("\n"),
+      [`Offer: ${gbp(p.amount)} a month${p.asking ? ` (advertised at ${gbp(p.asking)})` : ""}`, `Move in: ${moveIn}`, `Moving in: ${p.movingIn.length ? p.movingIn.join(", ") : `${p.adults} adult${p.adults === 1 ? "" : "s"}${p.children ? `, ${p.children} child${p.children === 1 ? "" : "ren"}` : ""}`}${p.pets ? `, with pets${p.petsNote ? ` (${p.petsNote})` : ""}` : ", no pets"}`].join("\n"),
+      p.works.length ? `Works they want done before moving day:\n${p.works.map((w) => `- ${w}`).join("\n")}` : "",
       p.note ? `For the landlord:\n${p.note}` : "",
       `From their tenant passport, confirmed as up to date:\n${passportLines(p.passport, p.changes).join("\n")}`,
       p.changes.length

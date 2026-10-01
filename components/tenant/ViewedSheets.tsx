@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import Sheet from "@/components/tenant/Sheet";
-import { APPLICANT_TYPES } from "@/lib/passport-shape";
+import { APPLICANT_TYPES, TRADING_FOR, WORK_HOURS, isEmployed, isTrading, workFlags } from "@/lib/passport-shape";
+import Toaster from "@/components/Toaster";
+import { DateField, MovingIn, RentField, WorksList } from "@/components/offers/OfferParts";
 import { show, type OfferFieldKey, type OfferPassport } from "@/lib/offer-passport";
 
 /**
@@ -44,7 +47,6 @@ const NOT_RIGHT = [
   "Something else",
 ];
 const TOPICS = ["Bills and council tax", "The landlord", "Parking", "Pets", "Deposit and fees", "Furniture", "The move-in date", "Something else"];
-const TERMS = ["6 months", "12 months", "18 months", "24 months"];
 
 const card = "rounded-[16px] border border-line/60";
 const label = "text-[13px] font-semibold";
@@ -55,12 +57,16 @@ const field = "mt-1.5 block h-12 w-full min-w-0 rounded-[12px] border border-lin
 const primary = "flex w-full items-center justify-center gap-2 rounded-full bg-accent-dark py-3.5 text-[14.5px] font-semibold text-white disabled:opacity-50";
 const gbp = (n: number) => `£${n.toLocaleString("en-GB")}`;
 
+/** Pets is shown as a fact with Change when the passport answered it, asked when not. */
+const pp_petsUnknown = (p: OfferPassport) => p.pets === null;
+
 export default function ViewedSheets({
   property,
   listingId,
   askingPcm,
   agentFirst,
   passport,
+  people,
   passportHref,
   sample,
   base,
@@ -71,11 +77,15 @@ export default function ViewedSheets({
   agentFirst: string;
   /** The passport answers the offer shows back, and lets them change. */
   passport: OfferPassport;
+  /** Who is on the passport, by name, to tick off as moving in. */
+  people: { id: string; name: string; who: string }[];
   passportHref: string | null;
   sample: boolean;
   base: string;
 }) {
   const [open, setOpen] = useState<ViewedKind | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const [done, setDone] = useState<ViewedKind | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -86,15 +96,26 @@ export default function ViewedSheets({
   const [message, setMessage] = useState("");
   const [amount, setAmount] = useState(askingPcm ? String(askingPcm) : "");
   const [moveIn, setMoveIn] = useState("");
-  const [term, setTerm] = useState("12 months");
+  const [works, setWorks] = useState<string[]>([]);
+  const [ticked, setTicked] = useState<Set<string>>(() => new Set(people.map((p) => p.id)));
+  const toggleWho = (id: string) =>
+    setTicked((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const movingIn = people.filter((p) => ticked.has(p.id));
+  const [editPets, setEditPets] = useState(pp_petsUnknown(passport));
   /* Their passport as they are sending it. Anything changed here is saved to
      the passport and shown to the agent against the original (lib/offer-
      passport); the tenant sees nothing different. */
   const [pp, setPp] = useState<OfferPassport>(passport);
   const set = <K extends OfferFieldKey>(k: K, v: OfferPassport[K]) => setPp((cur) => ({ ...cur, [k]: v }));
   const [editing, setEditing] = useState<string | null>(null);
-  const adults = Math.max(1, parseInt(pp.numAdults, 10) || 1);
-  const children = Math.max(0, parseInt(pp.numChildren, 10) || 0);
+  const adults = people.length ? Math.max(1, movingIn.filter((p) => p.who !== "Child").length) : Math.max(1, parseInt(pp.numAdults, 10) || 1);
+  const children = people.length ? movingIn.filter((p) => p.who === "Child").length : Math.max(0, parseInt(pp.numChildren, 10) || 0);
+  const flags = workFlags(pp);
   const [offerNote, setOfferNote] = useState("");
   const [confirmed, setConfirmed] = useState(false);
 
@@ -118,6 +139,7 @@ export default function ViewedSheets({
     if (kind === "offer") {
       if (!amount.trim() || offerError) return setErr(offerError ?? "Tell us what you'd like to offer each month.");
       if (!moveIn) return setErr("Choose the day you'd like to move in.");
+      if (people.length && !ticked.has("you")) return setErr("You're the one making the offer, so you need to be moving in.");
       if (!confirmed) return setErr("Tick to say your details are up to date.");
     }
     if (sample) return setDone(kind);
@@ -133,7 +155,7 @@ export default function ViewedSheets({
         note,
         topics,
         message,
-        offer: { amount: offerNum, moveIn, term, note: offerNote, confirmed },
+        offer: { amount: offerNum, moveIn, note: offerNote, confirmed, works, movingIn: movingIn.map((p) => p.name) },
         passport: { ...pp, numAdults: String(adults), numChildren: String(children) },
       }),
     })
@@ -255,6 +277,11 @@ export default function ViewedSheets({
         )}
       </Sheet>
 
+      {/* The rent cap speaks through a toast; the tenant area has no
+          Toaster of its own, so the sheets bring one - on the body, because
+          inside the page it sits under the sheet's own layer. */}
+      {mounted && createPortal(<Toaster at="top" />, document.body)}
+
       {/* ── Make an offer ── */}
       <Sheet
         open={open === "offer"}
@@ -272,45 +299,63 @@ export default function ViewedSheets({
             <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Your offer</p>
             <label className="mt-2 block">
               <span className={label}>Rent per month</span>
-              <span className="mt-0.5 block text-[12px] text-muted">{askingPcm ? `Advertised at ${gbp(askingPcm)} a month. Offers at or below that.` : "What you would like to pay each month."}</span>
-              <div className="relative mt-1.5">
-                <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[15px] font-semibold text-muted">£</span>
-                <input inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} className={`${input} !mt-0 pl-8 text-[16px] font-semibold ${offerError ? "!border-[#9d4340]" : ""}`} />
-              </div>
+              <span className="mt-0.5 block text-[12px] text-muted">{askingPcm ? `Advertised at ${gbp(askingPcm)} a month, which is the most a landlord can accept.` : "What you would like to pay each month."}</span>
+              <RentField value={amount} onChange={setAmount} askingPcm={askingPcm} className={`${field} text-[16px] font-semibold ${offerError ? "!border-[#9d4340]" : ""}`} />
               {offerError && <span className="mt-1.5 block text-[12.5px] text-[#9d4340]">{offerError}</span>}
             </label>
-            {/* The same height, the date a little narrower and the term a
-                little wider (James, 18 Sep 2026): a phone's date box has its
-                own minimum width and was pushing into the select beside it. */}
-            <div className="mt-4 grid grid-cols-[minmax(0,1fr)_minmax(0,1.12fr)] gap-3">
-              <label className="block min-w-0">
-                <span className={label}>Move in on</span>
-                <input type="date" min={today} value={moveIn} onChange={(e) => setMoveIn(e.target.value)} className={`${field} appearance-none`} />
-              </label>
-              <label className="block min-w-0">
-                <span className={label}>For</span>
-                <select value={term} onChange={(e) => setTerm(e.target.value)} className={field}>
-                  {TERMS.map((t) => <option key={t}>{t}</option>)}
-                </select>
-              </label>
+            {/* No term (1 Oct 2026): tenancies are rolling under the new
+                rules, so there is nothing to choose, and the date is our own
+                button over the phone's calendar rather than the native box,
+                which drew its text off-centre. */}
+            <div className="mt-4">
+              <span className={label}>Move in on</span>
+              <DateField value={moveIn} onChange={setMoveIn} min={today} className={field} />
+              <span className="mt-1 block text-[12px] text-muted">Tenancies are rolling now, so there&apos;s no fixed term to choose.</span>
             </div>
 
             <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Who&apos;s moving in</p>
-            <div className="mt-2 grid grid-cols-2 gap-3">
-              <Stepper label="Adults" value={adults} min={1} onChange={(n) => set("numAdults", String(n))} />
-              <Stepper label="Children" value={children} min={0} onChange={(n) => set("numChildren", String(n))} />
-            </div>
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <span className={label}>Any pets?</span>
-              <div className="flex gap-2">
-                {[false, true].map((v) => (
-                  <button key={String(v)} type="button" onClick={() => set("pets", v)} className={`rounded-full border px-4 py-1.5 text-[13px] ${pp.pets === v ? "border-accent-dark bg-accent-dark font-semibold text-white" : "border-line/80"}`}>
-                    {v ? "Yes" : "No"}
-                  </button>
-                ))}
+            {people.length ? (
+              <div className="mt-2">
+                <MovingIn people={people} ticked={ticked} onToggle={toggleWho} />
+                <p className="mt-1.5 text-[12px] text-muted">From your passport. Untick anyone who isn&apos;t coming.</p>
               </div>
+            ) : (
+              <div className="mt-2 grid grid-cols-2 gap-3">
+                <Stepper label="Adults" value={adults} min={1} onChange={(n) => set("numAdults", String(n))} />
+                <Stepper label="Children" value={children} min={0} onChange={(n) => set("numChildren", String(n))} />
+              </div>
+            )}
+            {!editPets ? (
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-[12px] border border-line/70 px-4 py-3">
+                <span>
+                  <span className={label}>Pets</span>
+                  <span className="block text-[13px] text-ink/80">{pp.pets ? pp.petsNote || "Yes" : "No pets"}</span>
+                </span>
+                <button type="button" onClick={() => setEditPets(true)} className="text-[12.5px] font-semibold text-accent-dark underline underline-offset-2">
+                  Change
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <span className={label}>Any pets?</span>
+                  <div className="flex gap-2">
+                    {[false, true].map((v) => (
+                      <button key={String(v)} type="button" onClick={() => set("pets", v)} className={`rounded-full border px-4 py-1.5 text-[13px] ${pp.pets === v ? "border-accent-dark bg-accent-dark font-semibold text-white" : "border-line/80"}`}>
+                        {v ? "Yes" : "No"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {pp.pets && <input value={pp.petsNote} onChange={(e) => set("petsNote", e.target.value)} placeholder="What, and how many?" className={input} />}
+              </>
+            )}
+
+            <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Works before moving day</p>
+            <p className="mt-1 text-[12px] leading-snug text-muted">Anything that needs doing to the home before you move in. If the landlord accepts your offer, they agree to these too.</p>
+            <div className="mt-2">
+              <WorksList items={works} onChange={setWorks} className={field.replace("mt-1.5 ", "")} />
             </div>
-            {pp.pets && <input value={pp.petsNote} onChange={(e) => set("petsNote", e.target.value)} placeholder="What, and how many?" className={input} />}
 
             <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">About you, from your passport</p>
             <p className="mt-1 text-[12px] leading-snug text-muted">Anything changed since you made it? Put it right here and your passport updates too.</p>
@@ -321,6 +366,36 @@ export default function ViewedSheets({
                   {APPLICANT_TYPES.map((t) => <option key={t}>{t}</option>)}
                 </select>
               </Fact>
+              {isEmployed(pp) && (
+                <>
+                  <Fact id="hours" title="Full or part-time" value={show("workHours", pp.workHours)} editing={editing} setEditing={setEditing}>
+                    <div className="flex gap-2">
+                      {WORK_HOURS.map((h) => (
+                        <button key={h} type="button" onClick={() => set("workHours", h)} className={`flex-1 rounded-full border py-2 text-[13px] ${pp.workHours === h ? "border-accent-dark bg-accent-dark font-semibold text-white" : "border-line/80"}`}>
+                          {h}
+                        </button>
+                      ))}
+                    </div>
+                  </Fact>
+                  <Fact id="zero" title="Zero-hours contract" value={show("zeroHours", pp.zeroHours)} editing={editing} setEditing={setEditing}>
+                    <YesNo q="Are you on a zero-hours contract?" v={pp.zeroHours} on={(v) => set("zeroHours", v)} />
+                  </Fact>
+                  <Fact id="prob" title="On probation" value={show("onProbation", pp.onProbation)} editing={editing} setEditing={setEditing}>
+                    <YesNo q="Are you still on probation?" v={pp.onProbation} on={(v) => set("onProbation", v)} />
+                  </Fact>
+                </>
+              )}
+              {isTrading(pp) && (
+                <Fact id="trading" title="Trading for" value={show("tradingFor", pp.tradingFor)} editing={editing} setEditing={setEditing}>
+                  <div className="flex flex-wrap gap-2">
+                    {TRADING_FOR.map((h) => (
+                      <button key={h} type="button" onClick={() => set("tradingFor", h)} className={`rounded-full border px-3.5 py-2 text-[13px] ${pp.tradingFor === h ? "border-accent-dark bg-accent-dark font-semibold text-white" : "border-line/80"}`}>
+                        {h}
+                      </button>
+                    ))}
+                  </div>
+                </Fact>
+              )}
               <Fact id="income" title="Income" value={show("annualIncome", pp.annualIncome)} editing={editing} setEditing={setEditing}>
                 <div className="relative">
                   <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[14px] text-muted">£</span>
@@ -345,6 +420,13 @@ export default function ViewedSheets({
                 <YesNo q="Does anyone moving in smoke?" v={pp.smoker} on={(v) => set("smoker", v)} />
               </Fact>
             </dl>
+            {flags.length > 0 && (
+              <div className="mt-2 rounded-[12px] bg-[#fdefec] px-3.5 py-2.5 text-[12.5px] leading-snug text-[#9d4340]">
+                {flags.map((f) => (
+                  <p key={f}>{f}</p>
+                ))}
+              </div>
+            )}
             <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-[12px] bg-accent-soft/70 p-3">
               <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent-dark)]" />
               <span className="text-[12.5px] leading-snug">These details are up to date, and I&apos;m happy for them to go to the landlord with my offer.</span>

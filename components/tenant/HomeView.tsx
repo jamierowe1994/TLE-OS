@@ -7,6 +7,7 @@ import AgentSheet, { OpenAgentButton } from "@/components/tenant/AgentSheet";
 import HomeSheet from "@/components/tenant/HomeSheet";
 import ViewedSheets, { ViewedButton } from "@/components/tenant/ViewedSheets";
 import { offerSubset } from "@/lib/offer-passport";
+import { householdPeople } from "@/lib/passport-shape";
 import type { TenantHome, TenantProperty } from "@/lib/tenant-home-view";
 import { DEAL, STAGE_UPDATE, locksFor, phaseOf } from "@/lib/tenant-journey";
 
@@ -131,6 +132,7 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
           askingPcm={v.enquiry.rentPcm}
           agentFirst={first.charAt(0).toUpperCase() + first.slice(1)}
           passport={offerSubset(v.passport.data)}
+          people={v.passport.data ? householdPeople(v.passport.data) : []}
           passportHref={v.passport.path}
           sample={sample}
           base={base}

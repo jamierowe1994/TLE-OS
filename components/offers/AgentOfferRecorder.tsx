@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
-import { APPLICANT_TYPES, type PassportData } from "@/lib/passport-shape";
+import { APPLICANT_TYPES, TRADING_FOR, WORK_HOURS, householdPeople, isEmployed, isTrading, workFlags, workLine, type PassportData } from "@/lib/passport-shape";
+import { DateField, MovingIn, RentField, WorksList } from "@/components/offers/OfferParts";
 import { OFFER_FIELDS, offerSubset, show, type OfferFieldKey, type OfferPassport } from "@/lib/offer-passport";
 
 /**
@@ -36,7 +37,6 @@ export type OfferTenant = {
 
 export type OfferHome = { id: string; address: string; locality: string; askingPcm: number; beds: number; photo: string | null };
 
-const TERMS = ["6 months", "12 months", "18 months", "24 months"];
 const HOW = ["On the phone", "In person", "By email", "By text"];
 const STEPS = ["The offer", "Who is moving in", "About them", "Check and send"] as const;
 
@@ -50,14 +50,17 @@ const inp = "mt-1.5 block h-11 w-full min-w-0 rounded-[12px] border border-line/
 const area = "mt-1.5 block w-full rounded-[12px] border border-line/80 bg-white px-3.5 py-2.5 text-[14px] outline-none focus:border-accent-dark";
 
 /** The questions that are not about the household, in the order a person asks them. */
-const ABOUT: OfferFieldKey[] = ["applicantType", "annualIncome", "hasBritishPassport", "shareCode", "landlordRef", "guarantor", "adverseCredit", "adverseCreditNote", "smoker"];
-const BOOLS = new Set<OfferFieldKey>(["hasBritishPassport", "landlordRef", "guarantor", "adverseCredit", "smoker", "pets"]);
+const ABOUT: OfferFieldKey[] = ["applicantType", "workHours", "zeroHours", "onProbation", "tradingFor", "annualIncome", "hasBritishPassport", "shareCode", "landlordRef", "guarantor", "adverseCredit", "adverseCreditNote", "smoker"];
+const BOOLS = new Set<OfferFieldKey>(["hasBritishPassport", "landlordRef", "guarantor", "adverseCredit", "smoker", "pets", "zeroHours", "onProbation"]);
+const CHOICES: Partial<Record<OfferFieldKey, readonly string[]>> = { applicantType: APPLICANT_TYPES, workHours: WORK_HOURS, tradingFor: TRADING_FOR };
 
 /** Only asked when the answer before makes them matter. */
 function relevant(k: OfferFieldKey, p: OfferPassport): boolean {
   if (k === "shareCode") return p.hasBritishPassport === false;
   if (k === "adverseCreditNote") return p.adverseCredit === true;
   if (k === "petsNote") return p.pets === true;
+  if (k === "workHours" || k === "zeroHours" || k === "onProbation") return isEmployed(p);
+  if (k === "tradingFor") return isTrading(p);
   return true;
 }
 
@@ -121,9 +124,19 @@ export default function AgentOfferRecorder({
   const [step, setStep] = useState(0);
   const [amount, setAmount] = useState(String(home.askingPcm));
   const [moveIn, setMoveIn] = useState("");
-  const [term, setTerm] = useState("12 months");
   const [how, setHow] = useState(HOW[0]);
   const [conditions, setConditions] = useState("");
+  const [works, setWorks] = useState<string[]>([]);
+  const people = useMemo(() => (tenant.passport ? householdPeople(tenant.passport) : []), [tenant.passport]);
+  const [ticked, setTicked] = useState<Set<string>>(() => new Set(people.map((p) => p.id)));
+  const toggle = (id: string) =>
+    setTicked((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const movingIn = people.filter((p) => ticked.has(p.id));
   const [pp, setPp] = useState<OfferPassport>(fromPassport);
   const [editing, setEditing] = useState<OfferFieldKey | null>(null);
   const [consent, setConsent] = useState(false);
@@ -132,10 +145,17 @@ export default function AgentOfferRecorder({
   const [done, setDone] = useState(false);
 
   const set = <K extends OfferFieldKey>(k: K, v: OfferPassport[K]) => setPp((cur) => ({ ...cur, [k]: v }));
-  const adults = Math.max(1, parseInt(pp.numAdults, 10) || 1);
-  const children = Math.max(0, parseInt(pp.numChildren, 10) || 0);
+  /* With a passport, the household is the ticked people; without one, the steppers. */
+  const adults = people.length ? movingIn.filter((p) => p.who !== "Child").length : Math.max(1, parseInt(pp.numAdults, 10) || 1);
+  const children = people.length ? movingIn.filter((p) => p.who === "Child").length : Math.max(0, parseInt(pp.numChildren, 10) || 0);
+  const flags = workFlags(pp);
   const offerNum = money(amount);
-  const income = money(pp.annualIncome);
+  /* The household's income, as referencing counts it: theirs plus each other
+     adult still ticked as moving in, from the passport's household page. */
+  const others = (tenant.passport?.coOccupantIncomes ?? "")
+    .split("\n")
+    .map((l, k) => ({ id: `adult-${k + 2}`, income: money(l.split(" - ")[1] ?? "") }));
+  const income = money(pp.annualIncome) + others.filter((o) => !people.length || ticked.has(o.id)).reduce((t, o) => t + o.income, 0);
   const today = new Date().toISOString().slice(0, 10);
 
   /* Rent as a share of income, the figure a landlord reads first. */
@@ -149,9 +169,11 @@ export default function AgentOfferRecorder({
       if (offerNum > home.askingPcm) return `The advertised rent is ${gbp(home.askingPcm)} a month, so an offer can't be above that.`;
       if (!moveIn) return "Choose the day they'd like to move in.";
     }
+    if (s === 1 && people.length && !movingIn.some((p) => p.id === "you")) return `${name} is the one making the offer, so they have to be moving in.`;
     if (s === 1 && pp.pets === null) return "Ask whether they have any pets.";
     if (s === 2) {
       const missing = ABOUT.filter((k) => relevant(k, pp) && k !== "adverseCreditNote" && k !== "shareCode" && (pp[k] === null || pp[k] === ""));
+      /* Asked of people who did their passport before these questions existed. */
       if (missing.length) return `Still to ask: ${missing.map((k) => OFFER_FIELDS.find((f) => f.key === k)!.label.toLowerCase()).join(", ")}.`;
     }
     if (s === 3 && !consent) return `Tick to say ${name} has agreed the details are right.`;
@@ -189,13 +211,20 @@ export default function AgentOfferRecorder({
           <p className="mt-1 text-[14px] text-ink/80">{show(k, pp[k])}</p>
         ) : BOOLS.has(k) ? (
           <YesNo value={pp[k] as boolean | null} onChange={(v) => set(k, v as never)} />
-        ) : k === "applicantType" ? (
-          <select value={pp.applicantType} onChange={(e) => set("applicantType", e.target.value)} className={inp}>
-            <option value="">Choose…</option>
-            {APPLICANT_TYPES.map((t) => (
-              <option key={t}>{t}</option>
+        ) : CHOICES[k] ? (
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {CHOICES[k]!.map((t) => (
+              <button
+                key={t}
+                type="button"
+                aria-pressed={pp[k] === t}
+                onClick={() => set(k, t as never)}
+                className={`rounded-full border px-3.5 py-2 text-[13px] ${pp[k] === t ? "border-accent-dark bg-accent-dark font-semibold text-white" : "border-line/80 bg-white"}`}
+              >
+                {t}
+              </button>
             ))}
-          </select>
+          </div>
         ) : (
           <input
             value={String(pp[k] ?? "")}
@@ -273,21 +302,15 @@ export default function AgentOfferRecorder({
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
                 <label className="block">
                   <span className={lbl}>Rent per month</span>
-                  <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="numeric" className={inp} />
-                </label>
-                <label className="block">
-                  <span className={lbl}>Move in on</span>
-                  <input type="date" min={today} value={moveIn} onChange={(e) => setMoveIn(e.target.value)} className={inp} />
-                </label>
-                <label className="block">
-                  <span className={lbl}>For</span>
-                  <select value={term} onChange={(e) => setTerm(e.target.value)} className={inp}>
-                    {TERMS.map((t) => (
-                      <option key={t}>{t}</option>
-                    ))}
-                  </select>
+                  <RentField value={amount} onChange={setAmount} askingPcm={home.askingPcm} className={inp} />
+                  <span className="mt-1 block text-[11.5px] text-muted">The asking rent is the most a landlord can accept.</span>
                 </label>
                 <div>
+                  <span className={lbl}>Move in on</span>
+                  <DateField value={moveIn} onChange={setMoveIn} min={today} className={inp} />
+                  <span className="mt-1 block text-[11.5px] text-muted">A rolling tenancy, so there&apos;s no term to choose.</span>
+                </div>
+                <div className="sm:col-span-2">
                   <span className={lbl}>How it came in</span>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {HOW.map((h) => (
@@ -304,10 +327,16 @@ export default function AgentOfferRecorder({
                   </div>
                 </div>
               </div>
-              <label className="mt-4 block">
-                <span className={lbl}>Anything they are asking for</span>
+              <div className="mt-5">
+                <span className={lbl}>Any works that need doing before moving day?</span>
                 <span className="ml-2 text-[11.5px] text-muted">optional</span>
-                <textarea rows={2} value={conditions} onChange={(e) => setConditions(e.target.value)} placeholder="For example: a later move-in, the spare bed taken out, a pet allowed" className={area} />
+                <p className="mb-2 mt-0.5 text-[12px] text-muted">If the landlord accepts the offer, they accept these too, and they go on their portal as jobs to finish before moving day.</p>
+                <WorksList items={works} onChange={setWorks} className={inp.replace("mt-1.5 ", "")} />
+              </div>
+              <label className="mt-5 block">
+                <span className={lbl}>Anything else for the landlord</span>
+                <span className="ml-2 text-[11.5px] text-muted">optional</span>
+                <textarea rows={2} value={conditions} onChange={(e) => setConditions(e.target.value)} placeholder="For example: why this home, flexibility on dates" className={area} />
               </label>
             </>
           )}
@@ -316,18 +345,36 @@ export default function AgentOfferRecorder({
             <>
               <h2 className="text-[20px] font-bold">Who Is Moving In</h2>
               <p className="mt-1 text-[13px] text-muted">{tenant.passport ? `From ${name}'s passport. Check it is still right.` : `${name} has no passport yet, so ask them.`}</p>
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                <Stepper label="Adults" value={adults} min={1} onChange={(n) => set("numAdults", String(n))} />
-                <Stepper label="Children" value={children} min={0} onChange={(n) => set("numChildren", String(n))} />
-              </div>
-              <div className="mt-4">
-                <span className="flex items-center gap-2">
-                  <span className={lbl}>Any pets?</span>
-                  <FromPassport on={known("pets")} />
+              {people.length ? (
+                <div className="mt-5">
+                  <MovingIn people={people} ticked={ticked} onToggle={toggle} />
+                  <p className="mt-2 text-[12px] text-muted">Everyone on the passport is ticked. Untick anybody who isn&apos;t moving in.</p>
+                </div>
+              ) : (
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <Stepper label="Adults" value={adults} min={1} onChange={(n) => set("numAdults", String(n))} />
+                  <Stepper label="Children" value={children} min={0} onChange={(n) => set("numChildren", String(n))} />
+                </div>
+              )}
+              <div className="mt-5">
+                <span className="flex items-center justify-between gap-3">
+                  <span className="flex items-center gap-2">
+                    <span className={lbl}>Pets</span>
+                    <FromPassport on={known("pets")} />
+                  </span>
+                  {known("pets") && editing !== "pets" && (
+                    <button type="button" onClick={() => setEditing("pets")} className="text-[12.5px] font-semibold text-accent-dark underline underline-offset-2">
+                      Change
+                    </button>
+                  )}
                 </span>
-                <YesNo value={pp.pets} onChange={(v) => set("pets", v)} />
-                {pp.pets && (
-                  <input value={pp.petsNote} onChange={(e) => set("petsNote", e.target.value)} placeholder="What, and how many?" className={inp} />
+                {known("pets") && editing !== "pets" ? (
+                  <p className="mt-1 text-[14px] text-ink/80">{pp.pets ? pp.petsNote || "Yes" : "No pets"}</p>
+                ) : (
+                  <>
+                    <YesNo value={pp.pets} onChange={(v) => set("pets", v)} />
+                    {pp.pets && <input value={pp.petsNote} onChange={(e) => set("petsNote", e.target.value)} placeholder="What, and how many?" className={inp} />}
+                  </>
                 )}
               </div>
             </>
@@ -344,6 +391,13 @@ export default function AgentOfferRecorder({
               <div className="mt-3">
                 {ABOUT.filter((k) => relevant(k, pp)).map((k) => answer(k))}
               </div>
+              {flags.length > 0 && (
+                <div className="mt-3 rounded-[12px] bg-[#fdefec] px-4 py-3 text-[13px] text-[#9d4340]">
+                  {flags.map((f) => (
+                    <p key={f}>{f}</p>
+                  ))}
+                </div>
+              )}
             </>
           )}
 
@@ -360,10 +414,10 @@ export default function AgentOfferRecorder({
                 <dl className="mt-4 grid gap-x-6 gap-y-3 text-[13.5px] sm:grid-cols-2">
                   {[
                     ["Moving in", moveIn ? new Date(`${moveIn}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "Not set"],
-                    ["For", term],
-                    ["Who", `${adults} ${adults === 1 ? "adult" : "adults"}${children ? `, ${children} ${children === 1 ? "child" : "children"}` : ""}, ${pp.pets ? pp.petsNote || "pets" : "no pets"}`],
-                    ["Working", pp.applicantType || "Not said"],
-                    ["Rent against income", affordability ? `${affordability}% of ${gbp(income)} a year` : "Not said"],
+                    ["Tenancy", "Rolling, no fixed term"],
+                    ["Who", `${movingIn.length ? movingIn.map((p) => (p.who === "Child" ? null : first(p.name))).filter(Boolean).join(" and ") + (children ? `, ${children} ${children === 1 ? "child" : "children"}` : "") : `${adults} ${adults === 1 ? "adult" : "adults"}${children ? `, ${children} ${children === 1 ? "child" : "children"}` : ""}`}, ${pp.pets ? (pp.petsNote ? `with ${pp.petsNote.charAt(0).toLowerCase()}${pp.petsNote.slice(1)}` : "with pets") : "no pets"}`],
+                    ["Working", workLine(pp)],
+                    ["Rent against income", affordability ? `${affordability}% of ${gbp(income)} a year${movingIn.filter((p) => p.who === "Adult").length ? " between them" : ""}` : "Not said"],
                     ["Guarantor", show("guarantor", pp.guarantor)],
                     ["Landlord reference", show("landlordRef", pp.landlordRef)],
                     ["Adverse credit", show("adverseCredit", pp.adverseCredit)],
@@ -374,9 +428,30 @@ export default function AgentOfferRecorder({
                     </div>
                   ))}
                 </dl>
+                {flags.length > 0 && (
+                  <div className="mt-4 rounded-[12px] bg-[#fdefec] px-3.5 py-2.5 text-[12.5px] text-[#9d4340]">
+                    {flags.map((f) => (
+                      <p key={f}>{f}</p>
+                    ))}
+                  </div>
+                )}
+                {works.length > 0 && (
+                  <div className="mt-4 rounded-[12px] bg-page px-3.5 py-3">
+                    <p className="text-[12.5px] font-semibold">Works before moving day</p>
+                    <ul className="mt-1.5 space-y-1 text-[13px]">
+                      {works.map((w) => (
+                        <li key={w} className="flex items-center gap-2.5">
+                          <span className="inline-block h-3.5 w-3.5 shrink-0 rounded-[4px] border border-ink/40" />
+                          {w}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-2 text-[11.5px] text-muted">Accepting the offer accepts these. They go on the landlord&apos;s portal as jobs to finish before moving day.</p>
+                  </div>
+                )}
                 {conditions.trim() && (
                   <p className="mt-4 rounded-[12px] bg-page px-3.5 py-2.5 text-[13px]">
-                    <span className="font-semibold">They ask: </span>
+                    <span className="font-semibold">Also: </span>
                     {conditions}
                   </p>
                 )}

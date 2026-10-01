@@ -16,13 +16,17 @@ import type { PassportData } from "@/lib/passport-shape";
  */
 
 export type OfferFieldKey =
-  | "applicantType" | "annualIncome" | "hasBritishPassport" | "shareCode" | "landlordRef"
+  | "applicantType" | "workHours" | "zeroHours" | "onProbation" | "tradingFor" | "annualIncome" | "hasBritishPassport" | "shareCode" | "landlordRef"
   | "guarantor" | "adverseCredit" | "adverseCreditNote" | "smoker" | "numAdults" | "numChildren" | "pets" | "petsNote";
 
 export type OfferPassport = Pick<PassportData, OfferFieldKey>;
 
 export const OFFER_FIELDS: { key: OfferFieldKey; label: string }[] = [
   { key: "applicantType", label: "Working" },
+  { key: "workHours", label: "Full or part-time" },
+  { key: "zeroHours", label: "Zero-hours contract" },
+  { key: "onProbation", label: "On probation" },
+  { key: "tradingFor", label: "Trading for" },
   { key: "annualIncome", label: "Income" },
   { key: "hasBritishPassport", label: "British or Irish passport" },
   { key: "shareCode", label: "Share code" },
@@ -42,6 +46,10 @@ export const labelOf = (k: string) => OFFER_FIELDS.find((f) => f.key === k)?.lab
 export function offerSubset(d: Partial<PassportData> | null | undefined): OfferPassport {
   return {
     applicantType: d?.applicantType ?? "",
+    workHours: d?.workHours ?? "",
+    zeroHours: d?.zeroHours ?? null,
+    onProbation: d?.onProbation ?? null,
+    tradingFor: d?.tradingFor ?? "",
     annualIncome: d?.annualIncome ?? "",
     hasBritishPassport: d?.hasBritishPassport ?? null,
     shareCode: d?.shareCode ?? "",

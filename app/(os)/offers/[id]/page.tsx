@@ -23,7 +23,7 @@ export const runtime = "nodejs";
 type Row = {
   id: string; email: string; name: string; address: string; kind: string; sent_to: string | null; outcome: string | null; created_at: Date;
   payload: {
-    amount?: number; asking?: number | null; moveIn?: string; term?: string; adults?: number; children?: number; pets?: boolean; petsNote?: string; note?: string;
+    amount?: number; asking?: number | null; moveIn?: string; term?: string; movingIn?: string[]; works?: string[]; adults?: number; children?: number; pets?: boolean; petsNote?: string; note?: string;
     passport?: OfferPassport; changes?: OfferChange[];
     reasons?: string[]; topics?: string[]; message?: string;
   };
@@ -88,10 +88,24 @@ export default async function OfferPage({ params }: { params: Promise<{ id: stri
               {p.asking ? <p className="mt-2 text-[13px] text-muted">Advertised at {gbp(p.asking)}{p.amount && p.amount < p.asking ? ` - ${gbp(p.asking - p.amount)} under` : ""}</p> : null}
               <dl className="mt-5 divide-y divide-line/50">
                 <Line k="Move in" v={p.moveIn ? new Date(p.moveIn).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : "-"} />
-                <Line k="For" v={p.term ?? "-"} />
-                <Line k="Moving in" v={`${p.adults ?? 1} adult${p.adults === 1 ? "" : "s"}${p.children ? `, ${p.children} child${p.children === 1 ? "" : "ren"}` : ""}`} />
+                {/* Older offers carried a term; since 1 Oct 2026 tenancies are rolling and none is asked. */}
+                {p.term ? <Line k="For" v={p.term} /> : null}
+                <Line k="Moving in" v={p.movingIn?.length ? p.movingIn.join(", ") : `${p.adults ?? 1} adult${p.adults === 1 ? "" : "s"}${p.children ? `, ${p.children} child${p.children === 1 ? "" : "ren"}` : ""}`} />
                 <Line k="Pets" v={p.pets ? `Yes${p.petsNote ? ` - ${p.petsNote}` : ""}` : "No"} />
               </dl>
+              {p.works?.length ? (
+                <div className="mt-5 rounded-[16px] bg-panel p-4">
+                  <p className={eyebrow}>Works before moving day</p>
+                  <ul className="mt-1.5 space-y-1 text-[14px]">
+                    {p.works.map((w) => (
+                      <li key={w} className="flex items-center gap-2.5">
+                        <span className="inline-block h-3.5 w-3.5 shrink-0 rounded-[4px] border border-ink/40" />
+                        {w}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               {p.note && (
                 <div className="mt-5 rounded-[16px] bg-panel p-4">
                   <p className={eyebrow}>For the landlord</p>

@@ -7,6 +7,10 @@ import PassportBook, { CLAY, COVER, PassportBack, photoPosition, type PassportFo
 import PassportScene, { PassportFlat } from "@/components/PassportScene";
 import {
   APPLICANT_TYPES,
+  WORK_HOURS,
+  TRADING_FOR,
+  isEmployed,
+  isTrading,
   EMPTY_PASSPORT,
   SECTIONS,
   answered,
@@ -1283,6 +1287,40 @@ export default function PassportForm({
               value: d.applicantType,
               summary: <strong>{d.applicantType}</strong>,
               node: <Choice label="Which best describes you?" value={d.applicantType} options={APPLICANT_TYPES} onChange={(v) => set("applicantType", v)} />,
+            },
+            /* The work questions referencing turns on (Rhiannon, 1 Oct 2026),
+               asked only of the people they apply to. */
+            {
+              key: "hours",
+              when: isEmployed(d),
+              done: Boolean(d.workHours),
+              value: d.workHours,
+              summary: <strong>{d.workHours}</strong>,
+              node: <Choice label="Full-time or part-time?" value={d.workHours} options={WORK_HOURS} onChange={(v) => set("workHours", v)} />,
+            },
+            {
+              key: "zero-hours",
+              when: isEmployed(d),
+              done: d.zeroHours !== null,
+              value: d.zeroHours,
+              summary: <>Zero-hours contract: <strong>{yes(d.zeroHours)}</strong></>,
+              node: <YesNo label="Are you on a zero-hours contract?" hint="Referencing can't accept zero-hours income on its own, so it's worth knowing now. A guarantor gets round it." value={d.zeroHours} onChange={(v) => set("zeroHours", v)} />,
+            },
+            {
+              key: "probation",
+              when: isEmployed(d),
+              done: d.onProbation !== null,
+              value: d.onProbation,
+              summary: <>On probation: <strong>{yes(d.onProbation)}</strong></>,
+              node: <YesNo label="Are you still on probation?" hint="If you are, a landlord may ask for a guarantor as well." value={d.onProbation} onChange={(v) => set("onProbation", v)} />,
+            },
+            {
+              key: "trading",
+              when: isTrading(d),
+              done: Boolean(d.tradingFor),
+              value: d.tradingFor,
+              summary: <>Trading <strong>{d.tradingFor.toLowerCase()}</strong></>,
+              node: <Choice label="How long have you been trading?" hint="Under a year, a landlord may ask for a guarantor as well." value={d.tradingFor} options={TRADING_FOR} onChange={(v) => set("tradingFor", v)} />,
             },
             {
               key: "money",

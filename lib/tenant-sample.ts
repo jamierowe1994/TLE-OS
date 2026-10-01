@@ -25,10 +25,16 @@ export const SOPHIE_PASSPORT: PassportData = {
   mobile: "07700 900123",
   hasBritishPassport: true,
   applicantType: "Employed",
+  workHours: "Full-time",
+  zeroHours: false,
+  onProbation: false,
   annualIncome: "34,000",
   savings: "5,200",
-  numAdults: "1",
+  /* Two of them and a dog (1 Oct 2026), so the offer's Who's moving in has
+     names to tick and the pets come through from the passport. */
+  numAdults: "2",
   numChildren: "0",
+  coOccupantIncomes: "Jordan Reid - 26,000",
   rentedLast12Months: true,
   rentOnTime: true,
   landlordRef: true,
@@ -38,7 +44,8 @@ export const SOPHIE_PASSPORT: PassportData = {
   previousAddress: "5 Castle Boulevard, Nottingham",
   adverseCredit: false,
   guarantor: true,
-  pets: false,
+  pets: true,
+  petsNote: "A small, older dog",
   smoker: false,
 };
 
