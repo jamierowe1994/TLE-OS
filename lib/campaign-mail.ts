@@ -59,6 +59,30 @@ export type EmailAudience = "partner" | "landlord" | "tenant" | "contractor" | "
  *
  * Defaults to landlord because every send path in this file writes to one.
  */
+/**
+ * The company's social links and their icon pictures. Pictures because Gmail
+ * and Outlook drop the drawn (SVG) icons, which left an empty circle.
+ * Newsletters go on the team letterhead, which carried none of these, so a
+ * Social block there showed one website chip and nothing else (Francesca,
+ * 30 Sep 2026: "social links don't quite work").
+ */
+export function tleSocial() {
+  const origin = assetOrigin();
+  return {
+    instagram: "https://www.instagram.com/thelettingexperts.co.uk",
+    facebook: "https://www.facebook.com/thelettingexpertscouk",
+    linkedin: "https://www.linkedin.com/company/the-letting-experts",
+    socialImages: origin
+      ? {
+          instagram: `${origin}/email/social/instagram.png`,
+          facebook: `${origin}/email/social/facebook.png`,
+          linkedin: `${origin}/email/social/linkedin.png`,
+          website: `${origin}/email/social/website.png`,
+        }
+      : undefined,
+  };
+}
+
 export function tleBrand(audience: EmailAudience = "landlord") {
   const origin = assetOrigin();
   const customer = audience === "landlord" || audience === "tenant";
@@ -82,17 +106,7 @@ export function tleBrand(audience: EmailAudience = "landlord") {
           /* The footer's icon row (James, 16 Sep 2026): Instagram, Facebook,
              LinkedIn, website, plain brown icons, in that order. Links are the
              ones on thelettingexperts.co.uk's own footer. */
-          instagram: "https://www.instagram.com/thelettingexperts.co.uk",
-          facebook: "https://www.facebook.com/thelettingexpertscouk",
-          linkedin: "https://www.linkedin.com/company/the-letting-experts",
-          socialImages: origin
-            ? {
-                instagram: `${origin}/email/social/instagram.png`,
-                facebook: `${origin}/email/social/facebook.png`,
-                linkedin: `${origin}/email/social/linkedin.png`,
-                website: `${origin}/email/social/website.png`,
-              }
-            : undefined,
+          ...tleSocial(),
         }
       : // The team and the trades: the same brown buttons, on the warm grey
         // page. Red until 30 Sep 2026, when James dropped it from the palette.

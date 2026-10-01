@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FONT_STACKS, resolveMargin } from "@/lib/email/render.js";
+import { FONT_STACKS, resolveMargin, resolvePad } from "@/lib/email/render.js";
 import { LAYOUTS, cellsOf, type Block } from "./tree";
 import { ICONS, UI } from "./icons";
 
@@ -218,11 +218,20 @@ export function youTubeThumb(url: string): string | null {
   return m ? `https://img.youtube.com/vi/${m[1]}/hqdefault.jpg` : null;
 }
 
+/** Button sizes: the words and the padding round them move together. */
+const BUTTON_SIZES = [
+  { v: "s", label: "Small", size: 13, pad: { t: 8, r: 18, b: 8, l: 18 } },
+  { v: "m", label: "Medium", size: 14, pad: { t: 11, r: 24, b: 11, l: 24 } },
+  { v: "l", label: "Large", size: 16, pad: { t: 15, r: 32, b: 15, l: 32 } },
+  { v: "xl", label: "Huge", size: 18, pad: { t: 19, r: 42, b: 19, l: 42 } },
+];
+
 export function Inspector({ block, patch, uploadImage }: { block: Block; patch: Patch; uploadImage?: (f: File) => Promise<string> }) {
   const s = (k: string) => (typeof block[k] === "string" ? (block[k] as string) : "");
   const n = (k: string, d: number) => (block[k] != null && block[k] !== "" && !Number.isNaN(Number(block[k])) ? Number(block[k]) : d);
   const m = resolveMargin(block) as { t: number; r: number; b: number; l: number };
   const hide = (block.hide as { mobile?: boolean; desktop?: boolean }) ?? {};
+  const bp = resolvePad(block) as { t: number; r: number; b: number; l: number };
   const t = block.type;
 
   const typeStyle = (defaultSize: number, min: number, max: number) => (
@@ -239,6 +248,18 @@ export function Inspector({ block, patch, uploadImage }: { block: Block; patch: 
       <Field label="Alignment">
         <Align value={s("align")} onChange={(v) => patch("align", v)} />
       </Field>
+      {/* Bold and italic for the whole block (1 Oct 2026, Francesca). A
+          heading is bold unless told otherwise; a quote italic. */}
+      <Toggle
+        on={t === "heading" ? block.bold !== false : Boolean(block.bold)}
+        label="Bold"
+        onChange={(v) => patch("bold", v)}
+      />
+      <Toggle
+        on={t === "quote" ? block.italic !== false : Boolean(block.italic)}
+        label="Italic"
+        onChange={(v) => patch("italic", v)}
+      />
     </>
   );
 
@@ -392,13 +413,34 @@ export function Inspector({ block, patch, uploadImage }: { block: Block; patch: 
           <Field label="Words colour">
             <Colour value={s("textColor") || "#ffffff"} onChange={(v) => patch("textColor", v)} />
           </Field>
-          <Field label="Rounded corners">
-            <Slider value={n("borderRadius", 8)} min={0} max={30} onChange={(v) => patch("borderRadius", v)} />
+          {/* The button itself, not just its words (1 Oct 2026, Francesca). */}
+          <Field label="Button size">
+            <Segmented
+              value={BUTTON_SIZES.find((z) => z.size === n("size", 14) && z.pad.t === bp.t && z.pad.l === bp.l)?.v ?? ""}
+              onChange={(v) => {
+                const z = BUTTON_SIZES.find((x) => x.v === v);
+                if (!z) return;
+                patch("size", z.size);
+                patch("pad", z.pad);
+              }}
+              options={BUTTON_SIZES.map((z) => ({ v: z.v, label: z.label }))}
+            />
+          </Field>
+          <Field label="Height">
+            <Slider value={bp.t} min={4} max={30} onChange={(v) => patch("pad", { ...bp, t: v, b: v })} />
+          </Field>
+          <Field label="Width">
+            <Slider value={bp.l} min={8} max={80} onChange={(v) => patch("pad", { ...bp, l: v, r: v })} />
+          </Field>
+          <Field label="Rounded corners" hint="All the way up makes a pill.">
+            <Slider value={n("borderRadius", 8)} min={0} max={40} onChange={(v) => patch("borderRadius", v)} />
           </Field>
           <Field label="Text size">
-            <Slider value={n("size", 14)} min={12} max={20} onChange={(v) => patch("size", v)} />
+            <Slider value={n("size", 14)} min={12} max={22} onChange={(v) => patch("size", v)} />
           </Field>
           <Toggle on={Boolean(block.bold)} label="Bold words" onChange={(v) => patch("bold", v)} />
+          <Toggle on={Boolean(block.italic)} label="Italic words" onChange={(v) => patch("italic", v)} />
+          <Toggle on={Boolean(block.shadow)} label="Drop shadow" onChange={(v) => patch("shadow", v)} />
           <Toggle on={Boolean(block.fullWidth)} label="Full width" onChange={(v) => patch("fullWidth", v)} />
           {!block.fullWidth && (
             <Field label="Alignment">
@@ -415,6 +457,7 @@ export function Inspector({ block, patch, uploadImage }: { block: Block; patch: 
           <Field label="Rounded corners">
             <Slider value={n("borderRadius", 8)} min={0} max={40} onChange={(v) => patch("borderRadius", v)} />
           </Field>
+          <Toggle on={Boolean(block.shadow)} label="Drop shadow" onChange={(v) => patch("shadow", v)} />
           <Field label="Alignment">
             <Align value={s("align") || "center"} onChange={(v) => patch("align", v)} />
           </Field>

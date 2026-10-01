@@ -6,7 +6,7 @@
  * previews is what arrives.
  */
 import { renderTemplate, renderTokens, mergeContextFor } from "@/lib/email/render.js";
-import { tleBrand } from "@/lib/campaign-mail";
+import { tleBrand, tleSocial } from "@/lib/campaign-mail";
 
 type Recipient = { email: string; name: string };
 
@@ -33,7 +33,8 @@ export function renderNewsletter(
   n: { subject: string; preheader: string; blocks: Record<string, unknown>[] },
   to: Recipient
 ): { subject: string; html: string } {
-  const brand = tleBrand("internal");
+  /* The team letterhead, with the company's social links so a Social block works. */
+  const brand = { ...tleBrand("internal"), ...tleSocial() };
   const blocks = n.blocks.some((b) => b?.type === "footer") ? [...n.blocks] : [...n.blocks, footer()];
   const ctx = mergeContextFor({ name: to.name, email: to.email }, brand) as Record<string, unknown>;
   const mergeCtx = { ...ctx, firstName: (ctx.firstName as string) || "there" };

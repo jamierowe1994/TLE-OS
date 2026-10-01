@@ -7,7 +7,7 @@ import Studio from "@/components/email-studio/Studio";
 import type { Block } from "@/components/email-studio/tree";
 import { renderNewsletter } from "@/lib/newsletter-render";
 import { Pill } from "@/components/Wire";
-import { tleBrand } from "@/lib/campaign-mail";
+import { tleBrand, tleSocial } from "@/lib/campaign-mail";
 import { londonParts, londonTime } from "@/lib/london-time";
 import type { Newsletter, Person, Recipient } from "@/lib/newsletters";
 import { statusLine, whenText } from "../status";
@@ -222,7 +222,7 @@ function EmailPage() {
           title={n.name || "Untitled"}
           kindLabel={n.kind === "event" ? "Event email" : "Newsletter"}
           initial={{ subject: n.subject, preheader: n.preheader, blocks: n.blocks as Block[] }}
-          brand={tleBrand("internal")}
+          brand={{ ...tleBrand("internal"), ...tleSocial() }}
           uploadImage={async (file) => {
             const fd = new FormData();
             fd.append("file", file);
