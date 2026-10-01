@@ -92,7 +92,29 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
     desk ? worksToCheck().catch(() => []) : [],
   ]);
 
+  /* An appraisal somebody else booked for you: the pre-presentation goes in
+     two hours unless you record a video or send it first (lib/pre-send, 1 Oct
+     2026). Read from the note we sent them, so the bell and the email say the
+     same thing. A week is plenty - by then the visit has been. */
+  const preHeadsUp = await q<{ id: string; ref: string; subject: string; body: string; created_at: Date }>(
+    `SELECT id, ref, subject, body, created_at FROM os_scheduled_sends
+      WHERE kind = 'pre-heads-up' AND LOWER(to_email) = LOWER($1) AND created_at > NOW() - INTERVAL '7 days'
+      ORDER BY created_at DESC LIMIT 10`,
+    [me.email]
+  ).catch(() => []);
+
   const out: Notice[] = [...reminders];
+  for (const p of preHeadsUp) {
+    out.push({
+      id: `pre:${p.id}`,
+      kind: "chase",
+      at: new Date(p.created_at).toISOString(),
+      title: "Pre-presentation booked for you",
+      body: p.body,
+      href: `/record/${encodeURIComponent(p.ref)}`,
+      tone: "warn",
+    });
+  }
 
   for (const e of deals) {
     out.push({

@@ -562,11 +562,11 @@ export const TLE_EMAILS: CatalogEntry[] = [
     group: "Market appraisals",
     name: "Before The Visit",
     audience: "landlord",
-    trigger: "Sent or scheduled from the Pre-appraisal step, the day before the visit",
+    trigger: "Sent when the agent presses Send on the appraisal, or two hours after booking if they do not (straight away when someone else books it under three hours before the visit)",
     fires: "components/AppraisalTrack.tsx, or the queue in app/api/scheduled-sends/run",
     to: "The landlord",
     summary:
-      "The day before. A button straight to their pre-presentation - who is coming, what happens on the day, how long it takes - which opens without an account. Nothing to set up until after the valuation.",
+      "Soon after booking. A button straight to their pre-presentation - who is coming, what happens on the day, how long it takes - which opens without an account. Nothing to set up until after the valuation.",
     render: () => renderPlain(subjectFor(SAMPLE_INVITE), bodyFor(SAMPLE_INVITE)),
   },
   {

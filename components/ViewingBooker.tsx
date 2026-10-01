@@ -17,9 +17,11 @@ import { useDiary, refreshDiary } from "@/lib/diary-store";
 import { usePref } from "@/lib/prefs-store";
 import { useRouter } from "next/navigation";
 import ConfirmEditor, { type ConfirmDraft, type ConfirmEditorHandle, type ConfirmTarget } from "@/components/ConfirmEditor";
+import PreSendOffer from "@/components/appraisal/PreSendOffer";
+import type { PreOnBooking } from "@/lib/pre-send-time";
 
 /** What the record did with a booking, told back to the booker's done screen. */
-export type BookedResult = { said?: string; goTo?: { ask: string; label: string; href: string } } | undefined;
+export type BookedResult = { said?: string; goTo?: { ask: string; label: string; href: string }; pre?: PreOnBooking | null } | undefined;
 
 /**
  * Booking a viewing, in the order the job actually happens: which property,
@@ -1549,6 +1551,8 @@ export default function ViewingBooker({
                   <p className="mt-4 max-w-md text-[12.5px] leading-relaxed text-muted">
                     {result?.said ?? (sentCount ? `${sentCount} message${sentCount === 1 ? "" : "s"} sent. In the diary and on the record.` : "Booked, and going into your Outlook calendar.")}
                   </p>
+                  {/* The pre-presentation, straight after an appraisal is booked (1 Oct 2026). */}
+                  {result?.pre && <PreSendOffer pre={result.pre} />}
                   {result?.goTo && (
                     <div className="mt-6 w-full max-w-md rounded-2xl border border-line/60 bg-card p-5">
                       <p className="text-[13.5px] leading-snug">{result.goTo.ask}</p>

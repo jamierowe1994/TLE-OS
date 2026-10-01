@@ -177,7 +177,7 @@ export const AGENT_GUIDES: Guide[] = [
         caption: "The opening page of the pre-presentation, as the landlord sees it.",
         why: "A landlord who has seen your face and knows what to expect before you ring the bell is already halfway to saying yes.",
         sends:
-          "At 9am the day before the visit, the landlord receives 'Before your valuation' with their address, from you, with a button to open the pre-presentation and your video if you recorded one. It cannot go if there is no email address on the file, and the head of the file warns you when that is the case.",
+          "When you send it, or two hours after the appraisal is booked if you do not, the landlord receives 'Before your valuation' with their address, from you, with a button to open the pre-presentation and your video if you recorded one. It cannot go if there is no email address on the file, and the head of the file warns you when that is the case.",
       },
       {
         title: "Building the Presentation",

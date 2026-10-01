@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { unreadByAppraisal } from "@/lib/appraisal-messages";
 import { stopLeadCampaigns } from "@/lib/campaign-store";
-import { listAppraisals, createAppraisal, recordValuation, setOutcome } from "@/lib/appraisal-store";
+import { listAppraisals, createAppraisal, getAppraisal, recordValuation, setOutcome } from "@/lib/appraisal-store";
 import { withLiveStages } from "@/lib/appraisal-stage";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { SERVICE_LEVELS, type ServiceLevel } from "@/lib/market-appraisal";
 import type { NextRequest } from "next/server";
-import { queueVideoChase } from "@/lib/video-chase";
+import { scheduleOnBooking } from "@/lib/pre-send";
+import type { PreOnBooking } from "@/lib/pre-send-time";
 import { publicOrigin } from "@/lib/origin";
 import type { ConfirmationResult } from "@/lib/appraisal-confirm";
 
@@ -83,11 +84,11 @@ export async function POST(req: NextRequest) {
        it, and say so on the row - "booked" is the number marketing reads. */
     if (appraisal.leadId) await stopLeadCampaigns(appraisal.leadId, "booked").catch(() => 0);
 
-    /* A dated booking is the first moment the video nudge can be scheduled.
-       Best effort, after the booking is safe: a nudge that cannot be queued
+    /* A dated booking is the moment the pre-presentation is scheduled.
+       Best effort, after the booking is safe: an email that cannot be queued
        must never cost the appointment (see the header). Needs a signed-in
        person, because a queued email still goes out in somebody's name. */
-    let videoChase: { queued: boolean; sendAt?: string; reason?: string } | null = null;
+    let pre: PreOnBooking | null = null;
     /* The landlord's confirmation, with the calendar file, the moment the
        booking is safe (James, 6 Sep 2026: it was written and never wired).
        Same rule as the nudge: it must never cost the appointment. */
@@ -102,11 +103,19 @@ export async function POST(req: NextRequest) {
            Every save of an appraisal with a date came through this route and
            sent it again. The agent now sees it, edits it and sends it from
            the file (/api/confirmations). */
+        /* The pre-presentation, the moment it is booked (Howard, approved by
+           James 1 Oct 2026; was the day before the visit). Booked by the
+           agent doing it: offered the video on the done screen, then sent.
+           Booked for somebody else: they are told, and it goes in two hours
+           unless they send it sooner. See lib/pre-send-time. This replaces
+           the two-days-before video nudge, which would now land after the
+           pre-presentation it asks about. */
         try {
-          const origin = publicOrigin(req);
-          videoChase = await queueVideoChase({ ma: appraisal, me, origin });
-        } catch {
-          videoChase = { queued: false, reason: "Couldn't queue the video nudge." };
+          const full = (await getAppraisal(appraisal.id).catch(() => null)) ?? appraisal;
+          pre = await scheduleOnBooking({ ma: full, me, origin: publicOrigin(req) });
+        } catch (e) {
+          pre = null;
+          console.error("[pre-send] booking", e instanceof Error ? e.message : e);
         }
         /* REX's diary, as the silent mirror (lib/rex-diary-write). Never the
            reason a booking fails. First, so Outlook below knows whether REX
@@ -144,7 +153,7 @@ export async function POST(req: NextRequest) {
         confirmation = { sent: false, reason: "Not signed in, so the confirmation could not go out in anybody's name." };
       }
     }
-    return NextResponse.json({ appraisal, videoChase, confirmation, rexDiary, outlook });
+    return NextResponse.json({ appraisal, pre, confirmation, rexDiary, outlook });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Could not save the appraisal." },

@@ -49,6 +49,7 @@ import { saveLabel, useCaseState } from "@/lib/case-state";
 import { isStalled, NURTURE_BRANCH, startingStep, TENANT_TRACK, trackFor } from "@/lib/journey";
 import { fetchMe } from "@/lib/me";
 import { WhatsAppButton } from "@/components/WhatsAppQr";
+import type { PreOnBooking } from "@/lib/pre-send-time";
 
 /**
  * The lead record, as a sheet that slides in from the right over a scrim.
@@ -3884,7 +3885,7 @@ function LeadDrawerBody({
                 appointmentAt: v.startsAt,
               }),
             })
-              .then((r) => r.json() as Promise<{ appraisal?: { id?: string }; outlook?: { ok?: boolean; detail?: string }; error?: string }>)
+              .then((r) => r.json() as Promise<{ appraisal?: { id?: string }; outlook?: { ok?: boolean; detail?: string }; pre?: PreOnBooking | null; error?: string }>)
               .catch(() => null);
             const id = res?.appraisal?.id;
             if (!id) return { said: `The appraisal did not save: ${res?.error ?? "the connection dropped"}. Try again.` };
@@ -3911,6 +3912,7 @@ function LeadDrawerBody({
             return {
               said: said.join(" "),
               goTo: { ask: "This lead will now appear on Market Appraisals. Do you want to go there now?", label: "Go to Market Appraisals", href: handoverTarget(`lead-${lead.id}`) },
+              pre: res?.pre ?? null,
             };
           }
           return said.length ? { said: said.join(" ") } : undefined;

@@ -9,7 +9,8 @@ import ValuationSteps from "@/components/appraisal/ValuationSteps";
 import WelcomeVideoRecorder from "@/components/WelcomeVideoRecorder";
 import { useSaveReporter } from "@/components/SaveChip";
 import { mintPreAppraisalDeck } from "@/components/DeckRail";
-import { PRE_APPRAISAL_LEAD_WORDS, bodyFor, subjectFor } from "@/lib/appraisal-email";
+import { bodyFor, subjectFor } from "@/lib/appraisal-email";
+import { preSendWhen, preSentWhen } from "@/lib/pre-send-time";
 import { effectiveStage, needsValuation, type MarketAppraisal } from "@/lib/market-appraisal";
 
 /**
@@ -96,9 +97,10 @@ export default function NextUp({
   /* ── The pre-presentation is pre-made (James, 11 Sep 2026) ──────────────
      Nobody presses "Make the deck" any more. A file with a date and no
      pre-presentation makes one the first time it is opened, and once the
-     deck exists the email that carries it is put on the queue for the day
-     before the visit - so the page can say "goes out on Thursday" and mean
-     it. Each happens once per open; a failure is shown, not retried. */
+     deck exists the email that carries it is put on the queue - so the page
+     can say when it goes and mean it. The booking now does both itself
+     (lib/pre-send, 1 Oct 2026); this catches a file it did not. Each happens
+     once per open; a failure is shown, not retried. */
   const minted = useRef(false);
   useEffect(() => {
     if (minted.current || decks === undefined || pre || !ma.appointmentAt || busy) return;
@@ -148,35 +150,41 @@ export default function NextUp({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pre, ma.landlordEmail, ma.preSend?.state, stage]);
 
-  const [declining, setDeclining] = useState(false);
-  async function decline() {
-    setDeclining(true);
+  /* "Send it without a video" and "Send it now" both send it this minute
+     (Howard, approved by James 1 Oct 2026). No Try again: either one sends
+     the pre-presentation on its way. */
+  const [declining, setDeclining] = useState<null | "decline" | "send">(null);
+  async function sendPre(mode: "decline" | "send") {
+    setDeclining(mode);
     setError(null);
-    /* No Try again: declining sends the pre-presentation on its way. */
-    const settle = reporter.begin("Video choice");
+    const settle = reporter.begin("Pre-presentation");
     const r = await fetch("/api/appraisals/video-chase", {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id: ma.id, mode: "decline" }),
-    }).then((x) => x.json()).catch(() => ({ ok: false, error: "That didn't save." }));
+      body: JSON.stringify({ id: ma.id, mode }),
+    }).then((x) => x.json()).catch(() => ({ ok: false, error: "That didn't send." }));
     if (!r.ok) {
-      setError(r.error ?? "That didn't save.");
-      settle({ ok: false, problem: r.error ?? "That didn't save." });
+      setError(r.error ?? "That didn't send.");
+      settle({ ok: false, problem: r.error ?? "That didn't send." });
+    } else if (r.held) {
+      /* Customer email is switched off here: it stays queued and goes when
+         the switch does. Said, because "sent" would not be true. */
+      setError(r.detail ?? "Email to landlords is switched off, so it is waiting.");
+      settle({ ok: false, problem: r.detail ?? "Email to landlords is switched off, so it is waiting." });
+      onDecksChanged?.();
     } else {
       settle({ ok: true });
       onDecksChanged?.();
     }
-    setDeclining(false);
+    setDeclining(null);
   }
 
   const sendWords = ma.preSend?.state === "sent"
-    ? `went to ${ma.landlord}${ma.preSend.at ? ` on ${new Date(ma.preSend.at).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}` : ""}`
+    ? `went to ${ma.landlord}${ma.preSend.at ? ` ${preSentWhen(ma.preSend.at)}` : ""}`
     : ma.preSend?.state === "queued" && ma.preSend.at
-      ? `goes to ${ma.landlord} on ${new Date(ma.preSend.at).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}, ${PRE_APPRAISAL_LEAD_WORDS} the visit`
+      ? `goes to ${ma.landlord} ${preSendWhen(ma.preSend.at)}`
       : !ma.landlordEmail
         ? "cannot go out on its own - there is no email for the landlord on this file"
-        : ma.preSend?.at
-          ? `goes to ${ma.landlord} ${PRE_APPRAISAL_LEAD_WORDS} the visit`
-          : "has not gone out";
+        : "goes as soon as you send it";
 
   const primary =
     "inline-flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60";
@@ -314,19 +322,30 @@ export default function NextUp({
             </button>
           ),
         };
-  } else if (stage === "pre_appraisal" && ma.videoState !== "recorded" && ma.videoState !== "declined") {
+  } else if (stage === "pre_appraisal" && ma.preSend?.state !== "sent" && ma.videoState !== "declined") {
     /* The one choice at this stage: a video from you on the front of the
-       pre-presentation, or send it as it is. Either way it goes. */
+       pre-presentation, or send it as it is. Either way it goes - now, on
+       the press, or on its own when the queue says. */
+    const recorded = ma.videoState === "recorded";
+    const goes = ma.preSend?.state === "queued" && ma.preSend.at ? `${sendWords}, or as soon as you send it` : sendWords;
     card = {
       icon: "magic-wand",
-      title: "Record a personalised video for your appraisal",
-      sub: `Your pre-presentation is ready and ${sendWords}. A short video from you on the front of it is what makes it yours.`,
+      title: recorded ? "Send your pre-presentation" : "Record a personalised video for your appraisal",
+      sub: recorded
+        ? `Your video is on the front of it, and it ${goes}.`
+        : `Your pre-presentation is ready and ${goes}. A short video from you on the front of it is what makes it yours.`,
       body: (
         <div className="flex flex-wrap items-center gap-2">
-          <WelcomeVideoRecorder compact token={pre.token} address={ma.address} label="Record a video" className={primary} onDone={() => onDecksChanged?.()} />
-          <button type="button" onClick={() => void decline()} disabled={declining} className={ghost}>
-            {declining ? "Saving…" : "Send it without a video"}
-          </button>
+          <WelcomeVideoRecorder compact token={pre.token} address={ma.address} label="Record a video" className={recorded ? ghost : primary} onDone={() => onDecksChanged?.()} />
+          {recorded ? (
+            <button type="button" onClick={() => void sendPre("send")} disabled={declining !== null || !ma.landlordEmail} className={primary}>
+              {declining ? "Sending…" : "Send it now"}
+            </button>
+          ) : (
+            <button type="button" onClick={() => void sendPre("decline")} disabled={declining !== null || !ma.landlordEmail} className={ghost}>
+              {declining ? "Sending…" : "Send it without a video"}
+            </button>
+          )}
         </div>
       ),
     };
