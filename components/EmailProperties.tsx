@@ -27,11 +27,14 @@ type Listing = {
 export default function EmailProperties({
   open,
   onClose,
+  onSent,
   lead,
   properties,
 }: {
   open: boolean;
   onClose: () => void;
+  /** Only when the email has actually gone - closing is not sending. */
+  onSent?: () => void;
   lead: { name: string; email: string };
   properties: Listing[];
 }) {
@@ -161,6 +164,7 @@ export default function EmailProperties({
       if (j.ok) {
         setSentSaid(j.said ?? "");
         setStage("sent");
+        onSent?.();
       } else setSendError(j.said ?? "It did not send.");
     } catch {
       setSendError("It did not send - the OS could not be reached.");

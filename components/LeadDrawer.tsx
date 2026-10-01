@@ -1428,6 +1428,15 @@ function LeadDrawerBody({
     /* Re-read when a booking is made here, so the new one appears at once. */
   }, [lead, contact.email, booked.length, confirmTick]);
   const theirViewings = [...theirs.upcoming, ...theirs.past];
+  /* A viewing in their diary puts them on Viewings, whatever REX's stage
+     word says - so a lead with a viewing booked opens on step 4 every time,
+     rather than wherever the last session left it (Howard, 1 Oct 2026). */
+  const hasViewing = theirViewings.length > 0;
+  useEffect(() => {
+    if (!lead || leadSide(lead) !== "tenant" || !hasViewing) return;
+    const at = TENANT_TRACK.findIndex((t) => t.id === "viewing");
+    setStep((s) => Math.max(s, at));
+  }, [lead, hasViewing]);
   const nextViewing = theirs.upcoming[0] ?? null;
 
 
@@ -2729,7 +2738,7 @@ function LeadDrawerBody({
                           Book a viewing
                         </PressButton>
                         <PressButton
-                          onClick={() => { setEmailing(true); advanceTo("shortlist"); }}
+                          onClick={() => setEmailing(true)}
                           className="press-ring inline-flex items-center gap-2 rounded-full border border-brown/60 px-5 py-2.5 text-[13px] font-semibold text-brown transition-colors hover:bg-brown hover:text-white"
                         >
                           <DoodleIcon name="mail" size={14} />
@@ -3601,11 +3610,12 @@ function LeadDrawerBody({
 
       <EmailProperties
         open={emailing}
-        onClose={() => {
-          setEmailing(false);
-          // Sending the shortlist IS how you finish the shortlist step.
-          if (here.action === "send") advance();
-        }}
+        onClose={() => setEmailing(false)}
+        /* The record moves when the email has gone, not when the window
+           opens or closes. Opening it and closing it again moved a lead to
+           step 4, Book a viewing, with nothing sent and nothing booked
+           (Howard, 1 Oct 2026). Step 4 is for a viewing that exists. */
+        onSent={() => advanceTo("shortlist")}
         lead={{ name: lead.name, email: contact.email || lead.email }}
         properties={shortlist}
       />
@@ -3727,6 +3737,10 @@ function LeadDrawerBody({
              it to REX silently, and sends OUR confirmations to the applicant
              and the agent. The row says what actually happened. */
           const said: string[] = [];
+          /* Whether the server says the viewing exists. Only then does the
+             lead move to Viewings (James, 1 Oct 2026: check it was actually
+             booked, and if it was not, keep it on its stage). */
+          let viewingMade = false;
           if (bookMode === "viewing" && v.startsAt) {
             const confirm = {
               leadId: lead.id,
@@ -3746,6 +3760,7 @@ function LeadDrawerBody({
             })
               .then((r) => r.json() as Promise<{ ok?: boolean; outlook?: { ok?: boolean; detail?: string } }>)
               .catch(() => null);
+            viewingMade = Boolean(j?.ok);
             said.push(!j ? "Couldn't reach the server: check your calendar and tell the applicant yourself." : j.outlook?.ok ? "In your Outlook calendar." : (j.outlook?.detail ?? "Booked."));
             /* The confirmation, as the agent left it in the booker's email
                column - or nothing, if they unticked it (17 Sep 2026). */
@@ -3779,8 +3794,9 @@ function LeadDrawerBody({
           // Booking IS the step's work — the record moves itself on, and the
           // next step's panel is one button away rather than a hunt. The
           // take-on stays put: its second half (photos & details) is still due.
-          if (bookMode === "viewing") advanceTo("viewing");
-          else if (here.action === "viewing") advance();
+          if (bookMode === "viewing") {
+            if (viewingMade) advanceTo("viewing");
+          } else if (here.action === "viewing") advance();
           if (here.action === "takeon") setTakeOnBooked(true);
 
           /* BOOKING AN APPRAISAL HANDS THE RECORD OVER.
