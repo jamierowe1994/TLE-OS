@@ -13,6 +13,7 @@ import { fillFrontCompose, getOpenListing, getOpenSurfaces } from "@/lib/open-re
 import { whenAgo } from "@/lib/lead-spine";
 import { fetchMe } from "@/lib/me";
 import { openGuide } from "@/lib/guide-sheet";
+import { TOAST_LIFT_EVENT, type ToastLift } from "@/lib/toast";
 
 /**
  * The character in the corner, and what he says.
@@ -611,6 +612,50 @@ export default function HelpDock() {
     };
   }, []);
 
+  /**
+   * Shoved up by a toast, and dropped again (James, 1 Oct 2026).
+   *
+   * Going up he gets the fright he gets when he is woken from a nap - the
+   * startle and the shaking arms - and keeps the wide eyes while he is up
+   * there. Coming down he lands with a squash on the bump and a scratch of
+   * the head: what was that? The moving itself is CSS (.os-toast-lift); this
+   * is only his face, and the squash, timed to the drop's first bounce.
+   *
+   * His face is left alone while his bubble is open: a conversation is not
+   * interrupted by a Saved. He still moves, and still lands.
+   */
+  const landing = useRef<HTMLSpanElement | null>(null);
+  const openRef = useRef(open);
+  openRef.current = open;
+  useEffect(() => {
+    const onLift = (e: Event) => {
+      const way = (e as CustomEvent<ToastLift>).detail;
+      if (way === "up") {
+        if (!openRef.current) {
+          if (reacting.current) clearTimeout(reacting.current);
+          /* A fright resets the clock on getting bored, so a yawn cannot
+             land in the middle of it. */
+          rest();
+          setMood("surprised");
+        }
+        return;
+      }
+      const el = landing.current;
+      if (el) {
+        el.classList.remove("os-steve-land");
+        void el.offsetWidth;
+        el.classList.add("os-steve-land");
+      }
+      /* The face changes as he hits the floor, not as he starts to fall. */
+      if (!openRef.current) {
+        if (reacting.current) clearTimeout(reacting.current);
+        reacting.current = setTimeout(() => react("confused", 1500), 300);
+      }
+    };
+    window.addEventListener(TOAST_LIFT_EVENT, onLift);
+    return () => window.removeEventListener(TOAST_LIFT_EVENT, onLift);
+  }, [react, rest]);
+
   if (!signedIn) return null;
 
   async function toggle() {
@@ -974,7 +1019,7 @@ export default function HelpDock() {
         <button
           type="button"
           onClick={rec.stop}
-          className="fixed bottom-6 right-[96px] z-[191] flex items-center gap-2 rounded-full bg-[#C4412F] px-4 py-2.5 text-[12.5px] font-semibold text-white shadow-[0_10px_30px_-10px_rgba(0,0,0,0.5)]"
+          className="os-toast-lift fixed bottom-6 right-[96px] z-[191] flex items-center gap-2 rounded-full bg-[#C4412F] px-4 py-2.5 text-[12.5px] font-semibold text-white shadow-[0_10px_30px_-10px_rgba(0,0,0,0.5)]"
         >
           <span aria-hidden className="h-2.5 w-2.5 animate-pulse rounded-full bg-white" />
           Recording {clockFace(rec.seconds)} · Stop
@@ -991,7 +1036,7 @@ export default function HelpDock() {
             setTab("feedback");
             if (!open) void toggle();
           }}
-          className="fixed bottom-6 right-[96px] z-[189] hidden items-center gap-1.5 rounded-full border border-line/80 bg-panel px-3.5 py-2 text-[11.5px] font-semibold text-ink shadow-[0_10px_30px_-14px_rgba(0,0,0,0.45)] transition-colors hover:border-ink sm:flex"
+          className="os-toast-lift fixed bottom-6 right-[96px] z-[189] hidden items-center gap-1.5 rounded-full border border-line/80 bg-panel px-3.5 py-2 text-[11.5px] font-semibold text-ink shadow-[0_10px_30px_-14px_rgba(0,0,0,0.45)] transition-colors hover:border-ink sm:flex"
         >
           <span aria-hidden className="h-2 w-2 rounded-full bg-[#C4412F]" />
           Report a problem
@@ -1005,9 +1050,11 @@ export default function HelpDock() {
         aria-expanded={open}
         data-hide-from-shot
         data-os-steve
-        className="fixed bottom-2 right-3 z-[190] text-ink transition-transform hover:scale-105 active:scale-95"
+        className="os-toast-lift fixed bottom-2 right-3 z-[190] text-ink hover:scale-105 active:scale-95"
       >
-        <AssistantCharacter mood={mood} size={76} loop={performing} />
+        <span ref={landing} className="block origin-bottom" onAnimationEnd={(e) => { if (e.target === e.currentTarget) e.currentTarget.classList.remove("os-steve-land"); }}>
+          <AssistantCharacter mood={mood} size={76} loop={performing} />
+        </span>
         {/* Something to carry. The dot is only ever there because there is
             genuinely something unread — see the note on `unseen`. */}
         {unseen > 0 && !open && (
@@ -1029,7 +1076,7 @@ export default function HelpDock() {
           data-os-steve-bubble
           /* On a phone the 68px shift pushed the left edge off the screen
              (375 - 68 - 335 is less than nothing). Found 21 Sep 2026. */
-          className="fade-up fixed bottom-[104px] right-5 z-[190] w-[min(392px,calc(100vw-2.5rem))] sm:right-[68px]"
+          className="os-toast-lift fade-up fixed bottom-[104px] right-5 z-[190] w-[min(392px,calc(100vw-2.5rem))] sm:right-[68px]"
         >
           <div className="relative rounded-[22px] border border-line/80 bg-panel p-4 shadow-[0_20px_50px_-16px_rgba(0,0,0,0.4)]">
             {/* The tail. Two stacked squares — the outer one carries the border

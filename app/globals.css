@@ -1279,3 +1279,58 @@ body {
   text-transform: none;
 }
 .biz-os table thead th { font-weight: 600; }
+
+/* ── Steve makes room for a toast (James, 1 Oct 2026) ────────────────────
+   Howard found a toast landing on Steve. Now the toast comes up in the
+   corner underneath him: Steve, the Report a problem pill and his bubble
+   are pushed up out of its way, and when it goes they drop back to the
+   floor with a little bounce. components/Toaster sets --os-toast-lift to
+   the toast's height and data-os-toast on <html>; anything that should
+   move carries .os-toast-lift.
+
+   The individual `translate` property, not `transform`, so it adds to
+   Steve's hover scale and the bubble's fade-up rather than replacing them.
+   Unlayered, so it outranks Tailwind's transition-transform on the button. */
+.os-toast-lift {
+  translate: 0 0;
+  /* A browser without linear() throws the whole line below away, so it gets
+     a plain fall first. */
+  transition:
+    translate 380ms cubic-bezier(0.5, 0, 0.75, 0),
+    scale 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  /* Down: gravity, a bounce of a tenth of the drop, and a smaller one. */
+  transition:
+    translate 600ms linear(0 0%, 0.016 6.4%, 0.063 12.8%, 0.141 19.2%, 0.25 25.7%, 0.391 32.1%, 0.563 38.5%, 0.766 44.9%, 1 51.3%, 0.944 56.7%, 0.911 62.1%, 0.9 67.5%, 0.911 73%, 0.944 78.4%, 1 83.8%, 0.981 87.8%, 0.975 91.9%, 0.981 95.9%, 1 100%),
+    scale 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+html[data-os-toast="up"] .os-toast-lift {
+  translate: 0 calc(-1 * var(--os-toast-lift, 0px));
+  /* Up: quick and smooth, out of the way before the toast arrives. */
+  transition:
+    translate 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    scale 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+/* The bump on landing: squashed flat as he hits the floor (the drop's first
+   bounce is 51% of its 600ms), stretched as he comes off it, then himself.
+   From his feet, so he squashes into the floor rather than shrinking. */
+.os-steve-land { animation: os-steve-land 420ms ease-out 280ms both; }
+@keyframes os-steve-land {
+  0% { transform: scale(1, 1); }
+  12% { transform: scale(1.14, 0.84); }
+  40% { transform: scale(0.95, 1.06); }
+  70% { transform: scale(1.03, 0.97); }
+  100% { transform: scale(1, 1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .os-steve-land { animation: none; }
+  .os-toast-lift,
+  html[data-os-toast="up"] .os-toast-lift {
+    transition: none;
+  }
+}

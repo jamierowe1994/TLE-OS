@@ -24,3 +24,12 @@ export function toast(text: string, tone: ToastTone = "ok"): void {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent<ToastDetail>(TOAST_EVENT, { detail: { text, tone } }));
 }
+
+/**
+ * Said by <Toaster /> when the bottom toast pushes Steve up ("up") and when
+ * it has gone and he drops back ("down") - once each way, not per toast. He
+ * looks startled going up and lands with a bump (components/HelpDock).
+ */
+export const TOAST_LIFT_EVENT = "os-toast-lift";
+
+export type ToastLift = "up" | "down";
