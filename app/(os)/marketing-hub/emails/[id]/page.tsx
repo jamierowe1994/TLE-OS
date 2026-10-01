@@ -115,7 +115,7 @@ function EmailPage() {
   const draft = n.status === "draft";
   const s = statusLine(n, armed);
 
-  async function act(label: string, fn: () => Promise<Response>, done?: (j: { ok: boolean; message?: string; error?: string }) => void) {
+  async function act(label: string, fn: () => Promise<Response>, done?: (j: { ok: boolean; message?: string; error?: string; newsletter?: { id: string } }) => void) {
     setBusy(label);
     setErr(null);
     setFlash(null);
@@ -153,6 +153,14 @@ function EmailPage() {
         />
         <Pill tone="neutral">{n.kind === "event" ? "Event" : "Newsletter"}</Pill>
         <Pill tone={s.tone}>{s.text}</Pill>
+        <button
+          type="button"
+          disabled={busy !== null}
+          onClick={() => void act("duplicate", () => fetch(`/api/newsletters/${id}/duplicate`, { method: "POST" }), (j) => j.newsletter && router.push(`/marketing-hub/emails/${j.newsletter.id}`))}
+          className="rounded-full border border-line/80 px-4 py-1.5 text-[12.5px] font-semibold hover:border-ink/40 disabled:opacity-40"
+        >
+          {busy === "duplicate" ? "Duplicating…" : "Duplicate"}
+        </button>
       </div>
       <p className="mt-1 text-[12px] text-muted">Only you see the name. The subject line is what people see in their inbox.</p>
 
