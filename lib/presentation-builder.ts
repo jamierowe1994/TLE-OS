@@ -39,7 +39,7 @@ export const BUILD_STEPS = [
   { id: "property", label: "Property", blurb: "What we know about it — beds, type, tenure, EPC." },
   { id: "available", label: "On the market", blurb: "What a tenant is choosing between right now." },
   { id: "let", label: "Recently let", blurb: "What actually let nearby, and how long it took." },
-  { id: "market", label: "Market", blurb: "Rents, pace, size and competition. Tick what goes to the landlord." },
+  { id: "market", label: "Market", blurb: "Rents, pace, size and competition. Every section starts on the slide - take off any you do not want." },
   { id: "review", label: "Review", blurb: "Which pages go in the presentation." },
 ] as const;
 

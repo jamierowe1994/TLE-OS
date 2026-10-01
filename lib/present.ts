@@ -939,9 +939,10 @@ export function slideHasContent(deck: PresentDeck, id: SlideId): boolean {
     const c = deck.comparables;
     return Boolean(c && c.rows.length >= 3);
   }
-  /* The market slide is opt-in per appraisal — the agent ticks blocks on the
-     Market step and nothing is included by default. An unticked deck must not
-     carry an empty "Your local market" heading with nothing underneath it. */
+  /* The market slide carries whichever blocks are ticked on the Market step.
+     Since 1 Oct 2026 every block starts ticked (the builder's marketDefaulted)
+     and the agent takes off what they do not want; a deck with every block
+     off must not carry an empty "Your local market" heading. */
   if (id === "market") return Boolean(deck.market);
   /* Everything else that renders a DATA set rather than standing copy. Each
      is dropped rather than shown empty, for the reason comparables is: a

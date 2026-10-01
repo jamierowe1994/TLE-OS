@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import MaterialInfoPanel from "@/components/MaterialInfoPanel";
@@ -10,6 +10,7 @@ import AddressPicker from "@/components/appraisal/AddressPicker";
 import { useCaseState } from "@/lib/case-state";
 import MarketMap from "@/components/MarketMap";
 import MarketPicturePanel, {
+  MARKET_BLOCKS,
   type MarketBlockId,
   type MarketSelection,
 } from "@/components/MarketPicture";
@@ -80,6 +81,10 @@ const money = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
  * latitude through Mercator. Zoom 14 puts a street or two in a 44px circle,
  * which reads as "a map" without becoming a puzzle.
  */
+/** How long the research call gets before the screen gives up on it and
+ *  offers Try again. Under the watchdog's 25 seconds on purpose. */
+const RESEARCH_PATIENCE = 20_000;
+
 function tileUrl(lat: number, lon: number, z = 15): string {
   const n = 2 ** z;
   const x = Math.floor(((lon + 180) / 360) * n);
@@ -154,6 +159,10 @@ export default function PresentationBuilder({
      `hidden`, which slidesFor honours in the preview, the minted deck and
      the booklet alike. */
   const [hidden, setHidden] = useState<SlideId[]>([]);
+  /* Review step: a slide row clicked (goes to the preview, `n` so clicking
+     the same row twice still fires) and the slide the preview is showing. */
+  const [previewGo, setPreviewGo] = useState<{ i: number; n: number } | null>(null);
+  const [previewAt, setPreviewAt] = useState(0);
   const [making, setMaking] = useState(false);
   /* THE PRESENTATION THIS APPRAISAL ALREADY HAS, if any (James, 17 Sep 2026:
      "rather than saying create presentation, it should always be update
@@ -175,6 +184,20 @@ export default function PresentationBuilder({
      the agent ticked the blocks. See MarketPicturePanel's onLoaded. */
   const [marketPic, setMarketPic] = useState<MarketPicture | null>(null);
   const [marketSel, setMarketSel] = useState<MarketSelection | null>(null);
+  /* EVERY SECTION IN, BY DEFAULT. Howard, 30 Sep 2026: "most agents will
+     just click through without adding them". So once the figures arrive,
+     a deck with no market choice yet gets every block for the closest area
+     (the sector), and the agent unticks what they do not want. A saved
+     choice wins: the seeding effect below overwrites this whichever lands
+     first, and unticking everything is kept as an empty list rather than
+     null so it is not re-filled next time. */
+  const marketDefaulted = useRef(false);
+  useEffect(() => {
+    if (marketDefaulted.current || !marketPic?.scopes.length) return;
+    marketDefaulted.current = true;
+    const closest = marketPic.scopes[marketPic.scopes.length - 1];
+    setMarketSel((prev) => prev ?? { area: closest.area, blocks: MARKET_BLOCKS.map((b) => b.id) });
+  }, [marketPic]);
 
   /**
    * The ticked market blocks, reduced to the figures the landlord will see.
@@ -437,6 +460,10 @@ export default function PresentationBuilder({
   }, [d, existing, inherited]);
 
   const opened = useRef(false);
+  /* A research call that failed or timed out, said inline with a Try again
+     beside it. Kept apart from `error`, which belongs to saving the deck. */
+  const [researchFailed, setResearchFailed] = useState<string | null>(null);
+  const [researchTry, setResearchTry] = useState(0);
   useEffect(() => {
     /* Waits for the saved match, so a picked property opens as itself rather
        than flashing "couldn't find" and then changing under the agent. */
@@ -449,26 +476,22 @@ export default function PresentationBuilder({
     const q = researchQuery(opened.current ? filtersRef.current : null);
     const mine = ++reqSeq.current;
     setRematching(opened.current);
-    fetch(`/api/ma-research?${q}`)
-      .then((r) => r.json())
-      .then((j: MaResearch & { error?: string }) => {
-        /* Somebody has already filtered. This is the opening list, and it is
-           now the wrong one — see reqSeq. */
-        if (mine !== reqSeq.current) return;
-        if (j.error) return setError(j.error);
-        setD(j);
-        // Only same-sector start ticked — a pre-ticked box is a recommendation.
-        // Once only: a new pick changes the property's facts, not the comparables.
-        if (!opened.current) setChosen(defaultSelection(j.comparables));
-        opened.current = true;
-      })
-      .catch((e: Error) => setError(e.message))
-      .finally(() => {
-        if (mine === reqSeq.current) setRematching(false);
-      });
+    setResearchFailed(null);
+    void askResearch(q).then((j) => {
+      /* Somebody has already filtered. This is the opening list, and it is
+         now the wrong one — see reqSeq. */
+      if (mine !== reqSeq.current || !j) return;
+      setRematching(false);
+      if ("error" in j) return setResearchFailed(j.error);
+      setD(j);
+      // Only same-sector start ticked — a pre-ticked box is a recommendation.
+      // Once only: a new pick changes the property's facts, not the comparables.
+      if (!opened.current) setChosen(defaultSelection(j.comparables));
+      opened.current = true;
+    });
     // researchQuery reads address, postcode and the match, all listed here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address, postcode, matchReady, match.hsId]);
+  }, [address, postcode, matchReady, match.hsId, researchTry]);
 
   /* Homesearch's live market — the whole sector including other agents'
      stock, and the only source that carries photographs. Picked separately
@@ -546,83 +569,32 @@ export default function PresentationBuilder({
     const t = setTimeout(() => setMapMounted(false), 320);
     return () => clearTimeout(t);
   }, [mapOpen]);
-  /* The last pin clicked. That property jumps to the top of the list so the
-     agent can see what they just pointed at without hunting for it — which is
-     the whole reason for putting the two side by side. */
+  /* The last pin (or rail face) clicked. The card is scrolled into view and
+     outlined for a moment, where it already sits. It used to jump to the top
+     of the list, and Howard (30 Sep 2026) watched the grid shuffle under his
+     cursor: "they jump around. keep them in place". */
   const [focused, setFocused] = useState<string | null>(null);
-
-  /**
-   * PICKING A PROPERTY MOVES IT. It does not just get a tick.
-   *
-   * A ticked card used to sit in the list looking almost exactly like an
-   * unticked one, so "what is going in the deck" had to be counted by eye
-   * across a grid of twenty. Now the deck is a rail at the top and the list is
-   * what is still under consideration — two places, two meanings, nothing in
-   * both.
-   *
-   * `leaving` is the half-second in between. The card has been picked but is
-   * still on screen playing its exit, and it must stay rendered for that or
-   * there is nothing to animate.
-   */
-  const [leaving, setLeaving] = useState<string[]>([]);
   const listRef = useRef<HTMLUListElement>(null);
-  const rects = useRef<Map<string, DOMRect>>(new Map());
-  const flipping = useRef(false);
-
-  /** Where every card is, right now — the F and L of FLIP. */
-  const measure = useCallback(() => {
-    const m = new Map<string, DOMRect>();
-    listRef.current?.querySelectorAll<HTMLElement>("[data-card]").forEach((el) => {
-      if (el.dataset.card) m.set(el.dataset.card, el.getBoundingClientRect());
-    });
-    rects.current = m;
-    flipping.current = true;
-  }, []);
-
-  /* Grid position is layout, and layout does not transition — remove one card
-     from a four-up grid and the rest TELEPORT into the gap. So each survivor is
-     measured before and after, put back where it was with a transform, and
-     then released. The browser animates the transform; the layout never moved. */
-  useLayoutEffect(() => {
-    if (!flipping.current) return;
-    flipping.current = false;
-    const before = rects.current;
-    if (!before.size) return;
-    listRef.current?.querySelectorAll<HTMLElement>("[data-card]").forEach((el) => {
-      const was = el.dataset.card ? before.get(el.dataset.card) : undefined;
-      if (!was) return;
-      const now = el.getBoundingClientRect();
-      const dx = was.left - now.left;
-      const dy = was.top - now.top;
-      if (!dx && !dy) return;
-      el.animate(
-        [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0,0)" }],
-        { duration: 460, easing: "cubic-bezier(0.34, 1.3, 0.5, 1)" }
-      );
-    });
-    rects.current = new Map();
-  });
+  useEffect(() => {
+    if (!focused) return;
+    const el = listRef.current?.querySelector<HTMLElement>(`[data-card="${CSS.escape(focused)}"]`);
+    el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    const t = window.setTimeout(() => setFocused(null), 1800);
+    return () => window.clearTimeout(t);
+  }, [focused]);
 
   /**
-   * Tick, or untick.
+   * Tick, or untick. IN PLACE.
    *
-   * Adding is deliberately slow: the card plays its exit BEFORE it joins the
-   * rail, so the eye follows one object from the grid to the top rather than
-   * seeing one thing disappear and a different thing appear. Removing is
-   * instant, because undoing a mistake should never make you wait.
+   * Picking used to fly the card out of the grid and into the rail at the
+   * top, and every card after it shuffled up a slot. Howard, 30 Sep 2026: "it
+   * is not clear if/what has been selected and when they are they jump
+   * around. keep them in place and highlight selected in line". So the grid
+   * never reorders and never loses a card; a picked one is ringed, badged and
+   * labelled where it stands. The rail stays as the summary of the deck.
    */
   function pick(k: string) {
-    if (pickedNearby.includes(k)) {
-      measure();
-      setPickedNearby((c) => c.filter((x) => x !== k));
-      return;
-    }
-    setLeaving((l) => (l.includes(k) ? l : [...l, k]));
-    window.setTimeout(() => {
-      measure();
-      setPickedNearby((c) => (c.includes(k) ? c : [...c, k]));
-      setLeaving((l) => l.filter((x) => x !== k));
-    }, 380);
+    setPickedNearby((c) => (c.includes(k) ? c.filter((x) => x !== k) : [...c, k]));
   }
   /**
    * WHICH PHOTOGRAPH EACH CARD IS SHOWING.
@@ -654,7 +626,11 @@ export default function PresentationBuilder({
   useEffect(() => {
     if (!photoIds) return;
     let live = true;
-    fetch(`/api/ma-photos?ids=${photoIds}`)
+    /* Aborted, not just ignored, when the list changes. A widened radius
+       used to leave the old gallery call running beside the new one, and a
+       call nobody is waiting for still counts against the 25-second watch. */
+    const ctl = new AbortController();
+    fetch(`/api/ma-photos?ids=${photoIds}`, { signal: ctl.signal })
       .then((r) => r.json())
       .then((j: { photos?: Record<string, string[]>; adverts?: Record<string, string | null> }) => {
         if (!live || !j.photos) return;
@@ -680,6 +656,7 @@ export default function PresentationBuilder({
       .catch(() => {});
     return () => {
       live = false;
+      ctl.abort();
     };
   }, [photoIds]);
 
@@ -692,11 +669,55 @@ export default function PresentationBuilder({
    * and the opening request lands afterwards and quietly puts the whole list
    * back — the control had moved, the list had not, and nothing looked broken.
    *
-   * A counter rather than an AbortController because the stale response is not
-   * an error to be handled, it is an answer to a question nobody is asking any
-   * more. It is read and discarded.
+   * The counter decides which answer is listened to. Since 1 Oct 2026 the
+   * stale request is ALSO aborted (askResearch): Howard dragged the radius,
+   * every half-mile notch fired its own 8-second research call, they piled up
+   * behind Homesearch's rate limit, and the watchdog put "A screen that would
+   * not finish" over the page. Aborted calls do not count against the watch.
    */
   const reqSeq = useRef(0);
+  const researchCtl = useRef<AbortController | null>(null);
+  const filterTimer = useRef<number | undefined>(undefined);
+  useEffect(
+    () => () => {
+      researchCtl.current?.abort();
+      window.clearTimeout(filterTimer.current);
+    },
+    []
+  );
+  const [refilterFailed, setRefilterFailed] = useState<string | null>(null);
+
+  /**
+   * ONE RESEARCH CALL AT A TIME, AND NEVER LONGER THAN WE WILL WAIT.
+   *
+   * Starting one aborts whichever was still out. Past RESEARCH_PATIENCE it
+   * gives up and says so, so the screen offers Try again instead of turning
+   * forever. Never throws: an answer, an `{ error }` for the screen to show,
+   * or null when a newer call took over and this one has nothing to say.
+   */
+  async function askResearch(q: URLSearchParams): Promise<MaResearch | { error: string } | null> {
+    researchCtl.current?.abort();
+    const ctl = new AbortController();
+    researchCtl.current = ctl;
+    let late = false;
+    const t = window.setTimeout(() => {
+      late = true;
+      ctl.abort();
+    }, RESEARCH_PATIENCE);
+    try {
+      const r = await fetch(`/api/ma-research?${q}`, { signal: ctl.signal });
+      const j = (await r.json().catch(() => null)) as (MaResearch & { error?: string }) | null;
+      if (!j) return { error: `The search came back with an error (${r.status}).` };
+      if (j.error) return { error: j.error };
+      return j;
+    } catch {
+      if (late) return { error: "The search took too long to answer." };
+      if (ctl.signal.aborted) return null;
+      return { error: "The search could not be reached." };
+    } finally {
+      window.clearTimeout(t);
+    }
+  }
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
@@ -715,21 +736,30 @@ export default function PresentationBuilder({
     return q;
   }
 
-  async function applyFilters(next: typeof filters) {
+  /**
+   * A filter changed. The control moves at once; the search waits `wait` ms
+   * for the agent to stop, so a slider dragged across six notches asks once
+   * rather than six times. The list on screen stays up until the new one
+   * lands, and a failure leaves it up with a Try again beside it.
+   */
+  function applyFilters(next: typeof filters, wait = 0) {
     setFilters(next);
     setRefiltering(true);
+    setRefilterFailed(null);
+    /* Whatever is already out is stale from this moment, not from when the
+       next call starts. */
     const mine = ++reqSeq.current;
-    const q = researchQuery(next);
-    try {
-      const r = await fetch(`/api/ma-research?${q}`);
-      const j = (await r.json()) as MaResearch & { error?: string };
-      if (mine !== reqSeq.current) return;
-      if (!j.error) setD(j);
-    } catch {
-      /* leave the previous feed up rather than blanking it */
-    } finally {
-      if (mine === reqSeq.current) setRefiltering(false);
-    }
+    researchCtl.current?.abort();
+    window.clearTimeout(filterTimer.current);
+    filterTimer.current = window.setTimeout(() => {
+      void askResearch(researchQuery(next)).then((j) => {
+        if (mine !== reqSeq.current || !j) return;
+        setRefiltering(false);
+        setRematching(false);
+        if ("error" in j) setRefilterFailed(j.error);
+        else setD(j);
+      });
+    }, wait);
   }
   /* Shared with the map, so a pin and a card agree on which house they are.
      See listingKey for why it is not the address. */
@@ -769,7 +799,8 @@ export default function PresentationBuilder({
             max={10}
             step={0.5}
             value={filters.radius}
-            onChange={(e) => applyFilters({ ...filters, radius: Number(e.target.value) })}
+            /* Waits for the drag to settle: one search, not one per notch. */
+            onChange={(e) => applyFilters({ ...filters, radius: Number(e.target.value) }, 450)}
             className="w-24 accent-[#56423e]"
             aria-label="Search radius in miles"
           />
@@ -844,7 +875,24 @@ export default function PresentationBuilder({
 
         {/* Said out loud, because a filtered map that is still fetching looks
             exactly like a filtered map that found nothing. */}
-        {refiltering && <span className={`${ctl} text-muted`}>Looking&hellip;</span>}
+        {refiltering && (
+          <span className={`${ctl} text-muted`}>
+            <span className="block h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+            Looking&hellip;
+          </span>
+        )}
+        {/* The list on screen is the last good one; say the new one did not
+            come, and offer it again, rather than leaving the agent guessing. */}
+        {refilterFailed && !refiltering && (
+          <button
+            type="button"
+            onClick={() => applyFilters(filters)}
+            title={refilterFailed}
+            className={`${ctl} font-semibold text-accent-dark`}
+          >
+            Did not refresh - Try again
+          </button>
+        )}
       </>
     );
   }
@@ -878,7 +926,7 @@ export default function PresentationBuilder({
       setSlide((m) => ({ ...m, [k]: (m[k] ?? 0) + by }));
     };
     return (
-      <li key={k} data-card={k} className={leaving.includes(k) ? "deck-leave" : undefined}>
+      <li key={k} data-card={k}>
         {/* NO BOX. James, 29 Aug: "I like the fact that they
             don't have white boxes underneath like we do. We've
             got the photo, and then we've got our connecting line
@@ -893,7 +941,25 @@ export default function PresentationBuilder({
             it. Selection is shown on the tick and a ring on the
             PHOTO instead — the border was carrying that meaning
             and losing it in the process. */}
-        <div className="group cursor-pointer" onClick={() => setFocused(k)}>
+        {/* THE WHOLE CARD IS THE TICK (Howard, 30 Sep 2026). The little
+            button on the photo was the only thing that picked, and a click
+            anywhere else just shuffled the card to the top. Now a click
+            anywhere picks or unpicks, and the card stays put. */}
+        <div
+          role="button"
+          tabIndex={0}
+          aria-pressed={on}
+          onClick={() => pick(k)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              pick(k);
+            }
+          }}
+          className={`group cursor-pointer rounded-[20px] outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ink/30 ${
+            focused === k ? "ring-2 ring-ink/25 ring-offset-4 ring-offset-page" : ""
+          }`}
+        >
           <div className="relative">
             {/* Plain img, not next/image: these are third-party
                 S3 URLs, and a remote-image allowlist for a feed
@@ -909,13 +975,13 @@ export default function PresentationBuilder({
                    to a letterbox and cut the roofline off every
                    one — a property photo with no property in it. */
                 className={`aspect-[4/3] w-full rounded-2xl bg-line/30 object-cover transition-all ${
-                  on ? "ring-2 ring-accent-dark ring-offset-2 ring-offset-page" : ""
+                  on ? "ring-[3px] ring-[#56634a] ring-offset-2 ring-offset-page" : "group-hover:brightness-[0.96]"
                 }`}
               />
             ) : (
               <div
                 className={`flex aspect-[4/3] w-full items-center justify-center rounded-2xl bg-line/20 text-[11px] text-muted ${
-                  on ? "ring-2 ring-accent-dark ring-offset-2 ring-offset-page" : ""
+                  on ? "ring-[3px] ring-[#56634a] ring-offset-2 ring-offset-page" : ""
                 }`}
               >
                 No photograph
@@ -933,16 +999,30 @@ export default function PresentationBuilder({
                 e.stopPropagation();
                 pick(k);
               }}
-              className={`absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full text-[13px] shadow-sm transition-transform hover:scale-110 ${
-                on ? "bg-accent-dark text-white" : "bg-page/85 text-muted"
+              /* Filled green with a tick when it is in; an empty circle with
+                 a plus when it is not. Both used to show a tick, one pale and
+                 one dark, which is why nobody could tell. The same green as
+                 the Market step's "On the slide". */
+              className={`absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full text-[14px] font-bold shadow-sm transition-transform hover:scale-110 ${
+                on ? "bg-[#56634a] text-white" : "border border-line/80 bg-page/90 text-muted"
               }`}
             >
-              &#10003;
+              {on ? <>&#10003;</> : "+"}
             </button>
-
-            {l.status === "let agreed" && (
-              <span className="absolute left-2 top-2 rounded-full bg-page/95 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-accent-dark shadow-sm">
-                Let agreed
+            {/* Top left, stacked: clear of the photo dots along the
+                bottom and of the tick on the right. */}
+            {(on || l.status === "let agreed") && (
+              <span className="pointer-events-none absolute left-2 top-2 flex flex-col items-start gap-1">
+                {l.status === "let agreed" && (
+                  <span className="rounded-full bg-page/95 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-accent-dark shadow-sm">
+                    Let agreed
+                  </span>
+                )}
+                {on && (
+                  <span className="rounded-full bg-[#56634a] px-2.5 py-1 text-[10.5px] font-semibold text-white shadow-sm">
+                    In the presentation
+                  </span>
+                )}
               </span>
             )}
 
@@ -1111,12 +1191,47 @@ export default function PresentationBuilder({
    */
   /* From either list: the let-agreed step picks the same way the market
      step does now (James, 11 Sep 2026), so a tick on either lands here. */
+  /* A PICK OUTLIVES THE SEARCH THAT FOUND IT. Homesearch returns the newest
+     48, so widening the radius pushed older picks out of the list - and,
+     because picks were only looked up in the current list, out of the deck
+     too, without a word (found 1 Oct 2026 chasing Howard's radius ticket:
+     three picked, widen to 2.5 miles, one left). Every picked listing seen
+     is remembered here, and the deck reads from that when the list no longer
+     carries it. Written during render on purpose: it only ever adds what is
+     on screen, so it is idempotent. */
+  const pickedSeen = useRef(new Map<string, MarketListing>());
+  for (const l of all) {
+    const k = keyOf(l);
+    if (pickedNearby.includes(k)) pickedSeen.current.set(k, l);
+  }
   const picks = pickedNearby
-    .map((k) => nearby.find((l) => keyOf(l) === k) ?? letAgreed.find((l) => keyOf(l) === k))
+    .map(
+      (k) =>
+        nearby.find((l) => keyOf(l) === k) ??
+        letAgreed.find((l) => keyOf(l) === k) ??
+        pickedSeen.current.get(k)
+    )
     .filter((l): l is MarketListing => Boolean(l));
   /* The list the split view is showing on this step. */
   const listHere: MarketListing[] = here === "let" ? letAgreed : nearby;
   const splitStep = here === "available" || here === "let";
+  /* How many are picked from each grid, for the line above it and the step
+     tabs. Recently let also counts our own lets ticked, which feed the guide. */
+  const pickedAvail = picks.filter((l) => l.status !== "let agreed").length;
+  const pickedLet = picks.filter((l) => l.status === "let agreed").length;
+  const pickedHere = here === "let" ? pickedLet : pickedAvail;
+  /* Picked, still in the deck, but not in the list on screen (see pickedSeen). */
+  const pickedAway = pickedHere - listHere.filter((l) => pickedNearby.includes(keyOf(l))).length;
+  const stepCount: Partial<Record<BuildStepId, number>> = {
+    available: pickedAvail,
+    let: pickedLet + pickedComps.length,
+  };
+  /* The rent guide and the What's letting nearby slide need three of our own
+     lets ticked. Said on Recently let, where the ticking happens (Howard,
+     30 Sep 2026: "i dont think this is clear on the previous steps") rather
+     than only on Review after the fact. Same floor as slideHasContent. */
+  const GUIDE_FLOOR = 3;
+  const guideMet = pickedComps.length >= GUIDE_FLOOR;
 
   /* OUR OWN LETS, folded up. What we let (with time on the market, which
      only our book can say) and what we are letting now, as one line above
@@ -1126,6 +1241,43 @@ export default function PresentationBuilder({
      rules under every address. */
   const oursStrip = d ? (
     <div className="mb-3 shrink-0">
+      <div
+        className={`mb-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border px-3 py-2 text-[12.5px] leading-snug ${
+          guideMet ? "border-[#56634a]/40 bg-[#f1f4ec]/70" : "border-accent-dark/35 bg-accent-soft/35"
+        }`}
+      >
+        <span
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+            guideMet ? "bg-[#56634a] text-white" : "bg-accent-dark text-white"
+          }`}
+          aria-hidden
+        >
+          {guideMet ? <>&#10003;</> : "!"}
+        </span>
+        <span className="min-w-0 flex-1">
+          {guideMet ? (
+            <>
+              The rent guide and the <span className="font-semibold">What&apos;s letting nearby</span> slide are in, from{" "}
+              <span className="figures">{pickedComps.length}</span> of our lets ticked.
+            </>
+          ) : (
+            <>
+              Tick at least {GUIDE_FLOOR} of our lets for the rent guide and the{" "}
+              <span className="font-semibold">What&apos;s letting nearby</span> slide{" "}
+              <span className="figures">({pickedComps.length} ticked)</span>.
+            </>
+          )}
+        </span>
+        {!oursOpen && (
+          <button
+            type="button"
+            onClick={() => setOursOpen(true)}
+            className="shrink-0 rounded-full border border-ink/25 bg-page px-3 py-1 text-[11.5px] font-semibold transition-colors hover:border-ink/50"
+          >
+            {guideMet ? "See our lets" : "Tick our lets"}
+          </button>
+        )}
+      </div>
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -1184,7 +1336,7 @@ export default function PresentationBuilder({
             })()}
           </div>
           <div>
-            <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">Ours nearby - tick what goes in the deck</p>
+            <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">Ours nearby - tick 3 or more for the rent guide</p>
             {oursTickable.length === 0 ? (
               <p className="mt-1.5 text-[11.5px] text-muted">Nothing of ours near this postcode.</p>
             ) : (
@@ -1513,6 +1665,15 @@ export default function PresentationBuilder({
             >
               <span className="mr-1 opacity-50">{i + 1}</span>
               {s.label}
+              {/* What is picked on this step, visible from every step. */}
+              {stepCount[s.id] ? (
+                <span
+                  className="figures ml-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#56634a] px-1 text-[10.5px] font-semibold text-white"
+                  title={`${stepCount[s.id]} picked`}
+                >
+                  {stepCount[s.id]}
+                </span>
+              ) : null}
             </button>
           ))}
           {(deckRail || mapToggle) && (
@@ -1539,7 +1700,27 @@ export default function PresentationBuilder({
           }
         >
           {error && <p className="text-[12.5px] text-accent-dark">{error}</p>}
-          {!d && !error && <p className="text-[12.5px] text-muted">Pulling the research…</p>}
+          {researchFailed && (
+            <p className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-accent-dark/35 bg-accent-soft/35 px-3 py-2 text-[12.5px]">
+              <span className="min-w-0 flex-1">
+                {d ? "The property's facts did not refresh. " : "The research did not load. "}
+                <span className="text-muted">{researchFailed}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setResearchTry((n) => n + 1)}
+                className="shrink-0 rounded-full border border-ink/25 bg-page px-3 py-1 text-[11.5px] font-semibold hover:border-ink/50"
+              >
+                Try again
+              </button>
+            </p>
+          )}
+          {!d && !error && !researchFailed && (
+            <p className="flex items-center gap-2 text-[12.5px] text-muted">
+              <span className="block h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+              Pulling the research…
+            </p>
+          )}
 
           {/* TIDY. James, 11 Sep 2026: "space is at a premium, so anything
               that doesn't need to be shown, we don't have to show. Key
@@ -1754,7 +1935,40 @@ export default function PresentationBuilder({
                   The map is STICKY rather than scrolling with the list. A map
                   that leaves the screen while you scroll the results is a map
                   you have to keep scrolling back to. */}
-              <div className={mapMounted ? "mt-3 flex min-h-0 flex-1 gap-4" : "mt-3"}>
+              {/* HOW MANY ARE IN, said where the picking happens. The filter
+                  line folds away with the map open, so this sits outside it. */}
+              <p className="mt-1 flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 text-[12px]">
+                <span
+                  className={`figures rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold ${
+                    pickedHere ? "bg-[#56634a] text-white" : "border border-line/80 text-muted"
+                  }`}
+                >
+                  {pickedHere} picked
+                </span>
+                <span className="text-muted">
+                  {pickedAway > 0
+                    ? `${pickedAway} of them ${pickedAway === 1 ? "is" : "are"} outside this search and still in the presentation - remove from the circles at the top.`
+                    : pickedHere
+                    ? "Ringed in green below. Click a card again to take it out."
+                    : here === "let"
+                      ? "Click a card to put it on the What's on the market slide."
+                      : "Click a card to put it in the presentation."}
+                </span>
+                {/* Said here as well as in the filter bar: with the map open
+                    the bar lives on the map, and with no map key it is not
+                    drawn at all. */}
+                {refilterFailed && !refiltering && (
+                  <button
+                    type="button"
+                    onClick={() => applyFilters(filters)}
+                    title={refilterFailed}
+                    className="ml-auto rounded-full border border-accent-dark/40 px-3 py-0.5 text-[11.5px] font-semibold text-accent-dark hover:border-accent-dark"
+                  >
+                    The list did not refresh - Try again
+                  </button>
+                )}
+              </p>
+              <div className={mapMounted ? "mt-2 flex min-h-0 flex-1 gap-4" : "mt-2"}>
                 {/* WITH THE MAP OPEN THE LIST IS THE ONLY THING THAT SCROLLS.
                     James, 29 Aug: "if we scroll, it only scrolls the properties
                     on the left. If we do scroll on the right, it just moves the
@@ -1773,25 +1987,18 @@ export default function PresentationBuilder({
                          the whitespace IS the separation — tight gaps make two
                          properties read as one, because nothing else says
                          where the first one stops. */
-                      ? "grid min-h-0 flex-1 grid-cols-1 content-start gap-x-4 gap-y-6 overflow-y-auto pr-1 xl:grid-cols-2"
-                      : "grid gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                      /* Padded all round so the green ring on a picked
+                         card is not clipped by the scroller's edge. */
+                      ? "grid min-h-0 flex-1 grid-cols-1 content-start gap-x-4 gap-y-6 overflow-y-auto p-2 xl:grid-cols-2"
+                      : "grid gap-x-4 gap-y-6 p-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
                   }
                 >
-                {[...listHere]
-                  /* Picked properties leave the list — they are in the rail at
-                     the top now, and a thing in two places at once is a thing
-                     you have to reconcile. One exception: the card still
-                     playing its exit, which is picked but not yet gone. */
-                  .filter((l) => !pickedNearby.includes(keyOf(l)) || leaving.includes(keyOf(l)))
-                  .sort((a, b) => {
-                    /* Only the clicked one moves. A full re-sort on every click
-                       would shuffle the list under the agent's cursor, which is
-                       worse than not helping at all. */
-                    if (focused === keyOf(a)) return -1;
-                    if (focused === keyOf(b)) return 1;
-                    return 0;
-                  })
-                  .map((l) => propertyCard(l))}
+                {/* THE FEED'S ORDER, ALWAYS. Picked cards used to leave the
+                    grid for the rail and a clicked one jumped to the top, so
+                    the list reshuffled under the agent's cursor on every click
+                    (Howard, 30 Sep 2026). Nothing is filtered or sorted on a
+                    pick now: the card is ringed where it stands. */}
+                {listHere.map((l) => propertyCard(l))}
                 </ul>
 
                 {/* Three quarters of the width was asked for; 58% is what that
@@ -1816,9 +2023,8 @@ export default function PresentationBuilder({
                         selected={pickedNearby}
                         radiusMiles={filters.radius}
                         controls={mapControls}
-                        /* Clicking a price brings that card to the top of the
-                           list so it can be read — the half of the old
-                           behaviour that was actually useful. */
+                        /* Clicking a price scrolls to that card and outlines
+                           it where it sits. It used to move it to the top. */
                         onOpen={(k) => setFocused(k)}
                         /* Ticking now happens on the card that pops out of the
                            map, where the photo and the rent are visible. It
@@ -1849,8 +2055,14 @@ export default function PresentationBuilder({
             </div>
           )}
 
-          {d && here === "market" && (
-            <div className="space-y-3">
+          {/* MOUNTED FROM THE START, SHOWN ON ITS OWN STEP. Every section of
+              the market slide is in by default now (Howard, 30 Sep 2026), so
+              the figures have to be read even by an agent who never opens
+              this step - otherwise "in by default" would quietly mean "in if
+              you happened to look". Hidden, not unmounted, for the same
+              reason. */}
+          {d && (
+            <div className={here === "market" ? "space-y-3" : "hidden"}>
               <p className="text-[12.5px] leading-relaxed text-muted">{BUILD_STEPS[3].blurb}</p>
 
               {/* THE MARKET AT THREE SCOPES.
@@ -2014,7 +2226,7 @@ export default function PresentationBuilder({
                     </>
                   ) : (
                     <p className="mt-2 text-[12.5px] leading-relaxed text-muted">
-                      No rent guide goes in yet. It needs at least 3 comparables ticked on Recently let
+                      No rent guide goes in yet. Tick at least 3 of our lets on Recently let
                       {pickedComps.length ? ` (${pickedComps.length} ticked so far)` : ""}.
                     </p>
                   )}
@@ -2074,7 +2286,7 @@ export default function PresentationBuilder({
                     if (!draftDeck || slideHasContent(draftDeck, id)) return null;
                     switch (id) {
                       case "comparables":
-                        return `Needs 3 comparables ticked on Recently let (${pickedComps.length} ticked)`;
+                        return `Tick 3 of our lets on Recently let (${pickedComps.length} ticked)`;
                       case "market":
                         return "Nothing ticked on the Market step";
                       case "listings":
@@ -2096,7 +2308,7 @@ export default function PresentationBuilder({
                     <>
                       <p className="text-[12px] leading-relaxed text-muted">
                         {shown.length} slides, {pickedComps.length} comparable{pickedComps.length === 1 ? "" : "s"}.
-                        Switch a slide off to leave it out.
+                        Click a slide to see it. Switch one off to leave it out.
                       </p>
                       <div className="mt-2.5 space-y-3">
                         {SECTIONS.map((sec) => {
@@ -2119,10 +2331,29 @@ export default function PresentationBuilder({
                                        Off is faded, not hidden - the landlord will
                                        not see it, but the agent should, with the
                                        reason when there is nothing to show. */
+                                    /* CLICK A SLIDE TO SEE IT (Howard, 30 Sep
+                                       2026: "rather than going through the
+                                       whole deck to find one slide"). The row
+                                       sends the preview to that slide, and the
+                                       one on screen is outlined here. A slide
+                                       that is off is not in the deck, so there
+                                       is nothing to jump to. */
                                     <li
                                       key={sl.id}
+                                      role={at >= 0 ? "button" : undefined}
+                                      tabIndex={at >= 0 ? 0 : undefined}
+                                      title={at >= 0 ? "Show this slide in the preview" : undefined}
+                                      onClick={() => at >= 0 && setPreviewGo({ i: at, n: Date.now() })}
+                                      onKeyDown={(e) => {
+                                        if (at >= 0 && (e.key === "Enter" || e.key === " ")) {
+                                          e.preventDefault();
+                                          setPreviewGo({ i: at, n: Date.now() });
+                                        }
+                                      }}
                                       className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 transition-colors ${
                                         on ? "border-line/70 bg-card" : "border-dashed border-line/60 opacity-60"
+                                      } ${at >= 0 ? "cursor-pointer hover:border-ink/40" : ""} ${
+                                        at >= 0 && at === previewAt ? "!border-brown ring-1 ring-brown" : ""
                                       }`}
                                     >
                                       <span
@@ -2147,7 +2378,11 @@ export default function PresentationBuilder({
                                           aria-checked={on}
                                           aria-label={`${sl.title} ${on ? "on" : "off"}`}
                                           disabled={Boolean(missing)}
-                                          onClick={() => toggleSlide(sl.id)}
+                                          onClick={(e) => {
+                                            /* The switch is not a request to look. */
+                                            e.stopPropagation();
+                                            toggleSlide(sl.id);
+                                          }}
                                           className={`relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-40 ${on ? "bg-[#56634a]" : "bg-line"}`}
                                         >
                                           <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-[left] ${on ? "left-[18px]" : "left-0.5"}`} />
@@ -2181,7 +2416,7 @@ export default function PresentationBuilder({
                   )}
                 </div>
                 {previewDeck ? (
-                  <DeckPreview deck={previewDeck} />
+                  <DeckPreview deck={previewDeck} goTo={previewGo} onAt={setPreviewAt} />
                 ) : (
                   <div className="flex aspect-[16/10] items-center justify-center rounded-2xl border border-dashed border-line text-[12.5px] text-muted">
                     Building the preview&hellip;
@@ -2270,10 +2505,23 @@ export default function PresentationBuilder({
 const PREVIEW_W = 1280;
 const PREVIEW_H = 800;
 
-function DeckPreview({ deck }: { deck: Deck }) {
+function DeckPreview({
+  deck,
+  goTo,
+  onAt,
+}: {
+  deck: Deck;
+  /** A slide picked from the list beside it. `n` changes on every click. */
+  goTo?: { i: number; n: number } | null;
+  /** Which slide is showing, so the list can outline it. */
+  onAt?: (i: number) => void;
+}) {
   const box = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.5);
   const [at, setAt] = useState(0);
+  const onAtRef = useRef(onAt);
+  onAtRef.current = onAt;
+  useEffect(() => onAtRef.current?.(at), [at]);
   const [tall, setTall] = useState(PREVIEW_H);
   const slides = useMemo(() => slidesFor(deck), [deck]);
   const scroller = () => box.current?.querySelector<HTMLElement>("[data-index]")?.parentElement ?? null;
@@ -2326,6 +2574,24 @@ function DeckPreview({ deck }: { deck: Deck }) {
     const to = Math.max(0, Math.min(slides.length - 1, i));
     row.scrollTo({ left: to * row.clientWidth, behavior: "smooth" });
   };
+
+  /* Straight to the slide clicked in the list. Instant rather than smooth:
+     a smooth run from slide 2 to slide 19 is a slideshow nobody asked for.
+     On a phone the list sits above the preview, so bring it into view too. */
+  useEffect(() => {
+    if (!goTo) return;
+    const row = scroller();
+    if (!row) return;
+    const to = Math.max(0, Math.min(slides.length - 1, goTo.i));
+    row.scrollTo({ left: to * row.clientWidth, behavior: "instant" as ScrollBehavior });
+    setAt(to);
+    const r = box.current?.getBoundingClientRect();
+    if (r && (r.top < 0 || r.top > window.innerHeight - 120)) {
+      box.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+    // Only a new click moves it; the deck redrawing must not jump back.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [goTo?.n]);
 
   return (
     <div>

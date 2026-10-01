@@ -271,11 +271,16 @@ export default function MarketPicturePanel({
   const onLoadedRef = useRef(onLoaded);
   onLoadedRef.current = onLoaded;
 
+  /* Bumped by Try again. The panel now stays mounted for the whole builder
+     (see PresentationBuilder), so "try the step again" no longer refetches
+     on its own. */
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let live = true;
+    const ctl = new AbortController();
     setD(null);
     setError(null);
-    fetch(`/api/market-picture?postcode=${encodeURIComponent(postcode)}`)
+    fetch(`/api/market-picture?postcode=${encodeURIComponent(postcode)}`, { signal: ctl.signal })
       .then((r) => r.json())
       .then((j: MarketPicture & { error?: string }) => {
         if (!live) return;
@@ -288,8 +293,9 @@ export default function MarketPicturePanel({
       .catch((e: Error) => live && setError(e.message));
     return () => {
       live = false;
+      ctl.abort();
     };
-  }, [postcode]);
+  }, [postcode, attempt]);
 
   if (error) {
     return (
@@ -297,15 +303,23 @@ export default function MarketPicturePanel({
         <p className="text-[12.5px] leading-relaxed">
           The market figures could not be pulled: {error}
         </p>
-        <p className="mt-1.5 text-[11.5px] text-muted">
-          Nothing is shown rather than a stale or zero figure. Try the step again in a moment.
+        <p className="mt-1.5 flex flex-wrap items-center gap-3 text-[11.5px] text-muted">
+          Nothing is shown rather than a stale or zero figure.
+          <button
+            type="button"
+            onClick={() => setAttempt((n) => n + 1)}
+            className="rounded-full border border-ink/25 bg-page px-3 py-1 text-[11.5px] font-semibold text-ink hover:border-ink/50"
+          >
+            Try again
+          </button>
         </p>
       </div>
     );
   }
   if (!d) {
     return (
-      <div className="rounded-xl border border-line/70 p-4">
+      <div className="flex items-center gap-2 rounded-xl border border-line/70 p-4">
+        <span className="block h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
         <p className="text-[12.5px] text-muted">Reading the local market…</p>
       </div>
     );
@@ -322,9 +336,10 @@ export default function MarketPicturePanel({
   }
 
   /* Closest by default. The district is context; the sector is the answer, and
-     on NN5 the two disagree by 39%. */
+     on NN5 the two disagree by 39%. A saved choice for another area opens on
+     that area, so its ticks are the ones on screen. */
   const sc: MarketPictureScope =
-    d.scopes.find((s) => s.area === areaPicked) ?? d.scopes[d.scopes.length - 1];
+    d.scopes.find((s) => s.area === (areaPicked ?? selection?.area)) ?? d.scopes[d.scopes.length - 1];
 
   const picked = selection?.area === sc.area ? selection.blocks : [];
   const togglePick = (id: MarketBlockId) => {
@@ -334,7 +349,10 @@ export default function MarketPicturePanel({
          across would attach a district's numbers to a sector's heading. */
       const was = prev?.area === sc.area ? prev.blocks : [];
       const next = was.includes(id) ? was.filter((b) => b !== id) : [...was, id];
-      return next.length ? { area: sc.area, blocks: next } : null;
+      /* Kept even when empty. Every block starts ticked now, so "the agent
+         took them all off" has to be told apart from "never chosen", or the
+         builder would tick them all again on the next visit. */
+      return { area: sc.area, blocks: next };
     });
   };
 
@@ -359,10 +377,15 @@ export default function MarketPicturePanel({
             type="button"
             onClick={() => {
               setAreaPicked(s.area);
-              /* Blocks are pinned to the scope they were picked in. Switching
-                 area and keeping the ticks would send the landlord figures for
-                 an area the agent had moved off. */
-              if (selection && selection.area !== s.area) onSelectionChange(null);
+              /* THE TICKS FOLLOW THE AREA ON SCREEN. They used to be wiped
+                 on every switch, so an agent who looked at the district and
+                 came back to the sector had to tick every section again
+                 (Howard, 30 Sep 2026). The figures still come from the area
+                 the ticks sit on - marketPayload reads selection.area - so
+                 the slide always carries the area the agent last chose. */
+              onSelectionChange((prev) =>
+                prev && prev.area !== s.area ? { area: s.area, blocks: prev.blocks } : prev
+              );
             }}
             className={`rounded-lg border px-2.5 py-1 text-[11.5px] ${
               s.area === sc.area
