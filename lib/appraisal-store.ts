@@ -108,7 +108,9 @@ function rowTo(r: Row): MarketAppraisal {
     valuationNote: r.valuation_note,
     valuedAt: r.valued_at ? new Date(r.valued_at).toISOString() : null,
     valuedBy: r.valued_by,
-    rexPropertyId: r.rex_property_id,
+    /* '' is "a person unlinked it" (see adoptLeadProperties); to everything
+       outside this file it reads as not linked, the same as null. */
+    rexPropertyId: r.rex_property_id || null,
     presentToken: r.present_token,
     termsSentAt: r.terms_sent_at ? new Date(r.terms_sent_at).toISOString() : null,
     createdAt: new Date(r.created_at).toISOString(),
@@ -244,6 +246,49 @@ async function withLiveAddress(rows: MarketAppraisal[]): Promise<MarketAppraisal
   });
 }
 
+/**
+ * WE ALREADY KNOW WHICH HOME THIS IS (Howard, 1 Oct 2026).
+ *
+ * The lead the appraisal was booked from carries its own property card, and
+ * when that card holds a REX property it is one a person picked or an exact
+ * single match (app/api/leads/[id]/prefill). The appraisal used to start at
+ * "Not linked" regardless, so the property file asked "which is it?" over
+ * near-duplicate addresses for a home the lead had already named.
+ *
+ * Adopted at booking (the POST route calls this) and on every read, so a
+ * lead linked after the booking still reaches its appraisal. Only when the
+ * appraisal has never been linked or unlinked (NULL, not '') and the lead's
+ * card is the same door as the appraisal - a landlord with two homes books
+ * the second against the same lead, and that one must not inherit the first.
+ */
+export async function adoptLeadProperties(rows: MarketAppraisal[]): Promise<MarketAppraisal[]> {
+  if (!hasDb()) return rows;
+  const want = rows.filter((r) => !r.rexPropertyId && r.leadId).map((r) => r.id);
+  if (!want.length) return rows;
+  const found = await q<{ id: string; pid: string | null; addr: string | null }>(
+    `SELECT a.id, f.property->>'rexPropertyId' AS pid, f.property->>'address' AS addr
+       FROM os_market_appraisals a JOIN os_lead_facts f ON f.lead_id = a.lead_id
+      WHERE a.id = ANY($1) AND a.rex_property_id IS NULL
+        AND COALESCE(f.property->>'rexPropertyId', '') <> ''`,
+    [want]
+  ).catch(() => []);
+  if (!found.length) return rows;
+  const { sameDoor } = await import("@/lib/bond-nudges");
+  const adopted = new Map<string, string>();
+  for (const f of found) {
+    const ma = rows.find((r) => r.id === f.id);
+    const pid = String(f.pid ?? "").replace(/\D/g, "");
+    if (!ma || !pid) continue;
+    if (f.addr && !sameDoor(f.addr, ma.address)) continue;
+    const done = await q(
+      `UPDATE os_market_appraisals SET rex_property_id = $2, updated_at = NOW() WHERE id = $1 AND rex_property_id IS NULL RETURNING id`,
+      [ma.id, pid]
+    ).catch(() => []);
+    if (done.length) adopted.set(ma.id, pid);
+  }
+  return adopted.size ? rows.map((r) => (adopted.has(r.id) ? { ...r, rexPropertyId: adopted.get(r.id)! } : r)) : rows;
+}
+
 export async function listAppraisals(): Promise<MarketAppraisal[]> {
   if (hasDb()) {
     const rows = await q<Row>(
@@ -251,7 +296,7 @@ export async function listAppraisals(): Promise<MarketAppraisal[]> {
          FROM os_market_appraisals
         ORDER BY created_at DESC`
     );
-    return withLiveAddress(rows.map(rowTo));
+    return adoptLeadProperties(await withLiveAddress(rows.map(rowTo)));
   }
   const rows = await readFile();
   /* Both backends, or the pilot laptops behave differently from Railway and
@@ -266,7 +311,7 @@ export async function getAppraisal(id: string): Promise<MarketAppraisal | null> 
          FROM os_market_appraisals WHERE id = $1`,
       [id]
     );
-    return rows[0] ? (await withLiveAddress([rowTo(rows[0])]))[0] : null;
+    return rows[0] ? (await adoptLeadProperties(await withLiveAddress([rowTo(rows[0])])))[0] : null;
   }
   const one = (await readFile()).find((r) => r.id === id);
   return one ? (await withLiveAddress([one]))[0] : null;
@@ -357,7 +402,9 @@ export async function recordValuation(
     if (has("feePct")) put("fee_pct", patch.feePct ?? null);
     if (has("setupFee")) put("setup_fee", patch.setupFee ?? null);
     if (has("valuationNote")) put("valuation_note", patch.valuationNote ?? null);
-    if (has("rexPropertyId")) put("rex_property_id", patch.rexPropertyId ?? null);
+    /* Cleared by a person is stored as '', not NULL, so the lead's own
+       property is never adopted back over their decision (adoptLeadProperties). */
+    if (has("rexPropertyId")) put("rex_property_id", patch.rexPropertyId || "");
     /* STAMPED ONLY WHEN A FIGURE MOVED. rexPropertyId travels through the same
        patch, and stamping valued_by on it would credit whoever picked a
        property with recording a valuation they never touched — on the one

@@ -507,11 +507,16 @@ export default function Listings() {
   /* ?open=<listing id> from the search bar or the bell: open that card once
      the book is here. Once, so closing it does not reopen it. */
   const openedFromUrl = useRef(false);
+  /* ?tab=marketing as well: the appraisal file sends an agent to write the
+     description, so it opens on the write-up, not the record's front page. */
+  const [openTab, setOpenTab] = useState<string | null>(null);
   useEffect(() => {
     if (openedFromUrl.current || !LISTINGS.length) return;
-    const wanted = new URLSearchParams(window.location.search).get("open");
+    const params = new URLSearchParams(window.location.search);
+    const wanted = params.get("open");
     if (!wanted) return;
     if (LISTINGS.some((l) => String(l.id) === wanted)) {
+      setOpenTab(params.get("tab"));
       setOpenId(wanted);
       openedFromUrl.current = true;
     }
@@ -982,16 +987,21 @@ export default function Listings() {
         }
         onArchive={(id, action) => void move(id, action)}
         archiveBusy={busyId != null && busyId === openId}
-        onClose={() => setOpenId(null)}
-        onStep={(d) =>
+        initialTab={openTab}
+        onClose={() => {
+          setOpenId(null);
+          setOpenTab(null);
+        }}
+        onStep={(d) => {
+          setOpenTab(null);
           setOpenId((id) => {
             /* Step through the board as shown - filtered and sorted - not the raw book. */
             const list = board.length ? board : LISTINGS;
             const i = list.findIndex((l) => String(l.id) === id);
             if (i < 0) return id;
             return String(list[(i + d + list.length) % list.length].id);
-          })
-        }
+          });
+        }}
       />
 
       {adding && (

@@ -5,6 +5,7 @@ import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import TermsCard from "@/components/appraisal/TermsCard";
 import TakeOnCard from "@/components/appraisal/TakeOnCard";
+import ListingAction from "@/components/appraisal/ListingAction";
 import ValuationSteps from "@/components/appraisal/ValuationSteps";
 import WelcomeVideoRecorder from "@/components/WelcomeVideoRecorder";
 import { useSaveReporter } from "@/components/SaveChip";
@@ -196,11 +197,7 @@ export default function NextUp({
       eyebrow: "Outcome",
       title: "Won",
       sub: "This is a listing now.",
-      body: (
-        <Link href="/listings" className={primary}>
-          Open Listings <span aria-hidden>→</span>
-        </Link>
-      ),
+      body: <ListingAction ma={ma} className={primary} onLinked={onSaved} />,
     };
   } else if (stage === "aml") {
     const items = (ma.ticks ?? []).filter((t) => t.stage === "aml");
@@ -224,9 +221,12 @@ export default function NextUp({
               ))}
             </ul>
           )}
-          <button type="button" onClick={onAttach} className={primary}>
-            <DoodleIcon name="upload" size={14} /> Attach a certificate
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={onAttach} className={primary}>
+              <DoodleIcon name="upload" size={14} /> Attach a certificate
+            </button>
+            <ListingAction ma={ma} className={ghost} onLinked={onSaved} />
+          </div>
         </>
       ),
     };
@@ -256,14 +256,9 @@ export default function NextUp({
       title: "The Take-On Visit",
       body: (
         <div>
-          <TakeOnCard ma={ma} primary={primary} ghost={ghost} />
-          {ma.rexPropertyId && (
-            <p className="mt-3">
-              <Link href={`/listings?open=${encodeURIComponent(ma.rexPropertyId)}`} className="text-[12px] text-muted underline underline-offset-4 hover:text-ink">
-                Write the description on the listing
-              </Link>
-            </p>
-          )}
+          {/* The listing sits beside the visit, not under it as a footnote,
+              and opens THIS home's listing (Howard, 1 Oct 2026). */}
+          <TakeOnCard ma={ma} primary={primary} ghost={ghost} listing={(cls) => <ListingAction ma={ma} className={cls} onLinked={onSaved} />} />
         </div>
       ),
     };

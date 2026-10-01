@@ -206,6 +206,7 @@ function ListingDrawerBody({
   onArchive,
   archiveBusy,
   saves,
+  initialTab,
 }: {
   /** Every save on this listing, for the chip by the close button. */
   saves: SaveScope;
@@ -217,6 +218,9 @@ function ListingDrawerBody({
    *  otherwise be updating a copy the board never hears about. */
   onArchive?: (id: string, action: "archive" | "restore") => void;
   archiveBusy?: boolean;
+  /** Open on this view rather than Home - ?tab=marketing from the appraisal
+   *  file's "Write the description" (Howard, 1 Oct 2026). */
+  initialTab?: string | null;
 }) {
   const [shown, setShown] = useState(false);
   const [tab, setTab] = useState<TabKey>("home");
@@ -673,12 +677,24 @@ function ListingDrawerBody({
     };
   }, [listing?.id]);
 
+  /* The view goes back to Home only when a DIFFERENT listing is opened - or
+     to the one asked for (?tab=marketing). It used to reset on every fresh
+     copy of the same listing, so a book refresh a second after opening threw
+     the agent off the view they were sent to (Howard, 1 Oct 2026). */
+  const tabFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!listing) return;
-    setTab("home");
+    if (!listing) {
+      tabFor.current = null;
+      return;
+    }
+    if (tabFor.current !== String(listing.id)) {
+      tabFor.current = String(listing.id);
+      setTab(TABS.find((x) => x.key === initialTab)?.key ?? "home");
+    }
     setBooked([]);
     setHandingOver(false);
     setOffers([]); setTopPick(null); setOffering(false); setReviewing(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listing]);
 
   useEffect(() => {

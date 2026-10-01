@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { unreadByAppraisal } from "@/lib/appraisal-messages";
 import { stopLeadCampaigns } from "@/lib/campaign-store";
-import { listAppraisals, createAppraisal, recordValuation, setOutcome } from "@/lib/appraisal-store";
+import { listAppraisals, createAppraisal, recordValuation, setOutcome, adoptLeadProperties } from "@/lib/appraisal-store";
 import { withLiveStages } from "@/lib/appraisal-stage";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
@@ -144,7 +144,11 @@ export async function POST(req: NextRequest) {
         confirmation = { sent: false, reason: "Not signed in, so the confirmation could not go out in anybody's name." };
       }
     }
-    return NextResponse.json({ appraisal, videoChase, confirmation, rexDiary, outlook });
+    /* The home the lead already named goes on the file now, so the property
+       file never asks "which is it?" about it (Howard, 1 Oct 2026). OS only,
+       after the diary write, which is left exactly as it was. */
+    const [linked] = await adoptLeadProperties([appraisal]).catch(() => [appraisal]);
+    return NextResponse.json({ appraisal: linked, videoChase, confirmation, rexDiary, outlook });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Could not save the appraisal." },

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import UploadDoc from "@/components/landlord/UploadDoc";
 import {
   PROPERTY_QUESTIONS,
   allDone,
@@ -125,11 +126,28 @@ export default function PropertyQuestions({
     onProgress?.({ done: p.done, of: p.of });
   }, [answers, onProgress]);
 
+  /* What is still to answer, said out loud once they press That's everything
+     with screens skipped. The button used to do nothing at all (Howard,
+     1 Oct 2026: "I skipped pages, but now it won't let me complete it"). */
+  const [missing, setMissing] = useState<string[] | null>(null);
+  /* "Finish for now": what they gave is saved, and the rest can wait. */
+  const [parked, setParked] = useState(false);
+
   const go = (to: number) => {
     if (timer.current) window.clearTimeout(timer.current);
     void flush();
     setAt(Math.max(0, Math.min(PROPERTY_QUESTIONS.length - 1, to)));
+    setParked(false);
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  /* The last screen's button. Everything answered: the thank-you shows on its
+     own. Anything skipped: straight to the first gap, with the gaps named. */
+  const finish = () => {
+    const gaps = PROPERTY_QUESTIONS.filter((s) => !stepDone(s, answers)).map((s) => s.title);
+    if (!gaps.length) return go(at);
+    setMissing(gaps);
+    go(firstUnfinished(answers));
   };
 
   if (!loaded) return <p className="px-1 py-10 text-[13px] text-muted">Getting your answers…</p>;
@@ -139,6 +157,34 @@ export default function PropertyQuestions({
   const p = progress(answers);
   const ready = stepDone(step, answers);
   const last = at === PROPERTY_QUESTIONS.length - 1;
+  const gapsNow = PROPERTY_QUESTIONS.filter((s) => !stepDone(s, answers));
+
+  if (parked && !done) {
+    return (
+      <div className="rounded-[22px] border border-line/60 bg-white p-8 text-center">
+        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
+          <DoodleIcon name="shield" size={22} />
+        </span>
+        <h2 className="mt-4 text-[24px] leading-tight">Thank you, that&rsquo;s saved.</h2>
+        <p className="mx-auto mt-2.5 max-w-md text-[14px] leading-relaxed text-muted">
+          {gapsNow.length === 1 ? "One screen still has" : `${gapsNow.length} screens still have`} a question or two. Come back
+          to {gapsNow.length === 1 ? "it" : "them"} whenever suits - or now, if you have a minute.
+        </p>
+        <div className="mt-5 flex flex-wrap justify-center gap-2">
+          {gapsNow.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => go(PROPERTY_QUESTIONS.indexOf(s))}
+              className="rounded-full border border-line/70 bg-white px-4 py-2 text-[12.5px] font-semibold transition-colors hover:border-ink/40"
+            >
+              {s.title}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   if (done) {
     return (
@@ -181,26 +227,63 @@ export default function PropertyQuestions({
       )}
 
       {/* Where they are. Counted in screens, because that is what they feel. */}
-      <div className="mb-5 flex items-center gap-3">
+      {/* Each bar is a way back to its screen. They always were buttons, but
+          six pixels tall nobody could find or hit them - so the press area is
+          the full height of the row and the bar is drawn inside it. */}
+      <div className="mb-1 flex items-center gap-3">
         <div className="flex flex-1 items-center gap-1.5">
           {PROPERTY_QUESTIONS.map((s, i) => (
             <button
               key={s.id}
               type="button"
               onClick={() => go(i)}
-              aria-label={s.title}
-              className="h-1.5 flex-1 rounded-full transition-colors"
-              style={{
-                background:
-                  stepDone(s, answers) ? "#56423e" : i === at ? "rgba(86,66,62,0.45)" : "rgba(86,66,62,0.14)",
-              }}
-            />
+              aria-label={`${s.title}${stepDone(s, answers) ? ", done" : ", still to do"}`}
+              aria-current={i === at ? "step" : undefined}
+              title={s.title}
+              className="group flex-1 cursor-pointer py-2.5"
+            >
+              <span
+                className="block h-1.5 rounded-full transition-[background-color,transform] group-hover:scale-y-150"
+                style={{
+                  background:
+                    stepDone(s, answers) ? "#56423e" : i === at ? "rgba(86,66,62,0.45)" : "rgba(86,66,62,0.14)",
+                }}
+              />
+            </button>
           ))}
         </div>
         <p className="shrink-0 text-[11.5px] text-muted">
           {p.done} of {p.of} done
         </p>
       </div>
+      <p className="mb-4 text-[11.5px] text-muted">
+        Screen {at + 1} of {PROPERTY_QUESTIONS.length}: {step.title}. Tap a bar to jump to any screen.
+      </p>
+
+      {missing && !done && gapsNow.length > 0 && (
+        <div className="mb-4 rounded-[18px] bg-accent-soft/80 px-5 py-4" role="status">
+          <p className="text-[13.5px] font-semibold leading-snug">
+            Nearly there. {listWords(gapsNow.map((s) => s.title))} {gapsNow.length === 1 ? "still has" : "still have"} a question or two.
+          </p>
+          <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
+            {gapsNow.some((s) => s.id === step.id) ? `We've brought you to ${step.title}. ` : ""}
+            Answer what you can, or finish for now and come back to the rest.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              if (timer.current) window.clearTimeout(timer.current);
+              void flush();
+              setMissing(null);
+              setParked(true);
+              if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            className="mt-3 rounded-full border border-line/70 bg-white px-4 py-2 text-[12.5px] font-semibold transition-colors hover:border-ink/40"
+          >
+            Finish for now
+          </button>
+        </div>
+      )}
 
       <section className="rounded-[22px] border border-line/60 bg-white p-7">
         <div className="flex items-start gap-4">
@@ -215,7 +298,14 @@ export default function PropertyQuestions({
 
         <div className="mt-7 space-y-7">
           {step.questions.filter((qn) => asked(qn, answers)).map((qn) => (
-            <Field key={qn.id} q={qn} value={answers[qn.id]} onChange={(v) => set(qn.id, v)} />
+            <Field
+              key={qn.id}
+              q={qn}
+              value={answers[qn.id]}
+              onChange={(v) => set(qn.id, v)}
+              appraisalId={appraisalId}
+              sample={demo || !appraisalId}
+            />
           ))}
         </div>
 
@@ -232,9 +322,8 @@ export default function PropertyQuestions({
             <span className="text-[11px] text-muted">{saving ? "Saving…" : demo ? "" : "Saved"}</span>
             <button
               type="button"
-              onClick={() => go(at + 1)}
-              disabled={last && !ready}
-              className="rounded-full bg-accent-dark px-6 py-3 text-[13.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+              onClick={() => (last ? finish() : go(at + 1))}
+              className="rounded-full bg-accent-dark px-6 py-3 text-[13.5px] font-semibold text-white transition-opacity hover:opacity-90"
             >
               {last ? "That's everything" : ready ? "Next" : "Skip for now"} <span aria-hidden>→</span>
             </button>
@@ -249,16 +338,26 @@ export default function PropertyQuestions({
   );
 }
 
+/** "A", "A and B", "A, B and C". */
+function listWords(xs: string[]): string {
+  return xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
+}
+
 function Field({
   q,
   value,
   onChange,
+  appraisalId,
+  sample,
 }: {
   q: Question;
   value: Answers[string];
   onChange: (v: string | string[]) => void;
+  appraisalId: string | null;
+  sample: boolean;
 }) {
   const chosen = typeof value === "string" ? value : "";
+  const offerUpload = Boolean(q.upload && q.upload.when.includes(chosen));
   return (
     <div>
       <label className="block text-[14px] font-semibold leading-snug">
@@ -288,6 +387,22 @@ function Field({
                 </button>
               );
             })}
+          </div>
+        )}
+
+        {/* They have it: send it now, while it is in their hand. The same
+            upload as the Documents page, filed under the same kind, so the
+            ask comes off their list there too. */}
+        {offerUpload && q.upload && (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/60 bg-page/60 px-4 py-3">
+            <p className="text-[12.5px] leading-snug text-muted">
+              {q.upload.kind === "other"
+                ? "Have it to hand? Upload it here and it goes straight on your file."
+                : chosen === "expired"
+                  ? "Upload the old one anyway - it tells us when it was last done."
+                  : "Upload a copy here and it goes straight on your file."}
+            </p>
+            <UploadDoc kind={q.upload.kind} appraisalId={appraisalId} sample={sample} title={q.upload.title} label="Upload it" tone="light" />
           </div>
         )}
 

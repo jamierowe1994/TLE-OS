@@ -260,11 +260,25 @@ export async function withLiveStage(ma: MarketAppraisal, listedIds: Set<string>,
 /** The list, each record carrying its live stage, the reason and the ticks. */
 export async function withLiveStages(list: MarketAppraisal[], now = new Date()): Promise<MarketAppraisal[]> {
   let listedIds = new Set<string>();
+  /* Which listing each property has, so the file can open THAT listing
+     (Howard, 1 Oct 2026: "opens listing but doesn't open my listing"). The
+     link used to hand the property id to ?open=, which takes a listing id,
+     so it landed on the board with nothing open. A home let more than once
+     has a listing per let; the newest is the one being worked on. */
+  const listingOf = new Map<string, { id: string; at: string }>();
   try {
     const book = await bookFor(null);
     listedIds = new Set(book.listings.filter((l) => l.propertyId).map((l) => String(l.propertyId)));
+    for (const l of book.listings) {
+      if (!l.propertyId) continue;
+      const key = String(l.propertyId);
+      const at = l.createdAt ?? "";
+      const held = listingOf.get(key);
+      if (!held || at > held.at) listingOf.set(key, { id: String(l.id), at });
+    }
   } catch {
     /* no book: nothing reads as won on that evidence; nothing else changes */
   }
-  return Promise.all(list.map((ma) => withLiveStage(ma, listedIds, now)));
+  const staged = await Promise.all(list.map((ma) => withLiveStage(ma, listedIds, now)));
+  return staged.map((ma) => ({ ...ma, listingId: ma.rexPropertyId ? listingOf.get(String(ma.rexPropertyId))?.id ?? null : null }));
 }
