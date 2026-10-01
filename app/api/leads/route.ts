@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchLeadBook, type LeadBook } from "@/lib/rex-leads";
 import { scopeFor } from "@/lib/scope";
-import { ledgerBoard, ledgerStats, recordLeads, salesLeadIds } from "@/lib/lead-ledger";
+import { ledgerBoard, ledgerStats, readNewValuations, recordLeads, salesLeadIds } from "@/lib/lead-ledger";
 import { hiddenLeadIds } from "@/lib/hidden-leads";
 import { ago } from "@/lib/rex-leads";
 import { hasDb, q } from "@/lib/db";
@@ -107,6 +107,20 @@ function refresh(key: string, rexUserId: string | null): Promise<Cached> {
   return p;
 }
 
+/** One read at a time across everybody opening the board at once. */
+let readingValuations: Promise<unknown> | null = null;
+function valuationsReadOnOpen(): Promise<unknown> {
+  if (!hasDb()) return Promise.resolve();
+  if (!readingValuations) {
+    readingValuations = readNewValuations(3)
+      .catch(() => 0)
+      .finally(() => {
+        readingValuations = null;
+      });
+  }
+  return Promise.race([readingValuations, new Promise((r) => setTimeout(r, 4000))]);
+}
+
 export async function GET(req: NextRequest) {
   if (!rexConfigured()) {
     return NextResponse.json({
@@ -133,6 +147,14 @@ export async function GET(req: NextRequest) {
   /* Leads removed from the OS by hand never leave the server, cached copy or
      not; the ids go with the answer so the page can hide its own records too. */
   const hidden = await hiddenLeadIds().catch(() => new Set<string>());
+  /* New valuation requests read in full before the board is drawn, so a sale
+     is known as one on the first open and not only once somebody opens it
+     (Howard, 1 Oct 2026: Danielle Jacques, "Enquiry type: sales", sat on the
+     board as a landlord lead). The scan does this too, but the board must not
+     depend on it - the scan had been silently failing for days. A few at a
+     time, never more than four seconds; usually there are none and it is one
+     query. */
+  await valuationsReadOnOpen();
   /* And every lead the ledger knows is a sale: the cached book is REX's own
      list, whose snippets never say "sales" (lib/lead-ledger salesLeadIds). */
   for (const id of await salesLeadIds().catch(() => new Set<string>())) hidden.add(id);
