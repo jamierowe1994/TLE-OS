@@ -182,7 +182,10 @@ export function sortTouches(touches: LeadTouch[]): LeadTouch[] {
  *
  * @param booked  whether an appraisal exists for this lead (os_market_appraisals)
  */
-export function foldSpine(touches: LeadTouch[], booked: boolean): Spine {
+/** `viewingBooked`: a viewing for this lead is in the diary (os_appointments).
+ *  It only changes the board's word for a tenant lead - a landlord's rail is
+ *  the appraisal spine and never books a viewing. */
+export function foldSpine(touches: LeadTouch[], booked: boolean, viewingBooked = false): Spine {
   const log = sortTouches(touches).reverse(); // oldest first for the fold
   let attempts = 0;
   let emailSentAt: string | null = null;
@@ -225,6 +228,7 @@ export function foldSpine(touches: LeadTouch[], booked: boolean): Spine {
   let label: string | null = null;
   if (lost) label = "Lost";
   else if (booked) label = SPINE_LABEL.appraisal_booked;
+  else if (viewingBooked) label = "Viewing booked";
   else if (nurture) label = "Nurture";
   else if (attempts >= 3) label = SPINE_LABEL.contact3;
   else if (attempts >= 2) label = SPINE_LABEL.contact2;

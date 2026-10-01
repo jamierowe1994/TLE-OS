@@ -94,9 +94,12 @@ export async function spineFor(leadId: string): Promise<{ touches: LeadTouch[]; 
  */
 export async function allSpines(): Promise<Record<string, Spine>> {
   if (!hasDb()) return {};
-  const [rows, booked] = await Promise.all([
+  const [rows, booked, viewings] = await Promise.all([
     q<Row>(`select id, lead_id, kind, outcome, body, by_name, at from os_lead_touches order by at desc`),
     q<{ lead_id: string }>(`select distinct lead_id from os_market_appraisals where lead_id is not null`),
+    /* A viewing booked from the lead (/api/viewings/book) is the tenant
+       lead's job done (Howard, 1 Oct 2026: it goes under Completed). */
+    q<{ lead_id: string }>(`select distinct lead_id from os_appointments where kind = 'viewing' and lead_id is not null`).catch(() => []),
   ]);
   const byLead = new Map<string, LeadTouch[]>();
   for (const r of rows) {
@@ -105,9 +108,10 @@ export async function allSpines(): Promise<Record<string, Spine>> {
     byLead.set(r.lead_id, list);
   }
   const bookedIds = new Set(booked.map((b) => b.lead_id));
+  const viewingIds = new Set(viewings.map((v) => v.lead_id));
   const out: Record<string, Spine> = {};
-  for (const id of new Set([...byLead.keys(), ...bookedIds])) {
-    out[id] = foldSpine(byLead.get(id) ?? [], bookedIds.has(id));
+  for (const id of new Set([...byLead.keys(), ...bookedIds, ...viewingIds])) {
+    out[id] = foldSpine(byLead.get(id) ?? [], bookedIds.has(id), viewingIds.has(id));
   }
   return out;
 }

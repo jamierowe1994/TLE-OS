@@ -68,6 +68,20 @@ function receivedAt(l: Lead): Date | null {
  */
 export type GroupId = "new" | "review" | "contacted";
 
+/**
+ * DONE WITH, ON THIS BOARD (Howard, 1 Oct 2026: "when something is completed
+ * (lost or book viewing) it should hide under a completed section").
+ *
+ * A lead's work on Leads ends when it is lost, when a tenant has a viewing
+ * booked, or when a landlord's appraisal is booked - each goes on to its own
+ * screen from there. REX closing it says the same. These leave the three
+ * working boxes for one folded box at the foot. It is not one of the boxes
+ * somebody chooses in Customise, so a layout saved before it existed still
+ * has it.
+ */
+const COMPLETED = new Set(["Lost", "Viewing booked", "Appraisal booked", "Closed", "Not proceeding"]);
+export const isCompleted = (l: Lead) => COMPLETED.has(l.spineLabel ?? l.stage);
+
 function groupOf(l: Lead, now: Date): GroupId {
   /* Anything past New has been picked up, whatever the label says next. */
   const spoken = (l.spineLabel ?? l.stage) !== "New";
@@ -127,16 +141,70 @@ export default function LeadGroups({
   const grouped = useMemo(() => {
     const now = new Date();
     const out: Record<GroupId, Lead[]> = { new: [], review: [], contacted: [] };
-    for (const l of leads) out[groupOf(l, now)].push(l);
+    const done: Lead[] = [];
+    for (const l of leads) {
+      if (isCompleted(l)) done.push(l);
+      else out[groupOf(l, now)].push(l);
+    }
     /* Newest first inside every box. The whole point of the view is that the
        thing needing attention is at the top. */
-    for (const k of Object.keys(out) as GroupId[]) {
-      out[k].sort((a, b) => (receivedAt(b)?.getTime() ?? 0) - (receivedAt(a)?.getTime() ?? 0));
-    }
-    return out;
+    const newest = (a: Lead, b: Lead) => (receivedAt(b)?.getTime() ?? 0) - (receivedAt(a)?.getTime() ?? 0);
+    for (const k of Object.keys(out) as GroupId[]) out[k].sort(newest);
+    done.sort(newest);
+    return { ...out, done };
   }, [leads]);
 
   const [openAll, setOpenAll] = useState<Record<string, boolean>>({});
+  /* Folded until asked for: it is the box of things nobody needs to act on. */
+  const [doneOpen, setDoneOpen] = useState(false);
+
+  const row = (l: Lead, filled: boolean) => (
+    <li key={l.id}>
+      <button
+        type="button"
+        data-steve-row=""
+        onClick={() => onOpen(l)}
+        className={`flex w-full flex-wrap items-center gap-x-4 gap-y-1.5 px-5 py-3 text-left transition-colors md:grid md:grid-cols-[10px_minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_auto] ${
+          l.id === activeId ? "bg-accent-soft/50" : "hover:bg-accent-soft/20"
+        }`}
+      >
+        {/* Filled means nobody has spoken to them. */}
+        <span
+          aria-hidden
+          className={`h-[7px] w-[7px] shrink-0 rounded-full ${filled ? "bg-accent-dark" : "border border-line bg-transparent"}`}
+        />
+
+        <span className="min-w-0">
+          <span className="hand block truncate text-[14px] leading-tight">{l.name}</span>
+          <span className="block truncate text-[11px] text-muted">{l.email || l.phone || "No details"}</span>
+        </span>
+
+        <span className="min-w-0">
+          <span className="block truncate text-[12px]">{l.enquiry}</span>
+          {l.preferred && (
+            <span className="block truncate text-[11px] text-muted">{l.preferred}</span>
+          )}
+        </span>
+
+        {/* No pin before the town. SourceMark already draws one
+            for Rightmove, and the same mark meaning two things
+            one column apart is worse than no mark at all. */}
+        <span className="min-w-0 truncate text-[12px] text-muted">{l.area}</span>
+
+        <span className="ml-auto flex shrink-0 items-center gap-3 md:ml-0">
+          <SourceMark source={l.source} />
+          <span className="whitespace-nowrap text-[11px] text-muted">{l.received}</span>
+          {l.spineLabel ? (
+            <Pill tone={l.spineLabel === "Appraisal booked" || l.spineLabel === "Viewing booked" ? "good" : l.spineLabel === "Nurture" || l.spineLabel === "Lost" ? "neutral" : "accent"}>
+              {l.spineLabel}
+            </Pill>
+          ) : (
+            <Pill tone={STAGE_TONE[l.stage]}>{l.stage}</Pill>
+          )}
+        </span>
+      </button>
+    </li>
+  );
 
   return (
     <div className="space-y-4">
@@ -181,61 +249,53 @@ export default function LeadGroups({
                     : "Nobody has been contacted yet."}
               </p>
             ) : (
-              <ul className="divide-y divide-line/40">
-                {shown.map((l) => (
-                  <li key={l.id}>
-                    <button
-                      type="button"
-                      data-steve-row=""
-                      onClick={() => onOpen(l)}
-                      className={`flex w-full flex-wrap items-center gap-x-4 gap-y-1.5 px-5 py-3 text-left transition-colors md:grid md:grid-cols-[10px_minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_auto] ${
-                        l.id === activeId ? "bg-accent-soft/50" : "hover:bg-accent-soft/20"
-                      }`}
-                    >
-                      {/* Filled means nobody has spoken to them. */}
-                      <span
-                        aria-hidden
-                        className={`h-[7px] w-[7px] shrink-0 rounded-full ${
-                          g.id === "contacted" ? "border border-line bg-transparent" : "bg-accent-dark"
-                        }`}
-                      />
-
-                      <span className="min-w-0">
-                        <span className="hand block truncate text-[14px] leading-tight">{l.name}</span>
-                        <span className="block truncate text-[11px] text-muted">{l.email || l.phone || "No details"}</span>
-                      </span>
-
-                      <span className="min-w-0">
-                        <span className="block truncate text-[12px]">{l.enquiry}</span>
-                        {l.preferred && (
-                          <span className="block truncate text-[11px] text-muted">{l.preferred}</span>
-                        )}
-                      </span>
-
-                      {/* No pin before the town. SourceMark already draws one
-                          for Rightmove, and the same mark meaning two things
-                          one column apart is worse than no mark at all. */}
-                      <span className="min-w-0 truncate text-[12px] text-muted">{l.area}</span>
-
-                      <span className="ml-auto flex shrink-0 items-center gap-3 md:ml-0">
-                        <SourceMark source={l.source} />
-                        <span className="whitespace-nowrap text-[11px] text-muted">{l.received}</span>
-                        {l.spineLabel ? (
-                          <Pill tone={l.spineLabel === "Appraisal booked" ? "good" : l.spineLabel === "Nurture" || l.spineLabel === "Lost" ? "neutral" : "accent"}>
-                            {l.spineLabel}
-                          </Pill>
-                        ) : (
-                          <Pill tone={STAGE_TONE[l.stage]}>{l.stage}</Pill>
-                        )}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <ul className="divide-y divide-line/40">{shown.map((l) => row(l, g.id !== "contacted"))}</ul>
             )}
           </section>
         );
       })}
+
+      {grouped.done.length > 0 && (
+        <section className="fade-up rounded-[22px] border border-line/50 bg-white" style={{ animationDelay: `${groups.length * 60}ms` }}>
+          <button
+            type="button"
+            onClick={() => setDoneOpen((o) => !o)}
+            aria-expanded={doneOpen}
+            className="flex w-full flex-wrap items-center gap-x-3 gap-y-1.5 px-5 py-3.5 text-left"
+          >
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-line/40 text-muted">
+              <DoodleIcon name="checklist" size={14} />
+            </span>
+            <h2 className="hand text-[17px] leading-none">Completed</h2>
+            <span className="figures rounded-full bg-line/40 px-2.5 py-0.5 text-[11px] font-semibold text-muted">
+              {grouped.done.length.toLocaleString("en-GB")}
+            </span>
+            <p className="text-[11.5px] text-muted">Lost, or a viewing or appraisal booked - nothing more to do here</p>
+            <span className="ml-auto flex items-center gap-1.5 text-[11.5px] font-semibold text-accent-dark">
+              {doneOpen ? "Hide" : "Show"}
+              <svg aria-hidden width="12" height="12" viewBox="0 0 12 12" fill="none" className={`transition-transform duration-200 ${doneOpen ? "rotate-180" : ""}`}>
+                <path d="M3 4.5l3 3 3-3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+          </button>
+          {doneOpen && (
+            <ul className="divide-y divide-line/40 border-t border-line/50">
+              {(openAll.done ? grouped.done : grouped.done.slice(0, PREVIEW)).map((l) => row(l, false))}
+              {grouped.done.length > PREVIEW && (
+                <li className="px-5 py-3 text-center">
+                  <button
+                    type="button"
+                    onClick={() => setOpenAll((o) => ({ ...o, done: !o.done }))}
+                    className="text-[11.5px] font-semibold text-accent-dark underline decoration-accent-dark/40 underline-offset-2 transition-colors hover:decoration-accent-dark"
+                  >
+                    {openAll.done ? "Show fewer" : `View all ${grouped.done.length.toLocaleString("en-GB")}`}
+                  </button>
+                </li>
+              )}
+            </ul>
+          )}
+        </section>
+      )}
     </div>
   );
 }

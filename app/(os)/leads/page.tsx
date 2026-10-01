@@ -308,8 +308,9 @@ export default function Leads() {
       if (fAgent && l.agent !== fAgent) return false;
       if (fStage && (l.spineLabel ?? l.stage) !== fStage) return false;
       /* Lost is off the working list (Howard, 24 Sep 2026). It is still one
-         Stage filter or a search away, and brought back from the lead. */
-      if (!fStage && !needle && l.spineLabel === "Lost") return false;
+         Stage filter or a search away, and brought back from the lead. In
+         Groups it is kept: it goes in the Completed box at the foot. */
+      if (!fStage && !needle && l.spineLabel === "Lost" && view !== "groups") return false;
       if (fTags.length) { const mine = tagsOf(l); if (!fTags.every((t) => mine.includes(t))) return false; }
       /* Phone and address are in the needle too. Somebody looking a landlord up
          mid-call has the number in front of them far more often than the town,
@@ -324,7 +325,7 @@ export default function Leads() {
       }
       return true;
     });
-  }, [ALL, side, fSource, fAgent, fStage, fTags, tagsOf, q]);
+  }, [ALL, side, fSource, fAgent, fStage, fTags, tagsOf, q, view]);
   /* Every tag on the board this side, with how many carry it. */
   const tagCounts = useMemo(() => {
     const m = new Map<string, number>();
