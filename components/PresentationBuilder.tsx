@@ -1242,7 +1242,9 @@ export default function PresentationBuilder({
      30 Sep 2026: "i dont think this is clear on the previous steps") rather
      than only on Review after the fact. Same floor as slideHasContent. */
   const GUIDE_FLOOR = 3;
-  const guideMet = pickedComps.length >= GUIDE_FLOOR;
+  /* A Rightmove price guide attached below counts as met too: it goes on
+     the slide in place of the range. */
+  const guideMet = pickedComps.length >= GUIDE_FLOOR || Boolean(rmGuide);
 
   /* OUR OWN LETS, folded up. What we let (with time on the market, which
      only our book can say) and what we are letting now, as one line above
@@ -1266,7 +1268,12 @@ export default function PresentationBuilder({
           {guideMet ? <>&#10003;</> : "!"}
         </span>
         <span className="min-w-0 flex-1">
-          {guideMet ? (
+          {guideMet && pickedComps.length < GUIDE_FLOOR ? (
+            <>
+              The Rightmove price guide goes on the <span className="font-semibold">What&apos;s letting nearby</span> slide. Tick{" "}
+              {GUIDE_FLOOR} of our lets as well to add our own rent range.
+            </>
+          ) : guideMet ? (
             <>
               The rent guide and the <span className="font-semibold">What&apos;s letting nearby</span> slide are in, from{" "}
               <span className="figures">{pickedComps.length}</span> of our lets ticked.
