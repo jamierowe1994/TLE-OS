@@ -6,7 +6,7 @@ import { homeOnMarket } from "@/lib/tenant-homes";
 import { agentEmailFor, noteOnLeads } from "@/lib/tenant-find";
 import { proseEmail } from "@/lib/email/prose";
 import { sendEmail } from "@/lib/resend";
-import { APPLICANT_TYPES, TRADING_FOR, WORK_HOURS, workFlags, workLine, type PassportData } from "@/lib/passport-shape";
+import { APPLICANT_TYPES, EMPTY_PASSPORT, TRADING_FOR, WORK_HOURS, householdIncome, workFlags, workLine, type PassportData } from "@/lib/passport-shape";
 import { savePassport } from "@/lib/passport";
 import { diffOffer, offerSubset, show, type OfferChange, type OfferPassport } from "@/lib/offer-passport";
 
@@ -144,6 +144,9 @@ export async function POST(req: NextRequest) {
          landlord accepts with the offer. */
       movingIn: list(o.movingIn),
       works: list(o.works),
+      /* For the landlord's affordability figure: everyone on the passport's
+         household page, as referencing counts it. */
+      householdIncome: householdIncome({ ...EMPTY_PASSPORT, ...(data ?? {}), ...after }).total,
       adults: Number(after.numAdults),
       children: Number(after.numChildren),
       pets: after.pets === true,

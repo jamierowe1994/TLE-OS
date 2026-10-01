@@ -157,6 +157,10 @@ export async function saveAgentOffer(me: OsUser, raw: Record<string, unknown>): 
     pets: after.pets === true,
     petsNote: after.petsNote,
     note,
+    /* The household's income as the agent saw it - theirs plus whoever else
+       is ticked as moving in - which is what the landlord's affordability
+       figure is worked from. Falls back to theirs alone. */
+    householdIncome: Math.max(0, Math.round(Number(raw.householdIncome) || 0)) || Number(String(after.annualIncome).replace(/[£,\s]/g, "")) || null,
     passport: after,
     changes,
     recordedBy: { name: me.name, email: me.email, how },

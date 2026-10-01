@@ -13,6 +13,8 @@ import type { ManagedProperty } from "@/lib/portfolio-types";
 import { certificatesFor } from "@/lib/rex-compliance";
 import { getApplications, type Application } from "@/lib/applications";
 import type { ViewOffer, ViewProgress } from "@/lib/landlord-view";
+import { liveBook } from "@/lib/tenant-matching";
+import { money, workLine, type PassportData } from "@/lib/passport-shape";
 import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
 import { getMeta } from "@/lib/business/deal-store";
 import { derivedStageFor } from "@/lib/business/deal-stage";
@@ -379,6 +381,19 @@ export async function landlordOffers(propertyIds: Array<string | null | undefine
   const props = new Set(propertyIds.filter((x): x is string => Boolean(x)).map(String));
   const lists = new Set(listingIds.filter((x): x is string | number => x != null && x !== "").map(String));
   if (!props.size && !lists.size) return [];
+  const [rex, ours] = await Promise.all([rexOffers(props, lists), osOffers(props, lists).catch(() => [] as ViewOffer[])]);
+  /* Ours first among the unaccepted, newest first: the order a landlord
+     reads in, with an accepted REX offer still floating to the very top. */
+  const all = [...rex, ...ours];
+  all.sort((a, b) => {
+    const acc = Number(b.status === "accepted") - Number(a.status === "accepted");
+    if (acc) return acc;
+    return (b.received ?? "").localeCompare(a.received ?? "");
+  });
+  return all;
+}
+
+async function rexOffers(props: Set<string>, lists: Set<string>): Promise<ViewOffer[]> {
   let apps: Application[] = [];
   try {
     apps = await recentApplications();
@@ -388,12 +403,74 @@ export async function landlordOffers(propertyIds: Array<string | null | undefine
   const mine = apps.filter(
     (a) => (a.propertyId && props.has(String(a.propertyId))) || (a.listingId != null && lists.has(String(a.listingId)))
   );
-  mine.sort((a, b) => {
-    const acc = Number(b.status === "accepted") - Number(a.status === "accepted");
-    if (acc) return acc;
-    return (b.dateReceived ?? "").localeCompare(a.dateReceived ?? "");
-  });
   return mine.map(offerOf);
+}
+
+/**
+ * The offers made through the OS (1 Oct 2026): a tenant's own Make an offer,
+ * and the ones an agent puts forward for them. Held in
+ * os_tenant_viewing_responses by listing id, so a landlord known only by the
+ * REX property (an appraisal that went to market) has the listing found
+ * from the live book first.
+ *
+ * The same ViewOffer as a REX one, with the same things left out - no
+ * contact details, no addresses, no share code, no adverse-credit note -
+ * plus the works they asked for. The id is prefixed so it can never meet a
+ * REX application id in os_landlord_offer_approvals.
+ */
+async function osOffers(props: Set<string>, lists: Set<string>): Promise<ViewOffer[]> {
+  if (!hasDb()) return [];
+  const listingIds = new Set(lists);
+  if (props.size) {
+    const book = await liveBook().catch(() => []);
+    for (const l of book) if (l.propertyId && props.has(String(l.propertyId))) listingIds.add(String(l.id));
+  }
+  if (!listingIds.size) return [];
+  const rows = await q<{ id: string; name: string; listing_id: string; payload: Record<string, unknown>; created_at: string | Date }>(
+    `SELECT id, name, listing_id, payload, created_at FROM os_tenant_viewing_responses
+      WHERE kind = 'offer' AND listing_id = ANY($1::text[]) ORDER BY created_at DESC LIMIT 50`,
+    [[...listingIds]]
+  );
+  return rows.map((r) => osOfferOf(r.id, r.name, r.payload, new Date(r.created_at).toISOString()));
+}
+
+const gbpWhole = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
+
+export function osOfferOf(id: string, name: string, p: Record<string, unknown>, received: string): ViewOffer {
+  const pp = (p.passport ?? {}) as Partial<PassportData>;
+  const amount = Number(p.amount) || 0;
+  const adults = Number(p.adults) || 1;
+  const children = Number(p.children) || 0;
+  const pets = p.pets === true;
+  const petsNote = String(p.petsNote ?? "").trim();
+  const names = Array.isArray(p.movingIn) ? (p.movingIn as unknown[]).map(String).filter(Boolean) : [];
+  const firsts = (names.length ? names : [name]).filter((n) => !/^child\b/i.test(n)).map((n) => n.trim().split(/\s+/)[0]);
+  const income = Number(p.householdIncome) || money(pp.annualIncome ?? "") || 0;
+  const works = Array.isArray(p.works) ? (p.works as unknown[]).map(String).filter(Boolean) : [];
+  const parts = [
+    `${adults} ${adults === 1 ? "adult" : "adults"}`,
+    children ? `${children} ${children === 1 ? "child" : "children"}` : "no children",
+    pets ? (petsNote ? petsNote.charAt(0).toLowerCase() + petsNote.slice(1) : "pets") : "no pets",
+  ];
+  return {
+    id: `os-${id}`,
+    amount: `${gbpWhole(amount)} per month`,
+    /* On the landlord's screen means it is with them to decide. */
+    status: "with-you",
+    statusLabel: "With you",
+    who: parts.join(", "),
+    applicants: firsts.length > 1 ? `${firsts.slice(0, -1).join(", ")} and ${firsts[firsts.length - 1]}` : firsts[0] ?? "",
+    moveIn: typeof p.moveIn === "string" && p.moveIn ? p.moveIn : null,
+    received,
+    conditions: String(p.note ?? "").trim() || null,
+    term: "Rolling, no fixed term",
+    income: income ? `${gbpWhole(income)} a year` : null,
+    affordabilityPct: income && amount ? Math.round(((amount * 12) / income) * 100) : null,
+    employment: pp.applicantType ? workLine({ applicantType: pp.applicantType, onProbation: pp.onProbation ?? null, zeroHours: pp.zeroHours ?? null, workHours: pp.workHours ?? "", tradingFor: pp.tradingFor ?? "" }) : null,
+    guarantor: typeof pp.guarantor === "boolean" ? pp.guarantor : null,
+    landlordRef: typeof pp.landlordRef === "boolean" ? pp.landlordRef : null,
+    works,
+  };
 }
 
 /* ------------------------------------------------------------ progress -- */

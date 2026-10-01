@@ -119,6 +119,21 @@ export interface ViewOffer {
   guarantor: boolean | null;
   /** A landlord reference covering the last two years is available. */
   landlordRef: boolean | null;
+  /**
+   * Works the tenant wants done before moving day (1 Oct 2026). Only on
+   * offers made through the OS. Approving the offer agrees to them, and they
+   * become the landlord's Before moving day list (lib/landlord-prep).
+   */
+  works?: string[];
+}
+
+/** One job on the landlord's Before moving day list, from an approved offer. */
+export interface ViewPrep {
+  id: string;
+  title: string;
+  /** The tenant's move-in day, ISO, when the offer gave one. */
+  dueOn: string | null;
+  done: boolean;
 }
 
 /** The let moving through Kirstie's eight stages, in the landlord's words. */
@@ -262,6 +277,8 @@ export interface LandlordView {
    * already pressed. See lib/landlord-offers.
    */
   approvedOfferId?: string | null;
+  /** Works agreed with an approved offer, to finish before moving day. */
+  beforeMoveIn?: ViewPrep[];
   /**
    * This is the harness, not a landlord's own file.
    *

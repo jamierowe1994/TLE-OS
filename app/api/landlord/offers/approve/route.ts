@@ -4,6 +4,7 @@ import { loadLandlordHome } from "@/lib/landlord-home-view";
 import { currentApproval, markApprovalEmailed, recordApproval } from "@/lib/landlord-offers";
 import { sendEmail } from "@/lib/resend";
 import { hasDb } from "@/lib/db";
+import { addPrep } from "@/lib/landlord-prep";
 
 /**
  * "I am happy with this one."
@@ -68,6 +69,12 @@ export async function POST(req: NextRequest) {
     property,
   });
 
+  /* The works they asked for, agreed with the offer: on the landlord's
+     Before moving day list, due on the move-in day (lib/landlord-prep). */
+  if (offer.works?.length) {
+    await addPrep({ accountId: me.id, offerId: offer.id, property, works: offer.works, dueOn: offer.moveIn }).catch(() => null);
+  }
+
   /* Told, not done. The agent is the one who can actually move it. */
   const agentEmail = view?.agent?.email?.trim() || OFFICE;
   const agentName = view?.agent?.name ?? "there";
@@ -77,6 +84,7 @@ export async function POST(req: NextRequest) {
     ["Offer", offer.amount],
     ...(offer.moveIn ? [["Move-in", offer.moveIn] as [string, string]] : []),
     ...(offer.conditions ? [["Asked for", offer.conditions] as [string, string]] : []),
+    ...(offer.works?.length ? [["Works before moving day", offer.works.join("; ")] as [string, string]] : []),
   ] as [string, string][];
 
   const text = [

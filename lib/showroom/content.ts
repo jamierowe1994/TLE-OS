@@ -174,7 +174,6 @@ export const TENANT_STEPS: ShowroomStep[] = [
     emails: ["viewing-feedback", "tenant-offer-copy", "viewing-not-for-them"],
     notYet: [
       "When they make an offer themselves, only the agent is emailed - the copy only goes when the agent puts it in for them.",
-      "Offers don't reach the landlord's screen yet: the agent puts them to the landlord.",
     ],
   },
   {
@@ -374,8 +373,12 @@ export const LANDLORD_STEPS: ShowroomStep[] = [
     id: "offers",
     title: "Viewings and offers",
     lead: "Tenants through the door, and offers coming in. Their area shows who has been and the offers waiting on them.",
-    sees: ["The viewings, and the offers to review, in their area."],
-    agent: { says: "Book viewings from the listing; offers arrive on Applications.", href: "/applications" },
+    sees: [
+      "The viewings, and the offers to review, in their area - whether they came through REX, from the tenant's own area, or from you on the phone.",
+      "Each offer: the rent, who is moving in, their work and household income, guarantor and landlord reference, and any works they want done before moving day.",
+      "Approving agrees to the works too. They become a Before moving day list in their area to tick off.",
+    ],
+    agent: { says: "Book viewings from the listing; offers arrive on Applications, and the ones made in the OS land on the landlord's screen by themselves.", href: "/applications" },
     screens: [{ label: "Offers in", href: raj("viewings"), device: "desktop" }],
     emails: [],
     notYet: [
@@ -542,8 +545,6 @@ export const AGENT_STEPS: ShowroomStep[] = [
     emails: ["tenant-offer-copy"],
     notYet: [
       "Only from a viewing so far - not yet from a lead or a listing.",
-      "The offer doesn't reach the landlord's screen yet: you put it to them.",
-      "Works before moving day don't become reminders on the landlord's portal yet.",
     ],
   },
   {

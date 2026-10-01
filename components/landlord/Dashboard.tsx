@@ -13,6 +13,7 @@ import MoreActions from "@/components/landlord/MoreActions";
 import SignTile from "@/components/landlord/SignTile";
 import { fullJourney } from "@/lib/landlord-journey";
 import { isLet, type LandlordView } from "@/lib/landlord-view";
+import BeforeMoveIn from "@/components/landlord/BeforeMoveIn";
 
 /**
  * The landlord dashboard, to James's mock of 11 Sep 2026: light, airy,
@@ -302,6 +303,9 @@ export default function LandlordDashboard({
           </ul>
         </section>
       )}
+
+      {/* ── before moving day: the works agreed with the approved offer ── */}
+      {v.beforeMoveIn && v.beforeMoveIn.length > 0 && <BeforeMoveIn items={v.beforeMoveIn} sample={v.sample} className={`${card} p-6`} />}
 
       {/* ── the tenancy, once the tenant is in: the management profile ── */}
       {v.tenancy && (

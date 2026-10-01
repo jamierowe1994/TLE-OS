@@ -693,6 +693,21 @@ CREATE INDEX IF NOT EXISTS os_inspection_events_insp ON os_inspection_events (in
 
 -- Company-wide settings, one JSON document per key: "invoicing" holds who
 -- an invoice is from, the bank details, the prefix and the terms.
+-- BEFORE MOVING DAY (1 Oct 2026). Works a tenant asked for with their offer,
+-- agreed when the landlord approves it, shown on the landlord's portal to tick
+-- off before the tenant moves in. One row per job; lib/landlord-prep.
+CREATE TABLE IF NOT EXISTS os_landlord_prep (
+  id          TEXT PRIMARY KEY,
+  account_id  TEXT NOT NULL,
+  offer_id    TEXT NOT NULL,
+  property    TEXT NOT NULL DEFAULT '',
+  title       TEXT NOT NULL,
+  due_on      DATE,
+  done_at     TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_landlord_prep_account ON os_landlord_prep (account_id, property);
+
 CREATE TABLE IF NOT EXISTS os_settings (
   key            TEXT PRIMARY KEY,
   value          JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -1337,6 +1352,8 @@ CREATE TABLE IF NOT EXISTS os_tenant_viewing_responses (
   outcome      TEXT,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- Offers are looked up by listing for the landlord's screen.
+CREATE INDEX IF NOT EXISTS os_tenant_viewing_responses_listing ON os_tenant_viewing_responses (listing_id) WHERE kind = 'offer';
 CREATE INDEX IF NOT EXISTS os_tenant_viewing_responses_email_idx ON os_tenant_viewing_responses (LOWER(email), created_at DESC);
 
 -- New-home alerts a tenant asked for, with the moment they agreed to the

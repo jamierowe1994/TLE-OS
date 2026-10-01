@@ -358,6 +358,21 @@ function Offer({ o, approved }: { o: ViewOffer; approved: boolean }) {
         ))}
       </dl>
 
+      {o.works && o.works.length > 0 && (
+        <div className="mt-3 rounded-[22px] bg-white p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Works before moving day</p>
+          <ul className="mt-2 space-y-1.5">
+            {o.works.map((w) => (
+              <li key={w} className="flex items-center gap-2.5 text-[13.5px]">
+                <span className="inline-block h-3.5 w-3.5 shrink-0 rounded-[4px] border border-ink/40" />
+                {w}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2.5 text-[11.5px] leading-relaxed text-muted">Approving the offer agrees to these. They go on your Before moving day list to tick off.</p>
+        </div>
+      )}
+
       {o.conditions && (
         <div className="mt-3 rounded-[22px] p-5" style={{ background: "var(--accent-soft, #fdefec)" }}>
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-accent-dark/60">What they asked for</p>

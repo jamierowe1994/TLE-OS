@@ -209,6 +209,7 @@ export default function AgentOfferRecorder({
         works,
         note: conditions,
         movingIn: movingIn.map((p) => p.name),
+        householdIncome: income,
         passport: { ...pp, numAdults: String(adults), numChildren: String(children) },
         consent,
         copyToTenant,

@@ -241,8 +241,16 @@ export function rajAt(stage: Stage): { view: LandlordView; docs: DocsView; maint
     offers:
       at >= rank("viewings")
         ? [
-            { id: "o1", amount: "£850 per month", status: let_ ? "accepted" : "with-you", statusLabel: let_ ? "Accepted" : "With you", who: "2 adults, no children, a small dog", applicants: "Sophie and Jordan", moveIn: "2026-10-01", received: "2026-06-14", conditions: "Would like to bring a small, older dog", term: "12 months", income: "£60,000 a year", affordabilityPct: 17, employment: "Employed, full-time, past probation", guarantor: false, landlordRef: true },
+            { id: "o1", amount: "£850 per month", status: let_ ? "accepted" : "with-you", statusLabel: let_ ? "Accepted" : "With you", who: "2 adults, no children, a small dog", applicants: "Sophie and Jordan", moveIn: "2026-10-01", received: "2026-06-14", conditions: "Would like to bring a small, older dog", term: "Rolling, no fixed term", income: "£60,000 a year", affordabilityPct: 17, employment: "Employed, full-time, past probation", guarantor: false, landlordRef: true, works: ["Fix the shower over the bath", "New carpet in the second bedroom"] },
             { id: "o2", amount: "£825 per month", status: let_ ? "unsuccessful" : "received", statusLabel: let_ ? "Unsuccessful" : "Received", who: "2 adults, no children, no pets", applicants: "Daniel and Priya", moveIn: "2026-09-01", received: "2026-06-08", conditions: null, term: "12 months", income: "£52,000 a year", affordabilityPct: 19, employment: "Employed, permanent", guarantor: true, landlordRef: null },
+          ]
+        : undefined,
+    /* The works agreed with Sophie's offer, once it is accepted (1 Oct 2026). */
+    beforeMoveIn:
+      stage === "let"
+        ? [
+            { id: "p1", title: "Fix the shower over the bath", dueOn: "2026-10-01", done: true },
+            { id: "p2", title: "New carpet in the second bedroom", dueOn: "2026-10-01", done: false },
           ]
         : undefined,
     progress:

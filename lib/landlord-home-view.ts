@@ -43,6 +43,7 @@ import { portalLinksFor } from "@/lib/rex-portal-links";
 import { fetchViewingsFor } from "@/lib/rex-viewings";
 import { rexConfigured } from "@/lib/rex";
 import type { ViewMaintenance, ViewMarketing, ViewViewing } from "@/lib/landlord-view";
+import { listPrep } from "@/lib/landlord-prep";
 
 const dayTime = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
@@ -225,6 +226,7 @@ export async function loadLandlordHome(me: Me, pick?: string | null) {
         ...base,
         progress,
         approvedOfferId: approved?.applicationId ?? null,
+        beforeMoveIn: await listPrep(me.id, base.property?.address ?? ""),
         ...(movedIn ? { stage: "managed" as const, property: { ...base.property, state: "Tenanted" } } : {}),
       }
     : null;
