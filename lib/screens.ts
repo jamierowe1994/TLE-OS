@@ -295,20 +295,6 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     ],
   },
 
-  "/emails": {
-    purpose:
-      "Everything sent under the company's name, from REX's own send log — the automation and the agents kept apart.",
-    does: [
-      "Read what was sent, and whether it was opened, clicked or bounced.",
-      "Increase the depth to pull more of the log back.",
-    ],
-    wiring: "live",
-    caveats: [
-      "This is an audit of what already went out. Nothing on this screen sends anything.",
-      "The log is slow to read and pulling more pages takes a while.",
-    ],
-  },
-
   "/portfolio": {
     purpose: "The whole managed book — properties, landlords, and where they are.",
     does: [

@@ -30,7 +30,6 @@ export const TRACKED_TABS = [
   { path: "/market-appraisals", label: "Market Appraisals" },
   { path: "/applications", label: "Applications" },
   { path: "/compliance", label: "Compliance" },
-  { path: "/emails", label: "Emails" },
   { path: "/portfolio", label: "Portfolio" },
   { path: "/finances", label: "Finances" },
   { path: "/profile", label: "Profile" },

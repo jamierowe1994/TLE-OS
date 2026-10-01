@@ -37,7 +37,7 @@ const COPY: Record<2 | 3 | 4, { subject: string; heading: string; intro: string;
     subject: "Phase 3 has started: emails and the portals are live",
     heading: "Phase 3 has started.",
     intro:
-      "From here, an email you send reaches the landlord or the tenant, from your own Outlook, and a listing you push goes to the portals. Your practice test files have been cleared. Portfolio, Emails, Finances and Tools are still to come.",
+      "From here, an email you send reaches the landlord or the tenant, from your own Outlook, and a listing you push goes to the portals. Your practice test files have been cleared. Portfolio, Finances and Tools are still to come.",
     button: "Open TLE OS",
     footnote: FOOT,
     text: [
@@ -45,7 +45,7 @@ const COPY: Record<2 | 3 | 4, { subject: string; heading: string; intro: string;
       "",
       "From here, an email you send reaches the landlord or the tenant, from your",
       "own Outlook, and a listing you push goes to the portals. Your practice test",
-      "files have been cleared. Portfolio, Emails, Finances and Tools are still to come.",
+      "files have been cleared. Portfolio, Finances and Tools are still to come.",
       "",
       ...FOOT_TEXT,
     ],
@@ -54,15 +54,15 @@ const COPY: Record<2 | 3 | 4, { subject: string; heading: string; intro: string;
     subject: "Phase 4 has started: the back office is open",
     heading: "Phase 4 has started.",
     intro:
-      "The back office is now open to you: Portfolio, with compliance, maintenance and inspections, plus Emails, Finances and Tools. Have a proper look round, and try to break it.",
+      "The back office is now open to you: Portfolio, with compliance, maintenance and inspections, plus Finances and Tools. Have a proper look round, and try to break it.",
     button: "Open TLE OS",
     footnote: FOOT,
     text: [
       "Phase 4 has started.",
       "",
       "The back office is now open to you: Portfolio, with compliance, maintenance",
-      "and inspections, plus Emails, Finances and Tools. Have a proper look round,",
-      "and try to break it.",
+      "and inspections, plus Finances and Tools. Have a proper look round, and try",
+      "to break it.",
       "",
       ...FOOT_TEXT,
     ],

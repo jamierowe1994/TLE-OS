@@ -159,12 +159,6 @@ export const FULL: TourStep[] = [
     body: "Under Portfolio: what is outstanding across your properties, and booking a contractor in to deal with it.",
   },
   {
-    id: "emails",
-    target: ['[data-nav="/emails"]'],
-    title: "Emails",
-    body: "An audit of what already goes out under our name. Skip past it for now, it is not the part you need on day one.",
-  },
-  {
     id: "portfolio",
     target: ['[data-nav="/portfolio"]'],
     title: "Portfolio",

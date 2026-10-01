@@ -149,7 +149,7 @@ export const PHASES: PhaseDef[] = [
     id: 4,
     name: "Back office",
     confirm: "PHASE 4",
-    says: "Portfolio, with Compliance, Maintenance and Inspections, plus Emails, Finances and Tools open to everybody.",
+    says: "Portfolio, with Compliance, Maintenance and Inspections, plus Finances and Tools open to everybody.",
     areas: all(BACK_ALL, "everyone"),
     switches: {},
     steps: [

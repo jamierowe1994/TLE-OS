@@ -42,7 +42,6 @@ export const QUICK_LINKS: QuickLink[] = [
   { id: "appraisal", label: "Market appraisals", href: "/market-appraisals", icon: "trend-up", hint: "The appraisal pipeline" },
   { id: "repair", label: "Log a repair", href: "/maintenance", icon: "setting", hint: "Jobs, contractors and invoices" },
   { id: "compliance", label: "Check compliance", href: "/compliance", icon: "shield", hint: "What is due and what has lapsed" },
-  { id: "emails", label: "Emails", href: "/emails", icon: "mail", hint: "The shared inbox" },
 ];
 
 const STORE = "tle-dash-quick-v1";

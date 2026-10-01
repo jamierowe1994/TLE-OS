@@ -88,9 +88,10 @@ export const BACK: NavItem[] = [
       { href: "/tenancy-reviews", label: "Tenancy Reviews" },
     ],
   },
-  /* Back office rather than Marketing: this is the audit of what already goes
-     out under our name, not a place to write anything new. */
-  { href: "/emails", label: "Emails", icon: "mail" },
+  /* Emails (the audit of REX's send log, /emails) came off the rail on 2 Oct
+     2026 - James: "there's literally no use case for it". The page is still
+     there by its address; put the line back here and in AGENT_ROUTES and
+     SCREENS to bring it back. */
   { href: "/finances", label: "Finances", icon: "wallet" },
   /* Tools used to sit second in FRONT, above Leads, and the argument for it
      was good: everything in FRONT assumes somebody already put their hand up,
@@ -296,7 +297,6 @@ export const AGENT_ROUTES = [
   "/maintenance",
   "/inspections",
   "/tenancy-reviews",
-  "/emails",
   "/portfolio",
   "/finances",
   "/tools",
