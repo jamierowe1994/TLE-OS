@@ -50,6 +50,7 @@ import {
   CERTIFICATE_SHARED_CONTRACTOR,
   TENANT_PASSPORT_INVITE,
   TENANT_PASSPORT_REQUEST,
+  TENANT_OFFER_COPY,
   TENANT_VIEWING_BOOKED,
   LANDLORD_SIGN_IN,
   TENANT_SIGN_IN,
@@ -854,6 +855,27 @@ The Letting Experts`
           whenPretty: "Friday 5 September at 12:30pm",
           agentName: "Sam Whitaker",
           meetLine: "Sam Whitaker will meet you there.",
+        })
+      )(),
+  },
+  {
+    id: "tenant-offer-copy",
+    group: "Doorways",
+    name: "Your Offer - Copy for the Tenant",
+    audience: "tenant",
+    trigger: "An agent puts an offer forward for a tenant and ticks Email them a copy",
+    fires: "Wired 1 Oct 2026. Put an offer forward (/offers/new, from a viewing) -> POST /api/offers/agent -> lib/agent-offer, from the agent's own Outlook where connected. Needs customer email on.",
+    to: "The tenant the offer is for",
+    draft: false,
+    summary: "The offer as the agent recorded it: rent, move-in, who is moving in, pets and any works before moving day. Asks them to reply if anything is wrong, so a mistake is caught before the landlord decides.",
+    doc: TENANT_OFFER_COPY,
+    render: (o) =>
+      blocksAs("tenant")(
+        withSample(o ?? TENANT_OFFER_COPY, {
+          firstName: "Sophie",
+          address: "8 Recreation Terrace",
+          agentName: "Sam Whitaker",
+          summaryList: "<strong>Rent:</strong> £850 a month<br><strong>Moving in:</strong> Saturday 24 October 2026<br><strong>Who:</strong> Sophie Turner and Jordan Reid, with a small, older dog<br><strong>Works before moving day:</strong> fix the shower over the bath",
         })
       )(),
   },

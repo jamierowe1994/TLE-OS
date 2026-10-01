@@ -143,6 +143,8 @@ export default function AgentOfferRecorder({
   const [copyToTenant, setCopyToTenant] = useState(true);
   const [err, setErr] = useState("");
   const [done, setDone] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState<{ id: string; copy: string; passport: string } | null>(null);
 
   const set = <K extends OfferFieldKey>(k: K, v: OfferPassport[K]) => setPp((cur) => ({ ...cur, [k]: v }));
   /* With a passport, the household is the ticked people; without one, the steppers. */
@@ -186,7 +188,39 @@ export default function AgentOfferRecorder({
     setEditing(null);
     if (step < STEPS.length - 1) setStep(step + 1);
     else if (sample) setDone(true);
+    else void save();
   };
+
+  /* For real: the server re-checks the cap and the consent, saves the
+     passport changes and records the offer (lib/agent-offer). */
+  async function save() {
+    setBusy(true);
+    setErr("");
+    const r = await fetch("/api/offers/agent", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        listingId: home.id,
+        name: tenant.name,
+        email: tenant.email,
+        amount: offerNum,
+        moveIn,
+        how,
+        works,
+        note: conditions,
+        movingIn: movingIn.map((p) => p.name),
+        passport: { ...pp, numAdults: String(adults), numChildren: String(children) },
+        consent,
+        copyToTenant,
+      }),
+    })
+      .then((x) => x.json())
+      .catch(() => null);
+    setBusy(false);
+    if (!r?.ok) return setErr(r?.error ?? "That didn't save. Try again.");
+    setSaved({ id: r.id, copy: r.copy, passport: r.passport });
+    setDone(true);
+  }
 
   /** One passport answer: shown, with Change, or asked when the passport doesn't have it.
    *  Called as a function, not mounted as a component: a component defined in
@@ -245,16 +279,27 @@ export default function AgentOfferRecorder({
     return (
       <section className={`${card} p-8 text-center`}>
         <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent-dark text-white">
-          <DoodleIcon name="check" size={22} />
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden><path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </span>
         <h2 className="mt-4 text-[22px] font-bold">Offer Put Forward</h2>
         <p className="mx-auto mt-2 max-w-md text-[14px] leading-relaxed text-ink/70">
-          {gbp(offerNum)} a month on {home.address}, for {name}. It is with the landlord now
-          {copyToTenant ? `, and ${name} has a copy by email to check` : ""}.
+          {gbp(offerNum)} a month on {home.address}, for {name}. It&apos;s on the file, ready to put to the landlord
+          {sample && copyToTenant ? `, and ${name} has a copy by email to check` : ""}.
           {added.length || changed.length ? ` ${added.length + changed.length} answer${added.length + changed.length === 1 ? "" : "s"} saved to ${name}'s passport, so nobody asks again.` : ""}
         </p>
         {sample && <p className="mt-3 text-[12px] text-muted">This is the harness, so nothing was saved or sent.</p>}
-        <button
+        {saved && (
+          <>
+            <p className="mt-3 text-[12.5px] text-muted">
+              {saved.copy === "sent" ? `${name}'s copy has gone.` : saved.copy === "not asked for" ? `${name} wasn't sent a copy.` : `${name}'s copy didn't go: ${saved.copy.replace(/^not sent: /, "").replace(/\.$/, "")}.`}{" "}
+              Passport {saved.passport}.
+            </p>
+            <a href={`/offers/${saved.id}`} className="mt-5 inline-block rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-white">
+              Open the offer
+            </a>
+          </>
+        )}
+        {sample && <button
           type="button"
           onClick={() => {
             setDone(false);
@@ -264,7 +309,7 @@ export default function AgentOfferRecorder({
           className="mt-5 rounded-full border border-line/80 px-5 py-2.5 text-[13px] font-semibold"
         >
           Start again
-        </button>
+        </button>}
       </section>
     );
   }
@@ -484,8 +529,8 @@ export default function AgentOfferRecorder({
         {err && <p className="mt-4 text-[13px] font-semibold text-[#9d4340]">{err}</p>}
 
         <div className="mt-6 flex flex-wrap items-center gap-3">
-          <button type="button" onClick={next} className="rounded-full bg-accent-dark px-6 py-3 text-[13.5px] font-semibold text-white">
-            {step < STEPS.length - 1 ? "Next" : "Put the offer forward"}
+          <button type="button" onClick={next} disabled={busy} className="rounded-full bg-accent-dark px-6 py-3 text-[13.5px] font-semibold text-white disabled:opacity-50">
+            {busy ? "Putting it forward…" : step < STEPS.length - 1 ? "Next" : "Put the offer forward"}
           </button>
           {step > 0 && (
             <button

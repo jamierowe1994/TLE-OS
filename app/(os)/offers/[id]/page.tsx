@@ -23,7 +23,7 @@ export const runtime = "nodejs";
 type Row = {
   id: string; email: string; name: string; address: string; kind: string; sent_to: string | null; outcome: string | null; created_at: Date;
   payload: {
-    amount?: number; asking?: number | null; moveIn?: string; term?: string; movingIn?: string[]; works?: string[]; adults?: number; children?: number; pets?: boolean; petsNote?: string; note?: string;
+    amount?: number; asking?: number | null; moveIn?: string; term?: string; movingIn?: string[]; works?: string[]; recordedBy?: { name: string; email: string; how: string }; adults?: number; children?: number; pets?: boolean; petsNote?: string; note?: string;
     passport?: OfferPassport; changes?: OfferChange[];
     reasons?: string[]; topics?: string[]; message?: string;
   };
@@ -70,6 +70,11 @@ export default async function OfferPage({ params }: { params: Promise<{ id: stri
     if (k === "shareCode" && p.passport.hasBritishPassport) return false;
     if (k === "adverseCreditNote" && !p.passport.adverseCredit) return false;
     if (k === "petsNote" && !p.passport.pets) return false;
+    /* The work questions only for the work they apply to. */
+    const employed = p.passport.applicantType === "Employed";
+    const trading = p.passport.applicantType === "Self-employed" || p.passport.applicantType === "Company director";
+    if ((k === "workHours" || k === "zeroHours" || k === "onProbation") && !employed) return false;
+    if (k === "tradingFor" && !trading) return false;
     return true;
   });
 
@@ -82,6 +87,11 @@ export default async function OfferPage({ params }: { params: Promise<{ id: stri
           <div className="grid gap-5 lg:grid-cols-2">
             <section className={card}>
               <p className={eyebrow}>The offer</p>
+              {p.recordedBy && (
+                <p className="mt-1 text-[12.5px] text-muted">
+                  Put forward by {p.recordedBy.name}, {p.recordedBy.how.toLowerCase()}, with the tenant&apos;s agreement.
+                </p>
+              )}
               <p className="mt-2 text-[34px] font-bold leading-none">
                 {p.amount ? gbp(p.amount) : "-"} <span className="text-[14px] font-normal text-muted">a month</span>
               </p>

@@ -509,6 +509,31 @@ export const TENANT_PASSPORT_INVITE = {
 } as const;
 
 /**
+ * Tenant: a copy of the offer their agent put forward for them (1 Oct 2026).
+ *
+ * When the agent records the offer on the phone or sitting down together,
+ * the tenant gets it in writing so a wrong figure is caught before the
+ * landlord decides. {{summaryList}} is the offer, one line each, built by
+ * lib/agent-offer.
+ */
+export const TENANT_OFFER_COPY = {
+  subject: "Your offer on {{address}}",
+  preheader: "What {{agentName}} has put forward for you. Reply if anything is wrong.",
+  mode: "blocks",
+  blocks: [
+    H("oc1", "Your offer is in"),
+    T("oc2", "Hi {{firstName}},<br><br>Here is the offer {{agentName}} has put forward for you on <strong>{{address}}</strong>."),
+    T("oc3", "{{summaryList}}"),
+    T("oc4", "If anything here isn't right, reply to this email and {{agentName}} will put it right before the landlord decides."),
+    T("oc5", "We usually hear back within a day, and we'll tell you as soon as we do."),
+    SP("oc6", 8),
+    T("oc7", "{{agentName}}<br>The Letting Experts"),
+    FOOT("oc8", "You're getting this because you made an offer through The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/**
  * Tenant: the passport on its own, BEFORE any viewing (1 Oct 2026).
  *
  * Rhiannon: "The rental passport should just be the initial request to

@@ -691,6 +691,17 @@ function ViewingDrawerBody({
                     )}
                   </div>
                 )}
+                {/* Put an offer forward for them (1 Oct 2026): on the phone or
+                    sitting down together, from what their passport knows. */}
+                {appt.contact?.email && appt.listingId && !cancelled && (
+                  <a
+                    href={`/offers/new?${new URLSearchParams({ listing: String(appt.listingId), name: appt.who ?? "", email: appt.contact.email })}`}
+                    className="press-ring mt-2 inline-flex items-center gap-2 rounded-full bg-accent-dark px-3 py-1.5 text-[11.5px] font-semibold text-white"
+                  >
+                    <DoodleIcon name="pencil" size={13} />
+                    Put an offer forward
+                  </a>
+                )}
               </Card>
 
               <Card
