@@ -11,7 +11,8 @@ import PortalStatsPanel from "@/components/PortalStatsPanel";
 import TenancyLinkPanel from "@/components/TenancyLinkPanel";
 import ListingDocuments from "@/components/ListingDocuments";
 import PropertyFile from "@/components/PropertyFile";
-import ViewingBooker, { type Person } from "@/components/ViewingBooker";
+import BookViewing from "@/components/viewings/BookViewing";
+import ApplicationFormCard from "@/components/listing/ApplicationFormCard";
 import { CopyButton, DoneTick, PressButton } from "@/components/Bits";
 import { Tag } from "@/components/ListingTags";
 import { ARCHIVE_AFTER_DAYS, archiveLabel, archiveWhy, type ArchiveReason } from "@/lib/listing-archive";
@@ -39,7 +40,6 @@ import { LISTING_TRACK, listingStartingStep } from "@/lib/journey";
  */
 const LISTING_OFFERS_LIVE = false;
 import type { Landlord } from "@/lib/rex-landlord";
-import { LEADS, leadSide } from "@/lib/leads-sample";
 import { DIARY } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
 import { setOpenListing } from "@/lib/open-record";
@@ -174,13 +174,6 @@ function Card({
   );
 }
 
-const APPLICANTS: Person[] = LEADS.filter((l) => leadSide(l) === "tenant").map((l) => ({
-  name: l.name,
-  email: l.email,
-  phone: l.phone,
-  lat: l.lat,
-  lng: l.lng,
-}));
 
 /**
  * The drawer, inside its Auto save scope (James, 23 Sep 2026: every file says
@@ -1130,7 +1123,7 @@ function ListingDrawerBody({
                       className="press-ring flex items-center gap-2 rounded-full border border-line/60 bg-white px-4 py-2.5 text-[12.5px] font-semibold"
                     >
                       <DoodleIcon name="calendar" size={14} />
-                      Arrange viewing
+                      Book a viewing
                     </PressButton>
                   )}
                 </div>
@@ -1678,6 +1671,8 @@ function ListingDrawerBody({
                     </p>
                   )}
                 </Card>
+                {/* The form itself, to copy or send (Howard, 1 Oct 2026). */}
+                <ApplicationFormCard listingId={String(listing.id)} />
               </div>
             )}
 
@@ -1694,7 +1689,7 @@ function ListingDrawerBody({
                           className="press-ring flex items-center gap-2 rounded-full border border-ink/25 px-3.5 py-2 text-[11.5px] font-semibold"
                         >
                           <DoodleIcon name="calendar" size={13} />
-                          Book viewing
+                          Book a viewing
                         </PressButton>
                       ) : undefined
                     }
@@ -2151,16 +2146,11 @@ function ListingDrawerBody({
         );
       })()}
 
-      <ViewingBooker
+      <BookViewing
         open={booking}
         onClose={() => setBooking(false)}
-        lead={null}
-        applicants={APPLICANTS}
+        home={{ id: String(listing.id), name: listing.name, locality: listing.locality, rent: listing.rent, image: listing.image, propertyId: listing.propertyId ?? null }}
         occupant={listing.tenant ?? null}
-        properties={[listing]}
-        /* Whose diary the grid shows: the person booking it. It said
-           "Kirstie" - a name left over from the sample (19 Sep 2026). */
-        agent=""
         onBooked={(v) => setBooked((cur) => [{ when: v.when, who: v.who }, ...cur])}
       />
       {lightbox != null && <PhotoLightbox photos={photos} start={lightbox} name={listing.name} onClose={() => setLightbox(null)} />}

@@ -19,7 +19,7 @@ import { useRouter } from "next/navigation";
 import ConfirmEditor, { type ConfirmDraft, type ConfirmEditorHandle, type ConfirmTarget } from "@/components/ConfirmEditor";
 
 /** What the record did with a booking, told back to the booker's done screen. */
-export type BookedResult = { said?: string; goTo?: { ask: string; label: string; href: string } } | undefined;
+export type BookedResult = { said?: string; goTo?: { ask: string; label: string; href: string; stay?: string } } | undefined;
 
 /**
  * Booking a viewing, in the order the job actually happens: which property,
@@ -126,6 +126,7 @@ export default function ViewingBooker({
   leadId = null,
   appraisalId = null,
   suggested = null,
+  skipProperty = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -158,6 +159,10 @@ export default function ViewingBooker({
   appraisalId?: string | null;
   /** What the landlord said they can do, shown above the diary (17 Sep 2026). */
   suggested?: string[] | null;
+  /** The home is already chosen - booked from its own listing (1 Oct 2026) -
+   *  so open straight on the diary. "change" beside it still lets them pick
+   *  another. */
+  skipProperty?: boolean;
   /**
    * `startsAt` and `minutes` are the booking as a MACHINE reads it, and they
    * are not decoration. Everything downstream — the landlord's calendar file,
@@ -252,7 +257,7 @@ export default function ViewingBooker({
     // Starting from a property, the applicant is the first unknown; starting
     // from a lead, it's already answered.
     setChosen(lead);
-    setStage(lead ? (mode === "viewing" ? "property" : "when") : "applicant");
+    setStage(lead ? (mode === "viewing" && !(skipProperty && firstId) ? "property" : "when") : "applicant");
     setFind("");
     setDay(null);
     setSlot(null);
@@ -268,7 +273,7 @@ export default function ViewingBooker({
        kept the viewing default and every appraisal was booked for half an
        hour, no matter what this line said. */
     setMins(mode === "appraisal" || mode === "takeon" ? 60 : 30);
-  }, [open, today, mode, firstId]);
+  }, [open, today, mode, firstId, skipProperty]);
 
   useEffect(() => {
     if (!open) return;
@@ -1564,7 +1569,7 @@ export default function ViewingBooker({
                           onClick={onClose}
                           className="rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-semibold transition-colors hover:border-ink/40"
                         >
-                          Stay on the lead
+                          {result.goTo.stay ?? "Stay on the lead"}
                         </button>
                       </div>
                     </div>

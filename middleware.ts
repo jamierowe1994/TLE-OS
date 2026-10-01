@@ -634,12 +634,17 @@ export const config = {
          documents     send us and fetch their own files - currentTenant
        Every one of them answers only for the tenant in the cookie. Still NOT
        api/tenant wholesale: reminders/run is a cron route with its own key. */
+    /* `api/tenant/apply` is a listing's application form (1 Oct 2026): the
+       link an agent copies or sends from the listing, filled in by an
+       applicant who has no account. It answers only for a home on the market
+       now, reads nothing Rightmove does not already show, and writes only the
+       application itself - never to REX. See app/api/tenant/apply. */
     /* `mail-img` is a newsletter picture (30 Sep 2026): fetched by the mail
        client of whoever opens the email, which has no session. Safe because
        the route only serves a uuid name from its own R2 prefix - see
        app/mail-img/[name]. `nl` is the same reader's open pixel and link
        clicks (1 Oct 2026, app/nl/*): a token, never a session, and a signed
        link that only ever leads to an address that was in the email. */
-    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|visit|api/visit|rehearsal|api/rehearsal|proof|send|api/tenant/passport|api/tenant/feedback|api/tenant/homes|api/tenant/session|api/tenant/maintenance|api/tenant/documents|api/landlord|api/calendar|brand|email|mail-img|nl|rex|r|api/r|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$).*)",
+    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|visit|api/visit|rehearsal|api/rehearsal|proof|send|api/tenant/passport|api/tenant/feedback|api/tenant/apply|api/tenant/homes|api/tenant/session|api/tenant/maintenance|api/tenant/documents|api/landlord|api/calendar|brand|email|mail-img|nl|rex|r|api/r|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$).*)",
   ],
 };

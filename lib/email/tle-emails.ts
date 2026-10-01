@@ -51,6 +51,7 @@ import {
   TENANT_PASSPORT_INVITE,
   TENANT_PASSPORT_REQUEST,
   TENANT_OFFER_COPY,
+  APPLICATION_FORM_INVITE,
   TENANT_VIEWING_BOOKED,
   LANDLORD_SIGN_IN,
   TENANT_SIGN_IN,
@@ -876,6 +877,27 @@ The Letting Experts`
           address: "8 Recreation Terrace",
           agentName: "Sam Whitaker",
           summaryList: "<strong>Rent:</strong> £850 a month<br><strong>Moving in:</strong> Saturday 24 October 2026<br><strong>Who:</strong> Sophie Turner and Jordan Reid, with a small, older dog<br><strong>Works before moving day:</strong> fix the shower over the bath",
+        })
+      )(),
+  },
+  {
+    id: "application-form-invite",
+    group: "Doorways",
+    name: "Apply for a Home - Application Form",
+    audience: "tenant",
+    trigger: "An agent presses Send application form on a listing and types in one or more addresses",
+    fires: "Wired 1 Oct 2026. Listing > Applications > Send application form -> POST /api/listings/application-form, one email per address, from the agent's own Outlook where connected. Needs customer email on. Links to /tenant/apply?listing=<id>; never mints or links a passport.",
+    to: "Each address the agent typed in",
+    draft: false,
+    summary: "The application form for one home, with a button straight to it. Says it takes about ten minutes, that every adult fills in their own part for the right to rent check, and that nothing is owed until the landlord says yes.",
+    doc: APPLICATION_FORM_INVITE,
+    render: (o) =>
+      blocksAs("tenant")(
+        withSample(o ?? APPLICATION_FORM_INVITE, {
+          address: "8 Recreation Terrace, Nottingham",
+          rent: "£850 a month",
+          agentName: "Sam Whitaker",
+          link: `${SITE}/tenant/apply?listing=828057`,
         })
       )(),
   },
