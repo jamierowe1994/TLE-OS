@@ -240,12 +240,12 @@ export default function Leads() {
      One read for the whole book: only leads with something logged or booked
      come back, and for those the Stage column says the spine's word rather
      than REX's three. Fails to nothing - the REX stage stands. */
-  const [spines, setSpines] = useState<Record<string, { label: string | null }>>({});
+  const [spines, setSpines] = useState<Record<string, { label: string | null; followUpAt?: string | null }>>({});
   useEffect(() => {
     let gone = false;
     fetch("/api/leads/spine", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((j: { ok?: boolean; spines?: Record<string, { label: string | null }> } | null) => {
+      .then((j: { ok?: boolean; spines?: Record<string, { label: string | null; followUpAt?: string | null }> } | null) => {
         if (!gone && j?.ok && j.spines) setSpines(j.spines);
       })
       .catch(() => {});
@@ -287,7 +287,8 @@ export default function Leads() {
       if (seen.has(l.id) || removed.has(l.id) || hiddenIds.includes(l.id)) continue;
       seen.add(l.id);
       const label = spines[l.id]?.label;
-      out.push(label ? { ...l, spineLabel: label } : l);
+      const followUpAt = spines[l.id]?.followUpAt ?? null;
+      out.push(label || followUpAt ? { ...l, ...(label ? { spineLabel: label } : {}), followUpAt } : l);
     }
     return out;
   }, [ours, source.leads, found, spines, removed, hiddenIds]);

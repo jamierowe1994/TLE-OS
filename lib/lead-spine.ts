@@ -170,6 +170,9 @@ export interface Spine {
   lastTouch: LeadTouch | null;
   /** One or two words for the list's Stage column, or null to keep REX's. */
   label: string | null;
+  /** When an agent banked the lead to get back in touch (an open follow-up
+   *  task, os_tasks kind follow-up). Filled by allSpines for the board. */
+  followUpAt?: string | null;
 }
 
 /** Newest first, as the log reads. */
