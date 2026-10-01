@@ -25,7 +25,8 @@ import MailThread from "@/components/MailThread";
 import TenantPropertySearch from "@/components/TenantPropertySearch";
 import LogTouch, { type LogMode } from "@/components/LogTouch";
 import type { PersonViewing } from "@/lib/person-viewings";
-import { ATTEMPT_KINDS, CONTACT_TRIES, tenantContact, touchIcon, touchSentence, whenAgo, type LeadTouch, type Spine, type SpineId } from "@/lib/lead-spine";
+import { ATTEMPT_KINDS, CONTACT_TRIES, followUpState, followUpWords, tenantContact, touchIcon, touchSentence, whenAgo, type LeadTouch, type NurtureState, type Spine, type SpineId } from "@/lib/lead-spine";
+import { londonDate } from "@/lib/london-time";
 import { Pill } from "@/components/Wire";
 import { leadSide } from "@/lib/leads-sample";
 import { isOsLead, osContactIdFrom } from "@/lib/contacts-as-leads";
@@ -1507,6 +1508,19 @@ function LeadDrawerBody({
      spoke to them, and nurture (Howard, 24 Sep 2026). */
   const tc = isTenant ? tenantContact(touches) : null;
   const nurturing = sp?.nurture ?? tc?.nurture ?? null;
+  /* Banked until a day (Howard, 1 Oct 2026), said on the nurture card. */
+  const followLine = (n: NurtureState | null) => {
+    const st = followUpState(n?.followUpOn, londonDate());
+    if (!n?.followUpOn || !st) return null;
+    return (
+      <p className={`mt-2 flex items-center gap-2 text-[11.5px] font-semibold ${st === "due" ? "text-accent-dark" : "text-brown"}`}>
+        <DoodleIcon name="calendar" size={13} />
+        {st === "due"
+          ? `Follow up today - banked for ${followUpWords(n.followUpOn)}. Log the call and it leaves the top of the board.`
+          : `Banked until ${followUpWords(n.followUpOn)} - off the working list till then.`}
+      </p>
+    );
+  };
   /* Marked as lost (Howard, 24 Sep 2026): off the working list, reason kept,
      and one press brings them back. */
   const lostNow = sp?.lost ?? tc?.lost ?? null;
@@ -1912,6 +1926,7 @@ function LeadDrawerBody({
                       Since {whenAgo(nurturing.at)} - {nurturing.reason}. Added by {nurturing.byName}. Log a call
                       they answered or a reply and they come straight back on the spine, at {here.label.toLowerCase()}.
                     </p>
+                    {followLine(nurturing)}
                     <p className="mt-2 flex items-center gap-2 text-[11.5px] font-medium text-accent-dark">
                       <DoodleIcon name="mail" size={13} />
                       {isTenant
@@ -2954,6 +2969,7 @@ function LeadDrawerBody({
                             <p className="mt-1 text-[12px] leading-relaxed text-muted">
                               {tc.nurture.reason}. Added by {tc.nurture.byName}. A call they answer or a reply brings them straight back. No emails go to tenants from nurture yet.
                             </p>
+                            {followLine(tc.nurture)}
                             <button
                               type="button"
                               onClick={() => void logTouch({ kind: "rejoin" })}

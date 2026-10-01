@@ -29,6 +29,80 @@ export interface LeadTouch {
   at: string;
   /** A note that also went to REX: its id there. */
   rexNoteId?: string | null;
+  /** Nurture only: the London day to get back in touch, "2026-11-14". */
+  followUpOn?: string | null;
+  /** The OS user who logged it - who the follow-up reminder goes to. */
+  byId?: string | null;
+}
+
+/** Where a nurture stands: why, who, since when, and the day they come back. */
+export interface NurtureState {
+  at: string;
+  reason: string;
+  byName: string;
+  byId?: string | null;
+  /** The follow-up day still owed: set when the lead was banked, cleared by
+   *  the first attempt logged on or after it. Null once followed up. */
+  followUpOn?: string | null;
+}
+
+/**
+ * Banked for follow-up (Howard, 1 Oct 2026: "more often than not landlord
+ * leads are not ready straight away and can take months of follow up").
+ *
+ * Read against today on every render, never stored as a state, so a banked
+ * lead comes back on its day with nothing to run.
+ *   banked  the day is still ahead: off the working board
+ *   due     today or past: back at the top as Follow up today
+ */
+export function followUpState(followUpOn: string | null | undefined, today: string): "banked" | "due" | null {
+  if (!followUpOn) return null;
+  return followUpOn > today ? "banked" : "due";
+}
+
+/** "14 Nov", or "14 Nov 2027" when it is not this year. */
+export function followUpWords(followUpOn: string, now = new Date()): string {
+  const d = new Date(`${followUpOn}T12:00:00Z`);
+  return d.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    ...(d.getUTCFullYear() !== now.getFullYear() ? { year: "numeric" } : {}),
+    timeZone: "UTC",
+  });
+}
+
+/** The quick picks on Send to nurture, as London days from `today`. */
+export const FOLLOW_UP_PICKS: { id: string; label: string; days?: number; months?: number }[] = [
+  { id: "2w", label: "2 weeks", days: 14 },
+  { id: "1m", label: "1 month", months: 1 },
+  { id: "3m", label: "3 months", months: 3 },
+  { id: "6m", label: "6 months", months: 6 },
+];
+
+/** `today` ("2026-10-01") moved on by days or calendar months. 31 Jan plus a
+ *  month is the last day of February, not 3 March. */
+export function addToDay(today: string, by: { days?: number; months?: number }): string {
+  const [y, m, d] = today.split("-").map(Number);
+  let out: Date;
+  if (by.months) {
+    const last = new Date(Date.UTC(y, m - 1 + by.months + 1, 0)).getUTCDate();
+    out = new Date(Date.UTC(y, m - 1 + by.months, Math.min(d, last)));
+  } else {
+    out = new Date(Date.UTC(y, m - 1, d + (by.days ?? 0)));
+  }
+  return out.toISOString().slice(0, 10);
+}
+
+/** A nurture row opens one; an attempt on or after the day closes it. */
+function nurtureFrom(t: LeadTouch): NurtureState {
+  return { at: t.at, reason: t.body, byName: t.byName, byId: t.byId ?? null, followUpOn: t.followUpOn ?? null };
+}
+function followedUp(n: NurtureState | null, t: LeadTouch): NurtureState | null {
+  if (!n?.followUpOn) return n;
+  if (!(ATTEMPT_KINDS.includes(t.kind) || t.kind === "email")) return n;
+  /* The day the attempt was made, in London: a call at 8am on the day counts. */
+  const day = new Date(t.at).toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+  return day >= n.followUpOn ? { ...n, followUpOn: null } : n;
 }
 
 export const TOUCH_KINDS: { id: TouchKind; label: string; icon: string }[] = [
@@ -119,7 +193,7 @@ export const CONTACT_TRIES = 3;
 export interface TenantContact {
   attempts: number;
   reached: boolean;
-  nurture: { at: string; reason: string; byName: string } | null;
+  nurture: NurtureState | null;
   lost: { at: string; reason: string; byName: string } | null;
 }
 
@@ -132,7 +206,8 @@ export function tenantContact(touches: LeadTouch[]): TenantContact {
   for (const t of log) {
     if (ATTEMPT_KINDS.includes(t.kind)) attempts++;
     if (t.outcome === "spoke" || t.outcome === "replied") reached = true;
-    if (t.kind === "nurture") nurture = { at: t.at, reason: t.body, byName: t.byName };
+    nurture = followedUp(nurture, t);
+    if (t.kind === "nurture") nurture = nurtureFrom(t);
     if (t.kind === "rejoin" || t.outcome === "spoke" || t.outcome === "replied") nurture = null;
     if (t.kind === "lost") { lost = { at: t.at, reason: t.body, byName: t.byName }; nurture = null; }
     if (t.kind === "rejoin") lost = null;
@@ -164,7 +239,7 @@ export interface Spine {
   emailSentAt: string | null;
   booked: boolean;
   /** Set while the lead sits on the nurture branch. */
-  nurture: { at: string; reason: string; byName: string } | null;
+  nurture: NurtureState | null;
   /** Set once the lead is marked lost, until somebody brings it back. */
   lost: { at: string; reason: string; byName: string } | null;
   lastTouch: LeadTouch | null;
@@ -194,7 +269,8 @@ export function foldSpine(touches: LeadTouch[], booked: boolean, viewingBooked =
   for (const t of log) {
     if (ATTEMPT_KINDS.includes(t.kind)) attempts++;
     if (t.kind === "email" && !emailSentAt) emailSentAt = t.at;
-    if (t.kind === "nurture") nurture = { at: t.at, reason: t.body, byName: t.byName };
+    nurture = followedUp(nurture, t);
+    if (t.kind === "nurture") nurture = nurtureFrom(t);
     /* Back on the spine: an explicit rejoin, or the landlord actually
        engaging - spoke or replied - which is the same thing said by events. */
     if (t.kind === "rejoin" || t.outcome === "spoke" || t.outcome === "replied") nurture = null;
@@ -266,7 +342,7 @@ export function touchSentence(t: LeadTouch): string {
     case "note":
       return "Note";
     case "nurture":
-      return `Added to nurture${t.body ? ` - ${t.body}` : ""}`;
+      return `Added to nurture${t.body ? ` - ${t.body}` : ""}${t.followUpOn ? `. Follow up on ${followUpWords(t.followUpOn)}` : ""}`;
     case "rejoin":
       return "Back on the spine";
     case "lost":

@@ -4,6 +4,7 @@ import { hasDb } from "@/lib/db";
 import { addTouch, setRexNoteId, spineFor } from "@/lib/lead-touches";
 import { noteToRex, type RexNoteResult } from "@/lib/rex-notes";
 import { campaignOn, enrolLead, stopLeadCampaigns } from "@/lib/campaign-store";
+import { londonDate } from "@/lib/london-time";
 import {
   ATTEMPT_KINDS,
   NURTURE_REASONS,
@@ -62,6 +63,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     lead?: { name?: string; email?: string; contactId?: string | null };
     /** A tenant's nurture is recorded but never enrols: every campaign is a landlord's. */
     side?: "tenant" | "landlord";
+    /** Nurture only: bank the lead until this day, "2026-11-14". */
+    followUpOn?: string | null;
   };
   const tenant = body.side === "tenant";
   const kind = body.kind as TouchKind;
@@ -88,6 +91,19 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
        first, so the spine can show it, then whatever was added. */
     text = text.trim() ? `${reason} - ${text.trim()}` : reason;
   }
+  /* Banked until a day (Howard, 1 Oct 2026). Tomorrow at the earliest, two
+     years at the most: a date in the past would bank nothing, and one typed as
+     2062 would bury the lead for good. */
+  let followUpOn: string | null = null;
+  if (kind === "nurture" && body.followUpOn) {
+    const d = String(body.followUpOn);
+    const today = londonDate();
+    const max = londonDate(Date.now() + 731 * 86400000);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || Number.isNaN(new Date(`${d}T12:00:00Z`).getTime()) || d <= today || d > max) {
+      return NextResponse.json({ ok: false, error: "Pick a follow-up day after today, within two years." }, { status: 400 });
+    }
+    followUpOn = d;
+  }
   if (kind === "lost") {
     reason = (tenant ? TENANT_LOST_REASONS : LOST_REASONS).includes(body.reason ?? "") ? (body.reason as string) : null;
     if (!reason) return NextResponse.json({ ok: false, error: "Say why the lead is lost." }, { status: 400 });
@@ -102,6 +118,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     body: text,
     byId: who.id,
     byName: who.name || who.email,
+    followUpOn,
   });
 
   /* ── A note goes to REX as well (Howard, 24 Sep 2026) ──────────────────────

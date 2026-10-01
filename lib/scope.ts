@@ -127,3 +127,25 @@ export async function searchScope(req: NextRequest, scope: Scope): Promise<strin
   const { actor } = await whoIs(req);
   return actor && can(actor.role, "see:everything") ? null : false;
 }
+
+/**
+ * The lead board for the office: the whole business for anybody whose ROLE
+ * sees everything (Susan, the pre-tenancy and compliance desk), not only an
+ * owner.
+ *
+ * Howard, 1 Oct 2026: "some leads will come through not linked to a property
+ * or agent and agent support will assign it". A lead with no REX assignee is
+ * on nobody's own board, so before this only an owner ever saw it - an office
+ * account with a REX link saw its own (usually none), and one without a link
+ * was refused. Leads only: every other route keeps scopeFor's answer.
+ *
+ * Never while an owner is viewing as somebody: that scope is the point.
+ */
+export async function leadScope(req: NextRequest): Promise<Scope> {
+  const scope = await scopeFor(req);
+  if (scope.everything || !hasDb()) return scope;
+  const { actor, viewingAs } = await whoIs(req);
+  if (!actor || viewingAs || actor.role === "owner") return scope;
+  if (!can(actor.role, "see:everything")) return scope;
+  return { rexUserId: null, everything: true, unlinked: false, label: "the whole business" };
+}

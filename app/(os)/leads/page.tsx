@@ -11,13 +11,15 @@ import PageHeader from "@/components/PageHeader";
 import SourceMark from "@/components/SourceMark";
 import { ColumnCustomiser, DataTable, useColumns, type ColumnDef } from "@/components/TableColumns";
 import { Pill } from "@/components/Wire";
-import { LEADS, STAGE_TONE, leadSide, type Lead } from "@/lib/leads-sample";
+import { LEADS, leadSide, type Lead } from "@/lib/leads-sample";
 import PickOne from "@/components/PickOne";
 import TagsPick from "@/components/TagsPick";
 import { defaultTags } from "@/lib/lead-facts-shape";
 import Segmented from "@/components/Segmented";
 import DoodleIcon from "@/components/DoodleIcon";
-import LeadGroups, { DEFAULT_GROUPS, type GroupsConfig } from "@/components/LeadGroups";
+import LeadGroups, { BANKED, DEFAULT_GROUPS, FOLLOW_UP_TODAY, isBanked, isCompleted, isFollowUpDue, stagePill, type GroupsConfig } from "@/components/LeadGroups";
+import { followUpState } from "@/lib/lead-spine";
+import { londonDate } from "@/lib/london-time";
 import GroupsCustomiser from "@/components/GroupsCustomiser";
 import CornerSwell from "@/components/CornerSwell";
 import { usePref } from "@/lib/prefs-store";
@@ -240,12 +242,13 @@ export default function Leads() {
      One read for the whole book: only leads with something logged or booked
      come back, and for those the Stage column says the spine's word rather
      than REX's three. Fails to nothing - the REX stage stands. */
-  const [spines, setSpines] = useState<Record<string, { label: string | null }>>({});
+  type SpineBit = { label: string | null; nurture?: { followUpOn?: string | null } | null };
+  const [spines, setSpines] = useState<Record<string, SpineBit>>({});
   useEffect(() => {
     let gone = false;
     fetch("/api/leads/spine", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((j: { ok?: boolean; spines?: Record<string, { label: string | null }> } | null) => {
+      .then((j: { ok?: boolean; spines?: Record<string, SpineBit> } | null) => {
         if (!gone && j?.ok && j.spines) setSpines(j.spines);
       })
       .catch(() => {});
@@ -283,11 +286,20 @@ export default function Leads() {
        twice). The book's copy wins: it carries the spine and the enquiry. */
     const seen = new Set<string>();
     const out: Lead[] = [];
+    /* Today on the London calendar, read each time the book is put together:
+       a banked lead comes back on its day with nothing stored to flip. */
+    const today = londonDate();
     for (const l of [...source.leads, ...ours, ...found]) {
       if (seen.has(l.id) || removed.has(l.id) || hiddenIds.includes(l.id)) continue;
       seen.add(l.id);
-      const label = spines[l.id]?.label;
-      out.push(label ? { ...l, spineLabel: label } : l);
+      const sp = spines[l.id];
+      const label = sp?.label;
+      /* Banked for follow-up (Howard, 1 Oct 2026): a nurture with a day on it
+         reads Banked until the day, then Follow up today. */
+      const fu = label === "Nurture" ? (sp?.nurture?.followUpOn ?? null) : null;
+      const st = followUpState(fu, today);
+      if (fu && st) out.push({ ...l, spineLabel: st === "due" ? FOLLOW_UP_TODAY : BANKED, followUpOn: fu });
+      else out.push(label ? { ...l, spineLabel: label } : l);
     }
     return out;
   }, [ours, source.leads, found, spines, removed, hiddenIds]);
@@ -300,17 +312,17 @@ export default function Leads() {
 
   // Tenant-side and landlord-side are different jobs with different questions,
   // so the nav splits them and the list follows. The filters stack on top.
-  const book = useMemo(() => {
+  /* Done with and banked leads leave the List as well as Groups (Howard, 1 Oct
+     2026), with one switch at the foot to see them. A stage filter or a
+     search finds them either way. */
+  const [showParked, setShowParked] = useState(false);
+  const { book, parked } = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return ALL.filter((l) => {
+    const all = ALL.filter((l) => {
       if (side && leadSide(l) !== side) return false;
       if (fSource && l.source !== fSource) return false;
       if (fAgent && l.agent !== fAgent) return false;
       if (fStage && (l.spineLabel ?? l.stage) !== fStage) return false;
-      /* Lost is off the working list (Howard, 24 Sep 2026). It is still one
-         Stage filter or a search away, and brought back from the lead. In
-         Groups it is kept: it goes in the Completed box at the foot. */
-      if (!fStage && !needle && l.spineLabel === "Lost" && view !== "groups") return false;
       if (fTags.length) { const mine = tagsOf(l); if (!fTags.every((t) => mine.includes(t))) return false; }
       /* Phone and address are in the needle too. Somebody looking a landlord up
          mid-call has the number in front of them far more often than the town,
@@ -325,7 +337,23 @@ export default function Leads() {
       }
       return true;
     });
-  }, [ALL, side, fSource, fAgent, fStage, fTags, tagsOf, q, view]);
+    /* Lost is off the working list (Howard, 24 Sep 2026), and since 1 Oct so
+       is everything else done with or banked. Groups keeps them: it has its
+       own folded boxes at the foot. */
+    const isParked = (l: Lead) => isCompleted(l) || isBanked(l);
+    const keep = view === "groups" || showParked || Boolean(fStage) || Boolean(needle);
+    const shown = keep ? all : all.filter((l) => !isParked(l));
+    /* Back from the bank today: top of the list, before anything newer. */
+    const sorted = [...shown.filter(isFollowUpDue), ...shown.filter((l) => !isFollowUpDue(l))];
+    return { book: sorted, parked: all.filter(isParked).length };
+  }, [ALL, side, fSource, fAgent, fStage, fTags, tagsOf, q, view, showParked]);
+  /* Nobody's yet (Howard, 1 Oct 2026: a new valuation request can arrive with
+     no agent, and support assigns it). Counted on the side being looked at,
+     for the chip that filters to them. */
+  const unassigned = useMemo(
+    () => ALL.filter((l) => l.agent === "Unassigned" && (!side || leadSide(l) === side) && !isCompleted(l)).length,
+    [ALL, side]
+  );
   /* Every tag on the board this side, with how many carry it. */
   const tagCounts = useMemo(() => {
     const m = new Map<string, number>();
@@ -337,7 +365,9 @@ export default function Leads() {
   useEffect(() => {
     setPage(0);
   }, [side, fSource, fAgent, fStage, fTags, q, perPage]);
-  const open = book.find((l) => l.id === openId) ?? null;
+  /* A lead opened by link may be one the list is not showing (completed or
+     banked): the drawer still opens it. */
+  const open = book.find((l) => l.id === openId) ?? ALL.find((l) => l.id === openId) ?? null;
 
   /** Previous/Next walk the whole filtered book, not just the visible page. */
   function step(delta: number) {
@@ -380,14 +410,10 @@ export default function Leads() {
       { key: "agent", label: "Agent", optional: true, cell: "whitespace-nowrap text-muted", render: (l) => l.agent },
       {
         key: "stage", label: "Stage", cell: "whitespace-nowrap",
-        render: (l) =>
-          l.spineLabel ? (
-            <Pill tone={l.spineLabel === "Appraisal booked" ? "good" : l.spineLabel === "Nurture" || l.spineLabel === "Lost" ? "neutral" : "accent"}>
-              {l.spineLabel}
-            </Pill>
-          ) : (
-            <Pill tone={STAGE_TONE[l.stage]}>{l.stage}</Pill>
-          ),
+        render: (l) => {
+          const p = stagePill(l);
+          return <Pill tone={p.tone}>{p.text}</Pill>;
+        },
       },
     ],
     [manyAgents]
@@ -414,6 +440,23 @@ export default function Leads() {
     if (source.onFile) bits.push(`${source.onFile.toLocaleString("en-GB")} kept on file in the OS - the search at the top looks through all of them`);
     return bits.length ? `${bits.join(". ")}.` : null;
   }, [source]);
+
+  /* One press to the leads nobody has been given yet. Only on a board that
+     holds more than one agent's work: an agent's own board never has any. */
+  const unassignedChip =
+    manyAgents && (unassigned > 0 || fAgent === "Unassigned") ? (
+      <button
+        type="button"
+        onClick={() => setFAgent(fAgent === "Unassigned" ? null : "Unassigned")}
+        aria-pressed={fAgent === "Unassigned"}
+        className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[12px] font-semibold transition-colors ${
+          fAgent === "Unassigned" ? "border-ink bg-ink text-page" : "border-accent/50 text-accent-dark hover:border-accent-dark"
+        }`}
+      >
+        <DoodleIcon name="user" size={12} />
+        {fAgent === "Unassigned" ? "Showing not assigned" : `${unassigned.toLocaleString("en-GB")} not assigned`}
+      </button>
+    ) : null;
 
   const pages = Math.max(1, Math.ceil(book.length / perPage));
   const rows = book.slice(page * perPage, page * perPage + perPage);
@@ -544,6 +587,7 @@ export default function Leads() {
                 <PickOne tone="pink" label="All agents" options={agents.map((o) => ({ id: o, label: o }))} value={fAgent} onChange={setFAgent} />
                 <PickOne tone="pink" label="All stages" options={stages.map((o) => ({ id: o, label: o }))} value={fStage} onChange={setFStage} />
                 <TagsPick tone="pink" tags={tagCounts} value={fTags} onChange={setFTags} />
+                {unassignedChip}
                 <div className="ml-auto">
                   <GroupsCustomiser value={groupsConfig} onChange={saveGroupsConfig} />
                 </div>
@@ -574,6 +618,7 @@ export default function Leads() {
             <PickOne tone="pink" label="All agents" options={agents.map((o) => ({ id: o, label: o }))} value={fAgent} onChange={setFAgent} />
             <PickOne tone="pink" label="All stages" options={stages.map((o) => ({ id: o, label: o }))} value={fStage} onChange={setFStage} />
             <TagsPick tone="pink" tags={tagCounts} value={fTags} onChange={setFTags} />
+            {unassignedChip}
             <div className="ml-auto">
               <ColumnCustomiser cols={cols} tone="pink" />
             </div>
@@ -595,6 +640,16 @@ export default function Leads() {
             <p className="flex items-center gap-2.5 text-[11px] text-muted">
               Showing {book.length ? page * perPage + 1 : 0}–
               {Math.min((page + 1) * perPage, book.length)} of {book.length} leads
+              {parked > 0 && !fStage && !q.trim() && (
+                <button
+                  type="button"
+                  onClick={() => setShowParked((v) => !v)}
+                  aria-pressed={showParked}
+                  className="rounded-full border border-line/80 px-2.5 py-1 text-[11px] font-semibold text-accent-dark transition-colors hover:border-ink/40"
+                >
+                  {showParked ? `Hide ${parked.toLocaleString("en-GB")} completed or banked` : `Show ${parked.toLocaleString("en-GB")} completed or banked`}
+                </button>
+              )}
               <select
                 value={perPage}
                 onChange={(e) => setPerPage(Number(e.target.value))}
