@@ -94,7 +94,7 @@ export default function PropertyFile({
   title = "Property file",
   screen = "the OS",
   propertyName = null,
-  onLinked,
+  onLink,
 }: {
   /** The REX property. Give this when you have it. */
   propertyId?: string | null;
@@ -106,9 +106,10 @@ export default function PropertyFile({
   screen?: string;
   /** The home's line, for the document sheet's heading. */
   propertyName?: string | null;
-  /** A person picked which home this is. The screen keeps it (the appraisal
-   *  stores it), so the question is not asked again next time. */
-  onLinked?: (propertyId: string) => void;
+  /** Keep the home the person picked on whatever this panel sits on (an
+   *  appraisal), so it is not asked again. Only ever on a pick: a linked home
+   *  that is listed moves an appraisal to Won, so nothing links on its own. */
+  onLink?: (propertyId: string) => void | Promise<void>;
 }) {
   const [data, setData] = useState<Answer | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -231,9 +232,12 @@ export default function PropertyFile({
 
   async function link(candidate: Candidate) {
     setPick(candidate.id);
-    onLinked?.(candidate.id);
     if (address) await moveHeld(candidate.id, address, true);
+    /* Picked once, kept (Howard, 1 Oct 2026): the choice used to live on this
+       screen only, so the same question came back on every visit. */
+    if (onLink && /^\d+$/.test(candidate.id)) await onLink(candidate.id);
   }
+
 
   const openPicker = (type: string | null) => {
     forType.current = type;

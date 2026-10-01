@@ -157,30 +157,6 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
     [reload]
   );
 
-  /* Picked in the property file's "which is it?" - kept on the appraisal, the
-     same as the Property record link on the landlord card, so the file never
-     asks again (Howard, 1 Oct 2026). */
-  const linkProperty = useCallback(
-    async (propertyId: string) => {
-      const settle = saves.reporter.begin("Property record");
-      try {
-        const r = await fetch("/api/appraisals", {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ id, rexPropertyId: propertyId }),
-        });
-        const j = (await r.json().catch(() => ({}))) as { appraisal?: MarketAppraisal; error?: string };
-        if (!j.appraisal) throw new Error(j.error ?? "That didn't save.");
-        settle({ ok: true });
-        saved(j.appraisal);
-      } catch (e) {
-        const why = e instanceof Error ? e.message : "That didn't save.";
-        settle({ ok: false, problem: /\bREX\b/i.test(why) ? "The property records could not be reached. Try again in a moment." : why });
-      }
-    },
-    [id, saves.reporter, saved]
-  );
-
   /* The property file panel, shown when asked for. */
   const [showFile, setShowFile] = useState(false);
 
@@ -622,7 +598,19 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
           the AML step rather than always on the page. */}
       {showFile && (
         <div id="property-file" className="fade-up scroll-mt-6 [&>section]:rounded-[22px] [&>section]:border-line/50 [&>section]:bg-white [&>section]:p-5">
-          <PropertyFile propertyId={ma.rexPropertyId} address={ma.address} screen="the market appraisal" onLinked={(pid) => void linkProperty(pid)} />
+          <PropertyFile
+            propertyId={ma.rexPropertyId}
+            address={ma.address}
+            screen="the market appraisal"
+            onLink={async (rexPropertyId) => {
+              await fetch("/api/appraisals", {
+                method: "PATCH",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ id: ma.id, rexPropertyId }),
+              }).catch(() => null);
+              reload();
+            }}
+          />
         </div>
       )}
     </div>

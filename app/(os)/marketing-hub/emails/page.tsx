@@ -33,6 +33,20 @@ export default function Emails() {
   }, []);
   useEffect(load, [load]);
 
+  const [copying, setCopying] = useState<string | null>(null);
+  async function duplicate(id: string) {
+    setCopying(id);
+    setErr(null);
+    try {
+      const j = await (await fetch(`/api/newsletters/${id}/duplicate`, { method: "POST" })).json();
+      if (!j.ok) throw new Error(j.error || "Couldn't duplicate it.");
+      router.push(`/marketing-hub/emails/${j.newsletter.id}`);
+    } catch (e) {
+      setErr((e as Error).message);
+      setCopying(null);
+    }
+  }
+
   async function create(kind: NewsletterKind) {
     setCreating(kind);
     try {
@@ -115,12 +129,12 @@ export default function Emails() {
             {list?.map((n) => {
               const s = statusLine(n, armed);
               return (
-                <li key={n.id}>
+                <li key={n.id} className="flex items-stretch gap-2">
                   <Link
                     href={`/marketing-hub/emails/${n.id}`}
-                    className="flex flex-wrap items-center gap-3 rounded-xl border border-line/70 bg-card p-3.5 transition-colors hover:border-ink/30"
+                    className="flex min-w-0 flex-1 flex-wrap items-center gap-3 rounded-xl border border-line/70 bg-card p-3.5 transition-colors hover:border-ink/30"
                   >
-                    <span className="min-w-0 flex-1">
+                    <span className="min-w-0 flex-1 basis-full sm:basis-0">
                       <span className="block truncate text-[13.5px] font-semibold">{n.name || "Untitled"}</span>
                       <span className="block truncate text-[11.5px] text-muted">{n.subject || "No subject yet"}</span>
                     </span>
@@ -128,6 +142,15 @@ export default function Emails() {
                     <span className="text-[11.5px] text-muted">{n.recipients.length} {n.recipients.length === 1 ? "person" : "people"}</span>
                     <Pill tone={s.tone}>{s.text}</Pill>
                   </Link>
+                  <button
+                    type="button"
+                    disabled={copying !== null}
+                    onClick={() => void duplicate(n.id)}
+                    aria-label={`Duplicate ${n.name || "Untitled"}`}
+                    className="shrink-0 rounded-xl border border-line/70 bg-card px-3.5 text-[12px] font-semibold text-muted transition-colors hover:border-ink/30 hover:text-ink disabled:opacity-40"
+                  >
+                    {copying === n.id ? "Duplicating…" : "Duplicate"}
+                  </button>
                 </li>
               );
             })}

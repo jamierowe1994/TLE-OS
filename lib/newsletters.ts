@@ -232,6 +232,24 @@ export async function createNewsletter(kind: NewsletterKind, by: string): Promis
 
 export class NewsletterError extends Error {}
 
+/**
+ * Duplicate: a fresh draft with the same design, subject, inbox line and list
+ * (Francesca, 1 Oct 2026). Works from any email, sent ones included, so last
+ * month's newsletter can be the start of this month's. Nothing about how the
+ * original went is carried over: no send time, no sends, no results.
+ */
+export async function duplicateNewsletter(id: string, by: string): Promise<Newsletter> {
+  const n = await getNewsletter(id);
+  if (!n) throw new NewsletterError("That email no longer exists.");
+  const copy = randomUUID();
+  await q(
+    `insert into os_newsletters (id, kind, name, subject, preheader, blocks, recipients, created_by)
+     values ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8)`,
+    [copy, n.kind, `${n.name || "Untitled"} (copy)`.slice(0, 200), n.subject, n.preheader, JSON.stringify(n.blocks), JSON.stringify(n.recipients), by]
+  );
+  return (await getNewsletter(copy)) as Newsletter;
+}
+
 /** Anything still editable. Once it is sending or sent, it is history. */
 export async function updateNewsletter(
   id: string,
