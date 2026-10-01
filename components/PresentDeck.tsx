@@ -80,6 +80,7 @@ import {
   type IconName,
 } from "@/components/present-kit";
 import * as S from "@/components/PresentSlides";
+import { RmGuideButton, RmGuideOnlySlide } from "@/components/RmGuideButton";
 
 
 /**
@@ -1138,7 +1139,8 @@ function Reviews({ reviews }: { reviews: { quote: string; author: string; rating
 function Comparables({ deck, show }: { deck: Deck; show: boolean }) {
   const c = deck.comparables;
   const [openAt, setOpenAt] = useState<number | null>(null);
-  if (!c) return null;
+  /* A Rightmove guide instead of comparables: the slide opens the guide. */
+  if (!c) return deck.rmGuide ? <RmGuideOnlySlide guide={deck.rmGuide} show={show} /> : null;
   const money = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
   const shown = c.rows.slice(0, 6);
   const galleryOf = (r: (typeof shown)[number]) =>
@@ -1172,6 +1174,11 @@ function Comparables({ deck, show }: { deck: Deck; show: boolean }) {
               figure together.
             </p>
           </Rise>
+          {deck.rmGuide && (
+            <Rise show={show} i={2}>
+              <RmGuideButton guide={deck.rmGuide} className="mt-5" />
+            </Rise>
+          )}
         </div>
 
         <Rise show={show} i={3}>
