@@ -10,6 +10,7 @@ import { createContext, useContext } from "react";
 /** What a page can ask the pop-out to do. The modal provides it. */
 export const BookActionsCtx = createContext<{ sign: () => void } | null>(null);
 import { DEMAND_STATS, PORTAL_STATS, statClaim } from "@/lib/present-stats";
+import { RmGuideBookButton } from "@/components/RmGuideButton";
 
 /**
  * THE BOOKLET'S OWN PAGES. James, 13 Sep 2026, from his mock-up of the
@@ -464,22 +465,42 @@ export function BookListings({ deck }: { deck: Deck }) {
  */
 export function BookComparables({ deck }: { deck: Deck }) {
   const c = deck.comparables;
-  if (!c) return <div style={{ width: PAGE_W, height: PAGE_H, background: PAPER }} />;
-  /* Five in the booklet; the deck shows more. */
-  const rows = c.rows.slice(0, 5);
+  const guide = deck.rmGuide ?? null;
+  if (!c && !guide) return <div style={{ width: PAGE_W, height: PAGE_H, background: PAPER }} />;
+  /* Five in the booklet; the deck shows more. None when a Rightmove guide
+     stands in for them - the page then opens the guide (lib/rm-guide). */
+  const rows = c ? c.rows.slice(0, 5) : [];
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       <div className="pointer-events-none absolute -right-[260px] -top-[240px] h-[560px] w-[560px] rounded-full" style={{ background: "var(--p-tint)", opacity: 0.9 }} />
       <div className="absolute left-[96px] top-[84px] w-[1100px]">
         <EyebrowRule>What&rsquo;s letting nearby</EyebrowRule>
-        <p className="mt-6 leading-none">
-          <span className="text-[84px]" style={{ ...TITLE, color: "var(--p-accent)" }}>{gbp(c.guideLow)}&ndash;{gbp(c.guideHigh)}</span>
-          <span className="ml-4 text-[28px] text-black/60" style={TITLE}>pcm</span>
-        </p>
-        <p className="mt-6 max-w-[760px] text-[17px] leading-[1.6] text-black/65">
-          Based on {c.basedOn} comparable {c.basedOn === 1 ? "property" : "properties"} letting nearby. We&rsquo;ll use the evidence to agree the right figure together.
-        </p>
-        <ul className="mt-7 rounded-[18px] border bg-white/70 px-5" style={{ width: 1080, borderColor: "rgba(0,0,0,0.07)" }}>
+        {c ? (
+          <>
+            <p className="mt-6 leading-none">
+              <span className="text-[84px]" style={{ ...TITLE, color: "var(--p-accent)" }}>{gbp(c.guideLow)}&ndash;{gbp(c.guideHigh)}</span>
+              <span className="ml-4 text-[28px] text-black/60" style={TITLE}>pcm</span>
+            </p>
+            <p className="mt-6 max-w-[760px] text-[17px] leading-[1.6] text-black/65">
+              Based on {c.basedOn} comparable {c.basedOn === 1 ? "property" : "properties"} letting nearby. We&rsquo;ll use the evidence to agree the right figure together.
+            </p>
+          </>
+        ) : (
+          <>
+            <h1 className="mt-6 text-[64px] leading-[1.1]" style={TITLE}>
+              Rightmove&rsquo;s <span style={{ color: "var(--p-accent)" }}>price guide</span>
+            </h1>
+            <p className="mt-6 max-w-[760px] text-[17px] leading-[1.6] text-black/65">
+              We&rsquo;ve used Rightmove&rsquo;s Best Price Guide for homes like yours nearby. Open it to see the evidence - we&rsquo;ll use it to agree the right figure together.
+            </p>
+          </>
+        )}
+        {guide && (
+          <div className="mt-7">
+            <RmGuideBookButton guide={guide} />
+          </div>
+        )}
+        {rows.length > 0 && <ul className="mt-7 rounded-[18px] border bg-white/70 px-5" style={{ width: 1080, borderColor: "rgba(0,0,0,0.07)" }}>
           {rows.map((r, n) => (
             <li key={`${r.name}-${r.rent}`} className={`flex items-center gap-6 py-3.5 ${n > 0 ? "border-t" : ""}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
               <Thumb src={r.image} />
@@ -492,7 +513,7 @@ export function BookComparables({ deck }: { deck: Deck }) {
               <span aria-hidden className="text-[18px] text-black/30">&rsaquo;</span>
             </li>
           ))}
-        </ul>
+        </ul>}
       </div>
       <div className="absolute right-[120px] top-[96px]">
         <p className="text-[11px] uppercase leading-[1.8] tracking-[0.3em] text-black/55">

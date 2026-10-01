@@ -317,6 +317,9 @@ export type PresentDeck = {
   /** What we charge. On both long decks — see PresentFees. */
   fees?: PresentFees | null;
   comparables?: PresentComparables | null;
+  /** A Rightmove Best Price Guide in place of (or beside) the comparables -
+   *  see lib/rm-guide. Meets the three-comparables floor on its own. */
+  rmGuide?: import("./rm-guide").RmGuide | null;
   /** What is advertised near them right now. */
   listings?: PresentListing[] | null;
   /** What we hold about the property, for them to correct. */
@@ -371,6 +374,8 @@ export type PresentBuilderPicks = {
   listings: string[];
   market: { area: string; blocks: string[] } | null;
   hidden: SlideId[];
+  /** The attached Rightmove guide, so Update opens with it. lib/rm-guide. */
+  rmGuide?: import("./rm-guide").RmGuide | null;
 };
 
 /* ───────────────────────── the words ───────────────────────── */
@@ -937,7 +942,9 @@ export function slideHasContent(deck: PresentDeck, id: SlideId): boolean {
        a landlord counting two properties concludes we do not know their
        street, and the rest of the deck inherits that doubt. Absent is better. */
     const c = deck.comparables;
-    return Boolean(c && c.rows.length >= 3);
+    /* ...or a Rightmove Best Price Guide the agent attached instead (Howard,
+       approved 1 Oct 2026): the guide is the evidence, and the slide opens it. */
+    return Boolean((c && c.rows.length >= 3) || deck.rmGuide);
   }
   /* The market slide is opt-in per appraisal — the agent ticks blocks on the
      Market step and nothing is included by default. An unticked deck must not

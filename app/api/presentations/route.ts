@@ -22,6 +22,7 @@ import {
 } from "@/lib/present";
 import { hasDb, q } from "@/lib/db";
 import { publicOrigin } from "@/lib/origin";
+import { guideIn } from "@/lib/rm-guide";
 
 /**
  * Minting a deck — one of three, chosen by `kind`.
@@ -57,6 +58,8 @@ type Body = {
    *  actually ticked, and which sections they kept. Both optional — a deck
    *  minted without the wizard still works exactly as it did. */
   comparables?: PresentComparables | null;
+  /** A Rightmove Best Price Guide, file or link - see lib/rm-guide. */
+  rmGuide?: unknown;
   /** What is advertised near them, with photographs, as picked on the wizard's
    *  Available step. See PresentListing for why the gallery travels. */
   listings?: PresentListing[] | null;
@@ -210,6 +213,10 @@ export async function POST(req: NextRequest) {
        thin selection quietly becomes no slide rather than a weak one. */
     comparables:
       body.comparables && body.comparables.rows.length >= 3 ? body.comparables : null,
+    /* Checked, not trusted: an https link or a PDF in the guide's own R2
+       folder, nothing else. With one, the comparables slide shows even
+       without three comparables - see slideHasContent. */
+    rmGuide: guideIn(body.rmGuide),
     /* Snapshotted for the same reason, and only when the agent actually chose
        something: an `area` with every block empty would mint a slide headed
        "Your local market" with nothing on it. slidesFor drops a null. */
@@ -331,5 +338,6 @@ function pickedIn(b: PresentBuilderPicks | null | undefined): PresentBuilderPick
     listings: strs(b.listings),
     market: b.market && typeof b.market.area === "string" ? { area: b.market.area, blocks: strs(b.market.blocks) } : null,
     hidden: SLIDES.filter((sl) => sl.removable && strs(b.hidden).includes(sl.id)).map((sl): SlideId => sl.id),
+    rmGuide: guideIn(b.rmGuide),
   };
 }

@@ -15,6 +15,8 @@ import MarketPicturePanel, {
 } from "@/components/MarketPicture";
 import type { MarketPicture } from "@/lib/market-picture";
 import PresentDeck from "@/components/PresentDeck";
+import RmGuidePanel from "@/components/RmGuidePanel";
+import type { RmGuide } from "@/lib/rm-guide";
 import {
   SECTIONS,
   STANDARD_FEES,
@@ -154,6 +156,8 @@ export default function PresentationBuilder({
      `hidden`, which slidesFor honours in the preview, the minted deck and
      the booklet alike. */
   const [hidden, setHidden] = useState<SlideId[]>([]);
+  /* A Rightmove Best Price Guide in place of the comparables (lib/rm-guide). */
+  const [rmGuide, setRmGuide] = useState<RmGuide | null>(null);
   const [making, setMaking] = useState(false);
   /* THE PRESENTATION THIS APPRAISAL ALREADY HAS, if any (James, 17 Sep 2026:
      "rather than saying create presentation, it should always be update
@@ -325,6 +329,7 @@ export default function PresentationBuilder({
             caveat: guide.caveat,
           }
         : null,
+      rmGuide,
       hidden,
       market: marketPayload(),
       /* WHAT THE AGENT PICKED ON THE AVAILABLE STEP, snapshotted with its
@@ -378,7 +383,7 @@ export default function PresentationBuilder({
     setError(null);
     setProgress("building");
     setUpdatingRun(Boolean(existing));
-    const builder = { comparables: chosen, listings: pickedNearby, market: marketSel, hidden };
+    const builder = { comparables: chosen, listings: pickedNearby, market: marketSel, hidden, rmGuide };
     try {
       const res = await fetch("/api/presentations", {
         method: "POST",
@@ -434,6 +439,7 @@ export default function PresentationBuilder({
     setPickedNearby(b.listings);
     if (b.market) setMarketSel({ area: b.market.area, blocks: b.market.blocks as MarketBlockId[] });
     setHidden(b.hidden);
+    setRmGuide(b.rmGuide ?? null);
   }, [d, existing, inherited]);
 
   const opened = useRef(false);
@@ -1406,6 +1412,7 @@ export default function PresentationBuilder({
          list, which must not wait on who is signed in; the preview does. */
       agent: me ?? { name: "", firstName: "", title: "", email: "", phone: "", photo: null, bio: "" },
       comparables: b.comparables && b.comparables.rows.length >= 3 ? b.comparables : null,
+      rmGuide: b.rmGuide,
       market: b.market && b.market.area ? b.market : null,
       listings: b.listings.length ? (b.listings as Deck["listings"]) : null,
       material: b.material.length ? b.material : null,
@@ -1428,7 +1435,7 @@ export default function PresentationBuilder({
       createdAt: new Date().toISOString(),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [d, me, chosen, picks, marketSel, marketPic, kind, landlord, address, postcode, appraisal, hidden]);
+  }, [d, me, chosen, picks, marketSel, marketPic, kind, landlord, address, postcode, appraisal, hidden, rmGuide]);
   const previewDeck = me ? draftDeck : null;
 
   const body = (
@@ -1709,6 +1716,10 @@ export default function PresentationBuilder({
                 );
               })()}
             </div>
+          )}
+
+          {d && here === "let" && (
+            <RmGuidePanel refId={refId ?? address} value={rmGuide} onChange={setRmGuide} />
           )}
 
           {/* ONE VIEW FOR BOTH. James, 11 Sep 2026: Recently let "should be exactly
@@ -2014,8 +2025,9 @@ export default function PresentationBuilder({
                     </>
                   ) : (
                     <p className="mt-2 text-[12.5px] leading-relaxed text-muted">
-                      No rent guide goes in yet. It needs at least 3 comparables ticked on Recently let
-                      {pickedComps.length ? ` (${pickedComps.length} ticked so far)` : ""}.
+                      {rmGuide
+                        ? "No range from our comparables - the Rightmove price guide attached on Recently let goes in instead, as a button on What's letting nearby."
+                        : `No rent guide goes in yet. It needs at least 3 comparables ticked on Recently let${pickedComps.length ? ` (${pickedComps.length} ticked so far)` : ""}, or a Rightmove price guide attached there.`}
                     </p>
                   )}
                   {(!deckGuide ||
@@ -2364,7 +2376,7 @@ function DeckPreview({ deck }: { deck: Deck }) {
 type SavedDeck = {
   token: string;
   url: string;
-  builder: { comparables: string[]; listings: string[]; market: { area: string; blocks: string[] } | null; hidden: SlideId[] } | null;
+  builder: { comparables: string[]; listings: string[]; market: { area: string; blocks: string[] } | null; hidden: SlideId[]; rmGuide?: RmGuide | null } | null;
 };
 
 /** "Send presentation to my email" - the builder's header and the build screen both use it. */
