@@ -75,7 +75,7 @@ export const TENANT_STEPS: ShowroomStep[] = [
     ],
     agent: { says: "On a tenant lead, press Send passport. On a booked viewing, press Invite to the passport.", href: "/leads?side=tenant" },
     screens: [{ label: "The passport", href: "/preview/{token}/passport", device: "phone" }],
-    emails: ["tenant-passport-invite", "tenant-passport-nudge-1", "tenant-passport-nudge-2"],
+    emails: ["tenant-passport-request", "tenant-passport-nudge-1", "tenant-passport-nudge-2"],
   },
   {
     id: "account",
@@ -136,7 +136,7 @@ export const TENANT_STEPS: ShowroomStep[] = [
     ],
     agent: { says: "On a tenant lead, press Book a viewing, check the email and send it. Move or cancel it from Viewings.", href: "/viewings" },
     screens: [{ label: "Their area, viewing booked", href: "/tenant/demo", stage: "viewing", device: "desktop" }],
-    emails: ["tenant-passport-invite", "viewing-moved", "viewing-cancelled"],
+    emails: ["tenant-passport-invite", "tenant-viewing-booked", "viewing-moved", "viewing-cancelled"],
     notYet: ["The tenant cannot move or cancel a viewing themselves - they reply to the email."],
   },
   {
@@ -232,7 +232,9 @@ export const TENANT_STEPS: ShowroomStep[] = [
  * the acceptance email"); these are what the Showroom shows instead.
  */
 export const EMAIL_WORDS: Record<string, { when: string; says: string; status?: "live" | "ready" | "built" | "written" | "planned" }> = {
-  "tenant-passport-invite": { when: "The moment you book a viewing, or send the passport from a lead", says: "The viewing details and a calendar invite, and a button to their passport. Fill it in once and it answers every application." },
+  "tenant-passport-request": { when: "When you press Send passport on a tenant lead, before any viewing", says: "The passport on its own: what it asks, that nothing is shared until they apply, and that you will be in touch about viewings once it is done." },
+  "tenant-passport-invite": { when: "The moment you book a viewing for someone who has not filled in their passport", says: "The viewing details and a calendar invite, and a button to their passport. Fill it in once and it answers every application." },
+  "tenant-viewing-booked": { when: "The moment you book a viewing for someone whose passport is done", says: "The viewing details and a calendar invite, and thanks for the passport rather than asking again." },
   "tenant-passport-nudge-1": { when: "Two days after the invite, if they have not started", says: "A short nudge: it takes about ten minutes, and nothing is shared until they apply." },
   "tenant-passport-nudge-2": { when: "A week after the invite, still not started", says: "Why it helps them: the same details for every home, and ready applications go first. The last reminder." },
   "tenant-sign-in": { when: "When a tenant asks for a link on the sign-in page", says: "A link that signs them straight in. It only ever goes to someone who really is one of our tenants." },
@@ -513,7 +515,7 @@ export const AGENT_STEPS: ShowroomStep[] = [
     agent: { says: "Book from the lead; your day is on Viewings.", href: "/viewings" },
     guide: "viewings",
     screens: [],
-    emails: ["tenant-passport-invite", "viewing-moved", "viewing-cancelled", "viewing-rebook"],
+    emails: ["tenant-passport-invite", "tenant-viewing-booked", "viewing-moved", "viewing-cancelled", "viewing-rebook"],
   },
   {
     id: "applications",

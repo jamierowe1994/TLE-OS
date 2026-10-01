@@ -221,19 +221,17 @@ export async function runKit(kit: KitId, me: OsUser, origin: string): Promise<Ki
     stored.push({ who: "tenant", label: "Open the passport", href: path });
     stored.push({ who: "agent", label: "Open the lead", href: `/leads?side=tenant&open=os-${c.id}` });
 
-    const whenPretty = new Date(londonAt(2, 17)).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" });
+    /* The passport on its own, before any viewing (1 Oct 2026): the way an
+       agent sends it from a lead. */
     try {
-      const { subject, html } = renderTleEmail("tenant-passport-invite", {
+      const { subject, html } = renderTleEmail("tenant-passport-request", {
         firstName: first,
-        address: "Flat 2, 30 Test Road, Didsbury",
-        whenPretty,
-        agentName: me.name || "Your agent",
-        meetLine: `${me.name || "Your agent"} will meet you there.`,
+        agentName: me.name || "your agent",
         link: `${origin}${path}`,
       });
       await sendEmail({ to: email, subject, html, audience: "customer", replyTo: email });
       await markInvited(passport.token, me.name || email);
-      said.push(`The Viewing Booked invite, with the passport link, is on its way to ${email}.`);
+      said.push(`The passport request is on its way to ${email}.`);
     } catch (e) {
       said.push(`The passport is made, but the invite did not send: ${e instanceof Error ? e.message.replace(/\.$/, "") : "unknown"}.`);
     }

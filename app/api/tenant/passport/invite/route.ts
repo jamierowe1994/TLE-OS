@@ -12,6 +12,16 @@ import { isInternalAddress } from "@/lib/email-policy";
 /**
  * POST /api/tenant/passport/invite
  *
+ * ── Two emails, by whether there is a viewing (1 Oct 2026) ────────────────
+ *
+ * From a lead there is no viewing, and agents do not book one until the
+ * passport says the tenant fits (Rhiannon). So with no `whenPretty` this
+ * sends the passport on its own (tenant-passport-request), and says nothing
+ * about a booking. From a booked viewing it sends the viewing email with the
+ * passport in it, as before. The lead used to get the viewing email too, with
+ * "the property" and "the time we agreed" standing in for a viewing that did
+ * not exist.
+ *
  * The send path the passport never had (launch list, item 17). An agent
  * presses "Invite to the passport" on a booked viewing; this mints the
  * passport for that tenant, renders the catalogue's Viewing Booked email with
@@ -120,14 +130,21 @@ export async function POST(req: NextRequest) {
   const token = existing?.token ?? (await createPassport({ name, email, agentId: me.id })).token;
   const link = `${publicOrigin(req)}/tenant/passport/${token}`;
   const firstName = name.split(/\s+/)[0] || "there";
-  const { subject, html } = renderTleEmail("tenant-passport-invite", {
-    firstName,
-    address: (body.address ?? "").trim() || "the property",
-    whenPretty: (body.whenPretty ?? "").trim() || "the time we agreed",
-    agentName: me.name || "Your agent",
-    meetLine: `${me.name || "Your agent"} will meet you there.`,
-    link,
-  });
+  const whenPretty = (body.whenPretty ?? "").trim();
+  const { subject, html } = whenPretty
+    ? renderTleEmail("tenant-passport-invite", {
+        firstName,
+        address: (body.address ?? "").trim() || "the property",
+        whenPretty,
+        agentName: me.name || "Your agent",
+        meetLine: `${me.name || "Your agent"} will meet you there.`,
+        link,
+      })
+    : renderTleEmail("tenant-passport-request", {
+        firstName,
+        agentName: me.name || "your agent",
+        link,
+      });
 
   /* From their own Outlook where that is armed, so the tenant's reply comes
      back to the agent who invited them rather than to a shared inbox. */

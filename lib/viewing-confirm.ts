@@ -1,6 +1,6 @@
 import "server-only";
 import type { OsUser } from "@/lib/users";
-import { createPassport, findPassportByEmail, markInvited } from "@/lib/passport";
+import { createPassport, findPassportByEmail, getPassport, markInvited } from "@/lib/passport";
 import { renderTleEmail } from "@/lib/email/tle-emails";
 import { sendEmail } from "@/lib/resend";
 import { sendAsAgent } from "@/lib/send-as-agent";
@@ -18,7 +18,9 @@ import { cleanEmailHtml, isRepeat, lastSent, recordSent, sentWords } from "@/lib
  * applicant's email, can rewrite it, and sends it (lib/confirmations). Then:
  *
  *   the applicant   the catalogue's Viewing Booked email (tenant-passport-invite)
- *                   with the passport link and a calendar file attached, from
+ *                   with the passport link and a calendar file attached - or,
+ *                   when their passport is already done, tenant-viewing-booked,
+ *                   which thanks them instead of asking again (1 Oct 2026) - from
  *                   the agent's OWN Outlook where that is armed and connected
  *                   so the reply comes back to them (lib/send-as-agent), and
  *                   from our sender with their address to reply to otherwise
@@ -85,7 +87,14 @@ async function passportFor(b: ViewingBooking, me: OsUser, to: string): Promise<s
   return existing?.token ?? (await createPassport({ name: b.applicant.name, email: to, agentId: me.id })).token;
 }
 
-function render(b: ViewingBooking, me: OsUser, origin: string, token: string) {
+/** Has the applicant already filled their passport in? Then the email thanks them rather than asking. */
+async function passportDone(token: string): Promise<boolean> {
+  if (!token) return false;
+  const p = await getPassport(token).catch(() => null);
+  return Boolean(p?.submittedAt);
+}
+
+function render(b: ViewingBooking, me: OsUser, origin: string, token: string, done = false) {
   const agentName = me.name || "Your agent";
   /* Add to my calendar, in the body where it is seen, rather than a file
      attached that people miss (James, 17 Sep 2026). */
@@ -104,7 +113,7 @@ function render(b: ViewingBooking, me: OsUser, origin: string, token: string) {
       { type: "text", id: "tpcal2", text: `Using Google or Outlook on the web? <a href="${cal.google}" style="${LINK}">Add it to Google Calendar</a> or <a href="${cal.outlook}" style="${LINK}">Outlook</a>.`, bg: "" },
     ],
   };
-  return renderTleEmail("tenant-passport-invite", {
+  return renderTleEmail(done ? "tenant-viewing-booked" : "tenant-passport-invite", {
     firstName: b.applicant.name.trim().split(/\s+/)[0] || "there",
     address: b.address || "the property",
     whenPretty: whenOf(b.startsAt),
@@ -121,7 +130,7 @@ export async function draftViewingConfirmation(b: ViewingBooking, me: OsUser, or
   const to = (b.applicant.email ?? "").trim();
   const prev = await lastSent(viewingKey(b));
   const token = emailOk(to) ? await passportFor(b, me, to).catch(() => "") : "";
-  const { subject, html } = render(b, me, origin, token || "your-passport");
+  const { subject, html } = render(b, me, origin, token || "your-passport", await passportDone(token));
   return {
     ok: true,
     to: emailOk(to) ? to : null,
@@ -170,7 +179,7 @@ export async function sendViewingConfirmation(p: {
   }
   try {
     const token = await passportFor(b, p.me, to);
-    const templ = render(b, p.me, p.origin, token);
+    const templ = render(b, p.me, p.origin, token, await passportDone(token));
     const subject = (p.subject ?? "").trim() || templ.subject;
     /* The draft was rendered with the same token, so the agent's edit already
        carries the right link. */

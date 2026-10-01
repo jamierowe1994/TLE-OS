@@ -49,6 +49,8 @@ import {
   CERTIFICATE_SHARED_TENANT,
   CERTIFICATE_SHARED_CONTRACTOR,
   TENANT_PASSPORT_INVITE,
+  TENANT_PASSPORT_REQUEST,
+  TENANT_VIEWING_BOOKED,
   LANDLORD_SIGN_IN,
   TENANT_SIGN_IN,
   WORKS_CONTRACTOR_ORDER,
@@ -856,12 +858,55 @@ The Letting Experts`
       )(),
   },
   {
+    id: "tenant-passport-request",
+    group: "Doorways",
+    name: "Tenant Passport - Before a Viewing",
+    audience: "tenant",
+    trigger: "An agent sends the passport from a tenant lead, before any viewing",
+    fires: "Wired 1 Oct 2026. Send passport on a tenant lead (components/LeadDrawer.tsx) -> POST /api/tenant/passport/invite with no viewing, from the agent's own Outlook where connected. Mints the passport and links to it.",
+    to: "The tenant on the lead",
+    draft: false,
+    summary:
+      "Rhiannon, 1 Oct 2026: agents only book viewings once a tenant meets the criteria, so the passport goes first and on its own. Says nothing about a viewing, asks them to fill it in so the agent can see what they need, and says the agent will be in touch about viewings once it is done.",
+    doc: TENANT_PASSPORT_REQUEST,
+    render: (o) =>
+      blocksAs("tenant")(
+        withSample(o ?? TENANT_PASSPORT_REQUEST, {
+          firstName: "Sophie",
+          agentName: "Sam Whitaker",
+          link: `${SITE}/tenant/welcome`,
+        })
+      )(),
+  },
+  {
+    id: "tenant-viewing-booked",
+    group: "Doorways",
+    name: "Viewing Booked - Passport Already Done",
+    audience: "tenant",
+    trigger: "A viewing is booked for a tenant whose passport is already filled in",
+    fires: "Wired 1 Oct 2026. lib/viewing-confirm.ts picks this instead of Viewing Booked - Start Your Passport when the applicant's passport is submitted. Opened for the agent after the booking to read, edit and send.",
+    to: "The tenant who booked the viewing",
+    draft: false,
+    summary: "The address, the time and who is meeting them, with the calendar buttons. Thanks them for the passport rather than asking for it again.",
+    doc: TENANT_VIEWING_BOOKED,
+    render: (o) =>
+      blocksAs("tenant")(
+        withSample(o ?? TENANT_VIEWING_BOOKED, {
+          firstName: "Sophie",
+          address: "8 Recreation Terrace, Nottingham NG2 3AB",
+          whenPretty: "Thursday 4 September at 5:30pm",
+          agentName: "Sam Whitaker",
+          meetLine: "Sam Whitaker will meet you there.",
+        })
+      )(),
+  },
+  {
     id: "tenant-passport-invite",
     group: "Doorways",
     name: "Viewing Booked - Start Your Passport",
     audience: "tenant",
-    trigger: "A viewing is booked for a tenant",
-    fires: "Wired. Opened for the agent after every booking (17 Sep 2026: read, edit, Send - never sent on its own), by lib/viewing-confirm.ts, from the agent's own Outlook where it is connected, with the calendar file; also by hand from a viewing (Invite to the passport). Mints the passport and links to it.",
+    trigger: "A viewing is booked for a tenant who has not filled in their passport yet",
+    fires: "Wired. Opened for the agent after every booking where the passport is not done yet (otherwise Viewing Booked - Passport Already Done) (17 Sep 2026: read, edit, Send - never sent on its own), by lib/viewing-confirm.ts, from the agent's own Outlook where it is connected, with the calendar file; also by hand from a viewing (Invite to the passport). Mints the passport and links to it.",
     to: "The tenant who booked the viewing",
     /* Not a draft since 15 Sep 2026: lib/viewing-confirm.ts sends it on every
        booking with an applicant email. */

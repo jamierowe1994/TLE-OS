@@ -509,6 +509,80 @@ export const TENANT_PASSPORT_INVITE = {
 } as const;
 
 /**
+ * Tenant: the passport on its own, BEFORE any viewing (1 Oct 2026).
+ *
+ * Rhiannon: "The rental passport should just be the initial request to
+ * complete so we can assess their situation to then be able to arrange an
+ * appointment. I won't book appointments with anyone unless they meet
+ * criteria." Sent from a lead the day they enquire, it says nothing about a
+ * viewing, because there isn't one yet and there may never be. The viewing
+ * email comes later, once the agent has read the passport and booked one.
+ */
+export const TENANT_PASSPORT_REQUEST = {
+  subject: "Your tenant passport: the first step to a viewing",
+  preheader: "About ten minutes, filled in once, and it answers every home you apply for.",
+  mode: "blocks",
+  blocks: [
+    H("pr1", "Your tenant passport"),
+    T(
+      "pr2",
+      "Hi {{firstName}},<br><br>Thanks for getting in touch with The Letting Experts. Before we arrange any viewings, we ask everyone to fill in a short tenant passport. It tells {{agentName}} about you and what you need, so we only book you in to see homes that suit you."
+    ),
+    SP("pr3", 8),
+    DIV("pr4"),
+    H2("pr5", "What it asks"),
+    T(
+      "pr6",
+      "Who is moving in, what you do and what you earn, where you've lived, any pets, and your right to rent in the UK. The same things every application asks, so you only answer them once."
+    ),
+    T(
+      "pr7",
+      "It takes about ten minutes, you can stop and come back to it, and it stays yours. <strong>Nothing in it is shared with a landlord unless you apply for their property.</strong>"
+    ),
+    SP("pr8", 8),
+    BTN("pr9", "Start your passport", "{{link}}"),
+    SP("pr10", 8),
+    T("pr11", "Once it's done, {{agentName}} will look through it and be in touch about viewings."),
+    SP("pr12", 8),
+    T("pr13", "The Letting Experts"),
+    FOOT("pr14", "You're getting this because you enquired with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/**
+ * Tenant: a viewing is booked and their passport is already done (1 Oct 2026).
+ *
+ * With the passport going out first, most tenants who get a viewing have
+ * already filled it in, and asking them to "start your passport" again reads
+ * as though nobody looked. So the confirmation thanks them instead. The
+ * block id tp2 is shared with TENANT_PASSPORT_INVITE on purpose: the
+ * calendar buttons are inserted after it in both.
+ */
+export const TENANT_VIEWING_BOOKED = {
+  subject: "Your viewing is booked",
+  preheader: "The address, the time, and who is meeting you.",
+  mode: "blocks",
+  blocks: [
+    H("tp1", "You're booked in"),
+    T(
+      "tp2",
+      "Hi {{firstName}},<br><br>Your viewing at <strong>{{address}}</strong> is confirmed for <strong>{{whenPretty}}</strong>. {{meetLine}}"
+    ),
+    SP("vb3", 8),
+    T(
+      "vb4",
+      "Thank you for completing your tenant passport. If this is the one, tell {{agentName}} and your application can go in the same day."
+    ),
+    T("vb5", "Need to change the time? Just reply to this email."),
+    SP("vb6", 8),
+    T("vb7", "The Letting Experts"),
+    FOOT("vb8", "You're getting this because you booked a viewing with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/**
  * Landlord: an appraisal is booked, so open the property file.
  *
  * The pitch is not "make an account". It is that we have already gathered what
