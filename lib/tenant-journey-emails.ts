@@ -5,7 +5,6 @@ import { switchOn } from "@/lib/switches";
 import { findUserByEmail, findUserById, type OsUser } from "@/lib/users";
 import { renderTleEmailLive } from "@/lib/email/tle-emails";
 import { SITE } from "@/lib/email/tle-documents";
-import { createPassport, findPassportByEmail } from "@/lib/passport";
 import { getApplications } from "@/lib/applications";
 import { rexConfigured } from "@/lib/rex";
 import type { ReminderResult } from "@/lib/tenant-reminders";
@@ -56,12 +55,10 @@ async function automaticDry(): Promise<Dry> {
   return (await automaticOn()) ? false : "held";
 }
 
-/** The tenant's passport link, minting one if they have none. Only on a real send. */
-async function passportLink(p: { name: string; email: string; agentId: string | null }): Promise<string> {
-  const existing = await findPassportByEmail(p.email, p.agentId).catch(() => null);
-  const token = existing?.token ?? (await createPassport({ name: p.name, email: p.email, agentId: p.agentId })).token;
-  return `${SITE}/tenant/passport/${token}`;
-}
+/* No passport links in the automatic emails (James, 1 Oct 2026): the
+   passport only goes when the agent presses Send passport, so none of these
+   mint one or ask for one. {{link}} is kept pointing at the tenant welcome
+   page for any edited copy that still has a button. */
 
 /** One send, logged when settled, reported either way. */
 async function sendOne(
@@ -158,7 +155,7 @@ export async function enquiryReplies(opts: { dry?: boolean } = {}): Promise<Out>
         moveInList: costs.list,
         feesLine: costs.feesLine,
         agentName: agent?.name || agentName || "The Letting Experts",
-        link: live ? await passportLink({ name: l.name ?? "", email: (l.email ?? "").trim(), agentId: agent?.id ?? null }) : `${SITE}/tenant/welcome`,
+        link: `${SITE}/tenant/welcome`,
       }),
     });
   }
@@ -183,7 +180,7 @@ export async function sendAddedWelcome(p: { contactId: string; name: string; ema
       firstName: firstName(p.name),
       agentName: p.by.name || "The Letting Experts",
       onNowLine: book.length ? `We have ${book.length} homes on with us right now.` : "",
-      link: live ? await passportLink({ name: p.name, email: p.email.trim(), agentId: p.by.id }) : `${SITE}/tenant/welcome`,
+      link: `${SITE}/tenant/welcome`,
     }),
   });
   return out[0] ?? null;
@@ -403,7 +400,7 @@ export async function matchesAgain(dry: Dry, out: Out) {
         firstName: firstName(name),
         homesList: homesListHtml(homes),
         agentName: agent?.name || "The Letting Experts",
-        link: live ? await passportLink({ name, email: to, agentId: agent?.id ?? null }) : `${SITE}/tenant/welcome`,
+        link: `${SITE}/tenant/welcome`,
       }),
     });
   }

@@ -881,13 +881,13 @@ The Letting Experts`
   {
     id: "tenant-viewing-booked",
     group: "Doorways",
-    name: "Viewing Booked - Passport Already Done",
+    name: "Viewing Booked",
     audience: "tenant",
-    trigger: "A viewing is booked for a tenant whose passport is already filled in",
-    fires: "Wired 1 Oct 2026. lib/viewing-confirm.ts picks this instead of Viewing Booked - Start Your Passport when the applicant's passport is submitted. Opened for the agent after the booking to read, edit and send.",
+    trigger: "A viewing is booked for a tenant",
+    fires: "Wired 1 Oct 2026. lib/viewing-confirm.ts, opened for the agent after every booking to read, edit and send, from their own Outlook where connected. Never mints or asks for a passport: that only goes when the agent presses Send passport.",
     to: "The tenant who booked the viewing",
     draft: false,
-    summary: "The address, the time and who is meeting them, with the calendar buttons. Thanks them for the passport rather than asking for it again.",
+    summary: "The address, the time and who is meeting them, with the calendar buttons. Thanks them for their passport if it is already done; otherwise no mention of it.",
     doc: TENANT_VIEWING_BOOKED,
     render: (o) =>
       blocksAs("tenant")(
@@ -897,16 +897,17 @@ The Letting Experts`
           whenPretty: "Thursday 4 September at 5:30pm",
           agentName: "Sam Whitaker",
           meetLine: "Sam Whitaker will meet you there.",
+          nextLine: "Thank you for completing your tenant passport. If this is the one, tell Sam Whitaker and your application can go in the same day.",
         })
       )(),
   },
   {
     id: "tenant-passport-invite",
     group: "Doorways",
-    name: "Viewing Booked - Start Your Passport",
+    name: "Tenant Passport - With a Viewing",
     audience: "tenant",
-    trigger: "A viewing is booked for a tenant who has not filled in their passport yet",
-    fires: "Wired. Opened for the agent after every booking where the passport is not done yet (otherwise Viewing Booked - Passport Already Done) (17 Sep 2026: read, edit, Send - never sent on its own), by lib/viewing-confirm.ts, from the agent's own Outlook where it is connected, with the calendar file; also by hand from a viewing (Invite to the passport). Mints the passport and links to it.",
+    trigger: "The agent presses Invite to the passport on a booked viewing",
+    fires: "By hand only since 1 Oct 2026 (James: the passport goes when the agent says so). Invite to the passport on a viewing (components/ViewingDrawer.tsx) -> POST /api/tenant/passport/invite with the viewing. Booking confirmations no longer use it. Mints the passport and links to it.",
     to: "The tenant who booked the viewing",
     /* Not a draft since 15 Sep 2026: lib/viewing-confirm.ts sends it on every
        booking with an applicant email. */
@@ -1242,9 +1243,9 @@ TLE_EMAILS.push(
     "tenant-enquiry-reply",
     "About the Home You Asked About",
     "A tenant enquires about one property",
-    "Wired 16 Sep 2026. lib/tenant-journey-emails enquiryReplies, on the leads scan every five minutes: a Letting lead first seen in the last two hours on a home still live with a rent. The move-in costs are worked out from the rent, England and Scotland apart. The button is their passport. Needs the Automatic tenant emails switch and customer email.",
+    "Wired 16 Sep 2026. lib/tenant-journey-emails enquiryReplies, on the leads scan every five minutes: a Letting lead first seen in the last two hours on a home still live with a rent. The move-in costs are worked out from the rent, England and Scotland apart. No passport since 1 Oct 2026: that only goes when the agent presses Send passport. Needs the Automatic tenant emails switch and customer email.",
     "The person who enquired",
-    "Straight away: is it still there, what the rent is, the three things it costs to move in, the next viewing times, and the passport as a single link rather than a second button. The move-in costs are one list the send path builds from the rent.",
+    "Straight away: is it still there, what the rent is, the three things it costs to move in, and how to arrange a viewing by reply. The move-in costs are one list the send path builds from the rent.",
     TENANT_ENQUIRY_REPLY,
     { link: `${SITE}/tenant/welcome`, feesLine: "No admin fees and no referencing fees. The holding fee goes towards your first month's rent." }
   ),
@@ -1252,9 +1253,9 @@ TLE_EMAILS.push(
     "tenant-added-welcome",
     "Let's Find You a Home",
     "An agent registers a tenant with no property in mind",
-    "Wired 16 Sep 2026. POST /api/contacts, when an agent adds a tenant with an email address, from that agent. The button is their passport. Needs the Automatic tenant emails switch and customer email.",
+    "Wired 16 Sep 2026. POST /api/contacts, when an agent adds a tenant with an email address, from that agent. No passport since 1 Oct 2026: that only goes when the agent presses Send passport. Needs the Automatic tenant emails switch and customer email.",
     "The tenant who was added",
-    "The search, not a property: what we need to know, one button into the passport where they tell us, and a promise to send what fits the same day.",
+    "The search, not a property: what we need to know, to tell us by reply, and a promise to send what fits the same day.",
     TENANT_ADDED_WELCOME,
     { link: `${SITE}/tenant/welcome` }
   ),
@@ -1282,9 +1283,9 @@ TLE_EMAILS.push(
     "tenant-matches",
     "Homes That Fit",
     "A tenant is qualified, and again when an agent sends homes from a lead",
-    "Wired 16 Sep 2026. A lead's Email properties -> POST /api/leads/email-properties, from the agent's own Outlook where that is armed and connected, otherwise the Letting Experts sender. Mints the passport the button opens. Needs customer email on.",
+    "Wired 16 Sep 2026. A lead's Email properties -> POST /api/leads/email-properties, from the agent's own Outlook where that is armed and connected, otherwise the Letting Experts sender. No passport since 1 Oct 2026. Needs customer email on.",
     "The tenant on the lead",
-    "The homes the agent ticked, one line each with the rent first, and one ask: reply with the ones to see. The button is their passport, so the one that fits can be applied for the same day.",
+    "The homes the agent ticked, one line each with the rent first, and one ask: reply with the ones to see.",
     TENANT_MATCHES,
     { introLine: "Here are the homes on with us right now that I think fit what you're after.", link: `${SITE}/tenant/welcome` }
   ),

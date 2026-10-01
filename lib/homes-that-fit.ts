@@ -1,7 +1,6 @@
 import "server-only";
 import type { OsUser } from "@/lib/users";
 import { renderTleEmailLive } from "@/lib/email/tle-emails";
-import { createPassport, findPassportByEmail, markInvited } from "@/lib/passport";
 import { sendAsAgent, type AgentSendResult } from "@/lib/send-as-agent";
 import { logDone } from "@/lib/tenant-email-send";
 
@@ -49,32 +48,21 @@ export async function renderHomesThatFit(p: { name: string; homes: FitHome[]; ag
   return { subject: p.homes.length === 1 ? subject.replace(/^1 homes that fit/, "A home that fits") : subject, html };
 }
 
-/** Render, mint or reuse their passport, send as the agent, log it. */
+/** Render, send as the agent, log it. No passport: that only goes when the agent presses Send passport (1 Oct 2026). */
 export async function sendHomesThatFit(p: { me: OsUser; name: string; to: string; homes: FitHome[]; origin: string }): Promise<AgentSendResult> {
   const to = p.to.trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
     return { sent: false, via: null, timeline: false, reason: "no_address", detail: "There is no usable email address on their record, so nothing was sent." };
   }
 
-  /* The button is their passport, so it has to exist. The same one if they
-     already have it, never a second. */
-  let token: string;
-  try {
-    const existing = await findPassportByEmail(to, p.me.id).catch(() => null);
-    token = existing?.token ?? (await createPassport({ name: p.name, email: to, agentId: p.me.id })).token;
-  } catch (e) {
-    return { sent: false, via: null, timeline: false, reason: "refused", detail: `Nothing was sent: the passport link could not be made (${e instanceof Error ? e.message : "unknown"}).` };
-  }
-
   const { subject, html } = await renderHomesThatFit({
     name: p.name,
     homes: p.homes,
     agentName: p.me.name || "The Letting Experts",
-    link: `${p.origin}/tenant/passport/${token}`,
+    link: `${p.origin}/tenant/welcome`,
   });
   const r = await sendAsAgent({ me: p.me, to, toName: p.name, subject, html });
   if (r.sent) {
-    await markInvited(token, p.me.name).catch(() => null);
     /* On the tenant email log, with the homes, so Anything Close? can follow
        up in four days with what has come on near them since. */
     await logDone(`tenant-matches:${to.toLowerCase()}:${Date.now()}`, "tenant-matches", to, "sent", r.detail, {

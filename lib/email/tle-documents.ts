@@ -551,12 +551,13 @@ export const TENANT_PASSPORT_REQUEST = {
 } as const;
 
 /**
- * Tenant: a viewing is booked and their passport is already done (1 Oct 2026).
+ * Tenant: a viewing is booked (1 Oct 2026). The confirmation every booking
+ * sends, with no passport in it.
  *
- * With the passport going out first, most tenants who get a viewing have
- * already filled it in, and asking them to "start your passport" again reads
- * as though nobody looked. So the confirmation thanks them instead. The
- * block id tp2 is shared with TENANT_PASSPORT_INVITE on purpose: the
+ * James: the passport only goes out when the agent presses Send passport, so
+ * a booking confirmation never asks for one. {{nextLine}} thanks them if
+ * their passport is already done, and otherwise just says how to go ahead.
+ * The block id tp2 is shared with TENANT_PASSPORT_INVITE on purpose: the
  * calendar buttons are inserted after it in both.
  */
 export const TENANT_VIEWING_BOOKED = {
@@ -570,10 +571,7 @@ export const TENANT_VIEWING_BOOKED = {
       "Hi {{firstName}},<br><br>Your viewing at <strong>{{address}}</strong> is confirmed for <strong>{{whenPretty}}</strong>. {{meetLine}}"
     ),
     SP("vb3", 8),
-    T(
-      "vb4",
-      "Thank you for completing your tenant passport. If this is the one, tell {{agentName}} and your application can go in the same day."
-    ),
+    T("vb4", "{{nextLine}}"),
     T("vb5", "Need to change the time? Just reply to this email."),
     SP("vb6", 8),
     T("vb7", "The Letting Experts"),
@@ -1259,10 +1257,6 @@ export const TENANT_ENQUIRY_REPLY = {
     T("ter5", "{{feesLine}}"),
     H2("ter6", "Seeing it"),
     T("ter7", "Reply with two or three days and times that suit you and I'll book the viewing in. Evenings and Saturdays are fine."),
-    H2("ter8", "Ready to apply if it's the one"),
-    T("ter9", "Your tenant passport holds the details every landlord asks for. Fill it in once and it answers every application you make with us. Nothing in it goes to a landlord unless you apply."),
-    SP("ter10", 8),
-    BTN("ter11", "Start my passport", "{{link}}"),
     SP("ter12", 8),
     T("ter13", "{{agentName}}<br>The Letting Experts"),
     FOOT("ter14", "You're getting this because you asked The Letting Experts about a property."),
@@ -1280,9 +1274,7 @@ export const TENANT_ADDED_WELCOME = {
     T("taw2", "Hi {{firstName}},<br><br>Thanks for registering with The Letting Experts. I'm {{agentName}}, and I'll be looking after your search."),
     H2("taw3", "What we need to know"),
     T("taw4", "<strong>Your budget</strong>, per month<br><strong>Where</strong> you'd like to live<br><strong>When</strong> you want to move<br><strong>Who</strong> is moving in, and any pets"),
-    T("taw5", "It takes about ten minutes in your tenant passport, and the same details then answer every application you make with us. Nothing in it goes to a landlord unless you apply."),
-    SP("taw6", 8),
-    BTN("taw7", "Tell us what you're after", "{{link}}"),
+    T("taw5", "Reply to this email with those and I'll start looking."),
     SP("taw8", 8),
     T("taw9", "{{onNowLine}} As soon as something fits, I'll send it over the same day."),
     SP("taw10", 8),
@@ -1348,10 +1340,6 @@ export const TENANT_MATCHES = {
     T("tm2", "Hi {{firstName}},<br><br>{{introLine}}"),
     T("tm3", "{{homesList}}"),
     T("tm4", "Reply with the ones you'd like to see and I'll book them in. Homes like these tend to let within a couple of weeks, so the sooner the better."),
-    H2("tm5", "Ready to apply the day you find it"),
-    T("tm6", "Your tenant passport holds the details every landlord asks for. Fill it in once, and if one of these is the one, your application goes in the same day. Nothing in it is shared unless you apply."),
-    SP("tm7", 8),
-    BTN("tm8", "Start my passport", "{{link}}"),
     SP("tm9", 8),
     T("tm10", "{{agentName}}<br>The Letting Experts"),
     FOOT("tm11", "You're getting this because you're looking for a home with The Letting Experts."),
@@ -1370,8 +1358,6 @@ export const TENANT_MATCHES_AGAIN = {
     T("tma3", "If your budget, your area or your moving date has changed, reply and tell me and I'll look again. In the meantime, here's what has come on since:"),
     T("tma4", "{{homesList}}"),
     T("tma5", "Reply with any you'd like to see and I'll book them in."),
-    SP("tma6", 8),
-    BTN("tma7", "Start my passport", "{{link}}"),
     SP("tma8", 8),
     T("tma9", "If you've found somewhere already, congratulations. Reply and let me know and I'll stop sending."),
     SP("tma10", 8),
