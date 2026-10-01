@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSaveReporter } from "@/components/SaveChip";
 
-export type CaseKind = "appraisal" | "tenancy-link" | "access" | "listing-step" | "required-docs" | "viewing" | "property-match";
+export type CaseKind = "appraisal" | "tenancy-link" | "access" | "listing-step" | "required-docs" | "viewing" | "property-match" | "lead-step";
 
 export type CaseStatus = "loading" | "ready" | "saving" | "saved" | "offline" | "error";
 
@@ -16,6 +16,7 @@ const SAID: Record<CaseKind, string> = {
   "required-docs": "Documents checklist",
   viewing: "Viewing notes",
   "property-match": "Property match",
+  "lead-step": "Stage",
 };
 
 /**

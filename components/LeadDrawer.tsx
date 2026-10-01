@@ -1437,6 +1437,29 @@ function LeadDrawerBody({
     const at = TENANT_TRACK.findIndex((t) => t.id === "viewing");
     setStep((s) => Math.max(s, at));
   }, [lead, hasViewing]);
+
+  /* The stage a tenant lead was left on, kept (Howard, 1 Oct 2026: "it is
+     not saving the stage I am on when going back to the lead"). Saved only
+     when somebody moves it - a click on the rail, or a step done - never
+     because the drawer worked one out on opening. On opening it is a floor,
+     like the log and the diary: the lead opens at least as far on as it was
+     left. A landlord's rail is read from the log, so it is not kept here. */
+  const tenantLeadId = lead && leadSide(lead) === "tenant" ? lead.id : null;
+  const [savedStep, saveStep, stepSave] = useCaseState<{ at: string | null }>("lead-step", tenantLeadId, { at: null });
+  const stepMoved = useRef(false);
+  useEffect(() => {
+    if (!tenantLeadId || stepSave === "loading" || !savedStep.at) return;
+    const at = TENANT_TRACK.findIndex((t) => t.id === savedStep.at);
+    if (at > 0) setStep((s) => Math.max(s, at));
+  }, [tenantLeadId, savedStep.at, stepSave]);
+  useEffect(() => {
+    if (!stepMoved.current) return;
+    stepMoved.current = false;
+    if (!tenantLeadId || stepSave === "loading" || stepSave === "offline") return;
+    const id = TENANT_TRACK[Math.min(step, TENANT_TRACK.length - 1)]?.id ?? null;
+    if (id && id !== savedStep.at) saveStep({ at: id });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
   const nextViewing = theirs.upcoming[0] ?? null;
 
 
@@ -1466,6 +1489,7 @@ function LeadDrawerBody({
   const advanceTo = (id: string) => {
     const to = track.findIndex((s) => s.id === id);
     if (to < 0) return;
+    stepMoved.current = true;
     const canRevisit = id === "viewing";
     setStep((from) => (to > from || canRevisit ? to : from));
   };
@@ -1501,7 +1525,10 @@ function LeadDrawerBody({
   const wide = appraisalTakesOver && appraisal.state === "visit";
 
   /** Advance one step, if there's anywhere to go. */
-  const advance = () => setStep((s) => Math.min(s + 1, track.length - 1));
+  const advance = () => {
+    stepMoved.current = true;
+    setStep((s) => Math.min(s + 1, track.length - 1));
+  };
 
   /** What the Next-action button does — the step decides, not the button.
       Imperatives open the work itself; only stray "none" steps advance dry. */
@@ -1812,9 +1839,15 @@ function LeadDrawerBody({
               steps={track}
               current={step}
               stalled={stalled}
-              onPick={setStep}
+              onPick={(i) => {
+                stepMoved.current = true;
+                setStep(i);
+              }}
               doneAt={sp ? (i) => Boolean(sp.done[track[i].id as SpineId]) : undefined}
-              pickAny={Boolean(sp)}
+              /* Any step, either side: an agent who has already rung, sent
+                 and booked should not have to click through each stage to
+                 say so (Howard, 1 Oct 2026). */
+              pickAny={Boolean(sp) || isTenant}
               branch={
                 !isTenant
                   ? {
