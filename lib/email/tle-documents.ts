@@ -534,6 +534,32 @@ export const TENANT_OFFER_COPY = {
 } as const;
 
 /**
+ * Tenant: the application form for one home, sent from its listing (Howard's
+ * ticket, approved by James 1 Oct 2026). The agent types in one or more
+ * addresses and each gets this, with a button to /tenant/apply?listing=<id>.
+ *
+ * The application form only - never the passport. The passport goes when the
+ * agent presses Send passport, and nowhere else (James, 1 Oct 2026).
+ */
+export const APPLICATION_FORM_INVITE = {
+  subject: "Apply for {{address}}",
+  preheader: "The application form for {{address}}. About ten minutes, and it goes straight to {{agentName}}.",
+  mode: "blocks",
+  blocks: [
+    H("af1", "Apply for {{address}}"),
+    T("af2", "Hi,<br><br>Here is the application form for <strong>{{address}}</strong>, advertised at {{rent}}."),
+    T("af3", "It takes about ten minutes. Everyone over 18 who will live there fills in their own part, because the right to rent check is a legal one for every adult. It goes straight to {{agentName}}, who puts it to the landlord."),
+    SP("af4", 8),
+    BTN("af5", "Start the application", "{{link}}"),
+    SP("af6", 8),
+    T("af7", "Nothing is owed by applying. A holding deposit is only asked for once the landlord says yes."),
+    T("af8", "Any questions, just reply to this email.<br><br>{{agentName}}<br>The Letting Experts"),
+    FOOT("af9", "You're getting this because you asked about a home with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/**
  * Tenant: the passport on its own, BEFORE any viewing (1 Oct 2026).
  *
  * Rhiannon: "The rental passport should just be the initial request to

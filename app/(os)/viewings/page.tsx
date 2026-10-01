@@ -19,6 +19,8 @@ import { card, dateOfOffset, fmtFull, fmtShort, groupByDay, nearLabel } from "@/
 import { KIND_META, minutesOf, type Appt, type ApptKind } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
 import { fetchMe } from "@/lib/me";
+import BookViewing from "@/components/viewings/BookViewing";
+import { PressButton } from "@/components/Bits";
 
 /**
  * Viewings: one screen, one person's diary.
@@ -75,6 +77,8 @@ export default function Viewings() {
   const [fKind, setFKind] = useState<ApptKind | null>(null);
   /** "apptId:label" for anything sent from a drawer this session. */
   const [sentExtra, setSentExtra] = useState<Set<string>>(new Set());
+  /* Book a viewing from here: the person, then the home (Howard, 1 Oct 2026). */
+  const [booking, setBooking] = useState(false);
 
   const { appts: DIARY, loading, everything, error } = useDiary();
 
@@ -224,6 +228,14 @@ export default function Viewings() {
               onChange={setView}
             />
             <div className="flex flex-wrap items-center gap-2.5">
+              <PressButton
+                data-steve="viewings.book"
+                onClick={() => setBooking(true)}
+                className="press-ring flex items-center gap-2 rounded-full bg-[var(--brown)] px-4 py-2 text-[12px] font-semibold text-white"
+              >
+                <DoodleIcon name="calendar" size={14} />
+                Book a viewing
+              </PressButton>
               {/* Only an owner has a book to choose from. An agent's diary is
                   their own and arrives already scoped. */}
               {everything && agents.length > 1 && (
@@ -381,6 +393,8 @@ export default function Viewings() {
         sentExtra={sentExtra}
         onSend={(id, label) => setSentExtra((cur) => new Set(cur).add(`${id}:${label}`))}
       />
+
+      <BookViewing open={booking} onClose={() => setBooking(false)} />
     </>
   );
 }

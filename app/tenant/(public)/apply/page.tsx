@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import PropertyPhoto from "@/components/PropertyPhoto";
 
 /**
@@ -32,14 +32,19 @@ import PropertyPhoto from "@/components/PropertyPhoto";
 /* The tenant surface's call-to-action colour (globals.css, data-surface="tenant"). */
 const CTA = "var(--accent-dark)";
 
-/** Live, this arrives with the link's token. The sample stands in so the page
- *  can be seen and judged before the join is wired. */
-const LISTING = {
+type Home = { id: number; property: string; locality: string; askingPcm: number; agent: string; photo: string | null };
+
+/** Opened with no listing (the admin portal list, the showroom), the sample
+ *  stands in so the page can be seen and judged. A listing's own link -
+ *  /tenant/apply?listing=<id>, copied or sent from the listing (1 Oct 2026) -
+ *  reads the real home, and the application is filed against it. */
+const SAMPLE: Home = {
   id: 828057,
   property: "Flat 2, Mercer Street",
   locality: "Manchester M4",
   askingPcm: 995,
   agent: "Rhiannon Carter",
+  photo: null,
 };
 
 const EMPLOYMENT = ["Employed", "Self-Employed", "Student", "Benefits", "In Receipt of Pension"] as const;
@@ -132,8 +137,31 @@ function YesNo({
 /* ── the form ─────────────────────────────────────────────────────────────── */
 
 export default function Apply() {
+  /* Which home: the link's own listing, or the sample. "gone" when the
+     listing isn't on the market any more - never a form for a home that
+     cannot take it. */
+  const [home, setHome] = useState<{ state: "loading" } | { state: "sample" | "live"; home: Home } | { state: "gone"; says: string }>({ state: "loading" });
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("listing")?.trim() ?? "";
+    if (!id) {
+      setHome({ state: "sample", home: SAMPLE });
+      return;
+    }
+    fetch(`/api/tenant/apply?listing=${encodeURIComponent(id)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; home?: Home; error?: string }) => {
+        if (j.ok && j.home) {
+          setHome({ state: "live", home: j.home });
+          setOffer(String(j.home.askingPcm));
+        } else setHome({ state: "gone", says: j.error ?? "This home isn't taking applications any more." });
+      })
+      .catch(() => setHome({ state: "gone", says: "We couldn't load this home just now. Please try again in a minute." }));
+  }, []);
+  const LISTING = home.state === "live" || home.state === "sample" ? home.home : SAMPLE;
+  const live = home.state === "live";
+
   const [people, setPeople] = useState<Person[]>([blank()]);
-  const [offer, setOffer] = useState(String(LISTING.askingPcm));
+  const [offer, setOffer] = useState(String(SAMPLE.askingPcm));
   const [startDate, setStartDate] = useState("");
   const [months, setMonths] = useState(12);
   const [occupants, setOccupants] = useState(1);
@@ -186,7 +214,10 @@ export default function Apply() {
     setProblems([]);
     setSending(true);
     try {
-      const res = await fetch("/api/applications", {
+      /* A listing's own link files through the public route (no staff
+         sign-in, and no term: tenancies are rolling). The sample keeps the
+         staff route it always had. */
+      const res = await fetch(live ? "/api/tenant/apply" : "/api/applications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -194,7 +225,7 @@ export default function Apply() {
           askingRent: LISTING.askingPcm,
           offerAmount: offerNum,
           startDate,
-          agreementMonths: months,
+          ...(live ? {} : { agreementMonths: months }),
           occupants,
           dependents,
           hasPets: pets === true,
@@ -240,10 +271,29 @@ export default function Apply() {
           <h1 className="mt-4 text-[20px] font-bold">Application received</h1>
           <p className="mx-auto mt-2 max-w-md text-[13.5px] leading-relaxed text-black/60">
             Your application for {LISTING.property} at {gbp(offerNum)} a month is with{" "}
-            {LISTING.agent}. She&apos;ll put it to the landlord and come back to you —
+            {LISTING.agent}, who will put it to the landlord and come back to you -
             usually within a working day. Nothing is owed yet, and nothing is agreed
             until the landlord says yes.
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (home.state === "loading") {
+    return (
+      <div className="flex items-center justify-center gap-2 py-24 text-[13px] text-black/50">
+        <span aria-hidden className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-black/15" style={{ borderTopColor: CTA }} />
+        Loading the home…
+      </div>
+    );
+  }
+  if (home.state === "gone") {
+    return (
+      <div className="py-16">
+        <div className="mx-auto max-w-xl rounded-2xl border border-black/10 bg-white p-8 text-center">
+          <h1 className="text-[20px] font-bold">This Application Form Is Closed</h1>
+          <p className="mx-auto mt-2 max-w-md text-[13.5px] leading-relaxed text-black/60">{home.says}</p>
         </div>
       </div>
     );
@@ -253,7 +303,7 @@ export default function Apply() {
     <div className="py-10">
       {/* What you're applying for — never a blank form asking which property. */}
       <div className="flex items-center gap-4 rounded-2xl border border-black/10 bg-white p-4">
-        <PropertyPhoto src={null} className="h-16 w-20 shrink-0 rounded-xl" />
+        <PropertyPhoto src={LISTING.photo} className="h-16 w-20 shrink-0 rounded-xl" />
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-black/40">
             You&apos;re applying for
@@ -268,7 +318,7 @@ export default function Apply() {
       <h1 className="mt-8 text-[22px] font-bold leading-tight">Your application</h1>
       <p className="mt-1.5 max-w-2xl text-[13.5px] leading-relaxed text-black/60">
         Ten minutes, and it goes straight to {LISTING.agent}. We ask everyone who&apos;ll
-        be living there, not just the lead name — the right to rent check is required by
+        be living there, not just the lead name - the right to rent check is required by
         law for every adult in the household.
       </p>
 
@@ -383,7 +433,7 @@ export default function Apply() {
             <YesNo
               required
               label="Can you give a landlord reference for the last 2 years?"
-              hint="If you've owned or lived with family, say no — it isn't a mark against you."
+              hint="If you've owned or lived with family, say no - it isn't a mark against you."
               value={p.landlordRef}
               onChange={(v) => set(i, { landlordRef: v })}
             />
@@ -396,7 +446,7 @@ export default function Apply() {
             />
             <YesNo
               required
-              label="Any adverse credit — CCJs, defaults, bankruptcy?"
+              label="Any adverse credit - CCJs, defaults, bankruptcy?"
               hint="Telling us now is far better than referencing finding it. It rarely stops an application."
               value={p.adverseCredit}
               onChange={(v) => set(i, { adverseCredit: v })}
@@ -446,13 +496,15 @@ export default function Apply() {
           <Field label="When would you move in?">
             <input type="date" className={inputCls} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
           </Field>
-          <Field label="How long for?">
-            <select className={inputCls} value={months} onChange={(e) => setMonths(Number(e.target.value))}>
-              {[6, 12, 18, 24].map((m) => (
-                <option key={m} value={m}>{m} months</option>
-              ))}
-            </select>
-          </Field>
+          {!live && (
+            <Field label="How long for?">
+              <select className={inputCls} value={months} onChange={(e) => setMonths(Number(e.target.value))}>
+                {[6, 12, 18, 24].map((m) => (
+                  <option key={m} value={m}>{m} months</option>
+                ))}
+              </select>
+            </Field>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <Field label="Adults moving in">
               <input
@@ -473,7 +525,7 @@ export default function Apply() {
           <YesNo
             required
             label="Will there be any pets?"
-            hint="Ask — don't assume. Most landlords will consider one."
+            hint="Ask - don't assume. Most landlords will consider one."
             value={pets}
             onChange={setPets}
           />

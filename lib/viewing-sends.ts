@@ -19,5 +19,10 @@ export const VIEWING_SENDS_LIVE = false;
  * booking lived only on that screen. Booking from a lead is the real path.
  * Flip to true once the listing feeds the booker its real REX enquiries
  * (MASTER-LIST D17).
+ *
+ * ON from 1 Oct 2026 (Howard's ticket, approved by James): the listing opens
+ * components/viewings/BookViewing, which asks who from the tenants on file
+ * (or saves someone new as Add new lead does) and books through the same
+ * /api/viewings/book road as a lead. No sample people, no invented agent.
  */
-export const LISTING_BOOKER_LIVE = false;
+export const LISTING_BOOKER_LIVE = true;
