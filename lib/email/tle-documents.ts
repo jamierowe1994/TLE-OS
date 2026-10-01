@@ -1363,7 +1363,9 @@ export const TENANT_MATCHES = {
   blocks: [
     H("tm1", "Homes that fit"),
     T("tm2", "Hi {{firstName}},<br><br>{{introLine}}"),
-    T("tm3", "{{homesList}}"),
+    /* The homes as cards (1 Oct 2026): tables, so a raw-HTML block rather
+       than a text one, whose paragraph would wrap a table. */
+    { type: "code", id: "tm3", html: "{{homesList}}" },
     T("tm4", "Reply with the ones you'd like to see and I'll book them in. Homes like these tend to let within a couple of weeks, so the sooner the better."),
     SP("tm9", 8),
     T("tm10", "{{agentName}}<br>The Letting Experts"),
