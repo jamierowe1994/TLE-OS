@@ -9,6 +9,7 @@ import { SERVICE_LEVELS, type ServiceLevel } from "@/lib/market-appraisal";
 import type { NextRequest } from "next/server";
 import { queueVideoChase } from "@/lib/video-chase";
 import { publicOrigin } from "@/lib/origin";
+import { readFacts } from "@/lib/lead-facts";
 import type { ConfirmationResult } from "@/lib/appraisal-confirm";
 
 import { putAppraisalInRexDiary, type DiaryOutcome } from "@/lib/rex-diary-write";
@@ -78,6 +79,19 @@ export async function POST(req: NextRequest) {
       agent: b.agent ?? null,
       appointmentAt: b.appointmentAt ?? null,
     });
+
+    /* The home is already known when the lead's property card was matched to
+       REX (Howard, 1 Oct 2026: "we know which property this is for already?
+       ... store the REX property id"). The appraisal starts linked, so its
+       property file never asks, and signing reuses it rather than making a
+       second record. A lettings id only (digits); never over one already set. */
+    if (appraisal.leadId && !appraisal.rexPropertyId) {
+      const known = await readFacts(appraisal.leadId).then((f) => f.property?.rexPropertyId ?? null).catch(() => null);
+      if (known && /^\d+$/.test(String(known))) {
+        await recordValuation(appraisal.id, { rexPropertyId: String(known) }, "TLE OS").catch(() => null);
+        appraisal.rexPropertyId = String(known);
+      }
+    }
 
     /* A booked appraisal is the nurture campaign WORKING. Take the lead off
        it, and say so on the row - "booked" is the number marketing reads. */

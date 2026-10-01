@@ -591,7 +591,19 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
           the AML step rather than always on the page. */}
       {showFile && (
         <div id="property-file" className="fade-up scroll-mt-6 [&>section]:rounded-[22px] [&>section]:border-line/50 [&>section]:bg-white [&>section]:p-5">
-          <PropertyFile propertyId={ma.rexPropertyId} address={ma.address} screen="the market appraisal" />
+          <PropertyFile
+            propertyId={ma.rexPropertyId}
+            address={ma.address}
+            screen="the market appraisal"
+            onLink={async (rexPropertyId) => {
+              await fetch("/api/appraisals", {
+                method: "PATCH",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ id: ma.id, rexPropertyId }),
+              }).catch(() => null);
+              reload();
+            }}
+          />
         </div>
       )}
     </div>
