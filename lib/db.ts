@@ -595,6 +595,44 @@ CREATE INDEX IF NOT EXISTS os_inspections_status   ON os_inspections (status, du
 CREATE INDEX IF NOT EXISTS os_inspections_property ON os_inspections (property_id);
 CREATE INDEX IF NOT EXISTS os_inspections_os_prop  ON os_inspections (os_property_id);
 CREATE INDEX IF NOT EXISTS os_inspections_token    ON os_inspections (access_token);
+-- The REX PM task a visit was raised from (1 Oct 2026), so the task leaves the
+-- due list once it is in hand here. See os_rexpm_tasks.
+ALTER TABLE os_inspections ADD COLUMN IF NOT EXISTS rexpm_task_id TEXT;
+CREATE INDEX IF NOT EXISTS os_inspections_rexpm ON os_inspections (rexpm_task_id);
+
+-- REX PM's own task lists, read off its screens (1 Oct 2026). REX refused API
+-- access, so this is the stopgap: inspections (and next tenancy reviews) are
+-- read page by page in James's browser and posted to /api/admin/rexpm-tasks.
+-- Until the team works them in the OS, the boards count REX PM's open tasks so
+-- the figures agree with REX PM's dashboard; the closed ones date each home's
+-- last visit for when the OS takes over. lib/rexpm-tasks.
+--   state   open | closed | gone (open last time, missing from a full read)
+CREATE TABLE IF NOT EXISTS os_rexpm_tasks (
+  id               TEXT PRIMARY KEY,
+  kind             TEXT NOT NULL,
+  state            TEXT NOT NULL,
+  task_type        TEXT NOT NULL DEFAULT '',
+  title            TEXT NOT NULL DEFAULT '',
+  address          TEXT NOT NULL DEFAULT '',
+  os_property_id   TEXT,
+  rex_property_id  TEXT,
+  match_how        TEXT,
+  tenancy          TEXT NOT NULL DEFAULT '',
+  ownership        TEXT NOT NULL DEFAULT '',
+  service          TEXT NOT NULL DEFAULT '',
+  follow_up_on     DATE,
+  due_on           DATE,
+  inspection_on    DATE,
+  closed_on        DATE,
+  progress         TEXT NOT NULL DEFAULT '',
+  managed_by       TEXT NOT NULL DEFAULT '',
+  priority         TEXT NOT NULL DEFAULT '',
+  raw              JSONB NOT NULL DEFAULT '{}'::jsonb,
+  first_seen_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_rexpm_tasks_kind ON os_rexpm_tasks (kind, state);
+CREATE INDEX IF NOT EXISTS os_rexpm_tasks_prop ON os_rexpm_tasks (rex_property_id);
 
 -- What was found, room by room. An action here is what turns an inspection
 -- into a works order, and works_order_id is that link once it is raised.

@@ -52,6 +52,13 @@ const ACTIONS: { id: string; label: string }[] = [
 ];
 
 const day = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—");
+/** "at 14:05 today", or "on 30 Sep" - when the old system's tasks were last copied across. */
+const readWhen = (iso: string) => {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" });
+  const same = d.toLocaleDateString("en-GB", { timeZone: "Europe/London" }) === new Date().toLocaleDateString("en-GB", { timeZone: "Europe/London" });
+  return same ? `at ${time} today` : `on ${d.toLocaleDateString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short" })}`;
+};
 const stamp = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
 const forInput = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
@@ -80,6 +87,9 @@ type Board = {
   live: boolean;
   reason?: string;
   bookError?: string;
+  /** "rex-pm" while the due list is the tasks copied across (lib/rexpm-tasks). */
+  source?: "rex-pm" | "os";
+  readAt?: string | null;
 };
 
 export default function Inspections() {
@@ -120,7 +130,7 @@ export default function Inspections() {
       body: JSON.stringify({
         kind: d.kind, propertyName: d.propertyName, locality: d.locality, propertyId: d.propertyId, listingId: d.listingId,
         landlord: d.landlord, landlordEmail: d.landlordEmail, tenant: d.tenant, tenantEmail: d.tenantEmail, tenantPhone: d.tenantPhone,
-        tenancyStart: d.tenancyStart, dueAt: d.dueAt,
+        tenancyStart: d.tenancyStart, dueAt: d.dueAt, osPropertyId: d.osPropertyId ?? null, rexpmTaskId: d.taskId ?? null,
       }),
     }).then((x) => x.json()).catch(() => null);
     if (!r?.ok) return setError(r?.error ?? "Could not raise it.");
@@ -191,11 +201,17 @@ export default function Inspections() {
             { id: "done" as const, label: `Done ${done.length}`, icon: <DoodleIcon name="checklist" size={14} /> },
           ]}
         />
-        {data?.rules && (
+        {data?.source === "rex-pm" ? (
+          /* The due list is the old system's open tasks for now (1 Oct 2026).
+             Agent copy never names the system - see lib/rexpm-tasks. */
+          <span className="ml-auto text-[11px] text-muted">
+            Copied across from the old system{data.readAt ? ` ${readWhen(data.readAt)}` : ""}. Visits booked here take over from it.
+          </span>
+        ) : data?.rules ? (
           <span className="ml-auto text-[11px] text-muted">
             First visit {data.rules.firstAfterMonths} months in, then every {data.rules.thenEveryMonths}. HMOs every {data.rules.hmoEveryMonths}.
           </span>
-        )}
+        ) : null}
       </div>
 
       {error && <p className="mt-4 rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-4 text-[12.5px]">{error}</p>}
@@ -220,7 +236,8 @@ export default function Inspections() {
                     <Pill tone="neutral">{kindLabel(d.kind)}</Pill>
                   </span>
                   <span className={`col-start-1 text-[12px] md:col-start-auto ${d.daysAway < 0 ? "font-semibold text-accent-dark" : "text-muted"}`}>
-                    {d.daysAway < 0 ? `${Math.abs(d.daysAway)} days over` : `Due ${day(d.dueAt)}`} · {d.why}
+                    {d.daysAway < 0 ? `${Math.abs(d.daysAway)} day${d.daysAway === -1 ? "" : "s"} over` : d.daysAway === 0 ? "Due today" : `Due ${day(d.dueAt)}`} · {d.why}
+                    {d.managedBy ? <span className="block text-[10.5px] font-normal text-muted">With {d.managedBy}</span> : null}
                   </span>
                   <PressButton onClick={() => void raise(d)} className="rounded-full border border-line/80 px-4 py-2 text-[12px] font-semibold">
                     Raise it

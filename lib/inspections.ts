@@ -5,6 +5,8 @@ import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
 import { stepOf, type StepId } from "@/lib/inspection-steps";
 import type { ManagedProperty } from "@/lib/portfolio-types";
+import type { RexpmTask } from "@/lib/rexpm-tasks";
+import { londonDayOffset, londonTime } from "@/lib/london-time";
 
 /**
  * Inspections: every visit we make to a home we manage, and the permission
@@ -112,6 +114,14 @@ export interface InspectionRules {
   leadDays: number;
   /** Which REX service types we inspect. Let Only is the landlord's own job. */
   services: string[];
+  /**
+   * Where the due list comes from (1 Oct 2026). "rex-pm": the open inspection
+   * tasks read across from REX PM (lib/rexpm-tasks), so the board agrees with
+   * REX PM's dashboard while the team still works there. "os": the cadence
+   * above, counted from each home's last visit - ours, or REX PM's closed
+   * tasks before we had any. Switched once the team books visits here.
+   */
+  source: "rex-pm" | "os";
   /** Set when a person last changed these, so the screen can say so. */
   updatedAt: string | null;
   updatedBy: string;
@@ -126,6 +136,7 @@ export const DEFAULT_RULES: InspectionRules = {
   offerSlots: 3,
   leadDays: 28,
   services: ["Managed", "Fully Managed", "Rent Collect"],
+  source: "rex-pm",
   updatedAt: null,
   updatedBy: "",
 };
@@ -204,6 +215,8 @@ export interface Inspection {
   files: { key: string; name: string; type: string; at: string; by: string }[];
   raisedBy: string;
   rehearsal: boolean;
+  /** The REX PM task this visit was raised from, if any (lib/rexpm-tasks). */
+  rexpmTaskId: string | null;
   createdAt: string;
   updatedAt: string;
   /** Derived, never stored. Filled by the store so a list can show it. */
@@ -283,6 +296,7 @@ function toInspection(r: Row): Inspection {
     files: Array.isArray(r.files) ? (r.files as Inspection["files"]) : [],
     raisedBy: s(r.raised_by),
     rehearsal: r.rehearsal === true,
+    rexpmTaskId: r.rexpm_task_id ? s(r.rexpm_task_id) : null,
     createdAt: iso(r.created_at) ?? new Date().toISOString(),
     updatedAt: iso(r.updated_at) ?? new Date().toISOString(),
   };
@@ -395,6 +409,7 @@ export interface NewInspection {
   accessMethod?: AccessMethod;
   noticeHours?: number;
   rehearsal?: boolean;
+  rexpmTaskId?: string | null;
 }
 
 export async function createInspection(input: NewInspection, by: string): Promise<Inspection> {
@@ -404,8 +419,8 @@ export async function createInspection(input: NewInspection, by: string): Promis
   const [r] = await q<Row>(
     `INSERT INTO os_inspections
        (id, kind, status, property_id, os_property_id, listing_id, property_name, locality, landlord, landlord_email,
-        tenant, tenant_email, tenant_phone, tenancy_start, due_at, notice_hours, access_method, access_token, raised_by, rehearsal)
-     VALUES ($1,$2,'due',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+        tenant, tenant_email, tenant_phone, tenancy_start, due_at, notice_hours, access_method, access_token, raised_by, rehearsal, rexpm_task_id)
+     VALUES ($1,$2,'due',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
      RETURNING *`,
     [
       id, input.kind, input.propertyId ?? null, input.osPropertyId ?? null, input.listingId ?? null,
@@ -413,6 +428,7 @@ export async function createInspection(input: NewInspection, by: string): Promis
       (input.tenant ?? "").trim(), (input.tenantEmail ?? "").trim().toLowerCase(), (input.tenantPhone ?? "").trim(),
       input.tenancyStart ?? null, input.dueAt ?? null, input.noticeHours ?? rules.noticeHours,
       input.accessMethod ?? "tenant_present", randomBytes(16).toString("hex"), by, input.rehearsal === true,
+      input.rexpmTaskId ?? null,
     ]
   );
   const made = toInspection(r);
@@ -622,6 +638,12 @@ export interface DueVisit {
   /** What the cadence counted from: the last visit we made, or the tenancy start. */
   since: string | null;
   why: string;
+  /** Set when the row is a REX PM task brought across (lib/rexpm-tasks). */
+  taskId?: string;
+  /** Who REX PM has the task with. */
+  managedBy?: string;
+  /** The OS home, where the row came from a REX PM task tied to one. */
+  osPropertyId?: string | null;
 }
 
 const addMonths = (from: Date, months: number) => {
@@ -677,6 +699,8 @@ export function dueList(
   rules: InspectionRules,
   /** REX property ids the OS knows to be licensed HMOs - lib/os-properties has them. */
   hmoIds: Set<string> = new Set(),
+  /** Last visits recorded before the OS, by REX property id or OS home id - REX PM's closed tasks. */
+  priorVisits: Map<string, string> = new Map(),
   now: Date = new Date()
 ): DueVisit[] {
   const inspectable = (p: ManagedProperty) => !p.service || rules.services.some((x) => x.toLowerCase() === (p.service ?? "").toLowerCase());
@@ -684,7 +708,7 @@ export function dueList(
 
   /* One home can carry several inspections. What matters for the cadence is
      the last one we actually got into, and whether one is in hand now. */
-  const lastVisit = new Map<string, string>();
+  const lastVisit = new Map<string, string>(priorVisits);
   const inHand = new Set<string>();
   for (const i of existing) {
     for (const k of [i.propertyId, i.listingId, i.osPropertyId]) {
@@ -747,6 +771,72 @@ export function dueList(
     if (!held || d.dueAt < held.dueAt) perHome.set(d.key, held ? { ...d, tenant: held.tenant || d.tenant, tenantEmail: held.tenantEmail || d.tenantEmail } : d);
   }
   return [...perHome.values()].sort((a, b) => a.dueAt.localeCompare(b.dueAt));
+}
+
+/**
+ * The due board while the source is "rex-pm": REX PM's open inspection tasks,
+ * one row per task, as its dashboard counts them (1 Oct 2026).
+ *
+ * Unlike the cadence board these rows are not collapsed onto the building.
+ * REX PM raises a task per room in a house let by the room, and its overdue
+ * figure counts each one; collapsing them would make ours disagree with the
+ * number James is holding up against it.
+ *
+ * A task leaves the list once a visit has been raised from it here (any
+ * state but cancelled), and that visit keeps the task's due date, so the
+ * overdue total does not move when the work changes hands. The managed book
+ * fills in the tenant's and landlord's contact details where the task's home
+ * is one REX CRM knows.
+ */
+export function dueFromTasks(
+  tasks: RexpmTask[],
+  existing: Inspection[],
+  book: ManagedProperty[],
+  hmoIds: Set<string> = new Set(),
+  now: Date = new Date()
+): DueVisit[] {
+  const taken = new Set(existing.filter((i) => i.rexpmTaskId && i.status !== "cancelled").map((i) => i.rexpmTaskId!));
+  const byProperty = new Map<string, ManagedProperty>();
+  for (const p of currentLets(book)) if (p.propertyId) byProperty.set(p.propertyId, p);
+
+  const out: DueVisit[] = [];
+  for (const t of tasks) {
+    if (taken.has(t.id)) continue;
+    const p = t.rexPropertyId ? byProperty.get(t.rexPropertyId) ?? null : null;
+    /* The end of the due day on the London clock: a task due today is not
+       late until tomorrow, which is how REX PM's Overdue tab reads. */
+    const [y, m, d] = (t.dueOn ?? new Date(now).toISOString().slice(0, 10)).split("-").map(Number);
+    const dueAt = new Date(londonTime(y, m, d, 23, 59).getTime() + 59_999).toISOString();
+    const type = t.taskType.toLowerCase();
+    const kind: Kind = /entry|ingoing|check.?in/.test(type) ? "check_in"
+      : /exit|outgoing|check.?out/.test(type) ? "check_out"
+      : t.rexPropertyId && hmoIds.has(t.rexPropertyId) ? "hmo" : "interim";
+    const tenant = p?.tenants?.[0] ?? null;
+    const name = (t.title.includes(":") ? t.title.slice(t.title.indexOf(":") + 1) : t.address).trim().replace(/[\s,]+$/, "");
+    const postcode = t.address.match(/[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\s*$/i)?.[0] ?? "";
+    out.push({
+      key: `rexpm:${t.id}`,
+      kind,
+      listingId: p?.listingId ?? null,
+      propertyId: t.rexPropertyId,
+      osPropertyId: t.osPropertyId,
+      propertyName: p?.name ?? name,
+      locality: p?.locality ?? postcode,
+      landlord: p?.landlord?.name ?? t.ownership,
+      landlordEmail: p?.landlord?.email ?? "",
+      tenant: tenant?.name ?? t.tenancy,
+      tenantEmail: tenant?.email ?? "",
+      tenantPhone: tenant?.phone ?? "",
+      tenancyStart: p?.letSince ?? null,
+      dueAt,
+      daysAway: londonDayOffset(dueAt, now),
+      since: null,
+      why: t.progress && t.progress.toLowerCase() !== "not started" ? `${t.taskType || "Inspection"}, ${t.progress.toLowerCase()}` : t.taskType || "Inspection",
+      taskId: t.id,
+      managedBy: t.managedBy,
+    });
+  }
+  return out.sort((a, b) => a.dueAt.localeCompare(b.dueAt) || a.propertyName.localeCompare(b.propertyName));
 }
 
 /** The four figures at the top of the screen, against the clock right now. */

@@ -7,8 +7,9 @@ import { rexConfigured } from "@/lib/rex";
 import { factsByRexId } from "@/lib/os-properties";
 import { getComplianceBook } from "@/lib/compliance-cache";
 import { isOurs } from "@/lib/compliance";
+import { lastClosedByHome, lastImport, openTasks } from "@/lib/rexpm-tasks";
 import {
-  createInspection, dueList, inspectionRules, listInspections, openFindings, summarise,
+  createInspection, dueFromTasks, dueList, inspectionRules, listInspections, openFindings, summarise,
   KIND_IDS, type Kind, type NewInspection,
 } from "@/lib/inspections";
 
@@ -23,13 +24,16 @@ import {
  *
  * The due list is computed, never stored. A schedule written down once is a
  * schedule that is wrong by next month, and this screen is where somebody
- * finds out a home has not been visited in two years.
+ * finds out a home has not been visited in two years. *
+ * Until the team books visits here, the due list is REX PM's own open
+ * inspection tasks instead (rules.source "rex-pm", 1 Oct 2026), read across
+ * by /api/admin/rexpm-tasks, so the figures match REX PM's dashboard.
  */
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const { actor } = await whoIs(req);
+  const { actor, subject } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!hasDb()) {
     return NextResponse.json({ ok: true, live: false, reason: "No database on this environment.", inspections: [], due: [], actions: [], rules: null, summary: null });
@@ -62,6 +66,10 @@ export async function GET(req: NextRequest) {
      list built from nothing - an empty board reads as "nothing is due". */
   let due: ReturnType<typeof dueList> = [];
   let bookError: string | null = null;
+  /* Where the due list came from, and when REX PM was last read, for the
+     line under the figures. See lib/rexpm-tasks. */
+  const read = rules.source === "rex-pm" ? await lastImport("inspection").catch(() => null) : null;
+  const fromTasks = rules.source === "rex-pm" && !!read;
   if (!rexConfigured()) {
     bookError = "REX isn't connected on this environment, so nothing can be worked out as due.";
   } else {
@@ -81,7 +89,21 @@ export async function GET(req: NextRequest) {
            which homes are ours. A home the managed book has under a second
            REX id is covered by the one the compliance book knows. */
         const ours = new Set(comp.book.properties.filter(isOurs).map((p) => String(p.id)));
-        due = dueList(book.properties.filter((p) => ours.has(String(p.propertyId ?? p.listingId))), inspections, rules, hmoIds);
+        if (fromTasks) {
+          /* REX PM's open tasks are the list (1 Oct 2026), so the figures
+             match its dashboard. An agent sees the tasks on homes in their
+             own book, and any REX PM has under their name. */
+          const tasks = await openTasks("inspection");
+          const me = ((subject ?? actor).name || "").trim().toLowerCase();
+          const mine = scope.rexUserId
+            ? new Set(book.properties.map((p) => String(p.propertyId ?? "")).filter(Boolean))
+            : null;
+          const scoped = mine ? tasks.filter((t) => (t.rexPropertyId && mine.has(t.rexPropertyId)) || (me && t.managedBy.trim().toLowerCase() === me)) : tasks;
+          due = dueFromTasks(scoped, inspections, book.properties, hmoIds);
+        } else {
+          const prior = await lastClosedByHome("inspection");
+          due = dueList(book.properties.filter((p) => ours.has(String(p.propertyId ?? p.listingId))), inspections, rules, hmoIds, prior);
+        }
       } catch (e) {
         bookError = e instanceof Error ? e.message : "REX didn't answer, so the due list is missing.";
       }
@@ -91,6 +113,8 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     ok: true, live: true, inspections, due, actions, rules,
     summary: summarise(inspections, due),
+    source: fromTasks ? "rex-pm" : "os",
+    readAt: read?.at ?? null,
     ...(bookError ? { bookError } : {}),
   });
 }
@@ -104,7 +128,7 @@ export async function POST(req: NextRequest) {
   const kind = (KIND_IDS as readonly string[]).includes(b.kind ?? "") ? (b.kind as Kind) : "interim";
   try {
     const by = (subject ?? actor).name || (subject ?? actor).email;
-    const inspection = await createInspection({ ...b, kind, propertyName: b.propertyName }, by);
+    const inspection = await createInspection({ ...b, kind, propertyName: b.propertyName, rexpmTaskId: typeof b.rexpmTaskId === "string" ? b.rexpmTaskId : null }, by);
     return NextResponse.json({ ok: true, inspection });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not raise it." }, { status: 400 });
