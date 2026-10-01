@@ -266,6 +266,19 @@ export async function record(
 }
 
 /**
+ * People who are never sent the Fixed email (James, 1 Oct 2026). Howard
+ * reports more than anyone, knows James is on them, and asked for the emails
+ * to stop. The ticket is still marked Fixed; he just is not mailed about it.
+ * Matched on the address he signs in with, ignoring any +tag.
+ */
+const NOT_TOLD_WHEN_FIXED = new Set(["howard.russell@theexpertsgroup.co.uk"]);
+
+function quietWhenFixed(email: string): boolean {
+  const e = email.trim().toLowerCase().replace(/\+[^@]*@/, "@");
+  return NOT_TOLD_WHEN_FIXED.has(e);
+}
+
+/**
  * The person who reported it hears it is fixed - once, and only a person.
  * An automatic bug has nobody to tell.
  */
@@ -277,6 +290,7 @@ export async function tellReporter(id: string, origin: string): Promise<boolean>
   ).catch(() => []);
   const b = rows[0];
   if (!b || b.told_at || b.kind === "auto" || !b.reporter_email.includes("@") || !isInternalAddress(b.reporter_email)) return false;
+  if (quietWhenFixed(b.reporter_email)) return false;
 
   const said = b.body.length > 400 ? `${b.body.slice(0, 400)}…` : b.body;
   const subject = "Fixed: what you reported in TLE OS";
