@@ -77,7 +77,9 @@ async function store(key: string, entry: Cached): Promise<void> {
 /** The scan's book, widened to everything on file for this scope. "received"
     is relative, so it is re-said from receivedAt at read time. */
 async function fromLedger(book: LeadBook, rexUserId: string | null): Promise<LeadBook> {
-  const stored = await ledgerBoard(rexUserId, 500).catch(() => []);
+  /* A row with no lead in it (a test row, a half-written one) is skipped
+     rather than drawn: one empty object took the whole Groups view down. */
+  const stored = (await ledgerBoard(rexUserId, 500).catch(() => [])).filter((l) => l && typeof l.id === "string" && l.id);
   if (stored.length < book.leads.length) return book;
   const leads = stored.map((l) => (l.receivedAt ? { ...l, received: ago(Math.floor(new Date(l.receivedAt).getTime() / 1000)) } : l));
   return { ...book, leads };
@@ -173,7 +175,7 @@ export async function GET(req: NextRequest) {
       (b.leads as { contactId?: string }[]).map((l) => l.contactId).filter(Boolean) as string[]
     );
     const ours = mine.filter((l) => !l.contactId || !rexContacts.has(l.contactId));
-    const leads = [...ours, ...(b.leads as typeof ours)].filter((l) => !hidden.has(l.id));
+    const leads = [...ours, ...(b.leads as typeof ours)].filter((l) => l && l.id && !hidden.has(l.id));
     return { ...b, leads, hiddenIds: [...hidden] };
   };
 

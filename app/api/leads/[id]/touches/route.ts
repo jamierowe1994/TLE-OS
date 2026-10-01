@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
-import { hasDb } from "@/lib/db";
+import { hasDb, q } from "@/lib/db";
+import { createTask } from "@/lib/tasks";
+import { londonParts, londonTime } from "@/lib/london-time";
 import { addTouch, setRexNoteId, spineFor } from "@/lib/lead-touches";
 import { noteToRex, type RexNoteResult } from "@/lib/rex-notes";
 import { campaignOn, enrolLead, stopLeadCampaigns } from "@/lib/campaign-store";
@@ -62,6 +64,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     lead?: { name?: string; email?: string; contactId?: string | null };
     /** A tenant's nurture is recorded but never enrols: every campaign is a landlord's. */
     side?: "tenant" | "landlord";
+    /** Nurture only: the day to get back in touch, YYYY-MM-DD (Howard, 1 Oct 2026). */
+    followUpOn?: string | null;
   };
   const tenant = body.side === "tenant";
   const kind = body.kind as TouchKind;
@@ -88,6 +92,23 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
        first, so the spine can show it, then whatever was added. */
     text = text.trim() ? `${reason} - ${text.trim()}` : reason;
   }
+  /* BANKED FOR LATER (Howard, 1 Oct 2026: "bank leads for follow up, by
+     entering a date for when they will get back in touch ... and then
+     resurfacing them on that date. Landlord leads can take months.")
+     A day after today and within two years; 9am London that day. */
+  let followUpAt: Date | null = null;
+  if (kind === "nurture" && body.followUpOn) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(body.followUpOn));
+    const today = londonParts(new Date());
+    const todayKey = Date.UTC(today.year, today.month - 1, today.day);
+    const dayKey = m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN;
+    if (!m || !(dayKey > todayKey) || dayKey - todayKey > 731 * 86400000) {
+      return NextResponse.json({ ok: false, error: "Pick a day from tomorrow onwards, within two years." }, { status: 400 });
+    }
+    followUpAt = londonTime(+m[1], +m[2], +m[3], 9);
+    const said = followUpAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" });
+    text = `${text} - get back in touch on ${said}`;
+  }
   if (kind === "lost") {
     reason = (tenant ? TENANT_LOST_REASONS : LOST_REASONS).includes(body.reason ?? "") ? (body.reason as string) : null;
     if (!reason) return NextResponse.json({ ok: false, error: "Say why the lead is lost." }, { status: 400 });
@@ -103,6 +124,34 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     byId: who.id,
     byName: who.name || who.email,
   });
+
+  /* ── The follow-up, as a task with a due date ─────────────────────────────
+     One open follow-up per lead: a new date replaces the old. Talking to
+     them, a reply, bringing them back or losing them closes it; any other
+     try closes one that has already come due. The board reads the open one
+     (lib/lead-touches allSpines) to bank the lead and bring it back. */
+  const closeFollowUps = (dueOnly: boolean) =>
+    q(
+      `UPDATE os_tasks SET done_at = NOW() WHERE lead_id = $1 AND kind = 'follow-up' AND done_at IS NULL${dueOnly ? " AND due_at <= NOW()" : ""}`,
+      [id]
+    ).catch(() => null);
+  if (followUpAt) {
+    await closeFollowUps(false);
+    const name = (body.lead?.name ?? "").toString().trim() || "this lead";
+    await createTask({
+      userId: who.id,
+      title: `Get back in touch with ${name}`,
+      detail: text,
+      dueAt: followUpAt.toISOString(),
+      leadId: id,
+      kind: "follow-up",
+      createdBy: who.name || who.email,
+    });
+  } else if (kind === "lost" || kind === "rejoin" || outcome === "spoke" || outcome === "replied") {
+    await closeFollowUps(false);
+  } else if (ATTEMPT_KINDS.includes(kind) || kind === "email") {
+    await closeFollowUps(true);
+  }
 
   /* ── A note goes to REX as well (Howard, 24 Sep 2026) ──────────────────────
      Written by the person actually signed in. Viewing as somebody else, it

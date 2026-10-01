@@ -142,23 +142,34 @@ export default function LeadGroups({
     const now = new Date();
     const out: Record<GroupId, Lead[]> = { new: [], review: [], contacted: [] };
     const done: Lead[] = [];
+    /* Banked for later (Howard, 1 Oct 2026): out of the working boxes until
+       the day the agent said, then at the top of the page that morning. */
+    const due: Lead[] = [];
+    const banked: Lead[] = [];
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
     for (const l of leads) {
       if (isCompleted(l)) done.push(l);
+      else if (l.followUpAt) (new Date(l.followUpAt).getTime() < endOfToday ? due : banked).push(l);
       else out[groupOf(l, now)].push(l);
     }
+    due.sort((a, b) => (a.followUpAt ?? "").localeCompare(b.followUpAt ?? ""));
+    banked.sort((a, b) => (a.followUpAt ?? "").localeCompare(b.followUpAt ?? ""));
     /* Newest first inside every box. The whole point of the view is that the
        thing needing attention is at the top. */
     const newest = (a: Lead, b: Lead) => (receivedAt(b)?.getTime() ?? 0) - (receivedAt(a)?.getTime() ?? 0);
     for (const k of Object.keys(out) as GroupId[]) out[k].sort(newest);
     done.sort(newest);
-    return { ...out, done };
+    return { ...out, done, due, banked };
   }, [leads]);
 
   const [openAll, setOpenAll] = useState<Record<string, boolean>>({});
   /* Folded until asked for: it is the box of things nobody needs to act on. */
   const [doneOpen, setDoneOpen] = useState(false);
+  const [bankedOpen, setBankedOpen] = useState(false);
+  const backOn = (iso: string | null | undefined) =>
+    iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", ...(new Date(iso).getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {}) }) : "";
 
-  const row = (l: Lead, filled: boolean) => (
+  const row = (l: Lead, filled: boolean, when?: string) => (
     <li key={l.id}>
       <button
         type="button"
@@ -193,7 +204,7 @@ export default function LeadGroups({
 
         <span className="ml-auto flex shrink-0 items-center gap-3 md:ml-0">
           <SourceMark source={l.source} />
-          <span className="whitespace-nowrap text-[11px] text-muted">{l.received}</span>
+          <span className="whitespace-nowrap text-[11px] text-muted">{when ?? l.received}</span>
           {l.spineLabel ? (
             <Pill tone={l.spineLabel === "Appraisal booked" || l.spineLabel === "Viewing booked" ? "good" : l.spineLabel === "Nurture" || l.spineLabel === "Lost" ? "neutral" : "accent"}>
               {l.spineLabel}
@@ -208,6 +219,23 @@ export default function LeadGroups({
 
   return (
     <div className="space-y-4">
+      {grouped.due.length > 0 && (
+        <section className="fade-up rounded-[22px] border border-accent-dark/30 bg-white">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line/50 px-5 py-3.5">
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent-dark text-white">
+              <DoodleIcon name="clock" size={14} />
+            </span>
+            <h2 className="hand text-[17px] leading-none">Follow up today</h2>
+            <span className="figures rounded-full bg-accent-soft px-2.5 py-0.5 text-[11px] font-semibold text-accent-dark">
+              {grouped.due.length.toLocaleString("en-GB")}
+            </span>
+            <p className="text-[11.5px] text-muted">You said you would get back in touch</p>
+          </div>
+          <ul className="divide-y divide-line/40">
+            {grouped.due.map((l) => row(l, true, `Due ${backOn(l.followUpAt)}`))}
+          </ul>
+        </section>
+      )}
       {groups.map((g, i) => {
         const rows = grouped[g.id];
         const all = openAll[g.id];
@@ -254,6 +282,37 @@ export default function LeadGroups({
           </section>
         );
       })}
+
+      {grouped.banked.length > 0 && (
+        <section className="fade-up rounded-[22px] border border-line/50 bg-white">
+          <button
+            type="button"
+            onClick={() => setBankedOpen((o) => !o)}
+            aria-expanded={bankedOpen}
+            className="flex w-full flex-wrap items-center gap-x-3 gap-y-1.5 px-5 py-3.5 text-left"
+          >
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-line/40 text-muted">
+              <DoodleIcon name="clock" size={14} />
+            </span>
+            <h2 className="hand text-[17px] leading-none">Banked for later</h2>
+            <span className="figures rounded-full bg-line/40 px-2.5 py-0.5 text-[11px] font-semibold text-muted">
+              {grouped.banked.length.toLocaleString("en-GB")}
+            </span>
+            <p className="text-[11.5px] text-muted">Back on your list on the day you picked</p>
+            <span className="ml-auto flex items-center gap-1.5 text-[11.5px] font-semibold text-accent-dark">
+              {bankedOpen ? "Hide" : "Show"}
+              <svg aria-hidden width="12" height="12" viewBox="0 0 12 12" fill="none" className={`transition-transform duration-200 ${bankedOpen ? "rotate-180" : ""}`}>
+                <path d="M3 4.5l3 3 3-3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+          </button>
+          {bankedOpen && (
+            <ul className="divide-y divide-line/40 border-t border-line/50">
+              {grouped.banked.map((l) => row(l, false, `Back ${backOn(l.followUpAt)}`))}
+            </ul>
+          )}
+        </section>
+      )}
 
       {grouped.done.length > 0 && (
         <section className="fade-up rounded-[22px] border border-line/50 bg-white" style={{ animationDelay: `${groups.length * 60}ms` }}>

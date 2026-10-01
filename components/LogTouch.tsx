@@ -30,6 +30,24 @@ import {
 
 export type LogMode = "attempt" | "nurture" | "lost";
 
+/** The quick picks for a follow-up day (Howard, 1 Oct 2026: landlords "can take months"). */
+const FOLLOW_UPS = [
+  { label: "In 2 weeks", days: 14 },
+  { label: "1 month", days: 30 },
+  { label: "3 months", days: 91 },
+  { label: "6 months", days: 182 },
+];
+
+/** A day this many days on, as YYYY-MM-DD on the agent's own calendar. A
+ *  quick pick that lands on a weekend moves on to the Monday - nobody rings a
+ *  landlord back on a Saturday because the maths said so. */
+function dayAhead(days: number, weekday = false): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  if (weekday) while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export default function LogTouch({
   leadId,
   leadName,
@@ -79,6 +97,11 @@ export default function LogTouch({
   const [reason, setReason] = useState(mode === "lost" ? "" : reasons[0]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* Banked for later (Howard, 1 Oct 2026): the day to get back in touch, as
+     YYYY-MM-DD, or "" for no date. The lead leaves the working boxes until
+     then and comes back on the morning of it, as a task too. */
+  const [followUp, setFollowUp] = useState("");
+  const [pickingDay, setPickingDay] = useState(false);
   /* The attempt walks through frames (James, 11 Sep 2026): how you reached
      them, how it went, whether they booked, then anything to remember. */
   const [frame, setFrame] = useState<1 | 2 | 3 | 4>(1);
@@ -119,7 +142,7 @@ export default function LogTouch({
         headers: { "content-type": "application/json" },
         body: JSON.stringify(
           mode === "nurture"
-            ? { kind: "nurture", reason, body, lead: leadFacts, side: audience }
+            ? { kind: "nurture", reason, body, lead: leadFacts, side: audience, followUpOn: followUp || null }
             : mode === "lost"
               ? { kind: "lost", reason, body, side: audience }
               : { kind, outcome, body: booked ? `Booked the valuation.${body ? ` ${body}` : ""}` : body }
@@ -279,6 +302,56 @@ export default function LogTouch({
                 </button>
               ))}
             </div>
+            {mode === "nurture" && (
+              <>
+                <p className="mt-4 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Get back in touch</p>
+                <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                  {FOLLOW_UPS.map((f) => {
+                    const day = dayAhead(f.days, true);
+                    const on = followUp === day && !pickingDay;
+                    return (
+                      <button
+                        key={f.label}
+                        type="button"
+                        onClick={() => {
+                          setPickingDay(false);
+                          setFollowUp(on ? "" : day);
+                        }}
+                        className={`rounded-full border px-3.5 py-2 text-[12px] transition-colors ${
+                          on ? "border-ink bg-ink font-semibold text-page" : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => setPickingDay((p) => !p)}
+                    className={`rounded-full border px-3.5 py-2 text-[12px] transition-colors ${
+                      pickingDay ? "border-ink bg-ink font-semibold text-page" : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
+                    }`}
+                  >
+                    Pick a day
+                  </button>
+                  {pickingDay && (
+                    <input
+                      type="date"
+                      value={followUp}
+                      min={dayAhead(1)}
+                      max={dayAhead(730)}
+                      onChange={(e) => setFollowUp(e.target.value)}
+                      className="rounded-full border border-line/80 bg-transparent px-3 py-1.5 text-[12px] outline-none focus:border-ink"
+                    />
+                  )}
+                </div>
+                <p className="mt-1.5 text-[11.5px] text-muted">
+                  {followUp
+                    ? `${first} leaves your working list and comes back to the top of it on ${new Date(`${followUp}T12:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "long", year: "numeric" })}, with a task on the lead to get in touch.`
+                    : "Optional. Pick a day and they come back to the top of your Leads list that morning."}
+                </p>
+              </>
+            )}
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}

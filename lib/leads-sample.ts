@@ -63,6 +63,8 @@ export type Lead = {
    *  "Nurture", "Appraisal booked" - folded from the log (lib/lead-spine).
    *  Unset when nothing has been logged, and the REX stage stands. */
   spineLabel?: string;
+  /** Banked: the morning an agent said they would get back in touch (an open follow-up task). */
+  followUpAt?: string | null;
 };
 
 export const STAGE_TONE: Record<Stage, "accent" | "neutral" | "good"> = {
