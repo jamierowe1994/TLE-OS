@@ -1,5 +1,6 @@
 "use client";
 
+import { asOf } from "@/lib/as-of";
 import { useEffect, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
@@ -21,6 +22,7 @@ type Payload = TrackerBook & {
   live: boolean;
   reason?: string;
   stale?: boolean;
+  ageMs?: number;
   queue: QueuedReminder[];
   /** What has actually gone, from the send log. Null = it could not be read. */
   chases?: { key: string; to: string; at: string }[] | null;
@@ -131,7 +133,7 @@ export default function ComplianceTracker() {
     <>
       <PageHeader
         title="Compliance tracker"
-        blurb="What is overdue, what is coming up, and which agent to chase, across every home we manage."
+        blurb={`What is overdue, what is coming up, and which agent to chase, across every home we manage.${d?.ageMs != null ? ` Figures ${asOf(d.ageMs).text}.` : ""}`}
       />
 
       {error && (

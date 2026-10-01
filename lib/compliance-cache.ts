@@ -109,7 +109,9 @@ export async function getComplianceBook(): Promise<{
 
   if (held && age < FRESH_MS) return { book: held.book, ageMs: age, stale: false };
   if (held && age < STALE_MS) {
-    void refreshComplianceBook();
+    /* Caught (1 Oct 2026): a background refresh that failed was an
+       unhandled rejection. The held copy stands, and says how old it is. */
+    void refreshComplianceBook().catch((e) => console.error("[compliance-cache] background refresh failed", e instanceof Error ? e.message : e));
     return { book: held.book, ageMs: age, stale: true };
   }
   try {

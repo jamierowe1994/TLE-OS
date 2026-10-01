@@ -165,7 +165,8 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
   /* Every home REX PM manages joins the book (6 Sep 2026): one REX holds a
      property for but does not mark as let comes in under its REX property,
      so its REX certificates are read like any other. */
-  const osProps = await activeOsProperties().catch(() => []);
+  /* Not caught: see activeOsProperties - an empty set is not an answer. */
+  const osProps = await activeOsProperties();
   /* One row per property.
      A home REX has listed twice - re-let, or advertised by two branches -
      arrived twice, and the book carried 664 rows for 520 homes. The screen

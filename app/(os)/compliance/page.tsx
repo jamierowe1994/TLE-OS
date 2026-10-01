@@ -1,5 +1,6 @@
 "use client";
 
+import { asOf } from "@/lib/as-of";
 import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
@@ -72,6 +73,8 @@ export default function Compliance() {
     loading: boolean;
     reason?: string;
     counts?: { properties: number; withAnyRecord: number; entries: number; withCertificate: number; gasUnknown: number };
+    /** How old the cached book is - shown, never hidden (lib/as-of). */
+    ageMs?: number;
     /* Nothing stands in for the book (18 Sep 2026): the sample homes used to
        show for the whole thirty-second read and again whenever it failed. The
        sample is for a laptop with nothing connected, and the server says so. */
@@ -84,7 +87,7 @@ export default function Compliance() {
       .then((j) => {
         if (gone) return;
         if (j.ok && j.live && Array.isArray(j.properties)) {
-          setSource({ properties: j.properties, live: true, loading: false, counts: j.counts });
+          setSource({ properties: j.properties, live: true, loading: false, counts: j.counts, ageMs: typeof j.ageMs === "number" ? j.ageMs : undefined });
         } else {
           setSource({
             properties: j.ok && j.demo ? COMP_BOOK : [],
@@ -181,7 +184,7 @@ export default function Compliance() {
                    the managed book - and printing that total above a list
                    scoped to what we manage is how the page and Susan's sheet
                    ended up quoting different numbers for the same question. */
-                `Live from REX — ${BOOK.length} homes we manage. ${noGas} have no gas supply, from the signed terms or REX PM's own record; ${gasUnknown} have nobody's answer either way, which is unknown rather than exempt. Let-only homes, and homes whose agent has left the business, are not on this screen. A certificate more than 6 months out of date reads as an old record, not an expiry.`
+                `Live from REX${source.ageMs != null ? `, ${asOf(source.ageMs).text}` : ""} — ${BOOK.length} homes we manage. ${noGas} have no gas supply, from the signed terms or REX PM's own record; ${gasUnknown} have nobody's answer either way, which is unknown rather than exempt. Let-only homes, and homes whose agent has left the business, are not on this screen. A certificate more than 6 months out of date reads as an old record, not an expiry.`
               : (source.reason ?? "Every certificate on every home, and the button that fixes each one.")
         }
         /* James's own artwork, trimmed to its ink so the drawing's own

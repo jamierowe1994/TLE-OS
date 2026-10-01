@@ -116,7 +116,13 @@ export async function notOnRex(): Promise<OsProperty[]> {
 /** Every home REX PM manages today (active letting agreement), linked or not. */
 export async function activeOsProperties(): Promise<OsProperty[]> {
   if (!hasDb()) return [];
-  const rows = await q<Row>(`SELECT * FROM os_properties WHERE active ORDER BY name`).catch(() => []);
+  /* No .catch (1 Oct 2026). This set decides which homes are ours
+     (managedByPm), so an empty answer on a database blip made Compliance read
+     "0 homes we manage", Portfolio lose every home not on REX and its
+     certificates-to-renew go to 0, and Inspections show nothing due - all as
+     if true, and cached. A failure now fails the read, so the cache serves
+     its last good copy marked old, or the screen says it couldn't load. */
+  const rows = await q<Row>(`SELECT * FROM os_properties WHERE active ORDER BY name`);
   return rows.map(rowTo);
 }
 

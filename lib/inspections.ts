@@ -1,3 +1,4 @@
+import { currentLets } from "@/lib/current-lets";
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
@@ -324,7 +325,7 @@ async function openActionCounts(ids: string[]): Promise<Map<string, number>> {
   return out;
 }
 
-export async function listInspections(opts: { kind?: Kind | null; open?: boolean; propertyId?: string | null; rehearsal?: boolean } = {}): Promise<Inspection[]> {
+export async function listInspections(opts: { kind?: Kind | null; open?: boolean; propertyId?: string | null; rehearsal?: boolean; strict?: boolean } = {}): Promise<Inspection[]> {
   if (!hasDb()) return [];
   const where: string[] = [opts.rehearsal ? `rehearsal` : `NOT rehearsal`];
   const args: unknown[] = [];
@@ -334,7 +335,13 @@ export async function listInspections(opts: { kind?: Kind | null; open?: boolean
   const rows = await q<Row>(
     `SELECT * FROM os_inspections WHERE ${where.join(" AND ")} ORDER BY COALESCE(booked_at, due_at, created_at) ASC NULLS LAST`,
     args
-  ).catch(() => []);
+  ).catch((e) => {
+    /* `strict` (the Inspections screen): a failed read must not pass for "no
+       visits ever" - that turns every home overdue. Other callers keep the
+       old quiet answer. */
+    if (opts.strict) throw e;
+    return [];
+  });
   const list = rows.map(toInspection);
   const counts = await openActionCounts(list.map((i) => i.id));
   return list.map((i) => withStep(i, counts.get(i.id) ?? 0));
@@ -689,7 +696,15 @@ export function dueList(
 
   const horizon = now.getTime() + rules.leadDays * 24 * 60 * 60 * 1000;
   const out: DueVisit[] = [];
-  for (const p of properties) {
+  /* The CURRENT let only (1 Oct 2026). REX keeps a leased listing for every
+     let, and a home's old ones were dating its visit from a tenancy that has
+     ended: on 30 Sep, 19 of 131 due rows ran from an older let than the one
+     in place (16 Five Fields Close: due from Feb 2024, re-let March 2026),
+     reading years overdue. lib/current-lets keeps each home's latest let.
+     The trade: a house let room by room under one REX property now dates
+     from its newest room rather than its oldest, which can make it look
+     less late than it is - smaller, and the safer way round to be wrong. */
+  for (const p of currentLets(properties)) {
     const key = keyOf(p);
     if (!key || inHand.has(key) || !inspectable(p)) continue;
     const hmo = Boolean(p.propertyId && hmoIds.has(p.propertyId));

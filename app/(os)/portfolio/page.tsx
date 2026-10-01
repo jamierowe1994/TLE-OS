@@ -1,5 +1,7 @@
 "use client";
 
+import { asOf } from "@/lib/as-of";
+import { currentLets } from "@/lib/current-lets";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
@@ -52,12 +54,12 @@ import Segmented from "@/components/Segmented";
 
 type BookState =
   | { status: "loading" }
-  | { status: "ready"; book: ManagedBook; scope: string; everything: boolean; stale: boolean }
+  | { status: "ready"; book: ManagedBook; scope: string; everything: boolean; stale: boolean; ageMs?: number }
   | { status: "failed"; error: string; unlinked?: boolean };
 
 type CertsState =
   | { status: "checking"; tries: number }
-  | { status: "ready"; by: Map<string, CompProperty>; stale: boolean }
+  | { status: "ready"; by: Map<string, CompProperty>; stale: boolean; ageMs?: number }
   | { status: "slow" }
   | { status: "failed"; error: string };
 
@@ -501,6 +503,7 @@ export default function Portfolio() {
             scope: j.scope ?? "",
             everything: Boolean(j.everything),
             stale: Boolean(j.stale),
+            ageMs: typeof j.ageMs === "number" ? j.ageMs : undefined,
           });
         } else {
           setState({ status: "failed", error: j.error ?? "REX didn't answer.", unlinked: Boolean(j.unlinked) });
@@ -522,7 +525,7 @@ export default function Portfolio() {
         .then((j) => {
           if (gone) return;
           if (j.status === "ready" && Array.isArray(j.properties)) {
-            setCerts({ status: "ready", by: new Map((j.properties as CompProperty[]).map((p) => [p.id, p])), stale: Boolean(j.stale) });
+            setCerts({ status: "ready", by: new Map((j.properties as CompProperty[]).map((p) => [p.id, p])), stale: Boolean(j.stale), ageMs: typeof j.ageMs === "number" ? j.ageMs : undefined });
           } else if (j.status === "pending") {
             if (tries + 1 >= CERT_MAX_TRIES) setCerts({ status: "slow" });
             else {
@@ -681,7 +684,10 @@ export default function Portfolio() {
   );
   const close = useCallback(() => setOpenId(null), []);
 
-  const rentRoll = useMemo(() => filtered.reduce((a, p) => a + (p.rentMonthly ?? 0), 0), [filtered]);
+  /* Counted and added up on each home's latest let only (lib/current-lets);
+     the list itself still shows every let. */
+  const filteredHomes = useMemo(() => currentLets(filtered), [filtered]);
+  const rentRoll = useMemo(() => filteredHomes.reduce((a, p) => a + (p.rentMonthly ?? 0), 0), [filteredHomes]);
   /* The list: a shared house once, in place of its first room. */
   const listRows = useMemo(() => {
     const seen = new Set<string>();
@@ -699,13 +705,13 @@ export default function Portfolio() {
   const blurb =
     state.status === "loading" ? "Fetching the managed book from REX…"
     : state.status === "failed" ? state.error
-    : `Live from REX — ${state.book.counts.properties} properties under management across ${state.book.counts.towns} towns, for ${state.book.counts.landlords} landlords${state.everything ? "" : ` (${state.scope}'s book)`}.${state.stale ? " Refreshing behind." : ""}`;
+    : `Live from REX — ${state.book.counts.properties} properties under management across ${state.book.counts.towns} towns, for ${state.book.counts.landlords} landlords${state.everything ? "" : ` (${state.scope}'s book)`}.${state.ageMs != null ? ` Figures ${asOf(state.ageMs).text}.` : state.stale ? " Refreshing behind." : ""}`;
 
   const certsHint =
     certs.status === "checking" ? <FindingData label="Checking REX" />
     : certs.status === "slow" ? "REX is still reading them. Refresh in a few minutes."
     : certs.status === "failed" ? <span className="text-accent-dark">{certs.error}</span>
-    : `Homes we manage: ${certTally.expired} expired · ${certTally.urgent} due in 30 days · ${certTally.missing} with no current record${certs.stale ? " · refreshing" : ""}`;
+    : `Homes we manage: ${certTally.expired} expired · ${certTally.urgent} due in 30 days · ${certTally.missing} with no current record${certs.ageMs != null ? ` · certificates ${asOf(certs.ageMs).text}` : certs.stale ? " · refreshing" : ""}`;
 
   const pillClass = (on: boolean) =>
     `rounded-full border px-3.5 py-2 text-[12px] transition-colors ${on ? "border-accent-dark bg-accent-soft text-accent-dark" : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"}`;
@@ -760,7 +766,7 @@ export default function Portfolio() {
               icon="coin"
               label="Rent roll"
               value={book ? <>{money(book.counts.rentRoll)}<span className="text-[13px] text-muted"> pcm</span></> : <FindingData label="" />}
-              hint={book && `REX's agreed rent, not money received. Average ${money(book.counts.avgRent)} pcm.`}
+              hint={book && `${money(book.counts.managedRentRoll)} on homes we manage or collect rent for. REX's agreed rent on each home's current let, not money received. Average ${money(book.counts.avgRent)} pcm.`}
             />
             <StatCard
               icon="user"
@@ -782,7 +788,7 @@ export default function Portfolio() {
               value={view}
               onChange={setView}
               options={[
-                { id: "properties" as const, label: book ? `Properties · ${filtered.length}` : "Properties", icon: <DoodleIcon name="list" size={14} /> },
+                { id: "properties" as const, label: book ? `Properties · ${filteredHomes.length}` : "Properties", icon: <DoodleIcon name="list" size={14} /> },
                 { id: "landlords" as const, label: book ? `Landlords · ${landlords.length}` : "Landlords", icon: <DoodleIcon name="user" size={14} /> },
                 { id: "map" as const, label: "Map", icon: <DoodleIcon name="target" size={14} /> },
               ]}
@@ -808,7 +814,7 @@ export default function Portfolio() {
 
           {book && filtering && (
             <p className="mt-2 text-[11.5px] text-muted">
-              {filtered.length} of {book.counts.properties} properties · {money(rentRoll)} pcm ·{" "}
+              {filteredHomes.length} of {book.counts.properties} properties · {money(rentRoll)} pcm ·{" "}
               <button type="button" onClick={() => { setQ(""); setService(null); setAgent(null); setTown(null); setLookOnly(false); setNotOnRexOnly(false); }} className="underline hover:text-ink">
                 clear
               </button>

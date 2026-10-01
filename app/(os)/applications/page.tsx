@@ -565,7 +565,7 @@ export default function Applications() {
             <span className="font-semibold">Open leaves out the ones that have finished.</span> An
             application stays open on paper after the tenant moves in, or after the home goes to
             someone else. Those sit under Closed: accepted with the move-in date passed, or not
-            accepted on a home that is now let or withdrawn. Open covers the latest 200 applications.
+            accepted on a home that is now let or withdrawn. Open covers every open application in REX, however old; the other tabs show the latest 200 as well.
           </li>
           <li>
             These are the four application statuses, live. Once an application is accepted, the{" "}

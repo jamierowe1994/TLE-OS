@@ -424,7 +424,10 @@ export async function getApplications(limit = 100, rexUserId?: string | null): P
   for (const [k, v] of appsCache) {
     const [n, who] = k.split(":");
     if (who === (rexUserId ?? "") && Number(n) >= limit && Date.now() - v.at < APPS_TTL_MS) {
-      return v.apps.slice(0, limit);
+      /* A pull of 100 or more also carries every open application, however
+         old (below), so it is handed over whole rather than cut back to the
+         newest `limit` - cutting it would drop exactly those. */
+      return limit >= 100 ? v.apps : v.apps.slice(0, limit);
     }
   }
 
@@ -433,6 +436,18 @@ export async function getApplications(limit = 100, rexUserId?: string | null): P
      is most of what a cold load cost. The offsets are known before anything
      is asked, so nothing is gained by waiting; a page past the end comes back
      empty and costs nothing. Same order, same refusal if any page is refused. */
+  /* Every open one, asked for alongside the newest pages rather than after
+     them (see below for why it exists). */
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+  const openPull =
+    limit >= 100
+      ? allApplications([
+          ...(rexUserId ? [{ name: "application.agent_id", type: "=", value: rexUserId }] : []),
+          { name: "application.application_status_id", type: "in", value: ["received", "communicated", "accepted"] },
+        ])
+      : Promise.resolve([] as Application[]);
+  /* Not left dangling if a newest page is refused first. */
+  openPull.catch(() => null);
   const offsets: number[] = [];
   for (let offset = 0; offset < limit; offset += 100) offsets.push(offset);
   const pages = await Promise.all(
@@ -457,8 +472,56 @@ export async function getApplications(limit = 100, rexUserId?: string | null): P
       out.push(a);
     }
   }
+  /* EVERY OPEN ONE, HOWEVER OLD (1 Oct 2026). The board read the newest 200
+     and nothing else, so an application still waiting on a landlord from
+     June simply was not there: on 30 Sep REX held 673, the board saw back to
+     mid-July, and 40 applications the OS itself counts as open (38 awaiting
+     a landlord decision) were missing - "All open" said 60 when it was 100.
+     So the newest `limit` stay for history, and on top come every received
+     and communicated application in REX, plus accepted ones whose move-in is
+     still ahead (an accepted one that has moved in is history, and there are
+     a couple of hundred of those). closedReasons still decides which of them
+     are really over. Skipped for small pulls (the dashboard tiles' 10s). */
+  if (limit >= 100) {
+    for (const a of await openPull) {
+      if (seen.has(a.id)) continue;
+      if (a.status === "accepted" && a.startDate && a.startDate.slice(0, 10) < today) continue;
+      seen.add(a.id);
+      out.push(a);
+    }
+    out.sort((x, y) => (y.createdAt ?? 0) - (x.createdAt ?? 0));
+  }
   appsCache.set(key, { at: Date.now(), apps: out });
   return out;
+}
+
+/** Every application matching some criteria: the first page says how many,
+ *  the rest are asked for side by side. Refuses if any page is refused, so a
+ *  half-read never passes for the whole book. */
+async function allApplications(criteria: Record<string, unknown>[]): Promise<Application[]> {
+  const page = async (offset: number) => {
+    const res = await rexCall("TenancyApplications", "search", {
+      criteria,
+      limit: 100,
+      offset,
+      order_by: { system_ctime: "desc" },
+    });
+    if (!res.ok) throw new Error(res.error ?? "REX wouldn't answer.");
+    return res.result as { rows?: Row[]; total?: number } | Row[];
+  };
+  /* Six pages at once: the open book was under 500 on 1 Oct 2026, and asking
+     for the first page to learn the total, then the rest, was two REX round
+     trips back to back (about five seconds). A page past the end comes back
+     empty. If the sixth is full there is more, so it carries on, side by side
+     again, up to 2,000. */
+  const BATCH = 6;
+  const pages: Awaited<ReturnType<typeof page>>[] = [];
+  for (let start = 0; start < 2000; start += BATCH * 100) {
+    const got = await Promise.all(Array.from({ length: BATCH }, (_, i) => page(start + i * 100)));
+    pages.push(...got);
+    if (rexRows(got[BATCH - 1]).length < 100) break;
+  }
+  return pages.flatMap((r) => rexRows(r)).map(shapeApplication);
 }
 
 /**

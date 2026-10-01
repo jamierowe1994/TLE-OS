@@ -40,11 +40,22 @@ export async function GET(req: NextRequest) {
   const open = req.nextUrl.searchParams.get("open") === "1";
   const propertyId = req.nextUrl.searchParams.get("property");
 
-  const [inspections, rules, actions] = await Promise.all([
-    listInspections({ kind, open, propertyId }),
-    inspectionRules(),
-    openFindings(),
-  ]);
+  /* Read without a safety net (1 Oct 2026): listInspections used to answer []
+     on a database error, and the due list then counted every home as never
+     visited - everything due, everything overdue, as if true. Now a failed
+     read is an error the screen shows. */
+  let inspections: Awaited<ReturnType<typeof listInspections>>;
+  let rules: Awaited<ReturnType<typeof inspectionRules>>;
+  let actions: Awaited<ReturnType<typeof openFindings>>;
+  try {
+    [inspections, rules, actions] = await Promise.all([
+      listInspections({ kind, open, propertyId, strict: true }),
+      inspectionRules(),
+      openFindings(),
+    ]);
+  } catch {
+    return NextResponse.json({ ok: false, error: "The inspections couldn't be read just now, so nothing is shown rather than a list that might be wrong. Try again in a minute." }, { status: 503 });
+  }
 
   /* The due list needs the managed book. When REX is not connected, or the
      person is not linked to a REX user, we say so instead of showing a due

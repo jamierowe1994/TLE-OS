@@ -83,9 +83,14 @@ export interface ManagedLandlord {
 }
 
 export interface ManagedCounts {
+  /** Homes, each once (lib/current-lets) - not REX's leased listings. */
   properties: number;
-  /** Monthly rent across the book, from REX's agreed rent. */
+  /** Every leased listing on record, past lets included. */
+  lets: number;
+  /** Monthly rent across the book, from REX's agreed rent, latest let only. */
   rentRoll: number;
+  /** The part of rentRoll on homes we manage or collect rent for. */
+  managedRentRoll: number;
   avgRent: number | null;
   landlords: number;
   /** Properties whose REX listing has no owner contact. */

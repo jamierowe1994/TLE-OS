@@ -1,3 +1,4 @@
+import { currentLets, MANAGED_SERVICES } from "@/lib/current-lets";
 import "server-only";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import { activeOsProperties } from "@/lib/os-properties";
@@ -186,7 +187,9 @@ function landlordsOf(properties: ManagedProperty[]): ManagedLandlord[] {
   );
 }
 
-function countsOf(properties: ManagedProperty[], landlords: ManagedLandlord[]): ManagedCounts {
+function countsOf(all: ManagedProperty[], landlords: ManagedLandlord[]): ManagedCounts {
+  /* Each home once, on its latest let - see lib/current-lets. */
+  const properties = currentLets(all);
   const rents = properties.map((p) => p.rentMonthly).filter((r): r is number => r != null);
   const rentRoll = rents.reduce((a, b) => a + b, 0);
   const byService: Record<string, number> = {};
@@ -196,7 +199,9 @@ function countsOf(properties: ManagedProperty[], landlords: ManagedLandlord[]): 
   }
   return {
     properties: properties.length,
+    lets: all.length,
     rentRoll,
+    managedRentRoll: properties.filter((p) => MANAGED_SERVICES.has(p.service ?? "")).reduce((a, p) => a + (p.rentMonthly ?? 0), 0),
     avgRent: rents.length ? Math.round(rentRoll / rents.length) : null,
     landlords: landlords.length,
     withoutLandlord: properties.filter((p) => !p.landlord).length,
@@ -260,7 +265,8 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
      an agent's own book stays REX's, since these carry no agent. */
   if (!rexUserId) {
     const have = new Set(properties.map((p) => String(p.propertyId ?? "")));
-    for (const o of await activeOsProperties().catch(() => [])) {
+    /* Not caught: see activeOsProperties - an empty set is not an answer. */
+    for (const o of await activeOsProperties()) {
       /* Already in REX's let book: nothing to add. Linked to a REX property
          REX does not mark as let (84 of them, 6 Sep): the home is managed in
          REX PM all the same, so it joins the book under its REX property. */
@@ -297,7 +303,9 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
       });
     }
   }
-  const landlords = landlordsOf(properties);
+  /* Landlords' homes and rent from each home's latest let only, or a landlord
+     whose flat was re-let twice "owns" three. */
+  const landlords = landlordsOf(currentLets(properties));
   return {
     properties,
     landlords,

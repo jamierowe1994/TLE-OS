@@ -31,7 +31,9 @@ import type { ManagedBook } from "./portfolio-types";
 /* v2 (7 Sep 2026): the book fills the sitting tenant from the tenancy
    application where the listing names nobody. Stored books hold the old,
    thinner answer and would be served for six hours. */
-const BOOK_BASE = "portfolio:v2";
+/* v3 (1 Oct 2026): counts are per home, not per let, and carry lets and
+   managedRentRoll - a v2 book in os_cache has neither, so it is not reused. */
+const BOOK_BASE = "portfolio:v3";
 /* v2 (18 Sep 2026): REX PM rows no longer pass "Managed" as a service, so a
    let-only home stops counting as ours here. A v1 answer still would. */
 const CERTS_BASE = "portfolio-certs:v2";
