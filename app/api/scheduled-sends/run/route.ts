@@ -89,7 +89,7 @@ const TOO_LATE_MS = 12 * 60 * 60 * 1000;
  * must not get it. `ref` is the appraisal's id or its lead's, depending on
  * which screen queued it.
  */
-async function preAppraisalStillStands(ref: string, sendAt: string): Promise<string | null> {
+async function preAppraisalStillStands(ref: string, body: string): Promise<string | null> {
   if (!ref) return null;
   const rows = await q<{ stage: string; appointment_at: string | Date | null }>(
     `SELECT stage, appointment_at FROM os_market_appraisals
@@ -105,10 +105,20 @@ async function preAppraisalStillStands(ref: string, sendAt: string): Promise<str
   if (!ma.appointment_at) return null;
   const visit = new Date(ma.appointment_at).getTime();
   if (visit < Date.now()) return "The visit had already happened by the time this was due, so it was not sent.";
-  /* Queued for the day before. A visit now more than two days after the send
-     time has been moved, and the words in this email name the old date. */
-  if (visit - new Date(sendAt).getTime() > 2 * 24 * 60 * 60 * 1000) {
-    return "The visit was moved after this was written, so it was not sent. Queue it again from the appraisal.";
+  /* The words in this email name the visit's date and time ("on **Thursday
+     8 October at 2:00pm**", lib/appraisal-email). If they no longer match
+     the appraisal, the visit was moved after it was written. This used to
+     read "sent more than two days before the visit" as moved, which was
+     true while it always went the day before; it now goes within two hours
+     of booking (lib/pre-send-time), so the words are the test. */
+  const named = / on \*\*([^*]+)\*\*/.exec(body)?.[1];
+  if (named) {
+    const v = new Date(visit);
+    const day = v.toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long" });
+    const time = v.toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "numeric", minute: "2-digit", hour12: true }).replace(/\s/g, "").toLowerCase();
+    if (named.trim() !== `${day} at ${time}`) {
+      return "The visit was moved after this was written, so it was not sent. Queue it again from the appraisal.";
+    }
   }
   return null;
 }
@@ -158,7 +168,7 @@ export async function POST(req: NextRequest) {
     const overtaken = late
       ? "This was due more than twelve hours ago, so it was not sent."
       : row.kind === "pre-appraisal"
-        ? await preAppraisalStillStands(row.ref, row.send_at)
+        ? await preAppraisalStillStands(row.ref, row.body)
         : null;
     if (overtaken) {
       await q(`UPDATE os_scheduled_sends SET state = 'cancelled', error = $2 WHERE id = $1`, [row.id, overtaken]).catch(() => []);

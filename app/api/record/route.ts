@@ -5,7 +5,6 @@ import { findUserById } from "@/lib/users";
 import { getAppraisal } from "@/lib/appraisal-store";
 import { presentationsFor } from "@/lib/present-store";
 import { hasDb, q } from "@/lib/db";
-import { PRE_APPRAISAL_LEAD_DAYS } from "@/lib/appraisal-email";
 import { mintRecordLink } from "@/lib/record-link";
 import { firstNameOf } from "@/lib/present";
 import { publicOrigin } from "@/lib/origin";
@@ -33,22 +32,22 @@ async function who(req: NextRequest) {
   return userId ? findUserById(userId) : null;
 }
 
-/** When the landlord's pre-appraisal email goes: the queued date if one is queued, otherwise the day before the visit. */
-async function goesOut(ref: string, appointmentAt: string | null): Promise<string | null> {
-  if (hasDb() && ref) {
-    const rows = await q<{ send_at: string }>(
-      `SELECT send_at FROM os_scheduled_sends
-        WHERE ref = $1 AND kind = 'pre-appraisal' AND state = 'queued'
-        ORDER BY send_at LIMIT 1`,
-      [ref]
-    ).catch(() => []);
-    if (rows[0]) return new Date(rows[0].send_at).toISOString();
-  }
-  if (!appointmentAt) return null;
-  const d = new Date(appointmentAt);
-  if (Number.isNaN(d.valueOf())) return null;
-  d.setDate(d.getDate() - PRE_APPRAISAL_LEAD_DAYS);
-  return d.toISOString();
+/** The landlord's pre-appraisal email: when it goes if queued, or when it went.
+ *  No longer guessed as "the day before" - it goes within two hours of booking
+ *  or when the agent sends it (lib/pre-send-time, 1 Oct 2026). */
+async function goesOut(refs: string[]): Promise<{ goesOut: string | null; sentAt: string | null }> {
+  if (!hasDb() || !refs.length) return { goesOut: null, sentAt: null };
+  const rows = await q<{ state: string; send_at: string; sent_at: string | null }>(
+    `SELECT state, send_at, sent_at FROM os_scheduled_sends
+      WHERE ref = ANY($1) AND kind = 'pre-appraisal' AND state IN ('queued','sending','sent')
+      ORDER BY (state = 'sent') DESC, send_at LIMIT 1`,
+    [refs]
+  ).catch(() => []);
+  const r = rows[0];
+  if (!r) return { goesOut: null, sentAt: null };
+  return r.state === "sent"
+    ? { goesOut: null, sentAt: new Date(r.sent_at ?? r.send_at).toISOString() }
+    : { goesOut: new Date(r.send_at).toISOString(), sentAt: null };
 }
 
 export async function GET(req: NextRequest) {
@@ -76,7 +75,7 @@ export async function GET(req: NextRequest) {
     },
     deck: pre ? { token: pre.token, url: `${origin(req)}/present/${pre.token}` } : null,
     video: pre?.deck.welcomeVideo ?? null,
-    goesOut: await goesOut(ref, ma.appointmentAt),
+    ...(await goesOut([...new Set([ref, ma.id])])),
     me: { name: me.name, email: me.email },
   });
 }

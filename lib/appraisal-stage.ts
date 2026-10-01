@@ -10,8 +10,7 @@ import { persistStage } from "@/lib/appraisal-store";
 import { getComplianceItemsFor } from "@/lib/business/rex-stats";
 import { listVault } from "@/lib/vault";
 import { pendingKeyFor } from "@/lib/property-match";
-import { PRE_APPRAISAL_LEAD_DAYS } from "@/lib/appraisal-email";
-import { londonParts, londonTime } from "@/lib/london-time";
+import { PRE_SEND_HOLD_MS, PRE_SEND_SOON_MS } from "@/lib/pre-send-time";
 import { readAnswers } from "@/lib/property-answers-store";
 import { allDone, progress } from "@/lib/property-questions";
 
@@ -105,17 +104,17 @@ const SEND_LABEL: Record<string, string> = {
   confirmation: "Confirmation sent",
 };
 
-/** The day before the visit at 9am, or within the hour if that has gone
- *  and the visit is still ahead. Null once the visit has been. */
+/** When it would go if nothing is queued: two hours from now, or a quarter
+ *  of an hour with the visit under three hours away (lib/pre-send-time; it
+ *  was 9am the day before until 1 Oct 2026). The file page queues it for
+ *  this the first time it is opened, so a file booked before the booking
+ *  queued it itself still gets one. Null once the visit has been. */
 function preSendMoment(ma: MarketAppraisal, now: Date): string | null {
   if (!ma.appointmentAt) return null;
   const visit = new Date(ma.appointmentAt);
   if (Number.isNaN(visit.valueOf()) || visit <= now) return null;
-  /* 9am London on the day before, whatever clock the server keeps. */
-  const v = londonParts(visit);
-  const when = londonTime(v.year, v.month, v.day - PRE_APPRAISAL_LEAD_DAYS, 9, 0);
-  const soon = new Date(now.getTime() + 60 * 60 * 1000);
-  return (when < soon ? soon : when).toISOString();
+  const soon = visit.getTime() - now.getTime() < PRE_SEND_SOON_MS;
+  return new Date(now.getTime() + (soon ? 15 * 60 * 1000 : PRE_SEND_HOLD_MS)).toISOString();
 }
 
 const iso = (v: string | Date | null | undefined) => (v ? new Date(v).toISOString() : null);
@@ -177,7 +176,7 @@ async function signalsFor(ma: MarketAppraisal, listedIds: Set<string>, now: Date
     recorded ? iso(pre?.createdAt ?? null) : null,
     recorded ? "recorded" : declined ? "sending without one" : nudgeAt ? `reminder ${dayWords(nudgeAt)}` : undefined
   );
-  for (const s of sends.filter((x) => x.kind !== "video-chase" && x.kind !== "pre-appraisal")) {
+  for (const s of sends.filter((x) => x.kind !== "video-chase" && x.kind !== "pre-appraisal" && x.kind !== "pre-heads-up")) {
     tick("booked", `send-${s.kind}`, SEND_LABEL[s.kind] ?? s.kind.replace(/[-_]/g, " "), Boolean(s.sent_at), iso(s.sent_at), !s.sent_at && s.state === "queued" ? `queued for ${dayWords(iso(s.send_at))}` : undefined);
   }
 

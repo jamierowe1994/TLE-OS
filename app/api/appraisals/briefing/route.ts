@@ -5,7 +5,7 @@ import { getAppraisal } from "@/lib/appraisal-store";
 import { presentationsFor } from "@/lib/present-store";
 import { sendEmail, ResendBlocked } from "@/lib/resend";
 import { ExternalRecipientRefused } from "@/lib/email-policy";
-import { PRE_APPRAISAL_LEAD_DAYS } from "@/lib/appraisal-email";
+import { preRowFor } from "@/lib/pre-send";
 import {
   briefingHtml,
   briefingSubject,
@@ -75,17 +75,11 @@ async function build(req: NextRequest, id: string) {
   const decks = await presentationsFor(ma.leadId ?? ma.id).catch(() => []);
   const pre = decks.find((d) => d.kind === "pre-appraisal") ?? null;
 
-  /* Counted BACK from the visit, the same way AppraisalTrack schedules it, so
-     the date in the email is the date the queue will actually use. */
-  let sendPretty: string | null = null;
-  if (ma.appointmentAt) {
-    const visit = new Date(ma.appointmentAt);
-    if (!Number.isNaN(visit.valueOf())) {
-      const when = new Date(visit);
-      when.setDate(when.getDate() - PRE_APPRAISAL_LEAD_DAYS);
-      sendPretty = prettyDay(when);
-    }
-  }
+  /* Read off the queue, so the date in the email is the date it will
+     actually use. It is no longer "the day before" by rule (lib/pre-send-
+     time, 1 Oct 2026): nothing queued means nothing to promise. */
+  const queued = await preRowFor(ma).catch(() => null);
+  const sendPretty = queued?.state === "queued" ? prettyDay(new Date(queued.send_at)) : null;
 
   const briefing: AgentBriefing = {
     agentFirstName: to.name,

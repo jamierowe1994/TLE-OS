@@ -1,5 +1,5 @@
 import type { MarketAppraisal, MaStage } from "@/lib/market-appraisal";
-import { PRE_APPRAISAL_LEAD_WORDS } from "@/lib/appraisal-email";
+import { preSendWhen } from "@/lib/pre-send-time";
 
 /**
  * At a glance: three facts, chosen by the stage (James, 11 Sep 2026: "it
@@ -60,12 +60,12 @@ export function glanceFor(
   const pre: GlanceItem = ps?.state === "sent"
     ? { icon: "mail", title: "Pre-presentation sent", sub: `${ps.at ? shortDay(ps.at) : "Sent"}${ps.opens ? ` · opened ${ps.opens} time${ps.opens === 1 ? "" : "s"}` : " · not opened yet"}` }
     : ps?.state === "queued" && ps.at
-      ? { icon: "mail", title: `Pre-presentation goes out ${shortDay(ps.at)}`, sub: `${PRE_APPRAISAL_LEAD_WORDS} the visit, at ${clock(ps.at)}` }
+      ? { icon: "mail", title: `Pre-presentation goes ${preSendWhen(ps.at, now)}`, sub: "Or as soon as you send it" }
       : !ma.landlordEmail
         ? { icon: "mail", title: "Pre-presentation cannot go out", sub: "No email for the landlord on this file" }
         : passed
           ? { icon: "mail", title: "Pre-presentation not sent", sub: "The visit has been" }
-          : { icon: "mail", title: "Pre-presentation being prepared", sub: `Goes out ${PRE_APPRAISAL_LEAD_WORDS} the visit` };
+          : { icon: "mail", title: "Pre-presentation being prepared", sub: "Goes as soon as you send it" };
 
   /* ── the video ── */
   const video: GlanceItem = ma.videoState === "recorded"

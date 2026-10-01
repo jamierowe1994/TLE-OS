@@ -14,6 +14,7 @@ import {
   videoRecorded,
 } from "@/lib/video-chase";
 import { publicOrigin } from "@/lib/origin";
+import { sendPreNow } from "@/lib/pre-send";
 
 /**
  * The video nudge for one appraisal.
@@ -21,7 +22,8 @@ import { publicOrigin } from "@/lib/origin";
  * GET  ?id=…                 → who it would go to, when, and whether one is queued
  * POST { id, mode: "now" }   → send it to the signed-in person this minute
  * POST { id, mode: "queue" } → put it on the queue for two days before the visit
- * POST { id, mode: "decline" } → send the pre-presentation without a video
+ * POST { id, mode: "decline" } → send the pre-presentation now, without a video
+ * POST { id, mode: "send" }    → send the pre-presentation now, video and all
  *
  * Reaches a colleague on our own domain, as the direct result of that
  * colleague pressing a button - the same footing as the agent briefing, and
@@ -73,11 +75,17 @@ export async function POST(req: NextRequest) {
   const ma = await getAppraisal(id);
   if (!ma) return NextResponse.json({ ok: false, error: "No such appraisal." }, { status: 404 });
 
-  const mode = body.mode === "queue" ? "queue" : body.mode === "decline" ? "decline" : "now";
+  const mode = body.mode === "queue" ? "queue" : body.mode === "decline" ? "decline" : body.mode === "send" ? "send" : "now";
   try {
-    if (mode === "decline") {
-      const r = await declineVideoChase({ ma, me, origin: origin(req) });
-      return NextResponse.json({ ok: true, ...r });
+    /* Both send the pre-presentation this minute (Howard, approved by James
+       1 Oct 2026). Declining also records the choice, as it always has. Not
+       sent because customer email is off here: ok, and `held` says so - it
+       stays on the queue and goes when the switch does. */
+    if (mode === "decline" || mode === "send") {
+      if (mode === "decline") await declineVideoChase({ ma, me, origin: origin(req) });
+      const r = await sendPreNow({ ma, me, origin: origin(req) });
+      if (!r.sent && !r.held) return NextResponse.json({ ok: false, error: r.detail }, { status: 409 });
+      return NextResponse.json({ ok: true, declined: mode === "decline", ...r });
     }
     if (mode === "queue") {
       const r = await queueVideoChase({ ma, me, origin: origin(req) });

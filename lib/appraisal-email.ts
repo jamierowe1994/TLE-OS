@@ -291,7 +291,7 @@ ${calendarLines ? `It takes ${lengthWords(i.minutes)}. Press the button to put i
 
 ${calendarLines}` : `It takes ${lengthWords(i.minutes)}, and the calendar invite is attached so it goes straight in your diary.`}
 
-There's nothing you need to do before then. ${PRE_APPRAISAL_LEAD_WORDS.replace(/^./, (c) => c.toUpperCase())}, I'll send you a short pre-presentation so you know who's coming and what happens on the day.
+There's nothing you need to do before then. I'm also sending you a short pre-presentation so you know who's coming and what happens on the day.
 
 If the time stops working, just ${i.agentPhone ? `reply or ring me on ${i.agentPhone}` : "reply to this email"} and we'll move it.
 

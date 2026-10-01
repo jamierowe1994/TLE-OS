@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import type { WelcomeVideo } from "@/lib/present";
+import { preSendWhen, preSentWhen } from "@/lib/pre-send-time";
 
 /**
  * Record your welcome - the whole page.
@@ -48,6 +49,7 @@ type Context = {
   deck?: { token: string; url: string } | null;
   video?: WelcomeVideo | null;
   goesOut?: string | null;
+  sentAt?: string | null;
 };
 
 type Phase = "loading" | "ready" | "saving" | "done" | "failed" | "error";
@@ -79,6 +81,12 @@ export default function RecordSession({ appraisalId }: { appraisalId: string }) 
   const [ctx, setCtx] = useState<Context["appraisal"] | null>(null);
   const [deck, setDeck] = useState<{ token: string; url: string } | null>(null);
   const [goesOut, setGoesOut] = useState<string | null>(null);
+  const [sentAt, setSentAt] = useState<string | null>(null);
+  /* Send it now, from here (1 Oct 2026): the pre-presentation goes two hours
+     after booking unless the agent sends it sooner, and having just recorded
+     the video is the moment they would. */
+  const [sending, setSending] = useState(false);
+  const [sendNote, setSendNote] = useState<string | null>(null);
   const [video, setVideo] = useState<WelcomeVideo | null>(null);
   const [recorderUrl, setRecorderUrl] = useState<string | null>(null);
   const [flowOrigin, setFlowOrigin] = useState<string | null>(null);
@@ -181,6 +189,7 @@ export default function RecordSession({ appraisalId }: { appraisalId: string }) 
         if (!c.ok || !c.appraisal) throw new Error(c.error ?? "Couldn't find that appraisal.");
         setCtx(c.appraisal);
         setGoesOut(c.goesOut ?? null);
+        setSentAt(c.sentAt ?? null);
 
         let d = c.deck ?? null;
         if (!d) {
@@ -327,8 +336,28 @@ export default function RecordSession({ appraisalId }: { appraisalId: string }) 
     }
   }
 
+  async function sendNow() {
+    if (!ctx || sending) return;
+    setSending(true);
+    setSendNote(null);
+    const r = (await fetch("/api/appraisals/video-chase", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: ctx.id, mode: "send" }),
+    })
+      .then((x) => x.json())
+      .catch(() => ({ ok: false, error: "That didn't send." }))) as { ok?: boolean; sent?: boolean; at?: string | null; detail?: string; error?: string };
+    if (r.ok && r.sent) {
+      setSentAt(r.at ?? new Date().toISOString());
+      setGoesOut(null);
+    } else {
+      setSendNote(r.detail ?? r.error ?? "That didn't send.");
+    }
+    setSending(false);
+  }
+
   const street = ctx ? shortAddress(ctx.address) : "";
-  const outWords = dayWords(goesOut);
+  const outWords = goesOut ? preSendWhen(goesOut) : null;
 
   return (
     <main className="mx-auto flex min-h-[100dvh] w-full max-w-5xl flex-col px-3 py-3 sm:px-8 sm:py-8">
@@ -345,7 +374,7 @@ export default function RecordSession({ appraisalId }: { appraisalId: string }) 
               <p className="mt-0.5 text-[12px] text-muted">
                 {ctx.landlord.replace(/\s*\(demo\)\s*$/, "")}
                 {visitShort(ctx.appointmentAt) ? ` · ${visitShort(ctx.appointmentAt)}` : ""}
-                {!phone && outWords ? ` · page goes out ${outWords}` : ""}
+                {!phone && outWords ? ` · page goes out ${outWords}` : !phone && sentAt ? ` · page sent ${preSentWhen(sentAt)}` : ""}
               </p>
             </>
           )}
@@ -452,10 +481,14 @@ export default function RecordSession({ appraisalId }: { appraisalId: string }) 
             <p className="hand mt-4 text-[24px]">All done.</p>
             <p className="mx-auto mt-1 max-w-md text-[13px] leading-relaxed text-muted">
               {ctx
-                ? `This will be at the top of ${ctx.landlordFirst}'s pre-appraisal page${outWords ? `, which goes out ${outWords}` : ""}.`
+                ? sentAt
+                  ? `This is at the top of ${ctx.landlordFirst}'s pre-appraisal page, which went to them ${preSentWhen(sentAt)}.`
+                  : `This will be at the top of ${ctx.landlordFirst}'s pre-appraisal page${outWords ? `, which goes out ${outWords} unless you send it now` : ""}.`
                 : "It's on the landlord's page."}
               {video?.durationSecs ? ` ${Math.round(video.durationSecs)} seconds.` : ""}
             </p>
+
+            {sendNote && <p className="mx-auto mt-2 max-w-md text-[12px] text-accent-dark">{sendNote}</p>}
 
             {video?.embedUrl && (
               <div className="mx-auto mt-5 max-w-xl">
@@ -470,6 +503,16 @@ export default function RecordSession({ appraisalId }: { appraisalId: string }) 
             )}
 
             <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5">
+              {goesOut && !sentAt && (
+                <button
+                  type="button"
+                  onClick={() => void sendNow()}
+                  disabled={sending}
+                  className="rounded-full bg-accent-dark px-4 py-2 text-[12.5px] font-semibold text-white disabled:opacity-60"
+                >
+                  {sending ? "Sending…" : `Send it to ${ctx?.landlordFirst ?? "them"} now`}
+                </button>
+              )}
               {deck && (
                 <a
                   href={deck.url}

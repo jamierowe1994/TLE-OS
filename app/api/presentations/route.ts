@@ -23,6 +23,7 @@ import {
 import { hasDb, q } from "@/lib/db";
 import { publicOrigin } from "@/lib/origin";
 import { guideIn } from "@/lib/rm-guide";
+import { agentProfile } from "@/lib/agent-profile";
 
 /**
  * Minting a deck — one of three, chosen by `kind`.
@@ -298,34 +299,6 @@ export async function POST(req: NextRequest) {
       !agent.phone && "a mobile number",
     ].filter(Boolean) as string[],
   });
-}
-
-/**
- * The agent's introduction, from their own OS profile.
- *
- * The key here was 'presentation_profile', which NOTHING in the codebase has
- * ever written. The profile page saves under 'tle-profile-v1' (PROFILE_KEY in
- * app/(os)/profile/page.tsx). So this returned "" for every agent who had ever
- * typed a bio, and every deck quietly fell through to the generic default —
- * the page told them "shows on your listings, your emails and the landlord
- * review pages" and then showed it nowhere.
- *
- * Empty here is still a fine answer: presentAgentFor falls back to the TEG
- * Hub's bio, so a partner who never opened this page still gets a real
- * introduction rather than the stock one.
- */
-async function agentProfile(userId: string): Promise<{ bio: string; photo: string | null }> {
-  const rows = await q<{ value: { bio?: string; photo?: string } }>(
-    `SELECT value FROM os_user_prefs WHERE user_id = $1 AND key = 'tle-profile-v1'`,
-    [userId]
-  ).catch(() => []);
-  return {
-    bio: (rows[0]?.value?.bio ?? "").trim(),
-    /* The uploader saves a data URL. Read back out for the deck, which used to
-       ask REX and the Hub only — and both hold nothing for TLE, so an agent
-       who had uploaded their own face still went out as a monogram. */
-    photo: (rows[0]?.value?.photo ?? "").trim() || null,
-  };
 }
 
 /** The builder's ticks, kept to plain strings. They are only ever read back

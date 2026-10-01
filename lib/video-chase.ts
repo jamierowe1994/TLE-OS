@@ -172,10 +172,24 @@ export async function queueVideoChase(opts: {
 }): Promise<{ queued: boolean; id?: string; sendAt?: string; reason?: string }> {
   if (!hasDb()) return { queued: false, reason: "No database on this environment." };
 
-  const sendAt = chaseSendAt(opts.ma);
-  const tooLate = opts.ma.appointmentAt
-    ? `The visit is inside ${VIDEO_CHASE_LEAD_DAYS} days, so the moment for a nudge has passed.`
-    : "The appraisal has no date yet.";
+  /* The pre-presentation now goes within two hours of booking (lib/pre-send-
+     time), so a nudge two days before the visit would usually ask for a
+     video after the deck has gone. Only queued when it still lands first. */
+  const refs = [...new Set([opts.ma.leadId, opts.ma.id].filter((r): r is string => Boolean(r)))];
+  const pre = await q<{ at: string }>(
+    `SELECT COALESCE(sent_at, send_at) AS at FROM os_scheduled_sends
+      WHERE kind = 'pre-appraisal' AND ref = ANY($1) AND state IN ('queued','sending','sent')
+      ORDER BY 1 LIMIT 1`,
+    [refs]
+  ).catch(() => []);
+  const due = chaseSendAt(opts.ma);
+  const preFirst = Boolean(due && pre[0] && new Date(pre[0].at) <= due);
+  const sendAt = preFirst ? null : due;
+  const tooLate = preFirst
+    ? "The pre-presentation goes before a nudge would, so none was queued."
+    : opts.ma.appointmentAt
+      ? `The visit is inside ${VIDEO_CHASE_LEAD_DAYS} days, so the moment for a nudge has passed.`
+      : "The appraisal has no date yet.";
 
   /* A visit that moves takes its nudge with it. The queued row is re-dated
      rather than duplicated, and a visit pulled inside two days cancels it -
@@ -186,7 +200,7 @@ export async function queueVideoChase(opts: {
     if (!sendAt) {
       await q(`UPDATE os_scheduled_sends SET state = 'cancelled', error = $2 WHERE id = $1`, [
         existing.id,
-        "The visit moved to within two days, so the nudge was withdrawn.",
+        preFirst ? tooLate : "The visit moved to within two days, so the nudge was withdrawn.",
       ]).catch(() => []);
       return { queued: false, reason: tooLate };
     }
