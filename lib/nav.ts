@@ -85,6 +85,7 @@ export const BACK: NavItem[] = [
       { href: "/compliance", label: "Compliance" },
       { href: "/maintenance", label: "Maintenance" },
       { href: "/inspections", label: "Inspections" },
+      { href: "/tenancy-reviews", label: "Tenancy Reviews" },
     ],
   },
   /* Back office rather than Marketing: this is the audit of what already goes
@@ -294,6 +295,7 @@ export const AGENT_ROUTES = [
   "/compliance",
   "/maintenance",
   "/inspections",
+  "/tenancy-reviews",
   "/emails",
   "/portfolio",
   "/finances",

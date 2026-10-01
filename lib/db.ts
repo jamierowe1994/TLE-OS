@@ -633,6 +633,35 @@ CREATE TABLE IF NOT EXISTS os_rexpm_tasks (
 );
 CREATE INDEX IF NOT EXISTS os_rexpm_tasks_kind ON os_rexpm_tasks (kind, state);
 CREATE INDEX IF NOT EXISTS os_rexpm_tasks_prop ON os_rexpm_tasks (rex_property_id);
+-- Tenancy reviews carry the agreement ("Fixed Term | expires 1 Jun 2026") and
+-- the rent REX PM holds, as printed (1 Oct 2026).
+ALTER TABLE os_rexpm_tasks ADD COLUMN IF NOT EXISTS agreement TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_rexpm_tasks ADD COLUMN IF NOT EXISTS current_rent TEXT NOT NULL DEFAULT '';
+
+-- A tenancy review done in the OS (1 Oct 2026): what was decided at the
+-- anniversary - rent up, no change, renewed, or the tenancy ending - and the
+-- new rent if there is one. rexpm_task_id ties it to the REX PM task it
+-- answers, which takes that task off the board. lib/tenancy-reviews.
+CREATE TABLE IF NOT EXISTS os_tenancy_reviews (
+  id               TEXT PRIMARY KEY,
+  rexpm_task_id    TEXT,
+  os_property_id   TEXT,
+  rex_property_id  TEXT,
+  property_name    TEXT NOT NULL DEFAULT '',
+  tenant           TEXT NOT NULL DEFAULT '',
+  landlord         TEXT NOT NULL DEFAULT '',
+  due_on           DATE,
+  outcome          TEXT NOT NULL,
+  rent_before      TEXT NOT NULL DEFAULT '',
+  new_rent         NUMERIC,
+  new_rent_period  TEXT,
+  new_rent_from    DATE,
+  note             TEXT NOT NULL DEFAULT '',
+  done_by          TEXT NOT NULL DEFAULT '',
+  done_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_tenancy_reviews_task ON os_tenancy_reviews (rexpm_task_id);
+CREATE INDEX IF NOT EXISTS os_tenancy_reviews_prop ON os_tenancy_reviews (rex_property_id);
 
 -- What was found, room by room. An action here is what turns an inspection
 -- into a works order, and works_order_id is that link once it is raised.

@@ -45,6 +45,10 @@ export interface RexpmTask {
   rexPropertyId: string | null;
   matchHow: string | null;
   tenancy: string;
+  /** Tenancy reviews only: "Fixed Term | expires 1 Jun 2026", "Periodic". */
+  agreement: string;
+  /** Tenancy reviews only: the rent as REX PM prints it, "£1,250.00 | Monthly". */
+  currentRent: string;
   ownership: string;
   service: string;
   followUpOn: string | null;
@@ -85,6 +89,8 @@ function toTask(r: Row): RexpmTask {
     rexPropertyId: r.rex_property_id ? s(r.rex_property_id) : null,
     matchHow: r.match_how ? s(r.match_how) : null,
     tenancy: s(r.tenancy),
+    agreement: s(r.agreement),
+    currentRent: s(r.current_rent),
     ownership: s(r.ownership),
     service: s(r.service),
     followUpOn: day(r.follow_up_on),
@@ -113,7 +119,7 @@ export function screenDate(v: string | undefined): string | null {
 
 const blank = (v: string | undefined) => {
   const t = (v ?? "").trim();
-  return t === "-" ? "" : t;
+  return t === "-" || t === "--" ? "" : t;
 };
 
 /**
@@ -132,12 +138,25 @@ export function readRow(columns: string[], row: ScreenRow) {
   };
   const [title = "", ...rest] = at("summary").split(" | ").map((x) => x.trim());
   const address = rest.join(", ").trim() || title.replace(/^[^:]*:\s*/, "");
-  const taskType = title.includes(":") ? title.slice(0, title.indexOf(":")).trim() : "";
+  /* The tenancy reviews list titles its tasks differently (1 Oct 2026):
+     "Tenancy Review 9 Stanshaws Close + Gagandeep Singh & Manpreet Kaur",
+     the tenants after the plus and no colon - and a few older ones are just
+     the tenants' names. Its tenancy column is the agreement, not the people. */
+  const review = columns.some((c) => c.trim().toLowerCase() === "tenancy agreement");
+  let taskType = title.includes(":") ? title.slice(0, title.indexOf(":")).trim() : "";
+  let tenants = "";
+  if (review) {
+    taskType = "Tenancy review";
+    const m = title.match(/^tenancy review\b\s*(.*?)(?:\s\+\s(.*))?$/i);
+    tenants = m ? (m[2] ?? "").trim() : title;
+  }
   return {
     title,
     address,
     taskType,
-    tenancy: blank(at("tenancy")),
+    tenancy: review ? tenants : blank(at("tenancy")),
+    agreement: blank(at("tenancy agreement")),
+    currentRent: blank(at("current rent")),
     ownership: blank(at("ownership")),
     service: blank(at("service package")),
     followUpOn: screenDate(at("follow up date")),
@@ -239,19 +258,22 @@ export async function importTasks(kind: TaskKind, tabs: { open?: ScreenTab; clos
       await q(
         `INSERT INTO os_rexpm_tasks
            (id, kind, state, task_type, title, address, os_property_id, rex_property_id, match_how, tenancy, ownership, service,
-            follow_up_on, due_on, inspection_on, closed_on, progress, managed_by, priority, raw, last_seen_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,NOW())
+            follow_up_on, due_on, inspection_on, closed_on, progress, managed_by, priority, raw, agreement, current_rent, last_seen_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21,$22,NOW())
          ON CONFLICT (id) DO UPDATE SET
            kind = $2, state = $3, task_type = $4, title = $5, address = $6, os_property_id = $7, rex_property_id = $8,
            match_how = $9, tenancy = $10, ownership = $11, service = $12,
            follow_up_on = COALESCE($13, os_rexpm_tasks.follow_up_on), due_on = COALESCE($14, os_rexpm_tasks.due_on),
            inspection_on = COALESCE($15, os_rexpm_tasks.inspection_on), closed_on = $16,
            progress = CASE WHEN $3 = 'open' THEN $17 ELSE os_rexpm_tasks.progress END,
-           managed_by = $18, priority = $19, raw = $20::jsonb, last_seen_at = NOW()`,
+           managed_by = $18, priority = $19, raw = $20::jsonb,
+           agreement = CASE WHEN $21 = '' THEN os_rexpm_tasks.agreement ELSE $21 END,
+           current_rent = CASE WHEN $22 = '' THEN os_rexpm_tasks.current_rent ELSE $22 END,
+           last_seen_at = NOW()`,
         [
           row.id, kind, state, f.taskType, f.title, f.address, home?.id ?? null, home?.rex_property_id ?? null, how,
           f.tenancy, f.ownership, f.service, f.followUpOn, f.dueOn, f.inspectionOn, f.closedOn, f.progress, f.managedBy, f.priority,
-          JSON.stringify({ columns: tab.columns, cells: row.c }),
+          JSON.stringify({ columns: tab.columns, cells: row.c }), f.agreement, f.currentRent,
         ]
       );
     }
@@ -267,10 +289,19 @@ export async function importTasks(kind: TaskKind, tabs: { open?: ScreenTab; clos
     );
     gone = rows.length;
   }
+  /* A read that carried one tab keeps the other tab's last count, so the
+     note reads the whole picture rather than "0 open" after a closed-only top-up. */
+  const before = await lastImport(kind);
   await q(
     `INSERT INTO os_settings (key, value, updated_by) VALUES ($1, $2::jsonb, 'rexpm-import')
      ON CONFLICT (key) DO UPDATE SET value = $2::jsonb, updated_at = NOW(), updated_by = 'rexpm-import'`,
-    [`rexpm_tasks:${kind}`, JSON.stringify({ at: new Date().toISOString(), open, closed, gone, complete, unmatched: unmatched.length })]
+    [`rexpm_tasks:${kind}`, JSON.stringify({
+      at: new Date().toISOString(),
+      open: tabs.open ? open : before?.open ?? 0,
+      closed: tabs.closed ? closed : before?.closed ?? 0,
+      gone, complete,
+      unmatched: tabs.open ? unmatched.length : before?.unmatched ?? 0,
+    })]
   );
   return { kind, open, closed, gone, unmatched };
 }

@@ -275,6 +275,23 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       /* Photographs landed 14-15 Sep. The one real gap left is the emailed
          copy, whose template is text - see INSPECTION_LANDLORD_REPORT. */
       "Photographs go on a finding and come out on the printed report. The emailed copy is still words only, so send the print when the pictures are the point.",
+      /* 1 Oct 2026: the board reads REX PM's own task list (lib/rexpm-tasks). */
+      "Until the team books visits here, the Due list is the old property management system's own list, copied across, so the figures match it. Raising a visit from it keeps its due date.",
+    ],
+  },
+
+  "/tenancy-reviews": {
+    purpose: "Every tenancy coming up to its anniversary, and what was decided about it.",
+    does: [
+      "Read the list of tenancies owed a review, latest first by how late they are, with the agreement and the rent on each.",
+      "Press Record review and say what was decided: the rent goes up (with the new rent and the date), renewed at the same rent, left as it is, the tenancy is ending, or something else.",
+      "Read what has been decided on the Done tab, and the reviews and rent rises recorded this month at the top.",
+    ],
+    wiring: "partial",
+    caveats: [
+      "Until the team records reviews here, the list is the old property management system's own, copied across, so the figures match it. A review recorded here comes off the list straight away.",
+      "Recording a review does not change the rent anywhere else yet. The new rent still has to be put through on the tenancy and with the landlord's statement.",
+      "Nothing on this screen writes to the tenant or the landlord.",
     ],
   },
 
