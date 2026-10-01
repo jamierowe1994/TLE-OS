@@ -10,13 +10,9 @@ import {
   TENANT_LOST_REASONS,
   OUTCOMES,
   TOUCH_KINDS,
-  FOLLOW_UP_PICKS,
-  addToDay,
-  followUpWords,
   type TouchKind,
   type TouchOutcome,
 } from "@/lib/lead-spine";
-import { londonDate } from "@/lib/london-time";
 
 /**
  * Writing down what just happened with a lead.
@@ -83,13 +79,6 @@ export default function LogTouch({
   const [reason, setReason] = useState(mode === "lost" ? "" : reasons[0]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /* Nurture only: bank them until a day (Howard, 1 Oct 2026). Off the working
-     board until then, back at the top on the day. Optional: "Not answering"
-     with no date is nurture as it always was. */
-  const today = londonDate();
-  const [followPick, setFollowPick] = useState<string | null>(null);
-  const [followOn, setFollowOn] = useState("");
-  const followUpOn = followPick === "date" ? (followOn > today ? followOn : "") : followPick ? addToDay(today, FOLLOW_UP_PICKS.find((f) => f.id === followPick) ?? {}) : "";
   /* The attempt walks through frames (James, 11 Sep 2026): how you reached
      them, how it went, whether they booked, then anything to remember. */
   const [frame, setFrame] = useState<1 | 2 | 3 | 4>(1);
@@ -118,7 +107,7 @@ export default function LogTouch({
   const chosen = inline ? "border-brown bg-brown/10" : "border-accent-dark bg-accent-soft/40";
   const kindIcon = inline ? "bg-brown text-white" : "bg-accent-soft text-accent-dark";
 
-  const canSave = mode === "attempt" ? Boolean(outcome) : Boolean(reason) && (mode !== "nurture" || followPick !== "date" || Boolean(followUpOn));
+  const canSave = mode === "attempt" ? Boolean(outcome) : Boolean(reason);
 
   async function save() {
     if (!canSave || busy) return;
@@ -130,7 +119,7 @@ export default function LogTouch({
         headers: { "content-type": "application/json" },
         body: JSON.stringify(
           mode === "nurture"
-            ? { kind: "nurture", reason, body, lead: leadFacts, side: audience, followUpOn: followUpOn || null }
+            ? { kind: "nurture", reason, body, lead: leadFacts, side: audience }
             : mode === "lost"
               ? { kind: "lost", reason, body, side: audience }
               : { kind, outcome, body: booked ? `Booked the valuation.${body ? ` ${body}` : ""}` : body }
@@ -297,46 +286,6 @@ export default function LogTouch({
               rows={2}
               className="mt-4 w-full resize-none rounded-xl border border-line/80 bg-transparent px-3 py-2.5 text-[12.5px] leading-relaxed outline-none placeholder:text-muted/70 focus:border-ink"
             />
-            {mode === "nurture" && (
-              <>
-                <p className="mt-4 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Follow up on</p>
-                <div className="mt-1.5 flex flex-wrap gap-2">
-                  {[...FOLLOW_UP_PICKS.map((f) => ({ id: f.id, label: f.label })), { id: "date", label: "Pick a date" }].map((f) => (
-                    <button
-                      key={f.id}
-                      type="button"
-                      onClick={() => setFollowPick((cur) => (cur === f.id ? null : f.id))}
-                      aria-pressed={followPick === f.id}
-                      className={`rounded-full border px-3.5 py-2 text-[12px] transition-colors ${
-                        followPick === f.id
-                          ? "border-ink bg-ink font-semibold text-page"
-                          : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
-                      }`}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-                {followPick === "date" && (
-                  <input
-                    type="date"
-                    aria-label="Follow up on"
-                    value={followOn}
-                    min={addToDay(today, { days: 1 })}
-                    max={addToDay(today, { months: 24 })}
-                    onChange={(e) => setFollowOn(e.target.value)}
-                    className="mt-2.5 rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[12.5px] outline-none focus:border-ink"
-                  />
-                )}
-                <p className="mt-2 text-[11.5px] text-muted">
-                  {followUpOn
-                    ? `${first} leaves your working list until ${followUpWords(followUpOn)}, then comes back at the top as Follow up today.`
-                    : followPick === "date"
-                      ? "Pick a day after today."
-                      : `No date: ${first} stays on your list as in nurture.`}
-                </p>
-              </>
-            )}
           </>
         )}
 
@@ -359,7 +308,7 @@ export default function LogTouch({
             }`}
           >
             <DoodleIcon name={mode === "lost" ? "cross" : mode === "nurture" ? "clock" : "checklist"} size={14} />
-            {busy ? "Saving…" : mode === "lost" ? "Mark as lost" : mode === "nurture" ? (followUpOn ? `Bank until ${followUpWords(followUpOn)}` : tried ? "Yes, send to nurture" : "Add to nurture") : booked ? "Log it and book" : "Log it"}
+            {busy ? "Saving…" : mode === "lost" ? "Mark as lost" : mode === "nurture" ? (tried ? "Yes, send to nurture" : "Add to nurture") : booked ? "Log it and book" : "Log it"}
           </PressButton>
           )}
         </div>
@@ -375,7 +324,7 @@ export default function LogTouch({
   return (
     <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
       <button aria-label="Close" onClick={onClose} className="absolute inset-0 cursor-default bg-ink/45" />
-      <div className="fade-up relative max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-3xl border border-line/80 bg-page p-6 shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">{body_}</div>
+      <div className="fade-up relative w-full max-w-md rounded-3xl border border-line/80 bg-page p-6 shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">{body_}</div>
     </div>
   );
 }

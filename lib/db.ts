@@ -867,11 +867,6 @@ CREATE TABLE IF NOT EXISTS os_lead_shortlist (
 );
 -- The note's twin in REX, once it has been written there (24 Sep 2026).
 ALTER TABLE os_lead_touches ADD COLUMN IF NOT EXISTS rex_note_id TEXT;
--- Banked for follow-up (Howard, 1 Oct 2026: "bank leads for follow up, by
--- entering a date for when they will get back in touch"). Set on a nurture
--- row only: the lead stays off the working board until this London date, then
--- comes back at the top as Follow up today until somebody logs an attempt.
-ALTER TABLE os_lead_touches ADD COLUMN IF NOT EXISTS follow_up_on DATE;
 
 -- A document on a lead, uploaded from the lead's Documents tab (Howard, 24 Sep
 -- 2026: "still no document uploads on leads for TT or LL"). The file is in R2

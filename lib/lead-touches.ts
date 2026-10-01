@@ -26,13 +26,7 @@ interface Row extends Record<string, unknown> {
   by_name: string;
   at: Date;
   rex_note_id?: string | null;
-  /* DATE comes back as text (see the cast in COLS): a JS Date would shift it
-     a day either side of midnight UTC. */
-  follow_up_on?: string | null;
-  by_id?: string | null;
 }
-
-const COLS = `id, lead_id, kind, outcome, body, by_id, by_name, at, rex_note_id, to_char(follow_up_on, 'YYYY-MM-DD') AS follow_up_on`;
 
 const toTouch = (r: Row): LeadTouch => ({
   id: r.id,
@@ -43,14 +37,13 @@ const toTouch = (r: Row): LeadTouch => ({
   byName: r.by_name,
   at: new Date(r.at).toISOString(),
   rexNoteId: r.rex_note_id ?? null,
-  followUpOn: r.follow_up_on ?? null,
-  byId: r.by_id ?? null,
 });
 
 export async function listTouches(leadId: string): Promise<LeadTouch[]> {
   if (!hasDb()) return [];
   const rows = await q<Row>(
-    `select ${COLS} from os_lead_touches where lead_id = $1 order by at desc`,
+    `select id, lead_id, kind, outcome, body, by_name, at, rex_note_id
+       from os_lead_touches where lead_id = $1 order by at desc`,
     [leadId]
   );
   return rows.map(toTouch);
@@ -63,14 +56,12 @@ export async function addTouch(p: {
   body: string;
   byId: string | null;
   byName: string;
-  /** Nurture only: "2026-11-14", the day to get back in touch. */
-  followUpOn?: string | null;
 }): Promise<LeadTouch> {
   const rows = await q<Row>(
-    `insert into os_lead_touches (id, lead_id, kind, outcome, body, by_id, by_name, follow_up_on)
-     values ($1, $2, $3, $4, $5, $6, $7, $8::date)
-     returning ${COLS}`,
-    [uid(), p.leadId, p.kind, p.outcome, p.body.trim(), p.byId, p.byName, p.followUpOn ?? null]
+    `insert into os_lead_touches (id, lead_id, kind, outcome, body, by_id, by_name)
+     values ($1, $2, $3, $4, $5, $6, $7)
+     returning id, lead_id, kind, outcome, body, by_name, at`,
+    [uid(), p.leadId, p.kind, p.outcome, p.body.trim(), p.byId, p.byName]
   );
   return toTouch(rows[0]);
 }
@@ -104,7 +95,7 @@ export async function spineFor(leadId: string): Promise<{ touches: LeadTouch[]; 
 export async function allSpines(): Promise<Record<string, Spine>> {
   if (!hasDb()) return {};
   const [rows, booked, viewings] = await Promise.all([
-    q<Row>(`select ${COLS} from os_lead_touches order by at desc`),
+    q<Row>(`select id, lead_id, kind, outcome, body, by_name, at from os_lead_touches order by at desc`),
     q<{ lead_id: string }>(`select distinct lead_id from os_market_appraisals where lead_id is not null`),
     /* A viewing booked from the lead (/api/viewings/book) is the tenant
        lead's job done (Howard, 1 Oct 2026: it goes under Completed). */

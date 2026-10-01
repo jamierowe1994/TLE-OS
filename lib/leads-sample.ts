@@ -63,9 +63,6 @@ export type Lead = {
    *  "Nurture", "Appraisal booked" - folded from the log (lib/lead-spine).
    *  Unset when nothing has been logged, and the REX stage stands. */
   spineLabel?: string;
-  /** Banked for follow-up: the London day it comes back, "2026-11-14". Set
-   *  only while the follow-up is owed (spineLabel Banked or Follow up today). */
-  followUpOn?: string;
 };
 
 export const STAGE_TONE: Record<Stage, "accent" | "neutral" | "good"> = {

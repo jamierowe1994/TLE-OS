@@ -5,7 +5,6 @@ import DoodleIcon from "@/components/DoodleIcon";
 import SourceMark from "@/components/SourceMark";
 import { Pill } from "@/components/Wire";
 import { STAGE_TONE, type Lead } from "@/lib/leads-sample";
-import { followUpWords } from "@/lib/lead-spine";
 
 /**
  * The book, split by what needs doing to it.
@@ -83,28 +82,6 @@ export type GroupId = "new" | "review" | "contacted";
 const COMPLETED = new Set(["Lost", "Viewing booked", "Appraisal booked", "Closed", "Not proceeding"]);
 export const isCompleted = (l: Lead) => COMPLETED.has(l.spineLabel ?? l.stage);
 
-/**
- * BANKED FOR FOLLOW-UP (Howard, 1 Oct 2026: "bank leads for follow up, by
- * entering a date ... and then resurfacing them on that date"). The page sets
- * the label from the nurture's day against today: Banked while the day is
- * ahead, Follow up today once it has come.
- */
-export const BANKED = "Banked";
-export const FOLLOW_UP_TODAY = "Follow up today";
-export const isBanked = (l: Lead) => l.spineLabel === BANKED;
-export const isFollowUpDue = (l: Lead) => l.spineLabel === FOLLOW_UP_TODAY;
-
-/** The stage pill's words and colour, the same on the list and the boxes. */
-export function stagePill(l: Lead): { text: string; tone: "accent" | "neutral" | "good" } {
-  const s = l.spineLabel;
-  if (!s) return { text: l.stage, tone: STAGE_TONE[l.stage] };
-  if (s === BANKED) return { text: l.followUpOn ? `Banked until ${followUpWords(l.followUpOn)}` : BANKED, tone: "neutral" };
-  if (s === FOLLOW_UP_TODAY) return { text: s, tone: "accent" };
-  if (s === "Appraisal booked" || s === "Viewing booked") return { text: s, tone: "good" };
-  if (s === "Nurture" || s === "Lost") return { text: s, tone: "neutral" };
-  return { text: s, tone: "accent" };
-}
-
 function groupOf(l: Lead, now: Date): GroupId {
   /* Anything past New has been picked up, whatever the label says next. */
   const spoken = (l.spineLabel ?? l.stage) !== "New";
@@ -165,12 +142,8 @@ export default function LeadGroups({
     const now = new Date();
     const out: Record<GroupId, Lead[]> = { new: [], review: [], contacted: [] };
     const done: Lead[] = [];
-    const banked: Lead[] = [];
-    const due: Lead[] = [];
     for (const l of leads) {
       if (isCompleted(l)) done.push(l);
-      else if (isBanked(l)) banked.push(l);
-      else if (isFollowUpDue(l)) due.push(l);
       else out[groupOf(l, now)].push(l);
     }
     /* Newest first inside every box. The whole point of the view is that the
@@ -178,17 +151,12 @@ export default function LeadGroups({
     const newest = (a: Lead, b: Lead) => (receivedAt(b)?.getTime() ?? 0) - (receivedAt(a)?.getTime() ?? 0);
     for (const k of Object.keys(out) as GroupId[]) out[k].sort(newest);
     done.sort(newest);
-    /* Soonest back first; the longest overdue first among the due. */
-    const byDay = (a: Lead, b: Lead) => (a.followUpOn ?? "").localeCompare(b.followUpOn ?? "");
-    banked.sort(byDay);
-    due.sort(byDay);
-    return { ...out, done, banked, due };
+    return { ...out, done };
   }, [leads]);
 
   const [openAll, setOpenAll] = useState<Record<string, boolean>>({});
-  /* Folded until asked for: the boxes of things nobody needs to act on today. */
+  /* Folded until asked for: it is the box of things nobody needs to act on. */
   const [doneOpen, setDoneOpen] = useState(false);
-  const [bankedOpen, setBankedOpen] = useState(false);
 
   const row = (l: Lead, filled: boolean) => (
     <li key={l.id}>
@@ -226,88 +194,20 @@ export default function LeadGroups({
         <span className="ml-auto flex shrink-0 items-center gap-3 md:ml-0">
           <SourceMark source={l.source} />
           <span className="whitespace-nowrap text-[11px] text-muted">{l.received}</span>
-          {(() => {
-            const p = stagePill(l);
-            return <Pill tone={p.tone}>{p.text}</Pill>;
-          })()}
+          {l.spineLabel ? (
+            <Pill tone={l.spineLabel === "Appraisal booked" || l.spineLabel === "Viewing booked" ? "good" : l.spineLabel === "Nurture" || l.spineLabel === "Lost" ? "neutral" : "accent"}>
+              {l.spineLabel}
+            </Pill>
+          ) : (
+            <Pill tone={STAGE_TONE[l.stage]}>{l.stage}</Pill>
+          )}
         </span>
       </button>
     </li>
   );
 
-  /** A folded box at the foot: Banked, then Completed. */
-  const fold = (
-    id: "banked" | "done",
-    rows: Lead[],
-    open: boolean,
-    setOpen: (f: (o: boolean) => boolean) => void,
-    title: string,
-    icon: string,
-    blurb: string,
-    delay: number
-  ) =>
-    rows.length > 0 && (
-      <section className="fade-up rounded-[22px] border border-line/50 bg-white" style={{ animationDelay: `${delay}ms` }}>
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          aria-expanded={open}
-          className="flex w-full flex-wrap items-center gap-x-3 gap-y-1.5 px-5 py-3.5 text-left"
-        >
-          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-line/40 text-muted">
-            <DoodleIcon name={icon} size={14} />
-          </span>
-          <h2 className="hand text-[17px] leading-none">{title}</h2>
-          <span className="figures rounded-full bg-line/40 px-2.5 py-0.5 text-[11px] font-semibold text-muted">
-            {rows.length.toLocaleString("en-GB")}
-          </span>
-          <p className="text-[11.5px] text-muted">{blurb}</p>
-          <span className="ml-auto flex items-center gap-1.5 text-[11.5px] font-semibold text-accent-dark">
-            {open ? "Hide" : "Show"}
-            <svg aria-hidden width="12" height="12" viewBox="0 0 12 12" fill="none" className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`}>
-              <path d="M3 4.5l3 3 3-3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </span>
-        </button>
-        {open && (
-          <ul className="divide-y divide-line/40 border-t border-line/50">
-            {(openAll[id] ? rows : rows.slice(0, PREVIEW)).map((l) => row(l, false))}
-            {rows.length > PREVIEW && (
-              <li className="px-5 py-3 text-center">
-                <button
-                  type="button"
-                  onClick={() => setOpenAll((o) => ({ ...o, [id]: !o[id] }))}
-                  className="text-[11.5px] font-semibold text-accent-dark underline decoration-accent-dark/40 underline-offset-2 transition-colors hover:decoration-accent-dark"
-                >
-                  {openAll[id] ? "Show fewer" : `View all ${rows.length.toLocaleString("en-GB")}`}
-                </button>
-              </li>
-            )}
-          </ul>
-        )}
-      </section>
-    );
-
   return (
     <div className="space-y-4">
-      {/* Back today from the bank: first thing on the board, and only there
-          when there is somebody to ring. Not a Customise box, so nobody can
-          hide the day they promised to call. */}
-      {grouped.due.length > 0 && (
-        <section className="fade-up rounded-[22px] border border-accent/40 bg-white">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line/50 px-5 py-3.5">
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent-soft text-accent-dark">
-              <DoodleIcon name="calendar" size={14} />
-            </span>
-            <h2 className="hand text-[17px] leading-none">Follow up today</h2>
-            <span className="figures rounded-full bg-accent-soft px-2.5 py-0.5 text-[11px] font-semibold text-accent-dark">
-              {grouped.due.length.toLocaleString("en-GB")}
-            </span>
-            <p className="text-[11.5px] text-muted">Banked until today - log the call and they leave this box</p>
-          </div>
-          <ul className="divide-y divide-line/40">{grouped.due.map((l) => row(l, true))}</ul>
-        </section>
-      )}
       {groups.map((g, i) => {
         const rows = grouped[g.id];
         const all = openAll[g.id];
@@ -355,8 +255,47 @@ export default function LeadGroups({
         );
       })}
 
-      {fold("banked", grouped.banked, bankedOpen, setBankedOpen, "Banked for follow up", "clock", "Off the list until the day somebody said they would call", groups.length * 60)}
-      {fold("done", grouped.done, doneOpen, setDoneOpen, "Completed", "checklist", "Lost, or a viewing or appraisal booked - nothing more to do here", (groups.length + 1) * 60)}
+      {grouped.done.length > 0 && (
+        <section className="fade-up rounded-[22px] border border-line/50 bg-white" style={{ animationDelay: `${groups.length * 60}ms` }}>
+          <button
+            type="button"
+            onClick={() => setDoneOpen((o) => !o)}
+            aria-expanded={doneOpen}
+            className="flex w-full flex-wrap items-center gap-x-3 gap-y-1.5 px-5 py-3.5 text-left"
+          >
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-line/40 text-muted">
+              <DoodleIcon name="checklist" size={14} />
+            </span>
+            <h2 className="hand text-[17px] leading-none">Completed</h2>
+            <span className="figures rounded-full bg-line/40 px-2.5 py-0.5 text-[11px] font-semibold text-muted">
+              {grouped.done.length.toLocaleString("en-GB")}
+            </span>
+            <p className="text-[11.5px] text-muted">Lost, or a viewing or appraisal booked - nothing more to do here</p>
+            <span className="ml-auto flex items-center gap-1.5 text-[11.5px] font-semibold text-accent-dark">
+              {doneOpen ? "Hide" : "Show"}
+              <svg aria-hidden width="12" height="12" viewBox="0 0 12 12" fill="none" className={`transition-transform duration-200 ${doneOpen ? "rotate-180" : ""}`}>
+                <path d="M3 4.5l3 3 3-3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+          </button>
+          {doneOpen && (
+            <ul className="divide-y divide-line/40 border-t border-line/50">
+              {(openAll.done ? grouped.done : grouped.done.slice(0, PREVIEW)).map((l) => row(l, false))}
+              {grouped.done.length > PREVIEW && (
+                <li className="px-5 py-3 text-center">
+                  <button
+                    type="button"
+                    onClick={() => setOpenAll((o) => ({ ...o, done: !o.done }))}
+                    className="text-[11.5px] font-semibold text-accent-dark underline decoration-accent-dark/40 underline-offset-2 transition-colors hover:decoration-accent-dark"
+                  >
+                    {openAll.done ? "Show fewer" : `View all ${grouped.done.length.toLocaleString("en-GB")}`}
+                  </button>
+                </li>
+              )}
+            </ul>
+          )}
+        </section>
+      )}
     </div>
   );
 }

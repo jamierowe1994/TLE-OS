@@ -9,9 +9,7 @@ import { getApplications } from "@/lib/applications";
 import { listCases } from "@/lib/plc-store";
 import { outstandingTerms } from "@/lib/rex-esign";
 import { rexConfigured } from "@/lib/rex";
-import { followUpWords, whenAgo, type Spine } from "@/lib/lead-spine";
-import { salesLeadIds } from "@/lib/lead-ledger";
-import { londonDate } from "@/lib/london-time";
+import { whenAgo } from "@/lib/lead-spine";
 import type { Notice } from "@/lib/notices";
 
 /**
@@ -54,7 +52,7 @@ import type { Notice } from "@/lib/notices";
  * whose condition has cleared - a reminder can never outlive its reason.
  */
 
-export const REMINDER_KINDS = ["lead_quiet", "lead_follow_up", "deck_due", "valuation_due", "plc_due", "terms_unsigned", "works_landlord_follow_up", "works_no_date", "works_tenant_unhappy", "works_landlord_untold"] as const;
+export const REMINDER_KINDS = ["lead_quiet", "deck_due", "valuation_due", "plc_due", "terms_unsigned", "works_landlord_follow_up", "works_no_date", "works_tenant_unhappy", "works_landlord_untold"] as const;
 export type ReminderKind = (typeof REMINDER_KINDS)[number];
 
 export interface Reminder {
@@ -88,16 +86,10 @@ function whose(list: Person[], agent: string | null | undefined): Person | null 
 /* ── the five ───────────────────────────────────────────────────────────── */
 
 async function leadReminders(list: Person[], now: number): Promise<Reminder[]> {
-  const [book, spines, sales] = await Promise.all([
-    fetchLeadBook(null),
-    allSpines().catch(() => ({})),
-    /* A sale is not ours to ring (Howard, 1 Oct 2026): REX's snippet never
-       says "sales", the ledger's full read does. */
-    salesLeadIds().catch(() => new Set<string>()),
-  ]);
+  const [book, spines] = await Promise.all([fetchLeadBook(null), allSpines().catch(() => ({}))]);
   const out: Reminder[] = [];
   for (const l of book.leads) {
-    if (l.stage !== "New" || !l.receivedAt || sales.has(l.id)) continue;
+    if (l.stage !== "New" || !l.receivedAt) continue;
     const age = now - new Date(l.receivedAt).getTime();
     /* Over a day and under a fortnight: a lead nobody has touched in two
        weeks is not a reminder, it is a lead to close, and the list should
@@ -116,44 +108,6 @@ async function leadReminders(list: Person[], now: number): Promise<Reminder[]> {
       href: `/leads?open=${encodeURIComponent(l.id)}`,
       tone: age > 3 * DAY ? "warn" : "none",
       dueAt: new Date(new Date(l.receivedAt).getTime() + DAY).toISOString(),
-    });
-  }
-  return out;
-}
-
-/**
- * Banked leads whose day has come (Howard, 1 Oct 2026). To whoever banked it -
- * they promised the call - and to nobody once an attempt is logged on or after
- * the day (lib/lead-spine clears followUpOn). The lead itself is read from the
- * ledger, not the REX book: a lead banked for six months has long since left
- * REX's newest 500.
- */
-async function followUpReminders(list: Person[], now: number): Promise<Reminder[]> {
-  const spines = (await allSpines()) as Record<string, Spine>;
-  const today = londonDate(now);
-  const due = Object.entries(spines).filter(([, sp]) => sp.label === "Nurture" && sp.nurture?.followUpOn && sp.nurture.followUpOn <= today);
-  if (!due.length) return [];
-  const rows = await q<{ id: string; name: string; enquiry: string; agent: string | null }>(
-    `SELECT id, name, enquiry, agent FROM os_leads WHERE id = ANY($1)`,
-    [due.map(([id]) => id)]
-  ).catch(() => []);
-  const lead = new Map(rows.map((r) => [r.id, r]));
-  const out: Reminder[] = [];
-  for (const [id, sp] of due) {
-    const n = sp.nurture!;
-    const l = lead.get(id);
-    const who = list.find((p) => p.id === n.byId) ?? whose(list, l?.agent);
-    if (!who) continue;
-    const name = l?.name && l.name !== "(no name given)" ? l.name : "your banked lead";
-    out.push({
-      id: `lead_follow_up:${id}`,
-      userId: who.id,
-      kind: "lead_follow_up",
-      title: `Follow up with ${name} today`,
-      body: `Banked for ${followUpWords(n.followUpOn!)} - ${n.reason}.`,
-      href: `/leads?open=${encodeURIComponent(id)}`,
-      tone: n.followUpOn! < today ? "warn" : "none",
-      dueAt: new Date(`${n.followUpOn}T08:00:00Z`).toISOString(),
     });
   }
   return out;
@@ -317,7 +271,6 @@ export async function runReminders(now = Date.now()): Promise<ReminderRun> {
   const list = await people();
   const sources: { kinds: ReminderKind[]; run: () => Promise<Reminder[]> }[] = [
     { kinds: ["lead_quiet"], run: () => leadReminders(list, now) },
-    { kinds: ["lead_follow_up"], run: () => followUpReminders(list, now) },
     { kinds: ["deck_due", "valuation_due"], run: () => appraisalReminders(list, now) },
     { kinds: ["plc_due"], run: () => plcReminders(list, now) },
     { kinds: ["terms_unsigned"], run: () => termsReminders(list, now) },
