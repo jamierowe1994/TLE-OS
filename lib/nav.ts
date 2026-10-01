@@ -82,6 +82,8 @@ export const BACK: NavItem[] = [
       /* The book itself first, because the parent opens the dropdown rather
          than navigating - without this there is no way to the directory. */
       { href: "/portfolio", label: "Properties" },
+      /* Property management at a glance, tile by tile (1 Oct 2026). */
+      { href: "/overview", label: "Overview" },
       { href: "/compliance", label: "Compliance" },
       { href: "/maintenance", label: "Maintenance" },
       { href: "/inspections", label: "Inspections" },
@@ -298,6 +300,7 @@ export const AGENT_ROUTES = [
   "/inspections",
   "/tenancy-reviews",
   "/portfolio",
+  "/overview",
   "/finances",
   "/tools",
 ] as const;

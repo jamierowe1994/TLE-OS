@@ -135,12 +135,12 @@ export const AREA_DEFS: AreaDef[] = [
     canHide: true,
   },
   {
-    id: "portfolio", label: "Portfolio", phase: 2, pages: ["/portfolio", "/compliance", "/maintenance", "/inspections", "/tenancy-reviews"],
+    id: "portfolio", label: "Portfolio", phase: 2, pages: ["/portfolio", "/overview", "/compliance", "/maintenance", "/inspections", "/tenancy-reviews"],
     /* Not /api/compliance or /api/property-file: a certificate is filed from a
        listing, an appraisal and an application too, and hiding Portfolio must
        not stop an agent attaching a gas certificate to the listing in front
        of them. */
-    apis: ["/api/works-orders", "/api/maintenance", "/api/inspections", "/api/tenancy-reviews", "/api/contractors"],
+    apis: ["/api/works-orders", "/api/maintenance", "/api/inspections", "/api/tenancy-reviews", "/api/overview", "/api/contractors"],
     canHide: true,
   },
   { id: "emails", label: "Emails", phase: 2, pages: ["/emails"], apis: ["/api/campaigns", "/api/email-templates", "/api/scheduled-sends"], canHide: true },

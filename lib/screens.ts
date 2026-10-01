@@ -280,6 +280,21 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     ],
   },
 
+  "/overview": {
+    purpose: "Property management at a glance: one tile for each part of the job, with what is late and what is coming up.",
+    does: [
+      "Read the tiles: properties, maintenance, inspections, tenancy reviews, compliance, upcoming vacancies, applications, lettings and, for the owners, rent arrears.",
+      "Press View all on a tile to open the screen it comes from.",
+      "Press Read again at the bottom to refresh every tile.",
+    ],
+    wiring: "live",
+    caveats: [
+      "Every figure is read from the screen the tile opens, so the two always agree, and an agent sees their own book just as they do there.",
+      "Nothing records which homes are empty yet, so Upcoming vacancies counts tenancies with notice served and homes on the market instead.",
+      "Rent arrears is shown to the business owners only.",
+    ],
+  },
+
   "/tenancy-reviews": {
     purpose: "Every tenancy coming up to its anniversary, and what was decided about it.",
     does: [
