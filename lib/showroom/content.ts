@@ -560,7 +560,7 @@ export const AGENT_STEPS: ShowroomStep[] = [
 ];
 
 Object.assign(EMAIL_WORDS, {
-  "tenant-enquiry-reply": { when: "Within five minutes of an enquiry about one home", says: "Is it still available, the rent, what moving in costs, and how to arrange a viewing." },
+  "tenant-enquiry-reply": { when: "Within five minutes of an enquiry about one home", says: "Is it still available, the rent, what moving in costs, and that you will be in touch before any viewing is booked." },
   "tenant-added-welcome": { when: "When you add a tenant with no home in mind", says: "What we need to know, to reply with, and a promise to send what fits." },
   "tenant-matches": { when: "When you press Email properties on the lead", says: "The homes you ticked, from you. They reply with the ones they want to see." },
   "tenant-matches-again": { when: "Four days after the homes went, if nothing is booked", says: "Have things changed, and what has come on near the homes we sent." },

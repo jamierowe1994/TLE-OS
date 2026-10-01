@@ -1245,7 +1245,7 @@ TLE_EMAILS.push(
     "A tenant enquires about one property",
     "Wired 16 Sep 2026. lib/tenant-journey-emails enquiryReplies, on the leads scan every five minutes: a Letting lead first seen in the last two hours on a home still live with a rent. The move-in costs are worked out from the rent, England and Scotland apart. No passport since 1 Oct 2026: that only goes when the agent presses Send passport. Needs the Automatic tenant emails switch and customer email.",
     "The person who enquired",
-    "Straight away: is it still there, what the rent is, the three things it costs to move in, and how to arrange a viewing by reply. The move-in costs are one list the send path builds from the rent.",
+    "Straight away: is it still there, what the rent is, the three things it costs to move in, and that the agent will be in touch to check it suits them before any viewing is booked. The move-in costs are one list the send path builds from the rent.",
     TENANT_ENQUIRY_REPLY,
     { link: `${SITE}/tenant/welcome`, feesLine: "No admin fees and no referencing fees. The holding fee goes towards your first month's rent." }
   ),

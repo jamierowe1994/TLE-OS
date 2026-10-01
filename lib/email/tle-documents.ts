@@ -1247,7 +1247,7 @@ export const APPLICATION_ACCEPTED_TENANT = {
 /** A single-property enquiry. {{rent}} {{availableLine}} {{moveInList}} {{feesLine}} {{link}} = their passport. No slots: nothing reads an agent's free time yet, so the viewing is arranged by reply. */
 export const TENANT_ENQUIRY_REPLY = {
   subject: "About {{address}}",
-  preheader: "Is it still available, what it costs to move in, and how to see it.",
+  preheader: "Is it still available, what it costs to move in, and what happens next.",
   mode: "blocks",
   blocks: [
     H("ter1", "Thanks for your enquiry"),
@@ -1255,8 +1255,8 @@ export const TENANT_ENQUIRY_REPLY = {
     H2("ter3", "What it costs to move in"),
     T("ter4", "{{moveInList}}"),
     T("ter5", "{{feesLine}}"),
-    H2("ter6", "Seeing it"),
-    T("ter7", "Reply with two or three days and times that suit you and I'll book the viewing in. Evenings and Saturdays are fine."),
+    H2("ter6", "What happens next"),
+    T("ter7", "Before we book any viewings, I'll be in touch to find out a little more about you and what you need, so we only show you homes that suit you. If you have any questions in the meantime, just reply to this email."),
     SP("ter12", 8),
     T("ter13", "{{agentName}}<br>The Letting Experts"),
     FOOT("ter14", "You're getting this because you asked The Letting Experts about a property."),
