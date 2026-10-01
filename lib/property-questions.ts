@@ -62,6 +62,13 @@ export interface Question {
    * question is not required either.
    */
   showIf?: { id: string; is: string[] };
+  /**
+   * They said they have it, so let them send it there and then (Howard,
+   * 1 Oct 2026) rather than finding the Documents page later. `kind` is the
+   * landlord document kind (lib/landlord-account DOC_KINDS); shown when the
+   * answer is one of `when`.
+   */
+  upload?: { kind: string; title: string; when: string[] };
 }
 
 export interface QuestionStep {
@@ -154,6 +161,7 @@ export const PROPERTY_QUESTIONS: QuestionStep[] = [
           { id: "none", label: "I don't have one" },
           { id: "no-gas", label: "There's no gas at the property" },
         ],
+        upload: { kind: "gas", title: "Gas safety certificate (CP12)", when: ["have", "expired"] },
       },
       {
         id: "eicr",
@@ -165,6 +173,7 @@ export const PROPERTY_QUESTIONS: QuestionStep[] = [
           { id: "none", label: "I don't have one" },
           { id: "unsure", label: "Not sure" },
         ],
+        upload: { kind: "eicr", title: "Electrical safety report (EICR)", when: ["have", "expired"] },
       },
       {
         id: "epc",
@@ -175,6 +184,7 @@ export const PROPERTY_QUESTIONS: QuestionStep[] = [
           { id: "none", label: "I don't have one" },
           { id: "unsure", label: "Not sure" },
         ],
+        upload: { kind: "epc", title: "Energy Performance Certificate (EPC)", when: ["have"] },
       },
       {
         id: "certs-held-by",
@@ -186,6 +196,7 @@ export const PROPERTY_QUESTIONS: QuestionStep[] = [
           { id: "you", label: "You already have it" },
           { id: "nobody", label: "Nobody - it needs doing" },
         ],
+        upload: { kind: "other", title: "Property paperwork", when: ["me"] },
       },
     ],
   },

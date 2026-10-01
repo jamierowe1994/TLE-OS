@@ -111,6 +111,7 @@ export default function PresentationBuilder({
   appraisal,
   fullPage = false,
   backHref,
+  nextHref,
   onClose,
 }: {
   address: string;
@@ -137,6 +138,10 @@ export default function PresentationBuilder({
   /** Rendered as a page rather than a modal — see the build route for why. */
   fullPage?: boolean;
   backHref?: string;
+  /** Where the agent goes once it is built, when the deck has a next step of
+   *  its own: a post-appraisal goes straight on to be sent with the terms
+   *  (Howard, 1 Oct 2026). Absent, the done screen waits for them. */
+  nextHref?: string;
   onClose?: () => void;
 }) {
   const [step, setStep] = useState(0);
@@ -2436,6 +2441,7 @@ export default function PresentationBuilder({
             token={existing?.token ?? null}
             appraisalId={appraisal?.id ?? null}
             backHref={backHref ?? null}
+            nextHref={nextHref ?? null}
             onEdit={() => setProgress(null)}
             onRetry={() => void create()}
           />
@@ -2733,6 +2739,7 @@ function BuildProgress({
   token,
   appraisalId,
   backHref,
+  nextHref,
   onEdit,
   onRetry,
 }: {
@@ -2743,6 +2750,7 @@ function BuildProgress({
   token: string | null;
   appraisalId: string | null;
   backHref: string | null;
+  nextHref: string | null;
   onEdit: () => void;
   onRetry: () => void;
 }) {
@@ -2771,9 +2779,19 @@ function BuildProgress({
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  if (!mounted) return null;
 
   const done = phase === "done" && shown;
+
+  /* Built, and the deck has a next step: a beat on the good news, then on to
+     it. location rather than the router, so the send screen reads the deck
+     that has just been saved rather than a cached page. */
+  useEffect(() => {
+    if (!done || !nextHref) return;
+    const t = window.setTimeout(() => window.location.assign(nextHref), 1400);
+    return () => window.clearTimeout(t);
+  }, [done, nextHref]);
+
+  if (!mounted) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-[150] flex items-center justify-center bg-page/85 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-label={done ? "Your presentation is built" : "Building the presentation"}>
@@ -2838,11 +2856,22 @@ function BuildProgress({
               {updating ? "Brilliant, Your Presentation Is Updated" : "Brilliant, Your Presentation Is Built"}
             </h2>
             <p className="mt-2 text-[13.5px] leading-relaxed text-muted">
-              {updating
-                ? "The same link opens the new version, so anyone who already has it sees your changes."
-                : "Congratulations. Have a look through it, and change anything you like, as often as you like."}
+              {nextHref
+                ? "Taking you to send it with the terms. You check it through as they will see it, sign your half, then send."
+                : updating
+                  ? "The same link opens the new version, so anyone who already has it sees your changes."
+                  : "Congratulations. Have a look through it, and change anything you like, as often as you like."}
             </p>
             <div className="mt-6 space-y-2.5">
+              {nextHref && (
+                <a href={nextHref} className={CHOICE}>
+                  <ChoiceIcon d="M4 12h14 M13 6l6 6-6 6" />
+                  <span className="min-w-0 flex-1 text-left">
+                    <span className="block text-[14px] font-semibold">Send it with the terms</span>
+                    <span className="block text-[12px] text-muted">On its way now - press if it has not moved.</span>
+                  </span>
+                </a>
+              )}
               {url && (
                 <a href={url} target="_blank" rel="noreferrer" className={CHOICE}>
                   <ChoiceIcon d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12z M12 9.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6z" />

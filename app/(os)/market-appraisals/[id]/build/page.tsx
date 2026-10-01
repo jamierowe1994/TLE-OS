@@ -4,7 +4,7 @@ import { use, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import PresentationBuilder from "@/components/PresentationBuilder";
-import type { MarketAppraisal } from "@/lib/market-appraisal";
+import { effectiveStage, type MarketAppraisal } from "@/lib/market-appraisal";
 import { DECK_KINDS, type DeckKind } from "@/lib/present";
 
 /**
@@ -93,6 +93,14 @@ export default function BuildPage({ params }: { params: Promise<{ id: string }> 
       appraisal={ma}
       fullPage
       backHref={`/market-appraisals?open=${ma.id}`}
+      /* A post-appraisal deck is built to be sent with the terms, so it goes
+         straight on to that screen (Howard, 1 Oct 2026) - unless they are
+         already signed, when there is nothing left to send. */
+      nextHref={
+        kind === "post-appraisal" && !["takeon", "aml", "won", "lost"].includes(effectiveStage(ma))
+          ? `/market-appraisals/${ma.id}/send`
+          : undefined
+      }
     />
   );
 }

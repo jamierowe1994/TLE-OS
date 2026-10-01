@@ -106,6 +106,9 @@ export interface MarketAppraisal {
    * column in lib/db.
    */
   rexPropertyId: string | null;
+  /** The listing on that property, newest first, attached by the list read
+   *  (lib/appraisal-stage). Null when there is no listing yet; absent on a bare row. */
+  listingId?: string | null;
   /** Presentation token, once one has been minted. */
   presentToken: string | null;
   /** ISO, when terms of business last went out for signature (DocuSeal). Null until they have. */

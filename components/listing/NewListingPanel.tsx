@@ -18,8 +18,20 @@ import { LET_TYPES, SERVICE_LEVELS } from "@/lib/listing-requirements";
 
 interface Props {
   onClose: () => void;
-  /** The new listing, so the board can open its record. */
-  onCreated: (listingId: string) => void;
+  /** The new listing, so the board can open its record, and the property it hangs off. */
+  onCreated: (listingId: string, propertyId?: string) => void;
+  /**
+   * Started from an appraisal file (Howard, 1 Oct 2026: "they can do
+   * everything whilst still in here"). The home it is about and what was
+   * agreed, so the agent checks three answers rather than retyping them.
+   * Nothing is created until they press the button, the same as from Listings.
+   */
+  prefill?: {
+    propertyId?: string | null;
+    address?: string | null;
+    rent?: number | null;
+    serviceLevel?: string | null;
+  };
 }
 
 type Found = { id: string; address: string };
@@ -28,23 +40,29 @@ type Option = { id: string; label: string };
 const field = "w-full rounded-xl border border-line/70 bg-white px-3.5 py-2.5 text-[13.5px] outline-none focus:border-ink";
 const label = "block text-[11px] text-muted";
 
-export default function NewListingPanel({ onClose, onCreated }: Props) {
+export default function NewListingPanel({ onClose, onCreated, prefill }: Props) {
   const [shown, setShown] = useState(false);
-  const [query, setQuery] = useState("");
+  /* A known home is already picked; an address alone is searched for, so the
+     agent still chooses the record rather than us guessing it. */
+  const [query, setQuery] = useState(prefill?.propertyId ? "" : (prefill?.address ?? ""));
   const [found, setFound] = useState<Found[] | null>(null);
   const [looking, setLooking] = useState(false);
-  const [picked, setPicked] = useState<Found | null>(null);
+  const [picked, setPicked] = useState<Found | null>(
+    prefill?.propertyId ? { id: String(prefill.propertyId), address: prefill.address ?? `Property ${prefill.propertyId}` } : null
+  );
   const [fresh, setFresh] = useState<{ streetNumber: string; streetName: string; town: string; postcode: string; propertyTypeId: string } | null>(null);
   const [types, setTypes] = useState<Option[]>([]);
   const [propertyTypes, setPropertyTypes] = useState<Option[]>([]);
   const [typeId, setTypeId] = useState("");
-  const [rent, setRent] = useState("");
+  const [rent, setRent] = useState(prefill?.rent ? String(prefill.rent) : "");
   const [deposit, setDeposit] = useState("");
   /* Typed over? Then the rent stops filling it in. */
   const [depositByHand, setDepositByHand] = useState(false);
   const [availableFrom, setAvailableFrom] = useState("");
   const [letType, setLetType] = useState("long_term");
-  const [serviceLevel, setServiceLevel] = useState("managed");
+  const [serviceLevel, setServiceLevel] = useState(
+    SERVICE_LEVELS.some((s) => s.id === prefill?.serviceLevel) ? (prefill?.serviceLevel as string) : "managed"
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -127,7 +145,7 @@ export default function NewListingPanel({ onClose, onCreated }: Props) {
         throw new Error(`${j.error ?? "The listing was not created."} The address is saved, so trying again will not add it twice.`);
       }
       if (!j.ok || !j.listingId) throw new Error(j.error ?? "The listing was not created.");
-      onCreated(j.listingId);
+      onCreated(j.listingId, j.propertyId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "The listing was not created.");
     } finally {

@@ -29,7 +29,20 @@ const minuteWords = (m: number) => (m % 60 === 0 ? (m === 60 ? "An hour" : `${m 
 const when = (iso: string) =>
   new Date(iso).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" });
 
-export default function TakeOnCard({ ma, primary, ghost }: { ma: MarketAppraisal; primary: string; ghost: string }) {
+export default function TakeOnCard({
+  ma,
+  primary,
+  ghost,
+  listing,
+}: {
+  ma: MarketAppraisal;
+  primary: string;
+  ghost: string;
+  /** The listing button, drawn beside the visit as an equal choice: the
+   *  valuation may already have given them everything the advert needs
+   *  (Howard, 1 Oct 2026). Given the class to wear, so it matches. */
+  listing?: (className: string) => React.ReactNode;
+}) {
   /* Whose diary the grid shows: the agent on the file, or whoever is looking
      at it when nobody is named. */
   const [me, setMe] = useState<string>("");
@@ -119,14 +132,23 @@ export default function TakeOnCard({ ma, primary, ghost }: { ma: MarketAppraisal
             <button type="button" onClick={() => setOpen(true)} className={ghost}>
               Book another visit
             </button>
+            {listing?.(ghost)}
           </>
         ) : (
-          <button type="button" onClick={() => setOpen(true)} className={booking ? ghost : primary}>
-            {booking ? "Move the take-on visit" : suggested?.length ? "Book one of their times" : "Book take-on visit"}
-            {!booking && <span aria-hidden>→</span>}
-          </button>
+          <>
+            <button type="button" onClick={() => setOpen(true)} className={booking ? ghost : primary}>
+              {booking ? "Move the take-on visit" : suggested?.length ? "Book one of their times" : "Book take-on visit"}
+              {!booking && <span aria-hidden>→</span>}
+            </button>
+            {listing?.(booking ? ghost : primary)}
+          </>
         )}
       </div>
+      {listing && !booking && (
+        <p className="mt-2.5 text-[11.5px] leading-relaxed text-muted">
+          Got the photos and details at the valuation? Skip the visit and go straight to the listing.
+        </p>
+      )}
       {said && <p className="mt-2.5 text-[11.5px] leading-relaxed">{said}</p>}
 
       <ViewingBooker

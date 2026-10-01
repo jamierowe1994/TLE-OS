@@ -9,6 +9,7 @@ import RexPropertyPicker from "@/components/RexPropertyPicker";
 import PropertyFile from "@/components/PropertyFile";
 import SaveChip, { SaveScopeProvider, useSaveScope } from "@/components/SaveChip";
 import AppraisalMessages from "@/components/appraisal/AppraisalMessages";
+import ListingAction from "@/components/appraisal/ListingAction";
 import PhotosPanel from "@/components/appraisal/PhotosPanel";
 import TakeOnWizard from "@/components/appraisal/TakeOnWizard";
 import ConfirmLine from "@/components/appraisal/ConfirmLine";
@@ -156,6 +157,30 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
     [reload]
   );
 
+  /* Picked in the property file's "which is it?" - kept on the appraisal, the
+     same as the Property record link on the landlord card, so the file never
+     asks again (Howard, 1 Oct 2026). */
+  const linkProperty = useCallback(
+    async (propertyId: string) => {
+      const settle = saves.reporter.begin("Property record");
+      try {
+        const r = await fetch("/api/appraisals", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ id, rexPropertyId: propertyId }),
+        });
+        const j = (await r.json().catch(() => ({}))) as { appraisal?: MarketAppraisal; error?: string };
+        if (!j.appraisal) throw new Error(j.error ?? "That didn't save.");
+        settle({ ok: true });
+        saved(j.appraisal);
+      } catch (e) {
+        const why = e instanceof Error ? e.message : "That didn't save.";
+        settle({ ok: false, problem: /\bREX\b/i.test(why) ? "The property records could not be reached. Try again in a moment." : why });
+      }
+    },
+    [id, saves.reporter, saved]
+  );
+
   /* The property file panel, shown when asked for. */
   const [showFile, setShowFile] = useState(false);
 
@@ -234,6 +259,8 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
   const pre = latest("pre-appraisal");
   const deck = latest("appraisal");
   const post = latest("post-appraisal");
+  const termsSigned =
+    live === "takeon" || live === "aml" || live === "won" || (ma.ticks ?? []).some((t) => t.id === "terms-signed" && t.done);
   const openFile = () => {
     setShowFile(true);
     setTimeout(() => document.getElementById("property-file")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
@@ -286,6 +313,10 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
             <WelcomeVideoRecorder compact token={pre.token} address={ma.address} />
           </span>
         )}
+        {/* Once the terms are signed, the listing is one press from the file
+            whatever the stage (Howard, 1 Oct 2026: "do everything whilst
+            still in here"). */}
+        {termsSigned && <ListingAction ma={ma} className={pill} onLinked={saved} />}
         <button type="button" onClick={openPhotos} className={pill}>
           <DoodleIcon name="pack/photo" size={13} className="text-accent-dark" /> Photographs
         </button>
@@ -591,7 +622,7 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
           the AML step rather than always on the page. */}
       {showFile && (
         <div id="property-file" className="fade-up scroll-mt-6 [&>section]:rounded-[22px] [&>section]:border-line/50 [&>section]:bg-white [&>section]:p-5">
-          <PropertyFile propertyId={ma.rexPropertyId} address={ma.address} screen="the market appraisal" />
+          <PropertyFile propertyId={ma.rexPropertyId} address={ma.address} screen="the market appraisal" onLinked={(pid) => void linkProperty(pid)} />
         </div>
       )}
     </div>

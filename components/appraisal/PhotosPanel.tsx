@@ -262,8 +262,9 @@ export default function PhotosPanel({ ma }: { ma: MarketAppraisal }) {
             {writing ? "Writing…" : advert ? "Write it again" : "Write it with AI"}
           </button>
           {!photos?.length && <span className="text-[11.5px] text-muted">Put the photographs on first.</span>}
-          {ma.rexPropertyId && (
-            <Link href={`/listings?open=${encodeURIComponent(ma.rexPropertyId)}`} className="text-[12px] text-muted underline underline-offset-4 hover:text-ink">
+          {/* The listing's id, not the property's - ?open= takes a listing. */}
+          {ma.listingId && (
+            <Link href={`/listings?open=${encodeURIComponent(ma.listingId)}&tab=marketing`} className="text-[12px] text-muted underline underline-offset-4 hover:text-ink">
               Open the listing to fill in the rest
             </Link>
           )}
