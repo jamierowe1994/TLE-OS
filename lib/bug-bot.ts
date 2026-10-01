@@ -251,7 +251,7 @@ export async function record(
           ]
         : []),
       "",
-      `All bugs: ${origin}/admin/pre-launch`,
+      `This ticket: ${origin}/admin/tickets?open=${encodeURIComponent(id)}`,
     ].join("\n");
     for (const to of await approvers()) {
       try {

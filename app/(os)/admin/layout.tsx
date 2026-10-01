@@ -51,7 +51,7 @@ import { fetchMe } from "@/lib/me";
 const GROUPS: Array<{
   title: string | null;
   rule?: boolean;
-  items: Array<{ href: string; label: string; exact?: boolean; needs: Capability }>;
+  items: Array<{ href: string; label: string; exact?: boolean; also?: string[]; needs: Capability }>;
 }> = [
   {
     title: null,
@@ -60,10 +60,11 @@ const GROUPS: Array<{
          tiles do — otherwise it is the one link that greets a pre-tenancy
          user with a refusal. */
       { href: "/admin", label: "Overview", exact: true, needs: "see:people" },
-      { href: "/admin/people", label: "People", needs: "see:people" },
-      /* see:roles, not manage:roles. Susan reads the map; only James
-         redraws it. The page hides its own controls the same way. */
-      { href: "/admin/permissions", label: "Permissions", needs: "see:roles" },
+      /* Permissions is a tab inside People now (James, 2 Oct 2026: "permissions
+         could be a tab within people"), so the one entry lights for both.
+         /admin/permissions still needs see:roles, and the tab only shows to
+         those who hold it - see components/admin/PeopleTabs. */
+      { href: "/admin/people", label: "People", also: ["/admin/permissions"], needs: "see:people" },
       { href: "/admin/pre-launch", label: "Pre-launch", needs: "see:prelaunch" },
       /* ONE entry, not four.
          Onboarding, Tenant passport and PLC handover each had their own line

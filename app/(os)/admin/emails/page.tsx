@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import EmailBuilder from "@/components/EmailBuilder";
 import type { CampaignStep } from "@/lib/campaigns";
@@ -49,6 +49,10 @@ export default function AdminEmails() {
   const [rows, setRows] = useState<Row[]>([]);
   const [state, setState] = useState<"loading" | "ready" | "off">("loading");
   const [open, setOpen] = useState<Row | null>(null);
+  /* Opened from a row's own Edit: straight into the builder (James, 2 Oct
+     2026 - the Edit button only existed inside the reader, so the catalogue
+     read as a list you could not change). */
+  const [editNow, setEditNow] = useState(false);
 
   useEffect(() => {
     fetch("/api/admin/emails")
@@ -100,11 +104,11 @@ export default function AdminEmails() {
             {rows
               .filter((r) => r.group === g)
               .map((r) => (
-                <li key={r.id}>
+                <li key={r.id} className="flex items-stretch gap-2">
                   <button
                     type="button"
-                    onClick={() => setOpen(r)}
-                    className="flex w-full flex-col gap-1.5 rounded-[22px] border border-line/50 bg-white p-4 text-left transition-colors hover:border-ink/40"
+                    onClick={() => { setEditNow(false); setOpen(r); }}
+                    className="flex min-w-0 flex-1 flex-col gap-1.5 rounded-[22px] border border-line/50 bg-white p-4 text-left transition-colors hover:border-ink/40"
                   >
                     <span className="flex flex-wrap items-center gap-2">
                       <DoodleIcon name="mail" size={14} className="text-accent-dark" />
@@ -126,19 +130,36 @@ export default function AdminEmails() {
                     </span>
                     <span className="text-[11.5px] leading-relaxed text-muted">{r.summary}</span>
                   </button>
+                  {r.editable ? (
+                    <button
+                      type="button"
+                      onClick={() => { setEditNow(true); setOpen(r); }}
+                      className="flex w-[92px] shrink-0 items-center justify-center gap-1.5 self-center rounded-full bg-accent-dark py-2 text-[12px] font-semibold text-page transition-opacity hover:opacity-90"
+                    >
+                      <DoodleIcon name="pencil" size={13} />
+                      Edit
+                    </button>
+                  ) : (
+                    <span
+                      title="Written by hand rather than in blocks, so the builder cannot open it yet"
+                      className="w-[92px] shrink-0 self-center text-center text-[11px] text-muted"
+                    >
+                      Read only
+                    </span>
+                  )}
                 </li>
               ))}
           </ul>
         </section>
       ))}
 
-      {open && <Reader row={open} onClose={() => setOpen(null)} />}
+      {open && <Reader row={open} startEditing={editNow} onClose={() => setOpen(null)} />}
     </div>
   );
 }
 
 /** One email, full size, with the facts about it kept out of the way. */
-function Reader({ row, onClose }: { row: Row; onClose: () => void }) {
+function Reader({ row, onClose, startEditing = false }: { row: Row; onClose: () => void; startEditing?: boolean }) {
   const [html, setHtml] = useState<string | null>(null);
   const [subject, setSubject] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -187,6 +208,14 @@ function Reader({ row, onClose }: { row: Row; onClose: () => void }) {
   }, [row.id]);
 
   useEffect(load, [load]);
+
+  /* Edit pressed on the list: open the builder as soon as the document is in. */
+  const started = useRef(false);
+  useEffect(() => {
+    if (!startEditing || started.current || !row.editable || !doc) return;
+    started.current = true;
+    setBuilding(true);
+  }, [startEditing, row.editable, doc]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();

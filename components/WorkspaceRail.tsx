@@ -44,7 +44,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 
 /** `icon` is a DoodleIcon name. Optional: the admin rail has none, and a
  *  rail with icons on some rows and not others would look broken. */
-export type RailItem = { href: string; label: string; exact?: boolean; icon?: string };
+export type RailItem = { href: string; label: string; exact?: boolean; icon?: string; /** Other routes that light this entry - a page shown as its tab. */ also?: string[] };
 
 export type RailGroup = {
   /** Section heading. Null or omitted for the first, unlabelled group —
@@ -67,7 +67,7 @@ export default function WorkspaceRail({
   footer?: React.ReactNode;
 }) {
   const path = usePathname();
-  const isOn = (t: RailItem) => (t.exact ? path === t.href : path.startsWith(t.href));
+  const isOn = (t: RailItem) => (t.exact ? path === t.href : path.startsWith(t.href)) || Boolean(t.also?.some((a) => path.startsWith(a)));
 
   /* Per workspace, so folding Kirstie's does not fold Francesca's. Read after
      mount rather than during: the server has no localStorage, and a rail that

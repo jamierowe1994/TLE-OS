@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { can } from "@/lib/roles";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
+import PeopleTabs from "@/components/admin/PeopleTabs";
 import { Pill } from "@/components/Wire";
 import AdminLoadFailed from "@/components/AdminLoadFailed";
 import { useAdmin, when, type Person } from "@/lib/admin-client";
@@ -253,6 +254,7 @@ export default function AdminPeople() {
   return (
     <>
       <PageHeader illustration="/illustrations/people/co-workers.svg" illustrationAspect={1.0} lineBreak="none" title="People" blurb="From REX, joined to who's actually got in." />
+      <PeopleTabs />
 
       {/* Re-pull the TEG Team Hub. James fills bios and headshots in there by
           hand, so the useful thing to show is not "synced ok" but how many are

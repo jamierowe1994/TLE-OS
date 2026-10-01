@@ -65,6 +65,46 @@ export default function Tickets() {
       .catch(() => setErr("Couldn't load the tickets."));
   useEffect(() => { void load(); }, []);
 
+  /* Their screen and what they added, here rather than on Pre-launch (James,
+     2 Oct 2026: "I have to go to pre-launch to sort the tickets"). Both are
+     fetched when asked for: a screenshot each would make the list heavy, and
+     recording links last five minutes (lib/bug-media). */
+  const [shots, setShots] = useState<Record<string, string | null>>({});
+  const [media, setMedia] = useState<Record<string, Array<{ id: string; mime: string; url: string }> | null>>({});
+  async function loadShot(id: string) {
+    if (id in shots) return;
+    /* "" while it loads, null when there is none, else the picture. */
+    setShots((m) => ({ ...m, [id]: "" }));
+    const j = await fetch(`/api/admin/bug-shot?id=${encodeURIComponent(id)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+    setShots((m) => ({ ...m, [id]: j?.shot ?? null }));
+  }
+  async function loadMedia(id: string) {
+    setMedia((m) => ({ ...m, [id]: null }));
+    const j = await fetch(`/api/bugs/media?id=${encodeURIComponent(id)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+    setMedia((m) => ({ ...m, [id]: j?.media ?? [] }));
+  }
+
+  /* /admin/tickets?open=<id> lands on one ticket with its screen showing -
+     the link the bug emails now carry. */
+  const [openId, setOpenId] = useState<string | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setOpenId(new URLSearchParams(window.location.search).get("open"));
+  }, []);
+  useEffect(() => {
+    if (!bugs || !openId) return;
+    const b = bugs.find((x) => x.id === openId);
+    if (!b) return;
+    if (b.state === "fixed" || b.state === "wontfix") setShow("all");
+    void loadShot(openId);
+    window.setTimeout(() => document.getElementById(`ticket-${openId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 150);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bugs, openId]);
+
   async function patch(id: string, body: Record<string, unknown>) {
     await fetch("/api/bugs", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, ...body }) });
     await load();
@@ -87,7 +127,7 @@ export default function Tickets() {
                    none: people.filter((b) => !b.priority && b.state !== "fixed" && b.state !== "wontfix").length };
 
   const row = (b: Bug) => (
-    <li key={b.id} className="rounded-xl border border-line/70 p-3">
+    <li key={b.id} id={`ticket-${b.id}`} className={`rounded-xl border p-3 ${b.id === openId ? "border-accent-dark ring-2 ring-accent-dark/20" : "border-line/70"}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5 text-[12.5px]">
@@ -127,8 +167,41 @@ export default function Tickets() {
             {s === "ack" ? "Acknowledge" : s === "fixed" ? "Fixed, tell them" : s === "wontfix" ? "Won't fix" : "Reopen"}
           </button>
         ))}
-        <Link href={`/admin/pre-launch#bug-${b.id}`} className="ml-auto text-muted underline underline-offset-2">Pictures on Pre-launch</Link>
+        <span className="ml-auto flex items-center gap-3">
+          {!(b.id in shots) && (
+            <button type="button" onClick={() => void loadShot(b.id)} className="text-muted underline underline-offset-2 hover:text-ink">
+              See their screen
+            </button>
+          )}
+          {(b.media ?? 0) > 0 && !media[b.id] && (
+            <button type="button" onClick={() => void loadMedia(b.id)} className="font-semibold text-accent-dark underline underline-offset-2">
+              {b.id in media ? "Opening…" : `Watch what they added (${b.media})`}
+            </button>
+          )}
+        </span>
       </div>
+      {b.id in shots &&
+        (shots[b.id] ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={shots[b.id]!} alt={`The screen when ${b.reporterEmail || "the OS"} reported this`} className="mt-3 w-full rounded-lg border border-line/70" />
+        ) : (
+          <p className="mt-2 text-[11px] text-muted">{shots[b.id] === "" ? "Opening their screen…" : "No picture with this one."}</p>
+        ))}
+      {media[b.id] &&
+        (media[b.id]!.length ? (
+          <div className="mt-3 space-y-2">
+            {media[b.id]!.map((m) =>
+              m.mime.startsWith("video/") ? (
+                <video key={m.id} src={m.url} controls playsInline className="w-full rounded-lg border border-line/70" />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={m.id} src={m.url} alt={`Added by ${b.reporterEmail}`} className="w-full rounded-lg border border-line/70" />
+              )
+            )}
+          </div>
+        ) : (
+          <p className="mt-2 text-[11px] text-muted">What they added could not be opened.</p>
+        ))}
     </li>
   );
 

@@ -1,0 +1,199 @@
+/* The launch countdown, as the Admin overview's picture (James, 2 Oct 2026:
+   "make the countdown in there instead ... instead of the illustration").
+   Ported from the CLOCK repo (app/countdown.css) - the same flip clock the
+   team has in Teams - without its clay page and the table it stands on, which
+   only read against clay. Sizes hang off --d, one digit card's width. */
+
+.cd-mini {
+  --d: 26px;
+  --clay: #de968f;
+  font-family: var(--font-bricolage), var(--font-manrope), system-ui, sans-serif;
+  position: relative;
+  isolation: isolate;
+  display: inline-block;
+}
+/* A soft shadow on the page under the clock, where the table was. */
+.cd-mini::after {
+  content: "";
+  position: absolute;
+  z-index: -2;
+  left: 6%;
+  right: 6%;
+  bottom: calc(var(--d) * -0.42);
+  height: calc(var(--d) * 0.36);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(86, 66, 62, 0.28), rgba(86, 66, 62, 0));
+}
+
+/* ── The split-flap card ───────────────────────────────────────────────────
+   Four layers: the new top half and the old bottom half sit still, and two
+   flaps fold between them - the old top falls away, then the new bottom
+   swings down into place. --half is the time each flap takes. */
+.cd-flap {
+  --fw: var(--d);
+  --fh: calc(var(--d) * 1.32);
+  --fr: calc(var(--fw) * 0.07);
+  --flap-top: linear-gradient(180deg, #ffffff 0%, #f4f2ef 100%);
+  --flap-bot: linear-gradient(180deg, #f2efeb 0%, #e6e2dd 100%);
+  --flap-line: #0e0b0a;
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: var(--fw);
+  height: var(--fh);
+  border-radius: var(--fr);
+  perspective: calc(var(--fh) * 5);
+  font-size: calc(var(--fh) * 0.72);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: #101014;
+  transition: color 600ms ease;
+}
+.cd-flap.cd-hot { color: #a85a51; }
+.cd-half {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 50%;
+  overflow: hidden;
+  backface-visibility: hidden;
+}
+.cd-half > span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: var(--fh);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Bricolage sits a touch high in its box; this centres the figures. */
+  padding-top: calc(var(--fh) * 0.05);
+}
+.cd-top {
+  top: 0;
+  border-radius: var(--fr) var(--fr) 0 0;
+  background: var(--flap-top);
+  transform-origin: 50% 100%;
+}
+.cd-top > span { top: 0; }
+.cd-bot {
+  bottom: 0;
+  border-radius: 0 0 var(--fr) var(--fr);
+  background: var(--flap-bot);
+  transform-origin: 50% 0;
+}
+.cd-bot > span { bottom: 0; }
+.cd-fold-top {
+  z-index: 2;
+  animation: cd-fold-top var(--half, 150ms) ease-in both;
+}
+.cd-fold-bot {
+  z-index: 2;
+  animation: cd-fold-bot var(--half, 150ms) ease-out var(--half, 150ms) both;
+}
+@keyframes cd-fold-top {
+  from { transform: rotateX(0deg); filter: brightness(1); }
+  to { transform: rotateX(-90deg); filter: brightness(0.6); }
+}
+@keyframes cd-fold-bot {
+  from { transform: rotateX(90deg); filter: brightness(1.25); }
+  to { transform: rotateX(0deg); filter: brightness(1); }
+}
+.cd-line {
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: max(1px, calc(var(--fh) * 0.014));
+  transform: translateY(-50%);
+  background: var(--flap-line);
+}
+
+/* ── The clock ──────────────────────────────────────────────────────────── */
+.cd-clock {
+  position: relative;
+}
+.cd-body {
+  position: relative;
+  background: linear-gradient(180deg, #c6d0b9 0%, #adb99f 100%);
+  border-radius: calc(var(--d) * 0.36);
+  padding: calc(var(--d) * 0.16);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -3px 0 rgba(58, 68, 48, 0.25);
+}
+.cd-button {
+  position: absolute;
+  top: calc(var(--d) * -0.12);
+  height: calc(var(--d) * 0.14);
+  border-radius: 3px 3px 0 0;
+}
+.cd-stand {
+  position: absolute;
+  z-index: -1;
+  left: 8%;
+  right: 8%;
+  bottom: calc(var(--d) * -0.16);
+  height: calc(var(--d) * 0.16);
+  background: #8e9a80;
+  border-radius: 0 0 4px 4px;
+}
+.cd-face {
+  background: linear-gradient(180deg, #2a2322 0%, #1f1918 100%);
+  border-radius: calc(var(--d) * 0.2);
+  padding: calc(var(--d) * 0.36) calc(var(--d) * 0.44) calc(var(--d) * 0.26);
+  display: flex;
+  align-items: center;
+  gap: calc(var(--d) * 0.5);
+  color: #fdefec;
+}
+.cd-window {
+  position: relative;
+  background: #0e0b0a;
+  border-radius: calc(var(--d) * 0.08);
+  padding: calc(var(--d) * 0.08);
+  display: flex;
+  gap: calc(var(--d) * 0.06);
+}
+.cd-pair { display: flex; gap: calc(var(--d) * 0.06); }
+.cd-pair + .cd-pair { margin-left: calc(var(--d) * 0.1); }
+/* The little pegs along the top of the window. */
+.cd-peg {
+  position: absolute;
+  top: calc(var(--d) * -0.1);
+  width: 2px;
+  height: calc(var(--d) * 0.14);
+  background: #8d817d;
+}
+.cd-label {
+  font-weight: 600;
+  color: rgba(253, 239, 236, 0.75);
+  font-size: clamp(10px, calc(var(--d) * 0.19), 18px);
+  margin-top: calc(var(--d) * 0.14);
+}
+/* The lamp where the reference says ALARM: clay, gently breathing. */
+.cd-lamp {
+  width: calc(var(--d) * 0.62);
+  height: calc(var(--d) * 0.2);
+  border-radius: 3px;
+  border: 1px solid rgba(253, 239, 236, 0.35);
+  padding: 2px;
+}
+.cd-lamp > span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--clay);
+  animation: cd-glow 2.4s ease-in-out infinite;
+}
+@keyframes cd-glow {
+  0%, 100% { box-shadow: 0 0 calc(var(--d) * 0.06) rgba(222, 150, 143, 0.5); opacity: 0.8; }
+  50% { box-shadow: 0 0 calc(var(--d) * 0.24) rgba(222, 150, 143, 1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cd-fold-top, .cd-fold-bot { animation-duration: 1ms; animation-delay: 0ms; }
+  .cd-lamp > span { animation: none; }
+}

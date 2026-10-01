@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import PageHeader from "@/components/PageHeader";
+import PeopleTabs from "@/components/admin/PeopleTabs";
 import { Pill } from "@/components/Wire";
 import type { Capability } from "@/lib/roles";
 
@@ -89,6 +90,7 @@ export default function Permissions() {
   return (
     <>
       <PageHeader illustration="/illustrations/people/agreement-deal.svg" illustrationAspect={1.0} lineBreak="none" title="Permissions" blurb="Who can see what, and who decides." />
+      <PeopleTabs />
 
       {flash && (
         <p className="fade-up mt-8 rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-4 text-[12.5px]">
