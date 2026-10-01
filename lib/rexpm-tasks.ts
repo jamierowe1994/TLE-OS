@@ -30,8 +30,8 @@ import { hasDb, q } from "@/lib/db";
  * disappears from the history.
  */
 
-export type TaskKind = "inspection" | "tenancy_review";
-export const TASK_KINDS: TaskKind[] = ["inspection", "tenancy_review"];
+export type TaskKind = "inspection" | "tenancy_review" | "maintenance";
+export const TASK_KINDS: TaskKind[] = ["inspection", "tenancy_review", "maintenance"];
 export type TaskState = "open" | "closed" | "gone";
 
 export interface RexpmTask {
@@ -49,6 +49,11 @@ export interface RexpmTask {
   agreement: string;
   /** Tenancy reviews only: the rent as REX PM prints it, "£1,250.00 | Monthly". */
   currentRent: string;
+  /** Maintenance only: what was reported, by whom, when, and REX PM's type ("GAS SAFETY"). */
+  description: string;
+  reportedBy: string;
+  reportedOn: string | null;
+  category: string;
   ownership: string;
   service: string;
   followUpOn: string | null;
@@ -91,6 +96,10 @@ function toTask(r: Row): RexpmTask {
     tenancy: s(r.tenancy),
     agreement: s(r.agreement),
     currentRent: s(r.current_rent),
+    description: s(r.description),
+    reportedBy: s(r.reported_by),
+    reportedOn: day(r.reported_on),
+    category: s(r.task_category),
     ownership: s(r.ownership),
     service: s(r.service),
     followUpOn: day(r.follow_up_on),
@@ -160,7 +169,13 @@ export function readRow(columns: string[], row: ScreenRow) {
     ownership: blank(at("ownership")),
     service: blank(at("service package")),
     followUpOn: screenDate(at("follow up date")),
-    dueOn: screenDate(at("task due date") || at("due date")),
+    /* Maintenance has no due date; it is late once its expected completion
+       date passes, which is how REX PM's Overdue tile counts (1 Oct 2026). */
+    dueOn: screenDate(at("task due date") || at("due date") || at("expected completion date")),
+    description: blank(at("description")),
+    reportedBy: blank(at("reported by")),
+    reportedOn: screenDate(at("reported date")),
+    category: blank(at("maintenance type")),
     inspectionOn: screenDate(at("inspection date")),
     closedOn: screenDate(at("closed date")),
     progress: blank(at("task progress") || at("progress")),
@@ -258,8 +273,9 @@ export async function importTasks(kind: TaskKind, tabs: { open?: ScreenTab; clos
       await q(
         `INSERT INTO os_rexpm_tasks
            (id, kind, state, task_type, title, address, os_property_id, rex_property_id, match_how, tenancy, ownership, service,
-            follow_up_on, due_on, inspection_on, closed_on, progress, managed_by, priority, raw, agreement, current_rent, last_seen_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21,$22,NOW())
+            follow_up_on, due_on, inspection_on, closed_on, progress, managed_by, priority, raw, agreement, current_rent,
+            description, reported_by, reported_on, task_category, last_seen_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21,$22,$23,$24,$25,$26,NOW())
          ON CONFLICT (id) DO UPDATE SET
            kind = $2, state = $3, task_type = $4, title = $5, address = $6, os_property_id = $7, rex_property_id = $8,
            match_how = $9, tenancy = $10, ownership = $11, service = $12,
@@ -269,11 +285,16 @@ export async function importTasks(kind: TaskKind, tabs: { open?: ScreenTab; clos
            managed_by = $18, priority = $19, raw = $20::jsonb,
            agreement = CASE WHEN $21 = '' THEN os_rexpm_tasks.agreement ELSE $21 END,
            current_rent = CASE WHEN $22 = '' THEN os_rexpm_tasks.current_rent ELSE $22 END,
+           description = CASE WHEN $23 = '' THEN os_rexpm_tasks.description ELSE $23 END,
+           reported_by = CASE WHEN $24 = '' THEN os_rexpm_tasks.reported_by ELSE $24 END,
+           reported_on = COALESCE($25, os_rexpm_tasks.reported_on),
+           task_category = CASE WHEN $26 = '' THEN os_rexpm_tasks.task_category ELSE $26 END,
            last_seen_at = NOW()`,
         [
           row.id, kind, state, f.taskType, f.title, f.address, home?.id ?? null, home?.rex_property_id ?? null, how,
           f.tenancy, f.ownership, f.service, f.followUpOn, f.dueOn, f.inspectionOn, f.closedOn, f.progress, f.managedBy, f.priority,
           JSON.stringify({ columns: tab.columns, cells: row.c }), f.agreement, f.currentRent,
+          f.description, f.reportedBy, f.reportedOn, f.category,
         ]
       );
     }
@@ -282,7 +303,9 @@ export async function importTasks(kind: TaskKind, tabs: { open?: ScreenTab; clos
   await land("closed", tabs.closed);
 
   let gone = 0;
-  if (complete && tabs.open && tabs.closed) {
+  /* "complete" means the Open tab was read end to end, so an open task missing
+     from it has left the list. The Closed tab is not needed to know that. */
+  if (complete && tabs.open) {
     const rows = await q<{ id: string }>(
       `UPDATE os_rexpm_tasks SET state = 'gone' WHERE kind = $1 AND state = 'open' AND NOT (id = ANY($2)) RETURNING id`,
       [kind, seen]

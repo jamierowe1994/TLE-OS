@@ -10,6 +10,7 @@ import Segmented from "@/components/Segmented";
 import { PressButton } from "@/components/Bits";
 import { openDocument } from "@/lib/doc-sheet";
 import type { Contractor, WorksOrder, WorksEvent, WorksSummary, Kind, Move, Status, Urgency, PaidHow } from "@/lib/works-orders";
+import type { CarriedJob } from "@/lib/works-carried";
 import { PLANNED_CATEGORIES, REPAIR_CATEGORIES, URGENCIES } from "@/lib/works-catalogue";
 import { STEPS, stepOf } from "@/lib/works-steps";
 import { WorksNow, ContractorForm, BLANK_CONTRACTOR } from "@/components/WorksNow";
@@ -90,7 +91,7 @@ export default function Maintenance() {
     else if (params.get("section") === "accounts") setSection("accounts");
     else setSection((cur) => (cur === "contractors" ? "repair" : cur));
   }, [rail, params]);
-  const [data, setData] = useState<{ orders: WorksOrder[]; contractors: Contractor[]; summary: WorksSummary | null; lastMonth?: WorksSummary | null; lastMonthOn?: string | null; live: boolean; reason?: string; canCorporate?: boolean } | null>(null);
+  const [data, setData] = useState<{ orders: WorksOrder[]; contractors: Contractor[]; summary: WorksSummary | null; lastMonth?: WorksSummary | null; lastMonthOn?: string | null; live: boolean; reason?: string; canCorporate?: boolean; carried?: CarriedJob[]; carriedReadAt?: string | null; carriedError?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showClosed, setShowClosed] = useState(false);
   const [raising, setRaising] = useState<Kind | null>(null);
@@ -126,6 +127,30 @@ export default function Maintenance() {
     });
   }, [orders, section, showClosed, q]);
   const grouped = useMemo(() => STEPS.map((st) => ({ status: st.id, label: st.label, rows: rows.filter((r) => stepOf(r) === st.id) })).filter((g) => g.rows.length), [rows]);
+  /* Jobs still in the old system (lib/works-carried): on the board, in the
+     figures, until somebody takes them on here. */
+  const carried = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return (data?.carried ?? []).filter((j) => j.kind === section && (!needle || `${j.title} ${j.address} ${j.tenant} ${j.landlord} ${j.managedBy} ${j.category}`.toLowerCase().includes(needle)));
+  }, [data, section, q]);
+  const [takingOn, setTakingOn] = useState<string | null>(null);
+  async function takeOn(j: CarriedJob) {
+    setTakingOn(j.taskId);
+    const r = await fetch("/api/works-orders", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        kind: j.kind, propertyName: j.propertyName, locality: j.locality, propertyId: j.propertyId,
+        title: j.title, description: j.description, category: j.category, urgency: j.kind === "repair" ? j.urgency : null,
+        dueAt: j.kind === "planned" ? j.dueAt : null, tenant: j.tenant, landlord: j.landlord, reportedBy: j.reportedBy || "Old system",
+        rexpmTaskId: j.taskId, rexpmReportedOn: j.reportedOn, rexpmDueOn: j.dueOn,
+      }),
+    }).then((x) => x.json()).catch(() => null);
+    setTakingOn(null);
+    if (!r?.ok) return setError(r?.error ?? "Could not take the job on.");
+    load();
+    setOpenId(r.order.id);
+  }
   const s = data?.summary;
   /* Last month's figures, if we have them. The snapshot started on 11 Sep
      2026, so until roughly mid-October there is nothing to compare against
@@ -248,7 +273,7 @@ export default function Maintenance() {
         <Contractors onChange={load} openJob={(id) => { router.push("/maintenance?section=jobs"); setOpenId(id); }} />
       ) : !data ? (
         <p className="mt-6 text-[12.5px] text-muted">Reading the jobs…</p>
-      ) : grouped.length === 0 ? (
+      ) : grouped.length === 0 && carried.length === 0 ? (
         /* An empty maintenance board is the good outcome, so it is drawn as
            one rather than as a dashed box apologising for having nothing in
            it. James's house, the line that goes with it, and the one button
@@ -314,8 +339,10 @@ export default function Maintenance() {
               </ul>
             </section>
           ))}
+          {carried.length > 0 && <CarriedList jobs={carried} readAt={data?.carriedReadAt ?? null} busy={takingOn} onTakeOn={(j) => void takeOn(j)} />}
         </div>
       )}
+      {data?.carriedError && <p className="mt-4 rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-4 text-[12.5px]">{data.carriedError}</p>}
 
       {raising && (
         <RaiseJob
@@ -335,6 +362,60 @@ export default function Maintenance() {
         />
       )}
     </>
+  );
+}
+
+/* ── Jobs still in the old system ───────────────────────────────────────── */
+
+/** "at 14:05 today", or "on 30 Sep" - when the old system's list was last copied across. */
+const readWhen = (iso: string) => {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" });
+  const same = d.toLocaleDateString("en-GB", { timeZone: "Europe/London" }) === new Date().toLocaleDateString("en-GB", { timeZone: "Europe/London" });
+  return same ? `at ${time} today` : `on ${d.toLocaleDateString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short" })}`;
+};
+
+/**
+ * The old system's open jobs (1 Oct 2026). Agent copy never names it. Each
+ * row says how late it is against the date the old system expected it done,
+ * and Take it on moves it here as a works order, without emailing anyone.
+ */
+function CarriedList({ jobs, readAt, busy, onTakeOn }: { jobs: CarriedJob[]; readAt: string | null; busy: string | null; onTakeOn: (j: CarriedJob) => void }) {
+  const today = Date.now();
+  return (
+    <section className="rounded-2xl border border-dashed border-line bg-panel p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <h2 className="text-[15px]">Still in the Old System</h2>
+        <span className="text-[11px] text-muted">{jobs.length} · copied across{readAt ? ` ${readWhen(readAt)}` : ""}. Take one on to run it here.</span>
+      </div>
+      <ul className="mt-3 divide-y divide-line/50">
+        {jobs.map((j) => {
+          const daysOver = j.dueAt ? Math.floor((today - new Date(j.dueAt).getTime()) / 86400000) + 1 : 0;
+          const status = j.overdue
+            ? `${daysOver} day${daysOver === 1 ? "" : "s"} over`
+            : j.dueOn ? `Expected ${day(j.dueAt)}` : j.reportedOn ? `Reported ${new Date(j.reportedOn).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}` : "No dates set";
+          return (
+            <li key={j.taskId} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 py-3 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto]">
+              <span className="min-w-0">
+                <span className="hand block truncate text-[13.5px]">{j.title}</span>
+                <span className="block truncate text-[10.5px] text-muted">{j.propertyName}{j.locality ? `, ${j.locality}` : ""}{j.tenant ? ` · ${j.tenant}` : ""}</span>
+              </span>
+              <span className="col-start-1 flex flex-wrap items-center gap-1.5 md:col-start-auto">
+                {j.urgency === "urgent" && <Pill tone="accent">Urgent</Pill>}
+                <span className="text-[11px] text-muted">{j.category}</span>
+              </span>
+              <span className={`col-start-1 text-[12px] md:col-start-auto ${j.overdue ? "font-semibold text-accent-dark" : "text-muted"}`}>
+                {status}{j.progress ? ` · ${j.progress}` : ""}
+                {j.managedBy ? <span className="block text-[10.5px] font-normal text-muted">With {j.managedBy}</span> : null}
+              </span>
+              <PressButton disabled={busy === j.taskId} onClick={() => onTakeOn(j)} className="row-span-2 rounded-full border border-line/80 px-4 py-2 text-[12px] font-semibold disabled:opacity-40 md:row-span-1">
+                {busy === j.taskId ? "Taking on…" : "Take it on"}
+              </PressButton>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 

@@ -599,6 +599,8 @@ CREATE INDEX IF NOT EXISTS os_inspections_token    ON os_inspections (access_tok
 -- due list once it is in hand here. See os_rexpm_tasks.
 ALTER TABLE os_inspections ADD COLUMN IF NOT EXISTS rexpm_task_id TEXT;
 CREATE INDEX IF NOT EXISTS os_inspections_rexpm ON os_inspections (rexpm_task_id);
+-- The REX PM maintenance task a works order was taken on from (1 Oct 2026).
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS rexpm_task_id TEXT;
 
 -- REX PM's own task lists, read off its screens (1 Oct 2026). REX refused API
 -- access, so this is the stopgap: inspections (and next tenancy reviews) are
@@ -637,6 +639,12 @@ CREATE INDEX IF NOT EXISTS os_rexpm_tasks_prop ON os_rexpm_tasks (rex_property_i
 -- the rent REX PM holds, as printed (1 Oct 2026).
 ALTER TABLE os_rexpm_tasks ADD COLUMN IF NOT EXISTS agreement TEXT NOT NULL DEFAULT '';
 ALTER TABLE os_rexpm_tasks ADD COLUMN IF NOT EXISTS current_rent TEXT NOT NULL DEFAULT '';
+-- Maintenance jobs carry what was reported, by whom and when, and REX PM's
+-- maintenance type ("GAS SAFETY", "EICR") (1 Oct 2026).
+ALTER TABLE os_rexpm_tasks ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_rexpm_tasks ADD COLUMN IF NOT EXISTS reported_by TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_rexpm_tasks ADD COLUMN IF NOT EXISTS reported_on DATE;
+ALTER TABLE os_rexpm_tasks ADD COLUMN IF NOT EXISTS task_category TEXT NOT NULL DEFAULT '';
 
 -- A tenancy review done in the OS (1 Oct 2026): what was decided at the
 -- anniversary - rent up, no change, renewed, or the tenancy ending - and the
