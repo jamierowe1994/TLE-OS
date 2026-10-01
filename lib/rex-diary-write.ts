@@ -1,6 +1,7 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
-import { rexCall, rexRows, rexWritesLocked } from "@/lib/rex";
+import { rexCall, rexRows, rexWritesLocked, type RexResponse } from "@/lib/rex";
+import { noteFailure } from "@/lib/auto-bugs";
 import { rexTokenFor } from "@/lib/rex-user";
 import { isTestFile, TEST_REFUSAL } from "@/lib/test-guard";
 import type { MarketAppraisal } from "@/lib/market-appraisal";
@@ -36,6 +37,11 @@ import type { MarketAppraisal } from "@/lib/market-appraisal";
  * appraisal MOVES the event (CalendarEvents/update) rather than adding a
  * second one; the event id is kept on the file.
  */
+
+/** REX's answer when the entry it was asked to change no longer exists. */
+function goneFromRex(r: RexResponse): boolean {
+  return r.status === 410 || /NoMatchingRecords|not found/i.test(r.error ?? "");
+}
 
 export const TLE_APPRAISAL_TYPE_ID = 527;
 const MINUTES = 60;
@@ -128,27 +134,43 @@ export async function putAppraisalInRexDiary(p: {
   }
 
   const data = appraisalEventData(ma, calendarId);
-  const send = (d: Record<string, unknown>) =>
-    before
+  const send = (d: Record<string, unknown>, how: "update" | "create") =>
+    how === "update" && before
       ? /* update_recurring_events is REQUIRED on an update, and must be a
            boolean: absent is a 500 "Undefined Property", "this" and null are
-           type errors (all three measured on James's calendar, 15 Sep 2026). */
-        rexCall("CalendarEvents", "update", { data: { id: before.eventId, update_recurring_events: false, ...d } }, token)
+           type errors (all three measured on James's calendar, 15 Sep 2026).
+           Quiet: an entry deleted in REX is handled below, not a ticket. */
+        rexCall("CalendarEvents", "update", { data: { id: before.eventId, update_recurring_events: false, ...d } }, token, { quiet: true })
       : rexCall("CalendarEvents", "create", { data: d, return_id: true }, token);
-
-  let res = await send(data);
   /* A property link REX will not take (a property from another business, say)
      must not cost the diary entry: try once more without it. */
-  if (!res.ok && "records" in data) {
-    const { records: _drop, ...bare } = data;
-    void _drop;
-    res = await send(bare);
+  const attempt = async (how: "update" | "create") => {
+    let r = await send(data, how);
+    if (!r.ok && !goneFromRex(r) && "records" in data) {
+      const { records: _drop, ...bare } = data;
+      void _drop;
+      r = await send(bare, how);
+    }
+    return r;
+  };
+
+  let res = await attempt(method);
+  let moved = Boolean(before);
+  /* Somebody deleted the entry in REX since it was made (Howard's ticket,
+     1 Oct 2026: a rebooked appraisal hit "event not found" and never reached
+     the diary). Moving it is impossible, so make it again at the new time. */
+  if (!res.ok && before && goneFromRex(res) && !rexWritesLocked("CalendarEvents", "create")) {
+    moved = false;
+    res = await attempt("create");
+  } else if (!res.ok && before) {
+    noteFailure({ source: "REX", what: "CalendarEvents/update", status: res.status, message: res.error ?? `answered ${res.status}` });
   }
   if (!res.ok) return { ok: false, reason: "refused", detail: `REX refused the diary entry: ${res.error ?? res.status}` };
 
   const raw = res.result as unknown;
-  const eventId = before?.eventId
-    ?? (typeof raw === "string" || typeof raw === "number" ? String(raw) : String((raw as { id?: string } | null)?.id ?? ""));
+  const eventId = moved && before
+    ? before.eventId
+    : typeof raw === "string" || typeof raw === "number" ? String(raw) : String((raw as { id?: string } | null)?.id ?? "");
   if (!eventId) return { ok: false, reason: "refused", detail: "REX said yes but did not say which entry it made." };
 
   await q(
@@ -157,7 +179,7 @@ export async function putAppraisalInRexDiary(p: {
      ON CONFLICT (kind, record_id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()`,
     [KIND, ma.id, JSON.stringify({ eventId, calendarId, startsAt: ma.appointmentAt }), userId]
   ).catch(() => null);
-  return { ok: true, eventId, moved: Boolean(before) };
+  return { ok: true, eventId, moved };
 }
 
 /* ── Viewings (15 Sep 2026) ────────────────────────────────────────────────
