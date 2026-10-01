@@ -189,6 +189,10 @@ const SORTS = [
  * it. Out at the body it has nothing above it to be trapped by, and it is
  * placed from the button's own measured position.
  */
+/** The filter panel's width and its options pop-out's - w-[240px] and w-[220px] below. */
+const PANEL_W = 240;
+const POP_W = 220;
+
 function FilterPanel({
   groups,
   active,
@@ -216,7 +220,11 @@ function FilterPanel({
 
   const place = useCallback(() => {
     const r = btn.current?.getBoundingClientRect();
-    if (r) setAt({ top: r.bottom + 8, left: Math.min(r.left, window.innerWidth - 560) });
+    /* Under the button, its right edge on the button's right edge (James,
+       1 Oct 2026: it used to drop 300px to the left of Filters, to leave room
+       for the options beside it). The options open on whichever side has the
+       room instead - see pop. */
+    if (r) setAt({ top: r.bottom + 8, left: Math.max(12, Math.min(r.right - PANEL_W, window.innerWidth - PANEL_W - 12)) });
   }, []);
 
   useEffect(() => {
@@ -239,10 +247,16 @@ function FilterPanel({
 
   const pop = (i: number, el: HTMLElement) => {
     const r = el.getBoundingClientRect();
+    const panel = el.closest("[data-filter-panel]")?.getBoundingClientRect() ?? r;
     setNeedle("");
-    setOver({ i, top: r.top, left: r.right + 6 });
+    /* Beside the panel on the right if it fits, else on the left. */
+    const right = panel.right + 6;
+    const left = right + POP_W <= window.innerWidth - 12 ? right : Math.max(12, panel.left - 6 - POP_W);
+    setOver({ i, top: r.top, left });
   };
 
+  /* Which side the options will open on, so the row's arrow points there. */
+  const opensLeft = Boolean(at && at.left + PANEL_W + 6 + POP_W > (typeof window === "undefined" ? Infinity : window.innerWidth - 12));
   const g = over ? groups[over.i] : null;
   const shown = g ? g.options.filter((o) => !needle.trim() || o.label.toLowerCase().includes(needle.trim().toLowerCase())) : [];
 
@@ -304,7 +318,7 @@ function FilterPanel({
                     <span className="block text-[12.5px] font-semibold">{grp.label}</span>
                     <span className={`block truncate text-[11px] ${current ? "text-accent-dark" : "text-muted"}`}>{current ?? "Any"}</span>
                   </span>
-                  <span aria-hidden className="text-muted">›</span>
+                  <span aria-hidden className="text-muted">{opensLeft ? "‹" : "›"}</span>
                 </button>
               );
             })}
