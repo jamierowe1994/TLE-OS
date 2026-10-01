@@ -71,6 +71,7 @@ export const TENANT_STEPS: ShowroomStep[] = [
     sees: [
       "An email with a button to their own passport.",
       "One question at a time, with a card that fills in as they type.",
+      "If they're employed: full or part-time, zero-hours, and whether they're on probation. Self-employed or a director: how long they've been trading.",
       "Two gentle reminders if they have not started it: after two days and after a week.",
     ],
     agent: { says: "On a tenant lead, press Send passport. On a booked viewing, press Invite to the passport.", href: "/leads?side=tenant" },
@@ -155,19 +156,26 @@ export const TENANT_STEPS: ShowroomStep[] = [
   {
     id: "feedback",
     title: "After the viewing: feedback and an offer",
-    lead: "Two hours after the viewing they get a link to their own feedback page for the home they saw. They can say it is not for them, ask a question, or make an offer.",
+    lead: "Two hours after the viewing they get a link to their own feedback page for the home they saw. They can say it is not for them, ask a question, or make an offer. Or the agent puts the offer in for them, on the phone or sitting down together.",
     sees: [
       "\"How was it?\" with a link to a page about that home.",
-      "Not for me, Questions, or Make an offer - never above the asking rent.",
+      "Make an offer: it starts at the asking rent and can't go above it. Type more and a message says the law bans it.",
+      "No term to choose - tenancies are rolling now. Just the day they'd like to move in, from a calendar.",
+      "Who's moving in, ticked off their passport by name, and their pets. Untick anyone who isn't coming.",
+      "Any works they want done before moving day, which the landlord accepts with the offer.",
+      "Their passport answers shown back to confirm, never asked again. If the agent put it in for them, a copy by email to check.",
       "If it is a no, homes nearby at a similar rent straight away.",
     ],
-    agent: { says: "Close the viewing on Viewings with how it went. Offers and answers come to you by email.", href: "/viewings" },
+    agent: { says: "Close the viewing on Viewings with how it went. To put an offer in for them, press Put an offer forward on the viewing.", href: "/viewings" },
     screens: [
+      { label: "Making an offer", href: "/tenant/demo", stage: "viewed", device: "phone" },
       { label: "The feedback page", href: "/tenant/feedback", device: "phone" },
-      { label: "In their area", href: "/tenant/demo", stage: "viewed", device: "desktop" },
     ],
-    emails: ["viewing-feedback", "viewing-not-for-them"],
-    notYet: ["When they make an offer, only the agent is emailed - the tenant gets no \"your offer is in\" email."],
+    emails: ["viewing-feedback", "tenant-offer-copy", "viewing-not-for-them"],
+    notYet: [
+      "When they make an offer themselves, only the agent is emailed - the copy only goes when the agent puts it in for them.",
+      "Offers don't reach the landlord's screen yet: the agent puts them to the landlord.",
+    ],
   },
   {
     id: "apply",
@@ -232,6 +240,7 @@ export const TENANT_STEPS: ShowroomStep[] = [
  * the acceptance email"); these are what the Showroom shows instead.
  */
 export const EMAIL_WORDS: Record<string, { when: string; says: string; status?: "live" | "ready" | "built" | "written" | "planned" }> = {
+  "tenant-offer-copy": { when: "When you put an offer forward for them and leave Email them a copy ticked", says: "The offer as you put it in: the rent, the move-in day, who's moving in and any works. Reply if anything is wrong.", status: "ready" },
   "tenant-passport-request": { when: "When you press Send passport on a tenant lead, before any viewing", says: "The passport on its own: what it asks, that nothing is shared until they apply, and that you will be in touch about viewings once it is done." },
   "tenant-passport-invite": { when: "The moment you book a viewing for someone who has not filled in their passport", says: "The viewing details and a calendar invite, and a button to their passport. Fill it in once and it answers every application." },
   "tenant-viewing-booked": { when: "The moment you book a viewing for someone whose passport is done", says: "The viewing details and a calendar invite, and thanks for the passport rather than asking again." },
@@ -516,6 +525,26 @@ export const AGENT_STEPS: ShowroomStep[] = [
     guide: "viewings",
     screens: [],
     emails: ["tenant-passport-invite", "tenant-viewing-booked", "viewing-moved", "viewing-cancelled", "viewing-rebook"],
+  },
+  {
+    id: "offers",
+    title: "Putting an offer forward",
+    lead: "When a tenant wants the home, you can put the offer in for them, on the phone or sitting down together. Everything their passport knows is already there, so they're never asked twice.",
+    sees: [
+      "Four short steps: the offer, who's moving in, about them, check and send.",
+      "The rent starts at the asking rent and can't go above it. No term - tenancies are rolling.",
+      "Their passport answers filled in, marked From passport, with Change on each. No passport? You ask as you go, and it's saved to a passport for them - not sent until you press Send passport.",
+      "Warnings when it matters: zero-hours, still on probation, trading under a year.",
+      "The offer exactly as the landlord will see it, before it goes. Then a copy to the tenant to check.",
+    ],
+    agent: { says: "On a booked viewing, press Put an offer forward.", href: "/viewings" },
+    screens: [{ label: "Putting an offer forward", href: "/preview/{token}/offer", device: "desktop" }],
+    emails: ["tenant-offer-copy"],
+    notYet: [
+      "Only from a viewing so far - not yet from a lead or a listing.",
+      "The offer doesn't reach the landlord's screen yet: you put it to them.",
+      "Works before moving day don't become reminders on the landlord's portal yet.",
+    ],
   },
   {
     id: "applications",
