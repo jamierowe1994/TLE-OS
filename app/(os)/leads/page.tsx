@@ -17,7 +17,7 @@ import TagsPick from "@/components/TagsPick";
 import { defaultTags } from "@/lib/lead-facts-shape";
 import Segmented from "@/components/Segmented";
 import DoodleIcon from "@/components/DoodleIcon";
-import LeadGroups, { DEFAULT_GROUPS, type GroupsConfig } from "@/components/LeadGroups";
+import LeadGroups, { DEFAULT_GROUPS, isCompleted, type GroupsConfig } from "@/components/LeadGroups";
 import GroupsCustomiser from "@/components/GroupsCustomiser";
 import CornerSwell from "@/components/CornerSwell";
 import { usePref } from "@/lib/prefs-store";
@@ -301,17 +301,17 @@ export default function Leads() {
 
   // Tenant-side and landlord-side are different jobs with different questions,
   // so the nav splits them and the list follows. The filters stack on top.
-  const book = useMemo(() => {
+  /* Done with leads leave the List as well as Groups (Howard, 1 Oct 2026),
+     with one switch at the foot to see them. A stage filter or a search finds
+     them either way. */
+  const [showDone, setShowDone] = useState(false);
+  const { book, doneCount } = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return ALL.filter((l) => {
+    const all = ALL.filter((l) => {
       if (side && leadSide(l) !== side) return false;
       if (fSource && l.source !== fSource) return false;
       if (fAgent && l.agent !== fAgent) return false;
       if (fStage && (l.spineLabel ?? l.stage) !== fStage) return false;
-      /* Lost is off the working list (Howard, 24 Sep 2026). It is still one
-         Stage filter or a search away, and brought back from the lead. In
-         Groups it is kept: it goes in the Completed box at the foot. */
-      if (!fStage && !needle && l.spineLabel === "Lost" && view !== "groups") return false;
       if (fTags.length) { const mine = tagsOf(l); if (!fTags.every((t) => mine.includes(t))) return false; }
       /* Phone and address are in the needle too. Somebody looking a landlord up
          mid-call has the number in front of them far more often than the town,
@@ -326,7 +326,19 @@ export default function Leads() {
       }
       return true;
     });
-  }, [ALL, side, fSource, fAgent, fStage, fTags, tagsOf, q, view]);
+    /* Lost is off the working list (Howard, 24 Sep 2026), and since 1 Oct so
+       is everything else that is done - lost, a viewing or an appraisal
+       booked, closed. Groups keeps them: it has its own Completed box. */
+    const keep = view === "groups" || showDone || Boolean(fStage) || Boolean(needle);
+    return { book: keep ? all : all.filter((l) => !isCompleted(l)), doneCount: all.filter(isCompleted).length };
+  }, [ALL, side, fSource, fAgent, fStage, fTags, tagsOf, q, view, showDone]);
+  /* Nobody's yet (Howard, 1 Oct 2026: a new valuation request can arrive with
+     no agent, and support assigns it). Counted on the side being looked at,
+     for the chip that filters to them. */
+  const unassigned = useMemo(
+    () => ALL.filter((l) => l.agent === "Unassigned" && (!side || leadSide(l) === side) && !isCompleted(l)).length,
+    [ALL, side]
+  );
   /* Every tag on the board this side, with how many carry it. */
   const tagCounts = useMemo(() => {
     const m = new Map<string, number>();
@@ -338,7 +350,9 @@ export default function Leads() {
   useEffect(() => {
     setPage(0);
   }, [side, fSource, fAgent, fStage, fTags, q, perPage]);
-  const open = book.find((l) => l.id === openId) ?? null;
+  /* A lead opened by link may be one the list is not showing (completed):
+     the drawer still opens it. */
+  const open = book.find((l) => l.id === openId) ?? ALL.find((l) => l.id === openId) ?? null;
 
   /** Previous/Next walk the whole filtered book, not just the visible page. */
   function step(delta: number) {
@@ -415,6 +429,23 @@ export default function Leads() {
     if (source.onFile) bits.push(`${source.onFile.toLocaleString("en-GB")} kept on file in the OS - the search at the top looks through all of them`);
     return bits.length ? `${bits.join(". ")}.` : null;
   }, [source]);
+
+  /* One press to the leads nobody has been given yet. Only on a board that
+     holds more than one agent's work: an agent's own board never has any. */
+  const unassignedChip =
+    manyAgents && (unassigned > 0 || fAgent === "Unassigned") ? (
+      <button
+        type="button"
+        onClick={() => setFAgent(fAgent === "Unassigned" ? null : "Unassigned")}
+        aria-pressed={fAgent === "Unassigned"}
+        className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[12px] font-semibold transition-colors ${
+          fAgent === "Unassigned" ? "border-ink bg-ink text-page" : "border-accent/50 text-accent-dark hover:border-accent-dark"
+        }`}
+      >
+        <DoodleIcon name="user" size={12} />
+        {fAgent === "Unassigned" ? "Showing not assigned" : `${unassigned.toLocaleString("en-GB")} not assigned`}
+      </button>
+    ) : null;
 
   const pages = Math.max(1, Math.ceil(book.length / perPage));
   const rows = book.slice(page * perPage, page * perPage + perPage);
@@ -545,6 +576,7 @@ export default function Leads() {
                 <PickOne tone="pink" label="All agents" options={agents.map((o) => ({ id: o, label: o }))} value={fAgent} onChange={setFAgent} />
                 <PickOne tone="pink" label="All stages" options={stages.map((o) => ({ id: o, label: o }))} value={fStage} onChange={setFStage} />
                 <TagsPick tone="pink" tags={tagCounts} value={fTags} onChange={setFTags} />
+                {unassignedChip}
                 <div className="ml-auto">
                   <GroupsCustomiser value={groupsConfig} onChange={saveGroupsConfig} />
                 </div>
@@ -575,6 +607,7 @@ export default function Leads() {
             <PickOne tone="pink" label="All agents" options={agents.map((o) => ({ id: o, label: o }))} value={fAgent} onChange={setFAgent} />
             <PickOne tone="pink" label="All stages" options={stages.map((o) => ({ id: o, label: o }))} value={fStage} onChange={setFStage} />
             <TagsPick tone="pink" tags={tagCounts} value={fTags} onChange={setFTags} />
+            {unassignedChip}
             <div className="ml-auto">
               <ColumnCustomiser cols={cols} tone="pink" />
             </div>
@@ -596,6 +629,16 @@ export default function Leads() {
             <p className="flex items-center gap-2.5 text-[11px] text-muted">
               Showing {book.length ? page * perPage + 1 : 0}–
               {Math.min((page + 1) * perPage, book.length)} of {book.length} leads
+              {doneCount > 0 && !fStage && !q.trim() && (
+                <button
+                  type="button"
+                  onClick={() => setShowDone((v) => !v)}
+                  aria-pressed={showDone}
+                  className="rounded-full border border-line/80 px-2.5 py-1 text-[11px] font-semibold text-accent-dark transition-colors hover:border-ink/40"
+                >
+                  {showDone ? `Hide ${doneCount.toLocaleString("en-GB")} completed` : `Show ${doneCount.toLocaleString("en-GB")} completed`}
+                </button>
+              )}
               <select
                 value={perPage}
                 onChange={(e) => setPerPage(Number(e.target.value))}

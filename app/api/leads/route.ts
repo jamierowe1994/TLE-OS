@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchLeadBook, type LeadBook } from "@/lib/rex-leads";
-import { scopeFor } from "@/lib/scope";
+import { leadScope } from "@/lib/scope";
 import { ledgerBoard, ledgerStats, readNewValuations, recordLeads, salesLeadIds } from "@/lib/lead-ledger";
 import { hiddenLeadIds } from "@/lib/hidden-leads";
 import { ago } from "@/lib/rex-leads";
@@ -135,7 +135,7 @@ export async function GET(req: NextRequest) {
   }
 
   /* WHOSE LEADS. Resolved before anything is fetched or read from cache. */
-  const scope = await scopeFor(req);
+  const scope = await leadScope(req);
   if (scope.unlinked) {
     return NextResponse.json({
       ok: true,

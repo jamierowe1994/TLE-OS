@@ -10,6 +10,7 @@ import { listCases } from "@/lib/plc-store";
 import { outstandingTerms } from "@/lib/rex-esign";
 import { rexConfigured } from "@/lib/rex";
 import { whenAgo } from "@/lib/lead-spine";
+import { salesLeadIds } from "@/lib/lead-ledger";
 import type { Notice } from "@/lib/notices";
 
 /**
@@ -86,10 +87,16 @@ function whose(list: Person[], agent: string | null | undefined): Person | null 
 /* ── the five ───────────────────────────────────────────────────────────── */
 
 async function leadReminders(list: Person[], now: number): Promise<Reminder[]> {
-  const [book, spines] = await Promise.all([fetchLeadBook(null), allSpines().catch(() => ({}))]);
+  const [book, spines, sales] = await Promise.all([
+    fetchLeadBook(null),
+    allSpines().catch(() => ({})),
+    /* A sale is not ours to ring (Howard, 1 Oct 2026): REX's snippet never
+       says "sales", the ledger's full read does. */
+    salesLeadIds().catch(() => new Set<string>()),
+  ]);
   const out: Reminder[] = [];
   for (const l of book.leads) {
-    if (l.stage !== "New" || !l.receivedAt) continue;
+    if (l.stage !== "New" || !l.receivedAt || sales.has(l.id)) continue;
     const age = now - new Date(l.receivedAt).getTime();
     /* Over a day and under a fortnight: a lead nobody has touched in two
        weeks is not a reminder, it is a lead to close, and the list should
