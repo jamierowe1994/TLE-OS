@@ -317,7 +317,16 @@ const CARD_EFFECT: Record<Proposal["kind"], string> = {
   email: "Sends from YOUR Microsoft mailbox, so it is in your Sent Items and their reply threads onto it. BCC'd to REX so it shows on their timeline. The address is looked up again when you press - it always goes to the person on the record.",
 };
 
+/* Not inside the iPhone app (James, 2 Oct 2026): the app's floating nav bar
+   sits where Steve's corner is, so he would be caught behind it. He comes
+   back to the app another way later. The app's user agent ends TLEOSApp/<v>. */
 export default function HelpDock() {
+  const [inApp, setInApp] = useState(true);
+  useEffect(() => setInApp(/TLEOSApp\//.test(navigator.userAgent)), []);
+  return inApp ? null : <Dock />;
+}
+
+function Dock() {
   const path = usePathname();
   const router = useRouter();
   const [signedIn, setSignedIn] = useState(false);

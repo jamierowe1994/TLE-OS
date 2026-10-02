@@ -348,6 +348,18 @@ export const SWITCHES: Switch[] = [
     legacyEnv: "NEWSLETTER_SENDING",
     legacyOn: "on",
   },
+  {
+    /* The iPhone app's alerts (2 Oct 2026, lib/push). Staff only, and only
+       what their own bell already shows - but it buzzes a pocket, so James
+       arms it. A test to your own phone works with it off. */
+    key: "phone_alerts",
+    label: "Phone alerts",
+    what: "Sends what lands in each person's bell to their phone, through the TLE OS iPhone app, every five minutes.",
+    who: "STAFF ONLY: anybody signed in to the TLE OS app on an iPhone. Never landlords or tenants.",
+    confirm: "PHONE ALERTS",
+    legacyEnv: "PHONE_ALERTS",
+    legacyOn: "on",
+  },
 ];
 
 const byKey = new Map(SWITCHES.map((s) => [s.key, s]));

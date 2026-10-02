@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from "next";
+import { cookies, headers } from "next/headers";
 import PhoneFrame from "@/components/m/PhoneFrame";
+import { M_THEME_COLOUR, M_THEME_COOKIE, type MTheme } from "@/lib/m-theme";
+import "./m.css";
 
 /**
  * THE PHONE VIEW (16 Sep 2026).
@@ -16,7 +19,16 @@ import PhoneFrame from "@/components/m/PhoneFrame";
  * Reworked 18 Sep 2026 (James: "strip this page down to its absolute bare
  * minimum ... quick access to information"): today's calendar is the whole
  * home screen, each appointment opens onto the people and the property, and
- * everything else is in the slide-out menu (components/m/PhoneFrame).
+ * everything else is in the slide-out menu.
+ *
+ * Reworked 2 Oct 2026 for the iPhone app (ios/), four times in a day; the
+ * one that stuck is a nod to the original Notion look: monochrome, the
+ * Notioly line drawings, light or dark chosen on the first visit
+ * (components/m/Welcome), four tabs at the foot and a "+" for every other
+ * page (components/m/PhoneFrame). The mode is a per-phone cookie, read here
+ * so the first paint is already right, and the app's status bar follows the
+ * theme colour. The app's user agent ends "TLEOSApp/<version>", read here
+ * for the one thing only the app offers: a test alert to your own phone.
  *
  * What it does: the diary, a person's number, a property's facts, and the
  * Right to Rent ID photograph. What it does not: add, change or delete
@@ -28,17 +40,28 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: "TLE OS", statusBarStyle: "default" },
 };
 
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  viewportFit: "cover",
-  themeColor: "#ffffff",
-};
+async function chosenTheme(): Promise<MTheme | null> {
+  const v = (await cookies()).get(M_THEME_COOKIE)?.value;
+  return v === "light" || v === "dark" ? v : null;
+}
 
-export default function PhoneLayout({ children }: { children: React.ReactNode }) {
+export async function generateViewport(): Promise<Viewport> {
+  return {
+    width: "device-width",
+    initialScale: 1,
+    viewportFit: "cover",
+    themeColor: M_THEME_COLOUR[(await chosenTheme()) ?? "light"],
+  };
+}
+
+export default async function PhoneLayout({ children }: { children: React.ReactNode }) {
+  const inApp = /TLEOSApp\//.test((await headers()).get("user-agent") ?? "");
+  const theme = await chosenTheme();
   return (
-    <div className="os-type min-h-dvh bg-page text-ink">
-      <PhoneFrame>{children}</PhoneFrame>
+    <div className="m-app min-h-dvh" data-mtheme={theme ?? "light"}>
+      <PhoneFrame inApp={inApp} theme={theme}>
+        {children}
+      </PhoneFrame>
     </div>
   );
 }

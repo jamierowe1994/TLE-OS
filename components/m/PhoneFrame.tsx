@@ -2,160 +2,257 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import DoodleIcon from "@/components/DoodleIcon";
+import Welcome from "@/components/m/Welcome";
+import { applyMTheme, type MTheme } from "@/lib/m-theme";
 
 /**
- * THE AGENT'S PHONE: one header, and a menu the page slides off to reveal.
+ * THE AGENT'S PHONE: a page, four tabs at the foot, and a "+" for the rest.
  *
- * James, 18 Sep 2026: "super, super simple ... TLE OS in the corner like we
- * do ... a click tab, and it should be the same as the landlord page, where
- * we have that really cool effect where it pulls the page out to the
- * left-hand side and then shows the options ... a pink background just like
- * the landlord one."
- *
- * The same movement as components/landlord/PhoneShell: the page shrinks and
- * moves left, casting a shadow over the pink menu behind it, and tapping the
- * page brings it back. The pink is only mounted while the menu is in use, so
- * an iOS rubber-band never shows it behind a closed page.
- *
- * Only the /m pages use this, and /m is only where a phone lands.
+ * James, 2 Oct 2026, the fourth look of the day: "a nod to the original
+ * design of TLE OS, which is this Notion style ... very monochromatic,
+ * offering a light and dark mode". The tabs are labelled, plain and quiet; the
+ * "+" sits at the top right of each screen's title (PhoneTop), as on his
+ * reference's Dashboard, and opens every other page, the light/dark switch,
+ * and the account. The bar is drawn here, so Safari and the iPhone app (one
+ * plain web view, ios/) show the same thing.
  */
 
-/* One word each (James, 18 Sep 2026: "Calendar, Tenant, Landlord, Property,
-   Scan ID" rather than a sentence per line). */
-const LINKS: Array<{ href: string; label: string }> = [
-  { href: "/m", label: "Calendar" },
-  { href: "/m/people?who=tenant", label: "Tenant" },
-  { href: "/m/people?who=landlord", label: "Landlord" },
-  { href: "/m/properties", label: "Property" },
-  { href: "/m/id-check", label: "Scan ID" },
+const TABS: Array<{ href: string; label: string; match: (p: string) => boolean; icon: React.ReactNode }> = [
+  {
+    href: "/m",
+    label: "Today",
+    match: (p) => p === "/m" || p.startsWith("/m/event"),
+    icon: <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v10a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5zM4 10h16M8 3v4M16 3v4" />,
+  },
+  {
+    href: "/m/people",
+    label: "People",
+    match: (p) => p.startsWith("/m/people"),
+    icon: <path d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2.5 20c.6-3.4 3.2-5.5 6.5-5.5s5.9 2.1 6.5 5.5M16 4.3a3.5 3.5 0 0 1 0 6.4M18.5 14.8c1.6.8 2.7 2.5 3 5.2" />,
+  },
+  {
+    href: "/m/properties",
+    label: "Properties",
+    match: (p) => p.startsWith("/m/properties"),
+    icon: <path d="M3.5 10.5 12 4l8.5 6.5M5.5 9v10.5h13V9M10 19.5v-5.5h4v5.5" />,
+  },
+  {
+    href: "/m/id-check",
+    label: "Scan ID",
+    match: (p) => p.startsWith("/m/id-check"),
+    icon: <path d="M3.5 6.5A2.5 2.5 0 0 1 6 4h12a2.5 2.5 0 0 1 2.5 2.5v11A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5zM9 12.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM5.8 16.5c.5-1.6 1.7-2.5 3.2-2.5s2.7.9 3.2 2.5M14.5 10h3.5M14.5 13.5h3.5" />,
+  },
 ];
 
-export default function PhoneFrame({ children }: { children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  /* The page shrinks about the middle of what is ON SCREEN, not the middle of
-     the whole day's list - or a long calendar slides off showing its middle. */
-  const [origin, setOrigin] = useState("50% 50%");
-  const path = usePathname();
+/* The full OS's pages an agent reaches for away from a desk. Each opens the
+   full OS screen; the app's swipe back returns to the phone. */
+const PAGES: Array<{ href: string; label: string; icon: string }> = [
+  { href: "/leads", label: "Leads", icon: "target" },
+  { href: "/listings", label: "Listings", icon: "home" },
+  { href: "/viewings", label: "Viewings", icon: "key" },
+  { href: "/applications", label: "Applications", icon: "file-contract" },
+  { href: "/market-appraisals", label: "Market Appraisals", icon: "checklist" },
+  { href: "/dashboard?full=1", label: "The Full OS", icon: "dashboard" },
+];
 
-  const close = useCallback(() => {
-    setOpen(false);
-    /* Kept until the page has slid back over it, or the pink vanishes from
-       under a page still on its way home. */
-    window.setTimeout(() => setMounted(false), 500);
-  }, []);
+const GoToContext = createContext<() => void>(() => {});
+/** Opens the "+" sheet. PhoneTop puts the button beside every title. */
+export const useGoTo = () => useContext(GoToContext);
 
-  const toggle = () => {
-    if (open) return close();
-    setOrigin(`50% ${Math.round(window.scrollY + window.innerHeight / 2)}px`);
-    setMounted(true);
-    /* A frame later, so the menu is painted before the page moves off it. */
-    requestAnimationFrame(() => setOpen(true));
+export default function PhoneFrame({ inApp, theme, children }: { inApp: boolean; theme: MTheme | null; children: React.ReactNode }) {
+  const path = usePathname() ?? "/m";
+  const [sheet, setSheet] = useState(false);
+  const [mode, setMode] = useState<MTheme | null>(theme);
+  useEffect(() => setSheet(false), [path]);
+  const open = useCallback(() => setSheet(true), []);
+
+  const choose = (t: MTheme) => {
+    applyMTheme(t);
+    setMode(t);
   };
 
-  /* Landing anywhere new closes it. */
-  useEffect(() => {
-    close();
-  }, [path, close]);
+  if (!mode) return <Welcome onChoose={choose} />;
+
+  return (
+    <GoToContext.Provider value={open}>
+      {/* Behind the clock and battery, so a scrolled page never runs under them. */}
+      <div aria-hidden className="fixed inset-x-0 top-0 z-30 h-[env(safe-area-inset-top)]" style={{ background: "var(--m-bg)" }} />
+      <div className="mx-auto w-full max-w-[560px] px-4 pb-[calc(env(safe-area-inset-bottom)+92px)] pt-[calc(env(safe-area-inset-top)+14px)]">{children}</div>
+
+      <nav
+        aria-label="Sections"
+        className="fixed inset-x-0 bottom-0 z-40 border-t pb-[env(safe-area-inset-bottom)]"
+        style={{ borderColor: "var(--m-line)", background: "var(--m-card)" }}
+      >
+        <ul className="mx-auto grid max-w-[560px] grid-cols-4">
+          {TABS.map((t) => {
+            const on = t.match(path);
+            return (
+              <li key={t.href}>
+                <Link
+                  href={t.href}
+                  aria-current={on ? "page" : undefined}
+                  className="flex h-[58px] flex-col items-center justify-center gap-1 text-[11px]"
+                  style={{ color: on ? "var(--m-ink)" : "var(--m-soft)", fontWeight: on ? 600 : 500 }}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden className="h-[23px] w-[23px]" fill="none" stroke="currentColor" strokeWidth={on ? 1.9 : 1.5} strokeLinecap="round" strokeLinejoin="round">
+                    {t.icon}
+                  </svg>
+                  {t.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+
+      {sheet && <PagesSheet inApp={inApp} mode={mode} onMode={choose} onClose={() => setSheet(false)} />}
+    </GoToContext.Provider>
+  );
+}
+
+type Me = { name: string; email: string; photo: string | null };
+
+function PagesSheet({ inApp, mode, onMode, onClose }: { inApp: boolean; mode: MTheme; onMode: (t: MTheme) => void; onClose: () => void }) {
+  const [me, setMe] = useState<Me | null>(null);
+  const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { user?: { name?: string; email?: string; photo?: string | null } | null }) => {
+        if (j.user?.name) setMe({ name: j.user.name, email: j.user.email ?? "", photo: j.user.photo ?? null });
+      })
+      .catch(() => null);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
-    const had = document.body.style.overflow;
+    const was = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = had;
+      document.body.style.overflow = was;
     };
-  }, [open, close]);
+  }, [onClose]);
+
+  const test = async () => {
+    setNote("Sending...");
+    const j = (await fetch("/api/push/test", { method: "POST" })
+      .then((r) => r.json())
+      .catch(() => ({ ok: false, error: "No connection." }))) as { ok: boolean; error?: string };
+    setNote(j.ok ? "Sent. It should arrive in a few seconds." : j.error ?? "That did not send.");
+  };
+
+  const signOut = async () => {
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
+    window.location.href = "/sign-in?next=/m";
+  };
+
+  const row = "m-row flex h-[52px] w-full items-center gap-3 px-4 text-left text-[15.5px] active:bg-panel";
 
   return (
-    <>
-      {mounted && (
-        <nav
-          className="fixed inset-0 z-0 flex flex-col justify-center bg-accent-soft px-7 pb-10 pt-20"
-          aria-hidden={!open}
-          aria-label="Menu"
-          style={{ pointerEvents: open ? "auto" : "none" }}
-        >
-          <ul className="ml-auto w-[80%] space-y-0.5 text-right">
-            {LINKS.map((l) => (
-              <li key={l.href}>
-                <Link href={l.href} onClick={close} className="block py-2 text-[26px] font-bold leading-tight text-ink">
-                  {l.label}
-                </Link>
-              </li>
-            ))}
-            <li className="pt-5">
-              <a href="/dashboard?full=1" className="block py-1.5 text-[15px] font-semibold text-muted">
-                Open the Full OS
+    <div
+      className="fixed inset-0 z-[80] flex items-end justify-center"
+      style={{ background: "rgba(0, 0, 0, 0.38)", animation: "m-dim 200ms ease-out both" }}
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Everything else"
+    >
+      <style>{`
+        @keyframes m-dim { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes m-rise { from { transform: translateY(100%) } to { transform: translateY(0) } }
+        @media (prefers-reduced-motion: reduce) { .m-sheet { animation: none !important } }
+      `}</style>
+      <div
+        className="m-sheet max-h-[90dvh] w-full max-w-[560px] overflow-y-auto rounded-t-[28px] px-4 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-3"
+        style={{ background: "var(--m-bg)", animation: "m-rise 320ms cubic-bezier(0.22, 1, 0.36, 1) both" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span aria-hidden className="mx-auto mb-3 block h-[5px] w-[40px] rounded-full" style={{ background: "var(--m-line)" }} />
+        <div className="mb-4 flex items-center justify-between px-1">
+          <h2 className="m-title text-[22px]">Everything Else</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="m-round m-press">
+            <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+
+        <ul className="m-group">
+          {PAGES.map((p) => (
+            <li key={p.href} className="m-row">
+              <a href={p.href} className={row}>
+                <DoodleIcon name={p.icon} size={18} className="text-muted" />
+                <span className="flex-1">{p.label}</span>
+                <Chevron />
               </a>
             </li>
-            <li>
-              <button
-                type="button"
-                onClick={async () => {
-                  await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
-                  window.location.href = "/sign-in?next=/m";
-                }}
-                className="block w-full py-1.5 text-right text-[15px] font-semibold text-muted"
-              >
-                Sign Out
-              </button>
-            </li>
-          </ul>
-        </nav>
-      )}
+          ))}
+        </ul>
 
-      <div
-        className="relative z-[1] min-h-dvh bg-page"
-        onClick={open ? close : undefined}
-        style={{
-          /* Further than the landlord portal's 64%: "Search for a Landlord" is the
-             longest line in either menu and must clear the page's edge. */
-          transform: open ? "scale(0.84) translateX(-74%)" : undefined,
-          transformOrigin: origin,
-          borderRadius: open ? 26 : 0,
-          overflow: open ? "hidden" : undefined,
-          boxShadow: open ? "0 30px 70px -18px rgba(40, 25, 20, 0.45)" : undefined,
-          transition: "transform 460ms cubic-bezier(0.22, 1, 0.36, 1), border-radius 320ms, box-shadow 460ms",
-        }}
-      >
-        <div className="mx-auto w-full max-w-[520px] px-4 pb-[max(28px,env(safe-area-inset-bottom))] pt-[max(14px,env(safe-area-inset-top))]">
-          <header className="mb-6 flex h-11 items-center justify-between">
-            <Link href="/m" aria-label="TLE OS, today's calendar" className="block">
-              <img src="/brand/tle-os-type.png" alt="TLE OS" className="art-light h-[19px] w-auto" />
-              <img src="/brand/tle-os-type-dark.png" alt="" aria-hidden className="art-dark h-[19px] w-auto" />
-            </Link>
+        <p className="m-eyebrow mb-2 mt-5 px-1">Appearance</p>
+        <div className="grid grid-cols-2 gap-2">
+          {(["light", "dark"] as const).map((t) => (
             <button
+              key={t}
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                toggle();
-              }}
-              aria-expanded={open}
-              aria-label={open ? "Close the menu" : "Menu"}
-              className="-mr-1 flex h-11 w-11 items-center justify-center rounded-full"
+              onClick={() => onMode(t)}
+              aria-pressed={mode === t}
+              className="m-press flex h-12 items-center justify-center gap-2 rounded-[14px] border text-[15px] font-medium"
+              style={
+                mode === t
+                  ? { background: "var(--m-ink)", color: "var(--m-bg)", borderColor: "var(--m-ink)" }
+                  : { background: "var(--m-card)", borderColor: "var(--m-line)" }
+              }
             >
-              <span className="flex flex-col gap-[5px]">
-                {[0, 1, 2].map((i) => (
-                  <span
-                    key={i}
-                    className="block h-[2px] w-[22px] rounded-full bg-ink"
-                    style={{
-                      transform: open ? (i === 0 ? "translateY(7px) rotate(45deg)" : i === 1 ? "scaleX(0)" : "translateY(-7px) rotate(-45deg)") : undefined,
-                      transition: "transform 320ms cubic-bezier(0.22, 1, 0.36, 1)",
-                    }}
-                  />
-                ))}
-              </span>
+              <span aria-hidden className="h-3.5 w-3.5 rounded-full border" style={{ background: t === "light" ? "#ffffff" : "#121212", borderColor: "#8a8a87" }} />
+              {t === "light" ? "Light" : "Dark"}
             </button>
-          </header>
-          {children}
+          ))}
         </div>
+
+        <div className="m-group mt-5">
+          <div className="m-row flex items-center gap-3 px-4 py-3.5">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-[15px] font-medium" style={{ background: "var(--m-pink-wash)" }}>
+              {me?.photo ? <img src={me.photo} alt="" className="h-full w-full object-cover" /> : initials(me?.name)}
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-[16px] font-medium">{me?.name ?? " "}</span>
+              <span className="block truncate text-[13.5px] text-muted">{me?.email ?? " "}</span>
+            </span>
+          </div>
+          {inApp && (
+            <button type="button" onClick={test} className={row}>
+              <DoodleIcon name="bell" size={18} className="text-muted" />
+              Test Phone Alerts
+            </button>
+          )}
+          <button type="button" onClick={signOut} className={row} style={{ color: "var(--accent-dark)" }}>
+            <DoodleIcon name="logout" size={18} />
+            Sign Out
+          </button>
+        </div>
+        {note && <p className="mt-2 px-1 text-[13.5px] text-muted">{note}</p>}
       </div>
-    </>
+    </div>
   );
+}
+
+function Chevron() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4 shrink-0" style={{ color: "var(--m-soft)" }}>
+      <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function initials(name: string | undefined): string {
+  return (name ?? "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join("");
 }

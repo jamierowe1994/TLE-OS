@@ -466,6 +466,7 @@ const MACHINE_ROUTES = [
   "/api/agent-compliance/remind",     // the agent's own 30/14/7, and Michael's list
   "/api/lettings-capture/run",        // the daily market sweep
   "/api/leads/scan",                  // the lead ledger, every five minutes
+  "/api/push/scan",                   // the bell to the iPhone app, every five minutes (cron key)
   "/api/bugs/bot",                    // the bug bot: takes bugs, records its fixes (cron key)
   "/api/landlord/property-answers/chase", // signed but questions unfinished: 2, 5, 9 days
   "/api/viewings/sweep",              // the viewings ledger, nightly

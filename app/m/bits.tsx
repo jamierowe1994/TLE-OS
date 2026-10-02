@@ -3,27 +3,68 @@
 import Link from "next/link";
 import { useEffect } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import { useGoTo } from "@/components/m/PhoneFrame";
 
 /**
  * The few pieces every phone screen shares. Kept deliberately small: big
  * targets (48px and up), one action per row, words rather than icons alone.
  */
 
-/** Back to the home screen, and the screen's title. */
-export function PhoneTop({ title, back = "/m" }: { title: string; back?: string }) {
+/**
+ * A screen's title, with the "+" for every other page at its right (James's
+ * reference: "Dashboard" and a plus). An optional small line above (the
+ * date), and on a screen one level down, a round back button at the left.
+ */
+export function PhoneTop({
+  title,
+  eyebrow,
+  back,
+  children,
+}: {
+  title: string;
+  eyebrow?: string;
+  back?: string;
+  /** Sits under the title: the week strip, chips. */
+  children?: React.ReactNode;
+}) {
+  const goTo = useGoTo();
   return (
-    <header className="mb-5 flex items-center gap-3">
-      <Link
-        href={back}
-        aria-label="Back"
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-line/70 bg-card active:bg-panel"
-      >
-        <svg viewBox="0 0 24 24" aria-hidden className="h-5 w-5">
-          <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </Link>
-      <h1 className="text-[25px] leading-tight">{title}</h1>
+    <header className="mb-4">
+      <div className="flex h-11 items-center justify-between gap-3">
+        {back ? <BackLink href={back} /> : <span />}
+        <button type="button" onClick={goTo} aria-label="Everything else" className="m-press -mr-1.5 flex h-11 w-11 items-center justify-center rounded-full">
+          <svg viewBox="0 0 24 24" aria-hidden className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
+      </div>
+      {eyebrow && <p className="m-eyebrow mt-1">{eyebrow}</p>}
+      <h1 className="m-title mt-0.5 text-[30px] leading-[1.15]">{title}</h1>
+      {children}
     </header>
+  );
+}
+
+export function BackLink({ href }: { href: string }) {
+  return (
+    <Link href={href} aria-label="Back" className="m-round m-press">
+      <svg viewBox="0 0 24 24" aria-hidden className="h-[18px] w-[18px]">
+        <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </Link>
+  );
+}
+
+/** Two or three choices as rounded chips, the chosen one filled. */
+export function Segmented<T extends string>({ value, options, onChange }: { value: T; options: Array<{ value: T; label: string }>; onChange: (v: T) => void }) {
+  return (
+    <div className="m-seg" role="group">
+      {options.map((o) => (
+        <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -38,7 +79,7 @@ export function Spinner({ label, className = "" }: { label: string; className?: 
 
 export function ErrorLine({ text, onRetry }: { text: string; onRetry?: () => void }) {
   return (
-    <div role="alert" className="rounded-2xl border border-accent/40 bg-accent-soft/60 px-4 py-3 text-[14px] text-accent-dark">
+    <div role="alert" className="rounded-2xl bg-accent-soft/70 px-4 py-3 text-[14px] text-accent-dark">
       <p>{text}</p>
       {onRetry && (
         <button type="button" onClick={onRetry} className="mt-2 font-semibold underline underline-offset-2">
@@ -56,21 +97,21 @@ export const dialable = (phone: string) => phone.replace(/[^\d+]/g, "");
 export function ReachButtons({ phone, email }: { phone: string; email: string }) {
   const tel = dialable(phone);
   if (!tel && !email) return <p className="mt-3 text-[13px] text-muted">No number or email on the record.</p>;
-  const btn = "flex h-12 flex-1 items-center justify-center gap-2 rounded-xl text-[14.5px] font-semibold active:opacity-80";
+  const btn = "m-btn m-press flex-1 !h-11 !text-[14.5px]";
   return (
     <div className="mt-3 flex gap-2">
       {tel && (
-        <a href={`tel:${tel}`} className={btn} style={{ background: "var(--brown)", color: "#fff" }}>
+        <a href={`tel:${tel}`} className={`${btn} m-btn-primary`}>
           <DoodleIcon name="call" size={17} /> Call
         </a>
       )}
       {tel && (
-        <a href={`sms:${tel}`} className={`${btn} border border-line/70 bg-card`}>
+        <a href={`sms:${tel}`} className={btn}>
           <DoodleIcon name="message" size={17} /> Text
         </a>
       )}
       {email && (
-        <a href={`mailto:${email}`} className={`${btn} border border-line/70 bg-card`}>
+        <a href={`mailto:${email}`} className={btn}>
           <DoodleIcon name="mail" size={17} /> Email
         </a>
       )}
@@ -127,26 +168,30 @@ export function SearchBox({
   value,
   onChange,
   placeholder,
+  autoFocus = false,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder: string;
+  /* Off by default: on a tab, the keyboard springing up the moment the tab
+     is opened hides the page it is on. */
+  autoFocus?: boolean;
 }) {
   return (
-    <label className="flex h-14 items-center gap-3 rounded-2xl border border-line/80 bg-card px-4 focus-within:border-accent">
-      <DoodleIcon name="search" size={18} className="text-muted" />
+    <label className="m-search">
+      <DoodleIcon name="search" size={17} className="text-muted" />
       <input
         type="search"
-        autoFocus
+        autoFocus={autoFocus}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         enterKeyHint="search"
         autoComplete="off"
-        className="h-full min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-muted"
+        className="h-full min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-muted [&::-webkit-search-cancel-button]:hidden"
       />
       {value && (
-        <button type="button" onClick={() => onChange("")} aria-label="Clear" className="flex h-8 w-8 items-center justify-center rounded-full text-muted">
+        <button type="button" onClick={() => onChange("")} aria-label="Clear" className="-mr-1.5 flex h-8 w-8 items-center justify-center rounded-full text-muted">
           <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4">
             <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
           </svg>

@@ -3420,6 +3420,21 @@ CREATE TABLE IF NOT EXISTS os_newsletter_clicks (
   at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS os_newsletter_clicks_by ON os_newsletter_clicks (newsletter_id, url);
+
+-- The agents' phones (2 Oct 2026): one row per iPhone app install, so the
+-- bell can reach a pocket. env is "sandbox" for a build run from Xcode and
+-- "production" for TestFlight; Apple refuses a token sent to the wrong one.
+-- A token Apple says is dead is deleted, not kept.
+CREATE TABLE IF NOT EXISTS os_push_devices (
+  token        TEXT PRIMARY KEY,
+  user_id      TEXT NOT NULL,
+  platform     TEXT NOT NULL DEFAULT 'ios',
+  env          TEXT NOT NULL DEFAULT 'production',
+  app_version  TEXT NOT NULL DEFAULT '',
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  seen_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_push_devices_user ON os_push_devices (user_id);
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a

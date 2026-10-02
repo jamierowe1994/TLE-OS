@@ -28,7 +28,7 @@ export function RadiusBox({ picked, onOpen }: { picked: RadiusPick | null; onOpe
     <button
       type="button"
       onClick={onOpen}
-      className="mt-2.5 flex h-14 w-full items-center gap-3 rounded-2xl border border-line/80 bg-card px-4 text-left active:bg-panel"
+      className="mt-2.5 flex h-12 w-full items-center gap-3 rounded-xl bg-card px-4 text-left active:bg-panel"
       style={picked ? { borderColor: "var(--accent)" } : undefined}
     >
       <DoodleIcon name="target" size={18} className="text-muted" />
@@ -127,9 +127,9 @@ export function RadiusSheet({ start, onPick, onClose }: { start: RadiusPick | nu
           autoCapitalize="characters"
           autoComplete="postal-code"
           enterKeyHint="search"
-          className="h-14 min-w-0 flex-1 rounded-2xl border border-line/80 bg-card px-4 text-[16px] uppercase outline-none placeholder:normal-case focus:border-accent"
+          className="h-14 min-w-0 flex-1 rounded-2xl border border-[color:var(--m-line)] bg-card px-4 text-[16px] uppercase outline-none placeholder:normal-case focus:border-accent"
         />
-        <button type="submit" disabled={busy !== null} className="h-14 shrink-0 rounded-2xl border border-line/80 bg-card px-5 text-[15px] font-semibold disabled:opacity-60">
+        <button type="submit" disabled={busy !== null} className="h-14 shrink-0 rounded-2xl border border-[color:var(--m-line)] bg-card px-5 text-[15px] font-semibold disabled:opacity-60">
           Search
         </button>
       </form>
