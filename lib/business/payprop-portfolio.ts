@@ -21,7 +21,9 @@ export interface PropertyRow {
   contract_amount?: number;
   commission?: number;
   service_level?: unknown;
-  active_tenancies?: number;
+  /** With include_active_tenancies, a LIST of the tenants on the running
+   *  tenancy, not a count (2 Oct 2026); older replies may carry a number. */
+  active_tenancies?: number | unknown[];
   account_balance?: number;
   address?: { first_line?: string; city?: string; postal_code?: string };
 }
@@ -186,6 +188,14 @@ const text = (v: unknown): string => {
   return "";
 };
 
+/**
+ * How many tenants are on a property's running tenancy. PayProp answers
+ * include_active_tenancies with an array of tenant records; reading it as a
+ * number made every property a void (78 of 78 in Scotland on 2 Oct 2026),
+ * which also dropped every rent from the managed book's fallback.
+ */
+const tenantsOn = (v: unknown): number => (Array.isArray(v) ? v.length : money(v));
+
 const money = (v: unknown) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -233,7 +243,9 @@ export async function getPortfolioBook(
   // the background job below, so a cold process served nothing until the whole
   // walk finished — the deploy-day slowness.
   if (!cache) {
-    const stored = await readCache<PortfolioBook>("payprop:portfolio:v4").catch(() => null);
+    /* v5 (2 Oct 2026): tenants counted from the active_tenancies list - a v4
+       book reads every property as void and carries no rents. */
+    const stored = await readCache<PortfolioBook>("payprop:portfolio:v5").catch(() => null);
     if (stored) cache = { at: stored.at, data: stored.data };
   }
   if (cache && Date.now() - cache.at < TTL_MS) return cache.data;
@@ -245,7 +257,7 @@ export async function getPortfolioBook(
         cache = { at: Date.now(), data };
         lastError = null;
         failedAt = 0;
-        await writeCache("payprop:portfolio:v4", data).catch(() => {
+        await writeCache("payprop:portfolio:v5", data).catch(() => {
           /* the durable copy is an optimisation, never a dependency */
         });
         return data;
@@ -322,12 +334,12 @@ async function computePortfolioBook(): Promise<PortfolioBook | null> {
       accRent += rent;
 
       // A property with no running tenancy is a void.
-      if (money(r.active_tenancies) > 0) tenanted++;
+      if (tenantsOn(r.active_tenancies) > 0) tenanted++;
       else vacant++;
 
       /* The rent being collected now, for the managed book's fallback. A void's
          figure is not anybody's rent, so only tenanted properties count. */
-      if (rent > 0 && money(r.active_tenancies) > 0) {
+      if (rent > 0 && tenantsOn(r.active_tenancies) > 0) {
         const rk = rentKey(text(r.property_name) || text(r.address?.first_line), text(r.address?.postal_code));
         if (rk) {
           const seen = rentsByKey.get(rk) ?? new Set<number>();
@@ -382,7 +394,7 @@ async function computePortfolioBook(): Promise<PortfolioBook | null> {
       if (raw && !book.names.includes(raw)) book.names.push(raw);
       book.properties++;
       book.rentRoll += rent;
-      book.activeTenancies += money(r.active_tenancies);
+      book.activeTenancies += tenantsOn(r.active_tenancies) > 0 ? 1 : 0;
       book.serviceLevels[level] = (book.serviceLevels[level] ?? 0) + 1;
       const pname = text(r.property_name);
       if (pname) book.propertyNames.push(pname);
