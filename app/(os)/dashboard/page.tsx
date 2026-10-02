@@ -85,26 +85,33 @@ export default function Dashboard() {
            which still leaves the greeting its one line. */
         /* 2 Oct 2026: James swapped the armchair scene for a brick loft
            floating on clouds ("I do love the properties ... lean more towards
-           that side"). Transparent PNG from Downloads, trimmed to its clouds
-           with only the stray wisps at either end taken off (7% left, 4%
-           right) and no faded edges (James asked to see them as drawn).
+           that side"). His transparent PNG, trimmed to its clouds and nothing
+           cut or faded at the ends, turned 2 degrees anticlockwise: the
+           building's base fell 2 degrees to the right and looked tipped on a
+           level rule ("needs to be just twisted slightly").
            The masthead is the standard 268, the same line as every other
            screen. The rule runs through the clouds just under the building's
-           base: it stands on the line and the lower clouds go under it. */
+           base: it stands on the line and the lower clouds (and the slant the
+           turn leaves at the bottom edge) go under it. */
         illustration="/illustrations/home/brick-loft-clouds.webp"
-        illustrationHeight={208}
-        illustrationAspect={2.4531}
+        illustrationHeight={245}
+        illustrationAspect={2.6836}
         /* Wide art: drawn from 1280px up only, so on a smaller laptop or a
            tablet the greeting keeps the width and the line stays level with
            every other screen - see artFromXl. */
         hideArtOnPhone
         artFromXl
+        /* A 1280 laptop with a tall screen has 160px less masthead than a
+           1440 one: three quarters size there keeps the greeting on its line. */
+        smallXlScale={0.75}
         seat={0.9}
         illustrationCrop
         lineBreak="none"
-        /* No inward nudge: the greeting's line runs right up to the art's
-           box, and the clouds need the clear space between them. */
-        illustrationNudge={0}
+        /* Pinned to the right edge. The seated inset (166px) is room for a
+           figure's legs to hang past the page's button; clouds have no legs,
+           so that room goes to the building instead ("a bit bigger still"),
+           and the clouds run out to the end of the line. */
+        flushRight
         /* Customise rides the search row — one line of chrome, not two.
            The agent's quick links sit to its right (components/QuickLinks):
            pills they picked themselves, and in customise mode the circle that

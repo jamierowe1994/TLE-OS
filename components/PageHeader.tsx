@@ -148,6 +148,7 @@ export default function PageHeader({
   illustrationAspect,
   hideArtOnPhone = false,
   artFromXl = false,
+  smallXlScale,
   /**
    * Slide the artwork sideways, in pixels. Positive is right.
    *
@@ -292,6 +293,13 @@ export default function PageHeader({
    * The words get the whole width instead, and the line stays where it is.
    */
   artFromXl?: boolean;
+  /**
+   * Scale for 1280-1439px screens with room to spare (taller than 820). The
+   * shared steps draw full size from 1280, but a 1280 laptop has 160px less
+   * masthead than a 1440 one, and the dashboard's wide loft squeezed the
+   * greeting to three lines there (2 Oct 2026). Wide art only.
+   */
+  smallXlScale?: number;
   lineBreak?: LineBreak;
   seat?: number;
   seatCut?: { left: number; right: number };
@@ -449,6 +457,10 @@ export default function PageHeader({
             /* The short masthead reserves through its own variable; with the
                art not drawn below 1280 there is nothing to reserve for. */
             artFromXl ? `\n          @media (max-width: 1279.98px) { .${artClass} { --mast-short-reserve: 0px } }` : ""
+          }${
+            smallXlScale
+              ? `\n          @media (min-width: 1280px) and (max-width: 1439.98px) and (min-height: 821px) { .${artClass} { padding-right: ${Math.round(illustrationHeight * (illustrationAspect ?? 0.7) * smallXlScale) + inset[3] + 14}px } .os-mast-art.${artClass}-art { scale: ${smallXlScale} } }`
+              : ""
           }
         `}</style>
       )}
@@ -639,7 +651,7 @@ export default function PageHeader({
           <div
             className={`os-mast-art pointer-events-none absolute bottom-0 origin-bottom-right scale-[0.5] sm:scale-[0.68] lg:scale-[0.88] xl:scale-100 ${
               artFromXl ? "hidden xl:block " : hideArtOnPhone ? "hidden sm:block " : ""
-            }${
+            }${smallXlScale && artClass ? `${artClass}-art ` : ""}${
               flushRight
                 ? "right-0"
                 : seated
