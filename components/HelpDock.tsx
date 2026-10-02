@@ -15,6 +15,8 @@ import { fetchMe } from "@/lib/me";
 import { openGuide } from "@/lib/guide-sheet";
 import { TOAST_LIFT_EVENT, type ToastLift } from "@/lib/toast";
 import SteveTasks from "@/components/SteveTasks";
+import { readScreen, runSteps } from "@/lib/screen-controls";
+import type { ScreenPlan } from "@/lib/steve-never";
 
 /**
  * The character in the corner, and what he says.
@@ -215,6 +217,10 @@ type Line = {
   offerTaken?: boolean;
   /** Downloads from the File Store he found (2 Oct 2026). */
   downloads?: { name: string; href: string }[];
+  /** Steps he planned on their screen, run by their press (2 Oct 2026). */
+  plan?: ScreenPlan;
+  /** "running" while it runs, then what happened. */
+  planState?: string;
   /** Set once the button has been pressed, so it cannot be pressed twice. */
   settled?: string;
   /** Files that went up with this message. Only ever on an agent's line. */
@@ -807,6 +813,39 @@ export default function HelpDock() {
    * Another page: an ordinary navigation, which mounts it fresh. He steps
    * aside afterwards so the file is not under the bubble.
    */
+  /**
+   * Run his plan on their screen (2 Oct 2026), step by step where they can
+   * watch. Their press is the say-so; the never rule is checked again on
+   * every control at the moment it is touched (lib/screen-controls).
+   */
+  async function runPlan(line: Line, chain = 0) {
+    if (!line.plan || line.planState) return;
+    const mark = (state: string) => setLines((all) => all.map((x) => (x.plan === line.plan ? { ...x, planState: state } : x)));
+    mark("running");
+    setMood("thinking");
+    const res = await runSteps(line.plan.steps, path).catch(() => ({ ok: false, done: 0, message: "Something stopped me part way. Have a look and tell me what's left." }));
+    mark(res.ok ? "done" : "stopped");
+    /* The steps opened what the rest of the job needs: he looks at the new
+       screen and finishes it. Four hops at most, so a plan can never chase
+       itself round the page. */
+    if (res.ok && line.plan.carryOn && chain < 4) {
+      await new Promise((r) => setTimeout(r, 500));
+      void say(
+        "Done - the screen has changed. Carry on with what I asked. (A plan that only types or chooses now runs straight away, so say you are filling it in; anything you press still waits for my press.)",
+        { silent: true, chain: chain + 1 }
+      );
+      return;
+    }
+    setLines((all) => [
+      ...all,
+      {
+        role: "assistant",
+        text: res.ok ? "That's done. Have a look, and tell me if anything needs changing." : res.message,
+      },
+    ]);
+    react(res.ok ? "happy" : "confused", 1600);
+  }
+
   function openFile(link: { href: string; label: string }) {
     if (!link.href.startsWith("/")) return;
     const target = link.href.split("?")[0];
@@ -822,8 +861,9 @@ export default function HelpDock() {
 
   /** `override` is a suggestion being pressed: sent as typed, without a
    *  round trip through the input's state. */
-  async function say(override?: string) {
+  async function say(override?: string, opts?: { silent?: boolean; chain?: number }) {
     const text = (override ?? draft).trim();
+    const chain = opts?.chain ?? 0;
     /* Sent, and only sent, once every chosen file has finished one way or the
        other. Otherwise a key that arrives a moment later is attached to
        nothing. */
@@ -832,6 +872,13 @@ export default function HelpDock() {
     if ((!text && !sending.length) || busy || uploading) return;
     /* "Yes" to his offer to open a file: open it, no model needed. */
     const lastSteve = [...lines].reverse().find((l) => l.role === "assistant");
+    /* "Yes" / "do it" to a plan on the screen: run it, the same as the button. */
+    if (!sending.length && lastSteve?.plan && !lastSteve.planState && YES.test(text)) {
+      setDraft("");
+      setLines((l) => [...l, { role: "agent", text }]);
+      void runPlan(lastSteve);
+      return;
+    }
     if (!sending.length && lastSteve?.offer && !lastSteve.offerTaken && YES.test(text)) {
       const offer = lastSteve.offer;
       setDraft("");
@@ -844,9 +891,11 @@ export default function HelpDock() {
       openFile(offer);
       return;
     }
-    setDraft("");
-    setFiles([]);
-    setLines((l) => [...l, { role: "agent", text, files: sending }]);
+    if (!opts?.silent) {
+      setDraft("");
+      setFiles([]);
+      setLines((l) => [...l, { role: "agent", text, files: sending }]);
+    }
     setBusy(true);
     setMood("thinking");
 
@@ -867,6 +916,15 @@ export default function HelpDock() {
              the only moment it needs to be true is the instant Send is
              pressed. */
           surfaces: getOpenSurfaces(),
+          /* Every control on screen, with a ref he can name in a plan
+             (lib/screen-controls). Read at the moment of sending. */
+          screen: (() => {
+            try {
+              return readScreen(path);
+            } catch {
+              return null;
+            }
+          })(),
           /* Keys only. The file itself went up on its own, through the one
              route that decides what may be stored. */
           attachments: sending.map((f) => ({ key: f.key, name: f.name, type: f.type, size: f.size })),
@@ -896,6 +954,7 @@ export default function HelpDock() {
     }
 
     let answer = r?.reply ?? "Something went wrong sending that. Try again in a moment.";
+    const newPlan: ScreenPlan | undefined = r?.screen && Array.isArray(r.screen.steps) && r.screen.steps.length ? (r.screen as ScreenPlan) : undefined;
     if (r?.proposal?.kind === "fill-compose" && !filled) {
       /* The composer closed while he was writing. The draft is real work and
          must not evaporate, so it falls back to the behaviour this replaced:
@@ -918,9 +977,16 @@ export default function HelpDock() {
         sealed: r?.sealed,
         offer: r?.offer && typeof r.offer.href === "string" ? r.offer : undefined,
         downloads: Array.isArray(r?.files) ? r.files.filter((f: { href?: unknown }) => typeof f?.href === "string" && (f.href as string).startsWith("/api/r2/file?")) : undefined,
+        plan: newPlan,
       },
     ]);
     setBusy(false);
+    /* Carrying on from a plan they already said yes to: filling in the boxes
+       that plan opened goes ahead without a second press. A press, a tick or
+       a save in the follow-up still waits for theirs. */
+    if (newPlan && chain > 0 && newPlan.steps.every((st) => st.do === "type" || st.do === "choose")) {
+      void runPlan({ role: "assistant", text: answer, plan: newPlan }, chain);
+    }
 
     /* He was asked to open something, and has. */
     if (r?.open && typeof r.open.href === "string") openFile(r.open);
@@ -1117,6 +1183,7 @@ export default function HelpDock() {
         aria-expanded={open}
         data-hide-from-shot
         data-os-steve
+        data-steve-dock
         className="os-toast-lift fixed bottom-2 right-3 z-[190] text-ink hover:scale-105 active:scale-95"
       >
         <span ref={landing} className="block origin-bottom" onAnimationEnd={(e) => { if (e.target === e.currentTarget) e.currentTarget.classList.remove("os-steve-land"); }}>
@@ -1141,6 +1208,7 @@ export default function HelpDock() {
              than beside it, and so the bubble does not sit directly over him. */
           data-hide-from-shot
           data-os-steve-bubble
+          data-steve-dock
           /* On a phone the 68px shift pushed the left edge off the screen
              (375 - 68 - 335 is less than nothing). Found 21 Sep 2026. */
           className="os-toast-lift fade-up fixed bottom-[104px] right-5 z-[190] w-[min(392px,calc(100vw-2.5rem))] sm:right-[68px]"
@@ -1257,6 +1325,43 @@ export default function HelpDock() {
                                   <span className="truncate">{f.name}</span>
                                 </a>
                               ))}
+                            </div>
+                          )}
+                          {/* His plan for their screen (2 Oct 2026): every step
+                              in words before anything is touched, and one
+                              press runs it while they watch. */}
+                          {l.plan && (
+                            <div className="mt-2 rounded-xl border border-line bg-box/60 p-2.5">
+                              <p className="text-[10px] uppercase tracking-[0.08em] text-muted">On your screen</p>
+                              <p className="mt-1 text-[12px] font-semibold">{l.plan.summary}</p>
+                              <ol className="mt-1.5 space-y-0.5 pl-4 text-[11.5px] leading-snug text-ink/85 [list-style:decimal]">
+                                {l.plan.steps.map((st, k) => (
+                                  <li key={k}>{st.says}</li>
+                                ))}
+                              </ol>
+                              {!l.planState ? (
+                                <div className="mt-2 flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => void runPlan(l)}
+                                    className="inline-flex items-center gap-1.5 rounded-full bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-page transition-opacity hover:opacity-90"
+                                  >
+                                    <DoodleIcon name="magic-wand" size={12} />
+                                    Do it
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setLines((all) => all.map((x) => (x === l ? { ...x, planState: "left" } : x)))}
+                                    className="rounded-full px-2.5 py-1.5 text-[11.5px] text-muted hover:text-ink"
+                                  >
+                                    Not now
+                                  </button>
+                                </div>
+                              ) : (
+                                <p className="mt-2 text-[11px] text-muted">
+                                  {l.planState === "running" ? "Doing it now…" : l.planState === "done" ? "Done." : l.planState === "left" ? "Left as it was." : "Stopped part way."}
+                                </p>
+                              )}
                             </div>
                           )}
                           {/* His offer to open the file (2 Oct 2026). One press,

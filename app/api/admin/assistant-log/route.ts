@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireCapability } from "@/lib/admin";
 import { allLines } from "@/lib/assistant-log";
 import { trendsFrom } from "@/lib/assistant-trends";
+import { listGaps } from "@/lib/assistant-steve-pa";
 
 /**
  * Every conversation, for James.
@@ -22,6 +23,8 @@ export async function GET(req: NextRequest) {
   if (!(await requireCapability(req, "see:people"))) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
-  const lines = await allLines(2000);
-  return NextResponse.json({ lines: lines.slice(0, 400), trends: trendsFrom(lines, { top: 5 }) });
+  const [lines, gaps] = await Promise.all([allLines(2000), listGaps().catch(() => [])]);
+  /* What people asked him to do that he could not (2 Oct 2026), newest first:
+     the list of what to teach him next. */
+  return NextResponse.json({ lines: lines.slice(0, 400), trends: trendsFrom(lines, { top: 5 }), gaps: gaps.slice(-30).reverse() });
 }

@@ -79,6 +79,7 @@ function when(iso: string | null) {
 export default function AssistantConsole() {
   const [lines, setLines] = useState<Line[] | null>(null);
   const [trends, setTrends] = useState<Trend[]>([]);
+  const [gaps, setGaps] = useState<{ at: string; who: string; asked: string; why: string }[]>([]);
   const [brain, setBrain] = useState<{
     live: boolean;
     spent: number;
@@ -119,9 +120,10 @@ export default function AssistantConsole() {
       .catch(() => setBrain(null));
     fetch("/api/admin/assistant-log")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("no"))))
-      .then((d: { lines?: Line[]; trends?: Trend[] }) => {
+      .then((d: { lines?: Line[]; trends?: Trend[]; gaps?: { at: string; who: string; asked: string; why: string }[] }) => {
         setLines(d.lines ?? []);
         setTrends(d.trends ?? []);
+        setGaps(d.gaps ?? []);
       })
       .catch(() => setDenied(true));
   }, []);
@@ -254,6 +256,38 @@ export default function AssistantConsole() {
               </li>
             ))}
           </ol>
+        )}
+      </section>
+
+      {/* ── CAN'T DO YET (James, 2 Oct 2026: "self-aware") ────────────────
+          Every time somebody asked him to do something he has no tool or
+          screen for, he says so and it lands here. The top of this list is
+          the next thing to teach him. What the team TAUGHT him is on the
+          Knowledge page under Learned from the team. */}
+      <section className="fade-up mt-6">
+        <h2 className="text-sm font-semibold uppercase tracking-wide">Asked for, can&rsquo;t do yet</h2>
+        <p className="mt-1 text-[12px] text-muted">
+          What people asked Steve to do that he had no way to. What they taught him is on{" "}
+          <Link href="/knowledge" className="underline underline-offset-2 hover:text-ink">Knowledge</Link>, under Learned from the team.
+        </p>
+        {lines === null ? (
+          <p className="mt-4 text-[12.5px] text-muted">Loading…</p>
+        ) : gaps.length === 0 ? (
+          <p className="mt-4 rounded-xl border border-dashed border-line p-4 text-[12.5px] text-muted">
+            Nothing yet. When somebody asks for something he can&rsquo;t do, it shows here.
+          </p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {gaps.map((g) => (
+              <li key={g.at + g.asked} className="rounded-[18px] border border-line/50 bg-white p-4">
+                <p className="text-[14px] font-semibold leading-snug">{g.asked.charAt(0).toUpperCase() + g.asked.slice(1)}</p>
+                <p className="mt-1 text-[12px] text-muted">
+                  {g.who} · {when(g.at)}
+                  {g.why ? ` · needs ${g.why.charAt(0).toLowerCase()}${g.why.slice(1)}` : ""}
+                </p>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 

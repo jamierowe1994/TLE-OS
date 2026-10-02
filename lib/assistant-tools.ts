@@ -14,6 +14,8 @@ import { GUIDE_TARGETS, guideTarget } from "@/lib/steve-guide";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { listAppraisals } from "@/lib/appraisal-store";
 import { MORE_TOOLS } from "@/lib/assistant-steve-more";
+import { PA_TOOLS } from "@/lib/assistant-steve-pa";
+import type { ScreenSnapshot } from "@/lib/steve-never";
 
 /**
  * WHAT STEVE CAN ACTUALLY GO AND FIND OUT.
@@ -53,6 +55,8 @@ export interface ToolContext {
   surfaces?: OpenSurface[];
   /** Who is asking - for what they asked him to remember, and their tasks. */
   me?: { id: string; name: string; email: string };
+  /** The controls on their screen, as the browser read them (lib/screen-controls). */
+  screen?: ScreenSnapshot | null;
 }
 
 /** A tool's answer, plus the one-line label the widget shows while it runs. */
@@ -864,6 +868,7 @@ export const TOOLS: AssistantTool[] = [
   offerToOpen,
   openFile,
   ...MORE_TOOLS,
+  ...PA_TOOLS,
 ];
 
 export type FileLink = { href: string; label: string };

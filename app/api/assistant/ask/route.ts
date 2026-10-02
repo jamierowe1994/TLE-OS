@@ -15,6 +15,7 @@ import {
 import { ask, budget, assistantConfigured } from "@/lib/assistant-brain";
 import { AGENT_NAV } from "@/lib/nav";
 import { keyIsOurs } from "@/lib/r2";
+import type { ScreenControl, ScreenSnapshot } from "@/lib/steve-never";
 
 /**
  * Talking to the assistant.
@@ -110,6 +111,7 @@ export async function POST(req: NextRequest) {
     path?: string;
     openListingId?: string;
     surfaces?: unknown;
+    screen?: unknown;
     attachments?: unknown;
   };
   const attachments = readAttachments(b.attachments);
@@ -186,6 +188,7 @@ export async function POST(req: NextRequest) {
       surfaces,
       me: { id: userId, name: me.name ?? "", email: me.email },
       memory,
+      screen: readScreen(b.screen),
     });
   } catch (e) {
     /* A model outage must not lose the question — it is still logged above,
@@ -231,6 +234,10 @@ export async function POST(req: NextRequest) {
     ...(answer.open && answer.open.href.startsWith("/") ? { open: answer.open } : {}),
     /* File Store downloads: our own signed-link route only. */
     ...(answer.files?.length ? { files: answer.files.filter((f) => f.href.startsWith("/api/r2/file?")) } : {}),
+    /* Steps on their own screen (lib/screen-controls). Not sealed: they run
+       in the browser with the person's own hands, after their press, and the
+       browser refuses a never control again at the moment of pressing. */
+    ...(answer.screen ? { screen: answer.screen } : {}),
   });
 }
 
@@ -297,4 +304,39 @@ function readSurfaces(raw: unknown): OpenSurface[] {
       },
     ];
   });
+}
+
+/**
+ * What the browser says is on the screen (lib/screen-controls), rebuilt field
+ * by field like the surfaces above: it goes straight into a prompt, so it is
+ * capped and coerced, never trusted. Ninety controls, short strings.
+ */
+function readScreen(raw: unknown): ScreenSnapshot | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const str = (v: unknown, n: number) => (typeof v === "string" ? v.replace(/\s+/g, " ").slice(0, n) : "");
+  const kinds = ["button", "link", "tab", "text", "number", "date", "select", "checkbox", "textarea"];
+  const controls: ScreenControl[] = Array.isArray(r.controls)
+    ? r.controls.slice(0, 90).flatMap((c): ScreenControl[] => {
+        const x = c as Record<string, unknown>;
+        const ref = str(x.ref, 6);
+        const kind = str(x.kind, 10);
+        if (!/^s\d{1,3}$/.test(ref) || !kinds.includes(kind)) return [];
+        return [
+          {
+            ref,
+            kind: kind as ScreenControl["kind"],
+            label: str(x.label, 70),
+            ...(typeof x.value === "string" ? { value: str(x.value, 120) } : {}),
+            ...(Array.isArray(x.options) ? { options: x.options.slice(0, 14).map((o) => str(o, 40)) } : {}),
+            ...(x.never === true ? { never: true } : {}),
+          },
+        ];
+      })
+    : [];
+  return {
+    title: str(r.title, 100),
+    headings: Array.isArray(r.headings) ? r.headings.slice(0, 14).map((h) => str(h, 60)) : [],
+    controls,
+  };
 }

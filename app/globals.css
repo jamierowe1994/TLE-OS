@@ -1327,6 +1327,13 @@ html[data-os-toast="up"] .os-toast-lift {
   70% { transform: scale(1.03, 0.97); }
   100% { transform: scale(1, 1); }
 }
+/* The control Steve is touching on their screen (lib/screen-controls). */
+.os-steve-touch {
+  outline: 3px solid var(--accent-dark, #a85a51) !important;
+  outline-offset: 3px;
+  border-radius: 10px;
+  transition: outline-color 200ms ease;
+}
 @media (prefers-reduced-motion: reduce) {
   .os-steve-land { animation: none; }
   .os-toast-lift,

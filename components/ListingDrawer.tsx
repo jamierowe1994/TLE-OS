@@ -1016,7 +1016,7 @@ function ListingDrawerBody({
                       switch decides who may press it (lib/area-map). */}
                   {isLive && pub && !publishHidden && (
                     portalConfirm ? (
-                      <span className="inline-flex flex-wrap items-center gap-1.5 rounded-full border border-line/60 bg-white py-1 pl-3 pr-1 text-[11px]">
+                      <span className="inline-flex flex-wrap items-center gap-1.5 rounded-full border border-line/60 bg-white py-1 pl-3 pr-1 text-[11px]" data-steve-never>
                         {pub.onPortals ? "Take it off Rightmove, OnTheMarket and Zoopla?" : "Put it back on Rightmove, OnTheMarket and Zoopla?"}
                         <button type="button" disabled={portalBusy} onClick={() => setPortalConfirm(false)} className="rounded-full px-2 py-0.5 text-muted hover:text-ink disabled:opacity-50">
                           Not yet
@@ -1033,6 +1033,7 @@ function ListingDrawerBody({
                     ) : (
                       <button
                         type="button"
+                        data-steve-never
                         onClick={() => (publishCanPress ? setPortalConfirm(true) : setPortalNote(lockedSentence(publishArea, publishLevel)))}
                         className="press-ring rounded-full border border-line/60 bg-white px-2.5 py-1 text-[11px] font-semibold transition-colors hover:border-ink/40"
                       >
@@ -1324,7 +1325,7 @@ function ListingDrawerBody({
                     <>
                       {/* Full colour, never greyed. Hover it and it says what
                           is still missing (James, 11 Sep). */}
-                      <span className="group relative">
+                      <span className="group relative" data-steve-never>
                         <PressButton
                           onClick={() => {
                             if (!readyToGoLive) return;
@@ -2281,7 +2282,7 @@ function PushCeremony({ at, address, error, onStart, onCancel, onDone }: { at: n
     }))
   );
   return (
-    <div className="fixed inset-0 z-[170] flex items-center justify-center p-4">
+    <div data-steve-never role="dialog" aria-modal="true" className="fixed inset-0 z-[170] flex items-center justify-center p-4">
       <style>{`
         @keyframes tle-confetti { 0% { transform: translate3d(0,-10vh,0) rotate(0deg); opacity: 1 } 100% { transform: translate3d(var(--sway),110vh,0) rotate(720deg); opacity: 0.9 } }
         @keyframes tle-pop { 0% { transform: scale(0.4); opacity: 0 } 60% { transform: scale(1.12); opacity: 1 } 100% { transform: scale(1) } }
