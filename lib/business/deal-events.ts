@@ -39,7 +39,10 @@ export type DealEventKind =
   | "plc_opened"
   /* Kirstie's sign-off: the one act that says this property is compliant
      and this tenant can move in. Her name is on the row. */
-  | "move_in_ready";
+  | "move_in_ready"
+  /* A tenant's reference came back not acceptable in Propoly (2 Oct 2026).
+     to_status holds the tenant's name, one row per tenant. */
+  | "reference_failed";
 
 export interface DealEvent {
   id: number;
@@ -128,6 +131,8 @@ export function eventSentence(e: Pick<DealEvent, "event" | "toStatus" | "fromSta
       return "References back - PLC pack opened for the agent to fill";
     case "move_in_ready":
       return "Signed off: compliant and ready to move in";
+    case "reference_failed":
+      return `Failed referencing: ${e.toStatus ?? "a tenant"}`;
     case "plc_submitted":
       return e.fromStatus === "deferred" ? "PLC pack back with you, resubmitted" : "PLC pack sent to you for checking";
     case "plc_checked":
@@ -171,6 +176,7 @@ export const TELL_AGENT: ReadonlySet<DealEventKind> = new Set([
   "cancelled",
   "rent_in",
   "move_in_ready",
+  "reference_failed",
 ]);
 
 export function eventTone(kind: DealEventKind): "ok" | "warn" | "none" {
@@ -189,6 +195,6 @@ export function eventTone(kind: DealEventKind): "ok" | "warn" | "none" {
   )
     return "ok";
   /* A pack landing on her desk is amber: it is the one row that waits on her. */
-  if (kind === "cancelled" || kind === "moved_back" || kind === "gone" || kind === "plc_submitted" || kind === "plc_checked") return "warn";
+  if (kind === "cancelled" || kind === "moved_back" || kind === "gone" || kind === "plc_submitted" || kind === "plc_checked" || kind === "reference_failed") return "warn";
   return "none";
 }

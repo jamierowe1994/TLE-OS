@@ -289,7 +289,7 @@ export const SWITCHES: Switch[] = [
      */
     key: "deal_watch_notify",
     label: "Tell agents when Propoly moves a deal",
-    what: "Emails the agent when references come back, when the agreement goes out for signing, and when a deal completes or is cancelled.",
+    what: "Emails the agent when references come back, when a reference fails, when the agreement goes out for signing, and when a deal completes or is cancelled.",
     who: "The agent who manages the property in Propoly. Kirstie reads the feed instead.",
     confirm: "TELL AGENTS",
     legacyEnv: "DEAL_WATCH_NOTIFY",

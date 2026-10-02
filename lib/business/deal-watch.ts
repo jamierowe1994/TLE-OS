@@ -10,6 +10,7 @@ import { createCase, getCase } from "@/lib/plc-store";
 import { sendEmail } from "@/lib/resend";
 import { switchOn } from "@/lib/switches";
 import { dealMovedEmail } from "@/lib/email/agent-emails";
+import { referenceState } from "@/lib/business/stage-evidence";
 import {
   eventSentence,
   kindFor,
@@ -278,6 +279,7 @@ export async function watchDeals(opts: { origin: string }): Promise<WatchResult>
 
   events.push(...(await watchMoney(deals, known)));
   events.push(...(await watchDeposits(deals, known)));
+  events.push(...(await watchReferences(deals)));
   events.push(...(await openPacks(events, deals)));
 
   const told = await tellAgents(events, opts.origin);
@@ -327,6 +329,50 @@ async function watchDeposits(deals: BusinessDeal[], known: Map<string, StateRow>
       /* deposit_registered from the register may already have said so. */
       if (kind === "deposit_registered" && row?.deposit_seen_at) continue;
       out.push(await record({ dealId: d.app.id, property: propertyOf(d), ...who, from: before?.status ?? null, to: f.status, kind, amount: f.amount }));
+    }
+  }
+  return out;
+}
+
+/* ─────────────────────────── a failed reference ────────────────────────── */
+
+/**
+ * James, 2 Oct 2026: a failed reference tells the AGENT, and only the agent.
+ * Read off each tenant's own decision on the Propoly deal (the same
+ * referenceState the board's amber line reads), one feed row per tenant, so
+ * a re-run or a second tenant failing later is not a repeat. tellAgents does
+ * the sending, to the deal's manager and nobody else, behind the same
+ * "Tell agents" switch as every other deal email.
+ */
+async function watchReferences(deals: BusinessDeal[]): Promise<DealEvent[]> {
+  const out: DealEvent[] = [];
+  const live = deals.filter((d) => d.statusKey !== "cancelled" && d.statusKey !== "complete");
+  const failing = live
+    .map((d) => ({ d, failed: referenceState(d.app.propoly)?.failed ?? [] }))
+    .filter((x) => x.failed.length);
+  if (!failing.length) return out;
+  const told = new Set(
+    (
+      await q<{ deal_id: string; to_status: string | null }>(
+        `SELECT deal_id, to_status FROM os_deal_events WHERE event = 'reference_failed' AND deal_id = ANY($1::text[])`,
+        [failing.map((x) => x.d.app.id)]
+      )
+    ).map((r) => `${r.deal_id}|${(r.to_status ?? "").toLowerCase()}`)
+  );
+  for (const { d, failed } of failing) {
+    for (const name of failed) {
+      if (told.has(`${d.app.id}|${name.toLowerCase()}`)) continue;
+      out.push(
+        await record({
+          dealId: d.app.id,
+          property: propertyOf(d),
+          agentEmail: d.managerEmail ?? null,
+          agentName: d.managerName ?? null,
+          from: null,
+          to: name,
+          kind: "reference_failed",
+        })
+      );
     }
   }
   return out;

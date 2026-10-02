@@ -241,7 +241,9 @@ export function dealMovedEmail(e: DealEvent, origin: string): AgentEmail {
             ? "The first rent has landed in PayProp. Kirstie will close the deal off; you can plan the move-in."
             : e.event === "move_in_ready"
               ? "Kirstie has signed the property off as compliant and the tenant ready to move in. Keys, inventory and check-in are yours to arrange."
-              : "Propoly has cancelled this deal. If that is a surprise, speak to Kirstie.";
+              : e.event === "reference_failed"
+                ? "Speak to the applicant today: a guarantor, rent in advance, or another applicant. The full report is on the deal in Propoly."
+                : "Propoly has cancelled this deal. If that is a surprise, speak to Kirstie.";
   const subjectWord: Partial<Record<DealEvent["event"], string>> = {
     references_back: "References back",
     agreement_out: "Out for signing",
@@ -249,6 +251,7 @@ export function dealMovedEmail(e: DealEvent, origin: string): AgentEmail {
     cancelled: "Cancelled",
     rent_in: "Rent in",
     move_in_ready: "Ready to move in",
+    reference_failed: "Failed referencing",
   };
   const subject = `${subjectWord[e.event] ?? sentence}: ${e.property}`;
   const link = `${origin.replace(/\/+$/, "")}/applications`;
@@ -264,7 +267,7 @@ export function dealMovedEmail(e: DealEvent, origin: string): AgentEmail {
         {
           title: "What happens next",
           detail: next.replace(/^Next:\s*/, "").replace(/^./, (c) => c.toUpperCase()),
-          tone: e.event === "cancelled" ? "attention" : "good",
+          tone: e.event === "cancelled" || e.event === "reference_failed" ? "attention" : "good",
         },
       ],
       button: "Open my applications",
