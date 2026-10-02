@@ -13,6 +13,7 @@ import type { ActionProposal } from "@/lib/assistant-actions";
 import { GUIDE_TARGETS, guideTarget } from "@/lib/steve-guide";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { listAppraisals } from "@/lib/appraisal-store";
+import { MORE_TOOLS } from "@/lib/assistant-steve-more";
 
 /**
  * WHAT STEVE CAN ACTUALLY GO AND FIND OUT.
@@ -50,6 +51,8 @@ export interface ToolContext {
   openListingId: string | null;
   /** Everything layered on screen, furthest back first. See lib/open-record. */
   surfaces?: OpenSurface[];
+  /** Who is asking - for what they asked him to remember, and their tasks. */
+  me?: { id: string; name: string; email: string };
 }
 
 /** A tool's answer, plus the one-line label the widget shows while it runs. */
@@ -63,6 +66,8 @@ export interface AssistantTool {
 }
 
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+/** Lower case, punctuation to spaces, one space between words. */
+const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 /** REX rows arrive as `{rows:[…]}` or a bare array depending on the method. */
 function rowsOf(result: unknown): Record<string, unknown>[] {
@@ -139,9 +144,17 @@ const findProperty: AssistantTool = {
     /* 1. Their own book first — these are the useful hits, and they come with
           rent and status already attached. */
     const book = await bookFor(ctx.scope.rexUserId);
-    const needle = query.toLowerCase();
+    /* Word by word, punctuation aside (2 Oct 2026): he searches with the
+       address as he last said it - "4 Williams Court, The Green, Cullompton" -
+       and a plain substring missed it on the commas. Every word of the query
+       has to be somewhere in the address. */
+    const words = norm(query).split(" ").filter(Boolean);
+    const hits = (hay: string) => {
+      const h = ` ${norm(hay)} `;
+      return words.every((w) => h.includes(` ${w} `) || (w.length > 3 && h.includes(w)));
+    };
     const mine = book.listings
-      .filter((l) => `${l.name} ${l.locality}`.toLowerCase().includes(needle))
+      .filter((l) => hits(`${l.name} ${l.locality}`))
       .slice(0, 8)
       .map((l) => ({
         listingId: l.id,
@@ -157,7 +170,12 @@ const findProperty: AssistantTool = {
     /* 2. REX's address index, for anything with no listing behind it. */
     let others: { propertyId: string; address: string; onYourBook: false; note: string }[] = [];
     if (rexConfigured()) {
-      const res = await rexCall("Properties", "autocomplete", { search_string: query, limit: 12 });
+      /* REX's index wants the street, not the whole line: fall back to the
+         part before the first comma when the full line finds nothing. */
+      let res = await rexCall("Properties", "autocomplete", { search_string: query, limit: 12 });
+      if (res.ok && !rowsOf(res.result).length && query.includes(",")) {
+        res = await rexCall("Properties", "autocomplete", { search_string: query.split(",")[0].trim(), limit: 12 });
+      }
       if (res.ok) {
         const known = new Set(book.listings.map((l) => String(l.propertyId)));
         others = rowsOf(res.result)
@@ -180,14 +198,14 @@ const findProperty: AssistantTool = {
     const managed = await managedBookFor(ctx.scope.rexUserId).catch(() => null);
     for (const m of managed?.book.properties ?? []) {
       if (files.length >= 6) break;
-      if (!`${m.name} ${m.locality} ${m.address}`.toLowerCase().includes(needle)) continue;
+      if (!hits(`${m.name} ${m.locality} ${m.address}`)) continue;
       files.push({ kind: "portfolio", id: String(m.listingId), address: `${m.name}, ${m.locality}`, what: "a home we manage - its Portfolio file" });
     }
     const appraisals = await listAppraisals().catch(() => []);
     for (const a of appraisals) {
       if (files.length >= 10) break;
       if (!ctx.scope.everything && a.agent !== ctx.scope.label) continue;
-      if (!`${a.address} ${a.postcode ?? ""}`.toLowerCase().includes(needle)) continue;
+      if (!hits(`${a.address} ${a.postcode ?? ""}`)) continue;
       files.push({ kind: "appraisal", id: a.id, address: a.address, what: `a market appraisal for ${a.landlord}` });
     }
 
@@ -845,6 +863,7 @@ export const TOOLS: AssistantTool[] = [
   showOnScreen,
   offerToOpen,
   openFile,
+  ...MORE_TOOLS,
 ];
 
 export type FileLink = { href: string; label: string };

@@ -35,6 +35,8 @@ export const KNOWLEDGE_SECTIONS = [
   "Pre-tenancy and move-in",
   "Marketing",
   "The system",
+  /* Read from links James feeds in (lib/knowledge-links, 2 Oct 2026). */
+  "Law and news",
 ] as const;
 
 export const DEFAULT_SECTION = KNOWLEDGE_SECTIONS[0];

@@ -2,6 +2,7 @@ import "server-only";
 import type { OpenSurface } from "@/lib/open-record";
 import Anthropic from "@anthropic-ai/sdk";
 import { hasDb, q } from "@/lib/db";
+import { filesFrom } from "@/lib/assistant-steve-more";
 import { listKnowledge } from "@/lib/business/knowledge-store";
 import { getBrief } from "@/lib/assistant-brief";
 import { systemMap } from "@/lib/system-map";
@@ -153,6 +154,31 @@ adverts, somebody's whole book. Use them.
   holds — "Kenneth Close" is Kenneth Bradshaw Close, Coventry. If more than one
   candidate comes back, ask which they meant. If none does, say so plainly and
   say where else it might be.
+- BE USEFUL BEYOND THE QUESTION. You can read a property's viewings,
+  applications, marketing, jobs and readiness to go live, and you can draft
+  tasks, notes, reminders, write-ups and emails. After answering, offer the ONE
+  next thing you could do that would help most - "Want me to make you a list
+  for that?", "Shall I write the advert?", "I can set a task for the photos".
+  When something is missing or late, say so and offer to fix it. One offer, not
+  a menu.
+- "Is it ready to go live / push / publish?" is listing_marketing: give the
+  verdict first (ready, or not yet), then what is missing in plain words, then
+  the improvements worth making, then offer to do one of them.
+- "How do I use this", "what do I do next", "I've got a valuation to sort" is
+  appraisal_next_step (and show_on_screen for where to click): find where they
+  are, name the one next step, and offer to open it. Walk them through, one
+  step at a time - do not dump the whole process.
+- For a document, form, template, brochure or guide, look in the File Store
+  with find_file and hand it over - the download buttons appear under your reply.
+- Knowledge under "Law and news" was read from articles and legislation and
+  carries its source and date. When you use it, say how recent it is and where
+  it came from; when it is old or thin, say so rather than overstating it.
+- When they ASK for a task or a list ("make me a list", "set a task", "give
+  Rhiannon a task"), draft it with propose_tasks in the same reply. Do not ask
+  whether they want one - the card is the confirmation, and pressing it is
+  their yes. Leave out anything already done.
+- When somebody tells you how they like to work, or asks you to remember
+  something about them, keep it with remember_about_them.
 - Once you have found the property they mean and it has a file (find_property's
   files list), say you found it, answer what they asked, and offer to open it with
   offer_to_open - one short line such as "I found it - want me to open the
@@ -284,7 +310,13 @@ export function houseStyle(text: string): string {
     /* The bubble is plain text, so markdown bold arrived as literal
        asterisks round a date (2 Oct 2026). Kept as plain words. */
     .replace(/\*\*([^*\n]+)\*\*/g, "$1")
-    .replace(/__([^_\n]+)__/g, "$1");
+    .replace(/__([^_\n]+)__/g, "$1")
+    /* Icons, never emojis (James's rule): a tick reads as "(done)", and any
+       pictograph goes. */
+    .replace(/(\bdone\b[^\n✓✔☑]{0,3})\s*[✓✔☑]\uFE0F?/gi, "$1")
+    .replace(/\s*[✓✔☑]\uFE0F?/g, " (done)")
+    .replace(/\p{Extended_Pictographic}\uFE0F?/gu, "")
+    .replace(/[ \t]+\n/g, "\n");
 }
 
 /**
@@ -331,6 +363,8 @@ export interface Answer {
   offer?: FileLink | null;
   /** A file to open on their screen now, if they asked him to. */
   open?: FileLink | null;
+  /** Downloads from the File Store he found for them. */
+  files?: { name: string; href: string }[];
 }
 
 /**
@@ -364,6 +398,10 @@ export interface AskContext {
   openListingId: string | null;
   /** Everything layered on screen, furthest back first. See lib/open-record. */
   surfaces?: OpenSurface[];
+  /** Who is asking. */
+  me?: { id: string; name: string; email: string };
+  /** What he has kept about how they like to work (lib/assistant-steve-more). */
+  memory?: string[];
 }
 
 /**
@@ -377,6 +415,12 @@ export interface AskContext {
  */
 function contextNote(ctx: AskContext): string | null {
   const bits: string[] = [];
+  /* He does not know what day it is, and dated a task a year back (2 Oct
+     2026). Said every turn, on the London clock. */
+  const now = new Date();
+  bits.push(
+    `Today is ${now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" })} (${now.toLocaleDateString("en-CA", { timeZone: "Europe/London" })}), London time.`
+  );
   if (ctx.path) bits.push(`They are on the ${ctx.path} screen.`);
   if (ctx.openListingId) {
     bits.push(
@@ -388,6 +432,22 @@ function contextNote(ctx: AskContext): string | null {
       ? "They can see the whole business."
       : `You are answering as ${ctx.scope.label || "them"}, and may only use their own properties.`
   );
+
+  /* An appraisal open on screen (2 Oct 2026: "on-screen awareness ... if
+     there's a valuation in there, it can help guide them through the next
+     step"). The appraisal page is a route, not a drawer, so it is read off
+     the path. */
+  const ma = /^\/market-appraisals\/([^/?#]+)/.exec(ctx.path ?? "");
+  if (ma) {
+    bits.push(
+      `They have the market appraisal ${decodeURIComponent(ma[1])} open. If they ask what to do, how to use this, or what is next, call appraisal_next_step with that id and talk them through the one next step.`
+    );
+  }
+
+  /* What he has kept about how this person likes to work. */
+  if (ctx.memory?.length) {
+    bits.push(`What you have kept about how ${ctx.me?.name?.split(" ")[0] || "they"} like to work (use it, do not recite it):\n${ctx.memory.map((m) => `- ${m}`).join("\n")}`);
+  }
 
   /* ── What is layered on screen ───────────────────────────────────────────
 
@@ -514,6 +574,7 @@ export async function ask(
   /* What the last property search said could be opened - so an offer made in
      words still gets its button when he forgot offer_to_open. */
   let found: FileLink[] = [];
+  let downloads: { name: string; href: string }[] = [];
   let inTokens = 0;
   let outTokens = 0;
   let spent = 0;
@@ -568,13 +629,17 @@ export async function ask(
       /* Answered from memory, without searching this turn: fall back to what
          his last search for this person found. */
       const key = whoKey(ctx);
-      if (!found.length) {
+      /* From memory, a file only counts if the reply names it - otherwise a
+         question about something else picked up the last home asked about. */
+      const fromMemory = !found.length;
+      if (fromMemory) {
         found = Date.now() - (LAST_FOUND_AT.get(key) ?? 0) < 20 * 60_000 ? LAST_FOUND.get(key) ?? [] : [];
       } else {
         LAST_FOUND.set(key, found);
         LAST_FOUND_AT.set(key, Date.now());
       }
-      if (!offer && !open && found.length) {
+      /* A card on screen is the thing to press; no second offer beside it. */
+      if (!offer && !open && !proposal && found.length) {
         const said = text.toLowerCase();
         const street = (f: FileLink) => f.label.split(",")[0].trim().toLowerCase();
         /* The kind of file he named, if he named one: "the Portfolio file",
@@ -583,7 +648,7 @@ export async function ask(
         const named = found.filter((f) => said.includes(street(f)));
         /* Every match the same home: he need not repeat the address. */
         const oneHome = new Set(found.map(street)).size === 1 ? found : [];
-        const pool = named.length ? named : oneHome.length ? oneHome : found.length === 1 ? found : [];
+        const pool = named.length ? named : fromMemory ? [] : oneHome.length ? oneHome : found.length === 1 ? found : [];
         offer = (kindSaid ? pool.find((f) => f.href.startsWith(kindSaid)) : null) ?? pool[0] ?? null;
         if (offer && !/\bopen\b[^.?!]*\?/i.test(text)) reply = `${text}\n\nWant me to open the file?`;
       }
@@ -597,6 +662,7 @@ export async function ask(
         guide,
         offer,
         open,
+        files: downloads,
       };
     }
 
@@ -613,6 +679,7 @@ export async function ask(
         path: ctx.path,
         openListingId: ctx.openListingId,
         surfaces: ctx.surfaces,
+        me: ctx.me,
       });
       /* Last one wins, and there is only ever one on the card. If he proposed
          twice in a turn the second is what he was actually talking about by
@@ -621,6 +688,8 @@ export async function ask(
       guide = guideIn(out) ?? guide;
       offer = offerIn(out) ?? offer;
       open = openIn(out) ?? open;
+      const dl = filesFrom(out);
+      if (dl.length) downloads = dl;
       if (call.name === "find_property") found = filesIn(out);
       results.push({
         type: "tool_result",

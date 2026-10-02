@@ -6,6 +6,8 @@ import PageHeader from "@/components/PageHeader";
 import { PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
 import { whenAgo } from "@/lib/lead-spine";
+import KnowledgeLinks from "@/components/knowledge/KnowledgeLinks";
+import MarketingKnowledge from "@/components/knowledge/MarketingKnowledge";
 
 /**
  * The knowledge hub (item 22).
@@ -62,6 +64,10 @@ export default function KnowledgeHub() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [section, setSection] = useState("");
+  /* Operational knowledge is what is written here; Marketing knowledge is the
+     File Store (James, 2 Oct 2026). */
+  const [view, setView] = useState<"operational" | "marketing">("operational");
+  const [feeding, setFeeding] = useState(false);
   const [guide, setGuide] = useState(false);
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -237,16 +243,47 @@ export default function KnowledgeHub() {
         onSearch={setQ}
         searchPlaceholder="Search what is written…"
         actions={
-          <PressButton
-            onClick={() => startNew()}
-            className="flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page"
-          >
-            <span className="text-[15px] leading-none">+</span> Write something
-          </PressButton>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => { setView("operational"); setFeeding((f) => !f); }}
+              className="rounded-full border border-line/80 px-5 py-2.5 text-[13px] font-semibold transition-colors hover:border-ink/40"
+            >
+              Feed Steve links
+            </button>
+            <PressButton
+              onClick={() => startNew()}
+              className="flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page"
+            >
+              <span className="text-[15px] leading-none">+</span> Write something
+            </PressButton>
+          </div>
         }
       />
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <nav aria-label="Knowledge" className="mt-6 flex gap-1.5">
+        {([
+          ["operational", "Operational knowledge"],
+          ["marketing", "Marketing knowledge"],
+        ] as const).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setView(id)}
+            aria-current={view === id ? "page" : undefined}
+            className={`rounded-full border px-4 py-1.5 text-[12.5px] transition-colors ${
+              view === id ? "border-brown bg-brown font-semibold text-page" : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {view === "operational" && feeding && <KnowledgeLinks onSaved={load} onClose={() => setFeeding(false)} />}
+      {view === "marketing" && <MarketingKnowledge q={q} />}
+
+      <div className={`mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] ${view === "operational" ? "" : "hidden"}`}>
         {/* ── the shelves ── */}
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2.5">

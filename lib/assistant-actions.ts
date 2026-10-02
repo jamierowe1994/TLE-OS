@@ -83,6 +83,17 @@ export type ActionProposal =
       body: string;
     }
   | {
+      /** A task, or a checklist of them (James, 2 Oct 2026: "create things
+       *  like tasks and lists for the guys to follow"). assigneeId null means
+       *  whoever presses the button. */
+      kind: "tasks";
+      listingId: string | null;
+      address: string | null;
+      assigneeId: string | null;
+      assigneeName: string | null;
+      items: { title: string; detail: string; due: string | null }[];
+    }
+  | {
       kind: "email";
       listingId: string;
       address: string;
@@ -176,6 +187,34 @@ async function doReminder(p: Extract<ActionProposal, { kind: "reminder" }>, acto
   /* Said every time, same as the appointments route: a reminder nobody told
      you was OS-only is a reminder somebody expects REX to fire. */
   return { ok: true, message: `Set for ${when}. It's in the OS diary only — it has NOT gone to REX or your 365 calendar.` };
+}
+
+async function doTasks(p: Extract<ActionProposal, { kind: "tasks" }>, actor: { id: string; name: string; osUserId: string | null }): Promise<ActionOutcome> {
+  if (!hasDb()) return { ok: false, message: "There's no database on this environment, so there's nowhere to keep them." };
+  const owner = p.assigneeId ?? actor.osUserId;
+  if (!owner) return { ok: false, message: "I couldn't tell whose list this is." };
+  const { createTask } = await import("@/lib/tasks");
+  const { londonTime } = await import("@/lib/london-time");
+  let made = 0;
+  for (const it of p.items) {
+    const m = it.due ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(it.due) : null;
+    const t = await createTask({
+      userId: owner,
+      title: it.title,
+      detail: it.detail,
+      dueAt: m ? londonTime(+m[1], +m[2], +m[3], 9).toISOString() : null,
+      listingId: p.listingId,
+      kind: "steve",
+      createdBy: actor.name,
+    });
+    if (t) made++;
+  }
+  if (!made) return { ok: false, message: "None of those saved. Try again in a moment." };
+  const whose = p.assigneeId && p.assigneeId !== actor.osUserId ? `${p.assigneeName ?? "them"}'s` : "your";
+  return {
+    ok: true,
+    message: `${made === 1 ? "Added to" : `${made} added to`} ${whose} tasks. ${p.assigneeId && p.assigneeId !== actor.osUserId ? "They'll see it in their bell." : "They're in your bell until done."}`,
+  };
 }
 
 async function doWriteUp(
@@ -361,6 +400,8 @@ export async function perform(
       return doNote(proposal, actor);
     case "reminder":
       return doReminder(proposal, actor);
+    case "tasks":
+      return doTasks(proposal, actor);
     case "write-up":
       return doWriteUp(proposal, await rexTokenFor(actor.osUserId));
     case "email":

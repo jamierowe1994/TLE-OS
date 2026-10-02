@@ -103,7 +103,30 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
     [me.email]
   ).catch(() => []);
 
+  /* Their own open tasks (2 Oct 2026): anything Steve or a colleague put on
+     their list, and anything of theirs due by tomorrow. Read from os_tasks,
+     so it leaves the bell the moment it is ticked. */
+  const tasks = await q<{ id: string; title: string; detail: string; due_at: Date | null; created_at: Date; created_by: string; kind: string }>(
+    `SELECT id, title, detail, due_at, created_at, created_by, kind FROM os_tasks
+      WHERE user_id = $1 AND done_at IS NULL
+        AND (kind = 'steve' OR (due_at IS NOT NULL AND due_at < NOW() + INTERVAL '1 day'))
+      ORDER BY COALESCE(due_at, created_at) ASC LIMIT 20`,
+    [me.id]
+  ).catch(() => []);
+
   const out: Notice[] = [...reminders];
+  for (const t of tasks) {
+    const overdue = t.due_at && new Date(t.due_at).getTime() < Date.now();
+    out.push({
+      id: `task:${t.id}`,
+      kind: "reminder",
+      at: new Date(t.created_at).toISOString(),
+      title: overdue ? `Overdue: ${t.title}` : t.title,
+      body: [t.detail, t.created_by && t.created_by !== me.name ? `From ${t.created_by}` : null].filter(Boolean).join(" · ") || "On your task list",
+      href: "/dashboard?steve=tasks",
+      tone: overdue ? "warn" : "none",
+    });
+  }
   for (const p of preHeadsUp) {
     out.push({
       id: `pre:${p.id}`,

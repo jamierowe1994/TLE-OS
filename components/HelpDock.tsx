@@ -14,6 +14,7 @@ import { whenAgo } from "@/lib/lead-spine";
 import { fetchMe } from "@/lib/me";
 import { openGuide } from "@/lib/guide-sheet";
 import { TOAST_LIFT_EVENT, type ToastLift } from "@/lib/toast";
+import SteveTasks from "@/components/SteveTasks";
 
 /**
  * The character in the corner, and what he says.
@@ -137,14 +138,17 @@ function heard(text: string): Mood | null {
   return null;
 }
 
-type Tab = "help" | "guides" | "news" | "feedback";
+type Tab = "help" | "guides" | "news" | "feedback" | "tasks";
 
 /** The strip across the top. Ids are the tour's, and must not be renamed. */
 const TABS: { id: Tab; label: string }[] = [
   { id: "help", label: "Chat" },
   { id: "guides", label: "Guides" },
   { id: "news", label: "News" },
-  { id: "feedback", label: "Feedback" },
+  { id: "tasks", label: "Tasks" },
+  /* "Report" since the Tasks tab joined (2 Oct 2026): five tabs and
+     "Feedback" did not fit. Same tab, same id. */
+  { id: "feedback", label: "Report" },
 ];
 
 /**
@@ -209,6 +213,8 @@ type Line = {
   offer?: { href: string; label: string };
   /** Set once the offer has been taken, so it is not offered twice. */
   offerTaken?: boolean;
+  /** Downloads from the File Store he found (2 Oct 2026). */
+  downloads?: { name: string; href: string }[];
   /** Set once the button has been pressed, so it cannot be pressed twice. */
   settled?: string;
   /** Files that went up with this message. Only ever on an agent's line. */
@@ -217,7 +223,9 @@ type Line = {
 
 /** Mirrors ActionProposal server-side, narrowed to what the card draws. */
 type Proposal = {
-  kind: "note" | "reminder" | "write-up" | "email" | "fill-compose";
+  kind: "note" | "reminder" | "write-up" | "email" | "fill-compose" | "tasks";
+  items?: { title: string; detail?: string; due?: string | null }[];
+  assigneeName?: string | null;
   address?: string | null;
   text?: string;
   title?: string;
@@ -250,6 +258,7 @@ const CARD_TITLE: Record<Proposal["kind"], string> = {
   "fill-compose": "Typed into your email",
   note: "Note, ready to save",
   reminder: "Reminder, ready to set",
+  tasks: "Tasks, ready to add",
   "write-up": "New advert, ready to publish",
   email: "Email, ready to send",
 };
@@ -257,6 +266,7 @@ const CARD_BUTTON: Record<Proposal["kind"], string> = {
   "fill-compose": "Type it in",
   note: "Save note",
   reminder: "Set reminder",
+  tasks: "Add them",
   "write-up": "Publish it",
   email: "Send it",
 };
@@ -266,6 +276,7 @@ const CARD_EFFECT: Record<Proposal["kind"], string> = {
   "fill-compose": "Puts the text in the boxes on your screen. Nothing is sent - that is still your button.",
   note: "Saves to the property file in the OS. Not sent to REX.",
   reminder: "Goes in the OS diary only - not REX, not your 365 calendar.",
+  tasks: "Adds to their task list in the OS, shown in their bell until ticked off. Nothing goes to REX.",
   "write-up": "Writes to REX and goes live on Rightmove, Zoopla and OnTheMarket in about five to ten minutes.",
   email: "Sends from YOUR Microsoft mailbox, so it is in your Sent Items and their reply threads onto it. BCC'd to REX so it shows on their timeline. The address is looked up again when you press - it always goes to the person on the record.",
 };
@@ -661,6 +672,18 @@ export default function HelpDock() {
     return () => window.removeEventListener(TOAST_LIFT_EVENT, onLift);
   }, [react, rest]);
 
+  /* ?steve=tasks opens him on the Tasks tab - the bell's link for a task. */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("steve") !== "tasks") return;
+    setTab("tasks");
+    setOpen(true);
+    sp.delete("steve");
+    const rest = sp.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${rest ? `?${rest}` : ""}${window.location.hash}`);
+  }, [path]);
+
   if (!signedIn) return null;
 
   async function toggle() {
@@ -894,6 +917,7 @@ export default function HelpDock() {
         card: r?.proposal?.kind === "fill-compose" ? undefined : r?.proposal,
         sealed: r?.sealed,
         offer: r?.offer && typeof r.offer.href === "string" ? r.offer : undefined,
+        downloads: Array.isArray(r?.files) ? r.files.filter((f: { href?: unknown }) => typeof f?.href === "string" && (f.href as string).startsWith("/api/r2/file?")) : undefined,
       },
     ]);
     setBusy(false);
@@ -1221,6 +1245,20 @@ export default function HelpDock() {
                               {l.steps.join(" · ")}
                             </p>
                           )}
+                          {l.downloads && l.downloads.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {l.downloads.map((f) => (
+                                <a
+                                  key={f.href}
+                                  href={f.href}
+                                  className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-accent-dark/40 bg-white px-3 py-1.5 text-[11.5px] font-semibold text-accent-dark transition-colors hover:border-accent-dark"
+                                >
+                                  <DoodleIcon name="upload" size={11} className="rotate-180" />
+                                  <span className="truncate">{f.name}</span>
+                                </a>
+                              ))}
+                            </div>
+                          )}
                           {/* His offer to open the file (2 Oct 2026). One press,
                               or a typed yes - see say(). */}
                           {l.offer && !l.offerTaken && (
@@ -1264,6 +1302,23 @@ export default function HelpDock() {
                                     hour: "2-digit", minute: "2-digit",
                                   })}
                                 </p>
+                              )}
+                              {l.card.kind === "tasks" && l.card.items && (
+                                <>
+                                  <p className="mt-1 text-[11.5px] text-muted">For {l.card.assigneeName ?? "you"}</p>
+                                  <ul className="mt-1.5 space-y-1">
+                                    {l.card.items.map((it, n) => (
+                                      <li key={n} className="flex items-start gap-2 text-[11.5px]">
+                                        <span className="mt-[3px] h-3 w-3 shrink-0 rounded-[3px] border border-line" />
+                                        <span className="min-w-0">
+                                          <span className="font-semibold">{it.title}</span>
+                                          {it.due ? <span className="text-muted"> · by {new Date(`${it.due}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span> : null}
+                                          {it.detail ? <span className="block text-muted">{it.detail}</span> : null}
+                                        </span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </>
                               )}
                               {(l.card.subject || l.card.heading || l.card.title) && (
                                 <p className="mt-1 text-[12px] font-semibold">
@@ -1557,6 +1612,8 @@ export default function HelpDock() {
                     </button>
                   </div>
                 </div>
+              ) : tab === "tasks" ? (
+                <SteveTasks />
               ) : tab === "news" ? (
                 /**
                  * The board.

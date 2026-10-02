@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { OpenSurface } from "@/lib/open-record";
 import { sealPayload, SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { scopeFor } from "@/lib/scope";
+import { memoryFor } from "@/lib/assistant-steve-more";
 import { findUserById } from "@/lib/users";
 import {
   logLine,
@@ -177,7 +178,15 @@ export async function POST(req: NextRequest) {
 
   let answer;
   try {
-    answer = await ask(history, text + noted, { scope, path, openListingId, surfaces });
+    const memory = (await memoryFor(userId).catch(() => ({ notes: [] }))).notes.map((n) => n.text);
+    answer = await ask(history, text + noted, {
+      scope,
+      path,
+      openListingId,
+      surfaces,
+      me: { id: userId, name: me.name ?? "", email: me.email },
+      memory,
+    });
   } catch (e) {
     /* A model outage must not lose the question — it is still logged above,
        and it is still a guide somebody needed. */
@@ -220,6 +229,8 @@ export async function POST(req: NextRequest) {
        only - built by lib/assistant-tools fileHref, checked again here. */
     ...(answer.offer && answer.offer.href.startsWith("/") ? { offer: answer.offer } : {}),
     ...(answer.open && answer.open.href.startsWith("/") ? { open: answer.open } : {}),
+    /* File Store downloads: our own signed-link route only. */
+    ...(answer.files?.length ? { files: answer.files.filter((f) => f.href.startsWith("/api/r2/file?")) } : {}),
   });
 }
 
