@@ -19,6 +19,8 @@ interface Board {
   ok: boolean;
   error?: string;
   at: string;
+  /** Whole business for Michael and the owners; everyone else, their own homes. */
+  scope?: { whole: boolean; label: string };
   properties: Tile<{ managed: number; avgRent: number; landlords: number; rentRoll: number }>;
   maintenance: Tile<{ open: number; overdue: number; emergencies: number; followUp: number; late: { title: string; where: string; dueOn: string | null }[]; partial: string | null }>;
   inspections: Tile<{ due: number; overdue: number; booked: number; awaitingTenant: number }>;
@@ -54,7 +56,7 @@ export default function Overview() {
     <>
       <PageHeader
         title="Overview"
-        blurb="Everything across the managed book at a glance: what is late, what is coming up, and where to go next. Every figure is live from the screen it opens."
+        blurb="Your homes at a glance: what is late, what is coming up, and where to go next. Every figure is live from the screen it opens."
         illustration="/illustrations/street.webp"
         hideArtOnPhone
         illustrationHeight={150}
@@ -70,7 +72,14 @@ export default function Overview() {
         </p>
       )}
 
-      <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {data?.scope && (
+        <p className="mt-6 flex items-center gap-2 text-[12px] text-muted">
+          <DoodleIcon name={data.scope.whole ? "grid" : "user"} size={14} className="text-accent-dark" />
+          {data.scope.whole ? "Showing every home across the business." : "Showing the homes on your own book."}
+        </p>
+      )}
+
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <Card icon="home" title="Properties" href="/portfolio" tile={data?.properties}>
           {(d) => (
             <>

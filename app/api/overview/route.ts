@@ -10,6 +10,9 @@ import { GET as inspectionsGET } from "@/app/api/inspections/route";
 import { GET as reviewsGET } from "@/app/api/tenancy-reviews/route";
 import { GET as applicationsGET } from "@/app/api/applications/route";
 import { GET as listingsGET } from "@/app/api/listings/route";
+import { grantWholeBusiness } from "@/lib/scope";
+import { seesWholeOverview } from "@/lib/overview-access";
+import { readViewAs, VIEW_AS_COOKIE } from "@/lib/view-as";
 
 /**
  * The Overview board (1 Oct 2026): one tile per part of property management,
@@ -21,6 +24,12 @@ import { GET as listingsGET } from "@/app/api/listings/route";
  * disagree with the page it links to, and an agent sees their own book just
  * as they do there. Each tile stands alone: one that fails says so and the
  * rest still draw. Nothing is a stored or sample number.
+ *
+ * WHO SEES WHAT (James, 2 Oct 2026): the whole business is Michael's - he
+ * keeps track of compliance across every home - and the owners'. Everybody
+ * else's Overview is their own homes (lib/overview-access). Maintenance and
+ * compliance are company-wide on their own screens, so for an own-homes
+ * board they are cut down here to the homes in the person's book.
  */
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -30,8 +39,9 @@ type Json = Record<string, unknown>;
 type Tile<T> = { ok: true; data: T } | { ok: false; error: string };
 
 /** Call another screen's GET as the same person, and read its JSON. */
-async function read(handler: (r: NextRequest) => Promise<Response>, req: NextRequest, path: string): Promise<Json> {
+async function read(handler: (r: NextRequest) => Promise<Response>, req: NextRequest, path: string, whole: boolean): Promise<Json> {
   const sub = new NextRequest(new URL(path, req.url), { headers: req.headers });
+  if (whole) grantWholeBusiness(sub);
   const res = await handler(sub);
   const j = (await res.json()) as Json;
   if (!res.ok || j.ok === false) throw new Error(typeof j.error === "string" ? j.error : `That screen didn't answer (${res.status}).`);
@@ -49,13 +59,25 @@ const settle = async <T,>(p: Promise<T>): Promise<Tile<T>> => {
 const todayLondon = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
 
 export async function GET(req: NextRequest) {
-  const { actor } = await whoIs(req);
+  const { actor, subject, viewingAs } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const today = todayLondon();
-  const money = can(actor.role, "see:business");
+  const money = can(actor.role, "see:business") && !viewingAs;
+  /* An owner viewing as somebody sees THEIR Overview, so the grant follows
+     the person being viewed - and a view-as of someone with no account
+     (the REX id on the cookie) is never widened. */
+  const viewAsCookie = actor.role === "owner" && !!readViewAs(req.cookies.get(VIEW_AS_COOKIE)?.value);
+  const whole = viewingAs ? !!subject && (await seesWholeOverview(subject)) : !viewAsCookie && (await seesWholeOverview(actor));
+  const get = (h: (r: NextRequest) => Promise<Response>, path: string) => read(h, req, path, whole);
+
+  /* The person's own homes, for cutting the company-wide tiles down. */
+  const portfolio = get(portfolioGET, "/api/portfolio");
+  const mine: Promise<Set<string> | null> = whole
+    ? Promise.resolve(null)
+    : portfolio.then((j) => new Set(((Array.isArray(j.properties) ? j.properties : []) as { propertyId: string | null }[]).map((p) => String(p.propertyId ?? "")).filter(Boolean)));
 
   const [properties, maintenance, inspections, reviews, compliance, applications, lettings, arrears] = await Promise.all([
-    settle(read(portfolioGET, req, "/api/portfolio").then((j) => {
+    settle(portfolio.then((j) => {
       const c = (j.counts ?? {}) as Json;
       return {
         managed: Number(c.properties ?? 0),
@@ -66,26 +88,29 @@ export async function GET(req: NextRequest) {
       };
     })),
 
-    settle(read(worksGET, req, "/api/works-orders?open=1").then((j) => {
+    settle(Promise.all([get(worksGET, "/api/works-orders?open=1"), mine]).then(([j, homes]) => {
       const s = (j.summary ?? {}) as Json;
-      const carried = (Array.isArray(j.carried) ? j.carried : []) as { followUpOn: string | null; overdue: boolean; title: string; propertyName: string; dueOn: string | null }[];
+      const ours = (id: string | null) => !homes || (!!id && homes.has(id));
+      const carried = ((Array.isArray(j.carried) ? j.carried : []) as { propertyId: string | null; followUpOn: string | null; overdue: boolean; title: string; propertyName: string; dueOn: string | null }[]).filter((c) => ours(c.propertyId));
+      const orders = ((Array.isArray(j.orders) ? j.orders : []) as { propertyId: string | null; dueAt: string | null; urgency: string | null; rehearsal?: boolean }[]).filter((o) => !o.rehearsal && ours(o.propertyId));
+      const now = Date.now();
       return {
-        open: Number(s.open ?? 0),
-        overdue: Number(s.overdue ?? 0),
-        emergencies: Number(s.emergencies ?? 0),
+        open: homes ? orders.length + carried.length : Number(s.open ?? 0),
+        overdue: homes ? orders.filter((o) => o.dueAt && Date.parse(o.dueAt) < now).length + carried.filter((c) => c.overdue).length : Number(s.overdue ?? 0),
+        emergencies: homes ? orders.filter((o) => o.urgency === "emergency").length : Number(s.emergencies ?? 0),
         followUp: carried.filter((c) => c.followUpOn && c.followUpOn <= today).length,
         late: carried.filter((c) => c.overdue).slice(0, 3).map((c) => ({ title: c.title, where: c.propertyName, dueOn: c.dueOn })),
         partial: typeof j.carriedError === "string" ? j.carriedError : null,
       };
     })),
 
-    settle(read(inspectionsGET, req, "/api/inspections").then((j) => {
+    settle(get(inspectionsGET, "/api/inspections").then((j) => {
       const s = (j.summary ?? {}) as Json;
       if (typeof j.bookError === "string") throw new Error(j.bookError);
       return { due: Number(s.due ?? 0), overdue: Number(s.overdue ?? 0), booked: Number(s.booked ?? 0), awaitingTenant: Number(s.awaitingTenant ?? 0) };
     })),
 
-    settle(read(reviewsGET, req, "/api/tenancy-reviews").then((j) => {
+    settle(get(reviewsGET, "/api/tenancy-reviews").then((j) => {
       const s = (j.summary ?? {}) as Json;
       const due = (Array.isArray(j.due) ? j.due : []) as { why: string; propertyName: string; agreement: string }[];
       const notice = due.filter((d) => /notice/i.test(d.why));
@@ -98,9 +123,9 @@ export async function GET(req: NextRequest) {
 
     /* The compliance book is whole-business and the slowest read in the OS;
        it is cached, and the tile uses the Compliance screen's own rule. */
-    settle(getComplianceBook().then(({ book, ageMs }) => {
+    settle(Promise.all([getComplianceBook(), mine]).then(([{ book, ageMs }, homes]) => {
       const seen = new Set<string>();
-      const props = (book.properties as CompProperty[]).filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)));
+      const props = (book.properties as CompProperty[]).filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)) && (!homes || homes.has(String(p.id))));
       const due = dueWithin(30, props);
       const expired = due.filter((d) => d.status === "expired");
       return {
@@ -111,7 +136,7 @@ export async function GET(req: NextRequest) {
       };
     })),
 
-    settle(read(applicationsGET, req, "/api/applications").then((j) => {
+    settle(get(applicationsGET, "/api/applications").then((j) => {
       const apps = (Array.isArray(j.applications) ? j.applications : []) as { status: string; closed: unknown; startDate: string | null }[];
       const open = apps.filter((a) => !a.closed && /^(received|communicated)$/i.test(a.status));
       const movingIn = apps.filter((a) => !a.closed && /^accepted$/i.test(a.status) && (a.startDate ?? "") >= today);
@@ -120,7 +145,7 @@ export async function GET(req: NextRequest) {
 
     /* On the market = published to the portals, the dashboard tile's own rule;
        the book's "available" counts drafts too. */
-    settle(read(listingsGET, req, "/api/listings?tests=0").then((j) => {
+    settle(get(listingsGET, "/api/listings?tests=0").then((j) => {
       const ls = (Array.isArray(j.listings) ? j.listings : []) as { publicationStatus: string | null; letAgreed: boolean }[];
       const published = ls.filter((l) => l.publicationStatus === "published");
       return {
@@ -141,5 +166,6 @@ export async function GET(req: NextRequest) {
       : Promise.resolve({ ok: false as const, error: "Rent arrears are for the business owners." }),
   ]);
 
-  return NextResponse.json({ ok: true, at: new Date().toISOString(), properties, maintenance, inspections, reviews, compliance, applications, lettings, arrears });
+  const label = whole ? "the whole business" : ((subject ?? actor).name || "your homes");
+  return NextResponse.json({ ok: true, at: new Date().toISOString(), scope: { whole, label }, properties, maintenance, inspections, reviews, compliance, applications, lettings, arrears });
 }

@@ -49,7 +49,22 @@ export interface Scope {
   label: string;
 }
 
+/**
+ * Requests the Overview board makes on behalf of somebody on its whole-business
+ * list (lib/overview-access). Held in memory and keyed by the request object
+ * itself, so only this server process can grant it: nothing a browser sends
+ * can put a request in here, and it widens no other screen.
+ */
+const WHOLE_BUSINESS = new WeakSet<NextRequest>();
+export function grantWholeBusiness(req: NextRequest): NextRequest {
+  WHOLE_BUSINESS.add(req);
+  return req;
+}
+
 export async function scopeFor(req: NextRequest): Promise<Scope> {
+  if (WHOLE_BUSINESS.has(req)) {
+    return { rexUserId: null, everything: true, unlinked: false, label: "the whole business" };
+  }
   /* No database at all means a developer's laptop and nothing else: hasDb()
      is false only when DATABASE_URL is unset, and it is always set in
      production, so this can never widen a real person's scope. Without it a
