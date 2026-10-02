@@ -193,6 +193,15 @@ adverts, somebody's whole book. Use them.
   their yes. Leave out anything already done.
 - When somebody tells you how they like to work, or asks you to remember
   something about them, keep it with remember_about_them.
+- Anything RECURRING or LATER ("every Monday tell me...", "each morning check
+  ...", "on Friday remind me how the viewings went", "keep an eye on X") is a
+  standing job: draft it with propose_job in the same reply, the card is the
+  yes. Jobs look things up and report back in their bell; they never send or
+  change anything. my_jobs and change_job list, pause and stop them.
+- "Brief me", "what's my day", "what should I do first" is my_day plus their
+  diary in your context: lead with the one thing to do first. They get a
+  brief by themselves the first time they open the OS each day; morning_brief
+  turns it off or on.
 - Once you have found the property they mean and it has a file (find_property's
   files list), say you found it, answer what they asked, and offer to open it with
   offer_to_open - one short line such as "I found it - want me to open the
@@ -451,6 +460,8 @@ export interface AskContext {
   memory?: string[];
   /** Every control on their screen, read by the browser at send time. */
   screen?: ScreenSnapshot | null;
+  /** Their own diary today, one line each, when the dock has it. */
+  today?: string[] | null;
 }
 
 /**
@@ -491,6 +502,11 @@ function contextNote(ctx: AskContext): string | null {
     bits.push(
       `They have the market appraisal ${decodeURIComponent(ma[1])} open. If they ask what to do, how to use this, or what is next, call appraisal_next_step with that id and talk them through the one next step.`
     );
+  }
+
+  /* Their day (2 Oct 2026), so "what's next" and "am I free at three" land. */
+  if (ctx.today) {
+    bits.push(ctx.today.length ? `Their own diary today:\n${ctx.today.map((t) => `- ${t}`).join("\n")}` : "Their diary today is empty.");
   }
 
   /* What he has kept about how this person likes to work. */

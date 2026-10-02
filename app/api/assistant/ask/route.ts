@@ -112,6 +112,7 @@ export async function POST(req: NextRequest) {
     openListingId?: string;
     surfaces?: unknown;
     screen?: unknown;
+    today?: unknown;
     attachments?: unknown;
   };
   const attachments = readAttachments(b.attachments);
@@ -189,6 +190,7 @@ export async function POST(req: NextRequest) {
       me: { id: userId, name: me.name ?? "", email: me.email },
       memory,
       screen: readScreen(b.screen),
+      today: readToday(b.today),
     });
   } catch (e) {
     /* A model outage must not lose the question — it is still logged above,
@@ -339,4 +341,19 @@ function readScreen(raw: unknown): ScreenSnapshot | null {
     headings: Array.isArray(r.headings) ? r.headings.slice(0, 14).map((h) => str(h, 60)) : [],
     controls,
   };
+}
+
+/** Their own diary today, as the dock holds it - capped and coerced for the prompt. */
+function readToday(raw: unknown): string[] | null {
+  if (!Array.isArray(raw)) return null;
+  const str = (v: unknown, n: number) => (typeof v === "string" ? v.replace(/\s+/g, " ").slice(0, n) : "");
+  return raw.slice(0, 20).flatMap((d) => {
+    const x = (d ?? {}) as Record<string, unknown>;
+    const start = str(x.start, 5);
+    const what = str(x.what, 100);
+    if (!/^\d{2}:\d{2}$/.test(start) || !what) return [];
+    const where = str(x.where, 100);
+    const who = str(x.who, 60);
+    return [`${start} ${str(x.kind, 16)}: ${what}${where ? ` at ${where}` : ""}${who ? ` with ${who}` : ""}`];
+  });
 }

@@ -15,6 +15,7 @@ import { runDeckReminders } from "@/lib/deck-reminders";
 import { runContractNudges } from "@/lib/contract-nudge";
 import { runInstructionSweep } from "@/lib/rex-instruct";
 import { publicOrigin } from "@/lib/origin";
+import { runDueJobs } from "@/lib/steve-jobs";
 
 /**
  * Send what's due.
@@ -140,6 +141,11 @@ export async function POST(req: NextRequest) {
   }
   if (!hasDb()) {
     return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
+  }
+  /* ?only=steve runs Steve's standing jobs and nothing else - for running
+     them by hand without sending anything that happens to be queued. */
+  if (req.nextUrl.searchParams.get("only") === "steve") {
+    return NextResponse.json({ ok: true, steveJobs: await runDueJobs() });
   }
   /* Claim and select in ONE statement. Two overlapping cron runs — a slow one
      and its successor — would otherwise both read the same due rows and send
@@ -277,7 +283,10 @@ export async function POST(req: NextRequest) {
   /* Customer updates nobody has dealt with: the agent is reminded, then
      Kirstie hears (lib/customer-updates). Never the customer. */
   const updates = await runUpdateNudges().catch((e) => ({ error: e instanceof Error ? e.message : "Update nudges failed." }));
-  return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, skipped: skipped.length, failed, decks, nudges, instructions, newsletters, updates });
+  /* Steve's standing jobs (lib/steve-jobs, 2 Oct 2026). Last, because each is
+     a model call and the sends above must never wait behind one. */
+  const steveJobs = await runDueJobs().catch((e) => ({ ran: 0, failed: [e instanceof Error ? e.message : "Steve's jobs failed."] }));
+  return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, skipped: skipped.length, failed, decks, nudges, instructions, newsletters, updates, steveJobs });
 }
 
 /** A dry read: what is due, without sending it. Same key as the run: this

@@ -8,7 +8,7 @@
  * "<source>:<row id>" and the same happening reads the same way every time.
  */
 
-export type NoticeKind = "deal" | "money" | "plc" | "campaign" | "handover" | "chase" | "reminder" | "compliance";
+export type NoticeKind = "deal" | "money" | "plc" | "campaign" | "handover" | "chase" | "reminder" | "compliance" | "steve";
 
 export interface Notice {
   id: string;
@@ -30,4 +30,5 @@ export const NOTICE_ICON: Record<NoticeKind, string> = {
   handover: "key",
   chase: "clock",
   compliance: "shield",
+  steve: "message",
 };

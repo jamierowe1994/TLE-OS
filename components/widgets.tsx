@@ -414,7 +414,7 @@ function AttentionWidget({ w, h }: { w: number; h: number }) {
   const [showAll, setShowAll] = useState(false);
   const items = (data?.notices ?? []).map((n) => ({
     id: n.id,
-    text: n.title + (n.body ? ` — ${n.body}` : ""),
+    text: n.title + (n.body ? ` - ${n.body}` : ""),
     href: n.href,
     hot: n.tone === "warn" || (data?.seenAt ? n.at > data.seenAt : true),
   }));

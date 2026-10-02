@@ -229,7 +229,7 @@ type Line = {
 
 /** Mirrors ActionProposal server-side, narrowed to what the card draws. */
 type Proposal = {
-  kind: "note" | "reminder" | "write-up" | "email" | "fill-compose" | "tasks";
+  kind: "note" | "reminder" | "write-up" | "email" | "fill-compose" | "tasks" | "job";
   items?: { title: string; detail?: string; due?: string | null }[];
   assigneeName?: string | null;
   address?: string | null;
@@ -256,6 +256,33 @@ const REPORT_STATUS: Record<string, string> = {
   closed: "Closed",
 };
 
+/**
+ * Today's own diary, for the morning brief and for every question (2 Oct
+ * 2026), so "what's next" and "am I free at three" land. The same route the
+ * dashboard reads - REX, Outlook and our own bookings, already scoped to them
+ * - held for five minutes so a page full of questions asks it once.
+ */
+type TodayLine = { start: string; mins: number; kind: string; what: string; where: string; who: string };
+let todayHeld: { at: number; lines: TodayLine[] } | null = null;
+let todayAsking: Promise<TodayLine[]> | null = null;
+function todayDiary(): Promise<TodayLine[]> {
+  if (todayHeld && Date.now() - todayHeld.at < 5 * 60_000) return Promise.resolve(todayHeld.lines);
+  todayAsking ??= fetch("/api/diary", { cache: "no-store" })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d: { appts?: { day: number; start: string; mins: number; kind: string; what: string; where?: string; who?: string; own?: boolean }[]; everything?: boolean } | null) => {
+      const lines = (d?.appts ?? [])
+        .filter((a) => a.day === 0 && (!d?.everything || a.own))
+        .map((a) => ({ start: a.start, mins: a.mins, kind: a.kind, what: a.what, where: a.where ?? "", who: a.who ?? "" }));
+      todayHeld = { at: Date.now(), lines };
+      return lines;
+    })
+    .catch(() => [])
+    .finally(() => {
+      todayAsking = null;
+    });
+  return todayAsking;
+}
+
 const CARD_TITLE: Record<Proposal["kind"], string> = {
   /* Never actually drawn — a fill-compose is applied on arrival and its card
      suppressed, because the result is visible in the boxes themselves. Present
@@ -265,6 +292,7 @@ const CARD_TITLE: Record<Proposal["kind"], string> = {
   note: "Note, ready to save",
   reminder: "Reminder, ready to set",
   tasks: "Tasks, ready to add",
+  job: "Standing job, ready to set up",
   "write-up": "New advert, ready to publish",
   email: "Email, ready to send",
 };
@@ -273,6 +301,7 @@ const CARD_BUTTON: Record<Proposal["kind"], string> = {
   note: "Save note",
   reminder: "Set reminder",
   tasks: "Add them",
+  job: "Set it up",
   "write-up": "Publish it",
   email: "Send it",
 };
@@ -283,6 +312,7 @@ const CARD_EFFECT: Record<Proposal["kind"], string> = {
   note: "Saves to the property file in the OS. Not sent to REX.",
   reminder: "Goes in the OS diary only - not REX, not your 365 calendar.",
   tasks: "Adds to their task list in the OS, shown in their bell until ticked off. Nothing goes to REX.",
+  job: "I'll do it on that schedule and report back in your bell and here. It only looks things up - it never sends or changes anything. Pause or stop it from my Tasks tab.",
   "write-up": "Writes to REX and goes live on Rightmove, Zoopla and OnTheMarket in about five to ten minutes.",
   email: "Sends from YOUR Microsoft mailbox, so it is in your Sent Items and their reply threads onto it. BCC'd to REX so it shows on their timeline. The address is looked up again when you press - it always goes to the person on the record.",
 };
@@ -678,13 +708,56 @@ export default function HelpDock() {
     return () => window.removeEventListener(TOAST_LIFT_EVENT, onLift);
   }, [react, rest]);
 
+  /* THE MORNING BRIEF (lib/steve-brief, 2 Oct 2026): the first time they
+     open the OS each day he pops up with their day. Asked once per page load;
+     the server says whether today's has been given, and keeps it, so a second
+     tab does not get a second one. */
+  const briefAsked = useRef(false);
+  /* Set below the early return, where loadHistory lives; read by the effects
+     above it. */
+  const loadHistoryRef = useRef<(() => Promise<void>) | null>(null);
+  useEffect(() => {
+    if (!signedIn || briefAsked.current) return;
+    briefAsked.current = true;
+    let gone = false;
+    (async () => {
+      const due = await fetch("/api/assistant/brief", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null);
+      if (!due?.due || gone) return;
+      const diary = await todayDiary();
+      const r = await fetch("/api/assistant/brief", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ diary }),
+      })
+        .then((x) => (x.ok ? x.json() : null))
+        .catch(() => null);
+      if (!r?.fresh || gone) return;
+      /* The brief is already in his chat (the server logged it), so loading
+         the conversation brings it in at the bottom. */
+      await loadHistoryRef.current?.();
+      setTab("help");
+      setOpen(true);
+      react("wave", 2200);
+    })();
+    return () => {
+      gone = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedIn]);
+
   /* ?steve=tasks opens him on the Tasks tab - the bell's link for a task. */
   useEffect(() => {
     if (typeof window === "undefined") return;
     const sp = new URLSearchParams(window.location.search);
-    if (sp.get("steve") !== "tasks") return;
-    setTab("tasks");
+    const want = sp.get("steve");
+    if (want !== "tasks" && want !== "chat") return;
+    /* "chat" is the bell's link for what a standing job reported: the whole
+       report is in his chat. */
+    setTab(want === "tasks" ? "tasks" : "help");
     setOpen(true);
+    if (want === "chat") void loadHistoryRef.current?.();
     sp.delete("steve");
     const rest = sp.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${rest ? `?${rest}` : ""}${window.location.hash}`);
@@ -708,6 +781,11 @@ export default function HelpDock() {
     react(waking ? "surprised" : "wave", waking ? 2600 : 1800);
 
     if (lines.length) return;
+    await loadHistory();
+  }
+
+  /** Their conversation so far, onto the screen. */
+  async function loadHistory() {
     const r = await fetch("/api/assistant/ask", { cache: "no-store" })
       .then((x) => (x.ok ? x.json() : null))
       .catch(() => null);
@@ -727,6 +805,8 @@ export default function HelpDock() {
       );
     }
   }
+
+  loadHistoryRef.current = loadHistory;
 
   /**
    * The button. The only thing in this component that changes anything.
@@ -898,6 +978,7 @@ export default function HelpDock() {
     }
     setBusy(true);
     setMood("thinking");
+    if (!todayHeld) void todayDiary();
 
     const r = await fetch("/api/assistant/ask", {
       method: "POST",
@@ -925,6 +1006,9 @@ export default function HelpDock() {
               return null;
             }
           })(),
+          /* Their own diary today, if it has been read in the last five
+             minutes; never waited on. */
+          today: todayHeld?.lines ?? undefined,
           /* Keys only. The file itself went up on its own, through the one
              route that decides what may be stored. */
           attachments: sending.map((f) => ({ key: f.key, name: f.name, type: f.type, size: f.size })),

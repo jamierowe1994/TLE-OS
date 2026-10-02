@@ -5,6 +5,8 @@ import { searchEverything } from "@/lib/search";
 import { hasDb, q } from "@/lib/db";
 import { noDashes } from "@/lib/no-dashes";
 import { neverPress, type ScreenPlan, type ScreenStep } from "@/lib/steve-never";
+import { changeJob, jobsFor, nextRun, scheduleWords, MAX_JOBS_EACH, type Every } from "@/lib/steve-jobs";
+import { dayFacts, setBriefOff } from "@/lib/steve-brief";
 
 /**
  * STEVE AS A PERSONAL ASSISTANT (James, 2 Oct 2026): "a literal personal
@@ -216,4 +218,120 @@ const searchAll: AssistantTool = {
   },
 };
 
-export const PA_TOOLS: AssistantTool[] = [doOnScreen, learnThis, noteAGap, searchAll];
+/* ── standing jobs ─────────────────────────────────────────────────────── */
+
+const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+const proposeJob: AssistantTool = {
+  name: "propose_job",
+  description:
+    "Set up a STANDING JOB: something you do for them on a schedule and report back on, in their bell and your chat ('every Monday at 9 tell me which of my listings have no photos', 'each morning list leads I haven't called', 'remind me on the 1st to check rent arrears', 'on Friday tell me how the 52a viewings went'). Draft it straight away when they ask - the card is the confirmation. Jobs only read and report: they can look anything up with your tools but never press, send or change anything, so word the ask as a question to answer. Times are London time.",
+  input_schema: {
+    type: "object",
+    properties: {
+      title: { type: "string", description: "What you will do, short, starting with a verb: 'Tell you which listings have no photos'." },
+      ask: { type: "string", description: "The full question you will answer each time, with every detail you need (whose book, which property, what counts)." },
+      every: { type: "string", enum: ["day", "weekday", "week", "month", "once"] },
+      day: { type: "string", description: "For week: the day name ('monday'). For month: the day of the month ('1'). Leave out otherwise." },
+      at: { type: "string", description: "24-hour London time, 'HH:MM'. Default 09:00." },
+      date: { type: "string", description: "For once: the date, YYYY-MM-DD." },
+    },
+    required: ["title", "ask", "every"],
+  },
+  label: () => "Drafting a standing job…",
+  async run(input, ctx) {
+    if (!ctx.me?.id) return { error: "I can't tell who this is for." };
+    const every = str(input.every) as Every;
+    if (!["day", "weekday", "week", "month", "once"].includes(every)) return { error: "every must be day, weekday, week, month or once." };
+    const at = /^([01]?\d|2[0-3]):[0-5]\d$/.test(str(input.at)) ? str(input.at).padStart(5, "0") : "09:00";
+    const dayRaw = str(input.day).toLowerCase();
+    let on: number | null = null;
+    if (every === "week") {
+      on = DAY_NAMES.findIndex((d) => d.startsWith(dayRaw.slice(0, 3)));
+      if (on < 0) return { error: "Which day of the week?" };
+    }
+    if (every === "month") {
+      on = Math.min(31, Math.max(1, Number(dayRaw) || 1));
+    }
+    const onceDate = every === "once" ? str(input.date) : null;
+    if (every === "once" && !/^\d{4}-\d{2}-\d{2}$/.test(onceDate ?? "")) return { error: "A one-off job needs a date, YYYY-MM-DD." };
+    const next = nextRun(every, on, at, new Date(), onceDate);
+    if (!next) return { error: "That time has already gone - pick one in the future." };
+    if ((await jobsFor(ctx.me.id).catch(() => [])).length >= MAX_JOBS_EACH) return { error: `They already have ${MAX_JOBS_EACH} standing jobs. Offer to stop one first (my_jobs).` };
+    const title = noDashes(str(input.title)).slice(0, 120);
+    const ask = noDashes(str(input.ask)).slice(0, 1500);
+    if (!title || !ask) return { error: "A job needs a title and the question to answer." };
+    const words = scheduleWords({ every, on, at, nextAt: next.toISOString() });
+    return {
+      __proposal: { kind: "job", listingId: null, address: null, title, text: words, ask, every, on, at, onceDate },
+      done: false,
+      note: `A card is on their screen: "${title}", ${words.toLowerCase()}. It is set up only when they press it. Say what it will do and when in one line; never say it is set up.`,
+    };
+  },
+};
+
+const myJobs: AssistantTool = {
+  name: "my_jobs",
+  description: "List their standing jobs: what each does, when, when it runs next, and whether it is paused. Call it for 'what jobs have I got', or before stopping or changing one.",
+  input_schema: { type: "object", properties: {} },
+  label: () => "Checking your standing jobs…",
+  async run(_input, ctx) {
+    if (!ctx.me?.id) return { error: "I can't tell who you are." };
+    const jobs = await jobsFor(ctx.me.id);
+    if (!jobs.length) return { jobs: [], note: "None yet. Offer an example that would suit them." };
+    return {
+      jobs: jobs.map((j) => ({
+        id: j.id,
+        does: j.title,
+        when: scheduleWords(j),
+        next: j.paused ? "paused" : j.nextAt ? new Date(j.nextAt).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" }) : "finished",
+      })),
+    };
+  },
+};
+
+const stopJob: AssistantTool = {
+  name: "change_job",
+  description: "Pause, restart or stop one of their standing jobs, by its id from my_jobs. Do it when they ask - it is their own job. To change what a job does or when, stop it and propose a new one.",
+  input_schema: {
+    type: "object",
+    properties: { id: { type: "string" }, change: { type: "string", enum: ["pause", "resume", "delete"] } },
+    required: ["id", "change"],
+  },
+  label: (i) => (str(i.change) === "delete" ? "Stopping that job…" : str(i.change) === "pause" ? "Pausing that job…" : "Restarting that job…"),
+  async run(input, ctx) {
+    if (!ctx.me?.id) return { error: "I can't tell who you are." };
+    const change = str(input.change) as "pause" | "resume" | "delete";
+    if (!["pause", "resume", "delete"].includes(change)) return { error: "change is pause, resume or delete." };
+    const ok = await changeJob(ctx.me.id, str(input.id), change);
+    return ok ? { ok: change === "delete" ? "Stopped for good." : change === "pause" ? "Paused." : "Running again." } : { error: "No job of theirs with that id - call my_jobs." };
+  },
+};
+
+/* ── their day ─────────────────────────────────────────────────────────── */
+
+const myDay: AssistantTool = {
+  name: "my_day",
+  description:
+    "Everything waiting for them today: overdue and due tasks, follow-ups, reminders the system has raised (leads not rung, decks not sent, terms unsigned), and what their standing jobs reported. Their diary for today is already in your context. Call it for 'what's my day', 'brief me', 'what should I do first', 'what have I missed'. Lead with the ONE thing to do first.",
+  input_schema: { type: "object", properties: {} },
+  label: () => "Looking at your day…",
+  async run(_input, ctx) {
+    if (!ctx.me?.id) return { error: "I can't tell who you are." };
+    return dayFacts(ctx.me.id);
+  },
+};
+
+const briefSwitch: AssistantTool = {
+  name: "morning_brief",
+  description: "Turn their morning brief (the rundown you give the first time they open the OS each day) off or back on, when they ask.",
+  input_schema: { type: "object", properties: { on: { type: "boolean" } }, required: ["on"] },
+  label: (i) => (i.on ? "Turning your morning brief on…" : "Turning your morning brief off…"),
+  async run(input, ctx) {
+    if (!ctx.me?.id) return { error: "I can't tell who you are." };
+    await setBriefOff(ctx.me.id, input.on !== true);
+    return { ok: input.on === true ? "On - from tomorrow morning." : "Off. They can ask you to turn it back on, or say 'brief me' any time." };
+  },
+};
+
+export const PA_TOOLS: AssistantTool[] = [doOnScreen, learnThis, noteAGap, searchAll, proposeJob, myJobs, stopJob, myDay, briefSwitch];

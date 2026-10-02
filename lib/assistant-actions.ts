@@ -94,6 +94,21 @@ export type ActionProposal =
       items: { title: string; detail: string; due: string | null }[];
     }
   | {
+      /** A standing job (lib/steve-jobs, 2 Oct 2026): a question he answers
+       *  for them on a schedule. listingId is always null - it is about them. */
+      kind: "job";
+      listingId: null;
+      address: null;
+      title: string;
+      /** The schedule in words, for the card. */
+      text: string;
+      ask: string;
+      every: "day" | "weekday" | "week" | "month" | "once";
+      on: number | null;
+      at: string;
+      onceDate: string | null;
+    }
+  | {
       kind: "email";
       listingId: string;
       address: string;
@@ -187,6 +202,18 @@ async function doReminder(p: Extract<ActionProposal, { kind: "reminder" }>, acto
   /* Said every time, same as the appointments route: a reminder nobody told
      you was OS-only is a reminder somebody expects REX to fire. */
   return { ok: true, message: `Set for ${when}. It's in the OS diary only — it has NOT gone to REX or your 365 calendar.` };
+}
+
+async function doJob(p: Extract<ActionProposal, { kind: "job" }>, actor: { id: string; name: string; osUserId: string | null }): Promise<ActionOutcome> {
+  if (!hasDb()) return { ok: false, message: "There's no database on this environment, so there's nowhere to keep it." };
+  if (!actor.osUserId) return { ok: false, message: "I couldn't tell whose job this is." };
+  const { createJob, scheduleWords } = await import("@/lib/steve-jobs");
+  try {
+    const j = await createJob({ userId: actor.osUserId, title: p.title, ask: p.ask, every: p.every, on: p.on, at: p.at, onceDate: p.onceDate });
+    return { ok: true, message: `Set up. ${scheduleWords(j)} I'll ${p.title.charAt(0).toLowerCase()}${p.title.slice(1).replace(/\.$/, "")}, and it'll land in your bell and here. Stop or pause it any time from my Tasks tab.` };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "That didn't save." };
+  }
 }
 
 async function doTasks(p: Extract<ActionProposal, { kind: "tasks" }>, actor: { id: string; name: string; osUserId: string | null }): Promise<ActionOutcome> {
@@ -402,6 +429,8 @@ export async function perform(
       return doReminder(proposal, actor);
     case "tasks":
       return doTasks(proposal, actor);
+    case "job":
+      return doJob(proposal, actor);
     case "write-up":
       return doWriteUp(proposal, await rexTokenFor(actor.osUserId));
     case "email":

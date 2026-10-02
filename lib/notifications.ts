@@ -114,7 +114,23 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
     [me.id]
   ).catch(() => []);
 
+  /* What Steve's standing jobs reported (lib/steve-jobs, 2 Oct 2026). Opens
+     his chat, where the whole report is. */
+  const { runsFor } = await import("@/lib/steve-jobs");
+  const jobRuns = await runsFor(me.id, 3).catch(() => []);
+
   const out: Notice[] = [...reminders];
+  for (const r of jobRuns) {
+    out.push({
+      id: `steve-job:${r.id}`,
+      kind: "steve",
+      at: r.at,
+      title: `Steve: ${r.title}`,
+      body: r.text.replace(/\s+/g, " ").slice(0, 180),
+      href: "/dashboard?steve=chat",
+      tone: r.ok ? "none" : "warn",
+    });
+  }
   for (const t of tasks) {
     const overdue = t.due_at && new Date(t.due_at).getTime() < Date.now();
     out.push({
