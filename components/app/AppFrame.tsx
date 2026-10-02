@@ -67,6 +67,15 @@ export default function AppFrame({ inApp, theme, children }: { inApp: boolean; t
   const [sheet, setSheet] = useState(false);
   const [mode, setMode] = useState<MTheme | null>(theme);
   useEffect(() => setSheet(false), [path]);
+  /* The app came to life: the stale-page guard in app/app/layout.tsx stands down. */
+  useEffect(() => {
+    (window as { __tleAppReady?: boolean }).__tleAppReady = true;
+    try {
+      sessionStorage.removeItem("app-reloaded");
+    } catch {
+      /* Nothing to clear. */
+    }
+  }, []);
   const open = useCallback(() => setSheet(true), []);
 
   const choose = (t: MTheme) => {

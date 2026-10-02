@@ -58,9 +58,18 @@ export default async function PhoneLayout({ children }: { children: React.ReactN
   const theme = await chosenTheme();
   return (
     <div className="m-app min-h-dvh" data-mtheme={theme ?? "light"}>
+      {/* A page that never comes to life reloads itself, once (2 Oct 2026).
+          James's home-screen app froze on the welcome screen: the phone had
+          kept a page whose code a deploy had since replaced, so it drew but
+          no button answered. This waits until the page's scripts have all
+          loaded or failed, then, if the app never said it was ready, loads
+          the page afresh - and only once per visit, so it can never loop. */}
+      <script dangerouslySetInnerHTML={{ __html: STALE_GUARD }} />
       <AppFrame inApp={inApp} theme={theme}>
         {children}
       </AppFrame>
     </div>
   );
 }
+
+const STALE_GUARD = `(function(){function check(){setTimeout(function(){if(window.__tleAppReady)return;try{if(sessionStorage.getItem("app-reloaded"))return;sessionStorage.setItem("app-reloaded","1")}catch(e){return}location.reload()},2500)}if(document.readyState==="complete")check();else window.addEventListener("load",check)})();`;
