@@ -388,7 +388,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             >
               TLE
             </span>
-            <span aria-hidden className={`font-[200] transition-[margin] duration-[360ms] ${collapsed ? "ml-0" : "ml-[3px]"}`}>
+            <span aria-hidden className={`font-[200] tracking-[-0.07em] transition-[margin] duration-[360ms] ${collapsed ? "ml-0" : "ml-[3px]"}`}>
               OS
             </span>
           </span>

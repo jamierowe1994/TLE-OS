@@ -182,7 +182,7 @@ export default function PreviewShell() {
             style={{ fontFamily: "var(--font-bricolage), var(--font-heading)" }}
           >
             <span aria-hidden className="font-[800]">TLE</span>
-            <span aria-hidden className="ml-[3px] font-[200]">OS</span>
+            <span aria-hidden className="ml-[3px] font-[200] tracking-[-0.07em]">OS</span>
           </span>
         </div>
         <div className="mt-4 border-t border-line/70" />
