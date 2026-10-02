@@ -35,8 +35,15 @@ import "./m.css";
  * anything else. The one write is the ID check.
  */
 
+/* Saved to the home screen, the phone is its own app (2 Oct 2026): its own
+   manifest, so adding it opens here - not on the pre-tenancy dashboard the
+   site-wide one (app/manifest.ts) opens for Kirstie's desktop window. Both
+   live under /icons, which the door leaves open: a phone asks for them
+   without a cookie. */
 export const metadata: Metadata = {
   title: "TLE OS",
+  manifest: "/icons/m/manifest.webmanifest",
+  icons: { apple: "/icons/m/apple-touch-icon.png" },
   appleWebApp: { capable: true, title: "TLE OS", statusBarStyle: "default" },
 };
 

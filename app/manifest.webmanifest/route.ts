@@ -16,20 +16,27 @@ import type { MetadataRoute } from "next";
  * screen is a dashboard of her own, with the feed, the packs, the stages
  * and the move-ins on it - so the installed window opens there, and the
  * feed is one card away or a pop-out.
+ *
+ * A plain route since 2 Oct 2026, at the same address. As app/manifest.ts it
+ * was stamped onto every page with no way for a section to name its own, and
+ * the agents' phone screens (app/m) need theirs, so saving them to a home
+ * screen opens the phone and not this dashboard.
  */
-export default function manifest(): MetadataRoute.Manifest {
-  return {
-    name: "TLE OS - Pre-tenancy",
-    short_name: "TLE OS",
-    description: "What moved, the packs with compliance, and who is moving in.",
-    start_url: "/pre-tenancy/dashboard?app=1",
-    scope: "/",
-    display: "standalone",
-    background_color: "#fbfaf7",
-    theme_color: "#fbfaf7",
-    icons: [
-      { src: "/icons/app/icon-192.png", sizes: "192x192", type: "image/png" },
-      { src: "/icons/app/icon-512.png", sizes: "512x512", type: "image/png" },
-    ],
-  };
+const MANIFEST: MetadataRoute.Manifest = {
+  name: "TLE OS - Pre-tenancy",
+  short_name: "TLE OS",
+  description: "What moved, the packs with compliance, and who is moving in.",
+  start_url: "/pre-tenancy/dashboard?app=1",
+  scope: "/",
+  display: "standalone",
+  background_color: "#fbfaf7",
+  theme_color: "#fbfaf7",
+  icons: [
+    { src: "/icons/app/icon-192.png", sizes: "192x192", type: "image/png" },
+    { src: "/icons/app/icon-512.png", sizes: "512x512", type: "image/png" },
+  ],
+};
+
+export function GET() {
+  return Response.json(MANIFEST, { headers: { "content-type": "application/manifest+json" } });
 }
