@@ -574,6 +574,38 @@ function toApplication(d: Record<string, unknown>, statusKey: string): AgentAppl
         const h = obj(obj(d.payments).holding_deposit);
         return str(h.status) ? { status: String(h.status), paidAt: str(h.paid_at), method: str(h.method) } : null;
       })(),
+      tenantRefs: arr(d.tenants).length
+        ? arr(d.tenants).map((t) => ({
+            name: [str(t.first_name), str(t.last_name)].filter(Boolean).join(" ") || "A tenant",
+            required: t.reference_required !== false,
+            decision: str(obj(t.reference).decision),
+          }))
+        : undefined,
+      agreement: (() => {
+        const ag = obj(d.agreements);
+        const ta = obj(ag.tenancy_agreement);
+        if (!str(ta.signing_status)) return null;
+        const g = obj(ag.guarantor_agreements);
+        const signedBy = (list: Record<string, unknown>[]) =>
+          list.filter((x) => Boolean(obj(x.signatures).tenancy_agreement)).length;
+        const tenants = arr(d.tenants);
+        const landlords = arr(d.landlords);
+        return {
+          status: String(ta.signing_status),
+          tenants: tenants.length,
+          tenantsSigned: signedBy(tenants),
+          landlords: landlords.length,
+          landlordsSigned: signedBy(landlords),
+          guarantorStatus: str(g.signing_status),
+          guarantorsRequired: num(g.required) ?? 0,
+          guarantorsDone: num(g.completed) ?? 0,
+        };
+      })(),
+      moveInMonies: (() => {
+        const m = obj(obj(d.payments).move_in_monies);
+        return str(m.status) ? { status: String(m.status), paidAt: str(m.paid_at) } : null;
+      })(),
+      executedAt: str(d.tenancy_executed_at),
       referencing: (() => {
         const r = obj(d.referencing);
         return str(r.status)

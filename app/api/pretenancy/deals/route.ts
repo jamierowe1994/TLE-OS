@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { flatbondForDeal } from "@/lib/business/flatfair-deal";
+import { CHECKLIST_ITEMS, recordTicks } from "@/lib/business/propoly-stages";
 import { requireCapability } from "@/lib/admin";
 import { getAllPropolyDeals, getPropolyMoveInForecast, propolyDealsSavedAt } from "@/lib/business/propoly-deals";
 import {
@@ -245,13 +246,18 @@ export async function GET(req: NextRequest) {
     const plc = plcCase
       ? { id: plcCase.id, state: plcCase.state, label: plcState?.label ?? plcCase.state, who: plcState?.who ?? "", decidedBy: plcCase.decidedBy, decidedAt: plcCase.decidedAt }
       : null;
+    /* The card's count includes the ticks a record makes (Propoly, Flatfair),
+       the same as the panel's (lib/business/propoly-stages recordTicks). */
+    const auto = recordTicks(d.app, flatbondForDeal(d, stageSources.flatbonds));
+    const ticked = CHECKLIST_ITEMS.filter((i) => meta?.checklist?.[i.key]?.done || auto[i.key]).length;
     const overlay: DealPortalOverlay = entry
       ? {
           ...entry.overlay,
           // A stage move Propoly has since overtaken is stale — don't show it.
           override: effective === portalStageOf(d.statusKey) ? null : entry.overlay.override,
+          checklistDone: ticked,
         }
-      : { notesCount: 0, lastNote: null, override: null, checklistDone: 0, checklistTotal: 0 };
+      : { notesCount: 0, lastNote: null, override: null, checklistDone: ticked, checklistTotal: CHECKLIST_ITEMS.length };
     const match = photos ? matchListingPhoto(photos, d.app.propertyName, d.app.locality) : null;
     // Address-keyed, because a Propoly deal holds an address string and no
     // PayProp id. Keys where two properties disagree were dropped upstream, so

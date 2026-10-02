@@ -24,6 +24,7 @@ import { BRAND } from "@/lib/business/brand";
 import { formatGBP } from "@/lib/business/format";
 import {
   CHECKLIST_ITEMS,
+  recordTicks,
   DEPOSIT_SCHEMES,
   PROPOLY_APP_URL,
   PORTAL_STAGES,
@@ -1242,7 +1243,8 @@ function DealWorkspace({
   function applyMeta(m: DealMeta, eff: string) {
     setMeta(m);
     setEffective(eff);
-    const done = CHECKLIST_ITEMS.filter((i) => m.checklist[i.key]?.done).length;
+    const auto = recordTicks(deal.app, deal.flatbond);
+    const done = CHECKLIST_ITEMS.filter((i) => m.checklist[i.key]?.done || auto[i.key]).length;
     onPatched({
       effectiveStatusKey: eff,
       portal: {
@@ -1351,9 +1353,9 @@ function DealWorkspace({
   const p = deal.app.propoly;
   const currentIdx = PORTAL_STAGES.findIndex((s) => s.key === effective);
   const moved = effective !== portalStageOf(deal.statusKey);
-  const checklistDone = meta
-    ? CHECKLIST_ITEMS.filter((i) => meta.checklist[i.key]?.done).length
-    : 0;
+  /* Ticks a record makes (Propoly, Flatfair) count alongside hers. */
+  const auto = recordTicks(deal.app, deal.flatbond);
+  const checklistDone = CHECKLIST_ITEMS.filter((i) => meta?.checklist[i.key]?.done || auto[i.key]).length;
 
   const lead = deal.app.tenants.find((t) => t.isPrimary) ?? deal.app.tenants[0];
   const daysToGo =
@@ -1649,6 +1651,7 @@ function DealWorkspace({
               <div className="grid gap-x-6 gap-y-0.5 sm:grid-cols-2 lg:grid-cols-3">
                 {CHECKLIST_ITEMS.map((item) => {
                   const tick = meta?.checklist[item.key];
+                  const rec = tick?.done ? null : auto[item.key];
                   return (
                     <label
                       key={item.key}
@@ -1656,20 +1659,25 @@ function DealWorkspace({
                     >
                       <input
                         type="checkbox"
-                        checked={tick?.done ?? false}
-                        disabled={busy || meta == null}
+                        checked={(tick?.done ?? false) || Boolean(rec)}
+                        disabled={busy || meta == null || Boolean(rec)}
+                        title={rec ? `Ticked by ${rec.source}: it shows this done` : undefined}
                         onChange={(e) =>
                           void postMeta({ checklist: { key: item.key, done: e.target.checked } })
                         }
                         className="mt-0.5 h-4 w-4 shrink-0 rounded border-line accent-[#56423e]"
                       />
                       <span className="min-w-0 text-[12.5px] leading-5">
-                        <span className={tick?.done ? "text-muted line-through" : ""}>
+                        <span className={tick?.done || rec ? "text-muted line-through" : ""}>
                           {item.label}
                         </span>
                         {tick?.done ? (
                           <span className="ml-1.5 whitespace-nowrap text-[10px] text-muted">
                             {tick.by.split(" ")[0]} · {fmtDate(tick.at)}
+                          </span>
+                        ) : rec ? (
+                          <span className="ml-1.5 whitespace-nowrap text-[10px] text-muted">
+                            {rec.source}{rec.at ? ` · ${fmtDate(rec.at)}` : ""}
                           </span>
                         ) : null}
                       </span>

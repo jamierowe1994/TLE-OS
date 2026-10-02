@@ -253,6 +253,7 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
           Boolean(meta?.depositScheme) ||
           Boolean(journeyMoney?.tenancy?.depositId),
         rentIn: Boolean(journeyMoney?.rentReceived),
+        agreementSigned: deal.app.propoly?.agreement?.status === "signed",
       },
       meta
     );

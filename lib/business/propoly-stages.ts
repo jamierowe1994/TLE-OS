@@ -8,6 +8,7 @@
 // by Kirstie moving the deal herself (stage overrides in lib/deal-store.ts).
 
 import type { ApplicationStage } from "@/lib/business/rex-stats"; // type-only — erased
+import { referenceState, type DealFlatbond, type PropolyRecord } from "@/lib/business/stage-evidence";
 
 export interface PortalStageInfo {
   key: string;
@@ -142,6 +143,33 @@ export const CHECKLIST_ITEMS: { key: string; label: string }[] = [
   { key: "standing_order", label: "Standing order set up" },
   { key: "keys_inventory", label: "Keys & inventory arranged" },
 ];
+
+/**
+ * The ticks a record makes for her (James, 2 Oct 2026: "lock the application
+ * process down"). Where Propoly or Flatfair shows a step done, it is done; she
+ * never has to tick what a system already knows. Right to Rent, keys and the
+ * PLC-by-email tick have no record and stay hers. So does the standing
+ * order: Propoly hands out its reference on day one, before any order exists.
+ *
+ * A record tick is only ever added, never taken away: her own tick stands
+ * whatever a system says.
+ */
+export function recordTicks(
+  app: { propoly?: PropolyRecord | null } | null | undefined,
+  flatbond?: DealFlatbond | null
+): Partial<Record<string, { source: "Propoly" | "Flatfair"; at: string | null }>> {
+  const p = app?.propoly;
+  const out: Partial<Record<string, { source: "Propoly" | "Flatfair"; at: string | null }>> = {};
+  if (p?.holdingPaid?.status === "paid") out.holding_fee = { source: "Propoly", at: p.holdingPaid.paidAt };
+  const refs = referenceState(p);
+  if (refs?.allPassed && !refs.needGuarantor.length) out.references = { source: "Propoly", at: null };
+  const ag = p?.agreement?.status;
+  if (ag === "awaiting_signatures" || ag === "signed") out.agreement_sent = { source: "Propoly", at: null };
+  if (ag === "signed") out.agreement_signed = { source: "Propoly", at: p?.executedAt ?? null };
+  if (flatbond?.done) out.deposit_registered = { source: "Flatfair", at: null };
+  if (p?.moveInMonies?.status === "paid") out.monies_received = { source: "Propoly", at: p.moveInMonies.paidAt };
+  return out;
+}
 
 /* --------------------------- service level vocabulary --------------------------- */
 

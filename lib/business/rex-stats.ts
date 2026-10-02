@@ -2149,6 +2149,24 @@ export interface AgentApplication {
     holdingPaid?: { status: string; paidAt: string | null; method: string | null } | null;
     /** referencing{}: how many references are asked for and back. */
     referencing?: { status: string; outcome: string | null; startedAt: string | null; required: number; decided: number } | null;
+    /** Each tenant's own reference result. Truer than referencing{} above,
+     *  which Propoly leaves "in_progress" on deals long complete. */
+    tenantRefs?: Array<{ name: string; required: boolean; decision: string | null }>;
+    /** agreements{}: the tenancy agreement and who has signed it. */
+    agreement?: {
+      status: string;
+      tenants: number;
+      tenantsSigned: number;
+      landlords: number;
+      landlordsSigned: number;
+      guarantorStatus: string | null;
+      guarantorsRequired: number;
+      guarantorsDone: number;
+    } | null;
+    /** payments.move_in_monies: "confirmation_required" | "paid". */
+    moveInMonies?: { status: string; paidAt: string | null } | null;
+    /** When Propoly marked the tenancy executed. */
+    executedAt?: string | null;
   };
   /** Portal overlay: pre-tenancy notes/stage-moves/checklist (lib/deal-store). */
   portal?: import("@/lib/business/types").DealPortalOverlay;

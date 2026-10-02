@@ -32,9 +32,9 @@ import { flatbondForDeal, loadFlatbonds } from "@/lib/business/flatfair-deal";
  *   Tenancy agreement Kirstie generates it in Propoly; when she does, Propoly
  *                     moves to signing_and_move_in_monies
  *
- * Signing has no source (Propoly exposes nothing), so the deal stays at
- * Tenancy agreement until PayProp shows the first rent, which is the proof the
- * tenancy is real. Then Rent payment. Then Move day: Propoly's "complete", or
+ * Signing: Propoly's agreements{} says when every party has signed (read
+ * since 2 Oct 2026), and that moves the deal to Rent payment; before then the
+ * first rent in PayProp was the only proof, and it still counts. Then Move day: Propoly's "complete", or
  * Kirstie's hand, whichever comes first.
  *
  * ── What happened to her old moves ─────────────────────────────────────────
@@ -56,6 +56,8 @@ export interface StageFacts {
   depositDone: boolean;
   /** First rent received in PayProp for this tenancy. */
   rentIn: boolean;
+  /** Propoly says every party has signed the tenancy agreement (2 Oct 2026). */
+  agreementSigned?: boolean;
 }
 
 const NO_FACTS: StageFacts = { plcState: null, plcCaseId: null, plcOutside: false, depositDone: false, rentIn: false };
@@ -78,7 +80,9 @@ export function derivePortalStage(live: string, facts: StageFacts, meta: Pick<De
       if (!facts.depositDone) return "deposit";
       return "tenancy_agreement";
     case "signing_and_move_in_monies":
-      return facts.rentIn ? "rent_payment" : "tenancy_agreement";
+      /* Signed by everyone in Propoly is the end of the agreement stop; the
+         first rent in PayProp still counts on its own, as before. */
+      return facts.rentIn || facts.agreementSigned ? "rent_payment" : "tenancy_agreement";
     case "complete":
       return "move_day";
     default:
@@ -129,6 +133,7 @@ export function stageFactsFor(
     plcOutside: meta?.checklist?.plc_outside?.done === true,
     depositDone,
     rentIn: Boolean(m?.rentReceived),
+    agreementSigned: deal.app.propoly?.agreement?.status === "signed",
   };
 }
 

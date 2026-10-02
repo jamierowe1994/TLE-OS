@@ -38,6 +38,67 @@
 
 export type EvidenceTone = "ok" | "warn" | "none";
 
+/** What Propoly says about a deal, as lib/business/propoly-deals maps it. */
+export interface PropolyRecord {
+  holdingPaid?: { status: string; paidAt: string | null; method: string | null } | null;
+  referencing?: { status: string; outcome: string | null; startedAt: string | null; required: number; decided: number } | null;
+  tenantRefs?: Array<{ name: string; required: boolean; decision: string | null }>;
+  agreement?: {
+    status: string;
+    tenants: number;
+    tenantsSigned: number;
+    landlords: number;
+    landlordsSigned: number;
+    guarantorStatus: string | null;
+    guarantorsRequired: number;
+    guarantorsDone: number;
+  } | null;
+  moveInMonies?: { status: string; paidAt: string | null } | null;
+  executedAt?: string | null;
+  standingOrderRef?: string | null;
+}
+
+/** A reference Propoly has decided, and whether it passed. */
+const REF_PASS = new Set(["acceptable", "acceptable_with_condition", "acceptable_with_guarantor"]);
+
+/**
+ * The references, tenant by tenant (2 Oct 2026). Propoly's own referencing{}
+ * stays "in_progress" on deals long finished, so each tenant's decision is
+ * the record. A fail, or a pass that needs a guarantor nobody has signed for
+ * yet, is amber.
+ */
+export function referenceState(p: PropolyRecord | null | undefined): {
+  required: number; back: number; failed: string[]; needGuarantor: string[]; guarantorWords: string; conditions: number; allPassed: boolean;
+} | null {
+  const refs = (p?.tenantRefs ?? []).filter((r) => r.required);
+  if (!refs.length) return null;
+  const decided = refs.filter((r) => r.decision && r.decision !== "awaiting_result");
+  const failed = decided.filter((r) => !REF_PASS.has(r.decision!)).map((r) => r.name);
+  /* The counts include guarantors' references, which the tenant list does
+     not; Propoly's status word is unreliable but its counts are not. */
+  const whole = p?.referencing;
+  const required = Math.max(refs.length, whole?.required ?? 0);
+  const back = Math.max(decided.length, whole?.decided ?? 0);
+  /* A guarantor is settled once their agreement is signed, or once the
+     tenancy agreement itself is signed by everyone. */
+  const g = p?.agreement?.guarantorStatus ?? null;
+  const settled = g === "signed" || p?.agreement?.status === "signed";
+  const needGuarantor = settled ? [] : decided.filter((r) => r.decision === "acceptable_with_guarantor").map((r) => r.name);
+  const guarantorWords =
+    g === "awaiting_signatures" ? "The guarantor has not signed yet."
+    : g === "partially_signed" ? "The guarantors have part-signed."
+    : "No guarantor on the deal yet.";
+  return {
+    required,
+    back,
+    failed,
+    needGuarantor,
+    guarantorWords,
+    conditions: decided.filter((r) => r.decision === "acceptable_with_condition").length,
+    allPassed: decided.length === refs.length && failed.length === 0 && back >= required,
+  };
+}
+
 /** The deal's flatbond in our copy of Flatfair (lib/business/flatfair-deal). */
 export interface DealFlatbond {
   id: number;
@@ -87,7 +148,7 @@ export interface EvidenceDeal {
   /** The deal's flatbond, when Flatfair holds one. */
   flatbond?: DealFlatbond | null;
   /** What Propoly itself says about the holding fee and the references. */
-  app?: { id?: string; propoly?: { holdingPaid?: { status: string; paidAt: string | null; method: string | null } | null; referencing?: { status: string; outcome: string | null; startedAt: string | null; required: number; decided: number } | null } | null } | null;
+  app?: { id?: string; propoly?: PropolyRecord | null } | null;
   /** Claimed move-in. Used to give a lagging system time before accusing it. */
   startDate?: string | null;
   /** Rent owed on a tenancy that has ALREADY STARTED. The route gates this;
@@ -179,6 +240,26 @@ export function stageEvidence(
     case "referencing": {
       /* Propoly runs the references and says how far they have got. Never a
          warning: a failed reference is for Kirstie to read, not an alert. */
+      const st = referenceState(d.app?.propoly);
+      if (st) {
+        if (st.failed.length) {
+          return { tone: "warn", text: `Failed referencing: ${st.failed.join(", ")}.` };
+        }
+        if (st.needGuarantor.length) {
+          return { tone: "warn", text: `Passed with a guarantor: ${st.needGuarantor.join(", ")}. ${st.guarantorWords}` };
+        }
+        if (st.allPassed) {
+          return {
+            tone: "ok",
+            text: `${st.required === 1 ? "Reference passed" : `All ${st.required} references passed`}${st.conditions ? `, ${st.conditions} with conditions` : ""}.`,
+          };
+        }
+        const started = d.app?.propoly?.referencing?.startedAt;
+        return {
+          tone: "none",
+          text: `${st.back} of ${st.required} reference${st.required === 1 ? "" : "s"} back${started ? `, asked for ${when(started)}` : ""}.`,
+        };
+      }
       const r = d.app?.propoly?.referencing;
       if (r) {
         const outcome = r.outcome ? r.outcome.replace(/_/g, " ") : null;
@@ -254,6 +335,19 @@ export function stageEvidence(
        probed, not one tenant agreement — so this can speak to the landlord's
        terms and must not be read as the tenant having signed. */
     case "tenancy_agreement": {
+      /* Propoly generates the AST and collects every signature (2 Oct 2026),
+         so this stop finally has a record of its own. */
+      const ag = d.app?.propoly?.agreement;
+      if (ag) {
+        if (ag.status === "signed") return { tone: "ok", text: "Signed by everyone, in Propoly." };
+        if (ag.status === "not_generated") return { tone: "none", text: "Not generated in Propoly yet." };
+        const parts = [
+          `tenants ${ag.tenantsSigned} of ${ag.tenants}`,
+          ag.landlords ? `landlord ${ag.landlordsSigned} of ${ag.landlords}` : null,
+          ag.guarantorsRequired ? `guarantors ${ag.guarantorsDone} of ${ag.guarantorsRequired}` : null,
+        ].filter(Boolean);
+        return { tone: "none", text: `Out for signing: ${parts.join(", ")}.` };
+      }
       const s = d.tobStatus?.status;
       if (s === "completed") {
         return {
@@ -294,6 +388,12 @@ export function stageEvidence(
           }.`,
         };
       }
+      /* Propoly confirms the move-in monies before PayProp shows the rent
+         (2 Oct 2026): the receipt that arrives first. */
+      const monies = d.app?.propoly?.moveInMonies;
+      if (monies?.status === "paid") {
+        return { tone: "ok", text: `Move-in monies paid${monies.paidAt ? ` ${when(monies.paidAt)}` : ""}, in Propoly.` };
+      }
       if (!moneyLoaded) {
         return { tone: "none", text: "PayProp's money reports have not loaded yet." };
       }
@@ -331,6 +431,10 @@ export function stageEvidence(
     case "move_day": {
       if (d.rentSchedule) {
         return { tone: "ok", text: `Rent schedule starts ${when(d.rentSchedule.from)}.` };
+      }
+      const executed = d.app?.propoly?.executedAt;
+      if (executed) {
+        return { tone: "ok", text: `Tenancy completed ${when(executed)}, in Propoly.` };
       }
       if (!moneyLoaded) {
         return { tone: "none", text: "PayProp's move-in report has not loaded yet." };
