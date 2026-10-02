@@ -69,6 +69,17 @@ export function propertyKey(name: string): string {
   return number && street ? `${number}|${street}` : "";
 }
 
+/**
+ * propertyKey tied to the postcode, for matching a rent to one home. The key
+ * alone collides across towns (2 High Street, anywhere); with the postcode it
+ * is one property. Empty when either half is missing.
+ */
+export function rentKey(name: string, postcode: string | null | undefined): string {
+  const k = propertyKey(name);
+  const pc = String(postcode ?? "").replace(/\s+/g, "").toUpperCase();
+  return k && pc ? `${k}|${pc}` : "";
+}
+
 /** Words that appear in every address and so identify nothing. */
 const STREET_NOISE = new Set([
   "flat", "room", "apt", "apartment", "unit", "the", "street", "road", "avenue",
@@ -140,6 +151,13 @@ export interface PortfolioBook {
    * guessed at — it is omitted here and listed in serviceLevelAmbiguous.
    */
   serviceLevelByKey: Record<string, string>;
+  /**
+   * The monthly rent PayProp collects on each tenanted property, keyed by
+   * `${propertyKey}|${POSTCODE}` (2 Oct 2026). The managed book falls back to
+   * it where REX holds no rent. A key two properties share with different
+   * rents is left out rather than guessed. Absent on books cached before then.
+   */
+  rentByKey?: Record<string, number>;
   /** Address keys where two properties disagree, so no answer is given. */
   serviceLevelAmbiguous: string[];
   /** E&W and Glasgow are separate agencies — split so both can be shown. */
@@ -287,6 +305,7 @@ async function computePortfolioBook(): Promise<PortfolioBook | null> {
   // last-write-wins would silently hand back one of two contradictory answers.
   const levelById: Record<string, string> = {};
   const levelsByKey = new Map<string, Set<string>>();
+  const rentsByKey = new Map<string, Set<number>>();
   const slices: AccountSlice[] = [];
 
   for (const { account, rows } of perAccount) {
@@ -305,6 +324,17 @@ async function computePortfolioBook(): Promise<PortfolioBook | null> {
       // A property with no running tenancy is a void.
       if (money(r.active_tenancies) > 0) tenanted++;
       else vacant++;
+
+      /* The rent being collected now, for the managed book's fallback. A void's
+         figure is not anybody's rent, so only tenanted properties count. */
+      if (rent > 0 && money(r.active_tenancies) > 0) {
+        const rk = rentKey(text(r.property_name) || text(r.address?.first_line), text(r.address?.postal_code));
+        if (rk) {
+          const seen = rentsByKey.get(rk) ?? new Set<number>();
+          seen.add(Math.round(rent * 100) / 100);
+          rentsByKey.set(rk, seen);
+        }
+      }
 
       // PayProp's own service level — how "managed" vs "let only" is decided,
       // rather than us inferring it.
@@ -387,6 +417,7 @@ async function computePortfolioBook(): Promise<PortfolioBook | null> {
     serviceLevelByKey: Object.fromEntries(
       [...levelsByKey].filter(([, v]) => v.size === 1).map(([k, v]) => [k, [...v][0]])
     ),
+    rentByKey: Object.fromEntries([...rentsByKey].filter(([, v]) => v.size === 1).map(([k, v]) => [k, [...v][0]])),
     serviceLevelAmbiguous: [...levelsByKey]
       .filter(([, v]) => v.size > 1)
       .map(([k]) => k),

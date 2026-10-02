@@ -68,6 +68,8 @@ export interface ManagedProperty {
   rexLet?: boolean;
   /** REX PM's reference (PRP00341), where the home came from there. */
   ref?: string;
+  /** "payprop" when REX holds no rent and this one is PayProp's, collected now (2 Oct 2026). */
+  rentSource?: "payprop";
 }
 
 export interface ManagedLandlord {
@@ -109,6 +111,8 @@ export interface ManagedCounts {
   homesOccupied?: number;
   homesVacant?: number;
   upcomingVacancies?: number;
+  /** Homes whose rent is PayProp's because REX holds none (lib/managed-book). */
+  rentsFromPayProp?: number;
 }
 
 export interface ManagedBook {

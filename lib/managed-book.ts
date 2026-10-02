@@ -2,6 +2,7 @@ import { currentLets, MANAGED_SERVICES } from "@/lib/current-lets";
 import "server-only";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import { activeOsProperties, pmManagedHomes, type OsProperty, type PmHome } from "@/lib/os-properties";
+import { getPortfolioBook, rentKey } from "@/lib/business/payprop-portfolio";
 import { sittingTenantsByProperty } from "@/lib/rex-tenants";
 import type {
   ManagedBook,
@@ -332,10 +333,29 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
       });
     }
   }
+  /* PayProp's rent where REX holds none (2 Oct 2026). 234 of the 527 homes
+     had no rent in REX, so the rent roll was short by a third. PayProp's is
+     the rent being collected now, read live; an account the OS cannot reach
+     (E&W while its connection is down) adds nothing rather than an old figure.
+     Never overrides a rent REX does hold - where the two disagree is the
+     Rent Check's business, not the book's. */
+  const pp = await getPortfolioBook().catch(() => null);
+  if (pp?.rentByKey) {
+    for (const p of properties) {
+      if (p.rentMonthly) continue;
+      const rent = pp.rentByKey[rentKey(p.address || p.name, p.postcode)];
+      if (!rent) continue;
+      p.rent = rent;
+      p.rentPeriod = "month";
+      p.rentMonthly = rent;
+      p.rentSource = "payprop";
+    }
+  }
   /* Landlords' homes and rent from each home's latest let only, or a landlord
      whose flat was re-let twice "owns" three. */
   const landlords = landlordsOf(currentLets(properties));
   const counts = countsOf(properties, landlords);
+  counts.rentsFromPayProp = currentLets(properties).filter((p) => p.rentSource === "payprop").length;
   if (pm) Object.assign(counts, pmCounts(pm, rexUserId ? new Set(properties.map((p) => String(p.propertyId ?? ""))) : null));
   return {
     properties,

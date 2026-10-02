@@ -779,7 +779,7 @@ export default function Portfolio() {
               icon="coin"
               label="Rent roll"
               value={book ? <>{money(book.counts.rentRoll)}<span className="text-[13px] text-muted"> pcm</span></> : <FindingData label="" />}
-              hint={book && `${money(book.counts.managedRentRoll)} on homes we manage or collect rent for. REX's agreed rent on each home's current let, not money received. Average ${money(book.counts.avgRent)} pcm.`}
+              hint={book && `${money(book.counts.managedRentRoll)} on homes we manage or collect rent for. REX's agreed rent on each home's current let${book.counts.rentsFromPayProp ? `, or PayProp's where REX has none (${book.counts.rentsFromPayProp} homes)` : ""}. Average ${money(book.counts.avgRent)} pcm.`}
             />
             <StatCard
               icon="user"
