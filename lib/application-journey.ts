@@ -11,6 +11,7 @@ import { eventsForDeal } from "@/lib/business/deal-watch";
 import type { DealEvent } from "@/lib/business/deal-events";
 import { loadMoneyContext, moneyForDeal, type MoneyContext } from "@/lib/business/deal-money";
 import { stageEvidence } from "@/lib/business/stage-evidence";
+import { flatbondForDeal, loadFlatbonds } from "@/lib/business/flatfair-deal";
 import { PORTAL_STAGES, propolyDealUrl } from "@/lib/business/propoly-stages";
 
 /**
@@ -225,9 +226,15 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
 
   /* 4 to 11. Kirstie's eight, from where she reads them. */
   let dealInfo: ApplicationJourney["deal"] = null;
+  let flatbond: ReturnType<typeof flatbondForDeal> = null;
   let plcInfo: ApplicationJourney["plc"] = null;
   if (deal) {
-    const [overlays, m] = await Promise.all([getOverlays([deal.app.id]).catch(() => new Map()), money()]);
+    const [overlays, m, flatbonds] = await Promise.all([
+      getOverlays([deal.app.id]).catch(() => new Map()),
+      money(),
+      loadFlatbonds().catch(() => []),
+    ]);
+    flatbond = flatbondForDeal(deal, flatbonds);
     const meta = overlays.get(deal.app.id)?.meta ?? null;
     /* The same derivation Kirstie's board uses, from the same records, so
        the agent's spine and her board never disagree about where a deal is.
@@ -241,6 +248,7 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
         plcCaseId: plcCase?.id ?? null,
         plcOutside: meta?.checklist?.plc_outside?.done === true,
         depositDone:
+          flatbond?.done === true ||
           meta?.checklist?.deposit_registered?.done === true ||
           Boolean(meta?.depositScheme) ||
           Boolean(journeyMoney?.tenancy?.depositId),
@@ -250,8 +258,8 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
     );
     const currentIdx = Math.max(0, PORTAL_STAGES.findIndex((s) => s.key === stageKey));
     const evidenceDeal = m
-      ? { ...moneyForDeal(m, deal.app.propertyName, deal.app.startDate), startDate: deal.app.startDate, app: deal.app }
-      : { startDate: deal.app.startDate, app: deal.app };
+      ? { ...moneyForDeal(m, deal.app.propertyName, deal.app.startDate), startDate: deal.app.startDate, app: deal.app, flatbond }
+      : { startDate: deal.app.startDate, app: deal.app, flatbond };
     dealInfo = { id: deal.app.id, stage: stageKey, url: propolyDealUrl(deal.app.id) };
 
     PORTAL_STAGES.forEach((s, i) => {
@@ -307,7 +315,9 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
          board reads. Until Flatfair's API exists this is the step. */
       const meta = await getMeta(deal.app.id).catch(() => null);
       const tick = meta?.checklist?.deposit_registered;
-      if (!tick?.done) {
+      /* Once Flatfair holds the deal (2 Oct 2026) it has been keyed in: the
+         tick is no longer the only way to know. */
+      if (!tick?.done && !flatbond) {
         actions.push({ id: "flatfair", label: "Set the deal up in Flatfair", detail: "PLC passed. Key it into Flatfair, then tick it done so Kirstie can generate the agreement.", href: `/applications/flatfair?deal=${encodeURIComponent(deal.app.id)}`, who: "you" });
       }
     }

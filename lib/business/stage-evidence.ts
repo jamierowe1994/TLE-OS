@@ -38,6 +38,36 @@
 
 export type EvidenceTone = "ok" | "warn" | "none";
 
+/** The deal's flatbond in our copy of Flatfair (lib/business/flatfair-deal). */
+export interface DealFlatbond {
+  id: number;
+  status: string;
+  /** "flatbond" (no cash deposit) | "traditional_deposit" | "unselected" */
+  product: string;
+  provider: string | null;
+  registrationNumber: string | null;
+  startDate: string | null;
+  tenants: number;
+  tenantsPaid: number;
+  /** The deposit side of the deal is finished in Flatfair. */
+  done: boolean;
+}
+
+/** What the Deposit stop says when Flatfair holds the deal. */
+export function flatbondWords(f: DealFlatbond): string {
+  if (f.done) {
+    return f.product === "flatbond"
+      ? `Flatfair no-deposit plan active${f.startDate ? ` from ${when(f.startDate)}` : ""}.`
+      : `Deposit registered with ${(f.provider ?? "the scheme").toUpperCase()}, ${f.registrationNumber}.`;
+  }
+  if (f.status === "pending_tenant_action") {
+    return `In Flatfair, waiting on the tenant${f.tenants ? `: ${f.tenantsPaid} of ${f.tenants} paid` : ""}.`;
+  }
+  if (f.product === "unselected") return "In Flatfair, deposit or no-deposit plan not chosen yet.";
+  if (f.status === "active") return "In Flatfair, not registered with the scheme yet.";
+  return `In Flatfair: ${f.status.replace(/_/g, " ")}.`;
+}
+
 export interface StageEvidence {
   tone: EvidenceTone;
   text: string;
@@ -54,6 +84,8 @@ export interface EvidenceDeal {
   rentReceived?: { amount: number; on: string; paidOut: boolean } | null;
   rentSchedule?: { from: string; rent: number } | null;
   depositReplacement?: string | null;
+  /** The deal's flatbond, when Flatfair holds one. */
+  flatbond?: DealFlatbond | null;
   /** What Propoly itself says about the holding fee and the references. */
   app?: { id?: string; propoly?: { holdingPaid?: { status: string; paidAt: string | null; method: string | null } | null; referencing?: { status: string; outcome: string | null; startedAt: string | null; required: number; decided: number } | null } | null } | null;
   /** Claimed move-in. Used to give a lagging system time before accusing it. */
@@ -182,6 +214,13 @@ export function stageEvidence(
     }
 
     case "deposit": {
+      /* Flatfair first (2 Oct 2026): every deposit goes through it, so its
+         flatbond is the record of this stage - registered, or how far off. */
+      if (d.flatbond) {
+        const since = daysSince(d.startDate, now);
+        const late = !d.flatbond.done && reached && since != null && since >= DEPOSIT_GRACE_DAYS;
+        return { tone: d.flatbond.done ? "ok" : late ? "warn" : "none", text: flatbondWords(d.flatbond) };
+      }
       if (d.depositReplacement) {
         return { tone: "ok", text: `No cash deposit — ${d.depositReplacement}.` };
       }

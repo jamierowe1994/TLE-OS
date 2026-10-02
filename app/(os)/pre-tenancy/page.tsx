@@ -42,7 +42,7 @@ import type {
 } from "@/lib/business/types";
 import type { AgentApplication } from "@/lib/business/rex-stats";
 import { rexListingUrl } from "@/lib/business/rex-links";
-import { stageEvidence } from "@/lib/business/stage-evidence";
+import { stageEvidence, type DealFlatbond } from "@/lib/business/stage-evidence";
 import { dealAlerts, type DealAlert } from "@/lib/business/deal-alerts";
 import WorkspaceLoading from "@/components/WorkspaceLoading";
 import PreTenancyHero from "@/components/pretenancy/Hero";
@@ -89,6 +89,7 @@ interface BoardDeal {
   schemeSuggestion?: { scheme: string; evidence: string } | null;
   /** "Holding deposit" invoice in PayProp for this property. */
   holdingInvoice?: { amount: number; fromDate: string | null } | null;
+  flatbond?: DealFlatbond | null;
   /** Rent that actually arrived, from PayProp's Owner rows. Evidence beside a
    *  stage, never a trigger for one — the address join is loose. */
   rentReceived?: { amount: number; on: string; paidOut: boolean } | null;
@@ -1050,7 +1051,10 @@ function cardStatus(d: BoardDeal, stageKey: string): { text: string; tone: strin
     case "holding_fee": return d.money?.holding || d.app.propoly?.holdingPaid?.status === "paid" ? { text: "Fee received", tone: GREEN_PILL } : d.holdingInvoice ? { text: "Fee invoiced", tone: AMBER_PILL } : { text: "Awaiting fee", tone: AMBER_PILL };
     case "referencing": return { text: "References in progress", tone: AMBER_PILL };
     case "plc": return d.plc ? { text: d.plc.label, tone: d.plc.state === "approved" ? GREEN_PILL : AMBER_PILL } : { text: "PLC in progress", tone: AMBER_PILL };
-    case "deposit": return d.money?.deposit ? { text: "Deposit received", tone: GREEN_PILL } : { text: "Awaiting deposit", tone: AMBER_PILL };
+    case "deposit":
+      if (d.flatbond?.done) return { text: d.flatbond.product === "flatbond" ? "Flatfair plan active" : "Deposit registered", tone: GREEN_PILL };
+      if (d.flatbond?.status === "pending_tenant_action") return { text: "Tenant to pay in Flatfair", tone: AMBER_PILL };
+      return d.money?.deposit ? { text: "Deposit received", tone: GREEN_PILL } : d.flatbond ? { text: "Set up in Flatfair", tone: AMBER_PILL } : { text: "Awaiting deposit", tone: AMBER_PILL };
     case "tenancy_agreement": return d.tobStatus?.status === "completed" ? { text: "Agreement signed", tone: GREEN_PILL } : d.tobStatus?.sentAt ? { text: "Agreement sent", tone: AMBER_PILL } : { text: "Agreement to send", tone: AMBER_PILL };
     case "rent_payment": return d.rentReceived ? { text: "First rent received", tone: GREEN_PILL } : { text: "Awaiting first payment", tone: AMBER_PILL };
     case "move_day": {

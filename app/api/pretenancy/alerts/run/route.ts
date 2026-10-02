@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { flatbondForDeal, loadFlatbonds } from "@/lib/business/flatfair-deal";
 import { timingSafeEqual } from "node:crypto";
 import { requireCapability } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
@@ -78,20 +79,22 @@ async function collect(): Promise<{ alerts: DealAlert[]; loaded: boolean; deals:
   ]);
   if (!deals || !money) return { alerts: [], loaded: false, deals: 0 };
 
-  const [overlays, cases] = await Promise.all([
+  const [overlays, cases, flatbonds] = await Promise.all([
     getOverlays(deals.map((d) => d.app.id)).catch(() => new Map()),
     listCases().catch(() => []),
+    loadFlatbonds().catch(() => []),
   ]);
   const rows: AlertDeal[] = deals.map((d) => {
     const meta = overlays.get(d.app.id)?.meta ?? null;
     const m = moneyForDeal(money, d.app.propertyName, d.app.startDate);
     return {
       app: { id: d.app.id, propertyName: d.app.propertyName },
-      effectiveStatusKey: derivePortalStage(d.statusKey, stageFactsFor(d, meta, cases, money), meta),
+      effectiveStatusKey: derivePortalStage(d.statusKey, stageFactsFor(d, meta, cases, money, null, flatbonds), meta),
       statusKey: d.statusKey,
       agentName: d.managerName ?? null,
       startDate: d.app.startDate,
       ...m,
+      flatbond: flatbondForDeal(d, flatbonds),
     };
   });
 

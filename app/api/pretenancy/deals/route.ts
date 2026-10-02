@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { flatbondForDeal } from "@/lib/business/flatfair-deal";
 import { requireCapability } from "@/lib/admin";
 import { getAllPropolyDeals, getPropolyMoveInForecast, propolyDealsSavedAt } from "@/lib/business/propoly-deals";
 import {
@@ -94,6 +95,7 @@ export interface PreTenancyDeal {
   schemeSuggestion: { scheme: string; evidence: string } | null;
   /** A "Holding deposit" invoice PayProp holds for this property. */
   holdingInvoice: { amount: number; fromDate: string | null } | null;
+  flatbond: import("@/lib/business/stage-evidence").DealFlatbond | null;
   /**
    * Rent that actually ARRIVED, from PayProp's Owner rows.
    *
@@ -235,7 +237,7 @@ export async function GET(req: NextRequest) {
     const matched = stageSources.matched.get(d.app.id) ?? null;
     const effective = derivePortalStage(
       d.statusKey,
-      stageFactsFor(d, meta, stageSources.cases, stageSources.money, matched),
+      stageFactsFor(d, meta, stageSources.cases, stageSources.money, matched, stageSources.flatbonds),
       meta
     );
     const plcCase = plcCaseForAddress(stageSources.cases, d.app.propertyName);
@@ -345,6 +347,8 @@ export async function GET(req: NextRequest) {
       // "no deposit to register" note was a contradiction on screen (review).
       schemeSuggestion: isFlatfair ? null : (m?.schemeSuggestion ?? null),
       holdingInvoice: m?.holdingInvoice ?? null,
+      /* The deal's flatbond in our copy of Flatfair - the Deposit stop's record. */
+      flatbond: flatbondForDeal(d, stageSources.flatbonds),
       rentReceived: m?.rentReceived ?? null,
       rentSchedule: m?.rentSchedule ?? null,
       arrears: m?.arrears ?? null,

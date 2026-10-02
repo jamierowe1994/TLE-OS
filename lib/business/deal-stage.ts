@@ -7,6 +7,7 @@ import { loadMoneyContext, moneyForDeal, type MoneyContext } from "@/lib/busines
 import { listCases } from "@/lib/plc-store";
 import { dealMoneyFor, type DealMoneyRow } from "@/lib/business/deposit-match";
 import type { PlcCase } from "@/lib/plc";
+import { flatbondForDeal, loadFlatbonds } from "@/lib/business/flatfair-deal";
 
 /**
  * Where a deal is, worked out rather than dragged.
@@ -25,8 +26,9 @@ import type { PlcCase } from "@/lib/plc";
  * Kirstie's stages happen, and each has its own source:
  *
  *   PLC               the OS's own PLC case - approved, or not
- *   Deposit           the Flatfair tick, a PayProp deposit id, or a scheme
- *                     recorded on the file
+ *   Deposit           the deal's flatbond active in Flatfair (since 2 Oct
+ *                     2026), the Flatfair tick, a PayProp deposit id, or a
+ *                     scheme recorded on the file
  *   Tenancy agreement Kirstie generates it in Propoly; when she does, Propoly
  *                     moves to signing_and_move_in_monies
  *
@@ -108,11 +110,14 @@ export function stageFactsFor(
   meta: DealMeta | null,
   cases: PlcCase[],
   money: MoneyContext | null,
-  matched?: { holding: DealMoneyRow | null; deposit: DealMoneyRow | null } | null
+  matched?: { holding: DealMoneyRow | null; deposit: DealMoneyRow | null } | null,
+  flatbonds?: Awaited<ReturnType<typeof loadFlatbonds>>
 ): StageFacts {
+  const flatbond = flatbonds ? flatbondForDeal(deal, flatbonds) : null;
   const plc = plcCaseForAddress(cases, deal.app.propertyName);
   const m = money?.loaded ? moneyForDeal(money, deal.app.propertyName, deal.app.startDate) : null;
   const depositDone =
+    flatbond?.done === true ||
     meta?.checklist?.deposit_registered?.done === true ||
     Boolean(meta?.depositScheme) ||
     Boolean(m?.tenancy?.depositId) ||
@@ -137,20 +142,22 @@ export async function loadStageSources(dealIds: string[] = []): Promise<{
   cases: PlcCase[];
   money: MoneyContext | null;
   matched: Map<string, { holding: DealMoneyRow | null; deposit: DealMoneyRow | null }>;
+  flatbonds: Awaited<ReturnType<typeof loadFlatbonds>>;
 }> {
-  const [cases, money, matched] = await Promise.all([
+  const [cases, money, matched, flatbonds] = await Promise.all([
     listCases().catch(() => [] as PlcCase[]),
     loadMoneyContext().catch(() => null),
     dealMoneyFor(dealIds).catch(() => new Map()),
+    loadFlatbonds().catch(() => []),
   ]);
-  return { cases, money, matched };
+  return { cases, money, matched, flatbonds };
 }
 
 /** One deal, from cold. For the routes that answer about a single deal. */
 export async function derivedStageFor(deal: BusinessDeal, meta: DealMeta | null): Promise<string> {
   try {
-    const { cases, money, matched } = await loadStageSources([deal.app.id]);
-    return derivePortalStage(deal.statusKey, stageFactsFor(deal, meta, cases, money, matched.get(deal.app.id) ?? null), meta);
+    const { cases, money, matched, flatbonds } = await loadStageSources([deal.app.id]);
+    return derivePortalStage(deal.statusKey, stageFactsFor(deal, meta, cases, money, matched.get(deal.app.id) ?? null, flatbonds), meta);
   } catch {
     return derivePortalStage(deal.statusKey, NO_FACTS, meta);
   }
