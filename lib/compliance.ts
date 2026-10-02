@@ -127,6 +127,10 @@ export type CompProperty = {
   /** That agent is no longer on the REX account (or the TEG register says
    *  they have departed). Their homes went with them. */
   agentLeft?: boolean;
+  /** The OS's own record says rent collect: we collect the rent and nothing
+   *  else, so the certificates, renewals and contracts are the landlord's
+   *  (James, 2 Oct 2026). */
+  rentCollect?: boolean;
 };
 
 /**
@@ -166,6 +170,8 @@ export const isLetOnly = (p: CompProperty): boolean => p.service === "Let Only";
  *   - neither                                    → nobody has told us we manage
  *     it, so it is not a job anybody here can be given
  *   - the agent on it has left the business       → the home went with them
+ *   - the OS's record says rent collect           → we only collect the rent;
+ *     certificates, renewals and contracts are the landlord's (James, 2 Oct 2026)
  *
  * James, 18 Sep 2026: "cross-reference these with who looks after them. If
  * it's an agent and the agent has left, then we don't look after them." REX
@@ -175,7 +181,7 @@ export const isLetOnly = (p: CompProperty): boolean => p.service === "Let Only";
  * only thing that speaks for it.
  */
 export const isOurs = (p: CompProperty): boolean =>
-  Boolean(p.managedByPm) && !isLetOnly(p) && !p.agentLeft;
+  Boolean(p.managedByPm) && !isLetOnly(p) && !p.agentLeft && !p.rentCollect;
 
 /**
  * What this property is REQUIRED to hold.

@@ -79,7 +79,7 @@ const isScotland = (p: PropRow) =>
 function isManaged(p: PropRow, facts: Map<string, FactRow>): boolean {
   /* The OS's own decision (newest of REX PM and PayProp) comes first. */
   if (p.service_level === "managed") return true;
-  if (p.service_level === "market_only") return false;
+  if (p.service_level === "market_only" || p.service_level === "rent_collect") return false;
   const service = facts.get("service_package")?.value || p.management || "";
   return !/tenant.?find|let.?only|no letting agreement/i.test(service);
 }
@@ -91,6 +91,15 @@ const MANAGED_ONLY = new Set([
   "doc_inventory", "repairing_standard", "doc_prt_notes",
   /* Tenant-find pays a one-off set-up fee, not a management percentage. */
   "fee_management",
+]);
+/**
+ * Rent collect: we collect the rent and nothing else. No certificates, no
+ * renewals, no tenancy contracts and no deposit: only our own side with the
+ * landlord, which includes the monthly fee (James, 2 Oct 2026).
+ */
+const RENT_COLLECT_ASKS = new Set([
+  "service_package", "fee_management", "fee_setup", "letting_agreement_start", "doc_terms_of_business", "nrl_status", "doc_nrl1",
+  "landlord_aml", "landlord_photo_id", "doc_landlord_id_ownership", "landlord_registration", "doc_landlord_registration", "rent_smart_wales",
 ]);
 /** English law: never asked in Scotland. */
 const ENGLAND_ONLY = new Set(["rtr_expiry", "rtr_checked", "doc_rtr_evidence", "rra_sheet_served", "doc_rra_sheet"]);
@@ -120,12 +129,14 @@ export function neededFields(p: PropRow, facts: Map<string, FactRow>): FactField
   const hmo = homeIsHmo(p, facts);
   const scot = isScotland(p);
   const managed = isManaged(p, facts);
+  const rentCollect = p.service_level === "rent_collect";
   const nrl = /^nrl/i.test(facts.get("nrl_status")?.value ?? "");
   const guarantors = Number(facts.get("guarantors_count")?.value ?? 0) > 0;
   const since = facts.get("letting_agreement_start")?.value ?? "";
   return FIELDS.filter((f) => {
     if (INFO.has(f.key) || f.group === "Sign-off") return false;
-    if (MANAGED_ONLY.has(f.key) && !managed) return false;
+    if (rentCollect && !RENT_COLLECT_ASKS.has(f.key)) return false;
+    if (MANAGED_ONLY.has(f.key) && !managed && !(rentCollect && f.key === "fee_management")) return false;
     if (ENGLAND_ONLY.has(f.key) && (scot || isWales(p.postcode))) return false;
     if (f.when === "hmo" && !hmo && !(scot && SCOTLAND_EVERY_HOME.has(f.key))) return false;
     /* Legionella is only asked in Scotland (Michael, 29 Sep 2026): the

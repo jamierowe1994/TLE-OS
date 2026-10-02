@@ -435,6 +435,8 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
        certificate there is not ours to chase. */
     if (f.serviceLevel === "market_only") p.service = "Let Only";
     else if (f.serviceLevel === "managed" && p.service === "Let Only") p.service = "Managed";
+    /* Rent collect: the rent is ours, the certificates are the landlord's (James, 2 Oct 2026). */
+    if (f.serviceLevel === "rent_collect") { p.service = "Rent Collect"; p.rentCollect = true; }
   }
 
   /* Homes REX CRM has no property for. The OS is their record: its own
@@ -457,6 +459,7 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
       /* A home added from the clean sweep carries PayProp's service level. */
       if (!p.service && /let\s*only/i.test(o.management ?? "")) p.service = "Let Only";
       if (o.serviceLevel === "market_only") p.service = "Let Only";
+      if (o.serviceLevel === "rent_collect") { p.service = "Rent Collect"; p.rentCollect = true; }
     }
   }
   for (const o of extra) {
@@ -470,6 +473,7 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
       agent: o.agentName,
       tenant: o.tenantNames ?? undefined,
       ...(/let\s*only/i.test(o.management ?? "") || o.serviceLevel === "market_only" ? { service: "Let Only" } : {}),
+      ...(o.serviceLevel === "rent_collect" ? { service: "Rent Collect", rentCollect: true } : {}),
       hmo: o.hmo,
       hasGas: !o.noGas,
       gasAnswered: o.noGas || Boolean(certs.gas),

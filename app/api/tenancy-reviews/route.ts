@@ -7,6 +7,7 @@ import { rexConfigured } from "@/lib/rex";
 import { getComplianceBook } from "@/lib/compliance-cache";
 import { isOurs } from "@/lib/compliance";
 import { lastClosedByHome, lastImport, openTasks } from "@/lib/rexpm-tasks";
+import { rentCollectIds } from "@/lib/os-properties";
 import type { ManagedProperty } from "@/lib/portfolio-types";
 import {
   dueFromCadence, dueFromTasks, listReviews, recordReview, reviewRules, summarise,
@@ -67,8 +68,11 @@ export async function GET(req: NextRequest) {
   let due: ReturnType<typeof dueFromTasks> = [];
   try {
     if (fromTasks) {
-      const tasks = await openTasks("tenancy_review");
-      due = dueFromTasks(tasks.filter((t) => isMine(t.rexPropertyId, t.managedBy)), done, book);
+      /* Rent collect: renewals are the landlord's (James, 2 Oct 2026). */
+      const [tasks, rentCollect] = await Promise.all([openTasks("tenancy_review"), rentCollectIds()]);
+      const theirs = (t: (typeof tasks)[number]) =>
+        (t.osPropertyId && rentCollect.has(t.osPropertyId)) || (t.rexPropertyId && rentCollect.has(t.rexPropertyId));
+      due = dueFromTasks(tasks.filter((t) => isMine(t.rexPropertyId, t.managedBy) && !theirs(t)), done, book);
     } else if (book.length) {
       const [comp, prior] = await Promise.all([getComplianceBook(), lastClosedByHome("tenancy_review")]);
       const ours = new Set(comp.book.properties.filter(isOurs).map((p) => String(p.id)));

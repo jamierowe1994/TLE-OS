@@ -46,8 +46,9 @@ export interface OsProperty {
    * 'managed' or 'market_only' (tenant-find / let only), decided by the OS
    * from whichever of REX PM and PayProp changed most recently (James, 25 Sep).
    * It outranks REX CRM's listing service type, which is often blank or stale.
+   * 'rent_collect': we collect the rent and nothing else (James, 2 Oct 2026).
    */
-  serviceLevel: "managed" | "market_only" | null;
+  serviceLevel: "managed" | "market_only" | "rent_collect" | null;
 }
 
 type Row = {
@@ -100,7 +101,7 @@ const rowTo = (r: Row): OsProperty => ({
   agentName: r.agent_name?.trim() || null,
   paypropNo: r.payprop_no ?? null,
   tenantNames: r.tenant_names?.trim() || null,
-  serviceLevel: r.service_level === "managed" || r.service_level === "market_only" ? r.service_level : null,
+  serviceLevel: r.service_level === "managed" || r.service_level === "market_only" || r.service_level === "rent_collect" ? r.service_level : null,
 });
 
 export const isOsPropertyId = (id: string | null | undefined): boolean => /^pm-[0-9a-f-]+$/i.test(String(id ?? ""));
@@ -184,4 +185,20 @@ export async function getOsProperty(id: string): Promise<OsProperty | null> {
   if (!hasDb()) return null;
   const rows = await q<Row>(`SELECT * FROM os_properties WHERE id = $1`, [id]).catch(() => []);
   return rows[0] ? rowTo(rows[0]) : null;
+}
+
+/**
+ * Homes the OS records as rent collect, by OS id and by REX property id. We
+ * collect the rent on these and nothing else, so renewals are the landlord's
+ * (James, 2 Oct 2026). Empty when there is no database.
+ */
+export async function rentCollectIds(): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (!hasDb()) return out;
+  const rows = await q<Row>(`SELECT * FROM os_properties WHERE service_level = 'rent_collect' AND active`).catch(() => []);
+  for (const r of rows) {
+    out.add(r.id);
+    if (r.rex_property_id) out.add(r.rex_property_id);
+  }
+  return out;
 }

@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
                                   pm_managed, pm_status, pm_upcoming_vacancy, pm_service, pm_read_at)
        VALUES ($1, 'rex-pm', '', $2, $3, $4, $5, $6, 'Active letting agreement', TRUE, $7, TRUE, $8, $9, $10, NOW())`,
       [id, address, parts.slice(0, 2).join(", "), [town, postcode].filter(Boolean).join(" "), postcode, town,
-       service && /tenant find/i.test(service) ? "market_only" : "managed", status, h.upcoming === true, service]
+       service && /tenant find/i.test(service) ? "market_only" : service && /rent collect/i.test(service) ? "rent_collect" : "managed", status, h.upcoming === true, service]
     );
     added.push(address);
   }
