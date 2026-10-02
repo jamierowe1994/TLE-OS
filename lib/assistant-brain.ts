@@ -5,7 +5,7 @@ import { hasDb, q } from "@/lib/db";
 import { listKnowledge } from "@/lib/business/knowledge-store";
 import { getBrief } from "@/lib/assistant-brief";
 import { systemMap } from "@/lib/system-map";
-import { guideIn, labelFor, proposalIn, runTool, TOOL_SCHEMAS } from "@/lib/assistant-tools";
+import { filesIn, guideIn, labelFor, offerIn, openIn, proposalIn, runTool, TOOL_SCHEMAS, type FileLink } from "@/lib/assistant-tools";
 import type { ActionProposal } from "@/lib/assistant-actions";
 import type { Scope } from "@/lib/scope";
 
@@ -153,6 +153,11 @@ adverts, somebody's whole book. Use them.
   holds — "Kenneth Close" is Kenneth Bradshaw Close, Coventry. If more than one
   candidate comes back, ask which they meant. If none does, say so plainly and
   say where else it might be.
+- Once you have found the property they mean and it has a file (find_property's
+  files list), say you found it, answer what they asked, and offer to open it with
+  offer_to_open - one short line such as "I found it - want me to open the
+  file?". A yes opens it on their screen without you. If they ask you to open
+  something outright ("open 4 Hermosa Road"), find it and call open_file.
 - CHAIN THE TOOLS. "How many bedrooms is X" is find_property then
   property_detail, in one go, without asking permission in between. Somebody
   mid-task does not want to be asked whether you may look.
@@ -273,7 +278,13 @@ and link the screens. Never tell somebody you cannot show them round.`,
  * writing one.
  */
 export function houseStyle(text: string): string {
-  return text.replace(/\s+[—–]\s+/g, " - ").replace(/[—–]/g, "-");
+  return text
+    .replace(/\s+[—–]\s+/g, " - ")
+    .replace(/[—–]/g, "-")
+    /* The bubble is plain text, so markdown bold arrived as literal
+       asterisks round a date (2 Oct 2026). Kept as plain words. */
+    .replace(/\*\*([^*\n]+)\*\*/g, "$1")
+    .replace(/__([^_\n]+)__/g, "$1");
 }
 
 /**
@@ -316,6 +327,23 @@ export interface Answer {
   proposal: ActionProposal | null;
   /** A walk-through he started on their screen (lib/steve-guide), if any. */
   guide: string | null;
+  /** A file he offered to open (the "Yes, open it" button), if any. */
+  offer?: FileLink | null;
+  /** A file to open on their screen now, if they asked him to. */
+  open?: FileLink | null;
+}
+
+/**
+ * The files his last property search found, per person (James, 2 Oct 2026).
+ * Only the words of earlier turns go back to the model, so when he answers a
+ * follow-up from memory nothing in THIS turn says which file he means. Held in
+ * this process for twenty minutes; losing it on a restart just means one
+ * answer without its button.
+ */
+const LAST_FOUND = new Map<string, FileLink[]>();
+const LAST_FOUND_AT = new Map<string, number>();
+function whoKey(ctx: AskContext): string {
+  return `${ctx.scope.rexUserId ?? ""}|${ctx.scope.label}`;
 }
 
 /**
@@ -481,6 +509,11 @@ export async function ask(
   const steps: string[] = [];
   let proposal: ActionProposal | null = null;
   let guide: string | null = null;
+  let offer: FileLink | null = null;
+  let open: FileLink | null = null;
+  /* What the last property search said could be opened - so an offer made in
+     words still gets its button when he forgot offer_to_open. */
+  let found: FileLink[] = [];
   let inTokens = 0;
   let outTokens = 0;
   let spent = 0;
@@ -523,14 +556,47 @@ export async function ask(
           .join("\n")
           .trim()
       );
+      /* EVERY PROPERTY HE FINDS IS OFFERED (James, 2 Oct 2026: "say that
+         you found it, and then say 'Do you want me to open it?'"). He does
+         not always remember to, so it is not left to him: when he looked a
+         property up and his answer names one that has a file, the offer and
+         its one-press button go on here. The file is the one whose address he
+         named (listings come first, so a home on the market opens as its
+         listing); one file and no doubt, that one. Several and none named
+         means he is asking which, and no button. */
+      let reply = text;
+      /* Answered from memory, without searching this turn: fall back to what
+         his last search for this person found. */
+      const key = whoKey(ctx);
+      if (!found.length) {
+        found = Date.now() - (LAST_FOUND_AT.get(key) ?? 0) < 20 * 60_000 ? LAST_FOUND.get(key) ?? [] : [];
+      } else {
+        LAST_FOUND.set(key, found);
+        LAST_FOUND_AT.set(key, Date.now());
+      }
+      if (!offer && !open && found.length) {
+        const said = text.toLowerCase();
+        const street = (f: FileLink) => f.label.split(",")[0].trim().toLowerCase();
+        /* The kind of file he named, if he named one: "the Portfolio file",
+           "the listing", "the appraisal". */
+        const kindSaid = /portfolio|managed/.test(said) ? "/portfolio" : /appraisal/.test(said) ? "/market-appraisals" : /listing/.test(said) ? "/listings" : null;
+        const named = found.filter((f) => said.includes(street(f)));
+        /* Every match the same home: he need not repeat the address. */
+        const oneHome = new Set(found.map(street)).size === 1 ? found : [];
+        const pool = named.length ? named : oneHome.length ? oneHome : found.length === 1 ? found : [];
+        offer = (kindSaid ? pool.find((f) => f.href.startsWith(kindSaid)) : null) ?? pool[0] ?? null;
+        if (offer && !/\bopen\b[^.?!]*\?/i.test(text)) reply = `${text}\n\nWant me to open the file?`;
+      }
       return {
-        text: text || "I couldn't put an answer together for that one — it's gone to James.",
+        text: reply || "I couldn't put an answer together for that one — it's gone to James.",
         inTokens,
         outTokens,
         canned: false,
         steps,
         proposal,
         guide,
+        offer,
+        open,
       };
     }
 
@@ -553,6 +619,9 @@ export async function ask(
          the end of it. */
       proposal = proposalIn(out) ?? proposal;
       guide = guideIn(out) ?? guide;
+      offer = offerIn(out) ?? offer;
+      open = openIn(out) ?? open;
+      if (call.name === "find_property") found = filesIn(out);
       results.push({
         type: "tool_result",
         tool_use_id: call.id,

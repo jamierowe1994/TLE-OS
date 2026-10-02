@@ -2,7 +2,7 @@
 
 import { GUIDE_EVENT } from "@/lib/steve-guide";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import AssistantCharacter, { type Mood } from "@/components/AssistantCharacter";
 import { captureScreen } from "@/lib/screenshot";
 import { clockFace, MAX_SECONDS, useScreenRecording } from "@/lib/screen-record";
@@ -205,6 +205,10 @@ type Line = {
    *  what executes must be what the server composed. */
   card?: Proposal;
   sealed?: string;
+  /** A file he offered to open: the "Yes, open it" button (2 Oct 2026). */
+  offer?: { href: string; label: string };
+  /** Set once the offer has been taken, so it is not offered twice. */
+  offerTaken?: boolean;
   /** Set once the button has been pressed, so it cannot be pressed twice. */
   settled?: string;
   /** Files that went up with this message. Only ever on an agent's line. */
@@ -268,6 +272,7 @@ const CARD_EFFECT: Record<Proposal["kind"], string> = {
 
 export default function HelpDock() {
   const path = usePathname();
+  const router = useRouter();
   const [signedIn, setSignedIn] = useState(false);
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("help");
@@ -772,6 +777,26 @@ export default function HelpDock() {
     );
   }
 
+  /**
+   * OPEN A FILE ON THEIR SCREEN (James, 2 Oct 2026: ask about a property,
+   * Steve finds it, offers to open it, and on a yes opens it). Same page:
+   * a full load, because Listings and Portfolio read ?open= as they mount.
+   * Another page: an ordinary navigation, which mounts it fresh. He steps
+   * aside afterwards so the file is not under the bubble.
+   */
+  function openFile(link: { href: string; label: string }) {
+    if (!link.href.startsWith("/")) return;
+    const target = link.href.split("?")[0];
+    window.setTimeout(() => {
+      if (target === path) window.location.assign(link.href);
+      else router.push(link.href);
+      setOpen(false);
+    }, 700);
+  }
+
+  /** A short yes to the last offer, answered here without a round trip. */
+  const YES = /^(y|yes|yeah|yep|yup|sure|ok|okay|please|go on|go ahead|do it|open it|yes please|please do)[.!\s]*$/i;
+
   /** `override` is a suggestion being pressed: sent as typed, without a
    *  round trip through the input's state. */
   async function say(override?: string) {
@@ -782,6 +807,20 @@ export default function HelpDock() {
     const uploading = files.some((f) => !f.key && !f.error);
     const sending = files.filter((f) => f.key);
     if ((!text && !sending.length) || busy || uploading) return;
+    /* "Yes" to his offer to open a file: open it, no model needed. */
+    const lastSteve = [...lines].reverse().find((l) => l.role === "assistant");
+    if (!sending.length && lastSteve?.offer && !lastSteve.offerTaken && YES.test(text)) {
+      const offer = lastSteve.offer;
+      setDraft("");
+      setLines((l) => [
+        ...l.map((x) => (x === lastSteve ? { ...x, offerTaken: true } : x)),
+        { role: "agent", text },
+        { role: "assistant", text: `Opening ${offer.label} for you now.` },
+      ]);
+      react("happy", 1400);
+      openFile(offer);
+      return;
+    }
     setDraft("");
     setFiles([]);
     setLines((l) => [...l, { role: "agent", text, files: sending }]);
@@ -854,9 +893,13 @@ export default function HelpDock() {
            draft is in the answer above instead. */
         card: r?.proposal?.kind === "fill-compose" ? undefined : r?.proposal,
         sealed: r?.sealed,
+        offer: r?.offer && typeof r.offer.href === "string" ? r.offer : undefined,
       },
     ]);
     setBusy(false);
+
+    /* He was asked to open something, and has. */
+    if (r?.open && typeof r.open.href === "string") openFile(r.open);
 
     /* He is showing them where something is (lib/steve-guide): start the walk
        once they have had a beat to read his line. The guide closes this dock
@@ -1177,6 +1220,26 @@ export default function HelpDock() {
                             <p className="mt-1 pl-1 text-[10px] leading-relaxed text-muted">
                               {l.steps.join(" · ")}
                             </p>
+                          )}
+                          {/* His offer to open the file (2 Oct 2026). One press,
+                              or a typed yes - see say(). */}
+                          {l.offer && !l.offerTaken && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const offer = l.offer!;
+                                setLines((all) => [
+                                  ...all.map((x) => (x === l ? { ...x, offerTaken: true } : x)),
+                                  { role: "assistant", text: `Opening ${offer.label} for you now.` },
+                                ]);
+                                react("happy", 1400);
+                                openFile(offer);
+                              }}
+                              className="mt-2 inline-flex items-center gap-2 rounded-full bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-page transition-opacity hover:opacity-90"
+                            >
+                              <DoodleIcon name="folder" size={12} />
+                              Yes, open it
+                            </button>
                           )}
                           {/* THE CARD. Everything that is about to happen, in
                               full, before it happens — the recipient, the whole

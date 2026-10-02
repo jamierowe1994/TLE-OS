@@ -216,6 +216,10 @@ export async function POST(req: NextRequest) {
     /* A walk-through to start on their screen. Not sealed: it only points,
        and the browser checks the id against its own list of routes. */
     ...(answer.guide ? { guide: answer.guide } : {}),
+    /* A file to offer, or to open now (James, 2 Oct 2026). Our own addresses
+       only - built by lib/assistant-tools fileHref, checked again here. */
+    ...(answer.offer && answer.offer.href.startsWith("/") ? { offer: answer.offer } : {}),
+    ...(answer.open && answer.open.href.startsWith("/") ? { open: answer.open } : {}),
   });
 }
 

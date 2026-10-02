@@ -11,6 +11,8 @@ import { rexCall, rexConfigured } from "@/lib/rex";
 import { requiredCerts, statusOf, type CompProperty } from "@/lib/compliance";
 import type { ActionProposal } from "@/lib/assistant-actions";
 import { GUIDE_TARGETS, guideTarget } from "@/lib/steve-guide";
+import { managedBookFor } from "@/lib/managed-book-cache";
+import { listAppraisals } from "@/lib/appraisal-store";
 
 /**
  * WHAT STEVE CAN ACTUALLY GO AND FIND OUT.
@@ -116,7 +118,7 @@ function refuseUnscoped(scope: Scope): { error: string } | null {
 const findProperty: AssistantTool = {
   name: "find_property",
   description:
-    "Find a property by address, street name, or postcode. Call this whenever somebody names a property — 'Kenneth Close', '4 Hermosa Road', 'the Teignmouth flat' — before answering anything else about it, because you need its id. Searches both the listings they are working on and REX's full address index, so it also finds properties that have never been on the market. Returns candidates with ids; if more than one comes back, ask which they meant rather than guessing.",
+    "Find a property by address, street name, or postcode. Call this whenever somebody names a property — 'Kenneth Close', '4 Hermosa Road', 'the Teignmouth flat' — before answering anything else about it, because you need its id. Searches the listings they are working on, the homes we manage, their market appraisals and REX's full address index. Returns candidates with ids, and `files`: what can be opened on screen for each (a listing, a managed home's Portfolio file, an appraisal). If more than one comes back, ask which they meant rather than guessing. Once you have the one they mean and it has a file, say you found it and offer to open it with offer_to_open.",
   input_schema: {
     type: "object",
     properties: {
@@ -145,6 +147,7 @@ const findProperty: AssistantTool = {
         listingId: l.id,
         propertyId: l.propertyId,
         address: `${l.name}, ${l.locality}`,
+        opens: { kind: "listing" as const, id: String(l.id) },
         rent: l.rent ? `£${l.rent.toLocaleString("en-GB")} ${l.rentPeriod === "week" ? "pw" : "pcm"}` : "not recorded in REX",
         status: l.letAgreed ? "let agreed" : l.publicationStatus === "published" ? "on the market" : "draft, not published",
         availableFrom: orMissing(l.availableFrom),
@@ -169,6 +172,25 @@ const findProperty: AssistantTool = {
       }
     }
 
+    /* 3. The files the OS itself holds for a home (James, 2 Oct 2026: when
+          somebody asks about a property, find its FILE and offer to open it).
+          A managed home opens on Portfolio, an appraisal on its own page.
+          Both are scoped the same way the screens are. */
+    const files: { kind: FileKind; id: string; address: string; what: string }[] = [];
+    const managed = await managedBookFor(ctx.scope.rexUserId).catch(() => null);
+    for (const m of managed?.book.properties ?? []) {
+      if (files.length >= 6) break;
+      if (!`${m.name} ${m.locality} ${m.address}`.toLowerCase().includes(needle)) continue;
+      files.push({ kind: "portfolio", id: String(m.listingId), address: `${m.name}, ${m.locality}`, what: "a home we manage - its Portfolio file" });
+    }
+    const appraisals = await listAppraisals().catch(() => []);
+    for (const a of appraisals) {
+      if (files.length >= 10) break;
+      if (!ctx.scope.everything && a.agent !== ctx.scope.label) continue;
+      if (!`${a.address} ${a.postcode ?? ""}`.toLowerCase().includes(needle)) continue;
+      files.push({ kind: "appraisal", id: a.id, address: a.address, what: `a market appraisal for ${a.landlord}` });
+    }
+
     /* An agent must not learn what is on somebody else's book by asking. An
        owner is looking at the whole business anyway, so they see everything. */
     const hidden = ctx.scope.everything ? 0 : others.length;
@@ -178,11 +200,13 @@ const findProperty: AssistantTool = {
       query,
       searchedAs: ctx.scope.label || "you",
       matches: [...mine, ...others],
-      found: mine.length + others.length,
+      /* What can be opened on screen for these, with offer_to_open. */
+      files: [...mine.map((m) => ({ kind: "listing" as const, id: String(m.listingId), address: m.address, what: "the listing" })), ...files],
+      found: mine.length + others.length + files.length,
       ...(hidden
         ? { note: `${hidden} further ${hidden === 1 ? "match is" : "matches are"} in REX but not on your book, so I haven't listed ${hidden === 1 ? "it" : "them"}.` }
         : {}),
-      ...(mine.length + others.length === 0
+      ...(mine.length + others.length + files.length === 0
         ? { note: "Nothing matched. It may be spelled differently in REX, or belong to another brand in the group." }
         : {}),
     };
@@ -714,6 +738,98 @@ const showOnScreen: AssistantTool = {
   },
 };
 
+/* ==========================================================================
+   Opening a file on their screen (James, 2 Oct 2026).
+   ========================================================================== */
+
+export type FileKind = "listing" | "portfolio" | "appraisal" | "lead";
+
+/** Where a file opens. One place, so the offer and the open cannot disagree. */
+export function fileHref(kind: FileKind, id: string): string | null {
+  const v = encodeURIComponent(id);
+  if (!id) return null;
+  if (kind === "listing") return `/listings?open=${v}`;
+  if (kind === "portfolio") return `/portfolio?open=${v}`;
+  if (kind === "appraisal") return `/market-appraisals/${v}`;
+  if (kind === "lead") return `/leads?open=${v}`;
+  return null;
+}
+
+const FILE_KINDS: FileKind[] = ["listing", "portfolio", "appraisal", "lead"];
+
+/** Is this file theirs to open? The same rule the screen would apply. */
+async function mayOpen(kind: FileKind, id: string, ctx: ToolContext): Promise<string | null> {
+  if (ctx.scope.unlinked) return "I can't tell which REX user you are, so I won't open anything. Ask James to link your account.";
+  if (ctx.scope.everything) return null;
+  if (kind === "listing") {
+    const book = await bookFor(ctx.scope.rexUserId);
+    return book.listings.some((l) => String(l.id) === id) ? null : "That listing isn't on your book, so I won't open it for you.";
+  }
+  if (kind === "portfolio") {
+    const m = await managedBookFor(ctx.scope.rexUserId).catch(() => null);
+    return m?.book.properties.some((p) => String(p.listingId) === id) ? null : "That home isn't one of yours, so I won't open it for you.";
+  }
+  if (kind === "appraisal") {
+    const a = (await listAppraisals().catch(() => [])).find((x) => x.id === id);
+    return a && a.agent === ctx.scope.label ? null : "That appraisal isn't one of yours, so I won't open it for you.";
+  }
+  return null;
+}
+
+const fileInput: Anthropic.Tool.InputSchema = {
+  type: "object",
+  properties: {
+    kind: { type: "string", enum: FILE_KINDS, description: "Which file: a listing, a managed home on Portfolio, a market appraisal, or a lead - as find_property's `files` gave it." },
+    id: { type: "string", description: "The id from find_property's `files` (or a lead id)." },
+    label: { type: "string", description: "The address or name, as you would say it - e.g. '4 Hermosa Road, Teignmouth'." },
+  },
+  required: ["kind", "id", "label"],
+};
+
+/**
+ * OFFER TO OPEN IT. James: when somebody asks about a property, find it, say
+ * you found it, and ask "Do you want me to open it?" - and if they say yes,
+ * open the file on their screen. This puts a "Yes, open it" button under the
+ * reply; a typed yes does the same (components/HelpDock).
+ */
+const offerToOpen: AssistantTool = {
+  name: "offer_to_open",
+  description:
+    "Offer to open a property's file on their screen. Call it whenever someone asks about a property (or a lead or appraisal) and you have found the one they mean and it has a file in find_property's `files`. Answer their question as normal, then end with a short offer such as 'I found it - want me to open the file?'. A 'Yes, open it' button appears under your reply, and a typed yes opens it too, so do not call open_file yourself after offering. Only one offer per reply.",
+  input_schema: fileInput,
+  label: (i) => `Finding the file for ${str(i.label) || "it"}…`,
+  async run(input, ctx) {
+    const kind = str(input.kind) as FileKind;
+    const id = str(input.id);
+    const href = FILE_KINDS.includes(kind) ? fileHref(kind, id) : null;
+    if (!href) return { error: "I need a kind and an id from find_property's files." };
+    const refused = await mayOpen(kind, id, ctx);
+    if (refused) return { error: refused };
+    return { __offer: { href, label: str(input.label) || "the file" }, ok: "The 'Yes, open it' button is under your reply. Finish with a one-line offer to open it." };
+  },
+};
+
+/**
+ * OPEN IT NOW, for when they asked to open it in the first place ("open
+ * 4 Hermosa Road"). Changes nothing: it is the same as clicking the row.
+ */
+const openFile: AssistantTool = {
+  name: "open_file",
+  description:
+    "Open a property's file (or a lead or appraisal) on their screen straight away. Use it only when they have asked you to open something, or said yes to opening it in a way the button did not catch - otherwise offer with offer_to_open. If you no longer have the id from earlier, call find_property again first. After calling it, reply in one short line, e.g. 'Opening 4 Hermosa Road for you now.'",
+  input_schema: fileInput,
+  label: (i) => `Opening ${str(i.label) || "the file"}…`,
+  async run(input, ctx) {
+    const kind = str(input.kind) as FileKind;
+    const id = str(input.id);
+    const href = FILE_KINDS.includes(kind) ? fileHref(kind, id) : null;
+    if (!href) return { error: "I need a kind and an id from find_property's files." };
+    const refused = await mayOpen(kind, id, ctx);
+    if (refused) return { error: refused };
+    return { __open: { href, label: str(input.label) || "the file" }, ok: "Opening it on their screen. Reply in one short line." };
+  },
+};
+
 export const TOOLS: AssistantTool[] = [
   findProperty,
   propertyDetail,
@@ -727,7 +843,36 @@ export const TOOLS: AssistantTool[] = [
   proposeEmail,
   fillOpenEmail,
   showOnScreen,
+  offerToOpen,
+  openFile,
 ];
+
+export type FileLink = { href: string; label: string };
+
+/** An offer to open a file, if a tool made one. */
+export function offerIn(result: unknown): FileLink | null {
+  const o = (result as { __offer?: unknown } | null)?.__offer as FileLink | undefined;
+  return o && typeof o.href === "string" ? { href: o.href, label: String(o.label ?? "") } : null;
+}
+
+/** The files a find_property result says can be opened, as links. */
+export function filesIn(result: unknown): FileLink[] {
+  const files = (result as { files?: unknown } | null)?.files;
+  if (!Array.isArray(files)) return [];
+  return files
+    .map((f) => {
+      const x = f as { kind?: FileKind; id?: string; address?: string };
+      const href = x.kind && x.id ? fileHref(x.kind, String(x.id)) : null;
+      return href ? { href, label: String(x.address ?? "the file") } : null;
+    })
+    .filter((f): f is FileLink => Boolean(f));
+}
+
+/** A file to open now, if a tool asked for it. */
+export function openIn(result: unknown): FileLink | null {
+  const o = (result as { __open?: unknown } | null)?.__open as FileLink | undefined;
+  return o && typeof o.href === "string" ? { href: o.href, label: String(o.label ?? "") } : null;
+}
 
 /** Pull a guide out of a tool result, if it started one. */
 export function guideIn(result: unknown): string | null {
