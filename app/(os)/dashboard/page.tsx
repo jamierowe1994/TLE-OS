@@ -85,18 +85,20 @@ export default function Dashboard() {
            which still leaves the greeting its one line. */
         /* 2 Oct 2026: James swapped the armchair scene for a brick loft
            floating on clouds ("I do love the properties ... lean more towards
-           that side"). Transparent PNG from Downloads: trimmed, the middle 72%
-           kept with the outer clouds faded to nothing (the full width took
-           840px and squeezed the greeting to one word a line), then a 1400px
-           webp. The rule runs through the clouds just under the building's
+           that side"). Transparent PNG from Downloads, trimmed to its clouds
+           with only the stray wisps at either end taken off (7% left, 4%
+           right) and no faded edges (James asked to see them as drawn).
+           The masthead is the standard 268, the same line as every other
+           screen. The rule runs through the clouds just under the building's
            base: it stands on the line and the lower clouds go under it. */
         illustration="/illustrations/home/brick-loft-clouds.webp"
-        illustrationHeight={250}
-        minHeight={300}
-        illustrationAspect={1.983}
-        /* The widest drawing in the OS; below 640px the greeting takes the
-           width - see hideArtOnPhone. */
+        illustrationHeight={208}
+        illustrationAspect={2.4531}
+        /* Wide art: drawn from 1280px up only, so on a smaller laptop or a
+           tablet the greeting keeps the width and the line stays level with
+           every other screen - see artFromXl. */
         hideArtOnPhone
+        artFromXl
         seat={0.9}
         illustrationCrop
         lineBreak="none"

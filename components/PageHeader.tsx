@@ -147,6 +147,7 @@ export default function PageHeader({
    */
   illustrationAspect,
   hideArtOnPhone = false,
+  artFromXl = false,
   /**
    * Slide the artwork sideways, in pixels. Positive is right.
    *
@@ -284,6 +285,13 @@ export default function PageHeader({
    * are the page and the drawing is decoration, so the decoration goes.
    */
   hideArtOnPhone?: boolean;
+  /**
+   * Draw the art only from 1280px up (2 Oct 2026, the dashboard's wide loft).
+   * Below that the rail takes 300px and a wide picture left the greeting
+   * 150px, three lines tall, pushing the rule below every other screen's.
+   * The words get the whole width instead, and the line stays where it is.
+   */
+  artFromXl?: boolean;
   lineBreak?: LineBreak;
   seat?: number;
   seatCut?: { left: number; right: number };
@@ -434,10 +442,14 @@ export default function PageHeader({
              so no larger screen can be changed by it - and the clamp is left
              off every other breakpoint, where the art really is drawn at the
              size the formula assumes. */
-          .${artClass} { padding-right: ${hideArtOnPhone ? "0" : `min(${reserve[0]}px, 46%)`} }
-          @media (min-width: 640px) { .${artClass} { padding-right: ${reserve[1]}px } }
-          @media (min-width: 1024px) { .${artClass} { padding-right: ${reserve[2]}px } }
-          @media (min-width: 1280px) { .${artClass} { padding-right: ${reserve[3]}px } }
+          .${artClass} { padding-right: ${hideArtOnPhone || artFromXl ? "0" : `min(${reserve[0]}px, 46%)`} }
+          @media (min-width: 640px) { .${artClass} { padding-right: ${artFromXl ? 0 : reserve[1]}px } }
+          @media (min-width: 1024px) { .${artClass} { padding-right: ${artFromXl ? 0 : reserve[2]}px } }
+          @media (min-width: 1280px) { .${artClass} { padding-right: ${reserve[3]}px } }${
+            /* The short masthead reserves through its own variable; with the
+               art not drawn below 1280 there is nothing to reserve for. */
+            artFromXl ? `\n          @media (max-width: 1279.98px) { .${artClass} { --mast-short-reserve: 0px } }` : ""
+          }
         `}</style>
       )}
       {seated && (
@@ -626,7 +638,7 @@ export default function PageHeader({
         {hasArt && (
           <div
             className={`os-mast-art pointer-events-none absolute bottom-0 origin-bottom-right scale-[0.5] sm:scale-[0.68] lg:scale-[0.88] xl:scale-100 ${
-              hideArtOnPhone ? "hidden sm:block " : ""
+              artFromXl ? "hidden xl:block " : hideArtOnPhone ? "hidden sm:block " : ""
             }${
               flushRight
                 ? "right-0"
