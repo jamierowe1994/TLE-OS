@@ -368,32 +368,35 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         }`}
       >
         {/* Wordmark + the collapse toggle. The logo's pin follows the accent. */}
-        {/* The logo (James, 13 Sep 2026): the house and the wordmark in one
-            drawing, the full width of the rail; the house alone when the rail
-            is collapsed. A painted illustration, so never put through the
-            dark-mode inversion - the dark theme gets its own copy with the
-            words in white and the house as painted. The collapse toggle sits
-            beside it on the same row. */}
-        <div className={`relative flex items-center px-1 ${collapsed ? "flex-col gap-2" : "justify-between"}`}>
-          {collapsed ? (
-            <img src="/brand/tle-os-house.png" alt="TLE OS" className="h-12 w-auto shrink-0 object-contain" />
-          ) : (
-            <>
-              <img src="/brand/tle-os-logo.png" alt="TLE OS" className="art-light h-auto w-[78%] object-contain" />
-              <img src="/brand/tle-os-logo-dark.png" alt="" aria-hidden className="art-dark h-auto w-[78%] object-contain" />
-            </>
-          )}
-          {/* The collapse toggle, beside the logo on the same row, centred on
-              the WORDS rather than the whole drawing (James, 13 Sep 2026): the
-              house stands taller than TLE OS, and the wordmark's middle sits
-              64.5% of the way down the image. */}
+        {/* The wordmark (James, 2 Oct 2026): no house, just TLE OS in Bricolage
+            Grotesque - TLE at 800, OS at 200 (loaded for this in app/layout),
+            as the type file draws it. Live text rather than the
+            picture, so collapsing can do what he asked: OS slides over and
+            hides TLE, and the narrow rail just says OS. The collapse toggle
+            sits beside it on the same row. */}
+        <div className={`relative flex items-center px-1 ${collapsed ? "flex-col gap-3" : "justify-between"}`}>
+          <span
+            aria-label="TLE OS"
+            className="flex select-none items-baseline whitespace-nowrap text-[30px] leading-none tracking-[-0.03em] text-ink"
+            style={{ fontFamily: "var(--font-heading)" }}
+          >
+            <span
+              aria-hidden
+              className={`inline-block overflow-hidden font-[800] transition-[max-width,opacity] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                collapsed ? "max-w-0 opacity-0" : "max-w-[90px] opacity-100"
+              }`}
+            >
+              TLE
+            </span>
+            <span aria-hidden className={`font-[200] transition-[margin] duration-[360ms] ${collapsed ? "ml-0" : "ml-[3px]"}`}>
+              OS
+            </span>
+          </span>
           <button
             type="button"
             onClick={toggleCollapsed}
             title={collapsed ? "Expand" : "Collapse"}
-            className={`flex h-6 w-6 items-center justify-center rounded-full border border-line/80 text-[11px] text-muted transition-colors hover:text-ink ${
-              collapsed ? "" : "absolute right-1 top-[64.5%] -translate-y-1/2"
-            }`}
+            className="flex h-6 w-6 items-center justify-center rounded-full border border-line/80 text-[11px] text-muted transition-colors hover:text-ink"
           >
             {collapsed ? "»" : "«"}
           </button>

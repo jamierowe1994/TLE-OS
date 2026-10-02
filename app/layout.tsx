@@ -28,7 +28,9 @@ const manrope = Manrope({
  */
 const bricolage = Bricolage_Grotesque({
   subsets: ["latin"],
-  weight: ["600", "700", "800"],
+  /* 200 for the OS in the rail's wordmark (2 Oct 2026): TLE heavy at 800,
+     OS skinny, as the type file draws it. */
+  weight: ["200", "600", "700", "800"],
   variable: "--font-bricolage",
   display: "swap",
 });

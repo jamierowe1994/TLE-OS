@@ -173,9 +173,17 @@ export default function PreviewShell() {
         data-os-sidebar
         className="sticky top-3 mb-3 ml-3 mt-3 hidden h-[calc(100vh-24px)] w-60 shrink-0 flex-col overflow-hidden rounded-3xl border border-line/80 bg-panel px-4 py-5 lg:flex"
       >
+        {/* The same wordmark as the real rail (components/Shell): Bricolage
+            Grotesque, TLE at 800 and OS at 200, no house. */}
         <div className="flex items-center px-1">
-          <img src="/brand/tle-os-logo.png" alt="TLE OS" className="art-light h-auto w-[78%] object-contain" />
-          <img src="/brand/tle-os-logo-dark.png" alt="" aria-hidden className="art-dark h-auto w-[78%] object-contain" />
+          <span
+            aria-label="TLE OS"
+            className="flex select-none items-baseline whitespace-nowrap text-[30px] leading-none tracking-[-0.03em] text-ink"
+            style={{ fontFamily: "var(--font-bricolage), var(--font-heading)" }}
+          >
+            <span aria-hidden className="font-[800]">TLE</span>
+            <span aria-hidden className="ml-[3px] font-[200]">OS</span>
+          </span>
         </div>
         <div className="mt-4 border-t border-line/70" />
 
