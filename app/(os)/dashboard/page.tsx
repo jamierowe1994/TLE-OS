@@ -93,7 +93,11 @@ export default function Dashboard() {
            The masthead is the standard 268, the same line as every other
            screen. The rule runs through the clouds just under the building's
            base: it stands on the line and the lower clouds go under it. */
-        illustration="/illustrations/home/brick-loft-clouds.webp"
+        /* A NEW NAME for every version of the picture: /public files are
+           served with max-age=14400, so a browser keeps the old one for four
+           hours under the same name - James saw the turned, clipped version
+           after the straight one was live. */
+        illustration="/illustrations/home/brick-loft-straight.webp"
         illustrationHeight={245}
         illustrationAspect={2.7536}
         /* Wide art: drawn from 1280px up only, so on a smaller laptop or a
