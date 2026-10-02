@@ -2144,6 +2144,11 @@ export interface AgentApplication {
     landlordUuids?: string[];
     /** Guarantors, where the deal has them (~31%). */
     guarantors?: Array<{ name: string | null; email: string | null; phone: string | null }>;
+    /** payments.holding_deposit: Propoly takes the holding fee itself (card),
+     *  so this is the receipt PayProp never shows (2 Oct 2026). */
+    holdingPaid?: { status: string; paidAt: string | null; method: string | null } | null;
+    /** referencing{}: how many references are asked for and back. */
+    referencing?: { status: string; outcome: string | null; startedAt: string | null; required: number; decided: number } | null;
   };
   /** Portal overlay: pre-tenancy notes/stage-moves/checklist (lib/deal-store). */
   portal?: import("@/lib/business/types").DealPortalOverlay;

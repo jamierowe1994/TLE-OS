@@ -54,6 +54,8 @@ export interface EvidenceDeal {
   rentReceived?: { amount: number; on: string; paidOut: boolean } | null;
   rentSchedule?: { from: string; rent: number } | null;
   depositReplacement?: string | null;
+  /** What Propoly itself says about the holding fee and the references. */
+  app?: { id?: string; propoly?: { holdingPaid?: { status: string; paidAt: string | null; method: string | null } | null; referencing?: { status: string; outcome: string | null; startedAt: string | null; required: number; decided: number } | null } | null } | null;
   /** Claimed move-in. Used to give a lagging system time before accusing it. */
   startDate?: string | null;
   /** Rent owed on a tenancy that has ALREADY STARTED. The route gates this;
@@ -112,6 +114,18 @@ export function stageEvidence(
       return { tone: "none", text: "Propoly's record is the only source for this." };
 
     case "holding_fee": {
+      /* Propoly takes the fee by card and says so (2 Oct 2026). The truest
+         receipt there is, so it comes first. */
+      const paid = d.app?.propoly?.holdingPaid;
+      if (paid?.status === "paid") {
+        return {
+          tone: "ok",
+          text: `Paid${paid.paidAt ? ` ${when(paid.paidAt)}` : ""}${paid.method ? ` by ${paid.method}` : ""}, in Propoly.`,
+        };
+      }
+      if (paid?.status === "not_required") {
+        return { tone: "none", text: "No holding fee on this deal." };
+      }
       if (d.holdingInvoice) {
         return {
           tone: "ok",
@@ -130,11 +144,25 @@ export function stageEvidence(
       };
     }
 
-    case "referencing":
+    case "referencing": {
+      /* Propoly runs the references and says how far they have got. Never a
+         warning: a failed reference is for Kirstie to read, not an alert. */
+      const r = d.app?.propoly?.referencing;
+      if (r) {
+        const outcome = r.outcome ? r.outcome.replace(/_/g, " ") : null;
+        if (outcome) return { tone: /pass|accept|approv/i.test(outcome) ? "ok" : "none", text: `References back: ${outcome}.` };
+        if (r.required > 0) {
+          return {
+            tone: "none",
+            text: `${r.decided} of ${r.required} reference${r.required === 1 ? "" : "s"} back${r.startedAt ? `, asked for ${when(r.startedAt)}` : ""}.`,
+          };
+        }
+      }
       return {
         tone: "none",
         text: "No system records referencing. Ticked by hand until one does.",
       };
+    }
 
     case "plc": {
       if (d.rlp?.status === "protected") {

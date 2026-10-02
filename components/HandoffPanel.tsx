@@ -64,6 +64,11 @@ export interface Handoff {
 }
 
 const gbp = (n: number | null) => (n == null ? "—" : `£${n.toLocaleString("en-GB")}`);
+/** "2026-10-27" → "27 Oct 2026". */
+const niceDay = (iso: string) => {
+  const d = new Date(`${iso.slice(0, 10)}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+};
 
 /**
  * A run's step, in the agent's words.
@@ -98,6 +103,10 @@ export default function HandoffPanel({ applicationId }: { applicationId: string 
   const [result, setResult] = useState<string | null>(null);
   const [runs, setRuns] = useState<Run[]>([]);
   const [openRun, setOpenRun] = useState<string | null>(null);
+  /* Folded by default (James, 2 Oct 2026): open, the packet pushed the spine
+     and the three boxes below off the screen. One line says whether it is
+     ready; the detail is a click away. */
+  const [expanded, setExpanded] = useState(false);
   const reporter = useSaveReporter();
 
   useEffect(() => {
@@ -167,31 +176,56 @@ export default function HandoffPanel({ applicationId }: { applicationId: string 
 
   if (error) {
     return (
-      <div className="rounded-2xl border border-line/80 bg-panel p-5">
+      <div className="rounded-2xl border border-line/80 bg-panel px-5 py-3.5">
         <p className="text-[12.5px] text-muted">{error}</p>
       </div>
     );
   }
   if (!h) {
     return (
-      <div className="rounded-2xl border border-line/80 bg-panel p-5">
+      <div className="flex items-center gap-2 rounded-2xl border border-line/80 bg-panel px-5 py-3.5">
+        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-ink" />
         <p className="text-[12.5px] text-muted">Assembling the handover…</p>
       </div>
     );
   }
 
   const ready = h.blockers.length === 0;
+  const required = h.certificates.filter((c) => c.required);
+  const certsGood = required.filter((c) => c.validAtStart && c.attached).length;
+  const summary = [
+    h.landlord?.name ?? "No landlord on the listing",
+    h.rentPcm != null ? `${gbp(h.rentPcm)} pcm${h.startDate ? ` from ${niceDay(h.startDate)}` : ""}` : null,
+    required.length ? `${certsGood} of ${required.length} certificates` : null,
+  ].filter(Boolean).join(" · ");
 
   return (
-    <div className="rounded-2xl border border-line/80 bg-panel p-5">
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
-          Hand over to the deal
-        </p>
-        <Pill tone={ready ? "accent" : "neutral"}>
-          {ready ? "Ready" : `${h.blockers.length} short`}
-        </Pill>
-      </div>
+    <div className="rounded-2xl border border-line/80 bg-panel">
+      <button
+        type="button"
+        onClick={() => setExpanded((e) => !e)}
+        aria-expanded={expanded}
+        className="flex w-full flex-wrap items-center gap-x-4 gap-y-1.5 px-5 py-3.5 text-left"
+      >
+        <span className="text-[13.5px] font-semibold">Hand over to the deal</span>
+        <span className="min-w-0 flex-1 basis-full truncate text-[12px] text-muted sm:basis-0">{summary}</span>
+        <span className="ml-auto flex shrink-0 items-center gap-2.5">
+          <Pill tone={ready ? "accent" : "neutral"}>
+            {ready ? "Ready" : `${h.blockers.length} short`}
+          </Pill>
+          <span className="text-[12px] font-semibold text-muted">{expanded ? "Hide" : "Show"}</span>
+          <svg
+            aria-hidden
+            viewBox="0 0 12 12"
+            className={`h-3 w-3 text-muted transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+          >
+            <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+      </button>
+
+      {expanded && (
+      <div className="border-t border-line/70 px-5 pb-5 pt-1">
 
       {/* Who and what — the packet, in the order the deal needs it. */}
       <dl className="mt-3.5 space-y-2 text-[12.5px]">
@@ -226,7 +260,7 @@ export default function HandoffPanel({ applicationId }: { applicationId: string 
         <div className="flex gap-3">
           <dt className="w-[92px] shrink-0 text-muted">Terms</dt>
           <dd className="figures min-w-0">
-            {gbp(h.rentPcm)} pcm · {h.agreementMonths ?? "—"} months · from {h.startDate ?? "—"}
+            {gbp(h.rentPcm)} pcm{h.agreementMonths ? ` · ${h.agreementMonths} months` : ""} · from {h.startDate ? niceDay(h.startDate) : "—"}
           </dd>
         </div>
       </dl>
@@ -396,6 +430,8 @@ export default function HandoffPanel({ applicationId }: { applicationId: string 
             ))}
           </ul>
         </div>
+      )}
+      </div>
       )}
     </div>
   );

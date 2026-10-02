@@ -1047,7 +1047,7 @@ function cardStatus(d: BoardDeal, stageKey: string): { text: string; tone: strin
   const start = d.app.startDate;
   switch (stageKey) {
     case "deal_started": return { text: "Application received", tone: QUIET_PILL };
-    case "holding_fee": return d.money?.holding ? { text: "Fee received", tone: GREEN_PILL } : d.holdingInvoice ? { text: "Fee invoiced", tone: AMBER_PILL } : { text: "Awaiting fee", tone: AMBER_PILL };
+    case "holding_fee": return d.money?.holding || d.app.propoly?.holdingPaid?.status === "paid" ? { text: "Fee received", tone: GREEN_PILL } : d.holdingInvoice ? { text: "Fee invoiced", tone: AMBER_PILL } : { text: "Awaiting fee", tone: AMBER_PILL };
     case "referencing": return { text: "References in progress", tone: AMBER_PILL };
     case "plc": return d.plc ? { text: d.plc.label, tone: d.plc.state === "approved" ? GREEN_PILL : AMBER_PILL } : { text: "PLC in progress", tone: AMBER_PILL };
     case "deposit": return d.money?.deposit ? { text: "Deposit received", tone: GREEN_PILL } : { text: "Awaiting deposit", tone: AMBER_PILL };

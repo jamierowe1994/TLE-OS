@@ -249,7 +249,9 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
       meta
     );
     const currentIdx = Math.max(0, PORTAL_STAGES.findIndex((s) => s.key === stageKey));
-    const evidenceDeal = m ? { ...moneyForDeal(m, deal.app.propertyName, deal.app.startDate), startDate: deal.app.startDate } : { startDate: deal.app.startDate };
+    const evidenceDeal = m
+      ? { ...moneyForDeal(m, deal.app.propertyName, deal.app.startDate), startDate: deal.app.startDate, app: deal.app }
+      : { startDate: deal.app.startDate, app: deal.app };
     dealInfo = { id: deal.app.id, stage: stageKey, url: propolyDealUrl(deal.app.id) };
 
     PORTAL_STAGES.forEach((s, i) => {

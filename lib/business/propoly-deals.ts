@@ -66,9 +66,9 @@ import type {
 //
 // The new payload does carry things we never had — referencing{}, agreements{},
 // payments{} and a per-deal assigned_agent{} — which map onto Kirstie's
-// checklist better than what they replaced. Deliberately not wired in here:
-// this change is a repair, and her board should not move under her without
-// James seeing it first.
+// checklist better than what they replaced. payments.holding_deposit and
+// referencing{} are read since 2 Oct 2026, for the words under a stage only:
+// they never move a deal (lib/business/stage-evidence).
 //
 // CONTRACT (as lib/rex-stats.ts): never throw into a page — return null so
 // the caller can fall back; cache so a dashboard load doesn't hammer them.
@@ -567,6 +567,25 @@ function toApplication(d: Record<string, unknown>, statusKey: string): AgentAppl
         .map((l) => (typeof l.uuid === "string" ? l.uuid : null))
         .filter((u): u is string => Boolean(u)),
       guarantors: partyList(arr(d.guarantors).length ? d.guarantors : d.guarantors_details),
+      /* Wired in 2 Oct 2026 (James, checking 4 Williams Court): the holding
+         fee is paid by card inside Propoly, and referencing is tracked there,
+         so these are the receipts the stage lines were missing. Read only. */
+      holdingPaid: (() => {
+        const h = obj(obj(d.payments).holding_deposit);
+        return str(h.status) ? { status: String(h.status), paidAt: str(h.paid_at), method: str(h.method) } : null;
+      })(),
+      referencing: (() => {
+        const r = obj(d.referencing);
+        return str(r.status)
+          ? {
+              status: String(r.status),
+              outcome: str(r.outcome),
+              startedAt: str(r.started_at),
+              required: num(r.references_required) ?? 0,
+              decided: num(r.references_decided) ?? 0,
+            }
+          : null;
+      })(),
     },
   };
 }
