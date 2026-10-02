@@ -12,8 +12,9 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const { actor } = await whoIs(req);
+  /* Asked together: the read is never sent unless the caller is signed in,
+     so starting it before the answer is back costs a query, not a leak. */
+  const [{ actor }, spines] = await Promise.all([whoIs(req), allSpines()]);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
-  const spines = await allSpines();
   return NextResponse.json({ ok: true, spines });
 }

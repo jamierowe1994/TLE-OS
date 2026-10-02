@@ -394,7 +394,7 @@ function TodayWidget({ w, h }: { w: number; h: number }) {
 }
 
 /* ── Attention list, with its ticks. ── */
-const noticesSlot: { p: Promise<unknown> | null } = { p: null };
+const noticesSlot: Slot = { p: null };
 
 /**
  * What needs you: the bell's own notices, on the board.
@@ -853,13 +853,21 @@ function PipelineWidget({ w, h }: { w: number; h: number }) {
  */
 
 type Fetched<T> = { data: T | null; loading: boolean; unlinked: boolean; error: string | null };
+/* `last` is the last GOOD answer, kept ten minutes so coming back to the
+   dashboard draws the tile at once and corrects it when the new read lands,
+   rather than greying every tile again (2 Oct 2026). The read is always made. */
+type Slot = { p: Promise<unknown> | null; last?: { at: number; raw: unknown } };
+const SLOT_KEEP_MS = 10 * 60 * 1000;
 
 function useShared<T>(
-  slot: { p: Promise<unknown> | null },
+  slot: Slot,
   url: string,
   pick: (j: Record<string, unknown>) => T | null
 ): Fetched<T> {
-  const [state, setState] = useState<Fetched<T>>({ data: null, loading: true, unlinked: false, error: null });
+  const [state, setState] = useState<Fetched<T>>(() => {
+    const held = slot.last && Date.now() - slot.last.at < SLOT_KEEP_MS ? pick(slot.last.raw as Record<string, unknown>) : null;
+    return held ? { data: held, loading: false, unlinked: false, error: null } : { data: null, loading: true, unlinked: false, error: null };
+  });
   useEffect(() => {
     let alive = true;
     slot.p ??= fetch(url)
@@ -869,6 +877,9 @@ function useShared<T>(
     void slot.p.then((raw) => {
       const j = (raw ?? null) as Record<string, unknown> | null;
       const data = j ? pick(j) : null;
+      /* Only a good answer is held; a failure clears it, so the next visit
+         never paints a figure the last read could not confirm. */
+      slot.last = data ? { at: Date.now(), raw: j } : undefined;
       /* A good answer is shared for a few minutes; a failed one is not kept at
          all. It used to be kept for the life of the tab, so a tile that once
          said "didn't answer" said it until a hard reload, and a good figure
@@ -896,9 +907,9 @@ function useShared<T>(
   return state;
 }
 
-const leadsSlot: { p: Promise<unknown> | null } = { p: null };
-const listingsSlot: { p: Promise<unknown> | null } = { p: null };
-const applicationsSlot: { p: Promise<unknown> | null } = { p: null };
+const leadsSlot: Slot = { p: null };
+const listingsSlot: Slot = { p: null };
+const applicationsSlot: Slot = { p: null };
 
 const sameDay = (iso: string | undefined, d: Date) => {
   if (!iso) return false;
@@ -1006,7 +1017,7 @@ function LeadSourcesWidget({ w, h }: { w: number; h: number }) {
  *  (41 Harewood Road, Margaret Wilson) to anybody who added it, with no
  *  loading and no error because it never asked anything. Same book, same
  *  once-per-home rule and same scope as the Compliance screen. */
-const complianceSlot: { p: Promise<unknown> | null } = { p: null };
+const complianceSlot: Slot = { p: null };
 function ComplianceDueWidget({ w, h }: { w: number; h: number }) {
   const { data, loading, error } = useShared<{ properties: CompProperty[] }>(
     complianceSlot, "/api/compliance",
@@ -1041,7 +1052,7 @@ function ComplianceDueWidget({ w, h }: { w: number; h: number }) {
 }
 
 /** Live since 7 Sep 2026, off the works orders. It was "7 · 2 urgent", typed in. */
-const worksSlot: { p: Promise<unknown> | null } = { p: null };
+const worksSlot: Slot = { p: null };
 function MaintenanceWidget({ w, h }: { w: number; h: number }) {
   const { data, loading, error } = useShared<{ summary: { open: number; overdue: number; emergencies: number; awaitingLandlord: number; byKind: { repair: number; planned: number } }; orders: { id: string; ref: number; title: string; propertyName: string; status: string; urgency: string | null; dueAt: string | null }[] }>(
     worksSlot, "/api/works-orders?open=1",

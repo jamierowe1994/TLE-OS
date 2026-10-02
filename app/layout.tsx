@@ -11,7 +11,9 @@ import "./globals.css";
  *
  * Montserrat, Shantell, Ms Madi and Lora are still loaded below because the
  * decks, postcards and email editor name them directly. They go when those
- * move over (MASTER-LIST Round 3, items 14 and 15).
+ * move over (MASTER-LIST Round 3, items 14 and 15). Not PRELOADED (2 Oct
+ * 2026): every screen was downloading all four up front for pages that
+ * mostly never draw them. They still arrive the moment something uses them.
  */
 const manrope = Manrope({
   subsets: ["latin"],
@@ -35,6 +37,7 @@ const montserrat = Montserrat({
   subsets: ["latin"],
   variable: "--font-montserrat",
   display: "swap",
+  preload: false,
 });
 
 // The TLE OS voice — the handwritten face used for the wordmark and headings,
@@ -43,6 +46,7 @@ const shantell = Shantell_Sans({
   subsets: ["latin"],
   variable: "--font-shantell",
   display: "swap",
+  preload: false,
 });
 
 /**
@@ -75,6 +79,7 @@ const msMadi = Ms_Madi({
   weight: "400",
   variable: "--font-script",
   display: "swap",
+  preload: false,
 });
 
 /**
@@ -93,6 +98,7 @@ const lora = Lora({
   style: ["normal", "italic"],
   variable: "--font-display",
   display: "swap",
+  preload: false,
 });
 
 // The body face everywhere, and the deck's body since 4 Sep.

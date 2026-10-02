@@ -257,20 +257,45 @@ export async function fetchLeadBook(rexUserId?: string | null): Promise<LeadBook
       { quiet }
     );
 
-  for (let page = 0; page < PAGES; page++) {
-    /* ONE MORE GO (25 Sep 2026). The overnight scan hit REX slow a few
-       times ("REX Leads/search was slow or busy"). A page is asked twice,
-       quietly the first time; only the second failure is a ticket. A timeout
-       past page one now keeps what it has, like a refusal always did. */
-    let res = await search(page, true).catch(() => null);
-    if (!res?.ok) {
-      await new Promise((r) => setTimeout(r, 2000));
-      try {
-        res = await search(page, false);
-      } catch (e) {
-        if (page === 0) throw e;
-        break;
-      }
+  /* ONE MORE GO (25 Sep 2026). The overnight scan hit REX slow a few times
+     ("REX Leads/search was slow or busy"). A page is asked twice, quietly the
+     first time; only the second failure is a ticket. Resolves to the reply,
+     or to the error a second failure threw. */
+  type Reply = Awaited<ReturnType<typeof search>>;
+  const fetchPage = async (page: number): Promise<Reply | { thrown: unknown }> => {
+    const first = await search(page, true).catch(() => null);
+    if (first?.ok) return first;
+    await new Promise((r) => setTimeout(r, 2000));
+    try {
+      return await search(page, false);
+    } catch (e) {
+      return { thrown: e };
+    }
+  };
+
+  /* PAGES IN PARALLEL (2 Oct 2026). The walk used to ask for page two only
+     once page one was back, five round trips end to end, and a cold board
+     waited for all of them (p90 10 s). Page one goes first because it says
+     how many there are - an agent with forty leads needs no page two - and
+     the rest are asked for together. They are still READ in order below, so
+     "a later page failing keeps what it has" means what it always meant. */
+  const pages: Array<Reply | { thrown: unknown }> = [await fetchPage(0)];
+  const firstRes = pages[0];
+  if (!("thrown" in firstRes) && firstRes.ok) {
+    const rawTotal = (firstRes.result as { total?: number | string } | null)?.total;
+    const known = rawTotal == null ? null : Number(rawTotal);
+    const firstRows = rexRows(firstRes.result).length;
+    const more = firstRows < PAGE_SIZE
+      ? 0
+      : Math.min(PAGES, known != null && Number.isFinite(known) ? Math.ceil(known / PAGE_SIZE) : PAGES) - 1;
+    if (more > 0) pages.push(...(await Promise.all(Array.from({ length: more }, (_, i) => fetchPage(i + 1)))));
+  }
+
+  for (let page = 0; page < pages.length; page++) {
+    const res = pages[page];
+    if ("thrown" in res) {
+      if (page === 0) throw res.thrown;
+      break;
     }
     /* Page one refused is not "no leads" (18 Sep 2026): the scan wrote that
        empty book over the owner's board cache, and the board read "Live" over

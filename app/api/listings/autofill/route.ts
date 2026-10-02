@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { TEST_REFUSAL, testDetails, testLandlord, testListingViewings, testPortals, testPublication } from "@/lib/test-listing-answers";
 import { isTestId } from "@/lib/test-overlay";
 import { autofillListing } from "@/lib/listing-autofill";
-import { readListingDetails } from "@/lib/listing-details";
+import { forgetListing, readListingDetails } from "@/lib/listing-details";
 import { gateListingWrite } from "@/lib/listing-gate";
 import { rexConfigured } from "@/lib/rex";
 import { forAgent } from "@/lib/agent-words";
@@ -36,6 +36,8 @@ export async function POST(req: NextRequest) {
   try {
     const details = await readListingDetails(id);
     const result = await autofillListing(details, { writeCopy: b.copy !== false });
+    /* It may have written to the listing; the next open reads REX again. */
+    forgetListing(id);
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? forAgent(gate.actor, e.message, "The lookup did not finish. Try again in a minute.") : "The lookup did not finish. Try again in a minute." }, { status: 502 });

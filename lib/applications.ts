@@ -412,7 +412,9 @@ export function shapeApplication(r: Row): Application {
  * are different books and must never be served to each other.
  */
 const APPS_TTL_MS = 60_000;
-const appsCache = new Map<string, { at: number; apps: Application[] }>();
+/* On globalThis, so the list route, the journey and the scans - separate
+   route modules - share one pull rather than one each (2 Oct 2026). */
+const appsCache: Map<string, { at: number; apps: Application[] }> = ((globalThis as unknown as { __appsCache?: Map<string, { at: number; apps: Application[] }> }).__appsCache ??= new Map());
 
 export async function getApplications(limit = 100, rexUserId?: string | null): Promise<Application[]> {
   const key = `${limit}:${rexUserId ?? ""}`;

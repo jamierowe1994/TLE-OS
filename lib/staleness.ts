@@ -104,7 +104,11 @@ export const RULES: Record<RecordKind, Rule> = {
   /* Applications and where they are in the pipeline. A minute, as they always
      have been: fast enough that two people working the same deal do not
      disagree, slow enough that a board does not hammer REX on every keystroke. */
-  application: { freshMs: MINUTE, keepMs: 10 * MINUTE, showWhileRefreshing: false, why: "Two people work the same deal. A minute keeps them agreeing without hammering the source." },
+  /* 2 Oct 2026: may be shown while it refreshes, because the board no longer
+     sits on it - an ageing answer says `stale`, the rebuild starts at once,
+     and the board reads again seconds later and is corrected. Waiting the
+     2-8 s rebuild on every first look was the slowest thing on the screen. */
+  application: { freshMs: MINUTE, keepMs: 10 * MINUTE, showWhileRefreshing: true, why: "Two people work the same deal. A minute keeps them agreeing without hammering the source; an ageing board is corrected within seconds, never left standing." },
 
   /* Certificates and their expiry dates. An hour to LOOK at; never for a
      decision - see forDecision. A pack approved on a certificate that expired

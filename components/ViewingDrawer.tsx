@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSlideOver } from "@/lib/use-slide-over";
 import { SAGE_INK, SAGE_WASH } from "@/components/ListingTags";
 import { createPortal } from "react-dom";
 import Link from "next/link";
@@ -144,12 +145,13 @@ export default function ViewingDrawer(props: DrawerProps) {
 function ViewingDrawerBody({
   appt,
   outcome,
-  onClose,
+  onClose: closeNow,
   sentExtra,
   onSend,
   saves,
 }: DrawerProps & { saves: SaveScope }) {
-  const [shown, setShown] = useState(false);
+  /* Every way out plays the drawer out first (lib/use-slide-over). */
+  const { shown, close: onClose } = useSlideOver(Boolean(appt), closeNow, appt?.id);
   /* Notes and the coupling used to live on this screen only, so both were
      lost the moment it closed - "press Enter to keep it" kept nothing
      (23 Sep 2026). Now they are saved against the viewing. */
@@ -188,7 +190,7 @@ function ViewingDrawerBody({
   const [invite, setInvite] = useState<{ state: "idle" | "sending" | "sent" | "already" | "failed"; text: string }>({ state: "idle", text: "" });
 
   useEffect(() => {
-    if (!appt) { setShown(false); return; }
+    if (!appt) return;
     setNote("");
     setCancelled(false);
     setCancelFlow(false);
@@ -206,8 +208,6 @@ function ViewingDrawerBody({
     setPushingOffer(false);
     setOfferPushed(false);
     setExtraActivity([]);
-    const id = requestAnimationFrame(() => setShown(true));
-    return () => cancelAnimationFrame(id);
   }, [appt]);
 
   useEffect(() => {
@@ -231,23 +231,19 @@ function ViewingDrawerBody({
     if (!appt) return;
     let gone = false;
     const target = `${appt.where} ${appt.what}`.toLowerCase();
-    fetch("/api/listings")
+    /* Matched on the server, keys and all, in one round trip (2 Oct 2026) -
+       this used to download the whole listing book to find one address. The
+       rule is unchanged: the street line itself, not just a town ("Bristol"
+       matches sixty properties and none of them reliably). */
+    fetch(`/api/listings/match?address=${encodeURIComponent(target)}`)
       .then((r) => r.json())
-      .then((j) => {
-        if (gone || !j.ok || !Array.isArray(j.listings)) return;
-        const hit = j.listings.find((l: { name: string; locality: string }) => {
-          const name = l.name.toLowerCase();
-          // Require the street line itself, not just a town — "Bristol"
-          // matches sixty properties and none of them reliably.
-          return name.length > 6 && target.includes(name);
-        });
+      .then((j: { ok?: boolean; match?: { propertyId: string | null; image: string | null; locality: string } | null; keysOk?: boolean; keys?: KeySet[] }) => {
+        if (gone || !j.ok) return;
+        const hit = j.match;
         if (!hit) { setMatch(null); setKeys([]); setNoMatch(true); return; }
         setMatch({ propertyId: hit.propertyId ?? null, image: hit.image ?? null, locality: hit.locality });
         if (hit.propertyId) {
-          fetch(`/api/keys?propertyIds=${encodeURIComponent(hit.propertyId)}`)
-            .then((r) => r.json())
-            .then((k) => { if (!gone && k.ok) setKeys(k.keys[hit.propertyId] ?? []); })
-            .catch(() => { if (!gone) setKeys([]); });
+          if (j.keysOk) setKeys(j.keys ?? []);
         } else setKeys([]);
       })
       .catch(() => { /* no match, no claims */ });
@@ -450,19 +446,16 @@ function ViewingDrawerBody({
   ];
 
   return (
-    <div className="fixed inset-0 z-[130]" data-steve="viewing.drawer">
+    <div className="so-root fixed inset-0 z-[130]" data-shown={shown} data-steve="viewing.drawer">
       <button
         aria-label="Close"
         onClick={onClose}
-        className={`absolute inset-0 cursor-default bg-ink/35 transition-opacity duration-300 ${
-          shown ? "opacity-100" : "opacity-0"
-        }`}
+        data-shown={shown}
+        className="so-scrim absolute inset-0 cursor-default bg-ink/35"
       />
       <aside
-        className={`absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden rounded-l-2xl bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[420ms] lg:w-[76%] xl:w-[68%] ${
-          shown ? "translate-x-0" : "translate-x-full"
-        }`}
-        style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
+        data-shown={shown}
+        className="so-panel absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden rounded-l-2xl bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] lg:w-[76%] xl:w-[68%]"
       >
         {/* On a phone the buttons take their own row above the title - side
             by side they crushed the title to one word a line (23 Sep 2026). */}

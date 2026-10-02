@@ -73,6 +73,7 @@ function read(): Promise<void> {
   return fetch("/api/diary", { cache: "no-store" })
     .then((r) => r.json())
     .then((j) => {
+      followUp(Boolean(j.stale || j.outlook?.ageing));
       if (j.ok && j.live && Array.isArray(j.appts)) {
         // Live book — the server has already merged our own appointments in.
         set({ appts: j.appts, live: true, loading: false, agents: j.agents ?? [], everything: Boolean(j.everything), error: null, whose: j.whose ?? null, outlook: j.outlook ?? null });
@@ -94,6 +95,22 @@ function read(): Promise<void> {
       }
     })
     .catch(() => set({ ...state, loading: false, error: "REX didn't answer." }));
+}
+
+/* An answer that came from a held copy while a fresh read runs behind it
+   (`stale`, or Outlook `ageing`) is read once more a few seconds later, so the
+   screen is corrected by that fresh read rather than left on the old one
+   until the next five-minute look. Once, so a source that stays slow is not
+   asked in a loop. */
+let followedUp = false;
+function followUp(ageing: boolean) {
+  if (!ageing) {
+    followedUp = false;
+    return;
+  }
+  if (followedUp) return;
+  followedUp = true;
+  window.setTimeout(() => void load(), 4000);
 }
 
 function start() {
@@ -129,6 +146,15 @@ function start() {
 export function refreshDiary(): Promise<void> {
   started = true;
   return load();
+}
+
+/**
+ * Begin reading the diary before a screen that shows it has mounted - the
+ * rail's hover and click (lib/route-warm). Does nothing if it is already
+ * read and being kept fresh.
+ */
+export function warmDiary(): void {
+  start();
 }
 
 /** The diary, live where possible. Safe to call from any client component. */

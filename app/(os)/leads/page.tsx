@@ -1,12 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { BoardSkeleton } from "@/components/Skeleton";
+import dynamic from "next/dynamic";
+import { whenIdle } from "@/lib/when-idle";
 import { useSearchParams } from "next/navigation";
 import { PressButton } from "@/components/Bits";
 import AddedHere from "@/components/AddedHere";
 import { contactToLead, type ContactRow } from "@/lib/contacts-as-leads";
-import LeadDrawer from "@/components/LeadDrawer";
-import NewLeadPanel from "@/components/NewLeadPanel";
+/* The drawer is 4,000 lines and the new-lead panel 1,300: off the first load,
+   fetched while the board sits idle (see whenIdle below). */
+const loadLeadDrawer = () => import("@/components/LeadDrawer");
+const loadNewLeadPanel = () => import("@/components/NewLeadPanel");
+const LeadDrawer = dynamic(loadLeadDrawer, { ssr: false });
+const NewLeadPanel = dynamic(loadNewLeadPanel, { ssr: false });
 import PageHeader from "@/components/PageHeader";
 import SourceMark from "@/components/SourceMark";
 import { ColumnCustomiser, DataTable, useColumns, type ColumnDef } from "@/components/TableColumns";
@@ -21,6 +28,7 @@ import LeadGroups, { DEFAULT_GROUPS, isCompleted, type GroupsConfig } from "@/co
 import GroupsCustomiser from "@/components/GroupsCustomiser";
 import CornerSwell from "@/components/CornerSwell";
 import { usePref } from "@/lib/prefs-store";
+import { dropJson, peekJson, readJson } from "@/lib/page-cache";
 
 /**
  * Leads: one inbox for every channel, with the record open beside it.
@@ -47,6 +55,38 @@ interface LeadSource {
   /** Leads the OS holds of its own, in its ledger. */
   onFile?: number;
   stale?: boolean;
+}
+
+/** What /api/leads answers. */
+interface LeadsAnswer {
+  ok?: boolean;
+  live?: boolean;
+  demo?: boolean;
+  unlinked?: boolean;
+  leads?: Lead[];
+  hiddenIds?: string[];
+  scanned?: number;
+  setAside?: { sales: number; unclear: number; blank: number };
+  total?: number | null;
+  onFile?: number;
+  stale?: boolean;
+  reason?: string;
+}
+
+/** The board's state from one answer - the same whether it is the read just
+ *  made or the last good one held in the tab. */
+function sourceFrom(j: LeadsAnswer): LeadSource {
+  if (j.ok && j.live && Array.isArray(j.leads)) {
+    return { leads: j.leads, live: true, loading: false, scanned: j.scanned, setAside: j.setAside, total: j.total, onFile: j.onFile, stale: j.stale };
+  }
+  if (j.ok && j.demo) return { leads: LEADS, live: false, loading: false, reason: j.reason };
+  return {
+    leads: [],
+    live: false,
+    loading: false,
+    failed: !j.unlinked,
+    reason: j.reason ?? "We couldn't read your leads just now. Nothing is lost - try again in a minute.",
+  };
 }
 
 /**
@@ -78,6 +118,7 @@ function pageWindow(page: number, pages: number): (number | "gap")[] {
 }
 
 export default function Leads() {
+  useEffect(() => whenIdle(() => { void loadLeadDrawer(); void loadNewLeadPanel(); }), []);
   // Closed on arrival: the page is the inbox, full width. The panel is a
   // consequence of picking someone, never the state you land in.
   const [openId, setOpenId] = useState<string | null>(null);
@@ -129,14 +170,19 @@ export default function Leads() {
      closes, so a tag just added is filterable at once. */
   const [fTags, setFTags] = useState<string[]>([]);
   const [savedTags, setSavedTags] = useState<Record<string, string[]>>({});
+  /* Read on arrival and again when a drawer CLOSES - not when one opens.
+     Opening re-read the whole board's tags and stages, and the answer landing
+     mid-slide rebuilt the open lead, so the drawer threw away its own reads
+     and fetched them all a second time (2 Oct 2026). */
+  const drawerShut = openId === null;
   useEffect(() => {
-    let gone = false;
+    if (!drawerShut) return;
     fetch("/api/leads/facts", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((j: { ok?: boolean; tags?: Record<string, string[]> } | null) => { if (!gone && j?.ok && j.tags) setSavedTags(j.tags); })
+      .then((j: { ok?: boolean; tags?: Record<string, string[]> } | null) => { if (j?.ok && j.tags) setSavedTags(j.tags); })
       .catch(() => {});
-    return () => { gone = true; };
-  }, [openId]);
+    /* Not cancelled when a drawer opens: the answer is still the board's. */
+  }, [drawerShut]);
   const tagsOf = useCallback((l: Lead) => savedTags[l.id] ?? defaultTags(l), [savedTags]);
   const params = useSearchParams();
   const side = params.get("side"); // "tenant" | "landlord" | null (both)
@@ -163,32 +209,40 @@ export default function Leads() {
         addresses, on a live board, with Email and Send passport beside them.
         The demo book is for a laptop with no REX at all, and the server says
         so with `demo`. Anything else is a loading line or an error. ── */
-  const [source, setSource] = useState<LeadSource>({ leads: [], live: false, loading: true });
+  /* The last good read paints at once (lib/page-cache); the one below
+     corrects it a moment later. */
+  const [source, setSource] = useState<LeadSource>(() => {
+    const held = peekJson<LeadsAnswer>("/api/leads");
+    return held ? sourceFrom(held) : { leads: [], live: false, loading: true };
+  });
 
   /* ── People added in the OS ────────────────────────────────────────────
      Their own fetch rather than a field on /api/leads, because the two answer
      different questions and fail separately: REX being slow must not delay a
      record somebody typed in ten seconds ago, and REX being down must not hide
      it. They arrive whenever they arrive and merge into the book below. */
-  const [ours, setOurs] = useState<Lead[]>([]);
+  const [ours, setOurs] = useState<Lead[]>(() => peekJson<{ contacts?: ContactRow[] }>("/api/contacts")?.contacts?.map(contactToLead) ?? []);
   /* Removed from the OS: by the server (hiddenIds) and, the moment the drawer
      does it, by the "lead-removed" event - no reload needed. */
   const [removed, setRemoved] = useState<Set<string>>(new Set());
-  const [hiddenIds, setHiddenIds] = useState<string[]>([]);
+  const [hiddenIds, setHiddenIds] = useState<string[]>(() => peekJson<LeadsAnswer>("/api/leads")?.hiddenIds ?? []);
   useEffect(() => {
     const on = (e: Event) => {
       const id = (e as CustomEvent<string>).detail;
       if (id) setRemoved((cur) => new Set(cur).add(id));
+      /* The held board still has them; the next visit must not paint it. */
+      dropJson("/api/leads");
     };
     window.addEventListener("lead-removed", on);
     return () => window.removeEventListener("lead-removed", on);
   }, []);
   useEffect(() => {
     let gone = false;
-    fetch("/api/contacts", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("no"))))
-      .then((j: { contacts: ContactRow[] }) => {
-        if (!gone) setOurs((j.contacts ?? []).map(contactToLead));
+    if (addedTick) dropJson("/api/contacts");
+    readJson<{ contacts?: ContactRow[] }>("/api/contacts", (j) => Array.isArray(j?.contacts))
+      .then((j) => {
+        if (!Array.isArray(j?.contacts)) return;
+        if (!gone) setOurs(j.contacts.map(contactToLead));
       })
       .catch(() => {
         /* Nobody added by hand is simply nobody added by hand — the REX book
@@ -199,38 +253,30 @@ export default function Leads() {
 
   useEffect(() => {
     let gone = false;
-    fetch("/api/leads")
-      .then((r) => r.json())
+    const good = (j: LeadsAnswer) => Boolean(j.ok && j.live && Array.isArray(j.leads));
+    let again = 0;
+    readJson<LeadsAnswer>("/api/leads", good)
       .then((j) => {
         if (gone) return;
         if (Array.isArray(j.hiddenIds)) setHiddenIds(j.hiddenIds);
-        if (j.ok && j.live && Array.isArray(j.leads)) {
-          setSource({
-            leads: j.leads,
-            live: true,
-            loading: false,
-            scanned: j.scanned,
-            setAside: j.setAside,
-            total: j.total,
-            onFile: j.onFile,
-            stale: j.stale,
-          });
-        } else if (j.ok && j.demo) {
-          setSource({ leads: LEADS, live: false, loading: false, reason: j.reason });
-        } else {
-          setSource({
-            leads: [],
-            live: false,
-            loading: false,
-            failed: !j.unlinked,
-            reason: j.reason ?? "We couldn't read your leads just now. Nothing is lost - try again in a minute.",
-          });
+        setSource(sourceFrom(j));
+        /* A held board answered while the server rebuilds it: read once more
+           in a few seconds and take the rebuilt one. */
+        if (j.stale) {
+          again = window.setTimeout(() => {
+            dropJson("/api/leads");
+            readJson<LeadsAnswer>("/api/leads", good)
+              .then((k) => { if (!gone && good(k)) setSource(sourceFrom(k)); })
+              .catch(() => undefined);
+          }, 4000);
         }
       })
       .catch(() => {
+        /* The held board was only ever there until this read answered. A
+           read that fails says so - never the old book standing in for it. */
         if (!gone) setSource({ leads: [], live: false, loading: false, failed: true, reason: "We couldn't read your leads just now. Nothing is lost - try again in a minute." });
       });
-    return () => { gone = true; };
+    return () => { gone = true; window.clearTimeout(again); };
   }, []);
 
   /* Ours first, newest at the top. Somebody who has just typed a record in
@@ -242,15 +288,15 @@ export default function Leads() {
      than REX's three. Fails to nothing - the REX stage stands. */
   const [spines, setSpines] = useState<Record<string, { label: string | null; followUpAt?: string | null }>>({});
   useEffect(() => {
-    let gone = false;
+    if (!drawerShut) return;
     fetch("/api/leads/spine", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((j: { ok?: boolean; spines?: Record<string, { label: string | null; followUpAt?: string | null }> } | null) => {
-        if (!gone && j?.ok && j.spines) setSpines(j.spines);
+        if (j?.ok && j.spines) setSpines(j.spines);
       })
       .catch(() => {});
-    return () => { gone = true; };
-  }, [openId]);
+    /* Not cancelled when a drawer opens: the answer is still the board's. */
+  }, [drawerShut]);
 
   /* ── Beyond the newest 500 ──────────────────────────────────────────────
      The board loads the newest 500 leads; the file holds thousands. Three
@@ -548,14 +594,11 @@ export default function Leads() {
         {/* Somebody typed in by hand still shows when the book does not: the
             state below only takes the board's place when there is nothing at
             all to put on it. */}
-        {!source.live && ALL.length === 0 ? (
+        {!source.live && ALL.length === 0 && source.loading ? (
+          <BoardSkeleton label="Fetching your leads…" count={7} />
+        ) : !source.live && ALL.length === 0 ? (
           <div className="fade-up rounded-[22px] border border-line/50 bg-white px-5 py-10 text-center" role="status">
-            {source.loading ? (
-              <p className="flex items-center justify-center gap-2.5 text-[13px] text-muted">
-                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-accent" aria-hidden />
-                Fetching your leads…
-              </p>
-            ) : (
+            {source.loading ? null : (
               <>
                 <p className="text-[13px] font-semibold text-ink">{source.failed ? "Your leads didn't load" : "No leads to show yet"}</p>
                 <p className="mx-auto mt-1.5 max-w-md text-[12px] leading-relaxed text-muted">{source.reason}</p>

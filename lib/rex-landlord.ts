@@ -1,5 +1,5 @@
 import "server-only";
-import { rexCall } from "@/lib/rex";
+import { listingRead } from "@/lib/listing-details";
 import { hasDb, q } from "@/lib/db";
 
 /**
@@ -108,7 +108,9 @@ export async function landlordForListing(listingId: string): Promise<LandlordAns
   const hit = await cached(listingId);
   if (hit) return { ok: true, landlord: hit.landlord };
 
-  const res = await rexCall("Listings", "read", { id });
+  /* The same Listings/read the drawer's details make on open, shared through
+     the per-listing read cache rather than asked for a second time. */
+  const res = await listingRead(id, "Listings", "read", { id });
   if (!res.ok) {
     /**
      * ⚠️ NEVER return `res.error` to a browser.

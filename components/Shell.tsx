@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { warmRoute } from "@/lib/route-warm";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import NotificationBell from "@/components/NotificationBell";
@@ -78,6 +79,8 @@ function NavLink({
         {...(asButton
           ? { type: "button" as const, onClick: onToggle, "aria-expanded": showChildren }
           : { href: item.href, onClick: (e: React.MouseEvent) => { e.preventDefault(); go(item.href); } })}
+        onMouseEnter={() => warmRoute(item.children?.[0]?.href ?? item.href)}
+        onFocus={() => warmRoute(item.children?.[0]?.href ?? item.href)}
         title={collapsed ? item.label : undefined}
         /* The handle the new-starter tour hangs its spotlight on. The href is
            already unique per item, so this carries no new source of truth -
@@ -124,6 +127,8 @@ function NavLink({
                 href={c.href}
                 data-nav={c.href}
                 onClick={(e) => { e.preventDefault(); go(c.href); }}
+                onMouseEnter={() => warmRoute(c.href)}
+                onFocus={() => warmRoute(c.href)}
                 className={`rounded-lg px-2.5 py-1.5 text-[12.5px] transition-colors ${
                   on ? "font-medium text-accent-dark" : "text-muted hover:text-ink"
                 }`}
@@ -207,6 +212,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const goTo = useCallback(
     (href: string) => {
       if (href === currentHref) return;
+      /* The new screen's reads start NOW and run under the fall, rather than
+         after it (lib/route-warm). The code for it too. */
+      warmRoute(href);
+      router.prefetch(href);
       setLeaving(href);
       window.setTimeout(() => router.push(href), EXIT_MS);
     },
@@ -339,8 +348,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
        pushed to /key — both retired when the shared code went. Signing out
        cleared a cookie nothing reads and landed on a page that redirects. */
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
-    router.push("/sign-in");
-    router.refresh();
+    /* A full load, not a router push (2 Oct 2026): the boards keep their last
+       answer in the tab (lib/page-cache, the dashboard tiles, the diary), and
+       only a fresh page empties all of it - so the next person to sign in on
+       this tab never sees the last person's book, even for a moment. */
+    window.location.assign("/sign-in");
   }
 
   return (

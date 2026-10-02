@@ -1,13 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { BoardSkeleton } from "@/components/Skeleton";
+import dynamic from "next/dynamic";
+import { whenIdle } from "@/lib/when-idle";
+import { dropJson, peekJson, readJson } from "@/lib/page-cache";
 import DoodleIcon from "@/components/DoodleIcon";
 import GuideButton from "@/components/GuideButton";
 import PageHeader from "@/components/PageHeader";
 import PickOne from "@/components/PickOne";
 import StageTabs from "@/components/StageTabs";
 import PropertyPhoto from "@/components/PropertyPhoto";
-import ApplicationDrawer, { type Check } from "@/components/ApplicationDrawer";
+import type { Check } from "@/components/ApplicationDrawer";
+/* Off the first load, fetched while the board sits idle. */
+const loadApplicationDrawer = () => import("@/components/ApplicationDrawer");
+const ApplicationDrawer = dynamic(loadApplicationDrawer, { ssr: false });
 import HandoffPanel from "@/components/HandoffPanel";
 import { SAGE_INK, SAGE_WASH } from "@/components/appraisal/NextUp";
 import type { Application } from "@/lib/applications";
@@ -113,34 +120,20 @@ type StageKey = (typeof STAGES)[number]["key"] | "attention" | "closed";
 
 const gbp = (n: number | null) => (n == null ? "—" : `£${n.toLocaleString("en-GB")}`);
 
+type AppsAnswer = { applications?: Application[]; error?: string; scope?: string; everything?: boolean; stale?: boolean };
+const APPS_URL = "/api/applications?limit=200";
+
 /**
- * One fetch, however many times this mounts.
+ * One fetch, however many times this mounts - lib/page-cache shares the read
+ * between mounts (and with the nav's prefetch), and holds the last good
+ * answer so coming back paints the board at once while it reads again.
  *
- * The call takes ~3 seconds against 200 applications, and the component
- * mounts more than once on the way to a settled page — the dev double-invoke,
- * then the shell. Each mount was starting its own copy of the same request.
- *
- * Holding the PROMISE rather than the result means a later mount joins the
- * call already in flight instead of racing it.
+ * The call took ~3 seconds against 200 applications, and the component
+ * mounts more than once on the way to a settled page. A failure is never
+ * held, so a single "wouldn't answer" doesn't stick.
  */
-let inFlight: Promise<{ applications?: Application[]; error?: string; scope?: string; everything?: boolean }> | null = null;
 function book() {
-  inFlight ??= fetch("/api/applications?limit=200")
-    .then((r) => r.json())
-    // A failure must not be cached — the next mount should try again.
-    .catch((e: Error) => {
-      inFlight = null;
-      throw e;
-    });
-  /* Shared between the mounts of ONE visit, then let go. It was held for the
-     life of the tab: come back an hour later and it was the same list, and a
-     single "wouldn't answer" stuck until a hard reload. */
-  const mine = inFlight;
-  void mine.then(
-    (j) => window.setTimeout(() => { if (inFlight === mine) inFlight = null; }, j?.error ? 0 : 5000),
-    () => undefined
-  );
-  return inFlight;
+  return readJson<AppsAnswer>(APPS_URL, (j) => !j.error && Array.isArray(j.applications));
 }
 
 /** The four checks, read off the live record rather than counted. */
@@ -180,7 +173,8 @@ function checksFor(a: Application): Check[] {
 }
 
 export default function Applications() {
-  const [apps, setApps] = useState<Application[] | null>(null);
+  useEffect(() => whenIdle(() => { void loadApplicationDrawer(); }), []);
+  const [apps, setApps] = useState<Application[] | null>(() => peekJson<AppsAnswer>(APPS_URL)?.applications ?? null);
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   /* ?open=<id>: the PLC wizard sends people back here to a named
@@ -198,13 +192,25 @@ export default function Applications() {
   /* Whose book this is - "the whole business" for an owner, the agent's own
      name otherwise - so the page can say so rather than leave somebody to
      wonder why they see less than they used to. */
-  const [scope, setScope] = useState<{ label: string; everything: boolean } | null>(null);
+  const [scope, setScope] = useState<{ label: string; everything: boolean } | null>(() => {
+    const held = peekJson<AppsAnswer>(APPS_URL);
+    return held?.scope ? { label: held.scope, everything: Boolean(held.everything) } : null;
+  });
 
   useEffect(() => {
     let live = true;
+    let again = 0;
     book()
       .then((d) => {
         if (!live) return;
+        /* A held board answered while the server rebuilds it: read once more
+           in a few seconds and take the rebuilt one. */
+        if (d.stale) {
+          again = window.setTimeout(() => {
+            dropJson(APPS_URL);
+            book().then((k) => { if (live && !k.error && k.applications) setApps(k.applications); }).catch(() => undefined);
+          }, 4000);
+        }
         if (d.error) setError(d.error);
         if (d.scope) setScope({ label: d.scope, everything: Boolean(d.everything) });
         setApps(d.applications ?? []);
@@ -212,6 +218,7 @@ export default function Applications() {
       .catch((e: Error) => live && setError(e.message));
     return () => {
       live = false;
+      window.clearTimeout(again);
     };
   }, []);
 
@@ -396,10 +403,7 @@ export default function Applications() {
           </div>
 
           {apps === null ? (
-            <p className="flex items-center justify-center gap-2 py-10 text-[12.5px] text-muted">
-              <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
-              Loading applications&hellip;
-            </p>
+            <BoardSkeleton label="Loading applications…" count={6} />
           ) : error ? (
             <p className="py-10 text-center text-[12.5px] text-muted">{error}</p>
           ) : rows.length === 0 ? (

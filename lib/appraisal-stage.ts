@@ -1,18 +1,19 @@
 import "server-only";
 import type { AppraisalTick, MarketAppraisal, MaStage } from "@/lib/market-appraisal";
-import { presentationsFor } from "@/lib/present-store";
-import { signedFor } from "@/lib/signed-documents";
-import { extraDocsFor, landlordAccountByEmail, landlordDocuments } from "@/lib/landlord-account";
-import { EXTRA_DOC_KINDS } from "@/lib/landlord-doc-kinds";
+import { after } from "next/server";
+import { EXTRA_DOC_KINDS, REQUIRED_DOCS_CASE, isExtraDocKind, type RequiredDocsCase } from "@/lib/landlord-doc-kinds";
 import { bookFor } from "@/lib/listings-cache";
 import { hasDb, q } from "@/lib/db";
-import { persistStage } from "@/lib/appraisal-store";
+import { appraisalsGeneration, listAppraisals, persistStages } from "@/lib/appraisal-store";
 import { getComplianceItemsFor } from "@/lib/business/rex-stats";
 import { listVault } from "@/lib/vault";
 import { pendingKeyFor } from "@/lib/property-match";
 import { PRE_SEND_HOLD_MS, PRE_SEND_SOON_MS } from "@/lib/pre-send-time";
-import { readAnswers } from "@/lib/property-answers-store";
-import { allDone, progress } from "@/lib/property-questions";
+import { allDone, progress, type Answers } from "@/lib/property-questions";
+
+/* lib/property-answers-store's os_case_state kind. Read here in the batch
+   rather than through readAnswers, which asks one appraisal at a time. */
+const ANSWERS_KIND = "property-answers";
 
 /**
  * Where an appraisal is, worked out from what has happened.
@@ -120,33 +121,125 @@ function preSendMoment(ma: MarketAppraisal, now: Date): string | null {
 const iso = (v: string | Date | null | undefined) => (v ? new Date(v).toISOString() : null);
 const dayWords = (v: string | null) => (v ? new Date(v).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) : "");
 
-async function signalsFor(ma: MarketAppraisal, listedIds: Set<string>, now: Date): Promise<Signals> {
-  const refs = [...new Set([ma.leadId, ma.id].filter((r): r is string => Boolean(r)))];
-  const [decks, signed, account, sends, esign, certs, answers, extras] = await Promise.all([
-    Promise.all(refs.map((r) => presentationsFor(r).catch(() => []))).then((d) => d.flat()),
-    signedFor(ma.id).catch(() => []),
-    ma.landlordEmail ? landlordAccountByEmail(ma.landlordEmail).catch(() => null) : Promise.resolve(null),
-    hasDb()
-      ? q<{ kind: string; state: string; send_at: string; sent_at: string | null }>(
-          `SELECT kind, state, send_at, sent_at FROM os_scheduled_sends WHERE ref = ANY($1) ORDER BY created_at DESC`,
-          [refs]
+/**
+ * EVERYTHING THE TICKS READ, FOR THE WHOLE LIST, IN SIX QUERIES (2 Oct 2026).
+ *
+ * signalsFor used to ask the database eight or nine questions PER appraisal
+ * (decks per ref, signatures, the landlord's account, then their documents,
+ * the sends, the e-sign watch, the answers, the extras). With sixty files on
+ * the list and a pool of five connections that was ~500 queries queued
+ * behind each other, which is where the 1.4 s p95 and 3.3 s p99 came from.
+ * Each question is now asked once for every appraisal with ANY($1), and the
+ * answers are handed out by id. Same rows, same rules, same ticks.
+ *
+ * The decks come back WITHOUT their deck JSON - only the one field the ticks
+ * read (welcomeVideo.status) - because a deck is the heaviest thing in the
+ * table and the list never shows one.
+ */
+interface DeckLite {
+  kind: string;
+  createdAt: string;
+  firstOpenedAt: string | null;
+  opens: number;
+  video: string | null;
+}
+interface SendLite { kind: string; state: string; send_at: string; sent_at: string | null; created_at: string }
+interface Batch {
+  decks: Map<string, DeckLite[]>;
+  signed: Map<string, { signer_name: string; completed_at: string }>;
+  docs: Map<string, { kind: string; uploadedAt: string }[]>;
+  sends: Map<string, SendLite[]>;
+  esign: Map<string, string>;
+  answers: Map<string, Answers>;
+  extras: Map<string, string[]>;
+}
+
+const refsOf = (ma: MarketAppraisal) => [...new Set([ma.leadId, ma.id].filter((r): r is string => Boolean(r)))];
+const emailKey = (v: string | null | undefined) => (v ? String(v).trim().toLowerCase() : "");
+
+function push<K, V>(m: Map<K, V[]>, k: K, v: V) {
+  const held = m.get(k);
+  if (held) held.push(v);
+  else m.set(k, [v]);
+}
+
+async function readBatch(list: MarketAppraisal[]): Promise<Batch> {
+  const out: Batch = { decks: new Map(), signed: new Map(), docs: new Map(), sends: new Map(), esign: new Map(), answers: new Map(), extras: new Map() };
+  if (!hasDb() || !list.length) return out;
+  const ids = [...new Set(list.map((m) => m.id))];
+  const refs = [...new Set(list.flatMap(refsOf))];
+  const emails = [...new Set(list.map((m) => emailKey(m.landlordEmail)).filter(Boolean))];
+  /* Every one is caught on its own: one table that will not answer costs
+     its ticks, not the whole list - the same promise each per-row .catch
+     made before. */
+  const [decks, signed, docs, sends, esign, cases] = await Promise.all([
+    q<{ kind: string; ref: string; created_at: string | Date; first_opened_at: string | Date | null; opens: number; video: string | null }>(
+      `SELECT DISTINCT ON (ref, kind) kind, ref, created_at, first_opened_at, opens,
+              deck->'welcomeVideo'->>'status' AS video
+         FROM os_presentations WHERE ref = ANY($1)
+        ORDER BY ref, kind, created_at DESC`,
+      [refs]
+    ).catch(() => []),
+    q<{ appraisal_id: string; signer_name: string; completed_at: string | Date }>(
+      `SELECT DISTINCT ON (appraisal_id) appraisal_id, signer_name, completed_at
+         FROM os_signed_documents WHERE appraisal_id = ANY($1) AND completed_at IS NOT NULL
+        ORDER BY appraisal_id, stored_at DESC`,
+      [ids]
+    ).catch(() => []),
+    emails.length
+      ? q<{ email: string; kind: string; uploaded_at: string | Date }>(
+          `SELECT a.email, d.kind, d.uploaded_at
+             FROM os_portal_accounts a JOIN os_landlord_documents d ON d.account_id = a.id
+            WHERE a.kind = 'landlord' AND a.email = ANY($1)
+            ORDER BY d.uploaded_at DESC`,
+          [emails]
         ).catch(() => [])
       : Promise.resolve([]),
-    hasDb()
-      ? q<{ created_at: string; completed_at: string | null }>(`SELECT created_at, completed_at FROM os_esign_watch WHERE ref = ANY($1) ORDER BY created_at DESC LIMIT 5`, [refs]).catch(() => [])
-      : Promise.resolve([]),
-    certificatesFor(ma),
-    readAnswers(ma.id).catch(() => ({})),
-    extraDocsFor(ma.id).catch((): string[] => []),
+    q<{ ref: string; kind: string; state: string; send_at: string; sent_at: string | null; created_at: string | Date }>(
+      `SELECT ref, kind, state, send_at, sent_at, created_at FROM os_scheduled_sends WHERE ref = ANY($1) ORDER BY created_at DESC`,
+      [refs]
+    ).catch(() => []),
+    q<{ ref: string; created_at: string | Date }>(
+      `SELECT ref, max(created_at) AS created_at FROM os_esign_watch WHERE ref = ANY($1) GROUP BY ref`,
+      [refs]
+    ).catch(() => []),
+    q<{ kind: string; record_id: string; payload: Record<string, unknown> | null }>(
+      `SELECT kind, record_id, payload FROM os_case_state WHERE kind = ANY($1) AND record_id = ANY($2)`,
+      [[ANSWERS_KIND, REQUIRED_DOCS_CASE], ids]
+    ).catch(() => []),
   ]);
-  const docs = account ? await landlordDocuments(account.id).catch(() => []) : [];
+  for (const d of decks)
+    push(out.decks, d.ref, { kind: d.kind, createdAt: iso(d.created_at)!, firstOpenedAt: iso(d.first_opened_at), opens: Number(d.opens ?? 0), video: d.video });
+  for (const s of signed) out.signed.set(s.appraisal_id, { signer_name: s.signer_name, completed_at: iso(s.completed_at)! });
+  for (const d of docs) push(out.docs, emailKey(d.email), { kind: d.kind, uploadedAt: iso(d.uploaded_at)! });
+  for (const s of sends) push(out.sends, s.ref, { kind: s.kind, state: s.state, send_at: s.send_at, sent_at: s.sent_at, created_at: iso(s.created_at)! });
+  for (const e of esign) out.esign.set(e.ref, iso(e.created_at)!);
+  for (const c of cases) {
+    if (c.kind === ANSWERS_KIND) out.answers.set(c.record_id, (c.payload ?? {}) as Answers);
+    else {
+      const extra = (c.payload as Partial<RequiredDocsCase> | null)?.extra;
+      out.extras.set(c.record_id, Array.isArray(extra) ? extra.filter(isExtraDocKind) : []);
+    }
+  }
+  return out;
+}
+
+function signalsFor(ma: MarketAppraisal, b: Batch, certs: CertTick[], listedIds: Set<string>, now: Date): Signals {
+  const refs = refsOf(ma);
+  const decks = refs.flatMap((r) => b.decks.get(r) ?? []);
+  const signedDoc = b.signed.get(ma.id) ?? null;
+  const docs = b.docs.get(emailKey(ma.landlordEmail)) ?? [];
+  /* Newest first across both refs, as the single ORDER BY used to give. */
+  const sends = refs.length > 1 ? refs.flatMap((r) => b.sends.get(r) ?? []).sort((x, y) => y.created_at.localeCompare(x.created_at)) : b.sends.get(refs[0]) ?? [];
+  const esignAt = refs.map((r) => b.esign.get(r) ?? "").sort().pop() || null;
+  const answers = b.answers.get(ma.id) ?? {};
+  const extras = b.extras.get(ma.id) ?? [];
   const kinds = new Set(docs.map((d) => d.kind));
 
   const deck = (kind: string) => decks.filter((d) => d.kind === kind).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0] ?? null;
   const pre = deck("pre-appraisal");
   const post = deck("post-appraisal");
-  const signedDoc = signed.find((s) => s.completed_at) ?? null;
-  const termsSentAt = ma.termsSentAt ?? iso(esign[0]?.created_at ?? null);
+  const termsSentAt = ma.termsSentAt ?? esignAt;
   const visitPassed = Boolean(ma.appointmentAt && new Date(ma.appointmentAt) < now);
   const listed = Boolean(ma.rexPropertyId && listedIds.has(String(ma.rexPropertyId)));
 
@@ -167,7 +260,7 @@ async function signalsFor(ma: MarketAppraisal, listedIds: Set<string>, now: Date
      only a detail - the job is done when there is a recording on the deck
      or the agent has said "send it without one". */
   const video = sends.find((s) => s.kind === "video-chase");
-  const recorded = Boolean(pre && (pre as { deck?: { welcomeVideo?: { status?: string } } }).deck?.welcomeVideo?.status === "ready");
+  const recorded = Boolean(pre && pre.video === "ready");
   const declined = !recorded && sends.some((s) => s.kind === "video-chase" && s.state === "declined");
   const videoState: Signals["videoState"] = recorded ? "recorded" : declined ? "declined" : "none";
   const nudgeAt = video && video.state === "queued" ? iso(video.send_at) : null;
@@ -213,7 +306,7 @@ async function signalsFor(ma: MarketAppraisal, listedIds: Set<string>, now: Date
   for (const c of certs) tick("aml", `cert-${c.key}`, `${c.label} on file`, c.held, c.at, c.detail);
   /* And whatever else the agent asked this property for (Documents This
      Property Needs, on the appraisal). */
-  for (const k of EXTRA_DOC_KINDS.filter((x) => (extras as string[]).includes(x.id))) {
+  for (const k of EXTRA_DOC_KINDS.filter((x) => extras.includes(x.id))) {
     tick("aml", `extra-${k.id}`, `${k.label} on the portal`, kinds.has(k.id), iso(docs.find((d) => d.kind === k.id)?.uploadedAt ?? null));
   }
 
@@ -223,16 +316,72 @@ async function signalsFor(ma: MarketAppraisal, listedIds: Set<string>, now: Date
   return { facts, ticks, videoState, preSend, nudgeAt };
 }
 
+type CertTick = { key: string; label: string; held: boolean; at: string | null; detail?: string };
+type ComplianceRead = Awaited<ReturnType<typeof getComplianceItemsFor>>;
+type VaultRead = Awaited<ReturnType<typeof listVault>>;
+
+/**
+ * THE TWO OUTSIDE READS, KEPT BRIEFLY (2 Oct 2026).
+ *
+ * Every appraisal on the list asked REX for its property's compliance and
+ * listed its folder in R2, on every load, uncached - the slow tail of the
+ * list. Both are kept per key now: REX compliance for five minutes (one
+ * minute when REX did not finish answering, the same rule as the deal board
+ * in lib/business/rex-stats), the R2 folder for two. A certificate filed in
+ * the last few minutes shows on the LIST a few minutes late; the file page
+ * (opts.fresh) reads the R2 folder every time and REX within the minute.
+ *
+ * On globalThis so every route module and every dev reload share one copy.
+ */
+interface CertCaches {
+  rex: Map<string, { at: number; ttl: number; p: Promise<ComplianceRead> }>;
+  vault: Map<string, { at: number; p: Promise<VaultRead> }>;
+}
+declare global {
+  // eslint-disable-next-line no-var
+  var __osAppraisalCerts: CertCaches | undefined;
+  // eslint-disable-next-line no-var
+  var __osStagedAppraisals: StagedCache | undefined;
+}
+const certCaches: CertCaches = (globalThis.__osAppraisalCerts ??= { rex: new Map(), vault: new Map() });
+const REX_CERT_MS = 5 * 60_000;
+const REX_CERT_UNKNOWN_MS = 60_000;
+const VAULT_MS = 2 * 60_000;
+
+/* The file page reads with `fresh`, and reloads after every save. The R2
+   folder is cheap and is where the OS's own uploads land, so it is always
+   read again; REX compliance is the slowest call REX has and nothing on the
+   file page writes to it, so a copy under a minute old still stands. */
+const REX_CERT_FRESH_MS = 60_000;
+
+function complianceFor(propertyId: string, fresh: boolean): Promise<ComplianceRead> {
+  const held = certCaches.rex.get(propertyId);
+  if (held && Date.now() - held.at < (fresh ? Math.min(held.ttl, REX_CERT_FRESH_MS) : held.ttl)) return held.p;
+  const entry = { at: Date.now(), ttl: REX_CERT_UNKNOWN_MS, p: getComplianceItemsFor(propertyId).catch((): ComplianceRead => ({ items: [], checked: false })) };
+  /* Kept for the full five minutes only once REX gave a whole answer. */
+  void entry.p.then((r) => { if (r.checked) entry.ttl = REX_CERT_MS; });
+  certCaches.rex.set(propertyId, entry);
+  return entry.p;
+}
+
+function vaultFor(key: string, fresh: boolean): Promise<VaultRead> {
+  const held = certCaches.vault.get(key);
+  if (!fresh && held && Date.now() - held.at < VAULT_MS) return held.p;
+  const entry = { at: Date.now(), p: listVault(key).catch((): VaultRead => []) };
+  certCaches.vault.set(key, entry);
+  return entry.p;
+}
+
 /** Gas, EICR and EPC: in REX on the picked property, or held against the address. */
-async function certificatesFor(ma: MarketAppraisal): Promise<{ key: string; label: string; held: boolean; at: string | null; detail?: string }[]> {
+async function certificatesFor(ma: MarketAppraisal, fresh: boolean): Promise<CertTick[]> {
   const want: { key: string; type: string; vault: string; label: string }[] = [
     { key: "gas", type: "gas_safety", vault: "gas", label: "Gas safety" },
     { key: "eicr", type: "eicr", vault: "eicr", label: "EICR" },
     { key: "epc", type: "epc", vault: "epc", label: "EPC" },
   ];
   const [rex, held] = await Promise.all([
-    ma.rexPropertyId ? getComplianceItemsFor(ma.rexPropertyId).catch(() => ({ items: [], checked: false })) : Promise.resolve({ items: [], checked: false }),
-    listVault(pendingKeyFor(`${ma.address}${ma.postcode && !ma.address.includes(ma.postcode) ? `, ${ma.postcode}` : ""}`)).catch(() => []),
+    ma.rexPropertyId ? complianceFor(String(ma.rexPropertyId), fresh) : Promise.resolve({ items: [], checked: false } as ComplianceRead),
+    vaultFor(pendingKeyFor(`${ma.address}${ma.postcode && !ma.address.includes(ma.postcode) ? `, ${ma.postcode}` : ""}`), fresh),
   ]);
   return want.map((w) => {
     const item = rex.items.find((i) => i.type === w.type);
@@ -244,20 +393,57 @@ async function certificatesFor(ma: MarketAppraisal): Promise<{ key: string; labe
   });
 }
 
-/** One record, its live stage, why, and the ticks; the stored stage brought up to match. */
-export async function withLiveStage(ma: MarketAppraisal, listedIds: Set<string>, now = new Date()): Promise<MarketAppraisal> {
+/**
+ * Fire-and-forget that does not hold the response. Inside a request, after()
+ * runs it once the reply has gone; outside one (a cron, the assistant's
+ * tools) after() throws, and it simply runs now without being awaited.
+ */
+function later(work: () => Promise<unknown>) {
   try {
-    const { facts, ticks, videoState, preSend, nudgeAt } = await signalsFor(ma, listedIds, now);
-    const { stage, why } = deriveAppraisalStage(ma, facts);
-    if (stage !== ma.stage && ma.stage !== "won" && ma.stage !== "lost") void persistStage(ma.id, stage);
-    return { ...ma, liveStage: stage, stageWhy: why, ticks, videoState, preSend, nudgeAt };
+    after(work);
   } catch {
-    return ma;
+    void work().catch(() => null);
   }
 }
 
+export interface StageOptions {
+  /** The single file page, read after a save: R2 read again, REX compliance at most a minute old. */
+  fresh?: boolean;
+}
+
+/** One record, its live stage, why, and the ticks; the stored stage brought up to match. */
+export async function withLiveStage(ma: MarketAppraisal, listedIds: Set<string>, now = new Date(), opts: StageOptions = {}): Promise<MarketAppraisal> {
+  const [one] = await stageAll([ma], listedIds, now, opts);
+  return one;
+}
+
+async function stageAll(list: MarketAppraisal[], listedIds: Set<string>, now: Date, opts: StageOptions): Promise<MarketAppraisal[]> {
+  const [batch, certs] = await Promise.all([
+    readBatch(list).catch((): Batch | null => null),
+    Promise.all(list.map((ma) => certificatesFor(ma, Boolean(opts.fresh)).catch((): CertTick[] | null => null))),
+  ]);
+  const moves: { id: string; stage: MaStage }[] = [];
+  const out = list.map((ma, i) => {
+    /* A record whose signals could not be read keeps its stored stage,
+       exactly as the per-row try/catch did. */
+    if (!batch || !certs[i]) return ma;
+    try {
+      const { facts, ticks, videoState, preSend, nudgeAt } = signalsFor(ma, batch, certs[i]!, listedIds, now);
+      const { stage, why } = deriveAppraisalStage(ma, facts);
+      if (stage !== ma.stage && ma.stage !== "won" && ma.stage !== "lost") moves.push({ id: ma.id, stage });
+      return { ...ma, liveStage: stage, stageWhy: why, ticks, videoState, preSend, nudgeAt };
+    } catch {
+      return ma;
+    }
+  });
+  /* The stored stage brought up to the live one, AFTER the reply: it used to
+     be a write per row racing the reads for the same five connections. */
+  if (moves.length) later(() => persistStages(moves));
+  return out;
+}
+
 /** The list, each record carrying its live stage, the reason and the ticks. */
-export async function withLiveStages(list: MarketAppraisal[], now = new Date()): Promise<MarketAppraisal[]> {
+export async function withLiveStages(list: MarketAppraisal[], now = new Date(), opts: StageOptions = {}): Promise<MarketAppraisal[]> {
   let listedIds = new Set<string>();
   /* Which listing each property has, so the file can open THAT listing
      (Howard, 1 Oct 2026: "opens listing but doesn't open my listing"). The
@@ -278,6 +464,58 @@ export async function withLiveStages(list: MarketAppraisal[], now = new Date()):
   } catch {
     /* no book: nothing reads as won on that evidence; nothing else changes */
   }
-  const staged = await Promise.all(list.map((ma) => withLiveStage(ma, listedIds, now)));
+  const staged = await stageAll(list, listedIds, now, opts);
   return staged.map((ma) => ({ ...ma, listingId: ma.rexPropertyId ? listingOf.get(String(ma.rexPropertyId))?.id ?? null : null }));
+}
+
+/**
+ * THE STAGED LIST, HELD FOR HALF A MINUTE (2 Oct 2026).
+ *
+ * The Market Appraisals screen and the dashboard ask for the whole staged
+ * list on every load. It is now kept for 30 seconds and, between 30 seconds
+ * and two minutes old, served while a fresh one is built behind it - the
+ * stale-while-revalidate the listing book already uses. Past two minutes it
+ * is not shown at all; the caller waits for a real read.
+ *
+ * Any write through lib/appraisal-store (booking, a figure, won/lost, terms
+ * sent) bumps a generation and the held copy is thrown away, so the person
+ * who just saved never reads their own change back stale. Writes the store
+ * does not see (a deck made, a landlord signing) reach the list within 30
+ * seconds; the file page reads its one record live and sees them at once.
+ *
+ * A failed read is never cached, so an error is not frozen onto the screen.
+ */
+interface StagedCache {
+  held: { at: number; gen: number; list: MarketAppraisal[] } | null;
+  building: Promise<MarketAppraisal[]> | null;
+}
+const staged: StagedCache = (globalThis.__osStagedAppraisals ??= { held: null, building: null });
+const STAGED_FRESH_MS = 30_000;
+const STAGED_KEEP_MS = 2 * 60_000;
+
+function buildStaged(): Promise<MarketAppraisal[]> {
+  if (staged.building) return staged.building;
+  const gen = appraisalsGeneration();
+  const p = listAppraisals()
+    .then((list) => withLiveStages(list))
+    .then((list) => {
+      /* Only kept if nothing was written while it was being built. */
+      if (gen === appraisalsGeneration()) staged.held = { at: Date.now(), gen, list };
+      return list;
+    })
+    .finally(() => {
+      if (staged.building === p) staged.building = null;
+    });
+  staged.building = p;
+  return p;
+}
+
+export async function stagedAppraisals(): Promise<MarketAppraisal[]> {
+  const held = staged.held;
+  const age = held ? Date.now() - held.at : Infinity;
+  if (held && held.gen === appraisalsGeneration() && age < STAGED_KEEP_MS) {
+    if (age >= STAGED_FRESH_MS) later(() => buildStaged().catch(() => null));
+    return held.list;
+  }
+  return buildStaged();
 }

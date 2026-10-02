@@ -186,15 +186,28 @@ export default function BentoDash({
    * happens downstream can feed back into it.
    */
   const hydrated = useRef(false);
+  /* This browser's own copy of the board is drawn at once, before the
+     account's copy has answered (2 Oct 2026). Waiting for it mounted the
+     DEFAULT tiles first - which each started their reads - and then swapped
+     in the saved board, whose own tiles only started reading after that.
+     Still not hydrated: the account's copy below is the one that sticks, and
+     nothing is written until it has been read. */
+  const drewLocal = useRef(false);
 
   useEffect(() => {
-    if (hydrated.current || !prefsReady) return;
-    hydrated.current = true;
+    if (hydrated.current) return;
     // A widget we no longer ship would wipe the board, so a failed check
     // leaves the default standing rather than rendering an empty grid.
-    if (Array.isArray(savedLayout) && savedLayout.length && savedLayout.every((i) => WIDGETS[i.type])) {
-      setLayout(savedLayout);
+    const usable = Array.isArray(savedLayout) && savedLayout.length > 0 && savedLayout.every((i) => WIDGETS[i.type]);
+    if (!prefsReady) {
+      if (usable && !drewLocal.current) {
+        drewLocal.current = true;
+        setLayout(savedLayout);
+      }
+      return;
     }
+    hydrated.current = true;
+    if (usable) setLayout(savedLayout);
   }, [savedLayout, prefsReady]);
 
   useEffect(() => {
@@ -357,13 +370,20 @@ export default function BentoDash({
     settledRef.current = null;
     setDrag(state);
 
-    const onMove = (ev: PointerEvent) => {
+    /* At most once a frame (2 Oct 2026). A mouse reports far more often
+       than the screen draws, and each report re-rendered the whole board -
+       every tile's body included - so a drag stuttered on a busy board. The
+       latest position is kept and acted on at the next frame. */
+    let frame = 0;
+    let lastEv: PointerEvent | null = null;
+    const step = () => {
+      frame = 0;
+      const ev = lastEv;
+      if (!ev || !dragRef.current) return;
       const moved =
-        dragRef.current?.moved ||
+        dragRef.current.moved ||
         Math.hypot(ev.clientX - startX, ev.clientY - startY) > DRAG_THRESHOLD;
-      if (dragRef.current) {
-        dragRef.current = { ...dragRef.current, x: ev.clientX, y: ev.clientY, moved };
-      }
+      dragRef.current = { ...dragRef.current, x: ev.clientX, y: ev.clientY, moved };
       setDrag(dragRef.current);
       if (!moved) return;
       const off = isOffBoard(ev.clientX, ev.clientY);
@@ -371,8 +391,16 @@ export default function BentoDash({
       if (off) clearPending();
       else moveDraggedTo(ev.clientX, ev.clientY);
     };
+    const onMove = (ev: PointerEvent) => {
+      lastEv = ev;
+      if (!frame) frame = requestAnimationFrame(step);
+    };
 
     const onUp = (ev: PointerEvent) => {
+      if (frame) {
+        cancelAnimationFrame(frame);
+        step();
+      }
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);

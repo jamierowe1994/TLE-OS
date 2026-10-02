@@ -75,17 +75,27 @@ export async function feedbackByIds(ids: string[]): Promise<Map<string, ViewingF
   const wanted = [...new Set(ids.filter(Boolean))];
   if (!rexConfigured() || !wanted.length) return out;
 
-  for (let i = 0; i < wanted.length; i += 60) {
-    const batch = wanted.slice(i, i + 60);
+  const batches: string[][] = [];
+  for (let i = 0; i < wanted.length; i += 60) batches.push(wanted.slice(i, i + 60));
+
+  /* THREE AT A TIME (2 Oct 2026). The batches went one after another, each
+     waiting on the last, on the cold diary read where every REX second shows.
+     Three abreast - the same courtesy to REX as the diary's own pages, a
+     little under it. A refused batch is skipped and a thrown one still
+     throws, exactly as before. */
+  const one = async (batch: string[]) => {
     const res = await rexCall("Feedback", "search", {
       criteria: [{ name: "id", type: "in", value: batch }],
       limit: 100,
     });
-    if (!res.ok) continue; /* feedback is a nicety; a diary without it still works */
+    if (!res.ok) return; /* feedback is a nicety; a diary without it still works */
     for (const row of rexRows(res.result) as RexFeedback[]) {
       const f = toFeedback(row);
       if (f) out.set(f.id, f);
     }
+  };
+  for (let i = 0; i < batches.length; i += 3) {
+    await Promise.all(batches.slice(i, i + 3).map(one));
   }
   return out;
 }

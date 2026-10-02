@@ -23,8 +23,18 @@ export const STALE_MS = 60 * 60 * 1000;
 
 export interface Cached { book: DiaryBook; at: number }
 
-let memory: Cached | null = null;
-let refreshing: Promise<Cached> | null = null;
+/* ON globalThis, NOT IN THE MODULE (2 Oct 2026). The build carries this file
+   in more than one place - the diary route and the five-minute timer's route
+   each inline it - and two module-level copies meant two caches: the timer
+   warmed ITS copy and the database, while the diary route kept serving its own
+   older one and starting REX reads of its own. One process, one held book, one
+   read in flight (same reasoning as the Propoly token in lib/business/propoly). */
+interface DiaryHold { memory: Cached | null; refreshing: Promise<Cached> | null }
+declare global {
+  // eslint-disable-next-line no-var
+  var __diaryHold: DiaryHold | undefined;
+}
+const hold: DiaryHold = (globalThis.__diaryHold ??= { memory: null, refreshing: null });
 
 async function readStored(): Promise<Cached | null> {
   if (!hasDb()) return null;
@@ -52,22 +62,29 @@ async function store(entry: Cached): Promise<void> {
 /** The copy we hold, from this process or the database. Whoever asks decides
  *  whether it is fresh enough. */
 export async function heldDiary(): Promise<Cached | null> {
-  return memory ?? (await readStored());
+  if (hold.memory) return hold.memory;
+  /* A fresh process: the database copy, kept in memory so the next request
+     does not parse the whole office's book out of os_cache again. */
+  const stored = await readStored();
+  if (stored && !hold.memory) hold.memory = stored;
+  return hold.memory ?? stored;
 }
 
 /** Read the diary again. Callers arriving while one is running join it. */
 export function refreshDiaryBook(): Promise<Cached> {
-  if (!refreshing) {
-    refreshing = fetchDiary()
+  if (!hold.refreshing) {
+    hold.refreshing = fetchDiary()
       .then(async (book) => {
         const entry = { book, at: Date.now() };
-        memory = entry;
-        await store(entry);
+        hold.memory = entry;
+        /* Not waited on: the people asking want the book, and the database copy
+           is only for the next process. */
+        void store(entry);
         return entry;
       })
-      .finally(() => { refreshing = null; });
+      .finally(() => { hold.refreshing = null; });
   }
-  return refreshing;
+  return hold.refreshing;
 }
 
 /**

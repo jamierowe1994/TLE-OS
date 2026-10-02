@@ -297,6 +297,31 @@ export async function rexCall(
    *  ticket yet (lib/rex-compliance, 25 Sep 2026). */
   opts?: { quiet?: boolean }
 ): Promise<RexResponse> {
+  /* Any write to a listing empties the short per-listing read cache the
+     drawer uses (lib/listing-details, 2 Oct 2026) - here, in the one place
+     every write passes, so no writer (Steve's write-up, the PLC, signed
+     terms, the handover) can forget to and leave the drawer showing the
+     advert from before. Through globalThis rather than an import, because
+     lib/listing-details imports this file. */
+  if (service === "Listings" && !isReadOnlyMethod(method)) {
+    try {
+      return await rexCallOnce(service, method, body, actorToken, opts);
+    } finally {
+      const id = (body as { data?: { id?: unknown } } | undefined)?.data?.id;
+      const reads = (globalThis as { __osListingReads?: Map<string, unknown> }).__osListingReads;
+      if (reads) for (const k of [...reads.keys()]) if (id == null || k.startsWith(`${id}|`)) reads.delete(k);
+    }
+  }
+  return rexCallOnce(service, method, body, actorToken, opts);
+}
+
+async function rexCallOnce(
+  service: string,
+  method: string,
+  body?: unknown,
+  actorToken?: string | null,
+  opts?: { quiet?: boolean }
+): Promise<RexResponse> {
   if (!rexConfigured()) {
     throw new Error("Rex isn't connected yet (missing REX_API_EMAIL/PASSWORD).");
   }

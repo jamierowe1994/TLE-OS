@@ -1,6 +1,6 @@
 import "server-only";
 import type { NextRequest } from "next/server";
-import { whoIs } from "@/lib/admin";
+import { whoIs, type Who } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
 import { can } from "@/lib/roles";
 import { ensureRexLink } from "@/lib/users";
@@ -62,6 +62,18 @@ export function grantWholeBusiness(req: NextRequest): NextRequest {
 }
 
 export async function scopeFor(req: NextRequest): Promise<Scope> {
+  return scopeForWho(req, hasDb() && !WHOLE_BUSINESS.has(req) ? await whoIs(req) : null);
+}
+
+/**
+ * The same answer, for a caller that has already asked whoIs.
+ *
+ * scopeFor asks whoIs itself, and most routes then ask it again for the actor,
+ * so every request read the person's row - headshot and all - twice over
+ * (2 Oct 2026, the diary speed work). A route that needs both asks whoIs once
+ * and hands it in here. `who` may be null only where scopeFor never needed it.
+ */
+export async function scopeForWho(req: NextRequest, who: Who | null): Promise<Scope> {
   if (WHOLE_BUSINESS.has(req)) {
     return { rexUserId: null, everything: true, unlinked: false, label: "the whole business" };
   }
@@ -75,7 +87,7 @@ export async function scopeFor(req: NextRequest): Promise<Scope> {
     return { rexUserId: null, everything: true, unlinked: false, label: "the whole business" };
   }
 
-  const { actor, subject, viewingAs } = await whoIs(req);
+  const { actor, subject, viewingAs } = who ?? (await whoIs(req));
 
   if (!actor) return { rexUserId: null, everything: false, unlinked: true, label: "" };
 

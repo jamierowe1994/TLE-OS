@@ -311,13 +311,15 @@ export default function AppraisalTrack({
   useEffect(() => {
     if (!appraisalId) return;
     let live = true;
-    fetch("/api/appraisals", { cache: "no-store" })
+    /* Just this record's stored figures (2 Oct 2026) - it used to read the
+       whole staged list to find one figure and one fee. */
+    fetch(`/api/appraisals/${encodeURIComponent(appraisalId)}?bare=1`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
         if (!live) return;
-        const found = (j?.appraisals ?? []).find(
-          (m: { id: string }) => m.id === appraisalId
-        ) as { valuation: number | null; feePct: number | null } | undefined;
+        const found = (j?.appraisal ?? undefined) as
+          | { valuation: number | null; feePct: number | null }
+          | undefined;
         if (found) setFigure({ valuation: found.valuation, feePct: found.feePct });
       })
       .catch(() => {

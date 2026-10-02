@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import DoorFrame from "@/components/DoorFrame";
 
 /**
@@ -39,7 +39,6 @@ function safeNext(raw: string | null): string {
 }
 
 function SignIn() {
-  const router = useRouter();
   const next = safeNext(useSearchParams().get("next"));
 
   const [email, setEmail] = useState("");
@@ -74,7 +73,11 @@ function SignIn() {
            together, so a narrow laptop window is not a phone. The full OS is
            one tap away from the phone view's menu. */
         const phone = window.matchMedia("(max-width: 640px) and (pointer: coarse)").matches;
-        router.replace(
+        /* A full load, not router.replace (2 Oct 2026): the tab may still hold
+           the boards of whoever was signed in before - their session ran out
+           and middleware brought them here mid-session. A fresh page holds
+           nobody's (see lib/page-cache). replace, so Back skips the form. */
+        window.location.replace(
           /* Michael lands on his own dashboard, as Kirstie does on hers (20 Sep 2026),
              and marketing on the Marketing Hub (28 Sep 2026): the dashboard is an
              agent's REX work, and a marketing account has no REX. */

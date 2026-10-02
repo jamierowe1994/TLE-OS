@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSlideOver } from "@/lib/use-slide-over";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -69,7 +70,7 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 export default function AppointmentDrawer({
   appt,
   outcome,
-  onClose,
+  onClose: closeNow,
   onOpenViewing,
   sentExtra,
   onSend,
@@ -82,19 +83,13 @@ export default function AppointmentDrawer({
   sentExtra: Set<string>;
   onSend: (apptId: string, label: string) => void;
 }) {
-  const [shown, setShown] = useState(false);
+  /* Every way out plays the card out first (lib/use-slide-over). */
+  const { shown, close: onClose } = useSlideOver(Boolean(appt), closeNow, appt?.id);
   useEffect(() => {
-    if (!appt) {
-      setShown(false);
-      return;
-    }
-    const id = requestAnimationFrame(() => setShown(true));
+    if (!appt) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
-    return () => {
-      cancelAnimationFrame(id);
-      window.removeEventListener("keydown", onKey);
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, [appt, onClose]);
 
   /* The property behind it, and its keys. Live REX entries carry no listing
@@ -108,22 +103,18 @@ export default function AppointmentDrawer({
     if (!appt || !AT_PROPERTY.has(appt.kind)) return;
     let gone = false;
     const target = `${appt.where} ${appt.what}`.toLowerCase();
-    fetch("/api/listings")
+    /* Matched on the server with the keys, one round trip (2 Oct 2026) - it
+       used to download the whole listing book to find one address. */
+    fetch(`/api/listings/match?address=${encodeURIComponent(target)}`)
       .then((r) => r.json())
-      .then((j) => {
+      .then((j: { ok?: boolean; match?: { propertyId: string | null; locality: string } | null; keysOk?: boolean; keys?: KeySet[] }) => {
         if (gone) return;
-        if (!j.ok || !Array.isArray(j.listings)) return setMatch(null);
-        const hit = j.listings.find((l: { name: string }) => {
-          const name = l.name.toLowerCase();
-          return name.length > 6 && target.includes(name);
-        });
+        if (!j.ok) return setMatch(null);
+        const hit = j.match;
         if (!hit) return setMatch(null);
         setMatch({ propertyId: hit.propertyId ?? null, locality: hit.locality });
         if (!hit.propertyId) return setKeys([]);
-        fetch(`/api/keys?propertyIds=${encodeURIComponent(hit.propertyId)}`)
-          .then((r) => r.json())
-          .then((k) => !gone && setKeys(k.ok ? (k.keys[hit.propertyId] ?? []) : []))
-          .catch(() => !gone && setKeys([]));
+        setKeys(j.keysOk ? (j.keys ?? []) : []);
       })
       .catch(() => !gone && setMatch(null));
     return () => {
@@ -154,17 +145,16 @@ export default function AppointmentDrawer({
     : null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[130]" data-steve="appointment.drawer">
+    <div className="so-root fixed inset-0 z-[130]" data-shown={shown} data-steve="appointment.drawer">
       <button
         aria-label="Close"
         onClick={onClose}
-        className={`absolute inset-0 cursor-default bg-ink/30 transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0"}`}
+        data-shown={shown}
+        className="so-scrim absolute inset-0 cursor-default bg-ink/30"
       />
       <aside
-        className={`absolute inset-y-0 right-0 flex w-full max-w-[460px] flex-col overflow-hidden bg-white shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[420ms] sm:inset-y-3 sm:right-3 sm:rounded-[22px] sm:border sm:border-line/50 ${
-          shown ? "translate-x-0" : "translate-x-full"
-        }`}
-        style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
+        data-shown={shown}
+        className="so-panel so-panel-float absolute inset-y-0 right-0 flex w-full max-w-[460px] flex-col overflow-hidden bg-white shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] sm:inset-y-3 sm:right-3 sm:rounded-[22px] sm:border sm:border-line/50"
       >
         {/* ── The head: what, when, and the way out. ── */}
         <div className="shrink-0 border-b border-line/60 px-5 pb-4 pt-5">

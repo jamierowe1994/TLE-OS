@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import PropertyPhoto from "@/components/PropertyPhoto";
 
 /**
  * The property's photographs, full size, over the page.
@@ -10,6 +9,38 @@ import PropertyPhoto from "@/components/PropertyPhoto";
  * from there. Arrow keys step, Escape closes, the strip at the bottom jumps.
  * Sits above the drawers (z-150) and closes on the backdrop.
  */
+/**
+ * The smallest picture REX keeps of a photo, for the 64x48 strip (2 Oct
+ * 2026). The strip loaded the 800x600 of every photo - thirty of them at
+ * ~160 KB to draw thumbnails the size of a stamp. REX keeps a 200x150 beside
+ * each 800x600 (~7 KB; checked on the CDN the same day - 100x75 does not
+ * exist), named the same with the size swapped. Anything not in that shape
+ * is left as it is, and a thumbnail that will not load falls back to the
+ * photo itself.
+ */
+const STRIP_SIZE = "200x150";
+function stripThumb(url: string): string {
+  return /\.rexsoftware\.com\//.test(url) ? url.replace(/_800x600\.(jpe?g|png|webp)$/i, `_${STRIP_SIZE}.$1`) : url;
+}
+
+function StripPhoto({ src }: { src: string }) {
+  const [url, setUrl] = useState(() => stripThumb(src));
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt=""
+      aria-hidden
+      loading="lazy"
+      decoding="async"
+      width={200}
+      height={150}
+      onError={() => url !== src && setUrl(src)}
+      className="h-full w-full object-cover"
+    />
+  );
+}
+
 export default function PhotoLightbox({
   photos, start = 0, onClose, name = "photo",
 }: {
@@ -105,7 +136,7 @@ export default function PhotoLightbox({
               aria-current={i === at}
               className={`h-12 w-16 shrink-0 overflow-hidden rounded-lg border-2 transition-opacity ${i === at ? "border-white" : "border-transparent opacity-60 hover:opacity-100"}`}
             >
-              <PropertyPhoto src={p} className="h-full w-full" />
+              <StripPhoto src={p} />
             </button>
           ))}
         </div>

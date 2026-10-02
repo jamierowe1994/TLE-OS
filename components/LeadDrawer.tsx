@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSlideOver } from "@/lib/use-slide-over";
 import { registerOpen } from "@/lib/open-record";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -642,12 +643,13 @@ export default function LeadDrawer(props: LeadDrawerProps) {
 
 function LeadDrawerBody({
   lead,
-  onClose,
+  onClose: closeNow,
   onStep,
   saves,
 }: LeadDrawerProps & { saves: SaveScope }) {
   const router = useRouter();
-  const [shown, setShown] = useState(false);
+  /* Every way out of the drawer plays it out first (lib/use-slide-over). */
+  const { shown, close: onClose } = useSlideOver(Boolean(lead), closeNow, lead?.id);
   const [tab, setTab] = useState<TabKey | null>(null);
 
   // Editable state, seeded per lead — the wireframe should feel like software,
@@ -1367,20 +1369,6 @@ function LeadDrawerBody({
       settle({ ok: false, problem: "That didn't save - the connection dropped." });
     }
   }
-
-  // Mount, then flip to shown on the next frame — a transform that starts and
-  // ends in the same paint doesn't animate.
-  useEffect(() => {
-    if (!lead) {
-      setShown(false);
-      return;
-    }
-    /* Two frames, not one: the first commit and the flip can land in the
-       same paint, and then the sheet pops instead of sliding. */
-    let id2 = 0;
-    const id = requestAnimationFrame(() => { id2 = requestAnimationFrame(() => setShown(true)); });
-    return () => { cancelAnimationFrame(id); cancelAnimationFrame(id2); };
-  }, [lead]);
 
   // Escape closes; arrows step. A record you can only leave with the mouse is
   // a record nobody works through quickly.
@@ -2578,23 +2566,20 @@ function LeadDrawerBody({
   }
 
   return (
-    <div className="fixed inset-0 z-[120]" data-steve="lead.drawer">
+    <div className="so-root fixed inset-0 z-[120]" data-shown={shown} data-steve="lead.drawer">
       {/* The scrim — clicking anywhere on it closes, as asked. */}
       <button
         aria-label="Close"
         onClick={onClose}
-        className={`absolute inset-0 cursor-default bg-ink/35 transition-opacity duration-300 ${
-          shown ? "opacity-100" : "opacity-0"
-        }`}
+        data-shown={shown}
+        className="so-scrim absolute inset-0 cursor-default bg-ink/35"
       />
 
       <aside
-        className={`absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden rounded-l-2xl bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-[transform,width] duration-[420ms] ${
+        data-shown={shown}
+        className={`so-panel absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden rounded-l-2xl bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] ${
           wide ? "lg:w-[calc(100%-9rem)]" : "lg:w-[calc(100%-17rem)]"
-        } ${
-          shown ? "translate-x-0" : "translate-x-full"
         }`}
-        style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
       >
         {/* ── Sheet chrome ── */}
         <div className="flex shrink-0 items-center justify-between gap-3 px-6 pt-5">

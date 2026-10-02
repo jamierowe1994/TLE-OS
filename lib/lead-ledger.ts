@@ -90,6 +90,17 @@ export async function salesLeadIds(): Promise<Set<string>> {
 }
 
 /**
+ * The same question asked only of the ids the board is about to draw (2 Oct
+ * 2026). salesLeadIds runs the regex over the whole ledger, thousands of rows,
+ * on every board open; this is a primary-key lookup over five hundred.
+ */
+export async function salesAmong(ids: string[]): Promise<Set<string>> {
+  if (!hasDb() || !ids.length) return new Set();
+  const rows = await q<{ id: string }>(`SELECT id FROM os_leads WHERE id = ANY($1::text[]) AND NOT ${NOT_SALES}`, [ids]);
+  return new Set(rows.map((r) => r.id));
+}
+
+/**
  * Read the whole enquiry for new valuation requests, at the scan - not when
  * somebody first opens one. Only the full message says "Enquiry type: sales"
  * (19 Sep 2026: Sunny Brar and Cheryl M Jennings sat on the board as landlord

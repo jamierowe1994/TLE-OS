@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
+import { hasDb } from "@/lib/db";
 import { TEST_REFUSAL, testDetails, testLandlord, testListingViewings, testPortals, testPublication } from "@/lib/test-listing-answers";
 import { isTestId } from "@/lib/test-overlay";
 import { whoIs } from "@/lib/admin";
@@ -33,9 +34,27 @@ export async function GET(req: NextRequest) {
 
   try {
     const all = await fetchViewingsFor(id, property);
-    await recordViewings(all).catch(() => null);
-    const leadIds = await leadIdsByContact([...new Set(all.flatMap((v) => v.contacts.map((c) => c.id)))]);
-    const withLeads: Viewing[] = all.map((v) => ({ ...v, contacts: v.contacts.map((c) => ({ ...c, leadId: leadIds.get(c.id) ?? null })) }));
+    const contactIds = [...new Set(all.flatMap((v) => v.contacts.map((c) => c.id)))];
+    let leadIds = await leadIdsByContact(contactIds);
+    /* Kept AFTER the reply when every viewer already has a lead (2 Oct
+       2026): the write is an upsert plus a statement per viewing, and the
+       drawer waited for all of it on every open. A viewer the ledger does not
+       hold yet is made a lead BY that write, so then it is waited for as
+       before - a link to a lead that does not exist yet is a dead click. */
+    const newViewers = all.some((v) => v.contacts.some((c) => !leadIds.has(c.id)));
+    let written = false;
+    if (hasDb() && all.length) {
+      if (newViewers) {
+        written = await recordViewings(all).then(() => true).catch(() => false);
+        /* Read back, as before: the ids the write actually made. */
+        if (written) leadIds = await leadIdsByContact(contactIds);
+      }
+      else after(() => recordViewings(all).catch(() => null));
+    }
+    const withLeads: Viewing[] = all.map((v) => ({
+      ...v,
+      contacts: v.contacts.map((c) => ({ ...c, leadId: leadIds.get(c.id) ?? null })),
+    }));
     const now = Date.now();
     const upcoming = withLeads.filter((v) => new Date(v.startsAt).getTime() >= now).sort((a, b) => a.startsAt.localeCompare(b.startsAt));
     const past = withLeads.filter((v) => new Date(v.startsAt).getTime() < now);

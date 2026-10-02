@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useSlideOver } from "@/lib/use-slide-over";
 import AddressField, { type ResolvedAddress } from "@/components/AddressField";
 import { DoneTick, PressButton } from "@/components/Bits";
 import ContactMatches from "@/components/ContactMatches";
@@ -120,7 +121,7 @@ function Section({
 
 export default function NewLeadPanel({
   open,
-  onClose,
+  onClose: closeNow,
   onCreated,
   initial,
   initialKind,
@@ -135,7 +136,8 @@ export default function NewLeadPanel({
   /** Skip the tenant-or-landlord fork when the caller already knows. */
   initialKind?: "tenant" | "landlord";
 }) {
-  const [shown, setShown] = useState(false);
+  /* Every way out plays the panel out first (lib/use-slide-over). */
+  const { shown, close: onClose } = useSlideOver(open, closeNow);
   const [d, setD] = useState<Draft>(EMPTY);
   const [geo, setGeo] = useState<ResolvedAddress | null>(null);
   const [saved, setSaved] = useState(false);
@@ -189,10 +191,7 @@ export default function NewLeadPanel({
   const marketRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open) {
-      setShown(false);
-      return;
-    }
+    if (!open) return;
     setD({ ...EMPTY, ...(initial ?? {}) });
     setGeo(null);
     setSaved(false);
@@ -208,8 +207,6 @@ export default function NewLeadPanel({
     setDossier(null);
     setDossierBusy(false);
     setBeds(0); setBaths(0);
-    const id = requestAnimationFrame(() => setShown(true));
-    return () => cancelAnimationFrame(id);
   }, [open]);
 
   useEffect(() => {
@@ -466,13 +463,12 @@ export default function NewLeadPanel({
   const label = "mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-muted";
 
   return (
-    <div className="fixed inset-0 z-[130]">
+    <div className="so-root fixed inset-0 z-[130]" data-shown={shown}>
       <button
         aria-label="Close"
         onClick={onClose}
-        className={`absolute inset-0 cursor-default bg-ink/35 transition-opacity duration-300 ${
-          shown ? "opacity-100" : "opacity-0"
-        }`}
+        data-shown={shown}
+        className="so-scrim absolute inset-0 cursor-default bg-ink/35"
       />
 
       {/* Possible duplicates, in the gutter the drawer leaves. */}
@@ -490,10 +486,8 @@ export default function NewLeadPanel({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        className={`absolute inset-y-0 right-0 flex overflow-hidden rounded-l-2xl w-full flex-col bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[420ms] lg:w-[76%] xl:w-[68%] ${
-          shown ? "translate-x-0" : "translate-x-full"
-        }`}
-        style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
+        data-shown={shown}
+        className="so-panel absolute inset-y-0 right-0 flex overflow-hidden rounded-l-2xl w-full flex-col bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] lg:w-[76%] xl:w-[68%]"
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line/70 px-6 py-5">
           <div>

@@ -60,43 +60,56 @@ const stateOf = (a: Access | null, viewingId: string): { state: AccessState; thr
 /** Every viewing in the next `days`, soonest first, with its access state. */
 export async function accessBoard(days = 14): Promise<AccessRow[]> {
   if (!hasDb()) return [];
-  const rows = await q<ViewRow>(
-    `SELECT id, listing_id, property_id, starts_at, agent, contacts, title, payload
-       FROM os_viewings
-      WHERE kind = 'viewing' AND NOT cancelled AND listing_id IS NOT NULL
-        AND starts_at BETWEEN NOW() AND NOW() + ($1 || ' days')::interval
-      ORDER BY starts_at`,
-    [String(days)]
-  ).catch(() => []);
+  /* The viewings and the test listings are asked for together, and each
+     test listing's record and viewings together (2 Oct 2026) - this walked
+     them one after another, two queries per test listing, in series. */
+  const [rows, testListings] = await Promise.all([
+    q<ViewRow>(
+      `SELECT id, listing_id, property_id, starts_at, agent, contacts, title, payload
+         FROM os_viewings
+        WHERE kind = 'viewing' AND NOT cancelled AND listing_id IS NOT NULL
+          AND starts_at BETWEEN NOW() AND NOW() + ($1 || ' days')::interval
+        ORDER BY starts_at`,
+      [String(days)]
+    ).catch(() => []),
+    /* The OS's own bookings on test listings, so a test file reads like a real
+       one here too (lib/test-overlay). */
+    q<{ id: string }>(
+      `SELECT DISTINCT payload->>'listingId' AS id FROM os_test_records WHERE kind = 'listing'`
+    ).catch(() => []),
+  ]);
 
-  /* The OS's own bookings on test listings, so a test file reads like a real
-     one here too (lib/test-overlay). */
-  const test: AccessRow[] = [];
-  const testListings = await q<{ id: string }>(
-    `SELECT DISTINCT payload->>'listingId' AS id FROM os_test_records WHERE kind = 'listing'`
-  ).catch(() => []);
-  for (const t of testListings) {
-    const listingId = Number(t.id);
-    if (!isTestId(listingId)) continue;
-    const l = await testListing(listingId).catch(() => null);
-    if (!l) continue;
-    for (const v of await testViewingsForListing(listingId).catch(() => [])) {
-      const at = new Date(v.startsAt).getTime();
-      if (at < Date.now() || at > Date.now() + days * 86400000) continue;
-      test.push({
-        viewingId: `os-${v.appointmentId}`,
-        startsAt: v.startsAt,
-        listingId: String(listingId),
-        address: `${l.name}, ${l.locality}`.trim(),
-        who: "A test applicant",
-        agent: v.withName,
-        state: "none",
-        through: null,
-        askedAt: null,
-        test: true,
-      });
-    }
-  }
+  const perListing = await Promise.all(
+    testListings
+      .map((t) => Number(t.id))
+      .filter((listingId) => isTestId(listingId))
+      .map(async (listingId): Promise<AccessRow[]> => {
+        const [l, viewings] = await Promise.all([
+          testListing(listingId).catch(() => null),
+          testViewingsForListing(listingId).catch(() => []),
+        ]);
+        if (!l) return [];
+        const found: AccessRow[] = [];
+        for (const v of viewings) {
+          const at = new Date(v.startsAt).getTime();
+          if (at < Date.now() || at > Date.now() + days * 86400000) continue;
+          found.push({
+            viewingId: `os-${v.appointmentId}`,
+            startsAt: v.startsAt,
+            listingId: String(listingId),
+            address: `${l.name}, ${l.locality}`.trim(),
+            who: "A test applicant",
+            agent: v.withName,
+            state: "none",
+            through: null,
+            askedAt: null,
+            test: true,
+          });
+        }
+        return found;
+      })
+  );
+  const test: AccessRow[] = perListing.flat();
 
   /* The property's arrangement first (lib/access-key), the listing's own for
      a home REX has no property for - and for anything recorded before the

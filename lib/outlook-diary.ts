@@ -1,4 +1,5 @@
 import "server-only";
+import { RULES } from "@/lib/staleness";
 import { createHash } from "node:crypto";
 import type { Appt } from "@/lib/diary";
 import { kindOf } from "@/lib/rex-diary";
@@ -47,10 +48,35 @@ const GRAPH = "https://graph.microsoft.com/v1.0";
 /** The same window as the REX diary, near enough: two weeks back, three months on. */
 const DAYS_BACK = 14;
 const DAYS_FORWARD = 90;
-const PAGE = 250;
+/* 500 a page (was 250): Graph's pages come one after another, each waiting on
+   the link in the last, so fewer and larger pages is the only way to make a
+   long calendar quicker. Well inside Graph's ceiling for calendarView. */
+const PAGE = 500;
 const MAX_PAGES = 12;
-/** Held this long per person, so the diary's polling does not ask Microsoft every time. */
+/** Fresh this long per person: inside it, Microsoft is not asked at all. */
 const HOLD_MS = 2 * 60 * 1000;
+/**
+ * Served this long while a newer read runs behind it (2 Oct 2026).
+ *
+ * The diary screen polls every five minutes and the hold above is two, so
+ * nearly every diary request was a cold Graph read - a token check and one or
+ * more calendar pages, one after another - and every response waited for it.
+ * That was most of the diary's 2.4 s median. Now the last good read is
+ * answered at once and the next one is fetched behind it, the same manners as
+ * the REX book in lib/diary-cache.
+ */
+/* Never past the diary's own keep in lib/staleness - five minutes - and the
+   answer says `ageing` so the screen reads again a few seconds later and is
+   corrected by the read this one started. */
+const KEEP_MS = RULES.diary.keepMs;
+/**
+ * The longest a diary waits for Outlook when there is nothing held to show.
+ * Past this the diary goes out without it, said so in `reason`, and the read
+ * carries on and is held for the next look.
+ */
+const FIRST_READ_WAIT_MS = 2500;
+/** A failed read is held this long, so a Microsoft outage is not asked again on every request. */
+const FAILED_HOLD_MS = 60 * 1000;
 
 export type OutlookState = "connected" | "not_connected" | "failed";
 
@@ -59,6 +85,8 @@ export interface OutlookRead {
   appts: Appt[];
   /** Why not, in words for the screen. */
   reason?: string;
+  /** Answered from a held read while a newer one runs behind it. */
+  ageing?: boolean;
 }
 
 interface GraphEvent {
@@ -74,8 +102,28 @@ interface GraphEvent {
   location?: { displayName?: string | null } | null;
 }
 
-const held = new Map<string, { at: number; read: OutlookRead }>();
-const reading = new Map<string, Promise<OutlookRead>>();
+/* On globalThis: lib/outlook-calendar calls forgetOutlookDiary from the
+   booking routes, which carry their own copy of this module. A Map per copy
+   meant the diary route's never heard that anything had been booked. */
+interface OutlookHold {
+  /** The last GOOD read per person (connected or not connected). */
+  held: Map<string, { at: number; read: OutlookRead }>;
+  /** The last failure per person, so it is not retried on every request. */
+  failed: Map<string, { at: number; read: OutlookRead }>;
+  /** When a person's held read stopped being trusted - they booked something then. */
+  forgotten: Map<string, number>;
+  reading: Map<string, { p: Promise<OutlookRead>; startedAt: number }>;
+}
+declare global {
+  // eslint-disable-next-line no-var
+  var __outlookDiary: OutlookHold | undefined;
+}
+const hold: OutlookHold = (globalThis.__outlookDiary ??= {
+  held: new Map(),
+  failed: new Map(),
+  forgotten: new Map(),
+  reading: new Map(),
+});
 
 /** Graph's dateTime with Prefer UTC comes back without a zone: it IS UTC. */
 function utc(s: string | undefined): Date | null {
@@ -175,26 +223,89 @@ async function readNow(user: { id: string; name: string; email: string }): Promi
   return { state: "connected", appts: events.map((e) => toAppt(e, who)).filter((a): a is Appt => a !== null) };
 }
 
-/**
- * This person's Outlook, as diary entries. Held briefly per person; a failed
- * read is not held, so the next look tries again.
- */
-export async function outlookDiaryFor(user: { id: string; name: string; email: string }): Promise<OutlookRead> {
-  const h = held.get(user.id);
-  if (h && Date.now() - h.at < HOLD_MS) return h.read;
-  const going = reading.get(user.id);
-  if (going) return going;
+/** Read now, once at a time per person; the result is held as it lands. */
+function readShared(user: { id: string; name: string; email: string }): Promise<OutlookRead> {
+  const going = hold.reading.get(user.id);
+  if (going) return going.p;
+  const startedAt = Date.now();
   const p = readNow(user)
+    .catch((): OutlookRead => ({ state: "failed", appts: [], reason: "Your Outlook calendar couldn't be read just now." }))
     .then((read) => {
-      if (read.state !== "failed") held.set(user.id, { at: Date.now(), read });
+      /* A read that began before their last booking cannot clear it: it may
+         not have the booking in it. */
+      const forgotAt = hold.forgotten.get(user.id) ?? 0;
+      if (read.state === "failed") {
+        hold.failed.set(user.id, { at: Date.now(), read });
+      } else {
+        /* Never over a newer read that landed first. */
+        if ((hold.held.get(user.id)?.at ?? 0) <= startedAt) hold.held.set(user.id, { at: startedAt, read });
+        hold.failed.delete(user.id);
+        if (startedAt > forgotAt) hold.forgotten.delete(user.id);
+      }
       return read;
     })
-    .finally(() => reading.delete(user.id));
-  reading.set(user.id, p);
+    .finally(() => {
+      if (hold.reading.get(user.id)?.p === p) hold.reading.delete(user.id);
+    });
+  hold.reading.set(user.id, { p, startedAt });
   return p;
 }
 
-/** Forget what is held for this person - after they book something, say. */
+/**
+ * This person's Outlook, as diary entries.
+ *
+ *   fresh (under two minutes)      answered from the hold, Microsoft not asked
+ *   older, up to ten minutes       answered from the hold, a new read started
+ *   nothing held, or just booked   a new read, waited on for 2.5 s at most
+ *
+ * A held read is only good on the day it was made: `day` on every entry is an
+ * offset from THAT day, the same rule as the REX book. And a read is never
+ * invented - past the wait, with nothing real to show, the answer is "failed"
+ * with the reason, which the booker already says out loud.
+ */
+export async function outlookDiaryFor(user: { id: string; name: string; email: string }): Promise<OutlookRead> {
+  const now = Date.now();
+  const h = hold.held.get(user.id);
+  const usable = h && londonDayOffset(h.at) === 0 && now - h.at < KEEP_MS ? h : null;
+  const forgotten = hold.forgotten.has(user.id);
+  if (usable && !forgotten && now - usable.at < HOLD_MS) return usable.read;
+
+  /* Failed a moment ago: answer with what is held, or say so again, rather
+     than queue another read behind a Microsoft that is not answering. (A
+     booking since clears this - see forgetOutlookDiary.) */
+  const f = hold.failed.get(user.id);
+  if (f && now - f.at < FAILED_HOLD_MS) return usable?.read ?? f.read;
+
+  /* Not awaited when there is something to show: this is a long-running
+     `next start` server, so the read finishes behind the response and is held
+     for the next look (readShared catches its own failure). */
+  const next = readShared(user);
+  /* Stale but real, and nothing booked since: answer with it, the new read
+     lands for the next look. */
+  if (usable && !forgotten) return { ...usable.read, ageing: true };
+
+  /* Nothing to show, or they have just booked something and the held copy
+     would hide it: wait for the new read, but not for ever. */
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<null>((done) => { timer = setTimeout(() => done(null), FIRST_READ_WAIT_MS); });
+  const read = await Promise.race([next, late]).finally(() => clearTimeout(timer));
+  if (read) return read;
+  if (usable) return usable.read;
+  return {
+    state: "failed",
+    appts: [],
+    reason: "Outlook is slow to answer, so your Outlook entries aren't shown yet - they will be on the next look.",
+  };
+}
+
+/**
+ * The held read is out of date - they have just booked something. Kept, not
+ * dropped: the next diary waits briefly for a new read, and only if Outlook is
+ * slow does it fall back to this one rather than to nothing.
+ */
 export function forgetOutlookDiary(userId: string): void {
-  held.delete(userId);
+  hold.forgotten.set(userId, Date.now());
+  hold.failed.delete(userId);
+  /* A read already running may have missed the booking: the next look starts its own. */
+  hold.reading.delete(userId);
 }

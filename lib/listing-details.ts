@@ -1,6 +1,7 @@
 import "server-only";
-import { rexCall } from "@/lib/rex";
+import { rexCall, type RexResponse } from "@/lib/rex";
 import { readMarketingFacts, type FactSource } from "@/lib/listing-marketing-store";
+import { RULES } from "@/lib/staleness";
 
 /**
  * ONE LISTING, AS THE PORTALS WILL SEE IT - read live from REX, and written
@@ -141,8 +142,85 @@ function messages(v: unknown): string[] {
   return [];
 }
 
-export async function readListingDetails(id: number): Promise<ListingDetails> {
-  const res = await rexCall("Listings", "read", { id });
+/**
+ * ONE LISTING'S REX READS, KEPT FOR TWO MINUTES (2 Oct 2026).
+ *
+ * Opening a listing asked REX the same things several times over: the
+ * Marketing tab and the drawer both read the details (Listings/read plus the
+ * property and two blocker checks), the publish panel asked for the portal
+ * blockers again, and the landlord card read Listings/read a third time. None
+ * of it was kept, so opening the same listing twice in a minute paid for all
+ * of it twice, at REX's pace.
+ *
+ * Now each read is kept per listing for the "listing" window in
+ * lib/staleness (two minutes - the rent and availability get said out loud
+ * to a tenant), and a read already on its way is shared rather than asked
+ * again. Only a real answer is kept; a refusal or a throw is forgotten the
+ * moment it lands, so an error is never served from here.
+ *
+ * DISPLAY ONLY. A decision never reads a cache (lib/staleness): publishing,
+ * the photo limit and the ownership gate all call readListingDetails without
+ * { cached: true }, which reads REX fresh - and refreshes what is kept, so
+ * the next screen to open sees what the write just did. forgetListing() is
+ * called after every write the OS makes to a listing.
+ *
+ * On globalThis so every route module and every dev reload share one copy.
+ */
+interface HeldRead {
+  at: number;
+  p: Promise<RexResponse>;
+}
+declare global {
+  // eslint-disable-next-line no-var
+  var __osListingReads: Map<string, HeldRead> | undefined;
+}
+const listingReads: Map<string, HeldRead> = (globalThis.__osListingReads ??= new Map());
+const LISTING_READ_MS = RULES.listing.freshMs;
+
+export function listingRead(
+  listingId: number | string,
+  service: string,
+  method: string,
+  body: Record<string, unknown>,
+  opts: { fresh?: boolean } = {}
+): Promise<RexResponse> {
+  const key = `${listingId}|${service}/${method}|${JSON.stringify(body)}`;
+  const now = Date.now();
+  const held = listingReads.get(key);
+  if (!opts.fresh && held && now - held.at < LISTING_READ_MS) return held.p;
+  /* Tidy as we go: nothing older than the window is worth holding. */
+  if (listingReads.size > 400) for (const [k, v] of listingReads) if (now - v.at >= LISTING_READ_MS) listingReads.delete(k);
+  const entry: HeldRead = { at: now, p: rexCall(service, method, body) };
+  listingReads.set(key, entry);
+  const drop = () => {
+    if (listingReads.get(key) === entry) listingReads.delete(key);
+  };
+  entry.p.then((r) => (r.ok ? undefined : drop()), drop);
+  return entry.p;
+}
+
+/** Throw away everything kept for this listing - after the OS writes to it. */
+export function forgetListing(listingId: number | string): void {
+  const prefix = `${listingId}|`;
+  for (const k of listingReads.keys()) if (k.startsWith(prefix)) listingReads.delete(k);
+}
+
+/**
+ * The listing, live. `cached: true` lets a screen that only SHOWS it take a
+ * read from the last two minutes (see listingRead); everything else reads
+ * fresh.
+ */
+export async function readListingDetails(id: number, opts: { cached?: boolean } = {}): Promise<ListingDetails> {
+  const fresh = !opts.cached;
+  /* The two blocker checks only need the listing id, so they start alongside
+     Listings/read instead of waiting for it - one REX round trip fewer. */
+  const pubErrP = listingRead(id, "ListingPublication", "getErrorsPreventingPublication", { listing_id: id }, { fresh });
+  const upErrP = listingRead(id, "ListingPortalUploads", "getErrorsPreventingUpload", { listing_id: id }, { fresh });
+  const heldP = readMarketingFacts(String(id)).catch(() => ({}) as Awaited<ReturnType<typeof readMarketingFacts>>);
+  /* Not left dangling if Listings/read throws below. */
+  pubErrP.catch(() => null);
+  upErrP.catch(() => null);
+  const res = await listingRead(id, "Listings", "read", { id }, { fresh });
   if (!res.ok || !res.result) throw new Error(res.error ?? "The listings system would not read that listing.");
   const l = res.result as Obj;
   const related = (l.related ?? {}) as Obj;
@@ -150,10 +228,10 @@ export async function readListingDetails(id: number): Promise<ListingDetails> {
   const propertyId = embedded.id != null ? String(embedded.id) : l.property_id != null ? String(l.property_id) : null;
 
   const [propRes, pubErr, upErr, held] = await Promise.all([
-    propertyId ? rexCall("Properties", "read", { id: Number(propertyId) }) : Promise.resolve(null),
-    rexCall("ListingPublication", "getErrorsPreventingPublication", { listing_id: id }),
-    rexCall("ListingPortalUploads", "getErrorsPreventingUpload", { listing_id: id }),
-    readMarketingFacts(String(id)).catch(() => ({}) as Awaited<ReturnType<typeof readMarketingFacts>>),
+    propertyId ? listingRead(id, "Properties", "read", { id: Number(propertyId) }, { fresh }) : Promise.resolve(null),
+    pubErrP,
+    upErrP,
+    heldP,
   ]);
   const p = ((propRes?.ok ? propRes.result : null) ?? embedded) as Obj;
 

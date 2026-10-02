@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { dropJson, readJson } from "@/lib/page-cache";
 import DoodleIcon from "@/components/DoodleIcon";
 import { Pill } from "@/components/Wire";
 
@@ -61,10 +62,14 @@ export default function AddedHere({ refreshKey }: { refreshKey?: number }) {
   const [flash, setFlash] = useState<string | null>(null);
   const [all, setAll] = useState(false);
 
-  const load = useCallback(() => {
-    fetch("/api/contacts", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("no"))))
-      .then((j: { contacts: Contact[]; rexBlocked: { detail: string } | null }) => {
+  /* The first read shares the Leads board's own read of the same list
+     (lib/page-cache) rather than asking twice; every read after a change
+     asks afresh. */
+  const load = useCallback((fresh = true) => {
+    if (fresh) dropJson("/api/contacts");
+    readJson<{ contacts: Contact[]; rexBlocked: { detail: string } | null }>("/api/contacts", (j) => Array.isArray(j?.contacts))
+      .then((j) => {
+        if (!Array.isArray(j?.contacts)) throw new Error("no");
         /* Only the ones that did NOT sync. The rest are in the table below,
            opening like any other file — see the note at the top of this file
            for why that was not always true. */
@@ -74,7 +79,7 @@ export default function AddedHere({ refreshKey }: { refreshKey?: number }) {
       .catch(() => setRows([]));
   }, []);
 
-  useEffect(load, [load, refreshKey]);
+  useEffect(() => load(Boolean(refreshKey)), [load, refreshKey]);
 
   async function push(id: string) {
     setBusyId(id);

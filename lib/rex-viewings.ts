@@ -126,24 +126,57 @@ async function siblingListingIds(propertyId: string): Promise<string[]> {
   return rexRows(res.result).map((r) => String((r as { id?: string | number }).id ?? "")).filter(Boolean);
 }
 
-/** The diary for a listing and, through its property, its sister listings. */
+/**
+ * Every event matching one search, up to 400. The first page goes alone; if
+ * it is full, the other three are asked for together rather than one after
+ * another. A refused page ends the read with what it has, as before.
+ */
+async function searchEvents(criteria: unknown[]): Promise<RexEvent[]> {
+  const page = async (offset: number): Promise<RexEvent[] | null> => {
+    const res = await rexCall("CalendarEvents", "search", { limit: 100, offset, order_by: { starts_at: "desc" }, criteria });
+    return res.ok ? (rexRows(res.result) as RexEvent[]) : null;
+  };
+  const first = await page(0);
+  if (!first) return [];
+  if (first.length < 100) return first;
+  const rest = await Promise.all([100, 200, 300].map((o) => page(o)));
+  const out = [...first];
+  for (const rows of rest) {
+    if (!rows) break;
+    out.push(...rows);
+    if (rows.length < 100) break;
+  }
+  return out;
+}
+
+/**
+ * The diary for a listing and, through its property, its sister listings.
+ *
+ * ALL AT ONCE (2 Oct 2026). This was three REX reads end to end - the
+ * sibling lookup, then the listing search page by page, then the property
+ * search page by page - and the drawer's Viewings tab waited for the sum.
+ * The listing's own diary and the property's diary need nothing from the
+ * sibling lookup, so they start straight away beside it; only the sisters'
+ * diaries wait for it, and only when there are sisters. Same events, same
+ * de-duplication, same order.
+ */
 export async function fetchViewingsFor(listingId: string, propertyId: string | null): Promise<Viewing[]> {
   if (!rexConfigured()) return [];
-  const ids = new Set<string>([listingId]);
-  if (propertyId) for (const id of await siblingListingIds(propertyId).catch(() => [])) ids.add(id);
+  const siblings = propertyId
+    ? siblingListingIds(propertyId)
+        .catch((): string[] => [])
+        .then((ids) => [...new Set(ids)].filter((id) => id !== listingId))
+    : Promise.resolve([] as string[]);
+  const batches = await Promise.all([
+    searchEvents([{ name: "records.listing_id", type: "in", value: [listingId] }]),
+    siblings.then((ids) => (ids.length ? searchEvents([{ name: "records.listing_id", type: "in", value: ids }]) : [])),
+    propertyId ? searchEvents([{ name: "records.property_id", type: "=", value: propertyId }]) : Promise.resolve([] as RexEvent[]),
+  ]);
   const seen = new Map<string, Viewing>();
-  const searches: unknown[][] = [[{ name: "records.listing_id", type: "in", value: [...ids] }]];
-  if (propertyId) searches.push([{ name: "records.property_id", type: "=", value: propertyId }]);
-  for (const criteria of searches) {
-    for (let offset = 0; offset < 400; offset += 100) {
-      const res = await rexCall("CalendarEvents", "search", { limit: 100, offset, order_by: { starts_at: "desc" }, criteria });
-      if (!res.ok) break;
-      const rows = rexRows(res.result) as RexEvent[];
-      for (const e of rows) {
-        const v = toViewing(e);
-        if (v && !seen.has(v.id)) seen.set(v.id, v);
-      }
-      if (rows.length < 100) break;
+  for (const rows of batches) {
+    for (const e of rows) {
+      const v = toViewing(e);
+      if (v && !seen.has(v.id)) seen.set(v.id, v);
     }
   }
   return [...seen.values()].sort((a, b) => b.startsAt.localeCompare(a.startsAt));

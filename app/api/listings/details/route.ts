@@ -4,7 +4,7 @@ import { TEST_REFUSAL, testDetails, testLandlord, testListingViewings, testPorta
 import { isTestId } from "@/lib/test-overlay";
 import { whoIs } from "@/lib/admin";
 import { record } from "@/lib/audit";
-import { MAX_HIGHLIGHTS, planListingWrite, readListingDetails, type ListingEdit } from "@/lib/listing-details";
+import { MAX_HIGHLIGHTS, forgetListing, planListingWrite, readListingDetails, type ListingEdit } from "@/lib/listing-details";
 import { gateListingWrite, listingIsTheirs } from "@/lib/listing-gate";
 import { invalidateListingBook } from "@/lib/listings-cache";
 import { saveMarketingFacts, type MarketingFacts } from "@/lib/listing-marketing-store";
@@ -51,7 +51,9 @@ export async function GET(req: NextRequest) {
   const id = listingId(req.nextUrl.searchParams.get("id"));
   if (!id) return NextResponse.json({ ok: false, error: "A numeric listing id is required." }, { status: 400 });
   try {
-    const details = await readListingDetails(id);
+    /* Display only, so a read from the last two minutes will do - the drawer
+       and the Marketing tab both ask on open (lib/listing-details). */
+    const details = await readListingDetails(id, { cached: true });
     return NextResponse.json(
       { ok: true, details, locks: { listing: rexWritesLocked("Listings", "update"), rooms: rexWritesLocked("Properties", "update"), media: rexWritesLocked("Upload", "uploadFileFromUrl") || rexWritesLocked("Listings", "update") } },
       { headers: { "cache-control": "private, no-store" } }
@@ -187,6 +189,7 @@ export async function PATCH(req: NextRequest) {
       }
     }
     await invalidateListingBook();
+    forgetListing(id);
     await record({
       kind: "listing_edited",
       actorId: actor.id,

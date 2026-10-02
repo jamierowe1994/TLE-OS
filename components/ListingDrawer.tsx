@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSlideOver } from "@/lib/use-slide-over";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import PhotoLightbox from "@/components/PhotoLightbox";
@@ -194,7 +195,7 @@ export default function ListingDrawer(props: Omit<Parameters<typeof ListingDrawe
 
 function ListingDrawerBody({
   listing,
-  onClose,
+  onClose: closeNow,
   onStep,
   onArchive,
   archiveBusy,
@@ -215,7 +216,8 @@ function ListingDrawerBody({
    *  file's "Write the description" (Howard, 1 Oct 2026). */
   initialTab?: string | null;
 }) {
-  const [shown, setShown] = useState(false);
+  /* Every way out plays the drawer out first (lib/use-slide-over). */
+  const { shown, close: onClose } = useSlideOver(Boolean(listing), closeNow, listing?.id);
   const [tab, setTab] = useState<TabKey>("home");
   const [emailing, setEmailing] = useState(false);
   /* Asked once, read by the header pill and by the Documents tab. */
@@ -432,7 +434,10 @@ function ListingDrawerBody({
     const id = String(listing.id);
     setEnquiries(null);
     setLiveApps(null);
-    fetch("/api/leads", { cache: "no-store" })
+    /* This listing's own enquiries and applications, filtered on the server
+       (2 Oct 2026) - these used to fetch the whole Leads board and 300
+       applications to keep a handful. Same fields back. */
+    fetch(`/api/listings/${encodeURIComponent(id)}/enquiries`, { cache: "no-store" })
       .then((r) => r.json())
       .then((j: { ok?: boolean; leads?: { id: string; name: string; source: string; received: string; receivedAt?: string; email: string; phone: string; enquiryMessage?: string; listingId?: number | string }[] }) => {
         if (gone) return;
@@ -449,7 +454,7 @@ function ListingDrawerBody({
         setViewings({ upcoming: j.upcoming ?? [], past: j.past ?? [] });
       })
       .catch(() => { if (!gone) setViewings({ upcoming: [], past: [] }); });
-    fetch("/api/applications?limit=300", { cache: "no-store" })
+    fetch(`/api/listings/${encodeURIComponent(id)}/applications`, { cache: "no-store" })
       .then((r) => r.json())
       .then((j: { ok?: boolean; applications?: { id: string; statusLabel?: string; status?: string; listingId?: string | number; applicants?: { name?: string }[]; offerAmount?: number | null; dateReceived?: number | null }[] }) => {
         if (gone) return;
@@ -691,12 +696,6 @@ function ListingDrawerBody({
   }, [listing]);
 
   useEffect(() => {
-    if (!listing) { setShown(false); return; }
-    const id = requestAnimationFrame(() => setShown(true));
-    return () => cancelAnimationFrame(id);
-  }, [listing]);
-
-  useEffect(() => {
     if (!listing) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -852,20 +851,17 @@ function ListingDrawerBody({
       : { label: "Draft", tone: "accent" as const };
 
   return (
-    <div className="fixed inset-0 z-[120]" data-steve="listing.drawer">
+    <div className="so-root fixed inset-0 z-[120]" data-shown={shown} data-steve="listing.drawer">
       <button
         aria-label="Close"
         onClick={onClose}
-        className={`absolute inset-0 cursor-default bg-ink/35 transition-opacity duration-300 ${
-          shown ? "opacity-100" : "opacity-0"
-        }`}
+        data-shown={shown}
+        className="so-scrim absolute inset-0 cursor-default bg-ink/35"
       />
 
       <aside
-        className={`absolute inset-y-0 right-0 flex overflow-hidden rounded-l-lg w-full flex-col bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[420ms] lg:w-[calc(100%-17rem)] ${
-          shown ? "translate-x-0" : "translate-x-full"
-        }`}
-        style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
+        data-shown={shown}
+        className="so-panel absolute inset-y-0 right-0 flex overflow-hidden rounded-l-lg w-full flex-col bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] lg:w-[calc(100%-17rem)]"
       >
         {/* The whole record scrolls, tabs included (James, 11 Sep): the row
             of buttons is only there at the top, not pinned over the page. The

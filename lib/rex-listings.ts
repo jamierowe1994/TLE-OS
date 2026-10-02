@@ -171,7 +171,7 @@ export interface RexListing extends Record<string, unknown> {
   epc_rating?: string | null;
   lettings_service_type?: { text?: string } | string | null;
   property?: (RexAddress & { id?: string | number }) | null;
-  listing_primary_image?: { url?: string } | null;
+  listing_primary_image?: { url?: string; thumbs?: Record<string, { url?: string }> } | null;
   related?: {
     listing_images?: {
       url?: string;
@@ -197,17 +197,46 @@ function https(url: string | undefined | null): string | null {
  * full set at full size would pull tens of megabytes to fill a panel a few
  * hundred pixels wide. The primary image is forced to the front in case REX
  * ever disagrees with its own priority ordering.
+ *
+ * Matched on the ORIGINAL url (2 Oct 2026). The primary comes back as an
+ * original and the rows as 800x600 thumbs, so "is the primary already in the
+ * list?" never matched and the first photo appeared twice - once full size.
  */
 function photos(l: RexListing): string[] {
   const rows = [...(l.related?.listing_images ?? [])].sort(
     (a, b) => (a.priority ?? 999) - (b.priority ?? 999)
   );
+  const primaryUrl = https(l.listing_primary_image?.url);
+  const at = primaryUrl ? rows.findIndex((r) => https(r.url) === primaryUrl) : -1;
+  if (at > 0) rows.unshift(...rows.splice(at, 1));
   const urls = rows
     .map((r) => https(r.thumbs?.["800x600"]?.url ?? r.url))
     .filter((u): u is string => Boolean(u));
-  const primary = https(l.listing_primary_image?.url);
-  if (primary && !urls.includes(primary)) urls.unshift(primary);
-  return urls;
+  if (primaryUrl && at < 0) {
+    const primary = https(l.listing_primary_image?.thumbs?.["800x600"]?.url) ?? primaryUrl;
+    if (!urls.includes(primary)) urls.unshift(primary);
+  }
+  return [...new Set(urls)];
+}
+
+/**
+ * The card's picture: the primary photo's 800x600 thumbnail, not the
+ * original (2 Oct 2026). The board draws ~270 of these, and the original is
+ * the heaviest file REX has. 800x600 rather than REX's 400x300, because the
+ * same url goes into Mail the database at up to 600px wide and a 400px
+ * picture stretched to that is visibly soft. The original only when REX has
+ * no thumbnail at all.
+ */
+function cardImage(l: RexListing): string | null {
+  const primaryUrl = https(l.listing_primary_image?.url);
+  const rows = l.related?.listing_images ?? [];
+  const row = primaryUrl ? rows.find((r) => https(r.url) === primaryUrl) : rows[0];
+  return (
+    https(l.listing_primary_image?.thumbs?.["800x600"]?.url) ??
+    https(row?.thumbs?.["800x600"]?.url) ??
+    primaryUrl ??
+    https(rows[0]?.url)
+  );
 }
 
 function addressOf(p: RexAddress | null | undefined): { name: string; locality: string } {
@@ -309,7 +338,7 @@ export function toListing(l: RexListing): OsListing {
     stateDate: l.state_date ?? null,
     lastUpdated: ago(num(l.system_modtime)),
     imageCount: l.related?.listing_images?.length ?? (l.listing_primary_image ? 1 : 0),
-    image: https(l.listing_primary_image?.url ?? l.related?.listing_images?.[0]?.url),
+    image: cardImage(l),
     images: photos(l),
     serviceType: service,
     tenant: null, // tenancy_id is populated on 0% of the book — nothing to join to
@@ -328,8 +357,7 @@ export function toListing(l: RexListing): OsListing {
  * go missing - which is how the book fills up with the sales business's stock.
  */
 async function searchListings(state: string, rexUserId?: string | null): Promise<RexListing[]> {
-  const rows: RexListing[] = [];
-  for (let page = 0; page < MAX_PAGES; page++) {
+  const page = async (n: number) => {
     const res = await rexCall("Listings", "search", {
       criteria: [
         { name: "system_listing_state", value: state },
@@ -341,7 +369,7 @@ async function searchListings(state: string, rexUserId?: string | null): Promise
         ...(rexUserId ? [{ name: "listing_agent_1_id", value: rexUserId }] : []),
       ],
       limit: PAGE_SIZE,
-      offset: page * PAGE_SIZE,
+      offset: n * PAGE_SIZE,
       order_by: { system_modtime: "desc" },
       extra_options: { extra_fields: ["related.listing_images", "related.listing_adverts"] },
     });
@@ -351,11 +379,49 @@ async function searchListings(state: string, rexUserId?: string | null): Promise
        the tab counts, Find a home and Mail the database. Thrown, the cache
        keeps the last true book and the screen gets an honest error. */
     if (!res.ok) throw new RexError("Listings/search", res);
-    const batch = rexRows(res.result) as RexListing[];
-    rows.push(...batch);
-    if (batch.length < PAGE_SIZE) break;
+    const total = Number((res.result as { total?: number | string } | null)?.total ?? NaN);
+    return { batch: rexRows(res.result) as RexListing[], total };
+  };
+
+  /* PAGES IN PARALLEL (2 Oct 2026). The walk asked for page two only once
+     page one was back, so a cold book (~294 rows, three pages) waited for
+     three REX round trips end to end. Page one goes first because it says
+     how many there are; the rest are asked for together, at most four
+     abreast. With no total from REX there is no knowing how far to go, so it
+     walks one at a time as it always did. A refusal on any page still throws
+     the whole read away (see above). */
+  const first = await page(0);
+  const rows: RexListing[] = [...first.batch];
+  let next = 1;
+  let full = first.batch.length === PAGE_SIZE;
+  if (full && Number.isFinite(first.total)) {
+    const pages = Math.min(MAX_PAGES, Math.ceil(first.total / PAGE_SIZE));
+    const ABREAST = 4;
+    while (full && next < pages) {
+      const wave = await Promise.all(
+        Array.from({ length: Math.min(ABREAST, pages - next) }, (_, k) => page(next + k))
+      );
+      next += wave.length;
+      for (const w of wave) rows.push(...w.batch);
+      full = wave[wave.length - 1].batch.length === PAGE_SIZE;
+    }
   }
-  return rows;
+  /* No total, or the book grew past it while being read: carry on walking. */
+  for (; full && next < MAX_PAGES; next++) {
+    const w = await page(next);
+    rows.push(...w.batch);
+    full = w.batch.length === PAGE_SIZE;
+  }
+  /* A listing edited mid-read moves up the modtime order and can land on two
+     pages. Once each. */
+  const seen = new Set<string>();
+  return rows.filter((r) => {
+    const id = String(r.id ?? "");
+    if (!id) return true;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
 }
 
 /**

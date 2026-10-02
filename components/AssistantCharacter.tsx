@@ -519,18 +519,34 @@ export default function AssistantCharacter({
       mood === "thinking" || mood === "asleep" || mood === "texting" ||
       mood === "sad" || mood === "bored" || mood === "yawn"
     ) return;
-    const onMove = (e: PointerEvent) => {
+    /* Once a frame at most, and only when the eyes would visibly move (2 Oct
+       2026). He sits on every screen, and re-drawing the whole character on
+       every mouse report - many times a frame - made the rest of the app
+       stutter whenever the mouse moved. */
+    let frame = 0;
+    let last: PointerEvent | null = null;
+    const step = () => {
+      frame = 0;
       const el = svg.current;
-      if (!el) return;
+      if (!el || !last) return;
       const b = el.getBoundingClientRect();
-      const dx = e.clientX - (b.left + b.width / 2);
-      const dy = e.clientY - (b.top + b.height / 2);
+      const dx = last.clientX - (b.left + b.width / 2);
+      const dy = last.clientY - (b.top + b.height / 2);
       const d = Math.hypot(dx, dy) || 1;
       const reach = Math.min(d / 220, 1) * 2.6;
-      setLook({ x: (dx / d) * reach, y: (dy / d) * reach * 0.75 });
+      const x = Math.round((dx / d) * reach * 10) / 10;
+      const y = Math.round((dy / d) * reach * 0.75 * 10) / 10;
+      setLook((cur) => (cur.x === x && cur.y === y ? cur : { x, y }));
+    };
+    const onMove = (e: PointerEvent) => {
+      last = e;
+      if (!frame) frame = requestAnimationFrame(step);
     };
     window.addEventListener("pointermove", onMove, { passive: true });
-    return () => window.removeEventListener("pointermove", onMove);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      if (frame) cancelAnimationFrame(frame);
+    };
   }, [track, still, mood]);
 
   const eyeShift =

@@ -1,4 +1,5 @@
 import "server-only";
+import { appraisalsChanged } from "@/lib/appraisal-store";
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
 import { findUserByEmail, type OsUser } from "@/lib/users";
@@ -219,6 +220,9 @@ async function unwind(refs: Refs, ownerEmail: string, since: Date | string, kitI
   if (docusealConfigured()) for (const a of appraisals) await archiveTermsFor(a).catch(() => 0);
   await run(`DELETE FROM os_presentations WHERE ref = ANY($1)`, [refIds]);
   await run(`DELETE FROM os_market_appraisals WHERE id = ANY($1) OR lead_id = ANY($2)`, [appraisals, leadIds]);
+  /* The appraisals list holds a short copy (lib/appraisal-store); a removed
+     test file must leave it now, not in two minutes. */
+  appraisalsChanged();
   /* Passports: the file's own, and any the flow made for this person - a
      viewing confirmation makes one by email, with no contact id on it. The
      email is the tester's own, so only passports made since the file was. */

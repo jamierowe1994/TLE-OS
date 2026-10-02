@@ -87,6 +87,83 @@ async function accountPeople(): Promise<Map<string, string>> {
   return out;
 }
 
+/**
+ * EVERY CALENDAR ON THE REX ACCOUNT, held (2 Oct 2026).
+ *
+ * The cold diary asked REX for the full calendar list - 134 calendars, two
+ * pages one after the other - before it could ask for a single event, and the
+ * list barely changes: a calendar appears when somebody joins. So it is held
+ * for a day (in memory and in os_cache, so a deploy does not start cold), and
+ * after an hour a new list is fetched behind the one in use, which keeps a new
+ * starter's calendar at most one diary read late rather than a day.
+ *
+ * Held raw - id and owner address - and filtered by whoever has an account
+ * NOW, on every read, so a new OS account is not held out for a day either.
+ */
+const CALENDARS_KEY = "diary:calendars:v1";
+const CALENDARS_KEEP_MS = 24 * 60 * 60 * 1000;
+const CALENDARS_RECHECK_MS = 60 * 60 * 1000;
+interface RexCalendar { id: string; owner: string }
+interface CalendarHold { at: number; rows: RexCalendar[] | null; reading: Promise<RexCalendar[]> | null }
+declare global {
+  // eslint-disable-next-line no-var
+  var __rexCalendars: CalendarHold | undefined;
+}
+const calendarHold: CalendarHold = (globalThis.__rexCalendars ??= { at: 0, rows: null, reading: null });
+
+function readCalendarsFromRex(): Promise<RexCalendar[]> {
+  if (calendarHold.reading) return calendarHold.reading;
+  calendarHold.reading = (async () => {
+    const out: RexCalendar[] = [];
+    for (let page = 0; page < 3; page++) {
+      const res = await rexCall("Calendars", "search", { limit: PAGE_SIZE, offset: page * PAGE_SIZE });
+      /* Thrown, not skipped: with no calendar ids the search below runs across
+         all six businesses and stops, silently, a couple of days out. */
+      if (!res.ok) throw new RexError("Calendars/search", res);
+      const rows = rexRows(res.result) as { id?: string; owner_user?: { email_address?: string } }[];
+      for (const c of rows) {
+        if (c.id) out.push({ id: String(c.id), owner: (c.owner_user?.email_address ?? "").toLowerCase() });
+      }
+      if (rows.length < PAGE_SIZE) break;
+    }
+    /* An empty list is never held: it would turn every later read into the
+       unfiltered six-business scan. */
+    if (out.length) {
+      calendarHold.rows = out;
+      calendarHold.at = Date.now();
+      if (hasDb()) {
+        void q(
+          `INSERT INTO os_cache (key, payload, computed_at) VALUES ($1, $2, NOW())
+           ON CONFLICT (key) DO UPDATE SET payload = EXCLUDED.payload, computed_at = NOW()`,
+          [CALENDARS_KEY, JSON.stringify({ rows: out })]
+        ).catch(() => null);
+      }
+    }
+    return out;
+  })().finally(() => { calendarHold.reading = null; });
+  return calendarHold.reading;
+}
+
+async function rexCalendars(): Promise<RexCalendar[]> {
+  if (!calendarHold.rows && hasDb()) {
+    const stored = await q<{ payload: { rows?: RexCalendar[] }; computed_at: Date }>(
+      "SELECT payload, computed_at FROM os_cache WHERE key = $1",
+      [CALENDARS_KEY]
+    ).catch(() => []);
+    const rows = stored[0]?.payload?.rows;
+    if (Array.isArray(rows) && rows.length && !calendarHold.rows) {
+      calendarHold.rows = rows;
+      calendarHold.at = new Date(stored[0].computed_at).getTime();
+    }
+  }
+  const age = Date.now() - calendarHold.at;
+  if (calendarHold.rows && age < CALENDARS_KEEP_MS) {
+    if (age > CALENDARS_RECHECK_MS) void readCalendarsFromRex().catch(() => null);
+    return calendarHold.rows;
+  }
+  return readCalendarsFromRex();
+}
+
 /** Ours if the calendar belongs to a lettings mailbox, or to somebody with an account. */
 export function isOurs(e: RexEvent, accounts?: Map<string, string>): boolean {
   const email = ownerOf(e).email;
@@ -259,26 +336,16 @@ export async function fetchDiary(): Promise<DiaryBook> {
   }
 
   const iso = (d: Date) => d.toISOString().slice(0, 19).replace("T", " ");
-  const accounts = await accountPeople();
+  /* Side by side: who has an account, and which calendars REX holds (usually
+     from the day's held list - see rexCalendars). */
+  const [accounts, calendars] = await Promise.all([accountPeople(), rexCalendars()]);
 
   // Step one: which calendars are ours? 134 exist across the six businesses
   // sharing this REX account; 22 belong to lettings mailboxes. Asking REX for
   // only those turns a 6,459-event scan into ~533.
-  const calIds: string[] = [];
-  for (let page = 0; page < 3; page++) {
-    const res = await rexCall("Calendars", "search", { limit: PAGE_SIZE, offset: page * PAGE_SIZE });
-    /* Thrown, not skipped: with no calendar ids the search below runs across
-       all six businesses and stops, silently, a couple of days out. */
-    if (!res.ok) throw new RexError("Calendars/search", res);
-    const rows = rexRows(res.result) as { id?: string; owner_user?: { email_address?: string } }[];
-    for (const c of rows) {
-      const owner = (c.owner_user?.email_address ?? "").toLowerCase();
-      if ((owner.endsWith(`@${OUR_DOMAIN}`) || accounts.has(owner)) && c.id) {
-        calIds.push(c.id);
-      }
-    }
-    if (rows.length < PAGE_SIZE) break;
-  }
+  const calIds = calendars
+    .filter((c) => c.owner.endsWith(`@${OUR_DOMAIN}`) || accounts.has(c.owner))
+    .map((c) => c.id);
 
   /* PAGES SIDE BY SIDE (19 Sep 2026). This walked the book one page at a
      time, each waiting for the last - ten or so REX calls end to end, which is

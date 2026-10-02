@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSlideOver } from "@/lib/use-slide-over";
 import DoodleIcon from "@/components/DoodleIcon";
 import Doodles from "@/components/Doodles";
 import PropertyPhoto from "@/components/PropertyPhoto";
@@ -282,7 +283,7 @@ export default function ApplicationDrawer({
   app,
   checklist,
   aside,
-  onClose,
+  onClose: closeNow,
 }: {
   app: AppRecord;
   stages?: Stage[];
@@ -291,7 +292,9 @@ export default function ApplicationDrawer({
   aside?: React.ReactNode;
   onClose: () => void;
 }) {
-  const [shown, setShown] = useState(false);
+  /* Mounted only while open; every way out plays it out first
+     (lib/use-slide-over). */
+  const { shown, close: onClose } = useSlideOver(true, closeNow, app.id);
   const [tab, setTab] = useState<TabKey>("home");
   /* The Auto save chip by the close button (23 Sep 2026): the comment, the
      property file and whatever the stage adds below report to it. */
@@ -358,13 +361,9 @@ export default function ApplicationDrawer({
   }, [app.id]);
 
   useEffect(() => {
-    const t = requestAnimationFrame(() => setShown(true));
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
-    return () => {
-      cancelAnimationFrame(t);
-      window.removeEventListener("keydown", onKey);
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
   const action = NEXT_ACTION[app.stageKey];
@@ -428,21 +427,18 @@ export default function ApplicationDrawer({
 
   return (
     <SaveScopeProvider scope={saves}>
-    <div className="fixed inset-0 z-[130]" data-steve="application.drawer">
+    <div className="so-root fixed inset-0 z-[130]" data-shown={shown} data-steve="application.drawer">
       <button
         aria-label="Close"
         onClick={onClose}
-        className={`absolute inset-0 cursor-default bg-ink/35 transition-opacity duration-300 ${
-          shown ? "opacity-100" : "opacity-0"
-        }`}
+        data-shown={shown}
+        className="so-scrim absolute inset-0 cursor-default bg-ink/35"
       />
       <aside
         role="dialog"
         aria-label={`Application: ${app.tenant}`}
-        className={`absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden rounded-l-lg bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[420ms] lg:w-[calc(100%-17rem)] ${
-          shown ? "translate-x-0" : "translate-x-full"
-        }`}
-        style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
+        data-shown={shown}
+        className="so-panel absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden rounded-l-lg bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] lg:w-[calc(100%-17rem)]"
       >
         {/* The whole record scrolls, tabs included, as the listing does. */}
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-10 pt-5">

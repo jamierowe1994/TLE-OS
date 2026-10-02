@@ -1,11 +1,11 @@
 import { londonDayOffset, londonHHMM } from "@/lib/london-time";
 import { FRESH_MS, STALE_MS, heldDiary, refreshDiaryBook } from "@/lib/diary-cache";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { fetchDiary, type DiaryBook } from "@/lib/rex-diary";
 import { hasDb, q } from "@/lib/db";
 import { rexConfigured } from "@/lib/rex";
 import type { Appt, ApptKind } from "@/lib/diary";
-import { scopeFor } from "@/lib/scope";
+import { scopeForWho } from "@/lib/scope";
 import { whoIs } from "@/lib/admin";
 import { osFeedbackFor } from "@/lib/viewing-feedback-store";
 import { outlookDiaryFor, type OutlookRead } from "@/lib/outlook-diary";
@@ -202,11 +202,24 @@ const minutesOf = (hhmm: string) => {
 };
 
 export async function GET(req: NextRequest) {
-  const scope = await scopeFor(req);
-  const { actor, subject, viewingAs } = await whoIs(req);
+  /* ONE look at who is asking (2 Oct 2026). scopeFor asked whoIs, and then this
+     asked it again: two reads of the person's row, headshot included, before
+     anything else could start. */
+  const who0 = await whoIs(req);
+  const { actor, subject, viewingAs } = who0;
   if (!actor) {
     return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   }
+  /* Their Outlook: asked for the moment we know whose it is, so it runs beside
+     every database read below rather than after them. Usually answered from
+     the hold straight away (lib/outlook-diary). */
+  const outlookP: Promise<OutlookRead | null> = viewingAs
+    ? Promise.resolve(null)
+    : outlookDiaryFor({ id: actor.id, name: actor.name || "", email: actor.email || "" }).catch(() => ({
+        state: "failed" as const,
+        appts: [],
+        reason: "Your Outlook calendar couldn't be read just now.",
+      }));
   /* An owner sees the business; everybody else sees their own mailbox. The
      picker on the Viewings screen is drawn from `everything`, so it simply
      does not appear for an agent.
@@ -230,18 +243,26 @@ export async function GET(req: NextRequest) {
      for the day that is reversed, and `everything` is always false. */
   const mineOnly = true;
   const person = viewingAs && subject ? subject : actor;
-  const rexLogin = hasDb()
-    ? await q<{ rex_email: string }>(`SELECT rex_email FROM os_rex_tokens WHERE user_id = $1`, [person.id]).catch(() => [])
-    : [];
+
+  /* Everything else this needs, side by side - none of it waits on the rest.
+     They used to run one after another, each a round trip to the database.
+
+     Ours are read OUTSIDE the cache, every time. The two-minute hold exists
+     for the slow REX pull; applying it to our own table would mean saving a
+     travel buffer and watching the diary insist it isn't there for another
+     minute and a half. */
+  const [scope, rexLogin, mine, found] = await Promise.all([
+    scopeForWho(req, who0),
+    hasDb()
+      ? q<{ rex_email: string }>(`SELECT rex_email FROM os_rex_tokens WHERE user_id = $1`, [person.id]).catch(() => [])
+      : Promise.resolve([] as { rex_email: string }[]),
+    ours(mineOnly ? person.id : null, person.id),
+    rexConfigured() ? heldDiary() : Promise.resolve(null),
+  ]);
   const who = mineOnly
     ? { email: (person.email ?? "").toLowerCase() || null, name: (scope.everything ? person.name : scope.label) || null, rexEmail: rexLogin[0]?.rex_email ?? null }
     : { email: null, name: null };
 
-  /* Ours are read OUTSIDE the cache, every time. The two-minute hold exists
-     for the slow REX pull; applying it to our own table would mean saving a
-     travel buffer and watching the diary insist it isn't there for another
-     minute and a half. */
-  const mine = await ours(mineOnly ? person.id : null, person.id);
   const self = {
     email: (person.email ?? "").toLowerCase() || null,
     name: person.name || null,
@@ -253,25 +274,18 @@ export async function GET(req: NextRequest) {
      login when there is one, because that is the address a calendar is
      actually filed under; otherwise the account's own. */
   const whose = { name: person.name || "", email: self.rexEmail ?? self.email ?? "" };
-  /* Their Outlook: asked for now, beside the REX book, and waited on as it is shaped. */
-  const outlookP: Promise<OutlookRead | null> = viewingAs
-    ? Promise.resolve(null)
-    : outlookDiaryFor({ id: actor.id, name: actor.name || "", email: actor.email || "" }).catch(() => ({
-        state: "failed" as const,
-        appts: [],
-        reason: "Your Outlook calendar couldn't be read just now.",
-      }));
   const outlookSaid = (o: OutlookRead | null) =>
-    o ? { state: o.state, ...(o.reason ? { reason: o.reason } : {}) } : { state: "not_yours" as const };
+    o ? { state: o.state, ...(o.reason ? { reason: o.reason } : {}), ...(o.ageing ? { ageing: true } : {}) } : { state: "not_yours" as const };
   /* An agent's book is already only theirs; marking it would say nothing. */
   const shaped = async (book: DiaryBook) => {
     const scoped = merged(forScope(book, who), mine);
-    const marked = await withOsFeedback(mineOnly ? scoped : own(scoped, self));
-    const outlook = await outlookP;
+    const [marked, outlook] = await Promise.all([withOsFeedback(mineOnly ? scoped : own(scoped, self)), outlookP]);
     /* Both calendars side by side: note whether their REX copies into their
-       Outlook, so a booking is not put there twice (lib/rex-outlook-sync). */
+       Outlook, so a booking is not put there twice (lib/rex-outlook-sync).
+       A database write the screen does not need - after the response. */
     if (outlook?.state === "connected") {
-      void noteRexOutlookSync(actor.id, mineOnly ? marked.appts : marked.appts.filter((a) => a.own), outlook.appts);
+      const theirs = mineOnly ? marked.appts : marked.appts.filter((a) => a.own);
+      after(() => noteRexOutlookSync(actor.id, theirs, outlook.appts).catch(() => undefined));
     }
     return { ...withOutlook(marked, outlook, mineOnly), whose, outlook: outlookSaid(outlook) };
   };
@@ -297,14 +311,15 @@ export async function GET(req: NextRequest) {
      carries `day` as an offset from THAT day, so yesterday's book puts
      yesterday under "Today". Across midnight, or when REX has been down since
      yesterday, it is dropped and the screen gets a read or an honest error. */
-  const found = await heldDiary();
   const held = found && londonDayOffset(found.at) === 0 ? found : null;
   const age = held ? Date.now() - held.at : Infinity;
   if (held && age < FRESH_MS) {
     return NextResponse.json({ ok: true, live: true, ...(await shaped(held.book)), everything: false, ageMs: age });
   }
   if (held && age < STALE_MS) {
-    void refreshDiaryBook();
+    /* After the response, and caught: a REX read that fails behind a held
+       book is the next request's problem, not an unhandled rejection. */
+    after(() => refreshDiaryBook().then(() => undefined, () => undefined));
     return NextResponse.json({ ok: true, live: true, ...(await shaped(held.book)), everything: false, ageMs: age, stale: true });
   }
   try {

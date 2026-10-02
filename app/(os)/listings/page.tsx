@@ -1,6 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BoardSkeleton } from "@/components/Skeleton";
+import dynamic from "next/dynamic";
+import { whenIdle } from "@/lib/when-idle";
+import { dropJson, peekJson, readJson } from "@/lib/page-cache";
 import { createPortal } from "react-dom";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
@@ -8,7 +12,9 @@ import PickOne from "@/components/PickOne";
 import Segmented from "@/components/Segmented";
 import StageTabs from "@/components/StageTabs";
 import CornerSwell from "@/components/CornerSwell";
-import ListingDrawer from "@/components/ListingDrawer";
+/* 2,400 lines: off the first load, fetched while the board sits idle. */
+const loadListingDrawer = () => import("@/components/ListingDrawer");
+const ListingDrawer = dynamic(loadListingDrawer, { ssr: false });
 import NewListingPanel from "@/components/listing/NewListingPanel";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { DIARY } from "@/lib/diary";
@@ -367,6 +373,7 @@ function FilterPanel({
 }
 
 export default function Listings() {
+  useEffect(() => whenIdle(() => { void loadListingDrawer(); }), []);
   /* Open BY ID, not by index. The book is re-read behind the page and its
      order changes as REX updates records, so an index taken at open time
      pointed at a different house a minute later (?open=228a Chapter Road
@@ -401,15 +408,24 @@ export default function Listings() {
     loading: boolean;
     failed?: boolean;
     reason?: string;
-  }>({ listings: [], counts: NO_COUNTS, live: false, loading: true });
+  }>(() => {
+    /* The last good read paints at once (lib/page-cache); loadBook corrects it. */
+    const held = peekJson<{ listings: SampleListing[]; counts: Counts }>("/api/listings");
+    return held ? { listings: held.listings, counts: held.counts, live: true, loading: false } : { listings: [], counts: NO_COUNTS, live: false, loading: true };
+  });
 
   /** The book. Also called after a listing is added, so the new one is there
    *  to open - the board holds a cached read and would not have it yet. */
-  const loadBook = useCallback(async () => {
+  const loadBook = useCallback(async (fresh = true) => {
     try {
-      const j = await fetch("/api/listings", { cache: "no-store" }).then((r) => r.json());
+      /* After a save, ask afresh; on arrival, share the nav's prefetch. */
+      if (fresh) dropJson("/api/listings");
+      const j = await readJson<{ ok?: boolean; live?: boolean; demo?: boolean; unlinked?: boolean; listings?: SampleListing[]; counts?: Counts; reason?: string }>(
+        "/api/listings",
+        (r) => Boolean(r.ok && r.live && Array.isArray(r.listings))
+      );
       if (j.ok && j.live && Array.isArray(j.listings)) {
-        setBook({ listings: j.listings, counts: j.counts, live: true, loading: false });
+        setBook({ listings: j.listings, counts: j.counts ?? NO_COUNTS, live: true, loading: false });
         return true;
       }
       if (j.ok && j.demo) {
@@ -436,7 +452,7 @@ export default function Listings() {
     return false;
   }, []);
   useEffect(() => {
-    void loadBook();
+    void loadBook(false);
   }, [loadBook]);
 
   /* ── THE ARCHIVE, fetched on first open and not before ──────────────────
@@ -787,12 +803,7 @@ export default function Listings() {
         {stage === "archived" && archive.error && !archive.loading && (
           <p className="py-6 text-[12.5px] text-accent-dark">{archive.error}</p>
         )}
-        {book.loading && (
-          <p className="flex items-center gap-2.5 py-6 text-[12.5px] text-muted" role="status">
-            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-accent" aria-hidden />
-            Fetching your listings…
-          </p>
-        )}
+        {book.loading && <BoardSkeleton kind="cards" label="Fetching your listings…" count={6} />}
         {!book.loading && !book.live && book.listings.length === 0 && (
           <div className="py-8 text-center" role={book.failed ? "alert" : "status"}>
             <p className="text-[13px] font-semibold text-ink">{book.failed ? "Your listings didn't load" : "No listings to show yet"}</p>

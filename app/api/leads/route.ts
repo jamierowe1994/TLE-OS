@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { fetchLeadBook, type LeadBook } from "@/lib/rex-leads";
 import { leadScope } from "@/lib/scope";
-import { ledgerBoard, ledgerStats, readNewValuations, recordLeads, salesLeadIds } from "@/lib/lead-ledger";
+import { ledgerBoard, ledgerStats, readNewValuations, recordLeads, salesAmong } from "@/lib/lead-ledger";
 import { hiddenLeadIds } from "@/lib/hidden-leads";
 import { ago } from "@/lib/rex-leads";
 import { hasDb, q } from "@/lib/db";
@@ -44,8 +44,26 @@ interface Cached {
 /* Keyed by scope, not a single slot. One shared `memory` would hand the first
    agent's leads to the second — the exact bug this change exists to prevent,
    reintroduced one layer up. The listings route had the same trap. */
-const memory = new Map<string, Cached>();
-const refreshing = new Map<string, Promise<Cached>>();
+/* On globalThis (2 Oct 2026), like the Propoly token: dev HMR and a second
+   route module importing this file must see the same copy, not each their
+   own empty Map and their own walk through REX. */
+const G = globalThis as unknown as {
+  __leadsBoard?: {
+    memory: Map<string, Cached>;
+    refreshing: Map<string, Promise<Cached>>;
+    valuationsAt: number;
+    readingValuations: Promise<unknown> | null;
+    onFile: { n: number; at: number } | null;
+  };
+};
+const state = (G.__leadsBoard ??= {
+  memory: new Map(),
+  refreshing: new Map(),
+  valuationsAt: 0,
+  readingValuations: null,
+  onFile: null,
+});
+const { memory, refreshing } = state;
 
 async function readStored(key: string): Promise<Cached | null> {
   if (!hasDb()) return null;
@@ -109,18 +127,53 @@ function refresh(key: string, rexUserId: string | null): Promise<Cached> {
   return p;
 }
 
-/** One read at a time across everybody opening the board at once. */
-let readingValuations: Promise<unknown> | null = null;
-function valuationsReadOnOpen(): Promise<unknown> {
-  if (!hasDb()) return Promise.resolve();
-  if (!readingValuations) {
-    readingValuations = readNewValuations(3)
-      .catch(() => 0)
-      .finally(() => {
-        readingValuations = null;
-      });
-  }
-  return Promise.race([readingValuations, new Promise((r) => setTimeout(r, 4000))]);
+/**
+ * New valuation requests read in full, BEHIND the response (2 Oct 2026).
+ *
+ * This used to be awaited on every open, up to four seconds, one REX call
+ * per enquiry - a large share of the board's p90. It still runs on open
+ * (Howard, 1 Oct 2026: Danielle Jacques, "Enquiry type: sales", sat on the
+ * board as a landlord lead; the board must not depend on the scan alone,
+ * which had been silently failing for days), but after the answer has gone,
+ * at most once a minute per process, one run at a time. A sale read here is
+ * off the board on the next open, and the five-minute scan reads them too.
+ */
+function valuationsBehind(): void {
+  if (!hasDb() || state.readingValuations || Date.now() - state.valuationsAt < 60_000) return;
+  state.valuationsAt = Date.now();
+  const run = readNewValuations(3)
+    .catch(() => 0)
+    .finally(() => {
+      state.readingValuations = null;
+    });
+  state.readingValuations = run;
+  after(() => run);
+}
+
+/** Leads on file, counted at most once a minute: a COUNT(*) over the whole
+    ledger on every open, for a number in a footnote, was not worth it. */
+async function onFileCount(): Promise<number> {
+  if (state.onFile && Date.now() - state.onFile.at < 60_000) return state.onFile.n;
+  const n = (await ledgerStats().catch(() => null))?.onFile;
+  if (n == null) return state.onFile?.n ?? 0;
+  state.onFile = { n, at: Date.now() };
+  return n;
+}
+
+/**
+ * The board straight from the ledger, for a scope with no cached book yet.
+ * The ledger IS a real read - every lead the scans and the board have taken
+ * from REX, kept - and the five-minute scan keeps it current, so there is no
+ * reason to make somebody wait on five pages of REX for what is already on
+ * file. Null when the ledger holds nothing for them: only then do they wait.
+ */
+async function ledgerBook(rexUserId: string | null): Promise<LeadBook | null> {
+  const stored = (await ledgerBoard(rexUserId, 500).catch(() => [])).filter((l) => l && typeof l.id === "string" && l.id);
+  if (!stored.length) return null;
+  const leads = stored.map((l) => (l.receivedAt ? { ...l, received: ago(Math.floor(new Date(l.receivedAt).getTime() / 1000)) } : l));
+  /* No walk happened, so nothing was scanned or set aside: the page says
+     nothing rather than a made-up count. */
+  return { leads, scanned: 0, setAside: { sales: 0, unclear: 0, blank: 0 }, total: null, newestAt: leads[0]?.receivedAt ?? null };
 }
 
 export async function GET(req: NextRequest) {
@@ -134,8 +187,13 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  /* WHOSE LEADS. Resolved before anything is fetched or read from cache. */
-  const scope = await leadScope(req);
+  /* WHOSE LEADS. Resolved before anything is fetched or read from cache.
+     whoIs is asked alongside rather than after: the contacts below need the
+     actor, and leadScope does not hand it back (lib/scope is not ours). */
+  const [scope, { actor }] = await Promise.all([
+    leadScope(req),
+    whoIs(req).catch(() => ({ actor: null })),
+  ]);
   if (scope.unlinked) {
     return NextResponse.json({
       ok: true,
@@ -146,60 +204,68 @@ export async function GET(req: NextRequest) {
     });
   }
   const key = cacheKeyFor(scope.rexUserId);
-  /* Leads removed from the OS by hand never leave the server, cached copy or
-     not; the ids go with the answer so the page can hide its own records too. */
-  const hidden = await hiddenLeadIds().catch(() => new Set<string>());
-  /* New valuation requests read in full before the board is drawn, so a sale
-     is known as one on the first open and not only once somebody opens it
-     (Howard, 1 Oct 2026: Danielle Jacques, "Enquiry type: sales", sat on the
-     board as a landlord lead). The scan does this too, but the board must not
-     depend on it - the scan had been silently failing for days. A few at a
-     time, never more than four seconds; usually there are none and it is one
-     query. */
-  await valuationsReadOnOpen();
-  /* And every lead the ledger knows is a sale: the cached book is REX's own
-     list, whose snippets never say "sales" (lib/lead-ledger salesLeadIds). */
-  for (const id of await salesLeadIds().catch(() => new Set<string>())) hidden.add(id);
 
-  /* CONTACTS ADDED BY HAND. Merged here rather than inside the cache, so one
-     typed in ten seconds ago is on the board now instead of after the next
-     refresh - and so the REX book stays exactly what REX said. An owner sees
-     them all; anybody else sees the ones they typed. */
-  const { actor } = await whoIs(req).catch(() => ({ actor: null }));
-  const mine = await contactsAsLeads(scope.everything ? null : (actor?.email ?? null)).catch(() => []);
-  const out = <B extends { leads: { id: string }[] }>(b: B) => {
+  /* Everything else at once (2 Oct 2026) - these were nine awaits in a row.
+     Leads removed from the OS by hand never leave the server, cached copy or
+     not; contacts added by hand are merged here rather than inside the cache,
+     so one typed in ten seconds ago is on the board now. An owner sees them
+     all; anybody else sees the ones they typed. */
+  const [hidden, mine, held, onFile] = await Promise.all([
+    hiddenLeadIds().catch(() => new Set<string>()),
+    contactsAsLeads(scope.everything ? null : (actor?.email ?? null)).catch(() => []),
+    memory.get(key) ?? readStored(key),
+    onFileCount(),
+  ]);
+  valuationsBehind();
+
+  const out = async <B extends { leads: { id: string }[] }>(b: B) => {
     /* A contact pushed to REX can come back as a REX lead later. When it
        does, REX's row is the one with the enquiry on it, so ours steps
        aside rather than showing the same person twice. */
     const rexContacts = new Set(
       (b.leads as { contactId?: string }[]).map((l) => l.contactId).filter(Boolean) as string[]
     );
+    /* Every lead the ledger knows is a sale: the cached book is REX's own
+       list, whose snippets never say "sales" (lib/lead-ledger salesAmong).
+       Asked of these ids only, and kept off hiddenIds: the page only needs
+       the hand-removed ones (its search and contacts never carry a sale). */
+    const sales = await salesAmong(b.leads.map((l) => l.id)).catch(() => new Set<string>());
     const ours = mine.filter((l) => !l.contactId || !rexContacts.has(l.contactId));
-    const leads = [...ours, ...(b.leads as typeof ours)].filter((l) => l && l.id && !hidden.has(l.id));
+    const leads = [...ours, ...(b.leads as typeof ours)].filter((l) => l && l.id && !hidden.has(l.id) && !sales.has(l.id));
     return { ...b, leads, hiddenIds: [...hidden] };
   };
 
-  const held = memory.get(key) ?? (await readStored(key));
   const age = held ? Date.now() - held.at : Infinity;
-  /* How much the OS now holds of its own, whatever REX shows. */
-  const onFile = (await ledgerStats().catch(() => ({ onFile: 0 }))).onFile;
 
   if (held && age < FRESH_MS) {
-    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...out(held.book), onFile, ageMs: age });
+    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await out(held.book)), onFile, ageMs: age });
   }
+
+  /* ALWAYS AN ANSWER NOW (2 Oct 2026). Past two minutes the caller gets what
+     is on file and the walk through REX runs behind the response. Past half
+     an hour the cached book is swapped for the ledger, which the five-minute
+     scan keeps current; with no cached book at all, the ledger is the book.
+     Only somebody with nothing on file anywhere waits on REX. */
+  const behind = () =>
+    after(() =>
+      refresh(key, scope.rexUserId).catch(() => {
+        /* the next open tries again; this one already has its answer */
+      })
+    );
   if (held && age < STALE_MS) {
-    void refresh(key, scope.rexUserId); // behind the scenes; this caller gets the stale copy now
-    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...out(held.book), onFile, ageMs: age, stale: true });
+    behind();
+    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await out(held.book)), onFile, ageMs: age, stale: true });
+  }
+  const filed = held ? await fromLedger(held.book, scope.rexUserId) : await ledgerBook(scope.rexUserId);
+  if (filed) {
+    behind();
+    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await out(filed)), onFile, ageMs: held ? age : null, stale: true });
   }
 
   try {
     const fresh = await refresh(key, scope.rexUserId);
-    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...out(fresh.book), onFile: (await ledgerStats().catch(() => ({ onFile }))).onFile, ageMs: 0 });
+    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await out(fresh.book)), onFile, ageMs: 0 });
   } catch (e) {
-    // Something is better than nothing, however old.
-    if (held) {
-      return NextResponse.json({ ok: true, live: true, scope: scope.label, ...out(held.book), ageMs: age, stale: true });
-    }
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "Couldn't reach REX." },
       { status: 502 }

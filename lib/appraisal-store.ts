@@ -117,16 +117,45 @@ function rowTo(r: Row): MarketAppraisal {
   };
 }
 
+/**
+ * A counter every write here moves on (2 Oct 2026). lib/appraisal-stage holds
+ * the staged list for half a minute, and compares this to throw its copy away
+ * the moment anything is booked, valued, won, lost or sent - so whoever just
+ * pressed Save never reads their own change back stale. On globalThis so every
+ * route module sees the same count.
+ */
+declare global {
+  // eslint-disable-next-line no-var
+  var __osAppraisalsGen: { n: number } | undefined;
+}
+const generation = (globalThis.__osAppraisalsGen ??= { n: 0 });
+export const appraisalsGeneration = () => generation.n;
+export function appraisalsChanged(): void {
+  generation.n += 1;
+}
+
 /** Terms went out for signature just now. */
 export async function markTermsSent(id: string): Promise<void> {
   if (!hasDb()) return;
   await q(`UPDATE os_market_appraisals SET terms_sent_at = NOW(), updated_at = NOW() WHERE id = $1`, [id]).catch(() => null);
+  appraisalsChanged();
 }
 
 /** The stage as the record now reads. Only ever moves forward; won and lost are the agent's. */
 export async function persistStage(id: string, stage: MaStage): Promise<void> {
   if (!hasDb()) return;
   await q(`UPDATE os_market_appraisals SET stage = $2, updated_at = NOW() WHERE id = $1 AND stage NOT IN ('won','lost') AND stage <> $2`, [id, stage]).catch(() => null);
+}
+
+/** The same, for a whole list in one statement - the list read used to fire one UPDATE per row. */
+export async function persistStages(moves: { id: string; stage: MaStage }[]): Promise<void> {
+  if (!hasDb() || !moves.length) return;
+  await q(
+    `UPDATE os_market_appraisals m SET stage = v.stage, updated_at = NOW()
+       FROM unnest($1::text[], $2::text[]) AS v(id, stage)
+      WHERE m.id = v.id AND m.stage NOT IN ('won','lost') AND m.stage <> v.stage`,
+    [moves.map((m) => m.id), moves.map((m) => m.stage)]
+  ).catch(() => null);
 }
 
 async function readFile(): Promise<MarketAppraisal[]> {
@@ -208,27 +237,33 @@ async function withLiveAddress(rows: MarketAppraisal[]): Promise<MarketAppraisal
   const linked = rows.filter((r) => r.leadId && isOsLead(r.leadId));
   if (!linked.length && !fromLedger.size) return rows;
 
-  const { getContact } = await import("@/lib/contacts-store");
+  /* One query for every linked contact, not one per appraisal (2 Oct 2026):
+     sixty getContact calls were queuing for a pool of five connections on
+     every list read. Only the four fields this needs. */
   const live = new Map<
     string,
     { address: string; postcode: string; email: string; mobile: string }
   >();
-  await Promise.all(
-    [...new Set(linked.map((r) => r.leadId!))].map(async (leadId) => {
-      try {
-        const c = await getContact(osContactIdFrom(leadId));
-        if (c)
-          live.set(leadId, {
-            address: c.address ?? "",
-            postcode: c.postcode ?? "",
-            email: c.email ?? "",
-            mobile: c.mobile ?? "",
-          });
-      } catch {
-        /* One unreachable contact must not blank a whole list of appraisals. */
-      }
-    })
-  );
+  const linkedIds = [...new Set(linked.map((r) => r.leadId!))];
+  if (linkedIds.length && hasDb()) {
+    const found = await q<{ id: string; address: string | null; postcode: string | null; email: string | null; mobile: string | null }>(
+      `SELECT id, address, postcode, email, mobile FROM os_contacts WHERE id = ANY($1)`,
+      [linkedIds.map(osContactIdFrom)]
+    ).catch(() => []);
+    /* One unreachable contact table must not blank a whole list of appraisals:
+       on a failure every row keeps the copy it was booked with. */
+    const byContact = new Map(found.map((c) => [String(c.id), c]));
+    for (const leadId of linkedIds) {
+      const c = byContact.get(osContactIdFrom(leadId));
+      if (c)
+        live.set(leadId, {
+          address: c.address ?? "",
+          postcode: c.postcode ?? "",
+          email: c.email ?? "",
+          mobile: c.mobile ?? "",
+        });
+    }
+  }
 
   /* The rule itself is in lib/appraisal-address, pure and tested. */
   return rows.map((r) => {
@@ -286,6 +321,7 @@ export async function adoptLeadProperties(rows: MarketAppraisal[]): Promise<Mark
     ).catch(() => []);
     if (done.length) adopted.set(ma.id, pid);
   }
+  if (adopted.size) appraisalsChanged();
   return adopted.size ? rows.map((r) => (adopted.has(r.id) ? { ...r, rexPropertyId: adopted.get(r.id)! } : r)) : rows;
 }
 
@@ -335,6 +371,7 @@ export async function setOutcome(id: string, outcome: "won" | "lost" | null): Pr
   if (hasDb()) {
     await q(`UPDATE os_market_appraisals SET stage = $2, updated_at = NOW() WHERE id = $1`, [id, stage]);
   }
+  appraisalsChanged();
   return getAppraisal(id);
 }
 
@@ -424,6 +461,7 @@ export async function recordValuation(
         RETURNING ${COLS}`,
       vals
     );
+    appraisalsChanged();
     return rows[0] ? (await withLiveAddress([rowTo(rows[0])]))[0] : null;
   }
 
@@ -448,6 +486,7 @@ export async function recordValuation(
   };
   all[i] = next;
   await writeFile(all);
+  appraisalsChanged();
   return (await withLiveAddress([next]))[0];
 }
 
@@ -512,6 +551,7 @@ export async function createAppraisal(input: NewAppraisal): Promise<MarketApprai
         appraisal.appointmentAt,
       ]
     );
+    appraisalsChanged();
     return rowTo(rows[0]);
   }
 
@@ -528,9 +568,11 @@ export async function createAppraisal(input: NewAppraisal): Promise<MarketApprai
       appointmentAt: appraisal.appointmentAt,
     };
     await writeFile(rows);
+    appraisalsChanged();
     return rows[idx];
   }
   rows.push(appraisal);
   await writeFile(rows);
+  appraisalsChanged();
   return appraisal;
 }

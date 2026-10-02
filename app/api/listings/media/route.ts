@@ -3,7 +3,7 @@ import { TEST_REFUSAL, testDetails, testLandlord, testListingViewings, testPorta
 import { isTestId } from "@/lib/test-overlay";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { record } from "@/lib/audit";
-import { readListingDetails } from "@/lib/listing-details";
+import { forgetListing, readListingDetails } from "@/lib/listing-details";
 import { gateListingWrite, listingIsTheirs } from "@/lib/listing-gate";
 import { invalidateListingBook } from "@/lib/listings-cache";
 import { R2_BUCKET, withR2 } from "@/lib/r2";
@@ -75,6 +75,7 @@ export async function POST(req: NextRequest) {
     if (!res.ok) return NextResponse.json({ ok: false, error: "It did not go on the listing. Try again in a minute." }, { status: 502 });
 
     await invalidateListingBook();
+    forgetListing(id);
     await record({ kind: "listing_edited", actorId: actor.id, actorEmail: actor.email, detail: `${id}: ${kind} added from ${key}` });
     const details = await readListingDetails(id).catch(() => null);
     return NextResponse.json({ ok: true, id, kind, details });

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { unreadByAppraisal } from "@/lib/appraisal-messages";
 import { stopLeadCampaigns } from "@/lib/campaign-store";
-import { listAppraisals, createAppraisal, getAppraisal, recordValuation, setOutcome, adoptLeadProperties } from "@/lib/appraisal-store";
-import { withLiveStages } from "@/lib/appraisal-stage";
+import { createAppraisal, getAppraisal, recordValuation, setOutcome, adoptLeadProperties } from "@/lib/appraisal-store";
+import { stagedAppraisals, withLiveStages } from "@/lib/appraisal-stage";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { SERVICE_LEVELS, type ServiceLevel } from "@/lib/market-appraisal";
@@ -41,7 +41,11 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    const [rows, unread] = await Promise.all([listAppraisals().then(withLiveStages), unreadByAppraisal()]);
+    /* The staged list is held for 30 s and rebuilt behind the reader up to
+       two minutes (lib/appraisal-stage, stagedAppraisals); the unread counts
+       are one cheap query and stay live on every call. One record is
+       /api/appraisals/<id>, which the file page reads instead of this. */
+    const [rows, unread] = await Promise.all([stagedAppraisals(), unreadByAppraisal()]);
     /* New landlord messages, for the "new message" pill on the list and the file. */
     return NextResponse.json({ appraisals: rows.map((a: { id: string }) => ({ ...a, unreadMessages: unread.get(a.id) ?? 0 })) });
   } catch (e) {
@@ -230,7 +234,7 @@ export async function PATCH(req: NextRequest) {
     }
     const ma = await setOutcome(id, outcome);
     if (!ma) return NextResponse.json({ error: "No such appraisal." }, { status: 404 });
-    const [withStage] = await withLiveStages([ma]);
+    const [withStage] = await withLiveStages([ma], new Date(), { fresh: true });
     return NextResponse.json({ ok: true, appraisal: withStage });
   }
 

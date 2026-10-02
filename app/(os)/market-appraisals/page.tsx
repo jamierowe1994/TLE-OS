@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { BoardSkeleton } from "@/components/Skeleton";
+import { peekJson, readJson } from "@/lib/page-cache";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
@@ -101,15 +103,15 @@ export default function MarketAppraisals() {
   /* The appraisals actually booked through the OS. Null while we are still
      asking, so the screen can say "loading" rather than flashing "none yet" at
      somebody who has just booked one. */
-  const [live, setLive] = useState<MarketAppraisal[] | null>(null);
+  const [live, setLive] = useState<MarketAppraisal[] | null>(() => peekJson<{ appraisals?: MarketAppraisal[] }>("/api/appraisals")?.appraisals ?? null);
   /* Booking one from here, for an appraisal that never was a lead. */
   const [booking, setBooking] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     let gone = false;
-    fetch("/api/appraisals", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
+    /* The last good read paints at once (lib/page-cache); this corrects it. */
+    readJson<{ appraisals?: MarketAppraisal[]; error?: string }>("/api/appraisals", (j) => Array.isArray(j?.appraisals) && !j.error)
       .then((j) => {
         if (!gone) setLive(Array.isArray(j?.appraisals) ? j.appraisals : []);
       })
@@ -319,7 +321,7 @@ export default function MarketAppraisals() {
         </div>
 
         {live === null ? (
-          <p className="py-6 text-[12.5px] text-muted">Fetching the appraisals…</p>
+          <BoardSkeleton kind={view === "tiles" ? "cards" : "rows"} label="Fetching the appraisals…" count={view === "tiles" ? 6 : 5} />
         ) : rows.length === 0 ? (
           <p className="py-6 text-[12.5px] text-muted">
             Nothing at this stage{period === "any" ? "" : " in that date range"}.

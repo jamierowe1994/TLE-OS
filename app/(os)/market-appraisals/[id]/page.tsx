@@ -81,12 +81,13 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
 
   const reload = useCallback(() => {
     let gone = false;
-    fetch(`/api/appraisals`, { cache: "no-store" })
+    /* This one record, not the whole list (2 Oct 2026) - the list read paid
+       for the signals of every other file on every save. */
+    fetch(`/api/appraisals/${encodeURIComponent(id)}`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => {
+      .then((j: { appraisal?: MarketAppraisal | null } | null) => {
         if (gone) return;
-        const list: MarketAppraisal[] = Array.isArray(j?.appraisals) ? j.appraisals : [];
-        setBooked(list.find((m) => m.id === id) ?? null);
+        setBooked(j?.appraisal ?? null);
       })
       .catch(() => {
         if (!gone) setBooked(null);
@@ -97,13 +98,18 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
   }, [id]);
   useEffect(() => reload(), [reload]);
 
-  /* The decks, read once here for the quick links and the Next up box. */
-  const refId = ma ? (ma.leadId ?? ma.id) : null;
+  /* The decks, read once here for the quick links and the Next up box.
+     The lead and the ref come off the route id (the store keys an appraisal
+     booked from a lead "lead-<leadId>", lib/appraisal-store), so the decks
+     and the lead's facts start alongside the record instead of after it. */
+  const routeLeadId = id.startsWith("lead-") ? id.slice("lead-".length) : null;
+  const refId = ma ? (ma.leadId ?? ma.id) : (routeLeadId ?? id);
   /* The property type as the lead's property card holds it - "HMO" is one of
      its choices, and that is what decides the HMO documents (20 Sep 2026). */
   const [propertyType, setPropertyType] = useState<string | null>(null);
+  const factsLeadId = ma ? ma.leadId : routeLeadId;
   useEffect(() => {
-    const leadId = ma?.leadId;
+    const leadId = factsLeadId;
     if (!leadId) return;
     let live = true;
     fetch(`/api/leads/${encodeURIComponent(leadId)}/facts`, { cache: "no-store" })
@@ -113,7 +119,7 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
       })
       .catch(() => { /* the card still offers the full list */ });
     return () => { live = false; };
-  }, [ma?.leadId]);
+  }, [factsLeadId]);
   const [decks, setDecks] = useState<SentDeck[] | null | undefined>(undefined);
   const loadDecks = useCallback(() => {
     if (!refId) return;
@@ -127,10 +133,14 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
   /* The property file, counted for "At a glance". One light call so the
      hero can say "3 on file" without the whole panel. */
   const [file, setFile] = useState<{ held: number; outstanding: number } | null | undefined>(undefined);
+  /* Keyed on the two fields it reads, not the record: every save hands back
+     a new object, and this re-read the property file each time. */
+  const fileRexId = ma?.rexPropertyId ?? null;
+  const fileAddress = ma?.address ?? null;
   useEffect(() => {
-    if (!ma) return;
+    if (!fileRexId && !fileAddress) return;
     let live = true;
-    const key = ma.rexPropertyId ? `property=${encodeURIComponent(ma.rexPropertyId)}` : `address=${encodeURIComponent(ma.address)}`;
+    const key = fileRexId ? `property=${encodeURIComponent(fileRexId)}` : `address=${encodeURIComponent(fileAddress ?? "")}`;
     fetch(`/api/property-file?${key}`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((j: { ok?: boolean; rows?: FileRow[]; outstanding?: number } | null) => {
@@ -145,10 +155,11 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
     return () => {
       live = false;
     };
-  }, [ma]);
+  }, [fileRexId, fileAddress]);
 
   /* A save hands back the bare row; the ticks, the live stage and the
-     "why" line only come with the list read, so re-read after every save. */
+     "why" line only come with the staged read, so re-read this one record
+     after every save. */
   const saved = useCallback(
     (next: MarketAppraisal) => {
       setBooked((prev) => (prev ? { ...prev, ...next } : next));

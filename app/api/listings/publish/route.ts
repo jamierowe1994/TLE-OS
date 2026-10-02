@@ -6,7 +6,7 @@ import { accessFor } from "@/lib/area-access";
 import { AREA_DEFS, canAct, levelOf, lockedSentence } from "@/lib/area-map";
 import { record } from "@/lib/audit";
 import { invalidateListingBook } from "@/lib/listings-cache";
-import { readListingDetails } from "@/lib/listing-details";
+import { forgetListing, listingRead, readListingDetails } from "@/lib/listing-details";
 import { listingIsTheirs } from "@/lib/listing-gate";
 import { publishGaps } from "@/lib/listing-publish-check";
 import { isExpiredToken, rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
@@ -122,10 +122,14 @@ export async function GET(req: NextRequest) {
        listing REX will publish can still be refused by every portal feed
        for want of bedrooms, bathrooms or an available date (measured on 100
        rentals, 15 Sep 2026). */
+    /* Through the per-listing read cache (lib/listing-details): this panel
+       and the Marketing tab open together, and the portal check is the same
+       call the details read makes - now asked once and shared. Showing only;
+       the POST below reads REX fresh before it does anything. */
     const [status, issues, upload] = await Promise.all([
-      rexCall("ListingPublication", "getPublicationStatus", { listing_id: id }),
-      rexCall("ListingPublication", "getPublicationIssues", { listing_id: id }),
-      rexCall("ListingPortalUploads", "getErrorsPreventingUpload", { listing_id: id }),
+      listingRead(id, "ListingPublication", "getPublicationStatus", { listing_id: id }),
+      listingRead(id, "ListingPublication", "getPublicationIssues", { listing_id: id }),
+      listingRead(id, "ListingPortalUploads", "getErrorsPreventingUpload", { listing_id: id }),
     ]);
     if (!status.ok) {
       const plain = "The listings system did not say where the listing is. Try again in a minute.";
@@ -246,6 +250,7 @@ export async function POST(req: NextRequest) {
     const now = whereFrom(after.ok ? after.result : res.result);
 
     await invalidateListingBook();
+    forgetListing(id);
     await record({
       kind: "listing_publication",
       actorId: actor.id,

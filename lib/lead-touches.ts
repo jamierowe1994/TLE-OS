@@ -95,7 +95,17 @@ export async function spineFor(leadId: string): Promise<{ touches: LeadTouch[]; 
 export async function allSpines(): Promise<Record<string, Spine>> {
   if (!hasDb()) return {};
   const [rows, booked, viewings, followUps] = await Promise.all([
-    q<Row>(`select id, lead_id, kind, outcome, body, by_name, at from os_lead_touches order by at desc`),
+    /* Only what the fold reads (2 Oct 2026). The body of every call note and
+       email ever logged was coming back to be thrown away; the fold reads a
+       body only as the REASON on nurture and lost, so the rest come back
+       empty. Callers of this read the label, attempts, nurture, lost and
+       booked - never lastTouch's text (that is spineFor's job, one lead). */
+    q<Row>(
+      `select id, lead_id, kind, outcome,
+              case when kind in ('nurture', 'lost') then body else '' end as body,
+              by_name, at
+         from os_lead_touches order by at desc`
+    ),
     q<{ lead_id: string }>(`select distinct lead_id from os_market_appraisals where lead_id is not null`),
     /* A viewing booked from the lead (/api/viewings/book) is the tenant
        lead's job done (Howard, 1 Oct 2026: it goes under Completed). */
