@@ -3,6 +3,7 @@ import { requireCapability } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
 import { overview } from "@/lib/agent-compliance";
 import { isCheckKind, recordCheck, subjectExists, verifyQueue, worksToCheck } from "@/lib/compliance-desk";
+import { confirmRegister, readAccuracy, readOne, REGISTERS } from "@/lib/cert-register";
 
 /**
  * Michael's desk: what is waiting on him, and his tick.
@@ -13,7 +14,10 @@ import { isCheckKind, recordCheck, subjectExists, verifyQueue, worksToCheck } fr
  *        The PROPERTY figures are not here: they come from the compliance book
  *        (/api/compliance/tracker), which walks REX and must never hold up a
  *        list that is one query.
- * POST → { kind, id, state: "verified" | "queried", note? }.
+ * POST → { kind, id, state: "verified" | "queried", note?, registerNumber? }.
+ *        registerNumber is the engineer's number he checked on the register
+ *        (lib/cert-register): kept with his tick, and against what was read.
+ *        { action: "read", kind, id } reads the engineer off the certificate.
  *
  * Nothing here sends anything. He goes through the agent, never to a landlord.
  */
@@ -25,7 +29,7 @@ export async function GET(req: NextRequest) {
   if (!me) return NextResponse.json({ ok: false, error: "Not yours." }, { status: 403 });
   if (!hasDb()) return NextResponse.json({ ok: true, stored: false, reason: "No database on this environment.", verify: [], works: [], agents: null });
   try {
-    const [verify, works, o] = await Promise.all([verifyQueue(), worksToCheck(), overview()]);
+    const [verify, works, o, accuracy] = await Promise.all([verifyQueue(), worksToCheck(), overview(), readAccuracy().catch(() => null)]);
     /* Agents only: the office's own logins are on the grid but are not who
        "all of the agents are compliant" is about. */
     const agents = o.agents.filter((a) => a.role === "agent");
@@ -35,6 +39,8 @@ export async function GET(req: NextRequest) {
       firstName: (me.name || "").split(" ")[0] ?? "",
       verify,
       works,
+      /* How often the number read off a certificate was the one he confirmed. */
+      registerAccuracy: accuracy,
       agents: {
         total: agents.length,
         short: agents.filter((a) => a.short > 0).length,
@@ -51,12 +57,29 @@ export async function POST(req: NextRequest) {
   const me = await requireCapability(req, "see:agent-compliance");
   if (!me) return NextResponse.json({ ok: false, error: "Not yours." }, { status: 403 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
-  const b = (await req.json().catch(() => ({}))) as { kind?: string; id?: string; state?: string; note?: string };
+  const b = (await req.json().catch(() => ({}))) as { kind?: string; id?: string; state?: string; note?: string; action?: string; registerNumber?: string; again?: boolean };
   if (!b.kind || !isCheckKind(b.kind) || !b.id) return NextResponse.json({ ok: false, error: "Which one?" }, { status: 400 });
+  /* Read the engineer off the certificate - once, kept. */
+  if (b.action === "read") {
+    if (b.kind === "works_order") return NextResponse.json({ ok: false, error: "Only certificates are read." }, { status: 400 });
+    const read = await readOne(b.kind, b.id, { again: b.again === true });
+    const reg = read.scheme !== "none" ? REGISTERS[read.scheme] : null;
+    return NextResponse.json({ ok: true, read, registerName: reg?.name ?? null, registerUrl: reg?.url ?? null });
+  }
   if (b.state !== "verified" && b.state !== "queried") return NextResponse.json({ ok: false, error: "Verified, or queried?" }, { status: 400 });
   if (b.state === "queried" && !b.note?.trim()) return NextResponse.json({ ok: false, error: "Say what is wrong with it, so the agent knows what to put right." }, { status: 400 });
   if (!(await subjectExists(b.kind, b.id))) return NextResponse.json({ ok: false, error: "That record is not there any more." }, { status: 404 });
-  await recordCheck({ kind: b.kind, id: b.id, state: b.state, note: b.note, by: me.name || me.email });
+  const number = (b.registerNumber ?? "").trim();
+  if (number && b.state === "verified" && b.kind !== "works_order") {
+    await confirmRegister(b.kind, b.id, number, me.name || me.email);
+  }
+  await recordCheck({
+    kind: b.kind,
+    id: b.id,
+    state: b.state,
+    note: b.note || (number && b.state === "verified" ? `Engineer ${number} checked on the register.` : undefined),
+    by: me.name || me.email,
+  });
   const [verify, works] = await Promise.all([verifyQueue(), worksToCheck()]);
   return NextResponse.json({ ok: true, verify, works });
 }

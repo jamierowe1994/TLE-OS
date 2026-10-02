@@ -4,6 +4,9 @@ import PageHeader from "@/components/PageHeader";
 import WorkspaceLoading from "@/components/WorkspaceLoading";
 import CheckRow, { GREEN } from "@/components/compliance-desk/CheckRow";
 import { useDesk } from "@/components/compliance-desk/useDesk";
+import RegisterCheck from "@/components/compliance-desk/RegisterCheck";
+import { useState } from "react";
+import type { VerifyItem } from "@/lib/compliance-desk";
 
 /**
  * To verify: every document that has come in, until Michael has looked at it.
@@ -20,7 +23,7 @@ import { useDesk } from "@/components/compliance-desk/useDesk";
 const LATE_AFTER_DAYS = 7;
 
 export default function ToVerify() {
-  const { desk, error, busy, check } = useDesk();
+  const { desk, error, busy, check, readRegister } = useDesk();
   if (!desk && !error) return <WorkspaceLoading />;
   const rows = desk?.verify ?? [];
   const queried = rows.filter((r) => r.queried).length;
@@ -29,7 +32,7 @@ export default function ToVerify() {
     <>
       <PageHeader
         title="To Verify"
-        blurb="Every certificate an agent, a contractor or a landlord has uploaded, until you have checked it. Oldest first."
+        blurb="Every certificate an agent, a contractor or a landlord has uploaded, or that was filed on REX, until you have checked it. Gas and electrical ones come with the engineer's register number read off for you. Oldest first."
         search={false}
       />
       {error && <p className="mt-4 rounded-2xl border border-line/80 bg-panel p-4 text-[12.5px] text-[#9d4340]">{error}</p>}
@@ -46,27 +49,62 @@ export default function ToVerify() {
         <>
           <p className="fade-up mt-4 text-[12.5px] text-muted">
             {rows.length} waiting{queried ? `, ${queried} of them queried and not yet put right` : ""}.
+            {desk?.registerAccuracy && desk.registerAccuracy.checked > 0
+              ? ` Engineer numbers read right ${desk.registerAccuracy.matched} of ${desk.registerAccuracy.checked} times so far.`
+              : ""}
           </p>
           <ul className="fade-up mt-3 space-y-3">
-            {rows.map((r) => (
-              <CheckRow
-                key={`${r.kind}-${r.id}`}
-                title={`${r.what} - ${r.property}`}
-                sub={`${r.door === "Landlord" ? `Uploaded by ${r.by}` : `Filed by ${r.by || "somebody"}`}, ${r.source}.${r.agent && r.door !== "Agent" ? ` Agent: ${r.agent}.` : ""}`}
-                chips={[r.door, r.expiry ? `Expires ${new Date(`${r.expiry}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}` : "", r.fileName]}
-                files={r.fileKey ? [{ key: r.fileKey, name: r.fileName }] : []}
-                addedAt={r.addedAt}
-                lateAfterDays={LATE_AFTER_DAYS}
-                queried={r.queried}
-                okLabel="Verified"
-                busy={busy === r.id}
-                onVerify={() => check(r.kind, r.id, "verified")}
-                onQuery={(note) => check(r.kind, r.id, "queried", note)}
-              />
+            {rows.map((r, i) => (
+              <VerifyRow key={`${r.kind}-${r.id}`} r={r} index={i} busy={busy === r.id} check={check} readRegister={readRegister} />
             ))}
           </ul>
         </>
       )}
     </>
+  );
+}
+
+/** One row, holding the number he checked until he presses Verified. */
+function VerifyRow({
+  r,
+  index,
+  busy,
+  check,
+  readRegister,
+}: {
+  r: VerifyItem;
+  index: number;
+  busy: boolean;
+  check: ReturnType<typeof useDesk>["check"];
+  readRegister: ReturnType<typeof useDesk>["readRegister"];
+}) {
+  const [number, setNumber] = useState("");
+  const onRegister = Boolean(r.register);
+  return (
+    <CheckRow
+      title={`${r.what} - ${r.property}`}
+      sub={`${r.door === "Landlord" ? `Uploaded by ${r.by}` : r.door === "REX" ? `Filed on REX${r.by ? `, ${r.by}'s home` : ""}` : `Filed by ${r.by || "somebody"}`}, ${r.door === "REX" ? "picked up by the OS" : r.source}.${r.agent && r.door !== "Agent" && r.door !== "REX" ? ` Agent: ${r.agent}.` : ""}`}
+      chips={[r.door, r.expiry ? `Expires ${new Date(`${r.expiry}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}` : "", r.fileName]}
+      files={r.fileKey ? [{ key: r.fileKey, name: r.fileName }] : []}
+      addedAt={r.addedAt}
+      lateAfterDays={LATE_AFTER_DAYS}
+      queried={r.queried}
+      okLabel={onRegister ? "On the register - verified" : "Verified"}
+      busy={busy}
+      onVerify={() => check(r.kind, r.id, "verified", undefined, onRegister ? number : undefined)}
+      onQuery={(note) => check(r.kind, r.id, "queried", note)}
+    >
+      {onRegister && (
+        <RegisterCheck
+          item={r}
+          number={number}
+          setNumber={setNumber}
+          delayMs={Math.min(index, 12) * 700}
+          onRead={(again) => readRegister(r.kind, r.id, again)}
+          onNotOnRegister={(note) => check(r.kind, r.id, "queried", note)}
+          onNoNumber={(note) => check(r.kind, r.id, "queried", note)}
+        />
+      )}
+    </CheckRow>
   );
 }

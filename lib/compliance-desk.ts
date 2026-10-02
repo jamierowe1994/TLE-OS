@@ -1,6 +1,7 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { DOC_KINDS } from "@/lib/landlord-account";
+import { readable, readsFor, REGISTERS, type RegisterRead } from "@/lib/cert-register";
 
 /**
  * MICHAEL'S DESK. The three lists that are his and nobody else's.
@@ -68,7 +69,7 @@ const NOT_HIS = ["id", "ownership", "other"];
 export interface VerifyItem {
   kind: "certificate" | "landlord_document";
   id: string;
-  door: "Agent" | "Contractor" | "Landlord";
+  door: "Agent" | "Contractor" | "Landlord" | "REX";
   property: string;
   /** "Gas safety (CP12)". */
   what: string;
@@ -85,6 +86,9 @@ export interface VerifyItem {
   agent: string | null;
   addedAt: string;
   queried: { note: string; by: string; at: string } | null;
+  /** Gas and electrical only: the engineer's register check (lib/cert-register).
+   *  `read` is null until the certificate has been read. */
+  register?: { read: RegisterRead | null; registerName: string | null; registerUrl: string | null };
 }
 
 const ymd = (v: unknown) => (v ? (v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10)) : null);
@@ -92,6 +96,8 @@ const isoOf = (v: unknown) => new Date(v as string).toISOString();
 
 function doorOf(source: string): VerifyItem["door"] {
   const s = source.toLowerCase();
+  /* Filed on REX (or REX PM) and picked up by the OS - see feedRexRenewals. */
+  if (/\brex\b/.test(s)) return "REX";
   if (s.includes("contractor")) return "Contractor";
   if (s.includes("landlord")) return "Landlord";
   return "Agent";
@@ -102,7 +108,7 @@ export async function verifyQueue(): Promise<VerifyItem[]> {
   if (!hasDb()) return [];
   const [certs, docs] = await Promise.all([
     q<Record<string, unknown>>(
-      `SELECT c.id, c.property_name, c.type_id, c.expiry, c.name, c.r2_key, c.source, c.added_by, c.added_at,
+      `SELECT c.id, c.property_name, c.type_id AS type_raw, c.type_id, c.expiry, c.name, c.r2_key, c.source, c.added_by, c.added_at,
               k.state, k.note, k.by_name, k.at AS checked_at
          FROM os_certificates c
          LEFT JOIN os_compliance_checks k ON k.kind = 'certificate' AND k.subject_id = c.id
@@ -111,7 +117,7 @@ export async function verifyQueue(): Promise<VerifyItem[]> {
       [CHECKS_BEGAN]
     ),
     q<Record<string, unknown>>(
-      `SELECT d.id, d.kind, d.name, d.r2_key, d.uploaded_at, a.name AS landlord, m.address, m.postcode, m.agent,
+      `SELECT d.id, d.kind AS type_raw, d.kind, d.name, d.r2_key, d.uploaded_at, a.name AS landlord, m.address, m.postcode, m.agent,
               k.state, k.note, k.by_name, k.at AS checked_at
          FROM os_landlord_documents d
          JOIN os_portal_accounts a ON a.id = d.account_id
@@ -138,7 +144,7 @@ export async function verifyQueue(): Promise<VerifyItem[]> {
       fileKey: String(r.r2_key ?? ""),
       by: String(r.added_by ?? ""),
       source: String(r.source ?? ""),
-      agent: doorOf(String(r.source ?? "")) === "Agent" ? String(r.added_by ?? "") || null : null,
+      agent: ["Agent", "REX"].includes(doorOf(String(r.source ?? ""))) ? String(r.added_by ?? "") || null : null,
       addedAt: isoOf(r.added_at),
       queried: queried(r),
     })),
@@ -158,6 +164,21 @@ export async function verifyQueue(): Promise<VerifyItem[]> {
       queried: queried(r),
     })),
   ];
+  /* The engineer's register check on every gas and electrical one. */
+  const rawType = new Map<string, string>([
+    ...certs.map((r) => [`certificate:${r.id}`, String(r.type_raw ?? "")] as [string, string]),
+    ...docs.map((r) => [`landlord_document:${r.id}`, String(r.type_raw ?? "")] as [string, string]),
+  ]);
+  const wanted = out.filter((i) => readable(i.kind, rawType.get(`${i.kind}:${i.id}`) ?? ""));
+  const reads = await readsFor(wanted).catch(() => new Map<string, RegisterRead>());
+  for (const i of wanted) {
+    const read = reads.get(`${i.kind}:${i.id}`) ?? null;
+    const reg = read && read.scheme !== "none" ? REGISTERS[read.scheme] : null;
+    const gas = /gas/.test(rawType.get(`${i.kind}:${i.id}`) ?? "");
+    /* Not read yet: the register it will almost certainly be, so the button is there from the start. */
+    const fallback = gas ? REGISTERS.gas_safe : null;
+    i.register = { read, registerName: (reg ?? fallback)?.name ?? null, registerUrl: (reg ?? fallback)?.url ?? null };
+  }
   return out.sort((a, b) => (a.addedAt < b.addedAt ? -1 : 1));
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 
 /**
@@ -44,6 +44,7 @@ export default function CheckRow({
   busy,
   onVerify,
   onQuery,
+  children,
 }: {
   title: string;
   sub: string;
@@ -60,6 +61,8 @@ export default function CheckRow({
   busy: boolean;
   onVerify: () => void;
   onQuery: (note: string) => void;
+  /** Drawn under the chips: the engineer's register check, on a certificate. */
+  children?: ReactNode;
 }) {
   const [asking, setAsking] = useState(false);
   const [note, setNote] = useState("");
@@ -101,6 +104,8 @@ export default function CheckRow({
           )}
         </div>
       </div>
+
+      {children}
 
       {queried && (
         <p className={`mt-3 rounded-xl px-3.5 py-2.5 text-[12.5px] leading-snug ${RED}`}>

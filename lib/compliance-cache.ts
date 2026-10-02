@@ -84,6 +84,13 @@ export function refreshComplianceBook(): Promise<CachedBook> {
         const entry = { book, at: Date.now() };
         memory = entry;
         await store(entry);
+        /* Renewals filed on REX go onto Michael's To verify list (lib/
+           cert-register, 2 Oct 2026). Behind the refresh, never holding it
+           up, and imported late because cert-register reaches back here. */
+        void import("@/lib/cert-register")
+          .then((m) => m.feedRexRenewals(book.properties, entry.at))
+          .then((r) => (r.queued || r.seeded ? console.log("[cert-register] REX renewals", JSON.stringify(r)) : undefined))
+          .catch((e) => console.error("[cert-register] feed failed", e instanceof Error ? e.message : e));
         return entry;
       })
       .finally(() => {

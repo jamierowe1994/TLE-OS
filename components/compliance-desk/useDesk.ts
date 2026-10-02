@@ -17,6 +17,7 @@ export interface Desk {
   firstName?: string;
   verify: VerifyItem[];
   works: WorksCheckItem[];
+  registerAccuracy?: { checked: number; matched: number } | null;
   agents: { total: number; short: number; requirements: number; names: { userId: string; name: string; short: number }[] } | null;
 }
 
@@ -36,10 +37,10 @@ export function useDesk() {
   }, []);
   useEffect(load, [load]);
 
-  const check = useCallback(async (kind: CheckKind, id: string, state: "verified" | "queried", note?: string) => {
+  const check = useCallback(async (kind: CheckKind, id: string, state: "verified" | "queried", note?: string, registerNumber?: string) => {
     setBusy(id);
     try {
-      const r = await fetch("/api/compliance-desk", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind, id, state, note }) });
+      const r = await fetch("/api/compliance-desk", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind, id, state, note, registerNumber }) });
       const j = (await r.json()) as { ok: boolean; error?: string; verify?: VerifyItem[]; works?: WorksCheckItem[] };
       if (!j.ok) setError(j.error ?? "That did not save.");
       else { setError(null); setDesk((d) => (d ? { ...d, verify: j.verify ?? d.verify, works: j.works ?? d.works } : d)); }
@@ -50,5 +51,25 @@ export function useDesk() {
     }
   }, []);
 
-  return { desk, error, busy, check, reload: load };
+  /** Read the engineer off a certificate (lib/cert-register) and lay it on the row. */
+  const readRegister = useCallback(async (kind: "certificate" | "landlord_document", id: string, again = false) => {
+    const j = await fetch("/api/compliance-desk", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "read", kind, id, again }) })
+      .then((r) => r.json())
+      .catch(() => null);
+    if (!j?.ok) return;
+    setDesk((d) =>
+      d
+        ? {
+            ...d,
+            verify: d.verify.map((v) =>
+              v.kind === kind && v.id === id
+                ? { ...v, register: { read: j.read, registerName: j.registerName ?? v.register?.registerName ?? null, registerUrl: j.registerUrl ?? v.register?.registerUrl ?? null } }
+                : v
+            ),
+          }
+        : d
+    );
+  }, []);
+
+  return { desk, error, busy, check, readRegister, reload: load };
 }
