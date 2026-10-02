@@ -83,44 +83,26 @@ export default function Dashboard() {
            Bigger than the shared 250 because it is the home screen and the
            scene is wide rather than tall - 330 gives it about 400 across,
            which still leaves the greeting its one line. */
-        illustration="/illustrations/home/armchair.webp"
-        /* 13 Sep, later: bigger, and sat further under the line (James: "it
-           looks better when the images are coming from underneath the line").
-           400 tall with the rule crossing at 0.80 keeps 320 above the line -
-           a touch more masthead than before - and hides the bottom fifth: the
-           chair legs, the table's base and the shoes are under the line now. */
-        illustrationHeight={400}
-        /* And the masthead itself a touch taller than the shared 268, so the
-           bigger scene has room above the rule and the head clears the search
-           row (James, 13 Sep 2026). */
+        /* 2 Oct 2026: James swapped the armchair scene for a brick loft
+           floating on clouds ("I do love the properties ... lean more towards
+           that side"). Transparent PNG from Downloads: trimmed, the middle 72%
+           kept with the outer clouds faded to nothing (the full width took
+           840px and squeezed the greeting to one word a line), then a 1400px
+           webp. The rule runs through the clouds just under the building's
+           base: it stands on the line and the lower clouds go under it. */
+        illustration="/illustrations/home/brick-loft-clouds.webp"
+        illustrationHeight={250}
         minHeight={300}
-        /* 13 Sep: James swapped in the stripped-down version of the same scene
-           - the dog, the books, the framed print, the magazines and the rug are
-           all gone, and it comes on a transparent ground instead of white. The
-           file is trimmed to its content, so the aspect moved 1.3879 -> 1.2113
-           and the seat had to move with it: the rug used to be the bottom edge,
-           and now the lowest thing in the drawing is the front shoe on its own.
-           0.88 would have taken the whole foot. */
-        illustrationAspect={1.2113}
-        /* The biggest drawing in the OS, on the smallest screen it has to
-           share with a three-line greeting. Below 640px it goes and the words
-           take the width - see hideArtOnPhone. */
+        illustrationAspect={1.983}
+        /* The widest drawing in the OS; below 640px the greeting takes the
+           width - see hideArtOnPhone. */
         hideArtOnPhone
-        /* The rug was what tied the furniture to the ground, and it has gone
-           with it, so the line has to do that job instead: at 0.92 the side
-           table's ring base lands ON the rule, the chair legs come down to it
-           and the front shoe runs INTO it. Tried 0.97 first - everything
-           hovered 30px above the line with nothing under it - and 0.895, which
-           chopped the front leg of the chair. */
-        seat={0.8}
+        seat={0.9}
         illustrationCrop
         lineBreak="none"
-        /* Off the right edge, and back from it.
-           flushRight pinned the scene to right-0 and the masthead cropped its
-           corner - James, 10 Sep: "it feels like it's getting the edge cut
-           off". It keeps the standard inset now and comes in a further 34px,
-           so the whole vignette is inside the frame. */
-        illustrationNudge={-34}
+        /* No inward nudge: the greeting's line runs right up to the art's
+           box, and the clouds need the clear space between them. */
+        illustrationNudge={0}
         /* Customise rides the search row — one line of chrome, not two.
            The agent's quick links sit to its right (components/QuickLinks):
            pills they picked themselves, and in customise mode the circle that
