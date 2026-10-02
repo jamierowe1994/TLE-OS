@@ -98,6 +98,17 @@ export interface ManagedCounts {
   withTenant: number;
   byService: Record<string, number>;
   towns: number;
+  /**
+   * Homes as REX PM counts them - its Active letting agreement list, each room
+   * let separately counted on its own (2 Oct 2026). `properties` groups rooms
+   * under their house; this is the figure that matches REX PM's dashboard.
+   * Absent until REX PM's list has been read across.
+   */
+  homes?: number;
+  /** Of those, REX PM's Tenancy Status: occupied, vacant, and its Upcoming vacancies tab. */
+  homesOccupied?: number;
+  homesVacant?: number;
+  upcomingVacancies?: number;
 }
 
 export interface ManagedBook {

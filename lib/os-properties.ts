@@ -72,6 +72,11 @@ type Row = {
   payprop_no?: string | null;
   tenant_names?: string | null;
   service_level?: string | null;
+  pm_managed?: boolean | null;
+  pm_status?: string | null;
+  pm_upcoming_vacancy?: boolean | null;
+  pm_service?: string | null;
+  pm_read_at?: string | null;
 };
 
 const rowTo = (r: Row): OsProperty => ({
@@ -111,6 +116,33 @@ export async function notOnRex(): Promise<OsProperty[]> {
   if (!hasDb()) return [];
   const rows = await q<Row>(`SELECT * FROM os_properties WHERE (rex_property_id IS NULL OR rex_property_id = '') AND active ORDER BY name`).catch(() => []);
   return rows.map(rowTo);
+}
+
+/** A home on REX PM's own managed list, with what that list says about it. */
+export interface PmHome extends OsProperty {
+  pmStatus: "occupied" | "vacant" | null;
+  pmUpcomingVacancy: boolean;
+  pmService: string | null;
+}
+
+/**
+ * The homes REX PM itself counts as managed - its Properties screen, Active
+ * letting agreement tab - as last read across (2 Oct 2026). Null when it has
+ * never been read, so callers fall back to the older rule rather than read an
+ * empty book as "we manage nothing". Throws on a database error, for the same
+ * reason as activeOsProperties.
+ */
+export async function pmManagedHomes(): Promise<PmHome[] | null> {
+  if (!hasDb()) return null;
+  const read = await q<{ n: string }>(`SELECT COUNT(*)::text AS n FROM os_properties WHERE pm_read_at IS NOT NULL`);
+  if (!Number(read[0]?.n ?? 0)) return null;
+  const rows = await q<Row>(`SELECT * FROM os_properties WHERE pm_managed ORDER BY name`);
+  return rows.map((r) => ({
+    ...rowTo(r),
+    pmStatus: r.pm_status === "occupied" || r.pm_status === "vacant" ? r.pm_status : null,
+    pmUpcomingVacancy: Boolean(r.pm_upcoming_vacancy),
+    pmService: r.pm_service ?? null,
+  }));
 }
 
 /** Every home REX PM manages today (active letting agreement), linked or not. */

@@ -80,7 +80,12 @@ export async function GET(req: NextRequest) {
     settle(portfolio.then((j) => {
       const c = (j.counts ?? {}) as Json;
       return {
-        managed: Number(c.properties ?? 0),
+        /* REX PM's own count of managed homes once its list is read (rooms let
+           separately each count), else the book's. */
+        managed: Number(c.homes ?? c.properties ?? 0),
+        occupied: c.homes != null ? Number(c.homesOccupied ?? 0) : null,
+        vacant: c.homes != null ? Number(c.homesVacant ?? 0) : null,
+        upcoming: c.homes != null ? Number(c.upcomingVacancies ?? 0) : null,
         avgRent: Number(c.avgRent ?? 0),
         landlords: Number(c.landlords ?? 0),
         rentRoll: Number(c.managedRentRoll ?? 0),

@@ -705,7 +705,7 @@ export default function Portfolio() {
   const blurb =
     state.status === "loading" ? "Fetching the managed book from REX…"
     : state.status === "failed" ? state.error
-    : `Live from REX — ${state.book.counts.properties} properties under management across ${state.book.counts.towns} towns, for ${state.book.counts.landlords} landlords${state.everything ? "" : ` (${state.scope}'s book)`}.${state.ageMs != null ? ` Figures ${asOf(state.ageMs).text}.` : state.stale ? " Refreshing behind." : ""}`;
+    : `Live from REX — ${state.book.counts.homes ?? state.book.counts.properties} properties under management across ${state.book.counts.towns} towns, for ${state.book.counts.landlords} landlords${state.everything ? "" : ` (${state.scope}'s book)`}.${state.ageMs != null ? ` Figures ${asOf(state.ageMs).text}.` : state.stale ? " Refreshing behind." : ""}`;
 
   const certsHint =
     certs.status === "checking" ? <FindingData label="Checking REX" />
@@ -767,8 +767,13 @@ export default function Portfolio() {
             <StatCard
               icon="home"
               label="Properties"
-              value={book ? book.counts.properties.toLocaleString("en-GB") : <FindingData label="" />}
-              hint={book && Object.entries(book.counts.byService).sort((a, b) => b[1] - a[1]).map(([s, n]) => `${s} ${n}`).join(" · ")}
+              /* Counted the way the old system counts its managed homes (2 Oct
+                 2026): every room let on its own is a home. The list below
+                 keeps rooms under their house, so it can run shorter. */
+              value={book ? (book.counts.homes ?? book.counts.properties).toLocaleString("en-GB") : <FindingData label="" />}
+              hint={book && (book.counts.homes != null
+                ? `${(book.counts.homesOccupied ?? 0).toLocaleString("en-GB")} occupied · ${book.counts.homesVacant ?? 0} vacant · ${book.counts.upcomingVacancies ?? 0} becoming vacant. Rooms let separately count as homes; below they sit under their house.`
+                : Object.entries(book.counts.byService).sort((a, b) => b[1] - a[1]).map(([s, n]) => `${s} ${n}`).join(" · "))}
             />
             <StatCard
               icon="coin"

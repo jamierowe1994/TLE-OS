@@ -1,7 +1,7 @@
 import { currentLets, MANAGED_SERVICES } from "@/lib/current-lets";
 import "server-only";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
-import { activeOsProperties } from "@/lib/os-properties";
+import { activeOsProperties, pmManagedHomes, type OsProperty, type PmHome } from "@/lib/os-properties";
 import { sittingTenantsByProperty } from "@/lib/rex-tenants";
 import type {
   ManagedBook,
@@ -187,6 +187,22 @@ function landlordsOf(properties: ManagedProperty[]): ManagedLandlord[] {
   );
 }
 
+/**
+ * REX PM's own figures for the homes in view: every home on its managed list
+ * (each room let separately counts once, as REX PM counts it), and how many
+ * it shows occupied, vacant and with a vacancy coming. An agent's slice is the
+ * homes whose REX property is in their book.
+ */
+function pmCounts(pm: PmHome[], inBook: Set<string> | null): Pick<ManagedCounts, "homes" | "homesOccupied" | "homesVacant" | "upcomingVacancies"> {
+  const mine = inBook ? pm.filter((h) => h.rexPropertyId && inBook.has(h.rexPropertyId)) : pm;
+  return {
+    homes: mine.length,
+    homesOccupied: mine.filter((h) => h.pmStatus === "occupied").length,
+    homesVacant: mine.filter((h) => h.pmStatus === "vacant").length,
+    upcomingVacancies: mine.filter((h) => h.pmUpcomingVacancy).length,
+  };
+}
+
 function countsOf(all: ManagedProperty[], landlords: ManagedLandlord[]): ManagedCounts {
   /* Each home once, on its latest let - see lib/current-lets. */
   const properties = currentLets(all);
@@ -244,7 +260,15 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
     if (batch.length < PAGE) break;
   }
 
-  const properties = rows.map(toProperty).filter((p) => p.listingId);
+  /* REX PM's own managed list decides the book (2 Oct 2026). James asked for
+     the OS to read 527 like REX PM's dashboard; REX CRM's leased listings had
+     it at 707, because they hold every home ever let - Let Only lettings, the
+     books of agents who have left, tenancies that ended. Once REX PM's list
+     has been read across, a REX letting is in the book only if its home is on
+     that list. Before that (never read), the older rule stands. */
+  const pm = await pmManagedHomes();
+  const pmRexIds = pm ? new Set(pm.map((h) => h.rexPropertyId).filter(Boolean) as string[]) : null;
+  const properties = rows.map(toProperty).filter((p) => p.listingId && (!pmRexIds || (p.propertyId && pmRexIds.has(p.propertyId))));
 
   /**
    * The sitting tenant, where the listing does not name one.
@@ -266,7 +290,8 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
   if (!rexUserId) {
     const have = new Set(properties.map((p) => String(p.propertyId ?? "")));
     /* Not caught: see activeOsProperties - an empty set is not an answer. */
-    for (const o of await activeOsProperties()) {
+    const extra: OsProperty[] = pm ?? (await activeOsProperties());
+    for (const o of extra) {
       /* Already in REX's let book: nothing to add. Linked to a REX property
          REX does not mark as let (84 of them, 6 Sep): the home is managed in
          REX PM all the same, so it joins the book under its REX property. */
@@ -286,7 +311,11 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
         rent: null,
         rentPeriod: null,
         rentMonthly: null,
-        service: o.management && /active/i.test(o.management) ? "Managed" : null,
+        /* REX PM's service package where its list has been read: a Tenant Find
+           home is ours to look after on paper only. */
+        service: "pmService" in o && (o as PmHome).pmService
+          ? (/tenant find/i.test((o as PmHome).pmService!) ? "Let Only" : /rent collect/i.test((o as PmHome).pmService!) ? "Rent Collect" : "Managed")
+          : o.management && /active/i.test(o.management) ? "Managed" : null,
         letType: null,
         letSince: null,
         onBooksSince: null,
@@ -306,10 +335,12 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
   /* Landlords' homes and rent from each home's latest let only, or a landlord
      whose flat was re-let twice "owns" three. */
   const landlords = landlordsOf(currentLets(properties));
+  const counts = countsOf(properties, landlords);
+  if (pm) Object.assign(counts, pmCounts(pm, rexUserId ? new Set(properties.map((p) => String(p.propertyId ?? ""))) : null));
   return {
     properties,
     landlords,
-    counts: countsOf(properties, landlords),
+    counts,
     pulledAt: new Date().toISOString(),
   };
 }

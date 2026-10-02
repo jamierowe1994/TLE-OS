@@ -2277,6 +2277,16 @@ ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS tenant_names TEXT;
 -- by the OS from the newest of REX PM's agreement and PayProp's let, and why.
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS service_level TEXT;
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS service_basis TEXT;
+-- REX PM's own "Active letting agreement" list, read off its Properties screen
+-- (2 Oct 2026): pm_managed is the book REX PM's dashboard counts (527 that
+-- day), pm_status its Tenancy Status (occupied / vacant), pm_upcoming_vacancy
+-- its Upcoming vacancies tab. Null pm_read_at means never read. The managed
+-- book is these homes once read (lib/managed-book). /api/admin/rexpm-properties.
+ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS pm_managed BOOLEAN;
+ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS pm_status TEXT;
+ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS pm_upcoming_vacancy BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS pm_service TEXT;
+ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS pm_read_at TIMESTAMPTZ;
 
 -- Every column of Susan's clean-sweep sheet, per home (24 Sep 2026): a word, a
 -- date, a number or a file, and where it came from. One row per home per field

@@ -21,7 +21,7 @@ interface Board {
   at: string;
   /** Whole business for Michael and the owners; everyone else, their own homes. */
   scope?: { whole: boolean; label: string };
-  properties: Tile<{ managed: number; avgRent: number; landlords: number; rentRoll: number }>;
+  properties: Tile<{ managed: number; avgRent: number; landlords: number; rentRoll: number; occupied: number | null; vacant: number | null; upcoming: number | null }>;
   maintenance: Tile<{ open: number; overdue: number; emergencies: number; followUp: number; late: { title: string; where: string; dueOn: string | null }[]; partial: string | null }>;
   inspections: Tile<{ due: number; overdue: number; booked: number; awaitingTenant: number }>;
   reviews: Tile<{ due: number; overdue: number; doneThisMonth: number; noticeServed: number; leaving: { where: string; agreement: string }[] }>;
@@ -32,6 +32,7 @@ interface Board {
 }
 
 const pounds = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
+const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : "–");
 /** £194,833 → "£194.8k": a tile has room for the size of a number, not every digit of it. */
 const compact = (n: number) => (n >= 10000 ? `£${(n / 1000).toFixed(1).replace(/\.0$/, "")}k` : pounds(n));
 const shortDay = (ymd: string | null) => (ymd ? new Date(`${ymd}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "");
@@ -84,14 +85,23 @@ export default function Overview() {
           {(d) => (
             <>
               <Big value={d.managed} label="homes we manage" />
-              {/* No "tenanted" figure: REX only knows whether a tenant's name is
-                  on file, which reads half the book as empty. Nothing in the
-                  OS records an empty home yet. */}
-              <Stats items={[
-                ["Landlords", String(d.landlords)],
-                ["Rent roll a month", compact(d.rentRoll)],
-                ["Average rent", pounds(d.avgRent)],
-              ]} />
+              {/* Tenanted, vacant and becoming vacant are the old system's own
+                  Tenancy Status, read across with its managed list (2 Oct 2026).
+                  Before that read, REX only knows whether a tenant's name is on
+                  file, which reads half the book as empty - so no figure. */}
+              {d.occupied != null ? (
+                <Stats items={[
+                  ["Tenanted", pct(d.occupied, d.managed)],
+                  ["Becoming vacant", String(d.upcoming ?? 0), (d.upcoming ?? 0) > 0],
+                  ["Vacant", String(d.vacant ?? 0), (d.vacant ?? 0) > 0],
+                ]} />
+              ) : (
+                <Stats items={[
+                  ["Landlords", String(d.landlords)],
+                  ["Rent roll a month", compact(d.rentRoll)],
+                  ["Average rent", pounds(d.avgRent)],
+                ]} />
+              )}
             </>
           )}
         </Card>

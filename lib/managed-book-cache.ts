@@ -33,7 +33,9 @@ import type { ManagedBook } from "./portfolio-types";
    thinner answer and would be served for six hours. */
 /* v3 (1 Oct 2026): counts are per home, not per let, and carry lets and
    managedRentRoll - a v2 book in os_cache has neither, so it is not reused. */
-const BOOK_BASE = "portfolio:v3";
+/* v4 (2 Oct 2026): the book is REX PM's own managed list once read, with its
+   homes / occupied / vacant counts - a v3 book is the old 707. */
+const BOOK_BASE = "portfolio:v4";
 /* v2 (18 Sep 2026): REX PM rows no longer pass "Managed" as a service, so a
    let-only home stops counting as ours here. A v1 answer still would. */
 const CERTS_BASE = "portfolio-certs:v2";
