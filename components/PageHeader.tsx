@@ -679,7 +679,9 @@ export default function PageHeader({
               className="relative h-full"
               /* Bottom only: the top has to stay open, because the artwork is
                  meant to run off the top of the masthead. */
-              style={illustrationCrop ? { clipPath: "inset(-100vh 0 0 0)" } : undefined}
+              /* Below the line only: the sides stay open so wide art (the
+                 dashboard's clouds) is never sliced at its own box's edges. */
+              style={illustrationCrop ? { clipPath: "inset(-100vh -100vw 0 -100vw)" } : undefined}
             >
               <LineDip width={dipWidth} mode={lineBreak} />
               {sprite ? (

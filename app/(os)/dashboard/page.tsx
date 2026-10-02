@@ -85,17 +85,17 @@ export default function Dashboard() {
            which still leaves the greeting its one line. */
         /* 2 Oct 2026: James swapped the armchair scene for a brick loft
            floating on clouds ("I do love the properties ... lean more towards
-           that side"). His transparent PNG, trimmed to its clouds and nothing
-           cut or faded at the ends, turned 2 degrees anticlockwise: the
-           building's base fell 2 degrees to the right and looked tipped on a
-           level rule ("needs to be just twisted slightly").
+           that side"). His transparent PNG, trimmed to its clouds, NOT turned:
+           the building's front corner is exactly vertical in the drawing
+           (measured, x constant from roof to base), and a 2 degree turn tried
+           first tipped it. Only a 2.5% soft edge where the drawing's own
+           canvas ends, so a cloud is never sliced flat.
            The masthead is the standard 268, the same line as every other
            screen. The rule runs through the clouds just under the building's
-           base: it stands on the line and the lower clouds (and the slant the
-           turn leaves at the bottom edge) go under it. */
+           base: it stands on the line and the lower clouds go under it. */
         illustration="/illustrations/home/brick-loft-clouds.webp"
         illustrationHeight={245}
-        illustrationAspect={2.6836}
+        illustrationAspect={2.7536}
         /* Wide art: drawn from 1280px up only, so on a smaller laptop or a
            tablet the greeting keeps the width and the line stays level with
            every other screen - see artFromXl. */
@@ -107,11 +107,11 @@ export default function Dashboard() {
         seat={0.9}
         illustrationCrop
         lineBreak="none"
-        /* Pinned to the right edge. The seated inset (166px) is room for a
-           figure's legs to hang past the page's button; clouds have no legs,
-           so that room goes to the building instead ("a bit bigger still"),
-           and the clouds run out to the end of the line. */
+        /* Pinned right, then let out past the end of the rule by 56px into
+           the page's own margin: the clouds spill beyond the line rather than
+           stopping on it (the frame no longer clips its sides). */
         flushRight
+        illustrationNudge={56}
         /* Customise rides the search row — one line of chrome, not two.
            The agent's quick links sit to its right (components/QuickLinks):
            pills they picked themselves, and in customise mode the circle that

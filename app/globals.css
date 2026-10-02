@@ -283,8 +283,11 @@ body {
      rise, so the masthead was visible below the rule on its way up and read
      as sliding in from outside rather than coming out from under the line
      (James, 10 Sep 2026). Nothing shows until it is home. */
-  0%, 92% { clip-path: inset(-100vh 0 0 0); }
-  100%    { clip-path: inset(-100vh 0 -100vh 0); }
+  /* The sides are never clipped (2 Oct 2026): artwork may spill past the
+     end of the rule - the dashboard's clouds were being cut off there. Only
+     the line itself, the bottom edge, does any hiding. */
+  0%, 92% { clip-path: inset(-100vh -100vw 0 -100vw); }
+  100%    { clip-path: inset(-100vh -100vw -100vh -100vw); }
 }
 /* How far the block goes: its own height, or further when the artwork stands
    taller than the masthead. The appraisals man is 302px above the rule, and
@@ -320,7 +323,7 @@ body {
 
 /* Leaving. The frame's clip is held shut for the whole fall, so the block
    goes behind the line rather than over whatever is under it. */
-.page-leaving .os-mast-frame { animation: none; clip-path: inset(-100vh 0 0 0); }
+.page-leaving .os-mast-frame { animation: none; clip-path: inset(-100vh -100vw 0 -100vw); }
 /* 0.4s, and Shell waits the same 400ms before it navigates. It used to leave
    at 260ms with the fall still going, so the old screen was cut off mid-drop
    - the "catches, freezes, comes back" James saw on Market Appraisals. */
