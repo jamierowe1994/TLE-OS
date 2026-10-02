@@ -85,11 +85,10 @@ export default function Dashboard() {
            which still leaves the greeting its one line. */
         /* 2 Oct 2026: James swapped the armchair scene for a brick loft
            floating on clouds ("I do love the properties ... lean more towards
-           that side"). His transparent PNG, trimmed to its clouds, NOT turned:
-           the building's front corner is exactly vertical in the drawing
-           (measured, x constant from roof to base), and a 2 degree turn tried
-           first tipped it. Only a 2.5% soft edge where the drawing's own
-           canvas ends, so a cloud is never sliced flat.
+           that side"). His transparent PNG, trimmed to its clouds and turned
+           half a degree anticlockwise at his ask ("just to straighten up
+           slightly"); 2 degrees was far too much, 1 a touch too much. Only a 2.5% soft edge where the
+           drawing's own canvas ends, so a cloud is never sliced flat.
            The masthead is the standard 268, the same line as every other
            screen. The rule runs through the clouds just under the building's
            base: it stands on the line and the lower clouds go under it. */
@@ -97,9 +96,9 @@ export default function Dashboard() {
            served with max-age=14400, so a browser keeps the old one for four
            hours under the same name - James saw the turned, clipped version
            after the straight one was live. */
-        illustration="/illustrations/home/brick-loft-straight.webp"
+        illustration="/illustrations/home/brick-loft-r05.webp"
         illustrationHeight={245}
-        illustrationAspect={2.7536}
+        illustrationAspect={2.7378}
         /* Wide art: drawn from 1280px up only, so on a smaller laptop or a
            tablet the greeting keeps the width and the line stays level with
            every other screen - see artFromXl. */
