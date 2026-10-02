@@ -5,6 +5,7 @@ import { BoardSkeleton } from "@/components/Skeleton";
 import dynamic from "next/dynamic";
 import { whenIdle } from "@/lib/when-idle";
 import { dropJson, peekJson, readJson } from "@/lib/page-cache";
+import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import GuideButton from "@/components/GuideButton";
 import PageHeader from "@/components/PageHeader";
@@ -176,6 +177,14 @@ export default function Applications() {
   useEffect(() => whenIdle(() => { void loadApplicationDrawer(); }), []);
   const [apps, setApps] = useState<Application[] | null>(() => peekJson<AppsAnswer>(APPS_URL)?.applications ?? null);
   const [error, setError] = useState<string | null>(null);
+  /* Customer updates still to tell, for the header link. */
+  const [updatesOpen, setUpdatesOpen] = useState(0);
+  useEffect(() => {
+    fetch("/api/customer-updates?all=1&open=1", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; updates?: unknown[] }) => setUpdatesOpen(j.ok ? (j.updates ?? []).length : 0))
+      .catch(() => null);
+  }, []);
   const [openId, setOpenId] = useState<string | null>(null);
   /* ?open=<id>: the PLC wizard sends people back here to a named
      application, and this is what opens it. Read once, on arrival. */
@@ -281,10 +290,20 @@ export default function Applications() {
         illustrationCrop
         lineBreak="none"
         actions={
-          <GuideButton
-            id="applications"
-            className="flex items-center gap-1.5 rounded-full border border-line/80 px-3.5 py-2 text-[12px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink"
-          />
+          <span className="flex flex-wrap items-center gap-2">
+            {/* Who should hear what, across every let (2 Oct 2026). */}
+            <Link
+              href="/applications/updates"
+              className="flex items-center gap-1.5 rounded-full border border-line/80 px-3.5 py-2 text-[12px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink"
+            >
+              Customer updates
+              {updatesOpen ? <span className="figures rounded-full bg-accent px-1.5 text-[10.5px] text-white">{updatesOpen}</span> : null}
+            </Link>
+            <GuideButton
+              id="applications"
+              className="flex items-center gap-1.5 rounded-full border border-line/80 px-3.5 py-2 text-[12px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink"
+            />
+          </span>
         }
       />
 

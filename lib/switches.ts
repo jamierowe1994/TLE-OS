@@ -194,7 +194,7 @@ export const SWITCHES: Switch[] = [
      */
     key: "tenant_reminders",
     label: "Automatic tenant emails",
-    what: "Emails tenants without anybody pressing a button: the reply to a new enquiry, the welcome when a tenant is added, passport nudges at two and seven days, the reminder on the morning of a viewing, How Was It? afterwards, Shall We Rebook? after a no-show, Anything Close? four days after homes were sent, Not That One after a no on the feedback page, and the application received and declined emails. Each goes once.",
+    what: "Emails tenants without anybody pressing a button: the reply to a new enquiry, the welcome when a tenant is added, passport nudges at two and seven days, the reminder on the morning of a viewing, How Was It? afterwards, Shall We Rebook? after a no-show, Anything Close? four days after homes were sent, and Not That One after a no on the feedback page. Each goes once. Application received, declined and accepted no longer go on their own: they wait in Customer updates for the agent (2 Oct 2026).",
     who: "TENANTS, from the agent's own Outlook where that is armed and connected, otherwise from the Letting Experts sender. Email to landlords and tenants must be on as well.",
     confirm: "EMAIL TENANTS",
     /* No old variable: this never existed before. Unset means off. */

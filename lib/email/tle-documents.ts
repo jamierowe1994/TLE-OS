@@ -534,6 +534,30 @@ export const TENANT_OFFER_COPY = {
 } as const;
 
 /**
+ * A customer update, written by the OS and sent by the agent (James, 2 Oct
+ * 2026). Something happened on the let - references back, the PLC sent back,
+ * the agreement out - and the landlord or tenant should hear. Nothing sends
+ * this on its own: the agent opens it, changes what they like, and sends it
+ * from their own address, or rings instead (lib/customer-updates).
+ *
+ * One shape for every update; lib/customer-update-copy writes the words.
+ */
+export const CUSTOMER_UPDATE = {
+  subject: "{{subject}}",
+  preheader: "{{preheader}}",
+  mode: "blocks",
+  blocks: [
+    H("cu1", "{{heading}}"),
+    T("cu2", "Hi {{firstName}},<br><br>{{body}}"),
+    T("cu3", "{{nextLine}}"),
+    SP("cu4", 8),
+    T("cu5", "Any questions, just reply to this email.<br><br>{{agentName}}<br>The Letting Experts"),
+    FOOT("cu6", "{{footLine}}"),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/**
  * Tenant: the application form for one home, sent from its listing (Howard's
  * ticket, approved by James 1 Oct 2026). The agent types in one or more
  * addresses and each gets this, with a button to /tenant/apply?listing=<id>.

@@ -6,6 +6,8 @@ import { findUserByEmail, findUserById, type OsUser } from "@/lib/users";
 import { renderTleEmailLive } from "@/lib/email/tle-emails";
 import { SITE } from "@/lib/email/tle-documents";
 import { getApplications } from "@/lib/applications";
+import { createUpdate, type UpdateRecipient } from "@/lib/customer-updates";
+import { putAcceptedWithAgent } from "@/lib/handover";
 import { rexConfigured } from "@/lib/rex";
 import type { ReminderResult } from "@/lib/tenant-reminders";
 import { alreadyDone, claim, deliver, dryFor, firstName, logDone, london, release, userByName, validEmail, type Dry } from "@/lib/tenant-email-send";
@@ -406,21 +408,27 @@ export async function matchesAgain(dry: Dry, out: Out) {
   }
 }
 
-/* ── The application: in, and not this one ─────────────────────────────── */
+/* ── The application: in, not this one, and yes ─────────────────────────── */
 
 /**
- * Both follow REX's application status. Every (application, status) pair the
- * OS sees is recorded the first time; the very first run records the whole
- * book as a baseline and sends nothing, so switching this on never writes to
- * somebody declined last month.
+ * All three follow REX's application status. Every (application, status) pair
+ * the OS sees is recorded the first time; the very first run records the
+ * whole book as a baseline and says nothing.
  *
  *   received      newly seen, and received in the last three days
- *   unsuccessful  newly seen after the baseline
+ *   unsuccessful  newly seen after the baseline, received in the last 60 days
+ *   accepted      newly seen after the baseline, accepted in the last 14 days
+ *
+ * SINCE 2 OCT 2026 NONE OF THESE EMAIL THE TENANT. James: "allow the agent to
+ * be able to push all of them". Each becomes a customer update with the agent
+ * (lib/customer-updates): the email already written, to send after reading,
+ * or to ring instead. So this runs whether or not the Automatic tenant emails
+ * switch is on - it no longer writes to anybody outside the office.
  */
 export async function applicationEmails(given: Dry, out: Out) {
-  /* Applications come from REX and a test file never reaches REX, so nothing
-     here can be addressed to a tester: held is simply dry. */
-  const dry = given !== false;
+  /* Only a deliberate dry run (?dry=1) is dry now: "held" sent nothing to a
+     customer before, and nothing here sends to a customer at all. */
+  const dry = given === true;
   if (!rexConfigured()) return;
   const apps = await getApplications(300);
   const [{ n }] = await q<{ n: number }>(`SELECT COUNT(*)::int AS n FROM os_application_status_seen`);
@@ -435,44 +443,55 @@ export async function applicationEmails(given: Dry, out: Out) {
     return;
   }
 
+  const seen = (a: { id: string; status: string }) =>
+    dry ? Promise.resolve() : q(`INSERT INTO os_application_status_seen (application_id, status) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [a.id, a.status]).then(() => undefined);
+  const daysAgo = (iso: string | null | undefined, fallbackSecs?: number | null) => {
+    const t = iso ? new Date(iso).getTime() : (fallbackSecs ?? 0) * 1000;
+    return t ? (Date.now() - t) / 86_400_000 : Infinity;
+  };
+
   const book = await liveBook();
   for (const a of apps) {
-    if (a.status !== "received" && a.status !== "unsuccessful") continue;
+    if (a.status !== "received" && a.status !== "unsuccessful" && a.status !== "accepted") continue;
     const known = await q<{ application_id: string }>(
       `SELECT application_id FROM os_application_status_seen WHERE application_id = $1 AND status = $2`,
       [a.id, a.status]
     );
     if (known.length) continue;
-    if (a.status === "received") {
-      const received = a.dateReceived ? new Date(a.dateReceived).getTime() : (a.createdAt ?? 0) * 1000;
-      if (!received || Date.now() - received > 3 * 86_400_000) {
-        if (!dry) await q(`INSERT INTO os_application_status_seen (application_id, status) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [a.id, a.status]);
-        continue;
-      }
+
+    /* Age guards. A received application older than three days has been
+       dealt with. AN OLD "UNSUCCESSFUL" IS HOUSEKEEPING (18 Sep sweep, item
+       13): tidying a year of applications in REX moves every one in an
+       afternoon, and nobody should be asked to tell last spring's applicant
+       no. An acceptance older than a fortnight is under way already. */
+    const age =
+      a.status === "accepted" ? daysAgo(a.dateAccepted) : daysAgo(a.dateReceived, a.createdAt);
+    const limit = a.status === "received" ? 3 : a.status === "accepted" ? 14 : 60;
+    if (age > limit) {
+      await seen(a);
+      continue;
     }
 
-    /* AGE GUARD on "unsuccessful" (18 Sep sweep, item 13). Tidying a year of
-       old applications in REX moves every one to unsuccessful in an afternoon,
-       and each was newly seen: every applicant would have been told "no" for
-       a home they enquired about last spring. An application received more
-       than 60 days ago is closed as housekeeping, and hears nothing. */
-    if (a.status === "unsuccessful") {
-      const received = a.dateReceived ? new Date(a.dateReceived).getTime() : (a.createdAt ?? 0) * 1000;
-      if (!received || Date.now() - received > 60 * 86_400_000) {
-        if (!dry) await q(`INSERT INTO os_application_status_seen (application_id, status) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [a.id, a.status]);
-        continue;
-      }
+    const address = [a.property, a.locality].filter(Boolean).join(", ");
+    if (dry) {
+      out.push({ key: `update:${a.status}:${a.id}`, emailId: "customer-update", to: "", subject: "", state: "would", detail: `Would put "${a.status}" for ${address} with ${a.agent ?? "the agent"} to tell the applicants.` });
+      continue;
+    }
+
+    if (a.status === "accepted") {
+      /* The same update a live handover makes, under the same key. */
+      const made = await putAcceptedWithAgent(a.id).catch(() => null);
+      out.push({ key: `accepted:${a.id}`, emailId: "customer-update", to: a.agent ?? "", subject: "", state: made ? "sent" : "skipped", detail: made ? `Put with ${made.agentName ?? "the agent"}: the landlord said yes to ${address}.` : `Already with the agent: ${address}.` });
+      await seen(a);
+      continue;
     }
 
     const listing = findListing(book, a.listingId);
     const scottish = isScottish(listing?.postcode ?? a.locality);
-    const address = [a.property, a.locality].filter(Boolean).join(", ");
     const agent = await userByName(a.agent);
-    const settled: boolean[] = [];
-
+    const recipients: Omit<UpdateRecipient, "state">[] = [];
     for (const person of a.applicants) {
       const to = (person.email ?? "").trim();
-      const before = out.length;
       if (a.status === "received") {
         const rent = a.offerAmount ?? listing?.rentMonthly ?? null;
         const bits = [
@@ -480,47 +499,49 @@ export async function applicationEmails(given: Dry, out: Out) {
           a.startDate ? `from <strong>${new Date(a.startDate).toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "Europe/London" })}</strong>` : null,
           a.agreementMonths ? `for ${a.agreementMonths} months` : null,
         ].filter(Boolean);
-        await sendOne(out, dry, {
-          key: `application-received:${a.id}:${to.toLowerCase() || person.name}`,
+        recipients.push({
+          role: "tenant",
+          name: person.name,
+          email: validEmail(to) ? to : null,
+          contactId: person.contactId ?? null,
           emailId: "application-received",
-          to,
-          toName: person.name,
-          agent,
-          would: `Would tell ${person.name} their application for ${address} is in.`,
-          vars: async () => ({
+          vars: {
             firstName: firstName(person.name),
             address,
             offerLine: bits.length ? `${bits.join(", ")}.` : "",
             holdingFeeLine: holdingFeeIfYes(rent, scottish),
             agentName: agent?.name || a.agent || "The Letting Experts",
-          }),
+          },
         });
       } else {
         const homes = similarHomes(book, listing ? [listing] : [{ locality: a.locality, rentMonthly: a.offerAmount }], { exclude: [String(a.listingId ?? "")] });
-        await sendOne(out, dry, {
-          key: `application-declined:${a.id}:${to.toLowerCase() || person.name}`,
+        recipients.push({
+          role: "tenant",
+          name: person.name,
+          email: validEmail(to) ? to : null,
+          contactId: person.contactId ?? null,
           emailId: "application-declined",
-          to,
-          toName: person.name,
-          agent,
-          would: `Would tell ${person.name} the landlord said no to ${address}${homes.length ? `, with ${homes.length} other homes` : ""}.`,
-          vars: async () => ({
+          vars: {
             firstName: firstName(person.name),
             address,
             reasonLine: "",
             homesList: homes.length ? homesListHtml(homes) : "Nothing close is on with us today, but new homes come on every week and I'll send you anything that fits.",
             agentName: agent?.name || a.agent || "The Letting Experts",
-          }),
+          },
         });
       }
-      const r = out[out.length - 1];
-      settled.push(out.length > before ? r.state === "sent" || r.state === "skipped" : true);
     }
-    /* Recorded as seen once every applicant is settled (sent, no address, or
-       sent on an earlier run). A refused send leaves it unrecorded, so the
-       next hour tries again. A dry run records nothing. */
-    if (!dry && settled.every(Boolean)) {
-      await q(`INSERT INTO os_application_status_seen (application_id, status) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [a.id, a.status]);
-    }
+    const made = await createUpdate({
+      key: `${a.status}:${a.id}`,
+      applicationId: a.id,
+      property: address,
+      agentEmail: agent?.email ?? null,
+      agentName: agent?.name ?? a.agent ?? null,
+      kind: a.status === "received" ? "application_received" : "application_declined",
+      headline: a.status === "received" ? "Application received" : "The landlord has said no",
+      recipients,
+    }).catch(() => null);
+    out.push({ key: `${a.status}:${a.id}`, emailId: "customer-update", to: agent?.email ?? "", subject: "", state: made ? "sent" : "skipped", detail: made ? `Put with ${made.agentName ?? "the agent"} to tell ${recipients.map((r) => r.name).join(", ")}.` : "Already with the agent." });
+    await seen(a);
   }
 }

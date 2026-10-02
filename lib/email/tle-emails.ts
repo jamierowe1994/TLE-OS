@@ -52,6 +52,7 @@ import {
   TENANT_PASSPORT_INVITE,
   TENANT_PASSPORT_REQUEST,
   TENANT_OFFER_COPY,
+  CUSTOMER_UPDATE,
   APPLICATION_FORM_INVITE,
   TENANT_VIEWING_BOOKED,
   LANDLORD_SIGN_IN,
@@ -880,6 +881,56 @@ The Letting Experts`
           address: "8 Recreation Terrace",
           agentName: "Sam Whitaker",
           summaryList: "<strong>Rent:</strong> £850 a month<br><strong>Moving in:</strong> Saturday 24 October 2026<br><strong>Who:</strong> Sophie Turner and Jordan Reid, with a small, older dog<br><strong>Works before moving day:</strong> fix the shower over the bath",
+        })
+      )(),
+  },
+  {
+    id: "update-tenant",
+    group: "Doorways",
+    name: "Update for the Tenant - Sent by the Agent",
+    audience: "tenant",
+    trigger: "Something happens on the let (references back, agreement out, PLC signed off...) and the agent chooses Email them",
+    fires: "Wired 2 Oct 2026. Never automatic: lib/customer-updates puts the update with the agent, who opens it in the review sheet, edits it and sends it from their own Outlook. Needs customer email on.",
+    to: "The tenant on the let",
+    draft: false,
+    summary: "One shape for every tenant update on a let. The words come from lib/customer-update-copy for the kind of update; the agent can change any of them before it goes.",
+    doc: CUSTOMER_UPDATE,
+    render: (o) =>
+      blocksAs("tenant")(
+        withSample(o ?? CUSTOMER_UPDATE, {
+          subject: "Your references are back - 8 Recreation Terrace",
+          preheader: "Good news on 8 Recreation Terrace, and what happens next.",
+          heading: "Your References Are Back",
+          firstName: "Sophie",
+          body: "Good news: your references for <strong>8 Recreation Terrace</strong> have come back and they're fine.",
+          nextLine: "Next, we finish the safety checks on the home and then send you the tenancy agreement to sign.",
+          agentName: "Sam Whitaker",
+          footLine: "You're getting this because you're renting a home through The Letting Experts.",
+        })
+      )(),
+  },
+  {
+    id: "update-landlord",
+    group: "Doorways",
+    name: "Update for the Landlord - Sent by the Agent",
+    audience: "landlord",
+    trigger: "Something happens on the let (references back, the PLC check needs something, agreement out...) and the agent chooses Email them",
+    fires: "Wired 2 Oct 2026. Never automatic: lib/customer-updates puts the update with the agent, who opens it in the review sheet, edits it and sends it from their own Outlook. Needs customer email on.",
+    to: "The landlord on the let",
+    draft: false,
+    summary: "One shape for every landlord update on a let. The words come from lib/customer-update-copy for the kind of update; the agent can change any of them before it goes.",
+    doc: CUSTOMER_UPDATE,
+    render: (o) =>
+      blocksAs("landlord")(
+        withSample(o ?? CUSTOMER_UPDATE, {
+          subject: "We need a gas safety certificate - 8 Recreation Terrace",
+          preheader: "One thing to sort before your tenant can move in.",
+          heading: "One Thing Before Move-In",
+          firstName: "Raj",
+          body: "We've been through the safety paperwork for <strong>8 Recreation Terrace</strong> and we need a current gas safety certificate before your tenant can move in.",
+          nextLine: "If you have one, reply with a copy. If not, we can book an engineer for you.",
+          agentName: "Sam Whitaker",
+          footLine: "You're getting this because The Letting Experts are letting your home.",
         })
       )(),
   },

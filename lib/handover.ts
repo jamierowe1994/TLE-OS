@@ -8,7 +8,9 @@ import { handoffFor, type Handoff } from "@/lib/deal-handoff";
 import { findUserById } from "@/lib/users";
 import { renderTleEmail } from "@/lib/email/tle-emails";
 import { HOLDING_FEE_WORDING, SITE, WEEK_AHEAD_LINES } from "@/lib/email/tle-documents";
-import { sendAsAgent } from "@/lib/send-as-agent";
+import { createUpdate, type UpdateRecipient } from "@/lib/customer-updates";
+import { userByName } from "@/lib/tenant-email-send";
+import { isScottish } from "@/lib/property-flags";
 
 /**
  * The offer-accepted handover, run by the OS.
@@ -473,90 +475,32 @@ export async function runHandover(
       status = "failed";
     }
 
-    /* 7 and 8. The accepted emails - ours now, from the agent's own mailbox.
+    /* 7 and 8. The accepted emails - written here, SENT BY THE AGENT.
 
-       They were REX merge templates 10978 and 10979, sent by MailMerge. James,
-       16 Sep 2026: copy the words across as they are, reword them later. So the
-       wording is Howard's, the letterhead is ours, and REX is not asked to send
-       anything - which also takes MailMerge/createAndSend off the write lock. */
+       They were REX merge templates 10978 and 10979 (Howard's words, then our
+       own from 16 Sep). Since 2 Oct 2026 (James: "allow the agent to push all
+       of them notifications") the handover sends neither: it puts them with
+       the agent as a customer update (lib/customer-updates), already written,
+       to send from their own address after reading, or to ring instead. */
     const scotland = str((listing.agreement_type as Row | null)?.id) === "153279";
     const sender = opts.byId ? await findUserById(opts.byId).catch(() => null) : null;
+    const recipients = acceptedRecipients(packet, { scotland, senderName: sender?.name ?? null, senderEmail: sender?.email ?? null });
     const address = [packet.property, packet.locality].filter(Boolean).join(", ");
-    const money = (p: number | null) => (p == null ? null : `£${p.toLocaleString("en-GB")} pcm`);
-    const day = (iso: string | null) =>
-      iso ? new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }) : null;
-    /* Only what the application actually holds. Howard's template printed eight
-       lines whether or not REX had them; a row saying "Conditions:" and nothing
-       else is worse than no row. */
-    const detailsList = [
-      ["Offer amount", money(packet.rentPcm)],
-      ["Start date", day(packet.startDate)],
-      ["Length of tenancy", packet.agreementMonths ? `${packet.agreementMonths} months` : null],
-      ["Date accepted", day(packet.acceptedOn)],
-      ["Tenant names", packet.tenants.map((t) => t.name).filter(Boolean).join(", ") || null],
-    ]
-      .filter(([, v]) => v)
-      .map(([k, v]) => `${k}: <strong>${v}</strong>`)
-      .join("<br>");
-    const agentPhone = "0161 883 2525";
-    /* One week's rent, and never a penny over: the Tenant Fees Act caps a
-       holding deposit at a week, so this rounds DOWN to the penny rather than
-       to the nearest pound. */
-    const holdingFee =
-      packet.rentPcm && packet.rentPcm > 0
-        ? (() => {
-            const pence = Math.floor(((packet.rentPcm * 12) / 52) * 100);
-            return pence % 100 === 0
-              ? `£${(pence / 100).toLocaleString("en-GB")}`
-              : `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-          })()
-        : null;
-
-    const targets: { id: string; who: string; to: string | null; name: string; email: string }[] = [
-      ...(packet.landlord?.email
-        ? [{ id: "email-landlord", who: `landlord ${packet.landlord.name}`, to: packet.landlord.email, name: packet.landlord.name, email: "application-accepted-landlord" }]
-        : []),
-      ...packet.tenants
-        .filter((t) => t.email)
-        .map((t) => ({ id: `email-tenant:${t.contactId ?? t.name}`, who: `tenant ${t.name}`, to: t.email, name: t.name, email: "application-its-yours" })),
-    ];
-
-    for (const t of targets) {
-      const vars: Record<string, string> =
-        t.email === "application-accepted-landlord"
-          ? { landlordName: t.name, address, detailsList, agentName: sender?.name ?? packet.agent ?? "The Letting Experts", agentPhone, agentEmail: sender?.email ?? "" }
-          : {
-              /* OUR OWN WORDS NOW (16 Sep 2026). Howard's REX template 10979
-                 was carried across word for word on the 16th and replaced the
-                 same day with The Landlord Has Said Yes, once James had read
-                 it: the holding fee explained, then every step to the keys.
-                 Scotland takes no holding deposit, so it gets its own line
-                 (HOLDING_FEE_WORDING) - still wants checking by somebody who
-                 knows Scottish lettings. */
-              firstName: t.name.trim().split(/\s+/)[0] || "there",
-              address,
-              holdingFeeLine: scotland
-                ? HOLDING_FEE_WORDING.scotland.accepted()
-                : HOLDING_FEE_WORDING.england.accepted(holdingFee ?? "one week's rent"),
-              weekAheadList: WEEK_AHEAD_LINES,
-              link: `${SITE}/tenant/tenancy`,
-              agentName: sender?.name ?? packet.agent ?? "The Letting Experts",
-              agentPhone,
-              agentEmail: sender?.email ?? "",
-            };
-      const { subject, html } = renderTleEmail(t.email, vars);
-      if (!live) {
-        await rec.add({ id: t.id, label: `Email to ${t.who}`, state: "would", detail: `Would email ${t.to} - "${subject}"${scotland ? ", Scottish wording" : ""}.`, request: { to: t.to, subject, email: t.email } });
-        continue;
+    if (!live) {
+      for (const r of recipients) {
+        const { subject } = renderTleEmail(r.emailId, r.vars);
+        await rec.add({ id: `tell-${r.role}:${r.contactId ?? r.name}`, label: `Tell ${r.role} ${r.name}`, state: "would", detail: `Would put "${subject}" with the agent to send or ring about. Nothing goes to them by itself.`, request: { to: r.email, subject, email: r.emailId } });
       }
-      if (!sender) {
-        await rec.add({ id: t.id, label: `Email to ${t.who}`, state: "failed", detail: "Nobody is signed in to send this as, so it was not sent.", request: { to: t.to, subject } });
-        status = "failed";
-        continue;
-      }
-      const out = await sendAsAgent({ me: sender, to: t.to as string, toName: t.name, subject, html });
-      await rec.add({ id: t.id, label: `Email to ${t.who}`, state: out.sent ? "ok" : "failed", detail: out.detail, request: { to: t.to, subject } });
-      if (!out.sent) status = "failed";
+    } else {
+      const made = await putAcceptedWithAgent(applicationId, { packet, scotland, sender }).catch(() => null);
+      await rec.add({
+        id: "tell-customers",
+        label: "Tell the landlord and tenants",
+        state: "ok",
+        detail: made
+          ? `Put with ${made.agentName ?? "the agent"} to tell them (update ${made.id}): ${recipients.map((r) => r.name).join(", ")}. Nothing went to them by itself.`
+          : `Already with the agent to tell them about ${address}.`,
+      });
     }
   } catch (e) {
     if (!(e instanceof Stop)) {
@@ -641,4 +585,114 @@ export async function ensureHandoverTodos(): Promise<number> {
     added++;
   }
   return added;
+}
+
+
+/* ───────────────── the landlord said yes: with the agent ───────────────── */
+
+/**
+ * The two accepted emails, written for the people on the application: the
+ * landlord's confirmation, and each tenant's "the landlord has said yes" with
+ * the holding fee and every step to the keys. Drafts for the agent
+ * (lib/customer-updates), never sent from here.
+ */
+export function acceptedRecipients(
+  packet: Handoff,
+  o: { scotland: boolean; senderName: string | null; senderEmail: string | null }
+): Omit<UpdateRecipient, "state">[] {
+  const address = [packet.property, packet.locality].filter(Boolean).join(", ");
+  const money = (p: number | null) => (p == null ? null : `£${p.toLocaleString("en-GB")} pcm`);
+  const day = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }) : null;
+  /* Only what the application actually holds. Howard's template printed eight
+     lines whether or not REX had them; a row saying "Conditions:" and nothing
+     else is worse than no row. */
+  const detailsList = [
+    ["Offer amount", money(packet.rentPcm)],
+    ["Start date", day(packet.startDate)],
+    ["Length of tenancy", packet.agreementMonths ? `${packet.agreementMonths} months` : null],
+    ["Date accepted", day(packet.acceptedOn)],
+    ["Tenant names", packet.tenants.map((t) => t.name).filter(Boolean).join(", ") || null],
+  ]
+    .filter(([, v]) => v)
+    .map(([k, v]) => `${k}: <strong>${v}</strong>`)
+    .join("<br>");
+  const agentPhone = "0161 883 2525";
+  const agentName = o.senderName ?? packet.agent ?? "The Letting Experts";
+  /* One week's rent, and never a penny over: the Tenant Fees Act caps a
+     holding deposit at a week, so this rounds DOWN to the penny rather than
+     to the nearest pound. */
+  const holdingFee =
+    packet.rentPcm && packet.rentPcm > 0
+      ? (() => {
+          const pence = Math.floor(((packet.rentPcm * 12) / 52) * 100);
+          return pence % 100 === 0
+            ? `£${(pence / 100).toLocaleString("en-GB")}`
+            : `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        })()
+      : null;
+  const out: Omit<UpdateRecipient, "state">[] = [];
+  if (packet.landlord) {
+    out.push({
+      role: "landlord",
+      name: packet.landlord.name,
+      email: packet.landlord.email,
+      contactId: packet.landlord.contactId,
+      emailId: "application-accepted-landlord",
+      vars: { landlordName: packet.landlord.name, address, detailsList, agentName, agentPhone, agentEmail: o.senderEmail ?? "" },
+    });
+  }
+  for (const t of packet.tenants) {
+    out.push({
+      role: "tenant",
+      name: t.name,
+      email: t.email,
+      contactId: t.contactId,
+      emailId: "application-its-yours",
+      vars: {
+        /* Scotland takes no holding deposit, so it gets its own line
+           (HOLDING_FEE_WORDING) - still wants checking by somebody who knows
+           Scottish lettings. */
+        firstName: t.name.trim().split(/\s+/)[0] || "there",
+        address,
+        holdingFeeLine: o.scotland
+          ? HOLDING_FEE_WORDING.scotland.accepted()
+          : HOLDING_FEE_WORDING.england.accepted(holdingFee ?? "one week's rent"),
+        weekAheadList: WEEK_AHEAD_LINES,
+        link: `${SITE}/tenant/tenancy`,
+        agentName,
+        agentPhone,
+        agentEmail: o.senderEmail ?? "",
+      },
+    });
+  }
+  return out;
+}
+
+/**
+ * "The landlord has said yes", put with the agent. Called by a live handover
+ * and by the hourly application pass (lib/tenant-journey-emails) when REX
+ * moves an application to accepted; one key, so whichever comes first wins
+ * and the other finds it there.
+ */
+export async function putAcceptedWithAgent(
+  applicationId: string,
+  o: { packet?: Handoff; scotland?: boolean; sender?: { name: string; email: string } | null } = {}
+) {
+  const packet = o.packet ?? (await handoffFor(applicationId));
+  if (!packet) return null;
+  const agent = o.sender ?? (packet.agent ? await userByName(packet.agent).catch(() => null) : null);
+  const scotland = o.scotland ?? isScottish(packet.locality);
+  const recipients = acceptedRecipients(packet, { scotland, senderName: agent?.name ?? null, senderEmail: agent?.email ?? null });
+  return createUpdate({
+    key: `accepted:${applicationId}`,
+    applicationId,
+    property: [packet.property, packet.locality].filter(Boolean).join(", "),
+    agentEmail: agent?.email ?? null,
+    agentName: agent?.name ?? packet.agent ?? null,
+    kind: "application_accepted",
+    headline: "The landlord has said yes",
+    why: packet.blockers.length ? `Before the handover can go: ${packet.blockers.join(" ")}` : "",
+    recipients,
+  });
 }

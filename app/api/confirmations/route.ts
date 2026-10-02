@@ -8,6 +8,10 @@ import { draftViewingConfirmation, sendViewingConfirmation, viewingKey, type Vie
 import { publicOrigin } from "@/lib/origin";
 import { draftTakeOnConfirmation, sendTakeOnConfirmation } from "@/lib/takeon";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
+import { getUpdate, settleRecipient } from "@/lib/customer-updates";
+import { renderTleEmail } from "@/lib/email/tle-emails";
+import { sendAsAgent } from "@/lib/send-as-agent";
+import { logSystemEvent } from "@/lib/business/deal-store";
 
 /**
  * POST → a booking confirmation, seen before it goes (17 Sep 2026).
@@ -26,7 +30,9 @@ export const maxDuration = 60;
 
 type Body = {
   action?: "draft" | "send";
-  kind?: "appraisal" | "viewing" | "takeon";
+  kind?: "appraisal" | "viewing" | "takeon" | "update";
+  /** A customer update: which person on it (lib/customer-updates). */
+  index?: number;
   id?: string;
   /** Take-on: the time being booked, which is not on the appraisal record. */
   startsAt?: string;
@@ -112,6 +118,40 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(out.sent ? { sent: true, detail: out.detail } : { sent: false, detail: out.reason });
       }
       return NextResponse.json(await draftTakeOnConfirmation({ ma, me: actor, startsAt, minutes, origin }));
+    }
+
+    /* A CUSTOMER UPDATE (2 Oct 2026): the words the OS wrote for one person
+       on the let, read and changed by the agent, sent from their own address.
+       Sending settles that person on the update. */
+    if (body.kind === "update") {
+      const u = body.id ? await getUpdate(Number(body.id)) : null;
+      const who = u?.recipients[Number(body.index)];
+      if (!u || !who) return NextResponse.json({ ok: false, error: "That update isn't here any more." }, { status: 404 });
+      if (body.action === "send") {
+        if (!who.email) return NextResponse.json({ sent: false, detail: `There's no email address for ${who.name}. Ring them instead.` });
+        const subject = (body.subject ?? "").trim();
+        const html = body.html ?? "";
+        if (!subject || !html) return NextResponse.json({ sent: false, detail: "The email is empty." });
+        const r = await sendAsAgent({ me: actor, to: who.email, toName: who.name, subject, html });
+        if (r.sent) {
+          await settleRecipient(u.id, Number(body.index), { state: "emailed", by: actor.name || actor.email, note: subject });
+          if (u.dealId) {
+            await logSystemEvent(u.dealId, { id: actor.id, name: actor.name || actor.email, role: "agent" }, `Emailed ${who.name} (${who.role}): "${subject}"`).catch(() => null);
+          }
+        }
+        return NextResponse.json({ ok: r.sent, sent: r.sent, detail: r.detail });
+      }
+      const { subject, html } = renderTleEmail(who.emailId, who.vars);
+      return NextResponse.json({
+        ok: true,
+        to: who.email,
+        toName: `${who.name} (${who.role})`,
+        subject,
+        html,
+        attachment: null,
+        ...(who.email ? {} : { blocked: `There's no email address for ${who.name} on file. Ring them instead, or add their email and come back.` }),
+        ...(who.state === "emailed" && who.doneAt ? { alreadySent: { at: who.doneAt, to: who.email ?? "", subject: who.note ?? subject } } : {}),
+      });
     }
 
     if (body.kind === "viewing") {

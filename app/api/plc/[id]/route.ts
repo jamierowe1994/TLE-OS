@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { putPlcWithAgent } from "@/lib/plc-updates";
 import {
   checkCase,
   decideCase,
@@ -410,6 +411,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           from: before?.state ?? "checked",
           to: decision,
         });
+        /* The landlord hears it from the agent, never from here (2 Oct 2026). */
+        await putPlcWithAgent(decided, decision).catch(() => null);
         /* Approved, and the switch is on: the pack goes into Propoly's slots
            now, so she can generate the agreement without uploading anything.
            A push that fails is recorded on the case and never undoes the

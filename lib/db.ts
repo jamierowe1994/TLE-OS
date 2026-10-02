@@ -3248,6 +3248,32 @@ CREATE TABLE IF NOT EXISTS os_deal_events (
   told_at      TIMESTAMPTZ,
   told_note    TEXT
 );
+-- Customer updates (2 Oct 2026): something happened on a let that a landlord
+-- or tenant should hear about. Nothing tells them automatically - the agent
+-- emails them (edited, from their own address), calls and logs it, or marks
+-- it not needed. recipients is one entry per person with its own state.
+CREATE TABLE IF NOT EXISTS os_customer_updates (
+  id             BIGSERIAL PRIMARY KEY,
+  key            TEXT NOT NULL UNIQUE,
+  application_id TEXT,
+  deal_id        TEXT,
+  property       TEXT NOT NULL DEFAULT '',
+  agent_email    TEXT,
+  agent_name     TEXT,
+  kind           TEXT NOT NULL,
+  headline       TEXT NOT NULL,
+  why            TEXT NOT NULL DEFAULT '',
+  recipients     JSONB NOT NULL DEFAULT '[]'::jsonb,
+  state          TEXT NOT NULL DEFAULT 'open',
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  notified_at    TIMESTAMPTZ,
+  nudged_at      TIMESTAMPTZ,
+  escalated_at   TIMESTAMPTZ,
+  done_at        TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS os_customer_updates_open ON os_customer_updates (state, created_at);
+CREATE INDEX IF NOT EXISTS os_customer_updates_app ON os_customer_updates (application_id);
+CREATE INDEX IF NOT EXISTS os_customer_updates_deal ON os_customer_updates (deal_id);
 -- Money seen in PayProp for the deal, stamped the first time the watcher saw
 -- it. money_checked_at NULL means the money pass has never looked at this
 -- row, so the first look records silently rather than announcing old money.

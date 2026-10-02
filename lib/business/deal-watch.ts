@@ -11,6 +11,7 @@ import { sendEmail } from "@/lib/resend";
 import { switchOn } from "@/lib/switches";
 import { dealMovedEmail } from "@/lib/email/agent-emails";
 import { referenceState } from "@/lib/business/stage-evidence";
+import { updatesFromEvents } from "@/lib/business/deal-updates";
 import {
   eventSentence,
   kindFor,
@@ -282,8 +283,12 @@ export async function watchDeals(opts: { origin: string }): Promise<WatchResult>
   events.push(...(await watchReferences(deals)));
   events.push(...(await openPacks(events, deals)));
 
-  const told = await tellAgents(events, opts.origin);
-  return { ok: true, deals: deals.length, events, told };
+  /* Moves a customer should hear about become updates with the agent
+     (2 Oct 2026). Their email to the agent comes from the update, so the
+     "your deal moved" email is not sent for those as well. */
+  const covered = await updatesFromEvents(events, deals).catch(() => new Set<number>());
+  const told = await tellAgents(events.filter((e) => !covered.has(e.id)), opts.origin);
+  return { ok: true, deals: deals.length, events, told: told + covered.size };
 }
 
 /* ────────────────── the holding fee and the deposit, matched ───────────── */

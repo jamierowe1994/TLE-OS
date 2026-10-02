@@ -10,6 +10,7 @@ import {
 import { CHECKLIST_ITEMS, DEPOSIT_SCHEMES, PORTAL_STAGE_BY_KEY } from "@/lib/business/propoly-stages";
 import { derivedStageFor } from "@/lib/business/deal-stage";
 import { recordActivity, tellAgents } from "@/lib/business/deal-watch";
+import { updatesFromEvents } from "@/lib/business/deal-updates";
 import { publicOrigin } from "@/lib/origin";
 
 // Pre-tenancy actions on one deal — Kirstie (or an admin) only:
@@ -82,7 +83,12 @@ export async function POST(
         from: access.deal.statusKey,
         to: "move_day",
       });
-      if (ev) await tellAgents([ev], publicOrigin(req)).catch(() => 0);
+      /* The agent tells the landlord and tenant (2 Oct 2026): an update with
+         the words ready, whose email to the agent replaces "your deal moved". */
+      if (ev) {
+        const covered = await updatesFromEvents([ev], [access.deal]).catch(() => new Set<number>());
+        if (!covered.size) await tellAgents([ev], publicOrigin(req)).catch(() => 0);
+      }
     }
     if (stage === null) {
       await logSystemEvent(id, actor, "reset the stage to Propoly's live status");

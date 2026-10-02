@@ -1,3 +1,4 @@
+import { runUpdateNudges } from "@/lib/customer-updates";
 import { runNewsletters } from "@/lib/newsletters";
 import { NextRequest, NextResponse } from "next/server";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
@@ -273,7 +274,10 @@ export async function POST(req: NextRequest) {
 
   /* Marketing's newsletters and event emails that have come due (lib/newsletters). */
   const newsletters = await runNewsletters().catch((e) => ({ error: e instanceof Error ? e.message : "Newsletters failed." }));
-  return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, skipped: skipped.length, failed, decks, nudges, instructions, newsletters });
+  /* Customer updates nobody has dealt with: the agent is reminded, then
+     Kirstie hears (lib/customer-updates). Never the customer. */
+  const updates = await runUpdateNudges().catch((e) => ({ error: e instanceof Error ? e.message : "Update nudges failed." }));
+  return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, skipped: skipped.length, failed, decks, nudges, instructions, newsletters, updates });
 }
 
 /** A dry read: what is due, without sending it. Same key as the run: this

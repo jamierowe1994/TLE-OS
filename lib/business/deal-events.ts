@@ -42,7 +42,11 @@ export type DealEventKind =
   | "move_in_ready"
   /* A tenant's reference came back not acceptable in Propoly (2 Oct 2026).
      to_status holds the tenant's name, one row per tenant. */
-  | "reference_failed";
+  | "reference_failed"
+  /* A customer update the agent has not dealt with by the next working
+     morning (lib/customer-updates). dealId is upd-<update id>; to_status is
+     the update's headline. Feed only: this is how it reaches Kirstie. */
+  | "update_untouched";
 
 export interface DealEvent {
   id: number;
@@ -133,6 +137,8 @@ export function eventSentence(e: Pick<DealEvent, "event" | "toStatus" | "fromSta
       return "Signed off: compliant and ready to move in";
     case "reference_failed":
       return `Failed referencing: ${e.toStatus ?? "a tenant"}`;
+    case "update_untouched":
+      return `Customer not told yet: ${e.toStatus ?? "an update"}`;
     case "plc_submitted":
       return e.fromStatus === "deferred" ? "PLC pack back with you, resubmitted" : "PLC pack sent to you for checking";
     case "plc_checked":
@@ -160,6 +166,7 @@ export function hrefFor(e: Pick<DealEvent, "event" | "dealId">): string | null {
     return `/plc/start?application=${encodeURIComponent(e.dealId.replace(/^plc-/, ""))}`;
   }
   if (e.event === "gone") return null;
+  if (e.event === "update_untouched") return `/applications/updates?open=${encodeURIComponent(e.dealId.replace(/^upd-/, ""))}`;
   return `/pre-tenancy?deal=${encodeURIComponent(e.dealId)}`;
 }
 
@@ -195,6 +202,6 @@ export function eventTone(kind: DealEventKind): "ok" | "warn" | "none" {
   )
     return "ok";
   /* A pack landing on her desk is amber: it is the one row that waits on her. */
-  if (kind === "cancelled" || kind === "moved_back" || kind === "gone" || kind === "plc_submitted" || kind === "plc_checked" || kind === "reference_failed") return "warn";
+  if (kind === "cancelled" || kind === "moved_back" || kind === "gone" || kind === "plc_submitted" || kind === "plc_checked" || kind === "reference_failed" || kind === "update_untouched") return "warn";
   return "none";
 }

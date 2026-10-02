@@ -485,7 +485,7 @@ export const AGENT_GUIDES: Guide[] = [
       },
       {
         title: "Handing Over to the Deal",
-        body: "An accepted application shows Hand over to the deal: the landlord, the tenants, the terms, and every certificate the property needs, with a count of anything short. Before this step nothing about the let exists on the deal side; the handover sets up the landlord and the property there and sends the good news.",
+        body: "An accepted application shows Hand over to the deal: the landlord, the tenants, the terms, and every certificate the property needs, with a count of anything short. Before this step nothing about the let exists on the deal side; the handover sets up the landlord and the property there. The good news is yours to give: it lands in Customer updates, already written, to email after reading or to ring about.",
         image: img("a-handover"),
         how: "For now the handover is in rehearsal. Rehearse the handover works out every step and writes nothing, while the handover itself still runs the way it always has. When rehearsals keep matching, it is switched on, and the button becomes Hand over to the deal.",
         sends:

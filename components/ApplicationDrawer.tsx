@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSlideOver } from "@/lib/use-slide-over";
+import CustomerUpdates from "@/components/CustomerUpdates";
 import DoodleIcon from "@/components/DoodleIcon";
 import Doodles from "@/components/Doodles";
 import PropertyPhoto from "@/components/PropertyPhoto";
@@ -571,6 +572,19 @@ export default function ApplicationDrawer({
               {/* Above the boxes, deliberately: once a deal is accepted the
                   handover IS the next action. */}
               {aside && <div className="mt-5">{aside}</div>}
+
+              {/* Who should hear what (2 Oct 2026): nothing reaches the
+                  landlord or tenant on its own, the agent emails, rings or
+                  marks it not needed. Draws nothing when nobody is waiting. */}
+              <div className="mt-5 empty:hidden">
+                <CustomerUpdates
+                  key={`${app.id}:${journey?.ok ? journey.deal?.id ?? "" : ""}`}
+                  applicationId={app.id}
+                  dealId={journey?.ok ? journey.deal?.id ?? null : null}
+                  openOnly
+                  hideWhenEmpty
+                />
+              </div>
 
               {/* ── THREE BOXES (James, 12 Sep 2026): what needs doing, the
                   checks, and the running account of the deal, side by side;
