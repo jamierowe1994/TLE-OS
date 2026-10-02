@@ -1,7 +1,7 @@
 import SwiftUI
 import WebKit
 
-/// The one full-screen web view. The page draws its own navigation (components/m/PhoneFrame.tsx),
+/// The one full-screen web view. The page draws its own navigation (components/app/AppFrame.tsx),
 /// and the sign-in pages simply show in the same view when nobody is signed in.
 @MainActor @Observable
 final class AppModel {
@@ -24,7 +24,7 @@ final class AppModel {
     var launchProgress: Double { web.progress }
 
     init() {
-        web = WebState(rootURL: Config.appURL(path: "/m"))
+        web = WebState(rootURL: Config.appURL(path: "/app"))
         web.onURLChange = { [weak self] _, url in self?.urlChanged(url) }
         web.onFinished = { [weak self] _, url in self?.pageFinished(url) }
         web.onFailed = { [weak self] _ in self?.launched = true }

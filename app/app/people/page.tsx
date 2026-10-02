@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PhonePerson } from "@/app/api/m/people/route";
 import type { NearbyPerson } from "@/app/api/m/nearby/route";
-import { ErrorLine, PhoneTop, ReachButtons, SearchBox, Spinner } from "../bits";
+import { ErrorLine, PhoneTop, ReachButtons, SearchBox, Segmented, Spinner } from "../bits";
 import { RadiusBox, RadiusSheet, type RadiusPick } from "../radius";
 
 /**
@@ -25,7 +25,9 @@ export default function PhonePeople() {
   const [error, setError] = useState<string | null>(null);
   const [slowNote, setSlowNote] = useState<string | null>(null);
   const turn = useRef(0);
-  const [side, setSide] = useState<"tenant" | "landlord" | null>(null);
+  /* One People tab with a Tenants / Landlords switch (2 Oct 2026); it was two
+     menu items. ?who= still picks the side, so old links land right. */
+  const [side, setSide] = useState<"tenant" | "landlord">("tenant");
   const [sheet, setSheet] = useState(false);
   const [radius, setRadius] = useState<RadiusPick | null>(null);
   const [near, setNear] = useState<NearbyPerson[] | null>(null);
@@ -36,8 +38,15 @@ export default function PhonePeople() {
     const q = sp.get("q");
     if (q) setNeedle(q);
     const w = sp.get("who");
-    setSide(w === "tenant" || w === "landlord" ? w : null);
+    if (w === "landlord") setSide("landlord");
   }, []);
+
+  const pickSide = (w: "tenant" | "landlord") => {
+    setSide(w);
+    const url = new URL(window.location.href);
+    url.searchParams.set("who", w);
+    window.history.replaceState(null, "", url);
+  };
 
   useEffect(() => {
     const term = needle.trim();
@@ -74,7 +83,7 @@ export default function PhonePeople() {
     if (!radius) return setNear(null);
     setNear(null);
     setNearError(null);
-    const sp = new URLSearchParams({ who: side ?? "tenant", lat: String(radius.lat), lng: String(radius.lng), miles: String(radius.miles) });
+    const sp = new URLSearchParams({ who: side, lat: String(radius.lat), lng: String(radius.lng), miles: String(radius.miles) });
     fetch(`/api/m/nearby?${sp.toString()}`, { cache: "no-store" })
       .then(async (r) => {
         const j = (await r.json()) as { ok?: boolean; people?: NearbyPerson[]; error?: string };
@@ -91,21 +100,25 @@ export default function PhonePeople() {
   const shown = new Set((fast ?? []).map((p) => `${p.name.toLowerCase()}|${p.phone.replace(/\D/g, "")}|${p.email.toLowerCase()}`));
   const extra = (slow ?? []).filter((p) => !shown.has(`${p.name.toLowerCase()}|${p.phone.replace(/\D/g, "")}|${p.email.toLowerCase()}`));
   /* Only the other side is left out - a plain contact could be either. */
-  const other = side === "tenant" ? /landlord/i : side === "landlord" ? /tenant|applicant/i : null;
-  const all = [...(fast ?? []), ...extra].filter((p) => !other || !other.test(p.role));
+  const other = side === "tenant" ? /landlord/i : /tenant|applicant/i;
+  const all = [...(fast ?? []), ...extra].filter((p) => !other.test(p.role));
   const searching = needle.trim().length >= 2;
-  const title = side === "tenant" ? "Tenant" : side === "landlord" ? "Landlord" : "Find a Person";
 
   return (
     <main>
-      <PhoneTop title={title} />
-      <SearchBox value={needle} onChange={setNeedle} placeholder="Name, phone or email" />
-      {side && (
-        <RadiusBox
-          picked={radius}
-          onOpen={() => setSheet(true)}
-        />
-      )}
+      <PhoneTop title="People" />
+      <Segmented
+        value={side}
+        onChange={pickSide}
+        options={[
+          { value: "tenant", label: "Tenants" },
+          { value: "landlord", label: "Landlords" },
+        ]}
+      />
+      <div className="mt-3">
+        <SearchBox value={needle} onChange={setNeedle} placeholder="Name, phone or email" />
+      </div>
+      <RadiusBox picked={radius} onOpen={() => setSheet(true)} />
 
       <div className="mt-4">
         {radius ? (
@@ -133,7 +146,7 @@ export default function PhonePeople() {
           </>
         ) : !searching ? (
           <p className="px-1 text-[14px] text-muted">
-            Type at least two letters of their name, or part of their number{side ? ", or search by radius" : ""}.
+            Type at least two letters of their name, or part of their number, or search by radius.
           </p>
         ) : (
           <>
@@ -141,7 +154,7 @@ export default function PhonePeople() {
             {fast === null && <Spinner label="Searching" className="py-4" />}
             <ul className="grid grid-cols-1 gap-3">
               {all.map((p) => (
-                <li key={p.key} className="rounded-[20px] border border-line/70 bg-card p-4">
+                <li key={p.key} className="m-group p-4">
                   <p className="text-[17px] font-semibold leading-snug">{p.name}</p>
                   <p className="mt-0.5 text-[13px] text-muted">{[p.role, p.context].filter(Boolean).join(" · ")}</p>
                   {(p.phone || p.email) && (
@@ -182,7 +195,7 @@ export default function PhonePeople() {
 function OpenRow({ p }: { p: NearbyPerson }) {
   const [open, setOpen] = useState(false);
   return (
-    <li className="rounded-[20px] border border-line/70 bg-card">
+    <li className="m-group">
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center gap-3 px-4 py-3.5 text-left">
         <span className="min-w-0 flex-1">
           <span className="block text-[16px] font-semibold leading-snug">{p.name}</span>

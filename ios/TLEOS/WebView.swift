@@ -3,7 +3,7 @@ import SwiftUI
 import WebKit
 
 extension UIColor {
-    /// The phone pages' warm grey (#F4F3F1, app/m/m.css), so the app never
+    /// The phone pages' warm grey (#F4F3F1, app/app/m.css), so the app never
     /// flashes white before a page paints.
     static let osPage = UIColor(red: 244 / 255, green: 243 / 255, blue: 241 / 255, alpha: 1)
 

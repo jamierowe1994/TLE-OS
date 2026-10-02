@@ -646,6 +646,10 @@ export const config = {
        app/mail-img/[name]. `nl` is the same reader's open pixel and link
        clicks (1 Oct 2026, app/nl/*): a token, never a session, and a signed
        link that only ever leads to an address that was in the email. */
-    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|visit|api/visit|rehearsal|api/rehearsal|proof|send|api/tenant/passport|api/tenant/feedback|api/tenant/apply|api/tenant/homes|api/tenant/session|api/tenant/maintenance|api/tenant/documents|api/landlord|api/calendar|brand|email|mail-img|nl|rex|r|api/r|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$).*)",
+    /* `sw.js` is the app's service worker (2 Oct 2026, public/sw.js): a
+       browser fetches it with no say over the redirect, and a 307 to the
+       sign-in page means no phone alerts at all. A static file, at the root
+       only, holding nothing but the code that shows an alert. */
+    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|visit|api/visit|rehearsal|api/rehearsal|proof|send|api/tenant/passport|api/tenant/feedback|api/tenant/apply|api/tenant/homes|api/tenant/session|api/tenant/maintenance|api/tenant/documents|api/landlord|api/calendar|brand|email|mail-img|nl|rex|r|api/r|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$|sw\\.js$).*)",
   ],
 };
