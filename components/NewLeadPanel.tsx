@@ -487,8 +487,40 @@ export default function NewLeadPanel({
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         data-shown={shown}
-        className="so-panel absolute inset-y-0 right-0 flex overflow-hidden rounded-l-2xl w-full flex-col bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] lg:w-[76%] xl:w-[68%]"
+        className={`so-panel absolute inset-y-0 right-0 flex overflow-hidden rounded-l-2xl w-full flex-col bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] ${
+          /* The fork comes out further, so the two halves have room each side
+             of the line (James, 2 Oct 2026); the forms keep the drawer width. */
+          !saved && kind === null ? "lg:w-[86%] xl:w-[80%]" : "lg:w-[76%] xl:w-[68%]"
+        }`}
       >
+        {!saved && kind === null ? (
+          /* The fork's own header (James, 2 Oct 2026, from his mock): the
+             question large, no rule under it, the close button on its own. */
+          <div className="flex shrink-0 items-start justify-between gap-4 px-6 pt-8 sm:px-16 sm:pt-11">
+            <div className="min-w-0">
+              <p className="text-[11.5px] font-semibold uppercase tracking-[0.22em] text-muted">New lead</p>
+              <h2 className="hand relative mt-2.5 inline-block text-[38px] leading-[1.05] sm:text-[54px]">
+                Who Are You Adding?
+                {/* The pink stroke under the first words, as in his mock
+                    ("I think the underline does add something"). */}
+                <svg aria-hidden viewBox="0 0 300 16" preserveAspectRatio="none" className="pointer-events-none absolute -bottom-3 left-[5%] h-[12px] w-[52%]">
+                  <path d="M3 11 C 70 3, 170 2, 297 8" fill="none" stroke="#F2B8AD" strokeWidth="5" strokeLinecap="round" />
+                </svg>
+              </h2>
+              <p className="mt-5 text-[14.5px] leading-relaxed text-muted">
+                Choose the type of lead to get started, and we&apos;ll take it from there.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-line/80 text-[14px] text-muted transition-colors hover:text-ink"
+              title="Close (Esc)"
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line/70 px-6 py-5">
           <div>
             <h2 className="text-[24px] leading-tight">{saved ? "Added" : "New lead"}</h2>
@@ -507,6 +539,7 @@ export default function NewLeadPanel({
             ✕
           </button>
         </div>
+        )}
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
           {saved ? (
@@ -686,53 +719,57 @@ export default function NewLeadPanel({
                  because for a landlord the property IS the enquiry, and the
                  dossier can be reading its history while the phone call is
                  still on pleasantries. ── */
-            /* No boxes — two full-bleed halves split by one line, each an
-               illustration big enough to carry the choice and a word big
-               enough to read across the room (James, 8 Aug 2026). */
-            <div className="mx-auto flex h-full max-w-3xl flex-col justify-center">
-              {/* James's picture for a new lead (11 Sep 2026). */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/brand/art/new-lead.webp" alt="" aria-hidden className="pointer-events-none mx-auto mb-2 h-[200px] w-auto shrink-0" />
+            /* Two halves side by side, split by one line, each a picture on
+               its own soft circle, the word, one line, and the arrow (James's
+               layout, 2 Oct 2026, with his two drawings). Stacks on a phone. */
+            <div className="relative mx-auto grid max-w-6xl grid-cols-1 divide-y divide-line/70 sm:mt-4 sm:grid-cols-2 sm:divide-y-0">
+              {/* The line between them is short and centred, not floor to
+                  ceiling (James, 2 Oct 2026). */}
+              <span aria-hidden className="pointer-events-none absolute left-1/2 top-1/2 hidden h-[72%] w-px -translate-y-1/2 bg-line/80 sm:block" />
               {(
                 [
                   {
                     k: "tenant" as const,
                     title: "Tenant",
-                    blurb: "Someone looking for a home — budget, area, viewings.",
-                    art: "/illustrations/notioly/place-search.svg",
+                    blurb: "Someone looking for a home: budget, area, viewings and more.",
+                    art: "/illustrations/lead/tenant-window.webp",
+                    /* A blush disc up behind the window, as in the mock. */
+                    disc: { background: "#F6DDD4", width: "62%", left: "10%", top: "4%" },
                   },
                   {
                     k: "landlord" as const,
                     title: "Landlord",
-                    blurb: "Someone with a property — we'll look it up as you type the address.",
-                    art: "/illustrations/notioly/home-insurance.svg",
+                    blurb: "Someone with a property. We'll look it up as you type the address.",
+                    art: "/illustrations/lead/landlord-door.webp",
+                    /* Sage, low behind the terrace on the left. */
+                    disc: { background: "#DCE4D3", width: "48%", left: "6%", top: "30%" },
                   },
                 ]
-              ).map((c, i) => (
+              ).map((c) => (
                 <PressButton
                   key={c.k}
                   onClick={() => {
                     setKind(c.k);
                     set("enquiry")(c.k === "landlord" ? "Landlord" : "General");
                   }}
-                  className={`group flex min-h-0 flex-1 items-center gap-10 px-8 py-6 text-left ${
-                    i === 1 ? "border-t border-line/70" : ""
-                  }`}
+                  className="group flex min-h-0 flex-col items-center justify-start px-6 py-8 text-center sm:px-14 sm:py-6"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={c.art}
-                    alt=""
-                    aria-hidden
-                    className="art h-52 w-52 shrink-0 transition-transform duration-300 group-hover:scale-[1.05]"
-                  />
-                  <span className="min-w-0">
-                    <span className="hand block text-[42px] leading-tight">{c.title}</span>
-                    <span className="mt-2 block max-w-sm text-[14px] leading-relaxed text-muted">
-                      {c.blurb}
-                    </span>
+                  <span className="relative flex h-[230px] w-full max-w-[380px] items-end justify-center sm:h-[330px]">
+                    <span aria-hidden className="absolute aspect-square rounded-full" style={c.disc} />
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={c.art}
+                      alt=""
+                      aria-hidden
+                      className="relative h-full w-auto max-w-full object-contain transition-transform duration-300 group-hover:scale-[1.03]"
+                    />
                   </span>
-                  <span className="ml-auto text-[26px] text-muted transition-transform duration-300 group-hover:translate-x-1.5">
+                  <span className="hand mt-6 block text-[40px] leading-none sm:text-[46px]">{c.title}</span>
+                  <span className="mt-3 block max-w-xs text-[14.5px] leading-relaxed text-muted">{c.blurb}</span>
+                  <span
+                    aria-hidden
+                    className="mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-accent-soft text-[22px] text-ink transition-transform duration-300 group-hover:translate-x-1.5"
+                  >
                     →
                   </span>
                 </PressButton>
