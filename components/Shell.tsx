@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import Wordmark from "@/components/Wordmark";
 import { warmRoute } from "@/lib/route-warm";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -375,23 +376,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             hides TLE, and the narrow rail just says OS. The collapse toggle
             sits beside it on the same row. */}
         <div className={`relative flex items-center px-1 ${collapsed ? "flex-col gap-3" : "justify-between"}`}>
-          <span
-            aria-label="TLE OS"
-            className="flex select-none items-baseline whitespace-nowrap text-[30px] leading-none tracking-[-0.03em] text-ink"
-            style={{ fontFamily: "var(--font-heading)" }}
-          >
-            <span
-              aria-hidden
-              className={`inline-block overflow-hidden font-[800] transition-[max-width,opacity] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                collapsed ? "max-w-0 opacity-0" : "max-w-[90px] opacity-100"
-              }`}
-            >
-              TLE
-            </span>
-            <span aria-hidden className={`font-[200] tracking-[-0.07em] transition-[margin] duration-[360ms] ${collapsed ? "ml-0" : "ml-[3px]"}`}>
-              OS
-            </span>
-          </span>
+          <Wordmark collapsed={collapsed} />
           <button
             type="button"
             onClick={toggleCollapsed}

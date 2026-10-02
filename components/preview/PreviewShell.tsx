@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Wordmark from "@/components/Wordmark";
 import DoodleIcon from "@/components/DoodleIcon";
 import AssistantCharacter, { type Mood } from "@/components/AssistantCharacter";
 import { FRONT, BACK, type NavItem } from "@/lib/nav";
@@ -176,14 +177,7 @@ export default function PreviewShell() {
         {/* The same wordmark as the real rail (components/Shell): Bricolage
             Grotesque, TLE at 800 and OS at 200, no house. */}
         <div className="flex items-center px-1">
-          <span
-            aria-label="TLE OS"
-            className="flex select-none items-baseline whitespace-nowrap text-[30px] leading-none tracking-[-0.03em] text-ink"
-            style={{ fontFamily: "var(--font-bricolage), var(--font-heading)" }}
-          >
-            <span aria-hidden className="font-[800]">TLE</span>
-            <span aria-hidden className="ml-[3px] font-[200] tracking-[-0.07em]">OS</span>
-          </span>
+          <Wordmark />
         </div>
         <div className="mt-4 border-t border-line/70" />
 

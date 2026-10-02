@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Wordmark from "@/components/Wordmark";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -105,27 +106,16 @@ export default function WorkspaceRail({
           collapsed ? "px-2.5" : "px-4"
         }`}
       >
-        <div className={`relative flex items-center px-1 ${collapsed ? "flex-col gap-2" : "justify-between"}`}>
-          {collapsed ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img src="/brand/tle-os-house.png" alt="TLE OS" className="h-12 w-auto shrink-0 object-contain" />
-          ) : (
-            <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/brand/tle-os-logo.png" alt="TLE OS" className="art-light h-auto w-[78%] object-contain" />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/brand/tle-os-logo-dark.png" alt="" aria-hidden className="art-dark h-auto w-[78%] object-contain" />
-            </>
-          )}
+        <div className={`relative flex items-center px-1 ${collapsed ? "flex-col gap-3" : "justify-between"}`}>
+          {/* The wordmark, as on the agent rail (2 Oct 2026): no house. */}
+          <Wordmark collapsed={collapsed} />
           {/* The same arrow, in the same place, as the agent rail's. */}
           <button
             type="button"
             onClick={fold}
             title={collapsed ? "Expand" : "Collapse"}
             aria-label={collapsed ? "Expand the menu" : "Collapse the menu"}
-            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-line/80 text-[11px] text-muted transition-colors hover:text-ink ${
-              collapsed ? "" : "absolute right-1 top-[64.5%] -translate-y-1/2"
-            }`}
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-line/80 text-[11px] text-muted transition-colors hover:text-ink"
           >
             {collapsed ? "»" : "«"}
           </button>

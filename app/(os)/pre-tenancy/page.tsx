@@ -694,19 +694,9 @@ function Board({ user }: { user: UserProfile }) {
           Moving soon
           {upcomingMoveIns.length ? <span className="rounded-full bg-ink/10 px-1.5 py-0.5 text-[11px]">{upcomingMoveIns.length}</span> : null}
         </button>
-        <button type="button" onClick={() => setTasksTodayOpen(true)} className="btn-press flex items-center gap-2 rounded-full border border-line bg-card px-3.5 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-black/30">
-          <span className="text-accent-dark"><DoodleIcon name="checklist" size={14} /></span>
-          Tasks
-          {todayCount ? <span className="rounded-full bg-accent-dark px-1.5 py-0.5 text-[11px] text-white">{todayCount}</span> : null}
-        </button>
-        <Link href="/pre-tenancy/feed" className="btn-press flex items-center gap-2 rounded-full border border-line bg-card px-3.5 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-black/30">
-          <span className="text-accent-dark"><DoodleIcon name="bell" size={14} /></span>
-          What moved
-        </Link>
-        <button type="button" onClick={() => setMailboxOpen(true)} className="btn-press flex items-center gap-2 rounded-full border border-line bg-card px-3.5 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-black/30" title="Connect your mailbox for the Emails tab">
-          <span className="text-accent-dark"><DoodleIcon name="mail" size={14} /></span>
-          Mailbox
-        </button>
+        {/* Two buttons up here (James, 2 Oct 2026: "a little bit messy").
+            Tasks, What moved, Mailbox and How this works are in the three
+            dots by the filters. */}
         <button
           type="button"
           onClick={() => void refreshNow()}
@@ -717,10 +707,6 @@ function Board({ user }: { user: UserProfile }) {
           <span className={`text-accent-dark ${refreshing ? "animate-spin" : ""}`}><DoodleIcon name="clock" size={14} /></span>
           {refreshing ? "Refreshing" : updatedLabel(savedAt)}
         </button>
-        <Link href="/pre-tenancy/knowledge?guide=board" className="flex items-center gap-2 rounded-full border border-line/80 bg-card px-3.5 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-ink/40">
-          <span className="text-accent-dark"><DoodleIcon name="note" size={14} /></span>
-          How this works
-        </Link>
       </PreTenancyHero>
 
       {!configured ? (
@@ -761,7 +747,10 @@ function Board({ user }: { user: UserProfile }) {
               controls - three stacked strips of chrome doing one job between
               them: deciding what you are looking at. They are one row now and
               the board starts that much higher. */}
-          <div className="fade-up flex flex-wrap items-center gap-2">
+          {/* relative z-30: the three-dot menu opens down over the banner and
+              the columns, which animate in later and would otherwise paint
+              over it. */}
+          <div className="fade-up relative z-30 flex flex-wrap items-center gap-2">
             <Chip on={chip === "all"} onClick={() => setChip("all")} count={activeCount}>All properties</Chip>
             <Chip on={chip === "attention"} onClick={() => setChip(chip === "attention" ? "all" : "attention")} count={flaggedDeals.length} tone="red">Needs attention</Chip>
             <Chip on={chip === "stalled"} onClick={() => setChip(chip === "stalled" ? "all" : "stalled")} count={stalled.length} tone="red">Stalled</Chip>
@@ -803,6 +792,25 @@ function Board({ user }: { user: UserProfile }) {
                         {showCancelled ? "Hide cancelled" : "Show cancelled"}
                         <span className="text-[11px] text-muted">{byStage.cancelled.length}</span>
                       </button>
+                      {/* Moved down from the header (2 Oct 2026). */}
+                      <div className="my-1 border-t border-line" />
+                      <button type="button" onClick={() => { setChecksOpen(true); setMoreOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] text-ink transition hover:bg-page">
+                        <span className="flex items-center gap-2"><DoodleIcon name="target" size={13} className="text-accent-dark" />What needs a look</span>
+                        {attention.length ? <span className="text-[11px] text-muted">{attention.length}</span> : null}
+                      </button>
+                      <button type="button" onClick={() => { setTasksTodayOpen(true); setMoreOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] text-ink transition hover:bg-page">
+                        <span className="flex items-center gap-2"><DoodleIcon name="checklist" size={13} className="text-accent-dark" />Tasks</span>
+                        {todayCount ? <span className="rounded-full bg-accent-dark px-1.5 py-0.5 text-[10.5px] text-white">{todayCount}</span> : null}
+                      </button>
+                      <Link href="/pre-tenancy/feed" onClick={() => setMoreOpen(false)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-ink transition hover:bg-page">
+                        <DoodleIcon name="bell" size={13} className="text-accent-dark" />What moved
+                      </Link>
+                      <button type="button" onClick={() => { setMailboxOpen(true); setMoreOpen(false); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-ink transition hover:bg-page">
+                        <DoodleIcon name="mail" size={13} className="text-accent-dark" />Mailbox
+                      </button>
+                      <Link href="/pre-tenancy/knowledge?guide=board" onClick={() => setMoreOpen(false)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-ink transition hover:bg-page">
+                        <DoodleIcon name="note" size={13} className="text-accent-dark" />How this works
+                      </Link>
                     </div>
                   </>
                 ) : null}
@@ -831,58 +839,9 @@ function Board({ user }: { user: UserProfile }) {
             </section>
           )}
 
-          {/* ── today's focus: the deals asking for a look ── */}
-          {attention.length > 0 ? (
-            <section className={`fade-up card ${focusOpen ? "p-5" : "px-5 py-3"}`}>
-              <div className="flex items-start justify-between gap-4">
-                <button
-                  type="button"
-                  onClick={() => foldFocus(!focusOpen)}
-                  aria-expanded={focusOpen}
-                  className="flex min-w-0 flex-1 items-start gap-3 text-left"
-                >
-                  <span className={`flex shrink-0 items-center justify-center rounded-full bg-accent-soft text-[#9d4340] ${focusOpen ? "h-10 w-10" : "h-8 w-8"}`}><DoodleIcon name="target" size={focusOpen ? 17 : 14} /></span>
-                  <div className="min-w-0">
-                    <h2 className={`font-bold leading-tight ${focusOpen ? "text-[17px]" : "text-[15px]"}`}>
-                      Today&apos;s focus
-                      {/* Folded, the count IS the card: it has to say whether
-                          there is anything in there without being opened. */}
-                      {!focusOpen ? (
-                        <span className="ml-2 text-[12.5px] font-semibold text-[#9d4340]">
-                          {attention.length} {attention.length === 1 ? "deal needs" : "deals need"} a look
-                        </span>
-                      ) : null}
-                    </h2>
-                    {focusOpen ? <p className="mt-0.5 text-[12px] text-muted">Deals that need your attention today.</p> : null}
-                  </div>
-                  <span aria-hidden className={`shrink-0 pt-1 text-[11px] text-muted transition-transform ${focusOpen ? "rotate-180" : ""}`}>▾</span>
-                </button>
-                <button type="button" onClick={() => setChecksOpen(true)} className="flex shrink-0 items-center gap-1 pt-1 text-[12px] font-semibold text-muted transition-colors hover:text-ink">
-                  View all ({attention.length}) <DoodleIcon name="trend-up" size={11} />
-                </button>
-              </div>
-              <div className={`mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3 ${focusOpen ? "" : "hidden"}`}>
-                {attention.slice(0, 3).map((al) => {
-                  const d = (deals ?? []).find((x) => x.app.id === al.dealId);
-                  if (!d) return null;
-                  const lead = d.app.tenants.find((t) => t.isPrimary) ?? d.app.tenants[0];
-                  return (
-                    <button key={al.key} type="button" onClick={() => setOpenId(d.app.id)} className="btn-press flex items-start gap-3 rounded-2xl border border-line/70 p-2.5 text-left transition hover:border-black/25">
-                      <Photo src={d.app.image} className="h-[72px] w-24 shrink-0 rounded-xl" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13.5px] font-semibold">{d.app.propertyName}</span>
-                        <span className="block truncate text-[12px] text-muted">{lead ? lead.name : d.agentName ?? ""}</span>
-                        <span className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-                          <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${RED_PILL}`}>{stageLabel(al.stageKey)}</span>
-                          <span className="line-clamp-1 text-[11.5px] text-[#9d4340]">{al.text.split(" — ")[1] ?? al.text}</span>
-                        </span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          ) : null}
+          {/* Today's focus came off (James, 2 Oct 2026): it was the Needs
+              attention chip's list a second time. The reasons are still a
+              click away - "What needs a look" in the three dots. */}
 
           {view === "kanban" ? (
             /* ── the columns: one per stage ── */
@@ -1434,7 +1393,14 @@ function DealWorkspace({
                   {deal.app.locality}
                 </p>
                 <p className="mt-2 text-[13.5px]">
-                  <span className="text-muted">Agent</span> <span className="ml-1 font-semibold">{deal.agentName ?? "Unassigned"}</span>
+                  <span className="text-muted">Agent</span>{" "}
+                  {deal.agentEmail ? (
+                    <a href={`mailto:${deal.agentEmail}`} title={deal.agentEmail} className="ml-1 font-semibold underline-offset-2 hover:underline">
+                      {deal.agentName ?? deal.agentEmail}
+                    </a>
+                  ) : (
+                    <span className="ml-1 font-semibold">{deal.agentName ?? "Unassigned"}</span>
+                  )}
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-1.5">
                   <span className={`rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold ${cancelled ? "bg-page text-muted" : "bg-[#fdefec] text-[#9d4340]"}`}>
@@ -1449,107 +1415,27 @@ function DealWorkspace({
                   {(p?.service ?? deal.serviceLevel ?? "").toUpperCase()}
                 </span>
               ) : null}
-              {/* PLC (RLP) from PayProp's instructions, exact-join or absent.
-                  No pill at all when it isn't recorded — an empty state here
-                  must not read as "no cover". */}
-              {deal.rlp ? (
-                <span
-                  title={deal.rlp.evidence}
-                  className={`rounded-full border px-2.5 py-0.5 text-[10.5px] font-semibold ${
-                    deal.rlp.status === "protected"
-                      ? "border-transparent bg-[#f1f4ec] text-[#56634a]"
-                      : "border-line bg-page text-muted"
-                  }`}
-                >
-                  {deal.rlp.status === "protected" ? "PLC PROTECTED" : "NO PLC"}
-                </span>
-              ) : null}
-              {/* A deposit registered in PayProp against this property's live
-                  tenancy — its ledger reference in the tooltip. */}
-              {deal.tenancy?.depositId ? (
-                <span
-                  title={`PayProp deposit ${deal.tenancy.depositId}${
-                    deal.tenancy.startDate ? ` · tenancy from ${deal.tenancy.startDate}` : ""
-                  }`}
-                  className="rounded-full bg-page px-2.5 py-0.5 text-[10.5px] font-semibold text-muted"
-                >
-                  DEPOSIT HELD
-                </span>
-              ) : null}
-              {/* Landlord Terms of Business, from REX's DocuSign log.
-                  Three-way on the known vocabulary: completed is green,
-                  sent/partially_signed amber, and anything else — failed,
-                  voided, statuses REX invents later — gets its own
-                  needs-a-look pill rather than masquerading as "sent"
-                  (review find). */}
+              {/* PLC, deposit and terms of business pills came off (James,
+                  2 Oct 2026): each has its own line in Tenancy progress. */}
               {/* Can this property legally be let? Kirstie's board is the last
                   place anyone looks before a tenancy starts, so a missing gas
-                  certificate belongs HERE, not two pages away. Silent when the
-                  address match wasn't confident or REX didn't finish — a
-                  guessed property's certificates are worse than none. */}
-              {deal.compliance?.checked ? (
-                deal.compliance.outstanding === 0 ? (
-                  <span
-                    title="Every required certificate is on file and in date"
-                    className="rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-[10.5px] font-semibold text-emerald-700"
-                  >
-                    COMPLIANT
-                  </span>
-                ) : (
-                  <span
-                    title={deal.compliance.problems.join(", ")}
-                    className={`rounded-full border px-2.5 py-0.5 text-[10.5px] font-semibold ${
-                      deal.compliance.expired > 0
-                        ? "border-transparent bg-[#fdefec] text-[#9d4340]"
-                        : "border-transparent bg-amber-50 text-amber-700"
-                    }`}
-                  >
-                    {deal.compliance.expired > 0
-                      ? `${deal.compliance.expired} EXPIRED`
-                      : `${deal.compliance.outstanding} COMPLIANCE`}
-                  </span>
-                )
+                  certificate belongs HERE. Only when something is short (2 Oct
+                  2026): a "compliant" pill was one more thing to read. */}
+              {deal.compliance?.checked && deal.compliance.outstanding > 0 ? (
+                <span
+                  title={deal.compliance.problems.join(", ")}
+                  className={`rounded-full border px-2.5 py-0.5 text-[10.5px] font-semibold ${
+                    deal.compliance.expired > 0
+                      ? "border-transparent bg-[#fdefec] text-[#9d4340]"
+                      : "border-transparent bg-amber-50 text-amber-700"
+                  }`}
+                >
+                  {deal.compliance.expired > 0
+                    ? `${deal.compliance.expired} EXPIRED`
+                    : `${deal.compliance.outstanding} COMPLIANCE`}
+                </span>
               ) : null}
-
-              {deal.tobStatus ? (
-                deal.tobStatus.status === "completed" ? (
-                  <span
-                    title={
-                      fmtDate(deal.tobStatus.completedAt)
-                        ? `Signed ${fmtDate(deal.tobStatus.completedAt)}`
-                        : "Signed"
-                    }
-                    className="rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-[10.5px] font-semibold text-emerald-700"
-                  >
-                    TOB SIGNED
-                  </span>
-                ) : deal.tobStatus.status === "sent" ||
-                  deal.tobStatus.status === "partially_signed" ? (
-                  <span
-                    title="Sent, not yet signed"
-                    className="rounded-full border border-transparent bg-amber-50 px-2.5 py-0.5 text-[10.5px] font-semibold text-amber-700"
-                  >
-                    TOB SENT
-                  </span>
-                ) : (
-                  <span
-                    title={`DocuSign envelope status: ${deal.tobStatus.status} — needs a look`}
-                    className="rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-[10.5px] font-semibold text-red-700"
-                  >
-                    TOB — CHECK
-                  </span>
-                )
-              ) : null}
-
                 </div>
-              </div>
-              {/* The street, and the line: the drawer's own masthead. */}
-              <div aria-hidden className="pointer-events-none absolute bottom-0 right-[300px] hidden w-[360px] xl:block">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/illustrations/houses-row.webp" alt="" className="art w-full opacity-90" />
-                <p className="absolute -right-[150px] top-2 w-[150px] text-[17px] leading-tight text-accent-dark" style={{ fontFamily: "var(--font-shantell), cursive", transform: "rotate(-6deg)" }}>
-                  Great homes, happier tenancies
-                </p>
               </div>
               <div className="ml-auto flex shrink-0 items-center gap-2">
                 <a href={propolyDealUrl(deal.app.id)} target="_blank" rel="noopener noreferrer" className="btn-press hidden rounded-xl border border-line bg-card px-3.5 py-2.5 text-[12.5px] font-semibold transition hover:border-black/30 sm:block">
@@ -1723,10 +1609,9 @@ function DealWorkspace({
             <div className="mt-5 grid gap-4 lg:grid-cols-12">
               <section className="card lg:col-span-3 p-5">
                 <DrawerHead icon="home-1" title="Property" />
-                <Photo src={deal.app.image} className="mt-4 aspect-[16/11] w-full rounded-xl" />
-                <p className="mt-3 text-[17px] font-bold leading-tight">{deal.app.propertyName}</p>
-                <p className="text-[12.5px] text-muted">{deal.app.locality}</p>
-                <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line pt-4">
+                {/* The photo and address live in the header only (James, 2 Oct
+                    2026: the same facts twice made the file feel busy). */}
+                <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
                   <NumberRow label="Rent (pcm)" value={deal.app.offer != null ? formatGBP(deal.app.offer) : "—"} big />
                   <NumberRow label="Deposit" value={depositValue} big />
                   <NumberRow label="Holding fee" value={p?.holdingFee != null ? formatGBP(p.holdingFee) : "—"} big />
@@ -1795,7 +1680,6 @@ function DealWorkspace({
               <section className="card flex flex-col lg:col-span-4 p-5">
                 <div className="flex items-center justify-between gap-3">
                   <DrawerHead icon="info" title="Tenancy progress" />
-                  {!cancelled && currentIdx >= 0 ? <span className="rounded-full bg-page px-2.5 py-1 text-[11px] font-semibold text-muted">{currentIdx + 1} of {PORTAL_STAGES.length}</span> : null}
                 </div>
                 <ol className="mt-4">
                 {PORTAL_STAGES.map((s, i) => {
@@ -1992,20 +1876,9 @@ function DealWorkspace({
                   );
                 })}
               </ol>
-                {/* Next up: the current stage, in her words, and the checklist behind it. */}
-                {!cancelled && current ? (
-                  <div className="mt-4 flex items-center gap-4 rounded-2xl bg-accent-soft p-4">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/80 text-[#9d4340]"><DoodleIcon name="calendar" size={16} /></span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Next up</p>
-                      <p className="text-[14px] font-bold leading-tight">{current.label}</p>
-                      <p className="mt-0.5 text-[12px] leading-snug text-ink/70">{current.blurb}</p>
-                    </div>
-                    <button type="button" onClick={() => setChecklistOpen(true)} className="btn-press shrink-0 rounded-full bg-accent-dark px-4 py-2 text-[12px] font-semibold text-white">
-                      View details
-                    </button>
-                  </div>
-                ) : null}
+                {/* No "Next up" box (2 Oct 2026): it said the current stage and its
+                    description a second time. The checklist opens from the
+                    Outstanding tile. */}
               </section>
 
               <section className="flex min-h-0 flex-col lg:col-span-5 lg:h-[640px]">
@@ -2021,8 +1894,8 @@ function DealWorkspace({
               </section>
             </div>
 
-            {/* ── the people ── */}
-            <div className="mt-4 grid gap-4 lg:grid-cols-3">
+            {/* ── the people: tenant and landlord (the agent is in the header) ── */}
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
               <PersonCard label={deal.app.tenants.length > 1 ? `Tenants (${deal.app.tenants.length})` : "Tenant"} icon="user">
                 {deal.app.tenants.length ? (
                   deal.app.tenants.map((t, i) => (
@@ -2035,10 +1908,6 @@ function DealWorkspace({
                 ) : (
                   <p className="text-[13px] text-muted">No tenant details recorded yet.</p>
                 )}
-              </PersonCard>
-              <PersonCard label="Agent" icon="user">
-                <p className="text-[15px] font-bold leading-tight">{deal.agentName ?? "Unassigned"}</p>
-                {deal.agentEmail ? <a href={`mailto:${deal.agentEmail}`} className="block truncate text-[12.5px] text-muted hover:text-ink">{deal.agentEmail}</a> : null}
               </PersonCard>
               <PersonCard label="Landlord" icon="user">
                 {p?.landlord ? (
