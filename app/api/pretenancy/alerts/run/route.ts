@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { flatbondForDeal, loadFlatbonds } from "@/lib/business/flatfair-deal";
+import { withoutDuplicates } from "@/lib/business/deal-dupes";
 import { timingSafeEqual } from "node:crypto";
 import { requireCapability } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
@@ -73,11 +74,13 @@ async function recipients(): Promise<string[]> {
 /** Everything the alert set needs, assembled from the same parts as the board. */
 async function collect(): Promise<{ alerts: DealAlert[]; loaded: boolean; deals: number }> {
   const now = new Date();
-  const [deals, money] = await Promise.all([
+  const [allDeals, money] = await Promise.all([
     getAllPropolyDeals().catch(() => null),
     loadMoneyContext(now).catch(() => null),
   ]);
-  if (!deals || !money) return { alerts: [], loaded: false, deals: 0 };
+  if (!allDeals || !money) return { alerts: [], loaded: false, deals: 0 };
+  /* The abandoned copy of a deal started twice raises nothing. */
+  const deals = withoutDuplicates(allDeals).deals;
 
   const [overlays, cases, flatbonds] = await Promise.all([
     getOverlays(deals.map((d) => d.app.id)).catch(() => new Map()),

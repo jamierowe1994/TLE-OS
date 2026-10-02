@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { flatbondForDeal } from "@/lib/business/flatfair-deal";
+import { withoutDuplicates } from "@/lib/business/deal-dupes";
+import { propolyDealUrl } from "@/lib/business/propoly-stages";
 import { CHECKLIST_ITEMS, recordTicks } from "@/lib/business/propoly-stages";
 import { requireCapability } from "@/lib/admin";
 import { getAllPropolyDeals, getPropolyMoveInForecast, propolyDealsSavedAt } from "@/lib/business/propoly-deals";
@@ -165,11 +167,11 @@ export async function GET(req: NextRequest) {
   const now = new Date();
   const moneyWork = loadMoneyContext(now).catch(() => null);
 
-  const [deals, forecast] = await Promise.all([
+  const [allDeals, forecast] = await Promise.all([
     getAllPropolyDeals().catch(() => null),
     getPropolyMoveInForecast().catch(() => null),
   ]);
-  if (deals == null) {
+  if (allDeals == null) {
     // Distinguish "no keys" from "cold cache didn't warm inside the deadline"
     // — the client retries the latter instead of claiming Propoly is missing.
     const { propolyConfigured } = await import("@/lib/business/propoly");
@@ -180,6 +182,10 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  /* A deal started twice for the same tenant on the same home is shown once:
+     the newer one. The older is listed apart, to cancel in Propoly
+     (lib/business/deal-dupes, 2 Oct 2026). */
+  const { deals, duplicates } = withoutDuplicates(allDeals);
   const overlays = await getOverlays(deals.map((d) => d.app.id));
   /* The records seven of the eight stages are read from. See deal-stage. */
   const stageSources = await loadStageSources(deals.map((d) => d.app.id));
@@ -433,5 +439,12 @@ export async function GET(req: NextRequest) {
 
   /* When these deals were read from Propoly: the board says "Updated 3 min ago". */
   const savedAt = await propolyDealsSavedAt().catch(() => null);
-  return NextResponse.json({ configured: true, deals: out, summary, compliancePending, savedAt: savedAt ? new Date(savedAt).toISOString() : null });
+  return NextResponse.json({
+    configured: true,
+    deals: out,
+    summary,
+    compliancePending,
+    savedAt: savedAt ? new Date(savedAt).toISOString() : null,
+    duplicates: duplicates.map((x) => ({ ...x, url: propolyDealUrl(x.id) })),
+  });
 }

@@ -44,6 +44,10 @@ function deal(i: number, stage: string, o: Loose): Loose {
 
 export const SAMPLE_BOARD = {
   configured: true,
+  /* One deal started twice, so the duplicate notice can be looked at. */
+  duplicates: [
+    { id: "sample-dupe", keptId: "sample-kept", property: "6 Lynedoch Place Lane", tenant: "Thomas Harris", startedOn: day(-23), keptStartedOn: day(-11), agent: "lianna denholm", url: "https://tle.propoly.com/deals/sample-dupe" },
+  ],
   deals: [
     deal(0, "deal_started", { app: undefined }),
     deal(1, "holding_fee", { holdingInvoice: { amount: 196, fromDate: day(-1) }, money: { holding: { status: "received", amount: 196, on: day(-1), matchedBy: "name", tenantName: "James Crumpton", note: "" }, deposit: null } }),

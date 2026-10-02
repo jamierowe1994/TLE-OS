@@ -18,6 +18,10 @@ export default function TenantDocuments({ dealId }: { dealId: string }) {
     return () => { gone = true; };
   }, [dealId]);
 
+  /* Nothing sent in, nothing drawn (2 Oct 2026): the empty box sat above
+     the thread on every deal. It appears the day something arrives. */
+  if (!docs || docs.length === 0) return null;
+
   return (
     <section className="rounded-2xl border border-line/80 bg-panel p-5">
       <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">Sent in by the tenant</p>

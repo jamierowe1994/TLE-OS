@@ -52,6 +52,9 @@ import { fetchMe } from "@/lib/me";
 
 /* ------------------------------- data shapes ------------------------------- */
 
+/** A deal started twice; the older copy (lib/business/deal-dupes). */
+type DuplicateRow = { id: string; keptId: string; property: string; tenant: string; startedOn: string | null; keptStartedOn: string | null; agent: string | null; url: string };
+
 interface BoardDeal {
   /** Move-in slipped 30+ days with nobody reactivating it. Kept out of the
    *  stage tabs entirely and gathered in Archive under the three-dot menu. */
@@ -420,6 +423,8 @@ function Board({ user }: { user: UserProfile }) {
 
   /** When the deals on screen were read from Propoly, and a clock to age that label. */
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  /* Deals started twice for one tenant: the older copy, kept off the board. */
+  const [duplicates, setDuplicates] = useState<DuplicateRow[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -442,6 +447,7 @@ function Board({ user }: { user: UserProfile }) {
            quiet second pass fills the certificates in. */
         compliancePending?: boolean;
         savedAt?: string | null;
+        duplicates?: DuplicateRow[];
       };
       /* The local preview, with Propoly not connected: ?sample=1 draws the
          board on invented deals so the layout can be looked at. Never in
@@ -451,6 +457,7 @@ function Board({ user }: { user: UserProfile }) {
         setConfigured(true);
         setDeals(SAMPLE_BOARD.deals as unknown as BoardDeal[]);
         setSummary(SAMPLE_BOARD.summary as unknown as BoardSummary);
+        setDuplicates((SAMPLE_BOARD as { duplicates?: DuplicateRow[] }).duplicates ?? []);
         setError(null);
         return true;
       }
@@ -474,6 +481,7 @@ function Board({ user }: { user: UserProfile }) {
       }
       setSummary(d.summary);
       setSavedAt(d.savedAt ?? null);
+      setDuplicates(d.duplicates ?? []);
       setError(null);
       /* The board is already on screen and usable; these just fill the
          certificates in as REX answers. Three tries, spaced out, then it
@@ -801,6 +809,27 @@ function Board({ user }: { user: UserProfile }) {
               </div>
             </div>
           </div>
+
+          {/* ── a deal started twice (lib/business/deal-dupes): the board shows
+                 the newer one; the older is named here, to cancel in Propoly ── */}
+          {duplicates.length > 0 && (
+            <section className="fade-up rounded-2xl border border-amber-300/70 bg-amber-50 px-5 py-3.5 text-[12.5px] text-amber-950">
+              <p className="font-semibold">
+                {duplicates.length === 1 ? "1 deal looks like a duplicate" : `${duplicates.length} deals look like duplicates`}, so the older copy is off the board
+              </p>
+              <ul className="mt-1.5 space-y-1">
+                {duplicates.map((x) => (
+                  <li key={x.id} className="leading-relaxed">
+                    {x.property}: {x.tenant} was started twice ({fmtDate(x.startedOn) ?? "earlier"} and {fmtDate(x.keptStartedOn) ?? "later"}). The {fmtDate(x.keptStartedOn) ?? "newer"} deal is going ahead.{" "}
+                    <a href={x.url} target="_blank" rel="noreferrer" className="font-semibold underline underline-offset-2">
+                      Cancel the old one in Propoly
+                    </a>
+                    {x.agent ? <span className="text-amber-800"> · {x.agent.replace(/\b\w/g, (c) => c.toUpperCase())}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           {/* ── today's focus: the deals asking for a look ── */}
           {attention.length > 0 ? (
@@ -1895,8 +1924,10 @@ function DealWorkspace({
 
                             Not drawn on a cancelled deal: a dead file does not
                             need chasing, and the checks would all read as
-                            failures. */}
-                        {!cancelled ? (() => {
+                            failures. Nor on a stage the deal has not reached
+                            (2 Oct 2026): eight "nothing yet" lines on every
+                            new deal was the clutter James asked to clear. */}
+                        {!cancelled && state !== "todo" ? (() => {
                           /* PLC reads the OS's own pack, which is what now
                              moves the stage. The RLP line it used to show was
                              about a different thing (rent protection) and sat
@@ -2164,7 +2195,7 @@ function WorkTabs({
                 because a document arriving is a thing to act on, and below it
                 it would be scrolled past. shrink-0 so it cannot squeeze the
                 thread's own scroll area. */}
-            <div className="shrink-0 pb-3">
+            <div className="shrink-0 pb-3 empty:hidden">
               <TenantDocuments dealId={deal.app.id} />
             </div>
             <div className="min-h-0 flex-1">

@@ -12,6 +12,7 @@ import { switchOn } from "@/lib/switches";
 import { dealMovedEmail } from "@/lib/email/agent-emails";
 import { referenceState } from "@/lib/business/stage-evidence";
 import { updatesFromEvents } from "@/lib/business/deal-updates";
+import { findDuplicates } from "@/lib/business/deal-dupes";
 import {
   eventSentence,
   kindFor,
@@ -351,7 +352,8 @@ async function watchDeposits(deals: BusinessDeal[], known: Map<string, StateRow>
  */
 async function watchReferences(deals: BusinessDeal[]): Promise<DealEvent[]> {
   const out: DealEvent[] = [];
-  const live = deals.filter((d) => d.statusKey !== "cancelled" && d.statusKey !== "complete");
+  const dupes = findDuplicates(deals);
+  const live = deals.filter((d) => d.statusKey !== "cancelled" && d.statusKey !== "complete" && !dupes.has(d.app.id));
   const failing = live
     .map((d) => ({ d, failed: referenceState(d.app.propoly)?.failed ?? [] }))
     .filter((x) => x.failed.length);

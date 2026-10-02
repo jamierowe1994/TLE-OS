@@ -11,6 +11,7 @@ import { eventsForDeal } from "@/lib/business/deal-watch";
 import type { DealEvent } from "@/lib/business/deal-events";
 import { loadMoneyContext, moneyForDeal, type MoneyContext } from "@/lib/business/deal-money";
 import { stageEvidence } from "@/lib/business/stage-evidence";
+import { withoutDuplicates } from "@/lib/business/deal-dupes";
 import { flatbondForDeal, loadFlatbonds } from "@/lib/business/flatfair-deal";
 import { PORTAL_STAGES, propolyDealUrl } from "@/lib/business/propoly-stages";
 
@@ -80,7 +81,10 @@ let moneyCache: { at: number; money: MoneyContext | null } | null = null;
 
 async function deals(): Promise<BusinessDeal[] | null> {
   if (dealsCache && Date.now() - dealsCache.at < KEEP_MS) return dealsCache.deals;
-  const d = await getAllPropolyDeals().catch(() => null);
+  const all = await getAllPropolyDeals().catch(() => null);
+  /* A deal started twice for one tenant is matched to the newer one only
+     (lib/business/deal-dupes): the spine must not read the abandoned copy. */
+  const d = all ? withoutDuplicates(all).deals : null;
   /* A read that failed is not kept. It was, for five minutes, and for those
      five minutes every accepted application said "it isn't in Propoly yet". */
   if (d) dealsCache = { at: Date.now(), deals: d };

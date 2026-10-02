@@ -3,6 +3,7 @@ import { q } from "@/lib/db";
 import type { BusinessDeal } from "@/lib/business/propoly-deals";
 import type { DealEvent, DealEventKind } from "@/lib/business/deal-events";
 import { referenceState } from "@/lib/business/stage-evidence";
+import { findDuplicates } from "@/lib/business/deal-dupes";
 import { createUpdate, type UpdateRecipient } from "@/lib/customer-updates";
 import { AUDIENCE, HEADLINE, updateVars, type UpdateKind } from "@/lib/customer-update-copy";
 
@@ -60,7 +61,11 @@ export function dealRecipients(deal: BusinessDeal, kind: UpdateKind, opts: { onl
  */
 export async function updatesFromEvents(events: DealEvent[], deals: BusinessDeal[]): Promise<Set<number>> {
   const covered = new Set<number>();
+  /* Nobody is asked to tell a customer about the abandoned copy of a deal
+     started twice (lib/business/deal-dupes). */
+  const dupes = findDuplicates(deals);
   for (const e of events) {
+    if (dupes.has(e.dealId)) continue;
     let kind = FROM_EVENT[e.event];
     if (!kind) continue;
     const deal = deals.find((d) => d.app.id === e.dealId);
