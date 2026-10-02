@@ -290,7 +290,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     wiring: "live",
     caveats: [
       "Every figure is read from the screen the tile opens, so the two always agree, and an agent sees their own book just as they do there.",
-      "Nothing records which homes are empty yet, so Upcoming vacancies counts tenancies with notice served and homes on the market instead.",
+      "Upcoming vacancies is the Move-outs list: tenancies ending, the late ones and the next 30 days, with homes on the market and let agreed beside them.",
       "Rent arrears is shown to the business owners only.",
     ],
   },
@@ -307,6 +307,21 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       "Until the team records reviews here, the list is the old property management system's own, copied across, so the figures match it. A review recorded here comes off the list straight away.",
       "Recording a review does not change the rent anywhere else yet. The new rent still has to be put through on the tenancy and with the landlord's statement.",
       "Nothing on this screen writes to the tenant or the landlord.",
+    ],
+  },
+
+  "/move-outs": {
+    purpose: "Every tenancy that is ending: the day the tenants go, and the jobs that close it off.",
+    does: [
+      "Read the list of tenancies ending, the late ones first, with the move-out day, the landlord, how far along it is and any follow-up date.",
+      "Press Close move-out and say what happened: they moved out (the day, and which of the check-out, keys, meters, deposit and re-let are done), they are staying after all, or something else.",
+      "Read what has been closed on the Done tab, and the figures at the top: moving out, already late, in the next 30 days and closed this month.",
+    ],
+    wiring: "partial",
+    caveats: [
+      "Until the team closes move-outs here, the list is the old property management system's own, copied across, so the figures match it. One closed here comes off the list straight away.",
+      "A tenancy review recorded as ending lands on this list too, with no move-out day until one is set.",
+      "Closing a move-out does not book the check-out, return the deposit or put the home on the market. Those are still done where they are done today.",
     ],
   },
 

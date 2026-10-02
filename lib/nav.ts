@@ -88,6 +88,7 @@ export const BACK: NavItem[] = [
       { href: "/maintenance", label: "Maintenance" },
       { href: "/inspections", label: "Inspections" },
       { href: "/tenancy-reviews", label: "Tenancy Reviews" },
+      { href: "/move-outs", label: "Move-outs" },
     ],
   },
   /* Emails (the audit of REX's send log, /emails) came off the rail on 2 Oct
@@ -299,6 +300,7 @@ export const AGENT_ROUTES = [
   "/maintenance",
   "/inspections",
   "/tenancy-reviews",
+  "/move-outs",
   "/portfolio",
   "/overview",
   "/finances",

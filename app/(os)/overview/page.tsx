@@ -25,6 +25,7 @@ interface Board {
   maintenance: Tile<{ open: number; overdue: number; emergencies: number; followUp: number; late: { title: string; where: string; dueOn: string | null }[]; partial: string | null }>;
   inspections: Tile<{ due: number; overdue: number; booked: number; awaitingTenant: number }>;
   reviews: Tile<{ due: number; overdue: number; doneThisMonth: number; noticeServed: number; leaving: { where: string; agreement: string }[] }>;
+  moveOuts: Tile<{ open: number; overdue: number; next30: number; followUp: number; next: { where: string; on: string | null }[] }>;
   compliance: Tile<{ expired: number; dueSoon: number; homesAffected: number }>;
   applications: Tile<{ open: number; movingIn: number }>;
   lettings: Tile<{ available: number; letAgreed: number; drafts: number }>;
@@ -36,10 +37,6 @@ const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` :
 /** £194,833 → "£194.8k": a tile has room for the size of a number, not every digit of it. */
 const compact = (n: number) => (n >= 10000 ? `£${(n / 1000).toFixed(1).replace(/\.0$/, "")}k` : pounds(n));
 const shortDay = (ymd: string | null) => (ymd ? new Date(`${ymd}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "");
-const endsText = (a: string) => {
-  const m = a.match(/expires (.+)$/i);
-  return m ? `ends ${m[1]}` : a.split(" | ")[0];
-};
 
 export default function Overview() {
   const [data, setData] = useState<Board | null>(null);
@@ -159,15 +156,17 @@ export default function Overview() {
           )}
         </Card>
 
-        <Card icon="key" title="Upcoming Vacancies" href="/tenancy-reviews" tile={data?.reviews && data?.lettings ? combine(data.reviews, data.lettings) : undefined}>
+        <Card icon="key" title="Upcoming Vacancies" href="/move-outs" tile={data?.moveOuts && data?.lettings ? combine(data.moveOuts, data.lettings) : undefined}>
           {(d) => (
             <>
-              <Big value={d.noticeServed} label="tenancies with notice served" />
+              <Big value={d.open} label="tenancies ending" />
               <Stats items={[
+                ["Overdue", String(d.overdue), d.overdue > 0],
+                ["Next 30 days", String(d.next30)],
                 ["On the market", String(d.available)],
                 ["Let agreed", String(d.letAgreed)],
               ]} />
-              <Rows rows={d.leaving.map((l) => [l.where, endsText(l.agreement), ""])} empty="No notices served." />
+              <Rows rows={d.next.map((l) => [l.where, "", l.on ? shortDay(l.on) : ""])} empty="No move-out days ahead." />
             </>
           )}
         </Card>
@@ -216,14 +215,14 @@ export default function Overview() {
   );
 }
 
-/** Upcoming vacancies needs two tiles' figures; it fails if either does. */
+/** Upcoming vacancies needs the move-outs and the lettings figures; it fails if either does. */
 function combine(
-  r: Board["reviews"],
+  m: Board["moveOuts"],
   l: Board["lettings"]
-): Tile<{ noticeServed: number; leaving: { where: string; agreement: string }[]; available: number; letAgreed: number }> {
-  if (!r.ok) return r;
+): Tile<{ open: number; overdue: number; next30: number; next: { where: string; on: string | null }[]; available: number; letAgreed: number }> {
+  if (!m.ok) return m;
   if (!l.ok) return l;
-  return { ok: true, data: { noticeServed: r.data.noticeServed, leaving: r.data.leaving, available: l.data.available, letAgreed: l.data.letAgreed } };
+  return { ok: true, data: { ...m.data, available: l.data.available, letAgreed: l.data.letAgreed } };
 }
 
 function Card<T>({ icon, title, href, tile, quiet, children }: { icon: string; title: string; href: string; tile: Tile<T> | undefined; quiet?: boolean; children: (d: T) => React.ReactNode }) {

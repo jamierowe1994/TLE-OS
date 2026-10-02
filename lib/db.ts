@@ -671,6 +671,29 @@ CREATE TABLE IF NOT EXISTS os_tenancy_reviews (
 CREATE INDEX IF NOT EXISTS os_tenancy_reviews_task ON os_tenancy_reviews (rexpm_task_id);
 CREATE INDEX IF NOT EXISTS os_tenancy_reviews_prop ON os_tenancy_reviews (rex_property_id);
 
+-- A move-out closed in the OS (2 Oct 2026): the tenants left (and the day),
+-- they are staying after all, or something else - with the end-of-tenancy
+-- jobs ticked off. rexpm_task_id ties it to the REX PM move-out it answers,
+-- which takes that one off the board. lib/move-outs.
+CREATE TABLE IF NOT EXISTS os_move_outs (
+  id               TEXT PRIMARY KEY,
+  rexpm_task_id    TEXT,
+  os_property_id   TEXT,
+  rex_property_id  TEXT,
+  property_name    TEXT NOT NULL DEFAULT '',
+  tenant           TEXT NOT NULL DEFAULT '',
+  landlord         TEXT NOT NULL DEFAULT '',
+  planned_on       DATE,
+  outcome          TEXT NOT NULL,
+  moved_out_on     DATE,
+  steps            JSONB NOT NULL DEFAULT '[]'::jsonb,
+  note             TEXT NOT NULL DEFAULT '',
+  done_by          TEXT NOT NULL DEFAULT '',
+  done_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_move_outs_task ON os_move_outs (rexpm_task_id);
+CREATE INDEX IF NOT EXISTS os_move_outs_prop ON os_move_outs (rex_property_id);
+
 -- What was found, room by room. An action here is what turns an inspection
 -- into a works order, and works_order_id is that link once it is raised.
 CREATE TABLE IF NOT EXISTS os_inspection_findings (

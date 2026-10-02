@@ -8,6 +8,7 @@ import { GET as portfolioGET } from "@/app/api/portfolio/route";
 import { GET as worksGET } from "@/app/api/works-orders/route";
 import { GET as inspectionsGET } from "@/app/api/inspections/route";
 import { GET as reviewsGET } from "@/app/api/tenancy-reviews/route";
+import { GET as moveOutsGET } from "@/app/api/move-outs/route";
 import { GET as applicationsGET } from "@/app/api/applications/route";
 import { GET as listingsGET } from "@/app/api/listings/route";
 import { grantWholeBusiness } from "@/lib/scope";
@@ -76,7 +77,7 @@ export async function GET(req: NextRequest) {
     ? Promise.resolve(null)
     : portfolio.then((j) => new Set(((Array.isArray(j.properties) ? j.properties : []) as { propertyId: string | null }[]).map((p) => String(p.propertyId ?? "")).filter(Boolean)));
 
-  const [properties, maintenance, inspections, reviews, compliance, applications, lettings, arrears] = await Promise.all([
+  const [properties, maintenance, inspections, reviews, moveOuts, compliance, applications, lettings, arrears] = await Promise.all([
     settle(portfolio.then((j) => {
       const c = (j.counts ?? {}) as Json;
       return {
@@ -126,6 +127,16 @@ export async function GET(req: NextRequest) {
       };
     })),
 
+    /* Upcoming vacancies is the Move-outs screen's own list (2 Oct 2026). */
+    settle(get(moveOutsGET, "/api/move-outs").then((j) => {
+      const s = (j.summary ?? {}) as Json;
+      const open = (Array.isArray(j.open) ? j.open : []) as { propertyName: string; moveOutOn: string | null; daysAway: number | null }[];
+      return {
+        open: Number(s.open ?? 0), overdue: Number(s.overdue ?? 0), next30: Number(s.next30 ?? 0), followUp: Number(s.followUp ?? 0),
+        next: open.filter((m) => m.daysAway !== null && m.daysAway >= 0).slice(0, 3).map((m) => ({ where: m.propertyName, on: m.moveOutOn })),
+      };
+    })),
+
     /* The compliance book is whole-business and the slowest read in the OS;
        it is cached, and the tile uses the Compliance screen's own rule. */
     settle(Promise.all([getComplianceBook(), mine]).then(([{ book, ageMs }, homes]) => {
@@ -172,5 +183,5 @@ export async function GET(req: NextRequest) {
   ]);
 
   const label = whole ? "the whole business" : ((subject ?? actor).name || "your homes");
-  return NextResponse.json({ ok: true, at: new Date().toISOString(), scope: { whole, label }, properties, maintenance, inspections, reviews, compliance, applications, lettings, arrears });
+  return NextResponse.json({ ok: true, at: new Date().toISOString(), scope: { whole, label }, properties, maintenance, inspections, reviews, moveOuts, compliance, applications, lettings, arrears });
 }

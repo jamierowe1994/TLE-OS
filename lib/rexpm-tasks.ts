@@ -30,8 +30,8 @@ import { hasDb, q } from "@/lib/db";
  * disappears from the history.
  */
 
-export type TaskKind = "inspection" | "tenancy_review" | "maintenance";
-export const TASK_KINDS: TaskKind[] = ["inspection", "tenancy_review", "maintenance"];
+export type TaskKind = "inspection" | "tenancy_review" | "maintenance" | "move_out";
+export const TASK_KINDS: TaskKind[] = ["inspection", "tenancy_review", "maintenance", "move_out"];
 export type TaskState = "open" | "closed" | "gone";
 
 export interface RexpmTask {
@@ -152,26 +152,35 @@ export function readRow(columns: string[], row: ScreenRow) {
      the tenants after the plus and no colon - and a few older ones are just
      the tenants' names. Its tenancy column is the agreement, not the people. */
   const review = columns.some((c) => c.trim().toLowerCase() === "tenancy agreement");
+  /* Move-outs (2 Oct 2026) title themselves "24 Elm Grove Drive + Jennifer
+     Mason & Brian Hemming", or just the tenants' names on older ones. */
+  const moveOut = columns.some((c) => c.trim().toLowerCase() === "move out date");
   let taskType = title.includes(":") ? title.slice(0, title.indexOf(":")).trim() : "";
   let tenants = "";
   if (review) {
     taskType = "Tenancy review";
     const m = title.match(/^tenancy review\b\s*(.*?)(?:\s\+\s(.*))?$/i);
     tenants = m ? (m[2] ?? "").trim() : title;
+  } else if (moveOut) {
+    taskType = "Move out";
+    const m = title.match(/^.*?\s\+\s(.*)$/);
+    tenants = (m ? m[1] : title).trim();
   }
   return {
     title,
     address,
     taskType,
-    tenancy: review ? tenants : blank(at("tenancy")),
+    tenancy: review || moveOut ? tenants : blank(at("tenancy")),
     agreement: blank(at("tenancy agreement")),
     currentRent: blank(at("current rent")),
     ownership: blank(at("ownership")),
     service: blank(at("service package")),
     followUpOn: screenDate(at("follow up date")),
     /* Maintenance has no due date; it is late once its expected completion
-       date passes, which is how REX PM's Overdue tile counts (1 Oct 2026). */
-    dueOn: screenDate(at("task due date") || at("due date") || at("expected completion date")),
+       date passes, which is how REX PM's Overdue tile counts (1 Oct 2026).
+       A move-out is late once its move-out date passes: REX PM's Overdue tab
+       held exactly the 11 whose date had gone by (2 Oct 2026). */
+    dueOn: screenDate(at("task due date") || at("due date") || at("expected completion date") || at("move out date")),
     description: blank(at("description")),
     reportedBy: blank(at("reported by")),
     reportedOn: screenDate(at("reported date")),
