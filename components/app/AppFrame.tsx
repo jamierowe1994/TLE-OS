@@ -9,42 +9,27 @@ import { useAlerts } from "@/components/app/alerts";
 import { applyMTheme, type MTheme } from "@/lib/m-theme";
 
 /**
- * THE AGENT'S PHONE: a page, four tabs at the foot, and a "+" for the rest.
+ * THE AGENT'S PHONE: a page, and a bar at the foot.
  *
- * James, 2 Oct 2026, the fourth look of the day: "a nod to the original
- * design of TLE OS, which is this Notion style ... very monochromatic,
- * offering a light and dark mode". The tabs are labelled, plain and quiet; the
- * "+" sits at the top right of each screen's title (PhoneTop), as on his
- * reference's Dashboard, and opens every other page, the light/dark switch,
- * and the account. The bar is drawn here, so Safari and the iPhone app (one
- * plain web view, ios/) show the same thing.
+ * 3 Oct 2026, from James's own pastel mockups: Home, People, a coral "+",
+ * Properties and More, the screen you are on lifted on a pink pill; the TLE OS
+ * wordmark and a bell with the unread count at the top of every screen
+ * (PhoneTop). "+" opens the quick actions, "More" every other page, the
+ * light/dark switch and the account. Drawn here, so Safari and the iPhone app
+ * (one plain web view, ios/) show the same thing.
  */
 
-const TABS: Array<{ href: string; label: string; match: (p: string) => boolean; icon: React.ReactNode }> = [
-  {
-    href: "/agent",
-    label: "Today",
-    match: (p) => p === "/agent" || p.startsWith("/agent/event"),
-    icon: <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v10a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5zM4 10h16M8 3v4M16 3v4" />,
-  },
-  {
-    href: "/agent/people",
-    label: "People",
-    match: (p) => p.startsWith("/agent/people"),
-    icon: <path d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2.5 20c.6-3.4 3.2-5.5 6.5-5.5s5.9 2.1 6.5 5.5M16 4.3a3.5 3.5 0 0 1 0 6.4M18.5 14.8c1.6.8 2.7 2.5 3 5.2" />,
-  },
-  {
-    href: "/agent/properties",
-    label: "Properties",
-    match: (p) => p.startsWith("/agent/properties"),
-    icon: <path d="M3.5 10.5 12 4l8.5 6.5M5.5 9v10.5h13V9M10 19.5v-5.5h4v5.5" />,
-  },
-  {
-    href: "/agent/id-check",
-    label: "Scan ID",
-    match: (p) => p.startsWith("/agent/id-check"),
-    icon: <path d="M3.5 6.5A2.5 2.5 0 0 1 6 4h12a2.5 2.5 0 0 1 2.5 2.5v11A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5zM9 12.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM5.8 16.5c.5-1.6 1.7-2.5 3.2-2.5s2.7.9 3.2 2.5M14.5 10h3.5M14.5 13.5h3.5" />,
-  },
+const ICONS = {
+  home: <path d="M3.5 10.5 12 4l8.5 6.5M5.5 9v10.5h13V9M10 19.5v-5.5h4v5.5" />,
+  people: <path d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2.5 20c.6-3.4 3.2-5.5 6.5-5.5s5.9 2.1 6.5 5.5M16 4.3a3.5 3.5 0 0 1 0 6.4M18.5 14.8c1.6.8 2.7 2.5 3 5.2" />,
+  properties: <path d="M3 20h18M5 20V9l5-4 5 4v11M15 20v-7h4v7M8.5 12h3M8.5 15.5h3" />,
+  more: <path d="M6 12h.01M12 12h.01M18 12h.01" />,
+};
+
+const TABS: Array<{ href: string; label: string; match: (p: string) => boolean; icon: keyof typeof ICONS }> = [
+  { href: "/agent", label: "Home", icon: "home", match: (p) => p === "/agent" || p.startsWith("/agent/day") || p.startsWith("/agent/event") || p.startsWith("/agent/search") },
+  { href: "/agent/people", label: "People", icon: "people", match: (p) => p.startsWith("/agent/people") },
+  { href: "/agent/properties", label: "Properties", icon: "properties", match: (p) => p.startsWith("/agent/properties") },
 ];
 
 /* The full OS's pages an agent reaches for away from a desk. Each opens the
@@ -58,15 +43,20 @@ const PAGES: Array<{ href: string; label: string; icon: string }> = [
   { href: "/dashboard?full=1", label: "The Full OS", icon: "dashboard" },
 ];
 
-const GoToContext = createContext<() => void>(() => {});
-/** Opens the "+" sheet. PhoneTop puts the button beside every title. */
-export const useGoTo = () => useContext(GoToContext);
+type Frame = { more: () => void; quick: () => void; bell: () => void; unread: number };
+const FrameContext = createContext<Frame>({ more: () => {}, quick: () => {}, bell: () => {}, unread: 0 });
+export const useFrame = () => useContext(FrameContext);
+/** Opens the "More" sheet. */
+export const useGoTo = () => useContext(FrameContext).more;
+
+type Sheet = "more" | "quick" | "bell" | null;
 
 export default function AppFrame({ inApp, theme, children }: { inApp: boolean; theme: MTheme | null; children: React.ReactNode }) {
   const path = usePathname() ?? "/agent";
-  const [sheet, setSheet] = useState(false);
+  const [sheet, setSheet] = useState<Sheet>(null);
   const [mode, setMode] = useState<MTheme | null>(theme);
-  useEffect(() => setSheet(false), [path]);
+  const [unread, setUnread] = useState(0);
+  useEffect(() => setSheet(null), [path]);
   /* The app came to life: the stale-page guard in app/agent/layout.tsx stands down. */
   useEffect(() => {
     (window as { __tleAppReady?: boolean }).__tleAppReady = true;
@@ -76,7 +66,21 @@ export default function AppFrame({ inApp, theme, children }: { inApp: boolean; t
       /* Nothing to clear. */
     }
   }, []);
-  const open = useCallback(() => setSheet(true), []);
+  /* The bell's count, read on arrival and once a minute, like the desktop bell. */
+  useEffect(() => {
+    const read = () =>
+      fetch("/api/notifications?limit=40", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((j: { ok?: boolean; unread?: number }) => j.ok && setUnread(j.unread ?? 0))
+        .catch(() => null);
+    void read();
+    const t = window.setInterval(read, 60_000);
+    return () => window.clearInterval(t);
+  }, []);
+  const more = useCallback(() => setSheet("more"), []);
+  const quick = useCallback(() => setSheet("quick"), []);
+  const bell = useCallback(() => setSheet("bell"), []);
+  const close = useCallback(() => setSheet(null), []);
 
   const choose = (t: MTheme) => {
     applyMTheme(t);
@@ -88,41 +92,217 @@ export default function AppFrame({ inApp, theme, children }: { inApp: boolean; t
   if (!mode) return <Welcome onChoose={choose} />;
 
   return (
-    <GoToContext.Provider value={open}>
+    <FrameContext.Provider value={{ more, quick, bell, unread }}>
       {/* Behind the clock and battery, so a scrolled page never runs under them. */}
       <div aria-hidden className="fixed inset-x-0 top-0 z-30 h-[env(safe-area-inset-top)]" style={{ background: "var(--m-bg)" }} />
-      <div className="mx-auto w-full max-w-[560px] px-4 pb-[calc(env(safe-area-inset-bottom)+92px)] pt-[calc(env(safe-area-inset-top)+14px)]">{children}</div>
+      <div className="mx-auto w-full max-w-[560px] px-4 pb-[calc(env(safe-area-inset-bottom)+100px)] pt-[calc(env(safe-area-inset-top)+10px)]">{children}</div>
 
       <nav
         aria-label="Sections"
         className="fixed inset-x-0 bottom-0 z-40 border-t pb-[env(safe-area-inset-bottom)]"
         style={{ borderColor: "var(--m-line)", background: "var(--m-bg)" }}
       >
-        <ul className="mx-auto grid max-w-[560px] grid-cols-4">
-          {TABS.map((t) => {
-            const on = t.match(path);
+        <ul className="mx-auto grid h-[66px] max-w-[560px] grid-cols-5 items-center px-2">
+          {TABS.slice(0, 2).map((t) => (
+            <Tab key={t.href} tab={t} on={t.match(path)} />
+          ))}
+          <li className="flex justify-center">
+            <button
+              type="button"
+              onClick={quick}
+              aria-label="Quick actions"
+              className="m-press flex h-[50px] w-[50px] items-center justify-center rounded-full text-white shadow-[0_8px_18px_-8px_rgba(222,124,112,0.9)]"
+              style={{ background: "var(--m-coral)" }}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+          </li>
+          <Tab tab={TABS[2]!} on={TABS[2]!.match(path)} />
+          <li className="flex justify-center">
+            <button type="button" onClick={more} className="flex h-[54px] w-[62px] flex-col items-center justify-center gap-[3px] rounded-[16px] text-[11px] font-medium" style={{ color: "var(--m-muted)" }}>
+              <svg viewBox="0 0 24 24" aria-hidden className="h-[22px] w-[22px]" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
+                {ICONS.more}
+              </svg>
+              More
+            </button>
+          </li>
+        </ul>
+      </nav>
+
+      {sheet === "more" && <PagesSheet inApp={inApp} mode={mode} onMode={choose} onClose={close} />}
+      {sheet === "quick" && <QuickSheet onClose={close} />}
+      {sheet === "bell" && <BellSheet onClose={close} onRead={() => setUnread(0)} />}
+    </FrameContext.Provider>
+  );
+}
+
+function Tab({ tab, on }: { tab: (typeof TABS)[number]; on: boolean }) {
+  return (
+    <li className="flex justify-center">
+      <Link
+        href={tab.href}
+        aria-current={on ? "page" : undefined}
+        className="flex h-[54px] w-[62px] flex-col items-center justify-center gap-[3px] rounded-[16px] text-[11px] font-medium transition-colors"
+        style={on ? { background: "var(--m-pink-wash)", color: "var(--m-coral)" } : { color: "var(--m-muted)" }}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden className="h-[22px] w-[22px]" fill={on && tab.icon === "home" ? "currentColor" : "none"} stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+          {ICONS[tab.icon]}
+        </svg>
+        {tab.label}
+      </Link>
+    </li>
+  );
+}
+
+/** A sheet up from the foot: the dim, the handle, a title and a close. */
+function SheetShell({ title, label, onClose, children }: { title: string; label: string; onClose: () => void; children: React.ReactNode }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    const was = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = was;
+    };
+  }, [onClose]);
+  return (
+    <div
+      className="fixed inset-0 z-[80] flex items-end justify-center"
+      style={{ background: "rgba(40, 28, 25, 0.38)", animation: "m-dim 200ms ease-out both" }}
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={label}
+    >
+      <style>{`
+        @keyframes m-dim { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes m-rise { from { transform: translateY(100%) } to { transform: translateY(0) } }
+        @media (prefers-reduced-motion: reduce) { .m-sheet { animation: none !important } }
+      `}</style>
+      <div
+        className="m-sheet max-h-[90dvh] w-full max-w-[560px] overflow-y-auto rounded-t-[28px] px-4 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-3"
+        style={{ background: "var(--m-bg)", animation: "m-rise 320ms cubic-bezier(0.22, 1, 0.36, 1) both" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span aria-hidden className="mx-auto mb-3 block h-[5px] w-[40px] rounded-full" style={{ background: "var(--m-line)" }} />
+        <div className="mb-4 flex items-center justify-between px-1">
+          <h2 className="m-title text-[24px]">{title}</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="m-round m-press">
+            <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* What the coral "+" offers: the phone's own jobs, as the mockup's quick
+   action tiles. Adding leads, properties and applications stays on the full
+   OS for now - the phone writes only the Right to Rent check. */
+const QUICK: Array<{ href: string; label: string; icon: string; tone: "pink" | "sage" }> = [
+  { href: "/agent/id-check", label: "Scan an ID", icon: "camera", tone: "pink" },
+  { href: "/agent/day", label: "Your Day", icon: "calendar", tone: "sage" },
+  { href: "/agent/people?who=tenant", label: "Find a Tenant", icon: "user", tone: "sage" },
+  { href: "/agent/people?who=landlord", label: "Find a Landlord", icon: "key", tone: "pink" },
+  { href: "/agent/properties", label: "Find a Property", icon: "home", tone: "pink" },
+  { href: "/agent/search", label: "Search Everything", icon: "search", tone: "sage" },
+];
+
+function QuickSheet({ onClose }: { onClose: () => void }) {
+  return (
+    <SheetShell title="Quick Actions" label="Quick actions" onClose={onClose}>
+      <ul className="grid grid-cols-2 gap-3">
+        {QUICK.map((q) => (
+          <li key={q.href}>
+            <Link
+              href={q.href}
+              className="m-press flex h-[118px] flex-col justify-between rounded-[22px] p-4"
+              style={{ background: q.tone === "pink" ? "var(--m-pink-wash)" : "var(--m-green-wash)" }}
+            >
+              <DoodleIcon name={q.icon} size={24} />
+              <span className="flex items-center justify-between text-[15px] font-medium">
+                {q.label}
+                <Chevron />
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </SheetShell>
+  );
+}
+
+type Notice = { id: string; at: string; title: string; body: string; href: string | null };
+
+function BellSheet({ onClose, onRead }: { onClose: () => void; onRead: () => void }) {
+  const [notices, setNotices] = useState<Notice[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("/api/notifications?limit=40", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; notices?: Notice[]; error?: string }) => {
+        if (!j.ok) throw new Error(j.error ?? "Your notifications did not load.");
+        setNotices(j.notices ?? []);
+        /* Opening the bell is what marks them read, as on the desktop. */
+        void fetch("/api/notifications", { method: "POST" }).then(onRead).catch(() => null);
+      })
+      .catch((e: Error) => setError(e.message));
+  }, [onRead]);
+  return (
+    <SheetShell title="Notifications" label="Notifications" onClose={onClose}>
+      {error ? (
+        <p className="px-1 text-[14px] text-muted">{error}</p>
+      ) : !notices ? (
+        <div role="status" className="flex items-center gap-3 px-1 py-6 text-[14px] text-muted">
+          <span className="block h-5 w-5 animate-spin rounded-full border-[2.5px] border-[color:var(--m-line)] border-t-[color:var(--m-coral)]" />
+          Loading your notifications
+        </div>
+      ) : notices.length === 0 ? (
+        <p className="px-1 py-6 text-center text-[14.5px] text-muted">Nothing new. You are all caught up.</p>
+      ) : (
+        <ul className="m-group">
+          {notices.map((n) => {
+            const inner = (
+              <>
+                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: "var(--m-coral)" }} />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-medium leading-snug">{n.title}</span>
+                  {n.body && <span className="mt-0.5 block text-[13.5px] leading-snug text-muted">{n.body}</span>}
+                  <span className="mt-1 block text-[12px] text-muted">{ago(n.at)}</span>
+                </span>
+              </>
+            );
             return (
-              <li key={t.href}>
-                <Link
-                  href={t.href}
-                  aria-current={on ? "page" : undefined}
-                  className="flex h-[58px] flex-col items-center justify-center gap-1 text-[11px]"
-                  style={{ color: on ? "var(--m-ink)" : "var(--m-soft)", fontWeight: on ? 600 : 500 }}
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden className="h-[23px] w-[23px]" fill="none" stroke="currentColor" strokeWidth={on ? 1.9 : 1.5} strokeLinecap="round" strokeLinejoin="round">
-                    {t.icon}
-                  </svg>
-                  {t.label}
-                </Link>
+              <li key={n.id} className="m-row">
+                {n.href ? (
+                  <a href={n.href} className="flex gap-3 px-4 py-3.5 active:bg-panel">
+                    {inner}
+                  </a>
+                ) : (
+                  <div className="flex gap-3 px-4 py-3.5">{inner}</div>
+                )}
               </li>
             );
           })}
         </ul>
-      </nav>
-
-      {sheet && <PagesSheet inApp={inApp} mode={mode} onMode={choose} onClose={() => setSheet(false)} />}
-    </GoToContext.Provider>
+      )}
+    </SheetShell>
   );
+}
+
+function ago(iso: string): string {
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins} min ago`;
+  const h = Math.round(mins / 60);
+  if (h < 24) return `${h} hr ago`;
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
 type Me = { name: string; email: string; photo: string | null };
@@ -185,7 +365,7 @@ function PagesSheet({ inApp, mode, onMode, onClose }: { inApp: boolean; mode: MT
       >
         <span aria-hidden className="mx-auto mb-3 block h-[5px] w-[40px] rounded-full" style={{ background: "var(--m-line)" }} />
         <div className="mb-4 flex items-center justify-between px-1">
-          <h2 className="m-title text-[22px]">Everything Else</h2>
+          <h2 className="m-title text-[24px]">More</h2>
           <button type="button" onClick={onClose} aria-label="Close" className="m-round m-press">
             <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
               <path d="M6 6l12 12M18 6L6 18" />

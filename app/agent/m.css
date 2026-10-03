@@ -1,6 +1,12 @@
 /*
  * THE PHONE'S LOOK (2 Oct 2026, for the iPhone app).
  *
+ * 3 Oct 2026, the pastel lettings look from James's own mockups: a warm cream
+ * page, pink and sage tiles, coral for the one action, Lora serif headlines,
+ * and his painted streets (public/illustrations/app). It supersedes the
+ * monochrome pass described below; the Notioly line drawings stay for the
+ * appointment cards.
+ *
  * The fourth and, in James's words, "last attempt" of the day, after the tile
  * reference, a standard tab bar and the BizLink pill bar: a nod back to the
  * original Notion style of TLE OS. Monochrome - light grey, black and white -
@@ -17,22 +23,25 @@
      think we should make that flat colour white ... all the way from the top
      to the bottom, including the nav bar". Cards are a flat grey on it with
      no outline and no shadow; the one card that matters is the brown. */
-  --m-bg: #ffffff;
-  --m-card: #f4f4f2;
-  --m-line: #ebebe8;
-  --m-fill: #e9e9e6;
-  /* What sits on a grey card - a button or a chip inside it - is white. */
-  --m-on-card: #ffffff;
-  --m-brown: #56423e;
+  --m-bg: #fbf8f4;
+  --m-card: #ffffff;
+  --m-line: #efe9e2;
+  --m-fill: #f3eee8;
+  /* What sits on a card - a button or a chip inside it. */
+  --m-on-card: #fbf8f4;
+  /* The one strong colour: a deeper coral than the tiles, so white words on
+     it still read (the mockups' coral, 3 Oct 2026; it was the brown). */
+  --m-brown: #c4645a;
   --m-brown-ink: #ffffff;
-  --m-ink: #121212;
-  --m-muted: #6f6f6c;
-  --m-soft: #a3a3a0;
-  /* The two pops of colour. Small, and never a whole surface. */
+  --m-ink: #1d1a19;
+  --m-muted: #6f6763;
+  --m-soft: #b0a8a3;
+  /* The coral of the mockups, for the one action; pink and sage for tiles. */
+  --m-coral: #de7c70;
   --m-pink: #e8968d;
-  --m-pink-wash: #fbe9e6;
+  --m-pink-wash: #fbe6e1;
   --m-green: #7fa16b;
-  --m-green-wash: #e9f0e3;
+  --m-green-wash: #eef0e3;
   --m-shadow: none;
 
   --ink: var(--m-ink);
@@ -53,34 +62,31 @@
 }
 
 .m-app[data-mtheme="dark"] {
-  --m-bg: #121212;
-  --m-card: #1e1e1e;
-  --m-line: #262626;
-  --m-fill: #2a2a2a;
-  --m-on-card: #2c2c2c;
-  --m-brown: #5f4a45;
+  --m-bg: #161312;
+  --m-card: #211d1b;
+  --m-line: #2c2725;
+  --m-fill: #2a2523;
+  --m-on-card: #2c2725;
+  --m-coral: #e58a7e;
+  --m-brown: #b35d54;
   --m-ink: #f2f2f0;
   --m-muted: #9b9b97;
   --m-soft: #5f5f5c;
-  --m-pink-wash: rgba(232, 150, 141, 0.16);
-  --m-green-wash: rgba(127, 161, 107, 0.18);
+  --m-pink-wash: #3a2826;
+  --m-green-wash: #262a20;
   --m-shadow: none;
   --accent-dark: #f0aaa2;
   color-scheme: dark;
 }
 
-/* Titles: medium, not bold, drawn in a touch - the reference's quiet weight. */
-.m-app .m-title {
-  font-family: var(--font-inter), system-ui, sans-serif;
-  font-weight: 500;
-  letter-spacing: -0.025em;
-}
+/* Titles in Lora, the mockups' warm serif; everything else stays Inter. */
+.m-app .m-title,
 .m-app h1,
 .m-app h2,
 .m-app h3 {
-  font-family: var(--font-inter), system-ui, sans-serif;
+  font-family: var(--font-display), Georgia, serif;
   font-weight: 500;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
 }
 
 .m-app .m-figure {
@@ -94,6 +100,11 @@
 .m-app .m-eyebrow {
   font-size: 13px;
   color: var(--m-muted);
+}
+
+/* The wordmark is ink on nothing; in the dark it turns light. */
+.m-app[data-mtheme="dark"] .m-wordmark {
+  filter: invert(1) brightness(0.95);
 }
 
 /* The Notioly line drawings are black ink on nothing; in the dark they turn white. */

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
-import { useGoTo } from "@/components/app/AppFrame";
+import { useFrame } from "@/components/app/AppFrame";
 
 /**
  * The few pieces every phone screen shares. Kept deliberately small: big
@@ -11,9 +11,10 @@ import { useGoTo } from "@/components/app/AppFrame";
  */
 
 /**
- * A screen's title, with the "+" for every other page at its right (James's
- * reference: "Dashboard" and a plus). An optional small line above (the
- * date), and on a screen one level down, a round back button at the left.
+ * The top of every screen, from James's mockups (3 Oct 2026): the TLE OS
+ * wordmark (or, one level down, a round back button) at the left and the bell
+ * with its unread count at the right; then an optional small line, the title
+ * in Lora, and whatever sits under it.
  */
 export function PhoneTop({
   title,
@@ -27,21 +28,39 @@ export function PhoneTop({
   /** Sits under the title: the week strip, chips. */
   children?: React.ReactNode;
 }) {
-  const goTo = useGoTo();
   return (
     <header className="mb-4">
-      <div className="flex h-11 items-center justify-between gap-3">
-        {back ? <BackLink href={back} /> : <span />}
-        <button type="button" onClick={goTo} aria-label="Everything else" className="m-press -mr-1.5 flex h-11 w-11 items-center justify-center rounded-full">
-          <svg viewBox="0 0 24 24" aria-hidden className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </button>
-      </div>
-      {eyebrow && <p className="m-eyebrow mt-1">{eyebrow}</p>}
-      <h1 className="m-title mt-0.5 text-[30px] leading-[1.15]">{title}</h1>
+      <TopBar back={back} />
+      {eyebrow && <p className="m-eyebrow mt-3">{eyebrow}</p>}
+      <h1 className="m-title mt-1 text-[32px] leading-[1.1]">{title}</h1>
       {children}
     </header>
+  );
+}
+
+/** The wordmark or a back button, and the bell. Home uses it on its own. */
+export function TopBar({ back }: { back?: string }) {
+  const { bell, unread } = useFrame();
+  return (
+    <div className="flex h-12 items-center justify-between gap-3">
+      {back ? (
+        <BackLink href={back} />
+      ) : (
+        <Link href="/agent" aria-label="TLE OS, home" className="block">
+          <img src="/brand/tle-os-type.png" alt="TLE OS" className="m-wordmark h-[22px] w-auto" />
+        </Link>
+      )}
+      <button type="button" onClick={bell} aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"} className="m-round m-press relative !h-11 !w-11">
+        <svg viewBox="0 0 24 24" aria-hidden className="h-[20px] w-[20px]" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0" />
+        </svg>
+        {unread > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10.5px] font-semibold text-white" style={{ background: "var(--m-coral)" }}>
+            {unread > 99 ? "99+" : unread}
+          </span>
+        )}
+      </button>
+    </div>
   );
 }
 

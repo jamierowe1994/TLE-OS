@@ -16,6 +16,11 @@ const fmtDate = (iso: string | null) =>
 
 export default function PhoneProperties() {
   const [needle, setNeedle] = useState("");
+  /* Opened from Search with the words already typed (?q=). */
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q");
+    if (q) setNeedle(q);
+  }, []);
   const [hits, setHits] = useState<PhoneProperty[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);

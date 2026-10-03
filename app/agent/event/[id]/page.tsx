@@ -67,7 +67,7 @@ export default function PhoneEvent() {
       ) : (
         <>
           <div className="mb-4">
-            <BackLink href="/agent" />
+            <BackLink href="/agent/day" />
           </div>
           {error ? (
             <ErrorLine text={error} />
@@ -148,7 +148,7 @@ function Event({ appt }: { appt: Appt }) {
           reference's "Meditation" screen (2 Oct 2026). */}
       <div className="m-group relative flex h-[240px] items-center justify-center">
         <div className="absolute left-3 top-3">
-          <BackLink href="/agent" />
+          <BackLink href="/agent/day" />
         </div>
         <img src={KIND_ART[appt.kind] ?? KIND_ART.other} alt="" className="m-ill h-[210px] w-auto" />
       </div>

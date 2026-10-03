@@ -1,317 +1,123 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Appt } from "@/lib/diary";
+import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
-import { useAlerts } from "@/components/app/alerts";
-import { ErrorLine, PhoneTop, Spinner } from "./bits";
-import { KIND_ART, KIND_LABEL, endOf, loadDiary, nowHm } from "./diary-bits";
+import AlertsCard from "@/components/app/AlertsCard";
+import { TopBar } from "./bits";
+import { todayLine, useHomeFigures, type Figure } from "./figures";
 
 /**
- * TODAY: the first tab.
+ * HOME (3 Oct 2026), drawn from James's own pastel mockup - "my favourite is
+ * probably the one on the left with the building": the greeting in Lora
+ * beside his painted street, a search across people and properties, four live
+ * figures on pink and sage tiles, and today's line that opens Your Day.
  *
- * James, 18 Sep 2026: "when we log in on mobile view only, we should just show
- * them what their diary looks like today ... click into it, and it will then
- * launch into the event." Drawn on 2 Oct in the Notion look he settled on: a
- * greeting, the week as a strip of days, the day's appointments as drawn
- * cards to swipe through, two figures, and the finders as chips.
- *
- * Every figure is the diary's own, read live. Each appointment opens
- * /m/event/<id>, which reads the day from the copy loadDiary keeps.
+ * Every figure is the agent's own and live (./figures). A figure that cannot
+ * be read shows a dash, and each tile opens where the number came from.
  */
 
-const isBusy = (a: Appt) => a.what === "Busy" && !a.where;
-
-const mins = (hm: string) => {
-  const [h, m] = hm.split(":").map(Number);
-  return h * 60 + m;
-};
-
-/** "In 25 min", "In 1 hr 10", or "On now" once it has started. */
-function whenLine(a: Appt, now: string): string {
-  if (a.start <= now) return "On now";
-  const d = mins(a.start) - mins(now);
-  if (d < 60) return `In ${d} min`;
-  const h = Math.floor(d / 60);
-  return `In ${h} hr${d % 60 ? ` ${d % 60}` : ""}`;
-}
-
-function greeting(first: string): string {
+function greeting(): string {
   const h = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone: "Europe/London" }).format(new Date()));
-  const part = h < 12 ? "Good Morning" : h < 18 ? "Good Afternoon" : "Good Evening";
-  return first ? `${part}, ${first}` : part;
+  return h < 12 ? "Good Morning," : h < 18 ? "Good Afternoon," : "Good Evening,";
 }
 
-const dayDate = (offset: number) => {
-  const d = new Date();
-  d.setHours(12, 0, 0, 0);
-  d.setDate(d.getDate() + offset);
-  return d;
-};
-
-export default function PhoneToday() {
-  const [appts, setAppts] = useState<Appt[] | null>(null);
-  const [note, setNote] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [day, setDay] = useState(0);
+export default function PhoneHome() {
+  const f = useHomeFigures();
   const [first, setFirst] = useState("");
-
-  const load = useCallback(async () => {
-    setError(null);
-    setAppts(null);
-    try {
-      const got = await loadDiary();
-      setNote(got.note);
-      setAppts(got.appts);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Your calendar did not load.");
-    }
-  }, []);
-
   useEffect(() => {
-    void load();
     fetch("/api/auth/me", { cache: "no-store" })
       .then((r) => r.json())
       .then((j: { user?: { name?: string } | null }) => setFirst((j.user?.name ?? "").split(/\s+/)[0] ?? ""))
       .catch(() => null);
-  }, [load]);
-
-  const now = nowHm();
-  const { ahead, earlier, allDay } = useMemo(() => {
-    const onDay = (appts ?? []).filter((a) => a.day === day && a.kind !== "travel").sort((a, b) => a.start.localeCompare(b.start));
-    const timed = onDay.filter((a) => !a.allDay && !isBusy(a));
-    const done = day === 0 ? timed.filter((a) => endOf(a) <= now) : [];
-    return { ahead: timed.filter((a) => !done.includes(a)), earlier: done, allDay: onDay.filter((a) => a.allDay) };
-  }, [appts, day, now]);
-
-  const viewings = [...ahead, ...earlier].filter((a) => a.kind === "viewing").length;
+  }, []);
 
   return (
     <main>
-      <PhoneTop
-        eyebrow={dayDate(day).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}
-        title={day === 0 ? greeting(first) : dayDate(day).toLocaleDateString("en-GB", { weekday: "long" })}
+      <TopBar />
+
+      {/* The greeting and the street. The painting runs off the right edge and
+          the search card sits over its foot, as in the mockup. */}
+      <section className="relative -mx-4 mt-2 h-[268px] overflow-hidden px-4">
+        <img
+          src="/illustrations/app/street-corner.webp"
+          alt=""
+          className="pointer-events-none absolute -right-16 top-0 h-[262px] w-auto max-w-none select-none"
+          style={{ maskImage: "linear-gradient(to left, #000 70%, transparent 100%)", WebkitMaskImage: "linear-gradient(to left, #000 70%, transparent 100%)" }}
+        />
+        <div className="relative w-[56%] pt-4">
+          <h1 className="m-title text-[38px] leading-[1.04]">
+            {greeting()}
+            <br />
+            {first || " "}
+          </h1>
+          <p className="mt-3 max-w-[170px] text-[14px] leading-snug text-muted">Here&apos;s what&apos;s happening with your lettings today.</p>
+        </div>
+      </section>
+
+      <Link
+        href="/agent/search"
+        className="m-press relative z-[1] -mt-5 flex h-[54px] items-center gap-3 rounded-full px-5 text-[14.5px] text-muted shadow-[0_10px_30px_-14px_rgba(80,50,40,0.35)]"
+        style={{ background: "var(--m-card)" }}
       >
-        <Week day={day} onPick={setDay} />
-      </PhoneTop>
+        <DoodleIcon name="search" size={18} className="text-ink" />
+        Search properties, tenants, landlords...
+      </Link>
 
-      {error ? (
-        <ErrorLine text={error} onRetry={load} />
-      ) : !appts ? (
-        <Spinner label="Loading your calendar" className="py-8" />
-      ) : (
-        <>
-          <AlertsCard />
-          {note && <p className="mb-3 text-[12.5px] text-muted">{note}</p>}
-          {allDay.map((a, i) => (
-            <p key={`${a.id}-${i}`} className="mb-2.5 rounded-[14px] px-4 py-2.5 text-[14px]" style={{ background: "var(--m-green-wash)" }}>
-              <span className="font-medium">All day</span> - {a.what}
-            </p>
-          ))}
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <Tile href="/leads" tone="pink" icon="user" value={f.leadsToday} label="Leads Today" />
+        <Tile href="/listings" tone="sage" icon="home" value={f.onMarket} label="On Market" />
+        <Tile href="/applications" tone="pink" icon="doc" value={f.applications} label="Applications" />
+        <Tile href="/agent/day" tone="sage" icon="key" value={f.viewingsWeek} label="Viewings, 7 Days" />
+      </div>
 
-          {ahead.length > 0 ? (
-            <div className="m-rail">
-              {ahead.map((a, i) => (
-                <DrawnCard key={`${a.id}-${i}`} a={a} now={now} first={day === 0 && i === 0} only={ahead.length === 1} />
-              ))}
-            </div>
-          ) : (
-            <div className="m-group flex flex-col items-center px-6 pb-7 pt-5 text-center">
-              <img src="/illustrations/notioly/looking-out-the-window.svg" alt="" className="m-ill h-[150px] w-auto" />
-              <p className="mt-2 text-[17px] font-medium">{day === 0 && earlier.length ? "That's Everything for Today" : "Nothing Booked"}</p>
-              <p className="mt-1 text-[14px] text-muted">{day === 0 ? (earlier.length ? "Nothing else in your calendar today." : "Nothing in your calendar today.") : "Nothing in your calendar on this day."}</p>
-            </div>
-          )}
+      <Link href="/agent/day" className="m-press mt-3 flex items-center gap-3.5 rounded-[22px] px-4 py-4" style={{ background: "var(--m-green-wash)" }}>
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px]" style={{ background: "var(--m-card)" }}>
+          <DoodleIcon name="calendar" size={20} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[16px] font-medium">Today</span>
+          <span className="block truncate text-[13.5px] text-muted">
+            {f.todayError ? "Your calendar did not load" : f.today ? todayLine(f.today) : "Loading your calendar"}
+          </span>
+        </span>
+        <Chevron />
+      </Link>
 
-          <h2 className="mt-7 text-[19px]">At a Glance</h2>
-          <div className="mt-3 grid grid-cols-2 gap-2.5">
-            <Figure value={ahead.length} label={day === 0 ? "Still to Go" : ahead.length === 1 ? "Appointment" : "Appointments"} />
-            <Figure value={viewings} label={viewings === 1 ? "Viewing" : "Viewings"} dot={viewings ? "var(--m-pink)" : undefined} />
-          </div>
-
-          <h2 className="mt-7 text-[19px]">Quick Find</h2>
-          <p className="mt-0.5 text-[14px] text-muted">Look someone or somewhere up</p>
-          <div className="m-rail mt-3">
-            {[
-              { href: "/agent/people?who=tenant", label: "Tenant" },
-              { href: "/agent/people?who=landlord", label: "Landlord" },
-              { href: "/agent/properties", label: "Property" },
-              { href: "/agent/id-check", label: "Scan an ID" },
-            ].map((c) => (
-              <Link key={c.href} href={c.href} className="m-press flex h-11 items-center rounded-full px-5 text-[14.5px] font-medium" style={{ background: "var(--m-card)" }}>
-                {c.label}
-              </Link>
-            ))}
-          </div>
-
-          {earlier.length > 0 && (
-            <>
-              <h2 className="mt-7 text-[19px]">Earlier Today</h2>
-              <ul className="m-group mt-3">
-                {earlier.map((a, i) => (
-                  <li key={`${a.id}-${i}`} className="m-row">
-                    <Link href={`/agent/event/${encodeURIComponent(a.id)}`} className="flex items-center gap-3 px-4 py-3 active:bg-panel">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--m-green-wash)", color: "var(--m-green)" }}>
-                        <svg viewBox="0 0 24 24" aria-hidden className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M5 12l5 5L19 7" />
-                        </svg>
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[15px] font-medium">{a.where || a.what}</span>
-                        <span className="block truncate text-[13px] text-muted">
-                          {KIND_LABEL[a.kind] ?? "Appointment"} · {a.start}
-                        </span>
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </>
-      )}
+      <div className="mt-3">
+        <AlertsCard />
+      </div>
     </main>
   );
 }
 
-/**
- * Asked once, on Today, while alerts are off on this phone (2 Oct 2026). The
- * phone itself only lets a page ask from a tap, so this is a card with a
- * button, never a pop-up on arrival. "Not now" puts it away on this phone;
- * the switch in the "+" sheet is always there.
- */
-const ALERTS_LATER = "app-alerts-later";
-
-function AlertsCard() {
-  const alerts = useAlerts();
-  const [later, setLater] = useState(true);
-  useEffect(() => {
-    try {
-      setLater(localStorage.getItem(ALERTS_LATER) === "1");
-    } catch {
-      setLater(false);
-    }
-  }, []);
-  if (later || (alerts.state !== "off" && alerts.state !== "busy")) return null;
+function Tile({ href, tone, icon, value, label }: { href: string; tone: "pink" | "sage"; icon: string; value: Figure; label: string }) {
   return (
-    <section className="m-group mb-3 flex items-start gap-3 p-4">
-      <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--m-pink-wash)" }}>
-        <DoodleIcon name="bell" size={17} />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-[15.5px] font-medium">Turn On Alerts</span>
-        <span className="mt-0.5 block text-[13.5px] leading-snug text-muted">A buzz on this phone when a lead, a viewing or a deal moves.</span>
-        {alerts.error && <span className="mt-1 block text-[13px] text-muted">{alerts.error}</span>}
-        <span className="mt-3 flex gap-2">
-          <button type="button" onClick={alerts.turnOn} disabled={alerts.state === "busy"} className="m-btn m-btn-primary m-press !h-10 !text-[14px]">
-            {alerts.state === "busy" ? "Turning On..." : "Turn On"}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              try {
-                localStorage.setItem(ALERTS_LATER, "1");
-              } catch {
-                /* It just asks again next time. */
-              }
-              setLater(true);
-            }}
-            className="m-btn m-press !h-10 !border-transparent !bg-transparent !text-[14px] text-muted"
-          >
-            Not Now
-          </button>
+    <Link href={href} className="m-press flex min-h-[132px] flex-col justify-between rounded-[22px] p-4" style={{ background: tone === "pink" ? "var(--m-pink-wash)" : "var(--m-green-wash)" }}>
+      <DoodleIcon name={icon} size={24} />
+      <span>
+        <span className="m-figure block text-[30px] font-semibold">
+          {value === "loading" ? (
+            <span role="status" aria-label="Loading" className="mb-1 mt-2 block h-5 w-5 animate-spin rounded-full border-[2.5px] border-black/10 border-t-[color:var(--m-coral)]" />
+          ) : value === null ? (
+            "–"
+          ) : (
+            value
+          )}
         </span>
-      </span>
-    </section>
-  );
-}
-
-/** Seven days, Monday first, the chosen one filled and today marked in pink. */
-function Week({ day, onPick }: { day: number; onPick: (d: number) => void }) {
-  const today = dayDate(0);
-  const monday = -((today.getDay() + 6) % 7);
-  /* The week the chosen day sits in, kept to the diary's reach (a week back, a fortnight on). */
-  const start = monday + Math.floor((day - monday) / 7) * 7;
-  const days = Array.from({ length: 7 }, (_, i) => start + i);
-  const reach = (d: number) => d >= -7 && d <= 14;
-  return (
-    <div className="mt-4 flex items-center gap-1">
-      <WeekStep dir={-1} disabled={!reach(start - 1)} onClick={() => onPick(Math.max(start - 7, -7))} />
-      <div className="grid flex-1 grid-cols-7">
-        {days.map((d) => {
-          const date = dayDate(d);
-          const on = d === day;
-          return (
-            <button key={d} type="button" disabled={!reach(d)} onClick={() => onPick(d)} className="flex flex-col items-center gap-1.5 py-1 disabled:opacity-30">
-              <span className="text-[12px] text-muted">{date.toLocaleDateString("en-GB", { weekday: "short" }).slice(0, 2)}</span>
-              <span
-                className="flex h-9 w-9 items-center justify-center rounded-full text-[15px] font-medium"
-                style={on ? { background: "var(--m-ink)", color: "var(--m-bg)" } : undefined}
-              >
-                {date.getDate()}
-              </span>
-              <span className="h-1 w-1 rounded-full" style={{ background: d === 0 ? "var(--m-pink)" : "transparent" }} />
-            </button>
-          );
-        })}
-      </div>
-      <WeekStep dir={1} disabled={!reach(start + 7)} onClick={() => onPick(Math.min(start + 7, 14))} />
-    </div>
-  );
-}
-
-function WeekStep({ dir, disabled, onClick }: { dir: 1 | -1; disabled: boolean; onClick: () => void }) {
-  return (
-    <button type="button" onClick={onClick} disabled={disabled} aria-label={dir < 0 ? "Previous week" : "Next week"} className="flex h-9 w-6 items-center justify-center text-muted disabled:opacity-25">
-      <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4">
-        <path d={dir < 0 ? "M15 5l-7 7 7 7" : "M9 5l7 7-7 7"} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </button>
-  );
-}
-
-/**
- * One appointment as a drawn card, the reference's "Driving home" card. The
- * next one is the dark brown card with the drawing in white (James's Copilot
- * reference, 3 Oct 2026); the rest are the flat grey.
- */
-function DrawnCard({ a, now, first, only }: { a: Appt; now: string; first: boolean; only: boolean }) {
-  return (
-    <Link
-      href={`/agent/event/${encodeURIComponent(a.id)}`}
-      className="m-group m-press block p-2"
-      style={{ width: only ? "100%" : "84%", ...(first ? { background: "var(--m-brown)", color: "#ffffff" } : {}) }}
-    >
-      <span className="relative flex h-[190px] items-center justify-center">
-        {first && (
-          <span className="m-chip absolute left-1.5 top-1.5 !bg-white/15 !text-white">
-            <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--m-pink)" }} />
-            {whenLine(a, now)}
-          </span>
-        )}
-        {/* On the brown the line drawing is always white, in either mode. */}
-        <img src={KIND_ART[a.kind] ?? KIND_ART.other} alt="" className={`h-[180px] w-auto ${first ? "invert" : "m-ill"}`} />
-      </span>
-      <span className="block rounded-[16px] px-3.5 py-3" style={{ background: first ? "rgba(255,255,255,0.12)" : "var(--m-on-card)" }}>
-        <span className="block truncate text-[16px] font-medium">{a.where || a.what}</span>
-        <span className={`mt-0.5 block truncate text-[13.5px] ${first ? "text-white/70" : "text-muted"}`}>
-          {KIND_LABEL[a.kind] ?? "Appointment"} · {a.start} - {endOf(a)}
-          {a.who ? ` · ${a.who}` : ""}
+        <span className="mt-1 flex items-center justify-between gap-2 text-[13.5px]">
+          {label}
+          <Chevron />
         </span>
       </span>
     </Link>
   );
 }
 
-function Figure({ value, label, dot }: { value: number; label: string; dot?: string }) {
+function Chevron() {
   return (
-    <div className="m-group px-4 py-5 text-center">
-      <p className="m-figure text-[30px]">{value}</p>
-      <p className="mt-2 flex items-center justify-center gap-1.5 text-[13.5px] text-muted">
-        {dot && <span className="h-1.5 w-1.5 rounded-full" style={{ background: dot }} />}
-        {label}
-      </p>
-    </div>
+    <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4 shrink-0">
+      <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
