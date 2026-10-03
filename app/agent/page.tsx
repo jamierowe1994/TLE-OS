@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import AlertsCard from "@/components/app/AlertsCard";
+import StandaloneHint from "@/components/app/StandaloneHint";
 import { TopBar } from "./bits";
 import { todayLine, useHomeFigures, type Figure } from "./figures";
 
@@ -85,6 +86,7 @@ export default function PhoneHome() {
       </Link>
 
       <div className="mt-3">
+        <StandaloneHint />
         <AlertsCard />
       </div>
     </main>

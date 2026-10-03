@@ -252,3 +252,18 @@
     transform: none;
   }
 }
+
+/* The page behind the page (James, 3 Oct 2026: dark mode, "the top bar is
+   still showing as white"). Safari tints its own bars - and the iPhone the
+   strip under the clock - from the html and body background, not from
+   .m-app, and those stayed the site's light colour. Matched only while the
+   app is on screen, so nothing outside /agent changes. */
+html:has(.m-app),
+html:has(.m-app) body {
+  background: #fbf8f4;
+}
+html:has(.m-app[data-mtheme="dark"]),
+html:has(.m-app[data-mtheme="dark"]) body {
+  background: #161312;
+  color-scheme: dark;
+}
