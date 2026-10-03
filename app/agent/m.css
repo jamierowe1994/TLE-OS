@@ -79,14 +79,16 @@
   color-scheme: dark;
 }
 
-/* Titles in Lora, the mockups' warm serif; everything else stays Inter. */
+/* Titles in Bricolage Grotesque, the OS's own title face (James, 3 Oct
+   2026: "the font that we should be using, which is the grotesque"); it was
+   Lora from the mockups for a morning. Everything else stays Inter. */
 .m-app .m-title,
 .m-app h1,
 .m-app h2,
 .m-app h3 {
-  font-family: var(--font-display), Georgia, serif;
-  font-weight: 500;
-  letter-spacing: -0.01em;
+  font-family: var(--font-bricolage), var(--font-manrope), system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .m-app .m-figure {

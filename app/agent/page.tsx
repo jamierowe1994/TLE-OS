@@ -10,7 +10,7 @@ import { todayLine, useHomeFigures, type Figure } from "./figures";
 
 /**
  * HOME (3 Oct 2026), drawn from James's own pastel mockup - "my favourite is
- * probably the one on the left with the building": the greeting in Lora
+ * probably the one on the left with the building": the greeting in Bricolage Grotesque
  * beside his painted street, a search across people and properties, four live
  * figures on pink and sage tiles, and today's line that opens Your Day.
  *

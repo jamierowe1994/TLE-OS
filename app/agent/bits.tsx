@@ -14,7 +14,7 @@ import { useFrame } from "@/components/app/AppFrame";
  * The top of every screen, from James's mockups (3 Oct 2026): the TLE OS
  * wordmark (or, one level down, a round back button) at the left and the bell
  * with its unread count at the right; then an optional small line, the title
- * in Lora, and whatever sits under it.
+ * in Bricolage Grotesque, and whatever sits under it.
  */
 export function PhoneTop({
   title,

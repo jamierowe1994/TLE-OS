@@ -12,7 +12,8 @@ import { applyMTheme, type MTheme } from "@/lib/m-theme";
  * THE AGENT'S PHONE: a page, and a bar at the foot.
  *
  * 3 Oct 2026, from James's own pastel mockups: Home, People, a coral "+",
- * Properties and More, the screen you are on lifted on a pink pill; the TLE OS
+ * Properties and More - icons only, no words under them (James, the same
+ * day) - the screen you are on lifted on a pink pill; the TLE OS
  * wordmark and a bell with the unread count at the top of every screen
  * (PhoneTop). "+" opens the quick actions, "More" every other page, the
  * light/dark switch and the account. Drawn here, so Safari and the iPhone app
@@ -102,7 +103,7 @@ export default function AppFrame({ inApp, theme, children }: { inApp: boolean; t
         className="fixed inset-x-0 bottom-0 z-40 border-t pb-[env(safe-area-inset-bottom)]"
         style={{ borderColor: "var(--m-line)", background: "var(--m-bg)" }}
       >
-        <ul className="mx-auto grid h-[66px] max-w-[560px] grid-cols-5 items-center px-2">
+        <ul className="mx-auto grid h-[62px] max-w-[560px] grid-cols-5 items-center px-2">
           {TABS.slice(0, 2).map((t) => (
             <Tab key={t.href} tab={t} on={t.match(path)} />
           ))}
@@ -121,11 +122,10 @@ export default function AppFrame({ inApp, theme, children }: { inApp: boolean; t
           </li>
           <Tab tab={TABS[2]!} on={TABS[2]!.match(path)} />
           <li className="flex justify-center">
-            <button type="button" onClick={more} className="flex h-[54px] w-[62px] flex-col items-center justify-center gap-[3px] rounded-[16px] text-[11px] font-medium" style={{ color: "var(--m-muted)" }}>
-              <svg viewBox="0 0 24 24" aria-hidden className="h-[22px] w-[22px]" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
+            <button type="button" onClick={more} aria-label="More" className="flex h-[48px] w-[58px] items-center justify-center rounded-[16px]" style={{ color: "var(--m-muted)" }}>
+              <svg viewBox="0 0 24 24" aria-hidden className="h-[24px] w-[24px]" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
                 {ICONS.more}
               </svg>
-              More
             </button>
           </li>
         </ul>
@@ -144,13 +144,13 @@ function Tab({ tab, on }: { tab: (typeof TABS)[number]; on: boolean }) {
       <Link
         href={tab.href}
         aria-current={on ? "page" : undefined}
-        className="flex h-[54px] w-[62px] flex-col items-center justify-center gap-[3px] rounded-[16px] text-[11px] font-medium transition-colors"
+        aria-label={tab.label}
+        className="flex h-[48px] w-[58px] items-center justify-center rounded-[16px] transition-colors"
         style={on ? { background: "var(--m-pink-wash)", color: "var(--m-coral)" } : { color: "var(--m-muted)" }}
       >
-        <svg viewBox="0 0 24 24" aria-hidden className="h-[22px] w-[22px]" fill={on && tab.icon === "home" ? "currentColor" : "none"} stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+        <svg viewBox="0 0 24 24" aria-hidden className="h-[24px] w-[24px]" fill={on && tab.icon === "home" ? "currentColor" : "none"} stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
           {ICONS[tab.icon]}
         </svg>
-        {tab.label}
       </Link>
     </li>
   );
