@@ -68,7 +68,7 @@ export default function PhoneHome() {
       <div className="mt-4 grid grid-cols-2 gap-3">
         <Tile href="/agent/leads" tone="pink" icon="user" value={f.leadsToday} label="Leads Today" />
         <Tile href="/agent/properties?chip=market" tone="sage" icon="home" value={f.onMarket} label="On Market" />
-        <Tile href={null} tone="pink" icon="doc" value={f.applications} label="Applications" />
+        <Tile href="/agent/applications" tone="pink" icon="doc" value={f.applications} label="Applications" />
         <Tile href="/agent/day" tone="sage" icon="key" value={f.viewingsWeek} label="Viewings, 7 Days" />
       </div>
 

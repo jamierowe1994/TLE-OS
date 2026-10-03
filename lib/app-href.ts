@@ -9,6 +9,7 @@ export function appHref(href: string | null | undefined): string {
   if (!href) return "/agent";
   if (href.startsWith("/agent")) return href;
   if (href.startsWith("/leads")) return "/agent/leads?tab=all";
+  if (href.startsWith("/applications")) return "/agent/applications";
   if (href.startsWith("/listings")) return "/agent/properties";
   if (href.startsWith("/portfolio") || href.startsWith("/property-management")) return "/agent/properties";
   if (href.startsWith("/viewings")) return "/agent/day";
