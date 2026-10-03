@@ -8,6 +8,7 @@ import { listContacts } from "@/lib/contacts-store";
 import { peopleLike, rememberPeople } from "@/lib/rex-people-store";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import type { Lead } from "@/lib/leads-sample";
+import { peopleBook } from "@/lib/m-people-book";
 
 /**
  * GET /api/m/people?q=… → a name, and how to reach them. The phone view's
@@ -97,10 +98,18 @@ export async function GET(req: NextRequest) {
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
 
   const needle = (req.nextUrl.searchParams.get("q") ?? "").trim();
-  if (needle.length < 2) return NextResponse.json({ ok: true, people: [] });
+  const wantBook = req.nextUrl.searchParams.get("book") === "1";
+  if (!wantBook && needle.length < 2) return NextResponse.json({ ok: true, people: [] });
   const scope = await scopeFor(req);
   const rexUserId = await searchScope(req, scope);
-  if (rexUserId === false) return NextResponse.json({ ok: true, people: [] });
+  if (rexUserId === false) return NextResponse.json({ ok: true, people: [], tenants: [], landlords: [] });
+
+  /* ?book=1 - the app's People tab: tenants and landlords before any typing (3 Oct 2026). */
+  if (wantBook) {
+    const book = await peopleBook(rexUserId);
+    if (!book) return NextResponse.json({ ok: false, error: "Your people did not load. Try again in a moment." }, { status: 502 });
+    return NextResponse.json({ ok: true, ...book });
+  }
 
   if (req.nextUrl.searchParams.get("rex") === "1") {
     if (!rexConfigured()) return NextResponse.json({ ok: true, people: [] });

@@ -1,222 +1,477 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
+import DoodleIcon from "@/components/DoodleIcon";
 import type { PhonePerson } from "@/app/api/m/people/route";
 import type { NearbyPerson } from "@/app/api/m/nearby/route";
-import { ErrorLine, PhoneTop, ReachButtons, SearchBox, Segmented, Spinner } from "../bits";
-import { RadiusBox, RadiusSheet, type RadiusPick } from "../radius";
+import type { BookPerson } from "@/lib/m-people-book";
+import { ErrorLine, Sheet, Spinner, TopBar, dialable, mapsHref } from "../bits";
+import { RadiusSheet, type RadiusPick } from "../radius";
 
 /**
- * TENANT and LANDLORD: a name in, a number out. Read only.
+ * PEOPLE (3 Oct 2026), from James's mockup - "this is how I would like the
+ * page to look for people ... lose the icons for the houses": the same header
+ * as Home and Properties, Tenants and Landlords, a search with a customise
+ * button, a count with its sort, and plain rows - a name, where they stand,
+ * where they live - opening a sheet with message, call and email at the top.
  *
- * Two answers, like the search bar on the full OS: what the OS already holds
- * comes back as they type, and the full contact book is asked behind it and
- * says it is still looking, because a common surname takes it several seconds.
- *
- * Under the name box, Search by Radius (James, 18 Sep 2026): everyone with a
- * home, or an enquiry, within a distance of where you stand or a postcode.
- * Those come back as short rows that open out when tapped.
+ * The list is the agent's own book (/api/m/people?book=1): open applicants
+ * at their real stage, the tenants in the homes we manage, and those homes'
+ * landlords. Typing also asks the full contact book, so anybody else is
+ * still found (shown under From the Contact Book). The radius search lives
+ * behind the customise button.
  */
 
+type Side = "tenant" | "landlord";
+type Sort = "recent" | "az" | "stage";
+const SORTS: Array<{ id: Sort; label: string }> = [
+  { id: "recent", label: "Recently Added" },
+  { id: "az", label: "Name, A to Z" },
+  { id: "stage", label: "Stage" },
+];
+
+const TONE: Record<BookPerson["tone"], { bg: string; ink: string }> = {
+  new: { bg: "var(--m-pink-wash)", ink: "var(--m-coral)" },
+  active: { bg: "var(--m-green-wash)", ink: "var(--m-sage-ink)" },
+  neutral: { bg: "var(--m-fill)", ink: "var(--m-muted)" },
+};
+
+const sameish = (a: string, b: string) => a.toLowerCase().replace(/\s+/g, " ").trim() === b.toLowerCase().replace(/\s+/g, " ").trim();
+
 export default function PhonePeople() {
-  const [needle, setNeedle] = useState("");
-  const [fast, setFast] = useState<PhonePerson[] | null>(null);
-  const [slow, setSlow] = useState<PhonePerson[] | null>(null);
+  const [book, setBook] = useState<{ tenants: BookPerson[]; landlords: BookPerson[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [slowNote, setSlowNote] = useState<string | null>(null);
-  const turn = useRef(0);
-  /* One People tab with a Tenants / Landlords switch (2 Oct 2026); it was two
-     menu items. ?who= still picks the side, so old links land right. */
-  const [side, setSide] = useState<"tenant" | "landlord">("tenant");
-  const [sheet, setSheet] = useState(false);
+  const [side, setSide] = useState<Side>("tenant");
+  const [needle, setNeedle] = useState("");
+  const [sort, setSort] = useState<Sort>("recent");
+  const [customise, setCustomise] = useState(false);
+  const [radiusOpen, setRadiusOpen] = useState(false);
   const [radius, setRadius] = useState<RadiusPick | null>(null);
   const [near, setNear] = useState<NearbyPerson[] | null>(null);
-  const [nearError, setNearError] = useState<string | null>(null);
+  const [others, setOthers] = useState<PhonePerson[] | null>(null);
+  const [open, setOpen] = useState<BookPerson | null>(null);
+  const turn = useRef(0);
+
+  const load = () => {
+    setError(null);
+    setBook(null);
+    fetch("/api/m/people?book=1", { cache: "no-store" })
+      .then(async (r) => {
+        const j = (await r.json().catch(() => ({}))) as { ok?: boolean; tenants?: BookPerson[]; landlords?: BookPerson[]; error?: string };
+        if (!r.ok || !j.ok) throw new Error(j.error ?? "Your people did not load.");
+        setBook({ tenants: j.tenants ?? [], landlords: j.landlords ?? [] });
+      })
+      .catch((e: Error) => setError(e.message));
+  };
 
   useEffect(() => {
+    load();
     const sp = new URLSearchParams(window.location.search);
+    if (sp.get("who") === "landlord") setSide("landlord");
     const q = sp.get("q");
     if (q) setNeedle(q);
-    const w = sp.get("who");
-    if (w === "landlord") setSide("landlord");
   }, []);
 
-  const pickSide = (w: "tenant" | "landlord") => {
+  const pickSide = (w: Side) => {
     setSide(w);
+    setRadius(null);
     const url = new URL(window.location.href);
     url.searchParams.set("who", w);
     window.history.replaceState(null, "", url);
   };
 
+  /* Typing also asks the whole contact book, for anybody not on the list. */
   useEffect(() => {
     const term = needle.trim();
     const mine = ++turn.current;
-    setError(null);
-    setSlowNote(null);
-    if (term.length < 2) {
-      setFast(null);
-      setSlow(null);
-      return;
-    }
-    /* Typing a name takes over from a radius search. */
-    setRadius(null);
-    setFast(null);
-    setSlow(null);
-    const t = window.setTimeout(async () => {
+    setOthers(null);
+    if (term.length < 2) return;
+    const t = window.setTimeout(() => {
       const ask = (extra: string) =>
-        fetch(`/api/m/people?q=${encodeURIComponent(term)}${extra}`, { cache: "no-store" }).then(async (r) => {
-          const j = (await r.json().catch(() => ({}))) as { ok?: boolean; people?: PhonePerson[]; error?: string };
-          if (!r.ok || !j.ok) throw new Error(j.error ?? "The search did not answer.");
-          return j.people ?? [];
-        });
-      ask("")
-        .then((p) => mine === turn.current && setFast(p))
-        .catch((e: Error) => mine === turn.current && (setFast([]), setError(e.message)));
-      ask("&rex=1")
-        .then((p) => mine === turn.current && setSlow(p))
-        .catch((e: Error) => mine === turn.current && (setSlow([]), setSlowNote(e.message)));
-    }, 320);
+        fetch(`/api/m/people?q=${encodeURIComponent(term)}${extra}`, { cache: "no-store" })
+          .then((r) => r.json())
+          .then((j: { people?: PhonePerson[] }) => j.people ?? [])
+          .catch(() => [] as PhonePerson[]);
+      void Promise.all([ask(""), ask("&rex=1")]).then(([a, b]) => mine === turn.current && setOthers([...a, ...b]));
+    }, 350);
     return () => window.clearTimeout(t);
   }, [needle]);
 
   useEffect(() => {
     if (!radius) return setNear(null);
     setNear(null);
-    setNearError(null);
     const sp = new URLSearchParams({ who: side, lat: String(radius.lat), lng: String(radius.lng), miles: String(radius.miles) });
     fetch(`/api/m/nearby?${sp.toString()}`, { cache: "no-store" })
-      .then(async (r) => {
-        const j = (await r.json()) as { ok?: boolean; people?: NearbyPerson[]; error?: string };
-        if (!r.ok || !j.ok) throw new Error(j.error ?? "The radius search did not answer.");
-        setNear(j.people ?? []);
-      })
-      .catch((e: Error) => {
-        setNear([]);
-        setNearError(e.message);
-      });
+      .then((r) => r.json())
+      .then((j: { people?: NearbyPerson[] }) => setNear(j.people ?? []))
+      .catch(() => setNear([]));
   }, [radius, side]);
 
-  /* The slow half only adds people the fast half did not already show. */
-  const shown = new Set((fast ?? []).map((p) => `${p.name.toLowerCase()}|${p.phone.replace(/\D/g, "")}|${p.email.toLowerCase()}`));
-  const extra = (slow ?? []).filter((p) => !shown.has(`${p.name.toLowerCase()}|${p.phone.replace(/\D/g, "")}|${p.email.toLowerCase()}`));
-  /* Only the other side is left out - a plain contact could be either. */
-  const other = side === "tenant" ? /landlord/i : /tenant|applicant/i;
-  const all = [...(fast ?? []), ...extra].filter((p) => !other.test(p.role));
-  const searching = needle.trim().length >= 2;
+  const list = useMemo(() => {
+    const all = book ? (side === "tenant" ? book.tenants : book.landlords) : [];
+    const n = needle.trim().toLowerCase();
+    const nd = n.replace(/\D/g, "");
+    const hits = all.filter((p) => {
+      if (!n) return true;
+      if ([p.name, p.address, p.locality, p.email].some((f) => f && f.toLowerCase().includes(n))) return true;
+      return nd.length >= 5 && p.phone.replace(/\D/g, "").includes(nd);
+    });
+    const by: Record<Sort, (a: BookPerson, b: BookPerson) => number> = {
+      recent: (a, b) => (b.at ?? "").localeCompare(a.at ?? ""),
+      az: (a, b) => a.name.localeCompare(b.name, "en-GB"),
+      stage: (a, b) => a.status.localeCompare(b.status, "en-GB") || a.name.localeCompare(b.name, "en-GB"),
+    };
+    return hits.sort(by[sort]);
+  }, [book, side, needle, sort]);
+
+  /* Contact-book finds that are not already on the list, and on this side. */
+  const extra = useMemo(() => {
+    if (!others) return [];
+    const other = side === "tenant" ? /landlord/i : /tenant|applicant/i;
+    const seen = new Set<string>();
+    return others.filter((o) => {
+      if (other.test(o.role)) return false;
+      if (list.some((p) => sameish(p.name, o.name))) return false;
+      const k = o.name.toLowerCase() + o.phone.replace(/\D/g, "");
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }, [others, list, side]);
+
+  const noun = side === "tenant" ? ["Tenant", "Tenants"] : ["Landlord", "Landlords"];
 
   return (
     <main>
-      <PhoneTop title="People" />
-      <Segmented
-        value={side}
-        onChange={pickSide}
-        options={[
-          { value: "tenant", label: "Tenants" },
-          { value: "landlord", label: "Landlords" },
-        ]}
-      />
-      <div className="mt-3">
-        <SearchBox value={needle} onChange={setNeedle} placeholder="Name, phone or email" />
-      </div>
-      <RadiusBox picked={radius} onOpen={() => setSheet(true)} />
+      <TopBar />
 
-      <div className="mt-4">
-        {radius ? (
-          <>
-            <div className="mb-2 flex items-center justify-between px-1">
-              <p className="text-[13px] text-muted">
-                {near ? `${near.length} ${side === "landlord" ? (near.length === 1 ? "landlord" : "landlords") : near.length === 1 ? "tenant" : "tenants"}, nearest first` : ""}
-              </p>
-              <button type="button" onClick={() => setRadius(null)} className="h-9 px-1 text-[13px] font-semibold text-accent-dark">
-                Clear
-              </button>
-            </div>
-            {nearError && <ErrorLine text={nearError} />}
-            {near === null ? (
-              <Spinner label="Looking around" className="py-4" />
-            ) : near.length === 0 && !nearError ? (
-              <p className="py-6 text-center text-[14px] text-muted">Nobody within {radius.miles} {radius.miles === 1 ? "mile" : "miles"}. Try further out.</p>
-            ) : (
-              <ul className="grid grid-cols-1 gap-2">
-                {near.map((p) => (
-                  <OpenRow key={p.key} p={p} />
-                ))}
-              </ul>
-            )}
-          </>
-        ) : !searching ? (
-          <p className="px-1 text-[14px] text-muted">
-            Type at least two letters of their name, or part of their number, or search by radius.
-          </p>
-        ) : (
-          <>
-            {error && <ErrorLine text={error} />}
-            {fast === null && <Spinner label="Searching" className="py-4" />}
-            <ul className="grid grid-cols-1 gap-3">
-              {all.map((p) => (
-                <li key={p.key} className="m-group p-4">
-                  <p className="text-[17px] font-semibold leading-snug">{p.name}</p>
-                  <p className="mt-0.5 text-[13px] text-muted">{[p.role, p.context].filter(Boolean).join(" · ")}</p>
-                  {(p.phone || p.email) && (
-                    <p className="mt-2 break-words text-[14.5px]">
-                      {p.phone && <span className="figures mr-3 font-semibold">{p.phone}</span>}
-                      {p.email && <span className="text-muted">{p.email}</span>}
-                    </p>
-                  )}
-                  <ReachButtons phone={p.phone} email={p.email} />
+      {/* Exactly Home's greeting box, as on Properties. */}
+      <section className="relative -mx-4 mt-2 h-[268px] overflow-hidden px-4">
+        <img
+          src="/illustrations/app/street-row.webp"
+          alt=""
+          className="pointer-events-none absolute -right-24 top-6 h-[236px] w-auto max-w-none select-none"
+          style={{ maskImage: "linear-gradient(to left, #000 70%, transparent 100%)", WebkitMaskImage: "linear-gradient(to left, #000 70%, transparent 100%)" }}
+        />
+        <div className="relative w-[56%] pt-4">
+          <h1 className="m-title text-[38px] leading-[1.04]">People</h1>
+          <p className="mt-3 max-w-[170px] text-[14px] leading-snug text-muted">Find your tenants and landlords.</p>
+        </div>
+      </section>
+
+      <div className="relative z-[1] -mt-5 grid grid-cols-2 gap-1 rounded-full p-1 shadow-[0_10px_30px_-14px_rgba(80,50,40,0.35)]" style={{ background: "var(--m-card)" }}>
+        {(["tenant", "landlord"] as const).map((w) => (
+          <button
+            key={w}
+            type="button"
+            onClick={() => pickSide(w)}
+            aria-pressed={side === w}
+            className="h-11 rounded-full text-[15px] font-medium transition-colors"
+            style={side === w ? { background: "var(--m-pink-wash)", color: "var(--m-coral)" } : undefined}
+          >
+            {w === "tenant" ? "Tenants" : "Landlords"}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-3 flex items-center gap-2.5">
+        <label className="flex h-[52px] min-w-0 flex-1 items-center gap-3 rounded-full px-5" style={{ background: "var(--m-card)" }}>
+          <DoodleIcon name="search" size={18} />
+          <input
+            type="search"
+            value={needle}
+            onChange={(e) => {
+              setNeedle(e.target.value);
+              setRadius(null);
+            }}
+            placeholder="Name, phone or home..."
+            enterKeyHint="search"
+            autoComplete="off"
+            className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted [&::-webkit-search-cancel-button]:hidden"
+          />
+          {needle && (
+            <button type="button" onClick={() => setNeedle("")} aria-label="Clear" className="-mr-2 flex h-8 w-8 items-center justify-center rounded-full text-muted">
+              <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          )}
+        </label>
+        <button
+          type="button"
+          onClick={() => setCustomise(true)}
+          aria-label="Customise"
+          className="m-press flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full"
+          style={{ background: "var(--m-pink-wash)", color: "var(--m-coral)" }}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <path d="M4 7h10M18 7h2M4 17h4M12 17h8M14 4.5v5M8 14.5v5" />
+          </svg>
+        </button>
+      </div>
+
+      {radius ? (
+        <>
+          <div className="mb-2 mt-5 flex items-center justify-between px-1">
+            <p className="text-[15px] font-medium">
+              {near ? `${near.length} ${near.length === 1 ? noun[0] : noun[1]}` : noun[1]} within {radius.miles} {radius.miles === 1 ? "mile" : "miles"}
+            </p>
+            <button type="button" onClick={() => setRadius(null)} className="text-[14px] font-medium" style={{ color: "var(--m-coral)" }}>
+              Clear
+            </button>
+          </div>
+          {near === null ? (
+            <Spinner label="Looking around" className="py-4" />
+          ) : near.length === 0 ? (
+            <p className="py-6 text-center text-[14px] text-muted">Nobody within {radius.miles} miles. Try further out.</p>
+          ) : (
+            <ul className="grid grid-cols-1 gap-2.5">
+              {near.map((p) => (
+                <li key={p.key}>
+                  <Row
+                    name={p.name}
+                    chip={{ text: p.miles < 0.1 ? "< 0.1 mi" : `${p.miles} mi`, tone: "neutral" }}
+                    line1={p.context || p.role}
+                    onClick={() => setOpen(asBook(p, side))}
+                  />
                 </li>
               ))}
             </ul>
-            {fast !== null && slow === null && <Spinner label="Checking the full contact book" className="py-4" />}
-            {slowNote && <p className="mt-3 text-[13px] text-muted">{slowNote}</p>}
-            {fast !== null && slow !== null && all.length === 0 && !error && (
-              <p className="py-6 text-center text-[14px] text-muted">Nobody found for &ldquo;{needle.trim()}&rdquo;.</p>
-            )}
-          </>
-        )}
-      </div>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="mb-2 mt-5 flex items-center justify-between px-1">
+            <p className="text-[15px] font-medium">{book ? `${list.length} ${list.length === 1 ? noun[0] : noun[1]}` : noun[1]}</p>
+            <button type="button" onClick={() => setCustomise(true)} className="flex items-center gap-1 text-[13.5px]">
+              <span className="text-muted">Sort by</span>
+              <span className="font-medium">{SORTS.find((s) => s.id === sort)?.label}</span>
+              <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </button>
+          </div>
 
-      {sheet && (
+          {error ? (
+            <ErrorLine text={error} onRetry={load} />
+          ) : !book ? (
+            <Spinner label={`Loading your ${noun[1].toLowerCase()}`} className="py-6" />
+          ) : list.length === 0 && !needle.trim() ? (
+            <p className="py-6 text-center text-[14px] text-muted">No {noun[1].toLowerCase()} on your book yet. Search to find anyone in the contact book.</p>
+          ) : (
+            <ul className="grid grid-cols-1 gap-2.5">
+              {list.map((p) => (
+                <li key={p.key}>
+                  <Row name={p.name} chip={{ text: p.status, tone: p.tone }} line1={p.address} line2={p.locality} onClick={() => setOpen(p)} />
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {needle.trim().length >= 2 && (
+            <>
+              <p className="m-eyebrow mb-2 mt-6 px-1">From the Contact Book</p>
+              {others === null ? (
+                <Spinner label="Checking the contact book" className="py-3" />
+              ) : extra.length === 0 ? (
+                <p className="px-1 text-[14px] text-muted">{list.length ? "Nobody else." : `Nobody found for "${needle.trim()}".`}</p>
+              ) : (
+                <ul className="grid grid-cols-1 gap-2.5">
+                  {extra.map((p) => (
+                    <li key={p.key}>
+                      <Row name={p.name} chip={{ text: p.role || "Contact", tone: "neutral" }} line1={p.context} onClick={() => setOpen(asBook(p, side))} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+        </>
+      )}
+
+      {customise && (
+        <Sheet label="Customise" onClose={() => setCustomise(false)}>
+          <h2 className="m-title mb-3 px-1 text-[24px]">Sort By</h2>
+          <ul className="m-group">
+            {SORTS.map((s) => (
+              <li key={s.id} className="m-row">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSort(s.id);
+                    setCustomise(false);
+                  }}
+                  className="flex h-[52px] w-full items-center justify-between px-4 text-left text-[15.5px]"
+                >
+                  {s.label}
+                  {sort === s.id && <Tick />}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <ul className="m-group mt-4">
+            <li>
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomise(false);
+                  setRadiusOpen(true);
+                }}
+                className="flex h-[52px] w-full items-center gap-3 px-4 text-left text-[15.5px]"
+              >
+                <DoodleIcon name="target" size={18} />
+                <span className="flex-1">Search by Radius</span>
+                <Chevron />
+              </button>
+            </li>
+          </ul>
+        </Sheet>
+      )}
+
+      {radiusOpen && (
         <RadiusSheet
           start={radius}
-          onClose={() => setSheet(false)}
+          onClose={() => setRadiusOpen(false)}
           onPick={(p) => {
-            setSheet(false);
+            setRadiusOpen(false);
             setNeedle("");
             setRadius(p);
           }}
         />
       )}
+
+      {open && <Detail p={open} onClose={() => setOpen(null)} />}
     </main>
   );
 }
 
-/** A radius result: one line to scan, and everything else when tapped. */
-function OpenRow({ p }: { p: NearbyPerson }) {
-  const [open, setOpen] = useState(false);
+/** A contact-book or radius find, shaped like a book row for the detail sheet. */
+function asBook(p: PhonePerson, side: Side): BookPerson {
+  return { key: p.key, side, name: p.name, phone: p.phone, email: p.email, status: p.role || "Contact", tone: "neutral", address: p.context, locality: "", since: null, tenancyType: null, rent: "", at: null };
+}
+
+function Row({ name, chip, line1, line2, onClick }: { name: string; chip: { text: string; tone: BookPerson["tone"] }; line1?: string; line2?: string; onClick: () => void }) {
   return (
-    <li className="m-group">
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center gap-3 px-4 py-3.5 text-left">
-        <span className="min-w-0 flex-1">
-          <span className="block text-[16px] font-semibold leading-snug">{p.name}</span>
-          <span className="block truncate text-[13px] text-muted">{[p.role, p.context].filter(Boolean).join(" · ")}</span>
+    <button type="button" onClick={onClick} className="m-press flex w-full items-center gap-3 rounded-[22px] px-4 py-3.5 text-left" style={{ background: "var(--m-card)" }}>
+      <span className="min-w-0 flex-1">
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="m-title truncate text-[18px]">{name}</span>
+          <Chip text={chip.text} tone={chip.tone} />
         </span>
-        <span className="figures shrink-0 text-[14px] text-muted">{p.miles < 0.1 ? "< 0.1 mi" : `${p.miles} mi`}</span>
-        <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4 shrink-0 text-muted" style={{ transform: open ? "rotate(90deg)" : undefined, transition: "transform 200ms" }}>
-          <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </button>
-      {open && (
-        <div className="border-t border-line/50 px-4 pb-4 pt-3">
-          {(p.phone || p.email) && (
-            <p className="break-words text-[14.5px]">
-              {p.phone && <span className="figures mr-3 font-semibold">{p.phone}</span>}
-              {p.email && <span className="text-muted">{p.email}</span>}
-            </p>
-          )}
-          <ReachButtons phone={p.phone} email={p.email} />
-        </div>
+        {line1 && <span className="mt-0.5 block truncate text-[14px] text-muted">{line1}</span>}
+        {line2 && <span className="block truncate text-[13.5px] text-muted">{line2}</span>}
+      </span>
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--m-on-card)" }}>
+        <Chevron />
+      </span>
+    </button>
+  );
+}
+
+function Chip({ text, tone }: { text: string; tone: BookPerson["tone"] }) {
+  const t = TONE[tone];
+  return (
+    <span className="shrink-0 whitespace-nowrap rounded-full px-2.5 py-[3px] text-[12px] font-medium" style={{ background: t.bg, color: t.ink }}>
+      {text}
+    </span>
+  );
+}
+
+function Chevron() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4 shrink-0">
+      <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function Tick() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className="h-5 w-5" style={{ color: "var(--m-coral)" }} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12l5 5L19 7" />
+    </svg>
+  );
+}
+
+function day(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+/** One person: the painting, who and where, four buttons, the facts, and their home. */
+function Detail({ p, onClose }: { p: BookPerson; onClose: () => void }) {
+  const tel = dialable(p.phone);
+  const applicant = p.side === "tenant" && p.tone === "new";
+  const facts: Array<[string, string, string]> = [
+    ["checklist", "Status", p.status],
+    ["calendar", applicant ? "Wants to Move In" : p.side === "tenant" ? "Moved In" : "With Us Since", p.since ? day(p.since) : ""],
+    ["doc", p.side === "tenant" ? "Tenancy" : "Service", p.tenancyType ?? ""],
+    ["coin", applicant ? "Offer" : "Rent", p.rent],
+  ].filter((f): f is [string, string, string] => Boolean(f[2]));
+
+  const actions: Array<{ label: string; icon: string; href: string | null }> = [
+    { label: "Message", icon: "message", href: tel ? `sms:${tel}` : null },
+    { label: "Call", icon: "call", href: tel ? `tel:${tel}` : null },
+    { label: "Email", icon: "mail", href: p.email ? `mailto:${p.email}` : null },
+    { label: "Directions", icon: "target", href: p.address ? mapsHref([p.address, p.locality].filter(Boolean).join(", ")) : null },
+  ];
+
+  return (
+    <Sheet label={p.name} onClose={onClose}>
+      <div className="-mx-1 -mt-1 mb-4 h-[150px] overflow-hidden rounded-[22px]" style={{ background: "var(--m-pink-wash)" }}>
+        <img src="/illustrations/app/street-row.webp" alt="" className="ml-auto h-full w-auto max-w-none" />
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="m-title text-[28px] leading-tight">{p.name}</h2>
+        <Chip text={p.status} tone={p.tone} />
+      </div>
+      {(p.address || p.locality) && <p className="mt-1 text-[14.5px] text-muted">{[p.address, p.locality].filter(Boolean).join(", ")}</p>}
+
+      <div className="mt-4 grid grid-cols-4 gap-2">
+        {actions.map((a) =>
+          a.href ? (
+            <a key={a.label} href={a.href} target={a.label === "Directions" ? "_blank" : undefined} rel="noreferrer" className="m-press flex flex-col items-center gap-1.5 rounded-[18px] py-3 text-[12.5px] font-medium" style={{ background: "var(--m-card)" }}>
+              <DoodleIcon name={a.icon} size={22} />
+              {a.label}
+            </a>
+          ) : (
+            <span key={a.label} className="flex flex-col items-center gap-1.5 rounded-[18px] py-3 text-[12.5px] font-medium opacity-35" style={{ background: "var(--m-card)" }}>
+              <DoodleIcon name={a.icon} size={22} />
+              {a.label}
+            </span>
+          )
+        )}
+      </div>
+
+      {facts.length > 0 && (
+        <ul className="m-group mt-4">
+          {facts.map(([icon, k, v]) => (
+            <li key={k} className="m-row flex items-center gap-3 px-4 py-3.5">
+              <DoodleIcon name={icon} size={18} className="text-muted" />
+              <span className="w-[42%] shrink-0 text-[14.5px] text-muted">{k}</span>
+              <span className="flex min-w-0 items-center gap-2 text-[15px] font-medium">
+                {k === "Status" && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: TONE[p.tone].ink }} />}
+                <span className="truncate">{v}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
-    </li>
+
+      {p.address && (
+        <>
+          <p className="m-eyebrow mb-2 mt-5 px-1">{p.side === "landlord" ? "Their Home With Us" : "Property"}</p>
+          <Link href={`/agent/properties?q=${encodeURIComponent(p.address)}`} className="m-press flex items-center gap-3 rounded-[22px] px-4 py-3.5" style={{ background: "var(--m-card)" }}>
+            <span className="min-w-0 flex-1">
+              <span className="m-title block truncate text-[17px]">{p.address}</span>
+              {p.locality && <span className="block truncate text-[13.5px] text-muted">{p.locality}</span>}
+            </span>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--m-on-card)" }}>
+              <Chevron />
+            </span>
+          </Link>
+        </>
+      )}
+    </Sheet>
   );
 }

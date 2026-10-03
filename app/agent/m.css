@@ -42,6 +42,7 @@
   --m-pink-wash: #fbe6e1;
   --m-green: #7fa16b;
   --m-green-wash: #eef0e3;
+  --m-sage-ink: #56634a;
   --m-shadow: none;
 
   --ink: var(--m-ink);
@@ -74,6 +75,7 @@
   --m-soft: #5f5f5c;
   --m-pink-wash: #3a2826;
   --m-green-wash: #262a20;
+  --m-sage-ink: #b5c4a3;
   --m-shadow: none;
   --accent-dark: #f0aaa2;
   color-scheme: dark;
