@@ -96,7 +96,7 @@ export default function AppFrame({ inApp, theme, children }: { inApp: boolean; t
       <nav
         aria-label="Sections"
         className="fixed inset-x-0 bottom-0 z-40 border-t pb-[env(safe-area-inset-bottom)]"
-        style={{ borderColor: "var(--m-line)", background: "var(--m-card)" }}
+        style={{ borderColor: "var(--m-line)", background: "var(--m-bg)" }}
       >
         <ul className="mx-auto grid max-w-[560px] grid-cols-4">
           {TABS.map((t) => {

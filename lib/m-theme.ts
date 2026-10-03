@@ -13,7 +13,7 @@ export type MTheme = "light" | "dark";
 export const M_THEME_COOKIE = "m-theme";
 
 /** The page colour of each mode, which is also the theme colour the app reads. */
-export const M_THEME_COLOUR: Record<MTheme, string> = { light: "#f4f4f3", dark: "#121212" };
+export const M_THEME_COLOUR: Record<MTheme, string> = { light: "#ffffff", dark: "#121212" };
 
 /** Browser only: remember the choice for a year and repaint now. */
 export function applyMTheme(theme: MTheme): void {

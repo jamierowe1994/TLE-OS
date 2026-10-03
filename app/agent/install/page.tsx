@@ -10,7 +10,7 @@ import QRCode from "qrcode";
  * James: the phone site carries on as it is, and its menu offers "Download
  * App" here - "if they don't want it, they don't have to". It installs the
  * app at /agent to the home screen: one tap on Android (Chrome's own install
- * prompt), three steps on an iPhone (Safari has no prompt to offer), and a
+ * prompt), four steps on an iPhone (Safari has no prompt to offer), and a
  * QR code on a computer so the phone can carry on from there.
  *
  * Under /agent on purpose: the page has to carry the app's manifest at the
@@ -110,6 +110,10 @@ export default function InstallPage() {
                 Tap <ShareIcon /> <b>Share</b> at the foot of Safari
               </>,
               <>Scroll down and tap <b>Add to Home Screen</b></>,
+              /* Newer iPhones ask, and with it off the icon only opens a
+                 Safari tab - with Safari's own buttons all over the app
+                 (James's screenshot, 3 Oct 2026). */
+              <>Make sure <b>Open as Web App</b> is switched on</>,
               <>Tap <b>Add</b> at the top right</>,
             ]}
           />

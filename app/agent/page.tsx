@@ -139,7 +139,7 @@ export default function PhoneToday() {
               { href: "/agent/properties", label: "Property" },
               { href: "/agent/id-check", label: "Scan an ID" },
             ].map((c) => (
-              <Link key={c.href} href={c.href} className="m-press flex h-11 items-center rounded-full border px-5 text-[14.5px] font-medium" style={{ borderColor: "var(--m-line)", background: "var(--m-card)" }}>
+              <Link key={c.href} href={c.href} className="m-press flex h-11 items-center rounded-full px-5 text-[14.5px] font-medium" style={{ background: "var(--m-card)" }}>
                 {c.label}
               </Link>
             ))}
@@ -271,26 +271,31 @@ function WeekStep({ dir, disabled, onClick }: { dir: 1 | -1; disabled: boolean; 
   );
 }
 
-/** One appointment as a drawn card, the reference's "Driving home" card. */
+/**
+ * One appointment as a drawn card, the reference's "Driving home" card. The
+ * next one is the dark brown card with the drawing in white (James's Copilot
+ * reference, 3 Oct 2026); the rest are the flat grey.
+ */
 function DrawnCard({ a, now, first, only }: { a: Appt; now: string; first: boolean; only: boolean }) {
   return (
     <Link
       href={`/agent/event/${encodeURIComponent(a.id)}`}
       className="m-group m-press block p-2"
-      style={{ width: only ? "100%" : "84%" }}
+      style={{ width: only ? "100%" : "84%", ...(first ? { background: "var(--m-brown)", color: "#ffffff" } : {}) }}
     >
       <span className="relative flex h-[190px] items-center justify-center">
         {first && (
-          <span className="m-chip absolute left-1.5 top-1.5" style={{ background: "var(--m-pink-wash)" }}>
+          <span className="m-chip absolute left-1.5 top-1.5 !bg-white/15 !text-white">
             <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--m-pink)" }} />
             {whenLine(a, now)}
           </span>
         )}
-        <img src={KIND_ART[a.kind] ?? KIND_ART.other} alt="" className="m-ill h-[180px] w-auto" />
+        {/* On the brown the line drawing is always white, in either mode. */}
+        <img src={KIND_ART[a.kind] ?? KIND_ART.other} alt="" className={`h-[180px] w-auto ${first ? "invert" : "m-ill"}`} />
       </span>
-      <span className="block rounded-[14px] border px-3.5 py-3" style={{ borderColor: "var(--m-line)", background: "var(--m-bg)" }}>
+      <span className="block rounded-[16px] px-3.5 py-3" style={{ background: first ? "rgba(255,255,255,0.12)" : "var(--m-on-card)" }}>
         <span className="block truncate text-[16px] font-medium">{a.where || a.what}</span>
-        <span className="mt-0.5 block truncate text-[13.5px] text-muted">
+        <span className={`mt-0.5 block truncate text-[13.5px] ${first ? "text-white/70" : "text-muted"}`}>
           {KIND_LABEL[a.kind] ?? "Appointment"} · {a.start} - {endOf(a)}
           {a.who ? ` · ${a.who}` : ""}
         </span>

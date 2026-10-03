@@ -13,10 +13,18 @@
  */
 
 .m-app {
-  --m-bg: #f4f4f3;
-  --m-card: #ffffff;
-  --m-line: #e5e5e3;
-  --m-fill: #ebebea;
+  /* Flat (James, 3 Oct 2026): "the background's always a flat colour, and I
+     think we should make that flat colour white ... all the way from the top
+     to the bottom, including the nav bar". Cards are a flat grey on it with
+     no outline and no shadow; the one card that matters is the brown. */
+  --m-bg: #ffffff;
+  --m-card: #f4f4f2;
+  --m-line: #ebebe8;
+  --m-fill: #e9e9e6;
+  /* What sits on a grey card - a button or a chip inside it - is white. */
+  --m-on-card: #ffffff;
+  --m-brown: #56423e;
+  --m-brown-ink: #ffffff;
   --m-ink: #121212;
   --m-muted: #6f6f6c;
   --m-soft: #a3a3a0;
@@ -25,7 +33,7 @@
   --m-pink-wash: #fbe9e6;
   --m-green: #7fa16b;
   --m-green-wash: #e9f0e3;
-  --m-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --m-shadow: none;
 
   --ink: var(--m-ink);
   --muted: var(--m-muted);
@@ -46,9 +54,11 @@
 
 .m-app[data-mtheme="dark"] {
   --m-bg: #121212;
-  --m-card: #1c1c1c;
-  --m-line: #2a2a2a;
-  --m-fill: #262626;
+  --m-card: #1e1e1e;
+  --m-line: #262626;
+  --m-fill: #2a2a2a;
+  --m-on-card: #2c2c2c;
+  --m-brown: #5f4a45;
   --m-ink: #f2f2f0;
   --m-muted: #9b9b97;
   --m-soft: #5f5f5c;
@@ -93,9 +103,8 @@
 
 .m-app .m-group {
   background: var(--m-card);
-  border: 1px solid var(--m-line);
-  border-radius: 20px;
-  box-shadow: var(--m-shadow);
+  border: 0;
+  border-radius: 22px;
   overflow: hidden;
 }
 .m-app .m-row {
@@ -118,17 +127,19 @@
   gap: 8px;
   height: 48px;
   padding: 0 18px;
-  border-radius: 14px;
-  border: 1px solid var(--m-line);
+  border-radius: 999px;
+  border: 0;
   background: var(--m-card);
   color: var(--m-ink);
   font-size: 15px;
   font-weight: 500;
 }
+.m-app .m-group .m-btn:not(.m-btn-primary) {
+  background: var(--m-on-card);
+}
 .m-app .m-btn-primary {
-  background: var(--m-ink);
-  border-color: var(--m-ink);
-  color: var(--m-bg);
+  background: var(--m-brown);
+  color: var(--m-brown-ink);
 }
 
 .m-app .m-chip {
@@ -151,12 +162,12 @@
   gap: 8px;
   height: 46px;
   padding: 0 14px;
-  border-radius: 14px;
-  border: 1px solid var(--m-line);
+  border-radius: 999px;
+  border: 1px solid transparent;
   background: var(--m-card);
 }
 .m-app .m-search:focus-within {
-  border-color: var(--m-soft);
+  border-color: var(--m-line);
 }
 
 /* Choices as rounded chips, the chosen one filled ink - "Gratitude / Stress". */
@@ -174,7 +185,7 @@
   height: 38px;
   padding: 0 16px;
   border-radius: 999px;
-  border: 1px solid var(--m-line);
+  border: 0;
   background: var(--m-card);
   font-size: 14px;
   font-weight: 500;
@@ -195,7 +206,7 @@
   width: 40px;
   height: 40px;
   border-radius: 999px;
-  border: 1px solid var(--m-line);
+  border: 0;
   background: var(--m-card);
   color: var(--m-ink);
 }
