@@ -192,7 +192,10 @@ export function Sheet({ onClose, label, children }: { onClose: () => void; label
       <div
         ref={panel}
         className="m-sheet max-h-[88dvh] w-full max-w-[520px] overflow-y-auto overscroll-contain rounded-t-[26px] bg-page px-5 pb-[max(22px,env(safe-area-inset-bottom))] pt-3"
-        style={{ animation: "m-rise 300ms cubic-bezier(0.22, 1, 0.36, 1) both" }}
+        /* Its own ink, always: a sheet opened from inside a coloured card
+           (Focus Hour's white text) must not inherit that card's colour -
+           James could not read the Silence Your Phone sheet (3 Oct 2026). */
+        style={{ animation: "m-rise 300ms cubic-bezier(0.22, 1, 0.36, 1) both", color: "var(--m-ink)" }}
         onClick={(e) => e.stopPropagation()}
       >
         <span aria-hidden className="mx-auto mb-4 block h-[5px] w-[44px] rounded-full bg-black/10" />
