@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
    for the same reason, so the two labels this sheet needs are handed in rather
    than copied a third time and left to drift. */
 import type { Finding, Inspection } from "@/lib/inspections";
+import { asChecks, checkLines } from "@/lib/inspection-checks";
 
 /**
  * THE PROPERTY VISIT REPORT, on paper.
@@ -164,6 +165,18 @@ export default function ReportSheet({
         <strong>Overall, the property is {CONDITION_SENTENCE[i.condition ?? "good"] ?? "in good order"}.</strong>
         {i.summary && <p style={{ margin: "6pt 0 0" }}>{i.summary}</p>}
       </div>
+
+      {/* The checks on the day (3 Oct 2026): alarms, damp, who lives there. */}
+      {checkLines(asChecks(i.checks)).length > 0 && (
+        <>
+          <h2>Safety and checks</h2>
+          <ul style={{ margin: "4pt 0 0", paddingLeft: "14pt" }}>
+            {checkLines(asChecks(i.checks)).map((l) => (
+              <li key={l}>{l}</li>
+            ))}
+          </ul>
+        </>
+      )}
 
       <h2>What we found</h2>
       {rooms.length === 0 ? (

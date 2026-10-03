@@ -10,6 +10,9 @@ import { PressButton } from "@/components/Bits";
 import { STEPS, stepOf, type StepId } from "@/lib/inspection-steps";
 import type { DueVisit, Finding, Inspection, InspectionEvent, InspectionRules } from "@/lib/inspections";
 import ReportSheet from "@/components/inspections/ReportSheet";
+import BookForm, { type Person } from "@/components/inspections/BookForm";
+import RecordVisit from "@/components/inspections/RecordVisit";
+import { asChecks, checkLines, checksDone, CHECKS } from "@/lib/inspection-checks";
 import { REPAIR_CATEGORIES, URGENCIES } from "@/lib/works-catalogue";
 import SaveChip, { SaveScopeProvider, useSaveReporter, useSaveScope } from "@/components/SaveChip";
 
@@ -66,7 +69,7 @@ const forInput = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 600
 function nextFor(i: Inspection): { text: string; hot: boolean } {
   const late = i.dueAt ? new Date(i.dueAt).getTime() < Date.now() : false;
   switch (i.step ?? stepOf({ ...i, openActions: i.openActions ?? 0 })) {
-    case "ask_access": return { text: `Ask the tenant · due ${day(i.dueAt)}`, hot: late };
+    case "ask_access": return { text: `Book it in · due ${day(i.dueAt)}`, hot: late };
     case "await_access": return { text: `Asked ${day(i.accessAskedAt)} · waiting on the tenant`, hot: late };
     case "rearrange": return { text: i.noAccessAt ? `No access ${day(i.noAccessAt)} · arrange again` : "Tenant asked for another time", hot: true };
     case "book": return { text: "Permission given · put a date in", hot: late };
@@ -90,6 +93,9 @@ type Board = {
   /** "rex-pm" while the due list is the tasks copied across (lib/rexpm-tasks). */
   source?: "rex-pm" | "os";
   readAt?: string | null;
+  /** Who is looking, and who can be sent on a visit (3 Oct 2026). */
+  me?: Person;
+  team?: Person[];
 };
 
 export default function Inspections() {
@@ -239,8 +245,9 @@ export default function Inspections() {
                     {d.daysAway < 0 ? `${Math.abs(d.daysAway)} day${d.daysAway === -1 ? "" : "s"} over` : d.daysAway === 0 ? "Due today" : `Due ${day(d.dueAt)}`} · {d.why}
                     {d.managedBy ? <span className="block text-[10.5px] font-normal text-muted">With {d.managedBy}</span> : null}
                   </span>
-                  <PressButton onClick={() => void raise(d)} className="rounded-full border border-line/80 px-4 py-2 text-[12px] font-semibold">
-                    Raise it
+                  {/* Raises it and opens it on the booking form (3 Oct 2026). */}
+                  <PressButton onClick={() => void raise(d)} className="rounded-full bg-ink px-4 py-2 text-[12px] font-semibold text-page">
+                    Book it
                   </PressButton>
                 </li>
               ))}
@@ -251,7 +258,7 @@ export default function Inspections() {
         <List rows={tab === "hand" ? inHand : done} onOpen={setOpenId} empty={tab === "hand" ? "Nothing in hand." : "Nothing finished yet."} />
       )}
 
-      {openId && <Sheet id={openId} onClose={() => setOpenId(null)} onChanged={load} />}
+      {openId && <Sheet id={openId} team={data?.team ?? []} me={data?.me ?? null} onClose={() => setOpenId(null)} onChanged={load} />}
     </>
   );
 }
@@ -298,9 +305,11 @@ function List({ rows, onOpen, empty }: { rows: Inspection[]; onOpen: (id: string
 /** One save on the visit. Answers whether it landed, so a form clears only then. */
 type Move = (body: unknown, label?: string) => Promise<boolean>;
 
-function Sheet({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
+function Sheet({ id, team, me, onClose, onChanged }: { id: string; team: Person[]; me: Person | null; onClose: () => void; onChanged: () => void }) {
   const [held, setHeld] = useState<{ inspection: Inspection; findings: Finding[]; events: InspectionEvent[] } | null>(null);
   const [busy, setBusy] = useState(false);
+  /* The full-screen visit record, and where it opens. */
+  const [recording, setRecording] = useState<null | "checks" | "rooms" | "writeup">(null);
   const [err, setErr] = useState<string | null>(null);
   /* The Auto save chip in the header (components/SaveChip), 23 Sep 2026:
      every step, finding, photo and note on the visit says whether it landed. */
@@ -352,22 +361,23 @@ function Sheet({ id, onClose, onChanged }: { id: string; onClose: () => void; on
                 <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">{kindLabel(i.kind)} · #{i.ref}</p>
                 <h2 className="hand mt-1 truncate text-[22px]">{i.propertyName}</h2>
                 <p className="text-[11.5px] text-muted">{i.locality}{i.tenant ? ` · ${i.tenant}` : ""}{i.landlord ? ` · landlord ${i.landlord}` : ""}</p>
-              </div>
-              <div className="flex flex-wrap items-center justify-end gap-3 sm:shrink-0">
                 {/* Only once it has been written up. Printing a visit that has
                     not happened produces a sheet saying "Not recorded" under
                     every heading, which looks like a broken report rather than
-                    an early one. */}
+                    an early one. Under the title, not beside it: up there it
+                    squeezed the address to "14 Preview …". */}
                 {i.reportedAt && (
                   <button
                     type="button"
                     onClick={() => window.print()}
                     title="Print this visit report for the landlord, or save it as a PDF"
-                    className="rounded-full border border-line/80 px-3.5 py-1.5 text-[11.5px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink"
+                    className="mt-2 rounded-full border border-line/80 px-3.5 py-1.5 text-[11.5px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink"
                   >
                     Print the report
                   </button>
                 )}
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-3 sm:shrink-0">
                 <SaveChip scope={saves} />
                 <button type="button" onClick={onClose} className="text-[12px] text-muted underline">Close</button>
               </div>
@@ -389,7 +399,7 @@ function Sheet({ id, onClose, onChanged }: { id: string; onClose: () => void; on
               <h3 className="hand mt-1 text-[18px]">{STEPS.find((x) => x.id === step)?.label}</h3>
               <p className="mt-1 text-[12px] text-muted">{STEPS.find((x) => x.id === step)?.blurb}</p>
               <div className="mt-4">
-                <Now step={step!} inspection={i} busy={busy} onMove={move} />
+                <Now key={`${step}-${i.bookedAt ?? ""}`} step={step!} inspection={i} team={team} me={me} busy={busy} onMove={move} onRecord={setRecording} />
               </div>
             </section>
 
@@ -397,12 +407,33 @@ function Sheet({ id, onClose, onChanged }: { id: string; onClose: () => void; on
             <section className="mt-5 rounded-2xl border border-line/80 bg-panel p-5">
               <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">Access</p>
               <dl className="mt-2 space-y-1 text-[12px]">
-                <Row k="Asked" v={i.accessAskedAt ? `${stamp(i.accessAskedAt)} · ${i.noticeHours} hours notice` : "not yet"} />
-                <Row k="Dates offered" v={i.offered.length ? i.offered.map((o) => stamp(o)).join(" · ") : "none"} />
-                <Row
-                  k="Tenant said"
-                  v={i.accessReply === "yes" ? `yes, ${stamp(i.accessRepliedAt)}` : i.accessReply === "other_time" ? `asked for another time, ${stamp(i.accessRepliedAt)}` : i.accessReply === "no" ? `no, ${stamp(i.accessRepliedAt)}` : "nothing yet"}
-                />
+                {i.bookedAt && <Row k="Booked" v={`${stamp(i.bookedAt)} · ${i.visitMins} minutes${i.inspector ? ` · ${i.inspector}` : ""}`} />}
+                {i.bookedAt && (
+                  <Row
+                    k="Tenant confirmed"
+                    v={
+                      i.tenantAckAt
+                        ? `yes, on their link ${stamp(i.tenantAckAt)}${i.tenantAckNote ? ` - "${i.tenantAckNote}"` : ""}`
+                        : !i.tenantConfirmedAt
+                          ? "not sent yet"
+                          : i.tenantEmail
+                            ? `emailed ${stamp(i.tenantConfirmedAt)}, not answered yet`
+                            : `told by phone, marked ${stamp(i.tenantConfirmedAt)}`
+                    }
+                  />
+                )}
+                {/* Booked straight away there was no ask and no answer, so those rows would only say "nothing". */}
+                {!(i.bookedAt && i.offered.length === 0 && !i.accessReply) && (
+                  <>
+                    <Row k="Asked" v={i.accessAskedAt ? `${stamp(i.accessAskedAt)} · ${i.noticeHours} hours notice` : "not yet"} />
+                    {i.offered.length > 0 && <Row k="Dates offered" v={i.offered.map((o) => stamp(o)).join(" · ")} />}
+                    <Row
+                      k="Tenant said"
+                      v={i.accessReply === "yes" ? `yes, ${stamp(i.accessRepliedAt)}` : i.accessReply === "other_time" ? `asked for another time, ${stamp(i.accessRepliedAt)}` : i.accessReply === "no" ? `no, ${stamp(i.accessRepliedAt)}` : "nothing yet"}
+                    />
+                  </>
+                )}
+                {i.appointmentId && <Row k="Diary" v="In the inspector's diary" />}
                 {i.accessNote && <Row k="In their words" v={`"${i.accessNote}"`} />}
                 {i.noAccessAt && <Row k="No access" v={`${stamp(i.noAccessAt)} · ${i.noAccessReason}`} />}
               </dl>
@@ -412,7 +443,7 @@ function Sheet({ id, onClose, onChanged }: { id: string; onClose: () => void; on
             </section>
 
             {/* ── What was found. ── */}
-            <Findings inspection={i} findings={held.findings} busy={busy} onMove={move} />
+            <Findings inspection={i} findings={held.findings} busy={busy} onMove={move} onRecord={setRecording} />
 
             {/* ── The timeline. ── */}
             <section className="mt-5 rounded-2xl border border-line/80 bg-panel p-5">
@@ -433,6 +464,16 @@ function Sheet({ id, onClose, onChanged }: { id: string; onClose: () => void; on
         )}
       </aside>
     </div>
+    {i && held && recording && (
+      <RecordVisit
+        inspection={i}
+        findings={held.findings}
+        busy={busy}
+        onMove={move}
+        onClose={() => setRecording(null)}
+        startAt={recording === "rooms" ? undefined : recording}
+      />
+    )}
     </SaveScopeProvider>
   );
 }
@@ -444,40 +485,99 @@ const Row = ({ k, v }: { k: string; v: string }) => (
   </div>
 );
 
-/** The one card. Everything else on the sheet is a record; this is the doing. */
-function Now({ step, inspection, busy, onMove }: { step: StepId; inspection: Inspection; busy: boolean; onMove: Move }) {
+/**
+ * The one card. Everything else on the sheet is a record; this is the doing.
+ *
+ * Book, confirm, record (James, 3 Oct 2026). Booking straight away is the
+ * usual road now: pick the time, the tenant gets it in writing with a button
+ * to say it works. Offering a few dates and letting them choose is still
+ * there for the tenant who is hard to pin down.
+ */
+function Now({
+  step,
+  inspection,
+  team,
+  me,
+  busy,
+  onMove,
+  onRecord,
+}: {
+  step: StepId;
+  inspection: Inspection;
+  team: Person[];
+  me: Person | null;
+  busy: boolean;
+  onMove: Move;
+  onRecord: (at: "checks" | "rooms" | "writeup") => void;
+}) {
   const soon = (days: number, hour: number) => { const d = new Date(); d.setDate(d.getDate() + days); d.setHours(hour, 0, 0, 0); return forInput(d); };
   const [slots, setSlots] = useState<string[]>([soon(3, 10), soon(4, 14), soon(5, 9)]);
-  const [at, setAt] = useState(soon(3, 10));
+  const [mode, setMode] = useState<"book" | "ask">("book");
+  const [moving, setMoving] = useState(false);
   const [reason, setReason] = useState("");
-  const [condition, setCondition] = useState<"good" | "fair" | "poor">("good");
-  const [summary, setSummary] = useState("");
+  const [noAccess, setNoAccess] = useState(false);
   const btn = "rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page";
   const ghost = "rounded-full border border-line/80 px-5 py-2.5 text-[13px] font-semibold";
+  const first = (inspection.tenant || "the tenant").split(/\s+/)[0];
+  const book = (label?: string) => <BookForm inspection={inspection} team={team} me={me} busy={busy} onMove={onMove} onDone={() => setMoving(false)} submitLabel={label} />;
+
+  /* Moving a booked visit: the same form, the same diary entry moved. */
+  if (moving) {
+    return (
+      <>
+        <p className="mb-3 text-[12px] text-muted">Moves the diary entry too. Tick the email so {first} has the new time in writing.</p>
+        {book()}
+        <button type="button" onClick={() => setMoving(false)} className="mt-3 text-[11.5px] text-muted underline">Keep {stamp(inspection.bookedAt)}</button>
+      </>
+    );
+  }
 
   switch (step) {
     case "ask_access":
     case "rearrange":
       return (
         <>
-          <p className="text-[12px] text-muted">
-            {inspection.tenantEmail ? `Goes to ${inspection.tenantEmail}.` : "No email address for the tenant, so this records the ask without sending anything - ring them."}
-          </p>
-          {slots.map((sl, n) => (
-            <input
-              key={n}
-              type="datetime-local"
-              value={sl}
-              onChange={(e) => setSlots((cur) => cur.map((c, x) => (x === n ? e.target.value : c)))}
-              className="mt-2 w-full rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]"
-            />
-          ))}
-          <button type="button" onClick={() => setSlots((c) => [...c, soon(7, 10)])} className="mt-2 text-[11.5px] text-muted underline">Offer another time</button>
-          <div className="mt-4">
-            <PressButton disabled={busy} onClick={() => onMove({ action: "ask_access", offered: slots.map((sl) => new Date(sl).toISOString()) })} className={btn}>
-              {busy ? "Sending…" : "Ask the tenant"}
-            </PressButton>
+          {step === "rearrange" && (
+            <p className="mb-3 rounded-xl bg-accent-soft/40 px-3 py-2 text-[12px]">
+              {inspection.noAccessAt ? `Couldn't get in on ${day(inspection.noAccessAt)}: ${inspection.noAccessReason}` : `${first} asked for another time${inspection.accessNote ? `: "${inspection.accessNote}"` : "."}`}
+            </p>
+          )}
+          <div className="mb-4 inline-flex rounded-full border border-line/80 p-0.5 text-[12px] font-semibold">
+            {(
+              [
+                ["book", "Book a time"],
+                ["ask", `Let ${first} choose`],
+              ] as const
+            ).map(([id, label]) => (
+              <button key={id} type="button" onClick={() => setMode(id)} className={`rounded-full px-3.5 py-1.5 ${mode === id ? "bg-ink text-page" : "text-muted"}`}>
+                {label}
+              </button>
+            ))}
           </div>
+          {mode === "book" ? (
+            book()
+          ) : (
+            <>
+              <p className="text-[12px] text-muted">
+                {inspection.tenantEmail ? `Goes to ${inspection.tenantEmail}, with a link to pick one.` : "No email address for the tenant, so this records the ask without sending anything - ring them."}
+              </p>
+              {slots.map((sl, n) => (
+                <input
+                  key={n}
+                  type="datetime-local"
+                  value={sl}
+                  onChange={(e) => setSlots((cur) => cur.map((c, x) => (x === n ? e.target.value : c)))}
+                  className="mt-2 w-full rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]"
+                />
+              ))}
+              <button type="button" onClick={() => setSlots((c) => [...c, soon(7, 10)])} className="mt-2 text-[11.5px] text-muted underline">Offer another time</button>
+              <div className="mt-4">
+                <PressButton disabled={busy} onClick={() => onMove({ action: "ask_access", offered: slots.map((sl) => new Date(sl).toISOString()) })} className={btn}>
+                  {busy ? "Sending…" : `Send ${first} the dates`}
+                </PressButton>
+              </div>
+            </>
+          )}
         </>
       );
     case "await_access":
@@ -488,62 +588,89 @@ function Now({ step, inspection, busy, onMove }: { step: StepId; inspection: Ins
             <PressButton disabled={busy} onClick={() => onMove({ action: "access_reply", reply: "yes", at: new Date(inspection.offered[0] ?? Date.now()).toISOString(), note: "Agreed on the phone." })} className={ghost}>They said yes on the phone</PressButton>
             <PressButton disabled={busy} onClick={() => onMove({ action: "access_reply", reply: "other_time", note: "Asked for another time on the phone." })} className={ghost}>They want another time</PressButton>
           </div>
+          <button type="button" onClick={() => setMoving(true)} className="mt-3 text-[11.5px] text-muted underline">Book a time instead</button>
         </>
       );
     case "book":
-      return (
-        <>
-          <input type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} className="w-full rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]" />
-          <div className="mt-4">
-            <PressButton disabled={busy} onClick={() => onMove({ action: "book", at: new Date(at).toISOString() })} className={btn}>Book it</PressButton>
-          </div>
-        </>
-      );
+      return book();
     case "confirm":
       return (
         <>
-          <p className="text-[12px] text-muted">Confirms {stamp(inspection.bookedAt)} to the tenant in writing. That email is the notice.</p>
+          <p className="text-[12px] text-muted">
+            Booked {stamp(inspection.bookedAt)} with {inspection.inspector || "the team"}.{" "}
+            {inspection.tenantEmail ? `Confirming emails ${first} the time with a button to say it works. That email is the notice.` : `No email for ${first}: ring them, then mark it confirmed.`}
+          </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <PressButton disabled={busy} onClick={() => onMove({ action: "confirm" })} className={btn}>Confirm it</PressButton>
-            <PressButton disabled={busy} onClick={() => onMove({ action: "tell_landlord" })} className={ghost}>Tell the landlord too</PressButton>
+            <PressButton disabled={busy} onClick={() => onMove({ action: "confirm" }, "Confirmation")} className={btn}>
+              {inspection.tenantEmail ? `Email ${first} the confirmation` : "Mark it confirmed"}
+            </PressButton>
+            {!inspection.landlordToldAt && <PressButton disabled={busy} onClick={() => onMove({ action: "tell_landlord" })} className={ghost}>Tell the landlord too</PressButton>}
+            <button type="button" onClick={() => setMoving(true)} className="text-[12px] text-muted underline">Change the time</button>
           </div>
         </>
       );
-    case "visit":
+    case "visit": {
+      /* Told on the phone counts as confirmed: there was no link to press. */
+      const acked = Boolean(inspection.tenantAckAt) || !inspection.tenantEmail;
       return (
         <>
-          <p className="text-[12px] text-muted">{stamp(inspection.bookedAt)}{inspection.inspector ? ` · ${inspection.inspector}` : ""}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <PressButton disabled={busy} onClick={() => onMove({ action: "visited" })} className={btn}>We&apos;ve been</PressButton>
+          <p className="text-[13px] font-semibold">
+            {stamp(inspection.bookedAt)} · {inspection.visitMins} minutes{inspection.inspector ? ` · ${inspection.inspector}` : ""}
+          </p>
+          <p className={`mt-1.5 flex items-center gap-1.5 text-[12px] ${acked ? "text-[#2f7a48]" : "text-accent-dark"}`}>
+            <span className="h-2 w-2 rounded-full" style={{ background: acked ? "#2f7a48" : "currentColor" }} />
+            {!inspection.tenantAckAt && !inspection.tenantEmail
+              ? `${first} was told by phone.`
+              : acked
+              ? `${first} confirmed the time works${inspection.tenantAckNote ? `: "${inspection.tenantAckNote}"` : "."}`
+              : `${first} hasn't pressed "That time works" yet. Worth a ring the day before.`}
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <PressButton
+              disabled={busy}
+              onClick={async () => {
+                if (await onMove({ action: "visited", inspector: inspection.inspector || me?.name || "" }, "Visit")) onRecord("checks");
+              }}
+              className={btn}
+            >
+              Record the visit
+            </PressButton>
+            <PressButton disabled={busy} onClick={() => setNoAccess((x) => !x)} className={ghost}>Couldn&apos;t get in</PressButton>
           </div>
-          <div className="mt-4">
-            <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Nobody in, turned away…" className="w-full rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]" />
-            <PressButton disabled={busy || !reason.trim()} onClick={() => onMove({ action: "no_access", reason })} className={`${ghost} mt-2`}>Couldn&apos;t get in</PressButton>
+          {noAccess && (
+            <div className="mt-3">
+              <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Nobody in, turned away…" className="w-full rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]" />
+              <PressButton disabled={busy || !reason.trim()} onClick={() => onMove({ action: "no_access", reason })} className={`${ghost} mt-2`}>Record no access</PressButton>
+            </div>
+          )}
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+            <button type="button" onClick={() => setMoving(true)} className="text-[11.5px] text-muted underline">Change the time</button>
+            {inspection.tenantEmail && !acked && (
+              <button type="button" disabled={busy} onClick={() => void onMove({ action: "confirm" }, "Confirmation")} className="text-[11.5px] text-muted underline">
+                Send {first} the confirmation again
+              </button>
+            )}
           </div>
         </>
       );
+    }
     case "report":
       return (
         <>
-          <div className="flex flex-wrap gap-2">
-            {(["good", "fair", "poor"] as const).map((c) => (
-              <button key={c} type="button" onClick={() => setCondition(c)} className={`rounded-full px-4 py-2 text-[12.5px] font-semibold ${condition === c ? "bg-ink text-page" : "border border-line/80 text-muted"}`}>
-                {c === "good" ? "In good order" : c === "fair" ? "Reasonable" : "Not being kept"}
-              </button>
-            ))}
-          </div>
-          <textarea value={summary} onChange={(e) => setSummary(e.target.value)} rows={4} placeholder="How the property is being kept, in a few lines for the landlord." className="mt-3 w-full rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]" />
-          <div className="mt-3">
-            <PressButton disabled={busy || !summary.trim()} onClick={() => onMove({ action: "report", condition, summary })} className={btn}>Write it up</PressButton>
+          <p className="text-[12px] text-muted">Visited {day(inspection.visitedAt)}. Go through the checks and each room, then write it up for the landlord.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <PressButton disabled={busy} onClick={() => onRecord("checks")} className={btn}>Carry on recording</PressButton>
+            <PressButton disabled={busy} onClick={() => onRecord("writeup")} className={ghost}>Write it up</PressButton>
           </div>
         </>
       );
     case "send_report":
       return (
         <>
-          <p className="text-[12px] text-muted">{inspection.landlordEmail ? `Goes to ${inspection.landlordEmail} with the findings on it.` : "No email address for the landlord - add one on their record first."}</p>
-          <div className="mt-3">
+          <p className="text-[12px] text-muted">{inspection.landlordEmail ? `Goes to ${inspection.landlordEmail} with the findings and the checks on it.` : "No email address for the landlord - add one on their record first."}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
             <PressButton disabled={busy} onClick={() => onMove({ action: "report_sent" })} className={btn}>Send the report</PressButton>
+            <PressButton disabled={busy} onClick={() => onRecord("writeup")} className={ghost}>Change the write-up</PressButton>
           </div>
         </>
       );
@@ -687,7 +814,13 @@ function RaiseWorksOrder({ finding, busy, onMove }: { finding: Finding; busy: bo
   );
 }
 
-function Findings({ inspection, findings, busy, onMove }: { inspection: Inspection; findings: Finding[]; busy: boolean; onMove: Move }) {
+function Findings({ inspection, findings, busy, onMove, onRecord }: { inspection: Inspection; findings: Finding[]; busy: boolean; onMove: Move; onRecord: (at: "checks" | "rooms" | "writeup") => void }) {
+  const checks = asChecks(inspection.checks);
+  /* On screen only what needs reading: a plain yes is counted, not listed.
+     The landlord's email and the printout carry every line. */
+  const allLines = checkLines(checks);
+  const lines = allLines.filter((l) => !/: yes$/.test(l));
+  const fine = allLines.length - lines.length;
   const [room, setRoom] = useState(ROOMS[0]);
   const [item, setItem] = useState("");
   const [note, setNote] = useState("");
@@ -697,13 +830,40 @@ function Findings({ inspection, findings, busy, onMove }: { inspection: Inspecti
 
   return (
     <section className="mt-5 rounded-2xl border border-line/80 bg-panel p-5">
-      <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">What we found</p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">What we found</p>
+        {canAdd && (
+          <button type="button" onClick={() => onRecord("rooms")} className="rounded-full border border-line/80 px-3.5 py-1.5 text-[11.5px] font-semibold">
+            Open the visit record
+          </button>
+        )}
+      </div>
+      {/* The checks on the day, the ones that failed first. */}
+      {canAdd && (
+        <div className="mt-3 rounded-xl bg-accent-soft/30 px-3 py-2.5 text-[12px]">
+          <p className="font-semibold">
+            Safety &amp; checks · {checksDone(checks)} of {CHECKS.length} answered
+          </p>
+          {allLines.length > 0 ? (
+            <ul className="mt-1 space-y-0.5 text-muted">
+              {lines.map((l) => (
+                <li key={l} className={/: NO/.test(l) ? "text-accent-dark" : ""}>{l}</li>
+              ))}
+              {fine > 0 && <li>{fine === allLines.length ? "All" : fine} answered yes - all fine.</li>}
+            </ul>
+          ) : (
+            <button type="button" onClick={() => onRecord("checks")} className="mt-0.5 text-[11.5px] text-accent-dark underline">
+              Answer the checks
+            </button>
+          )}
+        </div>
+      )}
       <ul className="mt-3 divide-y divide-line/50">
         {findings.map((f) => (
           <li key={f.id} className="py-2.5 text-[12px]">
             <div className="flex items-start justify-between gap-3">
               <span className="min-w-0">
-                <span className="block truncate font-semibold">{[f.room, f.item].filter(Boolean).join(" · ")}</span>
+                <span className="block truncate font-semibold">{[f.room, f.item === "Overall" ? "" : f.item].filter(Boolean).join(" · ")}</span>
                 {f.note && <span className="block text-muted">{f.note}</span>}
               </span>
               <span className="flex shrink-0 items-center gap-2">

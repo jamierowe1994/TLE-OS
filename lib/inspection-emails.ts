@@ -5,6 +5,7 @@ import { msConnectionFor, msSendMail, MailboxNotConnected } from "@/lib/microsof
 import { switchOn } from "@/lib/switches";
 import { isInternalAddress } from "@/lib/email-policy";
 import { kindLabel, type Finding, type Inspection } from "@/lib/inspections";
+import { asChecks, checkLines } from "@/lib/inspection-checks";
 import type { OsUser } from "@/lib/users";
 
 /**
@@ -68,12 +69,15 @@ function varsFor(i: Inspection, me: OsUser, findings: Finding[] = []): Record<st
     reportLink: `${ORIGIN}/inspections?open=${encodeURIComponent(i.id)}`,
     conditionWord: CONDITION_WORD[i.condition ?? "good"] ?? "in good order",
     summary: i.summary,
+    /* The rooms, then the checks made on the day (3 Oct 2026) - the same
+       words the printed report uses (lib/inspection-checks). */
     findings:
-      findings.length === 0
+      (findings.length === 0
         ? "Nothing that needs doing."
         : findings
             .map((f) => `${[f.room, f.item].filter(Boolean).join(" - ")}${f.note ? `: ${f.note}` : ""}`)
-            .join("<br>"),
+            .join("<br>")) +
+      (checkLines(asChecks(i.checks)).length ? `<br><br><strong>Checks on the day</strong><br>${checkLines(asChecks(i.checks)).join("<br>")}` : ""),
     agentName: me.name || "The Letting Experts",
     agentEmail: me.email,
   };

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { hasDb } from "@/lib/db";
+import { hasDb, q } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { scopeFor } from "@/lib/scope";
 import { managedBookFor } from "@/lib/managed-book-cache";
@@ -110,8 +110,15 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  /* Who can be sent (3 Oct 2026): the team, for the inspector on a booking,
+     with the person asking first. Names only. */
+  const me = subject ?? actor;
+  const team = await q<{ id: string; name: string }>(`SELECT id, name FROM os_users WHERE name <> '' ORDER BY name`).catch(() => []);
+
   return NextResponse.json({
     ok: true, live: true, inspections, due, actions, rules,
+    me: { id: me.id, name: me.name || me.email },
+    team: team.map((t) => ({ id: t.id, name: t.name })),
     summary: summarise(inspections, due),
     source: fromTasks ? "rex-pm" : "os",
     readAt: read?.at ?? null,

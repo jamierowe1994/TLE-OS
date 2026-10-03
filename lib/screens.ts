@@ -259,10 +259,11 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     purpose: "Every visit we owe the managed book, the tenant's permission to make it, and what was found.",
     does: [
       "Read the Due list, which is worked out from the cadence against today - not a stored schedule.",
-      "Press Raise it on a due home to open the visit and start the workflow.",
-      "Ask the tenant, which offers them dates by email and gives them their own link to answer on.",
-      "Book the date, confirm it in writing, mark the visit done or record that you could not get in.",
-      "Write the report room by room and send it to the landlord.",
+      "Press Book it on a due home to open the visit on the booking form.",
+      "Book a day, time, length and who is going: it goes in their diary and Outlook, and the tenant is emailed the time with a button to say it works or ask for another. Or offer a few dates and let the tenant choose on their own link.",
+      "See on the visit whether the tenant has confirmed, change the time, or send the confirmation again.",
+      "Press Record the visit on the day: the safety checks (alarms, damp, who lives there, meter readings), then each room with Good, Fair or Poor, notes, photos and what happens next, then the write-up.",
+      "Send the report to the landlord, with the checks and photos on it, and raise any works orders from the findings.",
     ],
     wiring: "partial",
     caveats: [

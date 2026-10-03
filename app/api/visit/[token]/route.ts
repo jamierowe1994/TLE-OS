@@ -31,6 +31,12 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ token: str
       reply: i.accessReply,
       bookedAt: i.bookedAt,
       askedAt: i.accessAskedAt,
+      /* Booked straight away (3 Oct 2026): the time, who is coming and how
+         long, and whether they have already said it works. */
+      mins: i.visitMins,
+      inspector: (i.inspector || "").split(/\s+/)[0] || "",
+      ackAt: i.tenantAckAt,
+      open: !["closed", "cancelled"].includes(i.status) && !i.visitedAt,
     },
   });
 }
@@ -40,6 +46,15 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
   const i = await inspectionByToken(token);
   if (!i || !hasDb()) return NextResponse.json({ ok: false, error: "That link isn't one of ours." }, { status: 404 });
   const b = (await req.json().catch(() => ({}))) as { reply?: string; at?: string; note?: string };
+  const who0 = i.tenant.trim() || "The tenant";
+  /* THE BOOKED TIME (3 Oct 2026). "confirm" says it works; "other_time" on a
+     booked visit asks to move it, and the visit goes back to the agent to
+     arrange again. Only while the visit is still to happen. */
+  if (b.reply === "confirm") {
+    if (!i.bookedAt || i.visitedAt || ["closed", "cancelled"].includes(i.status)) return NextResponse.json({ ok: false, error: "There's no visit booked on this link just now." }, { status: 400 });
+    await moveInspection(i.id, { action: "tenant_ack", note: (b.note ?? "").trim(), by: who0 }, who0);
+    return NextResponse.json({ ok: true, reply: "confirm", at: i.bookedAt });
+  }
   const reply = b.reply as AccessReply;
   if (reply !== "yes" && reply !== "no" && reply !== "other_time") {
     return NextResponse.json({ ok: false, error: "Tell us yes, another time, or no." }, { status: 400 });

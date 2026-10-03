@@ -599,6 +599,15 @@ CREATE INDEX IF NOT EXISTS os_inspections_token    ON os_inspections (access_tok
 -- due list once it is in hand here. See os_rexpm_tasks.
 ALTER TABLE os_inspections ADD COLUMN IF NOT EXISTS rexpm_task_id TEXT;
 CREATE INDEX IF NOT EXISTS os_inspections_rexpm ON os_inspections (rexpm_task_id);
+-- Book, confirm, record (3 Oct 2026): how long the visit is booked for, the
+-- tenant's own confirmation from their link (tenant_confirmed_at is OUR
+-- written confirmation going out), the checks made on the day, and the diary
+-- entry the booking made.
+ALTER TABLE os_inspections ADD COLUMN IF NOT EXISTS visit_mins INTEGER NOT NULL DEFAULT 30;
+ALTER TABLE os_inspections ADD COLUMN IF NOT EXISTS tenant_ack_at TIMESTAMPTZ;
+ALTER TABLE os_inspections ADD COLUMN IF NOT EXISTS tenant_ack_note TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_inspections ADD COLUMN IF NOT EXISTS checks JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE os_inspections ADD COLUMN IF NOT EXISTS appointment_id TEXT;
 -- The REX PM maintenance task a works order was taken on from (1 Oct 2026).
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS rexpm_task_id TEXT;
 

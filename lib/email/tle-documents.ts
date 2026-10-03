@@ -1008,6 +1008,9 @@ export const INSPECTION_TENANT_BOOKED = {
     T("itb2", "Hi {{tenantName}},<br><br>Confirming that <strong>{{inspector}}</strong> will call at {{address}} on <strong>{{whenPretty}}</strong> for a routine property visit. This email is your written notice of it."),
     T("itb3", "There is nothing you need to do. If anything has been bothering you about the property, that visit is a good moment to point it out - or reply to this email now and we will have it on the list before we arrive."),
     T("itb4", "If the time stops working, reply and we will move it."),
+    /* Their own link (3 Oct 2026): one press says the time works, or asks for another. */
+    SP("itb4a", 4),
+    BTN("itb4b", "Confirm the time works", "{{accessLink}}"),
     SP("itb5", 8),
     T("itb6", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
     FOOT("itb7", "You're getting this because you rent a property managed by The Letting Experts."),

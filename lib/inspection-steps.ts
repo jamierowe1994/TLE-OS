@@ -24,7 +24,7 @@ export type StepInspection = {
 };
 
 export const STEPS = [
-  { id: "ask_access", label: "Ask the tenant", blurb: "Their home. Offer dates, give the notice the tenancy requires, and let them answer in writing." },
+  { id: "ask_access", label: "Book it in", blurb: "Their home. Pick a time and they get it in writing with the notice the tenancy requires, or offer a few and let them choose." },
   { id: "await_access", label: "Waiting on the tenant", blurb: "Asked, not answered. Chase by phone once the notice period is over halfway gone." },
   { id: "rearrange", label: "Find another time", blurb: "They said no or asked for a different time. Offer fresh dates - never just turn up." },
   { id: "book", label: "Book the visit", blurb: "Permission given. Put the date in and tell the landlord it is happening." },
@@ -46,7 +46,7 @@ export function stepOf(i: StepInspection): StepId {
   if (i.accessReply === "no" || i.accessReply === "other_time") return "rearrange";
   /* Keys held and the tenancy allows it: the ask is still made, because
      notice is owed either way, but the answer is not what unblocks it. */
-  if (!i.accessAskedAt) return "ask_access";
+  if (!i.accessAskedAt && !i.bookedAt) return "ask_access";
   if (!i.accessReply && !i.bookedAt) return "await_access";
   if (!i.bookedAt) return "book";
   if (!i.tenantConfirmedAt) return "confirm";

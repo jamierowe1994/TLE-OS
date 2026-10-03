@@ -5,6 +5,7 @@ import {
   deleteFinding, getInspection, logEvent, moveInspection, saveFinding, type Finding, type Move,
 } from "@/lib/inspections";
 import { emailsForMove, outcomeLine } from "@/lib/inspection-emails";
+import { putVisitInDiary, takeVisitOutOfDiary } from "@/lib/inspection-diary";
 import { createOrder } from "@/lib/works-orders";
 import type { Urgency as NewOrderUrgency } from "@/lib/works-catalogue";
 
@@ -113,9 +114,26 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
     const move = body as Move;
     if (typeof move.action !== "string") return NextResponse.json({ ok: false, error: "Say what to do." }, { status: 400 });
-    const inspection = await moveInspection(id, move, by);
-    const found = await getInspection(id);
-    const emails = await emailsForMove(inspection, move.action, me, found?.findings ?? []).catch(() => []);
+    const before = await getInspection(id);
+    let inspection = await moveInspection(id, move, by);
+    let emails = await emailsForMove(inspection, move.action, me, before?.findings ?? []).catch(() => []);
+
+    /* BOOKED (3 Oct 2026): into the inspector's diary, and - when asked - the
+       written confirmation to the tenant straight away, which is their notice. */
+    if (move.action === "schedule") {
+      const inspectorId = move.inspectorId || me.id;
+      const diary = await putVisitInDiary(inspection, inspectorId).catch(() => "");
+      if (diary) await logEvent(id, "TLE OS", "diary", diary);
+      if (move.notify) {
+        inspection = await moveInspection(id, { action: "confirm" }, by);
+        emails = [...emails, ...(await emailsForMove(inspection, "confirm", me).catch(() => []))];
+      }
+    }
+    /* Not happening, or not getting in: out of the diary. */
+    if ((move.action === "cancel" || move.action === "no_access") && before?.inspection.appointmentId) {
+      await takeVisitOutOfDiary(before.inspection, before.inspection.inspectorId || me.id).catch(() => null);
+    }
+
     for (const e of emails) await logEvent(id, "TLE OS", "email", outcomeLine(e));
     const after = await getInspection(id);
     return NextResponse.json({ ok: true, ...after, emails });

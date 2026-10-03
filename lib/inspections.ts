@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
 import { stepOf, type StepId } from "@/lib/inspection-steps";
+import { asChecks, type Checks } from "@/lib/inspection-checks";
 import type { ManagedProperty } from "@/lib/portfolio-types";
 import type { RexpmTask } from "@/lib/rexpm-tasks";
 import { londonDayOffset, londonTime } from "@/lib/london-time";
@@ -217,6 +218,15 @@ export interface Inspection {
   rehearsal: boolean;
   /** The REX PM task this visit was raised from, if any (lib/rexpm-tasks). */
   rexpmTaskId: string | null;
+  /** How long the visit is booked for, in minutes. */
+  visitMins: number;
+  /** The tenant confirmed the booked time themselves, from their own link. */
+  tenantAckAt: string | null;
+  tenantAckNote: string;
+  /** The safety and general checks made on the day (lib/inspection-checks). */
+  checks: Checks;
+  /** The diary entry the booking made (os_appointments). */
+  appointmentId: string | null;
   createdAt: string;
   updatedAt: string;
   /** Derived, never stored. Filled by the store so a list can show it. */
@@ -297,6 +307,11 @@ function toInspection(r: Row): Inspection {
     raisedBy: s(r.raised_by),
     rehearsal: r.rehearsal === true,
     rexpmTaskId: r.rexpm_task_id ? s(r.rexpm_task_id) : null,
+    visitMins: Number(r.visit_mins ?? 30) || 30,
+    tenantAckAt: iso(r.tenant_ack_at),
+    tenantAckNote: s(r.tenant_ack_note),
+    checks: asChecks(r.checks),
+    appointmentId: r.appointment_id ? s(r.appointment_id) : null,
     createdAt: iso(r.created_at) ?? new Date().toISOString(),
     updatedAt: iso(r.updated_at) ?? new Date().toISOString(),
   };
@@ -442,6 +457,13 @@ export type Move =
   | { action: "ask_access"; offered: string[]; noticeHours?: number; accessMethod?: AccessMethod; note?: string }
   | { action: "access_reply"; reply: AccessReply; at?: string | null; note?: string; by?: string }
   | { action: "book"; at: string; inspectorId?: string | null; inspector?: string }
+  /* Book a time straight away (3 Oct 2026), without asking the tenant to pick
+     one first: the written confirmation that follows is their notice. */
+  | { action: "schedule"; at: string; mins?: number; inspectorId?: string | null; inspector?: string; accessMethod?: AccessMethod; notify?: boolean }
+  /* The tenant, from their own link: the booked time works for them. */
+  | { action: "tenant_ack"; note?: string; by?: string }
+  /* The safety and general checks made on the day. */
+  | { action: "checks"; checks: Checks }
   | { action: "confirm" }
   | { action: "tell_landlord" }
   | { action: "visited"; at?: string; inspector?: string }
@@ -492,6 +514,31 @@ export async function moveInspection(id: string, move: Move, by: string): Promis
       sql = `UPDATE os_inspections SET status = $2, booked_at = $3, inspector_id = $4, inspector = $5, tenant_confirmed_at = NULL, updated_at = NOW() WHERE id = $1 RETURNING *`;
       args = [id, setStatus("booked"), move.at, move.inspectorId ?? null, (move.inspector ?? by).trim()];
       line = `Booked for ${new Date(move.at).toLocaleString("en-GB")}${move.inspector ? `, ${move.inspector}` : ""}.`;
+      break;
+    case "schedule": {
+      if (!move.at || Number.isNaN(new Date(move.at).getTime())) throw new Error("Pick a date and time for the visit.");
+      const mins = Math.min(240, Math.max(10, Math.round(Number(move.mins) || found.inspection.visitMins || 30)));
+      /* Asked = now: booking it is the ask, and the confirmation email that
+         follows is the written notice. A tenant's earlier "another time" is
+         answered by this, so it is cleared. */
+      sql = `UPDATE os_inspections SET status = $2, booked_at = $3, visit_mins = $4, inspector_id = $5, inspector = $6,
+             access_method = COALESCE(NULLIF($7, ''), access_method), access_asked_at = COALESCE(access_asked_at, NOW()),
+             access_reply = NULL, access_replied_at = NULL, offered = '[]'::jsonb, tenant_confirmed_at = NULL, tenant_ack_at = NULL, tenant_ack_note = '',
+             no_access_at = NULL, no_access_reason = '', access_token = COALESCE(access_token, $8), updated_at = NOW()
+             WHERE id = $1 RETURNING *`;
+      args = [id, setStatus("booked"), move.at, mins, move.inspectorId ?? null, (move.inspector ?? by).trim(), move.accessMethod ?? "", randomBytes(16).toString("hex")];
+      line = `${found.inspection.bookedAt ? "Moved to" : "Booked for"} ${new Date(move.at).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}, ${mins} minutes, with ${(move.inspector ?? by).trim()}.`;
+      break;
+    }
+    case "tenant_ack":
+      sql = `UPDATE os_inspections SET tenant_ack_at = NOW(), tenant_ack_note = $2, updated_at = NOW() WHERE id = $1 RETURNING *`;
+      args = [id, (move.note ?? "").trim()];
+      line = `${move.by || found.inspection.tenant || "The tenant"} confirmed the time works for them.${move.note?.trim() ? ` "${move.note.trim()}"` : ""}`;
+      break;
+    case "checks":
+      sql = `UPDATE os_inspections SET checks = $2::jsonb, updated_at = NOW() WHERE id = $1 RETURNING *`;
+      args = [id, JSON.stringify(asChecks(move.checks))];
+      line = "";
       break;
     case "confirm":
       sql = `UPDATE os_inspections SET tenant_confirmed_at = NOW(), updated_at = NOW() WHERE id = $1 RETURNING *`;
