@@ -69,7 +69,7 @@ export default function PhoneHome() {
         <Tile href="/agent/leads" tone="pink" icon="user" value={f.leadsToday} label="Leads Today" />
         <Tile href="/agent/properties?chip=market" tone="sage" icon="home" value={f.onMarket} label="On Market" />
         <Tile href="/agent/applications" tone="pink" icon="doc" value={f.applications} label="Applications" />
-        <Tile href="/agent/day" tone="sage" icon="key" value={f.viewingsWeek} label="Viewings, 7 Days" />
+        <Tile href="/agent/viewings" tone="sage" icon="key" value={f.viewingsWeek} label="Viewings, 7 Days" />
       </div>
 
       <Link href="/agent/day" className="m-press mt-3 flex items-center gap-3.5 rounded-[22px] px-4 py-4" style={{ background: "var(--m-green-wash)" }}>

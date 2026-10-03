@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import type { Appt } from "@/lib/diary";
@@ -35,6 +35,7 @@ const WITH_LABEL: Record<string, string> = {
 export default function PhoneEvent() {
   const params = useParams<{ id: string }>();
   const id = decodeURIComponent(String(params?.id ?? ""));
+  const back = useSearchParams()?.get("from") === "viewings" ? "/agent/viewings" : "/agent/day";
   const [appt, setAppt] = useState<Appt | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,11 +64,11 @@ export default function PhoneEvent() {
   return (
     <main>
       {appt ? (
-        <Event appt={appt} />
+        <Event appt={appt} back={back} />
       ) : (
         <>
           <div className="mb-4">
-            <BackLink href="/agent/day" />
+            <BackLink href={back} />
           </div>
           {error ? (
             <ErrorLine text={error} />
@@ -82,7 +83,7 @@ export default function PhoneEvent() {
   );
 }
 
-function Event({ appt }: { appt: Appt }) {
+function Event({ appt, back }: { appt: Appt; back: string }) {
   const [facts, setFacts] = useState<PhoneEventFacts | null>(null);
   const [factsError, setFactsError] = useState<string | null>(null);
   const [people, setPeople] = useState<PhonePerson[] | null>(null);
@@ -148,7 +149,7 @@ function Event({ appt }: { appt: Appt }) {
           reference's "Meditation" screen (2 Oct 2026). */}
       <div className="m-group relative flex h-[240px] items-center justify-center">
         <div className="absolute left-3 top-3">
-          <BackLink href="/agent/day" />
+          <BackLink href={back} />
         </div>
         <img src={KIND_ART[appt.kind] ?? KIND_ART.other} alt="" className="m-ill h-[210px] w-auto" />
       </div>

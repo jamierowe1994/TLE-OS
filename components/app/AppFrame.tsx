@@ -30,7 +30,7 @@ const ICONS = {
 };
 
 const TABS: Array<{ href: string; label: string; match: (p: string) => boolean; icon: keyof typeof ICONS }> = [
-  { href: "/agent", label: "Home", icon: "home", match: (p) => p === "/agent" || p.startsWith("/agent/day") || p.startsWith("/agent/event") || p.startsWith("/agent/search") || p.startsWith("/agent/leads") || p.startsWith("/agent/applications") },
+  { href: "/agent", label: "Home", icon: "home", match: (p) => p === "/agent" || p.startsWith("/agent/day") || p.startsWith("/agent/event") || p.startsWith("/agent/search") || p.startsWith("/agent/leads") || p.startsWith("/agent/applications") || p.startsWith("/agent/viewings") },
   { href: "/agent/people", label: "People", icon: "people", match: (p) => p.startsWith("/agent/people") },
   { href: "/agent/properties", label: "Properties", icon: "properties", match: (p) => p.startsWith("/agent/properties") },
 ];
@@ -44,6 +44,7 @@ const PAGES: Array<{ href: string; label: string; icon: string }> = [
   /* The app's own pages only - never the desktop (James, 3 Oct 2026). */
   { href: "/agent/leads", label: "Leads", icon: "target" },
   { href: "/agent/applications", label: "Applications", icon: "file-contract" },
+  { href: "/agent/viewings", label: "Viewings", icon: "key" },
   { href: "/agent/day", label: "Your Day", icon: "calendar" },
 ];
 

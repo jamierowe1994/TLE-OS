@@ -12,6 +12,6 @@ export function appHref(href: string | null | undefined): string {
   if (href.startsWith("/applications")) return "/agent/applications";
   if (href.startsWith("/listings")) return "/agent/properties";
   if (href.startsWith("/portfolio") || href.startsWith("/property-management")) return "/agent/properties";
-  if (href.startsWith("/viewings")) return "/agent/day";
+  if (href.startsWith("/viewings")) return "/agent/viewings";
   return "/agent";
 }
