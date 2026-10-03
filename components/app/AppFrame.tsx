@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import Welcome from "@/components/app/Welcome";
 import { useAlerts } from "@/components/app/alerts";
+import { useSwipeToClose } from "@/components/app/swipe";
 import { applyMTheme, type MTheme } from "@/lib/m-theme";
+import { appHref } from "@/lib/app-href";
 
 /**
  * THE AGENT'S PHONE: a page, and a bar at the foot.
@@ -28,7 +30,7 @@ const ICONS = {
 };
 
 const TABS: Array<{ href: string; label: string; match: (p: string) => boolean; icon: keyof typeof ICONS }> = [
-  { href: "/agent", label: "Home", icon: "home", match: (p) => p === "/agent" || p.startsWith("/agent/day") || p.startsWith("/agent/event") || p.startsWith("/agent/search") },
+  { href: "/agent", label: "Home", icon: "home", match: (p) => p === "/agent" || p.startsWith("/agent/day") || p.startsWith("/agent/event") || p.startsWith("/agent/search") || p.startsWith("/agent/leads") },
   { href: "/agent/people", label: "People", icon: "people", match: (p) => p.startsWith("/agent/people") },
   { href: "/agent/properties", label: "Properties", icon: "properties", match: (p) => p.startsWith("/agent/properties") },
 ];
@@ -39,11 +41,9 @@ const PAGES: Array<{ href: string; label: string; icon: string }> = [
   /* Steve where The Full OS was (James, 3 Oct 2026): his whole conversation,
      full screen (app/agent/steve). */
   { href: "/agent/steve", label: "Steve", icon: "message-2" },
-  { href: "/leads", label: "Leads", icon: "target" },
-  { href: "/listings", label: "Listings", icon: "home" },
-  { href: "/viewings", label: "Viewings", icon: "key" },
-  { href: "/applications", label: "Applications", icon: "file-contract" },
-  { href: "/market-appraisals", label: "Market Appraisals", icon: "checklist" },
+  /* The app's own pages only - never the desktop (James, 3 Oct 2026). */
+  { href: "/agent/leads", label: "Leads", icon: "target" },
+  { href: "/agent/day", label: "Your Day", icon: "calendar" },
 ];
 
 type Frame = { more: () => void; quick: () => void; bell: () => void; unread: number };
@@ -167,6 +167,9 @@ function Tab({ tab, on }: { tab: (typeof TABS)[number]; on: boolean }) {
 
 /** A sheet up from the foot: the dim, the handle, a title and a close. */
 function SheetShell({ title, label, onClose, children }: { title: string; label: string; onClose: () => void; children: React.ReactNode }) {
+  const panel = useRef<HTMLDivElement | null>(null);
+  const dim = useRef<HTMLDivElement | null>(null);
+  useSwipeToClose(panel, dim, onClose);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -179,6 +182,7 @@ function SheetShell({ title, label, onClose, children }: { title: string; label:
   }, [onClose]);
   return (
     <div
+      ref={dim}
       className="fixed inset-0 z-[80] flex items-end justify-center"
       style={{ background: "rgba(40, 28, 25, 0.38)", animation: "m-dim 200ms ease-out both" }}
       onClick={onClose}
@@ -192,7 +196,8 @@ function SheetShell({ title, label, onClose, children }: { title: string; label:
         @media (prefers-reduced-motion: reduce) { .m-sheet { animation: none !important } }
       `}</style>
       <div
-        className="m-sheet max-h-[90dvh] w-full max-w-[560px] overflow-y-auto rounded-t-[28px] px-4 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-3"
+        ref={panel}
+        className="m-sheet max-h-[90dvh] w-full max-w-[560px] overflow-y-auto overscroll-contain rounded-t-[28px] px-4 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-3"
         style={{ background: "var(--m-bg)", animation: "m-rise 320ms cubic-bezier(0.22, 1, 0.36, 1) both" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -235,6 +240,9 @@ const QUICK: Array<{ href: string; label: string; line: string; icon: string; to
  */
 function QuickSheet({ onClose }: { onClose: () => void }) {
   const [leaving, setLeaving] = useState(false);
+  const panel = useRef<HTMLDivElement | null>(null);
+  const dim = useRef<HTMLDivElement | null>(null);
+  useSwipeToClose(panel, dim, onClose);
   const leave = useCallback(() => {
     setLeaving(true);
     window.setTimeout(onClose, 220);
@@ -253,6 +261,7 @@ function QuickSheet({ onClose }: { onClose: () => void }) {
 
   return (
     <div
+      ref={dim}
       className={`q-dim fixed inset-0 z-[80] flex items-end justify-center ${leaving ? "q-out" : ""}`}
       onClick={leave}
       role="dialog"
@@ -277,7 +286,8 @@ function QuickSheet({ onClose }: { onClose: () => void }) {
         }
       `}</style>
       <div
-        className="q-sheet max-h-[90dvh] w-full max-w-[560px] overflow-y-auto rounded-t-[30px] px-4 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-3"
+        ref={panel}
+        className="q-sheet max-h-[90dvh] overscroll-contain w-full max-w-[560px] overflow-y-auto rounded-t-[30px] px-4 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-3"
         style={{ background: "var(--m-bg)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -367,7 +377,7 @@ function BellSheet({ onClose, onRead }: { onClose: () => void; onRead: () => voi
             return (
               <li key={n.id} className="m-row">
                 {n.href ? (
-                  <a href={n.href} className="flex gap-3 px-4 py-3.5 active:bg-panel">
+                  <a href={appHref(n.href)} className="flex gap-3 px-4 py-3.5 active:bg-panel">
                     {inner}
                   </a>
                 ) : (
@@ -397,6 +407,9 @@ function PagesSheet({ inApp, mode, onMode, onClose }: { inApp: boolean; mode: MT
   const [me, setMe] = useState<Me | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const alerts = useAlerts();
+  const panel = useRef<HTMLDivElement | null>(null);
+  const dim = useRef<HTMLDivElement | null>(null);
+  useSwipeToClose(panel, dim, onClose);
 
   useEffect(() => {
     fetch("/api/auth/me", { cache: "no-store" })
@@ -432,6 +445,7 @@ function PagesSheet({ inApp, mode, onMode, onClose }: { inApp: boolean; mode: MT
 
   return (
     <div
+      ref={dim}
       className="fixed inset-0 z-[80] flex items-end justify-center"
       style={{ background: "rgba(0, 0, 0, 0.38)", animation: "m-dim 200ms ease-out both" }}
       onClick={onClose}
@@ -445,7 +459,8 @@ function PagesSheet({ inApp, mode, onMode, onClose }: { inApp: boolean; mode: MT
         @media (prefers-reduced-motion: reduce) { .m-sheet { animation: none !important } }
       `}</style>
       <div
-        className="m-sheet max-h-[90dvh] w-full max-w-[560px] overflow-y-auto rounded-t-[28px] px-4 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-3"
+        ref={panel}
+        className="m-sheet max-h-[90dvh] w-full max-w-[560px] overflow-y-auto overscroll-contain rounded-t-[28px] px-4 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-3"
         style={{ background: "var(--m-bg)", animation: "m-rise 320ms cubic-bezier(0.22, 1, 0.36, 1) both" }}
         onClick={(e) => e.stopPropagation()}
       >

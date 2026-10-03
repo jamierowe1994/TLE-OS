@@ -6,7 +6,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import type { PhonePerson } from "@/app/api/m/people/route";
 import type { NearbyPerson } from "@/app/api/m/nearby/route";
 import type { BookPerson } from "@/lib/m-people-book";
-import { ErrorLine, Sheet, Spinner, TopBar, dialable, mapsHref } from "../bits";
+import { ErrorLine, Sheet, Spinner, TopBar, dialable, mapsHref, whatsappHref, WhatsAppIcon } from "../bits";
 import { RadiusSheet, type RadiusPick } from "../radius";
 
 /**
@@ -149,9 +149,9 @@ export default function PhonePeople() {
       {/* Exactly Home's greeting box, as on Properties. */}
       <section className="relative -mx-4 mt-2 h-[268px] overflow-hidden px-4">
         <img
-          src="/illustrations/app/street-row.webp"
+          src="/illustrations/app/street-corner.webp"
           alt=""
-          className="pointer-events-none absolute -right-24 top-6 h-[236px] w-auto max-w-none select-none"
+          className="pointer-events-none absolute -right-16 top-0 h-[262px] w-auto max-w-none select-none"
           style={{ maskImage: "linear-gradient(to left, #000 70%, transparent 100%)", WebkitMaskImage: "linear-gradient(to left, #000 70%, transparent 100%)" }}
         />
         <div className="relative w-[56%] pt-4">
@@ -410,7 +410,7 @@ function Detail({ p, onClose }: { p: BookPerson; onClose: () => void }) {
   ].filter((f): f is [string, string, string] => Boolean(f[2]));
 
   const actions: Array<{ label: string; icon: string; href: string | null }> = [
-    { label: "Message", icon: "message", href: tel ? `sms:${tel}` : null },
+    { label: "WhatsApp", icon: "whatsapp", href: whatsappHref(p.phone) },
     { label: "Call", icon: "call", href: tel ? `tel:${tel}` : null },
     { label: "Email", icon: "mail", href: p.email ? `mailto:${p.email}` : null },
     { label: "Directions", icon: "target", href: p.address ? mapsHref([p.address, p.locality].filter(Boolean).join(", ")) : null },
@@ -431,12 +431,12 @@ function Detail({ p, onClose }: { p: BookPerson; onClose: () => void }) {
         {actions.map((a) =>
           a.href ? (
             <a key={a.label} href={a.href} target={a.label === "Directions" ? "_blank" : undefined} rel="noreferrer" className="m-press flex flex-col items-center gap-1.5 rounded-[18px] py-3 text-[12.5px] font-medium" style={{ background: "var(--m-card)" }}>
-              <DoodleIcon name={a.icon} size={22} />
+              {a.icon === "whatsapp" ? <WhatsAppIcon size={22} /> : <DoodleIcon name={a.icon} size={22} />}
               {a.label}
             </a>
           ) : (
             <span key={a.label} className="flex flex-col items-center gap-1.5 rounded-[18px] py-3 text-[12.5px] font-medium opacity-35" style={{ background: "var(--m-card)" }}>
-              <DoodleIcon name={a.icon} size={22} />
+              {a.icon === "whatsapp" ? <WhatsAppIcon size={22} /> : <DoodleIcon name={a.icon} size={22} />}
               {a.label}
             </span>
           )

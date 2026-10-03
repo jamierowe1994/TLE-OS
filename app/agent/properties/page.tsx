@@ -77,8 +77,11 @@ export default function PhoneProperties() {
 
   useEffect(() => {
     load();
-    const q = new URLSearchParams(window.location.search).get("q");
+    const sp = new URLSearchParams(window.location.search);
+    const q = sp.get("q");
     if (q) setNeedle(q);
+    const c = sp.get("chip");
+    if (c === "market" || c === "letagreed" || c === "draft") setChip(c);
     try {
       setGrid(localStorage.getItem(VIEW_KEY) === "grid");
     } catch {

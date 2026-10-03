@@ -6,6 +6,7 @@ import { sendWebPush, webPushConfigured } from "@/lib/web-push";
 import { noticesFor, seenAt } from "@/lib/notifications";
 import { findUserById } from "@/lib/users";
 import { switchOn } from "@/lib/switches";
+import { appHref } from "@/lib/app-href";
 
 /**
  * The bell, in the agent's pocket (2 Oct 2026).
@@ -144,7 +145,7 @@ export async function scanAndPush(): Promise<ScanReport> {
       const badge = seen ? notices.filter((n) => n.at > seen).length : notices.length;
       const each = fresh.length > MAX_EACH ? [] : fresh;
       for (const n of each) {
-        const r = await pushTo(user_id, { title: n.title, body: n.body, href: n.href, badge });
+        const r = await pushTo(user_id, { title: n.title, body: n.body, href: appHref(n.href), badge });
         report.sent += r.sent;
         report.errors.push(...r.failed);
       }

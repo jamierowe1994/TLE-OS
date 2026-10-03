@@ -66,9 +66,9 @@ export default function PhoneHome() {
       </Link>
 
       <div className="mt-4 grid grid-cols-2 gap-3">
-        <Tile href="/leads" tone="pink" icon="user" value={f.leadsToday} label="Leads Today" />
-        <Tile href="/listings" tone="sage" icon="home" value={f.onMarket} label="On Market" />
-        <Tile href="/applications" tone="pink" icon="doc" value={f.applications} label="Applications" />
+        <Tile href="/agent/leads" tone="pink" icon="user" value={f.leadsToday} label="Leads Today" />
+        <Tile href="/agent/properties?chip=market" tone="sage" icon="home" value={f.onMarket} label="On Market" />
+        <Tile href={null} tone="pink" icon="doc" value={f.applications} label="Applications" />
         <Tile href="/agent/day" tone="sage" icon="key" value={f.viewingsWeek} label="Viewings, 7 Days" />
       </div>
 
@@ -93,9 +93,21 @@ export default function PhoneHome() {
   );
 }
 
-function Tile({ href, tone, icon, value, label }: { href: string; tone: "pink" | "sage"; icon: string; value: Figure; label: string }) {
+/* href null: the figure stands alone until its own app page exists (James,
+   3 Oct 2026: the app never opens a desktop page). */
+function Tile({ href, tone, icon, value, label }: { href: string | null; tone: "pink" | "sage"; icon: string; value: Figure; label: string }) {
+  const Box = ({ children }: { children: React.ReactNode }) =>
+    href ? (
+      <Link href={href} className="m-press flex min-h-[132px] flex-col justify-between rounded-[22px] p-4" style={{ background: tone === "pink" ? "var(--m-pink-wash)" : "var(--m-green-wash)" }}>
+        {children}
+      </Link>
+    ) : (
+      <div className="flex min-h-[132px] flex-col justify-between rounded-[22px] p-4" style={{ background: tone === "pink" ? "var(--m-pink-wash)" : "var(--m-green-wash)" }}>
+        {children}
+      </div>
+    );
   return (
-    <Link href={href} className="m-press flex min-h-[132px] flex-col justify-between rounded-[22px] p-4" style={{ background: tone === "pink" ? "var(--m-pink-wash)" : "var(--m-green-wash)" }}>
+    <Box>
       <DoodleIcon name={icon} size={24} />
       <span>
         <span className="m-figure block text-[30px] font-semibold">
@@ -109,10 +121,10 @@ function Tile({ href, tone, icon, value, label }: { href: string; tone: "pink" |
         </span>
         <span className="mt-1 flex items-center justify-between gap-2 text-[13.5px]">
           {label}
-          <Chevron />
+          {href && <Chevron />}
         </span>
       </span>
-    </Link>
+    </Box>
   );
 }
 

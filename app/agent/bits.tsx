@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import { useFrame } from "@/components/app/AppFrame";
+import { useSwipeToClose } from "@/components/app/swipe";
 
 /**
  * The few pieces every phone screen shares. Kept deliberately small: big
@@ -112,6 +113,20 @@ export function ErrorLine({ text, onRetry }: { text: string; onRetry?: () => voi
 /** A phone number as the dialler wants it: digits and a leading plus only. */
 export const dialable = (phone: string) => phone.replace(/[^\d+]/g, "");
 
+/**
+ * Straight into a WhatsApp chat with them (James, 3 Oct 2026: "rather than
+ * Message, we should have WhatsApp"). wa.me wants the full international
+ * number with no plus or leading zero, so a UK 07 becomes 447. Null when the
+ * record has no usable number.
+ */
+export function whatsappHref(phone: string): string | null {
+  let d = phone.replace(/[^\d+]/g, "");
+  if (d.startsWith("+")) d = d.slice(1);
+  else if (d.startsWith("00")) d = d.slice(2);
+  else if (d.startsWith("0")) d = `44${d.slice(1)}`;
+  return d.length >= 10 ? `https://wa.me/${d}` : null;
+}
+
 /** Call, text and email, as three plain buttons. Missing ones are left out, not greyed. */
 export function ReachButtons({ phone, email }: { phone: string; email: string }) {
   const tel = dialable(phone);
@@ -125,8 +140,8 @@ export function ReachButtons({ phone, email }: { phone: string; email: string })
         </a>
       )}
       {tel && (
-        <a href={`sms:${tel}`} className={btn}>
-          <DoodleIcon name="message" size={17} /> Text
+        <a href={whatsappHref(phone) ?? `sms:${tel}`} className={btn}>
+          <WhatsAppIcon size={17} /> WhatsApp
         </a>
       )}
       {email && (
@@ -144,8 +159,11 @@ export function mapsHref(address: string, lat?: number | null, lng?: number | nu
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
-/** A sheet up from the bottom. Tapping the dim, or Escape, closes it. */
+/** A sheet up from the bottom. Tapping the dim, a swipe down, or Escape closes it. */
 export function Sheet({ onClose, label, children }: { onClose: () => void; label: string; children: React.ReactNode }) {
+  const panel = useRef<HTMLDivElement | null>(null);
+  const dim = useRef<HTMLDivElement | null>(null);
+  useSwipeToClose(panel, dim, onClose);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -158,6 +176,7 @@ export function Sheet({ onClose, label, children }: { onClose: () => void; label
   }, [onClose]);
   return (
     <div
+      ref={dim}
       className="fixed inset-0 z-[80] flex items-end justify-center"
       style={{ background: "rgba(43, 32, 29, 0.45)", animation: "m-dim 200ms ease-out both" }}
       onClick={onClose}
@@ -171,7 +190,8 @@ export function Sheet({ onClose, label, children }: { onClose: () => void; label
         @media (prefers-reduced-motion: reduce) { .m-sheet { animation: none !important } }
       `}</style>
       <div
-        className="m-sheet max-h-[88dvh] w-full max-w-[520px] overflow-y-auto rounded-t-[26px] bg-page px-5 pb-[max(22px,env(safe-area-inset-bottom))] pt-3"
+        ref={panel}
+        className="m-sheet max-h-[88dvh] w-full max-w-[520px] overflow-y-auto overscroll-contain rounded-t-[26px] bg-page px-5 pb-[max(22px,env(safe-area-inset-bottom))] pt-3"
         style={{ animation: "m-rise 300ms cubic-bezier(0.22, 1, 0.36, 1) both" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -217,5 +237,15 @@ export function SearchBox({
         </button>
       )}
     </label>
+  );
+}
+
+/** WhatsApp's mark, line-drawn to sit with the doodle icons; takes currentColor. */
+export function WhatsAppIcon({ size = 18, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden className={`shrink-0 ${className}`} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3.5 20.5l1.3-4.2A8.4 8.4 0 1 1 8 19.4z" />
+      <path d="M9 8.6c.2-.5.5-.6.8-.6h.5c.2 0 .4.1.5.4l.7 1.6c.1.2 0 .5-.1.6l-.5.6c-.1.1-.1.3 0 .5.6 1 1.4 1.8 2.4 2.4.2.1.4.1.5 0l.6-.5c.2-.1.4-.2.6-.1l1.6.7c.3.1.4.3.4.5v.5c0 .3-.1.6-.6.8-.8.4-2 .5-3.6-.4a9.6 9.6 0 0 1-3.6-3.6c-.9-1.6-.8-2.8-.4-3.6z" />
+    </svg>
   );
 }
