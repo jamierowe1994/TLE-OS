@@ -42,6 +42,11 @@ export const metadata: Metadata = {
   manifest: "/icons/m/manifest.webmanifest",
   icons: { apple: "/icons/m/apple-touch-icon.png" },
   appleWebApp: { capable: true, title: "TLE OS", statusBarStyle: "default" },
+  /* The Apple-named tag, by hand (3 Oct 2026). Next 15 now writes only the
+     standard mobile-web-app-capable for appleWebApp.capable; Launch Pad adds
+     this line too, and its home-screen icon opens full screen while ours
+     opened in a Safari tab with Safari's buttons over the app. */
+  other: { "apple-mobile-web-app-capable": "yes" },
 };
 
 async function chosenTheme(): Promise<MTheme | null> {
