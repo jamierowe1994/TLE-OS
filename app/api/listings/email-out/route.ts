@@ -2,11 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { TEST_REFUSAL, testDetails, testLandlord, testListingViewings, testPortals, testPublication } from "@/lib/test-listing-answers";
 import { isTestId } from "@/lib/test-overlay";
 import { whoIs } from "@/lib/admin";
-import { hasDb, q } from "@/lib/db";
+import { hasDb } from "@/lib/db";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
-import { bookFor } from "@/lib/listings-cache";
-import { findListing, liveBook, similarHomes } from "@/lib/tenant-matching";
-import { hiddenLeadIds } from "@/lib/hidden-leads";
+import { DAYS, matchFor } from "@/lib/mail-database";
 import { renderHomesThatFit, sendHomesThatFit, type FitHome } from "@/lib/homes-that-fit";
 import { addTouch } from "@/lib/lead-touches";
 import { publicOrigin } from "@/lib/origin";
@@ -42,87 +40,8 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-const DAYS = 90;
 const SHOW = 200;
 const PER_PRESS = 50;
-
-type LeadRow = { id: string; name: string; email: string; listing_id: string; received_at: Date | null };
-
-type EmailOutPerson = {
-  email: string;
-  name: string;
-  leadId: string;
-  askedAbout: string;
-  askedRent: number | null;
-  askedPer: string;
-  askedAt: string | null;
-  why: string[];
-};
-
-const per = (l: Pick<OsListing, "rentPeriod">) => (l.rentPeriod === "week" ? "per week" : "pcm");
-const town = (l: OsListing) => (l.locality ?? "").split(",")[0].replace(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i, "").trim().toLowerCase();
-const district = (p: string | null) => (p ?? "").toUpperCase().replace(/\s+/g, "").slice(0, -3);
-
-async function matchFor(id: string): Promise<{ home: OsListing | null; people: EmailOutPerson[]; alreadySent: number }> {
-  const live = await liveBook();
-  const home = findListing(live, id);
-  if (!home || !hasDb()) return { home, people: [], alreadySent: 0 };
-
-  /* The whole current book for the homes they asked about: most enquiries
-     are on homes that have since gone let agreed. */
-  const book = (await bookFor(null).catch(() => null))?.listings ?? live;
-  const [leads, hidden, sent] = await Promise.all([
-    q<LeadRow>(
-      `SELECT id, name, email, listing_id, received_at FROM os_leads
-        WHERE enquiry = 'Letting' AND email IS NOT NULL AND email <> '' AND listing_id IS NOT NULL
-          AND stage NOT IN ('Not proceeding', 'Closed')
-          AND received_at > NOW() - make_interval(days => $1)
-        ORDER BY received_at DESC NULLS LAST`,
-      [DAYS]
-    ),
-    hiddenLeadIds(),
-    q<{ sent_to: string }>(
-      `SELECT DISTINCT lower(sent_to) AS sent_to FROM os_tenant_email_log
-        WHERE email_id = 'tenant-matches' AND outcome = 'sent' AND meta->'homes' @> $1::jsonb`,
-      [JSON.stringify([{ id: String(home.id) }])]
-    ).catch(() => []),
-  ]);
-  const sentTo = new Set(sent.map((s) => s.sent_to));
-  /* Anyone who asked about THIS home knows about it already. */
-  const askedHere = new Set(leads.filter((l) => l.listing_id === String(home.id)).map((l) => l.email.trim().toLowerCase()));
-
-  const seen = new Set<string>();
-  const people: EmailOutPerson[] = [];
-  let alreadySent = 0;
-  for (const l of leads) {
-    const email = l.email.trim().toLowerCase();
-    if (seen.has(email) || hidden.has(l.id) || askedHere.has(email)) continue;
-    const asked = findListing(book, l.listing_id);
-    /* No rent on the home they asked about, no way to say it is similar. */
-    if (!asked || !(asked.rentMonthly && asked.rentMonthly > 0)) continue;
-    if (!similarHomes([home], [asked], { limit: 1 }).length) continue;
-    seen.add(email);
-    if (sentTo.has(email)) {
-      alreadySent++;
-      continue;
-    }
-    const why = [
-      asked.postcode && home.postcode && district(asked.postcode) === district(home.postcode) ? "Same postcode area" : town(asked) === town(home) ? "Same town" : "Nearby",
-      "Similar rent",
-    ];
-    people.push({
-      email,
-      name: l.name,
-      leadId: l.id,
-      askedAbout: asked.name,
-      askedRent: asked.rent,
-      askedPer: per(asked),
-      askedAt: l.received_at ? new Date(l.received_at).toISOString() : null,
-      why,
-    });
-  }
-  return { home, people, alreadySent };
-}
 
 function refuseViewingAs(req: NextRequest): NextResponse | null {
   try {

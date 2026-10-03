@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import type { PhoneProperty } from "@/app/api/m/properties/route";
@@ -20,7 +21,11 @@ import { ErrorLine, ReachButtons, Sheet, Spinner, TopBar, dialable, mapsHref } f
  */
 
 /* Four tabs, no more (James, 3 Oct 2026): they fit the track without
-   scrolling. Managed and archived homes are under All. */
+   scrolling. All is the ACTIVE book only - on the market, let agreed and not
+   yet live (James, 3 Oct 2026: "we shouldn't need to see archive
+   properties"). Managed and archived homes come up when searched for, and
+   the archive has its own place in the sort sheet. */
+const ACTIVE: PropertyGroup[] = ["market", "letagreed", "draft"];
 const CHIPS: Array<{ id: "all" | PropertyGroup; label: string }> = [
   { id: "all", label: "All" },
   { id: "market", label: "Market" },
@@ -57,7 +62,7 @@ export default function PhoneProperties() {
   const [book, setBook] = useState<PhoneProperty[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needle, setNeedle] = useState("");
-  const [chip, setChip] = useState<(typeof CHIPS)[number]["id"]>("all");
+  const [chip, setChip] = useState<(typeof CHIPS)[number]["id"] | "archived">("all");
   const [sort, setSort] = useState<Sort>("az");
   const [grid, setGrid] = useState(false);
   const [sorting, setSorting] = useState(false);
@@ -102,6 +107,8 @@ export default function PhoneProperties() {
     const n = needle.trim().toLowerCase();
     const hits = (book ?? []).filter((p) => {
       if (chip !== "all" && p.group !== chip) return false;
+      /* A search reaches the whole book; a plain list is the active homes. */
+      if (chip === "all" && !n && !ACTIVE.includes(p.group ?? "managed")) return false;
       if (!n) return true;
       return [p.name, p.locality, p.postcode, ...p.tenants.map((t) => t.name), p.landlord?.name].some((f) => f && f.toLowerCase().includes(n));
     });
@@ -114,7 +121,7 @@ export default function PhoneProperties() {
     return hits.sort(by[sort]);
   }, [book, needle, chip, sort]);
 
-  const countOf = (id: (typeof CHIPS)[number]["id"]) => (book ?? []).filter((p) => id === "all" || p.group === id).length;
+  const countOf = (id: (typeof CHIPS)[number]["id"] | "archived") => (book ?? []).filter((p) => (id === "all" ? ACTIVE.includes(p.group ?? "managed") : p.group === id)).length;
 
   return (
     <main>
@@ -185,6 +192,13 @@ export default function PhoneProperties() {
           );
         })}
       </div>
+
+      {chip === "archived" && (
+        <button type="button" onClick={() => setChip("all")} className="m-press mt-4 flex w-full items-center justify-between rounded-full px-4 py-2.5 text-[14px] font-medium" style={{ background: "var(--m-fill)" }}>
+          Showing the archive
+          <span style={{ color: "var(--m-coral)" }}>Back to Active</span>
+        </button>
+      )}
 
       <div className="mb-3 mt-5 flex items-center justify-between">
         <h2 className="m-title text-[22px]">{book ? `${shown.length} ${shown.length === 1 ? "Property" : "Properties"}` : "Properties"}</h2>
@@ -278,6 +292,22 @@ export default function PhoneProperties() {
                 </button>
               </li>
             ))}
+          </ul>
+          <p className="m-eyebrow mb-2 mt-5 px-1">Also</p>
+          <ul className="m-group">
+            <li className="m-row">
+              <button
+                type="button"
+                onClick={() => {
+                  setChip(chip === "archived" ? "all" : "archived");
+                  setSorting(false);
+                }}
+                className="flex h-[52px] w-full items-center justify-between px-4 text-left text-[15.5px]"
+              >
+                {chip === "archived" ? "Back to Active Homes" : "Archived Homes"}
+                <span className="text-[13.5px] text-muted">{countOf("archived")}</span>
+              </button>
+            </li>
           </ul>
         </Sheet>
       )}
@@ -376,9 +406,22 @@ function Detail({ p, onClose }: { p: PhoneProperty; onClose: () => void }) {
       <h2 className="m-title mt-2 text-[26px] leading-tight">{p.name}</h2>
       <p className="mt-0.5 text-[14.5px] text-muted">{[p.locality, p.postcode && !p.locality.includes(p.postcode) ? p.postcode : ""].filter(Boolean).join(", ")}</p>
 
-      <a href={mapsHref(`${p.name}, ${p.locality}`, p.lat, p.lng)} target="_blank" rel="noreferrer" className="m-btn m-btn-primary m-press mt-4 w-full">
-        <DoodleIcon name="target" size={17} /> Directions
-      </a>
+      {/* A live home can be sent to the people who would want it (James,
+          3 Oct 2026): the Email the Database flow, app/agent/match. */}
+      {p.group === "market" && p.key.startsWith("l-") ? (
+        <div className="mt-4 grid gap-2.5">
+          <Link href={`/agent/match/${encodeURIComponent(p.key.slice(2))}`} className="m-btn m-btn-primary m-press w-full">
+            <DoodleIcon name="mail" size={17} /> Email the Database
+          </Link>
+          <a href={mapsHref(`${p.name}, ${p.locality}`, p.lat, p.lng)} target="_blank" rel="noreferrer" className="m-btn m-press w-full">
+            <DoodleIcon name="target" size={17} /> Directions
+          </a>
+        </div>
+      ) : (
+        <a href={mapsHref(`${p.name}, ${p.locality}`, p.lat, p.lng)} target="_blank" rel="noreferrer" className="m-btn m-btn-primary m-press mt-4 w-full">
+          <DoodleIcon name="target" size={17} /> Directions
+        </a>
+      )}
 
       {facts.length > 0 && (
         <dl className="mt-4 grid grid-cols-2 gap-2.5">

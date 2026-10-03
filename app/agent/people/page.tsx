@@ -400,6 +400,15 @@ function day(iso: string): string {
 }
 
 /** One person: the painting, who and where, four buttons, the facts, and their home. */
+/** The Find a Home flow for a tenant: around their home, at about their rent. */
+function findHomeHref(p: BookPerson): string {
+  const n = Number((p.rent.match(/[\d,.]+/)?.[0] ?? "").replace(/,/g, "")) || 0;
+  const monthly = /\bpw\b|week/i.test(p.rent) ? Math.round((n * 52) / 12) : n;
+  const q = new URLSearchParams({ name: p.name, email: p.email, near: [p.address, p.locality].filter(Boolean).join(", ") });
+  if (monthly) q.set("rent", String(monthly));
+  return `/agent/find-home?${q.toString()}`;
+}
+
 function Detail({ p, onClose }: { p: BookPerson; onClose: () => void }) {
   const tel = dialable(p.phone);
   const applicant = p.side === "tenant" && p.tone === "new";
@@ -443,6 +452,14 @@ function Detail({ p, onClose }: { p: BookPerson; onClose: () => void }) {
           )
         )}
       </div>
+
+      {/* The other way round from Email the Database (James, 3 Oct 2026):
+          the live homes around where this tenant wants to be. */}
+      {p.side === "tenant" && (
+        <Link href={findHomeHref(p)} className="m-btn m-btn-primary m-press mt-3 w-full">
+          <DoodleIcon name="home" size={17} /> Find a Home
+        </Link>
+      )}
 
       {facts.length > 0 && (
         <ul className="m-group mt-4">
