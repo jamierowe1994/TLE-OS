@@ -1,0 +1,232 @@
+/*
+ * THE PHONE'S LOOK (2 Oct 2026, for the iPhone app).
+ *
+ * The fourth and, in James's words, "last attempt" of the day, after the tile
+ * reference, a standard tab bar and the BizLink pill bar: a nod back to the
+ * original Notion style of TLE OS. Monochrome - light grey, black and white -
+ * with the Notioly line illustrations, and only small pops of pink or green
+ * for highlighting. Light and dark, chosen when they first sign in.
+ *
+ * The mode lives on .m-app as data-mtheme (a per-phone cookie, read on the
+ * server in app/m/layout.tsx so the page never flashes the wrong one). The
+ * OS's own tokens are redefined inside, so every shared component follows.
+ */
+
+.m-app {
+  --m-bg: #f4f4f3;
+  --m-card: #ffffff;
+  --m-line: #e5e5e3;
+  --m-fill: #ebebea;
+  --m-ink: #121212;
+  --m-muted: #6f6f6c;
+  --m-soft: #a3a3a0;
+  /* The two pops of colour. Small, and never a whole surface. */
+  --m-pink: #e8968d;
+  --m-pink-wash: #fbe9e6;
+  --m-green: #7fa16b;
+  --m-green-wash: #e9f0e3;
+  --m-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+
+  --ink: var(--m-ink);
+  --muted: var(--m-muted);
+  --line: var(--m-line);
+  --page: var(--m-bg);
+  --card: var(--m-card);
+  --panel: var(--m-fill);
+  --accent: var(--m-pink);
+  --accent-soft: var(--m-pink-wash);
+  --accent-dark: #b4544a;
+  --brown: var(--m-ink);
+  --font-heading: var(--font-inter), system-ui, sans-serif;
+
+  background: var(--m-bg);
+  color: var(--m-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.m-app[data-mtheme="dark"] {
+  --m-bg: #121212;
+  --m-card: #1c1c1c;
+  --m-line: #2a2a2a;
+  --m-fill: #262626;
+  --m-ink: #f2f2f0;
+  --m-muted: #9b9b97;
+  --m-soft: #5f5f5c;
+  --m-pink-wash: rgba(232, 150, 141, 0.16);
+  --m-green-wash: rgba(127, 161, 107, 0.18);
+  --m-shadow: none;
+  --accent-dark: #f0aaa2;
+  color-scheme: dark;
+}
+
+/* Titles: medium, not bold, drawn in a touch - the reference's quiet weight. */
+.m-app .m-title {
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+.m-app h1,
+.m-app h2,
+.m-app h3 {
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.m-app .m-figure {
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.m-app .m-eyebrow {
+  font-size: 13px;
+  color: var(--m-muted);
+}
+
+/* The Notioly line drawings are black ink on nothing; in the dark they turn white. */
+.m-app[data-mtheme="dark"] .m-ill {
+  filter: invert(1);
+}
+
+.m-app .m-group {
+  background: var(--m-card);
+  border: 1px solid var(--m-line);
+  border-radius: 20px;
+  box-shadow: var(--m-shadow);
+  overflow: hidden;
+}
+.m-app .m-row {
+  position: relative;
+}
+.m-app .m-row + .m-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 16px;
+  height: 1px;
+  background: var(--m-line);
+}
+
+.m-app .m-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 18px;
+  border-radius: 14px;
+  border: 1px solid var(--m-line);
+  background: var(--m-card);
+  color: var(--m-ink);
+  font-size: 15px;
+  font-weight: 500;
+}
+.m-app .m-btn-primary {
+  background: var(--m-ink);
+  border-color: var(--m-ink);
+  color: var(--m-bg);
+}
+
+.m-app .m-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 500;
+  background: var(--m-fill);
+  color: var(--m-ink);
+  white-space: nowrap;
+}
+
+.m-app .m-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 46px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid var(--m-line);
+  background: var(--m-card);
+}
+.m-app .m-search:focus-within {
+  border-color: var(--m-soft);
+}
+
+/* Choices as rounded chips, the chosen one filled ink - "Gratitude / Stress". */
+.m-app .m-seg {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.m-app .m-seg::-webkit-scrollbar {
+  display: none;
+}
+.m-app .m-seg > button {
+  flex: none;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--m-line);
+  background: var(--m-card);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--m-ink);
+  transition: background-color 200ms, color 200ms, border-color 200ms;
+}
+.m-app .m-seg > button[aria-pressed="true"] {
+  background: var(--m-ink);
+  border-color: var(--m-ink);
+  color: var(--m-bg);
+}
+
+.m-app .m-round {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid var(--m-line);
+  background: var(--m-card);
+  color: var(--m-ink);
+}
+
+/* A row of cards that scrolls sideways and settles on each one. */
+.m-app .m-rail {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  margin: 0 -16px;
+  padding: 0 16px;
+  scroll-padding: 0 16px;
+}
+.m-app .m-rail::-webkit-scrollbar {
+  display: none;
+}
+.m-app .m-rail > * {
+  scroll-snap-align: start;
+  flex: none;
+}
+
+.m-app .m-press {
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1), background-color 160ms;
+}
+.m-app .m-press:active {
+  transform: scale(0.97);
+}
+@media (prefers-reduced-motion: reduce) {
+  .m-app .m-press:active {
+    transform: none;
+  }
+}

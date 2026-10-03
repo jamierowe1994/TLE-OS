@@ -3435,6 +3435,12 @@ CREATE TABLE IF NOT EXISTS os_push_devices (
   seen_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS os_push_devices_user ON os_push_devices (user_id);
+-- The app installed from the browser (2 Oct 2026, lib/web-push): platform
+-- "web", token is the sha256 of the endpoint, and these three carry what the
+-- browser handed over. Null for an iPhone-app row.
+ALTER TABLE os_push_devices ADD COLUMN IF NOT EXISTS endpoint TEXT;
+ALTER TABLE os_push_devices ADD COLUMN IF NOT EXISTS p256dh TEXT;
+ALTER TABLE os_push_devices ADD COLUMN IF NOT EXISTS auth TEXT;
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a
