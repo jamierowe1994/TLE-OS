@@ -72,7 +72,7 @@ function Focus() {
   const C = 2 * Math.PI * R;
 
   return (
-    <section className="relative mt-3 overflow-hidden rounded-[28px] p-5 text-white shadow-[0_18px_40px_-20px_rgba(150,70,50,0.7)]" style={{ background: "linear-gradient(160deg, #f2b496 0%, #e98a76 100%)" }}>
+    <section className="relative mt-3 overflow-hidden rounded-[28px] p-5 text-white shadow-[0_18px_40px_-20px_rgba(170,70,80,0.55)]" style={{ background: "var(--m-pink-grad)" }}>
       <span className="text-[13px] font-semibold uppercase tracking-[0.12em] text-white/85">Focus Hour</span>
       <div className="mt-3 flex items-center gap-5">
         <svg viewBox="0 0 170 170" className="h-[150px] w-[150px] shrink-0" aria-hidden>

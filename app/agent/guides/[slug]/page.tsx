@@ -61,7 +61,7 @@ export default async function GuidePage({ params }: { params: Promise<{ slug: st
 
       {/* What to do */}
       <h2 className="m-guide-title mt-9 text-[34px] leading-[0.98]">
-        {g.steps.length} Things <span style={{ color: "var(--m-coral)" }}>to Do</span>
+        {g.steps.length} Things <span style={{ color: "var(--m-coral)" }}>{g.stepsAre === "know" ? "to Know" : "to Do"}</span>
       </h2>
       <ol className="mt-4 grid gap-2.5">
         {g.steps.map((s, i) => (
@@ -120,7 +120,7 @@ export default async function GuidePage({ params }: { params: Promise<{ slug: st
         <a href={g.source.url} target="_blank" rel="noreferrer" className="underline underline-offset-2">
           {g.source.name}
         </a>
-        , {day(g.published)}, by {g.source.by}. Not tax or legal advice - landlords should check with their accountant.
+        , {day(g.published)}, by {g.source.by}. Not tax or legal advice - landlords should check with {g.checkWith ?? "their accountant"}.
       </p>
     </main>
   );

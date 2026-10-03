@@ -161,7 +161,7 @@ function Play({ general, huddles }: { general: Room | null; huddles: Room[] }) {
       <Link
         href="/agent/chats/room/general"
         className="m-press relative mt-5 block overflow-hidden rounded-[26px] p-5"
-        style={{ background: "linear-gradient(160deg, #f2b496 0%, #e98a76 100%)", color: "#fff" }}
+        style={{ background: "var(--m-pink-grad)", color: "#fff" }}
       >
         <span aria-hidden className="absolute -right-8 -top-8 h-36 w-36 rounded-full" style={{ border: "1.5px solid rgba(255,255,255,0.45)" }} />
         <span aria-hidden className="absolute -right-2 top-6 h-24 w-24 rounded-full" style={{ border: "1.5px solid rgba(255,255,255,0.35)" }} />

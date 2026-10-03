@@ -323,6 +323,12 @@ function QuickSheet({ onClose }: { onClose: () => void }) {
         <ul className="grid grid-cols-2 gap-3">
           {QUICK.map((q, i) => {
             const wash = q.tone === "pink" ? "var(--m-pink-wash)" : "var(--m-green-wash)";
+            const ink = q.tone === "pink" ? "var(--m-coral)" : "var(--m-green)";
+            const ring = q.tone === "pink" ? "rgba(232, 150, 141, 0.5)" : "rgba(127, 161, 107, 0.5)";
+            /* Only the first two carry the corner colour, with a thinner ring
+               round it; the rest are white with the icon in colour (James,
+               3 Oct 2026). */
+            const lead = i < 2;
             return (
               <li key={q.href} className="q-tile" style={{ animationDelay: `${120 + i * 55}ms` }}>
                 <Link
@@ -330,8 +336,13 @@ function QuickSheet({ onClose }: { onClose: () => void }) {
                   className="m-press relative flex h-full min-h-[150px] flex-col overflow-hidden rounded-[24px] border p-4"
                   style={{ background: "var(--m-card)", borderColor: "var(--m-line)" }}
                 >
-                  <span aria-hidden className="pointer-events-none absolute -right-12 -top-12 h-24 w-24 rounded-full opacity-80" style={{ background: wash }} />
-                  <span className="relative flex h-11 w-11 items-center justify-center rounded-[14px]" style={{ background: wash }}>
+                  {lead && (
+                    <>
+                      <span aria-hidden className="pointer-events-none absolute -right-[66px] -top-[66px] h-[132px] w-[132px] rounded-full border" style={{ borderColor: ring }} />
+                      <span aria-hidden className="pointer-events-none absolute -right-12 -top-12 h-24 w-24 rounded-full opacity-80" style={{ background: wash }} />
+                    </>
+                  )}
+                  <span className="relative flex h-11 w-11 items-center justify-center rounded-[14px]" style={lead ? { background: wash, color: ink } : { border: "1px solid var(--m-line)", color: ink }}>
                     <DoodleIcon name={q.icon} size={21} />
                   </span>
                   <span className="relative mt-3 text-[16.5px] font-semibold leading-tight">{q.label}</span>

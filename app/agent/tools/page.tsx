@@ -20,7 +20,7 @@ const TILES: Tile[] = [
 ];
 
 const TONE: Record<Tile["tone"], { bg: string; ink: string; icon: string; iconInk: string; line: string }> = {
-  coral: { bg: "linear-gradient(160deg, #f2b496 0%, #e98a76 100%)", ink: "#fff", icon: "rgba(255,255,255,0.22)", iconInk: "#fff", line: "rgba(255,255,255,0.9)" },
+  coral: { bg: "var(--m-pink-grad)", ink: "#fff", icon: "rgba(255,255,255,0.22)", iconInk: "#fff", line: "rgba(255,255,255,0.9)" },
   pink: { bg: "var(--m-pink-wash)", ink: "var(--m-ink)", icon: "var(--m-card)", iconInk: "var(--m-coral)", line: "var(--m-muted)" },
   sage: { bg: "var(--m-green-wash)", ink: "var(--m-ink)", icon: "var(--m-card)", iconInk: "var(--m-sage-ink)", line: "var(--m-muted)" },
   card: { bg: "var(--m-card)", ink: "var(--m-ink)", icon: "var(--m-pink-wash)", iconInk: "var(--m-coral)", line: "var(--m-muted)" },

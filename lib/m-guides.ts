@@ -29,12 +29,75 @@ export interface Guide {
   image: string;
   numbers: Array<{ big: string; plus?: boolean; label: string }>;
   steps: Array<{ title: string; body: string; tell?: string }>;
+  /** "Things to Do" by default; a proposal is "Things to Know". */
+  stepsAre?: "do" | "know";
   dates: Array<{ when: string; what: string }>;
   forUs: string[];
   source: { name: string; url: string; by: string };
+  /** Who to check with, in the footer. Default: their accountant. */
+  checkWith?: string;
 }
 
 export const GUIDES: Guide[] = [
+  {
+    slug: "landlord-licensing",
+    topic: "Licensing",
+    title: ["Landlord Licensing", "Propertymark Wants It Gone"],
+    summary: "A call to scrap council licensing - and why nothing changes yet.",
+    intro:
+      "Propertymark, the agents' professional body, has asked the government to get rid of council licensing schemes once the new national register of rented homes is up and running. It is a request, not a new law - so for now, licensing carries on exactly as before.",
+    published: "2026-10-02",
+    minutes: 3,
+    image: "/illustrations/app/home-bungalow.webp",
+    numbers: [
+      { big: "£1K", plus: true, label: "What a licence costs per property in several areas" },
+      { big: "2 in 3", label: "Councils that haven't prosecuted a single landlord in three years" },
+      { big: "300K", label: "Complaints about property conditions every year" },
+      { big: "84%", label: "Councils struggling to hire environmental health officers" },
+    ],
+    stepsAre: "know",
+    checkWith: "their local council",
+    steps: [
+      {
+        title: "Nothing has changed yet",
+        body: "This is Propertymark asking, not the government deciding. Council licensing schemes - selective and additional - still run as normal, and the government hasn't responded.",
+        tell: "Licensing hasn't been scrapped. If your area needs a licence, you still need one.",
+      },
+      {
+        title: "A national register is coming",
+        body: "The new national database, called Register Your Rental Property, opens on 15 December 2026 and rolls out across England over the next 12 months. In the end, every landlord letting a home in England will have to be on it.",
+        tell: "From December there's a national register for rental homes. Every landlord in England will have to join over the next year.",
+      },
+      {
+        title: "Why Propertymark wants licensing gone",
+        body: "It says licensing costs good landlords and agents a lot of money and paperwork without catching the bad ones. Fees run past £1,000 a property in places, two in three councils haven't prosecuted anyone in three years, and most can't find the staff to inspect.",
+      },
+      {
+        title: "If licensing stays, it wants it fairer",
+        body: "No more than 20% of licence fees spent on admin. One 'lead' council checking agents who work across several areas, instead of every council asking for the same documents. One national standard for what a complete application looks like, and councils showing what the fees are spent on.",
+      },
+      {
+        title: "Watch for the government's answer",
+        body: "There's no response yet. Until there is, plan as though licensing is here to stay, and get ready for the national register as well.",
+        tell: "It's only a proposal so far. We'll keep you posted.",
+      },
+    ],
+    dates: [
+      { when: "2 Oct 2026", what: "Propertymark asks the government to scrap council licensing" },
+      { when: "15 Dec 2026", what: "Register Your Rental Property opens" },
+      { when: "Next 12 months", what: "Rolled out across England - in the end every landlord letting must be on it" },
+    ],
+    forUs: [
+      "Keep checking licensing on every new instruction - nothing has changed yet.",
+      "Landlords will hear 'licensing is being scrapped'. It isn't, not yet.",
+      "If the lead council idea happens, one set of checks would cover the areas we work in, instead of one per council.",
+    ],
+    source: {
+      name: "Landlord Today",
+      url: "https://www.landlordtoday.co.uk/breaking-news/2026/10/scrap-landlord-licensing-propertymark-tells-government-to-act/",
+      by: "Graham Norwood",
+    },
+  },
   {
     slug: "making-tax-digital",
     topic: "Tax",

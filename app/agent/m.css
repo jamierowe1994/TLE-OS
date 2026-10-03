@@ -40,6 +40,8 @@
   --m-coral: #de7c70;
   --m-pink: #e8968d;
   --m-pink-wash: #fbe6e1;
+  /* The app's pink as a card: Chats' General, Focus Hour (James, 3 Oct 2026 - pink, not orange). */
+  --m-pink-grad: linear-gradient(160deg, #f1aaa3 0%, #e1847c 100%);
   --m-green: #7fa16b;
   --m-green-wash: #eef0e3;
   --m-sage-ink: #56634a;
