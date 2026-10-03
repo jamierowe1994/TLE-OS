@@ -7,8 +7,8 @@ import DoodleIcon from "@/components/DoodleIcon";
 import type { Appt } from "@/lib/diary";
 import type { PhonePerson } from "@/app/api/m/people/route";
 import type { PhoneEventFacts } from "@/app/api/m/event/route";
-import { BackLink, ErrorLine, ReachButtons, Spinner, mapsHref } from "../../bits";
-import { DIARY_KEY, KIND_ART, KIND_LABEL, endOf } from "../../diary-bits";
+import { ErrorLine, ReachButtons, Spinner, mapsHref } from "../../bits";
+import { DIARY_KEY, KIND_LABEL, endOf } from "../../diary-bits";
 
 /**
  * ONE APPOINTMENT, AND THE BARE BASICS FOR IT (James, 18 Sep 2026).
@@ -62,21 +62,20 @@ export default function PhoneEvent() {
 
   return (
     <main>
-      {appt ? (
-        <Event appt={appt} />
+      <Link href="/m" className="-ml-1 mb-3 inline-flex h-10 items-center gap-1.5 pr-3 text-[14px] font-semibold text-muted">
+        <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4">
+          <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        Today&apos;s Calendar
+      </Link>
+      {error ? (
+        <ErrorLine text={error} />
+      ) : appt === undefined ? (
+        <Spinner label="Opening the appointment" className="py-8" />
+      ) : appt === null ? (
+        <p className="py-8 text-center text-[14.5px] text-muted">That appointment is no longer in your calendar.</p>
       ) : (
-        <>
-          <div className="mb-4">
-            <BackLink href="/m" />
-          </div>
-          {error ? (
-            <ErrorLine text={error} />
-          ) : appt === undefined ? (
-            <Spinner label="Opening the appointment" className="py-8" />
-          ) : (
-            <p className="py-8 text-center text-[14.5px] text-muted">That appointment is no longer in your calendar.</p>
-          )}
-        </>
+        <Event appt={appt} />
       )}
     </main>
   );
@@ -144,21 +143,20 @@ function Event({ appt }: { appt: Appt }) {
 
   return (
     <>
-      {/* The drawing on its own card with the back button over it - the
-          reference's "Meditation" screen (2 Oct 2026). */}
-      <div className="m-group relative flex h-[240px] items-center justify-center">
-        <div className="absolute left-3 top-3">
-          <BackLink href="/m" />
-        </div>
-        <img src={KIND_ART[appt.kind] ?? KIND_ART.other} alt="" className="m-ill h-[210px] w-auto" />
-      </div>
-      <h1 className="m-title mt-5 text-[28px] leading-[1.15]">{appt.where || appt.what}</h1>
-      <p className="mt-1.5 flex items-center gap-1.5 text-[14px] text-muted">
-        <DoodleIcon name="clock" size={15} />
-        {KIND_LABEL[appt.kind] ?? "Appointment"} · {appt.start} - {endOf(appt)}
+      <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-accent-dark">{KIND_LABEL[appt.kind] ?? "Appointment"}</p>
+      <h1 className="mt-1 text-[25px] leading-tight">
+        {appt.where || appt.what}
+      </h1>
+      <p className="figures mt-1 text-[16px]">
+        {appt.start} to {endOf(appt)}
       </p>
       {appt.where && (
-        <a href={mapsHref(appt.where, appt.lat, appt.lng)} target="_blank" rel="noreferrer" className="m-btn m-press mt-5">
+        <a
+          href={mapsHref(appt.where, appt.lat, appt.lng)}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-4 flex h-12 items-center justify-center gap-2 rounded-2xl border border-line/70 bg-card text-[14.5px] font-semibold active:bg-panel"
+        >
           <DoodleIcon name="target" size={17} /> Directions
         </a>
       )}
@@ -235,7 +233,11 @@ function Event({ appt }: { appt: Appt }) {
       )}
 
       {appt.kind === "viewing" && appt.who && (
-        <Link href={idHref} className="m-btn m-btn-primary m-press mt-6 !h-[52px]">
+        <Link
+          href={idHref}
+          className="mt-6 flex h-14 items-center justify-center gap-2 rounded-2xl text-[15px] font-semibold text-white"
+          style={{ background: "var(--brown)" }}
+        >
           <DoodleIcon name="camera" size={18} /> Scan Their ID
         </Link>
       )}
@@ -245,9 +247,9 @@ function Event({ appt }: { appt: Appt }) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="mt-6">
-      <p className="m-eyebrow mb-2 px-1">{title}</p>
-      <div className="m-group p-4">{children}</div>
+    <section className="mt-4 rounded-[20px] border border-line/70 bg-card p-4">
+      <h2 className="mb-2 text-[11.5px] font-semibold uppercase tracking-[0.1em] text-muted">{title}</h2>
+      {children}
     </section>
   );
 }

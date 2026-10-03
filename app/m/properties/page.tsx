@@ -47,7 +47,7 @@ export default function PhoneProperties() {
 
   return (
     <main>
-      <PhoneTop title="Properties" />
+      <PhoneTop title="Property" />
       <SearchBox value={needle} onChange={setNeedle} placeholder="Street, town or postcode" />
 
       <div className="mt-4">
@@ -64,7 +64,7 @@ export default function PhoneProperties() {
             {hits.map((p) => {
               const expanded = open === p.key;
               return (
-                <li key={p.key} className="overflow-hidden m-group">
+                <li key={p.key} className="overflow-hidden rounded-[20px] border border-line/70 bg-card">
                   <button type="button" onClick={() => setOpen(expanded ? null : p.key)} className="flex w-full items-center gap-3 p-3 text-left" aria-expanded={expanded}>
                     {p.image ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -111,7 +111,7 @@ export default function PhoneProperties() {
                         href={mapsHref(`${p.name}, ${p.locality}`, p.lat, p.lng)}
                         target="_blank"
                         rel="noreferrer"
-                        className="m-btn m-press mt-3"
+                        className="mt-3 flex h-12 items-center justify-center gap-2 rounded-xl border border-line/70 bg-card text-[14.5px] font-semibold"
                       >
                         <DoodleIcon name="target" size={17} /> Directions
                       </a>
@@ -124,7 +124,7 @@ export default function PhoneProperties() {
                           <div key={t.name} className="mt-1 flex items-center justify-between gap-3">
                             <span className="font-semibold">{t.name}</span>
                             {dialable(t.phone) && (
-                              <a href={`tel:${dialable(t.phone)}`} className="m-btn m-btn-primary m-press !h-10 px-4 !text-[13.5px]">
+                              <a href={`tel:${dialable(t.phone)}`} className="flex h-10 items-center gap-1.5 rounded-lg border border-line/70 px-3 text-[13.5px] font-semibold">
                                 <DoodleIcon name="call" size={15} /> Call
                               </a>
                             )}

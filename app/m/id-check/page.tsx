@@ -263,7 +263,7 @@ export default function PhoneIdCheck() {
             onClick={() => setFromCalendar((v) => !v)}
             aria-expanded={fromCalendar}
             className="mt-2.5 flex h-14 w-full items-center gap-3 rounded-2xl border bg-card px-4 text-left active:bg-panel"
-            style={{ borderColor: fromCalendar ? "var(--accent)" : "var(--m-line)" }}
+            style={{ borderColor: fromCalendar ? "var(--accent)" : "color-mix(in srgb, var(--line) 80%, transparent)" }}
           >
             <DoodleIcon name="calendar" size={18} className="text-muted" />
             <span className="min-w-0 flex-1 text-[16px] text-muted">Search From Calendar</span>
@@ -285,7 +285,7 @@ export default function PhoneIdCheck() {
                     .filter((a) => !query.trim() || a.who.toLowerCase().includes(query.trim().toLowerCase()))
                     .map((a, i) => (
                       <li key={`${a.id}-${i}`}>
-                        <button type="button" onClick={() => pick(a.who, a.where, a.id)} className="flex w-full items-center gap-3 rounded-2xl border border-[color:var(--m-line)] bg-card px-4 py-3 text-left active:bg-panel">
+                        <button type="button" onClick={() => pick(a.who, a.where, a.id)} className="flex w-full items-center gap-3 rounded-2xl border border-line/70 bg-card px-4 py-3 text-left active:bg-panel">
                           <span className="figures w-[46px] shrink-0 text-[15px]">{a.start}</span>
                           <span className="min-w-0 flex-1">
                             <span className="block text-[15px] font-semibold">{a.who}</span>
@@ -308,7 +308,7 @@ export default function PhoneIdCheck() {
                 <ul className="grid grid-cols-1 gap-2">
                   {found.map((p) => (
                     <li key={p.key}>
-                      <button type="button" onClick={() => pick(p.name, p.context, null)} className="flex w-full items-center gap-3 rounded-2xl border border-[color:var(--m-line)] bg-card px-4 py-3 text-left active:bg-panel">
+                      <button type="button" onClick={() => pick(p.name, p.context, null)} className="flex w-full items-center gap-3 rounded-2xl border border-line/70 bg-card px-4 py-3 text-left active:bg-panel">
                         <span className="min-w-0 flex-1">
                           <span className="block text-[15px] font-semibold">{p.name}</span>
                           <span className="block truncate text-[13px] text-muted">{[p.role, p.context].filter(Boolean).join(" · ")}</span>
@@ -377,7 +377,7 @@ export default function PhoneIdCheck() {
                 key={k}
                 type="button"
                 onClick={() => chooseDoc(k)}
-                className="flex min-h-[72px] items-center gap-4 rounded-[20px] border border-[color:var(--m-line)] bg-card px-4 py-3 text-left active:bg-panel"
+                className="flex min-h-[72px] items-center gap-4 rounded-[20px] border border-line/70 bg-card px-4 py-3 text-left active:bg-panel"
               >
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent-soft text-accent-dark">
                   <DoodleIcon name={k === "other" ? "doc" : "user"} size={20} />
@@ -406,7 +406,7 @@ export default function PhoneIdCheck() {
 
           <ul className="mt-4 grid grid-cols-1 gap-3">
             {labels.map((label, i) => (
-              <li key={`${label}-${i}`} className="rounded-[20px] border border-[color:var(--m-line)] bg-card p-3">
+              <li key={`${label}-${i}`} className="rounded-[20px] border border-line/70 bg-card p-3">
                 <div className="flex items-center justify-between gap-2 px-1">
                   <span className="text-[14.5px] font-semibold">{label}</span>
                   {d.more && labels.length > 1 && (
@@ -419,7 +419,7 @@ export default function PhoneIdCheck() {
                   <div className="mt-2">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={previews[i]!} alt={`${label} photo`} className="max-h-[220px] w-full rounded-xl bg-panel object-contain" />
-                    <button type="button" onClick={() => setCamera(i)} className="mt-2 h-11 w-full rounded-xl border border-[color:var(--m-line)] text-[14px] font-semibold">
+                    <button type="button" onClick={() => setCamera(i)} className="mt-2 h-11 w-full rounded-xl border border-line/70 text-[14px] font-semibold">
                       Retake
                     </button>
                   </div>
@@ -450,7 +450,7 @@ export default function PhoneIdCheck() {
             </button>
           )}
 
-          <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-2xl border border-[color:var(--m-line)] bg-card p-4">
+          <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-2xl border border-line/70 bg-card p-4">
             <input type="checkbox" checked={seen} onChange={(e) => setSeen(e.target.checked)} className="mt-0.5 h-6 w-6 shrink-0 accent-[var(--brown)]" />
             <span className="text-[14.5px] leading-snug">
               I have seen the original document with {name.trim() || "the person"} in front of me, and the photo looks like them.
@@ -500,7 +500,7 @@ export default function PhoneIdCheck() {
             <button type="button" onClick={reset} className={primary} style={{ background: "var(--brown)" }}>
               Check Another Person
             </button>
-            <Link href="/m" className="flex h-14 items-center justify-center rounded-2xl border border-[color:var(--m-line)] bg-card text-[15px] font-semibold">
+            <Link href="/m" className="flex h-14 items-center justify-center rounded-2xl border border-line/70 bg-card text-[15px] font-semibold">
               Back to Home
             </Link>
           </div>
