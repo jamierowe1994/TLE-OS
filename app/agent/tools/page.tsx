@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ErrorLine, Sheet, Spinner, TopBar } from "../bits";
+import { ErrorLine, Sheet, Spinner, TopBar, HomeHero } from "../bits";
 
 /**
  * TOOLS (James, 3 Oct 2026): the useful little things. For now:
@@ -29,19 +29,22 @@ export default function PhoneTools() {
   return (
     <main>
       <TopBar />
-      <section className="relative -mx-4 mt-2 h-[268px] overflow-hidden px-4">
-        <img
-          src="/illustrations/app/townhouse.webp"
-          alt=""
-          className="pointer-events-none absolute -right-16 top-0 h-[262px] w-auto max-w-none select-none"
-          style={{ maskImage: "linear-gradient(to left, #000 70%, transparent 100%)", WebkitMaskImage: "linear-gradient(to left, #000 70%, transparent 100%)" }}
-        />
-        <div className="relative w-[56%] pt-4">
-          <h1 className="m-title text-[38px] leading-[1.04]">Tools</h1>
-          <p className="mt-3 max-w-[170px] text-[14px] leading-snug text-muted">Focus, the news, and handy bits for the day.</p>
-        </div>
-      </section>
+      <HomeHero title="Tools" line="Focus, the news, and handy bits for the day." src="/illustrations/app/home-modern.webp" height={138} bottom={14} />
       <Focus />
+      <Link href="/agent/guides" className="m-press mt-4 flex items-center gap-3.5 rounded-[22px] px-4 py-4" style={{ background: "var(--m-green-wash)" }}>
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--m-card)", color: "var(--m-sage-ink)" }}>
+          <svg viewBox="0 0 24 24" aria-hidden className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4.5 5.5c2.6-.9 5-.6 7.5 1v13c-2.5-1.6-4.9-1.9-7.5-1zM19.5 5.5c-2.6-.9-5-.6-7.5 1v13c2.5-1.6 4.9-1.9 7.5-1z" />
+          </svg>
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="m-title block text-[18px]">Guides</span>
+          <span className="block text-[13.5px]" style={{ color: "var(--m-sage-ink)" }}>The latest rules, in plain English.</span>
+        </span>
+        <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4 shrink-0">
+          <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </Link>
       <News />
     </main>
   );

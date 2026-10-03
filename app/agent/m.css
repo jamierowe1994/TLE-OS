@@ -93,6 +93,19 @@
   letter-spacing: -0.02em;
 }
 
+/* Guides: big and bold like James's Fieldfolk reference (3 Oct 2026) - the
+   headlines heavier, the giant figures tighter. */
+.m-app .m-guide-title {
+  font-family: var(--font-bricolage), var(--font-manrope), system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.m-app .m-guide-num {
+  font-family: var(--font-bricolage), var(--font-manrope), system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.05em;
+}
+
 .m-app .m-figure {
   font-family: var(--font-inter), system-ui, sans-serif;
   font-weight: 500;

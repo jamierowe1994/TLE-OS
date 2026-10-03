@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import type { Application } from "@/lib/applications";
-import { ErrorLine, Sheet, Spinner, TopBar, WhatsAppIcon, dialable, mapsHref, whatsappHref } from "../bits";
+import { ErrorLine, Sheet, Spinner, TopBar, WhatsAppIcon, dialable, mapsHref, whatsappHref, HomeHero } from "../bits";
 
 /**
  * APPLICATIONS (3 Oct 2026), the app's own page - James: "build the
@@ -114,19 +114,7 @@ export default function PhoneApplications() {
     <main>
       <TopBar />
 
-      {/* Exactly Home's greeting box, as on every tab. */}
-      <section className="relative -mx-4 mt-2 h-[268px] overflow-hidden px-4">
-        <img
-          src="/illustrations/app/townhouse.webp"
-          alt=""
-          className="pointer-events-none absolute -right-16 top-0 h-[262px] w-auto max-w-none select-none"
-          style={{ maskImage: "linear-gradient(to left, #000 70%, transparent 100%)", WebkitMaskImage: "linear-gradient(to left, #000 70%, transparent 100%)" }}
-        />
-        <div className="relative w-[56%] pt-4">
-          <h1 className="m-title text-[38px] leading-[1.04]">Applications</h1>
-          <p className="mt-3 max-w-[170px] text-[14px] leading-snug text-muted">Offers on your homes, and where they stand.</p>
-        </div>
-      </section>
+      <HomeHero title="Applications" line="Offers on your homes, and where they stand." src="/illustrations/app/home-redbrick.webp" />
 
       <div className="relative z-[1] -mt-5 flex items-center gap-2.5">
         <label className="flex h-[54px] min-w-0 flex-1 items-center gap-3 rounded-full px-5 shadow-[0_10px_30px_-14px_rgba(80,50,40,0.35)]" style={{ background: "var(--m-card)" }}>

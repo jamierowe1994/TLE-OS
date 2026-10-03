@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ErrorLine, Spinner, TopBar } from "../bits";
+import { ErrorLine, HomeHero, Spinner, TopBar } from "../bits";
 import { Face, ago } from "./bits";
 
 /**
@@ -62,19 +62,9 @@ export default function PhoneChats() {
     <main>
       <TopBar />
 
-      {/* Exactly Home's greeting box, as on every tab. */}
-      <section className="relative -mx-4 mt-2 h-[268px] overflow-hidden px-4">
-        <img
-          src="/illustrations/app/street-corner.webp"
-          alt=""
-          className="pointer-events-none absolute -right-16 top-0 h-[262px] w-auto max-w-none select-none"
-          style={{ maskImage: "linear-gradient(to left, #000 70%, transparent 100%)", WebkitMaskImage: "linear-gradient(to left, #000 70%, transparent 100%)" }}
-        />
-        <div className="relative w-[56%] pt-4">
-          <h1 className="m-title text-[38px] leading-[1.04]">Chats</h1>
-          <p className="mt-3 max-w-[170px] text-[14px] leading-snug text-muted">Your landlords, your tenants and your team.</p>
-        </div>
-      </section>
+      {/* The curved crescent for Chats (James, 3 Oct 2026). */}
+
+      <HomeHero title="Chats" line="Your landlords, your tenants and your team." src="/illustrations/app/crescent.webp" height={196} right={-22} bottom={14} />
 
       <div className="relative z-[1] -mt-5 grid grid-cols-2 gap-1 rounded-full p-1 shadow-[0_10px_30px_-14px_rgba(80,50,40,0.35)]" style={{ background: "var(--m-card)" }}>
         {(["work", "play"] as const).map((h) => {

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import { feedbackLabel, type Appt } from "@/lib/diary";
-import { ErrorLine, Spinner, TopBar } from "../bits";
+import { ErrorLine, Spinner, TopBar, HomeHero } from "../bits";
 import { endOf, loadDiary, nowHm } from "../diary-bits";
 
 /**
@@ -97,19 +97,7 @@ export default function PhoneViewings() {
     <main>
       <TopBar />
 
-      {/* Exactly Home's greeting box, as on every tab. */}
-      <section className="relative -mx-4 mt-2 h-[268px] overflow-hidden px-4">
-        <img
-          src="/illustrations/app/street-row.webp"
-          alt=""
-          className="pointer-events-none absolute -right-16 top-0 h-[262px] w-auto max-w-none select-none"
-          style={{ maskImage: "linear-gradient(to left, #000 70%, transparent 100%)", WebkitMaskImage: "linear-gradient(to left, #000 70%, transparent 100%)" }}
-        />
-        <div className="relative w-[56%] pt-4">
-          <h1 className="m-title text-[38px] leading-[1.04]">Viewings</h1>
-          <p className="mt-3 max-w-[170px] text-[14px] leading-snug text-muted">Who you are showing round, and where.</p>
-        </div>
-      </section>
+      <HomeHero title="Viewings" line="Who you are showing round, and where." src="/illustrations/app/home-cottage.webp" />
 
       <label className="relative z-[1] -mt-5 flex h-[54px] items-center gap-3 rounded-full px-5 shadow-[0_10px_30px_-14px_rgba(80,50,40,0.35)]" style={{ background: "var(--m-card)" }}>
         <DoodleIcon name="search" size={18} />

@@ -249,3 +249,21 @@ export function WhatsAppIcon({ size = 18, className = "" }: { size?: number; cla
     </svg>
   );
 }
+
+/**
+ * The 268px greeting box every tab opens with (Home's), for the single homes
+ * from James's sheet (3 Oct 2026: "every header has a different type of
+ * property in it"). The home sits low and right, under the words, so it
+ * never touches the title or the line below it.
+ */
+export function HomeHero({ title, line, src, height = 150, right = -8, bottom = 18 }: { title: string; line: string; src: string; height?: number; right?: number; bottom?: number }) {
+  return (
+    <section className="relative -mx-4 mt-2 h-[268px] overflow-hidden px-4">
+      <img src={src} alt="" className="pointer-events-none absolute w-auto max-w-none select-none" style={{ height, right, bottom }} />
+      <div className="relative w-[60%] pt-4">
+        <h1 className="m-title text-[38px] leading-[1.04]">{title}</h1>
+        <p className="mt-3 max-w-[190px] text-[14px] leading-snug text-muted">{line}</p>
+      </div>
+    </section>
+  );
+}
