@@ -2,7 +2,7 @@
 
 A native shell around the phone view of the OS: one full-screen web view that opens on `/m`.
 There is no native tab bar. The navigation (the floating dark bar with four icons and the "+"
-sheet) is drawn by the web page itself, in `components/app/AppFrame.tsx`, so it looks the same
+sheet) is drawn by the web page itself, in `components/m/PhoneFrame.tsx`, so it looks the same
 in Safari and in the app. The page pads itself for the notch and the home indicator with
 `env(safe-area-inset-*)`. When nobody is signed in, the sign-in page simply shows in the same
 web view.
@@ -59,7 +59,7 @@ Debug builds only. Release builds always use `https://tle-os.co.uk`.
   Remove it afterwards with `defaults delete` in place of `defaults write` (and no address).
 
 Test a notification tap with a JSON file such as
-`{"aps":{"alert":{"title":"Test","body":"Open People"}},"href":"/app/people?who=landlord"}`:
+`{"aps":{"alert":{"title":"Test","body":"Open People"}},"href":"/m/people?who=landlord"}`:
 
 ```
 xcrun simctl push booted uk.co.thelettingexperts.os push.json

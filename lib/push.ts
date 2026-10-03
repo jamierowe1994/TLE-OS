@@ -1,8 +1,6 @@
 import "server-only";
 import { q } from "@/lib/db";
-import crypto from "node:crypto";
 import { apnsConfigured, sendPush, type ApnsEnv, type PushMessage } from "@/lib/apns";
-import { sendWebPush, webPushConfigured } from "@/lib/web-push";
 import { noticesFor, seenAt } from "@/lib/notifications";
 import { findUserById } from "@/lib/users";
 import { switchOn } from "@/lib/switches";
@@ -16,15 +14,8 @@ import { switchOn } from "@/lib/switches";
  * send. The first scan for a person only sets the marker, so installing the
  * app never replays a fortnight of history at them.
  *
- * Two roads to a phone, one list of them (os_push_devices): Apple's push
- * service for the iPhone app (lib/apns), and Web Push for the app installed
- * from the browser on an iPhone or an Android (lib/web-push).
- *
  * Behind the "phone_alerts" switch. A test to your own phone is not.
  */
-
-/** Either road is set up on this environment. */
-export const pushConfigured = () => apnsConfigured() || webPushConfigured();
 
 const SENT_KEY = "push.sent_at";
 /** More than this in one scan arrives as one line saying how many. */
@@ -42,27 +33,10 @@ export async function registerDevice(userId: string, d: { token: string; platfor
   );
 }
 
-/** The browser's subscription. Keyed by a hash of its endpoint, which is long and unguessable but not ours to print. */
-export async function registerWebSubscription(userId: string, s: { endpoint: string; p256dh: string; auth: string }): Promise<void> {
-  const token = crypto.createHash("sha256").update(s.endpoint).digest("hex");
-  await q(
-    `INSERT INTO os_push_devices (token, user_id, platform, env, endpoint, p256dh, auth)
-     VALUES ($1, $2, 'web', 'web', $3, $4, $5)
-     ON CONFLICT (token) DO UPDATE SET user_id = EXCLUDED.user_id, endpoint = EXCLUDED.endpoint,
-       p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth, seen_at = NOW()`,
-    [token, userId, s.endpoint, s.p256dh, s.auth]
-  );
-}
-
-export async function forgetWebSubscription(userId: string, endpoint: string): Promise<void> {
-  const token = crypto.createHash("sha256").update(endpoint).digest("hex");
-  await q(`DELETE FROM os_push_devices WHERE token = $1 AND user_id = $2`, [token, userId]);
-}
-
-type Device = { token: string; env: string; endpoint: string | null; p256dh: string | null; auth: string | null };
+type Device = { token: string; env: ApnsEnv };
 
 async function devicesOf(userId: string): Promise<Device[]> {
-  return q<Device>(`SELECT token, env, endpoint, p256dh, auth FROM os_push_devices WHERE user_id = $1`, [userId]);
+  return q<Device>(`SELECT token, env FROM os_push_devices WHERE user_id = $1`, [userId]);
 }
 
 /** Send to every phone a person has, forgetting the ones Apple says are gone. */
@@ -70,26 +44,13 @@ export async function pushTo(userId: string, msg: PushMessage): Promise<{ sent: 
   const devices = await devicesOf(userId);
   let sent = 0;
   const failed: string[] = [];
-  const forget = (token: string) => q(`DELETE FROM os_push_devices WHERE token = $1`, [token]);
-  if (apnsConfigured()) {
-    for (const env of ["production", "sandbox"] as const) {
-      const results = await sendPush(env, devices.filter((d) => d.env === env).map((d) => d.token), msg);
-      for (const r of results) {
-        if (r.ok) sent++;
-        else {
-          failed.push(`${r.status} ${r.reason}`);
-          if (r.dead) await forget(r.token);
-        }
-      }
-    }
-  }
-  if (webPushConfigured()) {
-    for (const d of devices.filter((x) => x.env === "web" && x.endpoint && x.p256dh && x.auth)) {
-      const r = await sendWebPush({ endpoint: d.endpoint!, p256dh: d.p256dh!, auth: d.auth! }, msg);
+  for (const env of ["production", "sandbox"] as const) {
+    const results = await sendPush(env, devices.filter((d) => d.env === env).map((d) => d.token), msg);
+    for (const r of results) {
       if (r.ok) sent++;
       else {
         failed.push(`${r.status} ${r.reason}`);
-        if (r.dead) await forget(d.token);
+        if (r.dead) await q(`DELETE FROM os_push_devices WHERE token = $1`, [r.token]);
       }
     }
   }
@@ -121,7 +82,7 @@ export interface ScanReport {
 
 export async function scanAndPush(): Promise<ScanReport> {
   const report: ScanReport = { ok: true, armed: false, people: 0, sent: 0, started: 0, errors: [] };
-  if (!pushConfigured()) return { ...report, ok: false, errors: ["Neither APNs nor Web Push is set up on this environment."] };
+  if (!apnsConfigured()) return { ...report, ok: false, errors: ["APNs is not set up on this environment."] };
   report.armed = await switchOn("phone_alerts");
   if (!report.armed) return report;
 
@@ -149,7 +110,7 @@ export async function scanAndPush(): Promise<ScanReport> {
         report.errors.push(...r.failed);
       }
       if (!each.length) {
-        const r = await pushTo(user_id, { title: `${fresh.length} New Updates`, body: fresh[0]!.title, href: "/app", badge });
+        const r = await pushTo(user_id, { title: `${fresh.length} New Updates`, body: fresh[0]!.title, href: "/m", badge });
         report.sent += r.sent;
         report.errors.push(...r.failed);
       }

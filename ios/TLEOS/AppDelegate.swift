@@ -133,7 +133,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         }
     }
 
-    /// Only paths on the OS itself, such as `/app/event/abc` or `/leads?open=123`.
+    /// Only paths on the OS itself, such as `/m/event/abc` or `/leads?open=123`.
     private func open(_ href: String?) {
         guard let href, href.hasPrefix("/"), !href.hasPrefix("//"),
               let url = URL(string: href, relativeTo: Config.baseURL)?.absoluteURL,

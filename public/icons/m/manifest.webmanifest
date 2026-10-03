@@ -1,9 +1,9 @@
 {
-  "id": "/app",
+  "id": "/m",
   "name": "TLE OS",
   "short_name": "TLE OS",
   "description": "Your day, your people and your properties, in your pocket.",
-  "start_url": "/app",
+  "start_url": "/m?pwa=1",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

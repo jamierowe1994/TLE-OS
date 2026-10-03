@@ -42,7 +42,7 @@ enum Config {
 
     /// The phone view, which only a signed-in agent can reach.
     static func isPhonePath(_ path: String) -> Bool {
-        path == "/app" || path.hasPrefix("/app/")
+        path == "/m" || path.hasPrefix("/m/")
     }
 
     static let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
