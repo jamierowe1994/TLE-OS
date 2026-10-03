@@ -57,6 +57,21 @@ export async function GET(req: NextRequest) {
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!hasDb()) return NextResponse.json({ ok: true, checks: [] });
+
+  /* ?lead=<id>: the checks kept against one tenant lead, whoever made them -
+     so the lead can say its ID is done. Who, what and when; never the file. */
+  const lead = req.nextUrl.searchParams.get("lead");
+  if (lead) {
+    const rows = await q<{ id: string; person_name: string; doc_type: string; checked_by_name: string; checked_at: Date; likeness: boolean }>(
+      `SELECT id, person_name, doc_type, checked_by_name, checked_at, likeness FROM os_id_checks WHERE lead_id = $1 ORDER BY checked_at DESC LIMIT 10`,
+      [lead]
+    ).catch(() => null);
+    if (!rows) return NextResponse.json({ ok: false, error: "Could not read the checks." }, { status: 500 });
+    return NextResponse.json({
+      ok: true,
+      checks: rows.map((r) => ({ id: r.id, name: r.person_name, docType: DOC_TYPES[r.doc_type as DocType] ?? r.doc_type, by: r.checked_by_name, likeness: r.likeness, at: new Date(r.checked_at).toISOString() })),
+    });
+  }
   const rows = await q<{ id: string; person_name: string; property: string; doc_type: string; pages: number; checked_at: Date }>(
     `SELECT id, person_name, property, doc_type, pages, checked_at
        FROM os_id_checks
@@ -93,6 +108,8 @@ export async function POST(req: NextRequest) {
   const name = String(form.get("name") ?? "").trim().slice(0, 120);
   const property = String(form.get("property") ?? "").trim().slice(0, 200);
   const apptId = String(form.get("appt") ?? "").trim().slice(0, 80) || null;
+  const leadId = String(form.get("lead") ?? "").trim().slice(0, 80) || null;
+  const likeness = form.get("likeness") === "yes";
   const docType = String(form.get("docType") ?? "");
   const seen = form.get("seenInPerson") === "yes";
   const files = form.getAll("pages").filter((f): f is File => f instanceof File && f.size > 0);
@@ -104,6 +121,9 @@ export async function POST(req: NextRequest) {
       { ok: false, error: "Tick that you saw the original with the person there. Without it this is not a Right to Rent check." },
       { status: 400 }
     );
+  }
+  if (!likeness) {
+    return NextResponse.json({ ok: false, error: "Tick that the photo on the document is the person in front of you." }, { status: 400 });
   }
   if (files.length === 0) return NextResponse.json({ ok: false, error: "Take a photo of the document first." }, { status: 400 });
   if (files.length > MAX_PAGES) return NextResponse.json({ ok: false, error: `Up to ${MAX_PAGES} photos at a time.` }, { status: 400 });
@@ -163,9 +183,9 @@ export async function POST(req: NextRequest) {
 
   try {
     await q(
-      `INSERT INTO os_id_checks (id, person_name, property, appt_id, doc_type, pages, file_key, file_type, seen_in_person, checked_by, checked_by_name)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, $9, $10)`,
-      [id, name, property, apptId, docType, files.length, key, file.type, actor.id, actor.name ?? ""]
+      `INSERT INTO os_id_checks (id, person_name, property, appt_id, doc_type, pages, file_key, file_type, seen_in_person, checked_by, checked_by_name, lead_id, likeness)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, $9, $10, $11, TRUE)`,
+      [id, name, property, apptId, docType, files.length, key, file.type, actor.id, actor.name ?? "", leadId]
     );
   } catch (e) {
     console.error("Right to Rent record failed", (e as Error).message);

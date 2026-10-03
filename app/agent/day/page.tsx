@@ -219,7 +219,7 @@ function Timeline({ list, offset, max }: { list: Appt[]; offset: number; max?: n
   if (!list.length) {
     return (
       <div className="mt-4 flex flex-col items-center rounded-[22px] px-6 py-7 text-center" style={{ background: "var(--m-card)" }}>
-        <img src="/illustrations/notioly/looking-out-the-window.svg" alt="" className="m-ill h-[110px] w-auto" />
+        <img src="/illustrations/app/empty-armchair.webp" alt="" className="h-[120px] w-auto" />
         <p className="mt-2 text-[16px] font-medium">Nothing Booked</p>
         <p className="mt-1 text-[14px] text-muted">{offset === 0 ? "Nothing in your diary today." : "Nothing in your diary on this day."}</p>
       </div>

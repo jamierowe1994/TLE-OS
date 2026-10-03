@@ -165,7 +165,7 @@ export default function PhoneApplications() {
         <Spinner label="Loading your applications" className="py-6" />
       ) : shown.length === 0 ? (
         <div className="flex flex-col items-center rounded-[22px] px-6 py-8 text-center" style={{ background: "var(--m-card)" }}>
-          <img src="/illustrations/notioly/checklist.svg" alt="" className="m-ill h-[110px] w-auto" />
+          <img src="/illustrations/app/empty-armchair.webp" alt="" className="h-[120px] w-auto" />
           <p className="mt-2 text-[16px] font-medium">Nothing Here</p>
           <p className="mt-1 text-[14px] text-muted">{needle.trim() ? `No application matches "${needle.trim()}".` : "No applications in this group."}</p>
         </div>

@@ -1909,6 +1909,12 @@ CREATE TABLE IF NOT EXISTS os_id_checks (
   checked_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS os_id_checks_by ON os_id_checks (checked_by, checked_at DESC);
+-- A check made from a tenant lead is kept against it (3 Oct 2026), and
+-- likeness - the photo on the document is the person there - is its own
+-- tick, recorded, not folded into "seen in person".
+ALTER TABLE os_id_checks ADD COLUMN IF NOT EXISTS lead_id TEXT;
+ALTER TABLE os_id_checks ADD COLUMN IF NOT EXISTS likeness BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE INDEX IF NOT EXISTS os_id_checks_lead ON os_id_checks (lead_id) WHERE lead_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS os_cache (
   key            TEXT PRIMARY KEY,

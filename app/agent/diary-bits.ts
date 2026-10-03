@@ -12,14 +12,14 @@ export const KIND_LABEL: Record<string, string> = {
   other: "Appointment",
 };
 
-/* A drawing for each kind of appointment, from the Notioly set (2 Oct 2026). */
 export const KIND_ART: Record<string, string> = {
-  viewing: "/illustrations/people/real-estate-agent.svg",
-  appraisal: "/illustrations/people/taking-notes.svg",
-  takeon: "/illustrations/people/agreement-deal.svg",
-  movein: "/illustrations/people/moving-day.svg",
-  inspection: "/illustrations/notioly/checklist.svg",
-  other: "/illustrations/notioly/checking-the-calendar.svg",
+  /* Watercolour homes, not line drawings (James, 3 Oct 2026). */
+  viewing: "/illustrations/app/home-terrace.webp",
+  appraisal: "/illustrations/app/home-redbrick.webp",
+  takeon: "/illustrations/app/home-modern.webp",
+  movein: "/illustrations/app/diary-cottage.webp",
+  inspection: "/illustrations/app/home-flats.webp",
+  other: "/illustrations/app/home-bungalow.webp",
 };
 
 export const DIARY_KEY = "m-diary";

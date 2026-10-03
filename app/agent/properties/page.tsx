@@ -218,7 +218,7 @@ export default function PhoneProperties() {
         <Spinner label="Loading your properties" className="py-8" />
       ) : shown.length === 0 ? (
         <div className="flex flex-col items-center rounded-[22px] px-6 py-8 text-center" style={{ background: "var(--m-card)" }}>
-          <img src="/illustrations/notioly/place-search.svg" alt="" className="m-ill h-[120px] w-auto" />
+          <img src="/illustrations/app/empty-armchair.webp" alt="" className="h-[120px] w-auto" />
           <p className="mt-2 text-[16px] font-medium">Nothing Here</p>
           <p className="mt-1 text-[14px] text-muted">
             {needle.trim() ? `No property matches "${needle.trim()}".` : countOf(chip) === 0 ? "None of your properties are in this group." : "Nothing matches."}

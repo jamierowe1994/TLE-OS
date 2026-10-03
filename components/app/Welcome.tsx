@@ -26,7 +26,7 @@ export default function Welcome({ onChoose }: { onChoose: (t: MTheme) => void })
       {step === 0 ? (
         <>
           <div className="flex flex-1 flex-col items-center justify-center text-center">
-            <img src="/illustrations/people/real-estate-agent.svg" alt="" className="m-ill mb-8 h-[200px] w-auto" />
+            <img src="/illustrations/app/street-corner.webp" alt="" className="mb-8 h-[200px] w-auto" />
             <p className="text-[15px] font-medium">Welcome</p>
             <h1 className="m-title mt-3 text-[30px] leading-[1.15]">Your day, your people and your properties, in your pocket</h1>
           </div>

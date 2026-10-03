@@ -108,7 +108,7 @@ function Work({ threads }: { threads: Thread[] }) {
   if (!threads.length) {
     return (
       <div className="mt-4 flex flex-col items-center rounded-[22px] px-6 py-8 text-center" style={{ background: "var(--m-card)" }}>
-        <img src="/illustrations/notioly/inbox.svg" alt="" className="m-ill h-[110px] w-auto" />
+        <img src="/illustrations/app/empty-armchair.webp" alt="" className="h-[120px] w-auto" />
         <p className="mt-2 text-[16px] font-medium">No Messages Yet</p>
         <p className="mt-1 text-[14px] text-muted">When a landlord or tenant writes through their portal, it lands here.</p>
       </div>

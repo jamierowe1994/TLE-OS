@@ -61,6 +61,9 @@ export default function PhoneIdCheck() {
   const [name, setName] = useState("");
   const [property, setProperty] = useState("");
   const [appt, setAppt] = useState<string | null>(null);
+  /* A tenant lead the check is for (3 Oct 2026): kept against it. */
+  const [lead, setLead] = useState<string | null>(null);
+  const [likeness, setLikeness] = useState(false);
   const [doc, setDoc] = useState<DocType | null>(null);
   const [labels, setLabels] = useState<string[]>([]);
   const [shots, setShots] = useState<(File | null)[]>([]);
@@ -86,6 +89,7 @@ export default function PhoneIdCheck() {
     setName(n);
     setProperty(sp.get("property") ?? "");
     setAppt(sp.get("appt"));
+    setLead(sp.get("lead"));
     if (n.trim().length >= 2) setStep("doc");
   }, []);
 
@@ -161,6 +165,7 @@ export default function PhoneIdCheck() {
     setShots(DOCS[d].shots.map(() => null));
     setPreviews(DOCS[d].shots.map(() => null));
     setSeen(false);
+    setLikeness(false);
     setError(null);
     setStep("photos");
     /* Straight into the camera (James, 18 Sep 2026: from the viewing it should
@@ -192,7 +197,7 @@ export default function PhoneIdCheck() {
     setPreviews((p) => p.filter((_, n) => n !== i));
   };
 
-  const ready = doc !== null && shots.length > 0 && shots.every(Boolean) && seen && !sending;
+  const ready = doc !== null && shots.length > 0 && shots.every(Boolean) && seen && likeness && !sending;
 
   const send = async () => {
     if (!doc || !ready) return;
@@ -205,6 +210,8 @@ export default function PhoneIdCheck() {
       if (appt) form.set("appt", appt);
       form.set("docType", doc);
       form.set("seenInPerson", seen ? "yes" : "no");
+      form.set("likeness", likeness ? "yes" : "no");
+      if (lead) form.set("lead", lead);
       shots.forEach((f) => f && form.append("pages", f));
       const r = await fetch("/api/m/id-check", { method: "POST", body: form });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
@@ -228,6 +235,7 @@ export default function PhoneIdCheck() {
     setShots([]);
     setPreviews([]);
     setSeen(false);
+    setLikeness(false);
     setError(null);
     setStep("who");
     setQuery("");
@@ -453,7 +461,14 @@ export default function PhoneIdCheck() {
           <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-2xl border border-[color:var(--m-line)] bg-card p-4">
             <input type="checkbox" checked={seen} onChange={(e) => setSeen(e.target.checked)} className="mt-0.5 h-6 w-6 shrink-0 accent-[var(--brown)]" />
             <span className="text-[14.5px] leading-snug">
-              I have seen the original document with {name.trim() || "the person"} in front of me, and the photo looks like them.
+              I have seen the original document with {name.trim() || "the person"} in front of me.
+            </span>
+          </label>
+          <label className="mt-2.5 flex cursor-pointer items-start gap-3 rounded-2xl border border-[color:var(--m-line)] bg-card p-4">
+            <input type="checkbox" checked={likeness} onChange={(e) => setLikeness(e.target.checked)} className="mt-0.5 h-6 w-6 shrink-0 accent-[var(--brown)]" />
+            <span className="text-[14.5px] leading-snug">
+              <span className="block font-semibold">Likeness</span>
+              The photo on the document is {name.trim() || "the person"} - same face, a fair likeness for their age.
             </span>
           </label>
 
@@ -500,8 +515,8 @@ export default function PhoneIdCheck() {
             <button type="button" onClick={reset} className={primary} style={{ background: "var(--brown)" }}>
               Check Another Person
             </button>
-            <Link href="/agent" className="flex h-14 items-center justify-center rounded-2xl border border-[color:var(--m-line)] bg-card text-[15px] font-semibold">
-              Back to Home
+            <Link href={lead ? `/agent/leads?lead=${encodeURIComponent(lead)}` : "/agent"} className="flex h-14 items-center justify-center rounded-2xl border border-[color:var(--m-line)] bg-card text-[15px] font-semibold">
+              {lead ? "Back to the Lead" : "Back to Home"}
             </Link>
           </div>
         </div>

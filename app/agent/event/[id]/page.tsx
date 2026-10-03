@@ -151,7 +151,7 @@ function Event({ appt, back }: { appt: Appt; back: string }) {
         <div className="absolute left-3 top-3">
           <BackLink href={back} />
         </div>
-        <img src={KIND_ART[appt.kind] ?? KIND_ART.other} alt="" className="m-ill h-[210px] w-auto" />
+        <img src={KIND_ART[appt.kind] ?? KIND_ART.other} alt="" className="h-[190px] w-auto max-w-[92%] object-contain" />
       </div>
       <h1 className="m-title mt-5 text-[28px] leading-[1.15]">{appt.where || appt.what}</h1>
       <p className="mt-1.5 flex items-center gap-1.5 text-[14px] text-muted">

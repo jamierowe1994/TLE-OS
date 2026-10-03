@@ -141,7 +141,7 @@ export default function PhoneViewings() {
         <Spinner label="Loading your viewings" className="py-6" />
       ) : count === 0 ? (
         <div className="mt-2 flex flex-col items-center rounded-[22px] px-6 py-8 text-center" style={{ background: "var(--m-card)" }}>
-          <img src="/illustrations/notioly/checking-the-calendar.svg" alt="" className="m-ill h-[110px] w-auto" />
+          <img src="/illustrations/app/empty-armchair.webp" alt="" className="h-[120px] w-auto" />
           <p className="mt-2 text-[16px] font-medium">Nothing Here</p>
           <p className="mt-1 text-[14px] text-muted">{needle.trim() ? `No viewing matches "${needle.trim()}".` : tab === "today" ? "No viewings booked today." : "No viewings in this group."}</p>
         </div>

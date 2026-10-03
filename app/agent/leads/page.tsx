@@ -88,6 +88,17 @@ export default function PhoneLeads() {
     if (t === "new" || t === "chasing" || t === "all") setTab(t);
   }, []);
 
+  /* ?lead=<id>: straight back into one lead - Scan ID's "Back to the Lead". */
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("lead");
+    if (!id || !leads) return;
+    const hit = leads.find((l) => String(l.id) === id);
+    if (hit) {
+      setTab("all");
+      setOpen(hit);
+    }
+  }, [leads]);
+
   const today = londonDay(new Date());
   const inTab = (l: Lead, t: Tab) => {
     if (t === "today") return Boolean(l.receivedAt) && londonDay(new Date(l.receivedAt!)) === today;
@@ -182,7 +193,7 @@ export default function PhoneLeads() {
         <Spinner label="Loading your leads" className="py-6" />
       ) : shown.length === 0 ? (
         <div className="flex flex-col items-center rounded-[22px] px-6 py-8 text-center" style={{ background: "var(--m-card)" }}>
-          <img src="/illustrations/notioly/inbox.svg" alt="" className="m-ill h-[110px] w-auto" />
+          <img src="/illustrations/app/empty-armchair.webp" alt="" className="h-[120px] w-auto" />
           <p className="mt-2 text-[16px] font-medium">{tab === "today" && !needle.trim() ? "No New Leads Today Yet" : "Nothing Here"}</p>
           <p className="mt-1 text-[14px] text-muted">{needle.trim() ? `No lead matches "${needle.trim()}".` : "They'll appear here as they come in."}</p>
         </div>
@@ -300,6 +311,8 @@ function Detail({ l, onClose }: { l: Lead; onClose: () => void }) {
         })}
       </div>
 
+      {isTenant(l) && <IdCheck l={l} />}
+
       {l.enquiryMessage && (
         <>
           <p className="m-eyebrow mb-2 mt-5 px-1">Their Message</p>
@@ -321,5 +334,52 @@ function Detail({ l, onClose }: { l: Lead; onClose: () => void }) {
         </ul>
       )}
     </Sheet>
+  );
+}
+
+/** A lead looking for a home - not a landlord or a valuation. */
+const isTenant = (l: Lead) => !/landlord|valuation|vendor|sale/i.test(l.enquiry ?? "");
+
+type IdDone = { id: string; name: string; docType: string; by: string; likeness: boolean; at: string };
+
+/**
+ * SCAN THEIR ID on a tenant lead (James, 3 Oct 2026): Right to Rent from the
+ * lead itself - the document, seen in person, and its likeness to them - kept
+ * against the lead, so the lead says when it is done and by whom.
+ */
+function IdCheck({ l }: { l: Lead }) {
+  const [done, setDone] = useState<IdDone[] | null>(null);
+  useEffect(() => {
+    fetch(`/api/m/id-check?lead=${encodeURIComponent(String(l.id))}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; checks?: IdDone[] }) => setDone(j.ok ? j.checks ?? [] : []))
+      .catch(() => setDone([]));
+  }, [l.id]);
+  const href = `/agent/id-check?${new URLSearchParams({ name: l.name ?? "", property: l.address || l.area || "", lead: String(l.id) }).toString()}`;
+  const last = done?.[0];
+  return last ? (
+    <div className="mt-3 flex items-center gap-3 rounded-[20px] px-4 py-3" style={{ background: "var(--m-green-wash)" }}>
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--m-card)", color: "var(--m-sage-ink)" }}>
+        <svg viewBox="0 0 24 24" aria-hidden className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 12.5l4.5 4.5L19 7.5" />
+        </svg>
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] font-semibold" style={{ color: "var(--m-sage-ink)" }}>
+          ID Checked
+        </span>
+        <span className="block truncate text-[13px] text-muted">
+          {last.docType} · {new Date(last.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} · {last.by.split(" ")[0]}
+          {last.likeness ? " · likeness confirmed" : ""}
+        </span>
+      </span>
+      <a href={href} className="shrink-0 text-[13.5px] font-semibold" style={{ color: "var(--m-coral)" }}>
+        Scan Again
+      </a>
+    </div>
+  ) : (
+    <a href={href} className="m-btn m-btn-primary m-press mt-3 w-full">
+      <DoodleIcon name="camera" size={18} /> Scan Their ID
+    </a>
   );
 }
