@@ -36,12 +36,14 @@ const TABS: Array<{ href: string; label: string; match: (p: string) => boolean; 
 /* The full OS's pages an agent reaches for away from a desk. Each opens the
    full OS screen; the app's swipe back returns to the phone. */
 const PAGES: Array<{ href: string; label: string; icon: string }> = [
+  /* Steve where The Full OS was (James, 3 Oct 2026): his whole conversation,
+     full screen (app/agent/steve). */
+  { href: "/agent/steve", label: "Steve", icon: "message-2" },
   { href: "/leads", label: "Leads", icon: "target" },
   { href: "/listings", label: "Listings", icon: "home" },
   { href: "/viewings", label: "Viewings", icon: "key" },
   { href: "/applications", label: "Applications", icon: "file-contract" },
   { href: "/market-appraisals", label: "Market Appraisals", icon: "checklist" },
-  { href: "/dashboard?full=1", label: "The Full OS", icon: "dashboard" },
 ];
 
 type Frame = { more: () => void; quick: () => void; bell: () => void; unread: number };
@@ -113,7 +115,16 @@ export default function AppFrame({ inApp, theme, children }: { inApp: boolean; t
               className="m-press flex h-[50px] w-[50px] items-center justify-center rounded-full text-white shadow-[0_8px_18px_-8px_rgba(222,124,112,0.9)]"
               style={{ background: "var(--m-coral)" }}
             >
-              <svg viewBox="0 0 24 24" aria-hidden className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden
+                className="h-6 w-6"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                style={{ transform: sheet === "quick" ? "rotate(135deg)" : "none", transition: "transform 480ms cubic-bezier(0.34, 1.56, 0.64, 1)" }}
+              >
                 <path d="M12 5v14M5 12h14" />
               </svg>
             </button>
@@ -200,39 +211,116 @@ function SheetShell({ title, label, onClose, children }: { title: string; label:
   );
 }
 
-/* What the coral "+" offers: the phone's own jobs, as the mockup's quick
-   action tiles. Adding leads, properties and applications stays on the full
-   OS for now - the phone writes only the Right to Rent check. */
-const QUICK: Array<{ href: string; label: string; icon: string; tone: "pink" | "sage" }> = [
-  { href: "/agent/id-check", label: "Scan an ID", icon: "camera", tone: "pink" },
-  { href: "/agent/day", label: "Your Day", icon: "calendar", tone: "sage" },
-  { href: "/agent/people?who=tenant", label: "Find a Tenant", icon: "user", tone: "sage" },
-  { href: "/agent/people?who=landlord", label: "Find a Landlord", icon: "key", tone: "pink" },
-  { href: "/agent/properties", label: "Find a Property", icon: "home", tone: "pink" },
-  { href: "/agent/search", label: "Search Everything", icon: "search", tone: "sage" },
+/* What the coral "+" offers: the phone's own jobs, as quick action tiles -
+   white cards with a soft wash in the corner, an icon in a tinted square, a
+   line saying what each does (James's reference, 3 Oct 2026). Adding leads,
+   properties and applications stays on the full OS for now - the phone
+   writes only the Right to Rent check. */
+const QUICK: Array<{ href: string; label: string; line: string; icon: string; tone: "pink" | "sage" }> = [
+  { href: "/agent/id-check", label: "Scan an ID", line: "Capture and check an ID.", icon: "camera", tone: "pink" },
+  { href: "/agent/day", label: "Your Day", line: "Today's appointments.", icon: "calendar", tone: "sage" },
+  { href: "/agent/people?who=tenant", label: "Find a Tenant", line: "Applicants and tenants.", icon: "user", tone: "sage" },
+  { href: "/agent/people?who=landlord", label: "Find a Landlord", line: "Owners of our homes.", icon: "key", tone: "pink" },
+  { href: "/agent/properties", label: "Find a Property", line: "Every home on your book.", icon: "home", tone: "pink" },
+  { href: "/agent/search", label: "Search Everything", line: "People and properties.", icon: "search", tone: "sage" },
 ];
 
+/**
+ * The quick actions sheet - the button agents press most, so it has life
+ * (James, 3 Oct 2026: "beautifully animate up ... a little bit of
+ * bounciness"). The sheet rises on a spring that overshoots and settles, the
+ * tiles pop in one after another behind it, and it drops away when closed
+ * rather than vanishing. Transform and opacity only, so it stays smooth on
+ * an old phone; reduced motion gets a plain fade.
+ */
 function QuickSheet({ onClose }: { onClose: () => void }) {
+  const [leaving, setLeaving] = useState(false);
+  const leave = useCallback(() => {
+    setLeaving(true);
+    window.setTimeout(onClose, 220);
+  }, [onClose]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && leave();
+    window.addEventListener("keydown", onKey);
+    const was = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = was;
+    };
+  }, [leave]);
+
   return (
-    <SheetShell title="Quick Actions" label="Quick actions" onClose={onClose}>
-      <ul className="grid grid-cols-2 gap-3">
-        {QUICK.map((q) => (
-          <li key={q.href}>
-            <Link
-              href={q.href}
-              className="m-press flex h-[118px] flex-col justify-between rounded-[22px] p-4"
-              style={{ background: q.tone === "pink" ? "var(--m-pink-wash)" : "var(--m-green-wash)" }}
-            >
-              <DoodleIcon name={q.icon} size={24} />
-              <span className="flex items-center justify-between text-[15px] font-medium">
-                {q.label}
-                <Chevron />
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </SheetShell>
+    <div
+      className={`q-dim fixed inset-0 z-[80] flex items-end justify-center ${leaving ? "q-out" : ""}`}
+      onClick={leave}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Quick actions"
+    >
+      <style>{`
+        .q-dim { background: rgba(40, 28, 25, 0.4); animation: q-dim-in 260ms ease-out both; }
+        .q-sheet { animation: q-rise 560ms cubic-bezier(0.32, 1.42, 0.52, 1) both; }
+        .q-tile { animation: q-pop 520ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+        .q-bar { animation: q-grow 600ms cubic-bezier(0.34, 1.56, 0.64, 1) 260ms both; transform-origin: left; }
+        .q-out { animation: q-dim-out 220ms ease-in both; }
+        .q-out .q-sheet { animation: q-fall 220ms cubic-bezier(0.4, 0, 1, 1) both; }
+        @keyframes q-dim-in { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes q-dim-out { from { opacity: 1 } to { opacity: 0 } }
+        @keyframes q-rise { from { transform: translateY(100%) } to { transform: translateY(0) } }
+        @keyframes q-fall { from { transform: translateY(0) } to { transform: translateY(105%) } }
+        @keyframes q-pop { from { opacity: 0; transform: translateY(22px) scale(0.92) } to { opacity: 1; transform: none } }
+        @keyframes q-grow { from { transform: scaleX(0) } to { transform: scaleX(1) } }
+        @media (prefers-reduced-motion: reduce) {
+          .q-sheet, .q-tile, .q-bar, .q-out .q-sheet { animation: q-dim-in 200ms ease-out both !important; transform: none !important; }
+        }
+      `}</style>
+      <div
+        className="q-sheet max-h-[90dvh] w-full max-w-[560px] overflow-y-auto rounded-t-[30px] px-4 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-3"
+        style={{ background: "var(--m-bg)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span aria-hidden className="mx-auto mb-4 block h-[5px] w-[40px] rounded-full" style={{ background: "var(--m-line)" }} />
+        <div className="mb-5 flex items-start justify-between px-1">
+          <div>
+            <h2 className="m-title text-[28px] leading-none">Quick Actions</h2>
+            <span aria-hidden className="q-bar mt-2.5 block h-[3px] w-10 rounded-full" style={{ background: "var(--m-coral)" }} />
+          </div>
+          <button type="button" onClick={leave} aria-label="Close" className="m-round m-press">
+            <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+        <ul className="grid grid-cols-2 gap-3">
+          {QUICK.map((q, i) => {
+            const wash = q.tone === "pink" ? "var(--m-pink-wash)" : "var(--m-green-wash)";
+            return (
+              <li key={q.href} className="q-tile" style={{ animationDelay: `${120 + i * 55}ms` }}>
+                <Link
+                  href={q.href}
+                  className="m-press relative flex h-full min-h-[150px] flex-col overflow-hidden rounded-[24px] border p-4"
+                  style={{ background: "var(--m-card)", borderColor: "var(--m-line)" }}
+                >
+                  <span aria-hidden className="pointer-events-none absolute -right-12 -top-12 h-24 w-24 rounded-full opacity-80" style={{ background: wash }} />
+                  <span className="relative flex h-11 w-11 items-center justify-center rounded-[14px]" style={{ background: wash }}>
+                    <DoodleIcon name={q.icon} size={21} />
+                  </span>
+                  <span className="relative mt-3 text-[16.5px] font-semibold leading-tight">{q.label}</span>
+                  <span className="relative mt-1 flex flex-1 items-end justify-between gap-2">
+                    <span className="text-[12.5px] leading-snug text-muted">{q.line}</span>
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border" style={{ borderColor: "var(--m-line)", background: "var(--m-bg)" }}>
+                      <Chevron />
+                    </span>
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
   );
 }
 
