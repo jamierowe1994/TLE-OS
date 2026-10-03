@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { PinMap, type Pin } from "./map";
+import { Sheet } from "../bits";
 
 /**
  * THE MATCH FLOW (3 Oct 2026). James: "it should feel like, when they click on
@@ -88,8 +89,14 @@ export default function MatchFlow({
   const [similarOnly, setSimilarOnly] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [focus, setFocus] = useState<string | null>(null);
+  const [custom, setCustom] = useState(false);
+  const top = useRef<HTMLDivElement | null>(null);
+  const [padTop, setPadTop] = useState(150);
+  useLayoutEffect(() => {
+    const el = top.current;
+    if (el) setPadTop(Math.round(el.getBoundingClientRect().bottom) + 22);
+  }, [step]);
   const [sentSaid, setSentSaid] = useState("");
-  const rail = useRef<HTMLDivElement | null>(null);
 
   /* The whole screen is the flow: the page under it stays still. */
   useEffect(() => {
@@ -124,11 +131,9 @@ export default function MatchFlow({
       return n;
     });
 
-  /* A pin tapped on the map brings its card into view. */
-  const showCard = (id: string) => {
-    setFocus(id);
-    rail.current?.querySelector(`[data-card="${CSS.escape(id)}"]`)?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
-  };
+  /* A pin tapped on the map pops its card up; tapping the map lets it go. */
+  const showCard = (id: string) => setFocus((f) => (f === id ? null : id));
+  const focused = focus ? inRange.find((i) => i.id === focus) ?? null : null;
 
   const chosen = (items ?? []).filter((i) => picked.has(i.id));
 
@@ -163,7 +168,9 @@ export default function MatchFlow({
           pins={pins}
           miles={miles}
           onPin={(id) => (step === "map" ? showCard(id) : toggle(id))}
-          padBottom={190}
+          onBlank={() => setFocus(null)}
+          padTop={padTop}
+          padBottom={130}
         />
       )}
       {step !== "intro" && subject && (subject.lat == null || subject.lng == null) && (
@@ -173,7 +180,7 @@ export default function MatchFlow({
       {step !== "intro" && step !== "sent" && (
         <>
           {/* Top: where, and the way out. */}
-          <div className="absolute inset-x-0 top-0 z-10 px-4 pt-[calc(env(safe-area-inset-top)+12px)]">
+          <div ref={top} className="absolute inset-x-0 top-0 z-10 px-4 pt-[calc(env(safe-area-inset-top)+12px)]">
             <div className="flex items-center gap-2.5">
               <div className="flex h-[52px] min-w-0 flex-1 items-center gap-2.5 rounded-full px-4 shadow-[0_10px_30px_-14px_rgba(80,50,40,0.45)]" style={{ background: "var(--m-card)" }}>
                 <svg viewBox="0 0 24 24" aria-hidden className="h-5 w-5 shrink-0" style={{ color: CORAL }} fill="currentColor">
@@ -187,48 +194,64 @@ export default function MatchFlow({
                 </svg>
               </button>
             </div>
-            <div className="m-rail mt-2.5 !gap-2 pb-1">
+            {/* Clear of the box above (James, 3 Oct 2026); Similar Rent went into the +. */}
+            <div className="m-rail mt-4 !gap-2 pb-1">
               {MILES.map((m) => (
                 <Chip key={m} on={miles === m} onClick={() => setMiles(m)}>
-                  {m} {m === 1 ? "mile" : "miles"}
+                  {m} {m === 1 ? "mile" : "mi"}
                 </Chip>
               ))}
-              {(items ?? []).some((i) => i.similar != null) && (
-                <Chip on={similarOnly} onClick={() => setSimilarOnly((x) => !x)}>
-                  Similar Rent
+              {!MILES.includes(miles) && (
+                <Chip on onClick={() => setCustom(true)}>
+                  {miles} miles
                 </Chip>
               )}
+              <button
+                type="button"
+                onClick={() => setCustom(true)}
+                aria-label="Your own distance and filters"
+                className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-[0_8px_20px_-12px_rgba(80,50,40,0.45)]"
+                style={{ background: "var(--m-card)", color: CORAL }}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                {similarOnly && <span className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white" style={{ background: CORAL }} />}
+              </button>
             </div>
           </div>
 
           {/* Foot: the nearest as cards, then the bar. */}
           {step === "map" && (
-            <div className="absolute inset-x-0 bottom-0 z-10 pb-[calc(env(safe-area-inset-bottom)+14px)]">
-              {inRange.length > 0 ? (
-                <div ref={rail} className="m-rail px-4 pb-3 !gap-2.5">
-                  {inRange.slice(0, 40).map((i) => (
-                    <div
-                      key={i.id}
-                      data-card={i.id}
-                      className="mf-anim flex w-[78%] shrink-0 items-center gap-3 rounded-[24px] p-3 pr-3.5 shadow-[0_10px_30px_-14px_rgba(80,50,40,0.45)]"
-                      style={{ background: "var(--m-card)", animation: "mf-card 360ms cubic-bezier(0.22,1,0.36,1) both", outline: focus === i.id ? `2px solid ${CORAL}` : undefined }}
-                    >
-                      <Face kind={kind} item={i} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[15.5px] font-semibold">{i.title}</span>
-                        <span className="block truncate text-[12.5px] text-muted">{i.meta}</span>
-                      </span>
-                      <AddRound on={picked.has(i.id)} onClick={() => toggle(i.id)} label={i.title} />
-                    </div>
-                  ))}
-                </div>
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 pb-[calc(env(safe-area-inset-bottom)+14px)]">
+              {/* Only the bar and the map (James, 3 Oct 2026): a pin, tapped,
+                  pops its home up here, and the little circle adds it. */}
+              {focused ? (
+                <Preview key={focused.id} kind={kind} item={focused} on={picked.has(focused.id)} onToggle={() => toggle(focused.id)} onClose={() => setFocus(null)} />
               ) : (
-                <p className="mx-4 mb-3 rounded-[20px] px-4 py-3 text-center text-[14px] text-muted" style={{ background: "var(--m-card)" }}>
-                  {items?.length ? `Nobody within ${miles} ${miles === 1 ? "mile" : "miles"}. Try further out.` : "Nobody fits yet."}
+                <p className="mf-anim mx-auto mb-3 w-fit rounded-full px-4 py-2 text-center text-[13.5px] font-medium shadow-[0_8px_20px_-12px_rgba(80,50,40,0.45)]" style={{ background: "var(--m-card)", animation: "mf-up 320ms ease-out both" }}>
+                  {inRange.length
+                    ? `${inRange.length} ${inRange.length === 1 ? noun[0] : noun[1]} - tap one to see it`
+                    : items?.length
+                      ? `Nobody within ${miles} ${miles === 1 ? "mile" : "miles"} - try further out`
+                      : "Nobody fits yet"}
                 </p>
               )}
+              <div className="pointer-events-auto">
               <Bar step={step} count={picked.size} onMap={() => setStep("map")} onList={() => setStep("list")} onDraft={() => setStep("draft")} />
+              </div>
             </div>
+          )}
+
+          {custom && (
+            <CustomSheet
+              miles={miles}
+              setMiles={setMiles}
+              rent={(items ?? []).some((i) => i.similar != null)}
+              similarOnly={similarOnly}
+              setSimilarOnly={setSimilarOnly}
+              onClose={() => setCustom(false)}
+            />
           )}
         </>
       )}
@@ -368,7 +391,7 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
       type="button"
       onClick={onClick}
       aria-pressed={on}
-      className="flex h-10 shrink-0 items-center whitespace-nowrap rounded-full px-4 text-[14px] font-medium shadow-[0_8px_20px_-12px_rgba(80,50,40,0.45)]"
+      className="flex h-10 shrink-0 items-center whitespace-nowrap rounded-full px-3 text-[13.5px] font-medium shadow-[0_8px_20px_-12px_rgba(80,50,40,0.45)]"
       style={on ? { background: CORAL, color: "#fff" } : { background: "var(--m-card)" }}
     >
       {children}
@@ -679,5 +702,84 @@ function Sent({ said, onDone }: { said: string; onDone: () => void }) {
         Done
       </button>
     </div>
+  );
+}
+
+/** The home (or person) behind a tapped pin, sprung up above the bar, with the little circle that adds it. */
+function Preview({ kind, item, on, onToggle, onClose }: { kind: "people" | "homes"; item: MatchItem; on: boolean; onToggle: () => void; onClose: () => void }) {
+  return (
+    <div className="mf-anim pointer-events-auto mx-4 mb-3 overflow-hidden rounded-[28px] shadow-[0_24px_50px_-20px_rgba(60,30,20,0.55)]" style={{ background: "var(--m-card)", animation: "m-sheet-in 560ms cubic-bezier(0.22, 0.9, 0.3, 1) both" }}>
+      {kind === "homes" && item.image ? (
+        <div className="relative h-[150px]">
+          <img src={item.image} alt="" className="h-full w-full object-cover" />
+          <button type="button" onClick={onClose} aria-label="Close" className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full" style={{ background: "rgba(255,255,255,0.92)" }}>
+            <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+      ) : null}
+      <div className="flex items-center gap-3 p-4">
+        {!(kind === "homes" && item.image) && <Face kind={kind} item={item} />}
+        <span className="min-w-0 flex-1">
+          <span className="m-title block truncate text-[19px] leading-tight">{item.title}</span>
+          {item.line && <span className="block truncate text-[13px] text-muted">{item.line}</span>}
+          <span className="mt-0.5 block truncate text-[13.5px] font-medium">{item.meta}</span>
+        </span>
+        <AddRound on={on} onClick={onToggle} label={item.title} />
+      </div>
+    </div>
+  );
+}
+
+/** "+": your own distance, and (for homes) only those at a similar rent. */
+function CustomSheet({
+  miles,
+  setMiles,
+  rent,
+  similarOnly,
+  setSimilarOnly,
+  onClose,
+}: {
+  miles: number;
+  setMiles: (n: number) => void;
+  rent: boolean;
+  similarOnly: boolean;
+  setSimilarOnly: (b: boolean) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Sheet label="Your own search" onClose={onClose}>
+      <h2 className="m-title mb-1 px-1 text-[24px]">Your Own Search</h2>
+      <p className="mb-5 px-1 text-[14px] text-muted">Pick any distance, and narrow it down.</p>
+      <div className="rounded-[22px] p-5" style={{ background: "var(--m-card)" }}>
+        <div className="flex items-baseline justify-between">
+          <span className="text-[14px] font-semibold text-muted">Distance</span>
+          <span className="m-guide-num text-[36px] leading-none">
+            {miles}
+            <span className="ml-1 text-[16px] font-semibold text-muted">{miles === 1 ? "mile" : "miles"}</span>
+          </span>
+        </div>
+        <input type="range" min={1} max={30} step={1} value={miles} onChange={(e) => setMiles(Number(e.target.value))} className="mt-4 w-full accent-[var(--m-coral)]" />
+        <div className="mt-1 flex justify-between text-[12px] text-muted">
+          <span>1</span>
+          <span>30 miles</span>
+        </div>
+      </div>
+      {rent && (
+        <button type="button" onClick={() => setSimilarOnly(!similarOnly)} className="mt-3 flex w-full items-center justify-between rounded-[22px] px-5 py-4 text-left" style={{ background: "var(--m-card)" }}>
+          <span>
+            <span className="block text-[15.5px] font-semibold">Similar Rent Only</span>
+            <span className="block text-[13px] text-muted">Within a fifth of what they pay.</span>
+          </span>
+          <span className="relative inline-flex h-[30px] w-[50px] shrink-0 items-center rounded-full transition-colors" style={{ background: similarOnly ? CORAL : "var(--m-fill)" }}>
+            <span className="absolute left-[2px] h-[26px] w-[26px] rounded-full bg-white shadow transition-transform" style={{ transform: similarOnly ? "translateX(20px)" : "none" }} />
+          </span>
+        </button>
+      )}
+      <button type="button" onClick={onClose} className="mt-4 h-[54px] w-full rounded-full text-[16px] font-semibold text-white" style={{ background: "#141210" }}>
+        Show on the Map
+      </button>
+    </Sheet>
   );
 }

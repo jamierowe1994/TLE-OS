@@ -53,6 +53,8 @@ export function PinMap({
   pins,
   miles,
   onPin,
+  onBlank,
+  padTop = 150,
   padBottom = 0,
 }: {
   centre: { lat: number; lng: number };
@@ -63,6 +65,10 @@ export function PinMap({
   /** The ring drawn, and what the view fits. */
   miles: number;
   onPin: (id: string) => void;
+  /** A tap on the map itself, not a pin. */
+  onBlank?: () => void;
+  /** Space the top bar takes, so the ring sits below it. */
+  padTop?: number;
   /** Space the cards take at the foot, so the ring sits in what is visible. */
   padBottom?: number;
 }) {
@@ -73,6 +79,8 @@ export function PinMap({
   const [failed, setFailed] = useState(false);
   const [pos, setPos] = useState<Record<string, { x: number; y: number }>>({});
   const pinsRef = useRef(pins);
+  const blank = useRef(onBlank);
+  blank.current = onBlank;
   pinsRef.current = pins;
 
   const project = () => {
@@ -115,6 +123,7 @@ export function PinMap({
         ov.setMap(map.current);
         overlay.current = ov;
         map.current.addListener("bounds_changed", () => project());
+        map.current.addListener("click", () => blank.current?.());
         ring.current = new google.maps.Circle({
           map: map.current,
           center: centre,
@@ -139,10 +148,12 @@ export function PinMap({
     if (!map.current || !ring.current) return;
     ring.current.setRadius(miles * 1609.34);
     const b = ring.current.getBounds();
-    if (b) map.current.fitBounds(b, { top: 150, bottom: 40 + padBottom, left: 16, right: 16 });
+    /* The whole ring in what is visible, with room to spare (James, 3 Oct
+       2026: "the radius comes off the screen"). */
+    if (b) map.current.fitBounds(b, { top: padTop, bottom: padBottom + 24, left: 30, right: 30 });
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(fit, [miles, padBottom]);
+  useEffect(fit, [miles, padBottom, padTop]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(project, [pins]);
 
