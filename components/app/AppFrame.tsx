@@ -88,8 +88,6 @@ export default function AppFrame({ inApp, theme, children }: { inApp: boolean; t
     setMode(t);
   };
 
-  /* The download page is reached from the phone site, before there is an app. */
-  if (path.startsWith("/agent/install")) return <>{children}</>;
   if (!mode) return <Welcome onChoose={choose} />;
 
   return (

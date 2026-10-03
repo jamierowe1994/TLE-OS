@@ -92,7 +92,7 @@ export default function PhoneFrame({ children }: { children: React.ReactNode }) 
               {/* Was "Open the Full OS" (James, 2 Oct 2026): the phone site
                   stays as it is, and this is where an agent who wants more
                   gets the app (app/agent). Nobody has to. */}
-              <a href="/agent/install" className="block py-1.5 text-[15px] font-semibold text-muted">
+              <a href="/download" className="block py-1.5 text-[15px] font-semibold text-muted">
                 Download OS
               </a>
             </li>

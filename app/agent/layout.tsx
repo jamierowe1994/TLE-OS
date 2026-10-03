@@ -14,7 +14,7 @@ import "./m.css";
  *
  * Its own address, apart from the phone site at /m. James, the same evening:
  * a phone in the browser keeps the original phone site, and its menu offers
- * "Download OS" (/agent/install); this is what downloading gives them - in
+ * "Download OS" (/download); this is what downloading gives them - in
  * Safari or Chrome as an installed web app, or inside the iPhone app (ios/).
  * Keeping it at its own path is what lets the two differ: an installed web
  * app can share cookies with the browser (Android does), so a cookie could

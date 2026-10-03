@@ -26,7 +26,7 @@ export default function StandaloneHint() {
   return (
     <section className="mb-3 flex items-center gap-3 rounded-[22px] px-4 py-3.5" style={{ background: "var(--m-pink-wash)" }}>
       <DoodleIcon name="upload" size={20} />
-      <Link href="/agent/install" className="min-w-0 flex-1">
+      <Link href="/download" className="min-w-0 flex-1">
         <span className="block text-[15px] font-medium">Open TLE OS Full Screen</span>
         <span className="block text-[13px] leading-snug text-muted">Add it to your home screen and the browser&apos;s buttons go.</span>
       </Link>
