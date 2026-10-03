@@ -146,13 +146,14 @@ export default function PhonePeople() {
     <main>
       <TopBar />
 
-      {/* Exactly Home's greeting box, as on Properties. */}
+      {/* Exactly Home's greeting box, as on Properties. The brick loft from
+          the desktop dashboard (James, 3 Oct 2026), cut to the building and
+          its clouds with soft sides, set to the right so it clears the title. */}
       <section className="relative -mx-4 mt-2 h-[268px] overflow-hidden px-4">
         <img
-          src="/illustrations/app/street-corner.webp"
+          src="/illustrations/app/people-loft.webp"
           alt=""
-          className="pointer-events-none absolute -right-16 top-0 h-[262px] w-auto max-w-none select-none"
-          style={{ maskImage: "linear-gradient(to left, #000 70%, transparent 100%)", WebkitMaskImage: "linear-gradient(to left, #000 70%, transparent 100%)" }}
+          className="pointer-events-none absolute -right-[100px] top-[26px] h-[232px] w-auto max-w-none select-none"
         />
         <div className="relative w-[56%] pt-4">
           <h1 className="m-title text-[38px] leading-[1.04]">People</h1>

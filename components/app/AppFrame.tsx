@@ -9,6 +9,7 @@ import { useAlerts } from "@/components/app/alerts";
 import { useSwipeToClose } from "@/components/app/swipe";
 import { applyMTheme, type MTheme } from "@/lib/m-theme";
 import { appHref } from "@/lib/app-href";
+import { MORE_ORDER, NAV_DEFAULT, NAV_DESTS, NAV_SLOTS, activeNav, navDest, saveNav, type NavDest, type NavId } from "@/lib/m-nav";
 
 /**
  * THE AGENT'S PHONE: a page, and a bar at the foot.
@@ -22,31 +23,8 @@ import { appHref } from "@/lib/app-href";
  * (one plain web view, ios/) show the same thing.
  */
 
-const ICONS = {
-  home: <path d="M3.5 10.5 12 4l8.5 6.5M5.5 9v10.5h13V9M10 19.5v-5.5h4v5.5" />,
-  people: <path d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2.5 20c.6-3.4 3.2-5.5 6.5-5.5s5.9 2.1 6.5 5.5M16 4.3a3.5 3.5 0 0 1 0 6.4M18.5 14.8c1.6.8 2.7 2.5 3 5.2" />,
-  properties: <path d="M3 20h18M5 20V9l5-4 5 4v11M15 20v-7h4v7M8.5 12h3M8.5 15.5h3" />,
-  more: <path d="M6 12h.01M12 12h.01M18 12h.01" />,
-};
-
-const TABS: Array<{ href: string; label: string; match: (p: string) => boolean; icon: keyof typeof ICONS }> = [
-  { href: "/agent", label: "Home", icon: "home", match: (p) => p === "/agent" || p.startsWith("/agent/day") || p.startsWith("/agent/event") || p.startsWith("/agent/search") || p.startsWith("/agent/leads") || p.startsWith("/agent/applications") || p.startsWith("/agent/viewings") },
-  { href: "/agent/people", label: "People", icon: "people", match: (p) => p.startsWith("/agent/people") },
-  { href: "/agent/properties", label: "Properties", icon: "properties", match: (p) => p.startsWith("/agent/properties") },
-];
-
-/* The full OS's pages an agent reaches for away from a desk. Each opens the
-   full OS screen; the app's swipe back returns to the phone. */
-const PAGES: Array<{ href: string; label: string; icon: string }> = [
-  /* Steve where The Full OS was (James, 3 Oct 2026): his whole conversation,
-     full screen (app/agent/steve). */
-  { href: "/agent/steve", label: "Steve", icon: "message-2" },
-  /* The app's own pages only - never the desktop (James, 3 Oct 2026). */
-  { href: "/agent/leads", label: "Leads", icon: "target" },
-  { href: "/agent/applications", label: "Applications", icon: "file-contract" },
-  { href: "/agent/viewings", label: "Viewings", icon: "key" },
-  { href: "/agent/day", label: "Your Day", icon: "calendar" },
-];
+/* More's three dots - the one icon that is always on the bar. */
+const MORE_DOTS = <path d="M6 12h.01M12 12h.01M18 12h.01" />;
 
 type Frame = { more: () => void; quick: () => void; bell: () => void; unread: number };
 const FrameContext = createContext<Frame>({ more: () => {}, quick: () => {}, bell: () => {}, unread: 0 });
@@ -56,8 +34,11 @@ export const useGoTo = () => useContext(FrameContext).more;
 
 type Sheet = "more" | "quick" | "bell" | null;
 
-export default function AppFrame({ inApp, theme, children }: { inApp: boolean; theme: MTheme | null; children: React.ReactNode }) {
+export default function AppFrame({ inApp, theme, nav, children }: { inApp: boolean; theme: MTheme | null; nav: NavId[]; children: React.ReactNode }) {
   const path = usePathname() ?? "/agent";
+  /* The agent's own three icons (lib/m-nav), changed from More. */
+  const [bar, setBar] = useState<NavId[]>(nav);
+  const lit = activeNav(bar, path);
   const [sheet, setSheet] = useState<Sheet>(null);
   const [mode, setMode] = useState<MTheme | null>(theme);
   const [unread, setUnread] = useState(0);
@@ -106,8 +87,8 @@ export default function AppFrame({ inApp, theme, children }: { inApp: boolean; t
         style={{ borderColor: "var(--m-line)", background: "var(--m-bg)" }}
       >
         <ul className="mx-auto grid h-[62px] max-w-[560px] grid-cols-5 items-center px-2">
-          {TABS.slice(0, 2).map((t) => (
-            <Tab key={t.href} tab={t} on={t.match(path)} />
+          {bar.slice(0, 2).map((id) => (
+            <Tab key={id} dest={navDest(id)} on={lit === id} />
           ))}
           <li className="flex justify-center">
             <button
@@ -131,39 +112,57 @@ export default function AppFrame({ inApp, theme, children }: { inApp: boolean; t
               </svg>
             </button>
           </li>
-          <Tab tab={TABS[2]!} on={TABS[2]!.match(path)} />
+          <Tab dest={navDest(bar[2]!)} on={lit === bar[2]} />
           <li className="flex justify-center">
             <button type="button" onClick={more} aria-label="More" className="flex h-[48px] w-[58px] items-center justify-center rounded-[16px]" style={{ color: "var(--m-muted)" }}>
               <svg viewBox="0 0 24 24" aria-hidden className="h-[24px] w-[24px]" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
-                {ICONS.more}
+                {MORE_DOTS}
               </svg>
             </button>
           </li>
         </ul>
       </nav>
 
-      {sheet === "more" && <PagesSheet inApp={inApp} mode={mode} onMode={choose} onClose={close} />}
+      {sheet === "more" && (
+        <PagesSheet
+          inApp={inApp}
+          mode={mode}
+          onMode={choose}
+          bar={bar}
+          onBar={(b) => {
+            saveNav(b);
+            setBar(b);
+          }}
+          onClose={close}
+        />
+      )}
       {sheet === "quick" && <QuickSheet onClose={close} />}
       {sheet === "bell" && <BellSheet onClose={close} onRead={() => setUnread(0)} />}
     </FrameContext.Provider>
   );
 }
 
-function Tab({ tab, on }: { tab: (typeof TABS)[number]; on: boolean }) {
+function Tab({ dest, on }: { dest: NavDest; on: boolean }) {
   return (
     <li className="flex justify-center">
       <Link
-        href={tab.href}
+        href={dest.href}
         aria-current={on ? "page" : undefined}
-        aria-label={tab.label}
+        aria-label={dest.label}
         className="flex h-[48px] w-[58px] items-center justify-center rounded-[16px] transition-colors"
         style={on ? { background: "var(--m-pink-wash)", color: "var(--m-coral)" } : { color: "var(--m-muted)" }}
       >
-        <svg viewBox="0 0 24 24" aria-hidden className="h-[24px] w-[24px]" fill={on && tab.icon === "home" ? "currentColor" : "none"} stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
-          {ICONS[tab.icon]}
-        </svg>
+        <NavIcon dest={dest} on={on} />
       </Link>
     </li>
+  );
+}
+
+function NavIcon({ dest, on, size = 24 }: { dest: NavDest; on: boolean; size?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden style={{ width: size, height: size }} fill={on && dest.id === "home" ? "currentColor" : "none"} stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+      <path d={dest.d} />
+    </svg>
   );
 }
 
@@ -405,7 +404,32 @@ function ago(iso: string): string {
 
 type Me = { name: string; email: string; photo: string | null };
 
-function PagesSheet({ inApp, mode, onMode, onClose }: { inApp: boolean; mode: MTheme; onMode: (t: MTheme) => void; onClose: () => void }) {
+/*
+ * MORE (tidied 3 Oct 2026, James: "neaten up everything"). Three layers in
+ * one sheet:
+ *   - the pages that are not on the bar, then the agent's own name at the
+ *     foot, and under it Customise Navigation Bar
+ *   - Profile: Appearance, Alerts on This Phone, Test Phone Alerts, Sign Out
+ *   - Navigation Bar: pick the three icons beside the "+"
+ */
+type View = "list" | "profile" | "nav";
+
+function PagesSheet({
+  inApp,
+  mode,
+  onMode,
+  bar,
+  onBar,
+  onClose,
+}: {
+  inApp: boolean;
+  mode: MTheme;
+  onMode: (t: MTheme) => void;
+  bar: NavId[];
+  onBar: (b: NavId[]) => void;
+  onClose: () => void;
+}) {
+  const [view, setView] = useState<View>("list");
   const [me, setMe] = useState<Me | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const alerts = useAlerts();
@@ -430,6 +454,12 @@ function PagesSheet({ inApp, mode, onMode, onClose }: { inApp: boolean; mode: MT
     };
   }, [onClose]);
 
+  /* Each layer starts at the top. */
+  useEffect(() => {
+    panel.current?.scrollTo({ top: 0 });
+    setNote(null);
+  }, [view]);
+
   const test = async () => {
     setNote("Sending...");
     const j = (await fetch("/api/push/test", { method: "POST" })
@@ -444,6 +474,9 @@ function PagesSheet({ inApp, mode, onMode, onClose }: { inApp: boolean; mode: MT
   };
 
   const row = "m-row flex h-[52px] w-full items-center gap-3 px-4 text-left text-[15.5px] active:bg-panel";
+  const title = view === "profile" ? "Profile" : view === "nav" ? "Navigation Bar" : "More";
+  const offBar = MORE_ORDER.filter((id) => !bar.includes(id)).map(navDest);
+  const showAlerts = alerts.state !== "unsupported" && alerts.state !== "app" && alerts.state !== "loading";
 
   return (
     <div
@@ -453,12 +486,13 @@ function PagesSheet({ inApp, mode, onMode, onClose }: { inApp: boolean; mode: MT
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label="Everything else"
+      aria-label={title}
     >
       <style>{`
         @keyframes m-dim { from { opacity: 0 } to { opacity: 1 } }
         @keyframes m-rise { from { transform: translateY(100%) } to { transform: translateY(0) } }
-        @media (prefers-reduced-motion: reduce) { .m-sheet { animation: none !important } }
+        @keyframes m-in { from { opacity: 0; transform: translateX(14px) } to { opacity: 1; transform: none } }
+        @media (prefers-reduced-motion: reduce) { .m-sheet, .m-layer { animation: none !important } }
       `}</style>
       <div
         ref={panel}
@@ -467,8 +501,17 @@ function PagesSheet({ inApp, mode, onMode, onClose }: { inApp: boolean; mode: MT
         onClick={(e) => e.stopPropagation()}
       >
         <span aria-hidden className="mx-auto mb-3 block h-[5px] w-[40px] rounded-full" style={{ background: "var(--m-line)" }} />
-        <div className="mb-4 flex items-center justify-between px-1">
-          <h2 className="m-title text-[24px]">More</h2>
+        <div className="mb-4 flex items-center justify-between gap-3 px-1">
+          <div className="flex min-w-0 items-center gap-2.5">
+            {view !== "list" && (
+              <button type="button" onClick={() => setView("list")} aria-label="Back" className="m-round m-press">
+                <svg viewBox="0 0 24 24" aria-hidden className="h-[18px] w-[18px]">
+                  <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            )}
+            <h2 className="m-title truncate text-[24px]">{title}</h2>
+          </div>
           <button type="button" onClick={onClose} aria-label="Close" className="m-round m-press">
             <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
               <path d="M6 6l12 12M18 6L6 18" />
@@ -476,87 +519,221 @@ function PagesSheet({ inApp, mode, onMode, onClose }: { inApp: boolean; mode: MT
           </button>
         </div>
 
-        <ul className="m-group">
-          {PAGES.map((p) => (
-            <li key={p.href} className="m-row">
-              <a href={p.href} className={row}>
-                <DoodleIcon name={p.icon} size={18} className="text-muted" />
-                <span className="flex-1">{p.label}</span>
-                <Chevron />
-              </a>
-            </li>
-          ))}
-        </ul>
+        {view === "list" && (
+          <div key="list" className="m-layer">
+            <ul className="m-group">
+              {offBar.map((p) => (
+                <li key={p.id} className="m-row">
+                  <a href={p.href} className={row}>
+                    <span className="text-muted">
+                      <NavIcon dest={p} on={false} size={19} />
+                    </span>
+                    <span className="flex-1">{p.label}</span>
+                    <Chevron />
+                  </a>
+                </li>
+              ))}
+            </ul>
 
-        <p className="m-eyebrow mb-2 mt-5 px-1">Appearance</p>
-        <div className="grid grid-cols-2 gap-2">
-          {(["light", "dark"] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => onMode(t)}
-              aria-pressed={mode === t}
-              className="m-press flex h-12 items-center justify-center gap-2 rounded-[14px] border text-[15px] font-medium"
-              style={
-                mode === t
-                  ? { background: "var(--m-ink)", color: "var(--m-bg)", borderColor: "var(--m-ink)" }
-                  : { background: "var(--m-card)", borderColor: "var(--m-line)" }
-              }
-            >
-              <span aria-hidden className="h-3.5 w-3.5 rounded-full border" style={{ background: t === "light" ? "#ffffff" : "#121212", borderColor: "#8a8a87" }} />
-              {t === "light" ? "Light" : "Dark"}
-            </button>
-          ))}
-        </div>
-
-        {alerts.state !== "unsupported" && alerts.state !== "app" && alerts.state !== "loading" && (
-          <>
-            <p className="m-eyebrow mb-2 mt-5 px-1">Phone Alerts</p>
-            <div className="m-group">
-              <button
-                type="button"
-                disabled={alerts.state === "busy" || alerts.state === "blocked"}
-                onClick={alerts.state === "on" ? alerts.turnOff : alerts.turnOn}
-                className={`${row} justify-between`}
-              >
-                <span className="flex items-center gap-3">
-                  <DoodleIcon name="bell" size={18} className="text-muted" />
-                  {alerts.state === "blocked" ? "Alerts Are Blocked" : "Alerts on This Phone"}
+            <div className="m-group mt-5">
+              <button type="button" onClick={() => setView("profile")} className="m-row flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-panel">
+                <Avatar me={me} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[16px] font-medium">{me?.name ?? " "}</span>
+                  <span className="block truncate text-[13.5px] text-muted">Profile, appearance and alerts</span>
                 </span>
-                <Toggle on={alerts.state === "on"} busy={alerts.state === "busy"} />
+                <Chevron />
               </button>
             </div>
-            {alerts.state === "blocked" && (
-              <p className="mt-2 px-1 text-[13.5px] text-muted">This phone has said no to alerts from TLE OS. Turn them back on in the phone&apos;s Settings, under Notifications.</p>
-            )}
-            {alerts.error && <p className="mt-2 px-1 text-[13.5px] text-muted">{alerts.error}</p>}
-          </>
+
+            <div className="m-group mt-3">
+              <button type="button" onClick={() => setView("nav")} className={row}>
+                <svg viewBox="0 0 24 24" aria-hidden className="h-[19px] w-[19px] text-muted" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+                  <path d="M4 7h10M18 7h2M4 17h4M12 17h8M14 4.5v5M8 14.5v5" />
+                </svg>
+                <span className="flex-1">Customise Navigation Bar</span>
+                <Chevron />
+              </button>
+            </div>
+          </div>
         )}
 
-        <div className="m-group mt-5">
-          <div className="m-row flex items-center gap-3 px-4 py-3.5">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-[15px] font-medium" style={{ background: "var(--m-pink-wash)" }}>
-              {me?.photo ? <img src={me.photo} alt="" className="h-full w-full object-cover" /> : initials(me?.name)}
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-[16px] font-medium">{me?.name ?? " "}</span>
-              <span className="block truncate text-[13.5px] text-muted">{me?.email ?? " "}</span>
-            </span>
+        {view === "profile" && (
+          <div key="profile" className="m-layer" style={{ animation: "m-in 220ms ease-out both" }}>
+            <div className="m-group flex items-center gap-3.5 px-4 py-4">
+              <Avatar me={me} big />
+              <span className="min-w-0">
+                <span className="block truncate text-[18px] font-medium">{me?.name ?? " "}</span>
+                <span className="block truncate text-[13.5px] text-muted">{me?.email ?? " "}</span>
+              </span>
+            </div>
+
+            <p className="m-eyebrow mb-2 mt-5 px-1">Appearance</p>
+            <div className="grid grid-cols-2 gap-2">
+              {(["light", "dark"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => onMode(t)}
+                  aria-pressed={mode === t}
+                  className="m-press flex h-12 items-center justify-center gap-2 rounded-[14px] border text-[15px] font-medium"
+                  style={
+                    mode === t
+                      ? { background: "var(--m-ink)", color: "var(--m-bg)", borderColor: "var(--m-ink)" }
+                      : { background: "var(--m-card)", borderColor: "var(--m-line)" }
+                  }
+                >
+                  <span aria-hidden className="h-3.5 w-3.5 rounded-full border" style={{ background: t === "light" ? "#ffffff" : "#121212", borderColor: "#8a8a87" }} />
+                  {t === "light" ? "Light" : "Dark"}
+                </button>
+              ))}
+            </div>
+
+            {(showAlerts || inApp) && (
+              <>
+                <p className="m-eyebrow mb-2 mt-5 px-1">Phone Alerts</p>
+                <div className="m-group">
+                  {showAlerts && (
+                    <button
+                      type="button"
+                      disabled={alerts.state === "busy" || alerts.state === "blocked"}
+                      onClick={alerts.state === "on" ? alerts.turnOff : alerts.turnOn}
+                      className={`${row} justify-between`}
+                    >
+                      <span className="flex items-center gap-3">
+                        <DoodleIcon name="bell" size={18} className="text-muted" />
+                        {alerts.state === "blocked" ? "Alerts Are Blocked" : "Alerts on This Phone"}
+                      </span>
+                      <Toggle on={alerts.state === "on"} busy={alerts.state === "busy"} />
+                    </button>
+                  )}
+                  {(inApp || alerts.state === "on") && (
+                    <button type="button" onClick={test} className={row}>
+                      <DoodleIcon name="bell" size={18} className="text-muted" />
+                      Test Phone Alerts
+                    </button>
+                  )}
+                </div>
+                {alerts.state === "blocked" && (
+                  <p className="mt-2 px-1 text-[13.5px] text-muted">This phone has said no to alerts from TLE OS. Turn them back on in the phone&apos;s Settings, under Notifications.</p>
+                )}
+                {alerts.error && <p className="mt-2 px-1 text-[13.5px] text-muted">{alerts.error}</p>}
+                {note && <p className="mt-2 px-1 text-[13.5px] text-muted">{note}</p>}
+              </>
+            )}
+
+            <div className="m-group mt-5">
+              <button type="button" onClick={signOut} className={row} style={{ color: "var(--accent-dark)" }}>
+                <DoodleIcon name="logout" size={18} />
+                Sign Out
+              </button>
+            </div>
           </div>
-          {(inApp || alerts.state === "on") && (
-            <button type="button" onClick={test} className={row}>
-              <DoodleIcon name="bell" size={18} className="text-muted" />
-              Test Phone Alerts
-            </button>
-          )}
-          <button type="button" onClick={signOut} className={row} style={{ color: "var(--accent-dark)" }}>
-            <DoodleIcon name="logout" size={18} />
-            Sign Out
-          </button>
-        </div>
-        {note && <p className="mt-2 px-1 text-[13.5px] text-muted">{note}</p>}
+        )}
+
+        {view === "nav" && <NavPicker bar={bar} onBar={onBar} />}
       </div>
     </div>
+  );
+}
+
+/**
+ * Pick the three icons beside the "+". Tap a slot on the bar drawn at the
+ * top, then the page to put there; a page already on the bar swaps places
+ * with it, so the bar is always three different pages.
+ */
+function NavPicker({ bar, onBar }: { bar: NavId[]; onBar: (b: NavId[]) => void }) {
+  const [slot, setSlot] = useState(0);
+  const put = (id: NavId) => {
+    const next = [...bar];
+    const was = next.indexOf(id);
+    if (was === slot) return;
+    if (was >= 0) next[was] = next[slot]!;
+    next[slot] = id;
+    onBar(next);
+    setSlot((s) => (s + 1) % NAV_SLOTS);
+  };
+  const isDefault = bar.join() === NAV_DEFAULT.join();
+
+  return (
+    <div key="nav" className="m-layer" style={{ animation: "m-in 220ms ease-out both" }}>
+      <p className="px-1 text-[14px] leading-snug text-muted">Tap a space on your bar, then the page you want there. Anything not on the bar stays in More.</p>
+
+      {/* The bar as it will look, the chosen space ringed in coral. */}
+      <div className="mt-4 grid h-[70px] grid-cols-5 items-center rounded-[22px] px-2" style={{ background: "var(--m-card)" }}>
+        {[0, 1, -1, 2, -2].map((k) =>
+          k === -1 ? (
+            <span key="plus" className="mx-auto flex h-[44px] w-[44px] items-center justify-center rounded-full text-white opacity-60" style={{ background: "var(--m-coral)" }}>
+              <svg viewBox="0 0 24 24" aria-hidden className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </span>
+          ) : k === -2 ? (
+            <span key="more" className="mx-auto flex h-[48px] w-[52px] items-center justify-center opacity-60" style={{ color: "var(--m-muted)" }}>
+              <svg viewBox="0 0 24 24" aria-hidden className="h-[24px] w-[24px]" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
+                {MORE_DOTS}
+              </svg>
+            </span>
+          ) : (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setSlot(k)}
+              aria-label={`Space ${k + 1}: ${navDest(bar[k]!).label}`}
+              aria-pressed={slot === k}
+              className="m-press mx-auto flex h-[52px] w-[56px] flex-col items-center justify-center gap-0.5 rounded-[16px] transition-colors"
+              style={
+                slot === k
+                  ? { background: "var(--m-pink-wash)", color: "var(--m-coral)", boxShadow: "inset 0 0 0 2px var(--m-coral)" }
+                  : { color: "var(--m-ink)" }
+              }
+            >
+              <NavIcon dest={navDest(bar[k]!)} on={false} size={22} />
+              <span className="max-w-full truncate px-0.5 text-[10px] font-medium">{navDest(bar[k]!).label}</span>
+            </button>
+          )
+        )}
+      </div>
+
+      <p className="m-eyebrow mb-2 mt-5 px-1">Put in Space {slot + 1}</p>
+      <ul className="m-group">
+        {NAV_DESTS.map((d) => {
+          const at = bar.indexOf(d.id);
+          return (
+            <li key={d.id} className="m-row">
+              <button type="button" onClick={() => put(d.id)} className="m-row flex h-[52px] w-full items-center gap-3 px-4 text-left text-[15.5px] active:bg-panel">
+                <span style={{ color: at >= 0 ? "var(--m-coral)" : "var(--m-muted)" }}>
+                  <NavIcon dest={d} on={false} size={19} />
+                </span>
+                <span className="flex-1">{d.label}</span>
+                {at >= 0 && (
+                  <span className="rounded-full px-2.5 py-[3px] text-[12px] font-medium" style={{ background: "var(--m-pink-wash)", color: "var(--m-coral)" }}>
+                    Space {at + 1}
+                  </span>
+                )}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
+      {!isDefault && (
+        <button type="button" onClick={() => onBar(NAV_DEFAULT)} className="m-btn m-press mt-4 w-full">
+          Back to Home, People and Properties
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Avatar({ me, big }: { me: Me | null; big?: boolean }) {
+  return (
+    <span
+      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full font-medium ${big ? "h-14 w-14 text-[18px]" : "h-11 w-11 text-[15px]"}`}
+      style={{ background: "var(--m-pink-wash)", color: "var(--m-coral)" }}
+    >
+      {me?.photo ? <img src={me.photo} alt="" className="h-full w-full object-cover" /> : initials(me?.name)}
+    </span>
   );
 }
 

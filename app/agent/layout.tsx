@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { cookies, headers } from "next/headers";
 import AppFrame from "@/components/app/AppFrame";
 import { M_THEME_COLOUR, M_THEME_COOKIE, type MTheme } from "@/lib/m-theme";
+import { M_NAV_COOKIE, parseNav } from "@/lib/m-nav";
 import "./m.css";
 
 /**
@@ -66,6 +67,8 @@ export async function generateViewport(): Promise<Viewport> {
 export default async function PhoneLayout({ children }: { children: React.ReactNode }) {
   const inApp = /TLEOSApp\//.test((await headers()).get("user-agent") ?? "");
   const theme = await chosenTheme();
+  /* The agent's own three icons on the bar (lib/m-nav), drawn first time. */
+  const nav = parseNav((await cookies()).get(M_NAV_COOKIE)?.value);
   return (
     <div className="m-app min-h-dvh" data-mtheme={theme ?? "light"}>
       {/* A page that never comes to life reloads itself, once (2 Oct 2026).
@@ -75,7 +78,7 @@ export default async function PhoneLayout({ children }: { children: React.ReactN
           loaded or failed, then, if the app never said it was ready, loads
           the page afresh - and only once per visit, so it can never loop. */}
       <script dangerouslySetInnerHTML={{ __html: STALE_GUARD }} />
-      <AppFrame inApp={inApp} theme={theme}>
+      <AppFrame inApp={inApp} theme={theme} nav={nav}>
         {children}
       </AppFrame>
     </div>
