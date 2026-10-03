@@ -19,13 +19,13 @@ import { ErrorLine, ReachButtons, Sheet, Spinner, TopBar, dialable, mapsHref } f
  * the card carries what is true - rent, type, and how long it has been out.
  */
 
+/* Four tabs, no more (James, 3 Oct 2026): they fit the track without
+   scrolling. Managed and archived homes are under All. */
 const CHIPS: Array<{ id: "all" | PropertyGroup; label: string }> = [
   { id: "all", label: "All" },
-  { id: "market", label: "On Market" },
-  { id: "letagreed", label: "Let Agreed" },
+  { id: "market", label: "Market" },
+  { id: "letagreed", label: "Agreed" },
   { id: "draft", label: "Not Live" },
-  { id: "managed", label: "Managed" },
-  { id: "archived", label: "Archived" },
 ];
 
 type Sort = "az" | "rentHigh" | "rentLow" | "longest";
@@ -117,20 +117,22 @@ export default function PhoneProperties() {
     <main>
       <TopBar />
 
-      <section className="relative -mx-4 mt-1 h-[190px] overflow-hidden px-4">
+      {/* Exactly Home's greeting box (James, 3 Oct 2026): the same height, the
+          same title size, the painting the same height, the search over its foot. */}
+      <section className="relative -mx-4 mt-2 h-[268px] overflow-hidden px-4">
         <img
           src="/illustrations/app/townhouse.webp"
           alt=""
-          className="pointer-events-none absolute -right-8 top-0 h-[196px] w-auto max-w-none select-none"
-          style={{ maskImage: "linear-gradient(to left, #000 72%, transparent 100%)", WebkitMaskImage: "linear-gradient(to left, #000 72%, transparent 100%)" }}
+          className="pointer-events-none absolute -right-16 top-0 h-[262px] w-auto max-w-none select-none"
+          style={{ maskImage: "linear-gradient(to left, #000 70%, transparent 100%)", WebkitMaskImage: "linear-gradient(to left, #000 70%, transparent 100%)" }}
         />
-        <div className="relative w-[58%] pt-6">
+        <div className="relative w-[56%] pt-4">
           <h1 className="m-title text-[38px] leading-[1.04]">Properties</h1>
-          <p className="mt-2.5 max-w-[180px] text-[14px] leading-snug text-muted">A quick view of all your properties.</p>
+          <p className="mt-3 max-w-[170px] text-[14px] leading-snug text-muted">A quick view of all your properties.</p>
         </div>
       </section>
 
-      <div className="relative z-[1] -mt-2 flex items-center gap-2.5">
+      <div className="relative z-[1] -mt-5 flex items-center gap-2.5">
         <label className="flex h-[54px] min-w-0 flex-1 items-center gap-3 rounded-full px-5 shadow-[0_10px_30px_-14px_rgba(80,50,40,0.35)]" style={{ background: "var(--m-card)" }}>
           <DoodleIcon name="search" size={18} />
           <input
@@ -163,7 +165,7 @@ export default function PhoneProperties() {
         </button>
       </div>
 
-      <div className="mt-4 flex gap-1 overflow-x-auto rounded-full p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" style={{ background: "var(--m-card)" }}>
+      <div className="mt-4 grid grid-cols-4 gap-1 rounded-full p-1" style={{ background: "var(--m-card)" }}>
         {CHIPS.map((c) => {
           const on = chip === c.id;
           return (
@@ -172,7 +174,7 @@ export default function PhoneProperties() {
               type="button"
               onClick={() => setChip(c.id)}
               aria-pressed={on}
-              className="h-10 shrink-0 rounded-full px-4 text-[14px] font-medium transition-colors"
+              className="h-10 rounded-full px-1 text-[14px] font-medium transition-colors"
               style={on ? { background: "var(--m-pink-wash)", color: "var(--m-coral)" } : { color: "var(--m-ink)" }}
             >
               {c.label}
