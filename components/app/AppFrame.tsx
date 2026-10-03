@@ -240,7 +240,7 @@ function SheetShell({ title, label, onClose, children }: { title: string; label:
    writes only the Right to Rent check. */
 const QUICK: Array<{ href: string; label: string; line: string; icon: string; tone: "pink" | "sage" }> = [
   { href: "/agent/id-check", label: "Scan an ID", line: "Capture and check an ID.", icon: "camera", tone: "pink" },
-  { href: "/agent/day", label: "Your Day", line: "Today's appointments.", icon: "calendar", tone: "sage" },
+  { href: "/agent/day", label: "Diary", line: "Day, week and month.", icon: "calendar", tone: "sage" },
   { href: "/agent/people?who=tenant", label: "Find a Tenant", line: "Applicants and tenants.", icon: "user", tone: "sage" },
   { href: "/agent/people?who=landlord", label: "Find a Landlord", line: "Owners of our homes.", icon: "key", tone: "pink" },
   { href: "/agent/properties", label: "Find a Property", line: "Every home on your book.", icon: "home", tone: "pink" },

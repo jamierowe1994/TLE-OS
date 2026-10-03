@@ -97,7 +97,7 @@ export default function PhoneViewings() {
     <main>
       <TopBar />
 
-      <HomeHero title="Viewings" line="Who you are showing round, and where." src="/illustrations/app/home-cottage.webp" />
+      <HomeHero title="Viewings" line="Who you are showing round, and where." src="/illustrations/app/home-bungalow.webp" />
 
       <label className="relative z-[1] -mt-5 flex h-[54px] items-center gap-3 rounded-full px-5 shadow-[0_10px_30px_-14px_rgba(80,50,40,0.35)]" style={{ background: "var(--m-card)" }}>
         <DoodleIcon name="search" size={18} />

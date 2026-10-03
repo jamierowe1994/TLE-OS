@@ -39,7 +39,7 @@ export const NAV_DESTS: NavDest[] = [
   { id: "leads", href: "/agent/leads", label: "Leads", d: "M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 12h.01", owns: ["/agent/leads"] },
   { id: "applications", href: "/agent/applications", label: "Applications", d: "M6.5 3.5h7.5l4 4v13h-11.5zM14 3.5V7.5h4M9.5 12h6M9.5 15.5h6", owns: ["/agent/applications"] },
   { id: "viewings", href: "/agent/viewings", label: "Viewings", d: "M15 13a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12.2 11.8 4 20M6.5 17.5l2 2M9 15l1.5 1.5", owns: ["/agent/viewings"] },
-  { id: "day", href: "/agent/day", label: "Your Day", d: "M4.5 6h15v14h-15zM4.5 10.5h15M8.5 3.5v4M15.5 3.5v4", owns: ["/agent/day", "/agent/event"] },
+  { id: "day", href: "/agent/day", label: "Diary", d: "M4.5 6h15v14h-15zM4.5 10.5h15M8.5 3.5v4M15.5 3.5v4", owns: ["/agent/day", "/agent/event"] },
   { id: "steve", href: "/agent/steve", label: "Steve", d: "M4.5 5h15v10.5h-8L7 19v-3.5H4.5z", owns: ["/agent/steve"] },
   { id: "scan", href: "/agent/id-check", label: "Scan an ID", d: "M4 8h3l1.5-2h7L17 8h3v11H4zM12 16.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z", owns: ["/agent/id-check"] },
 ];
