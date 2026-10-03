@@ -6,6 +6,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import type { Appt } from "@/lib/diary";
 import { ErrorLine, HomeHero, Spinner, TopBar } from "../bits";
 import { KIND_LABEL, endOf, loadDiary, nowHm } from "../diary-bits";
+import SlideTabs from "@/components/app/SlideTabs";
 
 /**
  * THE DIARY (James, 3 Oct 2026, from his three-phone mockup): Day, Week and
@@ -107,20 +108,15 @@ export default function PhoneDiary() {
       <TopBar />
       <HomeHero title="Diary" line={LINE[view]} src="/illustrations/app/diary-cottage.webp" height={170} right={-14} bottom={14} />
 
-      <div className="relative z-[1] -mt-5 grid grid-cols-3 gap-1 rounded-full p-1 shadow-[0_10px_30px_-14px_rgba(80,50,40,0.35)]" style={{ background: "var(--m-card)" }}>
-        {(["day", "week", "month"] as const).map((v) => (
-          <button
-            key={v}
-            type="button"
-            onClick={() => pick(v)}
-            aria-pressed={view === v}
-            className="h-11 rounded-full text-[15px] font-medium transition-colors"
-            style={view === v ? { background: "var(--m-pink-wash)", color: "var(--m-coral)" } : undefined}
-          >
-            {v[0]!.toUpperCase() + v.slice(1)}
-          </button>
-        ))}
-      </div>
+      <SlideTabs
+        className="z-[1] -mt-5"
+        shadow
+        height={44}
+        textClass="text-[15px]"
+        value={view}
+        onChange={pick}
+        options={(["day", "week", "month"] as const).map((v) => ({ id: v, label: v[0]!.toUpperCase() + v.slice(1) }))}
+      />
 
       {note && <p className="mt-3 px-1 text-[12.5px] text-muted">{note}</p>}
 

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ErrorLine, Sheet, Spinner } from "../../../bits";
-import { Bubbles, ChatHead, Composer, Face, type Bubble } from "../../bits";
+import { Bubbles, ChatHead, ChatShell, Composer, Face, type Bubble } from "../../bits";
 
 /**
  * A room of the team's chat (3 Oct 2026).
@@ -92,7 +92,9 @@ export default function PhoneRoom() {
   }));
 
   return (
-    <main>
+    <>
+    <ChatShell
+      head={
       <ChatHead
         back={thread ? `/agent/chats/room/${encodeURIComponent(id)}` : "/agent/chats?half=play"}
         title={thread ? "Question" : data?.room.name ?? "Chat"}
@@ -107,14 +109,9 @@ export default function PhoneRoom() {
           ) : undefined
         }
       />
-
-      {error ? (
-        <ErrorLine text={error} />
-      ) : !data ? (
-        <Spinner label="Opening the chat" className="py-8" />
-      ) : (
-        <>
-          <Bubbles items={items} empty={general ? "Nobody has said anything yet. Start it off." : "Say hello to your huddle."} />
+      }
+      composer={
+        data && !error ? (
           <Composer
             placeholder={thread ? "Write an answer..." : general ? "Say something to everyone..." : "Message the huddle..."}
             onSend={send}
@@ -132,8 +129,17 @@ export default function PhoneRoom() {
               ) : undefined
             }
           />
-        </>
+        ) : undefined
+      }
+    >
+      {error ? (
+        <ErrorLine text={error} />
+      ) : !data ? (
+        <Spinner label="Opening the chat" className="py-8" />
+      ) : (
+        <Bubbles items={items} empty={general ? "Nobody has said anything yet. Start it off." : "Say hello to your huddle."} />
       )}
+    </ChatShell>
 
       {people && data && (
         <Sheet label="Who is in it" onClose={() => setPeople(false)}>
@@ -154,6 +160,6 @@ export default function PhoneRoom() {
           </button>
         </Sheet>
       )}
-    </main>
+    </>
   );
 }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ErrorLine, Sheet, Spinner, TopBar } from "../../bits";
+import SlideTabs from "@/components/app/SlideTabs";
 
 /**
  * NEWS (Tools, 3 Oct 2026): from the team (the OS's newsroom) and the
@@ -52,13 +53,17 @@ function News() {
     <section className="mt-3">
       <div className="mb-3 flex items-center justify-between px-1">
         <span />
-        <div className="flex gap-1 rounded-full p-1" style={{ background: "var(--m-card)" }}>
-          {(["team", "industry"] as const).map((t) => (
-            <button key={t} type="button" onClick={() => setTab(t)} aria-pressed={tab === t} className="h-8 rounded-full px-3.5 text-[13.5px] font-medium" style={tab === t ? { background: "var(--m-pink-wash)", color: "var(--m-coral)" } : undefined}>
-              {t === "team" ? "The Team" : "Industry"}
-            </button>
-          ))}
-        </div>
+        <SlideTabs
+          className="w-[210px]"
+          height={32}
+          textClass="text-[13.5px]"
+          value={tab}
+          onChange={setTab}
+          options={[
+            { id: "team" as const, label: "The Team" },
+            { id: "industry" as const, label: "Industry" },
+          ]}
+        />
       </div>
 
       {tab === "team" ? (

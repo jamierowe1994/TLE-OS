@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { TopBar } from "../../bits";
+import SlideTabs from "@/components/app/SlideTabs";
 
 /**
  * RENT CONVERTER (Tools, 3 Oct 2026): per month, per week, per year, the way
@@ -42,13 +43,14 @@ export default function RentConverter() {
             className="m-guide-num min-w-0 flex-1 bg-transparent text-[48px] leading-none outline-none placeholder:text-muted"
           />
         </div>
-        <div className="mt-4 grid grid-cols-3 gap-1 rounded-full p-1" style={{ background: "var(--m-fill)" }}>
-          {(["month", "week", "year"] as const).map((p) => (
-            <button key={p} type="button" onClick={() => setPer(p)} aria-pressed={per === p} className="h-10 rounded-full text-[14px] font-medium" style={per === p ? { background: "var(--m-card)", color: "var(--m-coral)" } : undefined}>
-              Per {p[0]!.toUpperCase() + p.slice(1)}
-            </button>
-          ))}
-        </div>
+        <SlideTabs
+          className="mt-4"
+          track="var(--m-fill)"
+          pill="var(--m-card)"
+          value={per}
+          onChange={setPer}
+          options={(["month", "week", "year"] as const).map((p) => ({ id: p, label: `Per ${p[0]!.toUpperCase() + p.slice(1)}` }))}
+        />
       </div>
 
       <ul className="mt-3 grid gap-2.5">

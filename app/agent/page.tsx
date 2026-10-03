@@ -7,6 +7,8 @@ import AlertsCard from "@/components/app/AlertsCard";
 import StandaloneHint from "@/components/app/StandaloneHint";
 import { TopBar } from "./bits";
 import { todayLine, useHomeFigures, type Figure } from "./figures";
+import FloatSearch from "@/components/app/FloatSearch";
+import SearchResults from "./search/results";
 
 /**
  * HOME (3 Oct 2026), drawn from James's own pastel mockup - "my favourite is
@@ -26,6 +28,7 @@ function greeting(): string {
 export default function PhoneHome() {
   const f = useHomeFigures();
   const [first, setFirst] = useState("");
+  const [needle, setNeedle] = useState("");
   useEffect(() => {
     fetch("/api/auth/me", { cache: "no-store" })
       .then((r) => r.json())
@@ -56,14 +59,12 @@ export default function PhoneHome() {
         </div>
       </section>
 
-      <Link
-        href="/agent/search"
-        className="m-press relative z-[1] -mt-5 flex h-[54px] items-center gap-3 rounded-full px-5 text-[14.5px] text-muted shadow-[0_10px_30px_-14px_rgba(80,50,40,0.35)]"
-        style={{ background: "var(--m-card)" }}
-      >
-        <DoodleIcon name="search" size={18} className="text-ink" />
-        Search properties, tenants, landlords...
-      </Link>
+      {/* Floats up over a blurred Home and shows what matches (James, 3 Oct 2026). */}
+      <div className="relative z-[1] -mt-5 flex">
+        <FloatSearch value={needle} onChange={setNeedle} placeholder="Search properties, tenants, landlords...">
+          <SearchResults needle={needle} flat />
+        </FloatSearch>
+      </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3">
         <Tile href="/agent/leads" tone="pink" icon="user" value={f.leadsToday} label="Leads Today" />
@@ -72,7 +73,7 @@ export default function PhoneHome() {
         <Tile href="/agent/viewings" tone="sage" icon="key" value={f.viewingsWeek} label="Viewings, 7 Days" />
       </div>
 
-      <Link href="/agent/day" className="m-press mt-3 flex items-center gap-3.5 rounded-[22px] px-4 py-4" style={{ background: "var(--m-green-wash)" }}>
+      <Link data-morph href="/agent/day" className="m-press mt-3 flex items-center gap-3.5 rounded-[22px] px-4 py-4" style={{ background: "var(--m-green-wash)" }}>
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px]" style={{ background: "var(--m-card)" }}>
           <DoodleIcon name="calendar" size={20} />
         </span>
@@ -98,7 +99,7 @@ export default function PhoneHome() {
 function Tile({ href, tone, icon, value, label }: { href: string | null; tone: "pink" | "sage"; icon: string; value: Figure; label: string }) {
   const Box = ({ children }: { children: React.ReactNode }) =>
     href ? (
-      <Link href={href} className="m-press flex min-h-[132px] flex-col justify-between rounded-[22px] p-4" style={{ background: tone === "pink" ? "var(--m-pink-wash)" : "var(--m-green-wash)" }}>
+      <Link data-morph href={href} className="m-press flex min-h-[132px] flex-col justify-between rounded-[22px] p-4" style={{ background: tone === "pink" ? "var(--m-pink-wash)" : "var(--m-green-wash)" }}>
         {children}
       </Link>
     ) : (

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 /** Shared by every Chats screen: the time words, a face, the bubbles and the box. */
 
@@ -51,20 +52,29 @@ export interface Bubble {
   onTap?: () => void;
 }
 
-/** The conversation, oldest at the top, scrolled to the newest. */
+/**
+ * The conversation, oldest at the top, scrolled to the newest. A message that
+ * arrives while it is open - yours or theirs - "bloops" in, swelling out of
+ * its own corner (James, 3 Oct 2026), rather than appearing.
+ */
 export function Bubbles({ items, empty }: { items: Bubble[]; empty: string }) {
   const end = useRef<HTMLDivElement | null>(null);
+  const seen = useRef<Set<string> | null>(null);
+  if (seen.current === null && items.length) seen.current = new Set(items.map((b) => b.id));
   useEffect(() => {
-    end.current?.scrollIntoView({ block: "end" });
-  }, [items.length]);
+    end.current?.scrollIntoView({ block: "end", behavior: seen.current && seen.current.size ? "smooth" : "auto" });
+    const t = window.setTimeout(() => items.forEach((b) => seen.current?.add(b.id)), 700);
+    return () => window.clearTimeout(t);
+  }, [items.length, items]);
   if (!items.length) return <p className="py-10 text-center text-[14.5px] text-muted">{empty}</p>;
   return (
-    <ol className="flex flex-col gap-2 pb-28 pt-2">
+    <ol className="flex flex-col gap-2 pb-3 pt-2">
       {items.map((b, i) => {
         const prev = items[i - 1];
         const showWho = !b.mine && b.who && (!prev || prev.who !== b.who || prev.mine);
+        const fresh = seen.current !== null && !seen.current.has(b.id);
         return (
-          <li key={b.id} className={`flex flex-col ${b.mine ? "items-end" : "items-start"}`}>
+          <li key={b.id} className={`flex flex-col ${b.mine ? "items-end" : "items-start"} ${fresh ? "m-bloop" : ""}`} style={fresh ? { transformOrigin: b.mine ? "100% 100%" : "0% 100%" } : undefined}>
             {showWho && <span className="mb-1 ml-3 mt-2 text-[12.5px] font-semibold text-muted">{b.who}</span>}
             <button
               type="button"
@@ -107,8 +117,8 @@ export function Composer({ placeholder, onSend, extra }: { placeholder: string; 
         e.preventDefault();
         void send();
       }}
-      className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+63px)] z-30 px-4 pb-2 pt-3"
-      style={{ background: "linear-gradient(to top, var(--m-bg) 72%, transparent)" }}
+      className="shrink-0 px-4 pb-2 pt-2"
+      style={{ background: "var(--m-bg)" }}
     >
       {extra && <div className="mx-auto mb-2 max-w-[560px]">{extra}</div>}
       <div className="mx-auto flex max-w-[560px] items-end gap-2 rounded-[26px] border p-1.5 pl-4" style={{ background: "var(--m-card)", borderColor: "var(--m-line)" }}>
@@ -144,7 +154,7 @@ export function Composer({ placeholder, onSend, extra }: { placeholder: string; 
 /** The bar at the top of a conversation: back, who, and what it is about. */
 export function ChatHead({ back, title, line, right }: { back: string; title: string; line?: string; right?: React.ReactNode }) {
   return (
-    <div className="sticky top-[env(safe-area-inset-top)] z-20 -mx-4 flex items-center gap-3 px-4 pb-3 pt-1" style={{ background: "var(--m-bg)" }}>
+    <div className="flex shrink-0 items-center gap-3 px-4 pb-3 pt-1" style={{ background: "var(--m-bg)" }}>
       <a href={back} aria-label="Back" className="m-round m-press shrink-0">
         <svg viewBox="0 0 24 24" aria-hidden className="h-[18px] w-[18px]">
           <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -156,5 +166,64 @@ export function ChatHead({ back, title, line, right }: { back: string; title: st
       </span>
       {right}
     </div>
+  );
+}
+
+/**
+ * Where the screen is while the keyboard is up. iPhones keep the page full
+ * height under the keyboard and only shrink the VISUAL viewport, so a box
+ * pinned to the bottom of the page sits behind the keys. This follows the
+ * visual viewport instead (James, 3 Oct 2026: "the reply button will move
+ * upwards while still keeping the text in frame").
+ */
+function useVisualViewport() {
+  const [vv, setVv] = useState<{ top: number; height: number; keyboard: boolean } | null>(null);
+  useEffect(() => {
+    const v = window.visualViewport;
+    if (!v) return;
+    const read = () => setVv({ top: v.offsetTop, height: v.height, keyboard: window.innerHeight - v.height > 120 });
+    read();
+    v.addEventListener("resize", read);
+    v.addEventListener("scroll", read);
+    return () => {
+      v.removeEventListener("resize", read);
+      v.removeEventListener("scroll", read);
+    };
+  }, []);
+  return vv;
+}
+
+/**
+ * A conversation screen: the name at the top, the messages in the middle
+ * (scrolling on their own), the box at the foot - and the whole thing fitted
+ * to what is visible, so with the keyboard up you still see who you are
+ * writing to and what was said. Drawn outside the page so the page's entrance
+ * movement cannot unpin it; it has its own.
+ */
+export function ChatShell({ head, composer, children }: { head: React.ReactNode; composer?: React.ReactNode; children: React.ReactNode }) {
+  const vv = useVisualViewport();
+  const scroller = useRef<HTMLDivElement | null>(null);
+  const [host, setHost] = useState<Element | null>(null);
+  useEffect(() => setHost(document.querySelector(".m-app") ?? document.body), []);
+  /* The keyboard coming up keeps the newest message in view. */
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [vv?.keyboard, vv?.height]);
+
+  const style: React.CSSProperties = vv?.keyboard
+    ? { top: vv.top, height: vv.height }
+    : { top: 0, bottom: "calc(env(safe-area-inset-bottom) + 63px)" };
+
+  if (!host) return null;
+  return createPortal(
+    <div className="m-page fixed inset-x-0 z-[35] mx-auto flex max-w-[560px] flex-col" style={{ ...style, background: "var(--m-bg)" }}>
+      <div className={vv?.keyboard ? "pt-2" : "pt-[calc(env(safe-area-inset-top)+10px)]"}>{head}</div>
+      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4">
+        {children}
+      </div>
+      {composer}
+    </div>,
+    host
   );
 }

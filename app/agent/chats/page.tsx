@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ErrorLine, HomeHero, Spinner, TopBar } from "../bits";
 import { Face, ago } from "./bits";
+import SlideTabs from "@/components/app/SlideTabs";
 
 /**
  * CHATS (James, 3 Oct 2026): "half social media, half social app, half TLE
@@ -66,28 +67,30 @@ export default function PhoneChats() {
 
       <HomeHero title="Chats" line="Your landlords, your tenants and your team." src="/illustrations/app/crescent.webp" height={196} right={-22} bottom={14} />
 
-      <div className="relative z-[1] -mt-5 grid grid-cols-2 gap-1 rounded-full p-1 shadow-[0_10px_30px_-14px_rgba(80,50,40,0.35)]" style={{ background: "var(--m-card)" }}>
-        {(["work", "play"] as const).map((h) => {
+      <SlideTabs
+        className="z-[1] -mt-5"
+        shadow
+        height={48}
+        textClass="text-[15.5px]"
+        value={half}
+        onChange={pick}
+        options={(["work", "play"] as const).map((h) => {
           const n = data ? data.unread[h] : 0;
-          return (
-            <button
-              key={h}
-              type="button"
-              onClick={() => pick(h)}
-              aria-pressed={half === h}
-              className="flex h-12 items-center justify-center gap-2 rounded-full text-[15.5px] font-medium transition-colors"
-              style={half === h ? { background: "var(--m-pink-wash)", color: "var(--m-coral)" } : undefined}
-            >
-              {h === "work" ? "Work" : "Play"}
-              {n > 0 && (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11.5px] font-bold text-white" style={{ background: "var(--m-coral)" }}>
-                  {n}
-                </span>
-              )}
-            </button>
-          );
+          return {
+            id: h,
+            label: (
+              <>
+                {h === "work" ? "Work" : "Play"}
+                {n > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11.5px] font-bold text-white" style={{ background: "var(--m-coral)" }}>
+                    {n}
+                  </span>
+                )}
+              </>
+            ),
+          };
         })}
-      </div>
+      />
 
       {error ? (
         <div className="mt-4">
@@ -159,6 +162,7 @@ function Play({ general, huddles }: { general: Room | null; huddles: Room[] }) {
     <>
       {/* General: the one room everybody is in. */}
       <Link
+        data-morph
         href="/agent/chats/room/general"
         className="m-press relative mt-5 block overflow-hidden rounded-[26px] p-5"
         style={{ background: "var(--m-pink-grad)", color: "#fff" }}
@@ -212,7 +216,7 @@ function Play({ general, huddles }: { general: Room | null; huddles: Room[] }) {
       )}
 
       {/* Find Your Local Agents */}
-      <Link href="/agent/chats/team" className="m-press mt-4 flex items-center gap-3.5 rounded-[22px] px-4 py-4" style={{ background: "var(--m-green-wash)" }}>
+      <Link data-morph href="/agent/chats/team" className="m-press mt-4 flex items-center gap-3.5 rounded-[22px] px-4 py-4" style={{ background: "var(--m-green-wash)" }}>
         <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--m-card)", color: "var(--m-sage-ink)" }}>
           <svg viewBox="0 0 24 24" aria-hidden className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 1 1 13 0c0 5.4-6.5 11-6.5 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" />

@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import Welcome from "@/components/app/Welcome";
 import { useAlerts } from "@/components/app/alerts";
 import { useSwipeToClose } from "@/components/app/swipe";
+import { bounce, useMorph, useSheetExit } from "@/components/app/motion";
 import { applyMTheme, type MTheme } from "@/lib/m-theme";
 import { appHref } from "@/lib/app-href";
 import { MORE_ORDER, NAV_DEFAULT, NAV_DESTS, NAV_SLOTS, activeNav, navDest, saveNav, type NavDest, type NavId } from "@/lib/m-nav";
@@ -36,6 +37,10 @@ type Sheet = "more" | "quick" | "bell" | null;
 
 export default function AppFrame({ inApp, theme, nav, children }: { inApp: boolean; theme: MTheme | null; nav: NavId[]; children: React.ReactNode }) {
   const path = usePathname() ?? "/agent";
+  const router = useRouter();
+  const go = useCallback((href: string) => router.push(href), [router]);
+  /* A tile marked data-morph grows into its page (components/app/motion). */
+  useMorph(path, go);
   /* The agent's own three icons (lib/m-nav), changed from More. */
   const [bar, setBar] = useState<NavId[]>(nav);
   const lit = activeNav(bar, path);
@@ -187,8 +192,9 @@ function SheetShell({ title, label, onClose, children }: { title: string; label:
   const panel = useRef<HTMLDivElement | null>(null);
   const dim = useRef<HTMLDivElement | null>(null);
   useSwipeToClose(panel, dim, onClose);
+  const { closing, close } = useSheetExit(onClose);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
     window.addEventListener("keydown", onKey);
     const was = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -196,32 +202,27 @@ function SheetShell({ title, label, onClose, children }: { title: string; label:
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = was;
     };
-  }, [onClose]);
+  }, [close]);
   return (
     <div
       ref={dim}
-      className="fixed inset-0 z-[80] flex items-end justify-center"
-      style={{ background: "rgba(40, 28, 25, 0.38)", animation: "m-dim 200ms ease-out both" }}
-      onClick={onClose}
+      className={`fixed inset-0 z-[80] flex items-end justify-center ${closing ? "m-dim-out" : "m-dim-in"}`}
+      style={{ background: "rgba(40, 28, 25, 0.38)" }}
+      onClick={close}
       role="dialog"
       aria-modal="true"
       aria-label={label}
     >
-      <style>{`
-        @keyframes m-dim { from { opacity: 0 } to { opacity: 1 } }
-        @keyframes m-rise { from { transform: translateY(100%) } to { transform: translateY(0) } }
-        @media (prefers-reduced-motion: reduce) { .m-sheet { animation: none !important } }
-      `}</style>
       <div
         ref={panel}
-        className="m-sheet max-h-[90dvh] w-full max-w-[560px] overflow-y-auto overscroll-contain rounded-t-[28px] px-4 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-3"
-        style={{ background: "var(--m-bg)", animation: "m-rise 320ms cubic-bezier(0.22, 1, 0.36, 1) both" }}
+        className={`m-sheet max-h-[90dvh] w-full max-w-[560px] overflow-y-auto overscroll-contain rounded-t-[28px] px-4 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-3 ${closing ? "m-sheet-out" : "m-sheet-in"}`}
+        style={{ background: "var(--m-bg)", color: "var(--m-ink)" }}
         onClick={(e) => e.stopPropagation()}
       >
         <span aria-hidden className="mx-auto mb-3 block h-[5px] w-[40px] rounded-full" style={{ background: "var(--m-line)" }} />
         <div className="mb-4 flex items-center justify-between px-1">
           <h2 className="m-title text-[24px]">{title}</h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="m-round m-press">
+          <button type="button" onClick={close} aria-label="Close" className="m-round m-press">
             <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
@@ -257,12 +258,13 @@ const QUICK: Array<{ href: string; label: string; line: string; icon: string; to
  */
 function QuickSheet({ onClose }: { onClose: () => void }) {
   const [leaving, setLeaving] = useState(false);
+  const router = useRouter();
   const panel = useRef<HTMLDivElement | null>(null);
   const dim = useRef<HTMLDivElement | null>(null);
   useSwipeToClose(panel, dim, onClose);
   const leave = useCallback(() => {
     setLeaving(true);
-    window.setTimeout(onClose, 220);
+    window.setTimeout(onClose, 270);
   }, [onClose]);
 
   useEffect(() => {
@@ -287,11 +289,11 @@ function QuickSheet({ onClose }: { onClose: () => void }) {
     >
       <style>{`
         .q-dim { background: rgba(40, 28, 25, 0.4); animation: q-dim-in 260ms ease-out both; }
-        .q-sheet { animation: q-rise 560ms cubic-bezier(0.32, 1.42, 0.52, 1) both; }
+        .q-sheet { animation: m-sheet-in 640ms cubic-bezier(0.22, 0.9, 0.3, 1) both; }
         .q-tile { animation: q-pop 520ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
         .q-bar { animation: q-grow 600ms cubic-bezier(0.34, 1.56, 0.64, 1) 260ms both; transform-origin: left; }
         .q-out { animation: q-dim-out 220ms ease-in both; }
-        .q-out .q-sheet { animation: q-fall 220ms cubic-bezier(0.4, 0, 1, 1) both; }
+        .q-out .q-sheet { animation: m-sheet-out 280ms cubic-bezier(0.5, 0, 0.9, 0.5) both; }
         @keyframes q-dim-in { from { opacity: 0 } to { opacity: 1 } }
         @keyframes q-dim-out { from { opacity: 1 } to { opacity: 0 } }
         @keyframes q-rise { from { transform: translateY(100%) } to { transform: translateY(0) } }
@@ -333,6 +335,14 @@ function QuickSheet({ onClose }: { onClose: () => void }) {
               <li key={q.href} className="q-tile" style={{ animationDelay: `${120 + i * 55}ms` }}>
                 <Link
                   href={q.href}
+                  onClick={(e) => {
+                    /* The tile bounces, the sheet drops away, then the page (James, 3 Oct 2026). */
+                    e.preventDefault();
+                    bounce(e.currentTarget, () => {
+                      leave();
+                      window.setTimeout(() => router.push(q.href), 150);
+                    });
+                  }}
                   className="m-press relative flex h-full min-h-[150px] flex-col overflow-hidden rounded-[24px] border p-4"
                   style={{ background: "var(--m-card)", borderColor: "var(--m-line)" }}
                 >
@@ -463,6 +473,15 @@ function PagesSheet({
   const panel = useRef<HTMLDivElement | null>(null);
   const dim = useRef<HTMLDivElement | null>(null);
   useSwipeToClose(panel, dim, onClose);
+  const { closing, close } = useSheetExit(onClose);
+  const router = useRouter();
+  /* A page from More: the row bounces, More drops away, then the page rises
+     in - "nothing should ever jerk into the next page" (James, 3 Oct 2026). */
+  const open = (el: Element, href: string) =>
+    bounce(el, () => {
+      close();
+      window.setTimeout(() => router.push(href), 170);
+    });
 
   useEffect(() => {
     fetch("/api/auth/me", { cache: "no-store" })
@@ -471,7 +490,7 @@ function PagesSheet({
         if (j.user?.name) setMe({ name: j.user.name, email: j.user.email ?? "", photo: j.user.photo ?? null });
       })
       .catch(() => null);
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
     window.addEventListener("keydown", onKey);
     const was = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -479,7 +498,7 @@ function PagesSheet({
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = was;
     };
-  }, [onClose]);
+  }, [close]);
 
   /* Each layer starts at the top. */
   useEffect(() => {
@@ -508,23 +527,21 @@ function PagesSheet({
   return (
     <div
       ref={dim}
-      className="fixed inset-0 z-[80] flex items-end justify-center"
-      style={{ background: "rgba(0, 0, 0, 0.38)", animation: "m-dim 200ms ease-out both" }}
-      onClick={onClose}
+      className={`fixed inset-0 z-[80] flex items-end justify-center ${closing ? "m-dim-out" : "m-dim-in"}`}
+      style={{ background: "rgba(0, 0, 0, 0.38)" }}
+      onClick={close}
       role="dialog"
       aria-modal="true"
       aria-label={title}
     >
       <style>{`
-        @keyframes m-dim { from { opacity: 0 } to { opacity: 1 } }
-        @keyframes m-rise { from { transform: translateY(100%) } to { transform: translateY(0) } }
-        @keyframes m-in { from { opacity: 0; transform: translateX(14px) } to { opacity: 1; transform: none } }
+        @keyframes m-in { 0% { opacity: 0; transform: translateX(26px) } 65% { opacity: 1; transform: translateX(-3px) } 100% { opacity: 1; transform: none } }
         @media (prefers-reduced-motion: reduce) { .m-sheet, .m-layer { animation: none !important } }
       `}</style>
       <div
         ref={panel}
-        className="m-sheet max-h-[90dvh] w-full max-w-[560px] overflow-y-auto overscroll-contain rounded-t-[28px] px-4 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-3"
-        style={{ background: "var(--m-bg)", animation: "m-rise 320ms cubic-bezier(0.22, 1, 0.36, 1) both" }}
+        className={`m-sheet max-h-[90dvh] w-full max-w-[560px] overflow-y-auto overscroll-contain rounded-t-[28px] px-4 pb-[calc(env(safe-area-inset-bottom)+20px)] pt-3 ${closing ? "m-sheet-out" : "m-sheet-in"}`}
+        style={{ background: "var(--m-bg)", color: "var(--m-ink)" }}
         onClick={(e) => e.stopPropagation()}
       >
         <span aria-hidden className="mx-auto mb-3 block h-[5px] w-[40px] rounded-full" style={{ background: "var(--m-line)" }} />
@@ -539,7 +556,7 @@ function PagesSheet({
             )}
             <h2 className="m-title truncate text-[24px]">{title}</h2>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="m-round m-press">
+          <button type="button" onClick={close} aria-label="Close" className="m-round m-press">
             <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
@@ -551,7 +568,14 @@ function PagesSheet({
             <ul className="m-group">
               {offBar.map((p) => (
                 <li key={p.id} className="m-row">
-                  <a href={p.href} className={row}>
+                  <a
+                    href={p.href}
+                    className={row}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      open(e.currentTarget, p.href);
+                    }}
+                  >
                     <span className="text-muted">
                       <NavIcon dest={p} on={false} size={19} />
                     </span>
@@ -586,7 +610,7 @@ function PagesSheet({
         )}
 
         {view === "profile" && (
-          <div key="profile" className="m-layer" style={{ animation: "m-in 220ms ease-out both" }}>
+          <div key="profile" className="m-layer" style={{ animation: "m-in 420ms cubic-bezier(0.22, 0.9, 0.3, 1) both" }}>
             <div className="m-group flex items-center gap-3.5 px-4 py-4">
               <Avatar me={me} big />
               <span className="min-w-0">
@@ -692,7 +716,7 @@ function NavPicker({ bar, onBar }: { bar: NavId[]; onBar: (b: NavId[]) => void }
   const isDefault = bar.join() === NAV_DEFAULT.join();
 
   return (
-    <div key="nav" className="m-layer" style={{ animation: "m-in 220ms ease-out both" }}>
+    <div key="nav" className="m-layer" style={{ animation: "m-in 420ms cubic-bezier(0.22, 0.9, 0.3, 1) both" }}>
       <p className="px-1 text-[14px] leading-snug text-muted">Tap a space on your bar, then the page you want there. Anything not on the bar stays in More.</p>
 
       {/* The bar as it will look, the chosen space ringed in coral. */}

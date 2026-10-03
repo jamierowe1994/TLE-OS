@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import { useFrame } from "@/components/app/AppFrame";
 import { useSwipeToClose } from "@/components/app/swipe";
+import { useSheetExit } from "@/components/app/motion";
 
 /**
  * The few pieces every phone screen shares. Kept deliberately small: big
@@ -163,9 +164,11 @@ export function mapsHref(address: string, lat?: number | null, lng?: number | nu
 export function Sheet({ onClose, label, children }: { onClose: () => void; label: string; children: React.ReactNode }) {
   const panel = useRef<HTMLDivElement | null>(null);
   const dim = useRef<HTMLDivElement | null>(null);
+  /* A swipe animates itself away; a tap on the dim or Escape drops it with a bounce. */
   useSwipeToClose(panel, dim, onClose);
+  const { closing, close } = useSheetExit(onClose);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
     window.addEventListener("keydown", onKey);
     const was = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -173,29 +176,24 @@ export function Sheet({ onClose, label, children }: { onClose: () => void; label
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = was;
     };
-  }, [onClose]);
+  }, [close]);
   return (
     <div
       ref={dim}
-      className="fixed inset-0 z-[80] flex items-end justify-center"
-      style={{ background: "rgba(43, 32, 29, 0.45)", animation: "m-dim 200ms ease-out both" }}
-      onClick={onClose}
+      className={`fixed inset-0 z-[80] flex items-end justify-center ${closing ? "m-dim-out" : "m-dim-in"}`}
+      style={{ background: "rgba(43, 32, 29, 0.45)" }}
+      onClick={close}
       role="dialog"
       aria-modal="true"
       aria-label={label}
     >
-      <style>{`
-        @keyframes m-dim { from { opacity: 0 } to { opacity: 1 } }
-        @keyframes m-rise { from { transform: translateY(100%) } to { transform: translateY(0) } }
-        @media (prefers-reduced-motion: reduce) { .m-sheet { animation: none !important } }
-      `}</style>
       <div
         ref={panel}
-        className="m-sheet max-h-[88dvh] w-full max-w-[520px] overflow-y-auto overscroll-contain rounded-t-[26px] bg-page px-5 pb-[max(22px,env(safe-area-inset-bottom))] pt-3"
+        className={`m-sheet max-h-[88dvh] w-full max-w-[520px] overflow-y-auto overscroll-contain rounded-t-[26px] bg-page px-5 pb-[max(22px,env(safe-area-inset-bottom))] pt-3 ${closing ? "m-sheet-out" : "m-sheet-in"}`}
         /* Its own ink, always: a sheet opened from inside a coloured card
            (Focus Hour's white text) must not inherit that card's colour -
            James could not read the Silence Your Phone sheet (3 Oct 2026). */
-        style={{ animation: "m-rise 300ms cubic-bezier(0.22, 1, 0.36, 1) both", color: "var(--m-ink)" }}
+        style={{ color: "var(--m-ink)" }}
         onClick={(e) => e.stopPropagation()}
       >
         <span aria-hidden className="mx-auto mb-4 block h-[5px] w-[44px] rounded-full bg-black/10" />

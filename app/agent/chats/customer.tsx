@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ErrorLine, Spinner, dialable, whatsappHref, WhatsAppIcon } from "../bits";
-import { Bubbles, ChatHead, Composer, type Bubble } from "./bits";
+import { Bubbles, ChatHead, ChatShell, Composer, type Bubble } from "./bits";
 
 /**
  * One customer conversation (3 Oct 2026): a landlord on their property file,
@@ -53,7 +53,8 @@ export default function CustomerThread({ kind, id }: { kind: "landlord" | "tenan
   const items: Bubble[] = (t?.messages ?? []).map((m) => ({ id: m.id, mine: m.from === "agent", body: m.body, at: m.at }));
 
   return (
-    <main>
+    <ChatShell
+      head={
       <ChatHead
         back="/agent/chats"
         title={t?.title ?? (kind === "landlord" ? "Landlord" : "Tenant")}
@@ -77,20 +78,24 @@ export default function CustomerThread({ kind, id }: { kind: "landlord" | "tenan
           )
         }
       />
-      {error ? (
-        <ErrorLine text={error} />
-      ) : !t ? (
-        <Spinner label="Opening the conversation" className="py-8" />
-      ) : (
-        <>
-          <Bubbles items={items} empty={`Nothing yet. Say hello to ${first}.`} />
+      }
+      composer={
+        t && !error ? (
           <Composer
             placeholder={`Reply to ${first}...`}
             onSend={send}
             extra={note ? <p className="rounded-[14px] px-3 py-2 text-[13px]" style={{ background: "var(--m-pink-wash)", color: "var(--m-coral)" }}>{note}</p> : undefined}
           />
-        </>
+        ) : undefined
+      }
+    >
+      {error ? (
+        <ErrorLine text={error} />
+      ) : !t ? (
+        <Spinner label="Opening the conversation" className="py-8" />
+      ) : (
+        <Bubbles items={items} empty={`Nothing yet. Say hello to ${first}.`} />
       )}
-    </main>
+    </ChatShell>
   );
 }

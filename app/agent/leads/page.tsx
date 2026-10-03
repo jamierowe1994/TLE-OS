@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import type { Lead } from "@/lib/leads-sample";
 import { ErrorLine, Sheet, Spinner, TopBar, WhatsAppIcon, dialable, mapsHref, whatsappHref } from "../bits";
+import SlideTabs from "@/components/app/SlideTabs";
+import FloatSearch from "@/components/app/FloatSearch";
 
 /**
  * LEADS (3 Oct 2026). James: "at no point on this app should we ever get
@@ -145,18 +147,12 @@ export default function PhoneLeads() {
       </section>
 
       <div className="relative z-[1] -mt-5 flex items-center gap-2.5">
-        <label className="flex h-[54px] min-w-0 flex-1 items-center gap-3 rounded-full px-5 shadow-[0_10px_30px_-14px_rgba(80,50,40,0.35)]" style={{ background: "var(--m-card)" }}>
-          <DoodleIcon name="search" size={18} />
-          <input
-            type="search"
-            value={needle}
-            onChange={(e) => setNeedle(e.target.value)}
-            placeholder="Name, phone or address..."
-            enterKeyHint="search"
-            autoComplete="off"
-            className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted [&::-webkit-search-cancel-button]:hidden"
-          />
-        </label>
+        <FloatSearch
+          value={needle}
+          onChange={setNeedle}
+          placeholder="Name, phone or address..."
+          items={leads ? shown.map((l) => ({ key: String(l.id), title: l.name || "No name given", line: [l.enquiry, l.address || l.area].filter(Boolean).join(" · "), tag: l.stage, onPick: () => setOpen(l) })) : null}
+        />
         <button
           type="button"
           onClick={() => setSorting(true)}
@@ -170,20 +166,7 @@ export default function PhoneLeads() {
         </button>
       </div>
 
-      <div className="mt-4 grid grid-cols-4 gap-1 rounded-full p-1" style={{ background: "var(--m-card)" }}>
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            aria-pressed={tab === t.id}
-            className="h-10 rounded-full px-1 text-[14px] font-medium transition-colors"
-            style={tab === t.id ? { background: "var(--m-pink-wash)", color: "var(--m-coral)" } : undefined}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <SlideTabs className="mt-4" value={tab} onChange={setTab} options={TABS.map((t) => ({ id: t.id, label: t.label }))} />
 
       <p className="mb-2 mt-5 px-1 text-[15px] font-medium">{leads ? `${shown.length} ${shown.length === 1 ? "Lead" : "Leads"}` : "Leads"}</p>
 

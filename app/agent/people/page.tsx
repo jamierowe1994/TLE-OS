@@ -8,6 +8,8 @@ import type { NearbyPerson } from "@/app/api/m/nearby/route";
 import type { BookPerson } from "@/lib/m-people-book";
 import { ErrorLine, Sheet, Spinner, TopBar, dialable, mapsHref, whatsappHref, WhatsAppIcon } from "../bits";
 import { RadiusSheet, type RadiusPick } from "../radius";
+import SlideTabs from "@/components/app/SlideTabs";
+import FloatSearch from "@/components/app/FloatSearch";
 
 /**
  * PEOPLE (3 Oct 2026), from James's mockup - "this is how I would like the
@@ -161,44 +163,31 @@ export default function PhonePeople() {
         </div>
       </section>
 
-      <div className="relative z-[1] -mt-5 grid grid-cols-2 gap-1 rounded-full p-1 shadow-[0_10px_30px_-14px_rgba(80,50,40,0.35)]" style={{ background: "var(--m-card)" }}>
-        {(["tenant", "landlord"] as const).map((w) => (
-          <button
-            key={w}
-            type="button"
-            onClick={() => pickSide(w)}
-            aria-pressed={side === w}
-            className="h-11 rounded-full text-[15px] font-medium transition-colors"
-            style={side === w ? { background: "var(--m-pink-wash)", color: "var(--m-coral)" } : undefined}
-          >
-            {w === "tenant" ? "Tenants" : "Landlords"}
-          </button>
-        ))}
-      </div>
+      <SlideTabs
+        className="z-[1] -mt-5"
+        shadow
+        height={44}
+        textClass="text-[15px]"
+        value={side}
+        onChange={pickSide}
+        options={[
+          { id: "tenant" as const, label: "Tenants" },
+          { id: "landlord" as const, label: "Landlords" },
+        ]}
+      />
 
       <div className="mt-3 flex items-center gap-2.5">
-        <label className="flex h-[52px] min-w-0 flex-1 items-center gap-3 rounded-full px-5" style={{ background: "var(--m-card)" }}>
-          <DoodleIcon name="search" size={18} />
-          <input
-            type="search"
-            value={needle}
-            onChange={(e) => {
-              setNeedle(e.target.value);
-              setRadius(null);
-            }}
-            placeholder="Name, phone or home..."
-            enterKeyHint="search"
-            autoComplete="off"
-            className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted [&::-webkit-search-cancel-button]:hidden"
-          />
-          {needle && (
-            <button type="button" onClick={() => setNeedle("")} aria-label="Clear" className="-mr-2 flex h-8 w-8 items-center justify-center rounded-full text-muted">
-              <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
-          )}
-        </label>
+        <FloatSearch
+          value={needle}
+          onChange={(v) => {
+            setNeedle(v);
+            setRadius(null);
+          }}
+          placeholder="Name, phone or home..."
+          shadow={false}
+          className="!h-[52px]"
+          items={list.map((p) => ({ key: p.key, title: p.name, line: [p.address, p.locality].filter(Boolean).join(", "), tag: p.status, onPick: () => setOpen(p) }))}
+        />
         <button
           type="button"
           onClick={() => setCustomise(true)}

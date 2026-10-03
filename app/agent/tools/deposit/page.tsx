@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { TopBar } from "../../bits";
+import SlideTabs from "@/components/app/SlideTabs";
 
 /**
  * DEPOSIT CALCULATOR (Tools, 3 Oct 2026): the most that can be taken, from
@@ -47,13 +48,18 @@ export default function DepositCalculator() {
             className="m-guide-num min-w-0 flex-1 bg-transparent text-[48px] leading-none outline-none placeholder:text-muted"
           />
         </div>
-        <div className="mt-4 grid grid-cols-2 gap-1 rounded-full p-1" style={{ background: "var(--m-fill)" }}>
-          {(["month", "week"] as const).map((p) => (
-            <button key={p} type="button" onClick={() => setPer(p)} aria-pressed={per === p} className="h-10 rounded-full text-[14.5px] font-medium" style={per === p ? { background: "var(--m-card)", color: "var(--m-coral)" } : undefined}>
-              Per {p === "month" ? "Month" : "Week"}
-            </button>
-          ))}
-        </div>
+        <SlideTabs
+          className="mt-4"
+          track="var(--m-fill)"
+          pill="var(--m-card)"
+          textClass="text-[14.5px]"
+          value={per}
+          onChange={setPer}
+          options={[
+            { id: "month" as const, label: "Per Month" },
+            { id: "week" as const, label: "Per Week" },
+          ]}
+        />
       </div>
 
       <ul className="mt-3 grid gap-2.5">

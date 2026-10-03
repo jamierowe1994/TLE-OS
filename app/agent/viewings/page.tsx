@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import { feedbackLabel, type Appt } from "@/lib/diary";
 import { ErrorLine, Spinner, TopBar, HomeHero } from "../bits";
 import { endOf, loadDiary, nowHm } from "../diary-bits";
+import SlideTabs from "@/components/app/SlideTabs";
+import FloatSearch from "@/components/app/FloatSearch";
 
 /**
  * VIEWINGS (3 Oct 2026), the app's own page - James: "build the viewings page
@@ -51,6 +54,7 @@ function dayHeading(offset: number): string {
 }
 
 export default function PhoneViewings() {
+  const router = useRouter();
   const [appts, setAppts] = useState<Appt[] | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -99,33 +103,16 @@ export default function PhoneViewings() {
 
       <HomeHero title="Viewings" line="Who you are showing round, and where." src="/illustrations/app/home-bungalow.webp" />
 
-      <label className="relative z-[1] -mt-5 flex h-[54px] items-center gap-3 rounded-full px-5 shadow-[0_10px_30px_-14px_rgba(80,50,40,0.35)]" style={{ background: "var(--m-card)" }}>
-        <DoodleIcon name="search" size={18} />
-        <input
-          type="search"
+      <div className="relative z-[1] -mt-5 flex">
+        <FloatSearch
           value={needle}
-          onChange={(e) => setNeedle(e.target.value)}
+          onChange={setNeedle}
           placeholder="Viewer or address..."
-          enterKeyHint="search"
-          autoComplete="off"
-          className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted [&::-webkit-search-cancel-button]:hidden"
+          items={appts ? groups.flatMap((g) => g.rows.map((a) => ({ key: a.id, title: a.who || "No viewer named", line: `${dayHeading(g.day)} ${a.start} · ${a.where || a.what}`, onPick: () => router.push(`/agent/event/${encodeURIComponent(a.id)}?from=viewings`) }))) : null}
         />
-      </label>
-
-      <div className="mt-4 grid grid-cols-4 gap-1 rounded-full p-1" style={{ background: "var(--m-card)" }}>
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            aria-pressed={tab === t.id}
-            className="h-10 rounded-full px-1 text-[14px] font-medium transition-colors"
-            style={tab === t.id ? { background: "var(--m-pink-wash)", color: "var(--m-coral)" } : undefined}
-          >
-            {t.label}
-          </button>
-        ))}
       </div>
+
+      <SlideTabs className="mt-4" value={tab} onChange={setTab} options={TABS.map((t) => ({ id: t.id, label: t.label }))} />
 
       <p className="mt-5 px-1 text-[15px] font-medium">
         {appts ? `${count} ${count === 1 ? "Viewing" : "Viewings"}` : "Viewings"}
@@ -177,6 +164,7 @@ function Row({ a, done }: { a: Appt; done: boolean }) {
           : null;
   return (
     <Link
+      data-morph
       href={`/agent/event/${encodeURIComponent(a.id)}?from=viewings`}
       className="m-press flex w-full items-center gap-3.5 rounded-[22px] px-4 py-3.5"
       style={{ background: "var(--m-card)" }}

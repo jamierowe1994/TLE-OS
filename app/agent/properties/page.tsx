@@ -6,6 +6,8 @@ import DoodleIcon from "@/components/DoodleIcon";
 import type { PhoneProperty } from "@/app/api/m/properties/route";
 import type { PropertyGroup } from "@/lib/m-properties";
 import { ErrorLine, ReachButtons, Sheet, Spinner, TopBar, dialable, mapsHref } from "../bits";
+import SlideTabs from "@/components/app/SlideTabs";
+import FloatSearch from "@/components/app/FloatSearch";
 
 /**
  * PROPERTIES (3 Oct 2026), from James's mockup - "make the properties tab a
@@ -143,25 +145,12 @@ export default function PhoneProperties() {
       </section>
 
       <div className="relative z-[1] -mt-5 flex items-center gap-2.5">
-        <label className="flex h-[54px] min-w-0 flex-1 items-center gap-3 rounded-full px-5 shadow-[0_10px_30px_-14px_rgba(80,50,40,0.35)]" style={{ background: "var(--m-card)" }}>
-          <DoodleIcon name="search" size={18} />
-          <input
-            type="search"
-            value={needle}
-            onChange={(e) => setNeedle(e.target.value)}
-            placeholder="Address, postcode or tenant..."
-            enterKeyHint="search"
-            autoComplete="off"
-            className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted [&::-webkit-search-cancel-button]:hidden"
-          />
-          {needle && (
-            <button type="button" onClick={() => setNeedle("")} aria-label="Clear" className="-mr-2 flex h-8 w-8 items-center justify-center rounded-full text-muted">
-              <svg viewBox="0 0 24 24" aria-hidden className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
-          )}
-        </label>
+        <FloatSearch
+          value={needle}
+          onChange={setNeedle}
+          placeholder="Address, postcode or tenant..."
+          items={book ? shown.map((p) => ({ key: p.key, title: p.name, line: [p.locality, p.rent].filter(Boolean).join(" · "), tag: p.status, onPick: () => setOpen(p) })) : null}
+        />
         <button
           type="button"
           onClick={() => setSorting(true)}
@@ -175,23 +164,7 @@ export default function PhoneProperties() {
         </button>
       </div>
 
-      <div className="mt-4 grid grid-cols-4 gap-1 rounded-full p-1" style={{ background: "var(--m-card)" }}>
-        {CHIPS.map((c) => {
-          const on = chip === c.id;
-          return (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => setChip(c.id)}
-              aria-pressed={on}
-              className="h-10 rounded-full px-1 text-[14px] font-medium transition-colors"
-              style={on ? { background: "var(--m-pink-wash)", color: "var(--m-coral)" } : { color: "var(--m-ink)" }}
-            >
-              {c.label}
-            </button>
-          );
-        })}
-      </div>
+      <SlideTabs className="mt-4" value={chip} onChange={setChip} options={CHIPS.map((c) => ({ id: c.id, label: c.label }))} />
 
       {chip === "archived" && (
         <button type="button" onClick={() => setChip("all")} className="m-press mt-4 flex w-full items-center justify-between rounded-full px-4 py-2.5 text-[14px] font-medium" style={{ background: "var(--m-fill)" }}>

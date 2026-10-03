@@ -51,7 +51,7 @@ export default function PhoneTools() {
           const live = t.href.endsWith("/focus") && left > 0;
           return (
             <li key={t.href}>
-              <Link href={t.href} className="m-press flex min-h-[172px] flex-col justify-between rounded-[26px] p-4 shadow-[0_14px_30px_-20px_rgba(120,60,40,0.55)]" style={{ background: c.bg, color: c.ink }}>
+              <Link data-morph href={t.href} className="m-press flex min-h-[172px] flex-col justify-between rounded-[26px] p-4 shadow-[0_14px_30px_-20px_rgba(120,60,40,0.55)]" style={{ background: c.bg, color: c.ink }}>
                 <span className="flex items-start justify-between">
                   <span className="flex h-11 w-11 items-center justify-center rounded-[14px]" style={{ background: c.icon, color: c.iconInk }}>
                     <svg viewBox="0 0 24 24" aria-hidden className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">

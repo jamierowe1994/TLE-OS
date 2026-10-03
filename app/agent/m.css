@@ -260,15 +260,73 @@
   flex: none;
 }
 
+/* ── MOTION (James, 3 Oct 2026: "fairly exaggerated ... everything feels like
+   real-world physics ... nothing should ever jerk into the next page") ──
+   One place for the app's movement:
+     m-press     sinks on the finger, springs back past itself on release
+     m-page      every page rises and settles in (app/agent/template.tsx)
+     m-sheet-*   sheets rise with a little bounce, and drop away on close
+     m-bloop     a new message swells out of its corner
+   All of it stands still for anyone who has asked their phone for less motion. */
 .m-app .m-press {
-  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1), background-color 160ms;
+  transition: transform 460ms cubic-bezier(0.34, 1.7, 0.5, 1), background-color 160ms;
 }
 .m-app .m-press:active {
-  transform: scale(0.97);
+  transform: scale(0.94);
+  transition: transform 110ms ease-out, background-color 110ms;
 }
+
+@keyframes m-page-in {
+  0% { opacity: 0; transform: translateY(26px) scale(0.975); }
+  60% { opacity: 1; transform: translateY(-3px) scale(1.004); }
+  100% { opacity: 1; transform: none; }
+}
+.m-app .m-page {
+  animation: m-page-in 560ms cubic-bezier(0.22, 0.9, 0.3, 1) both;
+}
+
+@keyframes m-sheet-in {
+  0% { transform: translateY(100%); }
+  62% { transform: translateY(-3.5%); }
+  82% { transform: translateY(1%); }
+  100% { transform: translateY(0); }
+}
+@keyframes m-sheet-out {
+  0% { transform: translateY(0); }
+  18% { transform: translateY(-2%); }
+  100% { transform: translateY(108%); }
+}
+@keyframes m-dim-in { from { opacity: 0 } to { opacity: 1 } }
+@keyframes m-dim-out { from { opacity: 1 } to { opacity: 0 } }
+.m-app .m-sheet-in { animation: m-sheet-in 640ms cubic-bezier(0.22, 0.9, 0.3, 1) both; }
+.m-app .m-sheet-out { animation: m-sheet-out 300ms cubic-bezier(0.5, 0, 0.9, 0.5) both; }
+.m-app .m-dim-in { animation: m-dim-in 260ms ease-out both; }
+.m-app .m-dim-out { animation: m-dim-out 300ms ease-in both; }
+
+@keyframes m-bloop {
+  0% { opacity: 0; transform: scale(0.15); }
+  55% { opacity: 1; transform: scale(1.09); }
+  78% { transform: scale(0.97); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.m-app .m-bloop { animation: m-bloop 560ms cubic-bezier(0.3, 0.9, 0.3, 1) both; }
+
+@keyframes m-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(0.9); }
+  70% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .m-app .m-press:active {
     transform: none;
+  }
+  .m-app .m-page,
+  .m-app .m-sheet-in,
+  .m-app .m-sheet-out,
+  .m-app .m-bloop {
+    animation-duration: 1ms !important;
   }
 }
 
