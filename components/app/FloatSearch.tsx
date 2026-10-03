@@ -69,7 +69,9 @@ export default function FloatSearch({
     input.current?.focus({ preventScroll: true });
   };
 
-  /* Rising: from where the box was to the top, a little past and back. */
+  /* Rising: a slow float from where the box was, easing in to its place with
+     only a gentle lift at the end - James, 3 Oct 2026: "it should kind of
+     float up, not ram up into the top". */
   useLayoutEffect(() => {
     if (!open) return;
     const r = from.current;
@@ -81,42 +83,45 @@ export default function FloatSearch({
     const sx = r.width / Math.max(1, to.width);
     el.animate(
       [
-        { transform: `translate(${dx}px, ${dy}px) scaleX(${sx})`, transformOrigin: "left top" },
-        { transform: `translate(0px, -16px) scale(1.05)`, transformOrigin: "left top", offset: 0.6 },
-        { transform: `translate(0px, 4px) scale(0.99)`, transformOrigin: "left top", offset: 0.8 },
+        { transform: `translate(${dx}px, ${dy}px) scaleX(${sx})`, transformOrigin: "left top", boxShadow: "none" },
+        { transform: `translate(0px, -7px) scale(1.025)`, transformOrigin: "left top", offset: 0.78 },
         { transform: "none", transformOrigin: "left top" },
       ],
-      { duration: 640, easing: "cubic-bezier(0.3, 0.9, 0.3, 1)" }
+      { duration: 1150, easing: "cubic-bezier(0.33, 0.1, 0.25, 1)" }
     );
-    back.current?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 380, easing: "ease-out", fill: "both" });
+    back.current?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 900, easing: "ease-out", fill: "both" });
     list.current?.animate(
       [
-        { opacity: 0, transform: "translateY(28px) scale(0.97)" },
+        { opacity: 0, transform: "translateY(36px)" },
         { opacity: 1, transform: "none" },
       ],
-      { duration: 460, delay: 200, easing: "cubic-bezier(0.22, 0.9, 0.3, 1)", fill: "both" }
+      { duration: 700, delay: 650, easing: "cubic-bezier(0.25, 0.8, 0.3, 1)", fill: "both" }
     );
   }, [open]);
 
-  /* Dropping back to where it came from, then gone. */
+  /* Going back: let go - it drifts down towards where it came from while it
+     fades, the page clears, and the box in the page fades back in. */
   const drop = (then?: () => void) => {
     const el = float.current;
     const r = pill.current?.getBoundingClientRect();
     input.current?.blur();
     const finish = () => {
       setOpen(false);
+      pill.current?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 450, easing: "ease-out" });
       then?.();
     };
     if (!el || !r || calm() || typeof el.animate !== "function") return finish();
     const to = el.getBoundingClientRect();
-    el.animate([{ transform: "none" }, { transform: `translate(${r.left - to.left}px, ${r.top - to.top}px) scaleX(${r.width / Math.max(1, to.width)})` }], {
-      duration: 320,
-      easing: "cubic-bezier(0.5, 0, 0.3, 1)",
-      fill: "forwards",
-    });
-    back.current?.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 320, easing: "ease-in", fill: "forwards" });
-    list.current?.animate([{ opacity: 1 }, { opacity: 0, transform: "translateY(20px)" }], { duration: 200, fill: "forwards" });
-    window.setTimeout(finish, 300);
+    el.animate(
+      [
+        { transform: "none", opacity: 1 },
+        { transform: `translate(${(r.left - to.left) * 0.6}px, ${(r.top - to.top) * 0.6}px) scaleX(${1 - (1 - r.width / Math.max(1, to.width)) * 0.6})`, opacity: 0 },
+      ],
+      { duration: 650, easing: "cubic-bezier(0.4, 0, 0.6, 1)", fill: "forwards" }
+    );
+    back.current?.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 700, easing: "ease-in-out", fill: "forwards" });
+    list.current?.animate([{ opacity: 1 }, { opacity: 0, transform: "translateY(24px)" }], { duration: 380, easing: "ease-in", fill: "forwards" });
+    window.setTimeout(finish, 640);
   };
 
   useEffect(() => {
@@ -173,7 +178,7 @@ export default function FloatSearch({
               className="absolute inset-0"
               style={{ background: "rgba(35, 24, 22, 0.42)", backdropFilter: "blur(14px) saturate(1.1)", WebkitBackdropFilter: "blur(14px) saturate(1.1)" }}
             />
-            <div className="pointer-events-none absolute inset-x-0 top-0 mx-auto max-w-[560px] px-4 pt-[calc(env(safe-area-inset-top)+14px)]">
+            <div className="pointer-events-none absolute inset-x-0 top-0 mx-auto max-w-[560px] px-4 pt-[calc(env(safe-area-inset-top)+46px)]">
               <div ref={float} className="pointer-events-auto flex items-center gap-2.5">
                 <label className="flex h-[56px] min-w-0 flex-1 items-center gap-3 rounded-full px-5 shadow-[0_24px_50px_-18px_rgba(20,10,8,0.6)]" style={{ background: "var(--m-card)" }}>
                   <DoodleIcon name="search" size={18} />

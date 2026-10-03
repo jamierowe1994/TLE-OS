@@ -236,10 +236,11 @@ function Detail({ a, onClose }: { a: App; onClose: () => void }) {
   const facts: Array<[string, string, string]> = [
     ["coin", "Offer", money(a.offerAmount, a.offerPeriod)],
     ["calendar", "Move In", a.startDate ? day(a.startDate) : ""],
-    ["doc", "Term", a.agreementMonths ? `${a.agreementMonths} months` : ""],
+    ["doc", "Term", a.agreementMonths ? `${a.agreementMonths} ${a.agreementMonths === 1 ? "month" : "months"}` : ""],
     ["user", "Living There", a.occupants != null ? `${a.occupants} ${a.occupants === 1 ? "person" : "people"}${a.dependents ? `, ${a.dependents} dependent${a.dependents === 1 ? "" : "s"}` : ""}` : ""],
     ["home", "Pets", a.hasPets == null ? "" : a.hasPets ? "Yes" : "No"],
-    ["coin", "Household Income", a.totalIncome ? `£${Math.round(a.totalIncome).toLocaleString("en-GB")} a year` : ""],
+    /* REX's total income is MONTHLY: its own affordability is rent over it. */
+    ["coin", "Household Income", a.totalIncome ? `£${Math.round(a.totalIncome).toLocaleString("en-GB")} a month` : ""],
     ["checklist", "Affordability", a.affordabilityPct != null ? `${Math.round(a.affordabilityPct)}%` : ""],
     ["key", "Holding Deposit", a.holdingDepositAmount ? `£${Math.round(a.holdingDepositAmount).toLocaleString("en-GB")}` : ""],
     ["clock", "Received", received(a) ? day(received(a)) : ""],

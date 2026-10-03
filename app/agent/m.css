@@ -281,8 +281,13 @@
   60% { opacity: 1; transform: translateY(-3px) scale(1.004); }
   100% { opacity: 1; transform: none; }
 }
+/* BACKWARDS, never "both": a finished animation still holding a transform -
+   even an identity one - makes the page the box that position:fixed children
+   are placed in, so every sheet opened on a long list (Applications, 3 Oct
+   2026: "it has a meltdown") landed thousands of pixels down the page. Once it
+   has played, the page must carry no transform at all. */
 .m-app .m-page {
-  animation: m-page-in 560ms cubic-bezier(0.22, 0.9, 0.3, 1) both;
+  animation: m-page-in 560ms cubic-bezier(0.22, 0.9, 0.3, 1) backwards;
 }
 
 @keyframes m-sheet-in {
