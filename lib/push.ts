@@ -7,6 +7,7 @@ import { noticesFor, seenAt } from "@/lib/notifications";
 import { findUserById } from "@/lib/users";
 import { switchOn } from "@/lib/switches";
 import { appHref } from "@/lib/app-href";
+import { customerMessagesSince, focusUntil } from "@/lib/chats";
 
 /**
  * The bell, in the agent's pocket (2 Oct 2026).
@@ -97,17 +98,21 @@ export async function pushTo(userId: string, msg: PushMessage): Promise<{ sent: 
   return { sent, failed };
 }
 
-async function readMarker(userId: string): Promise<string | null> {
-  const rows = await q<{ value: unknown }>(`SELECT value FROM os_user_prefs WHERE user_id = $1 AND key = $2`, [userId, SENT_KEY]);
+/* Customer messages keep their own marker (3 Oct 2026), so a Focus Hour that
+   holds the bell's notices never loses them by moving one shared marker on. */
+const MSG_KEY = "push.msg_at";
+
+async function readMarker(userId: string, key = SENT_KEY): Promise<string | null> {
+  const rows = await q<{ value: unknown }>(`SELECT value FROM os_user_prefs WHERE user_id = $1 AND key = $2`, [userId, key]);
   const v = rows[0]?.value;
   return typeof v === "string" ? v : null;
 }
 
-async function writeMarker(userId: string, at: string): Promise<void> {
+async function writeMarker(userId: string, at: string, key = SENT_KEY): Promise<void> {
   await q(
     `INSERT INTO os_user_prefs (user_id, key, value) VALUES ($1, $2, $3::jsonb)
      ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-    [userId, SENT_KEY, JSON.stringify(at)]
+    [userId, key, JSON.stringify(at)]
   );
 }
 
@@ -132,6 +137,25 @@ export async function scanAndPush(): Promise<ScanReport> {
       const me = await findUserById(user_id);
       if (!me) continue;
       report.people++;
+
+      /* What a landlord or tenant wrote them (Chats > Work): always sent, even
+         in a Focus Hour. The first scan only sets the marker, as below. */
+      const msgMarker = await readMarker(user_id, MSG_KEY);
+      if (!msgMarker) await writeMarker(user_id, new Date().toISOString(), MSG_KEY);
+      else {
+        const msgs = await customerMessagesSince(me, msgMarker);
+        for (const m of msgs.slice(0, MAX_EACH)) {
+          const r = await pushTo(user_id, { title: m.title, body: m.body, href: m.href });
+          report.sent += r.sent;
+          report.errors.push(...r.failed);
+        }
+        if (msgs.length) await writeMarker(user_id, msgs[0]!.at, MSG_KEY);
+      }
+
+      /* A Focus Hour holds everything else until it ends - the marker stays
+         put, so what came in arrives together afterwards. */
+      if (await focusUntil(user_id)) continue;
+
       const [notices, marker, seen] = await Promise.all([noticesFor(me, 40), readMarker(user_id), seenAt(user_id)]);
       const newest = notices[0]?.at ?? new Date().toISOString();
       if (!marker) {

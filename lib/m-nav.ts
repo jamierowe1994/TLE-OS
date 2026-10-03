@@ -10,7 +10,7 @@
  * the agent's own icons first time instead of flashing the default set.
  */
 
-export type NavId = "home" | "people" | "properties" | "leads" | "applications" | "viewings" | "day" | "steve" | "search" | "scan";
+export type NavId = "home" | "people" | "properties" | "chats" | "tools" | "leads" | "applications" | "viewings" | "day" | "steve" | "scan";
 
 export interface NavDest {
   id: NavId;
@@ -32,17 +32,19 @@ export const NAV_DESTS: NavDest[] = [
     owns: ["/agent/people"],
   },
   { id: "properties", href: "/agent/properties", label: "Properties", d: "M3 20h18M5 20V9l5-4 5 4v11M15 20v-7h4v7M8.5 12h3M8.5 15.5h3", owns: ["/agent/properties"] },
+  /* Chats and Tools (James, 3 Oct 2026); Search came off - every page has its own. */
+  { id: "chats", href: "/agent/chats", label: "Chats", d: "M3.5 5h11v8h-6L5.5 16v-3h-2zM17.5 9h3v8h-2v3l-3.5-3H10v-1.5", owns: ["/agent/chats"] },
+  { id: "tools", href: "/agent/tools", label: "Tools", d: "M4.5 4.5h6v6h-6zM13.5 4.5h6v6h-6zM4.5 13.5h6v6h-6zM16.5 13.5v6M13.5 16.5h6", owns: ["/agent/tools"] },
   { id: "leads", href: "/agent/leads", label: "Leads", d: "M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 12h.01", owns: ["/agent/leads"] },
   { id: "applications", href: "/agent/applications", label: "Applications", d: "M6.5 3.5h7.5l4 4v13h-11.5zM14 3.5V7.5h4M9.5 12h6M9.5 15.5h6", owns: ["/agent/applications"] },
   { id: "viewings", href: "/agent/viewings", label: "Viewings", d: "M15 13a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12.2 11.8 4 20M6.5 17.5l2 2M9 15l1.5 1.5", owns: ["/agent/viewings"] },
   { id: "day", href: "/agent/day", label: "Your Day", d: "M4.5 6h15v14h-15zM4.5 10.5h15M8.5 3.5v4M15.5 3.5v4", owns: ["/agent/day", "/agent/event"] },
   { id: "steve", href: "/agent/steve", label: "Steve", d: "M4.5 5h15v10.5h-8L7 19v-3.5H4.5z", owns: ["/agent/steve"] },
-  { id: "search", href: "/agent/search", label: "Search", d: "M10.5 17a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13zM15.5 15.5 20 20", owns: ["/agent/search"] },
   { id: "scan", href: "/agent/id-check", label: "Scan an ID", d: "M4 8h3l1.5-2h7L17 8h3v11H4zM12 16.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z", owns: ["/agent/id-check"] },
 ];
 
 /** The order More lists what is not on the bar. */
-export const MORE_ORDER: NavId[] = ["steve", "leads", "applications", "viewings", "day", "search", "scan", "home", "people", "properties"];
+export const MORE_ORDER: NavId[] = ["chats", "tools", "steve", "leads", "applications", "viewings", "day", "scan", "home", "people", "properties"];
 
 export const NAV_DEFAULT: NavId[] = ["home", "people", "properties"];
 export const NAV_SLOTS = 3;

@@ -42,6 +42,7 @@ export default function AppFrame({ inApp, theme, nav, children }: { inApp: boole
   const [sheet, setSheet] = useState<Sheet>(null);
   const [mode, setMode] = useState<MTheme | null>(theme);
   const [unread, setUnread] = useState(0);
+  const [chats, setChats] = useState(0);
   useEffect(() => setSheet(null), [path]);
   /* The app came to life: the stale-page guard in app/agent/layout.tsx stands down. */
   useEffect(() => {
@@ -59,8 +60,18 @@ export default function AppFrame({ inApp, theme, nav, children }: { inApp: boole
         .then((r) => r.json())
         .then((j: { ok?: boolean; unread?: number }) => j.ok && setUnread(j.unread ?? 0))
         .catch(() => null);
+    /* What customers and the team wrote that is unread, for the Chats icon. */
+    const readChats = () =>
+      fetch("/api/m/chats", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((j: { ok?: boolean; unread?: { work: number; play: number } }) => j.ok && setChats((j.unread?.work ?? 0) + (j.unread?.play ?? 0)))
+        .catch(() => null);
     void read();
-    const t = window.setInterval(read, 60_000);
+    void readChats();
+    const t = window.setInterval(() => {
+      void read();
+      void readChats();
+    }, 60_000);
     return () => window.clearInterval(t);
   }, []);
   const more = useCallback(() => setSheet("more"), []);
@@ -88,7 +99,7 @@ export default function AppFrame({ inApp, theme, nav, children }: { inApp: boole
       >
         <ul className="mx-auto grid h-[62px] max-w-[560px] grid-cols-5 items-center px-2">
           {bar.slice(0, 2).map((id) => (
-            <Tab key={id} dest={navDest(id)} on={lit === id} />
+            <Tab key={id} dest={navDest(id)} on={lit === id} badge={id === "chats" ? chats : 0} />
           ))}
           <li className="flex justify-center">
             <button
@@ -112,7 +123,7 @@ export default function AppFrame({ inApp, theme, nav, children }: { inApp: boole
               </svg>
             </button>
           </li>
-          <Tab dest={navDest(bar[2]!)} on={lit === bar[2]} />
+          <Tab dest={navDest(bar[2]!)} on={lit === bar[2]} badge={bar[2] === "chats" ? chats : 0} />
           <li className="flex justify-center">
             <button type="button" onClick={more} aria-label="More" className="flex h-[48px] w-[58px] items-center justify-center rounded-[16px]" style={{ color: "var(--m-muted)" }}>
               <svg viewBox="0 0 24 24" aria-hidden className="h-[24px] w-[24px]" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
@@ -142,17 +153,22 @@ export default function AppFrame({ inApp, theme, nav, children }: { inApp: boole
   );
 }
 
-function Tab({ dest, on }: { dest: NavDest; on: boolean }) {
+function Tab({ dest, on, badge = 0 }: { dest: NavDest; on: boolean; badge?: number }) {
   return (
     <li className="flex justify-center">
       <Link
         href={dest.href}
         aria-current={on ? "page" : undefined}
         aria-label={dest.label}
-        className="flex h-[48px] w-[58px] items-center justify-center rounded-[16px] transition-colors"
+        className="relative flex h-[48px] w-[58px] items-center justify-center rounded-[16px] transition-colors"
         style={on ? { background: "var(--m-pink-wash)", color: "var(--m-coral)" } : { color: "var(--m-muted)" }}
       >
         <NavIcon dest={dest} on={on} />
+        {badge > 0 && (
+          <span className="absolute right-2 top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10.5px] font-bold text-white" style={{ background: "var(--m-coral)" }}>
+            {badge > 9 ? "9+" : badge}
+          </span>
+        )}
       </Link>
     </li>
   );
@@ -621,6 +637,15 @@ function PagesSheet({
                 {note && <p className="mt-2 px-1 text-[13.5px] text-muted">{note}</p>}
               </>
             )}
+
+            <p className="m-eyebrow mb-2 mt-5 px-1">Chats</p>
+            <div className="m-group">
+              <a href="/agent/chats/team?patch=1" className={row}>
+                <DoodleIcon name="target" size={18} className="text-muted" />
+                <span className="flex-1">My Patch</span>
+                <Chevron />
+              </a>
+            </div>
 
             <div className="m-group mt-5">
               <button type="button" onClick={signOut} className={row} style={{ color: "var(--accent-dark)" }}>

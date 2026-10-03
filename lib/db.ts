@@ -3441,6 +3441,63 @@ CREATE INDEX IF NOT EXISTS os_push_devices_user ON os_push_devices (user_id);
 ALTER TABLE os_push_devices ADD COLUMN IF NOT EXISTS endpoint TEXT;
 ALTER TABLE os_push_devices ADD COLUMN IF NOT EXISTS p256dh TEXT;
 ALTER TABLE os_push_devices ADD COLUMN IF NOT EXISTS auth TEXT;
+
+-- A tenant's messages with their agent, from the tenant portal (3 Oct 2026),
+-- the tenant twin of os_landlord_messages: stored first, emailed second.
+-- agent_email is who it is for - the agent on their deal, or the one who
+-- issued their passport - and decides whose Chats it shows in.
+CREATE TABLE IF NOT EXISTS os_tenant_messages (
+  id             TEXT PRIMARY KEY,
+  account_id     TEXT NOT NULL,
+  direction      TEXT NOT NULL DEFAULT 'tenant',
+  body           TEXT NOT NULL,
+  agent_email    TEXT NOT NULL DEFAULT '',
+  author_id      TEXT,
+  sent_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  read_at        TIMESTAMPTZ,
+  emailed_at     TIMESTAMPTZ,
+  email_error    TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS os_tenant_messages_account
+  ON os_tenant_messages (account_id, sent_at);
+CREATE INDEX IF NOT EXISTS os_tenant_messages_agent
+  ON os_tenant_messages (lower(agent_email), sent_at DESC);
+
+-- The team's own chat on the phone (3 Oct 2026, Chats > Play): one open
+-- General room for everybody, and huddles a person starts and invites
+-- colleagues into. read_at on a member row is how far they have read.
+CREATE TABLE IF NOT EXISTS os_team_rooms (
+  id             TEXT PRIMARY KEY,
+  kind           TEXT NOT NULL DEFAULT 'huddle',
+  name           TEXT NOT NULL DEFAULT '',
+  created_by     TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS os_team_members (
+  room_id        TEXT NOT NULL,
+  user_id        TEXT NOT NULL,
+  invited_by     TEXT,
+  joined_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  read_at        TIMESTAMPTZ,
+  PRIMARY KEY (room_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS os_team_members_user ON os_team_members (user_id);
+-- question: a General post asking something; reply_to: an answer to one.
+CREATE TABLE IF NOT EXISTS os_team_messages (
+  id             TEXT PRIMARY KEY,
+  room_id        TEXT NOT NULL,
+  author_id      TEXT NOT NULL,
+  author_name    TEXT NOT NULL DEFAULT '',
+  body           TEXT NOT NULL,
+  question       BOOLEAN NOT NULL DEFAULT FALSE,
+  reply_to       TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_team_messages_room
+  ON os_team_messages (room_id, created_at);
+CREATE INDEX IF NOT EXISTS os_team_messages_reply
+  ON os_team_messages (reply_to) WHERE reply_to IS NOT NULL;
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a

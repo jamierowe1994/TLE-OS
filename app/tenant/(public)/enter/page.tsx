@@ -24,7 +24,10 @@ function Enter() {
       .then((j: { ok?: boolean; error?: string }) => {
         if (gone) return;
         if (j.ok) {
-          router.replace("/tenant");
+          /* An agent's reply links straight to Messages (3 Oct 2026); only a
+             page inside the tenant portal is ever followed. */
+          const next = params.get("next") ?? "";
+          router.replace(/^\/tenant(\/[\w/-]*)?$/.test(next) ? next : "/tenant");
           router.refresh();
         } else {
           setFailed(j.error ?? "That link isn't valid. Ask for a new one.");

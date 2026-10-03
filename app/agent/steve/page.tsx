@@ -86,6 +86,9 @@ export default function PhoneSteve() {
 
   useEffect(() => {
     void load();
+    /* ?ask= arrives typed in, never sent - Tools' "Write an Article" (3 Oct 2026). */
+    const ask = new URLSearchParams(window.location.search).get("ask");
+    if (ask) setText(ask.slice(0, 2000));
     const t = window.setTimeout(() => setMood("idle"), 2200);
     return () => window.clearTimeout(t);
   }, [load]);

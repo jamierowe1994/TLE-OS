@@ -6,7 +6,8 @@ import type { TenantHome } from "@/lib/tenant-home-view";
 const card = "rounded-[22px] border border-line/60 bg-white";
 const eyebrow = "text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted";
 
-export default function MessagesView({ v }: { v: TenantHome }) {
+/* `thread` is the real conversation (the signed-in portal); the sample keeps the note. */
+export default function MessagesView({ v, thread }: { v: TenantHome; thread?: React.ReactNode }) {
   return (
     <div className="space-y-5">
       <div className="pt-2">
@@ -17,17 +18,22 @@ export default function MessagesView({ v }: { v: TenantHome }) {
           <>
             <p className={eyebrow}>Your letting agent</p>
             <h2 className="mt-1 text-[22px] font-bold leading-tight">{v.agent.name}</h2>
-            <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-muted">
-              Messages here are on their way. For now, email reaches {v.agent.name.split(/\s+/)[0]} directly and is answered the same day.
-            </p>
-            {v.agent.email && (
+            {thread ? (
+              <div className="mt-4">{thread}</div>
+            ) : (
+              <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-muted">
+                Messages here are on their way. For now, email reaches {v.agent.name.split(/\s+/)[0]} directly and is answered the same day.
+              </p>
+            )}
+            {!thread && v.agent.email && (
               <a href={`mailto:${v.agent.email}`} className="mt-5 inline-flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-white">Email {v.agent.name.split(/\s+/)[0]}</a>
             )}
           </>
         ) : (
           <>
-            <h2 className="text-[22px] font-bold leading-tight">Your agent appears here</h2>
-            <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-muted">Once you apply for a property, the agent looking after it is here to message.</p>
+            <h2 className="text-[22px] font-bold leading-tight">{thread ? "Message the team" : "Your agent appears here"}</h2>
+            <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-muted">{thread ? "Once you apply for a property, your agent answers here. Until then the office does." : "Once you apply for a property, the agent looking after it is here to message."}</p>
+            {thread && <div className="mt-4">{thread}</div>}
           </>
         )}
       </div>
