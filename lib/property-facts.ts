@@ -37,6 +37,16 @@ export interface FactField {
   quick?: { label: string; value: string; hint: string };
 }
 
+/**
+ * NEVER HELD (James, 4 Oct 2026; Michael's list, 29 Sep). Old lets carry
+ * papers nobody ever kept - an AML check from before we did them, proof of
+ * ownership on a landlord of ten years - and no amount of chasing produces
+ * them. The checker answers it in one press, it counts as answered, and the
+ * word stays on the home so the gap is on record rather than hidden. N/A is
+ * different: that column does not apply to the home at all.
+ */
+const NEVER_HELD = { label: "Never held", value: "Never held", hint: "We never had one and never will (an old let). It counts as answered, and stays on record as never held." };
+
 export const FIELDS: FactField[] = [
   { key: "property_type", label: "Property type", group: "Property", kind: "word" },
   { key: "licence_type", label: "Licence type", group: "Property", kind: "word", when: "hmo" },
@@ -47,10 +57,10 @@ export const FIELDS: FactField[] = [
   { key: "fee_setup", label: "Set-up fee", group: "Landlord & service", kind: "word" },
   { key: "letting_agreement_start", label: "Letting agreement start", group: "Landlord & service", kind: "date" },
   { key: "nrl_status", label: "Non-resident landlord (NRL)", group: "Landlord & service", kind: "word" },
-  { key: "landlord_photo_id", label: "Landlord photo ID", group: "Landlord & service", kind: "word" },
-  { key: "landlord_aml", label: "Landlord AML check", group: "Landlord & service", kind: "word" },
-  { key: "landlord_proof_of_ownership", label: "Proof of ownership", group: "Landlord & service", kind: "word" },
-  { key: "landlord_proof_of_address", label: "Landlord proof of address", group: "Landlord & service", kind: "word" },
+  { key: "landlord_photo_id", label: "Landlord photo ID", group: "Landlord & service", kind: "word", quick: NEVER_HELD },
+  { key: "landlord_aml", label: "Landlord AML check", group: "Landlord & service", kind: "word", quick: NEVER_HELD },
+  { key: "landlord_proof_of_ownership", label: "Proof of ownership", group: "Landlord & service", kind: "word", quick: NEVER_HELD },
+  { key: "landlord_proof_of_address", label: "Landlord proof of address", group: "Landlord & service", kind: "word", quick: NEVER_HELD },
   { key: "rent_smart_wales", label: "Rent Smart Wales number", group: "Landlord & service", kind: "word", when: "wales" },
   { key: "landlord_registration", label: "Scottish landlord registration number", group: "Landlord & service", kind: "word", when: "scotland" },
   { key: "tenants_count", label: "Number of tenants", group: "Tenancy", kind: "number" },
@@ -75,7 +85,7 @@ export const FIELDS: FactField[] = [
   { key: "rra_sheet_served", label: "RRA information sheet served", group: "Tenancy", kind: "word", choices: ["Yes", "No"] },
   { key: "guarantors_count", label: "Number of guarantors", group: "Guarantors", kind: "number" },
   { key: "guarantor_names", label: "Guarantors", group: "Guarantors", kind: "word" },
-  { key: "guarantor_contacts", label: "Guarantor contact details", group: "Guarantors", kind: "word" },
+  { key: "guarantor_contacts", label: "Guarantor contact details", group: "Guarantors", kind: "word", quick: NEVER_HELD },
   { key: "deposit_ref", label: "Deposit scheme reference", group: "Deposit", kind: "word" },
   { key: "deposit_amount", label: "Deposit amount", group: "Deposit", kind: "money" },
   { key: "deposit_status", label: "Deposit status", group: "Deposit", kind: "word" },
@@ -90,12 +100,12 @@ export const FIELDS: FactField[] = [
   { key: "doc_tenancy_agreement", label: "Tenancy agreement", group: "Documents", kind: "file" },
   { key: "doc_terms_of_business", label: "Terms of business", group: "Documents", kind: "file" },
   { key: "doc_deposit_cert", label: "Deposit certificate & prescribed info", group: "Documents", kind: "file" },
-  { key: "doc_inventory", label: "Inventory / check-in", group: "Documents", kind: "file" },
-  { key: "doc_tenant_referencing", label: "Tenant ID & referencing", group: "Documents", kind: "file" },
-  { key: "doc_rtr_evidence", label: "Right to Rent evidence", group: "Documents", kind: "file" },
-  { key: "doc_landlord_id_ownership", label: "Landlord ID & proof of ownership", group: "Documents", kind: "file" },
-  { key: "doc_nrl1", label: "NRL1 approval letter", group: "Documents", kind: "file", when: "nrl" },
-  { key: "doc_guarantor", label: "Guarantor documents", group: "Documents", kind: "file" },
+  { key: "doc_inventory", label: "Inventory / check-in", group: "Documents", kind: "file", quick: NEVER_HELD },
+  { key: "doc_tenant_referencing", label: "Tenant ID & referencing", group: "Documents", kind: "file", quick: NEVER_HELD },
+  { key: "doc_rtr_evidence", label: "Right to Rent evidence", group: "Documents", kind: "file", quick: NEVER_HELD },
+  { key: "doc_landlord_id_ownership", label: "Landlord ID & proof of ownership", group: "Documents", kind: "file", quick: NEVER_HELD },
+  { key: "doc_nrl1", label: "NRL1 approval letter", group: "Documents", kind: "file", when: "nrl", quick: NEVER_HELD },
+  { key: "doc_guarantor", label: "Guarantor documents", group: "Documents", kind: "file", quick: NEVER_HELD },
   { key: "propoly_deal", label: "Propoly deal", group: "Sign-off", kind: "word" },
   { key: "check_signed_off", label: "Checked", group: "Sign-off", kind: "date" },
   { key: "check_notes", label: "Discrepancy notes", group: "Sign-off", kind: "word" },
