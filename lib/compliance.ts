@@ -56,7 +56,7 @@ export const CERT_META: Record<
   },
   pat: {
     label: "PAT testing", short: "PAT",
-    rule: "Yearly on supplied appliances — expected on HMOs, good practice everywhere.",
+    rule: "Yearly on supplied appliances on an HMO. In Scotland every five years on any other home, under the Repairing Standard.",
     trade: "electrician", icon: "setting",
   },
   alarms: {

@@ -107,8 +107,11 @@ const ENGLAND_ONLY = new Set(["rtr_expiry", "rtr_checked", "doc_rtr_evidence", "
 const SCOTLAND_EVERY_HOME = new Set(["pat_expiry", "alarms_expiry", "legionella_expiry"]);
 const AML_FROM = "2025-05-01";
 const DEPOSIT = new Set(["deposit_ref", "deposit_amount", "deposit_protected_on", "doc_deposit_cert"]);
-/** Tenant-find: we did the let, not the running of it, so these are the landlord's (James, 26 Sep). */
-const NOT_ON_MARKET_ONLY = new Set(["rent_matches_agreement", "guarantor_contacts"]);
+/** Tenant-find: we did the let, not the running of it, so these are the landlord's (James, 26 Sep).
+ *  The tenancy agreement too (Michael, 29 Sep 2026): on a market-only let we do
+ *  not hold one, so every one of those homes was flagging a document that was
+ *  never ours to keep. */
+const NOT_ON_MARKET_ONLY = new Set(["rent_matches_agreement", "guarantor_contacts", "doc_tenancy_agreement"]);
 /**
  * The RRA Information Sheet 2026 is for tenancies that already existed on
  * 1 May 2026; a tenancy begun on or after it gets a written statement of terms

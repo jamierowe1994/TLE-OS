@@ -58,6 +58,8 @@ export interface StageFacts {
   rentIn: boolean;
   /** Propoly says every party has signed the tenancy agreement (2 Oct 2026). */
   agreementSigned?: boolean;
+  /** The move-in date is before today, London time (4 Oct 2026). */
+  movedIn?: boolean;
 }
 
 const NO_FACTS: StageFacts = { plcState: null, plcCaseId: null, plcOutside: false, depositDone: false, rentIn: false };
@@ -76,6 +78,13 @@ export function derivePortalStage(live: string, facts: StageFacts, meta: Pick<De
     case "references":
       return "referencing";
     case "tenancy_generation":
+      /* PAST IT, WHATEVER PROPOLY SAYS (Michael and Rhiannon, 29 Sep 2026).
+         The Propoly server crash left deals sitting at tenancy generation, so
+         files whose tenants have moved in, paid and signed still read "PLC".
+         The money, the signatures and the calendar each prove the let went
+         ahead, so any one of them carries the deal past the PLC stop. */
+      if (facts.movedIn) return "move_day";
+      if (facts.rentIn || facts.agreementSigned) return "rent_payment";
       if (facts.plcState !== "approved" && !facts.plcOutside) return "plc";
       if (!facts.depositDone) return "deposit";
       return "tenancy_agreement";
@@ -134,7 +143,16 @@ export function stageFactsFor(
     depositDone,
     rentIn: Boolean(m?.rentReceived),
     agreementSigned: deal.app.propoly?.agreement?.status === "signed",
+    movedIn: movedInBy(deal.app.startDate),
   };
+}
+
+/** Is this move-in date before today, in London? A blank or unreadable date is not. */
+function movedInBy(startDate: string | null | undefined): boolean {
+  const day = String(startDate ?? "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+  return day < today;
 }
 
 /**

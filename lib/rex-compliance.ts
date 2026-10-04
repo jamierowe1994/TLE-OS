@@ -81,6 +81,11 @@ interface RexEntry extends Record<string, unknown> {
 
 /** Months a certificate usually runs, used only when REX holds an issue date and no expiry. */
 const LIFE_MONTHS: Record<string, number> = { portable_appliance_testing: 12, gas_safety: 12, eicr: 60, epc: 120, legionella_risk_assessment: 24 };
+/** Four more years on a Scottish PAT that is not an HMO's: five in all. */
+const PAT_SCOTLAND_EXTRA_DAYS = 4 * 365 + 1;
+/** A Scottish postcode in the address, or one of the two cities by name. Same areas as the clean sweep. */
+const isScottish = (locality: string) =>
+  /\b(AB|DD|DG|EH|FK|G|HS|IV|KA|KW|KY|ML|PA|PH|TD|ZE)\d{1,2}[A-Z]?\s*\d[A-Z]{2}\b/i.test(locality ?? "") || /\b(edinburgh|glasgow)\b/i.test(locality ?? "");
 function plusMonths(iso: string | null | undefined, months: number | undefined): string | null {
   if (!iso || !months) return null;
   const d = new Date(`${String(iso).slice(0, 10)}T12:00:00`);
@@ -350,6 +355,9 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
 
   let withCertificate = 0;
   let gasUnknown = 0;
+  /* Homes whose PAT date was worked out from the test date alone (a year on),
+     so the Scottish rule below can put the five years back. */
+  const patFromTest = new Set<string>();
 
   const properties: CompProperty[] = listings.map((l) => {
     const mine = byProperty.get(l.propertyId) ?? [];
@@ -365,6 +373,7 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
       const expires = daysUntil(detail?.expiry_date) ?? daysUntil(plusMonths(detail?.issue_date, LIFE_MONTHS[e.type_id ?? ""]));
       const attached = Boolean(e.file?.url);
       if (attached) withCertificate++;
+      if (key === "pat" && !detail?.expiry_date && detail?.issue_date) patFromTest.add(String(l.propertyId));
       const held = certs[key];
       const notRequired = Boolean(detail?.not_required);
       // Latest expiry wins; a record with no date never displaces one with.
@@ -437,6 +446,17 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
     else if (f.serviceLevel === "managed" && p.service === "Let Only") p.service = "Managed";
     /* Rent collect: the rent is ours, the certificates are the landlord's (James, 2 Oct 2026). */
     if (f.serviceLevel === "rent_collect") { p.service = "Rent Collect"; p.rentCollect = true; }
+  }
+
+  /* SCOTTISH PAT (Michael, 29 Sep 2026): under the Repairing Standard a PAT
+     test lasts five years, and only an HMO's is yearly. REX's PAT entry holds
+     the test date alone, which the loop above read as a year on; a Scottish
+     home that is not an HMO gets the other four years back. Read after the
+     OS's own record, which is what makes a home an HMO. */
+  for (const p of properties) {
+    const pat = p.certs.pat;
+    if (!pat || pat.expires == null || p.hmo || !patFromTest.has(p.id) || !isScottish(p.locality)) continue;
+    p.certs.pat = { ...pat, expires: pat.expires + PAT_SCOTLAND_EXTRA_DAYS };
   }
 
   /* Homes REX CRM has no property for. The OS is their record: its own
