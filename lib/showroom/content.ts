@@ -587,6 +587,44 @@ export const AGENT_STEPS: ShowroomStep[] = [
     screens: [],
     emails: ["compliance-chase-agent", "own-compliance"],
   },
+  /* Maintenance and inspections (tracker m29-15, 4 Oct 2026): so the team can
+     see every email a repair and a visit sends before the two are switched on
+     for agents. */
+  {
+    id: "maintenance",
+    title: "Repairs and maintenance",
+    lead: "A repair comes in from the tenant's portal or a phone call, becomes a job, and runs one step at a time: approve, find a contractor, book, done, check. Everybody hears at the right moment, from you.",
+    sees: [
+      "A works order with the next step on it, and the history underneath.",
+      "The contractor's own page: accept the job, book a time, upload the certificate and the invoice.",
+      "The landlord approves a quote on their portal, and sees the job through to done.",
+      "The tenant is told it is logged, who is coming and when, and asked if they are happy once it is done.",
+      "Compliance checks every finished job, and the invoice goes to accounts.",
+    ],
+    agent: { says: "Raise and run jobs on Maintenance, under Portfolio.", href: "/maintenance" },
+    screens: [],
+    emails: [
+      "works-tenant-received", "works-landlord-approval", "works-contractor-order", "works-contractor-booked", "works-tenant-found",
+      "works-tenant-booked", "works-landlord-arranged", "works-contractor-done-request", "works-tenant-done", "works-tenant-happy",
+      "works-landlord-report", "works-contractor-report", "works-contractor-cancelled", "works-compliance-done", "works-accounts-invoice",
+    ],
+    notYet: ["Maintenance is switched off for agents until it is released after launch."],
+  },
+  {
+    id: "inspections",
+    title: "Property visits",
+    lead: "The homes due a visit, booked into your diary with the tenant told in writing, then recorded room by room on the day and sent to the landlord.",
+    sees: [
+      "The due list, worked out from the cadence, and Book it on each home.",
+      "The tenant's email with the time and a button to say it works or ask for another.",
+      "Recording the visit: the safety checks, then each room with photos, then the write-up.",
+      "The landlord's report, with the checks and the photos on it.",
+    ],
+    agent: { says: "Book and record visits on Inspections, under Portfolio.", href: "/inspections" },
+    screens: [],
+    emails: ["inspection-tenant-access", "inspection-tenant-booked", "inspection-landlord-report"],
+    notYet: ["Inspections are switched off for agents until they are released after launch."],
+  },
 ];
 
 Object.assign(EMAIL_WORDS, {
@@ -600,7 +638,7 @@ Object.assign(EMAIL_WORDS, {
   "account-reset": { when: "When you ask to reset your password", says: "A link to choose a new one.", status: "live" },
   "appraisal-video-chase": { when: "Two days before an appraisal, if you have not recorded a video", says: "To you: scan the code, record a hello on your phone, and it goes out with the presentation." },
   "deal-moved": { when: "When your deal moves on - references back, agreement out, complete", says: "To you: which deal, what moved, and what happens next.", status: "live" },
-  "compliance-chase-agent": { when: "Each morning a certificate on your homes is 30, 14 or 7 days from running out", says: "To you: which homes, which certificates, and when they run out.", status: "ready" },
+  "compliance-chase-agent": { when: "Each morning a certificate on your homes is 30, 14 or 7 days from running out, and once when one has expired", says: "To you: which homes, which certificates, and when they run out or ran out.", status: "ready" },
   "own-compliance": { when: "Each morning something of your own is missing or running out", says: "To you: what it is, and when.", status: "ready" },
 });
 

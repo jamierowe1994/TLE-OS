@@ -63,7 +63,15 @@ export function showroomEmailMeta(id: string) {
   const entry = TLE_EMAILS.find((e) => e.id === id);
   if (!entry) return null;
   const words = EMAIL_WORDS[id];
-  const to = entry.audience === "tenant" ? "To the tenant" : entry.audience === "landlord" ? "To the landlord" : "To you";
+  /* Maintenance's emails go to a contractor, compliance and accounts as well
+     (4 Oct 2026); everything else not to a customer is the agent's own. */
+  const to =
+    entry.audience === "tenant" ? "To the tenant"
+    : entry.audience === "landlord" ? "To the landlord"
+    : entry.audience === "contractor" ? "To the contractor"
+    : id === "works-compliance-done" ? "To compliance"
+    : id === "works-accounts-invoice" ? "To accounts"
+    : "To you";
   return { id, name: entry.name, when: words?.when ?? entry.trigger, summary: words?.says ?? entry.summary, to, status: statusOf(id) };
 }
 
