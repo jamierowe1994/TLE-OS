@@ -1257,18 +1257,20 @@ export const VIEWING_MOVED = {
    holding-fee sentence as a variable, and the Scottish wording below is a
    placeholder until somebody who knows Scottish lettings law confirms it. */
 
+/* Rewritten in our own words, 4 Oct 2026 (tracker j10): the same facts and
+   the same variables as Howard's 10978, so the handover fills it unchanged. */
 export const APPLICATION_ACCEPTED_LANDLORD = {
-  subject: "New application accepted - {{address}}",
-  preheader: "The application on your property has been accepted. Here are the details.",
+  subject: "Good news - an application on {{address}} has been accepted",
+  preheader: "What was agreed, and what happens next.",
   mode: "blocks",
   blocks: [
-    H("aal1", "Application accepted"),
+    H("aal1", "You have new tenants on the way"),
     T(
       "aal2",
-      "Dear {{landlordName}},<br><br>Congratulations. The following application has now been accepted on your property at <strong>{{address}}</strong>:"
+      "Dear {{landlordName}},<br><br>Good news: the application on <strong>{{address}}</strong> has been accepted. Here is what was agreed:"
     ),
     T("aal3", "{{detailsList}}"),
-    T("aal4", "I will now begin the reference checks on the tenants, and will update you in due course with our findings."),
+    T("aal4", "<strong>What happens next.</strong> We are starting the tenants' references now and will let you know as soon as they are back. The let goes ahead once the references are through and the tenancy agreement is signed, and we will keep you posted at each step.<br><br>Any questions, just reply to this email or give me a call."),
     SP("aal5", 8),
     T("aal6", "{{agentName}}<br>{{agentPhone}}<br>{{agentEmail}}<br>The Letting Experts"),
     FOOT("aal7", "You're getting this because an application has been accepted on a property we let for you."),

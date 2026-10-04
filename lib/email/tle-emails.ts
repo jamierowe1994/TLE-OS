@@ -777,9 +777,9 @@ The Letting Experts`
     name: "Application Accepted (landlord)",
     audience: "landlord",
     trigger: "An offer is accepted and the handover runs",
-    fires: "Wired 16 Sep 2026. lib/handover.ts, from the agent's own mailbox (lib/send-as-agent). Howard's REX template 10978, carried across word for word - still to be rewritten and styled.",
+    fires: "Wired 16 Sep 2026. lib/handover.ts, from the agent's own mailbox (lib/send-as-agent). Rewritten in our own words 4 Oct 2026 from Howard's REX template 10978.",
     to: "The landlord whose property it is",
-    summary: "Tells the landlord the application is accepted, lists what was agreed, and says references are starting. Howard's wording, not ours yet.",
+    summary: "Tells the landlord the application is accepted, lists what was agreed, and says references are starting and what happens after.",
     doc: APPLICATION_ACCEPTED_LANDLORD,
     render: (o) =>
       blocksAs("landlord")(
