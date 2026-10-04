@@ -148,6 +148,8 @@ export default function NewLeadPanel({
      never happened. */
   const [saveError, setSaveError] = useState<string | null>(null);
   const [rexNote, setRexNote] = useState<{ ok: boolean; detail: string } | null>(null);
+  /* What the welcome email actually did, from the save (4 Oct 2026). */
+  const [welcome, setWelcome] = useState<{ state: string; detail: string } | null>(null);
   /** How many of the picked homes landed on their list, or "failed". */
   const [listSaved, setListSaved] = useState<number | "failed" | null>(null);
   const [emailPreview, setEmailPreview] = useState(false);
@@ -199,7 +201,7 @@ export default function NewLeadPanel({
     setSavedId(null);
     setSaving(false);
     setSaveError(null);
-    setRexNote(null);
+    setRexNote(null); setWelcome(null);
     setListSaved(null);
     setPicked([]);
     setPicking(false);
@@ -346,7 +348,7 @@ export default function NewLeadPanel({
     if (!ready || saving) return;
     setSaving(true);
     setSaveError(null);
-    setRexNote(null);
+    setRexNote(null); setWelcome(null);
     try {
       const r = await fetch("/api/contacts", {
         method: "POST",
@@ -372,6 +374,7 @@ export default function NewLeadPanel({
         return;
       }
       setRexNote(j.rex ? { ok: Boolean(j.rex.ok), detail: String(j.rex.detail ?? "") } : null);
+      setWelcome(j.welcome ? { state: String(j.welcome.state ?? ""), detail: String(j.welcome.detail ?? "") } : null);
       setRexId(j.contact?.rexId ? String(j.contact.rexId) : null);
       setSavedId(j.contact?.id ? String(j.contact.id) : null);
       /* The homes they're interested in go onto their file (Howard, 24 Sep
@@ -588,20 +591,27 @@ export default function NewLeadPanel({
               {kind === "tenant" && (
                 <div className="mt-5 w-full rounded-2xl border border-line/70 p-4 text-left">
                   {/* It said "queued" and nothing was queued (James found it,
-                      13 Sep 2026): saving a contact writes to the OS and pushes
-                      to REX, and sends nothing at all. Until customer email is
-                      sending from the Letting Experts domain this says so, and
-                      the preview below is a draft rather than a receipt. */}
+                      13 Sep 2026). Since 16 Sep saving a tenant does send the
+                      welcome, behind the Automatic tenant emails switch, and
+                      since 4 Oct this says what actually happened to it. */}
                   <p className="flex items-center gap-2 text-[12.5px] font-semibold">
                     <DoodleIcon name="mail" size={15} className="text-accent-dark" />
-                    The welcome email has NOT gone
+                    {welcome?.state === "sent"
+                      ? "The welcome email has gone"
+                      : welcome?.state === "would"
+                        ? "The welcome email is held"
+                        : !d.email?.trim()
+                          ? "No welcome email: there is no email address"
+                          : "The welcome email has not gone"}
                   </p>
                   <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
-                    {d.name.split(" ")[0] || "They"} should get one email: how we look after
-                    their details (the legal bit), and a button to set a password and open
-                    their own Letting Experts account. It is written and not yet wired -
-                    customer email waits on the Letting Experts sending domain. Send it from
-                    Outlook for now.
+                    {welcome?.state === "sent"
+                      ? `${d.name.split(" ")[0] || "They"} has been sent Let's Find You a Home, with a link to their own Letting Experts account.`
+                      : welcome?.state === "would"
+                        ? "Automatic tenant emails are switched off, so it was not sent. It goes by itself once they are on; until then send one from Outlook if they need it now."
+                        : welcome?.detail
+                          ? `${welcome.detail.replace(/\.+$/, "")}. Send one from Outlook if they need it now.`
+                          : "Add their email address and save again, or send one from Outlook."}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
@@ -694,7 +704,7 @@ export default function NewLeadPanel({
                     onClick={() => {
                       setD({ ...EMPTY, ...(initial ?? {}) });
                       setGeo(null); setSaved(false); setRexId(null); setSavedId(null);
-                      setSaveError(null); setRexNote(null);
+                      setSaveError(null); setRexNote(null); setWelcome(null);
                       setPicked([]); setPicking(false); setKind(initialKind ?? null);
                       setDossier(null); setBeds(0); setBaths(0);
                     }}

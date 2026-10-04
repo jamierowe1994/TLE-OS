@@ -106,10 +106,14 @@ export async function POST(req: NextRequest) {
   /* A tenant added by hand gets Let's Find You a Home (16 Sep 2026), once,
      behind the Automatic tenant emails switch. Never allowed to fail the
      save: the contact exists whatever the email does. */
+  /* What it did comes back to the panel (4 Oct 2026), which used to say "the
+     welcome email has NOT gone" whatever had happened. */
+  let welcome: { state: string; detail: string } | null = null;
   if (draft.kind === "tenant" && (draft.email ?? "").trim()) {
-    await import("@/lib/tenant-journey-emails")
+    const r = await import("@/lib/tenant-journey-emails")
       .then((m) => m.sendAddedWelcome({ contactId: saved.id, name: saved.name ?? draft.name, email: String(draft.email), by: actor }))
       .catch(() => null);
+    welcome = r ? { state: r.state, detail: r.detail } : { state: "failed", detail: "The welcome email could not be worked out." };
   }
 
   /* "CONTINUING X'S RECORD" (22 Sep 2026). The panel offered the REX contact
@@ -121,6 +125,7 @@ export async function POST(req: NextRequest) {
     const detail = `Carried on REX contact ${rexId} - nothing new was created in REX.`;
     await markRex(saved.id, "linked", detail, rexId, actor.email);
     return NextResponse.json({
+      welcome,
       contact: { ...saved, rexState: "linked", rexDetail: detail, rexId },
       rex: { ok: true, reason: "linked", rexId, detail },
     });
@@ -131,6 +136,7 @@ export async function POST(req: NextRequest) {
   if (body.pushToRex === false) {
     await markRex(saved.id, "held", "Saved without attempting REX.", null, actor.email);
     return NextResponse.json({
+      welcome,
       contact: { ...saved, rexState: "held", rexDetail: "Saved without attempting REX." },
       rex: { ok: false, reason: "not_attempted", detail: "Saved here only, as asked." },
     });
@@ -163,6 +169,7 @@ export async function POST(req: NextRequest) {
      the happy path assumed. Reporting "held" while the database says "failed"
      is the same class of bug as the Save button that saved nothing. */
   return NextResponse.json({
+    welcome,
     contact: {
       ...saved,
       rexState: state,
