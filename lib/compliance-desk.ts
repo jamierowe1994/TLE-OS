@@ -474,7 +474,14 @@ export async function answer(p: {
   }
   await recordCheck(p);
   if (p.state === "verified" && p.kind === "certificate") {
-    const share = await shareOnceChecked(p.id).catch(() => null);
+    /* Who it goes to is read off the whole managed book, and on a cold book
+       that is a walk of REX. His click must not wait on it: after eight
+       seconds he is answered, and the send finishes behind him. */
+    const share = await Promise.race([
+      shareOnceChecked(p.id).catch(() => null),
+      new Promise<"slow">((r) => setTimeout(() => r("slow"), 8000)),
+    ]);
+    if (share === "slow") return "Verified. Who it goes to is still being worked out; the result shows on the home's file in a minute or two.";
     return share?.line ?? "";
   }
   if (p.state === "queried" && p.kind !== "works_order") {
