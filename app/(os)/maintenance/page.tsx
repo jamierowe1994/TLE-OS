@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import DoodleIcon from "@/components/DoodleIcon";
+import StatTile, { toneFor } from "@/components/StatTile";
 import { Pill } from "@/components/Wire";
 import Segmented from "@/components/Segmented";
 import { PressButton } from "@/components/Bits";
@@ -206,27 +207,22 @@ export default function Maintenance() {
             ["Invoiced, unpaid", s ? pounds(s.invoicedUnpaidPence) : "•", "contractor invoices to settle", "coin", s && was ? s.invoicedUnpaidPence - was.invoicedUnpaidPence : null, true],
           ] as const
         ).map(([k, v, hint, icon, delta, money]) => (
-          <div key={k} className="rounded-2xl border border-line/80 bg-panel p-4">
-            <p className="flex items-center gap-2 text-[9.5px] font-bold uppercase tracking-wider text-muted">
-              <DoodleIcon name={icon} size={14} className="text-accent-dark" />
-              {k}
-            </p>
-            <p className="figures mt-1.5 text-[26px] leading-none">{v}</p>
+          /* Portfolio's tile (components/StatTile, 4 Oct 2026); Overdue is the
+             one that matters, pink while any job is late, green when none is. */
+          <StatTile key={k} label={k} value={v} icon={icon} tone={k === "Overdue" ? toneFor(s?.overdue) : undefined} hint={delta == null ? hint : undefined}>
             {/* Every one of these four counts something you would rather have
                 less of, so UP is the bad direction on all four and the arrow
                 can say so without a per-tile rule. Zero change is stated
                 rather than drawn as an arrow pointing nowhere. */}
-            {delta == null ? (
-              <p className="mt-1.5 truncate text-[11px] text-accent-dark">{hint}</p>
-            ) : (
-              <p className="mt-1.5 flex items-center gap-1.5 truncate text-[11px]">
+            {delta != null && (
+              <p className="mt-2 flex items-center gap-1.5 truncate text-[11px]">
                 <span className={delta === 0 ? "text-muted" : delta > 0 ? "text-accent-dark" : "text-[#2e7d5b]"}>
                   {delta === 0 ? "level with" : `${delta > 0 ? "↑" : "↓"} ${money ? pounds(Math.abs(delta)) : Math.abs(delta)} from`}
                 </span>
                 <span className="text-muted">last month</span>
               </p>
             )}
-          </div>
+          </StatTile>
         ))}
       </div>
 

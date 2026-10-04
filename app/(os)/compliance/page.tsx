@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import ComplianceDrawer from "@/components/ComplianceDrawer";
+import StatTile, { toneFor } from "@/components/StatTile";
 import {
   BIG_THREE, CERT_META, COMP_BOOK, dueWithin, headlineCerts, isOurs, isStaleRecord, statusOf,
   type CertKey, type CertStatus, type CompProperty,
@@ -210,24 +211,20 @@ export default function Compliance() {
       {/* Four tiles, four columns. It was five wide from when Let only had a
           tile of its own; that tile went on 10 Sep and left a gap at xl. */}
       <div className="mt-10 grid grid-cols-2 gap-4 xl:grid-cols-4">
+        {/* Portfolio's tile (components/StatTile, 4 Oct 2026). Expired now is
+            the one that matters: pink while anything has run out, green when
+            nothing has. Each tile still filters the book below. */}
         {TILES.map((t) => (
-          <button
+          <StatTile
             key={t.key}
-            type="button"
+            label={t.label}
+            value={source.loading ? <span className="text-[18px] text-muted">…</span> : t.value}
+            hint={t.hint}
+            icon={t.icon}
+            tone={t.key === "expired" && !source.loading && source.live ? toneFor(t.value) : undefined}
+            active={filter === t.key}
             onClick={() => setFilter(filter === t.key ? "all" : t.key)}
-            className={`fade-up block-pop rounded-2xl border bg-box p-5 text-left ${
-              filter === t.key ? "border-ink" : "border-line/80 hover:border-ink"
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <DoodleIcon name={t.icon} size={19} className="text-accent-dark" />
-              <span className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">
-                {t.label}
-              </span>
-            </div>
-            <p className="figures mt-3 text-[34px] leading-none">{t.value}</p>
-            <p className="mt-1.5 text-[11px] font-medium text-accent-dark">{t.hint}</p>
-          </button>
+          />
         ))}
       </div>
 

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import PageHeader from "@/components/PageHeader";
 import DoodleIcon from "@/components/DoodleIcon";
+import StatTile, { toneFor } from "@/components/StatTile";
 import { Pill } from "@/components/Wire";
 import Segmented from "@/components/Segmented";
 import { PressButton } from "@/components/Bits";
@@ -109,14 +110,8 @@ export default function MoveOuts() {
             ["Closed this month", s ? String(s.doneThisMonth) : "•", "recorded here", "checklist"],
           ] as const
         ).map(([k, v, hint, icon]) => (
-          <div key={k} className="rounded-2xl border border-line/80 bg-panel p-4">
-            <p className="flex items-center gap-2 text-[9.5px] font-bold uppercase tracking-wider text-muted">
-              <DoodleIcon name={icon} size={14} className="text-accent-dark" />
-              {k}
-            </p>
-            <p className="figures mt-1.5 text-[26px] leading-none">{v}</p>
-            <p className="mt-1.5 truncate text-[11px] text-accent-dark">{hint}</p>
-          </div>
+          /* Portfolio's tile; Already late is the one that matters. */
+          <StatTile key={k} label={k} value={v} hint={hint} icon={icon} tone={k === "Already late" ? toneFor(s?.overdue) : undefined} />
         ))}
       </div>
 

@@ -4,6 +4,7 @@ import { asOf } from "@/lib/as-of";
 import { currentLets } from "@/lib/current-lets";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import StatTile from "@/components/StatTile";
 import PageHeader from "@/components/PageHeader";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import PortfolioMap from "@/components/PortfolioMap";
@@ -133,20 +134,9 @@ const needsLook = (s: CertSummary | null) => !!s && (s.worst === "expired" || s.
 
 /* White with a hairline, like the rest of the OS since 11 Sep 2026; the one
    that asks for a hand (certificates to renew) goes pink. */
-function StatCard({ label, value, hint, icon, tone }: { label: string; value: React.ReactNode; hint?: React.ReactNode; icon: string; tone?: "pink" }) {
-  return (
-    <div className={`fade-up rounded-2xl border p-5 ${tone === "pink" ? "border-transparent bg-accent-soft/70" : "border-line/70 bg-card"}`}>
-      <p className="flex items-center gap-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
-        <span className={`flex h-7 w-7 items-center justify-center rounded-full ${tone === "pink" ? "bg-white/80" : "bg-accent-soft"} text-accent-dark`}>
-          <DoodleIcon name={icon} size={13} />
-        </span>
-        {label}
-      </p>
-      <div className="figures mt-2 text-[30px] font-semibold leading-none tracking-tight">{value}</div>
-      {hint && <p className="mt-2 text-[11px] leading-relaxed text-muted">{hint}</p>}
-    </div>
-  );
-}
+/* Lifted into components/StatTile (4 Oct 2026) so the other Portfolio pages
+   draw exactly this tile too. */
+const StatCard = StatTile;
 
 function Contact({ p, muted = false }: { p: Party; muted?: boolean }) {
   return (
