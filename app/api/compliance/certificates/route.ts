@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAnyCapability, whoIs } from "@/lib/admin";
+import { can } from "@/lib/roles";
 import { pendingKeyFor } from "@/lib/property-match";
 import { hasDb, q } from "@/lib/db";
 import { r2Configured } from "@/lib/r2";
@@ -10,7 +11,6 @@ import {
   YMD,
   fileCertificate,
   outCert,
-  shareCertificateRow,
   writeCertificateRow,
   ymd,
   type CertRow,
@@ -40,8 +40,10 @@ import {
  * gets it - the property file, a listing, an application, a PLC pack, the
  * contractor's own page - rather than each of them remembering to.
  *
- * It decides for itself whether to send: off unless the certificate_share
- * switch is armed, in date, a renewal, and somebody living there. So the
+ * Since 4 Oct 2026 it waits for compliance's check first (shareOnceChecked,
+ * on the desk's Verified); then it decides for itself whether to send: off
+ * unless the certificate_share switch is armed, in date, a renewal, and
+ * somebody living there. So the
  * Propoly backlog posting hundreds of historical certificates through here
  * costs one switch read each and writes to nobody.
  */
@@ -88,7 +90,8 @@ export async function POST(req: NextRequest) {
       rows = await q<CertRow>(`UPDATE os_certificates SET expiry = COALESCE($2, expiry), issue = COALESCE($3, issue) WHERE id = $1 RETURNING *`, [retry, fix.expiry ?? null, fix.issue ?? null]);
     }
     const r = await writeCertificateRow(rows[0], `Written by TLE OS from ${rows[0].source || "a dropped file"} (${rows[0].name}).`, req.nextUrl.searchParams.get("refresh") === "1");
-    return NextResponse.json({ ok: true, certificate: outCert(r), share: await shareCertificateRow(r) });
+    /* A retry is REX only. Sending it on is compliance's check, on the desk. */
+    return NextResponse.json({ ok: true, certificate: outCert(r), share: null });
   }
 
   if (!r2Configured) return NextResponse.json({ ok: false, error: "File storage isn't configured here, so the certificate cannot be kept." }, { status: 503 });
@@ -124,6 +127,8 @@ export async function POST(req: NextRequest) {
     source,
     by,
     refreshBook: req.nextUrl.searchParams.get("refresh") === "1",
+    /* The compliance office filing it has checked it already (4 Oct 2026). */
+    checkedBy: can(me.role, "see:agent-compliance") ? by : null,
   });
   if (filed.duplicate) return NextResponse.json({ ok: true, duplicate: true, certificate: outCert(filed.row) });
   return NextResponse.json({ ok: true, certificate: outCert(filed.row), share: filed.share });

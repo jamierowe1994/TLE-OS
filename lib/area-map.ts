@@ -134,8 +134,15 @@ export const AREA_DEFS: AreaDef[] = [
     apis: ["/api/applications", "/api/plc", "/api/pretenancy", "/api/handoff", "/api/handover", "/api/deals", "/api/tenancy-link"],
     canHide: true,
   },
+  /* Compliance on its own switch (James, 4 Oct 2026: compliance goes live for
+     the office AND the agents on Tuesday 6 Oct, while the rest of Portfolio
+     - Maintenance and Inspections email real landlords, tenants and
+     contractors - stays back). The page only reads; filing a certificate
+     goes through /api/compliance, which stays with the dashboard for the
+     reason given on Portfolio below. Arrives hidden (lib/db). */
+  { id: "compliance", label: "Compliance", phase: 2, pages: ["/compliance"], apis: [], canHide: true },
   {
-    id: "portfolio", label: "Portfolio", phase: 2, pages: ["/portfolio", "/overview", "/compliance", "/maintenance", "/inspections", "/tenancy-reviews", "/move-outs"],
+    id: "portfolio", label: "Portfolio", phase: 2, pages: ["/portfolio", "/overview", "/maintenance", "/inspections", "/tenancy-reviews", "/move-outs"],
     /* Not /api/compliance or /api/property-file: a certificate is filed from a
        listing, an appraisal and an application too, and hiding Portfolio must
        not stop an agent attaching a gas certificate to the listing in front

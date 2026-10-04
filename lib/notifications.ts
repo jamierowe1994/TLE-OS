@@ -6,7 +6,7 @@ import { listDealEvents } from "@/lib/business/deal-watch";
 import { eventSentence, eventTone, hrefFor, type DealEventKind } from "@/lib/business/deal-events";
 import type { Notice } from "@/lib/notices";
 import { remindersFor } from "@/lib/reminders";
-import { verifyQueue, worksToCheck } from "@/lib/compliance-desk";
+import { queriesFor, verifyQueue, worksToCheck } from "@/lib/compliance-desk";
 
 /**
  * What the bell shows, gathered from the tables where things already happen.
@@ -35,6 +35,8 @@ import { verifyQueue, worksToCheck } from "@/lib/compliance-desk";
  *                            (James, 7 Sep 2026)
  *   reminders                the person alone - worked out from their own
  *                            book by lib/reminders, never anybody else's
+ *   a document compliance    the agent it was emailed to (4 Oct 2026), until
+ *   queried                  it is put right or 30 days pass
  *   documents to verify,     the compliance role alone (Michael, 20 Sep 2026:
  *   finished works orders    "he needs to also be notified"). Read from his
  *                            own two lists, so a notice goes when he ticks the
@@ -119,7 +121,21 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
   const { runsFor } = await import("@/lib/steve-jobs");
   const jobRuns = await runsFor(me.id, 3).catch(() => []);
 
+  /* A document compliance queried, on a home of yours (4 Oct 2026). */
+  const queried = await queriesFor(me.id).catch(() => []);
+
   const out: Notice[] = [...reminders];
+  for (const x of queried) {
+    out.push({
+      id: `queried:${x.kind}:${x.id}`,
+      kind: "compliance",
+      at: x.at,
+      title: x.property,
+      body: `${x.by || "Compliance"} queried the ${x.what}: ${x.note}`,
+      href: x.link,
+      tone: "warn",
+    });
+  }
   for (const r of jobRuns) {
     out.push({
       id: `steve-job:${r.id}`,

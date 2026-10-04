@@ -25,6 +25,9 @@ export function useDesk() {
   const [desk, setDesk] = useState<Desk | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  /* What happened after his last answer, in one sentence: "Emailed Sam Lewis",
+     "Gas safety sent to landlord, tenant". Kept until the next one. */
+  const [said, setSaid] = useState<string | null>(null);
 
   const load = useCallback(() => {
     fetch("/api/compliance-desk", { cache: "no-store" })
@@ -37,15 +40,26 @@ export function useDesk() {
   }, []);
   useEffect(load, [load]);
 
-  const check = useCallback(async (kind: CheckKind, id: string, state: "verified" | "queried", note?: string, registerNumber?: string) => {
+  const check = useCallback(async (
+    kind: CheckKind,
+    id: string,
+    state: "verified" | "queried",
+    note?: string,
+    registerNumber?: string,
+    fileAs?: { type: string; expiry: string; issue?: string } | null
+  ): Promise<boolean> => {
     setBusy(id);
     try {
-      const r = await fetch("/api/compliance-desk", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind, id, state, note, registerNumber }) });
-      const j = (await r.json()) as { ok: boolean; error?: string; verify?: VerifyItem[]; works?: WorksCheckItem[] };
-      if (!j.ok) setError(j.error ?? "That did not save.");
-      else { setError(null); setDesk((d) => (d ? { ...d, verify: j.verify ?? d.verify, works: j.works ?? d.works } : d)); }
+      const r = await fetch("/api/compliance-desk", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind, id, state, note, registerNumber, fileAs }) });
+      const j = (await r.json()) as { ok: boolean; error?: string; said?: string; verify?: VerifyItem[]; works?: WorksCheckItem[] };
+      if (!j.ok) { setError(j.error ?? "That did not save."); return false; }
+      setError(null);
+      setSaid(j.said || null);
+      setDesk((d) => (d ? { ...d, verify: j.verify ?? d.verify, works: j.works ?? d.works } : d));
+      return true;
     } catch {
       setError("That did not save.");
+      return false;
     } finally {
       setBusy(null);
     }
@@ -71,5 +85,5 @@ export function useDesk() {
     );
   }, []);
 
-  return { desk, error, busy, check, readRegister, reload: load };
+  return { desk, error, busy, said, check, readRegister, reload: load };
 }

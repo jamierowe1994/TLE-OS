@@ -28,6 +28,8 @@ export interface Queried {
   note: string;
   by: string;
   at: string;
+  /** The agent the query was emailed to (4 Oct 2026). */
+  told?: string | null;
 }
 
 export default function CheckRow({
@@ -110,6 +112,7 @@ export default function CheckRow({
       {queried && (
         <p className={`mt-3 rounded-xl px-3.5 py-2.5 text-[12.5px] leading-snug ${RED}`}>
           <span className="font-semibold">Queried by {queried.by || "compliance"} on {new Date(queried.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}.</span> {queried.note}
+          {queried.told && <span className="mt-1 block text-[11.5px] opacity-80">Emailed to {queried.told}.</span>}
         </p>
       )}
 
@@ -120,7 +123,7 @@ export default function CheckRow({
             onChange={(e) => setNote(e.target.value)}
             rows={2}
             autoFocus
-            placeholder="What is wrong with it? This is what the agent needs to put right."
+            placeholder="What is wrong with it? The agent is emailed exactly this, so they can put it right."
             className="w-full rounded-xl border border-line/80 bg-page px-3.5 py-2.5 text-[13px] outline-none focus:border-ink/40"
           />
           <div className="mt-2 flex flex-wrap gap-2">

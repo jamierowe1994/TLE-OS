@@ -47,7 +47,7 @@ function CertPill({ cert, name }: { cert: CompProperty["certs"][CertKey]; name?:
   return (
     <span
       className={`figures inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${TONE[s]}`}
-      title={isStaleRecord(cert) ? `${name}: the last one on file ran out ${Math.round(Math.abs(cert!.expires!) / 30)} months ago and no renewal has reached REX` : name}
+      title={isStaleRecord(cert) ? `${name}: the last one on file ran out ${Math.round(Math.abs(cert!.expires!) / 30)} months ago and no renewal has reached us` : name}
     >
       {text}
     </span>
@@ -73,6 +73,8 @@ export default function Compliance() {
     loading: boolean;
     reason?: string;
     counts?: { properties: number; withAnyRecord: number; entries: number; withCertificate: number; gasUnknown: number };
+    /** The office sees the whole business; an agent, their own book (4 Oct 2026). */
+    scope?: { whole: boolean; label: string };
     /** How old the cached book is - shown, never hidden (lib/as-of). */
     ageMs?: number;
     /* Nothing stands in for the book (18 Sep 2026): the sample homes used to
@@ -87,7 +89,7 @@ export default function Compliance() {
       .then((j) => {
         if (gone) return;
         if (j.ok && j.live && Array.isArray(j.properties)) {
-          setSource({ properties: j.properties, live: true, loading: false, counts: j.counts, ageMs: typeof j.ageMs === "number" ? j.ageMs : undefined });
+          setSource({ properties: j.properties, live: true, loading: false, counts: j.counts, ageMs: typeof j.ageMs === "number" ? j.ageMs : undefined, scope: j.scope });
         } else {
           setSource({
             properties: j.ok && j.demo ? COMP_BOOK : [],
@@ -177,14 +179,14 @@ export default function Compliance() {
         title="Compliance"
         blurb={
           source.loading
-            ? "Reading every certificate on every home from REX…"
+            ? "Reading every certificate on every home…"
             : source.live && source.counts
               ? /* The count has to be the homes ON THIS SCREEN. The book REX
                    answers about is wider - every current listing as well as
                    the managed book - and printing that total above a list
                    scoped to what we manage is how the page and Susan's sheet
                    ended up quoting different numbers for the same question. */
-                `Live from REX${source.ageMs != null ? `, ${asOf(source.ageMs).text}` : ""} — ${BOOK.length} homes we manage. ${noGas} have no gas supply, from the signed terms or REX PM's own record; ${gasUnknown} have nobody's answer either way, which is unknown rather than exempt. Let-only homes, and homes whose agent has left the business, are not on this screen. A certificate more than 6 months out of date reads as an old record, not an expiry.`
+                `Live${source.ageMs != null ? `, ${asOf(source.ageMs).text}` : ""}. ${BOOK.length} ${source.scope && !source.scope.whole ? "homes on your own book" : "homes we manage"}. ${noGas} have no gas supply, from the signed terms or the property's own record; ${gasUnknown} have nobody's answer either way, which is unknown rather than exempt. Let-only and rent collect homes are the landlord's to keep compliant, and homes whose agent has left are not ours, so neither is here. A certificate more than 6 months out of date reads as an old record, not an expiry.`
               : (source.reason ?? "Every certificate on every home, and the button that fixes each one.")
         }
         /* James's own artwork, trimmed to its ink so the drawing's own
@@ -370,7 +372,7 @@ export default function Compliance() {
                   <td className="py-3 text-[12px] text-muted">
                     <span className="block max-w-[190px] truncate" title={p.landlord}>{p.landlord}</span>
                     {p.tenant === null ? (
-                      <span className="block text-[10.5px] text-muted/70" title="REX has no tenant on the listing: either nobody is in, or it has not been recorded">no tenant on record</span>
+                      <span className="block text-[10.5px] text-muted/70" title="No tenant on the listing: either nobody is in, or it has not been recorded">no tenant on record</span>
                     ) : p.tenant ? (
                       <span className="block max-w-[190px] truncate text-[10.5px] text-muted/70" title={p.tenant}>{p.tenant}</span>
                     ) : null}
@@ -390,10 +392,9 @@ export default function Compliance() {
       </div>
 
       <p className="mt-4 text-[11px] leading-relaxed text-muted">
-        <span className="font-semibold">What&apos;s real:</span> REX&apos;s compliance entries are
-        readable today, certificate files included. The book only started recording them in
-        Nov 2025 with no backfill — so &ldquo;no record&rdquo; will be the loudest column at
-        first, and that&apos;s the point: this page is where the gaps get closed.
+        <span className="font-semibold">Putting one right:</span> open the home and upload the
+        renewed certificate. Compliance checks it, and once they have, it goes to the landlord
+        and the tenant for you. If compliance query it, you get an email saying what needs fixing.
       </p>
 
       <ComplianceDrawer

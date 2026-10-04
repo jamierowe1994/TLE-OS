@@ -158,6 +158,10 @@ async function plan(): Promise<{
          restyle. */
       lines: sorted.map((r) => {
         const cert = r.certLabel.replace(/\s+[—–]\s+/g, " - ").replace(/[—–]/g, "-");
+        if (r.band === 0) {
+          const ago = Math.abs(r.daysLeft);
+          return `<strong>${r.property}</strong> - ${cert}, expired ${ago === 0 ? "today" : `${ago} day${ago === 1 ? "" : "s"} ago`}`;
+        }
         return `<strong>${r.property}</strong> - ${cert}, expires in ${r.daysLeft} day${
           r.daysLeft === 1 ? "" : "s"
         }`;

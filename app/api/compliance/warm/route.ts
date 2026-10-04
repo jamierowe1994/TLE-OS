@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAnyCapability } from "@/lib/admin";
 import { FRESH_MS, refreshComplianceBook } from "@/lib/compliance-cache";
 import { rexConfigured } from "@/lib/rex";
+import { noteFailure } from "@/lib/auto-bugs";
 
 /**
  * Sweep the compliance book before anybody asks for it.
@@ -61,11 +62,30 @@ export async function POST(req: NextRequest) {
   }
 
   const started = Date.now();
+  /* ANSWER BEFORE THE DOOR SHUTS (4 Oct 2026). The sweep takes two to three
+     minutes and Cloudflare hangs up on any request at 100 seconds, so every
+     cron run from 28 Sep onwards logged a 524 even though the sweep finished
+     on the server - and a real failure looked exactly the same. Now the route
+     answers at 80 seconds with "still going", the sweep carries on, and if
+     it then fails, that failure is logged where failures are read (Admin,
+     Tickets) instead of nowhere. */
+  const sweep = refreshComplianceBook();
+  sweep.catch((e) => {
+    noteFailure({ source: "REX", what: "compliance book sweep", message: e instanceof Error ? e.message : "The compliance book sweep failed." });
+  });
+  const answerBy = new Promise<"still going">((r) => setTimeout(() => r("still going"), 80_000));
   try {
     /* refreshComplianceBook shares one in-flight sweep, so a cron landing on
        top of a page load costs nothing extra — they wait on the same promise
        rather than starting a second walk. */
-    const entry = await refreshComplianceBook();
+    const first = await Promise.race([sweep, answerBy]);
+    if (first === "still going") {
+      return NextResponse.json(
+        { ok: true, warmed: "still going", tookMs: Date.now() - started, note: "The sweep is still running and will finish on its own; a failure is logged as a ticket." },
+        { status: 202 }
+      );
+    }
+    const entry = first;
     return NextResponse.json({
       ok: true,
       warmed: true,

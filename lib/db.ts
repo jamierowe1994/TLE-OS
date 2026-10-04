@@ -1194,6 +1194,11 @@ CREATE TABLE IF NOT EXISTS os_area_access (
 -- one - once, never over a position somebody has since chosen. Phase 3 opens it.
 INSERT INTO os_area_access (area, level, changed_by) VALUES ('showroom', 'hidden', 'Arrives hidden until Phase 3')
   ON CONFLICT (area) DO NOTHING;
+-- Compliance gets its own switch, out of Portfolio (4 Oct 2026). It arrives
+-- HIDDEN for agents, as it was inside Portfolio, so deploying it changes
+-- nothing; James opens it on Admin, Areas when compliance goes live.
+INSERT INTO os_area_access (area, level, changed_by) VALUES ('compliance', 'hidden', 'Arrives hidden, as it was inside Portfolio')
+  ON CONFLICT (area) DO NOTHING;
 
 -- Who counts as a tester when an area is at testers. By email rather than
 -- user id so somebody can be named before their account exists.
@@ -2278,6 +2283,15 @@ CREATE TABLE IF NOT EXISTS os_compliance_checks (
   at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (kind, subject_id)
 );
+-- Compliance going live, 4 Oct 2026. A certificate goes on to the landlord
+-- and tenants only once compliance has checked it (James: "after Michael
+-- verifies"), so the people the door could name wait on the row until then,
+-- and shared_at says the check has let it go. A query emails the agent; who
+-- was told, and when, is kept with the query.
+ALTER TABLE os_certificates ADD COLUMN IF NOT EXISTS share_people JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE os_certificates ADD COLUMN IF NOT EXISTS shared_at TIMESTAMPTZ;
+ALTER TABLE os_compliance_checks ADD COLUMN IF NOT EXISTS told TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_compliance_checks ADD COLUMN IF NOT EXISTS told_at TIMESTAMPTZ;
 
 -- THE OS'S OWN PROPERTY RECORD (6 Sep 2026). One row per REX PM property, linked
 -- to its REX CRM property where the address matched, "not on REX" where it did
@@ -3076,6 +3090,9 @@ CREATE TABLE IF NOT EXISTS os_landlord_documents (
 );
 CREATE INDEX IF NOT EXISTS os_landlord_documents_account
   ON os_landlord_documents (account_id, uploaded_at DESC);
+-- A landlord's certificate becomes a real certificate when compliance checks
+-- it (4 Oct 2026): the os_certificates row it was filed as.
+ALTER TABLE os_landlord_documents ADD COLUMN IF NOT EXISTS certificate_id TEXT;
 
 -- ── AND THE TENANT'S, added 15 Sep 2026 ──────────────────────────────────
 --

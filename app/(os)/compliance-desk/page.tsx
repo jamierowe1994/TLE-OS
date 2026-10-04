@@ -9,6 +9,7 @@ import { GREEN, RED, waited } from "@/components/compliance-desk/CheckRow";
 import { useDesk } from "@/components/compliance-desk/useDesk";
 import TodoCard from "@/components/compliance-desk/TodoCard";
 import type { ChaseRow, TrackerBook } from "@/lib/compliance-tracker";
+import { asOf } from "@/lib/as-of";
 
 /**
  * Michael's first screen: his job, in the order he does it.
@@ -30,7 +31,7 @@ import type { ChaseRow, TrackerBook } from "@/lib/compliance-tracker";
  * Nothing here is a second copy of a figure: every card opens the list it counts.
  */
 
-type Tracker = TrackerBook & { ok: boolean; live: boolean; reason?: string; stale?: boolean; error?: string; chases?: { key: string; to: string; at: string }[] | null };
+type Tracker = TrackerBook & { ok: boolean; live: boolean; reason?: string; stale?: boolean; ageMs?: number; error?: string; chases?: { key: string; to: string; at: string }[] | null };
 
 const card = "rounded-[22px] border border-line/70 bg-card";
 
@@ -148,6 +149,11 @@ export default function ComplianceDashboard() {
         <p className="flex items-center gap-2 text-[13.5px] text-ink"><DoodleIcon name="calendar" size={15} className="text-accent-dark" />{today}</p>
         {error && <p className="w-full text-[12.5px] text-[#9d4340]">{error}</p>}
         {book && !book.live && <p className="w-full text-[12.5px] text-[#9d4340]">Not live: {book.reason} Do not quote the property figures below.</p>}
+        {/* How old the property figures are, always (4 Oct 2026): the book is
+            cached, and a figure is live or it says it is not. */}
+        {bookOk && bookOk.live && bookOk.ageMs != null && (
+          <p className={`w-full text-[12px] ${asOf(bookOk.ageMs).old ? "text-[#9d4340]" : "text-muted"}`}>Property figures {asOf(bookOk.ageMs).text}.</p>
+        )}
       </PreTenancyHero>
 
       {/* ── overdue, to verify, works orders ── */}

@@ -63,7 +63,7 @@ const FRONT = ["dashboard", "leads", "appraisals", "listings", "listing-edit", "
 /* Everything but Push to the portals: that is the one front-office door that
    reaches the public, and it stays shut until launch (James, 22 Sep 2026). */
 const FRONT_WITHOUT_PORTALS = FRONT.filter((a) => a !== "listing-publish");
-const BACK_ALL = ["portfolio", "emails", "finances", "tools"];
+const BACK_ALL = ["portfolio", "compliance", "emails", "finances", "tools"];
 
 const all = (ids: string[], level: AreaLevel) => Object.fromEntries(ids.map((id) => [id, level])) as Record<string, AreaLevel>;
 
@@ -177,7 +177,9 @@ export async function phaseState(): Promise<PhaseState> {
   if (!hasDb()) return none;
   const rows = await q<{ value: Partial<PhaseState> | null }>(`SELECT value FROM os_settings WHERE key = $1`, [KEY]).catch(() => []);
   const v = rows[0]?.value;
-  if (!v || ![1, 2, 3].includes(Number(v.phase))) return none;
+  /* 4 was missing (4 Oct 2026): pressing Phase 4 would have read back as
+     "the pilot has not started" and the next write would have lost the history. */
+  if (!v || ![1, 2, 3, 4].includes(Number(v.phase))) return none;
   return { phase: Number(v.phase) as PhaseId, at: v.at ?? null, by: v.by ?? null, history: Array.isArray(v.history) ? v.history : [] };
 }
 

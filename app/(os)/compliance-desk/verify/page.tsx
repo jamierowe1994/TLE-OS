@@ -23,7 +23,7 @@ import type { VerifyItem } from "@/lib/compliance-desk";
 const LATE_AFTER_DAYS = 7;
 
 export default function ToVerify() {
-  const { desk, error, busy, check, readRegister } = useDesk();
+  const { desk, error, busy, said, check, readRegister } = useDesk();
   if (!desk && !error) return <WorkspaceLoading />;
   const rows = desk?.verify ?? [];
   const queried = rows.filter((r) => r.queried).length;
@@ -32,10 +32,11 @@ export default function ToVerify() {
     <>
       <PageHeader
         title="To Verify"
-        blurb="Every certificate an agent, a contractor or a landlord has uploaded, or that was filed on REX, until you have checked it. Gas and electrical ones come with the engineer's register number read off for you. Oldest first."
+        blurb="Every certificate an agent, a contractor or a landlord has uploaded, or that was filed on REX, until you have checked it. Verified, a certificate goes on to the landlord and tenants; queried, the agent is emailed what you wrote. Gas and electrical ones come with the engineer's register number read off for you. Oldest first."
         search={false}
       />
       {error && <p className="mt-4 rounded-2xl border border-line/80 bg-panel p-4 text-[12.5px] text-[#9d4340]">{error}</p>}
+      {said && !error && <p className={`mt-4 rounded-2xl p-4 text-[12.5px] ${GREEN}`}>{said}</p>}
       {desk && !desk.stored && <p className="mt-4 rounded-2xl border border-line/80 bg-panel p-4 text-[12.5px] text-muted">{desk.reason}</p>}
 
       {desk?.stored && rows.length === 0 && (
@@ -79,7 +80,18 @@ function VerifyRow({
   readRegister: ReturnType<typeof useDesk>["readRegister"];
 }) {
   const [number, setNumber] = useState("");
+  /* A landlord's certificate is filed as a real one on Verified: it needs the
+     date it runs out, and the type where the kind covers more than one. */
+  const [expiry, setExpiry] = useState("");
+  const [issue, setIssue] = useState("");
+  const [type, setType] = useState(r.fileAs?.types[0]?.id ?? "");
+  const [needDate, setNeedDate] = useState(false);
   const onRegister = Boolean(r.register);
+  const verify = () => {
+    if (r.fileAs && !expiry) return setNeedDate(true);
+    setNeedDate(false);
+    void check(r.kind, r.id, "verified", undefined, onRegister ? number : undefined, r.fileAs ? { type, expiry, issue: issue || undefined } : null);
+  };
   return (
     <CheckRow
       title={`${r.what} - ${r.property}`}
@@ -91,9 +103,33 @@ function VerifyRow({
       queried={r.queried}
       okLabel={onRegister ? "On the register - verified" : "Verified"}
       busy={busy}
-      onVerify={() => check(r.kind, r.id, "verified", undefined, onRegister ? number : undefined)}
+      onVerify={verify}
       onQuery={(note) => check(r.kind, r.id, "queried", note)}
     >
+      {r.fileAs && (
+        <div className="mt-3 flex flex-wrap items-end gap-3 rounded-xl bg-page px-3.5 py-3">
+          <p className="w-full text-[12px] text-muted">Verified, this is filed as the home&apos;s certificate, so it needs its dates.</p>
+          {r.fileAs.types.length > 1 && (
+            <label className="text-[11.5px] font-semibold">
+              Type
+              <select value={type} onChange={(e) => setType(e.target.value)} className="mt-1 block rounded-lg border border-line/80 bg-card px-2.5 py-1.5 text-[12.5px] font-normal">
+                {r.fileAs.types.map((t) => (
+                  <option key={t.id} value={t.id}>{t.label}</option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label className="text-[11.5px] font-semibold">
+            Runs out
+            <input type="date" value={expiry} onChange={(e) => { setExpiry(e.target.value); setNeedDate(false); }} className={`mt-1 block rounded-lg border bg-card px-2.5 py-1.5 text-[12.5px] font-normal ${needDate ? "border-[#9d4340]" : "border-line/80"}`} />
+          </label>
+          <label className="text-[11.5px] font-semibold">
+            Issued <span className="font-normal text-muted">(if it says)</span>
+            <input type="date" value={issue} onChange={(e) => setIssue(e.target.value)} className="mt-1 block rounded-lg border border-line/80 bg-card px-2.5 py-1.5 text-[12.5px] font-normal" />
+          </label>
+          {needDate && <p className="w-full text-[12px] text-[#9d4340]">Put the date it runs out in first.</p>}
+        </div>
+      )}
       {onRegister && (
         <RegisterCheck
           item={r}

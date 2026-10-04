@@ -104,6 +104,46 @@ export function certificateChaseEmail(input: { firstName: string; lines: string[
   };
 }
 
+/* ── Compliance has queried a document on your home (4 Oct 2026) ─────── */
+
+/**
+ * Michael never writes to a landlord: "he will always go through the agent".
+ * So when he queries a document, the agent is the one told, with his words
+ * exactly as he wrote them and a link straight to the home.
+ */
+export function documentQueriedEmail(input: {
+  firstName: string;
+  property: string;
+  what: string;
+  fileName: string;
+  note: string;
+  by: string;
+  link: string;
+}): AgentEmail {
+  const subject = `${input.what} queried - ${input.property}`;
+  const intro = `${input.by} has checked the ${input.what} for ${input.property} and something needs putting right before it can be signed off. Sort it with the landlord or the contractor, then upload the right one.`;
+  const rows: ShellRow[] = [
+    { title: input.property, detail: `${input.what}${input.fileName ? ` · ${input.fileName}` : ""}`, tone: "neutral", icon: "mark-home.png" },
+    { title: `What ${input.by.split(/\s+/)[0] || "compliance"} said`, detail: input.note, tone: "attention", icon: "mark-doc.png" },
+  ];
+  return {
+    subject,
+    html: skyListShell({
+      heading: `A document needs putting right, ${input.firstName}`,
+      intro,
+      rows,
+      rowsLead: "The document",
+      rowStyle: "bare",
+      button: "Open the home",
+      link: input.link,
+      hero: "hero-certificates.png",
+      tip: `Questions about it go to ${input.by}, not the landlord's inbox.`,
+      tipQuiet: true,
+    }),
+    text: [`A document needs putting right, ${input.firstName}`, "", intro, "", `${input.property} - ${input.what}${input.fileName ? ` (${input.fileName})` : ""}`, `What ${input.by} said: ${input.note}`, "", `Open the home: ${input.link}`].join("\n"),
+  };
+}
+
 /* ── An agent's own compliance (item 11) ──────────────────────────────── */
 
 export function ownComplianceEmail(input: { firstName: string; lines: string[] }): AgentEmail {

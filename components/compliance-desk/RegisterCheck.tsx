@@ -90,7 +90,7 @@ export default function RegisterCheck({
         </p>
       ) : read.state === "failed" ? (
         <p className="mt-1.5 text-[12.5px] text-muted">
-          Couldn&rsquo;t read it: {read.note || "unknown reason"}.{" "}
+          Couldn&rsquo;t read it: {(read.note || "unknown reason").replace(/\.+$/, "")}.{" "}
           <button type="button" onClick={async () => { setReading(true); await onRead(true); setReading(false); }} className="font-semibold text-ink underline underline-offset-2">
             Try again
           </button>{" "}

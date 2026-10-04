@@ -77,6 +77,15 @@ async function store(entry: CachedBook): Promise<void> {
   }
 }
 
+/**
+ * The book as it is held right now, however old, and never a refresh. For a
+ * look-up inside somebody's click (who is the agent on this home?) that must
+ * not wait minutes on REX. Null when nothing has been built yet.
+ */
+export async function heldComplianceBook(): Promise<CachedBook | null> {
+  return memory ?? (await readStored());
+}
+
 export function refreshComplianceBook(): Promise<CachedBook> {
   if (!refreshing) {
     refreshing = fetchComplianceBook()
@@ -125,8 +134,15 @@ export async function getComplianceBook(): Promise<{
     const fresh = await refreshComplianceBook();
     return { book: fresh.book, ageMs: 0, stale: false };
   } catch (e) {
-    // A stale answer beats no answer, but the caller must be told which it is.
-    if (held) return { book: held.book, ageMs: age, stale: true };
+    /* No more "a stale answer beats no answer" (4 Oct 2026, compliance going
+       live). Past a day old, a held book can call an expired certificate in
+       date, and the house rule is that a source that fails shows an error,
+       never an old number. Every screen and the chase read through here, so
+       none of them can quote a book this old. */
+    if (held) {
+      const when = new Date(held.at).toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+      throw new Error(`REX did not answer, and the last copy of the compliance book is from ${when}, which is too old to show. Try again in a few minutes.`);
+    }
     throw e;
   }
 }

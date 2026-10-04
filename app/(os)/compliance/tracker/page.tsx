@@ -234,7 +234,7 @@ export default function ComplianceTracker() {
                       <li key={r.key} className="rounded-xl border border-line/70 p-3">
                         <div className="flex flex-wrap items-baseline justify-between gap-2">
                           <span className="text-[12.5px]">{r.subject}</span>
-                          <Pill tone="neutral">{r.band}-day</Pill>
+                          <Pill tone={r.band === 0 ? "accent" : "neutral"}>{r.band === 0 ? "Expired" : `${r.band}-day`}</Pill>
                         </div>
                         <p className="mt-1 text-[11px] text-muted">
                           To: {r.to.landlord}

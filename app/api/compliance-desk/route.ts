@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireCapability } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
 import { overview } from "@/lib/agent-compliance";
-import { isCheckKind, recordCheck, subjectExists, verifyQueue, worksToCheck } from "@/lib/compliance-desk";
+import { answer, isCheckKind, subjectExists, verifyQueue, worksToCheck } from "@/lib/compliance-desk";
 import { confirmRegister, readAccuracy, readOne, REGISTERS } from "@/lib/cert-register";
 
 /**
@@ -14,12 +14,17 @@ import { confirmRegister, readAccuracy, readOne, REGISTERS } from "@/lib/cert-re
  *        The PROPERTY figures are not here: they come from the compliance book
  *        (/api/compliance/tracker), which walks REX and must never hold up a
  *        list that is one query.
- * POST → { kind, id, state: "verified" | "queried", note?, registerNumber? }.
+ * POST → { kind, id, state: "verified" | "queried", note?, registerNumber?, fileAs? }.
  *        registerNumber is the engineer's number he checked on the register
  *        (lib/cert-register): kept with his tick, and against what was read.
+ *        fileAs { type, expiry, issue? }: a landlord's certificate, filed as a
+ *        real one on his Verified.
  *        { action: "read", kind, id } reads the engineer off the certificate.
  *
- * Nothing here sends anything. He goes through the agent, never to a landlord.
+ * Since 4 Oct 2026 his answer has consequences (lib/compliance-desk, answer):
+ * Verified lets a certificate go on to the landlord and tenants; a query
+ * emails the agent. He still never writes to a landlord himself. `said` is the
+ * one sentence about what happened next, for his screen.
  */
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -57,7 +62,10 @@ export async function POST(req: NextRequest) {
   const me = await requireCapability(req, "see:agent-compliance");
   if (!me) return NextResponse.json({ ok: false, error: "Not yours." }, { status: 403 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
-  const b = (await req.json().catch(() => ({}))) as { kind?: string; id?: string; state?: string; note?: string; action?: string; registerNumber?: string; again?: boolean };
+  const b = (await req.json().catch(() => ({}))) as {
+    kind?: string; id?: string; state?: string; note?: string; action?: string; registerNumber?: string; again?: boolean;
+    fileAs?: { type?: string; expiry?: string; issue?: string } | null;
+  };
   if (!b.kind || !isCheckKind(b.kind) || !b.id) return NextResponse.json({ ok: false, error: "Which one?" }, { status: 400 });
   /* Read the engineer off the certificate - once, kept. */
   if (b.action === "read") {
@@ -73,13 +81,19 @@ export async function POST(req: NextRequest) {
   if (number && b.state === "verified" && b.kind !== "works_order") {
     await confirmRegister(b.kind, b.id, number, me.name || me.email);
   }
-  await recordCheck({
-    kind: b.kind,
-    id: b.id,
-    state: b.state,
-    note: b.note || (number && b.state === "verified" ? `Engineer ${number} checked on the register.` : undefined),
-    by: me.name || me.email,
-  });
+  let said = "";
+  try {
+    said = await answer({
+      kind: b.kind,
+      id: b.id,
+      state: b.state,
+      note: b.note || (number && b.state === "verified" ? `Engineer ${number} checked on the register.` : undefined),
+      by: me.name || me.email,
+      fileAs: b.fileAs?.expiry ? { type: String(b.fileAs.type ?? ""), expiry: String(b.fileAs.expiry), issue: b.fileAs.issue ? String(b.fileAs.issue) : null } : null,
+    });
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "That did not save." }, { status: 400 });
+  }
   const [verify, works] = await Promise.all([verifyQueue(), worksToCheck()]);
-  return NextResponse.json({ ok: true, verify, works });
+  return NextResponse.json({ ok: true, said, verify, works });
 }

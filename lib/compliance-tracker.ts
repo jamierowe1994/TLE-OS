@@ -270,9 +270,12 @@ export function buildTracker(
 
 /* ── the reminder queue ───────────────────────────────────────────────────── */
 
+/** A chase: one of the three bands, or 0 for "it has expired" (4 Oct 2026). */
+export type ChaseBand = Band | 0;
+
 export interface QueuedReminder {
   key: string;
-  band: Band;
+  band: ChaseBand;
   propertyId: string;
   property: string;
   certLabel: string;
@@ -292,7 +295,9 @@ export interface QueuedReminder {
  * evaluate an automated chase before it starts writing to landlords.
  */
 export function buildQueue(tracker: TrackerBook): QueuedReminder[] {
-  return tracker.upcoming
+  const blocked = (r: ChaseRow) =>
+    r.agent ? null : "No agent on this property — the chase would reach the landlord without their agent knowing.";
+  const due = tracker.upcoming
     .filter((r) => r.band !== null)
     .map((r) => ({
       key: `${r.propertyId}:${r.cert}:${r.band}`,
@@ -303,8 +308,27 @@ export function buildQueue(tracker: TrackerBook): QueuedReminder[] {
       daysLeft: r.daysLeft ?? 0,
       to: { landlord: r.landlord, agent: r.agent },
       subject: `${r.certLabel} for ${r.property} expires in ${r.daysLeft} days`,
-      blocked: r.agent
-        ? null
-        : "No agent on this property — the chase would reach the landlord without their agent knowing.",
+      blocked: blocked(r),
     }));
+  /* EXPIRED, once (James, 4 Oct 2026, compliance going live for agents). The
+     band rule above stops at zero days, and the escalation it promised never
+     got built - so a certificate that ran out was chased at 30, 14 and 7 days
+     and then never again, which is the moment it matters most. It is now one
+     more chase, keyed :0, sent once. "Missing" (no record, or an old one past
+     six months) is not here: that is Michael's list to work, and 278 of them
+     in an agent's inbox on day one would bury the real ones. */
+  const expired = tracker.outstanding
+    .filter((r) => r.status === "expired" && r.daysLeft != null)
+    .map((r) => ({
+      key: `${r.propertyId}:${r.cert}:0`,
+      band: 0 as const,
+      propertyId: r.propertyId,
+      property: r.property,
+      certLabel: r.certLabel,
+      daysLeft: r.daysLeft ?? 0,
+      to: { landlord: r.landlord, agent: r.agent },
+      subject: `${r.certLabel} for ${r.property} expired ${Math.abs(r.daysLeft ?? 0)} days ago`,
+      blocked: blocked(r),
+    }));
+  return [...expired, ...due];
 }

@@ -79,8 +79,8 @@ export const SWITCHES: Switch[] = [
   {
     key: "compliance_chases",
     label: "Certificate chases",
-    what: "Emails agents the certificates coming up for renewal on their book, once per 30/14/7 band.",
-    who: "TLE agents. Landlords are NOT written to yet - that needs the public sending domain.",
+    what: "Emails agents, at 7am each morning, the certificates coming up for renewal on their book, once per 30/14/7 band, and once more for any that have already expired.",
+    who: "TLE agents only. The first morning it is on, every agent with a home already expired gets one email listing them. Landlords are not written to.",
     confirm: "SEND CHASES",
     legacyEnv: "COMPLIANCE_CHASES",
     legacyOn: "on",
@@ -272,8 +272,8 @@ export const SWITCHES: Switch[] = [
      */
     key: "certificate_share",
     label: "Send a renewed certificate to everyone on it",
-    what: "When a renewed certificate is filed, emails a copy to the landlord, the sitting tenant and the contractor who produced it, and one to the compliance inbox for the audit trail. Certificates only - never an invoice, and never a cost.",
-    who: "LANDLORDS, TENANTS AND CONTRACTORS, with the certificate attached. Do not arm this until the Propoly certificate backlog has finished loading.",
+    what: "When compliance verifies a renewed certificate on To verify (or files one themselves), emails a copy to the landlord, the sitting tenant and the contractor who produced it, and one to the compliance inbox for the audit trail. Nothing goes on an upload alone. Certificates only - never an invoice, and never a cost.",
+    who: "LANDLORDS, TENANTS AND CONTRACTORS, with the certificate attached. Only certificates verified after it is armed go out; anything verified while it was off stays sent to nobody.",
     confirm: "SEND CERTIFICATES",
     /* No old variable: this never existed before. Unset means off. */
     legacyEnv: "CERTIFICATE_SHARE",

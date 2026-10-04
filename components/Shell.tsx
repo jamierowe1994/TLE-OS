@@ -192,10 +192,15 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       .catch(() => {});
     return () => { gone = true; };
   }, [pathname]);
-  const visible = (item: NavItem) => {
-    const area = areaForPage(item.href);
+  const pageVisible = (href: string) => {
+    const area = areaForPage(href);
     return !area || canSee(areaAccess, area);
   };
+  /* A section is on the rail when any page in it is (4 Oct 2026): Compliance
+     has its own switch now, and can be open while the rest of Portfolio is
+     hidden - the section then shows Compliance alone. */
+  const visible = (item: NavItem) => (item.children?.length ? item.children.some((c) => pageVisible(c.href)) : pageVisible(item.href));
+  const trimmed = (item: NavItem): NavItem => (item.children?.length ? { ...item, children: item.children.filter((c) => pageVisible(c.href)) } : item);
   const hereArea = areaForPage(pathname);
   /* Phase 1 of the pilot (lib/phases): while any area is on Practice, an
      agent's own test files are one press away, under the screens they are
@@ -414,7 +419,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               Back office
             </p>
           </div>
-          {BACK.filter(visible).map((item) => (
+          {BACK.filter(visible).map(trimmed).map((item) => (
             <NavLink
               key={item.href}
               item={item}

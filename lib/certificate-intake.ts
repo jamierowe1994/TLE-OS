@@ -23,9 +23,15 @@ import { shareCertificate, type SharePerson, type ShareResult } from "@/lib/cert
  *      arrived.
  *   2. THE ROW, into os_certificates. This is the OS's own record and it
  *      stands whether or not REX takes it.
- *   3. REX, then the people. Both gated, both allowed to fail, neither able
- *      to undo 1 and 2 - a certificate we hold and REX refused is a retry;
- *      a certificate we lost because an inbox bounced is gone.
+ *   3. REX. Gated, allowed to fail, never able to undo 1 and 2 - a
+ *      certificate we hold and REX refused is a retry.
+ *
+ * And then the people - but not here any more. James, 4 Oct 2026, with
+ * compliance going live: a certificate goes to the landlord and tenants only
+ * once Michael has checked it. So filing keeps who the door could name on the
+ * row (share_people) and stops; his Verified on the desk sends it on
+ * (shareOnceChecked). Filed by the compliance office itself, it was checked as
+ * it was filed, and goes on straight away.
  */
 
 /** REX's compliance type vocabulary. Anything else is not a certificate we file. */
@@ -73,6 +79,8 @@ export interface CertRow extends Record<string, unknown> {
   rex_entry_id: string | null;
   rex_note: string;
   rex_at: Date | null;
+  share_people?: unknown;
+  shared_at?: Date | null;
 }
 
 export const ymd = (v: Date | string | null) =>
@@ -170,6 +178,32 @@ export interface FileCertificate {
   /** People the managed book cannot name - the contractor, a works order's own landlord and tenant. */
   people?: SharePerson[];
   refreshBook?: boolean;
+  /** Filed by the compliance office: checked as it was filed, so it is ticked
+   *  off their list and goes on to the landlord and tenants straight away. */
+  checkedBy?: string | null;
+}
+
+/** What filing says about the send, while the certificate waits for its check. */
+const waitingForCheck = (): ShareResult => ({
+  armed: false,
+  skipped: "waiting for compliance to check it",
+  outcomes: [],
+  line: "Goes to the landlord and tenants once compliance has checked it.",
+});
+
+/**
+ * Compliance has checked it: send it on to everyone entitled to it.
+ *
+ * Once only. The claim on shared_at is the lock, so a double press, or a
+ * Verified after a query after a Verified, never runs the fan-out twice. The
+ * fan-out keeps its own gates (the switch, in date, a renewal, somebody living
+ * there), so a checked certificate on an empty home still goes nowhere.
+ */
+export async function shareOnceChecked(certificateId: string): Promise<ShareResult | null> {
+  const rows = await q<CertRow>(`UPDATE os_certificates SET shared_at = NOW() WHERE id = $1 AND shared_at IS NULL RETURNING *`, [certificateId]);
+  if (!rows[0]) return null;
+  const people = Array.isArray(rows[0].share_people) ? (rows[0].share_people as SharePerson[]) : [];
+  return shareCertificateRow(rows[0], people);
 }
 
 /**
@@ -201,10 +235,17 @@ export async function fileCertificate(input: FileCertificate): Promise<{ row: Ce
     )
   );
   const rows = await q<CertRow>(
-    `INSERT INTO os_certificates (id, property_id, property_name, type_id, expiry, issue, r2_key, name, source, added_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-    [id, input.propertyId, input.propertyName, input.type, input.expiry, input.issue || null, key, input.fileName, input.source, input.by]
+    `INSERT INTO os_certificates (id, property_id, property_name, type_id, expiry, issue, r2_key, name, source, added_by, share_people)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb) RETURNING *`,
+    [id, input.propertyId, input.propertyName, input.type, input.expiry, input.issue || null, key, input.fileName, input.source, input.by, JSON.stringify(input.people ?? [])]
   );
   const row = await writeCertificateRow(rows[0], `Written by TLE OS from ${input.source} (${input.fileName}).`, input.refreshBook === true);
-  return { row, duplicate: false, share: await shareCertificateRow(row, input.people ?? []) };
+  if (!input.checkedBy) return { row, duplicate: false, share: waitingForCheck() };
+  /* The office filed it: their tick, and on it goes. */
+  await q(
+    `INSERT INTO os_compliance_checks (kind, subject_id, state, note, by_name) VALUES ('certificate', $1, 'verified', $2, $3)
+     ON CONFLICT (kind, subject_id) DO NOTHING`,
+    [row.id, "Filed by compliance, so checked as it was filed.", input.checkedBy]
+  );
+  return { row, duplicate: false, share: await shareOnceChecked(row.id) };
 }
