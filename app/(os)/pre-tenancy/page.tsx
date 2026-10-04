@@ -1464,7 +1464,7 @@ function DealWorkspace({
         actionError ||
         cancelled ||
         deal.archived ||
-        (deal.flags ?? []).some((f) => f.kind === "scheme-missing") ? (
+        (deal.flags ?? []).some((f) => f.kind === "scheme-missing" || f.kind === "prep-open") ? (
           <div className="mt-4 space-y-2">
             {cancelled ? (
               <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-[12px] text-red-700">
@@ -1515,7 +1515,10 @@ function DealWorkspace({
                 reads as two problems. `scheme-missing` stays because nothing
                 upstream records which scheme holds a deposit: we are the
                 register, so only we can notice the gap. */}
-            {(deal.flags ?? []).filter((f) => f.kind === "scheme-missing").map((f) => (
+            {/* And the landlord's agreed works (4 Oct 2026): nothing upstream
+                knows about those either - they are the landlord's promise on
+                our portal. */}
+            {(deal.flags ?? []).filter((f) => f.kind === "scheme-missing" || f.kind === "prep-open").map((f) => (
               <p
                 key={f.kind}
                 className="rounded-xl border border-transparent bg-amber-50 px-4 py-2.5 text-[12px] text-amber-800"

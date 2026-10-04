@@ -16,6 +16,7 @@ import {
 import { getOverlays } from "@/lib/business/deal-store";
 import { derivePortalStage, loadStageSources, plcCaseForAddress, stageFactsFor } from "@/lib/business/deal-stage";
 import { PLC_STATES } from "@/lib/plc";
+import { openPrepByAddress } from "@/lib/landlord-prep";
 import { getPortfolioBook, propertyKey } from "@/lib/business/payprop-portfolio";
 import { getTobRegister, type TobStatus } from "@/lib/business/rex-esign";
 import { loadMoneyContext, moneyForDeal } from "@/lib/business/deal-money";
@@ -189,6 +190,9 @@ export async function GET(req: NextRequest) {
   const overlays = await getOverlays(deals.map((d) => d.app.id));
   /* The records seven of the eight stages are read from. See deal-stage. */
   const stageSources = await loadStageSources(deals.map((d) => d.app.id));
+  /* Works the landlord agreed with the offer and has not ticked off yet
+     (lib/landlord-prep), by address. */
+  const prepByKey = await openPrepByAddress(propertyKey).catch(() => new Map<string, { title: string; dueOn: string | null; property: string }[]>());
   const today = new Date().toISOString().slice(0, 10);
   const THIRTY_DAYS_AGO = new Date(Date.now() - 30 * 86_400_000)
     .toISOString()
@@ -326,6 +330,18 @@ export async function GET(req: NextRequest) {
             "This deal is past the PLC stage, but PayProp records the property as \"Without RLP\". If cover was sold, the PayProp instruction wording needs updating; if the landlord declined, this is fine.",
         });
       }
+    }
+
+    // 0. Works the landlord agreed with the offer - a carpet clean, a new
+    // shower - not yet ticked off on their portal (Michael, 29 Sep 2026).
+    // Shown from the offer to move day, so it is in front of the PLC and the
+    // agreement, while there is still time to chase it.
+    const prepOpen = key ? prepByKey.get(key) ?? [] : [];
+    if (live && prepOpen.length) {
+      flags.push({
+        kind: "prep-open",
+        label: `Agreed before moving in, not done yet: ${prepOpen.map((x) => x.title).join("; ")}. The landlord ticks these off on their portal - chase them before move day.`,
+      });
     }
 
     // 3. Deep in the pipeline with no deposit scheme recorded. The portal is

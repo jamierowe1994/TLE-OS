@@ -48,6 +48,28 @@ export async function listPrep(accountId: string, property: string): Promise<Vie
   return rows.map((r) => ({ id: r.id, title: r.title, dueOn: ymd(r.due_on), done: Boolean(r.done_at) }));
 }
 
+/**
+ * Every agreed job not yet ticked off, keyed by the loose address key the
+ * deal boards join on (number + street). For the pre-tenancy board and the
+ * office bell (Michael, 29 Sep 2026: "items like a carpet clean become
+ * to-dos, with a reminder at PLC stage if not done").
+ */
+export async function openPrepByAddress(keyOf: (address: string) => string | null): Promise<Map<string, { title: string; dueOn: string | null; property: string }[]>> {
+  const out = new Map<string, { title: string; dueOn: string | null; property: string }[]>();
+  if (!hasDb()) return out;
+  const rows = await q<{ property: string; title: string; due_on: string | Date | null }>(
+    `SELECT property, title, due_on FROM os_landlord_prep WHERE done_at IS NULL ORDER BY created_at, title`
+  ).catch(() => []);
+  for (const r of rows) {
+    const key = keyOf(r.property);
+    if (!key) continue;
+    const list = out.get(key) ?? [];
+    list.push({ title: r.title, dueOn: ymd(r.due_on), property: r.property });
+    out.set(key, list);
+  }
+  return out;
+}
+
 /** Ticked or unticked, only on their own list. */
 export async function tickPrep(accountId: string, id: string, done: boolean): Promise<boolean> {
   if (!hasDb()) return false;

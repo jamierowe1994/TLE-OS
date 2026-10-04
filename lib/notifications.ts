@@ -124,7 +124,30 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
   /* A document compliance queried, on a home of yours (4 Oct 2026). */
   const queried = await queriesFor(me.id).catch(() => []);
 
+  /* Agreed works not done, inside a week of move day (Michael, 29 Sep 2026):
+     the office, who run the move-in. */
+  const prepDue = desk
+    ? await q<{ id: string; property: string; title: string; due_on: Date | string | null; created_at: Date }>(
+        `SELECT id, property, title, due_on, created_at FROM os_landlord_prep
+          WHERE done_at IS NULL AND due_on IS NOT NULL AND due_on <= (NOW() AT TIME ZONE 'Europe/London')::date + 7
+          ORDER BY due_on LIMIT 20`
+      ).catch(() => [])
+    : [];
+
   const out: Notice[] = [...reminders];
+  for (const x of prepDue) {
+    const due = new Date(x.due_on as string);
+    const days = Math.round((due.getTime() - Date.now()) / 86_400_000);
+    out.push({
+      id: `prep:${x.id}`,
+      kind: "reminder",
+      at: new Date(x.created_at).toISOString(),
+      title: x.property,
+      body: `Agreed before moving in and not done yet: ${x.title}. Move day ${days < 0 ? "has passed" : days === 0 ? "is today" : `is in ${days} day${days === 1 ? "" : "s"}`}.`,
+      href: "/pre-tenancy",
+      tone: "warn",
+    });
+  }
   for (const x of queried) {
     out.push({
       id: `queried:${x.kind}:${x.id}`,
