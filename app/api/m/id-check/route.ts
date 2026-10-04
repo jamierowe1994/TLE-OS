@@ -5,6 +5,7 @@ import { whoIs } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
 import { R2_BUCKET, r2Configured, safeName, withR2 } from "@/lib/r2";
 import { bindPages, canBind } from "@/lib/doc-pages";
+import { followUpFor } from "@/lib/id-checks";
 
 /**
  * RIGHT TO RENT ID, photographed on a viewing (16 Sep 2026).
@@ -113,6 +114,10 @@ export async function POST(req: NextRequest) {
   const docType = String(form.get("docType") ?? "");
   const seen = form.get("seenInPerson") === "yes";
   const files = form.getAll("pages").filter((f): f is File => f instanceof File && f.size > 0);
+  /* How long they may rent for (4 Oct 2026): "none" for no time limit, or a
+     date. Asked on every check, because a time-limited right owes a follow-up. */
+  const lasts = String(form.get("lasts") ?? "");
+  const rightUntil = String(form.get("rightUntil") ?? "").trim();
 
   if (!name) return NextResponse.json({ ok: false, error: "Add the person's name." }, { status: 400 });
   if (!(docType in DOC_TYPES)) return NextResponse.json({ ok: false, error: "Choose which document it is." }, { status: 400 });
@@ -124,6 +129,13 @@ export async function POST(req: NextRequest) {
   }
   if (!likeness) {
     return NextResponse.json({ ok: false, error: "Tick that the photo on the document is the person in front of you." }, { status: 400 });
+  }
+  /* The older phone view (/m, inside the iPhone shell) does not ask yet, so an
+     answer that is missing is recorded as not said - the office's list shows
+     it - rather than refusing the photos. */
+  if (lasts && lasts !== "none" && lasts !== "until") return NextResponse.json({ ok: false, error: "Say how long they can rent for: no time limit, or until a date." }, { status: 400 });
+  if (lasts === "until" && (!/^\d{4}-\d{2}-\d{2}$/.test(rightUntil) || rightUntil <= new Date().toISOString().slice(0, 10))) {
+    return NextResponse.json({ ok: false, error: "Put in the date their permission runs out. If it has already run out, they do not have the right to rent." }, { status: 400 });
   }
   if (files.length === 0) return NextResponse.json({ ok: false, error: "Take a photo of the document first." }, { status: 400 });
   if (files.length > MAX_PAGES) return NextResponse.json({ ok: false, error: `Up to ${MAX_PAGES} photos at a time.` }, { status: 400 });
@@ -183,9 +195,11 @@ export async function POST(req: NextRequest) {
 
   try {
     await q(
-      `INSERT INTO os_id_checks (id, person_name, property, appt_id, doc_type, pages, file_key, file_type, seen_in_person, checked_by, checked_by_name, lead_id, likeness)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, $9, $10, $11, TRUE)`,
-      [id, name, property, apptId, docType, files.length, key, file.type, actor.id, actor.name ?? "", leadId]
+      `INSERT INTO os_id_checks (id, person_name, property, appt_id, doc_type, pages, file_key, file_type, seen_in_person, checked_by, checked_by_name, lead_id, likeness,
+                                 method, right_until, no_time_limit, follow_up_on)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, $9, $10, $11, TRUE, 'document', $12, $13, $14)`,
+      [id, name, property, apptId, docType, files.length, key, file.type, actor.id, actor.name ?? "", leadId,
+        lasts === "until" ? rightUntil : null, lasts === "none", lasts === "until" ? followUpFor(rightUntil) : null]
     );
   } catch (e) {
     console.error("Right to Rent record failed", (e as Error).message);

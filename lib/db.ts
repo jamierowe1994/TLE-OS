@@ -1929,6 +1929,15 @@ CREATE INDEX IF NOT EXISTS os_id_checks_by ON os_id_checks (checked_by, checked_
 ALTER TABLE os_id_checks ADD COLUMN IF NOT EXISTS lead_id TEXT;
 ALTER TABLE os_id_checks ADD COLUMN IF NOT EXISTS likeness BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS os_id_checks_lead ON os_id_checks (lead_id) WHERE lead_id IS NOT NULL;
+-- How the check was made and how long the right lasts (4 Oct 2026, lib/id-checks):
+-- the document seen in person, or a share code checked on GOV.UK by the office;
+-- no time limit, or until a date - and then the follow-up check that is owed.
+ALTER TABLE os_id_checks ADD COLUMN IF NOT EXISTS method TEXT NOT NULL DEFAULT 'document';
+ALTER TABLE os_id_checks ADD COLUMN IF NOT EXISTS share_code TEXT;
+ALTER TABLE os_id_checks ADD COLUMN IF NOT EXISTS right_until DATE;
+ALTER TABLE os_id_checks ADD COLUMN IF NOT EXISTS no_time_limit BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE os_id_checks ADD COLUMN IF NOT EXISTS follow_up_on DATE;
+CREATE INDEX IF NOT EXISTS os_id_checks_follow_up ON os_id_checks (follow_up_on) WHERE follow_up_on IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS os_cache (
   key            TEXT PRIMARY KEY,

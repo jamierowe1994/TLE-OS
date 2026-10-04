@@ -23,6 +23,8 @@ const RAIL: RailGroup[] = [
       { href: "/pre-tenancy/dashboard", label: "Dashboard", icon: "home" },
       { href: "/pre-tenancy", label: "Board", exact: true, icon: "grid" },
       { href: "/pre-tenancy/plc", label: "PLC queue", icon: "list" },
+      /* Right to Rent: the IDs agents scan and the share codes the office checks (4 Oct 2026). */
+      { href: "/pre-tenancy/id-checks", label: "ID checks", icon: "user" },
     ],
   },
   {

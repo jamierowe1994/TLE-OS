@@ -64,6 +64,9 @@ export default function PhoneIdCheck() {
   /* A tenant lead the check is for (3 Oct 2026): kept against it. */
   const [lead, setLead] = useState<string | null>(null);
   const [likeness, setLikeness] = useState(false);
+  /* How long they may rent for (4 Oct 2026): a time-limited right owes a follow-up check. */
+  const [lasts, setLasts] = useState<"" | "none" | "until">("");
+  const [until, setUntil] = useState("");
   const [doc, setDoc] = useState<DocType | null>(null);
   const [labels, setLabels] = useState<string[]>([]);
   const [shots, setShots] = useState<(File | null)[]>([]);
@@ -166,6 +169,8 @@ export default function PhoneIdCheck() {
     setPreviews(DOCS[d].shots.map(() => null));
     setSeen(false);
     setLikeness(false);
+    setLasts("");
+    setUntil("");
     setError(null);
     setStep("photos");
     /* Straight into the camera (James, 18 Sep 2026: from the viewing it should
@@ -197,7 +202,7 @@ export default function PhoneIdCheck() {
     setPreviews((p) => p.filter((_, n) => n !== i));
   };
 
-  const ready = doc !== null && shots.length > 0 && shots.every(Boolean) && seen && likeness && !sending;
+  const ready = doc !== null && shots.length > 0 && shots.every(Boolean) && seen && likeness && (lasts === "none" || (lasts === "until" && Boolean(until))) && !sending;
 
   const send = async () => {
     if (!doc || !ready) return;
@@ -211,6 +216,8 @@ export default function PhoneIdCheck() {
       form.set("docType", doc);
       form.set("seenInPerson", seen ? "yes" : "no");
       form.set("likeness", likeness ? "yes" : "no");
+      form.set("lasts", lasts);
+      form.set("rightUntil", until);
       if (lead) form.set("lead", lead);
       shots.forEach((f) => f && form.append("pages", f));
       const r = await fetch("/api/m/id-check", { method: "POST", body: form });
@@ -236,6 +243,8 @@ export default function PhoneIdCheck() {
     setPreviews([]);
     setSeen(false);
     setLikeness(false);
+    setLasts("");
+    setUntil("");
     setError(null);
     setStep("who");
     setQuery("");
@@ -398,7 +407,7 @@ export default function PhoneIdCheck() {
             ))}
           </div>
           <p className="mt-4 rounded-2xl bg-panel px-4 py-3 text-[13.5px] leading-relaxed text-muted">
-            If they have a share code instead, no photo is needed - send them to the office to check it online.
+            If they have a share code instead, no photo is needed: give the office the share code and they check it online, under ID checks.
           </p>
           <button type="button" onClick={() => setStep("who")} className="mt-4 h-12 w-full text-[14.5px] font-semibold text-muted">
             Back
@@ -471,6 +480,35 @@ export default function PhoneIdCheck() {
               The photo on the document is {name.trim() || "the person"} - same face, a fair likeness for their age.
             </span>
           </label>
+
+          {/* How long they can rent for. A British or Irish passport, or settled
+              status, has no time limit; anything else runs to a date, and the
+              office is reminded to check again before it does. */}
+          <div className="mt-2.5 rounded-2xl border border-[color:var(--m-line)] bg-card p-4">
+            <span className="block text-[14.5px] font-semibold">How long can they rent for?</span>
+            <div className="mt-2.5 grid grid-cols-2 gap-2">
+              {(
+                [
+                  ["none", "No time limit"],
+                  ["until", "Until a date"],
+                ] as const
+              ).map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setLasts(k)}
+                  className="h-12 rounded-xl border text-[14px] font-semibold"
+                  style={lasts === k ? { background: "var(--brown)", color: "#fff", borderColor: "var(--brown)" } : { borderColor: "var(--m-line)" }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {lasts === "until" && (
+              <input type="date" value={until} onChange={(e) => setUntil(e.target.value)} className="mt-2.5 h-12 w-full rounded-xl border border-[color:var(--m-line)] bg-page px-3 text-[15px]" />
+            )}
+            <span className="mt-2 block text-[12.5px] leading-snug text-muted">British or Irish passport: no time limit. A visa, permit or card with an end date: until that date.</span>
+          </div>
 
           {error && <div className="mt-4"><ErrorLine text={error} /></div>}
 

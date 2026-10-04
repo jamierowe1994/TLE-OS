@@ -7,6 +7,7 @@ import { eventSentence, eventTone, hrefFor, type DealEventKind } from "@/lib/bus
 import type { Notice } from "@/lib/notices";
 import { remindersFor } from "@/lib/reminders";
 import { queriesFor, verifyQueue, worksToCheck } from "@/lib/compliance-desk";
+import { followUpsDue } from "@/lib/id-checks";
 
 /**
  * What the bell shows, gathered from the tables where things already happen.
@@ -124,6 +125,9 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
   /* A document compliance queried, on a home of yours (4 Oct 2026). */
   const queried = await queriesFor(me.id).catch(() => []);
 
+  /* Right to Rent follow-up checks owed inside four weeks (4 Oct 2026): the office. */
+  const rtrDue = desk ? await followUpsDue(28).catch(() => []) : [];
+
   /* Agreed works not done, inside a week of move day (Michael, 29 Sep 2026):
      the office, who run the move-in. */
   const prepDue = desk
@@ -135,6 +139,18 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
     : [];
 
   const out: Notice[] = [...reminders];
+  for (const c of rtrDue) {
+    const days = Math.round((new Date(`${c.followUpOn}T00:00:00`).getTime() - Date.now()) / 86_400_000);
+    out.push({
+      id: `rtr:${c.id}`,
+      kind: "reminder",
+      at: c.at,
+      title: c.name,
+      body: `Right to Rent follow-up check ${days < 0 ? `was due ${-days} day${days === -1 ? "" : "s"} ago` : days <= 0 ? "is due today" : `is due in ${days} day${days === 1 ? "" : "s"}`}${c.property ? ` (${c.property})` : ""}.`,
+      href: me.role === "compliance" ? "/compliance-desk/id-checks" : "/pre-tenancy/id-checks",
+      tone: "warn",
+    });
+  }
   for (const x of prepDue) {
     const due = new Date(x.due_on as string);
     const days = Math.round((due.getTime() - Date.now()) / 86_400_000);
