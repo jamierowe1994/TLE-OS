@@ -117,6 +117,9 @@ const GROUPS: Array<{
          that can arm one by accident. This is the one that arms, and it is
          owner-gated rather than merely admin-gated. */
       { href: "/admin/switches", label: "Switches", needs: "manage:switches" },
+      /* What buzzes the office's phones, kind by kind (5 Oct 2026). Beside
+         Switches, whose Phone alerts switch decides whether any of it goes. */
+      { href: "/admin/alerts", label: "Phone alerts", needs: "manage:switches" },
       /* manage:people, not see:people. The audit log records what was done
          TO people - invites, resets, who viewed as whom - and it is James's
          record of his own actions rather than a staff list. Susan holds

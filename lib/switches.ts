@@ -354,7 +354,7 @@ export const SWITCHES: Switch[] = [
        arms it. A test to your own phone works with it off. */
     key: "phone_alerts",
     label: "Phone alerts",
-    what: "Sends what lands in each person's bell to their phone, through the TLE OS iPhone app, every five minutes.",
+    what: "Sends what lands in each person's bell to their phone, through the TLE OS app, every five minutes. Which kinds go is set under Phone alerts.",
     who: "STAFF ONLY: anybody signed in to the TLE OS app on an iPhone. Never landlords or tenants.",
     confirm: "PHONE ALERTS",
     legacyEnv: "PHONE_ALERTS",

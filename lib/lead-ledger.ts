@@ -184,3 +184,75 @@ export async function leadsForListing(listingId: string, limit = 100): Promise<L
   ).catch(() => []);
   return rows.map((r) => r.payload);
 }
+
+/**
+ * New enquiries for one person's bell and phone (5 Oct 2026): James wanted a
+ * buzz "when a tenant inquires about a property, when they get a new landlord
+ * lead through ... when a tenant requests a viewing". The last three days, so
+ * the bell never fills with last month.
+ *
+ *   their own leads          REX leads assigned to them (assignee_id), lettings
+ *                            only, the diary's own viewers left out - a person
+ *                            the scan filed from a booked viewing is not news
+ *   tenant area enquiries    os_tenant_enquiries emailed to them
+ *   every landlord lead      owners only (allLandlords): valuation requests on
+ *                            anybody's book, and landlords added to the leads
+ *                            by somebody else
+ *
+ * `words` is what the enquiry said, for telling a viewing request apart.
+ */
+export interface NewLead {
+  id: string;
+  at: string;
+  landlord: boolean;
+  name: string;
+  source: string;
+  address: string;
+  words: string;
+}
+
+export async function newLeadsFor(p: { rexUserId: string | null; email: string; allLandlords: boolean; days?: number; limit?: number }): Promise<NewLead[]> {
+  if (!hasDb()) return [];
+  const days = p.days ?? 3;
+  const limit = p.limit ?? 25;
+  const iso = (d: Date | string) => new Date(d).toISOString();
+  const [rex, portal, added] = await Promise.all([
+    p.rexUserId || p.allLandlords
+      ? q<{ id: string; received_at: Date; enquiry: string; source: string; name: string; address: string | null; words: string }>(
+          /* Timed by when the OS first saw it, not when REX received it: the
+             phone scan only sends what is newer than its last send, and a
+             lead the five-minute scan files late would otherwise land behind
+             that line and never buzz. */
+          `SELECT id, first_seen AS received_at, enquiry, COALESCE(source, '') AS source, COALESCE(name, '') AS name, address,
+                  concat_ws(' ', payload->>'subject', payload->>'enquiryMessage', payload->>'enquiryFull') AS words
+             FROM os_leads
+            WHERE received_at > NOW() - make_interval(days => $1) AND first_seen > NOW() - make_interval(days => $1)
+              AND COALESCE(source, '') <> 'REX diary'
+              AND ${NOT_SALES}
+              AND (($2::text IS NOT NULL AND assignee_id = $2) OR ($3 AND enquiry = 'Valuation'))
+            ORDER BY first_seen DESC LIMIT $4`,
+          [days, p.rexUserId, p.allLandlords, limit]
+        ).catch(() => [])
+      : [],
+    q<{ id: string; created_at: Date; name: string; address: string; message: string }>(
+      `SELECT id, created_at, name, address, message FROM os_tenant_enquiries
+        WHERE LOWER(sent_to) = LOWER($1) AND created_at > NOW() - make_interval(days => $2)
+        ORDER BY created_at DESC LIMIT $3`,
+      [p.email, days, limit]
+    ).catch(() => []),
+    p.allLandlords
+      ? q<{ id: string; created_at: Date; name: string; address: string | null; source: string | null; notes: string | null }>(
+          `SELECT id, created_at, name, address, source, notes FROM os_contacts
+            WHERE kind = 'landlord' AND created_at > NOW() - make_interval(days => $1)
+              AND LOWER(COALESCE(created_by, '')) <> LOWER($2) AND NOT COALESCE(is_test, FALSE)
+            ORDER BY created_at DESC LIMIT $3`,
+          [days, p.email, limit]
+        ).catch(() => [])
+      : [],
+  ]);
+  return [
+    ...rex.map((r) => ({ id: r.id, at: iso(r.received_at), landlord: r.enquiry === "Valuation", name: r.name, source: r.source, address: r.address ?? "", words: r.words ?? "" })),
+    ...portal.map((r) => ({ id: `tenant-area:${r.id}`, at: iso(r.created_at), landlord: false, name: r.name, source: "Tenant area", address: r.address, words: r.message })),
+    ...added.map((r) => ({ id: `os-${r.id}`, at: iso(r.created_at), landlord: true, name: r.name, source: r.source?.trim() || "Added to the leads", address: r.address ?? "", words: r.notes ?? "" })),
+  ].sort((a, b) => b.at.localeCompare(a.at));
+}

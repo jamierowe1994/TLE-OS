@@ -8,6 +8,7 @@ import type { Notice } from "@/lib/notices";
 import { remindersFor } from "@/lib/reminders";
 import { queriesFor, verifyQueue, worksToCheck } from "@/lib/compliance-desk";
 import { followUpsDue } from "@/lib/id-checks";
+import { newLeadsFor } from "@/lib/lead-ledger";
 
 /**
  * What the bell shows, gathered from the tables where things already happen.
@@ -38,6 +39,10 @@ import { followUpsDue } from "@/lib/id-checks";
  *                            book by lib/reminders, never anybody else's
  *   a document compliance    the agent it was emailed to (4 Oct 2026), until
  *   queried                  it is put right or 30 days pass
+ *   new enquiries            the agent the lead is for: tenant enquiries,
+ *                            viewing requests and landlord leads (5 Oct
+ *                            2026), the last three days. Owners also get
+ *                            every landlord lead (lib/lead-ledger newLeadsFor)
  *   documents to verify,     the compliance role alone (Michael, 20 Sep 2026:
  *   finished works orders    "he needs to also be notified"). Read from his
  *                            own two lists, so a notice goes when he ticks the
@@ -50,6 +55,9 @@ import { followUpsDue } from "@/lib/id-checks";
  * Unread = newer than that. Marking read is one write, and nothing about a
  * notice itself changes.
  */
+
+/** A tenant asking to see the home, in the words portals and people use. */
+const WANTS_VIEWING = /\b(arrange|book|request|requesting|organise|schedule)\s+(a\s+)?view(ing)?\b|\binterested in viewing\b|\b(like|love|want|keen) to (view|see)\b|\bcan i (view|see)\b|\bavailable (for|to) (a )?view|\bbook a viewing\b/i;
 
 const MONEY: DealEventKind[] = ["holding_in", "holding_reconciled", "deposit_in", "deposit_reconciled", "deposit_registered", "rent_in"];
 const PLC: DealEventKind[] = ["plc_submitted", "plc_checked", "plc_decided", "plc_opened", "move_in_ready"];
@@ -138,7 +146,32 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
       ).catch(() => [])
     : [];
 
+  /* New enquiries (5 Oct 2026), so a viewing request reaches the agent's
+     phone while the tenant is still on Rightmove. */
+  const leads = await newLeadsFor({
+    rexUserId: me.rexUserId,
+    email: me.email,
+    allLandlords: me.role === "owner" || can(me.role, "see:everything"),
+  }).catch(() => []);
+
   const out: Notice[] = [...reminders];
+  for (const l of leads) {
+    const who = l.name && l.name !== "(no name given)" ? l.name : null;
+    const where = l.address && l.address !== "—" ? l.address : null;
+    const viewing = !l.landlord && WANTS_VIEWING.test(l.words) && !/cancel/i.test(l.words);
+    const sort = l.landlord ? "landlord" : viewing ? "viewing" : "tenant";
+    out.push({
+      id: `lead:${sort}:${l.id}`,
+      kind: "lead",
+      at: l.at,
+      title: l.landlord ? `New landlord lead${who ? `: ${who}` : ""}` : viewing ? `Viewing request${who ? `: ${who}` : ""}` : `New enquiry${who ? `: ${who}` : ""}`,
+      body: l.landlord
+        ? `${where ?? "A valuation request"}, via ${l.source}.`
+        : `${viewing ? "Wants to view" : "Asked about"} ${where ?? "one of your homes"}, via ${l.source}.`,
+      href: l.id.startsWith("tenant-area:") ? "/leads" : `/leads?open=${encodeURIComponent(l.id)}`,
+      tone: viewing || l.landlord ? "warn" : "none",
+    });
+  }
   for (const c of rtrDue) {
     const days = Math.round((new Date(`${c.followUpOn}T00:00:00`).getTime() - Date.now()) / 86_400_000);
     out.push({
