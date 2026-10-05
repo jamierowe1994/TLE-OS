@@ -673,15 +673,10 @@ export default function Listings() {
                 }.`
               : (book.reason ?? "Manage your properties and their marketing.")
         }
-        /* Cropped at the bottom in the artwork itself, so the frame's bottom
-           edge IS the rule: no seat and no dip means she is dropped by
-           nothing and the crop lands exactly on the line, which reads as her
-           sitting behind it. */
-        illustration="/illustrations/reading-listings.webp"
-        /* Same drawing with the lamp ON, for the dark. Not an inversion - a
-           second artwork, which is why it is worth the extra file. */
-        illustrationDark="/illustrations/reading-listings-dark.webp"
-        illustrationAspect={1.121}
+        /* The phone app's street, so Listings looks like the app (James, 5 Oct
+           2026). It replaced the lady reading, which sat apart from the rest. */
+        illustration="/illustrations/app/street-corner.webp"
+        illustrationAspect={1.3495}
         lineBreak="none"
         searchValue={q}
         onSearch={setQ}
