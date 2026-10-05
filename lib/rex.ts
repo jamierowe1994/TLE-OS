@@ -348,6 +348,15 @@ async function rexCallOnce(
         res = await rexPost(path, body, token);
       }
     }
+    /* REX'S OWN HICCUP, ASKED AGAIN (5 Oct 2026). Listings/search answered 500
+       "Database Error ... (DBException)" at 06:21 on 16 Sep and twice on 2 Oct
+       - REX's database, at the same minute each time, and its own message says
+       to try again. A READ is asked once more after two seconds; a write never
+       is, because a write that half-landed must not land twice. */
+    if (!res.ok && res.status >= 500 && isReadOnlyMethod(method)) {
+      await new Promise((r) => setTimeout(r, 2_000));
+      res = await rexPost(path, body, actorToken ?? (await getToken(accountId)));
+    }
   } catch (e) {
     const name = (e as Error)?.name ?? "";
     const gaveUpWaiting = name === "AbortError";

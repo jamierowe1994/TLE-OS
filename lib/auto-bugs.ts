@@ -105,6 +105,11 @@ function duringADeploy(f: Failure): boolean {
  */
 function wasBusy(f: Failure): boolean {
   if (f.source === "Screen") return false;
+  /* REX's own database falling over for a minute (5 Oct 2026): "Database
+     Error. If you continue to see this message for more than a few minutes,
+     please contact support. (DBException)". Their outage, not our fault - it
+     joins the call's "slow or busy" ticket instead of opening its own. */
+  if (f.source === "REX" && /dbexception|database error|try again/i.test(f.message)) return true;
   return f.timedOut === true || (f.status != null && TRANSIENT.has(f.status));
 }
 /** Occurrences held back by the throttle, added to the count when the minute is up. */
