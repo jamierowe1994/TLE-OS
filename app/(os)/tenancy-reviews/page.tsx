@@ -154,7 +154,7 @@ export default function TenancyReviews() {
         due.length === 0 ? (
           <Empty title="Nothing to review." blurb="Every tenancy has a decision recorded, or none is coming up yet." />
         ) : (
-          <section className="mt-4 rounded-2xl border border-line/80 bg-panel p-5">
+          <section className="mt-4 rounded-[22px] border border-line/50 bg-white p-5">
             <ul className="divide-y divide-line/50">
               {due.map((d) => {
                 const late = d.daysAway !== null && d.daysAway < 0;
@@ -185,7 +185,7 @@ export default function TenancyReviews() {
       ) : done.length === 0 ? (
         <Empty title="Nothing recorded yet." blurb="Record a review from the list and it shows here, with what was decided." />
       ) : (
-        <section className="mt-4 rounded-2xl border border-line/80 bg-panel p-5">
+        <section className="mt-4 rounded-[22px] border border-line/50 bg-white p-5">
           <ul className="divide-y divide-line/50">
             {done.map((r) => (
               <li key={r.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 py-3 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto]">
@@ -219,7 +219,7 @@ export default function TenancyReviews() {
 
 function Empty({ title, blurb }: { title: string; blurb: string }) {
   return (
-    <div className="mt-6 rounded-2xl border border-dashed border-line/80 bg-panel p-8 text-center">
+    <div className="mt-6 rounded-[22px] border border-dashed border-line/60 bg-white p-8 text-center">
       <p className="hand text-[20px]">{title}</p>
       <p className="mx-auto mt-2 max-w-md text-[12.5px] text-muted">{blurb}</p>
     </div>

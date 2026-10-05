@@ -226,7 +226,7 @@ export default function Inspections() {
         due.length === 0 ? (
           <Empty title="Nothing due." blurb="Every managed home has been visited inside the cadence, or is already in hand." />
         ) : (
-          <section className="mt-4 rounded-2xl border border-line/80 bg-panel p-5">
+          <section className="mt-4 rounded-[22px] border border-line/50 bg-white p-5">
             <ul className="divide-y divide-line/50">
               {due.map((d) => (
                 <li key={d.key} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 py-3 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
@@ -261,7 +261,7 @@ export default function Inspections() {
 
 function Empty({ title, blurb }: { title: string; blurb: string }) {
   return (
-    <div className="mt-6 rounded-2xl border border-dashed border-line/80 bg-panel p-8 text-center">
+    <div className="mt-6 rounded-[22px] border border-dashed border-line/60 bg-white p-8 text-center">
       <p className="hand text-[20px]">{title}</p>
       <p className="mt-1 text-[12.5px] text-muted">{blurb}</p>
     </div>
@@ -271,7 +271,7 @@ function Empty({ title, blurb }: { title: string; blurb: string }) {
 function List({ rows, onOpen, empty }: { rows: Inspection[]; onOpen: (id: string) => void; empty: string }) {
   if (rows.length === 0) return <Empty title={empty} blurb="Raise one from the Due list, and it will run through from here." />;
   return (
-    <section className="mt-4 rounded-2xl border border-line/80 bg-panel p-5">
+    <section className="mt-4 rounded-[22px] border border-line/50 bg-white p-5">
       <ul className="divide-y divide-line/50">
         {rows.map((i) => {
           const next = nextFor(i);
@@ -390,7 +390,7 @@ function Sheet({ id, team, me, onClose, onChanged }: { id: string; team: Person[
             {err && <p className="mt-4 rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-3 text-[12px]">{err}</p>}
 
             {/* ── Now: the one thing this visit needs. ── */}
-            <section className="mt-6 rounded-2xl border border-line/80 bg-panel p-5">
+            <section className="mt-6 rounded-[22px] border border-line/50 bg-white p-5">
               <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">Now</p>
               <h3 className="hand mt-1 text-[18px]">{STEPS.find((x) => x.id === step)?.label}</h3>
               <p className="mt-1 text-[12px] text-muted">{STEPS.find((x) => x.id === step)?.blurb}</p>
@@ -400,7 +400,7 @@ function Sheet({ id, team, me, onClose, onChanged }: { id: string; team: Person[
             </section>
 
             {/* ── The permission, kept in full. ── */}
-            <section className="mt-5 rounded-2xl border border-line/80 bg-panel p-5">
+            <section className="mt-5 rounded-[22px] border border-line/50 bg-white p-5">
               <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">Access</p>
               <dl className="mt-2 space-y-1 text-[12px]">
                 {i.bookedAt && <Row k="Booked" v={`${stamp(i.bookedAt)} · ${i.visitMins} minutes${i.inspector ? ` · ${i.inspector}` : ""}`} />}
@@ -442,7 +442,7 @@ function Sheet({ id, team, me, onClose, onChanged }: { id: string; team: Person[
             <Findings inspection={i} findings={held.findings} busy={busy} onMove={move} onRecord={setRecording} />
 
             {/* ── The timeline. ── */}
-            <section className="mt-5 rounded-2xl border border-line/80 bg-panel p-5">
+            <section className="mt-5 rounded-[22px] border border-line/50 bg-white p-5">
               <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">Timeline</p>
               <ul className="mt-3 space-y-2.5">
                 {held.events.map((e) => (
@@ -825,7 +825,7 @@ function Findings({ inspection, findings, busy, onMove, onRecord }: { inspection
   const canAdd = Boolean(inspection.visitedAt);
 
   return (
-    <section className="mt-5 rounded-2xl border border-line/80 bg-panel p-5">
+    <section className="mt-5 rounded-[22px] border border-line/50 bg-white p-5">
       <div className="flex items-center justify-between gap-3">
         <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">What we found</p>
         {canAdd && (

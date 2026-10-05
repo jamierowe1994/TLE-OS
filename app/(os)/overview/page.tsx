@@ -227,7 +227,7 @@ function combine(
 
 function Card<T>({ icon, title, href, tile, quiet, children }: { icon: string; title: string; href: string; tile: Tile<T> | undefined; quiet?: boolean; children: (d: T) => React.ReactNode }) {
   return (
-    <section className="flex min-w-0 flex-col rounded-2xl border border-line/80 bg-panel p-5">
+    <section className="flex min-w-0 flex-col rounded-[22px] border border-line/50 bg-white p-5">
       <div className="flex items-center gap-2">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
           <DoodleIcon name={icon} size={15} />

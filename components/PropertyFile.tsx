@@ -251,7 +251,7 @@ export default function PropertyFile({
   );
 
   return (
-    <section className="rounded-2xl border border-line/80 bg-panel p-5">
+    <section className="rounded-[22px] border border-line/50 bg-white p-5">
       <input ref={input} type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void chose(f); }} />
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h3 className="flex items-center gap-2.5 text-[14px]">

@@ -143,7 +143,7 @@ export default function MoveOuts() {
         open.length === 0 ? (
           <Empty title="Nobody is moving out." blurb="No tenancy is ending, or every one has been closed off." />
         ) : (
-          <section className="mt-4 rounded-2xl border border-line/80 bg-panel p-5">
+          <section className="mt-4 rounded-[22px] border border-line/50 bg-white p-5">
             <ul className="divide-y divide-line/50">
               {open.map((d) => {
                 const late = d.daysAway !== null && d.daysAway < 0;
@@ -178,7 +178,7 @@ export default function MoveOuts() {
       ) : done.length === 0 ? (
         <Empty title="Nothing closed yet." blurb="Close a move-out from the list and it shows here, with the day they left and the jobs done." />
       ) : (
-        <section className="mt-4 rounded-2xl border border-line/80 bg-panel p-5">
+        <section className="mt-4 rounded-[22px] border border-line/50 bg-white p-5">
           <ul className="divide-y divide-line/50">
             {done.map((r) => (
               <li key={r.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 py-3 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto]">
@@ -213,7 +213,7 @@ export default function MoveOuts() {
 
 function Empty({ title, blurb }: { title: string; blurb: string }) {
   return (
-    <div className="mt-6 rounded-2xl border border-dashed border-line/80 bg-panel p-8 text-center">
+    <div className="mt-6 rounded-[22px] border border-dashed border-line/60 bg-white p-8 text-center">
       <p className="hand text-[20px]">{title}</p>
       <p className="mx-auto mt-2 max-w-md text-[12.5px] text-muted">{blurb}</p>
     </div>

@@ -160,7 +160,7 @@ export default function InvoiceEditor() {
       {saveErr && <p className="mt-4 text-[12.5px] text-accent-dark">Your last edits are not saved - {saveErr}</p>}
 
       {asking && (
-        <div className="mt-4 rounded-2xl border border-line/80 bg-panel p-4">
+        <div className="mt-4 rounded-[22px] border border-line/50 bg-white p-4">
           {asking === "send" && (
             <>
               <p className="text-[12.5px]">Email the invoice, with the page they can open and print. {inv.status === "draft" ? "It will be produced first and take its number." : ""}</p>
@@ -182,7 +182,7 @@ export default function InvoiceEditor() {
         </div>
 
         <aside className="space-y-4">
-          <section className="rounded-2xl border border-line/80 bg-panel p-4">
+          <section className="rounded-[22px] border border-line/50 bg-white p-4">
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted">To</p>
             <div className="mt-2 space-y-2">
               <input disabled={locked} value={inv.toName} onChange={(e) => change({ toName: e.target.value })} placeholder="Name" className={field} />
@@ -190,7 +190,7 @@ export default function InvoiceEditor() {
               <input disabled={locked} type="email" value={inv.toEmail} onChange={(e) => change({ toEmail: e.target.value })} placeholder="Email" className={field} />
             </div>
           </section>
-          <section className="rounded-2xl border border-line/80 bg-panel p-4">
+          <section className="rounded-[22px] border border-line/50 bg-white p-4">
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted">The invoice</p>
             <div className="mt-2 grid grid-cols-2 gap-2">
               <div><label className={label}>Date</label><input disabled={locked} type="date" value={inv.issueDate} onChange={(e) => change({ issueDate: e.target.value })} className={`mt-1 ${field}`} /></div>
@@ -199,7 +199,7 @@ export default function InvoiceEditor() {
               <div className="col-span-2"><label className={label}>Reference</label><input disabled={locked} value={inv.reference} onChange={(e) => change({ reference: e.target.value })} className={`mt-1 ${field}`} /></div>
             </div>
           </section>
-          <section className="rounded-2xl border border-line/80 bg-panel p-4">
+          <section className="rounded-[22px] border border-line/50 bg-white p-4">
             <div className="flex items-center justify-between">
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Lines</p>
               {!locked && <button type="button" onClick={() => change({ lines: [...inv.lines, { id: `l${Date.now()}`, description: "", qty: 1, unitPence: 0, vatRate: 20 }] })} className="text-[11px] text-accent-dark underline">+ line</button>}
@@ -224,7 +224,7 @@ export default function InvoiceEditor() {
               <div className="flex justify-between font-semibold"><dt>Total</dt><dd>{gbp(t.total)}</dd></div>
             </dl>
           </section>
-          <section className="rounded-2xl border border-line/80 bg-panel p-4">
+          <section className="rounded-[22px] border border-line/50 bg-white p-4">
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Note on the invoice</p>
             <textarea disabled={locked} value={inv.notes} onChange={(e) => change({ notes: e.target.value })} rows={3} className={`mt-2 ${field}`} />
             {locked && <p className="mt-2 text-[11px] text-muted">{inv.status === "sent" ? `Sent to ${inv.sentTo}. Void it and raise another to change it.` : inv.status === "paid" ? "Paid. Nothing to change." : "Void."}</p>}

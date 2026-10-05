@@ -303,7 +303,7 @@ export default function Maintenance() {
       ) : (
         <div className="mt-4 space-y-4">
           {grouped.map((g) => (
-            <section key={g.status} className="rounded-2xl border border-line/80 bg-panel p-5">
+            <section key={g.status} className="rounded-[22px] border border-line/50 bg-white p-5">
               <div className="flex items-baseline justify-between gap-3">
                 <h2 className="text-[15px]">{g.label}</h2>
                 <span className="text-[11px] text-muted">{g.rows.length}</span>
@@ -379,7 +379,7 @@ const readWhen = (iso: string) => {
 function CarriedList({ jobs, readAt, busy, onTakeOn }: { jobs: CarriedJob[]; readAt: string | null; busy: string | null; onTakeOn: (j: CarriedJob) => void }) {
   const today = Date.now();
   return (
-    <section className="rounded-2xl border border-dashed border-line bg-panel p-5">
+    <section className="rounded-[22px] border border-dashed border-line/60 bg-white p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <h2 className="text-[15px]">Still in the Old System</h2>
         <span className="text-[11px] text-muted">{jobs.length} · copied across{readAt ? ` ${readWhen(readAt)}` : ""}. Take one on to run it here.</span>
@@ -887,7 +887,7 @@ function JobDrawer({ order, contractors, canCorporate, onClose, onChanged }: { o
               <input type="file" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void upload(file); e.target.value = ""; }} />
             </label>
           </div>
-          <div className={act ? "rounded-2xl border border-line/80 bg-panel p-4 mt-3" : ""}>
+          <div className={act ? "rounded-[22px] border border-line/50 bg-white p-4 mt-3" : ""}>
             {act && (
               <div className="mt-4 rounded-xl border border-line/80 bg-card p-4">
                 {act === "assign" && (
@@ -992,7 +992,7 @@ function JobDrawer({ order, contractors, canCorporate, onClose, onChanged }: { o
 
           <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="space-y-4">
-              <section className="rounded-2xl border border-line/80 bg-panel p-4">
+              <section className="rounded-[22px] border border-line/50 bg-white p-4">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-muted">The job</p>
                 <p className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed">{o.description || <span className="text-muted">No detail recorded.</span>}</p>
                 <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[12px] sm:grid-cols-3">
@@ -1015,7 +1015,7 @@ function JobDrawer({ order, contractors, canCorporate, onClose, onChanged }: { o
                 </dl>
               </section>
 
-              <section className="rounded-2xl border border-line/80 bg-panel p-4">
+              <section className="rounded-[22px] border border-line/50 bg-white p-4">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Money</p>
                 <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-[12px] sm:grid-cols-3">
                   <Fact k="Landlord's authority" v={pounds(o.authorityPence)} />
@@ -1029,7 +1029,7 @@ function JobDrawer({ order, contractors, canCorporate, onClose, onChanged }: { o
               </section>
 
               {o.files.length > 0 && (
-                <section className="rounded-2xl border border-line/80 bg-panel p-4">
+                <section className="rounded-[22px] border border-line/50 bg-white p-4">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Files</p>
                   <ul className="mt-2 divide-y divide-line/50">
                     {o.files.map((fl) => (
@@ -1045,7 +1045,7 @@ function JobDrawer({ order, contractors, canCorporate, onClose, onChanged }: { o
               )}
             </div>
 
-            <section className="rounded-2xl border border-line/80 bg-panel p-4">
+            <section className="rounded-[22px] border border-line/50 bg-white p-4">
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Timeline</p>
               <ul className="mt-2 space-y-3">
                 {events.length === 0 && <li className="text-[12px] text-muted">Reading…</li>}
@@ -1197,7 +1197,7 @@ function Accounts({ orders, loaded, onOpen, onChanged }: { orders: WorksOrder[];
   }
   return (
     <div className="mt-4 space-y-4">
-      <div className="rounded-2xl border border-line/80 bg-panel p-5">
+      <div className="rounded-[22px] border border-line/50 bg-white p-5">
         <h2 className="text-[15px]">To pay</h2>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <p className="mt-0.5 max-w-[68ch] text-[11.5px] text-muted">
@@ -1216,7 +1216,7 @@ function Accounts({ orders, loaded, onOpen, onChanged }: { orders: WorksOrder[];
         </div>
       </div>
       {err && <p className="text-[12.5px] text-accent-dark">{err}</p>}
-      <div className="rounded-2xl border border-line/80 bg-panel p-5">
+      <div className="rounded-[22px] border border-line/50 bg-white p-5">
         {!loaded ? (
           <p className="text-[12.5px] text-muted">Reading…</p>
         ) : rows.length === 0 ? (
@@ -1282,7 +1282,7 @@ function Contractors({ onChange, openJob }: { onChange: () => void; openJob: (id
   const corporate = all.filter((c) => !c.ownerId && match(c));
 
   const Shelf = ({ title, blurb, rows, canEdit }: { title: string; blurb: string; rows: Contractor[]; canEdit: boolean }) => (
-    <section className="rounded-2xl border border-line/80 bg-panel p-5">
+    <section className="rounded-[22px] border border-line/50 bg-white p-5">
       <div className="flex items-baseline justify-between gap-3">
         <div>
           <h2 className="text-[15px]">{title}</h2>
@@ -1316,7 +1316,7 @@ function Contractors({ onChange, openJob }: { onChange: () => void; openJob: (id
       </div>
       {err && <p className="text-[12.5px] text-accent-dark">{err}</p>}
       {editing && data && (
-        <div className="rounded-2xl border border-line/80 bg-panel p-5">
+        <div className="rounded-[22px] border border-line/50 bg-white p-5">
           <p className="text-[10px] font-bold uppercase tracking-wider text-muted">{editing.id ? "Edit" : "New contractor"}</p>
           <div className="mt-3">
             <ContractorForm initial={editing} canCorporate={data.canCorporate} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); onChange(); }} />
@@ -1372,7 +1372,7 @@ function ContractorProfile({ id, onClose, onEdit, openJob, canEdit }: { id: stri
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
               <div className="space-y-4">
-                <section className="rounded-2xl border border-line/80 bg-panel p-4">
+                <section className="rounded-[22px] border border-line/50 bg-white p-4">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-muted">How to reach them</p>
                   <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-[12.5px] sm:grid-cols-3">
                     <Fact k="Phone" v={c.phone || "—"} />
@@ -1384,7 +1384,7 @@ function ContractorProfile({ id, onClose, onEdit, openJob, canEdit }: { id: stri
                   </dl>
                   {c.notes && <p className="mt-3 whitespace-pre-wrap text-[12.5px] leading-relaxed">{c.notes}</p>}
                 </section>
-                <section className="rounded-2xl border border-line/80 bg-panel p-4">
+                <section className="rounded-[22px] border border-line/50 bg-white p-4">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Their jobs</p>
                   {d.jobs.length === 0 ? (
                     <p className="mt-2 text-[12.5px] text-muted">None yet. Put them on a job and it shows here.</p>
@@ -1405,7 +1405,7 @@ function ContractorProfile({ id, onClose, onEdit, openJob, canEdit }: { id: stri
                   )}
                 </section>
               </div>
-              <section className="rounded-2xl border border-line/80 bg-panel p-4">
+              <section className="rounded-[22px] border border-line/50 bg-white p-4">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Money through them</p>
                 <dl className="mt-2 space-y-2 text-[12.5px]">
                   <div className="flex justify-between"><dt className="text-muted">Jobs</dt><dd className="figures">{d.stats.jobs}{d.stats.open ? ` · ${d.stats.open} open` : ""}</dd></div>
@@ -1455,7 +1455,7 @@ function PropertyInvoice({ onClose, onPick }: { onClose: () => void; onPick: (id
   }, [props, q]);
   const field = "w-full rounded-lg border border-line/80 bg-box px-3 py-2.5 text-[13px] outline-none focus:border-ink";
   return (
-    <div className="rounded-2xl border border-line/80 bg-panel p-5">
+    <div className="rounded-[22px] border border-line/50 bg-white p-5">
       <div className="flex items-baseline justify-between gap-3">
         <div>
           <h3 className="text-[14px]">Invoice a property</h3>
@@ -1526,7 +1526,7 @@ function Invoices({ onOpen }: { onOpen: (id: string) => void }) {
 
   return (
     <div className="mt-4 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/80 bg-panel p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[22px] border border-line/50 bg-white p-5">
         <div>
           <h2 className="text-[15px]">The invoicing schedule</h2>
           <p className="mt-0.5 text-[11.5px] text-muted">
@@ -1545,7 +1545,7 @@ function Invoices({ onOpen }: { onOpen: (id: string) => void }) {
       {fromProperty && <PropertyInvoice onClose={() => setFromProperty(false)} onPick={(id) => { setFromProperty(false); void fromHome(id); }} />}
 
       {showSettings && settings && (
-        <div className="rounded-2xl border border-line/80 bg-panel p-5">
+        <div className="rounded-[22px] border border-line/50 bg-white p-5">
           <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Who invoices are from</p>
           <p className="mt-1 text-[11.5px] text-muted">Copied onto every invoice when it is produced, so an old invoice keeps the details it went out with.</p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -1581,7 +1581,7 @@ function Invoices({ onOpen }: { onOpen: (id: string) => void }) {
         </div>
       )}
 
-      <div className="rounded-2xl border border-line/80 bg-panel p-5">
+      <div className="rounded-[22px] border border-line/50 bg-white p-5">
         {!data ? (
           <p className="text-[12.5px] text-muted">Reading the schedule…</p>
         ) : rows.length === 0 ? (

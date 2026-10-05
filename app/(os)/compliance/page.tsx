@@ -229,7 +229,7 @@ export default function Compliance() {
       </div>
 
       {/* ── THE NEXT MONTH — the reason this page exists. ── */}
-      <div className="fade-up block-pop mt-6 rounded-2xl border border-line/80 bg-box p-5 hover:border-ink">
+      <div className="fade-up block-pop mt-6 rounded-[22px] border border-line/50 bg-white p-5 hover:border-ink">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-[15px]">Coming out of compliance — the next month</h2>
         </div>
@@ -296,7 +296,7 @@ export default function Compliance() {
       </div>
 
       {/* ── The whole book. ── */}
-      <div className="fade-up mt-6 rounded-2xl border border-line/80 bg-panel p-5">
+      <div className="fade-up mt-6 rounded-[22px] border border-line/50 bg-white p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-[15px]">
             The book{filter !== "all" && (

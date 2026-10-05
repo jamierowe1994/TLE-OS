@@ -57,7 +57,7 @@ export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, 
   const hot = o.urgency === "emergency" && step !== "closed";
 
   return (
-    <div className={`rounded-2xl border p-4 ${hot ? "border-accent-dark/50 bg-accent-soft/30" : "border-line/80 bg-panel"}`}>
+    <div className={`rounded-2xl border p-4 ${hot ? "border-accent-dark/50 bg-accent-soft/30" : "border-line/50 bg-white"}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Now</p>
         {step !== "closed" && (

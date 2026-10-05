@@ -232,7 +232,7 @@ function PropertyPanel({
     : `${p.locality || "—"}${p.onRex === false ? ` · ${p.service ?? "Managed"} in REX PM${p.ref ? ` (${p.ref})` : ""} · not on REX` : p.service ? ` · ${p.service}` : " · service not set in REX"}`;
 
   const tenantCard = (t: Party) => (
-    <li key={t.contactId} className="rounded-xl border border-line/70 bg-panel px-4 py-3 text-[13px]">
+    <li key={t.contactId} className="rounded-xl border border-line/50 bg-white px-4 py-3 text-[13px]">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="font-semibold">{t.name}</span>
         {t.phone && <a href={`tel:${t.phone.replace(/\s+/g, "")}`} className="text-[12px] text-muted hover:text-ink">{t.phone}</a>}
@@ -311,7 +311,7 @@ function PropertyPanel({
               ))}
             </div>
           ) : (
-            <div className="overflow-hidden rounded-2xl border border-line/70 bg-box">
+            <div className="overflow-hidden rounded-[22px] border border-line/50 bg-white">
               <PropertyPhoto src={null} alt="" className="h-[180px] w-full object-cover" />
             </div>
           )}
@@ -362,7 +362,7 @@ function PropertyPanel({
               {house.rooms.length > 1 && (
                 <details className="mt-2">
                   <summary className="cursor-pointer text-[11.5px] text-muted underline-offset-2 hover:underline">{house.rooms.length - 1} earlier {house.rooms.length - 1 === 1 ? "let" : "lets"} on record in REX</summary>
-                  <ul className="mt-2 overflow-hidden rounded-xl border border-line/70 bg-panel">
+                  <ul className="mt-2 overflow-hidden rounded-xl border border-line/50 bg-white">
                     {house.rooms.slice(1).map((r) => (
                       <li key={r.listingId} className="border-b border-line/40 last:border-0">
                         <button type="button" onClick={() => setTab(r.listingId)} className="grid w-full grid-cols-[minmax(0,1fr)_100px_80px] items-center gap-3 px-4 py-2 text-left text-[12px] transition-colors hover:bg-box">
@@ -381,7 +381,7 @@ function PropertyPanel({
           {houseView && house && !lets && (
             <section className="mt-6">
               <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Rooms</p>
-              <ul className="overflow-hidden rounded-xl border border-line/70 bg-panel">
+              <ul className="overflow-hidden rounded-xl border border-line/50 bg-white">
                 {house.rooms.map((r) => (
                   <li key={r.listingId} className="border-b border-line/40 last:border-0">
                     <button type="button" onClick={() => setTab(r.listingId)} className="grid w-full grid-cols-[84px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 text-left text-[12.5px] transition-colors hover:bg-box sm:grid-cols-[84px_minmax(0,1fr)_100px_90px]">
@@ -399,7 +399,7 @@ function PropertyPanel({
           <section className="mt-6">
             <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Landlord</p>
             {landlord ? (
-              <div className="rounded-xl border border-line/70 bg-panel px-4 py-3 text-[13px]"><Contact p={landlord} /></div>
+              <div className="rounded-xl border border-line/50 bg-white px-4 py-3 text-[13px]"><Contact p={landlord} /></div>
             ) : (
               <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">
                 No landlord on the REX record. The owner relationship on this listing is empty, so nobody is being guessed at.
@@ -742,7 +742,7 @@ export default function Portfolio() {
       />
 
       {state.status === "failed" ? (
-        <div className="fade-up mt-8 rounded-2xl border border-dashed border-accent-dark/50 bg-panel p-6">
+        <div className="fade-up mt-8 rounded-[22px] border border-dashed border-accent-dark/50 bg-white p-6">
           <p className="text-[14px]">{state.unlinked ? "We can't show you a portfolio yet" : "The book couldn't be read"}</p>
           <p className="mt-1 max-w-[60ch] text-[12.5px] leading-relaxed text-muted">{state.error}</p>
           {!state.unlinked && (

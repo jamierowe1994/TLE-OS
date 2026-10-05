@@ -137,12 +137,12 @@ export default function ComplianceTracker() {
       />
 
       {error && (
-        <p className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5 text-[12.5px] text-muted">
+        <p className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5 text-[12.5px] text-muted">
           {error}
         </p>
       )}
       {!d && !error && (
-        <p className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5 text-[12.5px] text-muted">
+        <p className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5 text-[12.5px] text-muted">
           Reading the compliance book… the first read of the day takes a while.
         </p>
       )}
@@ -165,7 +165,7 @@ export default function ComplianceTracker() {
               ["7 days", d.counts.band7, "chase due"],
               ["No agent", d.counts.noAgent, "nobody to chase through"],
             ].map(([label, n, sub]) => (
-              <div key={label as string} className="rounded-2xl border border-line/80 bg-panel p-4">
+              <div key={label as string} className="rounded-[22px] border border-line/50 bg-white p-4">
                 <p className="figures text-[22px] leading-none">{n as number}</p>
                 <p className="mt-1 text-[10.5px] leading-tight">{label as string}</p>
                 <p className="text-[10px] leading-tight text-muted">{sub as string}</p>
@@ -177,7 +177,7 @@ export default function ComplianceTracker() {
               the worst offender, measured at zero documents on 100 sampled
               entries. Worth its own line because it looks compliant. */}
           {d.counts.dateWithoutDocument > 0 && (
-            <p className="fade-up mt-3 rounded-2xl border border-line/80 bg-panel p-4 text-[11.5px] leading-relaxed text-muted">
+            <p className="fade-up mt-3 rounded-[22px] border border-line/50 bg-white p-4 text-[11.5px] leading-relaxed text-muted">
               <span className="font-semibold text-ink">
                 {d.counts.dateWithoutDocument} certificates are in date but have no document on
                 file.
@@ -186,7 +186,7 @@ export default function ComplianceTracker() {
             </p>
           )}
 
-          <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
+          <div className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5">
             <div className="mb-3 flex flex-wrap gap-2">
               {(
                 [

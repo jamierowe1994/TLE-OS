@@ -194,7 +194,7 @@ export default function ComplianceDrawer({
           {/* Michael, 7 Sep 2026: a let-only home's certificates belong to the
               landlord. Said once, here, rather than muting every card. */}
           {isLetOnly(p) && (
-            <p className="mb-4 rounded-xl border border-line/70 bg-box px-4 py-3 text-[12px] leading-relaxed text-muted">
+            <p className="mb-4 rounded-xl border border-line/50 bg-white px-4 py-3 text-[12px] leading-relaxed text-muted">
               <span className="font-semibold text-ink">Let only.</span> These certificates are the landlord&apos;s duty,
               not ours, so this home is not counted in the compliance totals and nobody here is chasing it. It stays
               worth watching: a certificate falling due is the moment to ask whether they want it managed.
@@ -202,7 +202,7 @@ export default function ComplianceDrawer({
           )}
           {/* Who an engineer has to deal with. Read from REX when the drawer
               opens, because the compliance book carries neither. */}
-          <section className="mb-4 rounded-2xl border border-line/80 bg-panel p-4">
+          <section className="mb-4 rounded-[22px] border border-line/50 bg-white p-4">
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Who&apos;s there</p>
             {people === null ? (
               <p className="mt-2 text-[12px] text-muted">Reading the property…</p>
@@ -278,7 +278,7 @@ export default function ComplianceDrawer({
           {houseView && house && !lets && (
             <section className="mt-6">
               <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Rooms</p>
-              <ul className="overflow-hidden rounded-xl border border-line/70 bg-panel">
+              <ul className="overflow-hidden rounded-xl border border-line/50 bg-white">
                 {house.rooms.map((r) => {
                   const bad = requiredCerts(r).filter((k) => ["expired", "urgent", "missing"].includes(statusOf(r.certs[k])));
                   return (
