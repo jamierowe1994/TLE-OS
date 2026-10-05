@@ -61,3 +61,21 @@ export async function isTestFile(p: {
   }
   return false;
 }
+
+/**
+ * A PLC pack made for a test file (5 Oct 2026): from a test application (a
+ * negative id, lib/test-overlay), from Create a PLC pack (TEST-xxxxxx, 30 Test
+ * Road), or at the test address. Its approval never reaches Propoly or REX,
+ * its RLP request goes to the sender alone, and it stays out of Kirstie's
+ * feed and the reader's track record - while every screen of the check itself
+ * still works on it, so a tester can walk the whole of it.
+ */
+export function isTestCase(c: { applicationRef?: string | null; address?: string | null } | null | undefined): boolean {
+  if (!c) return false;
+  const ref = String(c.applicationRef ?? "").trim();
+  const n = Number(ref);
+  if (ref && Number.isFinite(n) && n < 0) return true;
+  if (/^TEST-/i.test(ref)) return true;
+  const address = String(c.address ?? "");
+  return TEST_STREET.test(address) || /\b30\s+Test\s+Road\b/i.test(address);
+}

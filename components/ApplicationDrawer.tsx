@@ -14,7 +14,7 @@ import GuideButton from "@/components/GuideButton";
 import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-events";
 import { WhatsAppButton } from "@/components/WhatsAppQr";
 
-type JourneyAction = { id: string; label: string; detail: string; href: string | null; who: "you" | "kirstie" | "landlord" | "tenant" };
+type JourneyAction = { id: string; label: string; detail: string; href: string | null; who: "you" | "kirstie" | "landlord" | "tenant"; test?: "accept" | "advance" };
 type Journey = {
   ok: boolean;
   error?: string;
@@ -331,10 +331,14 @@ export default function ApplicationDrawer({
      board reads them, with what the agent should do about it. Loads after
      the drawer opens - it touches Propoly and PayProp. */
   const [journey, setJourney] = useState<Journey | null>(null);
+  /* Bumped after a test application's own button, so the spine reads again. */
+  const [journeyTick, setJourneyTick] = useState(0);
+  const [playing, setPlaying] = useState<string | null>(null);
+  const [playError, setPlayError] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
-    setJourney(null);
+    if (journeyTick === 0) setJourney(null);
     fetch(`/api/applications/${encodeURIComponent(app.id)}/journey`)
       .then((r) => r.json())
       .then((j: Journey) => live && setJourney(j))
@@ -342,7 +346,28 @@ export default function ApplicationDrawer({
     return () => {
       live = false;
     };
-  }, [app.id]);
+  }, [app.id, journeyTick]);
+
+  /* A test application's step that a real one takes elsewhere (lib/test-overlay). */
+  const play = async (a: JourneyAction) => {
+    if (!a.test || playing) return;
+    setPlaying(a.id);
+    setPlayError(null);
+    try {
+      const r = await fetch(`/api/applications/${encodeURIComponent(app.id)}/test`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: a.test }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!j.ok) setPlayError(j.error ?? "That didn't work.");
+      else setJourneyTick((n) => n + 1);
+    } catch {
+      setPlayError("That didn't go through. Try again.");
+    } finally {
+      setPlaying(null);
+    }
+  };
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
 
@@ -606,7 +631,16 @@ export default function ApplicationDrawer({
                                 {a.who === "you" ? "You" : a.who === "kirstie" ? "Kirstie" : a.who === "landlord" ? "Landlord" : "Tenant"}
                               </Pill>
                               <span className="min-w-0 flex-1">
-                                {a.href ? (
+                                {a.test ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => void play(a)}
+                                    disabled={playing !== null}
+                                    className="mb-1 rounded-full border border-ink/80 px-3.5 py-1.5 text-[12px] font-semibold transition-colors hover:bg-ink hover:text-page disabled:opacity-50"
+                                  >
+                                    {playing === a.id ? "Working…" : a.label}
+                                  </button>
+                                ) : a.href ? (
                                   <a
                                     href={a.href}
                                     /* Propoly opens in its own tab, so the application stays where the agent left it. */
@@ -624,6 +658,7 @@ export default function ApplicationDrawer({
                           ))}
                         </ul>
                       )}
+                      {playError && <p className="mt-2.5 text-[12px] text-accent-dark">{playError}</p>}
                       {journey.flags && journey.flags.length > 0 && (
                         <div className="mt-3.5 border-t border-line/50 pt-3">
                           <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">From Kirstie&apos;s side</p>
@@ -752,7 +787,7 @@ export default function ApplicationDrawer({
                   action={
                     <span className="flex items-center gap-3 text-[11.5px] text-muted">
                       {stops && here && <span>Step {(hereIdx >= 0 ? hereIdx : stops.length - 1) + 1} of {stops.length}</span>}
-                      {journey?.ok && journey.deal && (
+                      {journey?.ok && journey.deal?.url && (
                         <a href={journey.deal.url} target="_blank" rel="noreferrer" className="font-semibold text-accent-dark hover:underline">
                           Kirstie&apos;s deal in Propoly →
                         </a>

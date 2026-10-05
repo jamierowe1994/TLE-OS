@@ -58,6 +58,8 @@ export interface JourneyAction {
   href: string | null;
   /** Whose move it is. "you" is the agent looking at it. */
   who: "you" | "kirstie" | "landlord" | "tenant";
+  /** A test application's own step, played by a button (lib/test-overlay). */
+  test?: "accept" | "advance";
 }
 
 export interface ApplicationJourney {

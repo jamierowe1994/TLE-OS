@@ -5,6 +5,7 @@ import { PORTAL_STAGES } from "@/lib/business/propoly-stages";
 import type { OsListing } from "@/lib/rex-listings";
 import type { Application } from "@/lib/applications";
 import type { ManagedProperty } from "@/lib/portfolio-types";
+import { caseIdFor, PLC_STATES, type PlcCase } from "@/lib/plc";
 import type { ApplicationJourney, JourneyAction, JourneyStop } from "@/lib/application-journey";
 
 /**
@@ -118,6 +119,13 @@ export async function clearTestRecords(kitId: string): Promise<void> {
   await q(`DELETE FROM os_test_records WHERE kit_id = $1`, [kitId]).catch(() => null);
 }
 
+/**
+ * The tester's own rows, or rows on a file that names them in its `viewers`
+ * (5 Oct 2026: James sees the files he asked to be made for Howard). The
+ * email is $2.
+ */
+const MINE = "(owner_email = LOWER($2) OR kit_id IN (SELECT id FROM os_test_kits WHERE cleared_at IS NULL AND refs->'viewers' ? LOWER($2)))";
+
 async function rows<T>(kind: Kind, where: string, params: unknown[]): Promise<Row<T>[]> {
   if (!hasDb()) return [];
   return q<Row<T>>(`SELECT id, kit_id, owner_email, payload FROM os_test_records WHERE kind = $1 AND ${where} ORDER BY created_at DESC`, [kind, ...params]).catch(() => []);
@@ -163,8 +171,8 @@ function toOsListing(l: TestListing): OsListing {
 export async function testListingsFor(email: string | null | undefined): Promise<OsListing[]> {
   if (!email) return [];
   const [ls, deals] = await Promise.all([
-    rows<TestListing>("listing", "owner_email = LOWER($2)", [email]),
-    rows<TestDeal>("deal", "owner_email = LOWER($2)", [email]),
+    rows<TestListing>("listing", MINE, [email]),
+    rows<TestDeal>("deal", MINE, [email]),
   ]);
   const agreed = new Set(deals.map((d) => d.payload.listingId));
   return ls.map((r) => ({ ...toOsListing(r.payload), letAgreed: agreed.has(r.payload.listingId) }));
@@ -242,17 +250,20 @@ function toApplication(o: TestOffer, l: TestListing | null, deal: TestDeal | nul
 }
 
 async function offerContext(o: TestOffer): Promise<{ l: TestListing | null; d: TestDeal | null }> {
-  const [l, d] = await Promise.all([
+  const [l, d, plc] = await Promise.all([
     testListing(o.listingId),
     rows<TestDeal>("deal", "payload->>'appId' = $2", [o.appId]).then((r) => r[0]?.payload ?? null),
+    q<{ state: PlcCase["state"] }>(`SELECT state FROM os_plc_cases WHERE id = $1`, [caseIdFor(o.appId)]).then((r) => r[0] ?? null).catch(() => null),
   ]);
-  return { l, d };
+  /* Where the deal really is, PLC pack included, so the board's label and
+     the file's spine say the same thing. */
+  return { l, d: d ? { ...d, stageKey: testDealStage(d, plc) } : null };
 }
 
 /** The tester's own test offers, as the Applications board draws them. */
 export async function testApplicationsFor(email: string | null | undefined): Promise<Application[]> {
   if (!email) return [];
-  const os = await rows<TestOffer>("offer", "owner_email = LOWER($2)", [email]);
+  const os = await rows<TestOffer>("offer", MINE, [email]);
   return Promise.all(os.map(async (r) => {
     const { l, d } = await offerContext(r.payload);
     return toApplication(r.payload, l, d);
@@ -405,11 +416,31 @@ export function stagesAt(stageKey: string) {
 }
 
 /**
- * A test application's spine, in the shape journeyFor() gives a real one:
- * REX's three stops, then Kirstie's eight at the deal's stage. Nothing is
- * asked of Propoly, the handover or the PLC store - the deal is the record.
+ * Where a test deal is, once its PLC pack is taken into account: a pack sent
+ * puts the deal at the PLC stop, and an approved one past it - the same rule
+ * Kirstie's board applies to a real deal (derivePortalStage).
  */
-export function testJourney(app: Application, deal: TestDeal | null): ApplicationJourney {
+export function testDealStage(deal: TestDeal, plc: Pick<PlcCase, "state"> | null): string {
+  const at = PORTAL_STAGES.findIndex((s) => s.key === deal.stageKey);
+  const plcAt = PORTAL_STAGES.findIndex((s) => s.key === "plc");
+  if (plc?.state === "approved" && at <= plcAt) return PORTAL_STAGES[plcAt + 1].key;
+  if (plc && plc.state !== "assembling" && at < plcAt) return "plc";
+  return deal.stageKey;
+}
+
+/**
+ * A test application's spine, in the shape journeyFor() gives a real one:
+ * REX's three stops, then Kirstie's eight at the deal's stage.
+ *
+ * WALKABLE (James, 5 Oct 2026: "run through applications and show Howard
+ * everything he needs to go through ... and the PLC checks"). The steps a
+ * real application takes in REX or Propoly - the agent accepting it, Kirstie
+ * moving the deal on - are buttons here (`test`), played by the tester. The
+ * PLC check is the REAL one: its own pack (plc-<app id>), its own screens,
+ * Kirstie's queue - only nothing about it leaves the OS (lib/test-guard
+ * isTestCase).
+ */
+export function testJourney(app: Application, deal: TestDeal | null, plc: PlcCase | null = null): ApplicationJourney {
   const accepted = app.status === "accepted";
   const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : null);
   const stops: JourneyStop[] = [
@@ -429,22 +460,146 @@ export function testJourney(app: Application, deal: TestDeal | null): Applicatio
       state: deal ? "done" : accepted ? "current" : "upcoming",
     },
   ];
-  const at = deal ? stagesAt(deal.stageKey) : null;
+  const stageKey = deal ? testDealStage(deal, plc) : null;
+  const at = stageKey ? stagesAt(stageKey) : null;
+  const plcState = plc ? PLC_STATES.find((x) => x.id === plc.state) : null;
   PORTAL_STAGES.forEach((s, i) => {
-    stops.push({ id: s.key, label: s.label, sub: null, tone: "none", state: at ? at[i].state : "upcoming" });
+    const isPlc = s.key === "plc" && plc;
+    stops.push({
+      id: s.key,
+      label: s.label,
+      sub: isPlc ? (plcState ? `${plcState.label} · ${plcState.who}` : plc!.state) : null,
+      tone: isPlc ? (plc!.state === "approved" ? "ok" : plc!.state === "declined" ? "warn" : "none") : "none",
+      state: at ? at[i].state : "upcoming",
+    });
   });
-  const actions: JourneyAction[] = accepted
-    ? []
-    : [{ id: "test-decision", label: "Put the offer to the landlord", detail: "This is a test offer - move the test file on from Admin > Testing to accept it.", href: null, who: "you" }];
+
+  const actions: JourneyAction[] = [];
+  const plcHref = `/plc/start?application=${encodeURIComponent(app.id)}`;
+  if (!accepted) {
+    actions.push({
+      id: "test-landlord",
+      label: "The landlord approves it in their portal",
+      detail: "Sign in to the landlord portal as the test landlord and press Approve on this offer. It emails you, as a real approval does.",
+      href: null,
+      who: "landlord",
+    });
+    actions.push({
+      id: "test-accept",
+      label: "Accept the offer",
+      detail: "On a real application you accept it once the landlord has said yes. On this test one, press it to do that and start the deal.",
+      href: null,
+      who: "you",
+      test: "accept",
+    });
+  } else if (!plc) {
+    actions.push({ id: "plc-start", label: "Start the PLC check", detail: "The pre-let compliance pack has not been started for this let.", href: plcHref, who: "you" });
+  } else {
+    const queries = plc.findings.filter((f) => f.level !== "ok");
+    if (plc.state === "assembling") {
+      actions.push({ id: "plc-submit", label: "Finish and submit the PLC pack", detail: "Started but not sent to compliance yet.", href: plcHref, who: "you" });
+    } else if (plc.state === "deferred" && queries.length) {
+      actions.push({ id: "plc-query", label: "Answer Kirstie on the PLC pack", detail: queries.map((f) => f.message).join(" "), href: plcHref, who: "you" });
+    } else if (plc.state === "declined") {
+      actions.push({ id: "plc-declined", label: "The PLC pack was declined", detail: plc.decisionNote || "See Kirstie's note on the pack.", href: plcHref, who: "you" });
+    } else if (plc.state !== "approved") {
+      actions.push({
+        id: "plc-wait",
+        label: "Check and approve the PLC pack, as Kirstie",
+        detail: `With compliance (${plcState?.label ?? plc.state}). On a real pack this is Kirstie's; on a test one you play her part on the PLC queue - the first check, then the approval.`,
+        href: `/pre-tenancy/plc?case=${encodeURIComponent(plc.id)}`,
+        who: "you",
+      });
+    }
+  }
+  /* Moving the deal on: Kirstie's job on a real deal, the tester's here. Never
+     past the PLC stop until the pack is approved - that is the check's whole
+     point, and the button would teach the opposite. */
+  if (deal && stageKey) {
+    const idx = PORTAL_STAGES.findIndex((s) => s.key === stageKey);
+    const next = PORTAL_STAGES[idx + 1];
+    const plcAt = PORTAL_STAGES.findIndex((s) => s.key === "plc");
+    /* At the PLC stop means the pack is not approved yet (testDealStage moves an approved one past it). */
+    if (next && idx !== plcAt) {
+      actions.push({
+        id: "test-advance",
+        label: `Move the deal on to ${next.label}`,
+        detail: "On a real deal this happens as each step is done. On this test one, press it to take the next step.",
+        href: null,
+        who: "you",
+        test: "advance",
+      });
+    }
+  }
   return {
     stops,
     actions,
     flags: [],
-    deal: deal ? { id: `test-${deal.appId}`, stage: deal.stageKey, url: "" } : null,
-    plc: null,
+    deal: deal ? { id: `test-${deal.appId}`, stage: stageKey ?? deal.stageKey, url: "" } : null,
+    plc: plc ? { id: plc.id, state: plc.state, who: plcState?.who ?? "" } : null,
     handover: null,
     history: [],
   };
+}
+
+/** May this person press a test application's buttons? Its tester, or someone the file names. */
+async function mayPlay(appId: string, email: string): Promise<{ kitId: string; owner: string } | null> {
+  const r = await q<{ kit_id: string; owner_email: string }>(
+    `SELECT t.kit_id, t.owner_email FROM os_test_records t JOIN os_test_kits k ON k.id = t.kit_id
+      WHERE t.kind = 'offer' AND t.payload->>'appId' = $1 AND k.cleared_at IS NULL
+        AND (t.owner_email = LOWER($2) OR k.refs->'viewers' ? LOWER($2) OR k.created_by = LOWER($2))
+      LIMIT 1`,
+    [appId, email]
+  ).catch(() => []);
+  return r[0] ? { kitId: r[0].kit_id, owner: r[0].owner_email } : null;
+}
+
+/** "Accept the offer" on a test application: accepted, and its deal started. */
+export async function acceptTestOffer(appId: string, by: { name: string; email: string }): Promise<void> {
+  const who = await mayPlay(appId, by.email);
+  if (!who) throw new Error("That test application isn't one of yours.");
+  await q(
+    `UPDATE os_test_records SET payload = payload || jsonb_build_object('status', 'accepted', 'accepted', $2::text)
+      WHERE kind = 'offer' AND payload->>'appId' = $1`,
+    [appId, new Date().toISOString()]
+  );
+  const t = await testApplication(appId);
+  if (!t || t.deal) return;
+  const l = await testListing(t.app.listingId ?? 0);
+  const o = (await rows<TestOffer>("offer", "payload->>'appId' = $2", [appId]))[0]?.payload;
+  if (!o) return;
+  const deal: TestDeal = {
+    appId,
+    listingId: o.listingId,
+    appraisalId: o.appraisalId,
+    tenantName: o.applicantName,
+    tenantEmail: o.applicantEmail,
+    property: l?.name ?? t.app.property,
+    locality: l ? `${l.locality} ${l.postcode}`.trim() : t.app.locality,
+    rent: o.amount,
+    moveIn: o.moveIn,
+    stageKey: "deal_started",
+    agentName: by.name || by.email,
+    agentEmail: who.owner,
+  };
+  await putTestRecord(who.kitId, who.owner, "deal", deal);
+}
+
+/** "Move the deal on" on a test application: one stage, from where it really is. */
+export async function advanceTestDeal(appId: string, by: { email: string }, plc: PlcCase | null): Promise<void> {
+  if (!(await mayPlay(appId, by.email))) throw new Error("That test application isn't one of yours.");
+  const d = (await rows<TestDeal>("deal", "payload->>'appId' = $2", [appId]))[0]?.payload;
+  if (!d) throw new Error("Accept the offer first - there is no deal to move on yet.");
+  const from = testDealStage(d, plc);
+  const idx = PORTAL_STAGES.findIndex((s) => s.key === from);
+  const plcAt = PORTAL_STAGES.findIndex((s) => s.key === "plc");
+  if (idx === plcAt) throw new Error("The PLC pack has to be approved before the deal moves past it.");
+  const next = PORTAL_STAGES[idx + 1];
+  if (!next) throw new Error("The deal is already at its last stage.");
+  await q(
+    `UPDATE os_test_records SET payload = payload || jsonb_build_object('stageKey', $2::text) WHERE kind = 'deal' AND payload->>'appId' = $1`,
+    [appId, next.key]
+  );
 }
 
 /**

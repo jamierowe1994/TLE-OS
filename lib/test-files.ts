@@ -16,6 +16,7 @@ import { archiveTermsFor, docusealConfigured } from "@/lib/docuseal";
 import { KITS, TEST_FILE_SIDES, sideOfKit, type KitId, type TestFileSide, type TestWho } from "@/lib/testing-journeys";
 import { KitRefused, londonAt, runKit, TEST_ADDRESS, TEST_POSTCODE, type Refs } from "@/lib/test-kits";
 import { clearTestRecords, newTestId, putTestRecord, type TestDeal, type TestListing, type TestOffer, type TestViewing } from "@/lib/test-overlay";
+import { caseIdFor } from "@/lib/plc";
 
 /**
  * TEST FILES: add them, put them back to a stage, delete them, and clear the
@@ -258,6 +259,12 @@ async function unwind(refs: Refs, ownerEmail: string, since: Date | string, kitI
   if (kitId) {
     const apps = (await q<{ app: string }>(`SELECT payload->>'appId' AS app FROM os_test_records WHERE kit_id = $1 AND kind = 'offer'`, [kitId]).catch(() => [])).map((r) => r.app);
     await run(`DELETE FROM os_application_comments WHERE application_id = ANY($1)`, [apps]);
+    /* The PLC pack walked on a test application (plc-<app id>), and the
+       landlord's Approve press on its offer (5 Oct 2026). */
+    const packs = apps.map((a) => caseIdFor(a));
+    await run(`DELETE FROM os_plc_shadow WHERE case_id = ANY($1)`, [packs]);
+    await run(`DELETE FROM os_plc_cases WHERE id = ANY($1)`, [packs]);
+    await run(`DELETE FROM os_landlord_offer_approvals WHERE application_id = ANY($1)`, [apps]);
     await clearTestRecords(kitId);
   }
 }
