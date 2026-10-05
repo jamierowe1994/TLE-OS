@@ -201,6 +201,8 @@ async function unwind(refs: Refs, ownerEmail: string, since: Date | string, kitI
   );
   await run(`DELETE FROM os_lead_touches WHERE lead_id = ANY($1)`, [leadIds]);
   await run(`DELETE FROM os_lead_documents WHERE lead_id = ANY($1)`, [leadIds]);
+  /* Documents put on a test home from any file (lib/file-documents). */
+  if (owner) await run(`DELETE FROM os_file_documents WHERE is_test AND by_id = $1`, [owner.id]);
   await run(`DELETE FROM os_tasks WHERE lead_id = ANY($1)`, [leadIds]);
   await run(`DELETE FROM os_lead_facts WHERE lead_id = ANY($1)`, [leadIds]);
   await run(`DELETE FROM os_campaign_sends WHERE enrolment_id IN (SELECT id FROM os_campaign_enrolments WHERE record_id = ANY($1))`, [leadIds]);

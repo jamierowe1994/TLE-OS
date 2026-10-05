@@ -31,6 +31,8 @@ import { Pill } from "@/components/Wire";
 import { leadSide } from "@/lib/leads-sample";
 import { isOsLead, osContactIdFrom } from "@/lib/contacts-as-leads";
 import { InlineField } from "@/components/Bits";
+import { UploadForm } from "@/components/FileDocuments";
+import { DOC_TYPES, OTHER, docTypeLabel } from "@/lib/doc-types";
 import {
   DOC_TAGS,
   LANDLORD_DOC_TAGS,
@@ -742,7 +744,6 @@ function LeadDrawerBody({
   const [docsBusy, setDocsBusy] = useState(false);
   const [docsSaid, setDocsSaid] = useState<{ ok: boolean; text: string } | null>(null);
   const [docRexBusy, setDocRexBusy] = useState<string | null>(null);
-  const docInput = useRef<HTMLInputElement | null>(null);
   type ServerDoc = { id: string; name: string; tag: string; sizeBytes: number; at: string; url: string; rexAt: string | null; rexError: string | null; rexNever?: boolean };
   const fromServer = (d: ServerDoc): Doc => ({
     id: d.id,
@@ -768,15 +769,26 @@ function LeadDrawerBody({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docsUrl]);
 
-  async function uploadDocs(files: FileList | null) {
-    if (!files?.length || !docsUrl || docsBusy) return;
+  /* Upload asks what it is first (James, 5 Oct 2026): Kirstie's list, or
+     Other and a name. The form (components/FileDocuments) does the asking. */
+  const [docPicking, setDocPicking] = useState(false);
+  async function uploadTyped(file: File, type: string, name: string): Promise<string | null> {
+    const err = await uploadDocs([file], type === OTHER ? "Other" : docTypeLabel(type), type === OTHER ? name : "");
+    if (!err) setDocPicking(false);
+    return err;
+  }
+
+  async function uploadDocs(files: File[], tag = "Other", ownName = ""): Promise<string | null> {
+    if (!files.length || !docsUrl || docsBusy) return null;
     setDocsBusy(true);
     setDocsSaid(null);
     let said: { ok: boolean; text: string } | null = null;
-    for (const f of Array.from(files)) {
+    let failed: string | null = null;
+    for (const f of files) {
       const fd = new FormData();
       fd.append("file", f);
-      fd.append("tag", "Other");
+      fd.append("tag", tag);
+      if (ownName) fd.append("name", ownName);
       if (lead?.contactId) fd.append("contactId", String(lead.contactId));
       /* A create is never retried on its own: a second press would file it twice. */
       const r = await trackSave<{ docs?: ServerDoc[]; rex?: { ok: boolean; why?: string } | null; error?: string }>(
@@ -784,6 +796,7 @@ function LeadDrawerBody({
       );
       if (!r.ok) {
         said = { ok: false, text: r.body?.error ?? `${f.name} did not upload.` };
+        failed = said.text;
         continue;
       }
       if (Array.isArray(r.body?.docs)) setDocs(r.body!.docs!.map(fromServer));
@@ -791,9 +804,10 @@ function LeadDrawerBody({
         ? { ok: true, text: "Uploaded, and in REX on their contact too." }
         : { ok: false, text: `Uploaded to the OS. ${r.body?.rex?.why ?? "Not in REX."}` };
     }
-    setDocsSaid(said);
     setDocsBusy(false);
-    if (docInput.current) docInput.current.value = "";
+    if (failed) return failed;
+    setDocsSaid(said);
+    return null;
   }
 
   function changeDoc(id: string, patch: { name?: string; tag?: DocTag }) {
@@ -2177,25 +2191,26 @@ function LeadDrawerBody({
                         copied to REX on the person's contact. */}
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                       <p className="text-[11.5px] text-muted">
-                        {isTenant ? "Right to rent, income, references, ID." : "ID, proof of ownership, certificates."} A PDF or a photo.
+                        {isTenant ? "Right to rent, references, proof of address." : "ID, proof of ownership, AML, certificates."}
                       </p>
-                      <input
-                        ref={docInput}
-                        type="file"
-                        multiple
-                        accept="application/pdf,image/jpeg,image/png,image/webp,image/heic"
-                        className="hidden"
-                        onChange={(e) => void uploadDocs(e.target.files)}
-                      />
-                      <PressButton
-                        onClick={() => docInput.current?.click()}
-                        disabled={docsBusy}
-                        className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-3.5 py-1.5 text-[11.5px] font-semibold text-page disabled:opacity-60"
-                      >
-                        <DoodleIcon name="upload" size={13} />
-                        {docsBusy ? "Uploading..." : "Upload a document"}
-                      </PressButton>
+                      {!docPicking && (
+                        <PressButton
+                          onClick={() => { setDocsSaid(null); setDocPicking(true); }}
+                          disabled={docsBusy}
+                          className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-3.5 py-1.5 text-[11.5px] font-semibold text-page disabled:opacity-60"
+                        >
+                          <DoodleIcon name="upload" size={13} />
+                          Upload
+                        </PressButton>
+                      )}
                     </div>
+                    {docPicking && (
+                      <UploadForm
+                        sides={isTenant ? ["tenant"] : ["landlord", "home"]}
+                        onUpload={uploadTyped}
+                        onCancel={() => setDocPicking(false)}
+                      />
+                    )}
                     {/* A test file says it once, not under every document. */}
                     {!docsSaid && docs.some((d) => d.rexNever) && (
                       <p className="mb-3 text-[11px] leading-snug text-muted">A test file, so its documents stay in the OS and never go to REX.</p>
@@ -2283,7 +2298,11 @@ function LeadDrawerBody({
                               onChange={(e) => changeDoc(d.id, { tag: e.target.value as DocTag })}
                               className="shrink-0 rounded-full border border-line/80 bg-transparent px-3 py-1.5 text-[11px] outline-none focus:border-ink"
                             >
-                              {(isTenant ? DOC_TAGS : LANDLORD_DOC_TAGS).map((t) => (
+                              {[...new Set([
+                                ...DOC_TYPES.filter((t) => (isTenant ? t.side === "tenant" : t.side !== "tenant")).map((t) => t.label),
+                                ...(isTenant ? DOC_TAGS : LANDLORD_DOC_TAGS),
+                                d.tag,
+                              ])].map((t) => (
                                 <option key={t} value={t}>
                                   {t}
                                 </option>

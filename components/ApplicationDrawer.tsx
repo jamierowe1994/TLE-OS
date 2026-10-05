@@ -13,6 +13,7 @@ import { type SpineStop } from "@/components/StageSpine";
 import GuideButton from "@/components/GuideButton";
 import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-events";
 import { WhatsAppButton } from "@/components/WhatsAppQr";
+import FileDocuments from "@/components/FileDocuments";
 
 type JourneyAction = { id: string; label: string; detail: string; href: string | null; who: "you" | "kirstie" | "landlord" | "tenant" };
 type Journey = {
@@ -152,10 +153,11 @@ const NEXT_ACTION: Record<string, { label: string; do: string; who: string }> = 
 
 const BLUSH_WASH = "color-mix(in srgb, var(--accent-soft) 70%, white)";
 
-type TabKey = "home" | "people" | "file";
+type TabKey = "home" | "people" | "documents" | "file";
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: "home", label: "Application", icon: "doc" },
   { key: "people", label: "Applicants", icon: "user" },
+  { key: "documents", label: "Documents", icon: "upload" },
   { key: "file", label: "Property file", icon: "shield" },
 ];
 
@@ -875,6 +877,25 @@ export default function ApplicationDrawer({
                   Right to rent is a statutory check on every adult who will live in the property. Record it for the others before the tenancy starts.
                 </p>
               )}
+            </div>
+          )}
+
+          {tab === "documents" && (
+            /* The home's documents, shared with Kirstie's deal and the listing
+               for the same address (James, 5 Oct 2026). Nothing is sent. */
+            <div key="documents" className="fade-up">
+              <ViewTitle
+                title="Documents"
+                sub="References, right to rent, the landlord's papers and anything else for this home. The office and the agent both see them."
+                art="/brand/art/agent-desk.png"
+              />
+              <div className="rounded-[22px] border border-line/50 bg-white p-5">
+                <FileDocuments
+                  address={[app.property, app.locality].filter(Boolean).join(", ")}
+                  propertyId={app.propertyId ?? null}
+                  from={{ kind: "application", id: app.id }}
+                />
+              </div>
             </div>
           )}
 

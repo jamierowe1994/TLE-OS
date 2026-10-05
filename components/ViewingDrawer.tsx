@@ -18,6 +18,7 @@ import { Pill } from "@/components/Wire";
 import { TENANT_TRACK } from "@/lib/journey";
 import { minutesOf, type Appt } from "@/lib/diary";
 import SaveChip, { SaveScopeProvider, useSaveScope, type SaveScope } from "@/components/SaveChip";
+import FileDocuments from "@/components/FileDocuments";
 import { useCaseState } from "@/lib/case-state";
 
 /**
@@ -1013,6 +1014,18 @@ function ViewingDrawerBody({
                   </button>
                 </Card>
               )}
+
+              {/* The home's documents (James, 5 Oct 2026): what is added here is
+                  on the listing, the application and Kirstie's deal for the
+                  same address too. Nothing is sent to anybody. */}
+              <Card title="Documents" icon="upload">
+                <FileDocuments
+                  address={[property, match?.locality ?? appt.where].filter(Boolean).join(", ")}
+                  propertyId={appt.propertyId ?? match?.propertyId ?? null}
+                  from={{ kind: "viewing", id: appt.id }}
+                  showMissing={false}
+                />
+              </Card>
 
               <Card title="Activity" icon="list">
                 <ul className="space-y-2.5">

@@ -4,6 +4,7 @@ import { whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
 import { addDoc, docsFor, docToRex, updateDoc, type DocRexResult } from "@/lib/lead-documents";
 import { R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
+import { DOC_MIME, DOC_TYPES } from "@/lib/doc-types";
 
 /**
  * A lead's documents (lib/lead-documents): list, upload, rename or re-tag, and
@@ -15,9 +16,12 @@ import { R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+/* The tags a lead has always had, and since 5 Oct 2026 Kirstie's list
+   (lib/doc-types), which the upload now asks for first. */
 const TAGS = [
   "Right to Rent", "Proof of income", "Reference", "Tenancy agreement", "Bank statement", "Guarantor",
   "ID", "Proof of address", "Proof of ownership", "AML check", "EPC", "Gas safety", "EICR", "Other",
+  ...DOC_TYPES.map((t) => t.label),
 ];
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -55,6 +59,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const tagRaw = String(form.get("tag") ?? "Other");
   const tag = TAGS.includes(tagRaw) ? tagRaw : "Other";
   const contactId = form.get("contactId") ? String(form.get("contactId")) : null;
+  /* An Other is named by whoever uploads it; anything else keeps the file's name. */
+  const ownName = String(form.get("name") ?? "").trim();
   const scope = SCOPES.document;
 
   if (!(file instanceof File)) return NextResponse.json({ ok: false, error: "No file was attached." }, { status: 400 });
@@ -65,8 +71,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       { status: 413 }
     );
   }
-  if (!(scope.types as readonly string[]).includes(file.type)) {
-    return NextResponse.json({ ok: false, error: "Only a PDF or a photo can go here." }, { status: 415 });
+  if (!DOC_MIME.includes(file.type) && !/\.docx?$/i.test(file.name)) {
+    return NextResponse.json({ ok: false, error: "Only a PDF, a photo or a Word document can go here." }, { status: 415 });
   }
   if (!r2Configured) {
     return NextResponse.json({ ok: false, error: "Storage isn't configured on this environment." }, { status: 503 });
@@ -90,7 +96,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   const who = subject ?? actor;
   const doc = await addDoc({
-    leadId: id, name: file.name, tag, r2Key: key, mime: file.type, sizeBytes: file.size,
+    leadId: id, name: ownName || file.name, tag, r2Key: key, mime: file.type, sizeBytes: file.size,
     byId: who.id, byName: who.name || who.email,
   });
   const rex = await toRex({ actorId: actor.id, viewingAsOther: !!subject && subject.id !== actor.id }, { leadId: id, docId: doc.id, contactId });

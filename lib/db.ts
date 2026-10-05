@@ -928,6 +928,35 @@ CREATE TABLE IF NOT EXISTS os_lead_documents (
 );
 CREATE INDEX IF NOT EXISTS os_lead_documents_lead_idx ON os_lead_documents (lead_id, at DESC);
 
+-- A home's documents (James, 5 Oct 2026): uploaded from any file - Kirstie's
+-- deal, a listing, an application, an appraisal, a viewing - and seen from
+-- every one of them for the same home (lib/file-documents). Matched by the
+-- address (street, door numbers, postcode) and the REX property when known.
+-- Uploading sends nothing to anybody.
+CREATE TABLE IF NOT EXISTS os_file_documents (
+  id               TEXT PRIMARY KEY,
+  address          TEXT NOT NULL,
+  street           TEXT NOT NULL DEFAULT '',
+  postcode         TEXT,
+  rex_property_id  TEXT,
+  from_kind        TEXT NOT NULL,
+  from_id          TEXT NOT NULL,
+  type             TEXT NOT NULL,
+  name             TEXT NOT NULL,
+  file_name        TEXT NOT NULL,
+  r2_key           TEXT NOT NULL,
+  mime             TEXT NOT NULL DEFAULT '',
+  size_bytes       INTEGER NOT NULL DEFAULT 0,
+  by_id            TEXT,
+  by_name          TEXT NOT NULL DEFAULT '',
+  is_test          BOOLEAN NOT NULL DEFAULT FALSE,
+  at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  removed_at       TIMESTAMPTZ,
+  removed_by       TEXT
+);
+CREATE INDEX IF NOT EXISTS os_file_documents_street_idx ON os_file_documents (street) WHERE removed_at IS NULL;
+CREATE INDEX IF NOT EXISTS os_file_documents_property_idx ON os_file_documents (rex_property_id) WHERE removed_at IS NULL;
+
 -- The OS's own working state on a record REX has no field for: the appraisal
 -- sub-case on a lead, the landlord-property-tenant link on a listing.
 --

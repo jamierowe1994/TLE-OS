@@ -48,6 +48,7 @@ import { dealAlerts, type DealAlert } from "@/lib/business/deal-alerts";
 import WorkspaceLoading from "@/components/WorkspaceLoading";
 import PreTenancyHero from "@/components/pretenancy/Hero";
 import SaveChip, { SaveScopeProvider, useSaveReporter, useSaveScope } from "@/components/SaveChip";
+import FileDocuments from "@/components/FileDocuments";
 import { fetchMe } from "@/lib/me";
 
 /* ------------------------------- data shapes ------------------------------- */
@@ -2009,7 +2010,7 @@ function NumberRow({
 // Activity (everyone sees) · Emails (from her connected mailbox) ·
 // Notes (private, only the author) · Tasks (follow-ups with dates).
 
-type WorkTab = "activity" | "emails" | "notes" | "tasks";
+type WorkTab = "activity" | "emails" | "notes" | "tasks" | "documents";
 
 function WorkTabs({
   deal,
@@ -2034,6 +2035,7 @@ function WorkTabs({
     { key: "activity", label: "Activity" },
     { key: "notes", label: "Notes" },
     { key: "tasks", label: "Tasks" },
+    { key: "documents", label: "Documents" },
     { key: "emails", label: "Emails" },
   ];
 
@@ -2081,6 +2083,15 @@ function WorkTabs({
           </>
         ) : tab === "emails" ? (
           <EmailsTab deal={deal} onOpenMailbox={onOpenMailbox} />
+        ) : tab === "documents" ? (
+          /* Kirstie uploads here and the agent sees it on the listing and the
+             application for the same home (James, 5 Oct 2026). Nothing is sent. */
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <FileDocuments
+              address={[deal.app.propertyName, deal.app.locality].filter(Boolean).join(", ")}
+              from={{ kind: "deal", id: deal.app.id }}
+            />
+          </div>
         ) : tab === "notes" ? (
           <>
             {/* Was a bg-page pill sitting on a bg-page panel — an invisible

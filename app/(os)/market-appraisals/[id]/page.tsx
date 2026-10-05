@@ -24,6 +24,7 @@ import {
   type MarketAppraisal,
 } from "@/lib/market-appraisal";
 import { WhatsAppButton } from "@/components/WhatsAppQr";
+import FileDocuments from "@/components/FileDocuments";
 
 /**
  * The appraisal file, to James's mock of 11 Sep 2026.
@@ -170,6 +171,9 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
 
   /* The property file panel, shown when asked for. */
   const [showFile, setShowFile] = useState(false);
+  /* The home's documents (James, 5 Oct 2026), shared with the listing, the
+     application and Kirstie's deal for the same address. */
+  const [showDocs, setShowDocs] = useState(false);
 
   /* The landlord conversation. Opened from the Messages link, or straight
      away from the agent's email (?messages=1 - James, 17 Sep 2026). */
@@ -252,6 +256,10 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
     setShowFile(true);
     setTimeout(() => document.getElementById("property-file")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   };
+  const openDocs = () => {
+    setShowDocs(true);
+    setTimeout(() => document.getElementById("documents")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  };
 
   return (
     <SaveScopeProvider scope={saves}>
@@ -312,6 +320,9 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
           {!readHere && (ma.unreadMessages ?? 0) > 0 && (
             <span className="ml-0.5 rounded-full bg-accent-dark px-1.5 py-px text-[10.5px] font-bold text-white">{ma.unreadMessages} new</span>
           )}
+        </button>
+        <button type="button" onClick={openDocs} className={pill}>
+          <DoodleIcon name="upload" size={13} className="text-accent-dark" /> Documents
         </button>
         <button type="button" onClick={openFile} className={pill}>
           <DoodleIcon name="folder" size={13} className="text-accent-dark" /> Property file
@@ -607,6 +618,21 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
           against the address, and are on the REX property the day it is
           linked or instructed (James, 6 Sep). Opened from the quick link or
           the AML step rather than always on the page. */}
+      {showDocs && (
+        <section id="documents" className="fade-up scroll-mt-6 rounded-[22px] border border-line/50 bg-white p-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">Documents</p>
+            <button type="button" onClick={() => setShowDocs(false)} className="text-[12px] text-muted hover:text-ink">Hide</button>
+          </div>
+          <FileDocuments
+            address={ma.postcode && !ma.address.toUpperCase().includes(ma.postcode.toUpperCase()) ? `${ma.address}, ${ma.postcode}` : ma.address}
+            propertyId={ma.rexPropertyId ?? null}
+            from={{ kind: "appraisal", id: ma.id }}
+            sides={["landlord", "home"]}
+          />
+        </section>
+      )}
+
       {showFile && (
         <div id="property-file" className="fade-up scroll-mt-6 [&>section]:rounded-[22px] [&>section]:border-line/50 [&>section]:bg-white [&>section]:p-5">
           <PropertyFile

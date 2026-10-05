@@ -54,6 +54,7 @@ import { useListingTerms } from "@/lib/use-listing-terms";
 import { fetchMe } from "@/lib/me";
 import { WhatsAppButton } from "@/components/WhatsAppQr";
 import SaveChip, { SaveScopeProvider, useSaveScope, type SaveScope } from "@/components/SaveChip";
+import FileDocuments from "@/components/FileDocuments";
 
 /**
  * The property record — the leads drawer's shape, aimed at a thing instead of
@@ -1784,6 +1785,18 @@ function ListingDrawerBody({
               </div>
             )}
 
+            {tab === "documents" && (
+              /* The home's documents, shared with Kirstie's deal and the
+                 application for the same address (James, 5 Oct 2026). */
+              <div className="mb-5 rounded-[22px] border border-line/50 bg-white p-5">
+                <p className="mb-3 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">Uploaded documents</p>
+                <FileDocuments
+                  address={[listing.name, listing.locality].filter(Boolean).join(", ")}
+                  propertyId={listing.propertyId ?? null}
+                  from={{ kind: "listing", id: listing.id }}
+                />
+              </div>
+            )}
             {tab === "documents" && (
               <div className="mb-5 rounded-[22px] border border-line/50 bg-white p-5">
                 <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">How we get in</p>

@@ -114,6 +114,26 @@ export const same = (a: Set<string>, b: Set<string>) => a.size === b.size && [..
 export const covers = (big: Set<string>, small: Set<string>) => [...small].every((x) => big.has(x));
 export const addrOf = (p: { name: string; locality: string }) => (p.locality ? `${p.name}, ${p.locality}` : p.name);
 
+/**
+ * THE SAME HOME, NOT THE SAME LETTERS (18 Sep sweep, item 9; moved here from
+ * lib/application-journey on 5 Oct 2026 so a home's documents use it too).
+ *
+ * Both sides go through the parser: same postcode when both carry one, same
+ * street, and the same numbers on the door. "12 High St" is not "112 High St".
+ */
+export function sameHome(a: string, b: string): boolean {
+  if (!a.trim() || !b.trim()) return false;
+  const pa = postcodeOf(a);
+  const pb = postcodeOf(b);
+  if (pa && pb && pa !== pb) return false;
+  const x = parseAddress(a);
+  const y = parseAddress(b);
+  if (!x.street || !y.street || x.street !== y.street) return false;
+  if (x.nums.size && y.nums.size) return same(x.nums, y.nums);
+  /* No number either side: a named house. The street and the name must agree. */
+  return !x.nums.size && !y.nums.size && x.sig.size > 0 && y.sig.size > 0 && (covers(x.sig, y.sig) || covers(y.sig, x.sig));
+}
+
 
 /**
  * The house a record belongs to: postcode + building number + street word.

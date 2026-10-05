@@ -1,4 +1,4 @@
-import { covers, parseAddress, postcodeOf, same } from "@/lib/address-parse";
+import { sameHome } from "@/lib/address-parse";
 import type { Application } from "@/lib/applications";
 import { buildHandoff } from "@/lib/deal-handoff";
 import { handoverMode, latestHandover } from "@/lib/handover";
@@ -95,28 +95,6 @@ async function money(): Promise<MoneyContext | null> {
   const m = await loadMoneyContext(new Date()).catch(() => null);
   moneyCache = { at: Date.now(), money: m };
   return m;
-}
-
-/**
- * THE SAME HOME, NOT THE SAME LETTERS (18 Sep sweep, item 9).
- *
- * This was a substring test on the street line: "12 High St" sat inside
- * "112 High St", and Edinburgh's "29/9" never matched anything. The compliance
- * matcher's parser (lib/address-parse) already knows a building from a flat
- * and a floor code, so both sides go through it: same postcode when both
- * carry one, same street, and the same numbers on the door.
- */
-function sameHome(a: string, b: string): boolean {
-  if (!a.trim() || !b.trim()) return false;
-  const pa = postcodeOf(a);
-  const pb = postcodeOf(b);
-  if (pa && pb && pa !== pb) return false;
-  const x = parseAddress(a);
-  const y = parseAddress(b);
-  if (!x.street || !y.street || x.street !== y.street) return false;
-  if (x.nums.size && y.nums.size) return same(x.nums, y.nums);
-  /* No number either side: a named house. The street and the name must agree. */
-  return !x.nums.size && !y.nums.size && x.sig.size > 0 && y.sig.size > 0 && (covers(x.sig, y.sig) || covers(y.sig, x.sig));
 }
 
 function findDeal(app: Application, all: BusinessDeal[]): BusinessDeal | null {
