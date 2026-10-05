@@ -42,6 +42,8 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     ok: true, live: true, orders, contractors, summary,
     carried: carried?.jobs ?? [],
+    /* Planned jobs a certificate on file has since finished (5 Oct 2026). */
+    carriedDone: carried?.done ?? [],
     carriedReadAt: carried?.readAt ?? null,
     ...(carried ? {} : { carriedError: "The jobs copied across from the old system couldn't be read just now, so the figures leave them out. Try again in a minute." }),
     lastMonth: lastMonth?.summary ?? null,

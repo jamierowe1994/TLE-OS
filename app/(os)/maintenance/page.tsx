@@ -11,7 +11,7 @@ import Segmented from "@/components/Segmented";
 import { PressButton } from "@/components/Bits";
 import { openDocument } from "@/lib/doc-sheet";
 import type { Contractor, WorksOrder, WorksEvent, WorksSummary, Kind, Move, Status, Urgency, PaidHow } from "@/lib/works-orders";
-import type { CarriedJob } from "@/lib/works-carried";
+import type { CarriedDone, CarriedJob } from "@/lib/works-carried";
 import { PLANNED_CATEGORIES, REPAIR_CATEGORIES, URGENCIES } from "@/lib/works-catalogue";
 import { STEPS, stepOf } from "@/lib/works-steps";
 import { WorksNow, ContractorForm, BLANK_CONTRACTOR } from "@/components/WorksNow";
@@ -92,7 +92,7 @@ export default function Maintenance() {
     else if (params.get("section") === "accounts") setSection("accounts");
     else setSection((cur) => (cur === "contractors" ? "repair" : cur));
   }, [rail, params]);
-  const [data, setData] = useState<{ orders: WorksOrder[]; contractors: Contractor[]; summary: WorksSummary | null; lastMonth?: WorksSummary | null; lastMonthOn?: string | null; live: boolean; reason?: string; canCorporate?: boolean; carried?: CarriedJob[]; carriedReadAt?: string | null; carriedError?: string } | null>(null);
+  const [data, setData] = useState<{ orders: WorksOrder[]; contractors: Contractor[]; summary: WorksSummary | null; lastMonth?: WorksSummary | null; lastMonthOn?: string | null; live: boolean; reason?: string; canCorporate?: boolean; carried?: CarriedJob[]; carriedDone?: CarriedDone[]; carriedReadAt?: string | null; carriedError?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showClosed, setShowClosed] = useState(false);
   const [raising, setRaising] = useState<Kind | null>(null);
@@ -336,6 +336,7 @@ export default function Maintenance() {
             </section>
           ))}
           {carried.length > 0 && <CarriedList jobs={carried} readAt={data?.carriedReadAt ?? null} busy={takingOn} onTakeOn={(j) => void takeOn(j)} />}
+          {section === "planned" && (data?.carriedDone?.length ?? 0) > 0 && <DoneOnCertificates jobs={data!.carriedDone!} />}
         </div>
       )}
       {data?.carriedError && <p className="mt-4 rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-4 text-[12.5px]">{data.carriedError}</p>}
@@ -411,6 +412,41 @@ function CarriedList({ jobs, readAt, busy, onTakeOn }: { jobs: CarriedJob[]; rea
           );
         })}
       </ul>
+    </section>
+  );
+}
+
+/**
+ * Planned jobs the old system still holds open, finished by a certificate now
+ * on file (lib/works-carried, 5 Oct 2026). Off the board and its figures;
+ * listed here so anybody can see which certificate closed each one.
+ */
+function DoneOnCertificates({ jobs }: { jobs: CarriedDone[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="rounded-[22px] border border-line/50 bg-white p-5">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full flex-wrap items-baseline justify-between gap-3 text-left">
+        <h2 className="text-[15px]">Done: Certificate on File</h2>
+        <span className="text-[11px] text-muted">
+          {jobs.length} job{jobs.length === 1 ? "" : "s"} the old system still shows as open, finished by a certificate filed since. {open ? "Hide" : "Show"}
+        </span>
+      </button>
+      {open && (
+        <ul className="mt-3 divide-y divide-line/50">
+          {jobs.map((j) => (
+            <li key={j.taskId} className="grid grid-cols-1 gap-x-4 gap-y-1 py-3 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1.6fr)]">
+              <span className="min-w-0">
+                <span className="hand block truncate text-[13.5px]">{j.title}</span>
+                <span className="block truncate text-[10.5px] text-muted">{j.propertyName}{j.locality ? `, ${j.locality}` : ""}{j.managedBy ? ` · with ${j.managedBy}` : ""}</span>
+              </span>
+              <span className="flex items-start gap-2 text-[12px] text-[#56634a]">
+                <DoodleIcon name="checklist" size={14} className="mt-0.5 shrink-0" />
+                {j.evidence}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
