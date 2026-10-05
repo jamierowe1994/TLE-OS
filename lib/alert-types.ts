@@ -22,6 +22,7 @@ import type { Notice } from "@/lib/notices";
 export type AlertType =
   | "tenant_enquiry"
   | "viewing_request"
+  | "viewing_booked"
   | "landlord_lead"
   | "customer_message"
   | "deal"
@@ -51,6 +52,7 @@ export interface AlertTypeDef {
 export const ALERT_TYPES: AlertTypeDef[] = [
   { key: "tenant_enquiry", label: "Tenant Enquiries", what: "Someone asks about one of your homes on Rightmove, Zoopla, OnTheMarket, the website or the tenant area.", who: "The agent the enquiry is for." },
   { key: "viewing_request", label: "Viewing Requests", what: "A tenant asks to view one of your homes.", who: "The agent the enquiry is for." },
+  { key: "viewing_booked", label: "Viewings Booked", what: "Someone else books a viewing into your diary.", who: "The agent whose diary it is in. Owners hear about every one." },
   { key: "landlord_lead", label: "New Landlord Leads", what: "A landlord asks for a valuation, or one is added to the leads.", who: "The agent it is for. Owners hear about every one." },
   { key: "customer_message", label: "Landlord and Tenant Messages", what: "A landlord or tenant writes to you from their portal.", who: "The agent they wrote to." },
   { key: "deal", label: "Applications and Deals", what: "An application moves on, is accepted or falls through.", who: "The deal's agent, and pre-tenancy." },
@@ -70,6 +72,7 @@ export const isAlertRule = (r: unknown): r is AlertRule => r === "off" || r === 
 
 /** Which kind of alert a bell notice is. Lead notices name theirs in the id. */
 export function alertTypeOf(n: Pick<Notice, "id" | "kind">): AlertType {
+  if (n.id.startsWith("booked:")) return "viewing_booked";
   if (n.id.startsWith("lead:viewing:")) return "viewing_request";
   if (n.id.startsWith("lead:landlord:")) return "landlord_lead";
   if (n.id.startsWith("lead:")) return "tenant_enquiry";

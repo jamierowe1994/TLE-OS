@@ -9,6 +9,7 @@ import { remindersFor } from "@/lib/reminders";
 import { queriesFor, verifyQueue, worksToCheck } from "@/lib/compliance-desk";
 import { followUpsDue } from "@/lib/id-checks";
 import { newLeadsFor } from "@/lib/lead-ledger";
+import { newBookingsFor } from "@/lib/rex-viewings";
 
 /**
  * What the bell shows, gathered from the tables where things already happen.
@@ -43,6 +44,9 @@ import { newLeadsFor } from "@/lib/lead-ledger";
  *                            viewing requests and landlord leads (5 Oct
  *                            2026), the last three days. Owners also get
  *                            every landlord lead (lib/lead-ledger newLeadsFor)
+ *   viewings booked          the agent whose diary it is in, when somebody
+ *                            else booked it; owners, every new one (lib/rex-
+ *                            viewings newBookingsFor, 5 Oct 2026)
  *   documents to verify,     the compliance role alone (Michael, 20 Sep 2026:
  *   finished works orders    "he needs to also be notified"). Read from his
  *                            own two lists, so a notice goes when he ticks the
@@ -146,15 +150,35 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
       ).catch(() => [])
     : [];
 
+  const owner = me.role === "owner" || can(me.role, "see:everything");
   /* New enquiries (5 Oct 2026), so a viewing request reaches the agent's
      phone while the tenant is still on Rightmove. */
   const leads = await newLeadsFor({
     rexUserId: me.rexUserId,
     email: me.email,
-    allLandlords: me.role === "owner" || can(me.role, "see:everything"),
+    allLandlords: owner,
   }).catch(() => []);
 
+  const booked = owner || me.name?.trim() ? await newBookingsFor({ name: me.name ?? "", everyone: owner }).catch(() => []) : [];
+
   const out: Notice[] = [...reminders];
+  for (const b of booked) {
+    const when = new Date(b.startsAt).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+    const mine = b.agent.toLowerCase() === (me.name ?? "").toLowerCase();
+    out.push({
+      id: `booked:${b.id}`,
+      kind: "lead",
+      at: b.at,
+      title: `Viewing booked${b.who ? `: ${b.who}` : ""}`,
+      body: [
+        `${b.address || "A home"}, ${when}.`,
+        mine ? null : b.agent ? `With ${b.agent}.` : null,
+        b.bookedBy && b.bookedBy.toLowerCase() !== b.agent.toLowerCase() ? `Booked by ${b.bookedBy}.` : null,
+      ].filter(Boolean).join(" "),
+      href: "/viewings",
+      tone: "none",
+    });
+  }
   for (const l of leads) {
     const who = l.name && l.name !== "(no name given)" ? l.name : null;
     const where = l.address && l.address !== "—" ? l.address : null;

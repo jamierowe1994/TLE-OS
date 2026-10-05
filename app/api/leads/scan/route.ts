@@ -63,7 +63,13 @@ export async function POST(req: NextRequest) {
     .then((m) => m.enquiryReplies())
     .then((r) => ({ sent: r.filter((x) => x.state === "sent").length, would: r.filter((x) => x.state === "would").length, skipped: r.filter((x) => x.state === "skipped").length }))
     .catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
-  return NextResponse.json({ ok: true, scanned: book.scanned, kept: book.leads.length, written, valuationsRead, onFile: stats.onFile, since: stats.since, newestAt: book.newestAt, replies, ms: Date.now() - started });
+  /* Viewings put in the diary in the last two hours, so "Viewing booked"
+     reaches the bell and the phone within five minutes (lib/rex-viewings
+     sweepNewBookings). Its own failure is reported, never the scan's. */
+  const bookings = await import("@/lib/rex-viewings")
+    .then((m) => m.sweepNewBookings())
+    .catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+  return NextResponse.json({ ok: true, scanned: book.scanned, kept: book.leads.length, written, valuationsRead, onFile: stats.onFile, since: stats.since, newestAt: book.newestAt, replies, bookings, ms: Date.now() - started });
 }
 
 export const GET = POST;

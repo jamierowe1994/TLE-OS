@@ -48,6 +48,8 @@ export interface Viewing {
   description: string | null;
   /** When the event was put in REX's diary (system_ctime), when REX says. */
   bookedAt: string | null;
+  /** Who put it there (system_created_user), when REX says. */
+  bookedBy?: string | null;
 }
 
 interface RexRecord {
@@ -66,6 +68,7 @@ interface RexEvent {
   status?: { id?: string; text?: string } | null;
   appointment_type?: { name?: string } | null;
   organiser_user?: { name?: string } | null;
+  system_created_user?: { name?: string } | null;
   calendar?: { owner_user?: { name?: string } | null } | null;
   records?: RexRecord[] | null;
   /** Unix seconds, as every REX record carries it. */
@@ -111,6 +114,7 @@ function toViewing(e: RexEvent): Viewing | null {
     type,
     status: e.status?.text ?? null,
     bookedAt: Number(e.system_ctime) > 0 ? new Date(Number(e.system_ctime) * 1000).toISOString() : null,
+    bookedBy: e.system_created_user?.name?.trim() || null,
     cancelled: Boolean(e.is_cancelled) || e.status?.id === "cancelled",
     agent: e.organiser_user?.name ?? e.calendar?.owner_user?.name ?? null,
     contacts,
@@ -287,8 +291,8 @@ const OUR_DOMAIN = "thelettingexperts.co.uk";
  * before anyone opens the listing; once bookings are made in the OS the
  * sweep matters less.
  */
-export async function sweepDiary(sinceDays = 730, budgetPages = 50): Promise<{ scanned: number; kept: number; pages: number; from: string; cursor: string | null; caughtUp: boolean }> {
-  if (!rexConfigured()) return { scanned: 0, kept: 0, pages: 0, from: "", cursor: null, caughtUp: false };
+/** The lettings calendars in REX (our own domain's), not the other brands sharing the account. */
+async function lettingsCalendars(): Promise<string[]> {
   const calIds: string[] = [];
   for (let page = 0; page < 3; page++) {
     const res = await rexCall("Calendars", "search", { limit: 100, offset: page * 100 });
@@ -297,6 +301,45 @@ export async function sweepDiary(sinceDays = 730, budgetPages = 50): Promise<{ s
     for (const c of rows) if ((c.owner_user?.email_address ?? "").toLowerCase().endsWith(`@${OUR_DOMAIN}`) && c.id) calIds.push(String(c.id));
     if (rows.length < 100) break;
   }
+  return calIds;
+}
+
+let calendarsHeld: { ids: string[]; at: number } | null = null;
+
+/**
+ * What was put in the lettings diary in the last two hours (5 Oct 2026), for
+ * the bell and the phone: "Viewing booked" has to arrive within minutes, and
+ * the nightly sweep is a day late. One REX page every five minutes on the
+ * leads scan, by REX's own created time (system_ctime), overlapping each run
+ * so nothing falls between two. Same ledger, same rows as the sweep.
+ *
+ * REX refuses order_by system_ctime on this search (a server error), so the
+ * window does the narrowing instead. About a dozen events a day.
+ */
+export async function sweepNewBookings(hours = 2): Promise<{ scanned: number; kept: number }> {
+  if (!rexConfigured()) return { scanned: 0, kept: 0 };
+  if (!calendarsHeld || Date.now() - calendarsHeld.at > 6 * 3600_000) {
+    const ids = await lettingsCalendars();
+    if (ids.length) calendarsHeld = { ids, at: Date.now() };
+  }
+  const since = new Date(Date.now() - hours * 3600_000).toISOString().slice(0, 19).replace("T", " ");
+  const res = await rexCall("CalendarEvents", "search", {
+    limit: 100,
+    criteria: [
+      { name: "system_ctime", type: ">=", value: since },
+      ...(calendarsHeld?.ids.length ? [{ name: "calendar_id", type: "in", value: calendarsHeld.ids }] : []),
+    ],
+  });
+  if (!res.ok) throw new Error(res.error ?? "REX's diary did not answer.");
+  const rows = rexRows(res.result) as RexEvent[];
+  const kept = rows.map(toViewing).filter((v): v is Viewing => Boolean(v && (v.listingId || v.propertyId)));
+  await recordViewings(kept);
+  return { scanned: rows.length, kept: kept.length };
+}
+
+export async function sweepDiary(sinceDays = 730, budgetPages = 50): Promise<{ scanned: number; kept: number; pages: number; from: string; cursor: string | null; caughtUp: boolean }> {
+  if (!rexConfigured()) return { scanned: 0, kept: 0, pages: 0, from: "", cursor: null, caughtUp: false };
+  const calIds = await lettingsCalendars();
 
   /* Where the last run got to. REX's calendar answers about four seconds a
      page and two years is near three hundred pages, so each run takes a
@@ -358,4 +401,50 @@ export async function sweepDiary(sinceDays = 730, budgetPages = 50): Promise<{ s
     ).catch(() => null);
   }
   return { scanned, kept, pages, from: from.toISOString(), cursor, caughtUp };
+}
+
+/**
+ * Viewings newly in one person's diary, for their bell and phone (5 Oct
+ * 2026). Booked in the last three days, still to come, not cancelled, and
+ * booked by somebody else - an agent who put it in their own diary does not
+ * need telling. Owners (`everyone`) hear about every new lettings viewing.
+ * Timed by when the OS first saw it, as the leads are (lib/lead-ledger).
+ */
+export interface NewBooking {
+  id: string;
+  at: string;
+  startsAt: string;
+  agent: string;
+  bookedBy: string | null;
+  address: string;
+  who: string;
+}
+
+export async function newBookingsFor(p: { name: string; everyone: boolean; days?: number; limit?: number }): Promise<NewBooking[]> {
+  if (!hasDb()) return [];
+  const rows = await q<{ id: string; first_seen: Date; starts_at: Date; agent: string | null; payload: Viewing }>(
+    `SELECT id, first_seen, starts_at, agent, payload FROM os_viewings
+      WHERE kind = 'viewing' AND NOT cancelled AND starts_at > NOW()
+        AND first_seen > NOW() - make_interval(days => $1)
+        AND (payload->>'bookedAt')::timestamptz > NOW() - make_interval(days => $1)
+        AND (
+          $2
+          OR (LOWER(COALESCE(agent, '')) = LOWER($3) AND LOWER(COALESCE(payload->>'bookedBy', '')) <> LOWER($3))
+        )
+      ORDER BY first_seen DESC LIMIT $4`,
+    [p.days ?? 3, p.everyone, p.name.trim(), p.limit ?? 25]
+  ).catch(() => []);
+  return rows.map((r) => {
+    const v = r.payload;
+    const fromTitle = /\bat (.+?)(?: with .+)?$/i.exec(v.title ?? "")?.[1]?.trim();
+    return {
+      id: r.id,
+      at: new Date(r.first_seen).toISOString(),
+      startsAt: new Date(r.starts_at).toISOString(),
+      agent: r.agent ?? "",
+      bookedBy: v.bookedBy ?? null,
+      address: v.listingLabel || fromTitle || "",
+      who: v.contacts?.map((c) => c.name).filter((n) => n && n !== "(no name)").join(" and ") || "",
+    };
+  });
 }
