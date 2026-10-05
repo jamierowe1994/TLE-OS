@@ -673,10 +673,11 @@ export default function Listings() {
                 }.`
               : (book.reason ?? "Manage your properties and their marketing.")
         }
-        /* The phone app's street, so Listings looks like the app (James, 5 Oct
-           2026). It replaced the lady reading, which sat apart from the rest. */
-        illustration="/illustrations/app/street-corner.webp"
-        illustrationAspect={1.3495}
+        /* The stone crescent from the phone app's paintings (James, 5 Oct
+           2026). It replaced the lady reading, which sat apart from the rest;
+           the app's street was tried first and read oddly this small. */
+        illustration="/illustrations/app/crescent.webp"
+        illustrationAspect={1.3471}
         lineBreak="none"
         searchValue={q}
         onSearch={setQ}
