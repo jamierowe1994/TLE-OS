@@ -78,6 +78,27 @@ Running through all of it: **it has to be on brand, look good, and work.**
 
 ---
 
+## Before go-live: delete the test data (James, 5 Oct 2026)
+
+Made for Howard's testing; every one goes before 14 October. Admin > Testing > Test files
+lists each as Howard's, and **Delete** (or **Ready for launch**, which clears every tester's
+files and closes testing) removes the lot - listing, offer, deal, viewings, PLC pack, landlord
+approval, the property record and its jobs.
+
+| # | What | Where it shows | Test file (os_test_kits id) |
+|---|---|---|---|
+| T1 | **52a Moor Street** and **52a Moor Street (copy)** - pretend listings | Listings (Howard and James) | `22781569b3364479b0e01f7f` |
+| T2 | **14 Test Street** - a let home, Howard as landlord and tenant | Portfolio, Maintenance, tenant + landlord portals | `df1c1c8b4c28e0dca2d27c1f` |
+| T3 | **Flat 1, 14 Test Street** - an application to walk end to end, PLC included | Applications, PLC queue, landlord portal | `97b2a747a9170e03c140f9fe` |
+
+**T1 needs a hand as well.** 52a Moor Street began as Howard's real appraisal, not a test
+file: deleting the file removes the appraisal, but the contact (howard.russell+2@...) is a
+real REX contact and stays. Decide whether it goes too.
+
+Check afterwards: `SELECT count(*) FROM os_test_kits WHERE cleared_at IS NULL` is 0, and
+`SELECT id FROM os_plc_cases WHERE application_ref LIKE '-%' OR application_ref LIKE 'TEST-%'`
+is empty.
+
 ## 1. Market appraisals tab
 
 A tab on the dashboard. It is the landlord side of the process broken out —

@@ -6,6 +6,7 @@ import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
 import { propertyKey } from "@/lib/business/payprop-portfolio";
 import { getCase, recordPropolyPush } from "@/lib/plc-store";
 import { checkById, type CheckId, type PlcCase, type PlcDocument, type PropolyPush, type PushResult } from "@/lib/plc";
+import { isTestCase } from "@/lib/test-guard";
 
 /**
  * The approved pack, into Propoly's document slots.
@@ -110,6 +111,7 @@ export async function pushCaseToPropoly(caseId: string, by: string): Promise<Pro
   const c = await getCase(caseId);
   if (!c) throw new Error("That pack no longer exists.");
   if (c.state !== "approved") throw new Error("Only an approved pack goes into Propoly.");
+  if (isTestCase(c)) throw new Error("This is a test pack, so it stays in the OS and never goes to Propoly.");
 
   const at = new Date().toISOString();
   const dealId = await propolyDealForCase(c);

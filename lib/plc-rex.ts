@@ -10,6 +10,7 @@ import { propertyKey } from "@/lib/business/payprop-portfolio";
 import { refreshComplianceBook } from "@/lib/compliance-cache";
 import { getCase, recordRexPush } from "@/lib/plc-store";
 import { checkById, type CheckId, type PlcCase, type PlcDocument, type PushResult, type RexPush } from "@/lib/plc";
+import { isTestCase } from "@/lib/test-guard";
 
 /**
  * The approved pack, into REX's compliance table.
@@ -287,6 +288,7 @@ export async function pushCaseToRex(caseId: string, by: string): Promise<RexPush
   const c = await getCase(caseId);
   if (!c) throw new Error("That pack no longer exists.");
   if (c.state !== "approved") throw new Error("Only an approved pack goes into REX.");
+  if (isTestCase(c)) throw new Error("This is a test pack, so it stays in the OS and never goes to REX.");
 
   const at = new Date().toISOString();
   const certs = c.documents.filter((d) => rexTypeFor(d.checkId, d.name));

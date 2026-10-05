@@ -1,5 +1,6 @@
 import "server-only";
 import { getApplications, type Application } from "@/lib/applications";
+import { isTestId, testApplication } from "@/lib/test-overlay";
 
 /**
  * Everything the handover already knows before anybody types.
@@ -110,6 +111,12 @@ export async function prefillFor(opts: {
   applicationId?: string;
   listingId?: string;
 }): Promise<Prefill | null> {
+  /* A test file's application (lib/test-overlay): never in REX's book, so it
+     is read from the overlay - the PLC check is walked on it like any other. */
+  if (opts.applicationId && isTestId(opts.applicationId)) {
+    const t = await testApplication(opts.applicationId);
+    return t ? shape(t.app) : null;
+  }
   const book = await getApplications(300);
 
   if (opts.applicationId) {

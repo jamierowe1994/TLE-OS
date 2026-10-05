@@ -27,6 +27,7 @@ import { pushCaseToPropoly } from "@/lib/plc-propoly";
 import { pushCaseToRex } from "@/lib/plc-rex";
 import { recordActivity } from "@/lib/business/deal-watch";
 import { switchOn } from "@/lib/switches";
+import { isTestCase } from "@/lib/test-guard";
 
 /**
  * GET   /api/plc/<id>  → the case, its findings in reading order, what's short
@@ -134,6 +135,14 @@ export async function POST(req: NextRequest, ctx: Ctx) {
      (Kirstie and Michael, lib/plc-approvers), and never the person who did
      the first check on the same pack. */
   const COMPLIANCE_ONLY = new Set(["check", "decide", "push-rex", "push-propoly", "rlp-send"]);
+  /* A test file's pack (lib/test-guard isTestCase, 5 Oct 2026): the tester
+     plays every side - first check AND final approval, still behind work:plc - so
+     Howard can walk the whole check. It is safe because nothing about a test
+     pack leaves the OS: no Propoly, no REX, no RLP request to anybody else. */
+  const testCase = isTestCase(await getCase(id).catch(() => null));
+  if (testCase && (body.action === "push-rex" || body.action === "push-propoly")) {
+    return NextResponse.json({ ok: false, error: "This is a test pack, so it stays in the OS and never goes to Propoly or REX." }, { status: 409 });
+  }
   const prod = process.env.NODE_ENV === "production";
   if (prod && COMPLIANCE_ONLY.has(body.action ?? "")) {
     if (!(await requireCapability(req, "work:plc"))) {
@@ -144,7 +153,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     }
   }
   const APPROVER_ONLY = body.action === "decide" && body.decision === "approved";
-  if (prod && (APPROVER_ONLY || body.action === "push-rex" || body.action === "push-propoly" || body.action === "rlp-send")) {
+  if (prod && !testCase && (APPROVER_ONLY || body.action === "push-rex" || body.action === "push-propoly" || body.action === "rlp-send")) {
     const me = await currentUser(req);
     const current = await getCase(id);
     const email = me?.email?.toLowerCase() ?? "";
@@ -224,7 +233,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         }
 
         const submitted = await submitCase(id);
-        await recordActivity({
+        if (!testCase) await recordActivity({
           id: submitted.id,
           property: submitted.address,
           agentEmail: submitted.agentEmail || null,
@@ -237,7 +246,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
         await markScanning(id);
         const scanned = await recordScan(id, outcome.findings);
-        if (outcome.recommendation) {
+        if (outcome.recommendation && !testCase) {
           await recordRecommendation({
             caseId: id,
             address: scanned.address,
@@ -282,7 +291,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         const me = await currentUser(req);
         const by = await actorName(req, "Compliance");
         const checked = await checkCase(id, { name: by, email: me?.email ?? null }, body.note ?? "");
-        await recordActivity({
+        if (!testCase) await recordActivity({
           id: checked.id,
           property: checked.address,
           agentEmail: checked.agentEmail || null,
@@ -309,7 +318,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         const me = await currentUser(req);
         if (!me) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
         try {
-          const sent = await sendRlpRequest(id, { id: me.id, name: me.name, email: me.email }, { test: body.test === true });
+          /* A test pack's request only ever goes to the sender. */
+          const sent = await sendRlpRequest(id, { id: me.id, name: me.name, email: me.email }, { test: body.test === true || testCase });
           const fresh = await getCase(id);
           return NextResponse.json({ ok: true, sentTo: sent.sentTo, ...(await payload(fresh, req)) });
         } catch (e) {
@@ -367,7 +377,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
            A scan that threw records nothing rather than recording a guess -
            there was no recommendation to be right or wrong about. */
-        if (outcome.recommendation) {
+        if (outcome.recommendation && !testCase) {
           await recordRecommendation({
             caseId: id,
             address: scanned.address,
@@ -401,8 +411,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         const decided = await decideCase(id, decision, by, body.note ?? "");
         /* After the decision lands, never before. Recording cannot throw, so a
            log failure can never cost Kirstie an approval. */
-        await recordDecision({ caseId: id, decision, decidedBy: by, note: body.note ?? "" });
-        await recordActivity({
+        if (!testCase) await recordDecision({ caseId: id, decision, decidedBy: by, note: body.note ?? "" });
+        if (!testCase) await recordActivity({
           id: decided.id,
           property: decided.address,
           agentEmail: decided.agentEmail || null,
@@ -422,7 +432,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
            generate the agreement; REX so the certificates count on the
            tracker and in REX PM (5 Sep). */
         const [propoly, rex] = await Promise.all([switchOn("propoly_documents"), switchOn("rex_compliance_write")]);
-        if (decision === "approved" && (propoly || rex)) {
+        if (decision === "approved" && (propoly || rex) && !testCase) {
           if (propoly) {
             try {
               await pushCaseToPropoly(id, by);

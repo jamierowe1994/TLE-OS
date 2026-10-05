@@ -5,6 +5,8 @@ import { getApplicationById } from "@/lib/applications";
 import { rexConfigured } from "@/lib/rex";
 import { journeyFor } from "@/lib/application-journey";
 import { isTestId, testApplication, testJourney } from "@/lib/test-overlay";
+import { getCase } from "@/lib/plc-store";
+import { caseIdFor } from "@/lib/plc";
 
 /**
  * GET /api/applications/{id}/journey → the spine, the agent's actions, and
@@ -23,8 +25,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   }
   if (isTestId(id)) {
-    const t = await testApplication(id);
-    return t ? NextResponse.json({ ok: true, test: true, ...testJourney(t.app, t.deal) }) : NextResponse.json({ ok: false, error: "That test application has gone." }, { status: 404 });
+    const [t, plc] = await Promise.all([testApplication(id), getCase(caseIdFor(id)).catch(() => null)]);
+    return t ? NextResponse.json({ ok: true, test: true, ...testJourney(t.app, t.deal, plc) }) : NextResponse.json({ ok: false, error: "That test application has gone." }, { status: 404 });
   }
   if (!rexConfigured()) return NextResponse.json({ ok: false, error: "Applications aren't connected here." }, { status: 503 });
 
