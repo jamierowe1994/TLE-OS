@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { landlordForTestDeal } from "@/lib/test-overlay";
+import { landlordForTestDeal, propertyForTestDeal } from "@/lib/test-overlay";
 import { currentTenant } from "@/lib/tenant-account";
 import { loadTenantHome } from "@/lib/tenant-home-view";
 import { createOrder, listOrders } from "@/lib/works-orders";
@@ -92,14 +92,18 @@ export async function POST(req: NextRequest) {
   /* A test tenancy's landlord (lib/test-overlay): a job the tester reports as
      their own tenant should reach the landlord portal they also own. A real
      deal carries no landlord here, so nothing changes for one. */
-  const testLandlord = deal.id.startsWith("test-") ? await landlordForTestDeal(deal.id).catch(() => null) : null;
+  const isTest = deal.id.startsWith("test-");
+  const [testLandlord, testHome] = isTest
+    ? await Promise.all([landlordForTestDeal(deal.id).catch(() => null), propertyForTestDeal(deal.id).catch(() => null)])
+    : [null, null];
   const order = await createOrder(
     {
       kind: "repair",
       /* The tenant's record carries an address, not a REX property id, so the
          order carries the address and the agent links it. Better an honest
-         gap than a guessed id pointing at the wrong home. */
-      propertyId: null,
+         gap than a guessed id pointing at the wrong home. A test tenancy's
+         home is the OS's own record, known for certain, so it is linked. */
+      propertyId: testHome?.id ?? null,
       propertyName: deal.property,
       locality: deal.locality,
       tenant: me.name,

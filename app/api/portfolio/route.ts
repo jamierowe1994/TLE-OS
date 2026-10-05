@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { scopeFor } from "@/lib/scope";
+import { scopeForWho } from "@/lib/scope";
+import { whoIs } from "@/lib/admin";
+import { hasDb } from "@/lib/db";
+import { testHomesFor } from "@/lib/test-overlay";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { rexConfigured } from "@/lib/rex";
 
@@ -27,7 +30,8 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const scope = await scopeFor(req);
+  const who = hasDb() ? await whoIs(req).catch(() => null) : null;
+  const scope = await scopeForWho(req, who);
   if (scope.unlinked) {
     return NextResponse.json({
       ok: false,
@@ -39,13 +43,19 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const { book, ageMs, stale } = await managedBookFor(scope.rexUserId);
+    /* The tester's own test homes ride alongside the cached book, never in
+       it: the book is shared, and its counts stay the business's own. */
+    const [{ book, ageMs, stale }, tests] = await Promise.all([
+      managedBookFor(scope.rexUserId),
+      testHomesFor(who?.actor?.email).catch(() => []),
+    ]);
     return NextResponse.json({
       ok: true,
       live: true,
       scope: scope.label,
       everything: scope.everything,
       ...book,
+      ...(tests.length ? { properties: [...tests, ...book.properties] } : {}),
       ageMs,
       ...(stale ? { stale: true } : {}),
     });

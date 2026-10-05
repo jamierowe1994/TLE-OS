@@ -4,6 +4,7 @@ import { hasDb, q } from "@/lib/db";
 import { PORTAL_STAGES } from "@/lib/business/propoly-stages";
 import type { OsListing } from "@/lib/rex-listings";
 import type { Application } from "@/lib/applications";
+import type { ManagedProperty } from "@/lib/portfolio-types";
 import type { ApplicationJourney, JourneyAction, JourneyStop } from "@/lib/application-journey";
 
 /**
@@ -310,6 +311,91 @@ export async function landlordForTestDeal(dealId: string): Promise<{ name: strin
   if (!d) return null;
   const l = await testListing(d.listingId);
   return l ? l.landlord : null;
+}
+
+/** The OS property a test tenancy's home is held as, for a job its tenant reports. */
+export async function propertyForTestDeal(dealId: string): Promise<{ id: string; name: string } | null> {
+  if (!hasDb()) return null;
+  const id = dealId.startsWith("test-") ? dealId.slice(5) : dealId;
+  const r = await q<{ pid: string; name: string }>(
+    `SELECT k.refs->>'osPropertyId' AS pid, p.name
+       FROM os_test_records t JOIN os_test_kits k ON k.id = t.kit_id
+       JOIN os_properties p ON p.id = k.refs->>'osPropertyId'
+      WHERE t.kind = 'deal' AND t.payload->>'appId' = $1 AND k.cleared_at IS NULL LIMIT 1`,
+    [id]
+  ).catch(() => []);
+  return r[0]?.pid ? { id: r[0].pid, name: r[0].name } : null;
+}
+
+/* ── the managed book ────────────────────────────────────────────────── */
+
+/**
+ * The tester's own live-tenancy homes, as Portfolio draws them (James, 5 Oct
+ * 2026: "a dummy property on there so I can start receiving tickets").
+ *
+ * The home is an os_properties row (source 'test'), but the managed book is
+ * REX PM's list since 2 Oct, so it never reaches the book on its own - and must
+ * not, or every figure on the page would carry it. It is added at serve time,
+ * only for the tester who made it (or a person named in the kit's `viewers`),
+ * and is never counted: Portfolio leaves `test` rows out of every total.
+ */
+export async function testHomesFor(email: string | null | undefined): Promise<ManagedProperty[]> {
+  if (!email || !hasDb()) return [];
+  const kits = await q<{ id: string; refs: { contacts?: string[]; osPropertyId?: string }; by_name: string | null }>(
+    `SELECT id, refs, by_name FROM os_test_kits
+      WHERE cleared_at IS NULL AND refs ? 'osPropertyId'
+        AND (created_by = LOWER($1) OR refs->'viewers' ? LOWER($1))
+      ORDER BY created_at DESC`,
+    [email]
+  ).catch(() => []);
+  const out: ManagedProperty[] = [];
+  for (const k of kits) {
+    const pid = k.refs.osPropertyId!;
+    const [landlordId, tenantId] = k.refs.contacts ?? [];
+    const [prop, recs, people] = await Promise.all([
+      q<{ name: string; address: string; locality: string; postcode: string | null; town: string | null }>(
+        `SELECT name, address, locality, postcode, town FROM os_properties WHERE id = $1 AND active`,
+        [pid]
+      ).catch(() => []),
+      q<{ kind: Kind; payload: TestListing & TestDeal }>(`SELECT kind, payload FROM os_test_records WHERE kit_id = $1 ORDER BY created_at DESC`, [k.id]).catch(() => []),
+      q<{ id: string; mobile: string | null }>(`SELECT id, mobile FROM os_contacts WHERE id = ANY($1)`, [[landlordId, tenantId].filter(Boolean)]).catch(() => []),
+    ]);
+    const phone = (id: string | undefined) => people.find((c) => c.id === id)?.mobile?.trim() || null;
+    const home = prop[0];
+    if (!home) continue;
+    const listing = recs.find((r) => r.kind === "listing")?.payload ?? null;
+    const deal = recs.find((r) => r.kind === "deal")?.payload ?? null;
+    const rent = deal?.rent ?? listing?.rent ?? null;
+    out.push({
+      listingId: pid,
+      propertyId: pid,
+      name: home.name,
+      locality: home.locality ? `${home.locality} ${home.postcode ?? ""}`.trim() : home.postcode ?? "",
+      address: home.address,
+      town: home.town,
+      postcode: home.postcode,
+      lat: null,
+      lng: null,
+      rent,
+      rentPeriod: rent ? "month" : null,
+      rentMonthly: rent,
+      service: "Managed",
+      letType: "Long Term",
+      letSince: deal?.moveIn ?? null,
+      onBooksSince: listing?.publishedAt?.slice(0, 10) ?? null,
+      agent: deal ? { id: "", name: deal.agentName } : null,
+      landlord: listing ? { contactId: landlordId ?? "", name: listing.landlord.name, email: listing.landlord.email, phone: phone(landlordId) } : null,
+      tenants: deal ? [{ contactId: tenantId ?? "", name: deal.tenantName, email: deal.tenantEmail, phone: phone(tenantId) }] : [],
+      image: listing?.images[0] ?? null,
+      images: listing?.images ?? [],
+      epcExpiry: null,
+      epcRating: null,
+      onRex: false,
+      rexLet: false,
+      test: true,
+    });
+  }
+  return out;
 }
 
 /** Stages in order, with each one's state, for a deal at `stageKey`. */
