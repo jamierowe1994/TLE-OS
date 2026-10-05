@@ -5,6 +5,7 @@ import { matchProperty, pendingKeyFor, type MatchResult } from "@/lib/property-m
 import { listVault, type VaultFile } from "@/lib/vault";
 import { rexConfigured } from "@/lib/rex";
 import { osCertRows } from "@/lib/os-certs";
+import { isOsPropertyId } from "@/lib/os-properties";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { scopeFor } from "@/lib/scope";
 import { houseKeyOf, isRoomAddress } from "@/lib/address-parse";
@@ -108,7 +109,7 @@ export async function GET(req: NextRequest) {
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const propertyParam = (req.nextUrl.searchParams.get("property") ?? "").trim();
   const address = (req.nextUrl.searchParams.get("address") ?? "").trim();
-  const osOnly = /^pm-[0-9a-f-]+$/i.test(propertyParam);
+  const osOnly = isOsPropertyId(propertyParam);
   if (!/^\d+$/.test(propertyParam) && !osOnly && !address) return NextResponse.json({ ok: false, error: "Which property?" }, { status: 400 });
 
   let propertyId: string | null = /^\d+$/.test(propertyParam) || osOnly ? propertyParam : null;

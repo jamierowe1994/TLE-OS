@@ -449,7 +449,7 @@ type Me = { name: string; email: string; photo: string | null };
  *   - Profile: Appearance, Alerts on This Phone, Test Phone Alerts, Sign Out
  *   - Navigation Bar: pick the three icons beside the "+"
  */
-type View = "list" | "profile" | "nav";
+type View = "list" | "profile" | "nav" | "alerts";
 
 function PagesSheet({
   inApp,
@@ -520,7 +520,7 @@ function PagesSheet({
   };
 
   const row = "m-row flex h-[52px] w-full items-center gap-3 px-4 text-left text-[15.5px] active:bg-panel";
-  const title = view === "profile" ? "Profile" : view === "nav" ? "Navigation Bar" : "More";
+  const title = view === "profile" ? "Profile" : view === "nav" ? "Navigation Bar" : view === "alerts" ? "Phone Alerts" : "More";
   const offBar = MORE_ORDER.filter((id) => !bar.includes(id)).map(navDest);
   const showAlerts = alerts.state !== "unsupported" && alerts.state !== "app" && alerts.state !== "loading";
 
@@ -548,7 +548,7 @@ function PagesSheet({
         <div className="mb-4 flex items-center justify-between gap-3 px-1">
           <div className="flex min-w-0 items-center gap-2.5">
             {view !== "list" && (
-              <button type="button" onClick={() => setView("list")} aria-label="Back" className="m-round m-press">
+              <button type="button" onClick={() => setView(view === "alerts" ? "profile" : "list")} aria-label="Back" className="m-round m-press">
                 <svg viewBox="0 0 24 24" aria-hidden className="h-[18px] w-[18px]">
                   <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -644,6 +644,11 @@ function PagesSheet({
               <>
                 <p className="m-eyebrow mb-2 mt-5 px-1">Phone Alerts</p>
                 <div className="m-group">
+                  <button type="button" onClick={() => setView("alerts")} className={row}>
+                    <DoodleIcon name="setting" size={18} className="text-muted" />
+                    <span className="flex-1">Choose Your Alerts</span>
+                    <Chevron />
+                  </button>
                   {showAlerts && (
                     <button
                       type="button"
@@ -692,6 +697,7 @@ function PagesSheet({
         )}
 
         {view === "nav" && <NavPicker bar={bar} onBar={onBar} />}
+        {view === "alerts" && <AlertPicker />}
       </div>
     </div>
   );
@@ -781,6 +787,81 @@ function NavPicker({ bar, onBar }: { bar: NavId[]; onBar: (b: NavId[]) => void }
         <button type="button" onClick={() => onBar(NAV_DEFAULT)} className="m-btn m-press mt-4 w-full">
           Back to Home, People and Properties
         </button>
+      )}
+    </div>
+  );
+}
+
+type AlertRow = { key: string; label: string; what: string; rule: "off" | "on" | "always"; on: boolean };
+
+/**
+ * What buzzes this person's phone, one switch a kind (5 Oct 2026). James
+ * decides first in Admin > Phone Alerts: a kind he has switched off, or set
+ * always on, shows here as a fact rather than a switch.
+ */
+function AlertPicker() {
+  const [rows, setRows] = useState<AlertRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/push/prefs", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; types?: AlertRow[]; error?: string }) => (j.ok && j.types ? setRows(j.types) : setError(j.error ?? "Your alerts did not load.")))
+      .catch(() => setError("No connection."));
+  }, []);
+
+  const flip = async (r: AlertRow) => {
+    if (r.rule !== "on" || busy) return;
+    setBusy(r.key);
+    setError(null);
+    setRows((all) => all && all.map((x) => (x.key === r.key ? { ...x, on: !r.on } : x)));
+    const j = (await fetch("/api/push/prefs", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type: r.key, on: !r.on }),
+    })
+      .then((x) => x.json())
+      .catch(() => ({ ok: false, error: "No connection." }))) as { ok: boolean; types?: AlertRow[]; error?: string };
+    if (j.ok && j.types) setRows(j.types);
+    else {
+      setRows((all) => all && all.map((x) => (x.key === r.key ? { ...x, on: r.on } : x)));
+      setError(j.error ?? "That did not save.");
+    }
+    setBusy(null);
+  };
+
+  return (
+    <div key="alerts" className="m-layer" style={{ animation: "m-in 420ms cubic-bezier(0.22, 0.9, 0.3, 1) both" }}>
+      <p className="px-1 text-[14px] leading-snug text-muted">Pick what sends an alert to your phone. Everything still shows in your bell.</p>
+      {!rows && !error && (
+        <div className="mt-6 flex justify-center text-muted" aria-label="Loading">
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+        </div>
+      )}
+      {error && <p className="mt-3 px-1 text-[13.5px]" style={{ color: "var(--m-coral)" }}>{error}</p>}
+      {rows && (
+        <ul className="m-group mt-4">
+          {rows.map((r) => (
+            <li key={r.key} className="m-row">
+              <button
+                type="button"
+                onClick={() => flip(r)}
+                disabled={r.rule !== "on"}
+                aria-pressed={r.on}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-panel disabled:active:bg-transparent"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15.5px]">{r.label}</span>
+                  <span className="mt-0.5 block text-[13px] leading-snug text-muted">
+                    {r.rule === "off" ? "Switched off for everyone." : r.rule === "always" ? "Always on for everyone." : r.what}
+                  </span>
+                </span>
+                <Toggle on={r.on} busy={busy === r.key || r.rule !== "on"} />
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

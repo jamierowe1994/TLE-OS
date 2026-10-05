@@ -70,6 +70,8 @@ export interface ManagedProperty {
   ref?: string;
   /** "payprop" when REX holds no rent and this one is PayProp's, collected now (2 Oct 2026). */
   rentSource?: "payprop";
+  /** A tester's own live-tenancy home (lib/test-overlay): shown to them alone, never counted. */
+  test?: boolean;
 }
 
 export interface ManagedLandlord {

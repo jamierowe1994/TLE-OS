@@ -8,6 +8,8 @@ import { findUserById } from "@/lib/users";
 import { switchOn } from "@/lib/switches";
 import { appHref } from "@/lib/app-href";
 import { customerMessagesSince, focusUntil } from "@/lib/chats";
+import { alertRules, myAlerts, type Rules } from "@/lib/alert-prefs";
+import { alertTypeOf, wantsAlert } from "@/lib/alert-types";
 
 /**
  * The bell, in the agent's pocket (2 Oct 2026).
@@ -23,6 +25,11 @@ import { customerMessagesSince, focusUntil } from "@/lib/chats";
  * from the browser on an iPhone or an Android (lib/web-push).
  *
  * Behind the "phone_alerts" switch. A test to your own phone is not.
+ *
+ * What each phone is sent is filtered by kind (5 Oct 2026, lib/alert-types):
+ * James's rule for the kind, then the person's own choice in the app. The
+ * marker still moves past what was filtered out, so switching a kind back on
+ * never replays what it held back.
  */
 
 /** Either road is set up on this environment. */
@@ -131,12 +138,22 @@ export async function scanAndPush(): Promise<ScanReport> {
   report.armed = await switchOn("phone_alerts");
   if (!report.armed) return report;
 
+  /* Unreadable rules send nothing: a kind James switched off must not buzz
+     everybody because one read failed. */
+  let rules: Rules;
+  try {
+    rules = await alertRules();
+  } catch (e) {
+    return { ...report, ok: false, errors: [`Alert rules unreadable: ${e instanceof Error ? e.message : String(e)}`] };
+  }
+
   const owners = await q<{ user_id: string }>(`SELECT DISTINCT user_id FROM os_push_devices`);
   for (const { user_id } of owners) {
     try {
       const me = await findUserById(user_id);
       if (!me) continue;
       report.people++;
+      const mine = await myAlerts(user_id);
 
       /* What a landlord or tenant wrote them (Chats > Work): always sent, even
          in a Focus Hour. The first scan only sets the marker, as below. */
@@ -144,7 +161,8 @@ export async function scanAndPush(): Promise<ScanReport> {
       if (!msgMarker) await writeMarker(user_id, new Date().toISOString(), MSG_KEY);
       else {
         const msgs = await customerMessagesSince(me, msgMarker);
-        for (const m of msgs.slice(0, MAX_EACH)) {
+        const wanted = wantsAlert("customer_message", rules, mine) ? msgs : [];
+        for (const m of wanted.slice(0, MAX_EACH)) {
           const r = await pushTo(user_id, { title: m.title, body: m.body, href: m.href });
           report.sent += r.sent;
           report.errors.push(...r.failed);
@@ -163,8 +181,13 @@ export async function scanAndPush(): Promise<ScanReport> {
         report.started++;
         continue;
       }
-      const fresh = notices.filter((n) => n.at > marker);
-      if (!fresh.length) continue;
+      const arrived = notices.filter((n) => n.at > marker);
+      if (!arrived.length) continue;
+      const fresh = arrived.filter((n) => wantsAlert(alertTypeOf(n), rules, mine));
+      if (!fresh.length) {
+        await writeMarker(user_id, arrived[0]!.at);
+        continue;
+      }
       /* The badge is the bell's own unread count, so the two always agree. */
       const badge = seen ? notices.filter((n) => n.at > seen).length : notices.length;
       const each = fresh.length > MAX_EACH ? [] : fresh;
@@ -178,7 +201,7 @@ export async function scanAndPush(): Promise<ScanReport> {
         report.sent += r.sent;
         report.errors.push(...r.failed);
       }
-      await writeMarker(user_id, fresh[0]!.at);
+      await writeMarker(user_id, arrived[0]!.at);
     } catch (e) {
       report.errors.push(e instanceof Error ? e.message : String(e));
     }

@@ -8,7 +8,11 @@
 export function appHref(href: string | null | undefined): string {
   if (!href) return "/agent";
   if (href.startsWith("/agent")) return href;
-  if (href.startsWith("/leads")) return "/agent/leads?tab=all";
+  if (href.startsWith("/leads")) {
+    /* Straight into the one lead, as Scan ID's "Back to the Lead" does. */
+    const id = new URLSearchParams(href.split("?")[1] ?? "").get("open");
+    return id ? `/agent/leads?tab=all&lead=${encodeURIComponent(id)}` : "/agent/leads?tab=all";
+  }
   if (href.startsWith("/applications")) return "/agent/applications";
   if (href.startsWith("/listings")) return "/agent/properties";
   if (href.startsWith("/portfolio") || href.startsWith("/property-management")) return "/agent/properties";

@@ -104,7 +104,7 @@ const rowTo = (r: Row): OsProperty => ({
   serviceLevel: r.service_level === "managed" || r.service_level === "market_only" || r.service_level === "rent_collect" ? r.service_level : null,
 });
 
-export const isOsPropertyId = (id: string | null | undefined): boolean => /^pm-[0-9a-f-]+$/i.test(String(id ?? ""));
+export const isOsPropertyId = (id: string | null | undefined): boolean => /^pm-(test-)?[0-9a-f-]+$/i.test(String(id ?? ""));
 
 export async function listOsProperties(): Promise<OsProperty[]> {
   if (!hasDb()) return [];

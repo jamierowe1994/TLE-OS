@@ -229,6 +229,7 @@ function PropertyPanel({
     ? lets
       ? `${house.locality || "—"} · ${house.rooms.length} lets on record in REX${p.service ? ` · ${p.service}` : ""}`
       : `${house.locality || "—"} · shared house · ${house.rooms.length} ${house.rooms.length === 1 ? "room" : "rooms"}, ${letRooms.length} let${house.house?.service ? ` · ${house.house.service}` : ""}`
+    : p.test ? `${p.locality || "—"} · ${p.service ?? "Managed"} · test home, only you can see it`
     : `${p.locality || "—"}${p.onRex === false ? ` · ${p.service ?? "Managed"} in REX PM${p.ref ? ` (${p.ref})` : ""} · not on REX` : p.service ? ` · ${p.service}` : " · service not set in REX"}`;
 
   const tenantCard = (t: Party) => (
@@ -437,7 +438,9 @@ function PropertyPanel({
           </div>
 
           <div className="mt-6 flex flex-wrap items-center gap-2">
-            {p.onRex === false ? (
+            {p.test ? (
+              <span className="text-[11.5px] text-muted">A test home from your Test files - only you can see it, and it is never counted in the figures above.</span>
+            ) : p.onRex === false ? (
               <span className="text-[11.5px] text-muted">Not on REX: the OS is this home&apos;s record, brought over from REX PM.</span>
             ) : (
               <a
@@ -637,7 +640,8 @@ export default function Portfolio() {
         default: return byAddress(a, b);
       }
     });
-    return rows;
+    /* A tester's own test home sits at the top, whatever the order. */
+    return [...rows.filter((p) => p.test), ...rows.filter((p) => !p.test)];
   }, [book, q, service, agent, town, lookOnly, notOnRexOnly, sort, attention, certBy, summaryOf]);
 
   const filtering = Boolean(q.trim() || service || agent || town || lookOnly || notOnRexOnly);
@@ -676,7 +680,7 @@ export default function Portfolio() {
 
   /* Counted and added up on each home's latest let only (lib/current-lets);
      the list itself still shows every let. */
-  const filteredHomes = useMemo(() => currentLets(filtered), [filtered]);
+  const filteredHomes = useMemo(() => currentLets(filtered.filter((p) => !p.test)), [filtered]);
   const rentRoll = useMemo(() => filteredHomes.reduce((a, p) => a + (p.rentMonthly ?? 0), 0), [filteredHomes]);
   /* The list: a shared house once, in place of its first room. */
   const listRows = useMemo(() => {
@@ -854,7 +858,7 @@ export default function Portfolio() {
                         >
                           <PropertyPhoto src={p.image ?? house?.rooms.find((r) => r.image)?.image ?? null} alt="" className="h-11 w-14 rounded-lg object-cover" />
                           <span className="min-w-0">
-                            <span className="block truncate text-[13px]">{house ? house.name : p.name}</span>
+                            <span className="block truncate text-[13px]">{house ? house.name : p.name}{p.test && <span className="ml-1.5 text-[11px] font-semibold text-accent-dark md:hidden">Test</span>}</span>
                             <span className="block truncate text-[11px] text-muted">
                               {house ? `${house.locality} · ${house.kind === "lets" ? `${house.rooms.length} lets on record` : `${house.rooms.length} rooms, ${letRooms} let`}` : p.locality}
                               <span className="md:hidden">{landlord ? ` · ${landlord.name}` : ""}</span>
@@ -865,7 +869,7 @@ export default function Portfolio() {
                           </span>
                           <span className="hidden md:block">
                             {p.service ? <Pill tone={p.service === "Managed" ? "good" : "neutral"}>{p.service}</Pill> : <span className="text-[11px] text-muted">Not set</span>}
-                            {p.onRex === false && <Pill tone="accent">Not on REX</Pill>}
+                            {p.test ? <Pill tone="accent">Test</Pill> : p.onRex === false && <Pill tone="accent">Not on REX</Pill>}
                             {p.onRex !== false && p.rexLet === false && <Pill tone="neutral">Not let in REX</Pill>}
                           </span>
                           <span className="hidden min-w-0 truncate text-[12px] md:block">
