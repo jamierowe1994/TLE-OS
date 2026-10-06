@@ -151,6 +151,26 @@ export async function findPassportByEmail(email: string, agentId: string | null)
   return r ? { token: r.token, invitedAt: r.invited_at ? new Date(r.invited_at).toISOString() : null } : null;
 }
 
+/**
+ * The newest FINISHED passport for this email, whoever's it is.
+ *
+ * For the office (6 Oct 2026): Kirstie opens a lead from Passports done and
+ * the tenant's passport was minted against the agent, not her, so the
+ * per-agent lookup above found nothing and the drawer offered to send one.
+ * Read-only use only - minting and sending stay per agent.
+ */
+export async function findDonePassportByEmail(email: string): Promise<{ token: string; invitedAt: string | null } | null> {
+  if (!hasDb() || !email.trim()) return null;
+  const rows = await q<{ token: string; invited_at: string | Date | null }>(
+    `SELECT token, invited_at FROM os_tenant_passports
+      WHERE lower(email) = lower($1) AND contact_id IS DISTINCT FROM 'demo' AND submitted_at IS NOT NULL
+      ORDER BY submitted_at DESC LIMIT 1`,
+    [email.trim()]
+  );
+  const r = rows[0];
+  return r ? { token: r.token, invitedAt: r.invited_at ? new Date(r.invited_at).toISOString() : null } : null;
+}
+
 export const DEMO_CONTACT_ID = "demo";
 
 /** Throwaway passports only. Never returns a real tenant's row. */

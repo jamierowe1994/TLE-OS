@@ -21,6 +21,7 @@ import type { Notice } from "@/lib/notices";
 import type { Application } from "@/lib/applications";
 import type { OsListing } from "@/lib/rex-listings";
 import { useReportReady } from "@/lib/reveal";
+import { doneAgo, type DonePassport } from "@/lib/passports-done-shape";
 
 /**
  * The widget registry — every box the dashboard can hold.
@@ -1288,6 +1289,61 @@ function ApplicationsWidget({ w, h }: { w: number; h: number }) {
   );
 }
 
+/**
+ * Passports done: the tenants who have finished their passport, newest first
+ * (Kirstie, 6 Oct 2026 - no viewing is booked until it is in). Who, the home
+ * they asked about, and how long ago. A row opens that tenant's lead; the
+ * tile opens the whole list on Leads. Scoped like the lead board.
+ */
+const passportsSlot: Slot = { p: null };
+const PASSPORTS_LIST = "/leads?side=tenant&passports=done";
+function PassportsDoneWidget({ w, h }: { w: number; h: number }) {
+  const { data, loading, unlinked, error } = useShared<{ passports: DonePassport[] }>(
+    passportsSlot, "/api/tenant/passports/done?limit=8",
+    (j) => (j.ok && Array.isArray(j.passports) ? { passports: j.passports as DonePassport[] } : null)
+  );
+  const list = data?.passports ?? [];
+  const max = h >= 3 ? 8 : h >= 2 ? 6 : w >= 2 ? 2 : 1;
+  return (
+    <>
+      <Head icon="user" label="Passports Done" />
+      {loading ? (
+        <p className="mt-4 flex items-center gap-2 text-[11.5px] text-muted" role="status">
+          <span className="block h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+          Reading the passports…
+        </p>
+      ) : !data ? (
+        <p className="mt-4 text-[11.5px] leading-relaxed text-muted" role="alert">
+          {unlinked ? "Link your REX account to see your tenants' passports." : (error ?? "The passports didn't load.")}
+        </p>
+      ) : !list.length ? (
+        <p className="mt-4 text-[11.5px] leading-relaxed text-muted">
+          Nobody has finished their passport yet. They show here the moment they do.
+        </p>
+      ) : (
+        /* No count: the tile reads the newest few, and a number made from
+           those would be a number nobody measured. The full list is on Leads. */
+        <ul className="mt-3 space-y-2.5 overflow-hidden">
+          {list.slice(0, max).map((p) => (
+            <li key={p.id}>
+              <Link
+                href={p.leadId ? `${PASSPORTS_LIST}&open=${encodeURIComponent(p.leadId)}` : PASSPORTS_LIST}
+                className="flex items-baseline gap-2.5 text-[12px] transition-colors hover:text-accent-dark"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">{p.name}</span>
+                  <span className="block truncate text-[10.5px] text-muted">{p.homes[0] ?? "No home asked about yet"}</span>
+                </span>
+                <span className="shrink-0 text-[10px] text-muted">{doneAgo(p.submittedAt)}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
 export const WIDGETS: Record<string, WidgetDef> = {
   "leads-today": {
     label: "Leads today", icon: "pack/target", hint: "count → trend → the names themselves",
@@ -1497,6 +1553,14 @@ export const WIDGETS: Record<string, WidgetDef> = {
      one sign"; this answers the question an office actually asks on a
      Monday, which is who is still sitting on ours. A component rather than
      an inline renderer because it reads REX live and opens its own modal. ── */
+  "passports-done": {
+    label: "Passports Done", icon: "user", hint: "tenants ready to book - who, the home, how long ago",
+    href: PASSPORTS_LIST,
+    defaultW: 1, defaultH: 2,
+    sizes: { s: [1, 1], m: [1, 2], l: [2, 3] },
+    render: (w, h) => <PassportsDoneWidget w={w} h={h} />,
+  },
+
   "terms-outstanding": {
     label: "Terms to sign",
     icon: "file-contract",
@@ -1567,7 +1631,7 @@ export const DASH_TRAY_GROUPS = [
   { key: "performance", label: "Performance", icon: "trend-up", types: ["leads-today", "lead-sources", "pipeline", "earnings", "applications", "deal-moves"] },
   { key: "social", label: "Social & ads", icon: "megaphone", types: ["facebook-leads", "instagram-leads", "ads-live"] },
   { key: "book", label: "The book", icon: "folder", types: ["portfolio", "on-market", "occupancy", "recently-listed"] },
-  { key: "diary", label: "People & diary", icon: "calendar", types: ["diary", "today", "viewings-week", "attention"] },
+  { key: "diary", label: "People & diary", icon: "calendar", types: ["diary", "today", "viewings-week", "passports-done", "attention"] },
   { key: "management", label: "Management", icon: "setting", types: ["arrears", "maintenance", "renewals", "terms-outstanding"] },
   { key: "compliance", label: "Compliance", icon: "shield", types: ["compliance-due"] },
   { key: "news", label: "News", icon: "megaphone", types: ["news"] },

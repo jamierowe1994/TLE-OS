@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { publicOrigin } from "@/lib/origin";
-import { createPassport, findPassportByEmail, getPassport, markInvited } from "@/lib/passport";
+import { createPassport, findDonePassportByEmail, findPassportByEmail, getPassport, markInvited } from "@/lib/passport";
+import { can } from "@/lib/roles";
 import { householdIncome } from "@/lib/passport-shape";
 import { renderTleEmail } from "@/lib/email/tle-emails";
 import { sendAsAgent } from "@/lib/send-as-agent";
@@ -61,11 +62,20 @@ export async function GET(req: NextRequest) {
   const email = (req.nextUrl.searchParams.get("email") ?? "").trim();
   if (!email) return NextResponse.json({ ok: true, sent: false, path: null, invitedAt: null });
 
-  const existing = await findPassportByEmail(email, me.id).catch(() => null);
+  const own = await findPassportByEmail(email, me.id).catch(() => null);
+  /* The office sees every agent's tenants (Passports done on Leads), so a
+     tenant who finished an agent's passport shows as done to them too, rather
+     than offering to send a second one. Only a FINISHED one, and only here:
+     the POST still mints and sends per agent. */
+  const ownDone = own ? await getPassport(own.token).catch(() => null) : null;
+  const existing =
+    !ownDone?.submittedAt && can(me.role, "see:everything")
+      ? (await findDonePassportByEmail(email).catch(() => null)) ?? own
+      : own;
   /* Done or not, and what it says (11 Sep 2026): a finished passport shows
      on the lead as a tick, and its answers fill in the tenant's details, so
      the agent never re-asks what the tenant has already told us. */
-  const full = existing ? await getPassport(existing.token).catch(() => null) : null;
+  const full = existing ? (existing.token === ownDone?.token ? ownDone : await getPassport(existing.token).catch(() => null)) : null;
   const d = full?.data;
   const yes = (b: boolean | null | undefined) => (b == null ? null : b ? "Yes" : "No");
   const income = d ? householdIncome(d).total : null;
