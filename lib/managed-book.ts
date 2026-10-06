@@ -229,6 +229,28 @@ function countsOf(all: ManagedProperty[], landlords: ManagedLandlord[]): Managed
 }
 
 /**
+ * The REX properties one user owns (system_owner_user). Ids only, paged.
+ * Thrown on a refusal, like the book itself: a short list would quietly drop
+ * an agent's homes.
+ */
+async function propertiesOwnedBy(rexUserId: string): Promise<Set<string>> {
+  const ids = new Set<string>();
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const res = await rexCall("Properties", "search", {
+      criteria: [{ name: "system_owner_user_id", value: rexUserId }],
+      limit: PAGE,
+      offset: page * PAGE,
+      result_format: "ids",
+    });
+    if (!res.ok) throw new Error(res.error ?? `REX refused the owned homes (HTTP ${res.status}).`);
+    const batch = rexRows(res.result) as unknown[];
+    for (const id of batch) ids.add(String(id));
+    if (batch.length < PAGE) break;
+  }
+  return ids;
+}
+
+/**
  * The whole managed book, or one agent's slice of it.
  *
  * MULTI-TENANT: `rexUserId` narrows at REX, on listing_agent_1_id, so another
@@ -285,13 +307,17 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
     const who = sitting.get(p.propertyId);
     if (who) p.tenants = who.people.map((t: Party) => ({ contactId: t.contactId, name: t.name, email: t.email, phone: t.phone }));
   }
-  /* Homes REX CRM has no property for (6 Sep 2026): the OS holds them so
-     the managed book reads like REX PM's. Only for the whole-business view;
-     an agent's own book stays REX's, since these carry no agent. */
-  if (!rexUserId) {
+  /* Homes REX CRM has no letting for (6 Sep 2026): the OS holds them so
+     the managed book reads like REX PM's. The whole business gets every one.
+     An agent gets the ones whose REX property they own (6 Oct 2026): 6 Ruskin
+     Place had no REX listing, so moving it to Lianna in REX changed nothing -
+     the agent's book only ever read listing_agent_1. */
+  {
     const have = new Set(properties.map((p) => String(p.propertyId ?? "")));
     /* Not caught: see activeOsProperties - an empty set is not an answer. */
-    const extra: OsProperty[] = pm ?? (await activeOsProperties());
+    const all: OsProperty[] = pm ?? (await activeOsProperties());
+    const owned = rexUserId ? await propertiesOwnedBy(rexUserId) : null;
+    const extra = owned ? all.filter((o) => o.rexPropertyId && owned.has(o.rexPropertyId)) : all;
     for (const o of extra) {
       /* Already in REX's let book: nothing to add. Linked to a REX property
          REX does not mark as let (84 of them, 6 Sep): the home is managed in
