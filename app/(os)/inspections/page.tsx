@@ -65,6 +65,9 @@ const readWhen = (iso: string) => {
 };
 const stamp = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
 const forInput = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+/** The London day of a stored date, as a date box wants it (YYYY-MM-DD). */
+const dayInput = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString("en-CA", { timeZone: "Europe/London" }) : "");
+const todayInput = () => forInput(new Date()).slice(0, 10);
 
 /** What the row says to do next. The visit's next thing, not its status. */
 function nextFor(i: Inspection): { text: string; hot: boolean } {
@@ -130,7 +133,12 @@ export default function Inspections() {
   const due = useMemo(() => (data?.due ?? []).filter((d) => match(`${d.propertyName} ${d.locality} ${d.tenant} ${d.landlord}`)), [data, needle]);
   const s = data?.summary ?? null;
 
-  async function raise(d: DueVisit) {
+  /* `newDue` (6 Oct 2026): the due date changed from the Due list. The visit
+     is raised on the date it came with, then moved through the same edit as
+     the sheet's own "Change due date", so the timeline says who moved it,
+     from what, to what and why. A raised visit is never recomputed or
+     re-imported, so the date stays where it was put. */
+  async function raise(d: DueVisit, newDue?: { day: string; note: string }): Promise<boolean> {
     const r = await fetch("/api/inspections", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -140,10 +148,22 @@ export default function Inspections() {
         tenancyStart: d.tenancyStart, dueAt: d.dueAt, osPropertyId: d.osPropertyId ?? null, rexpmTaskId: d.taskId ?? null,
       }),
     }).then((x) => x.json()).catch(() => null);
-    if (!r?.ok) return setError(r?.error ?? "Could not raise it.");
+    if (!r?.ok) { setError(r?.error ?? "Could not raise it."); return false; }
+    if (newDue) {
+      const e = await fetch(`/api/inspections/${r.inspection.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "edit", patch: { dueAt: newDue.day }, note: newDue.note }),
+      }).then((x) => x.json()).catch(() => null);
+      if (!e?.ok) setError(e?.error ?? "Raised, but the new due date didn't save. Open it from In hand and change it there.");
+      load();
+      setTab("hand");
+      return Boolean(e?.ok);
+    }
     load();
     setTab("hand");
     setOpenId(r.inspection.id);
+    return true;
   }
 
   return (
@@ -229,23 +249,7 @@ export default function Inspections() {
           <section className="mt-4 rounded-[22px] border border-line/50 bg-white p-5">
             <ul className="divide-y divide-line/50">
               {due.map((d) => (
-                <li key={d.key} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 py-3 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
-                  <span className="min-w-0">
-                    <span className="hand block truncate text-[13.5px]">{d.propertyName}</span>
-                    <span className="block truncate text-[10.5px] text-muted">{d.locality}{d.tenant ? ` · ${d.tenant}` : " · no tenant on the listing"}</span>
-                  </span>
-                  <span className="col-start-1 flex items-center gap-1.5 md:col-start-auto">
-                    <Pill tone="neutral">{kindLabel(d.kind)}</Pill>
-                  </span>
-                  <span className={`col-start-1 text-[12px] md:col-start-auto ${d.daysAway < 0 ? "font-semibold text-accent-dark" : "text-muted"}`}>
-                    {d.daysAway < 0 ? `${Math.abs(d.daysAway)} day${d.daysAway === -1 ? "" : "s"} over` : d.daysAway === 0 ? "Due today" : `Due ${day(d.dueAt)}`} · {d.why}
-                    {d.managedBy ? <span className="block text-[10.5px] font-normal text-muted">With {d.managedBy}</span> : null}
-                  </span>
-                  {/* Raises it and opens it on the booking form (3 Oct 2026). */}
-                  <PressButton onClick={() => void raise(d)} className="rounded-full bg-ink px-4 py-2 text-[12px] font-semibold text-page">
-                    Book it
-                  </PressButton>
-                </li>
+                <DueRow key={d.key} d={d} onBook={() => void raise(d)} onMoveDue={(day, note) => raise(d, { day, note })} />
               ))}
             </ul>
           </section>
@@ -256,6 +260,128 @@ export default function Inspections() {
 
       {openId && <Sheet id={openId} team={data?.team ?? []} me={data?.me ?? null} onClose={() => setOpenId(null)} onChanged={load} />}
     </>
+  );
+}
+
+/** One home on the Due list: book it, or change when it is due. */
+function DueRow({ d, onBook, onMoveDue }: { d: DueVisit; onBook: () => void; onMoveDue: (day: string, note: string) => Promise<boolean> }) {
+  const [editing, setEditing] = useState(false);
+  return (
+                <li className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 py-3 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+                  <span className="min-w-0">
+                    <span className="hand block truncate text-[13.5px]">{d.propertyName}</span>
+                    <span className="block truncate text-[10.5px] text-muted">{d.locality}{d.tenant ? ` · ${d.tenant}` : " · no tenant on the listing"}</span>
+                  </span>
+                  <span className="col-start-1 flex items-center gap-1.5 md:col-start-auto">
+                    <Pill tone="neutral">{kindLabel(d.kind)}</Pill>
+                  </span>
+                  <span className={`col-start-1 text-[12px] md:col-start-auto ${d.daysAway < 0 ? "font-semibold text-accent-dark" : "text-muted"}`}>
+                    {d.daysAway < 0 ? `${Math.abs(d.daysAway)} day${d.daysAway === -1 ? "" : "s"} over` : d.daysAway === 0 ? "Due today" : `Due ${day(d.dueAt)}`} · {d.why}
+                    {d.managedBy ? <span className="block text-[10.5px] font-normal text-muted">With {d.managedBy}</span> : null}
+                    {!editing && (
+                      <button type="button" onClick={() => setEditing(true)} className="block text-[11px] font-normal text-muted underline">
+                        Change due date
+                      </button>
+                    )}
+                  </span>
+                  {/* Raises it and opens it on the booking form (3 Oct 2026). */}
+                  <PressButton onClick={onBook} className="rounded-full bg-ink px-4 py-2 text-[12px] font-semibold text-page">
+                    Book it
+                  </PressButton>
+                  {editing && (
+                    <div className="col-span-full">
+                      <DueDateForm
+                        current={d.dueAt}
+                        hint="Saving puts this visit In hand with the new date, so it no longer follows the old system or the cadence."
+                        onSave={onMoveDue}
+                        onDone={() => setEditing(false)}
+                      />
+                    </div>
+                  )}
+                </li>
+  );
+}
+
+/**
+ * Change when a visit is due (6 Oct 2026). The team stopped moving dates in
+ * the old system and moves them here instead; the date is kept on the visit,
+ * and the timeline says who moved it, from what, and why.
+ */
+function DueDateForm({ current, hint, onSave, onDone }: { current: string | null; hint?: string; onSave: (day: string, note: string) => Promise<boolean>; onDone: () => void }) {
+  const [value, setValue] = useState(dayInput(current));
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const unchanged = !value || value === dayInput(current);
+  return (
+    <div className="mt-2 rounded-xl bg-accent-soft/30 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="text-[12px] text-muted" htmlFor={`due-${current ?? "new"}`}>New due date</label>
+        <input
+          id={`due-${current ?? "new"}`}
+          type="date"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="rounded-xl border border-line/80 bg-page px-3 py-1.5 text-[13px]"
+        />
+      </div>
+      <input
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        maxLength={200}
+        placeholder="Why, if it helps - tenant away, landlord asked… (optional)"
+        className="mt-2 w-full rounded-xl border border-line/80 bg-page px-3 py-1.5 text-[12.5px]"
+      />
+      {hint && <p className="mt-1.5 text-[11px] text-muted">{hint}</p>}
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        <PressButton
+          disabled={saving || unchanged}
+          onClick={async () => {
+            setSaving(true);
+            const ok = await onSave(value, note.trim());
+            setSaving(false);
+            if (ok) onDone();
+          }}
+          className="rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page"
+        >
+          {saving ? "Saving…" : "Save"}
+        </PressButton>
+        <button type="button" onClick={onDone} className="text-[11.5px] text-muted underline">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Record the visit, on the day it was actually done (6 Oct 2026). Today unless
+ * changed, and never a day still to come.
+ */
+function VisitedForm({ busy, label, onSave }: { busy: boolean; label: string; onSave: (at: string | undefined) => void }) {
+  const today = todayInput();
+  const [value, setValue] = useState(today);
+  const future = Boolean(value) && value > today;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <label className="flex items-center gap-2 text-[12px] text-muted">
+        Done on
+        <input
+          type="date"
+          value={value}
+          max={today}
+          onChange={(e) => setValue(e.target.value)}
+          className="rounded-xl border border-line/80 bg-page px-3 py-1.5 text-[13px] text-ink"
+        />
+      </label>
+      <PressButton
+        disabled={busy || !value || future}
+        /* Today is "now", so the time is right; an earlier day is recorded at
+           midday, which keeps it on that day whatever the clocks are doing. */
+        onClick={() => onSave(value === today ? undefined : new Date(`${value}T12:00:00`).toISOString())}
+        className="rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page"
+      >
+        {label}
+      </PressButton>
+      {future && <span className="w-full text-[11px] text-accent-dark">A visit can&apos;t be done on a day that hasn&apos;t happened yet.</span>}
+    </div>
   );
 }
 
@@ -357,6 +483,7 @@ function Sheet({ id, team, me, onClose, onChanged }: { id: string; team: Person[
                 <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">{kindLabel(i.kind)} · #{i.ref}</p>
                 <h2 className="hand mt-1 truncate text-[22px]">{i.propertyName}</h2>
                 <p className="text-[11.5px] text-muted">{i.locality}{i.tenant ? ` · ${i.tenant}` : ""}{i.landlord ? ` · landlord ${i.landlord}` : ""}</p>
+                <DueLine inspection={i} busy={busy} onMove={move} />
                 {/* Only once it has been written up. Printing a visit that has
                     not happened produces a sheet saying "Not recorded" under
                     every heading, which looks like a broken report rather than
@@ -474,6 +601,38 @@ function Sheet({ id, team, me, onClose, onChanged }: { id: string; team: Person[
   );
 }
 
+/**
+ * When the visit is due, and the control that moves it. Shown until it has
+ * been done - after that the next one is worked out from the visit itself.
+ */
+function DueLine({ inspection: i, busy, onMove }: { inspection: Inspection; busy: boolean; onMove: Move }) {
+  const [editing, setEditing] = useState(false);
+  const movable = !i.visitedAt && ["due", "arranging", "booked", "no_access"].includes(i.status);
+  if (!i.dueAt && !movable) return null;
+  const late = i.dueAt ? new Date(i.dueAt).getTime() < Date.now() : false;
+  return (
+    <div className="mt-1">
+      <p className="text-[11.5px]">
+        <span className={late && movable ? "font-semibold text-accent-dark" : "text-muted"}>
+          {i.dueAt ? `Due ${new Date(i.dueAt).toLocaleDateString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric" })}` : "No due date"}
+        </span>
+        {movable && !editing && (
+          <button type="button" disabled={busy} onClick={() => setEditing(true)} className="ml-2 text-[11.5px] text-muted underline">
+            Change due date
+          </button>
+        )}
+      </p>
+      {editing && (
+        <DueDateForm
+          current={i.dueAt}
+          onSave={(day, note) => onMove({ action: "edit", patch: { dueAt: day }, note }, "Due date")}
+          onDone={() => setEditing(false)}
+        />
+      )}
+    </div>
+  );
+}
+
 const Row = ({ k, v }: { k: string; v: string }) => (
   <div className="flex gap-3">
     <dt className="w-32 shrink-0 text-muted">{k}</dt>
@@ -516,6 +675,26 @@ function Now({
   const ghost = "rounded-full border border-line/80 px-5 py-2.5 text-[13px] font-semibold";
   const first = (inspection.tenant || "the tenant").split(/\s+/)[0];
   const book = (label?: string) => <BookForm inspection={inspection} team={team} me={me} busy={busy} onMove={onMove} onDone={() => setMoving(false)} submitLabel={label} />;
+  const recordVisited = async (at: string | undefined) => {
+    if (await onMove({ action: "visited", at, inspector: inspection.inspector || me?.name || "" }, "Visit")) onRecord("checks");
+  };
+  /* Already been (6 Oct 2026): a visit made before it was booked here - the
+     team moving across from the old system - is recorded on its real day
+     without inventing a booking first. */
+  const [already, setAlready] = useState(false);
+  const alreadyBeen = (
+    <div className="mt-4 border-t border-line/50 pt-3">
+      {already ? (
+        <>
+          <p className="mb-2 text-[12px] text-muted">Already been? Record it on the day it was done.</p>
+          <VisitedForm busy={busy} label="Record it as done" onSave={(at) => void recordVisited(at)} />
+          <button type="button" onClick={() => setAlready(false)} className="mt-2 text-[11.5px] text-muted underline">Cancel</button>
+        </>
+      ) : (
+        <button type="button" onClick={() => setAlready(true)} className="text-[11.5px] text-muted underline">Already been? Record the visit</button>
+      )}
+    </div>
+  );
 
   /* Moving a booked visit: the same form, the same diary entry moved. */
   if (moving) {
@@ -574,6 +753,7 @@ function Now({
               </div>
             </>
           )}
+          {alreadyBeen}
         </>
       );
     case "await_access":
@@ -585,10 +765,16 @@ function Now({
             <PressButton disabled={busy} onClick={() => onMove({ action: "access_reply", reply: "other_time", note: "Asked for another time on the phone." })} className={ghost}>They want another time</PressButton>
           </div>
           <button type="button" onClick={() => setMoving(true)} className="mt-3 text-[11.5px] text-muted underline">Book a time instead</button>
+          {alreadyBeen}
         </>
       );
     case "book":
-      return book();
+      return (
+        <>
+          {book()}
+          {alreadyBeen}
+        </>
+      );
     case "confirm":
       return (
         <>
@@ -603,6 +789,7 @@ function Now({
             {!inspection.landlordToldAt && <PressButton disabled={busy} onClick={() => onMove({ action: "tell_landlord" })} className={ghost}>Tell the landlord too</PressButton>}
             <button type="button" onClick={() => setMoving(true)} className="text-[12px] text-muted underline">Change the time</button>
           </div>
+          {alreadyBeen}
         </>
       );
     case "visit": {
@@ -621,16 +808,8 @@ function Now({
               ? `${first} confirmed the time works${inspection.tenantAckNote ? `: "${inspection.tenantAckNote}"` : "."}`
               : `${first} hasn't pressed "That time works" yet. Worth a ring the day before.`}
           </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <PressButton
-              disabled={busy}
-              onClick={async () => {
-                if (await onMove({ action: "visited", inspector: inspection.inspector || me?.name || "" }, "Visit")) onRecord("checks");
-              }}
-              className={btn}
-            >
-              Record the visit
-            </PressButton>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <VisitedForm busy={busy} label="Record the visit" onSave={(at) => void recordVisited(at)} />
             <PressButton disabled={busy} onClick={() => setNoAccess((x) => !x)} className={ghost}>Couldn&apos;t get in</PressButton>
           </div>
           {noAccess && (

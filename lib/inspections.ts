@@ -466,6 +466,8 @@ export type Move =
   | { action: "checks"; checks: Checks }
   | { action: "confirm" }
   | { action: "tell_landlord" }
+  /* `at` is the day it was actually done (6 Oct 2026): a visit made last
+     week and recorded today is dated last week, never in the future. */
   | { action: "visited"; at?: string; inspector?: string }
   | { action: "no_access"; reason: string }
   | { action: "report"; condition: Condition; summary: string }
@@ -473,11 +475,28 @@ export type Move =
   | { action: "close" }
   | { action: "cancel"; reason: string }
   | { action: "reopen" }
-  | { action: "edit"; patch: Partial<NewInspection> }
+  /* `note` is the optional why, written on the timeline beside a changed due date. */
+  | { action: "edit"; patch: Partial<NewInspection>; note?: string }
   | { action: "note"; text: string }
   | { action: "file"; file: { key: string; name: string; type: string } };
 
 const setStatus = (status: Status) => status;
+
+const ukDay = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric" });
+
+/**
+ * A due date typed on the screen (6 Oct 2026). A bare day - what a date box
+ * gives - means the END of that day on the London clock, the way the REX PM
+ * tasks are read in dueFromTasks: due on the 20th is not late until the 21st.
+ * Midnight UTC would have made it late an hour into its own day in summer.
+ */
+export function dueAtFromInput(v: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v.trim());
+  if (m) return new Date(londonTime(Number(m[1]), Number(m[2]), Number(m[3]), 23, 59).getTime() + 59_999).toISOString();
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) throw new Error("That isn't a date.");
+  return d.toISOString();
+}
 
 export async function moveInspection(id: string, move: Move, by: string): Promise<Inspection> {
   if (!hasDb()) throw new Error("No database on this environment.");
@@ -555,11 +574,22 @@ export async function moveInspection(id: string, move: Move, by: string): Promis
       args = [id];
       line = "The landlord was told the visit is happening.";
       break;
-    case "visited":
+    case "visited": {
+      /* The day it was really done. Not in the future - a visit is recorded
+         after it happens - and five minutes' grace for a phone's clock. */
+      let at: string | null = null;
+      if (move.at) {
+        const d = new Date(move.at);
+        if (Number.isNaN(d.getTime())) throw new Error("That isn't a date.");
+        if (d.getTime() > Date.now() + 5 * 60_000) throw new Error("A visit can't be recorded as done on a day that hasn't happened yet.");
+        at = d.toISOString();
+      }
       sql = `UPDATE os_inspections SET status = $2, visited_at = COALESCE($3::timestamptz, NOW()), inspector = COALESCE(NULLIF($4, ''), inspector), no_access_at = NULL, updated_at = NOW() WHERE id = $1 RETURNING *`;
-      args = [id, setStatus("visited"), move.at ?? null, (move.inspector ?? "").trim()];
-      line = `Visited${move.inspector ? ` by ${move.inspector}` : ` by ${by}`}.`;
+      args = [id, setStatus("visited"), at, (move.inspector ?? "").trim()];
+      const earlier = at && londonDayOffset(at, now) < 0;
+      line = `Visited${earlier ? ` on ${ukDay(at!)}` : ""}${move.inspector ? ` by ${move.inspector}` : ` by ${by}`}.`;
       break;
+    }
     case "no_access":
       sql = `UPDATE os_inspections SET status = $2, no_access_at = NOW(), no_access_reason = $3, booked_at = NULL, tenant_confirmed_at = NULL, updated_at = NOW() WHERE id = $1 RETURNING *`;
       args = [id, setStatus("no_access"), move.reason.trim()];
@@ -591,7 +621,8 @@ export async function moveInspection(id: string, move: Move, by: string): Promis
       line = "Reopened.";
       break;
     case "edit": {
-      const p = move.patch ?? {};
+      const p = { ...(move.patch ?? {}) };
+      if (p.dueAt) p.dueAt = dueAtFromInput(p.dueAt);
       sql = `UPDATE os_inspections SET
                property_name = COALESCE(NULLIF($2, ''), property_name),
                locality      = COALESCE(NULLIF($3, ''), locality),
@@ -609,7 +640,17 @@ export async function moveInspection(id: string, move: Move, by: string): Promis
       args = [id, (p.propertyName ?? "").trim(), (p.locality ?? "").trim(), (p.landlord ?? "").trim(), (p.landlordEmail ?? "").trim(),
         (p.tenant ?? "").trim(), (p.tenantEmail ?? "").trim(), (p.tenantPhone ?? "").trim(), p.dueAt ?? null, p.tenancyStart ?? null,
         (p.accessMethod ?? "") as string, p.noticeHours ?? null];
-      line = "Details edited.";
+      /* A due date changed by hand says what it was, what it is now and why,
+         under the person's name - the old system's date can be argued with
+         later, so the record of who moved it matters. */
+      const was = found.inspection.dueAt;
+      const dueMoved = Boolean(p.dueAt && p.dueAt !== was);
+      const others = Object.entries(p).some(([k, v]) => k !== "dueAt" && v !== undefined && v !== null && v !== "");
+      const why = (move.note ?? "").trim();
+      line = [
+        dueMoved ? `Due date changed${was ? ` from ${ukDay(was)}` : ""} to ${ukDay(p.dueAt!)}.${why ? ` "${why}"` : ""}` : "",
+        others || !dueMoved ? "Details edited." : "",
+      ].filter(Boolean).join(" ");
       break;
     }
     case "note":
