@@ -62,12 +62,8 @@ type Listing = {
   propertyId?: string | null;
 };
 
-/* What the booker's own Starts and Length boxes offer: the grid's whole
-   window in quarter hours, and up to the four hours a drag allows. */
-const START_TIMES = Array.from({ length: (22 - 6) * 4 }, (_, i) => {
-  const m = 6 * 60 + i * 15;
-  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-});
+/* What the booker's own Length box offers: up to the four hours a drag
+   allows. Starts is typed to the minute. */
 const LENGTHS = Array.from({ length: 16 }, (_, i) => (i + 1) * 15);
 
 function lengthWords(n: number): string {
@@ -1096,15 +1092,19 @@ export default function ViewingBooker({
         </label>
         <label className="flex min-w-0 flex-col gap-1 text-[11px] text-muted">
           Starts
-          <select
+          {/* Typed to the minute (6 Oct 2026): an agent booking 12:10 could
+              not, because this was a quarter-hour list. Clicking and dragging
+              on the diary still lands on the quarter hours. */}
+          <input
+            type="time"
+            step={60}
             value={slot}
-            onChange={(e) => setSlot(e.target.value)}
+            onChange={(e) => {
+              /* Blank while a digit is half typed: keep the last whole time. */
+              if (/^\d{2}:\d{2}$/.test(e.target.value)) setSlot(e.target.value);
+            }}
             className="figures w-full min-w-0 rounded-lg border border-line/80 bg-card px-2.5 py-2 text-[13px] text-ink"
-          >
-            {(START_TIMES.includes(slot) ? START_TIMES : [...START_TIMES, slot].sort()).map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
+          />
         </label>
         <label className="flex min-w-0 flex-col gap-1 text-[11px] text-muted">
           Length
