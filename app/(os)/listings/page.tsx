@@ -67,6 +67,7 @@ type SampleListing = {
   archivedSince?: string | null;
   archiveAgeDays?: number | null;
   lastUpdated: string | null;
+  modifiedAt?: string | null;
   imageCount: number;
   image: string | null;
   serviceType?: string | null;
@@ -171,6 +172,7 @@ const RENT_BANDS = [
 ];
 
 const SORTS = [
+  { id: "activity", label: "Latest activity" },
   { id: "recent", label: "Most recent" },
   { id: "rent-low", label: "Rent - low to high" },
   { id: "rent-high", label: "Rent - high to low" },
@@ -383,6 +385,27 @@ export default function Listings() {
   const [adding, setAdding] = useState(false);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<string | null>(null);
+  /* Latest activity (James, 6 Oct 2026): the listing somebody last did
+     something on comes first - an offer accepted, a viewing booked, an edit.
+     The order lives in /api/activity, read when the button is first pressed. */
+  const [activityAt, setActivityAt] = useState<Record<string, string> | null>(null);
+  /* Listings whose offer has been accepted: handed to Applications, so they
+     read as let agreed here and leave All listings (6 Oct 2026). */
+  const [accepted, setAccepted] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    let live = true;
+    fetch("/api/activity", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!live || !d.ok) return;
+        setActivityAt(d.listings ?? {});
+        setAccepted(new Set<string>(d.accepted ?? []));
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
   const [rentBand, setRentBand] = useState<string | null>(null);
   const [loc, setLoc] = useState<string | null>(null);
   /* Available used to be a switch of its own, because it answers the one
@@ -529,7 +552,10 @@ export default function Listings() {
     }
   }, []);
 
-  const LISTINGS = book.listings;
+  const LISTINGS = useMemo(
+    () => (accepted.size ? book.listings.map((l) => (!l.letAgreed && accepted.has(String(l.id)) ? { ...l, letAgreed: true } : l)) : book.listings),
+    [book.listings, accepted]
+  );
   /* The working book: everything the cap has not put away. Defined once, and
      every tab but Archived reads from it - so a cold draft cannot reappear in
      All listings, Missing photos or Needs compliance by the back door. */
@@ -603,21 +629,31 @@ export default function Listings() {
         if (l.epcExpiry != null) return false;
       } else if (stage === "archived") {
         /* The source IS the archive - there is no status left to test. */
-      } else if (stage !== "all" && statusOf(l).label !== stage) return false;
+      } else if (stage === "all") {
+        /* Let agreed is Applications' work now; it keeps its own tab. */
+        if (statusOf(l).label === "Let agreed") return false;
+      } else if (statusOf(l).label !== stage) return false;
       if (!listedIn(l.publishedAt, period)) return false;
       return true;
     });
     // Most recent is the resting order (REX's own lastUpdated already leads);
     // the rent sorts rearrange on request.
     const monthly = (l: SampleListing) => l.rentMonthly ?? l.rent;
-    if (sort === "rent-low") rows.sort((a, b) => (monthly(a) ?? 1e9) - (monthly(b) ?? 1e9));
+    if (sort === "activity") {
+      const at = (l: SampleListing) => {
+        const ours = activityAt?.[String(l.id)] ?? "";
+        const rex = l.modifiedAt ?? "";
+        return ours > rex ? ours : rex;
+      };
+      rows.sort((a, b) => at(b).localeCompare(at(a)));
+    } else if (sort === "rent-low") rows.sort((a, b) => (monthly(a) ?? 1e9) - (monthly(b) ?? 1e9));
     else if (sort === "rent-high") rows.sort((a, b) => (monthly(b) ?? 0) - (monthly(a) ?? 0));
     /* The archive arrives in REX's modtime order, which on this data is a
        bulk sync rather than anything meaningful (see lib/listing-archive.ts).
        Most-recently-cold first is the order somebody scanning it wants. */
     else if (stage === "archived") rows.sort((a, b) => (b.archivedSince ?? "").localeCompare(a.archivedSince ?? ""));
     return rows;
-  }, [WORKING, archive.listings, q, sort, rentBand, loc, stage, period]);
+  }, [WORKING, archive.listings, q, sort, rentBand, loc, stage, period, activityAt]);
 
   /* ── READY TO PUBLISH, ON THE PUSH ROUTE'S OWN WORD (17 Sep 2026) ───────
      The book cannot see council tax, bills, furnishing or key features, so a
@@ -725,7 +761,7 @@ export default function Listings() {
         onChange={setStage}
         flow={false}
         stages={[
-          { id: "all" as const, label: "All listings", icon: "analytics", count: WORKING.length, blurb: "Everything on the rental book that is still moving" },
+          { id: "all" as const, label: "All listings", icon: "analytics", count: WORKING.length - (byStage["Let agreed"] ?? 0), blurb: "Everything still being marketed. Let agreed has its own tab" },
           { id: "Available" as const, label: "Available", icon: "home", count: byStage.Available, blurb: "Published, and not let agreed - what you can put somebody in now" },
           { id: "Let agreed" as const, label: "Let agreed", icon: "key", count: byStage["Let agreed"], blurb: "Taken, and working through to a tenancy" },
           { id: "Draft" as const, label: "Draft", icon: "doc", count: byStage.Draft, blurb: `Not on the portals yet - drafted in the last ${Math.round(ARCHIVE_AFTER_DAYS / 30)} months` },
@@ -738,7 +774,17 @@ export default function Listings() {
           { id: "archived" as const, label: "Archived", icon: "folder", count: archivedKnown, blurb: `${archivedInBook} cold drafts from the book, plus every listing that came off without a tenant` },
         ]}
       />
-          <div className="ml-auto mt-4">
+          <div className="ml-auto mt-4 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSort((s) => (s === "activity" ? null : "activity"))}
+              aria-pressed={sort === "activity"}
+              className={`rounded-full border px-3.5 py-1.5 text-[13px] transition ${
+                sort === "activity" ? "border-ink bg-ink text-white" : "border-line bg-white text-ink hover:border-accent hover:bg-accent-soft"
+              }`}
+            >
+              Activity
+            </button>
             <FilterPanel
               active={[sort, rentBand, loc].filter(Boolean).length + (period === "any" ? 0 : 1)}
               onClear={() => { setSort(null); setRentBand(null); setLoc(null); setPeriod("any"); }}

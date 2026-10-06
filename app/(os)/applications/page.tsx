@@ -234,8 +234,24 @@ export default function Applications() {
   const all = apps ?? [];
   const agents = useMemo(() => [...new Set(all.map((a) => a.agent).filter((x): x is string => Boolean(x)))].sort(), [all]);
   const mine = useMemo(() => (fAgent ? all.filter((a) => a.agent === fAgent) : all), [all, fAgent]);
-  const rows = useMemo(
-    () =>
+  /* Latest activity (James, 6 Oct 2026): the application somebody last did
+     something on comes first - accepted, a comment, the PLC pack moving -
+     rather than the newest created. Read when the button is first pressed. */
+  const [byActivity, setByActivity] = useState(false);
+  const [activityAt, setActivityAt] = useState<Record<string, string> | null>(null);
+  useEffect(() => {
+    if (!byActivity || activityAt) return;
+    let live = true;
+    fetch("/api/activity", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => live && d.ok && setActivityAt(d.applications ?? {}))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [byActivity, activityAt]);
+  const rows = useMemo(() => {
+    const picked =
       stage === "open"
         ? mine.filter(isOpen)
         : stage === "attention"
@@ -244,10 +260,16 @@ export default function Applications() {
             ? mine.filter((a) => a.closed)
             : stage === "unsuccessful"
               ? mine.filter((a) => a.status === stage)
-              : mine.filter((a) => a.status === stage && !a.closed),
-    [mine, stage]
-  );
-  useEffect(() => { setPage(0); }, [stage, fAgent]);
+              : mine.filter((a) => a.status === stage && !a.closed);
+    if (!byActivity) return picked;
+    const at = (a: Application) => {
+      const ours = activityAt?.[String(a.id)] ?? "";
+      const rex = a.updatedAt ? new Date(a.updatedAt * 1000).toISOString() : "";
+      return ours > rex ? ours : rex;
+    };
+    return [...picked].sort((a, b) => at(b).localeCompare(at(a)));
+  }, [mine, stage, byActivity, activityAt]);
+  useEffect(() => { setPage(0); }, [stage, fAgent, byActivity]);
   const pages = Math.max(1, Math.ceil(rows.length / PER_PAGE));
   const shown = rows.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
   const counts = useMemo(() => ({
@@ -257,6 +279,23 @@ export default function Applications() {
     by: (k: string) => mine.filter((a) => a.status === k && (k === "unsuccessful" || !a.closed)).length,
   }), [mine]);
   const open = all.find((a) => a.id === openId) ?? null;
+  /* Asked for by name but not on the board (an accepted let whose move-in has
+     passed is cut from it): fetch that one and add it, rather than opening
+     nothing. */
+  useEffect(() => {
+    if (!openId || !apps || open) return;
+    let live = true;
+    fetch(`${APPS_URL}&include=${encodeURIComponent(openId)}&tests=0`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d: AppsAnswer) => {
+        const hit = d.applications?.find((a) => a.id === openId);
+        if (live && hit) setApps((cur) => (cur && !cur.some((a) => a.id === hit.id) ? [...cur, hit] : cur));
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [openId, apps, open]);
 
   /* The right-to-rent banner that used to sit here - "34 of 120 people on
      the 92 open applications have no recorded right-to-rent answer" - was
@@ -415,6 +454,16 @@ export default function Applications() {
                   Show all open
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => setByActivity((v) => !v)}
+                aria-pressed={byActivity}
+                className={`rounded-full border px-3.5 py-1.5 text-[13px] transition ${
+                  byActivity ? "border-ink bg-ink text-white" : "border-line bg-white text-ink hover:border-accent hover:bg-accent-soft"
+                }`}
+              >
+                Activity
+              </button>
               {scope?.everything && agents.length > 1 && (
                 <PickOne tone="pink" label="All agents" icon="user" options={agents.map((a) => ({ id: a, label: a }))} value={fAgent} onChange={setFAgent} />
               )}

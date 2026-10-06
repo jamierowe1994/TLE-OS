@@ -39,7 +39,23 @@ export type CheckId =
   | "eicr"
   | "licensing"
   | "tenancy-agreement"
-  | "right-to-rent";
+  | "right-to-rent"
+  /* The HMO set (6 Oct 2026, Rhiannon's room at 5b Newton Road): a room in a
+     shared house cannot be checked without them, and there was nowhere to
+     put a PAT test. Asked of every pack, required only of an HMO. */
+  | "pat"
+  | "fire-safety"
+  | "alarms"
+  | "legionella"
+  /* Whatever the reader could not place. Never required, never pushed. */
+  | "other";
+
+/**
+ * What kind of let the pack is for. Decides which of the HMO documents are
+ * needed (James, 6 Oct 2026: "this property is an HMO, and therefore it needs
+ * a PAT test"). Asked on the first screen, guessed from the property.
+ */
+export type LetType = "home" | "hmo";
 
 export type Check = {
   id: CheckId;
@@ -74,14 +90,20 @@ export type Check = {
    *                 passed (her words, 4 Sep), so asking for it first is
    *                 asking for a thing that does not exist yet.
    * `manual`      - Right to Rent: evidence may legitimately live elsewhere.
+   * `optional`    - worth having on file, never asked for. The HMO set on
+   *                 an ordinary home, and anything unsorted.
    *
    * This is the £60 rule. A pack that reaches Legal for Landlords with an
    * empty slot fails, and the failed check is charged again to TLE rather
    * than to the agent. So the empty slot is caught here, where it costs a
    * sentence, rather than there, where it costs sixty pounds.
    */
-  gate: "required" | "conditional" | "after" | "manual";
+  gate: Gate;
+  /** The gate instead, when the let is an HMO. */
+  hmoGate?: Gate;
 };
+
+export type Gate = "required" | "conditional" | "after" | "manual" | "optional";
 
 export const PLC_CHECKS: Check[] = [
   {
@@ -156,7 +178,54 @@ export const PLC_CHECKS: Check[] = [
     why: "A statutory check with a manual step. The model must not be asked to certify it.",
     gate: "manual",
   },
+  {
+    id: "pat",
+    label: "PAT test",
+    needs: "Portable appliance test report, within 12 months",
+    scan: "dates",
+    why: "Appliances the landlord supplies in a shared house have to be tested.",
+    gate: "optional",
+    hmoGate: "conditional",
+  },
+  {
+    id: "fire-safety",
+    label: "Fire risk assessment",
+    needs: "Current fire risk assessment, plus emergency lighting and fire alarm certificates where fitted",
+    scan: "dates",
+    why: "Every HMO needs one, and the council asks for it before anything else.",
+    gate: "optional",
+    hmoGate: "conditional",
+  },
+  {
+    id: "alarms",
+    label: "Smoke and CO alarms",
+    needs: "Test record or certificate for the smoke and carbon monoxide alarms",
+    scan: "presence",
+    why: "Alarms must be working on the day the tenancy starts.",
+    gate: "optional",
+    hmoGate: "conditional",
+  },
+  {
+    id: "legionella",
+    label: "Legionella risk assessment",
+    needs: "Legionella risk assessment, usually reviewed every 2 years",
+    scan: "dates",
+    why: "A duty on every let in Scotland, and good practice on any shared water system.",
+    gate: "optional",
+  },
+  {
+    id: "other",
+    label: "Anything else",
+    needs: "Inventory, floor plan, or anything we could not sort",
+    scan: "none",
+    why: "Somewhere for the files that are not one of the checks, so nothing is lost.",
+    gate: "optional",
+  },
 ];
+
+/** The gate that applies to this pack. */
+export const gateOf = (check: Check, letType: LetType | null | undefined): Gate =>
+  letType === "hmo" && check.hmoGate ? check.hmoGate : check.gate;
 
 export const checkById = (id: CheckId) => PLC_CHECKS.find((c) => c.id === id) ?? null;
 
@@ -177,17 +246,21 @@ export const checkById = (id: CheckId) => PLC_CHECKS.find((c) => c.id === id) ??
 export const CHECK_GROUPS: { id: "landlord" | "tenant"; title: string; blurb: string; checks: CheckId[] }[] = [
   {
     id: "landlord",
-    title: "Landlord and property",
-    blurb: "Everything about the building and who owns it.",
-    checks: ["landlord-id-aml", "gas-safety", "epc", "eicr", "licensing"],
+    title: "Landlord Documents",
+    blurb: "The landlord's ID and every certificate for the property.",
+    checks: ["landlord-id-aml", "gas-safety", "epc", "eicr", "licensing", "pat", "fire-safety", "alarms", "legionella"],
   },
   {
     id: "tenant",
-    title: "Tenant and tenancy",
-    blurb: "Everything about the people moving in.",
+    title: "Tenant Documents",
+    blurb: "Referencing, guarantors and Right to Rent for everyone moving in.",
     checks: ["tenant-checks", "guarantor-checks", "right-to-rent", "tenancy-agreement"],
   },
 ];
+
+/** Which step a check is filed under. "Anything else" lives on the landlord step. */
+export const groupOf = (id: CheckId): "landlord" | "tenant" =>
+  CHECK_GROUPS.find((g) => g.checks.includes(id))?.id ?? "landlord";
 
 /**
  * A first guess at which check a dropped file belongs to.
@@ -202,10 +275,17 @@ export const CHECK_GROUPS: { id: "landlord" | "tenant"; title: string; blurb: st
  * "certificate", so the specific patterns are tried before the loose ones.
  */
 const FILENAME_HINTS: [RegExp, CheckId][] = [
+  [/\bpat\b|portable.?appliance/i, "pat"],
+  [/legionella/i, "legionella"],
+  [/fire.?risk|\bfra\b|emergency.?light|fire.?alarm|fire.?door/i, "fire-safety"],
+  [/smoke|carbon.?monoxide|\bco.?alarm|alarm/i, "alarms"],
   [/cp-?12|gas/i, "gas-safety"],
   [/eicr|electric|nice?ic|periodic.?inspect/i, "eicr"],
   [/epc|energy.?perf/i, "epc"],
   [/licen[cs]|hmo|selective/i, "licensing"],
+  /* The landlord's own passport is ID, not Right to Rent: checked before the
+     passport pattern below catches it. */
+  [/landlord|\bll\b|owner/i, "landlord-id-aml"],
   [/guarantor|guarantee/i, "guarantor-checks"],
   [/right.?to.?rent|share.?code|passport|visa|brp/i, "right-to-rent"],
   [/ast|tenancy.?agree|agreement/i, "tenancy-agreement"],
@@ -335,6 +415,31 @@ export type PlcDocument = {
    * unread rather than skipping it quietly.
    */
   placeholder?: boolean;
+  /** What the reader made of the file when it was dropped. */
+  read?: FileRead | null;
+};
+
+/**
+ * One file, read the moment it lands (James, 6 Oct 2026: "automatically work
+ * out what type of document it is ... confirm any validation dates and how
+ * long it's valid until"). Facts for the agent to confirm, never a verdict:
+ * the agent can move a file to another check, and the full scan still runs
+ * when the pack is sent.
+ */
+export type FileRead = {
+  /** The check the reader thinks it is, or null when it could not say. */
+  checkId: CheckId | null;
+  /** What it is, in a few words: "Gas Safety Record", "Passport". */
+  what: string;
+  issueDate: string | null;
+  expiryDate: string | null;
+  /** Set when the expiry was worked out from an issue date and the usual life. */
+  expiryDerived?: boolean;
+  /** People named on it, for ID and referencing. */
+  names: string[];
+  confidence: "high" | "medium" | "low";
+  note?: string;
+  at: string;
 };
 
 /**
@@ -409,6 +514,8 @@ export type PlcCase = {
   documents: PlcDocument[];
   /** The date the tenancy starts. Every date check is measured against it. */
   moveInDate: string | null;
+  /** Ordinary home or HMO. Null until the agent says (older packs). */
+  letType?: LetType | null;
   /** What the agent wanted compliance to know. Free text, not a field. */
   agentNote: string;
   /** Conditional checks declared not needed, each with its reason. */
@@ -451,12 +558,13 @@ export type PlcCase = {
  * excluded: it is a manual check whose evidence may legitimately live
  * elsewhere, and blocking on it would stop every genuine submission.
  */
-export function missingDocuments(c: Pick<PlcCase, "documents" | "waivers">): Check[] {
+export function missingDocuments(c: Pick<PlcCase, "documents" | "waivers" | "letType">): Check[] {
   const have = new Set(c.documents.map((d) => d.checkId));
   const waived = new Set((c.waivers ?? []).map((w) => w.checkId));
-  return PLC_CHECKS.filter(
-    (k) => (k.gate === "required" || k.gate === "conditional") && !have.has(k.id) && !waived.has(k.id)
-  );
+  return PLC_CHECKS.filter((k) => {
+    const g = gateOf(k, c.letType);
+    return (g === "required" || g === "conditional") && !have.has(k.id) && !waived.has(k.id);
+  });
 }
 
 /**
@@ -466,14 +574,14 @@ export function missingDocuments(c: Pick<PlcCase, "documents" | "waivers">): Che
  * `askWhy`   - conditional checks with nothing filed and no reason yet.
  * `ready`    - both lists empty. Only then may the pack leave the agent.
  */
-export function gateFor(c: Pick<PlcCase, "documents" | "waivers">): {
+export function gateFor(c: Pick<PlcCase, "documents" | "waivers" | "letType">): {
   blocked: Check[];
   askWhy: Check[];
   ready: boolean;
 } {
   const short = missingDocuments(c);
-  const blocked = short.filter((k) => k.gate === "required");
-  const askWhy = short.filter((k) => k.gate === "conditional");
+  const blocked = short.filter((k) => gateOf(k, c.letType) === "required");
+  const askWhy = short.filter((k) => gateOf(k, c.letType) === "conditional");
   return { blocked, askWhy, ready: blocked.length === 0 && askWhy.length === 0 };
 }
 

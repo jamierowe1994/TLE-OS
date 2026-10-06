@@ -1,6 +1,7 @@
 import "server-only";
 import { getApplications, type Application } from "@/lib/applications";
 import { isTestId, testApplication } from "@/lib/test-overlay";
+import { factsByRexId } from "@/lib/os-properties";
 
 /**
  * Everything the handover already knows before anybody types.
@@ -51,6 +52,14 @@ export interface Prefill {
   rentPcm: number | null;
   /** Things the agent should look at, in the words they would use. */
   warnings: string[];
+  /**
+   * A first answer to "home or HMO?" (6 Oct 2026). True when the OS's own
+   * property record says HMO, or the address is a room. The agent confirms it
+   * on the first screen; it decides whether the HMO documents are needed.
+   */
+  hmo?: boolean;
+  /** The landlord on the OS's property record, so the reader can tell their ID from a tenant's. */
+  landlordName?: string | null;
 }
 
 /** REX gives a date as a stamp, a string, or nothing. Only YYYY-MM-DD survives. */
@@ -60,7 +69,9 @@ function asYmd(v: string | null): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
 }
 
-function shape(a: Application): Prefill {
+const ROOM = /\b(room|bedroom)\s*\d/i;
+
+function shape(a: Application, facts?: { hmo: boolean; landlordName: string | null } | null): Prefill {
   const warnings: string[] = [];
   const moveInDate = asYmd(a.startDate);
 
@@ -96,6 +107,8 @@ function shape(a: Application): Prefill {
     agentName: a.agent,
     rentPcm: a.offerAmount,
     warnings,
+    hmo: Boolean(facts?.hmo) || ROOM.test(a.property),
+    landlordName: facts?.landlordName ?? null,
   };
 }
 
@@ -117,11 +130,15 @@ export async function prefillFor(opts: {
     const t = await testApplication(opts.applicationId);
     return t ? shape(t.app) : null;
   }
-  const book = await getApplications(300);
+  const [book, facts] = await Promise.all([
+    getApplications(300),
+    factsByRexId().catch(() => new Map<string, { hmo: boolean; landlordName: string | null }>()),
+  ]);
+  const factsOf = (a: Application) => (a.propertyId ? facts.get(String(a.propertyId)) ?? null : null);
 
   if (opts.applicationId) {
     const found = book.find((a) => String(a.id) === String(opts.applicationId));
-    return found ? shape(found) : null;
+    return found ? shape(found, factsOf(found)) : null;
   }
 
   if (opts.listingId) {
@@ -130,7 +147,7 @@ export async function prefillFor(opts: {
     /* Newest first. A property that has been let before carries old
        applications, and the one being handed over is always the latest. */
     const latest = [...on].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
-    const shaped = shape(latest);
+    const shaped = shape(latest, factsOf(latest));
     if (on.length > 1) {
       shaped.warnings.push(
         `There are ${on.length} applications on this listing. This is the most recent one, so check it is the right one.`

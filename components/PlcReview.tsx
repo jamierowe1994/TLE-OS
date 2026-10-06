@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
-import type { Check, CheckId, Finding, PlcCase } from "@/lib/plc";
+import { gateOf, type Check, type CheckId, type Finding, type PlcCase } from "@/lib/plc";
 
 /**
  * The compliance side of a PLC handover, and the pieces it is built from.
@@ -335,6 +335,9 @@ export function ComplianceSide({
           {data.checks.map((check) => {
             const filed = c.documents.filter((d) => d.checkId === check.id);
             const waived = (c.waivers ?? []).find((w) => w.checkId === check.id);
+            /* Optional on this let and nothing filed: an empty line about a
+               PAT test on an ordinary flat is noise (6 Oct 2026). */
+            if (!filed.length && !waived && gateOf(check, c.letType) === "optional") return null;
             return (
               <li
                 key={check.id}
@@ -362,15 +365,32 @@ export function ComplianceSide({
                         <span className="text-xs">(name only, no file attached)</span>
                       </span>
                     ) : (
-                      <a
-                        key={d.key}
-                        href={d.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-full bg-page px-2.5 py-1 text-[12px] font-medium underline decoration-line underline-offset-2 transition hover:text-accent-dark"
-                      >
-                        {d.name}
-                      </a>
+                      <span key={d.key} className="inline-flex flex-wrap items-center gap-1.5">
+                        <a
+                          href={d.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-full bg-page px-2.5 py-1 text-[12px] font-medium underline decoration-line underline-offset-2 transition hover:text-accent-dark"
+                        >
+                          {d.name}
+                        </a>
+                        {/* What the reader saw when it was dropped: the date
+                            that matters, for checking against the file. */}
+                        {d.read?.expiryDate && (
+                          <span
+                            className={`text-[11.5px] ${
+                              c.moveInDate && d.read.expiryDate < c.moveInDate ? "text-[#c0504a]" : "text-muted"
+                            }`}
+                          >
+                            valid until{" "}
+                            {new Date(`${d.read.expiryDate}T12:00:00`).toLocaleDateString("en-GB", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })}
+                          </span>
+                        )}
+                      </span>
                     )
                   )
                 )}

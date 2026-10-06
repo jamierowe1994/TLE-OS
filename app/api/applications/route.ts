@@ -56,8 +56,18 @@ export async function GET(req: NextRequest) {
     ]);
     const { applications, stages, closed } = held.value;
     const tests = testRows.map((a) => ({ ...a, stageLabel: a.stageLabel ?? a.statusLabel, test: true }));
+    /* ?include=<id>: one application asked for by name - the PLC wizard's
+       "Open the application" (6 Oct 2026). The board's cut drops accepted
+       lets whose move-in has passed, so a pack could point at an application
+       the board never loaded, and the link opened nothing. Still only from
+       this person's own book. */
+    const include = req.nextUrl.searchParams.get("include");
+    const shown = cut(applications, limit);
+    const extra = include && !shown.some((a) => String(a.id) === include)
+      ? applications.filter((a) => String(a.id) === include)
+      : [];
     return NextResponse.json({
-      applications: [...tests, ...cut(applications, limit).map((a) => ({
+      applications: [...tests, ...[...shown, ...extra].map((a) => ({
         ...a,
         stageLabel: stages.get(a.id) ?? a.statusLabel,
         closed: closed.get(a.id) ?? null,

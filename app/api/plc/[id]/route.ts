@@ -28,6 +28,7 @@ import { pushCaseToRex } from "@/lib/plc-rex";
 import { recordActivity } from "@/lib/business/deal-watch";
 import { switchOn } from "@/lib/switches";
 import { isTestCase } from "@/lib/test-guard";
+import { moveInToRex } from "@/lib/plc-move-in-rex";
 
 /**
  * GET   /api/plc/<id>  → the case, its findings in reading order, what's short
@@ -93,15 +94,22 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
-  let body: { moveInDate?: string | null; agentNote?: string };
+  let body: { moveInDate?: string | null; agentNote?: string; letType?: "home" | "hmo" | null };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ ok: false, error: "Expected JSON." }, { status: 400 });
   }
   try {
+    const before = await getCase(id);
     const updated = await updateDetails(id, body);
-    return NextResponse.json({ ok: true, ...(await payload(updated, req)) });
+    /* A moved move-in date goes onto the REX application too (6 Oct 2026). */
+    let rexMoveIn: { ok: boolean; note: string } | null = null;
+    if (updated.moveInDate && before && updated.moveInDate !== before.moveInDate && !isTestCase(updated)) {
+      const me = await currentUser(req);
+      rexMoveIn = await moveInToRex(updated.applicationRef, updated.moveInDate, me?.id ?? null);
+    }
+    return NextResponse.json({ ok: true, ...(await payload(updated, req)), ...(rexMoveIn ? { rexMoveIn } : {}) });
   } catch (e) {
     return fail(e);
   }

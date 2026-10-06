@@ -2238,6 +2238,8 @@ ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS checked_by_email TEXT;
 ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS check_note TEXT NOT NULL DEFAULT '';
 -- Rent and Legal Protection: the agent's answer, and the request sent to Legal for Landlords.
 ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS rlp_wanted BOOLEAN;
+-- Ordinary home or HMO, which decides whether the HMO documents are needed (6 Oct 2026).
+ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS let_type TEXT;
 ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS rlp_request JSONB;
 
 -- Certificates that came in OUTSIDE a PLC pack (5 Sep 2026): the backlog

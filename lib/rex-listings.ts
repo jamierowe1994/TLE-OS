@@ -74,6 +74,8 @@ export interface OsListing {
    *  came off the market. */
   stateDate: string | null;
   lastUpdated: string;
+  /** REX's last change, as a time, so the Activity order can compare it (6 Oct 2026). */
+  modifiedAt?: string | null;
   imageCount: number;
   image: string | null;
   /**
@@ -337,6 +339,7 @@ export function toListing(l: RexListing): OsListing {
     listingState: l.system_listing_state ?? null,
     stateDate: l.state_date ?? null,
     lastUpdated: ago(num(l.system_modtime)),
+    modifiedAt: num(l.system_modtime) ? new Date((num(l.system_modtime) as number) * 1000).toISOString() : null,
     imageCount: l.related?.listing_images?.length ?? (l.listing_primary_image ? 1 : 0),
     image: cardImage(l),
     images: photos(l),

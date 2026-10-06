@@ -4,6 +4,7 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
 import {
   checkById,
+  gateOf,
   PLC_CHECKS,
   type CheckId,
   type Finding,
@@ -248,9 +249,9 @@ const REPORT_TOOL: Anthropic.Tool = {
 
 /* ───────────────────────────── fetching bytes ──────────────────────────── */
 
-type Fetched = { media: string; base64: string };
+export type Fetched = { media: string; base64: string };
 
-async function fetchDocument(doc: PlcDocument): Promise<Fetched> {
+export async function fetchDocument(doc: PlcDocument): Promise<Fetched> {
   /* A name with no bytes behind it. Reported as unreadable rather than
      skipped, so a placeholder can never pass through the pack unremarked. */
   if (doc.placeholder) throw new Error("it was recorded by name only and never stored");
@@ -275,7 +276,7 @@ async function fetchDocument(doc: PlcDocument): Promise<Fetched> {
   return { media, base64: Buffer.from(body.bytes).toString("base64") };
 }
 
-function contentBlock(f: Fetched): Anthropic.ContentBlockParam {
+export function contentBlock(f: Fetched): Anthropic.ContentBlockParam {
   if (f.media === "application/pdf") {
     return {
       type: "document",
@@ -488,7 +489,10 @@ export async function scanCase(c: PlcCase): Promise<ScanOutcome> {
        she sees the empty slot and the reason side by side. Neither is a
        blocker - a blocker here would stop the pack at the gate. */
     const waiver = (c.waivers ?? []).find((w) => w.checkId === check.id) ?? null;
-    if (check.gate === "after") {
+    const gate = gateOf(check, c.letType);
+    /* Nice to have on file, never asked for: an empty slot is not news. */
+    if (gate === "optional") continue;
+    if (gate === "after") {
       findings.push({
         checkId: check.id,
         level: "query",
@@ -508,7 +512,7 @@ export async function scanCase(c: PlcCase): Promise<ScanOutcome> {
     }
     findings.push({
       checkId: check.id,
-      level: check.gate === "required" ? "blocker" : "query",
+      level: gate === "required" ? "blocker" : "query",
       /* A required slot left empty is a blocker; a conditional one is a
          question. The gate normally stops both before the scan ever runs,
          so this is the belt to that braces. */

@@ -88,6 +88,14 @@ export function rexTypeFor(checkId: CheckId, name: string): string | null {
     case "licensing":
       if (/requirement|exempt|not.?required/.test(n)) return null;
       return /additional/.test(n) ? "additional_hmo_license" : /selective/.test(n) ? "selective_hmo_license" : "mandatory_hmo_license";
+    /* The HMO set, where REX has a type that is plainly the same thing. A
+       fire risk assessment has no REX type of its own, so it stays in the OS. */
+    case "pat":
+      return "portable_appliance_testing";
+    case "legionella":
+      return "legionella_risk_assessment";
+    case "alarms":
+      return /carbon|\bco\b/.test(n) ? "co_alarms" : "smoke_alarms";
     default:
       /* ID, references, right to rent, agreements: not certificates. */
       return null;
@@ -327,7 +335,7 @@ export async function pushCaseToRex(caseId: string, by: string): Promise<RexPush
       results.push({ checkId: doc.checkId, name: doc.name, type, outcome: "skipped", note: "REX takes one entry per certificate type and this pack already wrote one." });
       continue;
     }
-    const expiry = expiryFor(c, doc.checkId);
+    const expiry = expiryFor(c, doc.checkId) ?? doc.read?.expiryDate ?? null;
     if (!expiry) {
       results.push({ checkId: doc.checkId, name: doc.name, type, outcome: "skipped", note: `REX needs an expiry date for ${label} and the reader did not find one on the document.` });
       continue;

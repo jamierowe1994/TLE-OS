@@ -3,6 +3,7 @@ import { createCase, listCases, PlcRefused, reviewQueue } from "@/lib/plc-store"
 import { PLC_CHECKS } from "@/lib/plc";
 import { scanConfigured } from "@/lib/plc-scan";
 import { currentUser } from "@/lib/plc-actor";
+import { moveInToRex } from "@/lib/plc-move-in-rex";
 
 /**
  * GET  /api/plc          → every handover, newest first
@@ -42,6 +43,9 @@ export async function POST(req: NextRequest) {
     agentName?: string;
     agentEmail?: string;
     moveInDate?: string | null;
+    letType?: "home" | "hmo" | null;
+    /** The date REX had when the wizard opened, so a change can go back to it. */
+    rexStartDate?: string | null;
   };
   try {
     body = await req.json();
@@ -61,8 +65,21 @@ export async function POST(req: NextRequest) {
       agentName: me?.name ?? body.agentName ?? "",
       agentEmail: me?.email ?? body.agentEmail ?? "",
       moveInDate: body.moveInDate ?? null,
+      letType: body.letType === "hmo" || body.letType === "home" ? body.letType : null,
     });
-    return NextResponse.json({ ok: true, case: created });
+    /* The agent changed the move-in date on the first screen: put it on the
+       REX application too (James, 6 Oct 2026). Only on a fresh pack - a pack
+       re-opened keeps its own date, and a later change goes through PATCH. */
+    let rexMoveIn: { ok: boolean; note: string } | null = null;
+    if (
+      created.moveInDate &&
+      body.rexStartDate !== undefined &&
+      created.moveInDate !== (body.rexStartDate ?? null) &&
+      created.moveInDate === (body.moveInDate ?? "").slice(0, 10)
+    ) {
+      rexMoveIn = await moveInToRex(created.applicationRef, created.moveInDate, me?.id ?? null);
+    }
+    return NextResponse.json({ ok: true, case: created, ...(rexMoveIn ? { rexMoveIn } : {}) });
   } catch (e) {
     if (e instanceof PlcRefused) {
       return NextResponse.json({ ok: false, error: e.message }, { status: 409 });

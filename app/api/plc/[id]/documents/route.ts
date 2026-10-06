@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { attachDocument, PlcRefused, removeDocument } from "@/lib/plc-store";
-import { checkById, missingDocuments, PLC_CHECKS, type CheckId } from "@/lib/plc";
+import { attachDocument, moveDocument, PlcRefused, removeDocument } from "@/lib/plc-store";
+import { checkById, missingDocuments, PLC_CHECKS, type CheckId, type FileRead } from "@/lib/plc";
 import { keyIsOurs, r2Configured } from "@/lib/r2";
 import { actorName } from "@/lib/plc-actor";
 
 /**
  * POST   /api/plc/<id>/documents  → file an already-uploaded document
+ * PATCH  /api/plc/<id>/documents  → move one to another check ({ key, checkId })
  * DELETE /api/plc/<id>/documents?key=... → take one back out
  *
  * The upload itself is /api/r2/upload, unchanged: it stores the bytes under
@@ -25,7 +26,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
-  let body: { checkId?: string; name?: string; key?: string; placeholder?: boolean };
+  let body: { checkId?: string; name?: string; key?: string; placeholder?: boolean; read?: FileRead | null };
   try {
     body = await req.json();
   } catch {
@@ -76,6 +77,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       url: `/api/r2/file?key=${encodeURIComponent(key)}`,
       addedBy: await actorName(req, "Agent"),
       placeholder,
+      read: cleanRead(body.read),
     });
     return NextResponse.json({
       ok: true,
@@ -85,6 +87,44 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   } catch (e) {
     return fail(e);
   }
+}
+
+export async function PATCH(req: NextRequest, ctx: Ctx) {
+  const { id } = await ctx.params;
+  let body: { key?: string; checkId?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ ok: false, error: "Expected JSON." }, { status: 400 });
+  }
+  const checkId = body.checkId as CheckId | undefined;
+  if (!body.key || !checkId || !checkById(checkId)) {
+    return NextResponse.json({ ok: false, error: "Which file, and which check?" }, { status: 400 });
+  }
+  try {
+    const updated = await moveDocument(id, body.key, checkId);
+    return NextResponse.json({ ok: true, case: updated, missing: missingDocuments(updated).map((m) => m.id) });
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Only the fields we expect, so a caller cannot stuff the case with anything. */
+function cleanRead(r: FileRead | null | undefined): FileRead | null {
+  if (!r || typeof r !== "object") return null;
+  const ymd = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+  const checkId = typeof r.checkId === "string" && checkById(r.checkId as CheckId) ? (r.checkId as CheckId) : null;
+  return {
+    checkId,
+    what: String(r.what ?? "").slice(0, 80),
+    issueDate: ymd(r.issueDate),
+    expiryDate: ymd(r.expiryDate),
+    ...(r.expiryDerived ? { expiryDerived: true } : {}),
+    names: Array.isArray(r.names) ? r.names.map((n) => String(n).slice(0, 80)).slice(0, 8) : [],
+    confidence: r.confidence === "high" || r.confidence === "medium" ? r.confidence : "low",
+    ...(r.note ? { note: String(r.note).slice(0, 240) } : {}),
+    at: typeof r.at === "string" ? r.at.slice(0, 40) : new Date().toISOString(),
+  };
 }
 
 export async function DELETE(req: NextRequest, ctx: Ctx) {

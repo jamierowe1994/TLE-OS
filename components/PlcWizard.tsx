@@ -7,16 +7,17 @@ import { DoneTick } from "@/components/Bits";
 import {
   agentOwnNote,
   caseIdFor,
-  CHECK_GROUPS,
-  guessCheck,
   PLC_CHECKS,
   gateFor,
+  gateOf,
+  groupOf,
   rlpAnswered,
   waiverFor,
   type CheckId,
+  type LetType,
   type PlcCase,
-  type PlcDocument,
 } from "@/lib/plc";
+import PlcDocuments from "@/components/PlcDocuments";
 import type { Prefill } from "@/lib/plc-prefill";
 import { demoCase } from "@/lib/plc-demo";
 import { prettyWhen } from "@/components/PlcReview";
@@ -125,299 +126,11 @@ function WizardStyles() {
   );
 }
 
-/* ─────────────────────────────── drop zone ─────────────────────────────── */
-
-type Pending = {
-  id: string;
-  file: File;
-  checkId: CheckId | null;
-  state: "waiting" | "sending" | "done" | "failed";
-  error?: string;
-  placeholder?: boolean;
-};
-
-/**
- * The whole window is the target.
- *
- * The dotted box is where the eye goes, but an agent dragging four files off
- * a desktop aims roughly, and a drop that lands two pixels outside a box and
- * silently does nothing is the most annoying possible failure. So the listener
- * is on the window and the box is a label for it.
- */
-function useWindowDrop(onFiles: (files: File[]) => void, active: boolean) {
-  const [over, setOver] = useState(false);
-  const depth = useRef(0);
-
-  useEffect(() => {
-    if (!active) return;
-    const enter = (e: DragEvent) => {
-      if (!e.dataTransfer?.types.includes("Files")) return;
-      depth.current += 1;
-      setOver(true);
-    };
-    /* Counted rather than toggled: dragging across a child element fires a
-       leave on the parent, and a boolean flickers the whole page. */
-    const leave = () => {
-      depth.current = Math.max(0, depth.current - 1);
-      if (!depth.current) setOver(false);
-    };
-    const over_ = (e: DragEvent) => {
-      if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
-    };
-    const drop = (e: DragEvent) => {
-      if (!e.dataTransfer?.types.includes("Files")) return;
-      e.preventDefault();
-      depth.current = 0;
-      setOver(false);
-      const files = Array.from(e.dataTransfer.files ?? []);
-      if (files.length) onFiles(files);
-    };
-    window.addEventListener("dragenter", enter);
-    window.addEventListener("dragleave", leave);
-    window.addEventListener("dragover", over_);
-    window.addEventListener("drop", drop);
-    return () => {
-      window.removeEventListener("dragenter", enter);
-      window.removeEventListener("dragleave", leave);
-      window.removeEventListener("dragover", over_);
-      window.removeEventListener("drop", drop);
-    };
-  }, [onFiles, active]);
-
-  return over;
-}
-
-function DocumentStep({
-  group,
-  caseId,
-  documents,
-  onChanged,
-  illustration,
-  demo,
-}: {
-  group: (typeof CHECK_GROUPS)[number];
-  caseId: string;
-  documents: PlcDocument[];
-  onChanged: (c: PlcCase) => void;
-  illustration: string;
-  /** Attach for show: nothing is uploaded and nothing is recorded. */
-  demo?: { case: PlcCase };
-}) {
-  const [pending, setPending] = useState<Pending[]>([]);
-  const input = useRef<HTMLInputElement | null>(null);
-  /** Set while an attach is in flight — see the effect below. */
-  const inFlight = useRef(false);
-  const checks = PLC_CHECKS.filter((c) => group.checks.includes(c.id));
-
-  const take = useCallback(
-    (files: File[]) => {
-      setPending((p) => [
-        ...p,
-        ...files.map((file, i) => ({
-          id: `${file.name}-${p.length + i}`,
-          file,
-          checkId: guessCheck(file.name, group.checks),
-          state: "waiting" as const,
-        })),
-      ]);
-    },
-    [group.checks]
-  );
-
-  const over = useWindowDrop(take, true);
-
-  const send = async (row: Pending) => {
-    if (!row.checkId) return;
-    inFlight.current = true;
-    setPending((p) => p.map((x) => (x.id === row.id ? { ...x, state: "sending" } : x)));
-    try {
-      let key: string;
-      let name = row.file.name;
-      let placeholder = false;
-
-      if (demo) {
-        /* Recorded by name only, and flagged a placeholder - the same shape
-           the 503 branch below produces on an environment with no bucket, so
-           nothing downstream can mistake it for a document on file. The
-           bytes never leave the browser. */
-        const doc: PlcDocument = {
-          checkId: row.checkId,
-          name,
-          key: `documents/sample/${name.replace(/[^\w.\- ]+/g, "")}`,
-          url: "#",
-          addedAt: new Date().toISOString(),
-          addedBy: demo.case.agentName,
-          placeholder: true,
-        };
-        onChanged({ ...demo.case, documents: [...demo.case.documents, doc] });
-        setPending((p) => p.map((x) => (x.id === row.id ? { ...x, state: "done", placeholder: true } : x)));
-        inFlight.current = false;
-        return;
-      }
-
-      const form = new FormData();
-      form.append("file", row.file);
-      form.append("scope", "document");
-      form.append("ref", caseId);
-      const up = await fetch("/api/r2/upload", { method: "POST", body: form });
-      const stored = await up.json().catch(() => ({}));
-
-      if (up.ok && stored.ok) {
-        key = stored.key;
-        name = stored.name;
-      } else if (up.status === 503) {
-        /* No bucket on this environment. Recorded by name so the walkthrough
-           can finish, and flagged all the way down so nothing ever shows it
-           as a document on file. */
-        key = `documents/${caseId}/${row.file.name.replace(/[^\w.\- ]+/g, "")}`;
-        placeholder = true;
-      } else {
-        throw new Error(stored.error ?? "The upload failed.");
-      }
-
-      const res = await api<{ case: PlcCase }>(`/api/plc/${caseId}/documents`, {
-        method: "POST",
-        body: JSON.stringify({ checkId: row.checkId, name, key, placeholder }),
-      });
-      onChanged(res.case);
-      setPending((p) => p.map((x) => (x.id === row.id ? { ...x, state: "done", placeholder } : x)));
-    } catch (e) {
-      setPending((p) =>
-        p.map((x) => (x.id === row.id ? { ...x, state: "failed", error: (e as Error).message } : x))
-      );
-    } finally {
-      /* Cleared before the state update above settles, so the effect picks up
-         the next waiting file on the very next render rather than stalling. */
-      inFlight.current = false;
-    }
-  };
-
-  /* Anything with a check against it goes up on its own. The agent only has to
-     touch the ones we guessed wrong, or could not guess at all.
-
-     ONE AT A TIME, and the lock is the whole reason this works. Each attach
-     returns the case as it stood when that request was served, so five in
-     flight together means the last response to land overwrites the other
-     four — which showed up as a tick list where only one of five dropped
-     files had registered. Serialising makes every response the newest one. */
-  useEffect(() => {
-    if (inFlight.current) return;
-    const next = pending.find((p) => p.state === "waiting" && p.checkId);
-    if (next) void send(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pending]);
-
-  const unsure = pending.filter((p) => p.state === "waiting" && !p.checkId);
-
-  return (
-    <div>
-      <p className="text-sm text-muted">{group.blurb}</p>
-
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => input.current?.click()}
-        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && input.current?.click()}
-        className={`relative mt-5 flex min-h-[15rem] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-10 text-center transition ${
-          over
-            ? "border-ink bg-box"
-            : "border-line hover:bg-box"
-        }`}
-      >
-        <DoodleIcon
-          name={illustration}
-          size={104}
-          className="pointer-events-none absolute text-ink opacity-[0.06]"
-        />
-        <p className="relative text-base text-ink">
-          {over ? "Let go" : "Drop the documents here"}
-        </p>
-        <p className="relative mt-1 text-sm text-muted">
-          Anywhere on the page works. Or click to choose them.
-        </p>
-        <input
-          ref={input}
-          type="file"
-          multiple
-          accept="application/pdf,image/*"
-          className="hidden"
-          onChange={(e) => {
-            take(Array.from(e.target.files ?? []));
-            e.target.value = "";
-          }}
-        />
-      </div>
-
-      {unsure.length > 0 && (
-        <p className="mt-4 text-sm text-amber-700">
-          {unsure.length === 1 ? "One file" : `${unsure.length} files`} we could not place. Pick the
-          check each one belongs to.
-        </p>
-      )}
-
-      {pending.length > 0 && (
-        <ul className="mt-4 space-y-2">
-          {pending.map((p) => (
-            <li
-              key={p.id}
-              className="flex flex-wrap items-center gap-3 rounded-lg border border-line px-3 py-2 text-sm"
-            >
-              <span className="min-w-0 flex-1 truncate">{p.file.name}</span>
-              {p.state === "waiting" && (
-                <select
-                  value={p.checkId ?? ""}
-                  onChange={(e) =>
-                    setPending((all) =>
-                      all.map((x) =>
-                        x.id === p.id ? { ...x, checkId: (e.target.value || null) as CheckId | null } : x
-                      )
-                    )
-                  }
-                  className="rounded-lg border border-line bg-transparent px-2 py-1 text-sm"
-                >
-                  <option value="">Which check?</option>
-                  {checks.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
-              )}
-              {p.state === "sending" && <span className="text-muted">Filing…</span>}
-              {p.state === "done" && (
-                <span className="text-emerald-700">
-                  {p.placeholder ? "Recorded by name only" : "Filed"}
-                </span>
-              )}
-              {p.state === "failed" && (
-                <span className="text-rose-700">{p.error}</span>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <ul className="mt-6 space-y-1.5">
-        {checks.map((c) => {
-          const filed = documents.filter((d) => d.checkId === c.id);
-          return (
-            <li key={c.id} className="flex items-baseline gap-2 text-sm">
-              <span
-                className={`mt-1 h-2 w-2 shrink-0 rounded-full ${
-                  filed.length ? "bg-emerald-500" : "bg-neutral-300"
-                }`}
-              />
-              <span className={filed.length ? "" : "text-muted"}>{c.label}</span>
-              <span className="min-w-0 truncate text-xs text-muted">
-                {filed.length ? filed.map((f) => f.name).join(", ") : c.needs}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
+/* The primary button. Pink on hover (James, 6 Oct 2026): it used to turn
+   white, white text on a white box, and read as switched off. */
+const PRIMARY =
+  "rounded-lg border border-ink bg-ink px-4 py-2.5 text-sm text-white transition hover:border-accent hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-ink disabled:hover:bg-ink";
+const SECONDARY = "rounded-lg border border-line px-4 py-2.5 text-sm transition hover:bg-box";
 
 /* ──────────────────────────────── the wizard ───────────────────────────── */
 
@@ -472,11 +185,18 @@ export default function PlcWizard({
   const [prefill, setPrefill] = useState<Prefill | null>(null);
   const [kase, setKase] = useState<PlcCase | null>(null);
   const [moveIn, setMoveIn] = useState("");
+  /** Home or HMO: decides whether the HMO documents are needed. */
+  const [letType, setLetType] = useState<LetType | null>(null);
+  /** A check the review screen sent the agent back to fill. */
+  const [focus, setFocus] = useState<CheckId | null>(null);
+  /** Where Continue on the details goes: back to the review when it was opened from there. */
+  const [returnTo, setReturnTo] = useState<Step | null>(null);
+  /** What REX said when a changed move-in date was sent back to the application. */
+  const [rexNote, setRexNote] = useState<{ ok: boolean; note: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** The reason typed against a conditional check, before it is sent. */
   const [why, setWhy] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
-  const [fixing, setFixing] = useState(false);
   /** What the agent wants compliance to know. Optional. */
   const [note, setNote] = useState("");
   /* The demo seam is a fresh object on every render of whatever mounts this.
@@ -540,6 +260,7 @@ export default function PlcWizard({
         if (!alive) return;
         setPrefill(got);
         setMoveIn(existing?.moveInDate ?? got?.moveInDate ?? "");
+        setLetType(existing?.letType ?? (got ? (got.hmo ? "hmo" : "home") : null));
         setError(failed);
         if (existing) setKase(existing);
         go(existing && existing.state !== "assembling" ? "returned" : "details");
@@ -566,23 +287,27 @@ export default function PlcWizard({
          carries on from where it was. */
       setKase(
         kase && kase.state === "assembling"
-          ? { ...kase, moveInDate: moveIn || null }
-          : demoCase({ moveInDate: moveIn || null, documents: [], agentNote: "" })
+          ? { ...kase, moveInDate: moveIn || null, letType }
+          : { ...demoCase({ moveInDate: moveIn || null, documents: [], agentNote: "" }), letType }
       );
-      go("landlord");
+      go(returnTo ?? "landlord");
+      setReturnTo(null);
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      const made = await api<{ case: PlcCase }>("/api/plc", {
+      const made = await api<{ case: PlcCase; rexMoveIn?: { ok: boolean; note: string } }>("/api/plc", {
         method: "POST",
         body: JSON.stringify({
           applicationRef: prefill.applicationRef,
           address: prefill.address,
           moveInDate: moveIn || null,
+          letType,
+          rexStartDate: prefill.moveInDate,
         }),
       });
+      if (made.rexMoveIn) setRexNote(made.rexMoveIn);
       let current = made.case;
       /* Already sent, or sent back, since this screen opened. Show that
          rather than a set of screens that will refuse every change. */
@@ -595,15 +320,17 @@ export default function PlcWizard({
          returns the pack already started. It deliberately does not overwrite
          anything - which means a move-in date corrected on this screen has to
          be written separately. */
-      if (moveIn && current.moveInDate !== moveIn) {
-        const patched = await api<{ case: PlcCase }>(`/api/plc/${current.id}`, {
+      if ((moveIn && current.moveInDate !== moveIn) || (letType && current.letType !== letType)) {
+        const patched = await api<{ case: PlcCase; rexMoveIn?: { ok: boolean; note: string } }>(`/api/plc/${current.id}`, {
           method: "PATCH",
-          body: JSON.stringify({ moveInDate: moveIn }),
+          body: JSON.stringify({ moveInDate: moveIn || current.moveInDate, letType: letType ?? current.letType ?? null }),
         });
         current = patched.case;
+        if (patched.rexMoveIn) setRexNote(patched.rexMoveIn);
       }
       setKase(current);
-      go("landlord");
+      go(returnTo ?? "landlord");
+      setReturnTo(null);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -792,26 +519,24 @@ export default function PlcWizard({
               Check These Over
             </h1>
             <p className="mt-2 text-sm text-muted">
-              Pulled through from the application. If any of it is wrong, fix it on the file first.
+              Pulled through from the application. Change the move-in date here if it has moved.
             </p>
-
             {error && (
               <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
                 {error}
               </p>
             )}
-
             {prefill && (
               <>
                 <dl className="mt-6 divide-y divide-neutral-100 rounded-xl border border-line">
                   <div className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-3">
-                    <dt className="w-32 shrink-0 text-xs uppercase tracking-wide text-muted">
+                    <dt className="w-full shrink-0 text-xs uppercase tracking-wide text-muted sm:w-32">
                       Property
                     </dt>
                     <dd className="min-w-0 flex-1 text-sm">{prefill.address}</dd>
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-3">
-                    <dt className="w-32 shrink-0 text-xs uppercase tracking-wide text-muted">
+                    <dt className="w-full shrink-0 text-xs uppercase tracking-wide text-muted sm:w-32">
                       {prefill.tenants.length > 1 ? "Tenants" : "Tenant"}
                     </dt>
                     <dd className="min-w-0 flex-1 text-sm">
@@ -820,26 +545,64 @@ export default function PlcWizard({
                         : "Nobody recorded"}
                     </dd>
                   </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-3">
-                    <dt className="w-32 shrink-0 text-xs uppercase tracking-wide text-muted">
-                      Move-in date
+                  {/* Move-in dates move all the time (James, 6 Oct 2026, on a
+                      room whose date came through as the 5th for a Friday the
+                      9th). The pack's date is the one every certificate is
+                      measured against, so it is changed here, plainly, and
+                      can be changed again from the last screen. */}
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
+                    <dt className="w-full shrink-0 text-xs uppercase tracking-wide text-muted sm:w-32">
+                      <label htmlFor="plc-move-in">Move-in date</label>
                     </dt>
                     <dd className="min-w-0 flex-1 text-sm">
                       <input
+                        id="plc-move-in"
                         type="date"
                         value={moveIn}
                         onChange={(e) => setMoveIn(e.target.value)}
                         className="rounded-lg border border-line bg-transparent px-2 py-1 text-sm"
                       />
-                      {!prefill.moveInDate && (
-                        <span className="ml-2 text-xs text-amber-700">
-                          not on the application
+                      {!prefill.moveInDate ? (
+                        <span className="ml-2 text-xs text-amber-700">not on the application, so add it</span>
+                      ) : moveIn && moveIn !== prefill.moveInDate ? (
+                        <span className="ml-2 text-xs text-muted">
+                          changed from {prettyDate(prefill.moveInDate)}
                         </span>
-                      )}
+                      ) : null}
                     </dd>
                   </div>
+                  {/* Home or HMO (James, 6 Oct 2026: "this property is an HMO,
+                      and therefore it needs a PAT test"). Guessed from the
+                      property; the agent has the last word. */}
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+                    <dt className="w-full shrink-0 text-xs uppercase tracking-wide text-muted sm:w-32">
+                      Type of let
+                    </dt>
+                    <dd className="flex min-w-0 flex-1 flex-wrap gap-2">
+                      {([
+                        ["home", "A whole home"],
+                        ["hmo", "An HMO, or a room in one"],
+                      ] as const).map(([v, label]) => (
+                        <button
+                          key={v}
+                          type="button"
+                          aria-pressed={letType === v}
+                          onClick={() => setLetType(v)}
+                          className={`rounded-lg border px-3 py-1.5 text-sm transition ${
+                            letType === v ? "border-ink bg-ink text-white" : "border-line hover:bg-box"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </dd>
+                    {letType === "hmo" && (
+                      <p className="w-full text-xs text-muted sm:pl-36">
+                        The PAT test, fire risk assessment and alarm record are asked for as well.
+                      </p>
+                    )}
+                  </div>
                 </dl>
-
                 {prefill.warnings.length > 0 && (
                   <ul className="mt-4 space-y-1.5">
                     {prefill.warnings.map((w) => (
@@ -849,58 +612,30 @@ export default function PlcWizard({
                     ))}
                   </ul>
                 )}
-
-                {fixing ? (
-                  <div className="mt-6 rounded-xl border border-line p-4 text-sm">
-                    <p className="text-ink">
-                      Fix it on the application, then come back
-                    </p>
-                    <p className="mt-1 text-muted">
-                      The property, the people and the dates all live on the application record.
-                      Changing them here would only change them here, and compliance would get the
-                      old ones.
-                    </p>
-                    <div className="mt-4 flex flex-wrap gap-3">
-                      {/* Also a door out of the preview, so it is closed
-                          there. The sentence above still makes the point
-                          that the fix belongs on the application record. */}
-                      {!demo && (
-                        <button
-                          type="button"
-                          onClick={() => router.push(`/applications?open=${prefill.applicationId}`)}
-                          className="rounded-lg border border-ink bg-ink px-3.5 py-2 text-sm text-white"
-                        >
-                          Open the application
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setFixing(false)}
-                        className="rounded-lg border border-line px-3.5 py-2 text-sm"
-                      >
-                        Never mind, it is fine
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mt-8 flex flex-wrap items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={startAndContinue}
-                      disabled={busy}
-                      className="rounded-lg border border-ink bg-ink px-4 py-2.5 text-sm text-white transition hover:bg-box disabled:opacity-40"
+                <div className="mt-8 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={startAndContinue}
+                    disabled={busy || !letType}
+                    title={!letType ? "Say whether this is a whole home or an HMO first" : undefined}
+                    className={PRIMARY}
+                  >
+                    {busy ? "One moment…" : "Continue"}
+                  </button>
+                  {/* The people and the property are the application's, so a
+                      wrong name is put right there. Opened in a new tab so the
+                      pack in progress is not lost. */}
+                  {!demo && (
+                    <a
+                      href={`/applications?open=${encodeURIComponent(prefill.applicationId)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={SECONDARY}
                     >
-                      {busy ? "One moment…" : "Continue"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFixing(true)}
-                      className="rounded-lg border border-line px-4 py-2.5 text-sm transition hover:bg-box"
-                    >
-                      Something is not right
-                    </button>
-                  </div>
-                )}
+                      Open the application
+                    </a>
+                  )}
+                </div>
               </>
             )}
           </div>
@@ -909,42 +644,81 @@ export default function PlcWizard({
         {(step === "landlord" || step === "tenant") && kase && (
           <div>
             <h1 className="text-2xl tracking-normal text-ink">
-              {step === "landlord" ? "Landlord Submission Documents" : "Tenant and Tenancy"}
+              {step === "landlord" ? "Landlord Documents" : "Tenant Documents"}
             </h1>
-            <DocumentStep
-              group={CHECK_GROUPS.find((g) => g.id === step)!}
-              caseId={kase.id}
-              documents={documents}
+            {rexNote && step === "landlord" && (
+              <p className={`mb-3 mt-2 text-xs ${rexNote.ok ? "text-emerald-700" : "text-amber-700"}`}>
+                Move-in date {prettyDate(kase.moveInDate)}. {rexNote.note}
+              </p>
+            )}
+            <PlcDocuments
+              key={step}
+              step={step}
+              kase={kase}
               onChanged={setKase}
-              illustration={step === "landlord" ? "home" : "file-contract"}
-              demo={demo ? { case: kase } : undefined}
+              context={{
+                tenants: prefill?.tenants.map((t) => t.name) ?? [],
+                landlord: prefill?.landlordName ?? null,
+              }}
+              focus={focus}
+              demo={Boolean(demo)}
             />
             <div className="mt-8 flex flex-wrap items-center gap-3">
+              <button type="button" onClick={() => go(step === "landlord" ? "details" : "landlord")} className={SECONDARY}>
+                Back
+              </button>
               <button
                 type="button"
-                onClick={() => go(step === "landlord" ? "tenant" : "review")}
-                className="rounded-lg border border-ink bg-ink px-4 py-2.5 text-sm text-white transition hover:bg-box"
+                onClick={() => {
+                  setFocus(null);
+                  go(step === "landlord" ? "tenant" : "review");
+                }}
+                className={PRIMARY}
               >
                 Next
               </button>
               <span className="text-xs text-muted">
-                Anything missing is shown on the next screen before it goes anywhere.
+                Anything missing is shown on the last screen before it goes anywhere.
               </span>
             </div>
           </div>
         )}
-
         {step === "review" && kase && (() => {
           const gate = gateFor(kase);
           const blockers = kase.findings.filter((f) => f.level === "blocker");
-          const gated = PLC_CHECKS.filter((c) => c.gate === "required" || c.gate === "conditional");
+          /* What the gate asks for on this let, plus anything optional the
+             agent has filed anyway, so the list is the whole pack. */
+          const gated = PLC_CHECKS.filter((c) => {
+            const g = gateOf(c, kase.letType);
+            return g === "required" || g === "conditional" || (g === "optional" && filedFor(c.id));
+          });
+          /* Send the agent to the screen that check lives on, scrolled to it. */
+          const fill = (id: CheckId) => {
+            setFocus(id);
+            go(groupOf(id));
+          };
+          /* Read when it was dropped: anything that runs out before the move-in
+             date, said here rather than by the scan after Send. */
+          const runsOut = documents.filter(
+            (d) => d.read?.expiryDate && kase.moveInDate && d.read.expiryDate < kase.moveInDate
+          );
           return (
           <div>
             <h1 className="text-2xl tracking-normal text-ink">
               {gate.ready && blockers.length === 0 && rlpAnswered(kase) ? "Ready to Send" : "Not Ready to Send Yet"}
             </h1>
             <p className="mt-2 text-sm text-muted">
-              {kase.address} · moving in {prettyDate(kase.moveInDate) ?? "date not set"}
+              {kase.address} · moving in {prettyDate(kase.moveInDate) ?? "date not set"} ·{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  setReturnTo("review");
+                  go("details");
+                }}
+                className="underline underline-offset-2 hover:text-ink"
+              >
+                change
+              </button>
             </p>
 
             {error && (
@@ -955,6 +729,9 @@ export default function PlcWizard({
 
             {/* A pack that came back keeps what compliance wrote in view while
                 it is being put right, instead of on a screen already left. */}
+            {rexNote && (
+              <p className={`mt-2 text-xs ${rexNote.ok ? "text-emerald-700" : "text-amber-700"}`}>{rexNote.note}</p>
+            )}
             {kase.decidedAt && kase.decisionNote && (
               <div className="mt-4 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-900">
                 <p className="font-medium">What compliance asked for</p>
@@ -968,10 +745,33 @@ export default function PlcWizard({
                 caught here rather than there. */}
             {gate.blocked.length > 0 && (
               <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
-                Every let needs {gate.blocked.map((k) => k.label).join(", ")}. A pack that reaches the
-                check without them fails it and the failed check is charged again, so it cannot go until
-                they are attached.
+                Still needed:{" "}
+                {gate.blocked.map((k, i) => (
+                  <span key={k.id}>
+                    {i > 0 && ", "}
+                    <button type="button" onClick={() => fill(k.id)} className="underline underline-offset-2 hover:text-rose-950">
+                      {k.label}
+                    </button>
+                  </span>
+                ))}
+                . A pack that reaches the check without them fails it, and the failed check is charged
+                again.
               </p>
+            )}
+            {runsOut.length > 0 && (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <p>These run out before the move-in date:</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                  {runsOut.map((d) => (
+                    <li key={d.key}>
+                      <button type="button" onClick={() => fill(d.checkId)} className="text-left underline underline-offset-2">
+                        {d.read?.what || d.name}
+                      </button>{" "}
+                      - valid until {prettyDate(d.read?.expiryDate ?? null)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
 
             {blockers.length > 0 && (
@@ -991,8 +791,9 @@ export default function PlcWizard({
                 const has = filedFor(c.id);
                 const waiver = waiverFor(kase, c.id);
                 const count = documents.filter((d) => d.checkId === c.id).length;
-                const needsWhy = !has && !waiver && c.gate === "conditional";
-                const blocked = !has && c.gate === "required";
+                const g = gateOf(c, kase.letType);
+                const needsWhy = !has && !waiver && g === "conditional";
+                const blocked = !has && g === "required";
                 return (
                   <li key={c.id} className="px-4 py-2.5 text-sm">
                     <div className="flex items-center gap-3">
@@ -1005,10 +806,21 @@ export default function PlcWizard({
                       ) : (
                         <span className={`h-4 w-4 shrink-0 rounded-full border ${blocked ? "border-rose-400" : "border-line"}`} />
                       )}
-                      <span className={has ? "" : blocked ? "text-rose-800" : "text-muted"}>{c.label}</span>
+                      <button
+                        type="button"
+                        onClick={() => fill(c.id)}
+                        className={`text-left underline-offset-2 hover:underline ${has ? "" : blocked ? "text-rose-800" : "text-muted"}`}
+                      >
+                        {c.label}
+                      </button>
                       <span className="ml-auto text-xs text-muted">
                         {has ? (count === 1 ? "1 file" : `${count} files`) : waiver ? "not needed" : blocked ? "needed" : "nothing attached"}
                       </span>
+                      {!has && !waiver && (
+                        <button type="button" onClick={() => fill(c.id)} className="text-xs underline underline-offset-2 hover:text-ink">
+                          Add
+                        </button>
+                      )}
                     </div>
                     {waiver && !has && (
                       <p className="mt-1.5 flex items-start gap-2 pl-7 text-xs text-muted">
@@ -1028,7 +840,13 @@ export default function PlcWizard({
                               ? "Why not needed? e.g. No gas supply to the property"
                               : c.id === "guarantor-checks"
                                 ? "Why not needed? e.g. No guarantor on this tenancy"
-                                : "Why not needed? e.g. Council has no licensing scheme here"
+                                : c.id === "pat"
+                                  ? "Why not needed? e.g. The landlord supplies no electrical appliances"
+                                  : c.id === "fire-safety"
+                                    ? "Why not needed? e.g. Booked for the 8th, will follow"
+                                    : c.id === "alarms"
+                                      ? "Why not needed? e.g. Tested at check-in, record to follow"
+                                      : "Why not needed? e.g. Council has no licensing scheme here"
                           }
                           className="min-w-0 flex-1 rounded-lg border border-line bg-white px-3 py-1.5 text-xs outline-none focus:border-ink"
                         />
@@ -1048,7 +866,7 @@ export default function PlcWizard({
             </ul>
             <p className="mt-2 text-xs text-muted">
               Right to Rent is checked separately. The tenancy agreement is generated by compliance
-              once this passes, so it is not asked for here.
+              once this passes, so it is not asked for here. Press any line to add to it.
             </p>
 
             {documents.some((d) => d.placeholder) && (
@@ -1120,16 +938,12 @@ export default function PlcWizard({
                       ? "Say whether the landlord wants Rent and Legal Protection first"
                       : undefined
                 }
-                className="rounded-lg border border-ink bg-ink px-4 py-2.5 text-sm text-white transition hover:bg-box disabled:cursor-not-allowed disabled:opacity-40"
+                className={PRIMARY}
               >
                 Send to the compliance team
               </button>
-              <button
-                type="button"
-                onClick={() => go("landlord")}
-                className="rounded-lg border border-line px-4 py-2.5 text-sm transition hover:bg-box"
-              >
-                Add something else
+              <button type="button" onClick={() => go("tenant")} className={SECONDARY}>
+                Back
               </button>
             </div>
           </div>
@@ -1218,7 +1032,7 @@ export default function PlcWizard({
                   type="button"
                   onClick={reopen}
                   disabled={busy}
-                  className="rounded-lg border border-ink bg-ink px-4 py-2.5 text-sm text-white transition hover:bg-box disabled:opacity-40"
+                  className={PRIMARY}
                 >
                   {busy ? "One moment…" : "Reopen and fix it"}
                 </button>

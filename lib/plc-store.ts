@@ -10,8 +10,11 @@ import {
   checkById,
   noteAsSent,
   gateFor,
+  gateOf,
   rlpAnswered,
   type CheckId,
+  type FileRead,
+  type LetType,
   type Finding,
   type PlcCase,
   type PlcDocument,
@@ -67,6 +70,7 @@ interface Row extends Record<string, unknown> {
   check_note: string | null;
   rlp_wanted: boolean | null;
   rlp_request: RlpRequest | null;
+  let_type: string | null;
   submitted_at: string | Date | null;
   scanned_at: string | Date | null;
   decided_at: string | Date | null;
@@ -100,6 +104,7 @@ function rowTo(r: Row): PlcCase {
     agentEmail: r.agent_email ?? "",
     state: r.state as PlcState,
     moveInDate: ymd(r.move_in_date),
+    letType: r.let_type === "hmo" || r.let_type === "home" ? r.let_type : null,
     agentNote: r.agent_note ?? "",
     documents: Array.isArray(r.documents) ? r.documents : [],
     findings: Array.isArray(r.findings) ? r.findings : [],
@@ -124,7 +129,7 @@ function rowTo(r: Row): PlcCase {
 const COLS = `id, application_ref, address, agent_name, agent_email, state,
               move_in_date, agent_note, documents, findings, waivers, propoly_push, rex_push, submitted_at,
               scanned_at, decided_at, decided_by, decision_note, created_at,
-              checked_at, checked_by, checked_by_email, check_note, rlp_wanted, rlp_request`;
+              checked_at, checked_by, checked_by_email, check_note, rlp_wanted, rlp_request, let_type`;
 
 /* ──────────────────────────── the file backend ──────────────────────────── */
 
@@ -163,7 +168,7 @@ async function mutate(id: string, fn: (c: PlcCase) => PlcCase): Promise<PlcCase>
               decided_at = $9, decided_by = $10, decision_note = $11,
               waivers = $12::jsonb, propoly_push = $13::jsonb, rex_push = $14::jsonb,
               checked_at = $15, checked_by = $16, checked_by_email = $17, check_note = $18,
-              rlp_wanted = $19, rlp_request = $20::jsonb,
+              rlp_wanted = $19, rlp_request = $20::jsonb, let_type = $21,
               updated_at = NOW()
         WHERE id = $1
         RETURNING ${COLS}`,
@@ -188,6 +193,7 @@ async function mutate(id: string, fn: (c: PlcCase) => PlcCase): Promise<PlcCase>
         next.checkNote ?? "",
         next.rlpWanted ?? null,
         next.rlpRequest ? JSON.stringify(next.rlpRequest) : null,
+        next.letType ?? null,
       ]
     );
     return rowTo(saved[0]);
@@ -259,6 +265,7 @@ export interface NewCase {
   agentName: string;
   agentEmail: string;
   moveInDate?: string | null;
+  letType?: LetType | null;
 }
 
 /**
@@ -288,6 +295,7 @@ export async function createCase(input: NewCase): Promise<PlcCase> {
     agentEmail: input.agentEmail.trim().toLowerCase(),
     state: "assembling",
     moveInDate: input.moveInDate ? input.moveInDate.slice(0, 10) : null,
+    letType: input.letType ?? null,
     agentNote: "",
     documents: [],
     findings: [],
@@ -305,11 +313,11 @@ export async function createCase(input: NewCase): Promise<PlcCase> {
   if (hasDb()) {
     const rows = await q<Row>(
       `INSERT INTO os_plc_cases
-         (id, application_ref, address, agent_name, agent_email, state, move_in_date)
-       VALUES ($1, $2, $3, $4, $5, 'assembling', $6)
+         (id, application_ref, address, agent_name, agent_email, state, move_in_date, let_type)
+       VALUES ($1, $2, $3, $4, $5, 'assembling', $6, $7)
        ON CONFLICT (id) DO UPDATE SET updated_at = NOW()
        RETURNING ${COLS}`,
-      [id, applicationRef, address, fresh.agentName, fresh.agentEmail, fresh.moveInDate]
+      [id, applicationRef, address, fresh.agentName, fresh.agentEmail, fresh.moveInDate, fresh.letType]
     );
     return rowTo(rows[0]);
   }
@@ -323,7 +331,7 @@ export async function createCase(input: NewCase): Promise<PlcCase> {
 /** The move-in date and the agent's note, while the pack is still theirs. */
 export async function updateDetails(
   id: string,
-  patch: { moveInDate?: string | null; agentNote?: string }
+  patch: { moveInDate?: string | null; agentNote?: string; letType?: LetType | null }
 ): Promise<PlcCase> {
   return mutate(id, (c) => {
     if (c.state !== "assembling") {
@@ -336,6 +344,8 @@ export async function updateDetails(
       moveInDate:
         patch.moveInDate === undefined ? c.moveInDate : patch.moveInDate?.slice(0, 10) || null,
       agentNote: patch.agentNote === undefined ? c.agentNote : patch.agentNote,
+      letType:
+        patch.letType === undefined ? c.letType ?? null : patch.letType === "hmo" || patch.letType === "home" ? patch.letType : null,
     };
   });
 }
@@ -355,6 +365,7 @@ export async function attachDocument(
     url: string;
     addedBy: string;
     placeholder?: boolean;
+    read?: FileRead | null;
   }
 ): Promise<PlcCase> {
   return mutate(id, (c) => {
@@ -371,8 +382,26 @@ export async function attachDocument(
       addedAt: new Date().toISOString(),
       addedBy: doc.addedBy,
       ...(doc.placeholder ? { placeholder: true as const } : {}),
+      ...(doc.read ? { read: doc.read } : {}),
     };
+    /* The same file dropped twice (a folder dropped again) is filed once. */
+    if (c.documents.some((d) => d.key === next.key)) return c;
     return { ...c, documents: [...c.documents, next] };
+  });
+}
+
+/**
+ * The reader filed it under the wrong check, and the agent has said which.
+ * The file stays; only its slot changes.
+ */
+export async function moveDocument(id: string, key: string, checkId: CheckId): Promise<PlcCase> {
+  if (!checkById(checkId)) throw new PlcRefused("That isn't one of the checks.");
+  return mutate(id, (c) => {
+    if (c.state !== "assembling") {
+      throw new PlcRefused("This pack is with compliance. Ask them to send it back to change it.");
+    }
+    if (!c.documents.some((d) => d.key === key)) throw new PlcRefused("That file isn't on this pack.");
+    return { ...c, documents: c.documents.map((d) => (d.key === key ? { ...d, checkId } : d)) };
   });
 }
 
@@ -452,9 +481,11 @@ export async function waiveCheck(
 ): Promise<PlcCase> {
   const check = checkById(checkId);
   if (!check) throw new PlcRefused("That isn't one of the checks.");
-  if (check.gate !== "conditional") {
+  const current = await getCase(id);
+  const gate = gateOf(check, current?.letType);
+  if (gate !== "conditional") {
     throw new PlcRefused(
-      check.gate === "required"
+      gate === "required"
         ? `${check.label} is needed on every let - it can't be marked not needed.`
         : `${check.label} isn't part of the pre-let gate.`
     );
