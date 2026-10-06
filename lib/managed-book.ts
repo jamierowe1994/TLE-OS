@@ -340,6 +340,14 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
     rexLet: false,
     ref: o.ref,
   });
+  /* AN AGENT'S OWN HOUSES, EVERY ROOM (6 Oct 2026). An agent's book is REX's
+     listings in their name, so a room REX has no let listing for - 5b Newton
+     Road's Room 3 - never reached Rhiannon's Portfolio even once the whole-
+     business view had it. A REX PM room joins an agent's book when another
+     room of the same house is already in it: same building, same street. */
+  const houseKey = (d: Parsed) => (d.building ? `${d.building}|${d.street}` : null);
+  const theirHouses = new Set(properties.map((p) => houseKey(doorOf(p))).filter((k): k is string => Boolean(k)));
+  const outOfScope = (d: Parsed) => Boolean(rexUserId) && !theirHouses.has(houseKey(d) ?? "");
   for (const o of extra) {
     const door = parseAddress(o.address);
     if (o.rexPropertyId) {
@@ -350,7 +358,7 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
         if (!pmFor.has(o.rexPropertyId)) pmFor.set(o.rexPropertyId, o);
         continue;
       }
-      if (rexUserId) continue;
+      if (outOfScope(door)) continue;
       /* Linked to a REX property REX does not mark as let (84 of them, 6 Sep):
          the home is managed in REX PM all the same, so it joins the book under
          its REX property - unless another home already stands there. */
@@ -363,7 +371,7 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
       pmFor.set(o.id, o);
       continue;
     }
-    if (rexUserId || properties.some((p) => p.propertyId === o.id)) continue;
+    if (outOfScope(door) || properties.some((p) => p.propertyId === o.id)) continue;
     properties.push(pmRow(o, o.id, o.id, false));
     pmFor.set(o.id, o);
   }
