@@ -232,6 +232,32 @@ export async function keepRexAlive(userId: string | null): Promise<void> {
   if (token) await extend(userId, token);
 }
 
+/**
+ * Everyone's, from the server, whether they have opened the OS or not.
+ *
+ * James, 6 Oct 2026: "I thought we had a way of keeping the token alive
+ * permanently." We did - extendSessionToken - but it only ever ran for the
+ * person in front of the screen. Somebody off for a fortnight still lapsed,
+ * and a lapsed token cannot be revived. So the five-minute lead scan
+ * (app/api/leads/scan) calls this too: any live token past halfway is pushed
+ * out another fortnight. Each person's is touched about once a week; the read
+ * that finds none costs nothing. Once signed in, nobody signs in again unless
+ * they press Disconnect or REX itself refuses the extension.
+ */
+export async function keepEveryoneRexAlive(): Promise<number> {
+  if (!hasDb()) return 0;
+  const rows = await q<{ user_id: string; token_enc: string }>(
+    `SELECT user_id, token_enc FROM os_rex_tokens
+      WHERE expires_at > NOW() AND expires_at < NOW() + ($1 * INTERVAL '1 millisecond')`,
+    [EXTEND_WHEN_UNDER_MS]
+  ).catch(() => []);
+  for (const r of rows) {
+    const token = open(r.token_enc);
+    if (token) await extend(r.user_id, token);
+  }
+  return rows.length;
+}
+
 export async function rexSessionFor(userId: string | null): Promise<RexSession> {
   if (!userId) return { connected: false, reason: "Not signed in to the OS." };
   if (!hasDb()) return { connected: false, reason: "No database on this environment." };
