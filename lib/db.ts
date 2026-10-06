@@ -971,6 +971,16 @@ CREATE TABLE IF NOT EXISTS os_file_documents (
 CREATE INDEX IF NOT EXISTS os_file_documents_street_idx ON os_file_documents (street) WHERE removed_at IS NULL;
 CREATE INDEX IF NOT EXISTS os_file_documents_property_idx ON os_file_documents (rex_property_id) WHERE removed_at IS NULL;
 
+-- Each agent's Letting Agent Registration Number (Scotland), by REX user id.
+-- Every Scottish advert must show it (6 Oct 2026); typed once on a listing,
+-- prefilled on every Scottish listing of theirs after that.
+CREATE TABLE IF NOT EXISTS os_agent_larn (
+  rex_user_id  TEXT PRIMARY KEY,
+  larn         TEXT NOT NULL,
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by   TEXT
+);
+
 -- The OS's own working state on a record REX has no field for: the appraisal
 -- sub-case on a lead, the landlord-property-tenant link on a listing.
 --

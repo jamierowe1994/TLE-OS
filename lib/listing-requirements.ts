@@ -51,6 +51,8 @@ export interface RequirementInput {
   epcBand?: string | null;
   /** Scottish homes only: the landlord's registration number, by law on every advert. */
   landlordRegistration?: string | null;
+  /** Scottish homes: the letting agent's own registration number (LARN). */
+  agentLarn?: string | null;
   scotland?: boolean;
 }
 
@@ -97,6 +99,7 @@ export const REQUIREMENTS: { id: RequirementId; label: string; ok: (i: Requireme
   /* Undefined = not known to this caller, so not judged here. */
   { id: "epcBand", label: "EPC rating", ok: (i) => i.epcBand === undefined || filled(i.epcBand) },
   { id: "landlordRegistration", label: "Landlord registration number", ok: (i) => !i.scotland || filled(i.landlordRegistration) },
+  { id: "agentLarn", label: "Letting agent registration number (LARN)", ok: (i) => !i.scotland || filled(i.agentLarn) },
 ];
 
 /** Shown and counted, never blocking. */
@@ -124,6 +127,7 @@ export function inputFromDetails(d: {
   facts: Record<string, string | number | null | undefined>;
   epc?: { band: string | null };
   record?: { landlordRegistration: string | null; scotland: boolean; epc: { band: string | null } | null };
+  agentLarn?: string | null;
 }): RequirementInput {
   const f = (k: string) => (d.facts[k] == null ? null : String(d.facts[k]));
   return {
@@ -135,6 +139,7 @@ export function inputFromDetails(d: {
        sees pre-filled, and saving sends it on. */
     epcBand: d.epc ? (d.epc.band ?? d.record?.epc?.band ?? null) : undefined,
     landlordRegistration: d.record?.landlordRegistration ?? null,
+    agentLarn: d.agentLarn ?? null,
     scotland: d.record?.scotland ?? false,
   };
 }

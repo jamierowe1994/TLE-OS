@@ -31,6 +31,8 @@ export interface Draft {
   epcBand: string | null;
   epcCurrent: number | null;
   epcPotential: number | null;
+  /** Scottish homes: the agent's Letting Agent Registration Number. */
+  agentLarn: string | null;
   /** REX's listing subcategory id - the property type the portals insist on. */
   propertyTypeId: string | null;
   /** Scottish homes: the landlord's registration number. Kept by the OS. */
@@ -69,6 +71,7 @@ export const draftFrom = (d: ListingDetails): Draft => ({
   epcPotential: d.epc.potential,
   landlordRegistration: d.record?.landlordRegistration ?? null,
   propertyTypeId: d.propertyTypeId ?? null,
+  agentLarn: d.agentLarn ?? null,
 });
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -111,6 +114,7 @@ export const CHANGE_WORDS: Record<keyof Draft, string> = {
   epcPotential: "EPC potential score",
   landlordRegistration: "landlord registration number",
   propertyTypeId: "property type",
+  agentLarn: "letting agent registration number",
 };
 
 export const money = (n: number | null | undefined) => (n == null ? null : `£${n.toLocaleString("en-GB")}`);

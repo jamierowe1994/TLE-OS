@@ -2,7 +2,7 @@ import "server-only";
 import { rexCall, type RexResponse } from "@/lib/rex";
 import { readMarketingFacts, type FactSource } from "@/lib/listing-marketing-store";
 import { RULES } from "@/lib/staleness";
-import { bandForScore, recordForProperty, type EpcBand, type ListingRecord } from "@/lib/listing-record";
+import { bandForScore, larnForAgent, recordForProperty, type EpcBand, type ListingRecord } from "@/lib/listing-record";
 
 /**
  * ONE LISTING, AS THE PORTALS WILL SEE IT - read live from REX, and written
@@ -81,6 +81,8 @@ export interface ListingDetails {
   /** REX's listing subcategory: its id, and the related row's id for an update. */
   propertyTypeId: string | null;
   propertyTypeRowId: string | null;
+  /** The listing agent's Letting Agent Registration Number, as the OS holds it (Scotland). */
+  agentLarn: string | null;
   /** What the OS's own property record holds for this home (lib/listing-record). */
   record: ListingRecord;
   material: { electricity: string | null; water: string | null; sewerage: string | null; broadband: string | null; gas: string | null };
@@ -250,6 +252,7 @@ export async function readListingDetails(id: number, opts: { cached?: boolean } 
   const postcode0 = str(p.adr_postcode) ?? "";
   const record = await recordForProperty(propertyId, { postcode: postcode0, town: town0, address: str(p.system_search_key) });
   const eerNow = num(l.epc_current_eer);
+  const agentLarn = record.scotland ? await larnForAgent(str(((l.listing_agent_1 ?? {}) as Obj).id)) : null;
 
   const adverts = Array.isArray(related.listing_adverts) ? (related.listing_adverts as Obj[]) : [];
   const internet = adverts.find((a) => a.advert_type === "internet") ?? {};
@@ -306,6 +309,7 @@ export async function readListingDetails(id: number, opts: { cached?: boolean } 
       band: (str(l.epc_rating)?.toUpperCase().match(/^[A-G]$/)?.[0] as EpcBand | undefined) ?? bandForScore(eerNow),
     },
     record,
+    agentLarn,
     material: {
       electricity: text(p.attr_primary_electricity_supply),
       water: text(p.attr_primary_water_supply),

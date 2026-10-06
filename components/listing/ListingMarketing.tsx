@@ -216,11 +216,11 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
     propertyType: draft.propertyTypeId ? (types?.find((t) => t.id === draft.propertyTypeId)?.label ?? details.propertyType ?? draft.propertyTypeId) : null, heading: draft.heading, body: draft.body, highlights: draft.highlights, photos: images.length,
     councilTaxBand: draft.councilTaxBand, parking: draft.parking, electricity: draft.electricity, water: draft.water,
     sewerage: draft.sewerage, broadband: draft.broadband, heating: draft.heating, furnishing: draft.furnishing,
-    epcBand: draft.epcBand, landlordRegistration: draft.landlordRegistration, scotland: details.record?.scotland ?? false,
+    epcBand: draft.epcBand, landlordRegistration: draft.landlordRegistration, agentLarn: draft.agentLarn, scotland: details.record?.scotland ?? false,
   };
   /* The ring counts only what the portals and the law need (6 Oct 2026); the
      registration number only on a Scottish home. The rest is recommended. */
-  const required = REQUIREMENTS.filter((r) => r.id !== "landlordRegistration" || input.scotland);
+  const required = REQUIREMENTS.filter((r) => (r.id !== "landlordRegistration" && r.id !== "agentLarn") || input.scotland);
   const done = required.filter((r) => r.ok(input)).length;
   const total = required.length;
   const recDone = RECOMMENDED.filter((r) => r.ok(input)).length;
@@ -560,12 +560,18 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
               <input disabled={!canEdit} value={draft.landlordRegistration ?? ""} onChange={(e) => setDraft((d) => ({ ...d, landlordRegistration: e.target.value.replace(/\s+/g, " ").slice(0, 40) || null }))} placeholder="e.g. 123456/230/12345" className={`${fieldCls} mt-1 ${edge("landlordRegistration")}`} />
             </label>
           )}
+          {details.record?.scotland && (
+            <label className="col-span-2 block min-w-0 sm:col-span-3 lg:col-span-1">
+              {label("agentLarn", "Your letting agent registration number")}
+              <input disabled={!canEdit} value={draft.agentLarn ?? ""} onChange={(e) => setDraft((d) => ({ ...d, agentLarn: e.target.value.toUpperCase().replace(/\s+/g, "").slice(0, 16) || null }))} placeholder="e.g. LARN1902034" className={`${fieldCls} mt-1 ${edge("agentLarn")}`} />
+            </label>
+          )}
         </div>
         <p className="mt-2.5 text-[11px] leading-relaxed text-muted">
           {epcNote ?? (draft.epcCurrent != null && draft.epcPotential == null
             ? "Add the potential score too and the rating goes to the portals with the advert. Until then it is kept here."
             : "Every advert has to show the EPC rating.")}
-          {details.record?.scotland && " In Scotland the landlord registration number has to be on the advert as well, so saving adds it as the last line of the description."}
+          {details.record?.scotland && " In Scotland the landlord's registration number and your letting agent registration number (LARN) have to be on the advert as well, so saving adds both as the last lines of the description. Your LARN is remembered for your other Scottish listings."}
         </p>
       </section>
 

@@ -13,7 +13,7 @@ import { isExpiredToken, rexCall, rexConfigured, rexWritesLocked } from "@/lib/r
 import { rexTokenFor } from "@/lib/rex-user";
 import { isOwner } from "@/lib/agent-words";
 import { recordFact } from "@/lib/property-facts";
-import { bandForScore, forgetRecord } from "@/lib/listing-record";
+import { bandForScore, forgetRecord, normaliseLarn, saveAgentLarn, withScottishFooter } from "@/lib/listing-record";
 
 /**
  * The advert, live from REX, and saved back to it.
@@ -174,6 +174,12 @@ export async function PATCH(req: NextRequest) {
     if (typeof b.propertyTypeId === "string" && /^[\w-]{1,40}$/.test(b.propertyTypeId)) propertyTypeId = b.propertyTypeId;
     else bad.push("property type");
   }
+  let agentLarn: string | undefined;
+  if (b.agentLarn !== undefined && b.agentLarn !== null && b.agentLarn !== "") {
+    const n = normaliseLarn(String(b.agentLarn));
+    if (n) agentLarn = n;
+    else bad.push("letting agent registration number (LARN followed by its digits, e.g. LARN1902034)");
+  }
   if (bad.length) return NextResponse.json({ ok: false, error: `These did not look right: ${bad.join(", ")}.` }, { status: 400 });
 
   try {
@@ -187,16 +193,27 @@ export async function PATCH(req: NextRequest) {
     const epcTouched = epcBand !== undefined || epcCurrent !== undefined || epcPotential !== undefined;
     let epcKeptOnly = false;
     let epcWrite: Record<string, number> | undefined;
-    if (epcTouched || larn !== undefined) {
+    if (epcTouched || larn !== undefined || agentLarn !== undefined) {
       const current = await readListingDetails(id).catch(() => null);
       const key = current?.record.factsKey ?? null;
       if (key && larn) {
         await recordFact({ propertyId: key, field: "landlord_registration", value: larn, source: "manual", sourceRef: `listing ${id}`, by: actor.email });
-        const body = edit.body ?? current?.body ?? "";
-        if (!body.includes(larn)) {
-          const kept = body.replace(/\n*\s*Landlord registration number:[^\n]*\s*$/i, "").trimEnd();
-          edit.body = `${kept}${kept ? "\n\n" : ""}Landlord registration number: ${larn}`;
-        }
+      }
+      /* The agent's LARN is theirs, not the home's: kept against the
+         listing's agent, so their next Scottish listing is prefilled. */
+      if (agentLarn) {
+        const agentId = current?.agent.id;
+        if (!agentId) return NextResponse.json({ ok: false, error: "Choose the listing's agent first - the LARN on the advert is theirs." }, { status: 400 });
+        await saveAgentLarn(agentId, agentLarn, actor.email);
+      }
+      /* Both Scottish numbers ride as the description's last lines. */
+      if (current?.record.scotland && (larn !== undefined || agentLarn !== undefined || edit.body !== undefined)) {
+        const body = edit.body ?? current.body ?? "";
+        const next = withScottishFooter(body, {
+          landlord: larn !== undefined ? larn : current.record.landlordRegistration,
+          agent: agentLarn ?? current.agentLarn,
+        });
+        if (next !== body) edit.body = next;
       }
       if (epcTouched && current) {
         const now = epcCurrent !== undefined ? epcCurrent : current.epc.current;
@@ -225,7 +242,7 @@ export async function PATCH(req: NextRequest) {
       }
     }
     if (!plan.listing && !plan.property) {
-      if (epcTouched || larn !== undefined || propertyTypeId) {
+      if (epcTouched || larn !== undefined || agentLarn !== undefined || propertyTypeId) {
         forgetListing(id);
         const details = await readListingDetails(id).catch(() => null);
         return NextResponse.json({ ok: true, id, note: epcKeptOnly ? "Kept here. Add the potential score to send the rating to the portals." : "Saved.", details });

@@ -141,3 +141,44 @@ export async function recordFiles(osPropertyId: string): Promise<RecordFile[]> {
   } while (token);
   return out;
 }
+
+/* ── The agent's Letting Agent Registration Number (Scotland) ─────────── */
+
+/** "larn 1902034" / "1902034" -> "LARN1902034". Null when it is not one. */
+export function normaliseLarn(v: string | null | undefined): string | null {
+  const digits = (v ?? "").toUpperCase().replace(/\s+/g, "").replace(/^LARN/, "");
+  return /^\d{5,9}$/.test(digits) ? `LARN${digits}` : null;
+}
+
+export async function larnForAgent(rexUserId: string | null): Promise<string | null> {
+  if (!rexUserId || !hasDb()) return null;
+  const rows = await q<{ larn: string }>("SELECT larn FROM os_agent_larn WHERE rex_user_id = $1", [rexUserId]).catch(() => []);
+  return rows[0]?.larn ?? null;
+}
+
+export async function saveAgentLarn(rexUserId: string, larn: string, by: string): Promise<void> {
+  if (!hasDb()) return;
+  await q(
+    `INSERT INTO os_agent_larn (rex_user_id, larn, updated_at, updated_by) VALUES ($1, $2, NOW(), $3)
+     ON CONFLICT (rex_user_id) DO UPDATE SET larn = EXCLUDED.larn, updated_at = NOW(), updated_by = EXCLUDED.updated_by`,
+    [rexUserId, larn, by]
+  );
+}
+
+/**
+ * The advert's Scottish footer: the landlord's registration number and the
+ * letting agent's, as the description's last lines. Any earlier copy of
+ * either line is taken out first, so a changed number replaces the old one.
+ */
+export function withScottishFooter(body: string, numbers: { landlord?: string | null; agent?: string | null }): string {
+  const kept = body
+    .split("\n")
+    .filter((line) => !/^\s*(Landlord registration number|Letting agent registration number):/i.test(line))
+    .join("\n")
+    .trimEnd();
+  const lines = [
+    numbers.landlord ? `Landlord registration number: ${numbers.landlord}` : null,
+    numbers.agent ? `Letting agent registration number: ${numbers.agent}` : null,
+  ].filter(Boolean);
+  return lines.length ? `${kept}${kept ? "\n\n" : ""}${lines.join("\n")}` : kept;
+}
