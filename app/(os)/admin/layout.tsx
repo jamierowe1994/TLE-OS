@@ -130,6 +130,9 @@ const GROUPS: Array<{
          somebody sitting inside their own screen invites them to read it while
          deciding - which is exactly what would destroy the measurement. */
       { href: "/admin/plc-checks", label: "PLC checks", needs: "see:reports" },
+      /* The weekly book health check (6 Oct 2026): what has drifted between
+         REX, REX PM and the certificates. Reports only. */
+      { href: "/admin/book-health", label: "Book health", needs: "see:reports" },
       /* Agent compliance was here. It is inside Michael's view now, under
          Agents - one route in, as with the other three. */
       { href: "/admin/todo", label: "To do", needs: "see:reports" },

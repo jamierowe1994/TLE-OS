@@ -126,6 +126,18 @@ export const SWITCHES: Switch[] = [
     legacyOn: "on",
   },
   {
+    /* The weekly book health check (6 Oct 2026): duplicates and missing
+       homes in REX, certificates whose dates cannot be right. Reads only;
+       this decides whether the list is emailed. */
+    key: "book_health",
+    label: "Weekly book health email",
+    what: "Every Monday morning, emails the list of homes REX holds twice, homes REX PM manages that REX has no record of, rooms sharing one REX record, certificates whose dates cannot be right, and let rooms with no rent. Nothing is changed.",
+    who: "The owners (James and Howard). Staff only.",
+    confirm: "SEND HEALTH CHECK",
+    legacyEnv: "BOOK_HEALTH",
+    legacyOn: "on",
+  },
+  {
     key: "pretenancy_alerts",
     label: "Pre-tenancy digest",
     what: "Emails a daily list of deals where the pipeline and PayProp disagree.",

@@ -524,6 +524,10 @@ const MACHINE_ROUTES = [
      in the route, failing shut without CRON_SECRET. */
   "/api/payprop/attachments",
   "/api/reminders/run",
+  /* The weekly book health check (6 Oct 2026): cron key on POST, see:reports
+     or the cron key on GET, both checked in the route and failing shut
+     without CRON_SECRET. */
+  "/api/book-health/run",
 ];
 
 export async function middleware(req: NextRequest) {

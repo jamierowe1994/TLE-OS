@@ -361,3 +361,58 @@ export function radarDigestEmail(input: {
     text: [`Landlord Radar - ${input.dateLabel}`, "", intro, "", "Top ten not yet worked:", textRows(rows), "", `Open Radar: ${link}`].join("\n"),
   };
 }
+
+/* ── The weekly book health check (6 Oct 2026) ───────────────────────── */
+
+export function bookHealthEmail(input: {
+  findings: { key: string; kind: string; title: string; detail: string }[];
+  isNew: (key: string) => boolean;
+  labels: Record<string, { title: string; fix: string }>;
+  order: string[];
+}): AgentEmail {
+  /* Grouped by what is wrong, new ones first in each group, a handful each:
+     the page holds the full list, and a mail of a hundred rows is skimmed. */
+  const PER_KIND = 6;
+  const rows: ShellRow[] = [];
+  const textLines: string[] = [];
+  const fresh = input.findings.filter((f) => input.isNew(f.key)).length;
+  for (const kind of input.order) {
+    const all = input.findings.filter((f) => f.kind === kind);
+    if (!all.length) continue;
+    const label = input.labels[kind];
+    const sorted = [...all].sort((a, b) => Number(input.isNew(b.key)) - Number(input.isNew(a.key)));
+    const newHere = all.filter((f) => input.isNew(f.key)).length;
+    rows.push({
+      title: `${label.title}: ${all.length}`,
+      detail: `${label.fix}${newHere ? ` ${newHere} new this week.` : ""}`,
+      tone: "attention",
+    });
+    textLines.push(`${label.title}: ${all.length}${newHere ? ` (${newHere} new)` : ""}`);
+    for (const f of sorted.slice(0, PER_KIND)) {
+      /* Every line keeps the red mark: one carried over from last week is still unfixed, and the shell's calm mark reads as "fine". */
+      rows.push({ title: f.title, detail: f.detail, tone: "neutral", pill: input.isNew(f.key) ? "New" : undefined, pillTone: "urgent" });
+      textLines.push(`  - ${f.title}: ${f.detail}`);
+    }
+    if (all.length > PER_KIND) textLines.push(`  ...and ${all.length - PER_KIND} more on the page.`);
+  }
+  const n = input.findings.length;
+  const link = `${SITE}/admin/book-health`;
+  const subject = n
+    ? `Book health: ${n} thing${n === 1 ? "" : "s"} to put right${fresh ? `, ${fresh} new` : ""}`
+    : "Book health: nothing to put right this week";
+  return {
+    subject,
+    html: skyListShell({
+      heading: "This Week's Book Health",
+      intro: n
+        ? "Every home REX PM manages, checked against REX and the certificates on file. Nothing here has been changed - each line is something a person needs to put right."
+        : "Every home REX PM manages, checked against REX and the certificates on file. Nothing needs putting right this week.",
+      rows,
+      rowStyle: "panel",
+      button: "Open the full list",
+      link,
+      rowHref: link,
+    }),
+    text: [subject, "", ...textLines, "", link].join("\n"),
+  };
+}
