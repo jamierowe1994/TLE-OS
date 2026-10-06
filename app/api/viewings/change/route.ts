@@ -6,7 +6,7 @@ import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view
 /**
  * POST → cancel or move a viewing (lib/viewing-change, 15 Sep 2026).
  * Body: { viewingId, action: "cancel"|"move", reason?, reasonText?, newStartsAt?,
- *         oldStartsAt, minutes, applicantName, applicantEmail, address }.
+ *         oldStartsAt, minutes, applicantName, applicantEmail, address, notify? }.
  */
 
 export const dynamic = "force-dynamic";
@@ -45,6 +45,9 @@ export async function POST(req: NextRequest) {
     applicantEmail: str("applicantEmail") || null,
     address: str("address") || "the property",
     unaccompanied: b.unaccompanied === true,
+    /* Change time sends its own reviewed email (the booker); default on for
+       the Reschedule and Cancel buttons, which still tell them here. */
+    notify: b.notify !== false,
   });
   return NextResponse.json({ ok: true, ...out });
 }

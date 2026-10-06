@@ -103,6 +103,8 @@ export type Appt = {
    */
   listingId?: string | null;
   propertyId?: string | null;
+  /** The lead the booking was made for, on a viewing booked in the OS. */
+  leadId?: string | null;
   /**
    * What was said afterwards, out of REX - see lib/rex-feedback.ts.
    *

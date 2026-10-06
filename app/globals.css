@@ -1441,3 +1441,13 @@ html[data-os-toast="up"] .os-toast-lift {
 /* A card that floats off the edge (the viewings appointment card): it goes
    its own width AND its margin, so no sliver is left showing at the edge. */
 .so-panel.so-panel-float:not([data-shown="true"]) { transform: translate3d(calc(100% + 32px), 0, 0); }
+
+/* The viewing booker's steps (6 Oct 2026): each slides in from the side it
+   was reached from - forward from the right, back from the left. */
+@keyframes step-in-next { from { opacity: 0; transform: translateX(56px); } to { opacity: 1; transform: none; } }
+@keyframes step-in-back { from { opacity: 0; transform: translateX(-56px); } to { opacity: 1; transform: none; } }
+.step-in-next { animation: step-in-next 340ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.step-in-back { animation: step-in-back 340ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .step-in-next, .step-in-back { animation: none; }
+}

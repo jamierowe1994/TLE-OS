@@ -623,6 +623,8 @@ export async function addTestViewing(p: {
   withName: string;
   authorId: string | null;
   authorName: string;
+  /** The tenant's lead, so Change time and the confirmations know who it is. */
+  leadId?: string | null;
 }): Promise<{ appointmentId: string; listing: TestListing } | null> {
   if (!hasDb()) return null;
   const rows = await q<{ kit_id: string; owner_email: string; payload: TestListing }>(
@@ -635,8 +637,11 @@ export async function addTestViewing(p: {
   const id = randomUUID();
   const where = `${row.payload.name}, ${row.payload.locality} ${row.payload.postcode}`.trim();
   await q(
-    `INSERT INTO os_appointments (id, starts_at, mins, kind, title, where_at, who, author_id, author_name) VALUES ($1,$2,$3,'viewing',$4,$5,$6,$7,$8)`,
-    [id, new Date(p.startsAt).toISOString(), p.mins, `Viewing: ${row.payload.name} (test)`, where, p.who.slice(0, 120), p.authorId, p.authorName]
+    `INSERT INTO os_appointments (id, starts_at, mins, kind, title, where_at, who, author_id, author_name, booking) VALUES ($1,$2,$3,'viewing',$4,$5,$6,$7,$8,$9::jsonb)`,
+    [id, new Date(p.startsAt).toISOString(), p.mins, `Viewing: ${row.payload.name} (test)`, where, p.who.slice(0, 120), p.authorId, p.authorName,
+     /* What a real booking carries (app/api/viewings/book), so a test viewing
+        can be moved and re-confirmed the same way (6 Oct 2026). */
+     JSON.stringify({ leadId: p.leadId ?? null, listingId: String(p.listingId), applicantName: p.who, applicantEmail: p.tenantEmail || null, address: row.payload.name, startsAt: new Date(p.startsAt).toISOString(), minutes: p.mins })]
   );
   const v: TestViewing = {
     appointmentId: id,

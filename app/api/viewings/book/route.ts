@@ -68,10 +68,12 @@ export async function POST(req: NextRequest) {
       withName: (actor.name || "").split(/\s+/)[0] || actor.name || "",
       authorId: actor.id,
       authorName: actor.name ?? "",
+      leadId: String(b.leadId),
     }).catch(() => null);
     return NextResponse.json({
       ok: Boolean(made),
       test: true,
+      viewingId: made ? `os-${made.appointmentId}` : null,
       said: made
         ? "Test viewing. It is in your diary and on the test file - nothing went to Outlook, REX or the applicant."
         : "That test listing has gone. Reset the test file and try again.",
@@ -151,17 +153,22 @@ export async function POST(req: NextRequest) {
     minutes,
     unaccompanied,
   };
+  /* The id the listing and the diary know this viewing by, so the booker's
+     last step can confirm access on it: REX's when REX took it. */
+  const rowId = uid();
+  let viewingId: string | null = rexEventId ? `rex-${rexEventId}` : null;
   if (hasDb()) {
-    await q(
+    const saved = await q(
       `INSERT INTO os_appointments (id, starts_at, mins, kind, title, where_at, who, author_id, author_name, rex_event_id, synced_at, lead_id, contact_email, booking)
        VALUES ($1, $2, $3, 'viewing', $4, $5, $6, $7, $8, $9, CASE WHEN $9::text IS NULL THEN NULL ELSE NOW() END, $10, $11, $12::jsonb)`,
-      [uid(), booking.startsAt, minutes, `${unaccompanied ? "Unaccompanied viewing" : "Viewing"} - ${address} with ${applicantName}`.slice(0, 200),
+      [rowId, booking.startsAt, minutes, `${unaccompanied ? "Unaccompanied viewing" : "Viewing"} - ${address} with ${applicantName}`.slice(0, 200),
        address.slice(0, 200), applicantName.slice(0, 120), actor.id, actor.name ?? "", rexEventId, booking.leadId, booking.applicantEmail, JSON.stringify(booking)]
-    ).catch(() => null);
+    ).then(() => true).catch(() => false);
+    if (saved && !viewingId) viewingId = `os-${rowId}`;
   }
 
   /* For the agent's row: their diary and the email. The REX mirror is in the
      response for owners, never in the words an agent reads. */
   const said = [outlook.ok ? "In your Outlook calendar." : outlook.detail, "Confirmation not sent yet."].filter(Boolean).join(" ");
-  return NextResponse.json({ ok: true, said, outlook, rex, tenant });
+  return NextResponse.json({ ok: true, said, outlook, rex, tenant, viewingId });
 }

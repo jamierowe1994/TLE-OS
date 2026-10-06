@@ -3659,8 +3659,10 @@ function LeadDrawerBody({
       />
 
       {/* The prompt. Deliberately not a modal: the booking is done and this
-          is an offer, so it sits in the corner and can be ignored. */}
-      {access && (
+          is an offer, so it sits in the corner and can be ignored. Held back
+          while the booker is still open: its own steps now run on to the
+          landlord and access, and this would sit over its buttons. */}
+      {access && !booking && (
         <div className="fade-up fixed bottom-5 right-5 z-[140] w-[min(94vw,380px)] rounded-2xl border border-line/80 bg-panel p-4 shadow-[0_18px_50px_-20px_rgba(0,0,0,0.4)]">
           <div className="flex items-start gap-2.5">
             <DoodleIcon name="key" size={17} className="mt-0.5 shrink-0 text-accent-dark" />
@@ -3779,6 +3781,8 @@ function LeadDrawerBody({
              lead move to Viewings (James, 1 Oct 2026: check it was actually
              booked, and if it was not, keep it on its stage). */
           let viewingMade = false;
+          /* The id the listing knows it by, for the booker's access step. */
+          let bookedViewingId: string | null = null;
           if (bookMode === "viewing" && v.startsAt) {
             const confirm = {
               leadId: lead.id,
@@ -3796,9 +3800,10 @@ function LeadDrawerBody({
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ ...confirm, contactId: lead.contactId ?? null }),
             })
-              .then((r) => r.json() as Promise<{ ok?: boolean; outlook?: { ok?: boolean; detail?: string } }>)
+              .then((r) => r.json() as Promise<{ ok?: boolean; viewingId?: string | null; outlook?: { ok?: boolean; detail?: string } }>)
               .catch(() => null);
             viewingMade = Boolean(j?.ok);
+            bookedViewingId = j?.viewingId ?? null;
             said.push(!j ? "Couldn't reach the server: check your calendar and tell the applicant yourself." : j.outlook?.ok ? "In your Outlook calendar." : (j.outlook?.detail ?? "Booked."));
             /* The confirmation, as the agent left it in the booker's email
                column - or nothing, if they unticked it (17 Sep 2026). */
@@ -3919,6 +3924,7 @@ function LeadDrawerBody({
               pre: res?.pre ?? null,
             };
           }
+          if (bookMode === "viewing") return { said: said.join(" "), viewingId: bookedViewingId, failed: !viewingMade };
           return said.length ? { said: said.join(" ") } : undefined;
         }}
       />

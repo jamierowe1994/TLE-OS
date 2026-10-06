@@ -41,6 +41,67 @@ export interface ViewingChangeInput {
   address: string;
   /** Nobody from us is going, so the moved email must not promise an agent. */
   unaccompanied?: boolean;
+  /**
+   * False = move it but email nobody (James, 6 Oct 2026). Change time runs
+   * through the booker, which shows the agent the "new time" email to read
+   * and edit before it goes (/api/confirmations), so the change itself must
+   * not send its own copy as well. Cancelling still tells them here.
+   */
+  notify?: boolean;
+}
+
+/** One of our own rows in os_appointments, as a move needs it. */
+type OsRow = { id: string; author_id: string | null; starts_at: Date; booking: Record<string, unknown> | null };
+
+/**
+ * Move or cancel the OS's own record of a viewing.
+ *
+ * A viewing REX did not take lives only here (and in the agent's Outlook),
+ * keyed os-<row id> on the diary. Moving it used to send the applicant a new
+ * time while the diary, the row and the Outlook entry all kept the old one.
+ * A viewing REX did take still has a row here (rex_event_id set), which the
+ * confirmation and the landlord's portal read, so that follows REX's move.
+ */
+async function moveOurRow(me: OsUser, row: OsRow, p: ViewingChangeInput, steps: Record<string, string>): Promise<void> {
+  if (!hasDb()) return;
+  const b = row.booking ?? {};
+  /* The Outlook entry was made under the key of the time it was BOOKED at,
+     so that key is kept on the row and reused for every later move. */
+  const outlookKey = typeof b.outlookKey === "string" && b.outlookKey
+    ? b.outlookKey
+    : `viewing|${String(b.leadId ?? "")}|${b.listingId != null ? String(b.listingId) : "-"}|${new Date(String(b.startsAt ?? row.starts_at)).toISOString()}`;
+  if (p.action !== "move" || !p.newStartsAt) return;
+  const at = new Date(p.newStartsAt).toISOString();
+  await q(
+    `UPDATE os_appointments
+        SET starts_at = $2::timestamptz, mins = $3::int,
+            booking = CASE WHEN booking IS NULL THEN NULL ELSE booking || jsonb_build_object('startsAt', $5::text, 'minutes', $6::int, 'outlookKey', $4::text) END
+      WHERE id = $1`,
+    /* The time and the length go in twice, once per type: one parameter read
+       as a timestamp in one place and as text in another is refused. */
+    [row.id, at, p.minutes, outlookKey, at, p.minutes]
+  ).catch(() => null);
+  /* A test file's viewing is also written on the kit: keep the two agreeing. */
+  await q(
+    `UPDATE os_test_records SET payload = payload || jsonb_build_object('startsAt', $2::text) WHERE kind = 'viewing' AND payload->>'appointmentId' = $1`,
+    [row.id, at]
+  ).catch(() => null);
+  if (!steps.outlook && b.leadId) {
+    const known = await q(`SELECT 1 FROM os_case_state WHERE kind = 'outlook-event' AND record_id = $1`, [outlookKey]).catch(() => []);
+    if (known.length) {
+      const o = await putInOutlook({
+        userId: me.id,
+        key: outlookKey,
+        subject: `${p.unaccompanied ? "Unaccompanied viewing" : "Viewing"} - ${p.address} with ${p.applicantName}`,
+        body: `Booked in TLE OS. Moved from ${pretty(p.oldStartsAt)}.\nApplicant: ${p.applicantName}`,
+        showAs: p.unaccompanied ? "free" : "busy",
+        location: p.address,
+        startsAt: at,
+        minutes: p.minutes,
+      }).catch(() => ({ ok: false as const, detail: "Could not reach Outlook." }));
+      steps.outlook = o.ok ? "Moved in your Outlook calendar." : o.detail;
+    }
+  }
 }
 
 const pretty = (iso: string) =>
@@ -68,6 +129,21 @@ export async function changeViewing(me: OsUser, p: ViewingChangeInput): Promise<
       return { said: first ? `That viewing is ${first}'s. Only they can cancel or move it.` : "That viewing is another agent's. Only they can cancel or move it.", steps: { rex: "Not changed." } };
     }
   }
+  /* OURS ONLY: a viewing REX never took. The same rule on whose it is - an
+     agent moves their own - read off the row rather than REX. */
+  const ourId = p.viewingId.startsWith("os-") ? p.viewingId.slice(3) : null;
+  if (ourId) {
+    const rows = hasDb()
+      ? await q<OsRow>(`SELECT id, author_id, starts_at, booking FROM os_appointments WHERE id = $1`, [ourId]).catch(() => [])
+      : [];
+    const row = rows[0];
+    if (!row) return { said: "That viewing could not be found, so nothing was changed.", steps: { os: "Not found." } };
+    if (me.role === "agent" && row.author_id && row.author_id !== me.id) {
+      return { said: "That viewing is another agent's. Only they can cancel or move it.", steps: { os: "Not changed." } };
+    }
+    await moveOurRow(me, row, p, steps);
+  }
+
   if (eventId) {
     const r = await changeRexEvent({
       userId: me.id,
@@ -110,7 +186,17 @@ export async function changeViewing(me: OsUser, p: ViewingChangeInput): Promise<
     }
   }
 
-  /* The applicant. */
+  /* REX took it, so it moved there - and our own row of it follows, because
+     the confirmation and the landlord's portal read the time from it. */
+  if (eventId && hasDb() && steps.rex?.startsWith("Moved")) {
+    const rows = await q<OsRow>(`SELECT id, author_id, starts_at, booking FROM os_appointments WHERE rex_event_id = $1 LIMIT 1`, [eventId]).catch(() => []);
+    if (rows[0]) await moveOurRow(me, rows[0], p, { ...steps, outlook: steps.outlook ?? "handled" });
+  }
+
+  /* The applicant - unless the booker is showing them the email instead. */
+  if (p.notify === false) {
+    return { said: [steps.outlook, steps.rex].filter(Boolean).join(" ") || "Moved.", steps };
+  }
   const to = (p.applicantEmail ?? "").trim();
   const firstName = p.applicantName.trim().split(/\s+/)[0] || "there";
   const agentName = me.name || "Your agent";
