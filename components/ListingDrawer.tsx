@@ -891,7 +891,9 @@ function ListingDrawerBody({
             ✕
           </button>
           <SaveChip scope={saves} />
-          <div className="ml-auto flex min-w-0 max-w-full gap-2 overflow-x-auto pb-0.5">
+          {/* Swipeable on a phone, but no scrollbar: with Marketing picked the row
+              overflowed by a pixel and drew one under the tabs (6 Oct 2026). */}
+          <div className="ml-auto flex min-w-0 max-w-full gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {TABS.map((t) => {
               const count =
                 t.key === "applications"

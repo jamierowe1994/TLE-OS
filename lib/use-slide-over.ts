@@ -25,6 +25,35 @@ import { useCallback, useEffect, useRef, useState } from "react";
  */
 const OUT_MS = 300;
 
+/**
+ * The page behind stays still (James, 6 Oct 2026: "the background of the
+ * listings page is still moving. If we scroll up and down, that shouldn't
+ * happen when we have the listing page open").
+ *
+ * The document is locked for as long as any drawer is open - counted, so a
+ * drawer opened from inside another does not unlock the page when it closes.
+ * The scrollbar's width is put back as padding so the board behind does not
+ * jump sideways the moment its scrollbar disappears.
+ */
+let locks = 0;
+let saved: { overflow: string; padding: string } | null = null;
+function lockPage() {
+  if (typeof document === "undefined") return;
+  if (locks++ > 0) return;
+  const root = document.documentElement;
+  const gap = window.innerWidth - root.clientWidth;
+  saved = { overflow: root.style.overflow, padding: document.body.style.paddingRight };
+  root.style.overflow = "hidden";
+  if (gap > 0) document.body.style.paddingRight = `${gap}px`;
+}
+function unlockPage() {
+  if (typeof document === "undefined" || locks === 0) return;
+  if (--locks > 0) return;
+  document.documentElement.style.overflow = saved?.overflow ?? "";
+  document.body.style.paddingRight = saved?.padding ?? "";
+  saved = null;
+}
+
 export function useSlideOver(open: boolean, onClose: () => void, which?: string | number | null) {
   const [shown, setShown] = useState(false);
   const leaving = useRef(false);
@@ -41,6 +70,13 @@ export function useSlideOver(open: boolean, onClose: () => void, which?: string 
     leaving.current = false;
     setShown(true);
   }, [which, open]);
+
+  /* Locked from the moment there is a record until it is gone, the slide out included. */
+  useEffect(() => {
+    if (!open) return;
+    lockPage();
+    return unlockPage;
+  }, [open]);
 
   useEffect(() => {
     if (!open) {

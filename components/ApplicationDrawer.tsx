@@ -481,7 +481,7 @@ export default function ApplicationDrawer({
               ✕
             </button>
             <SaveChip scope={saves} />
-            <div className="ml-auto flex min-w-0 max-w-full gap-2 overflow-x-auto pb-0.5">
+            <div className="ml-auto flex min-w-0 max-w-full gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {TABS.map((t) => {
                 const count = t.key === "people" ? people.length : 0;
                 const on = tab === t.key;

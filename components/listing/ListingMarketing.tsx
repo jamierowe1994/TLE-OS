@@ -62,6 +62,13 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
   const [drop, setDrop] = useState<"photos" | "floorplan" | null>(null);
+  /* Putting the photos in order (James, 6 Oct 2026): drag one onto another's
+     place, or tap one and then tap where it goes - the tap works on a phone,
+     where dragging does not. Either way it only changes the draft; Save
+     writes the order to the listing, the same as Make main photo. */
+  const [picked, setPicked] = useState<string | null>(null);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
   /** Which fields the magic button filled, and from where. */
   const [filledBy, setFilledBy] = useState<Record<string, string>>({});
   const [filling, setFilling] = useState<"all" | "copy" | null>(null);
@@ -193,6 +200,17 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
   const changes = changesIn(details, draft);
   const changed = Object.keys(changes) as (keyof Draft)[];
   const images = orderedImages(details, draft);
+  /** Take one photo out and put it where another one is, the rest closing up behind it. */
+  const movePhoto = (id: string, to: string) => {
+    if (id === to) return;
+    const order = images.map((x) => x.id);
+    const from = order.indexOf(id);
+    const at = order.indexOf(to);
+    if (from < 0 || at < 0) return;
+    order.splice(from, 1);
+    order.splice(at, 0, id);
+    setDraft((d) => ({ ...d, imageOrder: order }));
+  };
   const input: RequirementInput = {
     rent: draft.rent, deposit: draft.deposit, availableFrom: draft.availableFrom, beds: draft.beds, baths: draft.baths,
     propertyType: draft.propertyTypeId ? (types?.find((t) => t.id === draft.propertyTypeId)?.label ?? details.propertyType ?? draft.propertyTypeId) : null, heading: draft.heading, body: draft.body, highlights: draft.highlights, photos: images.length,
@@ -607,23 +625,90 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
           )}
         </div>
         {images.length ? (
-          <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4 xl:grid-cols-6">
-            {images.map((img, i) => (
-              <div key={img.id} className="group relative overflow-hidden rounded-xl border border-line/50">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={img.thumb} alt="" className="aspect-[4/3] w-full object-cover" />
-                {i === 0 ? (
-                  <span className="absolute left-1.5 top-1.5 rounded-full bg-ink/80 px-2 py-0.5 text-[10px] font-semibold text-white">Main photo</span>
-                ) : (
-                  canEdit && (
-                    <button type="button" onClick={() => setDraft((d) => ({ ...d, imageOrder: [img.id, ...images.map((x) => x.id).filter((x) => x !== img.id)] }))} className="absolute inset-x-1.5 bottom-1.5 rounded-full bg-white/95 py-1 text-[10.5px] font-semibold opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100">
-                      Make main photo
-                    </button>
-                  )
-                )}
-              </div>
-            ))}
-          </div>
+          <>
+            {canEdit && images.length > 1 && (
+              <p className="mt-2 text-[12px] text-muted">
+                {picked
+                  ? "Now tap where it should go. Tap it again to leave it where it is."
+                  : "Drag a photo to move it, or tap one and then tap where it should go. The first is the main photo on every portal."}
+              </p>
+            )}
+            <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4 xl:grid-cols-6">
+              {images.map((img, i) => {
+                const isPicked = picked === img.id;
+                const isTarget = dragOver === img.id && dragging !== img.id;
+                return (
+                  <div
+                    key={img.id}
+                    draggable={canEdit}
+                    onDragStart={(e) => {
+                      if (!canEdit) return;
+                      setDragging(img.id);
+                      setPicked(null);
+                      e.dataTransfer.effectAllowed = "move";
+                      e.dataTransfer.setData("text/x-photo", img.id);
+                    }}
+                    onDragOver={(e) => {
+                      if (!dragging) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      if (dragOver !== img.id) setDragOver(img.id);
+                    }}
+                    onDrop={(e) => {
+                      if (!dragging) return;
+                      e.preventDefault();
+                      movePhoto(dragging, img.id);
+                      setDragging(null);
+                      setDragOver(null);
+                    }}
+                    onDragEnd={() => {
+                      setDragging(null);
+                      setDragOver(null);
+                    }}
+                    onClick={() => {
+                      if (!canEdit || images.length < 2) return;
+                      if (!picked) setPicked(img.id);
+                      else if (picked === img.id) setPicked(null);
+                      else {
+                        movePhoto(picked, img.id);
+                        setPicked(null);
+                      }
+                    }}
+                    className={`group relative overflow-hidden rounded-xl border transition ${
+                      canEdit && images.length > 1 ? "cursor-grab active:cursor-grabbing" : ""
+                    } ${isPicked ? "border-accent ring-2 ring-accent" : isTarget ? "border-accent ring-2 ring-accent/50" : "border-line/50"} ${
+                      dragging === img.id ? "opacity-40" : ""
+                    }`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={img.thumb} alt="" draggable={false} className="pointer-events-none aspect-[4/3] w-full select-none object-cover" />
+                    {i === 0 ? (
+                      <span className="absolute left-1.5 top-1.5 rounded-full bg-ink/80 px-2 py-0.5 text-[10px] font-semibold text-white">Main photo</span>
+                    ) : (
+                      <span className="figures absolute left-1.5 top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-white/90 px-1.5 text-[10px] font-semibold text-ink">
+                        {i + 1}
+                      </span>
+                    )}
+                    {i !== 0 && canEdit && !picked && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDraft((d) => ({ ...d, imageOrder: [img.id, ...images.map((x) => x.id).filter((x) => x !== img.id)] }));
+                        }}
+                        className="absolute inset-x-1.5 bottom-1.5 rounded-full bg-white/95 py-1 text-[10.5px] font-semibold opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+                      >
+                        Make main photo
+                      </button>
+                    )}
+                    {isPicked && (
+                      <span className="absolute inset-x-1.5 bottom-1.5 rounded-full bg-accent py-1 text-center text-[10.5px] font-semibold text-white">Moving</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
         ) : (
           <button type="button" disabled={!canEdit} onClick={() => setDrop("photos")} className="mt-4 flex w-full flex-col items-center rounded-2xl border-2 border-dashed border-line/70 bg-page px-6 py-8 text-center hover:border-accent-dark/60">
             <span className="hand text-[16px]">Drop the photos here</span>
