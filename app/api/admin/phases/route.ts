@@ -4,7 +4,7 @@ import { applyPhase, PhaseRefused, PHASES, phaseState, previewPhase, setPilotLis
 import { publicOrigin } from "@/lib/origin";
 
 /**
- * The three pilot phases (lib/phases).
+ * The pilot phases (lib/phases).
  *
  *   GET   where the pilot is, what each phase is, and what pressing each one
  *         would change RIGHT NOW - read off the live switches and areas, so
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   if (viewingAs) return NextResponse.json({ ok: false, error: "Stop viewing as somebody first." }, { status: 403 });
 
   const b = (await req.json().catch(() => ({}))) as { phase?: number; typed?: string; invite?: unknown; announce?: boolean };
-  if (![1, 2, 3].includes(Number(b.phase))) return NextResponse.json({ ok: false, error: "Which phase?" }, { status: 400 });
+  if (!PHASES.some((p) => p.id === Number(b.phase))) return NextResponse.json({ ok: false, error: "Which phase?" }, { status: 400 });
   try {
     const result = await applyPhase({
       id: Number(b.phase) as PhaseId,
