@@ -85,7 +85,6 @@ function TenantFeedback() {
   const [interested, setInterested] = useState<"yes" | "no" | null>(null);
   const [offer, setOffer] = useState("");
   const [moveIn, setMoveIn] = useState("");
-  const [term, setTerm] = useState("12 months");
   const [sent, setSent] = useState(false);
 
   const offerNum = Number(offer.replace(/[£,\s]/g, ""));
@@ -115,7 +114,7 @@ function TenantFeedback() {
           t: token,
           answers,
           interested: interested === "yes",
-          offer: interested === "yes" ? { amount: offerNum, moveIn, term } : undefined,
+          offer: interested === "yes" ? { amount: offerNum, moveIn } : undefined,
         }),
       });
       const j = (await r.json()) as { ok?: boolean; said?: string };
@@ -268,25 +267,13 @@ function TenantFeedback() {
 
             <div className="flex flex-wrap gap-4">
               <label className="block">
-                <span className="text-[13px] font-semibold">When could you move in?</span>
+                <span className="block text-[13px] font-semibold">When could you move in?</span>
                 <input
                   type="date"
                   value={moveIn}
                   onChange={(e) => setMoveIn(e.target.value)}
                   className="mt-2 rounded-xl border border-black/12 bg-white p-3 text-[13.5px] outline-none"
                 />
-              </label>
-              <label className="block">
-                <span className="text-[13px] font-semibold">How long for?</span>
-                <select
-                  value={term}
-                  onChange={(e) => setTerm(e.target.value)}
-                  className="mt-2 rounded-xl border border-black/12 bg-white p-3 text-[13.5px] outline-none"
-                >
-                  <option>6 months</option>
-                  <option>12 months</option>
-                  <option>24 months</option>
-                </select>
               </label>
             </div>
           </div>

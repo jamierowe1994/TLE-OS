@@ -26,6 +26,8 @@ type Row = {
     amount?: number; asking?: number | null; moveIn?: string; term?: string; movingIn?: string[]; works?: string[]; recordedBy?: { name: string; email: string; how: string }; source?: string; adults?: number; children?: number; pets?: boolean; petsNote?: string; note?: string;
     passport?: OfferPassport; changes?: OfferChange[];
     reasons?: string[]; topics?: string[]; message?: string;
+    /* Howard's four questions, when the offer came from the viewing feedback page. */
+    answers?: Record<string, string>;
   };
 };
 
@@ -49,6 +51,14 @@ function Eye({ watch }: { watch: boolean }) {
     </span>
   );
 }
+
+/** Howard's four questions, in his order (the viewing feedback page's own). */
+const FEEDBACK_QUESTIONS: [string, string][] = [
+  ["liked", "What did you like most about the property?"],
+  ["info", "Is there anything you'd like more information on?"],
+  ["concerns", "Are there any concerns or points you'd like to discuss?"],
+  ["compare", "How does it compare to other properties you've seen?"],
+];
 
 export default async function OfferPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -146,6 +156,11 @@ export default async function OfferPage({ params }: { params: Promise<{ id: stri
                   </span>
                 )}
               </div>
+              {!p.passport && p.source !== "application-form" && (
+                <p className="mt-3 text-[13px] leading-relaxed text-muted">
+                  No passport yet. They offered from the page sent after their viewing, which asks only for the rent and the day, so there is nothing more to show until they fill one in.
+                </p>
+              )}
               <dl className="mt-3 divide-y divide-line/50">
                 {keys.map((k) => {
                   const c = changed.get(k);
@@ -174,6 +189,21 @@ export default async function OfferPage({ params }: { params: Promise<{ id: stri
             </section>
           </div>
         </>
+      )}
+
+      {/* What they said after the viewing, when the offer came with it (6 Oct 2026). */}
+      {r.kind === "offer" && p.answers && Object.values(p.answers).some((v) => v?.trim()) && (
+        <section className={card}>
+          <p className={eyebrow}>What they said after the viewing</p>
+          <dl className="mt-3 divide-y divide-line/50">
+            {FEEDBACK_QUESTIONS.filter(([k]) => p.answers?.[k]?.trim()).map(([k, q]) => (
+              <div key={k} className="py-2.5">
+                <dt className="text-[13px] text-muted">{q}</dt>
+                <dd className="mt-0.5 whitespace-pre-line text-[14px] leading-relaxed">{p.answers?.[k]}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
       )}
 
       {r.kind !== "offer" && (

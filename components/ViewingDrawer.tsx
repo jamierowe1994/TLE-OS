@@ -45,6 +45,16 @@ function endTime(a: Appt): string {
 export type Outcome = "Booked" | "Confirm" | "Applying" | "Thinking" | "Not for them";
 
 /** Where the completed-viewing dropdown can land. */
+/* Howard's four questions, word for word and in his order: the tenant's own
+   feedback page asks the same ones (app/tenant/(public)/feedback), so what an
+   agent fills in for them reads the same on the record (6 Oct 2026). */
+const HOWARD_QUESTIONS = [
+  { key: "liked", q: "What did you like most about the property?" },
+  { key: "info", q: "Is there anything you’d like more information on?" },
+  { key: "concerns", q: "Are there any concerns or points you’d like to discuss?" },
+  { key: "compare", q: "How does it compare to other properties you’ve seen?" },
+] as const;
+
 const FEEDBACK_OPTIONS = [
   { id: "loved", label: "Loved it — offer expected", outcome: "Applying" as const, spine: 5 },
   { id: "offer", label: "Offer received", outcome: "Applying" as const, spine: 5 },
@@ -174,6 +184,8 @@ function ViewingDrawerBody({
   const [completing, setCompleting] = useState<"idle" | "choose" | "show-form" | "done">("idle");
   const [fbChoice, setFbChoice] = useState<string>("");
   const [fbNotes, setFbNotes] = useState("");
+  /* Their answers to Howard's questions, typed by the agent on their behalf. */
+  const [fbAnswers, setFbAnswers] = useState<Record<string, string>>({});
   const [fbSaving, setFbSaving] = useState(false);
   const [changeBusy, setChangeBusy] = useState(false);
   const [changeError, setChangeError] = useState<string | null>(null);
@@ -256,7 +268,13 @@ function ViewingDrawerBody({
   const property = appt.what.replace(/^[^—]+—\s*/, "");
   const allSent = appt.comms.every((c) => c.done || sentExtra.has(`${appt.id}:${c.label}`));
   const effectiveOutcome = localOutcome ?? outcome ?? null;
-  const applying = effectiveOutcome === "Applying";
+  /* Feedback the OS saved in its own words ("Loved it - offer expected",
+     "Offer received") still means an offer once the drawer is opened again,
+     so the offer card and its Put the offer forward stay (6 Oct 2026). REX's
+     words are never read this way. */
+  const osOffering =
+    appt.feedback?.source === "os" && FEEDBACK_OPTIONS.some((o) => o.outcome === "Applying" && o.label === appt.feedback?.outcome);
+  const applying = effectiveOutcome === "Applying" || osOffering;
 
   const log = (what: string) =>
     setExtraActivity((cur) => [...cur, { when: "Just now", what, by: "You" }]);
@@ -870,6 +888,26 @@ function ViewingDrawerBody({
 
               {past && !appt.feedback && completing === "show-form" && (
                 <Card title="How did it land?" icon="message">
+                  {/* The tenant's feedback, filled in for them (Howard, 6 Oct
+                      2026): the same four questions their own feedback page
+                      asks, for when they said it in person or on the phone. */}
+                  <p className="mb-2.5 text-[11.5px] leading-relaxed text-muted">
+                    Fill this in for {appt.who ? appt.who.split(/\s+/)[0] : "them"} if they told you in person or on the phone. Leave any question they didn&apos;t answer.
+                  </p>
+                  <div className="mb-3.5 space-y-2.5">
+                    {HOWARD_QUESTIONS.map((h) => (
+                      <label key={h.key} className="block">
+                        <span className="text-[11.5px] font-semibold">{h.q}</span>
+                        <textarea
+                          value={fbAnswers[h.key] ?? ""}
+                          onChange={(e) => setFbAnswers((cur) => ({ ...cur, [h.key]: e.target.value }))}
+                          rows={2}
+                          className="mt-1 w-full resize-none rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[12px] leading-relaxed outline-none transition-colors focus:border-ink"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mb-1.5 text-[11.5px] font-semibold">Are they offering?</p>
                   <div className="space-y-1.5">
                     {FEEDBACK_OPTIONS.map((o) => (
                       <button
@@ -895,7 +933,7 @@ function ViewingDrawerBody({
                     value={fbNotes}
                     onChange={(e) => setFbNotes(e.target.value)}
                     rows={2}
-                    placeholder="What they actually said, in their words. Copy it for the landlord from the Feedback tab."
+                    placeholder="Anything else they said, in their words."
                     className="mt-3 w-full resize-none rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[12px] leading-relaxed outline-none transition-colors focus:border-ink"
                   />
                   <PressButton
@@ -903,7 +941,10 @@ function ViewingDrawerBody({
                       const opt = FEEDBACK_OPTIONS.find((o) => o.id === fbChoice);
                       if (!opt || fbSaving) return;
                       const said = fbNotes.trim();
-                      void saveFeedback({ attended: true, choice: opt.id, label: opt.label, note: said }, () => {
+                      /* Howard's questions first, in his order, then anything else. */
+                      const qa = HOWARD_QUESTIONS.map((h) => ({ q: h.q, a: (fbAnswers[h.key] ?? "").trim() })).filter((x) => x.a);
+                      const note = [...qa.map((x) => `${x.q}\n${x.a}`), said].filter(Boolean).join("\n\n");
+                      void saveFeedback({ attended: true, choice: opt.id, label: opt.label, note }, () => {
                         setLocalOutcome(opt.outcome);
                         setCompleting("done");
                         log(`Feedback recorded: ${opt.label}${said ? ` — "${said}"` : ""}`);
@@ -963,9 +1004,21 @@ function ViewingDrawerBody({
                     </p>
                   ) : (
                     <p className="text-[12px] leading-relaxed text-muted">
-                      {appt.who} is offering. Put it to the landlord from Outlook for now - the OS
-                      does not send the offer yet.
+                      {appt.contact?.email && appt.listingId
+                        ? `${appt.who} is offering. Put it forward for them and it goes on the landlord's screen for the home, filled from their passport.`
+                        : `${appt.who} is offering. Add their email to their record to put the offer forward for them.`}
                     </p>
+                  )}
+                  {/* Their offer, made for them (6 Oct 2026): the same four steps
+                      as "Put an offer forward" above, filled from their passport. */}
+                  {appt.contact?.email && appt.listingId && !offerPushed && (
+                    <a
+                      href={`/offers/new?${new URLSearchParams({ listing: String(appt.listingId), name: appt.who ?? "", email: appt.contact.email })}`}
+                      className="press-ring mt-3 inline-flex items-center gap-2 rounded-full bg-accent-dark px-4 py-2.5 text-[12px] font-semibold text-page"
+                    >
+                      <DoodleIcon name="pencil" size={13} />
+                      Put the offer forward for them
+                    </a>
                   )}
                   {VIEWING_SENDS_LIVE && !offerPushed && (
                     <PressButton

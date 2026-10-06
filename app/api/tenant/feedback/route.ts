@@ -4,6 +4,10 @@ import { sendEmail } from "@/lib/resend";
 import { renderPlain } from "@/lib/campaign-mail";
 import { userByName } from "@/lib/tenant-email-send";
 import { sendNotForThem } from "@/lib/tenant-journey-emails";
+import { randomUUID } from "node:crypto";
+import { findPassportByEmail, getPassport } from "@/lib/passport";
+import { EMPTY_PASSPORT, householdIncome, type PassportData } from "@/lib/passport-shape";
+import { offerSubset } from "@/lib/offer-passport";
 
 /**
  * The tenant's feedback on a viewing, behind the token in How Was It?
@@ -70,7 +74,7 @@ export async function POST(req: NextRequest) {
     t?: string;
     answers?: Record<string, string>;
     interested?: boolean;
-    offer?: { amount?: number; moveIn?: string; term?: string };
+    offer?: { amount?: number; moveIn?: string };
   };
   const f = await load(String(b.t ?? ""));
   if (!f) return NextResponse.json({ ok: false, said: "This link has expired or isn't quite right." }, { status: 404 });
@@ -78,7 +82,7 @@ export async function POST(req: NextRequest) {
   if (typeof b.interested !== "boolean") return NextResponse.json({ ok: false, said: "Let us know whether you'd like to offer." }, { status: 400 });
 
   const answers = Object.fromEntries(QUESTIONS.map(([k]) => [k, String(b.answers?.[k] ?? "").slice(0, 2000).trim()]));
-  let offer: { amount: number; moveIn: string | null; term: string | null } | null = null;
+  let offer: { amount: number; moveIn: string | null } | null = null;
   if (b.interested) {
     const amount = Math.round(Number(b.offer?.amount));
     if (!Number.isFinite(amount) || amount <= 0) return NextResponse.json({ ok: false, said: "Tell us what you'd like to offer." }, { status: 400 });
@@ -87,7 +91,9 @@ export async function POST(req: NextRequest) {
     if (f.asking_pcm && amount > f.asking_pcm) {
       return NextResponse.json({ ok: false, said: `The advertised rent is £${f.asking_pcm.toLocaleString("en-GB")} a month, so an offer can't be above that.` }, { status: 400 });
     }
-    offer = { amount, moveIn: b.offer?.moveIn ? String(b.offer.moveIn).slice(0, 20) : null, term: b.offer?.term ? String(b.offer.term).slice(0, 20) : null };
+    /* No term (1 Oct 2026): tenancies are rolling, so there is nothing to choose. */
+    const moveIn = String(b.offer?.moveIn ?? "").slice(0, 10);
+    offer = { amount, moveIn: /^\d{4}-\d{2}-\d{2}$/.test(moveIn) ? moveIn : null };
   }
 
   const saved = await q<{ token: string }>(
@@ -96,6 +102,51 @@ export async function POST(req: NextRequest) {
     [f.token, JSON.stringify(answers), b.interested, offer ? JSON.stringify(offer) : null]
   );
   if (!saved.length) return NextResponse.json({ ok: false, said: "We already have your feedback on this one. Thank you." }, { status: 409 });
+
+  /* A REAL OFFER, NOT AN EMAIL (Howard, 6 Oct 2026). Kept with the offers
+     made in the portal and the ones agents put forward, so it opens at
+     /offers/<id> and is on the landlord's screen for the home - the email
+     below only tells the agent it is there. What their passport already holds
+     goes with it, read and never changed: the feedback page asks for the rent
+     and the day, nothing more. */
+  let offerId: string | null = null;
+  if (offer && f.listing_id) {
+    offerId = randomUUID();
+    const found = await findPassportByEmail(f.email, null).catch(() => null);
+    const held = found ? await getPassport(found.token).catch(() => null) : null;
+    const data = (held?.data ?? null) as PassportData | null;
+    const pp = offerSubset(data);
+    await q(
+      `INSERT INTO os_tenant_viewing_responses (id, email, name, listing_id, address, kind, payload, sent_to, outcome)
+       VALUES ($1,$2,$3,$4,$5,'offer',$6::jsonb,NULL,'from the viewing feedback page')`,
+      [
+        offerId,
+        f.email.toLowerCase(),
+        f.name,
+        f.listing_id,
+        f.address,
+        JSON.stringify({
+          source: "viewing-feedback",
+          amount: offer.amount,
+          asking: f.asking_pcm,
+          moveIn: offer.moveIn,
+          movingIn: [],
+          works: [],
+          adults: Number(pp.numAdults) || 1,
+          children: Number(pp.numChildren) || 0,
+          pets: pp.pets === true,
+          petsNote: pp.petsNote ?? "",
+          note: "",
+          householdIncome: data ? householdIncome({ ...EMPTY_PASSPORT, ...data }).total : null,
+          passport: data ? pp : null,
+          changes: [],
+          answers,
+        }),
+      ]
+    ).catch(() => {
+      offerId = null;
+    });
+  }
 
   /* The agent hears either way. Staff mail, so it is not behind the customer
      switch: an offer sitting in a table nobody reads is the failure here. */
@@ -125,10 +176,11 @@ export async function POST(req: NextRequest) {
       ...(offer
         ? [
             `**Offer:** £${offer.amount.toLocaleString("en-GB")} pcm${f.asking_pcm ? ` (advertised at £${f.asking_pcm.toLocaleString("en-GB")})` : ""}`,
-            `**Move in:** ${safe(offer.moveIn ?? "not said")}`,
-            `**Term:** ${safe(offer.term ?? "not said")}`,
+            `**Move in:** ${offer.moveIn ? new Date(`${offer.moveIn}T12:00:00`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : "not said"}`,
             "",
-            "Put it to the landlord, and reply to them either way.",
+            offerId
+              ? `It is on the landlord's screen for the home now. Open the offer: ${(process.env.OS_ORIGIN ?? "https://tle-os.co.uk").replace(/\/+$/, "")}/offers/${offerId}`
+              : "Put it to the landlord, and reply to them either way.",
             "",
           ]
         : ["They have been sent other homes nearby at a similar rent, if there were any.", ""]),
