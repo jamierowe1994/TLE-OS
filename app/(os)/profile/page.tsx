@@ -11,6 +11,7 @@ import { PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
 import RexSignIn from "@/components/RexSignIn";
 import { usePref, usePrefsHome } from "@/lib/prefs-store";
+import { PHOTO_MAX_CHARS } from "@/lib/profile-photo";
 import {
   applyTheme, readTheme, writeTheme,
   CHARCOALS, DARK_BG_DEFAULT, DARK_BG_KEY, DARK_BOX_DEFAULT, DARK_BOX_KEY,
@@ -434,7 +435,16 @@ export default function ProfilePage() {
                       const ctx = c.getContext("2d")!;
                       ctx.imageSmoothingQuality = "high";
                       ctx.drawImage(img, 0, 0, c.width, c.height);
-                      save({ ...profile, photo: c.toDataURL("image/jpeg", 0.86) });
+                      /* Under the server's cap. A busy 1200px photo
+                         can run past it at 0.86, and the server refuses it
+                         where nobody sees - so step the quality down until
+                         it fits rather than send something that bounces. */
+                      let photo = c.toDataURL("image/jpeg", 0.86);
+                      for (const quality of [0.8, 0.72, 0.64, 0.56]) {
+                        if (photo.length <= PHOTO_MAX_CHARS) break;
+                        photo = c.toDataURL("image/jpeg", quality);
+                      }
+                      save({ ...profile, photo });
                       URL.revokeObjectURL(img.src);
                     };
                     img.src = URL.createObjectURL(file);
