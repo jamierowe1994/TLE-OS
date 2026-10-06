@@ -63,13 +63,12 @@ export async function publishGaps(details: ListingDetails): Promise<PublishGap[]
 export async function hasTerms(details: ListingDetails): Promise<boolean> {
   if (!details.propertyId) return true;
   try {
-    const { rexCall, rexRows } = await import("@/lib/rex");
-    const res = await rexCall("ComplianceEntries", "search", {
-      criteria: [{ name: "parent_object_id", type: "in", value: [details.propertyId] }],
-      limit: 100,
-    });
-    if (!res.ok) return true;
-    return rexRows(res.result).some((r) => r.type_id === "terms_of_business" && r.system_record_state !== "archived");
+    const { osTermsFor, rexHasTerms } = await import("@/lib/terms-to-rex");
+    const inRex = await rexHasTerms(details.propertyId);
+    if (inRex !== false) return true;
+    /* Uploaded on the Documents tab and marked Terms of Business counts too
+       (James, 6 Oct 2026): the push files it into REX before publishing. */
+    return Boolean(await osTermsFor(details.propertyId));
   } catch {
     return true;
   }

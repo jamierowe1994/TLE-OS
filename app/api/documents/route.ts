@@ -111,8 +111,15 @@ export async function POST(req: NextRequest) {
     by: { id: actor.id, name: actor.name || actor.email },
     isTest,
   });
+  /* Marked Terms of Business: REX needs it as a compliance entry before the
+     listing can go live, so it is filed there too (lib/terms-to-rex). */
+  let note: string | undefined;
+  if (type === "terms_of_business" && propertyId && /^\d+$/.test(propertyId) && !isTest) {
+    const { fileTermsToRex } = await import("@/lib/terms-to-rex");
+    note = (await fileTermsToRex({ propertyId, r2Key: key, fileName: file.name, byName: actor.name || actor.email })).note;
+  }
   const docs = await docsForHome({ address, propertyId }, { id: actor.id, office: officeOf(actor.role) });
-  return NextResponse.json({ ok: true, docs });
+  return NextResponse.json({ ok: true, docs, note });
 }
 
 export async function DELETE(req: NextRequest) {

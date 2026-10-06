@@ -225,6 +225,16 @@ export async function POST(req: NextRequest) {
       if (blockers.length) {
         return NextResponse.json({ ok: false, error: `The portals will not take it yet: ${blockers.join("; ")}`, blockers }, { status: 422 });
       }
+      /* Terms uploaded in the OS but not yet in REX go in now, or REX refuses. */
+      if (details.propertyId) {
+        const { ensureTermsInRex } = await import("@/lib/terms-to-rex");
+        if (!(await ensureTermsInRex(details.propertyId).catch(() => true))) {
+          return NextResponse.json(
+            { ok: false, error: "The signed terms of business could not be filed in the listings system, so it cannot go live yet. Try again in a minute, or ask the office.", missing: ["terms"] },
+            { status: 422 }
+          );
+        }
+      }
       const who = await agentToken(actor, details.agent);
       if ("error" in who) return NextResponse.json({ ok: false, error: who.error, needsAgent: true, signIn: who.signIn || undefined }, { status: 409 });
       token = who.token;
