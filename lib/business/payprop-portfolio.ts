@@ -1,6 +1,7 @@
 import "server-only";
 import { payPropAccounts, payPropGetAll, type PayPropAccountId } from "@/lib/business/payprop";
 import { readCache, writeCache } from "@/lib/business/integration-cache";
+import { parseAddress } from "@/lib/address-parse";
 
 // The managed book out of PayProp, attributable to the partner who runs each
 // property. PayProp names them in `responsible_agent` — a free-text name, not
@@ -79,7 +80,19 @@ export function propertyKey(name: string): string {
 export function rentKey(name: string, postcode: string | null | undefined): string {
   const k = propertyKey(name);
   const pc = String(postcode ?? "").replace(/\s+/g, "").toUpperCase();
-  return k && pc ? `${k}|${pc}` : "";
+  if (!k || !pc) return "";
+  /* THE ROOM AND THE HOUSE, NOT THE FIRST NUMBER (6 Oct 2026). propertyKey
+     takes the first plain number it sees, which in "Room 1, 5b Newton Road"
+     is the ROOM - so Room 1 at 5a, 5b and 5c were one key "1|newton", their
+     rents cancelled each other out, and a room could be handed another
+     house's rent. A room keys on room + house number + street + postcode.
+     Everything else keeps the old key: Scotland's "1/2, 5 Glenmore Place"
+     floor codes are spelt differently by PayProp and REX and only the loose
+     key brings them together (measured: two rents lost when flats were
+     keyed the room way too). */
+  const a = parseAddress(name);
+  if (a.unitWord !== "room" || a.unit == null || a.building == null) return `${k}|${pc}`;
+  return `room ${a.unit}|${a.building}|${k.split("|")[1]}|${pc}`;
 }
 
 /** Words that appear in every address and so identify nothing. */
@@ -244,7 +257,10 @@ export async function getPortfolioBook(
   // walk finished — the deploy-day slowness.
   if (!cache) {
     /* v5 (2 Oct 2026): tenants counted from the active_tenancies list - a v4
-       book reads every property as void and carries no rents. */
+       book reads every property as void and carries no rents. A v5 book
+       written before rooms got their own rentKey (6 Oct 2026) still serves
+       every other home; its old room keys simply match nothing until the
+       hourly refresh rewrites them. */
     const stored = await readCache<PortfolioBook>("payprop:portfolio:v5").catch(() => null);
     if (stored) cache = { at: stored.at, data: stored.data };
   }

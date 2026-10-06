@@ -116,7 +116,8 @@ export async function GET(req: NextRequest) {
   let match: MatchResult | null = null;
   if (!propertyId && address) {
     match = await matchProperty(address).catch(() => null);
-    if (match?.verdict === "confident" && match.targets.length === 1) propertyId = match.targets[0].id;
+    /* The same door only (6 Oct 2026): one target that is another room of the house is not this home. */
+    if (match?.verdict === "confident" && match.link) propertyId = match.link.id;
   }
 
   const pendingKey = address ? pendingKeyFor(address) : null;

@@ -44,7 +44,9 @@ export type ArchiveReason =
   /** An agent archived it early. */
   | "by-hand"
   /** Withdrawn in REX - it came off the market with nobody in it. */
-  | "withdrawn";
+  | "withdrawn"
+  /** Never published, and the home has since been let on another listing. */
+  | "let-elsewhere";
 
 export interface ArchiveState {
   archived: boolean;
@@ -73,6 +75,16 @@ export interface ArchivableListing {
   stateDate?: string | null;
 }
 
+/**
+ * A let of the same home on ANOTHER listing (6 Oct 2026): the day it was let,
+ * and which listing. Read by the server from REX's leased listings and
+ * accepted applications - see lib/listings-archive-view.
+ */
+export interface LetElsewhere {
+  at: string;
+  listingId: string;
+}
+
 function daysSince(iso: string | null | undefined): number | null {
   if (!iso) return null;
   const at = new Date(`${iso.slice(0, 10)}T00:00:00Z`).getTime();
@@ -99,7 +111,7 @@ function daysSince(iso: string | null | undefined): number | null {
  * goes quietly back to the archive. Self-healing, and nobody has to remember
  * to tidy up.
  */
-export function archiveOf(l: ArchivableListing, override?: ArchiveOverride | null): ArchiveState {
+export function archiveOf(l: ArchivableListing, override?: ArchiveOverride | null, letElsewhere?: LetElsewhere | null): ArchiveState {
   /* Withdrawn is REX's own word for "this came off the market". It is not our
      rule and it cannot be undone from here, so it is checked first and a hand
      override never contradicts it. */
@@ -117,6 +129,20 @@ export function archiveOf(l: ArchivableListing, override?: ArchiveOverride | nul
     return { archived: true, reason: "by-hand", since: override.at.slice(0, 10), ageDays: daysSince(override.at) };
   }
 
+  /* LET ON ANOTHER LISTING (James, 6 Oct 2026, Room 1 at 5b Newton Road).
+     A draft made on 8 Sep sat in the working list after the home was let on
+     its older listing on 25 Sep - a duplicate nobody will ever publish. A
+     draft whose home was let on another listing on or after the day the draft
+     was made is history, whatever its age. A draft made AFTER the let is the
+     next re-let being prepared and stays. A restore after the let wins: the
+     agent has said it is wanted. */
+  if (letElsewhere && !(override?.state === "restored" && override.at.slice(0, 10) >= letElsewhere.at)) {
+    const made = l.createdAt?.slice(0, 10) ?? null;
+    if (!made || letElsewhere.at >= made) {
+      return { archived: true, reason: "let-elsewhere", since: letElsewhere.at, ageDays: daysSince(letElsewhere.at) };
+    }
+  }
+
   const from = override?.state === "restored" ? override.at.slice(0, 10) : l.createdAt ?? null;
   const age = daysSince(from);
   if (age != null && age > ARCHIVE_AFTER_DAYS) {
@@ -131,6 +157,7 @@ export function archiveLabel(reason: ArchiveReason | null): string {
   if (reason === "withdrawn") return "Taken off the market";
   if (reason === "by-hand") return "Archived";
   if (reason === "stale-draft") return "Draft, gone cold";
+  if (reason === "let-elsewhere") return "Let on another listing";
   return "";
 }
 
@@ -141,6 +168,7 @@ export function archiveWhy(s: ArchiveState): string {
     : null;
   if (s.reason === "withdrawn") return when ? `Came off without a tenant, ${when}.` : "Came off the market without a tenant.";
   if (s.reason === "by-hand") return when ? `Put away by hand, ${when}.` : "Put away by hand.";
+  if (s.reason === "let-elsewhere") return when ? `The home was let on another listing, ${when}.` : "The home was let on another listing.";
   if (s.reason === "stale-draft") {
     const months = s.ageDays == null ? null : Math.round(s.ageDays / 30);
     return when

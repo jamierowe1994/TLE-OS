@@ -65,6 +65,7 @@ export async function GET(req: NextRequest) {
         staleDrafts: listings.filter((l) => l.archiveReason === "stale-draft").length,
         byHand: listings.filter((l) => l.archiveReason === "by-hand").length,
         withdrawn: listings.filter((l) => l.archiveReason === "withdrawn").length,
+        letElsewhere: listings.filter((l) => l.archiveReason === "let-elsewhere").length,
       },
     });
   } catch (e) {

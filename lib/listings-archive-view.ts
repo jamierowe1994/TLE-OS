@@ -1,7 +1,9 @@
 import "server-only";
 import type { ListingBook, OsListing } from "@/lib/rex-listings";
-import { archiveOf, type ArchiveReason } from "@/lib/listing-archive";
+import { archiveOf, type ArchiveReason, type LetElsewhere } from "@/lib/listing-archive";
 import { archiveOverrides } from "@/lib/listing-archive-store";
+import { managedBookFor } from "@/lib/managed-book-cache";
+import { sittingTenantsByProperty } from "@/lib/rex-tenants";
 
 /**
  * The book, with every listing told where it stands.
@@ -21,11 +23,48 @@ export interface ArchivedListing extends OsListing {
   archiveAgeDays: number | null;
 }
 
+type Let = { at: string; listingId: string };
+
+/**
+ * Every let REX knows of, by property (6 Oct 2026): the leased listings in
+ * the managed book (whole business, cached - one agent's draft can be let on
+ * another agent's listing) and the accepted applications whose tenancy has
+ * started. Empty, never a guess, when neither answers: a draft is then judged
+ * by its age alone, as it was before.
+ */
+export async function letsByProperty(): Promise<Map<string, Let[]>> {
+  const out = new Map<string, Let[]>();
+  const add = (propertyId: string | null | undefined, at: string | null | undefined, listingId: string | null | undefined) => {
+    if (!propertyId || !at || !listingId || !/^\d+$/.test(String(listingId))) return;
+    const list = out.get(String(propertyId)) ?? [];
+    list.push({ at: String(at).slice(0, 10), listingId: String(listingId) });
+    out.set(String(propertyId), list);
+  };
+  const [book, sitting] = await Promise.all([
+    managedBookFor(null).then((m) => m.book).catch(() => null),
+    sittingTenantsByProperty().catch(() => null),
+  ]);
+  for (const p of book?.properties ?? []) add(p.propertyId, p.letSince, p.listingId);
+  for (const [propertyId, t] of sitting ?? []) add(propertyId, t.startDate, t.listingId);
+  return out;
+}
+
+/** The latest let of this listing's home on a DIFFERENT listing, if any. */
+export function letElsewhereOf(l: { id: string; propertyId: string | null }, lets: Map<string, Let[]>): LetElsewhere | null {
+  if (!l.propertyId) return null;
+  let best: Let | null = null;
+  for (const x of lets.get(String(l.propertyId)) ?? []) {
+    if (x.listingId === String(l.id)) continue;
+    if (!best || x.at > best.at) best = x;
+  }
+  return best;
+}
+
 /** Stamp the archive state onto a set of listings. */
 export async function stampArchive(listings: OsListing[]): Promise<ArchivedListing[]> {
-  const overrides = await archiveOverrides();
+  const [overrides, lets] = await Promise.all([archiveOverrides(), letsByProperty()]);
   return listings.map((l) => {
-    const a = archiveOf(l, overrides.get(String(l.id)));
+    const a = archiveOf(l, overrides.get(String(l.id)), letElsewhereOf(l, lets));
     return { ...l, archived: a.archived, archiveReason: a.reason, archivedSince: a.since, archiveAgeDays: a.ageDays };
   });
 }

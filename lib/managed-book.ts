@@ -4,6 +4,7 @@ import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import { activeOsProperties, pmManagedHomes, type OsProperty, type PmHome } from "@/lib/os-properties";
 import { getPortfolioBook, rentKey } from "@/lib/business/payprop-portfolio";
 import { sittingTenantsByProperty } from "@/lib/rex-tenants";
+import { parseAddress, sameDoor, type Parsed } from "@/lib/address-parse";
 import type {
   ManagedBook,
   ManagedCounts,
@@ -288,50 +289,97 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
   /* Homes REX CRM has no property for (6 Sep 2026): the OS holds them so
      the managed book reads like REX PM's. Only for the whole-business view;
      an agent's own book stays REX's, since these carry no agent. */
-  if (!rexUserId) {
-    const have = new Set(properties.map((p) => String(p.propertyId ?? "")));
-    /* Not caught: see activeOsProperties - an empty set is not an answer. */
-    const extra: OsProperty[] = pm ?? (await activeOsProperties());
-    for (const o of extra) {
-      /* Already in REX's let book: nothing to add. Linked to a REX property
-         REX does not mark as let (84 of them, 6 Sep): the home is managed in
-         REX PM all the same, so it joins the book under its REX property. */
-      if (o.rexPropertyId && have.has(o.rexPropertyId)) continue;
-      if (have.has(o.id)) continue;
-      have.add(o.rexPropertyId ?? o.id);
-      properties.push({
-        listingId: o.rexPropertyId ? `pm-link-${o.rexPropertyId}` : o.id,
-        propertyId: o.rexPropertyId ?? o.id,
-        name: o.name || o.address,
-        locality: o.locality,
-        address: o.address,
-        town: o.town,
-        postcode: o.postcode,
-        lat: null,
-        lng: null,
-        rent: null,
-        rentPeriod: null,
-        rentMonthly: null,
-        /* REX PM's service package where its list has been read: a Tenant Find
-           home is ours to look after on paper only. */
-        service: "pmService" in o && (o as PmHome).pmService
-          ? (/tenant find/i.test((o as PmHome).pmService!) ? "Let Only" : /rent collect/i.test((o as PmHome).pmService!) ? "Rent Collect" : "Managed")
-          : o.management && /active/i.test(o.management) ? "Managed" : null,
-        letType: null,
-        letSince: null,
-        onBooksSince: null,
-        agent: null,
-        landlord: null,
-        tenants: [],
-        image: null,
-        images: [],
-        epcExpiry: null,
-        epcRating: null,
-        onRex: Boolean(o.rexPropertyId),
-        rexLet: false,
-        ref: o.ref,
-      });
+  /* Not caught: see activeOsProperties - an empty set is not an answer. */
+  const extra: OsProperty[] = pm ?? (rexUserId ? [] : await activeOsProperties());
+  /* EVERY ROOM, NOT THE FIRST (James, 6 Oct 2026, 5b Newton Road). A REX PM
+     home used to drop out of the book whenever its REX property was already
+     in it - but the 6 Sep certificate import tied whole houses of rooms to
+     ONE record (the house's, or Room 1's), so Room 3 at 5b "was" Room 1 and
+     vanished, and 19 rooms at 166 Gloucester Road North read as one. A REX
+     PM home is covered by a row already in the book only when that row is the
+     same door - same unit at the same building - or, where it is the only
+     REX PM home linked to that REX property, when nothing says it is another
+     room. Otherwise it stands as its own row, marked not on REX: REX holds no
+     record for this room itself. */
+  const linkCount = new Map<string, number>();
+  for (const o of extra) if (o.rexPropertyId) linkCount.set(o.rexPropertyId, (linkCount.get(o.rexPropertyId) ?? 0) + 1);
+  const doorOf = (p: { name: string; locality: string }) => parseAddress(p.locality ? `${p.name}, ${p.locality}` : p.name);
+  const anotherRoom = (a: Parsed, b: Parsed) =>
+    a.unitWord === "room" && b.unitWord === "room" && a.unit != null && b.unit != null && a.unit !== b.unit && (a.building == null || b.building == null || a.building === b.building);
+  /* propertyId → the REX PM home that IS that row, for the tenant fallback below. */
+  const pmFor = new Map<string, OsProperty>();
+  const pmRow = (o: OsProperty, propertyId: string, listingId: string, onRex: boolean): ManagedProperty => ({
+    listingId,
+    propertyId,
+    name: o.name || o.address,
+    locality: o.locality,
+    address: o.address,
+    town: o.town,
+    postcode: o.postcode,
+    lat: null,
+    lng: null,
+    rent: null,
+    rentPeriod: null,
+    rentMonthly: null,
+    /* REX PM's service package where its list has been read: a Tenant Find
+       home is ours to look after on paper only. */
+    service: "pmService" in o && (o as PmHome).pmService
+      ? (/tenant find/i.test((o as PmHome).pmService!) ? "Let Only" : /rent collect/i.test((o as PmHome).pmService!) ? "Rent Collect" : "Managed")
+      : o.management && /active/i.test(o.management) ? "Managed" : null,
+    letType: null,
+    letSince: null,
+    onBooksSince: null,
+    agent: null,
+    landlord: null,
+    tenants: [],
+    image: null,
+    images: [],
+    epcExpiry: null,
+    epcRating: null,
+    onRex,
+    rexLet: false,
+    ref: o.ref,
+  });
+  for (const o of extra) {
+    const door = parseAddress(o.address);
+    if (o.rexPropertyId) {
+      const onIt = properties.filter((p) => p.propertyId === o.rexPropertyId);
+      const same = onIt.filter((p) => sameDoor(door, doorOf(p), true));
+      const trusted = linkCount.get(o.rexPropertyId) === 1 && onIt.length > 0 && !onIt.some((p) => anotherRoom(door, doorOf(p)));
+      if (same.length || trusted) {
+        if (!pmFor.has(o.rexPropertyId)) pmFor.set(o.rexPropertyId, o);
+        continue;
+      }
+      if (rexUserId) continue;
+      /* Linked to a REX property REX does not mark as let (84 of them, 6 Sep):
+         the home is managed in REX PM all the same, so it joins the book under
+         its REX property - unless another home already stands there. */
+      if (!onIt.length) {
+        properties.push(pmRow(o, o.rexPropertyId, `pm-link-${o.rexPropertyId}`, true));
+        pmFor.set(o.rexPropertyId, o);
+        continue;
+      }
+      properties.push(pmRow(o, o.id, o.id, false));
+      pmFor.set(o.id, o);
+      continue;
     }
+    if (rexUserId || properties.some((p) => p.propertyId === o.id)) continue;
+    properties.push(pmRow(o, o.id, o.id, false));
+    pmFor.set(o.id, o);
+  }
+
+  /* WHO LIVES THERE, FROM REX PM (6 Oct 2026). REX named nobody on 334 of
+     481 current lets - its listing tenant is filled for about half the book
+     and the accepted application for fewer. REX PM's own record names the
+     tenants in residence, so where REX gives no one, the home's latest let
+     reads REX PM's names - never on an older let, and never on a home REX PM
+     itself shows as vacant. Names only: there is no REX contact behind them. */
+  for (const p of currentLets(properties)) {
+    if (p.tenants.length || !p.propertyId) continue;
+    const o = pmFor.get(p.propertyId);
+    if (!o?.tenantNames) continue;
+    if ("pmStatus" in o && (o as PmHome).pmStatus === "vacant") continue;
+    p.tenants = o.tenantNames.split(/\s*,\s*/).filter(Boolean).map((name, i) => ({ contactId: `rexpm:${o.id}:${i}`, name, email: null, phone: null }));
   }
   /* PayProp's rent where REX holds none (2 Oct 2026). 234 of the 527 homes
      had no rent in REX, so the rent roll was short by a third. PayProp's is

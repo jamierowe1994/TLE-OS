@@ -176,10 +176,13 @@ export async function putInstructionInRex(appraisalId: string, opts: { userId?: 
        ids ("pm-...") are a different system and no use to a listing. */
     const lettings = (list: { id: string; name: string }[]) => list.filter((t) => /^\d+$/.test(t.id));
     const match = found ? { ...found, targets: lettings(found.targets) } : null;
-    if (match?.verdict === "confident" && match.targets.length) {
-      propertyId = match.targets[0].id;
+    /* The same door only (6 Oct 2026): a confident house match names every
+       room under it, and the first of those is not this home. */
+    const link = match?.link && /^\d+$/.test(match.link.id) ? match.link : null;
+    if (match?.verdict === "confident" && link) {
+      propertyId = link.id;
       how = `found in REX (${match.how})`;
-    } else if (match?.verdict === "check" && match.targets.length) {
+    } else if (match?.targets.length) {
       notes.unshift(`REX may already hold this home (${match.targets.map((t) => t.name).join("; ")}), so nothing was created. Pick it with Link it on the appraisal.`);
     } else {
       const parts = splitAddress(ma.address, ma.postcode || null);

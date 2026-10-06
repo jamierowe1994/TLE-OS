@@ -240,7 +240,7 @@ function PropertyPanel({
         <span className="font-semibold">{t.name}</span>
         {t.phone && <a href={`tel:${t.phone.replace(/\s+/g, "")}`} className="text-[12px] text-muted hover:text-ink">{t.phone}</a>}
         {t.email && <a href={`mailto:${t.email}`} className="truncate text-[12px] text-muted hover:text-ink">{t.email}</a>}
-        {p.onRex !== false && (
+        {p.onRex !== false && /^\d+$/.test(t.contactId) && (
           <a href={rexContactUrl(t.contactId)} target="_blank" rel="noreferrer" className="ml-auto rounded-full border border-line/80 px-3 py-1 text-[11px] hover:border-ink/40">
             Tenant&apos;s file
           </a>

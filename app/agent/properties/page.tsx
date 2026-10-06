@@ -8,6 +8,7 @@ import type { PropertyGroup } from "@/lib/m-properties";
 import { ErrorLine, ReachButtons, Sheet, Spinner, TopBar, dialable, mapsHref } from "../bits";
 import SlideTabs from "@/components/app/SlideTabs";
 import FloatSearch from "@/components/app/FloatSearch";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * PROPERTIES (3 Oct 2026), from James's mockup - "make the properties tab a
@@ -112,7 +113,8 @@ export default function PhoneProperties() {
       /* A search reaches the whole book; a plain list is the active homes. */
       if (chip === "all" && !n && !ACTIVE.includes(p.group ?? "managed")) return false;
       if (!n) return true;
-      return [p.name, p.locality, p.postcode, ...p.tenants.map((t) => t.name), p.landlord?.name].some((f) => f && f.toLowerCase().includes(n));
+      /* Every word, whole numbers: "room 2" is not Room 20 (6 Oct 2026, lib/search-match). */
+      return searchMatches(n, p.name, p.locality, p.postcode, ...p.tenants.map((t) => t.name), p.landlord?.name);
     });
     const by: Record<Sort, (a: PhoneProperty, b: PhoneProperty) => number> = {
       az: (a, b) => a.name.localeCompare(b.name, "en-GB", { numeric: true }),
