@@ -20,6 +20,7 @@ import { KIND_META, minutesOf, type Appt, type ApptKind } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
 import { fetchMe } from "@/lib/me";
 import BookViewing from "@/components/viewings/BookViewing";
+import ChangeViewing from "@/components/viewings/ChangeViewing";
 import { PressButton } from "@/components/Bits";
 
 /**
@@ -72,6 +73,8 @@ export default function Viewings() {
   const [monthShift, setMonthShift] = useState(0);
   const [quickId, setQuickId] = useState<string | null>(null);
   const [fullId, setFullId] = useState<string | null>(null);
+  /* Change time: the booker opened on this viewing (6 Oct 2026). */
+  const [changing, setChanging] = useState<Appt | null>(null);
   /** undefined = not decided yet; null = everyone; a name = that person. */
   const [fAgent, setFAgent] = useState<string | null | undefined>(undefined);
   const [fKind, setFKind] = useState<ApptKind | null>(null);
@@ -383,6 +386,10 @@ export default function Viewings() {
           setQuickId(null);
           setFullId(a.id);
         }}
+        onChangeTime={(a) => {
+          setQuickId(null);
+          setChanging(a);
+        }}
         sentExtra={sentExtra}
         onSend={(id, label) => setSentExtra((cur) => new Set(cur).add(`${id}:${label}`))}
       />
@@ -390,11 +397,16 @@ export default function Viewings() {
       <ViewingDrawer
         appt={full}
         onClose={() => setFullId(null)}
+        onChangeTime={(a) => {
+          setFullId(null);
+          setChanging(a);
+        }}
         sentExtra={sentExtra}
         onSend={(id, label) => setSentExtra((cur) => new Set(cur).add(`${id}:${label}`))}
       />
 
       <BookViewing open={booking} onClose={() => setBooking(false)} />
+      <ChangeViewing appt={changing} onClose={() => setChanging(null)} />
     </>
   );
 }

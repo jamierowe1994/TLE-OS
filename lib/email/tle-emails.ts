@@ -81,6 +81,8 @@ import {
   LANDLORD_DOCS_NUDGE,
   VIEWING_CANCELLED,
   VIEWING_MOVED,
+  LANDLORD_VIEWING_BOOKED,
+  LANDLORD_VIEWING_MOVED,
   APPLICATION_ACCEPTED_LANDLORD,
   APPLICATION_ACCEPTED_TENANT,
   TENANT_ENQUIRY_REPLY,
@@ -860,6 +862,49 @@ The Letting Experts`
           whenPretty: "Friday 5 September at 12:30pm",
           agentName: "Sam Whitaker",
           meetLine: "Sam Whitaker will meet you there.",
+        })
+      )(),
+  },
+  {
+    id: "landlord-viewing-booked",
+    group: "Doorways",
+    name: "Viewing Booked - Landlord",
+    audience: "landlord",
+    trigger: "The agent books a viewing and chooses to tell the landlord as well",
+    fires: "Wired 6 Oct 2026. The booker's Landlord step (components/ViewingBooker.tsx) -> POST /api/confirmations kind viewing-landlord -> lib/viewing-confirm.ts. By hand only: the agent reads it and presses Send, or Don't send.",
+    to: "The property's landlord, as REX holds them",
+    summary: "The address, the time, whether one of us is there, and reply if access is a problem.",
+    doc: LANDLORD_VIEWING_BOOKED,
+    render: (o) =>
+      blocksAs("landlord")(
+        withSample(o ?? LANDLORD_VIEWING_BOOKED, {
+          firstName: "David",
+          address: "8 Recreation Terrace, Nottingham NG2 3AB",
+          whenPretty: "Thursday 4 September at 5:30pm",
+          agentName: "Sam Whitaker",
+          meetLine: "Sam Whitaker will be there to show them round, so there is nothing you need to do.",
+        })
+      )(),
+  },
+  {
+    id: "landlord-viewing-moved",
+    group: "Doorways",
+    name: "Viewing Moved - Landlord",
+    audience: "landlord",
+    trigger: "The agent changes a viewing's time and chooses to tell the landlord as well",
+    fires: "Wired 6 Oct 2026. Change time on a viewing -> the booker's Landlord step -> POST /api/confirmations kind viewing-landlord with movedFrom. By hand only.",
+    to: "The property's landlord, as REX holds them",
+    summary: "Old time, new time, and reply if the new one is a problem for access.",
+    doc: LANDLORD_VIEWING_MOVED,
+    render: (o) =>
+      blocksAs("landlord")(
+        withSample(o ?? LANDLORD_VIEWING_MOVED, {
+          firstName: "David",
+          address: "8 Recreation Terrace, Nottingham NG2 3AB",
+          oldWhen: "Thursday 4 September at 5:30pm",
+          whenPretty: "Friday 5 September at 12:30pm",
+          agentName: "Sam Whitaker",
+          meetLine: "Sam Whitaker will be there to show them round, so there is nothing you need to do.",
         })
       )(),
   },

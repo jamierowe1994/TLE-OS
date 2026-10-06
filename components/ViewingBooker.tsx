@@ -8,7 +8,6 @@ import DiaryGrid from "@/components/DiaryGrid";
 import { ConfettiBurst, DoneTick, PressButton } from "@/components/Bits";
 import PeopleFilterBar, { NO_FILTERS, passesFilters, milesBetween, type Filters } from "@/components/PeopleFilter";
 import SendFlow, { type Outgoing } from "@/components/SendFlow";
-import { VIEWING_SENDS_LIVE } from "@/lib/viewing-sends";
 import { dayKey, useForecast } from "@/lib/weather";
 import type { Landlord } from "@/lib/rex-landlord";
 import { fetchMe } from "@/lib/me";
@@ -16,12 +15,36 @@ import { minutesOf, type Appt } from "@/lib/diary";
 import { useDiary, refreshDiary } from "@/lib/diary-store";
 import { usePref } from "@/lib/prefs-store";
 import { useRouter } from "next/navigation";
-import ConfirmEditor, { type ConfirmDraft, type ConfirmEditorHandle, type ConfirmTarget } from "@/components/ConfirmEditor";
+import ConfirmEditor, { payloadOf, type ConfirmDraft, type ConfirmEditorHandle, type ConfirmTarget } from "@/components/ConfirmEditor";
 import PreSendOffer from "@/components/appraisal/PreSendOffer";
 import type { PreOnBooking } from "@/lib/pre-send-time";
+import AccessNow from "@/components/viewings/AccessNow";
 
 /** What the record did with a booking, told back to the booker's done screen. */
-export type BookedResult = { said?: string; goTo?: { ask: string; label: string; href: string; stay?: string }; pre?: PreOnBooking | null } | undefined;
+export type BookedResult = {
+  said?: string;
+  goTo?: { ask: string; label: string; href: string; stay?: string };
+  pre?: PreOnBooking | null;
+  /** The id the listing and the diary know the viewing by ("rex-…" / "os-…"),
+   *  so the last step can confirm access against it. Null when it was not filed. */
+  viewingId?: string | null;
+  /** The booking did not go through: the later steps are not offered. */
+  failed?: boolean;
+} | undefined;
+
+/* ── A VIEWING, STEP BY STEP (James, 6 Oct 2026) ──────────────────────────
+   "Stage 1 is the calendar. Stage 2 is what we'll be sending out, and stage 3
+   after that is when we've sent it." Then the landlord, then access. Each step
+   slides in from the side rather than sharing the screen with the diary,
+   which is what the email column beside it used to do. Appraisals and
+   take-ons keep the column: this is the viewing's own flow. */
+const FLOW_STEPS = [
+  { stage: "when", label: "Time" },
+  { stage: "email", label: "Email" },
+  { stage: "done", label: "Sent" },
+  { stage: "landlord", label: "Landlord" },
+  { stage: "access", label: "Access" },
+] as const;
 
 /**
  * Booking a viewing, in the order the job actually happens: which property,
@@ -129,6 +152,7 @@ export default function ViewingBooker({
   appraisalId = null,
   suggested = null,
   skipProperty = false,
+  editing = null,
 }: {
   open: boolean;
   onClose: () => void;
@@ -166,6 +190,12 @@ export default function ViewingBooker({
    *  another. */
   skipProperty?: boolean;
   /**
+   * CHANGE TIME on a viewing that is already booked (6 Oct 2026). The diary
+   * opens on its current slot, the email is the "new time" one, and the
+   * caller moves it rather than booking another.
+   */
+  editing?: { startsAt: string; minutes: number; unaccompanied?: boolean } | null;
+  /**
    * `startsAt` and `minutes` are the booking as a MACHINE reads it, and they
    * are not decoration. Everything downstream — the landlord's calendar file,
    * the "about 45 minutes" line on their page, the confirmation email — used
@@ -195,7 +225,10 @@ export default function ViewingBooker({
   const today = useMemo(() => startOfDay(new Date()), []);
   /* A viewing is booked property first (James, 11 Sep 2026): find it, confirm
      it is the one, then the diary, then the confirmation. */
-  const [stage, setStage] = useState<"applicant" | "property" | "confirm" | "when" | "who" | "done">("when");
+  const [stage, setStage] = useState<"applicant" | "property" | "confirm" | "when" | "email" | "who" | "done" | "landlord" | "access">("when");
+  /* Which way the next step slides in: forward from the right, back from the left. */
+  const [dir, setDir] = useState<1 | -1>(1);
+  const flow = mode === "viewing";
   const [find, setFind] = useState("");
   const [book, setBook] = useState<Listing[] | null>(null);
   const [chosen, setChosen] = useState<Person | null>(lead);
@@ -229,6 +262,12 @@ export default function ViewingBooker({
   const [result, setResult] = useState<BookedResult | null>(null);
   const router = useRouter();
   const splitRef = useRef<HTMLDivElement>(null);
+  /* The landlord step and the access step, after the applicant is told. */
+  const [landlordDraft, setLandlordDraft] = useState<ConfirmDraft | null>(null);
+  const landlordEditor = useRef<ConfirmEditorHandle>(null);
+  const [landlordBusy, setLandlordBusy] = useState(false);
+  const [landlordSaid, setLandlordSaid] = useState<string | null>(null);
+  const [accessOpen, setAccessOpen] = useState(false);
 
   // Reset on OPEN only. The caller builds `properties` inline, so depending on
   // it here would throw the chosen day and time away on any parent re-render.
@@ -259,10 +298,16 @@ export default function ViewingBooker({
     // Starting from a property, the applicant is the first unknown; starting
     // from a lead, it's already answered.
     setChosen(lead);
-    setStage(lead ? (mode === "viewing" && !(skipProperty && firstId) ? "property" : "when") : "applicant");
+    setStage(editing ? "when" : lead ? (mode === "viewing" && !(skipProperty && firstId) ? "property" : "when") : "applicant");
+    setDir(1);
     setFind("");
     setDay(null);
     setSlot(null);
+    setAccompanied(true);
+    setLandlordDraft(null);
+    setLandlordSaid(null);
+    setLandlordBusy(false);
+    setAccessOpen(false);
     setPropertyId(firstId ?? seed.current[0]?.id ?? "");
     setFilters(NO_FILTERS);
     setWeek(0);
@@ -275,7 +320,20 @@ export default function ViewingBooker({
        kept the viewing default and every appraisal was booked for half an
        hour, no matter what this line said. */
     setMins(mode === "appraisal" || mode === "takeon" ? 60 : 30);
-  }, [open, today, mode, firstId, skipProperty]);
+    /* Change time: start on the slot it already has. */
+    if (editing) {
+      const at = new Date(editing.startsAt);
+      if (!Number.isNaN(at.getTime())) {
+        const d = startOfDay(at);
+        setDay(d);
+        setSlot(`${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`);
+        setWeek(Math.max(0, Math.floor((Math.round((d.getTime() - today.getTime()) / 86400000) + ((today.getDay() + 6) % 7)) / 7)));
+      }
+      setMins(editing.minutes || 30);
+      setAccompanied(!editing.unaccompanied);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, today, mode, firstId, skipProperty, editing?.startsAt]);
 
   useEffect(() => {
     if (!open) return;
@@ -692,6 +750,56 @@ export default function ViewingBooker({
     }
   }
 
+  /* Change time: has the slot actually moved? Same time = a resend. */
+  const timeChanged = Boolean(editing && startsAt && new Date(editing.startsAt).getTime() !== new Date(startsAt).getTime());
+  const lengthChanged = Boolean(editing && mins !== editing.minutes);
+  /** The viewing as the confirmations know it, for the applicant and the landlord alike. */
+  const viewingBooking = startsAt && leadId && chosen && property
+    ? {
+        leadId,
+        listingId: property.id || null,
+        applicantName: chosen.name,
+        applicantEmail: chosen.email,
+        address: property.name,
+        startsAt,
+        minutes: mins,
+        unaccompanied: !accompanied,
+        ...(timeChanged && editing ? { movedFrom: editing.startsAt } : {}),
+      }
+    : null;
+  const landlordTarget: ConfirmTarget | null = flow && viewingBooking ? { kind: "viewing-landlord", booking: viewingBooking } : null;
+  /** Step to another stage, sliding the right way. */
+  const go = (next: typeof stage, d: 1 | -1 = 1) => {
+    setDir(d);
+    setStage(next);
+  };
+
+  /** The landlord's email, sent only because the agent pressed Send. */
+  async function sendLandlord() {
+    if (!landlordTarget || landlordBusy) return;
+    setLandlordBusy(true);
+    const r = await fetch("/api/confirmations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "send",
+        ...payloadOf(landlordTarget),
+        subject: landlordEditor.current?.subject,
+        html: landlordEditor.current?.html(),
+        again: Boolean(landlordDraft?.alreadySent),
+      }),
+    })
+      .then((x) => x.json() as Promise<{ sent?: boolean; detail?: string; error?: string }>)
+      .catch(() => null);
+    setLandlordBusy(false);
+    if (r?.sent) {
+      setLandlordSaid(`Sent to the landlord. ${r.detail ?? ""}`.trim());
+      go("access");
+    } else {
+      setLandlordSaid(`That did not send: ${String(r?.detail ?? r?.error ?? "the connection dropped").replace(/\.+$/, "")}.`);
+    }
+  }
+
   /** The confirmation to draft beside the diary, when there is one to send. */
   const emailTarget: ConfirmTarget | null =
     !startsAt
@@ -704,8 +812,8 @@ export default function ViewingBooker({
       ? null
       : mode === "appraisal"
         ? { kind: "appraisal-new", appraisal: { leadId, landlord: chosen.name, email: chosen.email, address: address || "", startsAt, minutes: mins } }
-        : property
-          ? { kind: "viewing", booking: { leadId, listingId: property.id, applicantName: chosen.name, applicantEmail: chosen.email, address: property.name, startsAt, minutes: mins, unaccompanied: !accompanied } }
+        : viewingBooking
+          ? { kind: "viewing", booking: viewingBooking }
           : null;
   const willSend = Boolean(emailTarget && sendEmail && draft?.ok && draft.to && !draft.blocked);
   const draftLoading = Boolean(emailTarget && sendEmail && draft === null);
@@ -740,6 +848,7 @@ export default function ViewingBooker({
       : { send: false };
     await saveBuffers();
     setResult(null);
+    setDir(1);
     setStage("done");
     try {
       const r = await onBooked({
@@ -964,6 +1073,54 @@ export default function ViewingBooker({
     ];
   }
 
+  /* The date, start and length boxes: in the column beside the diary for an
+     appraisal, under it for a viewing. Both move the same booking. */
+  const timeInputs = day && slot ? (
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1.35fr_1fr_1fr]">
+        <label className="col-span-2 flex min-w-0 flex-col gap-1 text-[11px] text-muted sm:col-span-1">
+          Date
+          <input
+            type="date"
+            value={isoDay(day)}
+            min={isoDay(today)}
+            onChange={(e) => {
+              const [y, m, d] = e.target.value.split("-").map(Number);
+              if (!y || !m || !d) return;
+              const next = new Date(y, m - 1, d);
+              if (offsetOf(next) < 0) return;
+              setDay(next);
+              setWeek(weekOf(offsetOf(next)));
+            }}
+            className="w-full min-w-0 rounded-lg border border-line/80 bg-card px-2.5 py-2 text-[13px] text-ink"
+          />
+        </label>
+        <label className="flex min-w-0 flex-col gap-1 text-[11px] text-muted">
+          Starts
+          <select
+            value={slot}
+            onChange={(e) => setSlot(e.target.value)}
+            className="figures w-full min-w-0 rounded-lg border border-line/80 bg-card px-2.5 py-2 text-[13px] text-ink"
+          >
+            {(START_TIMES.includes(slot) ? START_TIMES : [...START_TIMES, slot].sort()).map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex min-w-0 flex-col gap-1 text-[11px] text-muted">
+          Length
+          <select
+            value={mins}
+            onChange={(e) => setMins(Number(e.target.value))}
+            className="w-full min-w-0 rounded-lg border border-line/80 bg-card px-2.5 py-2 text-[13px] text-ink"
+          >
+            {(LENGTHS.includes(mins) ? LENGTHS : [...LENGTHS, mins].sort((a, b) => a - b)).map((n) => (
+              <option key={n} value={n}>{lengthWords(n)}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+  ) : null;
+
   // Portaled: this opens from inside drawers whose slide transition leaves a
   // transform on the aside — which would anchor `fixed` to the drawer.
   return createPortal(
@@ -976,16 +1133,26 @@ export default function ViewingBooker({
 
       <div
         className={`fade-up relative flex w-full flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)] transition-[max-width] duration-300 ${
-          stage === "when"
+          stage === "when" || (flow && stage === "email")
             ? `h-[94vh] ${wide ? "max-w-[calc(100vw-1rem)]" : "max-w-[1440px]"}`
+            : flow && (stage === "done" || stage === "landlord" || stage === "access")
+              ? `h-[94vh] max-w-5xl`
             : `max-h-[92vh] ${toLandlord ? "max-w-5xl" : "max-w-4xl"}`
         }`}
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line/70 px-6 py-4">
           <div className="min-w-0">
             <h2 className="text-[19px] leading-tight">
-              {stage === "done"
-                ? mode === "appraisal" ? "Appraisal booked" : mode === "takeon" ? "Take-on booked" : "Viewing booked"
+              {stage === "email"
+                ? "What We'll Send"
+                : stage === "landlord"
+                  ? "Tell the Landlord as Well?"
+                  : stage === "access"
+                    ? "Confirm Access Now?"
+                    : stage === "when" && editing
+                      ? "Change the Time"
+                      : stage === "done"
+                ? mode === "appraisal" ? "Appraisal booked" : mode === "takeon" ? "Take-on booked" : editing ? (timeChanged || lengthChanged ? "Viewing Moved" : "Viewing Unchanged") : flow ? "Viewing Booked" : "Viewing booked"
                 : stage === "who"
                   ? "Who do we tell?"
                   : stage === "applicant"
@@ -1011,6 +1178,29 @@ export default function ViewingBooker({
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {/* Where they are in it: five steps, the current one filled. */}
+            {flow && FLOW_STEPS.some((f) => f.stage === stage) && (
+              <ol className="hidden items-center gap-1.5 md:flex" aria-label="Steps">
+                {FLOW_STEPS.map((f, i) => {
+                  const at = FLOW_STEPS.findIndex((x) => x.stage === stage);
+                  const state = i < at ? "done" : i === at ? "now" : "next";
+                  return (
+                    <li key={f.stage} className="flex items-center gap-1.5">
+                      {i > 0 && <span aria-hidden className={`h-px w-4 ${i <= at ? "bg-accent-dark" : "bg-line"}`} />}
+                      <span
+                        aria-current={state === "now" ? "step" : undefined}
+                        className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] transition-colors ${
+                          state === "now" ? "bg-accent-dark font-semibold text-white" : state === "done" ? "text-accent-dark" : "text-muted"
+                        }`}
+                      >
+                        <span className="figures">{state === "done" ? "✓" : i + 1}</span>
+                        {f.label}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
             {stage === "when" && (
               <button
                 type="button"
@@ -1033,6 +1223,7 @@ export default function ViewingBooker({
         </div>
 
         <div className={`min-h-0 flex-1 overflow-y-auto px-6 py-5 ${stage === "when" ? "lg:overflow-hidden" : ""}`}>
+          <div key={flow ? stage : "booker"} className={`${stage === "when" || (flow && stage === "email") ? "h-full" : ""} ${flow ? (dir > 0 ? "step-in-next" : "step-in-back") : ""}`}>
           {/* ══ WHO'S VIEWING ══ */}
           {stage === "applicant" && (
             <>
@@ -1158,8 +1349,8 @@ export default function ViewingBooker({
               {!toLandlord && property && (
                 <p className="mb-3 flex items-center gap-2 text-[12.5px] text-muted">
                   <DoodleIcon name="home" size={14} />
-                  {property.name} · {property.locality}
-                  <button type="button" onClick={() => setStage("property")} className="ml-1 text-[11.5px] font-semibold text-accent-dark hover:underline">change</button>
+                  {property.name}{property.locality ? ` · ${property.locality}` : ""}
+                  {!editing && <button type="button" onClick={() => setStage("property")} className="ml-1 text-[11.5px] font-semibold text-accent-dark hover:underline">change</button>}
                 </p>
               )}
               {/* THE week — the diary's own grid, so booking happens against
@@ -1238,9 +1429,42 @@ export default function ViewingBooker({
                   </p>
                 )
               )}
+              {/* ══ THE PICK, UNDER THE DIARY (viewings) ══
+                  The time and its boxes, and nothing else: the email has its
+                  own step now (James, 6 Oct 2026). */}
+              {flow && day && slot && (
+                <div className="frame-grow mt-3 flex flex-col gap-3 rounded-2xl border border-line/60 bg-card p-4 lg:flex-row lg:items-end">
+                  <div className="min-w-0 lg:w-[260px] lg:shrink-0">
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">
+                      {editing ? (timeChanged ? "Moving it to" : "Booked for") : "Viewing"}
+                    </p>
+                    <p className="hand mt-1 text-[18px] leading-tight">{whenPretty}</p>
+                    <p className="mt-1 text-[11.5px] text-muted">
+                      <span className="figures">{slot}-{endOf(slot, mins)}</span> · {howLong}
+                      {editing && timeChanged ? ` · was ${new Date(editing.startsAt).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}` : ""}
+                    </p>
+                  </div>
+                  <div className="min-w-0 flex-1">{timeInputs}</div>
+                  {!editing && (
+                    <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-line/60 px-3 py-2.5 text-[12px] lg:max-w-[260px]">
+                      <input
+                        id="booker-accompanied"
+                        type="checkbox"
+                        checked={accompanied}
+                        onChange={(e) => setAccompanied(e.target.checked)}
+                        className="mt-0.5"
+                      />
+                      <span>
+                        <span className="block font-semibold">One of us will be there</span>
+                        <span className="block text-[11px] leading-snug text-muted">Untick if the applicant lets themselves in.</span>
+                      </span>
+                    </label>
+                  )}
+                </div>
+              )}
               </div>
 
-              {day && slot && (
+              {day && slot && !flow && (
                 <>
                   <div
                     role="separator"
@@ -1262,49 +1486,7 @@ export default function ViewingBooker({
                       <p className="hand mt-1 text-[20px] leading-tight">{whenPretty}</p>
                       {/* The date, start and length, set here or on the grid:
                           both move the same booking (Howard, 24 Sep 2026). */}
-                      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-[1.35fr_1fr_1fr]">
-                        <label className="col-span-2 flex min-w-0 flex-col gap-1 text-[11px] text-muted sm:col-span-1">
-                          Date
-                          <input
-                            type="date"
-                            value={isoDay(day)}
-                            min={isoDay(today)}
-                            onChange={(e) => {
-                              const [y, m, d] = e.target.value.split("-").map(Number);
-                              if (!y || !m || !d) return;
-                              const next = new Date(y, m - 1, d);
-                              if (offsetOf(next) < 0) return;
-                              setDay(next);
-                              setWeek(weekOf(offsetOf(next)));
-                            }}
-                            className="w-full min-w-0 rounded-lg border border-line/80 bg-card px-2.5 py-2 text-[13px] text-ink"
-                          />
-                        </label>
-                        <label className="flex min-w-0 flex-col gap-1 text-[11px] text-muted">
-                          Starts
-                          <select
-                            value={slot}
-                            onChange={(e) => setSlot(e.target.value)}
-                            className="figures w-full min-w-0 rounded-lg border border-line/80 bg-card px-2.5 py-2 text-[13px] text-ink"
-                          >
-                            {(START_TIMES.includes(slot) ? START_TIMES : [...START_TIMES, slot].sort()).map((t) => (
-                              <option key={t} value={t}>{t}</option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="flex min-w-0 flex-col gap-1 text-[11px] text-muted">
-                          Length
-                          <select
-                            value={mins}
-                            onChange={(e) => setMins(Number(e.target.value))}
-                            className="w-full min-w-0 rounded-lg border border-line/80 bg-card px-2.5 py-2 text-[13px] text-ink"
-                          >
-                            {(LENGTHS.includes(mins) ? LENGTHS : [...LENGTHS, mins].sort((a, b) => a - b)).map((n) => (
-                              <option key={n} value={n}>{lengthWords(n)}</option>
-                            ))}
-                          </select>
-                        </label>
-                      </div>
+                      <div className="mt-3">{timeInputs}</div>
                       <p className="mt-2 text-[12px] text-muted">
                         <span className="figures">{slot}–{endOf(slot, mins)}</span>
                         {" · "}
@@ -1313,23 +1495,6 @@ export default function ViewingBooker({
                       </p>
                     </div>
 
-              {mode === "viewing" && (
-                <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-line/60 px-3 py-2.5 text-[12px]">
-                  <input
-                    id="booker-accompanied"
-                    type="checkbox"
-                    checked={accompanied}
-                    onChange={(e) => setAccompanied(e.target.checked)}
-                    className="mt-0.5"
-                  />
-                  <span>
-                    <span className="block font-semibold">One of us will be there</span>
-                    <span className="block text-[11px] leading-snug text-muted">
-                      Untick for an unaccompanied viewing - the applicant lets themselves in. It shows in its own colour on the diary.
-                    </span>
-                  </span>
-                </label>
-              )}
 
 
                     {emailTarget ? (
@@ -1525,6 +1690,97 @@ export default function ViewingBooker({
             </div>
           )}
 
+          {/* ══ 2. WHAT WE'LL SEND (viewings) ══
+              The applicant's email, the whole width, editable in place. */}
+          {flow && stage === "email" && (
+            <div className="flex h-full min-h-[520px] flex-col gap-4">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-line/60 bg-card px-4 py-3">
+                <DoodleIcon name="calendar" size={16} className="shrink-0 text-accent-dark" />
+                <div className="min-w-0 flex-1">
+                  <p className="hand truncate text-[16px] leading-tight">{whenPretty}</p>
+                  <p className="truncate text-[11.5px] text-muted">
+                    {property?.name}{chosen ? ` · ${chosen.name}` : ""}{!accompanied ? " · unaccompanied" : ""}
+                    {editing && timeChanged ? ` · moved from ${new Date(editing.startsAt).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}` : ""}
+                  </p>
+                </div>
+                <button type="button" onClick={() => go("when", -1)} className="text-[11.5px] font-semibold text-accent-dark hover:underline">
+                  Change the time
+                </button>
+              </div>
+              {emailTarget ? (
+                <>
+                  <label className="flex cursor-pointer items-start gap-2.5 text-[12.5px]">
+                    <input id="booker-send-email" type="checkbox" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} className="mt-0.5" />
+                    <span>
+                      <span className="block font-semibold">
+                        {editing && timeChanged ? "Email them the new time" : "Email the confirmation"}
+                      </span>
+                      <span className="block text-[11px] leading-snug text-muted">
+                        To {chosen?.name.split(" ")[0] || "the applicant"}, with the calendar invite. Change any of the words first, or untick to {editing ? (timeChanged || lengthChanged ? "move it without telling them" : "leave it as it is") : "book it without telling them"}.
+                      </span>
+                    </span>
+                  </label>
+                  {sendEmail ? (
+                    <ConfirmEditor ref={editor} target={emailTarget} onDraft={setDraft} fill />
+                  ) : (
+                    <p className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-line/80 p-8 text-center text-[12.5px] text-muted">
+                      Nothing goes to {chosen?.name.split(" ")[0] || "them"}. You can send the confirmation from their lead later.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="rounded-xl border border-line/60 px-3.5 py-3 text-[12px] text-muted">
+                  The confirmation can be sent from the record once this is booked.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ══ 4. THE LANDLORD (viewings) ══
+              Optional: shown, editable, and sent only on Send. */}
+          {flow && stage === "landlord" && (
+            <div className="flex h-full min-h-[480px] flex-col gap-4">
+              <p className="text-[12.5px] leading-relaxed text-muted">
+                {editing && timeChanged
+                  ? "The applicant has the new time. You can let the landlord know too, so the access is not a surprise - or leave it, and they will see it on their portal."
+                  : "The applicant is booked in. You can send the landlord the same news, so the access is not a surprise - or leave it, and they will see it on their portal."}
+              </p>
+              {landlordTarget ? (
+                <ConfirmEditor ref={landlordEditor} target={landlordTarget} onDraft={setLandlordDraft} fill />
+              ) : (
+                <p className="rounded-xl border border-line/60 px-3.5 py-3 text-[12px] text-muted">
+                  This viewing is not joined to a home we can look the landlord up for. Tell them yourself.
+                </p>
+              )}
+              {landlordSaid && <p className="rounded-xl bg-accent-soft/70 px-3.5 py-2.5 text-[12px] text-accent-dark">{landlordSaid}</p>}
+            </div>
+          )}
+
+          {/* ══ 5. ACCESS (viewings) ══
+              Straight into the listing's own access sheet, for this viewing. */}
+          {flow && stage === "access" && (
+            <div className="mx-auto flex max-w-lg flex-col items-center py-10 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
+                <DoodleIcon name="key" size={24} />
+              </span>
+              <p className="hand mt-5 text-[22px] leading-tight">Can We Get In?</p>
+              <p className="mt-2 text-[12.5px] leading-relaxed text-muted">
+                {result?.viewingId && property?.id
+                  ? `Check how we get into ${property.name} for ${whenPretty}: the keys, or a yes from whoever lives there. It takes a minute now and saves a wasted trip.`
+                  : "This viewing is not on a listing we can record access against yet. Check the keys or ask whoever lives there, then note it on the listing."}
+              </p>
+              {landlordSaid && <p className="mt-4 text-[12px] text-muted">{landlordSaid}</p>}
+              {result?.goTo && (
+                <p className="mt-6 text-[12px] text-muted">
+                  {result.goTo.ask}{" "}
+                  <button type="button" onClick={() => { onClose(); router.push(result.goTo!.href); }} className="font-semibold text-accent-dark hover:underline">
+                    {result.goTo.label}
+                  </button>
+                </p>
+              )}
+            </div>
+          )}
+
                     {/* ══ WHO ══ */}
           {stage === "who" && (
             <SendFlow
@@ -1558,7 +1814,7 @@ export default function ViewingBooker({
                   </p>
                   {/* The pre-presentation, straight after an appraisal is booked (1 Oct 2026). */}
                   {result?.pre && <PreSendOffer pre={result.pre} />}
-                  {result?.goTo && (
+                  {result?.goTo && !flow && (
                     <div className="mt-6 w-full max-w-md rounded-2xl border border-line/60 bg-card p-5">
                       <p className="text-[13.5px] leading-snug">{result.goTo.ask}</p>
                       <div className="mt-4 flex flex-wrap justify-center gap-2.5">
@@ -1582,6 +1838,7 @@ export default function ViewingBooker({
               )}
             </div>
           )}
+          </div>
         </div>
 
         {stage !== "who" && (
@@ -1640,11 +1897,22 @@ export default function ViewingBooker({
                     <span>That time has already gone. Book it anyway if the visit has happened - the confirmation will say so.</span>
                   </p>
                 )}
+                {flow ? (
+                  <PressButton
+                    onClick={() => ready && go("email")}
+                    className={`shrink-0 rounded-full px-6 py-2.5 text-[13px] font-semibold ${ready ? "bg-ink text-page" : "cursor-not-allowed bg-ink/30 text-page/60"}`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <DoodleIcon name="mail" size={15} />
+                      Next: the Email
+                      <span aria-hidden>→</span>
+                    </span>
+                  </PressButton>
+                ) : (
                 <PressButton
                   onClick={() => {
                     if (!ready || savingBuffers || booking || draftLoading) return;
-                    if (VIEWING_SENDS_LIVE && mode === "viewing") setStage("who");
-                    else void bookIt();
+                    void bookIt();
                   }}
                   className={`shrink-0 rounded-full px-6 py-2.5 text-[13px] font-semibold ${
                     ready && !savingBuffers && !booking && !draftLoading ? "bg-ink text-page" : "cursor-not-allowed bg-ink/30 text-page/60"
@@ -1659,6 +1927,104 @@ export default function ViewingBooker({
                     {savingBuffers || booking ? "Booking…" : draftLoading ? "Getting the email ready…" : willSend ? "Book and send" : "Book it"}
                   </span>
                 </PressButton>
+                )}
+              </>
+            ) : flow && stage === "email" ? (
+              (() => {
+                const changes = !editing || timeChanged || lengthChanged;
+                const can = ready && !booking && !draftLoading && (changes || willSend);
+                const label = booking
+                  ? editing ? "Moving it…" : "Booking…"
+                  : draftLoading
+                    ? "Getting the email ready…"
+                    : editing
+                      ? changes ? (willSend ? "Move It and Send" : "Move It") : willSend ? "Send It Again" : "Nothing to Change"
+                      : willSend ? "Book and Send" : "Book It";
+                return (
+                  <>
+                    <button type="button" onClick={() => go("when", -1)} className="rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-medium transition-colors hover:border-ink/40">
+                      ← Back to the diary
+                    </button>
+                    <PressButton
+                      onClick={() => can && void bookIt()}
+                      className={`shrink-0 rounded-full px-6 py-2.5 text-[13px] font-semibold ${can ? "bg-accent-dark text-white" : "cursor-not-allowed bg-ink/30 text-page/60"}`}
+                    >
+                      <span className="flex items-center gap-2">
+                        {booking ? (
+                          <span className="block h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-page/40 border-t-page" />
+                        ) : (
+                          <DoodleIcon name={willSend ? "mail" : "calendar"} size={15} />
+                        )}
+                        {label}
+                      </span>
+                    </PressButton>
+                  </>
+                );
+              })()
+            ) : flow && stage === "done" ? (
+              <>
+                <button type="button" onClick={onClose} className="rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-medium transition-colors hover:border-ink/40">
+                  Finish here
+                </button>
+                {result && !result.failed ? (
+                  <PressButton onClick={() => go("landlord")} className="press-ring shrink-0 rounded-full bg-ink px-6 py-2.5 text-[13px] font-semibold text-page">
+                    <span className="flex items-center gap-2">
+                      Next: the Landlord
+                      <span aria-hidden>→</span>
+                    </span>
+                  </PressButton>
+                ) : (
+                  <span className="text-[12px] text-muted">{result === null ? "Saving…" : ""}</span>
+                )}
+              </>
+            ) : flow && stage === "landlord" ? (
+              (() => {
+                const can = Boolean(landlordDraft?.ok && landlordDraft.to && !landlordDraft.blocked) && !landlordBusy;
+                return (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLandlordSaid("Nothing was sent to the landlord.");
+                        go("access");
+                      }}
+                      className="rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-medium transition-colors hover:border-ink/40"
+                    >
+                      Don&apos;t send
+                    </button>
+                    <PressButton
+                      onClick={() => can && void sendLandlord()}
+                      className={`shrink-0 rounded-full px-6 py-2.5 text-[13px] font-semibold ${can ? "bg-accent-dark text-white" : "cursor-not-allowed bg-ink/30 text-page/60"}`}
+                    >
+                      <span className="flex items-center gap-2">
+                        {landlordBusy ? (
+                          <span className="block h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-page/40 border-t-page" />
+                        ) : (
+                          <DoodleIcon name="mail" size={15} />
+                        )}
+                        {landlordBusy ? "Sending…" : landlordDraft === null && landlordTarget ? "Getting the email ready…" : "Send to the Landlord"}
+                      </span>
+                    </PressButton>
+                  </>
+                );
+              })()
+            ) : flow && stage === "access" ? (
+              <>
+                <button type="button" onClick={onClose} className="rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-medium transition-colors hover:border-ink/40">
+                  Not now
+                </button>
+                {result?.viewingId && property?.id ? (
+                  <PressButton onClick={() => setAccessOpen(true)} className="press-ring shrink-0 rounded-full bg-accent-dark px-6 py-2.5 text-[13px] font-semibold text-white">
+                    <span className="flex items-center gap-2">
+                      <DoodleIcon name="key" size={15} />
+                      Confirm Access
+                    </span>
+                  </PressButton>
+                ) : (
+                  <PressButton onClick={onClose} className="rounded-full bg-ink px-6 py-2.5 text-[13px] font-semibold text-page">
+                    Done
+                  </PressButton>
+                )}
               </>
             ) : (
               <>
@@ -1674,6 +2040,28 @@ export default function ViewingBooker({
           </div>
         )}
       </div>
+      {accessOpen && result?.viewingId && property?.id && startsAt && (
+        <AccessNow
+          listingId={property.id}
+          propertyId={property.propertyId ?? null}
+          address={property.name}
+          agent={meName}
+          tenant={occupant ? { name: occupant.name, email: occupant.email, phone: occupant.phone } : null}
+          viewing={{
+            id: result.viewingId,
+            startsAt,
+            mins,
+            type: accompanied ? "Viewing" : "Unaccompanied viewing",
+            status: null,
+            cancelled: false,
+            agent: meName || null,
+            description: null,
+            feedbackId: null,
+            contacts: chosen ? [{ id: leadId ?? chosen.email, name: chosen.name, email: chosen.email || null, phone: chosen.phone || null, leadId }] : [],
+          }}
+          onClose={() => setAccessOpen(false)}
+        />
+      )}
     </div>,
     document.body
   );

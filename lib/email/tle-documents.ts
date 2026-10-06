@@ -1241,6 +1241,47 @@ export const VIEWING_MOVED = {
   branding: { showSignoff: false },
 } as const;
 
+/* ── The landlord, told about a viewing (James, 6 Oct 2026) ──────────────
+   Optional and by hand: the last-but-one step of booking a viewing asks the
+   agent whether to send it, shows it, and sends only on a yes. The portal
+   still shows every viewing either way. */
+export const LANDLORD_VIEWING_BOOKED = {
+  subject: "A viewing is booked at {{address}}",
+  preheader: "{{whenPretty}}, and what it needs from you.",
+  mode: "blocks",
+  blocks: [
+    H("lv1", "A viewing is booked"),
+    T(
+      "lv2",
+      "Hi {{firstName}},<br><br>We have booked a viewing at <strong>{{address}}</strong> for <strong>{{whenPretty}}</strong>. {{meetLine}}"
+    ),
+    T("lv3", "If that time is a problem for access, just reply to this email and we will move it."),
+    T("lv4", "We will let you know how it went."),
+    SP("lv5", 8),
+    T("lv6", "{{agentName}}<br>The Letting Experts"),
+    FOOT("lv7", "You're getting this because The Letting Experts are letting your property."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+export const LANDLORD_VIEWING_MOVED = {
+  subject: "New time for the viewing at {{address}}",
+  preheader: "The viewing is now {{whenPretty}}.",
+  mode: "blocks",
+  blocks: [
+    H("lm1", "The viewing has a new time"),
+    T(
+      "lm2",
+      "Hi {{firstName}},<br><br>The viewing at <strong>{{address}}</strong> has moved from {{oldWhen}} to <strong>{{whenPretty}}</strong>. {{meetLine}}"
+    ),
+    T("lm3", "If the new time is a problem for access, just reply to this email and we will sort another."),
+    SP("lm4", 8),
+    T("lm5", "{{agentName}}<br>The Letting Experts"),
+    FOOT("lm6", "You're getting this because The Letting Experts are letting your property."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
 /* ── The offer is accepted ────────────────────────────────────────────────
 
    James, 16 Sep 2026: "I'm happy to copy their emails, and then we can reword

@@ -4,7 +4,7 @@ import { hasDb, q } from "@/lib/db";
 import { appraisalIdForLead, getAppraisal } from "@/lib/appraisal-store";
 import type { MarketAppraisal } from "@/lib/market-appraisal";
 import { draftBookingConfirmation, sendBookingConfirmation } from "@/lib/appraisal-confirm";
-import { draftViewingConfirmation, sendViewingConfirmation, viewingKey, type ViewingBooking } from "@/lib/viewing-confirm";
+import { draftLandlordViewing, draftViewingConfirmation, sendLandlordViewing, sendViewingConfirmation, viewingKey, type ViewingBooking } from "@/lib/viewing-confirm";
 import { publicOrigin } from "@/lib/origin";
 import { draftTakeOnConfirmation, sendTakeOnConfirmation } from "@/lib/takeon";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
@@ -30,7 +30,7 @@ export const maxDuration = 60;
 
 type Body = {
   action?: "draft" | "send";
-  kind?: "appraisal" | "viewing" | "takeon" | "update";
+  kind?: "appraisal" | "viewing" | "viewing-landlord" | "takeon" | "update";
   /** A customer update: which person on it (lib/customer-updates). */
   index?: number;
   id?: string;
@@ -39,6 +39,8 @@ type Body = {
   booking?: {
     leadId?: string; listingId?: string | number | null; applicantName?: string; applicantEmail?: string | null;
     address?: string; startsAt?: string; minutes?: number; unaccompanied?: boolean;
+    /** Change time: when it was before, so the email says it has moved. */
+    movedFrom?: string | null;
   };
   /** An appraisal being booked, before it is saved: the booker's email column. */
   appraisal?: { leadId?: string; landlord?: string; email?: string | null; address?: string; startsAt?: string; minutes?: number };
@@ -58,6 +60,7 @@ function bookingFrom(b: Body["booking"]): ViewingBooking | null {
     startsAt: b.startsAt,
     minutes: Number(b.minutes) || 30,
     unaccompanied: b.unaccompanied === true,
+    movedFrom: b.movedFrom && !Number.isNaN(new Date(b.movedFrom).getTime()) ? b.movedFrom : null,
   };
 }
 
@@ -152,6 +155,18 @@ export async function POST(req: NextRequest) {
         ...(who.email ? {} : { blocked: `There's no email address for ${who.name} on file. Ring them instead, or add their email and come back.` }),
         ...(who.state === "emailed" && who.doneAt ? { alreadySent: { at: who.doneAt, to: who.email ?? "", subject: who.note ?? subject } } : {}),
       });
+    }
+
+    /* The landlord, told about a viewing only when the agent says so: the
+       booker's Landlord step (6 Oct 2026). */
+    if (body.kind === "viewing-landlord") {
+      const booking = bookingFrom(body.booking);
+      if (!booking) return NextResponse.json({ ok: false, error: "Which viewing, and when?" }, { status: 400 });
+      if (body.action === "send") {
+        const r = await sendLandlordViewing({ me: actor, booking, subject: body.subject, html: body.html, again: body.again === true });
+        return NextResponse.json({ ok: r.sent, sent: r.sent, alreadySent: r.alreadySent ?? false, detail: r.detail });
+      }
+      return NextResponse.json(await draftLandlordViewing(booking, actor));
     }
 
     if (body.kind === "viewing") {

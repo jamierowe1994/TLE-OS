@@ -88,7 +88,7 @@ export default function BookViewing({
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ ...confirm, contactId: p.contactId }),
     })
-      .then((r) => r.json() as Promise<{ ok?: boolean; said?: string; outlook?: { ok?: boolean; detail?: string } }>)
+      .then((r) => r.json() as Promise<{ ok?: boolean; said?: string; viewingId?: string | null; outlook?: { ok?: boolean; detail?: string } }>)
       .catch(() => null);
     const said: string[] = [];
     if (!j) said.push("Couldn't reach the server: check your calendar and tell the applicant yourself.");
@@ -109,6 +109,8 @@ export default function BookViewing({
     if (j?.ok) onBooked?.({ when: v.when, who: p.name, property: v.property, leadId: p.leadId, said: said.join(" ") });
     return {
       said: said.join(" "),
+      viewingId: j?.viewingId ?? null,
+      failed: !j?.ok,
       goTo: {
         ask: j?.ok ? `The viewing is on ${p.name.split(" ")[0] || "their"}'s file too.` : `${p.name.split(" ")[0] || "Their"}'s file is on the Leads board.`,
         label: "Open their lead",

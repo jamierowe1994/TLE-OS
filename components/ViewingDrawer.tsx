@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { canChangeTime } from "@/components/viewings/ChangeViewing";
 import { useSlideOver } from "@/lib/use-slide-over";
 import { SAGE_INK, SAGE_WASH } from "@/components/ListingTags";
 import { createPortal } from "react-dom";
@@ -134,6 +135,9 @@ type DrawerProps = {
   onClose: () => void;
   sentExtra: Set<string>;
   onSend: (apptId: string, label: string) => void;
+  /** Change time through the booker, with the email shown first (6 Oct
+   *  2026). Given, Reschedule opens that instead of the quick move here. */
+  onChangeTime?: (a: Appt) => void;
 };
 
 /* The OS's own notes on a viewing, kept in os_case_state under kind
@@ -159,6 +163,7 @@ function ViewingDrawerBody({
   onClose: closeNow,
   sentExtra,
   onSend,
+  onChangeTime,
   saves,
 }: DrawerProps & { saves: SaveScope }) {
   /* Every way out plays the drawer out first (lib/use-slide-over). */
@@ -506,11 +511,11 @@ function ViewingDrawerBody({
             {!past && !cancelled && (
               <>
                 <PressButton
-                  onClick={() => setRescheduling(true)}
+                  onClick={() => (onChangeTime && canChangeTime(appt) ? onChangeTime(appt) : setRescheduling(true))}
                   className="press-ring flex items-center gap-2 rounded-full border border-ink/25 px-4 py-2 text-[11.5px] font-semibold"
                 >
                   <DoodleIcon name="calendar" size={13} />
-                  Reschedule
+                  Change time
                 </PressButton>
                 <PressButton
                   onClick={() => setCancelFlow(true)}

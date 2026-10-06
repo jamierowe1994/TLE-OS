@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import { PressButton } from "@/components/Bits";
+import { canChangeTime } from "@/components/viewings/ChangeViewing";
 import type { Outcome } from "@/components/ViewingDrawer";
 import type { KeySet } from "@/lib/rex-keys";
 import { KIND_META, type Appt } from "@/lib/diary";
@@ -72,6 +73,7 @@ export default function AppointmentDrawer({
   outcome,
   onClose: closeNow,
   onOpenViewing,
+  onChangeTime,
   sentExtra,
   onSend,
 }: {
@@ -80,6 +82,8 @@ export default function AppointmentDrawer({
   onClose: () => void;
   /** The viewing's own file - the full drawer with feedback and offers. */
   onOpenViewing: (a: Appt) => void;
+  /** Change time: the booker on this viewing (6 Oct 2026). */
+  onChangeTime?: (a: Appt) => void;
   sentExtra: Set<string>;
   onSend: (apptId: string, label: string) => void;
 }) {
@@ -385,6 +389,12 @@ export default function AppointmentDrawer({
                 <DoodleIcon name="folder" size={13} />
                 {past && !appt.feedback ? "Open the viewing and record feedback" : "Open the viewing file"}
               </button>
+              {onChangeTime && canChangeTime(appt) && (
+                <button type="button" onClick={() => onChangeTime(appt)} className={secondary}>
+                  <DoodleIcon name="calendar" size={13} />
+                  Change time
+                </button>
+              )}
               {appt.link && (
                 <Link href={appt.link.href} className={secondary} title={appt.link.label}>
                   <DoodleIcon name="home" size={13} />

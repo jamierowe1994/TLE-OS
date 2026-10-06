@@ -24,6 +24,8 @@ export type ViewingBookingInput = {
   startsAt: string;
   minutes: number;
   unaccompanied?: boolean;
+  /** Change time: when it was booked for before, so the email says it moved. */
+  movedFrom?: string | null;
 };
 
 export type AppraisalBookingInput = {
@@ -39,6 +41,8 @@ export type ConfirmTarget =
   | { kind: "appraisal"; id: string }
   | { kind: "appraisal-new"; appraisal: AppraisalBookingInput }
   | { kind: "viewing"; booking: ViewingBookingInput }
+  /** The same viewing, to the property's landlord (the booker's last-but-one step). */
+  | { kind: "viewing-landlord"; booking: ViewingBookingInput }
   /** The take-on visit: photographs and the floor plan, on an appraisal. */
   | { kind: "takeon"; id: string; startsAt: string; minutes: number }
   /** One person on a customer update (lib/customer-updates). */
@@ -72,7 +76,9 @@ export function payloadOf(t: ConfirmTarget): Record<string, unknown> {
         ? { kind: "takeon", id: t.id, startsAt: t.startsAt, minutes: t.minutes }
         : t.kind === "update"
           ? { kind: "update", id: t.id, index: t.index }
-          : { kind: "viewing", booking: t.booking };
+          : t.kind === "viewing-landlord"
+            ? { kind: "viewing-landlord", booking: t.booking }
+            : { kind: "viewing", booking: t.booking };
 }
 
 const when = (iso: string) =>
@@ -150,6 +156,11 @@ const ConfirmEditor = forwardRef<ConfirmEditorHandle, { target: ConfirmTarget; o
     }
     if (!draft.ok) {
       return <div className={`flex items-center justify-center p-6 text-center text-[12.5px] text-muted ${fill ? "flex-1" : ""}`}>{draft.error ?? "Couldn't load the email."}</div>;
+    }
+    /* Nobody to write to at all (no landlord on file, a test listing): say
+       why, without an empty email under it. */
+    if (!draft.html && draft.blocked) {
+      return <p className="rounded-xl bg-accent-soft/70 px-3.5 py-3 text-[12.5px] leading-snug text-accent-dark">{draft.blocked}</p>;
     }
     return (
       <div className={`flex min-h-0 flex-col gap-3 ${fill ? "flex-1" : ""}`}>

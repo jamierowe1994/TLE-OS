@@ -40,8 +40,9 @@ async function ours(authorId: string | null, selfId: string): Promise<Appt[]> {
     const rows = await q<{
       id: string; starts_at: Date; mins: number; kind: string;
       title: string; where_at: string; who: string; author_name: string; author_id: string | null;
+      booking: { leadId?: string; listingId?: string | null; applicantEmail?: string | null; unaccompanied?: boolean } | null;
     }>(
-      `SELECT id, starts_at, mins, kind, title, where_at, who, author_name, author_id
+      `SELECT id, starts_at, mins, kind, title, where_at, who, author_name, author_id, booking
          FROM os_appointments
         WHERE starts_at > NOW() - INTERVAL '21 days'
           AND starts_at < NOW() + INTERVAL '60 days'
@@ -70,6 +71,14 @@ async function ours(authorId: string | null, selfId: string): Promise<Appt[]> {
         agent: r.author_name ?? "",
         comms: [],
         ...(r.author_id === selfId ? { own: true } : {}),
+        /* What the booking was made with, so Change time can open the booker
+           on the same person and home (6 Oct 2026). */
+        ...(r.booking ? {
+          leadId: r.booking.leadId ?? null,
+          listingId: r.booking.listingId ?? null,
+          ...(r.booking.applicantEmail ? { contact: { email: r.booking.applicantEmail, phone: "" } } : {}),
+          ...(r.booking.unaccompanied ? { unaccompanied: true } : {}),
+        } : {}),
       } satisfies Appt;
     });
   } catch {
