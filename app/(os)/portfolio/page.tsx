@@ -11,6 +11,7 @@ import PortfolioMap from "@/components/PortfolioMap";
 import FindingData from "@/components/business/FindingData";
 import PropertyFile from "@/components/PropertyFile";
 import SaveChip, { SaveScopeProvider, useSaveScope } from "@/components/SaveChip";
+import LandlordJobEmails from "@/components/LandlordJobEmails";
 import PropertyAnswers from "@/components/PropertyAnswers";
 import { Pill } from "@/components/Wire";
 import { rexContactUrl, rexListingUrl } from "@/lib/business/rex-links";
@@ -417,7 +418,11 @@ function PropertyPanel({
           <section className="mt-6">
             <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Landlord</p>
             {landlord ? (
-              <div className="rounded-xl border border-line/50 bg-white px-4 py-3 text-[13px]"><Contact p={landlord} /></div>
+              <div className="rounded-xl border border-line/50 bg-white px-4 py-3 text-[13px]">
+                <Contact p={landlord} />
+                {/* Their say over the maintenance job emails (6 Oct 2026). */}
+                {landlord.email && landlord.email.includes("@") && <LandlordJobEmails key={landlord.email} landlord={landlord.email} name={landlord.name} className="mt-2.5 border-t border-line/40 pt-2.5" />}
+              </div>
             ) : (
               <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">
                 No landlord on the REX record. The owner relationship on this listing is empty, so nobody is being guessed at.

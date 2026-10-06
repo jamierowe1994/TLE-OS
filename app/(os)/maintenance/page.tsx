@@ -16,6 +16,7 @@ import { PLANNED_CATEGORIES, REPAIR_CATEGORIES, URGENCIES } from "@/lib/works-ca
 import { STEPS, stepOf } from "@/lib/works-steps";
 import { WorksNow, ContractorForm, BLANK_CONTRACTOR } from "@/components/WorksNow";
 import SaveChip, { SaveScopeProvider, useSaveScope } from "@/components/SaveChip";
+import LandlordJobEmails from "@/components/LandlordJobEmails";
 
 /**
  * Maintenance: every job on the managed book, reported through paid.
@@ -51,9 +52,12 @@ const stamp = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleS
 const toPence = (s: string) => Math.round(Number(String(s).replace(/[£,\s]/g, "")) * 100);
 
 /** What the row says to do next. The job's next thing, not its status. */
-function nextFor(o: WorksOrder): { text: string; hot: boolean } {
+function nextFor(o: WorksOrder, ringForApproval = false): { text: string; hot: boolean } {
   const late = o.dueAt ? new Date(o.dueAt).getTime() < Date.now() : false;
   const clock = o.kind === "repair" ? ` · attend by ${stamp(o.dueAt)}` : ` · due ${day(o.dueAt)}`;
+  /* A landlord who asked not to be emailed was not sent the approval
+     request, so nobody is "waiting" - somebody has to ring (6 Oct 2026). */
+  if (ringForApproval && o.status === "approval") return { text: `Ring ${o.landlord || "the landlord"} for approval of ${pounds(o.quotePence)}`, hot: true };
   switch (stepOf(o)) {
     case "tell_landlord": return { text: `Tell the landlord${clock}`, hot: late || o.urgency === "emergency" };
     case "arranging": return { text: "Who's arranging it?", hot: late || o.urgency === "emergency" };
@@ -92,7 +96,7 @@ export default function Maintenance() {
     else if (params.get("section") === "accounts") setSection("accounts");
     else setSection((cur) => (cur === "contractors" ? "repair" : cur));
   }, [rail, params]);
-  const [data, setData] = useState<{ orders: WorksOrder[]; contractors: Contractor[]; summary: WorksSummary | null; lastMonth?: WorksSummary | null; lastMonthOn?: string | null; live: boolean; reason?: string; canCorporate?: boolean; carried?: CarriedJob[]; carriedDone?: CarriedDone[]; carriedReadAt?: string | null; carriedError?: string } | null>(null);
+  const [data, setData] = useState<{ orders: WorksOrder[]; contractors: Contractor[]; summary: WorksSummary | null; lastMonth?: WorksSummary | null; lastMonthOn?: string | null; live: boolean; reason?: string; canCorporate?: boolean; carried?: CarriedJob[]; carriedDone?: CarriedDone[]; carriedReadAt?: string | null; carriedError?: string; ringForApproval?: string[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showClosed, setShowClosed] = useState(false);
   const [raising, setRaising] = useState<Kind | null>(null);
@@ -310,7 +314,7 @@ export default function Maintenance() {
               </div>
               <ul className="mt-3 divide-y divide-line/50">
                 {g.rows.map((o) => {
-                  const next = nextFor(o);
+                  const next = nextFor(o, data?.ringForApproval?.includes(o.id));
                   return (
                     <li key={o.id}>
                       <button type="button" onClick={() => setOpenId(o.id)} className="grid w-full grid-cols-[52px_minmax(0,1fr)] items-center gap-x-4 gap-y-1.5 py-3 text-left transition-colors hover:bg-accent-soft/20 md:grid-cols-[52px_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1.2fr)]">
@@ -910,6 +914,11 @@ function JobDrawer({ order, contractors, canCorporate, onClose, onChanged }: { o
             canCorporate={canCorporate}
             onInvoiceLandlord={() => void invoiceLandlord()}
           />
+
+          {/* The landlord's say over the job emails, by the job it governs. */}
+          {o.landlordEmail.includes("@") && (
+            <LandlordJobEmails key={o.landlordEmail} job={o.id} name={o.landlord} order={o} className="mt-3 rounded-2xl border border-line/50 bg-white px-4 py-3" />
+          )}
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-muted">More</span>

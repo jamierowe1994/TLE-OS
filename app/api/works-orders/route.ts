@@ -6,6 +6,7 @@ import { can } from "@/lib/roles";
 import { createOrder, listOrders, listContractors, worksSummary, logEvent, KINDS, type Kind, type NewOrder } from "@/lib/works-orders";
 import { emailsForMove, outcomeLine } from "@/lib/works-emails";
 import { alreadyTakenOn, carriedJobs, markTakenOn, withCarried } from "@/lib/works-carried";
+import { landlordKey, landlordPrefsFor, ringsForApproval } from "@/lib/landlord-prefs";
 
 /**
  * Works orders: the list, the figures, and raising one.
@@ -39,8 +40,13 @@ export async function GET(req: NextRequest) {
     carriedJobs().catch(() => null),
   ]);
   const summary = carried ? withCarried(own, carried.jobs) : own;
+  /* Jobs awaiting a landlord who is not to be emailed about them: the board
+     says ring them rather than "waiting on the landlord" (6 Oct 2026). */
+  const awaiting = orders.filter((o) => o.status === "approval");
+  const prefs = awaiting.length ? await landlordPrefsFor(awaiting.map((o) => o.landlordEmail)).catch(() => new Map()) : new Map();
+  const ringForApproval = awaiting.filter((o) => ringsForApproval(o, prefs.get(landlordKey(o.landlordEmail)))).map((o) => o.id);
   return NextResponse.json({
-    ok: true, live: true, orders, contractors, summary,
+    ok: true, live: true, orders, contractors, summary, ringForApproval,
     carried: carried?.jobs ?? [],
     /* Planned jobs a certificate on file has since finished (5 Oct 2026). */
     carriedDone: carried?.done ?? [],
