@@ -141,6 +141,7 @@ export function Readiness({
   compact,
   buttonOnly,
   onAction,
+  pill,
 }: {
   r: ReadinessState;
   /** No button - a tile, or anywhere the box is already the whole width. */
@@ -149,12 +150,38 @@ export function Readiness({
   buttonOnly?: boolean;
   /** Makes the move a real button. Without it the words are plain (the row around them is the link). */
   onAction?: () => void;
+  /**
+   * A small pill beside the rent on a tile (James, 6 Oct 2026: the full box
+   * took a third of the card and squashed the photograph). The why is in the
+   * hover, and the No photos / EPC chips above already say what is missing.
+   */
+  pill?: boolean;
 }) {
   const wash = r.tone === "good" ? { background: SAGE_WASH } : r.tone === "accent" ? { background: "var(--accent-soft)" } : { background: "#f6f6f4" };
   const ink = r.tone === "good" ? SAGE_INK : r.tone === "accent" ? "var(--accent-dark)" : "var(--muted)";
   const button = `shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3.5 py-2 text-[11.5px] font-semibold ${
     r.tone === "accent" ? "bg-accent-dark text-white" : "border border-line/60 bg-white"
   }`;
+  if (pill) {
+    const words =
+      r.title === "Live"
+        ? "Live on portals"
+        : r.title === "Live, needs attention"
+          ? `Live · ${r.missing.length} to fix`
+          : r.missing.length && r.tone === "accent"
+            ? `${r.title} · ${r.missing.length} to do`
+            : r.title;
+    return (
+      <span
+        className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold"
+        style={{ ...wash, color: ink }}
+        title={r.sub}
+      >
+        <DoodleIcon name={r.icon} size={12} className="shrink-0" />
+        <span className="truncate">{words}</span>
+      </span>
+    );
+  }
   if (buttonOnly) {
     return (
       <span className={`inline-flex ${button}`} title={`${r.title}. ${r.sub}`}>

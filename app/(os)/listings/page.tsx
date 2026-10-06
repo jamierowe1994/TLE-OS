@@ -95,10 +95,12 @@ function rentPeriodLabel(l: SampleListing): string {
 /** One labelled fact in a listing row: the icon, the caption, the value. */
 function Fact({ icon, label, value, title }: { icon: string; label: string; value: string; title?: string }) {
   return (
-    <span className="flex items-center gap-2">
+    <span className="flex min-w-0 items-center gap-2">
       <DoodleIcon name={icon} size={13} className="shrink-0 text-accent-dark" />
       <span className="min-w-0">
-        <span className="block whitespace-nowrap text-[9.5px] font-semibold uppercase leading-tight tracking-[0.06em] text-muted">{label}</span>
+        {/* Truncates rather than pushing out: on a narrow tile "Photos" ran
+            over the card's edge (6 Oct 2026). */}
+        <span className="block truncate text-[9.5px] font-semibold uppercase leading-tight tracking-[0.06em] text-muted">{label}</span>
         <span className="figures block truncate text-[12.5px]" title={title}>{value}</span>
       </span>
     </span>
@@ -862,7 +864,7 @@ export default function Listings() {
             Nothing matches{period === "any" ? "" : " in that window"} - widen the rent band or clear the filters.
           </p>
         )}
-        <div className={`cascade ${view === "tiles" ? "grid gap-4 sm:grid-cols-2 xl:grid-cols-3" : "space-y-3"}`}>
+        <div className={`cascade ${view === "tiles" ? "grid grid-cols-[repeat(auto-fill,minmax(min(100%,330px),1fr))] gap-4" : "space-y-3"}`}>
         {board.map((l) => {
           const st = statusOf(l);
           const views = viewingsFor(l.name);
@@ -907,7 +909,12 @@ export default function Listings() {
                   src={l.image}
                   className={
                     view === "tiles"
-                      ? "h-44 w-full shrink-0 rounded-[16px]"
+                      ? /* A fixed shape, not a fixed height (James, 6 Oct 2026): at
+                           176px tall a wide card turned every photograph into a
+                           thin strip, cropped to the middle. 4:3 keeps the room
+                           in view at any width, and a fourth column comes in
+                           on a wide screen before the cards get that wide. */
+                        "aspect-[4/3] w-full shrink-0 rounded-[16px]"
                       : "h-40 w-full shrink-0 rounded-[16px] sm:h-24 sm:w-32"
                   }
                 />
@@ -916,7 +923,7 @@ export default function Listings() {
                   className={
                     view === "tiles"
                       ? /* Tiles: the three facts side by side under the name, the rent on its own line. */
-                        "grid min-w-0 flex-1 grid-cols-[1.5fr_1fr_1fr] gap-x-3 gap-y-3 px-2 pb-2 [&>span:first-child]:col-span-3"
+                        "grid min-w-0 flex-1 grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)] gap-x-3 gap-y-3 px-2 pb-2 [&>span:first-child]:col-span-3"
                       : /* ── One row, read across ──────────────────────────
                            The name truncated on its own line, the four facts
                            stacked underneath it, and the rent pinned right -
@@ -970,13 +977,21 @@ export default function Listings() {
                   {/* A third of the book — mostly drafts — carries no rent at
                       all. A bare "£" reads as broken; "rent not set" reads as
                       a job to do, which is what it is. */}
-                  <span className={view === "tiles" ? "order-2 col-span-3 flex items-baseline gap-1.5 border-t border-line/50 pt-3" : "col-span-3 md:col-span-1"}>
-                    <span className="figures block text-[20px] leading-none">
-                      {l.rent == null ? "—" : `£${l.rent.toLocaleString("en-GB")}`}
+                  <span className={view === "tiles" ? "order-2 col-span-3 flex flex-wrap items-center gap-x-1.5 gap-y-2 border-t border-line/50 pt-3" : "col-span-3 md:col-span-1"}>
+                    <span className={view === "tiles" ? "flex items-baseline gap-1.5" : "contents"}>
+                      <span className="figures block text-[20px] leading-none">
+                        {l.rent == null ? "—" : `£${l.rent.toLocaleString("en-GB")}`}
+                      </span>
+                      <span className={view === "tiles" ? "text-[11px] text-muted" : "mt-0.5 block text-[10px] text-muted"}>
+                        {l.rent == null ? "rent not set" : rentPeriodLabel(l)}
+                      </span>
                     </span>
-                    <span className={view === "tiles" ? "text-[11px] text-muted" : "mt-0.5 block text-[10px] text-muted"}>
-                      {l.rent == null ? "rent not set" : rentPeriodLabel(l)}
-                    </span>
+                    {/* Where it is, as a pill on the rent's line (tiles). */}
+                    {view === "tiles" && !l.archived && (
+                      <span className="ml-auto min-w-0">
+                        <Readiness r={readiness(l, checks[`${l.id}:${l.lastUpdated ?? ""}`])} pill />
+                      </span>
+                    )}
                   </span>
                   <Fact icon="calendar" label="Available from" value={shortDate(l.availableFrom)} title={l.availableFrom ?? undefined} />
                   {/* No Bedrooms column. REX's listing model has no bedroom
@@ -990,7 +1005,7 @@ export default function Listings() {
                       archived row there IS no next move, so the space says
                       why it is here and leaves room for the button that sits
                       over the card. */}
-                  <span className={view === "tiles" ? "order-3 col-span-3 block" : "flex justify-end"}>
+                  <span className={view === "tiles" ? (l.archived ? "order-3 col-span-3 block" : "hidden") : "flex justify-end"}>
                     {l.archived ? (
                       <span className={`block text-[11.5px] leading-snug text-muted ${view === "tiles" ? "" : "text-right"}`}>
                         {archiveWhy({ archived: true, reason: l.archiveReason ?? null, since: l.archivedSince ?? null, ageDays: l.archiveAgeDays ?? null })}
