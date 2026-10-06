@@ -73,11 +73,34 @@ export async function POST(req: Request) {
        DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW(), updated_by = EXCLUDED.updated_by`,
       [kind, id, JSON.stringify(body.payload), body.by ?? ""]
     );
+    /* Access set or changed: the diary entries of the viewings still to come
+       say how to get in (lib/viewing-brief, 6 Oct 2026). Behind the answer. */
+    if (kind === "access") void refreshAfterAccess(id).catch(() => {});
     return NextResponse.json({ saved: true });
   } catch (e) {
     return NextResponse.json(
       { saved: false, error: e instanceof Error ? e.message : "write failed" },
       { status: 500 }
     );
+  }
+}
+
+/** The access record is the listing's id or "property-<REX property id>". */
+async function refreshAfterAccess(id: string): Promise<void> {
+  const { refreshViewingDiaries } = await import("@/lib/viewing-brief");
+  if (/^\d+$/.test(id)) {
+    await refreshViewingDiaries(id);
+    return;
+  }
+  const property = id.match(/^property-(\d+)$/)?.[1];
+  if (!property) return;
+  const rows = await q<{ listing_id: string }>(
+    `SELECT DISTINCT booking->>'listingId' AS listing_id FROM os_appointments
+      WHERE kind = 'viewing' AND starts_at > NOW() AND booking->>'listingId' ~ '^[0-9]+$'`
+  ).catch(() => []);
+  const { readListingDetails } = await import("@/lib/listing-details");
+  for (const r of rows) {
+    const d = await readListingDetails(Number(r.listing_id), { cached: true }).catch(() => null);
+    if (d?.propertyId === property) await refreshViewingDiaries(r.listing_id);
   }
 }

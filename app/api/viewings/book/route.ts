@@ -3,6 +3,7 @@ import { whoIs } from "@/lib/admin";
 import { putViewingInRexDiary } from "@/lib/rex-diary-write";
 import { rexCopiesToOutlook } from "@/lib/rex-outlook-sync";
 import { putInOutlook } from "@/lib/outlook-calendar";
+import { accessLineFor, fullAddressFor, rexContactDetails, viewingBrief } from "@/lib/viewing-brief";
 import { isOsLead, osContactIdFrom } from "@/lib/contacts-as-leads";
 import { getContact, markRex } from "@/lib/contacts-store";
 import { pushContactToRex } from "@/lib/rex-contacts";
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, said: "Which lead, and when?" }, { status: 400 });
   }
   const applicantName = (b.applicantName ?? "").trim() || "The applicant";
-  const address = (b.address ?? "").trim() || "the property";
+  let address = (b.address ?? "").trim() || "the property";
   const minutes = Number(b.minutes) || 30;
   const listingId = b.listingId != null && b.listingId !== "" ? String(b.listingId) : null;
   const unaccompanied = b.unaccompanied === true;
@@ -104,6 +105,24 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  /* What the agent's diary entry says (lib/viewing-brief, 6 Oct 2026): the
+     address with its postcode, the applicant's number and email, the access. */
+  address = await fullAddressFor(listingId, address);
+  let applicantPhone: string | null = null;
+  let applicantEmail = (b.applicantEmail ?? "").trim() || null;
+  if (contactId) {
+    const d = await rexContactDetails(contactId).catch(() => ({ phone: null, email: null }));
+    applicantPhone = d.phone;
+    applicantEmail = applicantEmail ?? d.email;
+  } else if (isOsLead(String(b.leadId))) {
+    const c = await getContact(osContactIdFrom(String(b.leadId))).catch(() => null);
+    applicantPhone = c?.mobile?.trim() || null;
+  }
+  const { readListingDetails } = await import("@/lib/listing-details");
+  const listingDetails = listingId ? await readListingDetails(Number(listingId), { cached: true }).catch(() => null) : null;
+  const access = await accessLineFor(listingId, listingDetails?.propertyId ?? null).catch(() => null);
+  const brief = viewingBrief({ address, applicantName, phone: applicantPhone, email: applicantEmail, access, unaccompanied, agentName: actor.name });
+
   const rex = await putViewingInRexDiary({
     userId: actor.id,
     leadId: String(b.leadId),
@@ -114,6 +133,7 @@ export async function POST(req: NextRequest) {
     startsAt: b.startsAt,
     minutes,
     unaccompanied,
+    description: brief,
   }).catch(() => ({ ok: false as const, reason: "refused" as const, detail: "Could not reach REX." }));
 
   /* INTO OUTLOOK - unless their REX already copies its diary there (Howard,
@@ -127,7 +147,7 @@ export async function POST(req: NextRequest) {
     userId: actor.id,
     key: `viewing|${b.leadId}|${listingId ?? "-"}|${new Date(b.startsAt).toISOString()}`,
     subject: `${unaccompanied ? "Unaccompanied viewing" : "Viewing"} - ${address} with ${applicantName}`,
-    body: `Booked in TLE OS.${unaccompanied ? " Unaccompanied - nobody from us is going." : ""}\nApplicant: ${applicantName}${b.applicantEmail ? ` (${b.applicantEmail})` : ""}`,
+    body: brief,
     /* An unaccompanied viewing is in the agent's diary so they know it is
        happening, but it does not take their time. */
     showAs: unaccompanied ? "free" : "busy",
@@ -148,6 +168,7 @@ export async function POST(req: NextRequest) {
     listingId,
     applicantName,
     applicantEmail: (b.applicantEmail ?? "").trim().toLowerCase() || null,
+    applicantPhone,
     address,
     startsAt: new Date(b.startsAt).toISOString(),
     minutes,

@@ -59,6 +59,8 @@ export async function putInOutlook(p: {
   minutes: number;
   /** "free" for something in their diary that does not take their time (an unaccompanied viewing). */
   showAs?: "busy" | "free";
+  /** Rewrite the entry even at the same time - its details changed (lib/viewing-brief). */
+  force?: boolean;
 }): Promise<OutlookOutcome> {
   let token: string;
   try {
@@ -80,7 +82,7 @@ export async function putInOutlook(p: {
       ).catch(() => [])
     : [];
   const before = rows[0]?.payload?.eventId ? rows[0].payload : null;
-  if (before?.eventId && before.startsAt === p.startsAt) {
+  if (before?.eventId && before.startsAt === p.startsAt && !p.force) {
     return { ok: true, eventId: before.eventId, moved: false, duplicate: true };
   }
 

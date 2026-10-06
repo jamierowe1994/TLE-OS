@@ -220,6 +220,8 @@ export async function putViewingInRexDiary(p: {
   startsAt: string;
   minutes: number;
   unaccompanied?: boolean;
+  /** The whole brief for the entry (lib/viewing-brief): address, applicant, access. */
+  description?: string;
 }): Promise<ViewingOutcome> {
   if (!p.listingId) return { ok: false, reason: "no_listing", detail: "No listing on the booking, so REX would not know which home it is." };
   if (await isTestFile({ leadId: p.leadId, contactId: p.contactId })) return { ok: false, reason: "test_file", detail: TEST_REFUSAL };
@@ -258,7 +260,7 @@ export async function putViewingInRexDiary(p: {
            title up in its own screen; the API refuses an empty one ("The title
            field is required", measured 15 Sep 2026). */
         title: `TLE ${p.unaccompanied ? "Unaccompanied" : "Accompanied"} Viewing at ${p.address || "the property"} with ${p.applicantName}`,
-        description: `Booked in TLE OS.${p.contactId ? "" : ` Applicant: ${p.applicantName} (not yet a REX contact).`}`,
+        description: p.description ?? `Booked in TLE OS.${p.contactId ? "" : ` Applicant: ${p.applicantName} (not yet a REX contact).`}`,
         starts_at: rexTime(p.startsAt),
         ends_at: rexTime(end),
         event_location: { description: p.address },
@@ -297,6 +299,8 @@ export async function changeRexEvent(p: {
   eventId: string;
   cancel?: { reason: keyof typeof REX_CANCEL_REASON };
   moveTo?: { startsAt: string; minutes: number };
+  /** New words for the entry, same time (6 Oct 2026: access set after booking). */
+  describe?: { description: string; location?: string };
 }): Promise<{ ok: boolean; detail: string }> {
   if (rexWritesLocked("CalendarEvents", "update")) return { ok: false, detail: "changing REX's diary is not switched on" };
   const token = await rexTokenFor(p.userId).catch(() => null);
@@ -322,10 +326,14 @@ export async function changeRexEvent(p: {
     data.starts_at = rexTime(p.moveTo.startsAt);
     data.ends_at = rexTime(new Date(new Date(p.moveTo.startsAt).getTime() + Math.max(15, p.moveTo.minutes) * 60000).toISOString());
   }
+  if (p.describe) {
+    data.description = p.describe.description.slice(0, 4000);
+    if (p.describe.location) data.event_location = { description: p.describe.location };
+  }
   if (p.cancel) {
     data.is_cancelled = true;
     data.cancellation_reason_id = REX_CANCEL_REASON[p.cancel.reason];
   }
   const res = await rexCall("CalendarEvents", "update", { data }, token);
-  return res.ok ? { ok: true, detail: p.cancel ? "cancelled in REX" : "moved in REX" } : { ok: false, detail: `REX refused: ${res.error ?? res.status}` };
+  return res.ok ? { ok: true, detail: p.cancel ? "cancelled in REX" : p.moveTo ? "moved in REX" : "updated in REX" } : { ok: false, detail: `REX refused: ${res.error ?? res.status}` };
 }

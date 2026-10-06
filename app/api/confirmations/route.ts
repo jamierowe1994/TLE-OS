@@ -4,6 +4,7 @@ import { hasDb, q } from "@/lib/db";
 import { appraisalIdForLead, getAppraisal } from "@/lib/appraisal-store";
 import type { MarketAppraisal } from "@/lib/market-appraisal";
 import { draftBookingConfirmation, sendBookingConfirmation } from "@/lib/appraisal-confirm";
+import { fullAddressFor } from "@/lib/viewing-brief";
 import { draftLandlordViewing, draftViewingConfirmation, sendLandlordViewing, sendViewingConfirmation, viewingKey, type ViewingBooking } from "@/lib/viewing-confirm";
 import { publicOrigin } from "@/lib/origin";
 import { draftTakeOnConfirmation, sendTakeOnConfirmation } from "@/lib/takeon";
@@ -162,6 +163,8 @@ export async function POST(req: NextRequest) {
     if (body.kind === "viewing-landlord") {
       const booking = bookingFrom(body.booking);
       if (!booking) return NextResponse.json({ ok: false, error: "Which viewing, and when?" }, { status: 400 });
+      /* The postcode too (Lianna, 6 Oct 2026): the card says "6 Ruskin Place". */
+      booking.address = await fullAddressFor(booking.listingId, booking.address);
       if (body.action === "send") {
         const r = await sendLandlordViewing({ me: actor, booking, subject: body.subject, html: body.html, again: body.again === true });
         return NextResponse.json({ ok: r.sent, sent: r.sent, alreadySent: r.alreadySent ?? false, detail: r.detail });
@@ -172,6 +175,8 @@ export async function POST(req: NextRequest) {
     if (body.kind === "viewing") {
       const booking = bookingFrom(body.booking);
       if (!booking) return NextResponse.json({ ok: false, error: "Which viewing, and when?" }, { status: 400 });
+      /* The postcode too (Lianna, 6 Oct 2026): the card says "6 Ruskin Place". */
+      booking.address = await fullAddressFor(booking.listingId, booking.address);
       if (body.action === "send") {
         /* Their copy only needs the calendar file when Outlook didn't take it. */
         const inAgentsCalendar = hasDb()
