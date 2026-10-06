@@ -93,11 +93,18 @@ export function buildPnl(
   const byMonth = (fn: (c: PnlColumn) => PnlCell) => Object.fromEntries(columns.map((c) => [c.month, fn(c)]));
 
   /* ---------------------------- income ---------------------------- */
-  /* Fees through PayProp are the OS's own reading. Commission received
-     outside PayProp (a few hundred pounds a month in the accounts) is not
-     something PayProp can see, so it comes from the accounts or the sheet and
-     is shown on its own line rather than folded in. */
-  const received = (m: string) => sheet("commissionReceived", m);
+  /* Fees through PayProp are the OS's own reading. Money that never passes
+     through PayProp - commission received (a few hundred pounds a month) and,
+     from August 2026, referral income - comes from the accounts or the sheet
+     and is shown on its own lines rather than folded in. */
+  const OUTSIDE: Array<[string, string]> = [
+    ["commissionReceived", "Commission received outside PayProp"],
+    ["referralIncome", "Referral income"],
+  ];
+  const received = (m: string) => {
+    const vals = OUTSIDE.map(([k]) => sheet(k, m));
+    return vals.every((v) => v == null) ? null : vals.reduce<number>((t, v) => t + (v ?? 0), 0);
+  };
   const fees = row({
     key: "fees",
     label: "Fees through PayProp",
@@ -111,13 +118,13 @@ export function buildPnl(
       return { value: mm ? round(mm.combinedNet) : null, source: mm ? "payprop" : null };
     }),
   });
-  const hasReceived = columns.some((c) => received(c.month) != null);
-  if (hasReceived) {
+  for (const [key, label] of OUTSIDE) {
+    if (!columns.some((c) => sheet(key, c.month) != null)) continue;
     row({
-      key: "commissionReceived",
-      label: "Commission received outside PayProp",
+      key,
+      label,
       group: "income",
-      cells: byMonth((c) => ({ value: received(c.month), source: received(c.month) == null ? null : fromPlan(c.month) })),
+      cells: byMonth((c) => ({ value: sheet(key, c.month), source: sheet(key, c.month) == null ? null : fromPlan(c.month) })),
     });
   }
   const income = row({

@@ -36,6 +36,7 @@ export const PLAN_LINES: PlanLineDef[] = [
   { key: "rlpPremiumIncome", label: "RLP premiums", match: /^rlp insurance premiums$/i, group: "income" },
   { key: "otherFees", label: "Other fees", match: /^other fees?$/i, group: "income" },
   { key: "commissionReceived", label: "Commission received outside PayProp", match: /^commission received$/i, group: "income" },
+  { key: "referralIncome", label: "Referral income", match: /^referral income$/i, group: "income" },
   { key: "totalIncome", label: "Total income", match: /^total income$/i, group: "total" },
   { key: "commissionLetOnly", label: "Agent commission - let only", match: /^agent commission.*let only/i, group: "cos" },
   { key: "commissionSetUp", label: "Agent commission - set up", match: /^agent commission.*set up/i, group: "cos" },
@@ -218,6 +219,7 @@ export function looksLikeAccounts(text: string): boolean {
 
 const ACCOUNT_ROWS: Array<[RegExp, string]> = [
   [/^commission received$/i, "commissionReceived"],
+  [/^referral income$/i, "referralIncome"],
   [/^joining fee income$/i, "_joining"],
   [/^licen[cs]e fee income$/i, "_licence"],
   [/^pro licen[cs]e fee income$/i, "_proLicence"],
@@ -281,7 +283,7 @@ export function parseAccounts(text: string, year: number, fileName: string | nul
   const put = (k: string, m: string, v: number | null) => {
     (lines[k] ??= {})[m] = v == null ? null : Math.round(v * 100) / 100;
   };
-  const incomeKeys = ["commissionReceived", "_joining", "_licence", "_proLicence", "managementFees", "otherFees", "rlpPremiumIncome", "setUpFees", "transactionFees", "letOnlyFees"];
+  const incomeKeys = ["commissionReceived", "referralIncome", "_joining", "_licence", "_proLicence", "managementFees", "otherFees", "rlpPremiumIncome", "setUpFees", "transactionFees", "letOnlyFees"];
   const expenseKeys = ["accountancy", "advertising", "groupAdmin", "bankCharges", "computer", "insurance", "operatingSoftware", "propertySoftware", "recruitment", "training", "subscriptions", "telephone", "travel"];
   for (const m of months) {
     const incSum = incomeKeys.reduce((t, k) => t + at(k, m), 0);
@@ -296,7 +298,7 @@ export function parseAccounts(text: string, year: number, fileName: string | nul
     if (off(net, at("netProfit", m))) problems.push(`${monthName}: the totals come to a net of ${net.toFixed(2)}, the P&L says ${at("netProfit", m).toFixed(2)}`);
 
     const feeOffsets = at("_joining", m) + at("_licence", m) + at("_proLicence", m);
-    for (const k of ["commissionReceived", "managementFees", "otherFees", "rlpPremiumIncome", "setUpFees", "transactionFees", "letOnlyFees", "plcReferencing", "rlpPremium", "commissionManagement", "totalCostOfSales", "otherExpenses", "netProfit", ...expenseKeys]) {
+    for (const k of ["commissionReceived", "referralIncome", "managementFees", "otherFees", "rlpPremiumIncome", "setUpFees", "transactionFees", "letOnlyFees", "plcReferencing", "rlpPremium", "commissionManagement", "totalCostOfSales", "otherExpenses", "netProfit", ...expenseKeys]) {
       put(k, m, raw[k] ? at(k, m) : null);
     }
     put("commissionSetUp", m, null);
