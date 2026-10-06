@@ -34,11 +34,18 @@ function cronAuthorised(req: NextRequest): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/** Owners only: this is James's and Howard's list, not the office's. */
+/**
+ * James and Howard (James, 6 Oct 2026: "you and Howard"). Not every owner:
+ * Susan holds the owner role too, and a list of data to put right is for the
+ * people who put it right. A saved list in os_settings ("book_health_to")
+ * overrides this without a deploy.
+ */
+const DEFAULT_TO = ["james@therecruitmentexperts.co.uk", "howard.russell@theexpertsgroup.co.uk"];
 async function recipients(): Promise<string[]> {
-  if (!hasDb()) return [];
-  const rows = await q<{ email: string }>(`SELECT email FROM os_users WHERE role = 'owner' AND email <> ''`).catch(() => []);
-  return rows.map((r) => r.email);
+  if (!hasDb()) return DEFAULT_TO;
+  const rows = await q<{ value: { emails?: unknown } | null }>(`SELECT value FROM os_settings WHERE key = 'book_health_to'`).catch(() => []);
+  const saved = Array.isArray(rows[0]?.value?.emails) ? (rows[0]!.value!.emails as unknown[]).map(String).filter((e) => e.includes("@")) : [];
+  return saved.length ? saved : DEFAULT_TO;
 }
 
 export async function GET(req: NextRequest) {

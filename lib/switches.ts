@@ -132,7 +132,7 @@ export const SWITCHES: Switch[] = [
     key: "book_health",
     label: "Weekly book health email",
     what: "Every Monday morning, emails the list of homes REX holds twice, homes REX PM manages that REX has no record of, rooms sharing one REX record, certificates whose dates cannot be right, and let rooms with no rent. Nothing is changed.",
-    who: "The owners (James and Howard). Staff only.",
+    who: "James and Howard. Staff only.",
     confirm: "SEND HEALTH CHECK",
     legacyEnv: "BOOK_HEALTH",
     legacyOn: "on",
