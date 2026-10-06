@@ -3,6 +3,7 @@ import { countUsers, touchSeen } from "@/lib/users";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { can } from "@/lib/roles";
+import { keepRexAlive } from "@/lib/rex-user";
 import { readViewAs, VIEW_AS_COOKIE } from "@/lib/view-as";
 
 /**
@@ -36,6 +37,8 @@ export async function GET(req: NextRequest) {
      leave a footprint saying they were here. Not awaited, because a timestamp
      is not worth a millisecond of the page it sits behind. */
   if (actor) void touchSeen(actor.id);
+  /* And their listings sign-in with it, past halfway - see keepRexAlive. */
+  if (actor) void keepRexAlive(actor.id).catch(() => {});
   /* A view-as can target somebody with no OS account, so the banner's name
      comes off the token rather than out of os_users. */
   /* Measured on the live site 29 Aug: this endpoint answered 200 with NO

@@ -97,6 +97,31 @@ export async function findAddresses(query: string): Promise<{ id: string; addres
   return rows.map((r) => ({ id: String(r.id ?? ""), address: String(r.address ?? "") })).filter((r) => r.id && r.address);
 }
 
+/**
+ * A listing already up for this home, if there is one.
+ *
+ * A relet starts from Portfolio (6 Oct 2026, Lianna: "one's coming up for
+ * relet ... so that she didn't have to duplicate it across the system"). The
+ * old, let listing stays as it is - REX moves it to leased on its own - and a
+ * NEW listing goes on the same property record, so the history is one home.
+ * What must never happen is a second CURRENT listing on the same home: two
+ * adverts, two sets of enquiries. So that one is found and opened instead.
+ * Read-only; null when the search cannot answer, so a slow REX never blocks.
+ */
+export async function currentListingOn(propertyId: string): Promise<string | null> {
+  const res = await rexCall("Listings", "search", {
+    criteria: [
+      { name: "property_id", value: propertyId },
+      { name: "listing_category_id", value: "residential_rental" },
+      { name: "system_listing_state", value: "current" },
+    ],
+    limit: 1,
+    order_by: { system_ctime: "desc" },
+  }).catch(() => null);
+  const row = (res?.result as { rows?: { id?: unknown }[] } | null)?.rows?.[0];
+  return row?.id != null ? String(row.id) : null;
+}
+
 export async function createListing(l: NewListing, userId: string | null, dryRun = false): Promise<NewListingOutcome> {
   if (!rexConfigured()) return { ok: false, reason: "not_configured", detail: "The listings system is not connected on this environment." };
   if (!l.propertyId) return { ok: false, reason: "incomplete", detail: "Pick the address first." };
@@ -109,7 +134,7 @@ export async function createListing(l: NewListing, userId: string | null, dryRun
     return {
       ok: false,
       reason: "no_rex_session",
-      detail: "Connect your listings account on your Profile first, so the listing is recorded as yours rather than the office's.",
+      detail: "Your REX sign-in has run out, so the listing can't be saved under your name yet. Sign in again to carry on.",
     };
   }
 
@@ -127,7 +152,7 @@ export async function createListing(l: NewListing, userId: string | null, dryRun
 
   const res = await rexCall("Listings", "create", { data: payload, return_id: true }, token);
   if (isExpiredToken(res)) {
-    return { ok: false, reason: "rex_session_expired", detail: "Your sign-in to the listings system has lapsed. Reconnect it on your Profile and try again." };
+    return { ok: false, reason: "rex_session_expired", detail: "Your REX sign-in has run out. Sign in again to carry on." };
   }
   if (!res.ok) {
     return {

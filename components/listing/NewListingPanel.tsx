@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import SignInAgain from "@/components/SignInAgain";
 import { fiveWeeks, money } from "@/components/listing/listing-draft";
 import { LET_TYPES, SERVICE_LEVELS } from "@/lib/listing-requirements";
 
@@ -26,6 +27,8 @@ interface Props {
    * agreed, so the agent checks three answers rather than retyping them.
    * Nothing is created until they press the button, the same as from Listings.
    */
+  /** The panel's title: "Re-let this home" when it comes from Portfolio. */
+  heading?: string;
   prefill?: {
     propertyId?: string | null;
     address?: string | null;
@@ -40,7 +43,7 @@ type Option = { id: string; label: string };
 const field = "w-full rounded-xl border border-line/70 bg-white px-3.5 py-2.5 text-[13.5px] outline-none focus:border-ink";
 const label = "block text-[11px] text-muted";
 
-export default function NewListingPanel({ onClose, onCreated, prefill }: Props) {
+export default function NewListingPanel({ onClose, onCreated, prefill, heading = "Add a new listing" }: Props) {
   const [shown, setShown] = useState(false);
   /* A known home is already picked; an address alone is searched for, so the
      agent still chooses the record rather than us guessing it. */
@@ -65,6 +68,10 @@ export default function NewListingPanel({ onClose, onCreated, prefill }: Props) 
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* Their REX sign-in has run out: asked for on the spot, then it carries on. */
+  const [needsSignIn, setNeedsSignIn] = useState(false);
+  /* The home already has a current listing: that one is opened, not a second made. */
+  const [existing, setExisting] = useState<string | null>(null);
   const box = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -119,6 +126,8 @@ export default function NewListingPanel({ onClose, onCreated, prefill }: Props) 
   async function create() {
     setSaving(true);
     setError(null);
+    setNeedsSignIn(false);
+    setExisting(null);
     try {
       const r = await fetch("/api/listings/create", {
         method: "POST",
@@ -134,7 +143,20 @@ export default function NewListingPanel({ onClose, onCreated, prefill }: Props) 
           serviceLevel,
         }),
       });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; listingId?: string; propertyId?: string };
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; listingId?: string; propertyId?: string; signIn?: boolean; existingListingId?: string };
+      if (!j.ok && j.existingListingId) {
+        setExisting(j.existingListingId);
+        return;
+      }
+      if (!j.ok && j.signIn) {
+        if (j.propertyId && fresh) {
+          const address = [fresh.streetNumber, fresh.streetName, fresh.town, fresh.postcode].map((x) => x.trim()).filter(Boolean).join(", ");
+          setPicked({ id: j.propertyId, address });
+          setFresh(null);
+        }
+        setNeedsSignIn(true);
+        return;
+      }
       /* The address can be made when the listing is then refused. Hold on to
          it, so trying again adds the listing to that address rather than
          making a second one (the route returns its id for exactly this). */
@@ -164,7 +186,7 @@ export default function NewListingPanel({ onClose, onCreated, prefill }: Props) 
         <div className="flex items-start justify-between gap-4 px-6 pt-5">
           <div>
             <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-accent-dark">Listings</p>
-            <h2 className="hand mt-1 text-[23px] leading-tight">Add a new listing</h2>
+            <h2 className="hand mt-1 text-[23px] leading-tight">{heading}</h2>
           </div>
           <button type="button" onClick={onClose} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/60 text-[13px] text-muted hover:border-ink/40 hover:text-ink" title="Close (Esc)">
             ✕
@@ -276,12 +298,23 @@ export default function NewListingPanel({ onClose, onCreated, prefill }: Props) 
             )}
           </section>
 
+          {needsSignIn && <SignInAgain doing="create the listing" onDone={() => void create()} />}
+          {existing && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-accent-soft/60 px-3.5 py-3">
+              <p className="text-[12px] leading-relaxed text-accent-dark">This home is already on Listings, so there is nothing new to make. Carry on with that one.</p>
+              <a href={`/listings?open=${encodeURIComponent(existing)}&tab=marketing`} className="shrink-0 rounded-full bg-[var(--brown)] px-4 py-2 text-[12px] font-semibold text-white hover:opacity-90">
+                Open the listing <span aria-hidden>→</span>
+              </a>
+            </div>
+          )}
           {error && <p className="rounded-xl bg-accent-soft/60 px-3.5 py-2.5 text-[12px] leading-relaxed text-accent-dark">{error}</p>}
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-line/50 bg-white px-6 py-4">
           <p className="text-[11px] leading-snug text-muted">Photos, the description and the rest come next, on the listing.</p>
-          <button
+          {/* While the sign-in card or the existing listing is showing, that
+              card holds the one button to press - never two that both say create. */}
+          {!needsSignIn && !existing && <button
             type="button"
             disabled={!ready || saving}
             onClick={() => void create()}
@@ -289,7 +322,7 @@ export default function NewListingPanel({ onClose, onCreated, prefill }: Props) 
           >
             <DoodleIcon name="home" size={14} />
             {saving ? "Creating it…" : "Create the listing"}
-          </button>
+          </button>}
         </div>
       </div>
     </div>

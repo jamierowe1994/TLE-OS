@@ -90,15 +90,17 @@ function portalMessages(v: unknown): string[] {
  * The REX sign-in to publish with: the listing's agent's, whoever pressed it.
  * Answers an error sentence instead when the agent has none.
  */
-async function agentToken(actor: OsUser, agent: { id: string | null; name: string | null; email: string | null }): Promise<{ token: string; asActor: boolean; name: string } | { error: string }> {
+async function agentToken(actor: OsUser, agent: { id: string | null; name: string | null; email: string | null }): Promise<{ token: string; asActor: boolean; name: string } | { error: string; signIn?: boolean }> {
   if (!agent.id) return { error: "The listing has no agent yet, so nobody would get its enquiries. Choose the agent first." };
   const first = agent.name?.split(" ")[0] ?? "The listing's agent";
   const same = (await ensureRexLink(actor)) === agent.id || (!!agent.email && agent.email.trim().toLowerCase() === actor.email.trim().toLowerCase());
   const owner = same ? actor : ((await findUserByRexId(agent.id)) ?? (agent.email ? await findUserByEmail(agent.email) : null));
   const token = owner ? await rexTokenFor(owner.id).catch(() => null) : null;
   if (token) return { token, asActor: same, name: agent.name ?? first };
-  if (same) return { error: "Connect your sign-in to the listings system on your Profile first. Enquiries go to whoever puts a listing live, and without it they would go to the office." };
-  return { error: `This one has to go live as ${first}, because enquiries go to whoever puts a listing live. ${first} needs to connect their sign-in to the listings system on their Profile, then either of you can push it.` };
+  /* Their own sign-in has run out: the push card asks for it on the spot
+     (components/SignInAgain) and tries again, 6 Oct 2026. */
+  if (same) return { error: "Your REX sign-in has run out. Enquiries go to whoever puts a listing live, so it has to go out under your name - sign in again and it carries on.", signIn: true };
+  return { error: `This one has to go live as ${first}, because enquiries go to whoever puts a listing live, and ${first}'s REX sign-in has run out. ${first} signs in again on their Profile (Connect to REX), then either of you can push it.` };
 }
 
 function listingId(v: unknown): number | null {
@@ -217,7 +219,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: false, error: `The portals will not take it yet: ${blockers.join("; ")}`, blockers }, { status: 422 });
       }
       const who = await agentToken(actor, details.agent);
-      if ("error" in who) return NextResponse.json({ ok: false, error: who.error, needsAgent: true }, { status: 409 });
+      if ("error" in who) return NextResponse.json({ ok: false, error: who.error, needsAgent: true, signIn: who.signIn || undefined }, { status: 409 });
       token = who.token;
       as = who;
     } else if (was.status !== "published") {
@@ -238,8 +240,8 @@ export async function POST(req: NextRequest) {
           );
     if (!res.ok) {
       if (token && isExpiredToken(res)) {
-        const whose = as.asActor ? "Your sign-in to the listings system has lapsed. Reconnect it on your Profile" : `${as.name}'s sign-in to the listings system has lapsed. They need to reconnect it on their Profile`;
-        return NextResponse.json({ ok: false, error: `${whose} and try again.`, reconnect: as.asActor }, { status: 401 });
+        const whose = as.asActor ? "Your REX sign-in has run out. Sign in again" : `${as.name}'s REX sign-in has run out. They sign in again on their Profile (Connect to REX)`;
+        return NextResponse.json({ ok: false, error: `${whose} and try again.`, reconnect: as.asActor, signIn: as.asActor || undefined }, { status: 401 });
       }
       const plain = "The portals did not take that change. Try again in a minute.";
       return NextResponse.json({ ok: false, error: isOwner(actor) ? res.error ?? `REX refused it (${res.status}).` : plain }, { status: 502 });

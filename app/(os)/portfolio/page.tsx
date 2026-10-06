@@ -16,6 +16,7 @@ import { Pill } from "@/components/Wire";
 import { rexContactUrl, rexListingUrl } from "@/lib/business/rex-links";
 import { housesIn, houseByListing, roomLabel, tabLabel, tenantsInOrder, pickerOption, MANAGED_READERS as R, type House } from "@/lib/houses";
 import RoomPicker from "@/components/RoomPicker";
+import ReletAction from "@/components/portfolio/ReletAction";
 import PhotoLightbox from "@/components/PhotoLightbox";
 import { useDocumentOpen } from "@/lib/doc-sheet";
 import {
@@ -265,8 +266,24 @@ function PropertyPanel({
             <div className="min-w-0">
               <h2 className="text-[20px] leading-tight">{title}</h2>
               <p className="mt-1 text-[12px] text-muted">{sub}</p>
+              {/* On a phone the button row has no room for it: under the name instead. */}
+              {!p.test && p.onRex !== false && p.propertyId && (
+                <ReletAction
+                  home={p}
+                  className="mt-3 rounded-full bg-[var(--brown)] px-4 py-2 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 sm:hidden"
+                />
+              )}
             </div>
             <div className="flex items-center justify-end gap-1.5 sm:shrink-0">
+              {/* Coming up for relet: back onto Listings from here, on the same
+                  home record (components/portfolio/ReletAction). Up here, not
+                  at the foot of a long drawer, so it is found. */}
+              {!p.test && p.onRex !== false && p.propertyId && (
+                <ReletAction
+                  home={p}
+                  className="mr-1 hidden h-9 whitespace-nowrap rounded-full bg-[var(--brown)] px-4 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 sm:inline-flex sm:items-center sm:gap-1"
+                />
+              )}
               <SaveChip scope={saves} className="mr-0.5" />
               <button type="button" aria-label="Previous property" onClick={() => onStep(-1)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">‹</button>
               <button type="button" aria-label="Next property" onClick={() => onStep(1)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">›</button>
