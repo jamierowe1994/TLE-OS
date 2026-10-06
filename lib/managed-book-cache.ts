@@ -36,7 +36,9 @@ import type { ManagedBook } from "./portfolio-types";
 /* v4 (2 Oct 2026): the book is REX PM's own managed list once read, with its
    homes / occupied / vacant counts - a v3 book is the old 707. */
 /* v5 (2 Oct 2026): PayProp's rent where REX has none (rentSource, rentsFromPayProp). */
-const BOOK_BASE = "portfolio:v5";
+/* v6 (6 Oct 2026): an agent's book adds the REX PM homes whose REX property they own. */
+/* v7 (6 Oct 2026): every room of a shared house, REX PM's tenant names where REX has none. */
+const BOOK_BASE = "portfolio:v7";
 /* v2 (18 Sep 2026): REX PM rows no longer pass "Managed" as a service, so a
    let-only home stops counting as ours here. A v1 answer still would. */
 const CERTS_BASE = "portfolio-certs:v2";

@@ -362,6 +362,23 @@ export function toListing(l: RexListing): OsListing {
  * go missing - which is how the book fills up with the sales business's stock.
  */
 async function searchListings(state: string, rexUserId?: string | null): Promise<RexListing[]> {
+  if (!rexUserId) return searchListingsBy(state, null);
+  /* THE LISTING NOBODY IS AGENT ON (6 Oct 2026). Lianna relisted 6 Ruskin
+     Place straight in REX and left Listing Agent blank, so her board - which
+     reads listing_agent_1 - never showed it, while the owner's whole book did.
+     Where a listing names no agent, the person REX has as its owner (whoever
+     made it, unless reassigned) is the agent. Still filtered at REX, so
+     another agent's stock never enters this process. */
+  const [asAgent, asOwner] = await Promise.all([
+    searchListingsBy(state, { name: "listing_agent_1_id", value: rexUserId }),
+    searchListingsBy(state, { name: "system_owner_user_id", value: rexUserId }),
+  ]);
+  const have = new Set(asAgent.map((r) => String(r.id ?? "")));
+  const unnamed = asOwner.filter((r) => !r.listing_agent_1 && !have.has(String(r.id ?? "")));
+  return [...asAgent, ...unnamed];
+}
+
+async function searchListingsBy(state: string, scope: { name: string; value: string } | null): Promise<RexListing[]> {
   const page = async (n: number) => {
     const res = await rexCall("Listings", "search", {
       criteria: [
@@ -371,7 +388,7 @@ async function searchListings(state: string, rexUserId?: string | null): Promise
         /* MULTI-TENANT. An agent sees their own book and nobody else's. The
            filter is applied at REX rather than after the fetch, so another
            agent's stock is never in this process's memory to leak. */
-        ...(rexUserId ? [{ name: "listing_agent_1_id", value: rexUserId }] : []),
+        ...(scope ? [scope] : []),
       ],
       limit: PAGE_SIZE,
       offset: n * PAGE_SIZE,

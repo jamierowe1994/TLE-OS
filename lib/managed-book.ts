@@ -230,6 +230,28 @@ function countsOf(all: ManagedProperty[], landlords: ManagedLandlord[]): Managed
 }
 
 /**
+ * The REX properties one user owns (system_owner_user). Ids only, paged.
+ * Thrown on a refusal, like the book itself: a short list would quietly drop
+ * an agent's homes.
+ */
+async function propertiesOwnedBy(rexUserId: string): Promise<Set<string>> {
+  const ids = new Set<string>();
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const res = await rexCall("Properties", "search", {
+      criteria: [{ name: "system_owner_user_id", value: rexUserId }],
+      limit: PAGE,
+      offset: page * PAGE,
+      result_format: "ids",
+    });
+    if (!res.ok) throw new Error(res.error ?? `REX refused the owned homes (HTTP ${res.status}).`);
+    const batch = rexRows(res.result) as unknown[];
+    for (const id of batch) ids.add(String(id));
+    if (batch.length < PAGE) break;
+  }
+  return ids;
+}
+
+/**
  * The whole managed book, or one agent's slice of it.
  *
  * MULTI-TENANT: `rexUserId` narrows at REX, on listing_agent_1_id, so another
@@ -286,11 +308,15 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
     const who = sitting.get(p.propertyId);
     if (who) p.tenants = who.people.map((t: Party) => ({ contactId: t.contactId, name: t.name, email: t.email, phone: t.phone }));
   }
-  /* Homes REX CRM has no property for (6 Sep 2026): the OS holds them so
-     the managed book reads like REX PM's. Only for the whole-business view;
-     an agent's own book stays REX's, since these carry no agent. */
+  /* Homes REX CRM has no letting for (6 Sep 2026): the OS holds them so
+     the managed book reads like REX PM's. The whole business gets every one.
+     An agent gets the ones whose REX property they own (6 Oct 2026): 6 Ruskin
+     Place had no REX listing, so moving it to Lianna in REX changed nothing -
+     the agent's book only ever read listing_agent_1. And every room of a
+     house already in their book (below). */
   /* Not caught: see activeOsProperties - an empty set is not an answer. */
-  const extra: OsProperty[] = pm ?? (rexUserId ? [] : await activeOsProperties());
+  const extra: OsProperty[] = pm ?? (await activeOsProperties());
+  const owned = rexUserId ? await propertiesOwnedBy(rexUserId) : null;
   /* EVERY ROOM, NOT THE FIRST (James, 6 Oct 2026, 5b Newton Road). A REX PM
      home used to drop out of the book whenever its REX property was already
      in it - but the 6 Sep certificate import tied whole houses of rooms to
@@ -347,7 +373,8 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
      room of the same house is already in it: same building, same street. */
   const houseKey = (d: Parsed) => (d.building ? `${d.building}|${d.street}` : null);
   const theirHouses = new Set(properties.map((p) => houseKey(doorOf(p))).filter((k): k is string => Boolean(k)));
-  const outOfScope = (d: Parsed) => Boolean(rexUserId) && !theirHouses.has(houseKey(d) ?? "");
+  const outOfScope = (d: Parsed, o: OsProperty) =>
+    Boolean(rexUserId) && !theirHouses.has(houseKey(d) ?? "") && !(o.rexPropertyId && owned?.has(o.rexPropertyId));
   for (const o of extra) {
     const door = parseAddress(o.address);
     if (o.rexPropertyId) {
@@ -358,7 +385,7 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
         if (!pmFor.has(o.rexPropertyId)) pmFor.set(o.rexPropertyId, o);
         continue;
       }
-      if (outOfScope(door)) continue;
+      if (outOfScope(door, o)) continue;
       /* Linked to a REX property REX does not mark as let (84 of them, 6 Sep):
          the home is managed in REX PM all the same, so it joins the book under
          its REX property - unless another home already stands there. */
@@ -371,7 +398,7 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
       pmFor.set(o.id, o);
       continue;
     }
-    if (outOfScope(door) || properties.some((p) => p.propertyId === o.id)) continue;
+    if (outOfScope(door, o) || properties.some((p) => p.propertyId === o.id)) continue;
     properties.push(pmRow(o, o.id, o.id, false));
     pmFor.set(o.id, o);
   }
