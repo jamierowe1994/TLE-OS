@@ -56,6 +56,7 @@ import { fetchMe } from "@/lib/me";
 import { WhatsAppButton } from "@/components/WhatsAppQr";
 import SaveChip, { SaveScopeProvider, useSaveScope, type SaveScope } from "@/components/SaveChip";
 import FileDocuments from "@/components/FileDocuments";
+import ListingOwner from "@/components/listing/ListingOwner";
 
 /**
  * The property record — the leads drawer's shape, aimed at a thing instead of
@@ -999,6 +1000,8 @@ function ListingDrawerBody({
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   <Tag tone={status.tone}>{status.label}</Tag>
                   {listing.tenant && <Tag tone="neutral">Tenanted</Tag>}
+                  {/* Whose it is, and moving it - James and Susan only (6 Oct 2026). */}
+                  <ListingOwner listingId={listing.id} />
                   {/* A test file's listing (lib/test-overlay): negative id, never in REX. */}
                   {Number(listing.id) < 0 && <Tag tone="neutral">Test listing - only you can see it</Tag>}
                   {/* Terms, as one word rather than a panel. The copy lives in Documents. */}

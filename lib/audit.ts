@@ -56,7 +56,8 @@ export type AuditKind =
   | "listing_publication"
   /* The advert edited from the OS into REX: which fields, and any photo or
      floor plan uploaded (15 Sep 2026). */
-  | "listing_edited";
+  | "listing_edited"
+  | "listing_owner_changed";
 
 export interface AuditRow {
   id: string;
