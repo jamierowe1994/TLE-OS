@@ -114,6 +114,32 @@ export async function updatePresentation(token: string, deck: PresentDeck): Prom
   return rows[0] ? toRow(rows[0]) : null;
 }
 
+/**
+ * A headshot added after the deck went out (James, 6 Oct 2026).
+ *
+ * A deck is a snapshot, so an agent who sent one before uploading their photo
+ * left the landlord looking at a monogram - Rhiannon's two 79A Torquay Road
+ * decks went out that way the same afternoon. When the agent saves a photo,
+ * every deck of theirs that went out WITHOUT one picks it up.
+ *
+ * Only the empty ones. A deck that already carries a face - REX's, or one the
+ * agent chose for that deck alone in the builder - was a choice, and a new
+ * profile photo does not overrule it.
+ */
+export async function fillMissingAgentPhoto(authorId: string, photo: string): Promise<number> {
+  if (!hasDb() || !authorId || !photo.trim()) return 0;
+  const rows = await q<{ token: string }>(
+    `UPDATE os_presentations
+        SET deck = jsonb_set(deck, '{agent,photo}', to_jsonb($2::text), true)
+      WHERE author_id = $1
+        AND deck ? 'agent'
+        AND COALESCE(deck -> 'agent' ->> 'photo', '') = ''
+      RETURNING token`,
+    [authorId, photo.trim()]
+  ).catch(() => []);
+  return rows.length;
+}
+
 export async function readPresentation(token: string): Promise<PresentationRow | null> {
   if (!hasDb() || !token) return null;
   const rows = await q<Raw>(

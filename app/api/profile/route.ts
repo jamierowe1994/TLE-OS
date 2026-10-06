@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { hasDb, q } from "@/lib/db";
+import { fillMissingAgentPhoto } from "@/lib/present-store";
 
 /**
  * The bits of a profile the whole OS needs to know about.
@@ -43,6 +44,8 @@ export async function PATCH(req: NextRequest) {
   }
   if (photo !== undefined) {
     await q(`update os_users set photo = $1 where id = $2`, [photo || null, userId]);
+    /* Any deck already sent without a face gets this one. */
+    if (photo) await fillMissingAgentPhoto(userId, photo);
   }
   return NextResponse.json({ ok: true });
 }
