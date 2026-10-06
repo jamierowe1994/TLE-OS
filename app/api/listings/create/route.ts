@@ -3,7 +3,7 @@ import { whoIs } from "@/lib/admin";
 import { record } from "@/lib/audit";
 import { gateListingWrite } from "@/lib/listing-gate";
 import { invalidateListingBook } from "@/lib/listings-cache";
-import { createListing, findAddresses, listingSubcategories, type NewListing } from "@/lib/rex-listing-create";
+import { createListing, findAddresses, listingSubcategories, type NewListing, currentListingOn } from "@/lib/rex-listing-create";
 import { createProperty, propertySubcategories } from "@/lib/rex-properties";
 import { rexConfigured } from "@/lib/rex";
 import { isOwner } from "@/lib/agent-words";
@@ -24,6 +24,9 @@ import { isOwner } from "@/lib/agent-words";
  * Switch: "Edit the advert" under Listings, the same one that guards saving.
  */
 
+
+/** Refusals the agent can fix by signing in again, there and then. */
+const SIGN_IN = new Set<string>(["no_rex_session", "rex_session_expired"]);
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -101,9 +104,22 @@ export async function POST(req: NextRequest) {
       },
       actor.id
     );
-    if (!outcome.ok) return NextResponse.json({ ok: false, step: "address", error: isOwner(actor) ? outcome.ownerDetail ?? outcome.detail : outcome.detail }, { status: 422 });
+    if (!outcome.ok) return NextResponse.json({ ok: false, step: "address", error: isOwner(actor) ? outcome.ownerDetail ?? outcome.detail : outcome.detail, signIn: SIGN_IN.has(outcome.reason) || undefined }, { status: 422 });
     propertyId = outcome.propertyId;
     madeProperty = true;
+  }
+
+  /* Already on Listings? Then that is the one to work on - a second current
+     listing on one home means two adverts and two sets of enquiries. Only
+     for an address that was picked: a brand new one cannot have a listing. */
+  if (!madeProperty && !dryRun) {
+    const existing = await currentListingOn(propertyId);
+    if (existing) {
+      return NextResponse.json(
+        { ok: false, step: "listing", error: "This home is already on Listings, so a second one was not made.", existingListingId: existing },
+        { status: 409 }
+      );
+    }
   }
 
   const listing: NewListing = {
@@ -122,6 +138,9 @@ export async function POST(req: NextRequest) {
         ok: false,
         step: "listing",
         error: isOwner(actor) ? made.ownerDetail ?? made.detail : made.detail,
+        /* The panel asks for the sign-in on the spot rather than sending
+           them off to Profile (components/SignInAgain). */
+        signIn: SIGN_IN.has(made.reason) || undefined,
         /* The property is real even when the listing is refused: say so, or
            the next attempt makes a second one at the same address. */
         propertyId: madeProperty ? propertyId : undefined,

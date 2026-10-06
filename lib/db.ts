@@ -525,6 +525,20 @@ CREATE TABLE IF NOT EXISTS os_works_order_events (
   text           TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS os_works_order_events_order ON os_works_order_events (order_id, at DESC);
+-- A landlord's say over the job emails (James, 6 Oct 2026: "other landlords
+-- might say 'why the hell are you emailing me?'"). Every job, only those over
+-- a figure, or none - we ring them. No row is 'all', exactly as before.
+-- Keyed on the landlord's email, lowercased: it is the one thing every job
+-- and every Portfolio card carries, and the address the choice governs.
+-- See lib/landlord-prefs.ts.
+CREATE TABLE IF NOT EXISTS os_landlord_prefs (
+  landlord_key   TEXT PRIMARY KEY,
+  landlord_name  TEXT NOT NULL DEFAULT '',
+  job_emails     TEXT NOT NULL DEFAULT 'all',
+  over_amount    INTEGER NOT NULL DEFAULT 250,
+  updated_by     TEXT NOT NULL DEFAULT '',
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 -- ── Inspections ──────────────────────────────────────────────────────────
 -- Every visit we make to a home we manage: the check-in, the periodic

@@ -1,5 +1,6 @@
 import "server-only";
 import { rexCall, rexRows } from "@/lib/rex";
+import { unitLine } from "@/lib/address-parse";
 
 /**
  * Tenancy applications — the real ones, out of REX.
@@ -326,7 +327,8 @@ export function shapeApplication(r: Row): Application {
       : str((property.adr_building as Row | null)?.name);
   const name =
     [
-      property.adr_unit_number ? `Apartment ${property.adr_unit_number}` : null,
+      /* "Room 2", not "Apartment Room 2" (6 Oct 2026) - see unitLine. */
+      unitLine(str(property.adr_unit_number)),
       building,
       street || null,
     ]

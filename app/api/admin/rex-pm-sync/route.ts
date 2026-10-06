@@ -57,8 +57,13 @@ async function planFor(h: Home): Promise<Plan> {
   if (!m) return { ...base, action: "hold", why: "REX could not be asked just now", rexId: null, candidates: [] };
   const targets = lettings(m.targets);
   const possible = lettings(m.possible ?? []);
-  if (m.verdict === "confident" && targets.length === 1) {
-    return { ...base, action: "link", why: `already in REX (${m.how})`, rexId: targets[0].id, candidates: targets.map((t) => t.name) };
+  /* The link is the same door only (6 Oct 2026): a room is never tied to the
+     house's record or another room's, however confident the house match is -
+     that is how Room 3 at 5b Newton Road came to be Room 1. A room REX has no
+     record for is held with the house's records as its candidates. */
+  const link = m.link && /^\d+$/.test(m.link.id) ? m.link : null;
+  if (m.verdict === "confident" && link) {
+    return { ...base, action: "link", why: `already in REX (${m.how})`, rexId: link.id, candidates: targets.map((t) => t.name) };
   }
   if (targets.length || possible.length) {
     return { ...base, action: "hold", why: m.verdict === "confident" ? `REX holds ${targets.length} records that fit` : `REX may hold it (${m.how})`, rexId: null, candidates: [...targets, ...possible].map((t) => `${t.name} [${t.id}]`) };

@@ -7,6 +7,8 @@ import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
 import { getApplications } from "@/lib/applications";
 import type { Lead } from "@/lib/leads-sample";
 import { peopleLike } from "@/lib/rex-people-store";
+import { searchMatches, searchRank } from "@/lib/search-match";
+import { currentLets } from "@/lib/current-lets";
 
 /**
  * The one search, shared by the search bar (/api/search) and Steve (2 Oct
@@ -22,18 +24,9 @@ export interface Hit {
   href: string;
 }
 
-const digits = (s: string) => s.replace(/\D/g, "");
-
-function matches(needle: string, ...fields: (string | null | undefined)[]): boolean {
-  const n = needle.toLowerCase();
-  const nd = digits(needle);
-  return fields.some((f) => {
-    if (!f) return false;
-    const v = String(f).toLowerCase();
-    if (v.includes(n)) return true;
-    return nd.length >= 5 && digits(v).includes(nd);
-  });
-}
+/* Every word of the search, whole numbers, any order (6 Oct 2026) - see
+   lib/search-match for why "room 2" stopped finding Room 20. */
+const matches = searchMatches;
 
 /** An id only matches when somebody has typed most of it - "07" is a phone
  *  prefix, not a request for every property whose REX id contains 07. */
@@ -62,29 +55,37 @@ export async function searchEverything(needle: string, rexUserId: string | null)
   ]);
 
   const hits: Hit[] = [];
+  /* How sure each hit is, by position in `hits`: the exact home first. */
+  const rank: number[] = [];
   const cap = (n: number) => hits.length < n;
+  const push = (h: Hit, address?: string | null) => {
+    hits.push(h);
+    rank.push(address ? searchRank(needle, address) : 0);
+  };
 
   for (const l of book?.listings ?? []) {
     if (!cap(40)) break;
     if (matches(needle, l.name, l.locality) || idMatch(needle, l.propertyId) || idMatch(needle, l.id)) {
       /* HMO rooms share a name; the listing ref keeps them apart. */
-      hits.push({ kind: "property", title: l.name, sub: `${l.locality} · listing ${l.id}`, href: `/listings?open=${encodeURIComponent(l.id)}` });
+      push({ kind: "property", title: l.name, sub: `${l.locality} · listing ${l.id}`, href: `/listings?open=${encodeURIComponent(l.id)}` }, `${l.name}, ${l.locality}`);
     }
   }
   /* Managed homes (6 Sep): most certificates live on homes with no live
      listing, so the search has to open the Portfolio drawer for them. */
   const seenListing = new Set((book?.listings ?? []).map((l) => String(l.id)));
-  for (const m of managed?.properties ?? []) {
+  /* Each home once, on its latest let: a room let five times was five hits,
+     four of them somebody who moved out years ago (6 Oct 2026). */
+  for (const m of currentLets(managed?.properties ?? [])) {
     if (!cap(50)) break;
     if (seenListing.has(String(m.listingId))) continue;
     if (matches(needle, m.name, m.locality, m.address) || idMatch(needle, m.propertyId) || idMatch(needle, m.listingId)) {
-      hits.push({ kind: "property", title: m.name, sub: `${m.locality} · managed`, href: `/portfolio?open=${encodeURIComponent(m.listingId)}` });
+      push({ kind: "property", title: m.name, sub: `${m.locality} · managed`, href: `/portfolio?open=${encodeURIComponent(m.listingId)}` }, `${m.name}, ${m.locality}`);
     }
   }
   for (const l of leads) {
     if (!cap(60)) break;
     if (matches(needle, l.name, l.email, l.phone, l.address, l.preferred)) {
-      hits.push({ kind: "lead", title: l.name, sub: `${l.enquiry} lead · ${l.source}${l.area && l.area !== "—" ? ` · ${l.area}` : ""}`, href: `/leads?open=${encodeURIComponent(l.id)}` });
+      push({ kind: "lead", title: l.name, sub: `${l.enquiry} lead · ${l.source}${l.area && l.area !== "—" ? ` · ${l.area}` : ""}`, href: `/leads?open=${encodeURIComponent(l.id)}` });
     }
   }
   for (const a of applications) {
@@ -93,20 +94,20 @@ export async function searchEverything(needle: string, rexUserId: string | null)
     const emails = a.applicants.map((x) => x.email ?? "").join(" ");
     const phones = a.applicants.map((x) => x.phone ?? "").join(" ");
     if (matches(needle, a.property, names, emails, phones)) {
-      hits.push({ kind: "application", title: names || "Application", sub: `application · ${a.property}`, href: `/applications?open=${encodeURIComponent(a.id)}` });
+      push({ kind: "application", title: names || "Application", sub: `application · ${a.property}`, href: `/applications?open=${encodeURIComponent(a.id)}` }, `${a.property}, ${a.locality}`);
     }
   }
   for (const d of deals ?? []) {
     if (!cap(100)) break;
     const tenants = d.app.tenants.map((t) => t.name).join(", ");
     if (matches(needle, d.app.propertyName, tenants, ...d.app.tenants.map((t) => t.email ?? ""))) {
-      hits.push({ kind: "deal", title: d.app.propertyName, sub: `deal · ${d.statusKey.replace(/_/g, " ")}${tenants ? ` · ${tenants}` : ""}`, href: `/pre-tenancy?deal=${encodeURIComponent(d.app.id)}` });
+      push({ kind: "deal", title: d.app.propertyName, sub: `deal · ${d.statusKey.replace(/_/g, " ")}${tenants ? ` · ${tenants}` : ""}`, href: `/pre-tenancy?deal=${encodeURIComponent(d.app.id)}` });
     }
   }
   for (const p of compliance?.book.properties ?? []) {
     if (!cap(120)) break;
     if (matches(needle, p.name, p.locality) || idMatch(needle, p.id)) {
-      hits.push({ kind: "compliance", title: p.name, sub: `${p.locality} · certificates`, href: `/compliance?open=${encodeURIComponent(p.id)}` });
+      push({ kind: "compliance", title: p.name, sub: `${p.locality} · certificates`, href: `/compliance?open=${encodeURIComponent(p.id)}` }, `${p.name}, ${p.locality}`);
     }
   }
 
@@ -118,7 +119,7 @@ export async function searchEverything(needle: string, rexUserId: string | null)
   for (const p of known) {
     if (!cap(130)) break;
     const reach = [p.email, p.phone].filter(Boolean).join(" · ") || "no email or phone on the record";
-    hits.push({
+    push({
       kind: "person",
       title: p.name,
       sub: `person · ${reach}${p.age ? ` · read ${p.age}` : ""}`,
@@ -126,5 +127,11 @@ export async function searchEverything(needle: string, rexUserId: string | null)
     });
   }
 
-  return hits.slice(0, 40);
+  /* The exact home first (the same room at the same house), then whole-word
+     matches, then the rest - each group in the order it was found. */
+  return hits
+    .map((h, i) => ({ h, i, r: rank[i] }))
+    .sort((a, b) => b.r - a.r || a.i - b.i)
+    .map((x) => x.h)
+    .slice(0, 40);
 }

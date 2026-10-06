@@ -22,6 +22,7 @@ export function norm(s: string): string {
     .replace(new RegExp(POSTCODE.source, "gi"), " ")
     .replace(/\b(\d+[a-z]?)\s*\/\s*(\d+[a-z]?)\b/g, "$1f$2") // Glasgow "1/2" → one token
     .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\b(flat|room|apartment|apt|unit|studio)(\d+[a-z]?)\b/g, "$1 $2") // "Room5" → "room 5" (5c Newton Road, 6 Oct 2026)
     .replace(/\b(flat|apartment|apt|unit)\s+([a-z])\b[ ]+(\d+)\b/g, "$1 $3$2") // "flat b 17" → "flat 17b"
     .replace(/(^|\s)([a-z])\s+(\d+)\b(?!\s*[a-z]?\d)/g, "$1$3$2") // "b 41 milton" → "41b milton"
     .replace(/\b(\d+)\s+([a-z])\b(?!\s*\d)/g, "$1$2") // "18 b" → "18b"
@@ -110,6 +111,21 @@ export function parseAddress(s: string): Parsed {
   return { nums, building, unit, unitWord, street, front, sig, ident };
 }
 
+/**
+ * The same door (6 Oct 2026, 5b Newton Road): a unit only ever matches the
+ * same unit at the same building, and an address with no unit only matches
+ * one with none. "Room 3, 5b" is never "Room 1, 5b", and never "5b" itself.
+ * Strict (the default) also wants the same kind of unit where both say -
+ * "Room 1" is not "Flat 1" - which is what a stored link needs; `lenient`
+ * lets the kind differ, for a screen deciding whether two records are one.
+ */
+export function sameDoor(a: Parsed, b: Parsed, lenient = false): boolean {
+  if (a.building != null && b.building != null && a.building !== b.building) return false;
+  if (a.unit == null || b.unit == null) return a.unit == null && b.unit == null && (lenient || (a.unitWord == null && b.unitWord == null));
+  if (a.unit !== b.unit) return false;
+  return lenient || a.unitWord == null || b.unitWord == null || a.unitWord === b.unitWord;
+}
+
 export const same = (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].every((x) => b.has(x));
 export const covers = (big: Set<string>, small: Set<string>) => [...small].every((x) => big.has(x));
 export const addrOf = (p: { name: string; locality: string }) => (p.locality ? `${p.name}, ${p.locality}` : p.name);
@@ -156,4 +172,17 @@ export function isRoomAddress(address: string): boolean {
 /** The house's own line, from a room's: "Room 2, 2 Norwich Street, Wisbech PE13 2LE" → "2 Norwich Street, Wisbech PE13 2LE". */
 export function houseNameFrom(address: string): string {
   return address.replace(/^\s*(?:(?:apartment|flat)\s+)?(room|studio|bed(room)?)\s*[a-z0-9]+\s*[,/-]?\s*/i, "").trim();
+}
+
+/**
+ * REX's unit number as the first part of a home's line (6 Oct 2026). REX's
+ * unit field is often a whole phrase already - "Room 2", "Flat 4" - and the
+ * line used to put "Apartment" in front of it regardless, so the book read
+ * "Apartment Room 2, 5b Newton Road". The word goes on only when the unit is
+ * a bare number or letter.
+ */
+export function unitLine(unit: string | null | undefined): string | null {
+  const u = String(unit ?? "").trim();
+  if (!u) return null;
+  return /^(room|flat|apartment|apt|unit|studio|suite|bedroom|annexe?)\b/i.test(u) ? u : `Apartment ${u}`;
 }

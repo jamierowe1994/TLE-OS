@@ -191,7 +191,7 @@ export async function createProperty(
     return {
       ok: false,
       reason: "no_rex_session",
-      detail: "Connect your listings account on your Profile first, so the property is recorded under your name rather than the office's.",
+      detail: "Your REX sign-in has run out, so the address can't be saved under your name yet. Sign in again to carry on.",
       ownerDetail:
         "You have no REX sign-in held, so the property would be created under the office account " +
         "rather than your name. Link your REX account on Profile, then try again. (This is the " +
@@ -225,7 +225,7 @@ export async function createProperty(
     return {
       ok: false,
       reason: "rex_session_expired",
-      detail: "Your sign-in to the listings system has lapsed. Reconnect it on your Profile and try again.",
+      detail: "Your REX sign-in has run out. Sign in again to carry on.",
     };
   }
   if (!res.ok && /duplicate|already exists/i.test(res.error ?? "")) {

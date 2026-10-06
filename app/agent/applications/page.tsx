@@ -6,6 +6,7 @@ import type { Application } from "@/lib/applications";
 import { ErrorLine, Sheet, Spinner, TopBar, WhatsAppIcon, dialable, mapsHref, whatsappHref, HomeHero } from "../bits";
 import SlideTabs from "@/components/app/SlideTabs";
 import FloatSearch from "@/components/app/FloatSearch";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * APPLICATIONS (3 Oct 2026), the app's own page - James: "build the
@@ -102,7 +103,8 @@ export default function PhoneApplications() {
     const hits = (apps ?? []).filter((a) => {
       if (!inTab(a, tab)) return false;
       if (!n) return true;
-      return [a.property, a.locality, ...a.applicants.map((p) => p.name), ...a.applicants.map((p) => p.email ?? "")].some((f) => f && f.toLowerCase().includes(n));
+      /* Every word, whole numbers: "room 2" is not Room 20 (6 Oct 2026, lib/search-match). */
+      return searchMatches(n, a.property, a.locality, ...a.applicants.map((p) => p.name), ...a.applicants.map((p) => p.email ?? ""));
     });
     const by: Record<Sort, (x: App, y: App) => number> = {
       newest: (x, y) => received(y).localeCompare(received(x)),

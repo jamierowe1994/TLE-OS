@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSlideOver } from "@/lib/use-slide-over";
 import DoodleIcon from "@/components/DoodleIcon";
+import SignInAgain from "@/components/SignInAgain";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import PhotoLightbox from "@/components/PhotoLightbox";
 import Link from "next/link";
@@ -274,6 +275,8 @@ function ListingDrawerBody({
      confetti only ever follow a publish REX has confirmed. */
   const [pushOk, setPushOk] = useState(false);
   const [pushError, setPushError] = useState<string | null>(null);
+  /* The push was refused only because their sign-in ran out: the card asks for it. */
+  const [pushSignIn, setPushSignIn] = useState(false);
   useEffect(() => {
     if (pushing == null || pushing < 0 || pushing >= 3 || pushError) return;
     if (pushing === 2 && !pushOk) return;
@@ -345,7 +348,7 @@ function ListingDrawerBody({
   const [portalConfirm, setPortalConfirm] = useState(false);
   const [portalNote, setPortalNote] = useState<string | null>(null);
 
-  async function portalCall(action: "publish" | "off" | "on"): Promise<{ ok: boolean; error?: string }> {
+  async function portalCall(action: "publish" | "off" | "on"): Promise<{ ok: boolean; error?: string; signIn?: boolean }> {
     if (!listing) return { ok: false, error: "No listing open." };
     try {
       const r = await fetch("/api/listings/publish", {
@@ -353,8 +356,8 @@ function ListingDrawerBody({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ id: listing.id, action }),
       });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; status?: string | null; onPortals?: boolean };
-      if (!j.ok) return { ok: false, error: j.error ?? "The portals did not take it." };
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; status?: string | null; onPortals?: boolean; signIn?: boolean };
+      if (!j.ok) return { ok: false, error: j.error ?? "The portals did not take it.", signIn: j.signIn };
       setPub((cur) => ({ status: j.status ?? null, onPortals: Boolean(j.onPortals), blockers: cur?.blockers ?? [] }));
       return { ok: true };
     } catch {
@@ -365,10 +368,14 @@ function ListingDrawerBody({
   async function startPush() {
     setPushOk(false);
     setPushError(null);
+    setPushSignIn(false);
     setPushing(0);
     const res = await portalCall("publish");
     if (res.ok) setPushOk(true);
-    else setPushError(res.error ?? "The portals did not take it.");
+    else {
+      setPushSignIn(Boolean(res.signIn));
+      setPushError(res.error ?? "The portals did not take it.");
+    }
   }
 
   async function flipPortals(action: "off" | "on") {
@@ -2185,6 +2192,7 @@ function ListingDrawerBody({
           at={pushing}
           address={listing.name}
           error={pushError}
+          signIn={pushSignIn}
           onStart={() => void startPush()}
           onCancel={() => {
             setPushing(null);
@@ -2261,7 +2269,7 @@ const PORTALS = ["Rightmove", "OnTheMarket", "Zoopla"];
  * steps run while it answers, and the last one holds until REX has said
  * yes. If REX says no, the card says why instead of celebrating.
  */
-function PushCeremony({ at, address, error, onStart, onCancel, onDone }: { at: number; address: string; error: string | null; onStart: () => void; onCancel: () => void; onDone: () => void }) {
+function PushCeremony({ at, address, error, signIn = false, onStart, onCancel, onDone }: { at: number; address: string; error: string | null; signIn?: boolean; onStart: () => void; onCancel: () => void; onDone: () => void }) {
   const [shown, setShown] = useState(false);
   useEffect(() => {
     const t = requestAnimationFrame(() => setShown(true));
@@ -2373,6 +2381,11 @@ function PushCeremony({ at, address, error, onStart, onCancel, onDone }: { at: n
             <h2 className="hand mt-4 text-[23px] leading-tight">It hasn&apos;t gone live</h2>
             <p className="mt-2 text-[13.5px] leading-relaxed text-muted">{error}</p>
             <p className="mt-2 text-[12px] leading-relaxed text-muted">Nothing was posted. {address} is still a draft.</p>
+            {signIn && (
+              <div className="mt-5 text-left">
+                <SignInAgain compact doing="push it live" onDone={onStart} />
+              </div>
+            )}
             <button
               type="button"
               onClick={onCancel}

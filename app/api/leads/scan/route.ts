@@ -34,6 +34,9 @@ export async function POST(req: NextRequest) {
   }
   if (!rexConfigured()) return NextResponse.json({ ok: false, error: "REX isn't connected on this environment." });
   const started = Date.now();
+  /* Everyone's REX sign-in, pushed out before it can lapse - first, so a
+     failed lead read below never skips it (lib/rex-user keepEveryoneRexAlive). */
+  const signInsKept = await import("@/lib/rex-user").then((m) => m.keepEveryoneRexAlive()).catch(() => 0);
   /* A read that failed writes nothing: not the ledger, and above all not the
      board's cache, which this used to overwrite with an empty book. */
   let book: Awaited<ReturnType<typeof fetchLeadBook>>;
@@ -69,7 +72,7 @@ export async function POST(req: NextRequest) {
   const bookings = await import("@/lib/rex-viewings")
     .then((m) => m.sweepNewBookings())
     .catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
-  return NextResponse.json({ ok: true, scanned: book.scanned, kept: book.leads.length, written, valuationsRead, onFile: stats.onFile, since: stats.since, newestAt: book.newestAt, replies, bookings, ms: Date.now() - started });
+  return NextResponse.json({ ok: true, scanned: book.scanned, kept: book.leads.length, written, valuationsRead, onFile: stats.onFile, since: stats.since, newestAt: book.newestAt, replies, bookings, signInsKept, ms: Date.now() - started });
 }
 
 export const GET = POST;

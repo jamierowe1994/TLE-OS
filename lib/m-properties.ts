@@ -3,6 +3,7 @@ import { bookFor } from "@/lib/listings-cache";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { archiveOf } from "@/lib/listing-archive";
 import { archiveOverrides } from "@/lib/listing-archive-store";
+import { letsByProperty, letElsewhereOf } from "@/lib/listings-archive-view";
 
 /**
  * A property, and the few facts an agent needs standing outside it - the
@@ -119,6 +120,8 @@ export async function bookPhoneProperties(rexUserId: string | null): Promise<Pho
     managedBookFor(rexUserId).then((m) => m.book).catch(() => null),
     archiveOverrides().catch(() => new Map()),
   ]);
+  /* The same "let on another listing" rule the Listings screen uses (6 Oct 2026). */
+  const lets = await letsByProperty().catch(() => new Map());
   if (!book && !managed) return null;
 
   const managedByListing = new Map((managed?.properties ?? []).map((m) => [String(m.listingId), m]));
@@ -126,7 +129,7 @@ export async function bookPhoneProperties(rexUserId: string | null): Promise<Pho
 
   for (const l of book?.listings ?? []) {
     const m = managedByListing.get(String(l.id));
-    const archived = archiveOf(l, overrides.get(String(l.id))).archived;
+    const archived = archiveOf(l, overrides.get(String(l.id)), letElsewhereOf(l, lets)).archived;
     const group: PropertyGroup = archived ? "archived" : l.letAgreed ? "letagreed" : l.publicationStatus === "published" ? "market" : "draft";
     out.push({
       key: `l-${l.id}`,

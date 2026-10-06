@@ -102,8 +102,12 @@ export function housesIn<T extends Addressed>(properties: T[], r: HouseReaders<T
     const house = rest.length ? dedupe(rest, r, () => "house")[0] : null;
     /* One room let twice with no house record is still one home: show it once. */
     if (!house && rooms.length < 2 && members.length < 2) continue;
-    const name = house ? house.name : houseNameFrom(rooms[0].name);
-    out.set(key, { key, kind: "rooms", name, locality: (house ?? rooms[0]).locality, house, rooms, members: house ? [house, ...rooms] : rooms, all: members });
+    /* Named from the room with the plainest address: a REX PM room the OS
+       added carries its whole address in its name ("Room 3, 5b Newton Road,
+       Kingskerswell, Newton abbot"), and the house should read like REX's. */
+    const plainest = rooms.reduce((a, b) => (b.name.length < a.name.length ? b : a), rooms[0]);
+    const name = house ? house.name : houseNameFrom(plainest.name);
+    out.set(key, { key, kind: "rooms", name, locality: (house ?? plainest).locality, house, rooms, members: house ? [house, ...rooms] : rooms, all: members });
   }
   /* 166 Gloucester Road North: fifteen leased listings with the same name,
      one property, a room's rent on each and a different tenant on each. REX

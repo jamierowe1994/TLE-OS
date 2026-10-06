@@ -42,6 +42,8 @@ export interface SittingTenants {
   startDate: string | null;
   /** True once the fixed term is behind us: probably periodic, possibly gone. */
   pastTerm: boolean;
+  /** The listing the application was on, so a draft on another can tell (6 Oct 2026). */
+  listingId: string | null;
 }
 
 const ACCEPTED = new Set(["accepted"]);
@@ -98,14 +100,21 @@ async function walk(): Promise<Map<string, SittingTenants>> {
       return Number(x.id) - Number(y.id);
     });
 
+  /* Not moved in yet (6 Oct 2026): an accepted application whose tenancy
+     starts after today is the NEXT tenant, not the one living there - Room 2
+     at 5b Newton Road showed Lauren Johnstone days before her move-in. It is
+     skipped, so whoever is in the home now still stands. Today is read on
+     every walk, so she appears on her start date without anyone touching it. */
+  const today = new Date().toISOString().slice(0, 10);
   for (const a of accepted) {
+    if (a.startDate && String(a.startDate).slice(0, 10) > today) continue;
     const { pastTerm } = ended(a);
     /* The rule: a tenancy that has run its term is not claimed as current. */
     if (pastTerm) { out.delete(a.propertyId as string); continue; }
     const people: TenantParty[] = a.applicants
       .filter((t) => t.name && t.name !== "Name not recorded")
       .map((t) => ({ contactId: t.contactId ?? "", name: t.name, email: t.email ?? "", phone: t.phone ?? "" }));
-    out.set(a.propertyId as string, { people, names: people.map((t) => t.name), startDate: a.startDate, pastTerm });
+    out.set(a.propertyId as string, { people, names: people.map((t) => t.name), startDate: a.startDate, pastTerm, listingId: a.listingId != null ? String(a.listingId) : null });
   }
   for (const [k, v] of out) if (v.people.length === 0) out.delete(k);
   held = { at: Date.now(), map: out };

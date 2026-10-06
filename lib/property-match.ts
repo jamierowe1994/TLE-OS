@@ -22,6 +22,19 @@ import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
  *
  * Only "confident" is ever written to. "check" and "no match" go in front
  * of a person with the candidates.
+ *
+ * ── Targets are not the link (James, 6 Oct 2026, 5b Newton Road) ─────────
+ *
+ * "shared" and "building" return every record under a house, because a
+ * certificate filed on one room is the whole house's. That is right for a
+ * certificate and wrong for a link: the 6 Sep import stored the FIRST of
+ * those targets as the home's REX property, so Room 3 at 5b was tied to
+ * Room 1's record and 16 REX properties ended up shared by 62 REX PM homes,
+ * hiding ~46 rooms from Portfolio. Anything that ties ONE home to ONE REX
+ * property (the REX PM sync, the instruction sweep, a property's file) reads
+ * `link`, never `targets[0]`. `link` is set only when exactly one REX target
+ * (or, failing any, one OS target) is the same door: the same unit (room / flat number) at the same building, or
+ * no unit either side. A room never links to the house or another room.
  */
 
 export interface MatchCandidate {
@@ -35,10 +48,12 @@ export interface MatchResult {
   how: string;
   targets: MatchCandidate[];
   possible: MatchCandidate[];
+  /** The one REX property this address IS - same unit, same building - or null. */
+  link: MatchCandidate | null;
 }
 
-import { parseAddress, postcodeOf, norm, same, covers, addrOf } from "@/lib/address-parse";
-export { postcodeOf, parseAddress };
+import { parseAddress, postcodeOf, norm, same, covers, addrOf, sameDoor } from "@/lib/address-parse";
+export { postcodeOf, parseAddress, sameDoor };
 const FILLER = /^(flat|room|apartment|unit|apt|studio|floor|the|ground|first|second|third|top|basement|lower|upper|gff|fff|house|rear|front)$/;
 const isNum = (w: string) => /\d/.test(w);
 
@@ -64,7 +79,7 @@ async function rexLookup(address: string): Promise<MatchCandidate[]> {
 /** The property an address names, by the backlog's rules. */
 export async function matchProperty(address: string): Promise<MatchResult> {
   const pc = postcodeOf(address);
-  if (!pc) return { verdict: "no match", how: "no postcode on the address", targets: [], possible: [] };
+  if (!pc) return { verdict: "no match", how: "no postcode on the address", targets: [], possible: [], link: null };
   const f = parseAddress(address);
 
   /* Everyone REX knows at the postcode: the book first, then REX's index. */
@@ -74,11 +89,27 @@ export async function matchProperty(address: string): Promise<MatchResult> {
     const c = { id: String(p.id), name: p.name, locality: p.locality };
     if (postcodeOf(addrOf(c)) === pc) cands.set(c.id, c);
   }
-  for (const p of await rexLookup(address)) if (!cands.has(p.id)) cands.set(p.id, p);
+  /* REX's own line for its own record wins over the book's (6 Oct 2026): the
+     book names a REX property after the REX PM home linked to it, so a wrong
+     link read back here as "Room 1, 5c" on Room 3's record and confirmed
+     itself. REX's line replaces it where REX gives one at this postcode. */
+  for (const p of await rexLookup(address)) if (!cands.has(p.id) || postcodeOf(p.name) === pc) cands.set(p.id, p);
   const all = [...cands.values()].map((p) => ({ p, c: parseAddress(p.name), pc: postcodeOf(addrOf(p)) }));
   const here = all.filter((x) => x.pc === pc);
-  const done = (list: typeof all, how: string, verdict: MatchResult["verdict"]): MatchResult => ({ targets: list.map((x) => x.p), how, verdict, possible: [] });
+  /* The candidate set holds REX PM's own homes ("pm-...") as well as REX's,
+     so the same door is usually there twice - REX's record and the OS's own.
+     REX's wins; an OS id is the link only where REX has no such door. */
+  const linkOf = (list: typeof all): MatchCandidate | null => {
+    const doors = list.filter((x) => sameDoor(f, x.c));
+    const rexDoors = doors.filter((x) => /^\d+$/.test(x.p.id));
+    if (rexDoors.length) return rexDoors.length === 1 ? rexDoors[0].p : null;
+    return doors.length === 1 ? doors[0].p : null;
+  };
+  const done = (list: typeof all, how: string, verdict: MatchResult["verdict"]): MatchResult => {
+    return { targets: list.map((x) => x.p), how, verdict, possible: [], link: linkOf(list) };
+  };
   const unsure = (how: string): MatchResult => ({
+    link: null,
     targets: [],
     how,
     verdict: "no match",
@@ -114,7 +145,9 @@ export async function matchProperty(address: string): Promise<MatchResult> {
   }
   const out = pc.split(" ")[0];
   const near = all.filter((x) => x.pc && x.pc !== pc && x.pc.split(" ")[0] === out && x.c.street === f.street && same(x.c.nums, f.nums));
-  if (near.length) return { targets: near.map((x) => x.p), how: `postcode differs (REX ${near[0].pc})`, verdict: "check", possible: [] };
+  if (near.length) {
+    return { targets: near.map((x) => x.p), how: `postcode differs (REX ${near[0].pc})`, verdict: "check", possible: [], link: linkOf(near) };
+  }
   return unsure(here.length ? `${here.length} at this postcode, none fit` : "nothing at this postcode");
 }
 

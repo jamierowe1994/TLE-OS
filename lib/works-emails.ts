@@ -9,6 +9,7 @@ import { switchOn } from "@/lib/switches";
 import { isInternalAddress } from "@/lib/email-policy";
 import { pounds, URGENCIES, type Move, type WorksOrder } from "@/lib/works-orders";
 import type { OsUser } from "@/lib/users";
+import { getLandlordPref, landlordHold } from "@/lib/landlord-prefs";
 
 /**
  * The emails a job sends as it moves: to the contractor, the tenant and the
@@ -22,6 +23,13 @@ import type { OsUser } from "@/lib/users";
  *                works-tenant-booked         a date is set
  *                works-tenant-done           marked done
  *   landlord     works-landlord-approval     a quote over their authority
+ *                works-landlord-arranged     a date is set
+ *
+ * The landlord's two that go on their own - arranged and approval - first
+ * ask the landlord's own choice (lib/landlord-prefs, 6 Oct 2026): every job,
+ * only over a figure, or none. Held, the timeline says why, and a held
+ * approval says ring them. The report is the agent's own press of a button,
+ * so it goes as asked.
  *
  * Best effort, after the move is saved: a missing address, the customer
  * switch off, or Resend refusing comes back as a sentence for the timeline
@@ -231,6 +239,13 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
   const contractorOrder = async () => { if (contractor) out.push(await send(o, "works-contractor-order", contractor.email, vars, me, "contractor")); };
   const contractorBooked = async () => { if (contractor && o.scheduledAt) out.push(await send(o, "works-contractor-booked", contractor.email, vars, me, "contractor")); };
   const tenantBooked = async () => { if (o.scheduledAt) out.push(await send(o, "works-tenant-booked", o.tenantEmail, vars, me, "tenant")); };
+  /* The landlord's choice, read once and only when a landlord email is due.
+     A failed read is the old behaviour - every job - rather than a lost
+     approval request. */
+  const landlord = async (id: string, kind: "notice" | "approval") => {
+    const held = o.landlordEmail.includes("@") ? landlordHold(o, await getLandlordPref(o.landlordEmail).catch(() => ({ jobEmails: "all" as const, overAmount: 0, updatedBy: "", updatedAt: null })), kind) : null;
+    out.push(held ? { to: "landlord", sent: false, address: o.landlordEmail, reason: held } : await send(o, id, o.landlordEmail, vars, me, "landlord"));
+  };
 
   switch (action) {
     case "raised":
@@ -261,13 +276,13 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
     case "schedule":
       await contractorBooked();
       await tenantBooked();
-      out.push(await send(o, "works-landlord-arranged", o.landlordEmail, vars, me, "landlord"));
+      await landlord("works-landlord-arranged", "notice");
       break;
     case "done_request":
       if (contractor) out.push(await send(o, "works-contractor-done-request", contractor.email, vars, me, "contractor"));
       break;
     case "quote":
-      if (o.status === "approval") out.push(await send(o, "works-landlord-approval", o.landlordEmail, vars, me, "landlord"));
+      if (o.status === "approval") await landlord("works-landlord-approval", "approval");
       break;
     case "done":
       /* The done note says what was done; the happy email asks the one

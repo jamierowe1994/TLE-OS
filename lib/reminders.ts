@@ -12,6 +12,8 @@ import { rexConfigured } from "@/lib/rex";
 import { whenAgo } from "@/lib/lead-spine";
 import { salesLeadIds } from "@/lib/lead-ledger";
 import type { Notice } from "@/lib/notices";
+import { JOB_EMAILS, ringsForApproval, type JobEmails } from "@/lib/landlord-prefs";
+import { pounds } from "@/lib/works-orders";
 
 /**
  * Smart reminders: what each person should do next, worked out from the
@@ -53,7 +55,7 @@ import type { Notice } from "@/lib/notices";
  * whose condition has cleared - a reminder can never outlive its reason.
  */
 
-export const REMINDER_KINDS = ["lead_quiet", "deck_due", "valuation_due", "plc_due", "terms_unsigned", "works_landlord_follow_up", "works_no_date", "works_tenant_unhappy", "works_landlord_untold"] as const;
+export const REMINDER_KINDS = ["lead_quiet", "deck_due", "valuation_due", "plc_due", "terms_unsigned", "works_landlord_follow_up", "works_no_date", "works_tenant_unhappy", "works_landlord_untold", "works_ring_for_approval"] as const;
 export type ReminderKind = (typeof REMINDER_KINDS)[number];
 
 export interface Reminder {
@@ -221,15 +223,22 @@ async function termsReminders(list: Person[], now: number): Promise<Reminder[]> 
  * landlord is organising, the chase when a contractor has not set a date,
  * a tenant who said it isn't right, and a report whose landlord has not
  * been told. Scoped to whoever raised the job, by name.
+ *
+ * And a quote awaiting a landlord who asked not to be emailed about jobs
+ * (lib/landlord-prefs, 6 Oct 2026): their approval request was held, so
+ * somebody has to ring them for the yes.
  */
 async function worksReminders(list: Person[], now: number): Promise<Reminder[]> {
   const rows = await q<{
     id: string; ref: number; title: string; property_name: string; raised_by: string; status: string; arranging: string | null;
     landlord_follow_up_at: Date | null; landlord_resolved_at: Date | null; landlord_told_at: Date | null; contractor_confirmed_at: Date | null;
     scheduled_at: Date | null; completed_at: Date | null; tenant_happy: string | null; tenant_happy_at: Date | null; tenant_happy_note: string; created_at: Date; urgency: string | null;
-  }>(`SELECT id, ref, title, property_name, raised_by, status, arranging, landlord_follow_up_at, landlord_resolved_at, landlord_told_at, contractor_confirmed_at,
-             scheduled_at, completed_at, tenant_happy, tenant_happy_at, tenant_happy_note, created_at, urgency
-        FROM os_works_orders WHERE NOT rehearsal AND status NOT IN ('paid', 'cancelled')`).catch(() => []);
+    landlord: string; landlord_mobile: string; quote_pence: number | null; authority_pence: number; updated_at: Date; job_emails: string | null; over_amount: number | null;
+  }>(`SELECT w.id, w.ref, w.title, w.property_name, w.raised_by, w.status, w.arranging, w.landlord_follow_up_at, w.landlord_resolved_at, w.landlord_told_at, w.contractor_confirmed_at,
+             w.scheduled_at, w.completed_at, w.tenant_happy, w.tenant_happy_at, w.tenant_happy_note, w.created_at, w.urgency,
+             w.landlord, w.landlord_mobile, w.quote_pence, w.authority_pence, w.updated_at, lp.job_emails, lp.over_amount
+        FROM os_works_orders w LEFT JOIN os_landlord_prefs lp ON lp.landlord_key = LOWER(TRIM(w.landlord_email))
+       WHERE NOT w.rehearsal AND w.status NOT IN ('paid', 'cancelled')`).catch(() => []);
   const out: Reminder[] = [];
   for (const r of rows) {
     const who = whose(list, r.raised_by);
@@ -244,6 +253,12 @@ async function worksReminders(list: Person[], now: number): Promise<Reminder[]> 
     }
     if (r.arranging === "us" && r.contractor_confirmed_at && !r.scheduled_at && now - t(r.contractor_confirmed_at) > 2 * DAY) {
       out.push({ id: `works_no_date:${r.id}`, userId: who.id, kind: "works_no_date", title: `No date yet on #${r.ref} ${r.title}`, body: `${r.property_name}. The contractor confirmed ${whenAgo(new Date(r.contractor_confirmed_at).toISOString(), now)} and nobody has set a date. Ring them, or type it in.`, href, tone: "warn", dueAt: new Date(t(r.contractor_confirmed_at) + 2 * DAY).toISOString() });
+    }
+    const pref = r.job_emails && (JOB_EMAILS as readonly string[]).includes(r.job_emails)
+      ? { jobEmails: r.job_emails as JobEmails, overAmount: Number(r.over_amount) || 250, updatedBy: "", updatedAt: null }
+      : undefined;
+    if (ringsForApproval({ status: r.status, landlord: r.landlord, quotePence: r.quote_pence, authorityPence: Number(r.authority_pence) }, pref)) {
+      out.push({ id: `works_ring_for_approval:${r.id}`, userId: who.id, kind: "works_ring_for_approval", title: `Ring ${r.landlord || "the landlord"} for approval on #${r.ref} ${r.title}`, body: `${r.property_name}. A quote of ${pounds(r.quote_pence)} is over their authority, and they've asked not to be emailed about jobs.${r.landlord_mobile ? ` ${r.landlord_mobile}.` : ""}`, href, tone: "warn", dueAt: new Date(r.updated_at).toISOString() });
     }
     if (r.tenant_happy === "no") {
       out.push({ id: `works_tenant_unhappy:${r.id}`, userId: who.id, kind: "works_tenant_unhappy", title: `Tenant not happy: #${r.ref} ${r.title}`, body: `${r.property_name}. ${r.tenant_happy_note || "No detail given"}. Somebody needs to ring them.`, href, tone: "warn", dueAt: new Date(t(r.tenant_happy_at) || now).toISOString() });
@@ -281,7 +296,7 @@ export async function runReminders(now = Date.now()): Promise<ReminderRun> {
     { kinds: ["deck_due", "valuation_due"], run: () => appraisalReminders(list, now) },
     { kinds: ["plc_due"], run: () => plcReminders(list, now) },
     { kinds: ["terms_unsigned"], run: () => termsReminders(list, now) },
-    { kinds: ["works_landlord_follow_up", "works_no_date", "works_tenant_unhappy", "works_landlord_untold"], run: () => worksReminders(list, now) },
+    { kinds: ["works_landlord_follow_up", "works_no_date", "works_tenant_unhappy", "works_landlord_untold", "works_ring_for_approval"], run: () => worksReminders(list, now) },
   ];
 
   const fresh: Reminder[] = [];

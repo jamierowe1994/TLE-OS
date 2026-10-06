@@ -29,6 +29,8 @@ import GroupsCustomiser from "@/components/GroupsCustomiser";
 import CornerSwell from "@/components/CornerSwell";
 import { usePref } from "@/lib/prefs-store";
 import { dropJson, peekJson, readJson } from "@/lib/page-cache";
+import PassportsDoneList, { PassportDonePill } from "@/components/PassportsDoneList";
+import type { DonePassport } from "@/lib/passports-done-shape";
 
 /**
  * Leads: one inbox for every channel, with the record open beside it.
@@ -186,6 +188,63 @@ export default function Leads() {
   const tagsOf = useCallback((l: Lead) => savedTags[l.id] ?? defaultTags(l), [savedTags]);
   const params = useSearchParams();
   const side = params.get("side"); // "tenant" | "landlord" | null (both)
+
+  /* ── Finished passports (Kirstie, 6 Oct 2026) ──────────────────────────
+     She books no viewing until the passport is in. One read for the whole
+     tenant side - it is both the Passports done view and the tick on each
+     row below - re-read when a drawer closes, like the tags. Null while it
+     reads; a failure is said, never an empty list standing in for it. */
+  const passportsParam = params.get("passports") === "done";
+  const [passportsOn, setPassportsOn] = useState(passportsParam);
+  /* Arriving from the dashboard tile while already on Leads. */
+  useEffect(() => setPassportsOn(passportsParam), [passportsParam]);
+  const [donePassports, setDonePassports] = useState<DonePassport[] | null>(null);
+  const [passportsError, setPassportsError] = useState<string | null>(null);
+  useEffect(() => {
+    if (side !== "tenant" || !drawerShut) return;
+    let gone = false;
+    fetch("/api/tenant/passports/done?limit=500", { cache: "no-store" })
+      .then((r) => r.json().catch(() => null))
+      .then((j: { ok?: boolean; passports?: DonePassport[]; error?: string } | null) => {
+        if (gone) return;
+        if (j?.ok && Array.isArray(j.passports)) {
+          setDonePassports(j.passports);
+          setPassportsError(null);
+        } else {
+          setDonePassports(null);
+          setPassportsError(j?.error ?? "The passports didn't load. Try again in a minute.");
+        }
+      })
+      .catch(() => {
+        if (gone) return;
+        setDonePassports(null);
+        setPassportsError("The passports didn't load. Try again in a minute.");
+      });
+    return () => { gone = true; };
+  }, [side, drawerShut]);
+  const pickPassports = (on: boolean) => {
+    setPassportsOn(on);
+    /* Kept in the address, so the dashboard tile can link straight here and
+       a refresh stays where it was. */
+    const u = new URL(window.location.href);
+    if (on) u.searchParams.set("passports", "done");
+    else u.searchParams.delete("passports");
+    window.history.replaceState(null, "", u);
+  };
+  /* Which lead a finished passport is: by the lead the server matched, else
+     by email. Empty until the read lands, so no row claims a tick early. */
+  const passportOf = useMemo(() => {
+    const byLead = new Map<string, DonePassport>();
+    const byEmail = new Map<string, DonePassport>();
+    for (const p of donePassports ?? []) {
+      if (p.leadId && !byLead.has(p.leadId)) byLead.set(p.leadId, p);
+      const e = p.email.trim().toLowerCase();
+      if (e && !byEmail.has(e)) byEmail.set(e, p);
+    }
+    return (l: Lead): DonePassport | null =>
+      leadSide(l) !== "tenant" ? null : byLead.get(l.id) ?? byEmail.get((l.email ?? "").trim().toLowerCase()) ?? null;
+  }, [donePassports]);
+  const showPassports = side === "tenant" && passportsOn;
   /* "Add new lead" in the sidebar lands here with ?new=1 and opens the panel. */
   const wantsNew = params.get("new") === "1";
   useEffect(() => {
@@ -417,12 +476,18 @@ export default function Leads() {
         /* Who it is for, under the name, when the board is more than one
            agent's - the owner's view (Susan, 19 Sep 2026). Here rather than
            only in the Agent column, which is off unless switched on. */
-        render: (l) => (
-          <span className="block whitespace-nowrap">
-            <span className="hand text-[13px]">{l.name}</span>
-            {manyAgents && <span className="block text-[10.5px] text-muted">{l.agent && l.agent !== "Unassigned" ? `For ${l.agent}` : "Not assigned"}</span>}
-          </span>
-        ),
+        render: (l) => {
+          /* The passport tick on the row itself, so a ready tenant shows
+             without opening anybody (Kirstie, 6 Oct 2026). */
+          const done = passportOf(l);
+          return (
+            <span className="block whitespace-nowrap">
+              <span className="hand text-[13px]">{l.name}</span>
+              {done && <span className="ml-2 align-middle"><PassportDonePill at={done.submittedAt} /></span>}
+              {manyAgents && <span className="block text-[10.5px] text-muted">{l.agent && l.agent !== "Unassigned" ? `For ${l.agent}` : "Not assigned"}</span>}
+            </span>
+          );
+        },
       },
       {
         key: "email", label: "Email",
@@ -451,7 +516,7 @@ export default function Leads() {
           ),
       },
     ],
-    [manyAgents]
+    [manyAgents, passportOf]
   );
   const cols = useColumns<Lead>("leads", defs);
 
@@ -555,10 +620,26 @@ export default function Leads() {
         searchPlaceholder="Search every lead - name, phone, address or agent…"
         actions={
           <div className="flex flex-wrap items-center gap-2.5">
+            {/* Tenants only: the people who have finished their passport, and
+                so can be booked in. One press on, one press back. */}
+            {side === "tenant" && (
+              <button
+                type="button"
+                onClick={() => pickPassports(!passportsOn)}
+                aria-pressed={passportsOn}
+                className={`flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[12px] font-semibold transition-colors ${
+                  passportsOn ? "border-brown bg-brown text-page" : "border-line/80 bg-white text-ink hover:border-ink/40"
+                }`}
+              >
+                <DoodleIcon name="user" size={13} />
+                Passports Done
+                {donePassports && <span className={`figures ${passportsOn ? "text-page/80" : "text-muted"}`}>{donePassports.length.toLocaleString("en-GB")}</span>}
+              </button>
+            )}
             {/* The shape switch sits BEFORE the button that makes a lead, and
                 the marker slides between them - the same control as every
                 other choice of two in the OS. */}
-            {side && (
+            {side && !showPassports && (
               <Segmented
                 value={view}
                 onChange={pickView}
@@ -610,6 +691,16 @@ export default function Leads() {
               </>
             )}
           </div>
+        ) : showPassports ? (
+          <PassportsDoneList
+            passports={donePassports}
+            error={passportsError}
+            leads={ALL.filter((l) => leadSide(l) === "tenant")}
+            activeId={openId}
+            onOpen={(id) => setOpenId(id === openId ? null : id)}
+            q={q}
+            manyAgents={manyAgents}
+          />
         ) : view === "groups" ? (
           <>
             <div className="fade-up relative z-20 rounded-[22px] border border-line/50 bg-white px-5 py-4">

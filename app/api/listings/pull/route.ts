@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
   const scope = await scopeFor(req);
   const mine = scope.rexUserId ?? null;
   if (!scope.everything && !mine) {
-    return NextResponse.json({ ok: false, error: "Connect your listings account on your Profile first." }, { status: 403 });
+    return NextResponse.json({ ok: false, error: "Your REX sign-in has run out. Sign in again on your Profile (Connect to REX) to carry on." }, { status: 403 });
   }
 
   /* Ask REX for it, with the agent filter when there is one. A listing that

@@ -1,5 +1,6 @@
 import "server-only";
 import { rexCall, rexConfigured, RexError, rexRows } from "@/lib/rex";
+import { unitLine } from "@/lib/address-parse";
 
 /**
  * The rental book, live from REX.
@@ -248,7 +249,8 @@ function addressOf(p: RexAddress | null | undefined): { name: string; locality: 
     typeof p.adr_building === "string" ? p.adr_building : (p.adr_building?.name ?? null);
   const name =
     [
-      p.adr_unit_number ? `Apartment ${p.adr_unit_number}` : null,
+      /* "Room 2", not "Apartment Room 2" (6 Oct 2026) - see unitLine. */
+      unitLine(p.adr_unit_number),
       building,
       street || null,
     ]
