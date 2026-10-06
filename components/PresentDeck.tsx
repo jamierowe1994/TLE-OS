@@ -586,7 +586,8 @@ function AgentHouse({ deck, show }: { deck: Deck; show: boolean }) {
               </div>
             )}
           </Rise>
-          <Rise show={show} i={5} className="absolute right-[100px] top-[792px] z-[2] w-[220px]">
+          {/* Clear of Back and Next in the bottom-right corner (6 Oct 2026). */}
+          <Rise show={show} i={5} className="absolute right-[250px] top-[792px] z-[2] w-[220px]">
             <p className="text-[27px] leading-[1.1] text-black/70" style={{ ...SCRIPT, transform: "rotate(-6deg)" }}>
               Let&rsquo;s make
               <br />
@@ -2333,6 +2334,10 @@ export default function PresentDeck({
    * on it. `landed` is the deck's own half of the fly-in - see the scroller.
    */
   const gated = !embedded && !framed && deckKind(deck) !== "pre-appraisal";
+  /* Back and Next show on every deck a landlord opens, the pre-appraisal
+     included (James, 6 Oct 2026: nothing told them there was a next page).
+     Only the entrance stays off the pre-appraisal. */
+  const arrows = !embedded && !framed;
   const [entered, setEntered] = useState(!gated);
   const [landed, setLanded] = useState(!gated);
   const still = useRef(false);
@@ -2609,6 +2614,30 @@ export default function PresentDeck({
             style={{ scrollbarWidth: "none" }}
           >
             {body(s.id, i)}
+            {/* Next, at the foot of the slide, on a phone. The corner pair is
+                hidden there - it sat on top of whatever scrolled under it -
+                and nothing else told a landlord there was another page
+                (James, 6 Oct 2026). In the flow, so it can never cover text. */}
+            {arrows && i < slides.length - 1 && (
+              <div className="flex justify-end px-6 pb-12 pt-4 sm:hidden">
+                <button
+                  type="button"
+                  onClick={() => go(i + 1)}
+                  className="flex items-center gap-3 rounded-full border py-2.5 pl-5 pr-2.5 text-[14px] font-semibold active:scale-[0.97]"
+                  style={{ borderColor: "rgba(0,0,0,0.14)", color: INK, background: "#ffffff" }}
+                >
+                  <span>
+                    Next
+                    <span className="ml-1.5 font-normal text-black/50">{slides[i + 1].title}</span>
+                  </span>
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full text-white" style={{ background: accent }}>
+                    <svg viewBox="0 0 24 24" aria-hidden className="h-[16px] w-[16px]">
+                      <path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -2699,13 +2728,13 @@ export default function PresentDeck({
           James, 13 Sep 2026: "arrows in the bottom right to go backwards and
           forward through the presentation". Two round buttons; the one that
           has nowhere to go fades rather than disappears, so the pair keeps
-          its place. On the two long decks only - the pre-appraisal is his
-          and unchanged. Left and Right on the keyboard still work.
+          its place. On every deck since 6 Oct 2026, the pre-appraisal
+          included. Left and Right on the keyboard still work.
 
           Not on a phone: fixed to the corner they sat on top of whatever
           scrolled under them (the review card, on the agent slide), and a
           phone is swiped anyway. From sm up there is a margin to sit in. */}
-      {gated && (
+      {arrows && (
         <div className="fixed bottom-8 right-10 z-30 hidden items-center gap-2 sm:flex lg:right-14">
           {([["Back", -1], ["Next", 1]] as const).map(([label, dir]) => {
             const to = at + dir;

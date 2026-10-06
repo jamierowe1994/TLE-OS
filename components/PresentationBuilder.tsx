@@ -7,6 +7,8 @@ import MaterialInfoPanel from "@/components/MaterialInfoPanel";
 import SubjectStory from "@/components/appraisal/SubjectStory";
 import StreetView from "@/components/appraisal/StreetView";
 import AddressPicker from "@/components/appraisal/AddressPicker";
+import PropertyDetails from "@/components/appraisal/PropertyDetails";
+import { NO_FACTS, withAgentFacts, type PropertyFacts } from "@/lib/agent-property-facts";
 import { useCaseState } from "@/lib/case-state";
 import MarketMap from "@/components/MarketMap";
 import MarketPicturePanel, {
@@ -158,7 +160,12 @@ export default function PresentationBuilder({
     NO_MATCH
   );
   const matchReady = !refId || matchStatus !== "loading";
+  /* THE AGENT'S CORRECTIONS to what the property is (James, 6 Oct 2026: a
+     six-bed HMO came back as a two-bed flat with no way to change it). Laid
+     over the lookup in `material` below, which everything here reads. */
+  const [facts, setFacts] = useCaseState<PropertyFacts>("appraisal-facts", refId ?? null, NO_FACTS);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const material = useMemo(() => withAgentFacts(d?.material ?? null, facts), [d, facts]);
   const [rematching, setRematching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chosen, setChosen] = useState<string[]>([]);
@@ -396,7 +403,14 @@ export default function PresentationBuilder({
          thirty rows across five groups; a landlord is being asked to
          correct what goes on the listing, and a thirty-row form is one
          nobody corrects. */
-      material: (d.material?.groups ?? [])
+      /* What the deck says the home is: the agent's word where they gave
+         one. Sent so the property slide carries it too. */
+      property: {
+        beds: material?.bedrooms ?? null,
+        baths: facts.baths ?? null,
+        propertyType: facts.type ?? null,
+      },
+      material: (material?.groups ?? [])
         .flatMap((g) => g.fields)
         .filter((f) => f.headline)
         .slice(0, 8)
@@ -1563,10 +1577,10 @@ export default function PresentationBuilder({
         address,
         postcode,
         image: null,
-        beds: d?.material?.bedrooms ?? null,
-        baths: null,
+        beds: material?.bedrooms ?? null,
+        baths: facts.baths ?? null,
         sqft: null,
-        propertyType: null,
+        propertyType: facts.type ?? null,
         epc: null,
       },
       whenPretty: "",
@@ -1599,7 +1613,7 @@ export default function PresentationBuilder({
       createdAt: new Date().toISOString(),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [d, me, chosen, picks, marketSel, marketPic, kind, landlord, address, postcode, appraisal, hidden, rmGuide]);
+  }, [d, material, facts, me, chosen, picks, marketSel, marketPic, kind, landlord, address, postcode, appraisal, hidden, rmGuide]);
   const previewDeck = me ? draftDeck : null;
 
   const body = (
@@ -1780,6 +1794,18 @@ export default function PresentationBuilder({
                   onCancel={d.subject?.picked ? () => setPickerOpen(false) : undefined}
                 />
               )}
+              {!pickerOpen && (
+                <PropertyDetails
+                  found={{
+                    type: d.material?.groups.flatMap((g) => g.fields).find((f) => f.label === "Property type")?.value ?? null,
+                    beds: d.material?.bedrooms ?? null,
+                    baths: null,
+                  }}
+                  facts={facts}
+                  onChange={setFacts}
+                  onWrongProperty={() => setPickerOpen(true)}
+                />
+              )}
               {rematching && (
                 <p className="flex items-center gap-2 text-[12px] text-muted">
                   <span className="block h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
@@ -1800,7 +1826,13 @@ export default function PresentationBuilder({
                   property on its map and its story - advertised now, through
                   our hands before, and any photographs either turns up. */}
               <div className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-                <MaterialInfoPanel material={d.material} warning={d.addressWarning} hideVerbose compact />
+                {facts.ignoreLookup ? (
+                  <p className="self-start rounded-xl border border-line/70 p-3 text-[12px] leading-relaxed text-muted">
+                    The lookup&apos;s facts are switched off for this property. The deck uses only the details above.
+                  </p>
+                ) : (
+                  <MaterialInfoPanel material={material} warning={d.addressWarning} hideVerbose compact />
+                )}
                 <div className="space-y-5">
                   {d.subjectPoint && (
                     /* The front door from the street, with the flat map as
@@ -1850,7 +1882,7 @@ export default function PresentationBuilder({
             <div className="mt-4 border-t border-line/70 pt-4">
               <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">Compliance</p>
               {(() => {
-                const items = knownCompliance(d.material ?? null);
+                const items = knownCompliance(material);
                 const dot = (st: string) =>
                   st === "fail"
                     ? "bg-accent-dark"
@@ -2219,7 +2251,7 @@ export default function PresentationBuilder({
                   marketPayload() into the deck. See lib/market-picture. */}
               <MarketPicturePanel
                 postcode={postcode}
-                subjectBeds={d.scopeBeds ?? d.material?.bedrooms ?? null}
+                subjectBeds={d.scopeBeds ?? material?.bedrooms ?? null}
                 selection={marketSel}
                 onSelectionChange={setMarketSel}
                 onLoaded={setMarketPic}
