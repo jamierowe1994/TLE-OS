@@ -27,6 +27,14 @@ export interface Draft {
   pets: string | null;
   outsideSpace: string | null;
   floorAreaSqft: number | null;
+  /** The EPC: the band every advert must carry, and REX's two SAP scores. */
+  epcBand: string | null;
+  epcCurrent: number | null;
+  epcPotential: number | null;
+  /** REX's listing subcategory id - the property type the portals insist on. */
+  propertyTypeId: string | null;
+  /** Scottish homes: the landlord's registration number. Kept by the OS. */
+  landlordRegistration: string | null;
 }
 
 export type FactField = "councilTaxBand" | "parking" | "electricity" | "water" | "sewerage" | "broadband" | "heating" | "furnishing" | "pets" | "outsideSpace";
@@ -53,6 +61,14 @@ export const draftFrom = (d: ListingDetails): Draft => ({
   pets: d.facts.pets,
   outsideSpace: d.facts.outsideSpace,
   floorAreaSqft: d.facts.floorAreaSqft,
+  /* REX's EPC first; where REX has none, the OS's property record (the
+     Scottish register, the clean sweep) so the box is never blank when the
+     band is known somewhere. */
+  epcBand: d.epc.band ?? d.record?.epc?.band ?? null,
+  epcCurrent: d.epc.current ?? d.record?.epc?.score ?? null,
+  epcPotential: d.epc.potential,
+  landlordRegistration: d.record?.landlordRegistration ?? null,
+  propertyTypeId: d.propertyTypeId ?? null,
 });
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -90,6 +106,11 @@ export const CHANGE_WORDS: Record<keyof Draft, string> = {
   pets: "pets",
   outsideSpace: "outside space",
   floorAreaSqft: "floor area",
+  epcBand: "EPC rating",
+  epcCurrent: "EPC score",
+  epcPotential: "EPC potential score",
+  landlordRegistration: "landlord registration number",
+  propertyTypeId: "property type",
 };
 
 export const money = (n: number | null | undefined) => (n == null ? null : `£${n.toLocaleString("en-GB")}`);

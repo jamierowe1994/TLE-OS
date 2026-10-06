@@ -47,6 +47,11 @@ export interface RequirementInput {
   broadband: string | null | undefined;
   heating: string | null | undefined;
   furnishing: string | null | undefined;
+  /** The EPC band. Undefined where the caller does not know it (the new-listing panel). */
+  epcBand?: string | null;
+  /** Scottish homes only: the landlord's registration number, by law on every advert. */
+  landlordRegistration?: string | null;
+  scotland?: boolean;
 }
 
 /** How a rental is let, and what we do for the landlord (REX's own lists). */
@@ -68,19 +73,36 @@ export type RequirementId = keyof RequirementInput;
 
 const filled = (v: unknown) => (typeof v === "string" ? v.trim().length > 0 : v != null);
 
+/*
+ * THE MINIMUM TO GO ON THE PORTALS (James, 6 Oct 2026): "If they're not
+ * mandatory fields to post onto Rightmove, don't make them mandatory." Every
+ * one of the original list was blocking a push, so 6 Ruskin Place sat
+ * waiting on broadband and heating. Required now is what the portal feeds
+ * refuse without, what Trading Standards puts on every advert (rent, deposit,
+ * council tax), and what the law adds: the EPC band everywhere, and in
+ * Scotland the landlord's registration number. The rest is RECOMMENDED: shown,
+ * counted separately, never in the way.
+ */
 export const REQUIREMENTS: { id: RequirementId; label: string; ok: (i: RequirementInput) => boolean }[] = [
   { id: "photos", label: "Photos", ok: (i) => i.photos > 0 },
   { id: "heading", label: "Headline", ok: (i) => filled(i.heading) && i.heading.length <= 255 },
   { id: "body", label: "Description", ok: (i) => i.body.trim().length >= 80 },
-  { id: "highlights", label: `Key features (${MIN_FEATURES} or more)`, ok: (i) => i.highlights.filter((h) => h.trim()).length >= MIN_FEATURES },
   { id: "rent", label: "Rent", ok: (i) => i.rent != null && i.rent > 0 },
   { id: "deposit", label: "Deposit", ok: (i) => i.deposit != null },
   { id: "availableFrom", label: "Available from", ok: (i) => filled(i.availableFrom) },
   { id: "propertyType", label: "Property type", ok: (i) => filled(i.propertyType) },
   { id: "beds", label: "Bedrooms", ok: (i) => i.beds != null },
   { id: "baths", label: "Bathrooms", ok: (i) => i.baths != null && i.baths > 0 },
-  { id: "furnishing", label: "Furnishing", ok: (i) => filled(i.furnishing) },
   { id: "councilTaxBand", label: "Council tax band", ok: (i) => filled(i.councilTaxBand) },
+  /* Undefined = not known to this caller, so not judged here. */
+  { id: "epcBand", label: "EPC rating", ok: (i) => i.epcBand === undefined || filled(i.epcBand) },
+  { id: "landlordRegistration", label: "Landlord registration number", ok: (i) => !i.scotland || filled(i.landlordRegistration) },
+];
+
+/** Shown and counted, never blocking. */
+export const RECOMMENDED: { id: RequirementId; label: string; ok: (i: RequirementInput) => boolean }[] = [
+  { id: "highlights", label: `Key features (${MIN_FEATURES} or more)`, ok: (i) => i.highlights.filter((h) => h.trim()).length >= MIN_FEATURES },
+  { id: "furnishing", label: "Furnishing", ok: (i) => filled(i.furnishing) },
   { id: "parking", label: "Parking", ok: (i) => filled(i.parking) },
   { id: "heating", label: "Heating", ok: (i) => filled(i.heating) },
   { id: "electricity", label: "Electricity", ok: (i) => filled(i.electricity) },
@@ -100,6 +122,8 @@ export function inputFromDetails(d: {
   rent: number | null; deposit: number | null; availableFrom: string | null; beds: number | null; baths: number | null;
   propertyType: string | null; heading: string; body: string; highlights: string[]; images: unknown[];
   facts: Record<string, string | number | null | undefined>;
+  epc?: { band: string | null };
+  record?: { landlordRegistration: string | null; scotland: boolean; epc: { band: string | null } | null };
 }): RequirementInput {
   const f = (k: string) => (d.facts[k] == null ? null : String(d.facts[k]));
   return {
@@ -107,5 +131,10 @@ export function inputFromDetails(d: {
     propertyType: d.propertyType, heading: d.heading, body: d.body, highlights: d.highlights, photos: d.images.length,
     councilTaxBand: f("councilTaxBand"), parking: f("parking"), electricity: f("electricity"), water: f("water"),
     sewerage: f("sewerage"), broadband: f("broadband"), heating: f("heating"), furnishing: f("furnishing"),
+    /* REX's band, else the property record's: the record is what the agent
+       sees pre-filled, and saving sends it on. */
+    epcBand: d.epc ? (d.epc.band ?? d.record?.epc?.band ?? null) : undefined,
+    landlordRegistration: d.record?.landlordRegistration ?? null,
+    scotland: d.record?.scotland ?? false,
   };
 }

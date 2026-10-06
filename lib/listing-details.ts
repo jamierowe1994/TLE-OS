@@ -2,6 +2,7 @@ import "server-only";
 import { rexCall, type RexResponse } from "@/lib/rex";
 import { readMarketingFacts, type FactSource } from "@/lib/listing-marketing-store";
 import { RULES } from "@/lib/staleness";
+import { bandForScore, recordForProperty, type EpcBand, type ListingRecord } from "@/lib/listing-record";
 
 /**
  * ONE LISTING, AS THE PORTALS WILL SEE IT - read live from REX, and written
@@ -70,7 +71,18 @@ export interface ListingDetails {
   service: string | null;
   councilTaxBand: string | null;
   parking: string | null;
-  epc: { rating: string | null; expiry: string | null; chartUrl: string | null; fileUrl: string | null };
+  epc: {
+    rating: string | null; expiry: string | null; chartUrl: string | null; fileUrl: string | null;
+    /** REX's SAP scores. REX only takes the two together (6 Oct 2026). */
+    current: number | null; potential: number | null;
+    /** The band from the current score, or REX's own rating where it has one. */
+    band: EpcBand | null;
+  };
+  /** REX's listing subcategory: its id, and the related row's id for an update. */
+  propertyTypeId: string | null;
+  propertyTypeRowId: string | null;
+  /** What the OS's own property record holds for this home (lib/listing-record). */
+  record: ListingRecord;
   material: { electricity: string | null; water: string | null; sewerage: string | null; broadband: string | null; gas: string | null };
   /** listing_agent_1. `id` is their REX user id. */
   agent: { id: string | null; name: string | null; phone: string | null; email: string | null };
@@ -234,6 +246,10 @@ export async function readListingDetails(id: number, opts: { cached?: boolean } 
     heldP,
   ]);
   const p = ((propRes?.ok ? propRes.result : null) ?? embedded) as Obj;
+  const town0 = str(p.adr_suburb_or_town) ?? "";
+  const postcode0 = str(p.adr_postcode) ?? "";
+  const record = await recordForProperty(propertyId, { postcode: postcode0, town: town0, address: str(p.system_search_key) });
+  const eerNow = num(l.epc_current_eer);
 
   const adverts = Array.isArray(related.listing_adverts) ? (related.listing_adverts as Obj[]) : [];
   const internet = adverts.find((a) => a.advert_type === "internet") ?? {};
@@ -274,6 +290,8 @@ export async function readListingDetails(id: number, opts: { cached?: boolean } 
     baths: num(p.attr_bathrooms),
     receptions: num(p.attr_living_areas),
     propertyType: text((subcats[0] ?? {}).subcategory) ?? text(p.property_subcategory),
+    propertyTypeId: str(((subcats[0] ?? {}).subcategory as Obj | null)?.id),
+    propertyTypeRowId: str((subcats[0] ?? {}).id),
     letType: text(l.let_type),
     service: text(l.lettings_service_type),
     councilTaxBand: str(p.meta_tax_band) ?? str(p.meta_rates_council),
@@ -283,7 +301,11 @@ export async function readListingDetails(id: number, opts: { cached?: boolean } 
       expiry: str(l.epc_expiry_date),
       chartUrl: abs((l.epc_combined_chart as Obj | null)?.url ?? (l.epc_eer_chart as Obj | null)?.url),
       fileUrl: abs((l.epc_file as Obj | null)?.url),
+      current: eerNow,
+      potential: num(l.epc_potential_eer),
+      band: (str(l.epc_rating)?.toUpperCase().match(/^[A-G]$/)?.[0] as EpcBand | undefined) ?? bandForScore(eerNow),
     },
+    record,
     material: {
       electricity: text(p.attr_primary_electricity_supply),
       water: text(p.attr_primary_water_supply),

@@ -46,7 +46,10 @@ export async function testDetails(id: number): Promise<{ ok: true; details: List
     service: "Fully managed",
     councilTaxBand: "B",
     parking: "On street",
-    epc: { rating: "C", expiry: null, chartUrl: null, fileUrl: null },
+    epc: { rating: "C", expiry: null, chartUrl: null, fileUrl: null, current: 72, potential: 80, band: "C" },
+    propertyTypeId: null,
+    propertyTypeRowId: null,
+    record: { osPropertyId: null, factsKey: null, landlordName: null, landlordRegistration: null, epc: null, scotland: false },
     material: { electricity: "Mains", water: "Mains", sewerage: "Mains", broadband: "Fibre", gas: "Mains" },
     agent: { id: null, name: null, phone: null, email: null },
     facts: {

@@ -9,7 +9,7 @@ import type { ListingDetails } from "@/lib/listing-details";
 import GuideButton from "@/components/GuideButton";
 import { toast } from "@/lib/toast";
 import { useSaveReporter } from "@/components/SaveChip";
-import { MIN_FEATURES, OPTIONS, REQUIREMENTS, isRequired, type RequirementInput } from "@/lib/listing-requirements";
+import { MIN_FEATURES, OPTIONS, RECOMMENDED, REQUIREMENTS, isRequired, type RequirementInput } from "@/lib/listing-requirements";
 
 /**
  * THE MARKETING TAB (15 Sep 2026, second pass after James saw the first).
@@ -67,6 +67,22 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
   const [filling, setFilling] = useState<"all" | "copy" | null>(null);
   const [fillNote, setFillNote] = useState<string | null>(null);
   const [sources, setSources] = useState<Record<string, string>>({});
+  /* REX's listing subcategories, asked once, for the property type picker. */
+  const [types, setTypes] = useState<{ id: string; label: string }[] | null>(null);
+  const typesAsked = useRef(false);
+  const loadTypes = useCallback(async () => {
+    if (typesAsked.current) return;
+    typesAsked.current = true;
+    try {
+      const j = (await fetch("/api/listings/create?lists=1", { cache: "no-store" }).then((r) => r.json())) as { ok?: boolean; types?: { id: string; label: string }[] };
+      setTypes(j.ok ? j.types ?? [] : []);
+    } catch {
+      typesAsked.current = false;
+      setTypes([]);
+    }
+  }, []);
+  const [epcReading, setEpcReading] = useState(false);
+  const [epcNote, setEpcNote] = useState<string | null>(null);
   /* THE ADVERT IS THE ONE THING THE CHIP NEVER SENDS (23 Sep 2026). Its
      Save writes to the live portals, so it goes only from its own button,
      after a read. But an edited advert must not let the chip say everything
@@ -95,6 +111,7 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
   const seeded = initial?.details.id === listingId ? initial : null;
   useEffect(() => {
     setPreviewing(false);
+    setEpcNote(null);
     setFilledBy({});
     setFillNote(null);
     setSources({});
@@ -112,6 +129,48 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
   }, [load, listingId, Boolean(seeded)]);
 
   const setDraft = useCallback((fn: (d: Draft) => Draft) => setDraftState((d) => (d ? fn(d) : d)), []);
+
+  /** Read the band and both scores off the EPC on the listing (6 Oct 2026). */
+  const readEpc = useCallback(async (id: string, quiet = false) => {
+    setEpcReading(true);
+    setEpcNote(null);
+    try {
+      const r = await fetch(`/api/listings/epc-read?id=${encodeURIComponent(id)}`, { cache: "no-store" });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; band?: string | null; current?: number | null; potential?: number | null };
+      if (!j.ok) throw new Error(j.error ?? "The EPC could not be read.");
+      const marks: Record<string, string> = {};
+      setDraft((d) => {
+        const next = { ...d };
+        if (j.band) { next.epcBand = j.band; marks.epcBand = "the EPC"; }
+        if (j.current != null) { next.epcCurrent = j.current; marks.epcCurrent = "the EPC"; }
+        if (j.potential != null) { next.epcPotential = j.potential; marks.epcPotential = "the EPC"; }
+        return next;
+      });
+      setFilledBy((m) => ({ ...m, ...marks }));
+      setEpcNote(Object.keys(marks).length ? "Read from the EPC. Check it, then Save." : quiet ? null : "Nothing could be read off that EPC - fill it in from the certificate.");
+    } catch (e) {
+      if (!quiet) setEpcNote(e instanceof Error ? e.message : "The EPC could not be read.");
+    } finally {
+      setEpcReading(false);
+    }
+  }, [setDraft]);
+
+  /* Read the EPC on its own when the band or a score is missing and there is
+     a certificate to read (James, 6 Oct 2026). Once per listing; the server
+     keeps what it read, so a second open costs nothing. */
+  useEffect(() => {
+    if (draft && !draft.propertyTypeId && canEdit) void loadTypes();
+  }, [draft, canEdit, loadTypes]);
+
+  const epcTried = useRef<string | null>(null);
+  useEffect(() => {
+    if (!details || !draft || !canEdit || !details.epc.fileUrl || epcTried.current === details.id) return;
+    if (draft.epcBand && draft.epcCurrent != null && draft.epcPotential != null) return;
+    epcTried.current = details.id;
+    void readEpc(details.id, true);
+  }, [details, draft, canEdit, readEpc]);
+
+
 
   if (error && !details) {
     return (
@@ -136,12 +195,17 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
   const images = orderedImages(details, draft);
   const input: RequirementInput = {
     rent: draft.rent, deposit: draft.deposit, availableFrom: draft.availableFrom, beds: draft.beds, baths: draft.baths,
-    propertyType: details.propertyType, heading: draft.heading, body: draft.body, highlights: draft.highlights, photos: images.length,
+    propertyType: draft.propertyTypeId ? (types?.find((t) => t.id === draft.propertyTypeId)?.label ?? details.propertyType ?? draft.propertyTypeId) : null, heading: draft.heading, body: draft.body, highlights: draft.highlights, photos: images.length,
     councilTaxBand: draft.councilTaxBand, parking: draft.parking, electricity: draft.electricity, water: draft.water,
     sewerage: draft.sewerage, broadband: draft.broadband, heating: draft.heating, furnishing: draft.furnishing,
+    epcBand: draft.epcBand, landlordRegistration: draft.landlordRegistration, scotland: details.record?.scotland ?? false,
   };
-  const done = REQUIREMENTS.filter((r) => r.ok(input)).length;
-  const total = REQUIREMENTS.length;
+  /* The ring counts only what the portals and the law need (6 Oct 2026); the
+     registration number only on a Scottish home. The rest is recommended. */
+  const required = REQUIREMENTS.filter((r) => r.id !== "landlordRegistration" || input.scotland);
+  const done = required.filter((r) => r.ok(input)).length;
+  const total = required.length;
+  const recDone = RECOMMENDED.filter((r) => r.ok(input)).length;
   const okFor = (id: keyof RequirementInput) => REQUIREMENTS.find((r) => r.id === id)?.ok(input) ?? true;
 
   async function save() {
@@ -337,7 +401,7 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
             <p className="hand text-[18px] leading-tight">{done === total ? "Ready for the portals" : "Let us fill this in"}</p>
             <p className="mt-0.5 text-[12px] leading-relaxed text-muted">
               {done === total
-                ? "Everything the portals need is here. Preview it, then push it live."
+                ? `Everything the portals need is here${recDone < RECOMMENDED.length ? `, and ${recDone} of ${RECOMMENDED.length} of the nice-to-haves` : ""}. Preview it, then push it live.`
                 : "We read the photos, the last listing, the landlord's answers and the local market, and fill in everything we can. Photos and floor plans are yours."}
             </p>
           </div>
@@ -369,10 +433,25 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
       <div className="grid gap-5 lg:grid-cols-2">
         <section className={card}>
           <p className={eyebrow}>The home</p>
-          <div className="mt-2 flex items-center justify-between gap-3">
-            {label("propertyType", <span className="text-[12.5px] text-ink">Property type</span>)}
-            <span className="text-[13px] font-semibold">{details.propertyType ?? "–"}</span>
-          </div>
+          {/* Pickable here (6 Oct 2026): a listing made straight in REX can
+              arrive with none, and the portals refuse it without one. */}
+          <label className="mt-2 block min-w-0">
+            {label("propertyType", "Property type")}
+            <select
+              disabled={!canEdit}
+              value={draft.propertyTypeId ?? ""}
+              onFocus={() => void loadTypes()}
+              onChange={(e) => setDraft((d) => ({ ...d, propertyTypeId: e.target.value || null }))}
+              className={`${fieldCls} mt-1 appearance-none bg-[length:11px] bg-[right_13px_center] bg-no-repeat pr-8 ${edge("propertyType")} ${draft.propertyTypeId ? "" : "text-muted"}`}
+              style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23888' stroke-width='1.6'/%3E%3C/svg%3E\")" }}
+            >
+              <option value="">{types === null && !draft.propertyTypeId ? "Loading the types…" : "Choose…"}</option>
+              {draft.propertyTypeId && !(types ?? []).some((t) => t.id === draft.propertyTypeId) && (
+                <option value={draft.propertyTypeId}>{details.propertyType ?? "Current type"}</option>
+              )}
+              {(types ?? []).map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+            </select>
+          </label>
           <div className="mt-1 divide-y divide-line/40">
             {stepper("beds", "Bedrooms")}
             {stepper("baths", "Bathrooms")}
@@ -423,6 +502,53 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
           {select("water", "Water")}
           {select("sewerage", "Sewerage")}
         </div>
+      </section>
+
+      <section className={card} data-steve="listing.marketing.epc">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className={eyebrow}>EPC{details.record?.scotland ? " and registration" : ""}</p>
+          {canEdit && details.epc.fileUrl && (
+            <button type="button" onClick={() => void readEpc(details.id)} disabled={epcReading} className="flex items-center gap-1.5 rounded-full border border-line/60 px-3.5 py-1.5 text-[12px] font-semibold hover:border-ink/40 disabled:opacity-60">
+              {epcReading ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-line border-t-accent-dark" /> : <DoodleIcon name="magic-wand" size={12} />}
+              {epcReading ? "Reading the EPC…" : "Read it from the EPC"}
+            </button>
+          )}
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          <label className="block min-w-0">
+            {label("epcBand", "EPC rating")}
+            <select
+              disabled={!canEdit}
+              value={draft.epcBand ?? ""}
+              onChange={(e) => setDraft((d) => ({ ...d, epcBand: e.target.value || null }))}
+              className={`${fieldCls} mt-1 appearance-none bg-[length:11px] bg-[right_13px_center] bg-no-repeat pr-8 ${edge("epcBand")} ${draft.epcBand ? "" : "text-muted"}`}
+              style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23888' stroke-width='1.6'/%3E%3C/svg%3E\")" }}
+            >
+              <option value="">Choose…</option>
+              {["A", "B", "C", "D", "E", "F", "G"].map((b) => <option key={b} value={b}>Band {b}</option>)}
+            </select>
+          </label>
+          <label className="block min-w-0">
+            {label("epcCurrent", "Score now")}
+            <input type="number" min={1} max={120} disabled={!canEdit} value={draft.epcCurrent ?? ""} onChange={(e) => setDraft((d) => ({ ...d, epcCurrent: e.target.value === "" ? null : Math.max(1, Math.min(120, Math.round(Number(e.target.value)))) }))} placeholder="e.g. 68" className={`${fieldCls} mt-1 border-line/70`} />
+          </label>
+          <label className="block min-w-0">
+            {label("epcPotential", "Potential score")}
+            <input type="number" min={1} max={120} disabled={!canEdit} value={draft.epcPotential ?? ""} onChange={(e) => setDraft((d) => ({ ...d, epcPotential: e.target.value === "" ? null : Math.max(1, Math.min(120, Math.round(Number(e.target.value)))) }))} placeholder="e.g. 79" className={`${fieldCls} mt-1 border-line/70`} />
+          </label>
+          {details.record?.scotland && (
+            <label className="col-span-2 block min-w-0 sm:col-span-3 lg:col-span-1">
+              {label("landlordRegistration", "Landlord registration number")}
+              <input disabled={!canEdit} value={draft.landlordRegistration ?? ""} onChange={(e) => setDraft((d) => ({ ...d, landlordRegistration: e.target.value.replace(/\s+/g, " ").slice(0, 40) || null }))} placeholder="e.g. 123456/230/12345" className={`${fieldCls} mt-1 ${edge("landlordRegistration")}`} />
+            </label>
+          )}
+        </div>
+        <p className="mt-2.5 text-[11px] leading-relaxed text-muted">
+          {epcNote ?? (draft.epcCurrent != null && draft.epcPotential == null
+            ? "Add the potential score too and the rating goes to the portals with the advert. Until then it is kept here."
+            : "Every advert has to show the EPC rating.")}
+          {details.record?.scotland && " In Scotland the landlord registration number has to be on the advert as well, so saving adds it as the last line of the description."}
+        </p>
       </section>
 
       <section className={card}>

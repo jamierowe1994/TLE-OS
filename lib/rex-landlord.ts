@@ -41,6 +41,9 @@ export type Landlord = {
   name: string;
   email: string | null;
   phone: string | null;
+  /** "record" = REX CRM holds no owner, so this is the OS property record's
+   *  landlord (REX PM's name for them): a name to show, nobody to write to. */
+  from?: "rex" | "record";
 };
 
 type Row = Record<string, unknown>;
@@ -54,7 +57,7 @@ const str = (v: unknown): string | null => {
    Twelve hours keeps a busy morning to one call per property while still
    picking up a correction the same day. */
 const CACHE_MS = 12 * 60 * 60 * 1000;
-const cacheKey = (listingId: string) => `landlord:v1:${listingId}`;
+const cacheKey = (listingId: string) => `landlord:v2:${listingId}`;
 
 async function cached(listingId: string): Promise<{ landlord: Landlord | null } | null> {
   if (!hasDb()) return null;
@@ -154,7 +157,19 @@ export async function landlordForListing(listingId: string): Promise<LandlordAns
       }
     : null;
 
-  const usable = landlord && landlord.name ? landlord : null;
+  let usable = landlord && landlord.name ? landlord : null;
+  /* REX CRM has nobody (6 Oct 2026, 6 Ruskin Place: a property our sync
+     created with no contact on it). The OS's property record often has the
+     landlord from REX PM - show that rather than "no landlord held". */
+  if (!usable) {
+    const prop = (((res.result ?? {}) as Row).property ?? null) as Row | null;
+    const propertyId = str(prop?.id) ?? str(((res.result ?? {}) as Row).property_id);
+    if (propertyId) {
+      const { recordForProperty } = await import("@/lib/listing-record");
+      const rec = await recordForProperty(propertyId, {}).catch(() => null);
+      if (rec?.landlordName) usable = { contactId: null, name: rec.landlordName, email: null, phone: null, from: "record" };
+    }
+  }
   await keep(listingId, usable);
   return { ok: true, landlord: usable };
 }

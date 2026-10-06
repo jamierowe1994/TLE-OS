@@ -12,6 +12,8 @@ import { OPTIONS } from "@/lib/listing-requirements";
 import { isExpiredToken, rexCall, rexConfigured, rexWritesLocked } from "@/lib/rex";
 import { rexTokenFor } from "@/lib/rex-user";
 import { isOwner } from "@/lib/agent-words";
+import { recordFact } from "@/lib/property-facts";
+import { bandForScore, forgetRecord } from "@/lib/listing-record";
 
 /**
  * The advert, live from REX, and saved back to it.
@@ -144,14 +146,90 @@ export async function PATCH(req: NextRequest) {
   for (const key of ["councilTaxBand", "parking", "electricity", "water", "sewerage", "broadband"] as const) {
     if (facts[key] !== undefined) edit[key] = facts[key];
   }
+  /* The EPC and, in Scotland, the landlord registration number (6 Oct 2026). */
+  const sap = (v: unknown): number | null | undefined => {
+    if (v === undefined) return undefined;
+    if (v === null || v === "") return null;
+    const n = Number(v);
+    return Number.isInteger(n) && n >= 1 && n <= 150 ? n : undefined;
+  };
+  const epcCurrent = sap(b.epcCurrent);
+  const epcPotential = sap(b.epcPotential);
+  if (b.epcCurrent !== undefined && epcCurrent === undefined) bad.push("EPC score (a number from the certificate)");
+  if (b.epcPotential !== undefined && epcPotential === undefined) bad.push("EPC potential score (a number from the certificate)");
+  let epcBand: string | null | undefined;
+  if (b.epcBand !== undefined) {
+    if (b.epcBand === null || b.epcBand === "") epcBand = null;
+    else if (typeof b.epcBand === "string" && /^[A-G]$/.test(b.epcBand)) epcBand = b.epcBand;
+    else bad.push("EPC rating");
+  }
+  let larn: string | null | undefined;
+  if (b.landlordRegistration !== undefined) {
+    if (b.landlordRegistration === null || b.landlordRegistration === "") larn = null;
+    else if (typeof b.landlordRegistration === "string" && /^[A-Za-z0-9/ -]{3,40}$/.test(b.landlordRegistration.trim())) larn = b.landlordRegistration.trim();
+    else bad.push("landlord registration number (numbers and slashes, as the council gives it)");
+  }
+  let propertyTypeId: string | undefined;
+  if (b.propertyTypeId !== undefined) {
+    if (typeof b.propertyTypeId === "string" && /^[\w-]{1,40}$/.test(b.propertyTypeId)) propertyTypeId = b.propertyTypeId;
+    else bad.push("property type");
+  }
   if (bad.length) return NextResponse.json({ ok: false, error: `These did not look right: ${bad.join(", ")}.` }, { status: 400 });
 
   try {
     /* The OS's own copy first, so nothing typed is lost to a refused write. */
     const factKeys = Object.keys(facts).filter((k) => k !== "sources");
     if (factKeys.length) await saveMarketingFacts(String(id), facts, actor.email);
+    /* What the OS keeps for the home, whatever REX takes. A Scottish advert
+       must carry the landlord registration number and REX has no field for
+       it, so it rides as the description's last line - the way Scottish
+       agents put it on the portals. */
+    const epcTouched = epcBand !== undefined || epcCurrent !== undefined || epcPotential !== undefined;
+    let epcKeptOnly = false;
+    let epcWrite: Record<string, number> | undefined;
+    if (epcTouched || larn !== undefined) {
+      const current = await readListingDetails(id).catch(() => null);
+      const key = current?.record.factsKey ?? null;
+      if (key && larn) {
+        await recordFact({ propertyId: key, field: "landlord_registration", value: larn, source: "manual", sourceRef: `listing ${id}`, by: actor.email });
+        const body = edit.body ?? current?.body ?? "";
+        if (!body.includes(larn)) {
+          const kept = body.replace(/\n*\s*Landlord registration number:[^\n]*\s*$/i, "").trimEnd();
+          edit.body = `${kept}${kept ? "\n\n" : ""}Landlord registration number: ${larn}`;
+        }
+      }
+      if (epcTouched && current) {
+        const now = epcCurrent !== undefined ? epcCurrent : current.epc.current;
+        const pot = epcPotential !== undefined ? epcPotential : current.epc.potential;
+        const band = epcBand !== undefined ? epcBand : bandForScore(now);
+        if (key && band) {
+          await recordFact({ propertyId: key, field: "epc_rating", value: now ? `${band} (${now})` : band, source: "manual", sourceRef: `listing ${id}`, by: actor.email });
+        }
+        /* REX takes the two scores together or refuses the save. */
+        if (now != null && pot != null) {
+          epcWrite = { epc_current_eer: now, epc_potential_eer: pot };
+        } else epcKeptOnly = true;
+      }
+      forgetRecord(current?.propertyId);
+    }
     const plan = await planListingWrite(id, edit);
+    if (epcWrite) plan.listing = { ...(plan.listing ?? { id }), ...epcWrite };
+    /* The property type is REX's listing subcategory, a related row: its own
+       id keeps it an update rather than a second type beside the first. */
+    if (propertyTypeId) {
+      const now = await readListingDetails(id).catch(() => null);
+      if (now?.propertyTypeId !== propertyTypeId) {
+        const row = { ...(now?.propertyTypeRowId ? { id: now.propertyTypeRowId } : {}), priority: 1, subcategory: { id: propertyTypeId } };
+        const listing = (plan.listing ?? { id }) as Record<string, unknown>;
+        plan.listing = { ...listing, related: { ...((listing.related as Record<string, unknown>) ?? {}), listing_subcategories: [row] } };
+      }
+    }
     if (!plan.listing && !plan.property) {
+      if (epcTouched || larn !== undefined || propertyTypeId) {
+        forgetListing(id);
+        const details = await readListingDetails(id).catch(() => null);
+        return NextResponse.json({ ok: true, id, note: epcKeptOnly ? "Kept here. Add the potential score to send the rating to the portals." : "Saved.", details });
+      }
       const details = factKeys.length ? await readListingDetails(id).catch(() => null) : null;
       return NextResponse.json({ ok: true, id, note: factKeys.length ? "Saved." : "Nothing to change.", details });
     }

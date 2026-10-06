@@ -57,6 +57,7 @@ import { WhatsAppButton } from "@/components/WhatsAppQr";
 import SaveChip, { SaveScopeProvider, useSaveScope, type SaveScope } from "@/components/SaveChip";
 import FileDocuments from "@/components/FileDocuments";
 import ListingOwner from "@/components/listing/ListingOwner";
+import RecordPapers from "@/components/listing/RecordPapers";
 
 /**
  * The property record — the leads drawer's shape, aimed at a thing instead of
@@ -1226,6 +1227,10 @@ function ListingDrawerBody({
                       <p className="flex items-center gap-2.5 text-muted"><DoodleIcon name="mail" size={13} />No email on file</p>
                     )}
                   </div>
+                  {/* REX's listing names nobody; this is the managed record's landlord (6 Oct 2026). */}
+                  {landlord.landlord.from === "record" && (
+                    <p className="mt-3 text-[11.5px] leading-relaxed text-muted">From the managed property record. They are not on this listing yet, so nothing is sent to them from here.</p>
+                  )}
                 </>
               )}
               {landlord.status === "none" && (
@@ -1807,6 +1812,8 @@ function ListingDrawerBody({
                 />
               </div>
             )}
+            {/* The home's papers from the property record (6 Oct 2026). */}
+            {tab === "documents" && <RecordPapers listingId={listing.id} />}
             {tab === "documents" && (
               <div className="mb-5 rounded-[22px] border border-line/50 bg-white p-5">
                 <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">How we get in</p>
