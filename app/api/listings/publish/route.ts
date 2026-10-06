@@ -244,6 +244,21 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: false, error: `${whose} and try again.`, reconnect: as.asActor, signIn: as.asActor || undefined }, { status: 401 });
       }
       const plain = "The portals did not take that change. Try again in a minute.";
+      /* Kept (6 Oct 2026): 6 Ruskin Place was refused twice for Lianna and
+         nothing said why - the agent saw the plain sentence and the reason
+         went nowhere. REX's message goes in the audit log, with anything
+         shaped like a session token taken out first. */
+      const why = String(res.error ?? `HTTP ${res.status}`)
+        .replace(/"token"\s*:\s*"[^"]*"/gi, '"token":"[removed]"')
+        .replace(/\b[0-9a-f]{4}(?:-[0-9a-f]{4}){4,}\b/gi, "[removed]")
+        .slice(0, 400);
+      console.error("[publish] REX refused", { id, action, status: res.status, why });
+      await record({
+        kind: "listing_publication",
+        actorId: actor.id,
+        actorEmail: actor.email,
+        detail: `${id}: ${action} REFUSED${token ? (as.asActor ? "" : ` as ${as.name}`) : " as the office account"} - ${why}`,
+      }).catch(() => {});
       return NextResponse.json({ ok: false, error: isOwner(actor) ? res.error ?? `REX refused it (${res.status}).` : plain }, { status: 502 });
     }
 
