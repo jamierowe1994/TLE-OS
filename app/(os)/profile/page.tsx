@@ -268,6 +268,10 @@ export default function ProfilePage() {
   useEffect(() => { loadSetup(); }, [loadSetup]);
 
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
+  /** The sign-in address, from the session and nowhere else. Not part of
+   *  Profile: it is not theirs to edit, and a copy saved in the browser would
+   *  outlive the account it came from. */
+  const [email, setEmail] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   /** Geocoding the Hub's address after they accept it. */
   const [placing, setPlacing] = useState(false);
@@ -291,6 +295,7 @@ export default function ProfilePage() {
     fetchMe()
       .then((j) => {
         if (!alive || !j?.user) return;
+        setEmail(j.user.email ?? null);
         setProfile((p) => ({
           ...p,
           name: p.name || j.user!.name || "",
@@ -477,7 +482,9 @@ export default function ProfilePage() {
                 <span className={label}>Email</span>
                 <span className="flex items-center gap-2.5 rounded-xl border border-line/60 bg-panel px-3.5 py-2.5 text-[13.5px] text-muted">
                   <DoodleIcon name="lock" size={13} className="shrink-0" />
-                  james@thelettingexperts.co.uk
+                  {/* Was a hardcoded james@ (6 Oct 2026): every agent saw
+                      James's address on their own profile. */}
+                  <span className="truncate">{email ?? "Loading…"}</span>
                 </span>
                 <span className="mt-1 block text-[10px] text-muted">
                   Your sign-in — it can&apos;t be changed here.
