@@ -149,7 +149,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
          an appraisal button shipped, and the exact failure this file's header
          warns about - a caveat sending somebody away to do by hand what the
          screen had quietly started doing. Corrected 14 Sep 2026. */
-      "Book an appraisal here only when there is no landlord lead behind it. Where there is one, book it from the lead on Leads instead - that keeps the lead and the appraisal as one record rather than two.",
+      "Book an appraisal here when there is no landlord lead behind it yet: the landlord, then the property, then the time, and they become a lead on the way. If they are already a lead it points you to book from that lead instead, so the lead and the appraisal stay one record.",
       "Stages move on their own, read from the record: the deck sent, the visit passed, the figure recorded, the terms signed, the landlord's documents, the REX listing. Won and Lost are the only moves made by hand.",
       "Booking sends the landlord their confirmation with a calendar file attached, from the public sender with you as reply-to, as long as their record has an email address and Email to customers is on. The file says whether it went.",
       "The appointment does not reach REX's diary yet. Put it in REX yourself until that write is unlocked.",

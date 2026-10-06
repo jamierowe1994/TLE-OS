@@ -128,8 +128,11 @@ export async function POST(req: NextRequest) {
            unless they send it sooner. See lib/pre-send-time. This replaces
            the two-days-before video nudge, which would now land after the
            pre-presentation it asks about. */
+        /* Read back WITH the landlord's live contact details (appraisal-store
+           withLiveAddress), so the REX diary and the Outlook entry carry their
+           mobile - the record createAppraisal hands back has none. */
+        const full = (await getAppraisal(appraisal.id).catch(() => null)) ?? appraisal;
         try {
-          const full = (await getAppraisal(appraisal.id).catch(() => null)) ?? appraisal;
           pre = await scheduleOnBooking({ ma: full, me, origin: publicOrigin(req) });
         } catch (e) {
           pre = null;
@@ -139,7 +142,7 @@ export async function POST(req: NextRequest) {
            reason a booking fails. First, so Outlook below knows whether REX
            will copy it there itself. */
         try {
-          rexDiary = await putAppraisalInRexDiary({ ma: appraisal, userId: me.id });
+          rexDiary = await putAppraisalInRexDiary({ ma: full, userId: me.id });
         } catch (e) {
           rexDiary = { ok: false, reason: "refused", detail: e instanceof Error ? e.message : "Couldn't reach REX." };
         }
@@ -159,7 +162,7 @@ export async function POST(req: NextRequest) {
             userId: me.id,
             key: `appraisal|${appraisal.id}`,
             subject: `Market appraisal - ${where} with ${appraisal.landlord}`,
-            body: `Booked in TLE OS.\nLandlord: ${appraisal.landlord}${appraisal.landlordMobile ? `, ${appraisal.landlordMobile}` : ""}`,
+            body: `Booked in TLE OS.\nLandlord: ${full.landlord}${full.landlordMobile ? `, ${full.landlordMobile}` : ""}${full.landlordEmail ? `, ${full.landlordEmail}` : ""}`,
             location: where,
             startsAt: appraisal.appointmentAt,
             minutes: 60,

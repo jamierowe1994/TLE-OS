@@ -152,7 +152,7 @@ export const AGENT_GUIDES: Guide[] = [
       },
       {
         title: "Booking the Visit",
-        body: "Most appraisals are booked straight from the lead, with Book an appraisal on the lead itself. For a landlord who never came through as a lead, use Book an appraisal on this screen instead: the landlord, the address, the postcode, who is going and when.",
+        body: "Most appraisals are booked straight from the lead, with Book an appraisal on the lead itself. For a landlord who never came through as a lead, use Book an appraisal on this screen: three steps - the landlord (name, mobile, email, where they came from), the property (address, type, bedrooms, bathrooms, where things stand) and then the time. It makes them a lead as it goes, so the confirmation and the pre-appraisal deck reach them. If they are already on the system it says so and books from their lead instead.",
         image: img("ma-book"),
         why: "An appraisal booked without a date shows on the board as needing a time, and that becomes the chase. Book the date whenever you have it.",
         sends:
