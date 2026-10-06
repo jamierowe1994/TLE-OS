@@ -46,8 +46,33 @@ export async function hasEpc(details: ListingDetails): Promise<boolean> {
  */
 export async function publishGaps(details: ListingDetails): Promise<PublishGap[]> {
   const gaps: PublishGap[] = missing(inputFromDetails(details)).map((g) => ({ id: g.id, label: g.label }));
-  if (!(await hasEpc(details))) gaps.push({ id: "epc", label: "EPC" });
+  const [epc, terms] = await Promise.all([hasEpc(details), hasTerms(details)]);
+  if (!epc) gaps.push({ id: "epc", label: "EPC" });
+  if (!terms) gaps.push({ id: "terms", label: "Signed terms of business" });
   return gaps;
+}
+
+/**
+ * REX REFUSES TO PUBLISH WITHOUT TERMS OF BUSINESS (6 Oct 2026). 6 Ruskin
+ * Place was pushed twice and refused twice; REX's own "what is stopping
+ * this" calls (getErrorsPreventingPublication, getPublicationIssues) both
+ * answered empty. James found it by pressing Publish inside REX: a
+ * terms_of_business compliance entry has to be on the property. So the OS
+ * asks the question itself. A check that cannot be made does not block.
+ */
+export async function hasTerms(details: ListingDetails): Promise<boolean> {
+  if (!details.propertyId) return true;
+  try {
+    const { rexCall, rexRows } = await import("@/lib/rex");
+    const res = await rexCall("ComplianceEntries", "search", {
+      criteria: [{ name: "parent_object_id", type: "in", value: [details.propertyId] }],
+      limit: 100,
+    });
+    if (!res.ok) return true;
+    return rexRows(res.result).some((r) => r.type_id === "terms_of_business" && r.system_record_state !== "archived");
+  } catch {
+    return true;
+  }
 }
 
 /* Read once per listing per version: a board of drafts asks for the same few

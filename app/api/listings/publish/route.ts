@@ -204,7 +204,14 @@ export async function POST(req: NextRequest) {
       const gaps = await publishGaps(details);
       if (gaps.length) {
         return NextResponse.json(
-          { ok: false, error: `Finish the Marketing tab first: ${gaps.map((g) => g.label.toLowerCase()).join(", ")}.`, missing: gaps.map((g) => g.id) },
+          {
+            ok: false,
+            error: [
+              gaps.some((g) => g.id !== "terms") ? `Finish the Marketing tab first: ${gaps.filter((g) => g.id !== "terms").map((g) => g.label.toLowerCase()).join(", ")}.` : "",
+              gaps.some((g) => g.id === "terms") ? "The landlord's signed terms of business have to be on file before it can go live - send them from the Documents tab, or ask the office to add the signed copy." : "",
+            ].filter(Boolean).join(" "),
+            missing: gaps.map((g) => g.id),
+          },
           { status: 422 }
         );
       }
