@@ -1,6 +1,7 @@
 import "server-only";
 import { rexCall, rexRows } from "@/lib/rex";
 import { unitLine } from "@/lib/address-parse";
+import { hasDb, q } from "@/lib/db";
 
 /**
  * Tenancy applications — the real ones, out of REX.
@@ -797,17 +798,34 @@ async function listingStates(ids: number[]): Promise<Map<number, string>> {
   return out;
 }
 
+/** Applications with a PLC pack that is not finished and was worked on in the last fortnight. */
+async function openPlcPacks(): Promise<Set<string>> {
+  if (!hasDb()) return new Set();
+  const rows = await q<{ application_ref: string }>(
+    `SELECT application_ref FROM os_plc_cases
+      WHERE state NOT IN ('approved', 'declined') AND updated_at > NOW() - INTERVAL '14 days'`
+  ).catch(() => []);
+  return new Set(rows.map((r) => String(r.application_ref)));
+}
+
 export async function closedReasons(apps: Application[]): Promise<Map<string, string>> {
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+  /* A pack left half-done long after the move-in is abandoned, not live. */
+  const monthAgo = new Date(Date.now() - 30 * 86400000).toLocaleDateString("en-CA", { timeZone: "Europe/London" });
   const ids = [...new Set(apps.map((a) => a.listingId).filter((x): x is number => x != null))];
-  const state = await listingStates(ids);
+  const [state, packOpen] = await Promise.all([listingStates(ids), openPlcPacks()]);
 
   const out = new Map<string, string>();
   for (const a of apps) {
     if (a.status === "unsuccessful") continue;
     const s = a.listingId != null ? state.get(a.listingId) : undefined;
     if (a.status === "accepted") {
-      if (a.startDate && a.startDate.slice(0, 10) <= today) out.set(a.id, "Moved in");
+      /* Not while its PLC check is still going (6 Oct 2026): REX's start
+         date passing does not move anybody in, and Rhiannon's Room 2 vanished
+         from the board on the 5th with the pack still being put together. */
+      const start = a.startDate?.slice(0, 10) ?? null;
+      const checking = packOpen.has(String(a.id)) && start != null && start >= monthAgo;
+      if (start && start <= today && !checking) out.set(a.id, "Moved in");
     } else if (s === "leased") out.set(a.id, "Home let");
     else if (s === "withdrawn") out.set(a.id, "Listing withdrawn");
   }
