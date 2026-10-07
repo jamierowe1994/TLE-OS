@@ -17,6 +17,7 @@ import { STEPS, stepOf } from "@/lib/works-steps";
 import { WorksNow, ContractorForm, BLANK_CONTRACTOR } from "@/components/WorksNow";
 import SaveChip, { SaveScopeProvider, useSaveScope } from "@/components/SaveChip";
 import LandlordJobEmails from "@/components/LandlordJobEmails";
+import WalkthroughLink from "@/components/showroom/WalkthroughLink";
 
 /**
  * Maintenance: every job on the managed book, reported through paid.
@@ -94,6 +95,8 @@ export default function Maintenance() {
     if (rail === "contractors") setSection("contractors");
     else if (params.get("section") === "invoices") setSection("invoices");
     else if (params.get("section") === "accounts") setSection("accounts");
+    /* A link straight to the planned jobs (the Showroom's gas safety walkthrough). */
+    else if (params.get("section") === "planned") setSection("planned");
     else setSection((cur) => (cur === "contractors" ? "repair" : cur));
   }, [rail, params]);
   const [data, setData] = useState<{ orders: WorksOrder[]; contractors: Contractor[]; summary: WorksSummary | null; lastMonth?: WorksSummary | null; lastMonthOn?: string | null; live: boolean; reason?: string; canCorporate?: boolean; carried?: CarriedJob[]; carriedDone?: CarriedDone[]; carriedReadAt?: string | null; carriedError?: string; ringForApproval?: string[] } | null>(null);
@@ -197,6 +200,7 @@ export default function Maintenance() {
             <PressButton onClick={() => { setSection("planned"); setRaising("planned"); }} className="flex items-center gap-2 rounded-full border border-line/80 px-5 py-2.5 text-[13px] font-semibold">
               <span className="text-[15px] leading-none">+</span> Plan a job
             </PressButton>
+            <WalkthroughLink step="repair" />
           </div>
         }
       />

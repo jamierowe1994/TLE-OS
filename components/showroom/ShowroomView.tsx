@@ -10,6 +10,12 @@ import DoodleIcon from "@/components/DoodleIcon";
 import { AGENT_GUIDES } from "@/lib/agent-guides";
 import { openGuide } from "@/lib/guide-sheet";
 import { SAMPLE_WHO, SIDES, STEPS_FOR, type ShowroomScreen, type ShowroomSide, type ShowroomStep } from "@/lib/showroom/content";
+import BackOfficeView from "@/components/showroom/BackOfficeView";
+
+/* The fourth tab (James, 7 Oct 2026): the back office's walkthroughs, which are
+   a different shape - live demos across every side - so they have their own
+   view (components/showroom/BackOfficeView) rather than steps. */
+const BACK_OFFICE_SAYS = "How the office keeps every home safe and fixed: compliance, a repair from every door, the gas safety, and visits with planned maintenance. Each one to read as a guide, or click through as a live demo from the tenant's, the landlord's and the office's side.";
 
 /**
  * The Showroom's screen (lib/showroom/content says what and why).
@@ -22,7 +28,7 @@ import { SAMPLE_WHO, SIDES, STEPS_FOR, type ShowroomScreen, type ShowroomSide, t
  * what is wrong with it. The step is in the address, so a link to one opens it.
  */
 
-type EmailMeta = {
+export type EmailMeta = {
   id: string;
   name: string;
   to: string;
@@ -31,7 +37,7 @@ type EmailMeta = {
   status: { key: "live" | "ready" | "built" | "written" | "planned"; says: string };
 };
 
-const STATUS_TONE: Record<EmailMeta["status"]["key"], string> = {
+export const STATUS_TONE: Record<EmailMeta["status"]["key"], string> = {
   live: "bg-[#e3efe0] text-[#2f5d2a]",
   ready: "bg-[#eef1e6] text-[#4d5a33]",
   built: "bg-panel text-muted",
@@ -42,17 +48,22 @@ const STATUS_TONE: Record<EmailMeta["status"]["key"], string> = {
 export default function ShowroomView({ token, phoneOrigin }: { token: string; phoneOrigin: string | null }) {
   const router = useRouter();
   const params = useSearchParams();
+  const back = params.get("side") === "backoffice";
   const side = (SIDES.find((s) => s.id === params.get("side"))?.id ?? "tenant") as ShowroomSide;
   const steps = STEPS_FOR[side];
   const step = steps.find((s) => s.id === params.get("step")) ?? steps[0] ?? null;
   const at = step ? steps.indexOf(step) : -1;
 
   const go = useCallback(
-    (next: { side?: ShowroomSide; step?: string | null }) => {
+    (next: Record<string, string | null | undefined>) => {
       const q = new URLSearchParams(params.toString());
-      if (next.side) q.set("side", next.side);
-      if (next.step === null) q.delete("step");
-      else if (next.step) q.set("step", next.step);
+      /* A new side or a new walkthrough starts at its beginning. */
+      if (next.side) { q.delete("step"); q.delete("way"); q.delete("scene"); }
+      if (next.step !== undefined) { q.delete("way"); q.delete("scene"); }
+      for (const [k, v] of Object.entries(next)) {
+        if (v === null) q.delete(k);
+        else if (v !== undefined) q.set(k, v);
+      }
       router.replace(`/showroom?${q.toString()}`, { scroll: false });
     },
     [params, router]
@@ -74,23 +85,36 @@ export default function ShowroomView({ token, phoneOrigin }: { token: string; ph
     <>
       <PageHeader
         title="Showroom"
-        blurb="Every journey from the other side of the glass: what the tenant, the landlord and the agent see at each step, every email that goes out, and a place to say what is not right."
+        blurb="Every journey from the other side of the glass: what the tenant, the landlord and the agent see at each step, every email that goes out, live demos of the back office, and a place to say what is not right."
         illustration="/illustrations/lady-window.png"
         illustrationAspect={0.6925}
         hideArtOnPhone
         lineBreak="none"
         actions={
           <Segmented
-            options={SIDES.map((s) => ({ id: s.id, label: s.label }))}
-            value={side}
-            onChange={(v) => go({ side: v, step: null })}
+            options={[
+              ...SIDES.map((s) => ({ id: s.id as string, label: s.label as React.ReactNode })),
+              /* Four tabs on a phone leave "Back of..." - the shorter word there. */
+              { id: "backoffice", label: <><span className="sm:hidden">Office</span><span className="hidden sm:inline">Back office</span></> },
+            ]}
+            value={back ? "backoffice" : side}
+            onChange={(v) => go({ side: v })}
           />
         }
       />
 
-      <p className="mt-6 text-[13px] text-muted">{sideInfo.says}</p>
+      <p className="mt-6 text-[13px] text-muted">{back ? BACK_OFFICE_SAYS : sideInfo.says}</p>
 
-      {!sideInfo.ready ? (
+      {back ? (
+        <BackOfficeView
+          token={token}
+          phoneOrigin={phoneOrigin}
+          stepId={params.get("step")}
+          wayId={params.get("way")}
+          sceneNo={Number(params.get("scene") ?? 0) || 0}
+          go={go}
+        />
+      ) : !sideInfo.ready ? (
         <div className="mt-6 rounded-3xl border border-dashed border-line/80 px-6 py-14 text-center">
           <DoodleIcon name="rocket" size={26} className="mx-auto text-muted" />
           <p className="mt-3 text-[15px]">The {sideInfo.label.toLowerCase()} side is next</p>
@@ -182,6 +206,22 @@ function StepView({
           ))}
         </ul>
       </section>
+
+      {step.walkthrough && (
+        <Link
+          href={`/showroom?side=backoffice&step=${step.walkthrough.step}${step.walkthrough.way ? `&way=${step.walkthrough.way}` : ""}`}
+          className="flex items-center gap-4 rounded-3xl border border-ink/80 bg-ink p-5 text-page transition-opacity hover:opacity-95"
+        >
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-page/10">
+            <DoodleIcon name="magic-wand" size={18} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-semibold">{step.walkthrough.label}</span>
+            <span className="mt-0.5 block text-[12.5px] text-page/70">A live demo on the real screens - the tenant, the landlord and the office, one scene at a time - and the same as a guide to read. Under Back office.</span>
+          </span>
+          <span aria-hidden className="text-[18px]">→</span>
+        </Link>
+      )}
 
       {step.screens.length > 0 && <Screens side={side} screens={step.screens} token={token} phoneOrigin={phoneOrigin} />}
       {step.guide && <GuideShots guideId={step.guide} href={step.agent.href} />}
@@ -346,7 +386,7 @@ function Screens({
  * Raj's portal, the decks), so the phone opens it with nothing to sign in to.
  * The code follows the screen picked above it, stage and all.
  */
-function PhoneCode({ path, origin, label }: { path: string; origin: string | null; label: string }) {
+export function PhoneCode({ path, origin, label }: { path: string; origin: string | null; label: string }) {
   const [url, setUrl] = useState<string | null>(null);
   const [png, setPng] = useState<string | null>(null);
   useEffect(() => {
@@ -431,7 +471,7 @@ function GuideShots({ guideId, href }: { guideId: string; href?: string }) {
 
 /* ─────────────────────────── the emails ─────────────────────────── */
 
-function Emails({ ids, showTo = false }: { ids: string[]; showTo?: boolean }) {
+export function Emails({ ids, showTo = false }: { ids: string[]; showTo?: boolean }) {
   const [rows, setRows] = useState<EmailMeta[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<EmailMeta | null>(null);
@@ -495,7 +535,7 @@ function Emails({ ids, showTo = false }: { ids: string[]; showTo?: boolean }) {
   );
 }
 
-function EmailSheet({ meta, onClose }: { meta: EmailMeta; onClose: () => void }) {
+export function EmailSheet({ meta, onClose }: { meta: EmailMeta; onClose: () => void }) {
   const [state, setState] = useState<{ subject: string; html: string } | { error: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState<{ ok: boolean; text: string } | null>(null);
@@ -570,7 +610,7 @@ function EmailSheet({ meta, onClose }: { meta: EmailMeta; onClose: () => void })
 
 /* ─────────────────────────── feedback ─────────────────────────── */
 
-function Feedback({ side, step }: { side: ShowroomSide; step: ShowroomStep }) {
+export function Feedback({ side, step }: { side: ShowroomSide | "backoffice"; step: { id: string; title: string } }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<{ ok: boolean; text: string } | null>(null);
@@ -605,7 +645,7 @@ function Feedback({ side, step }: { side: ShowroomSide; step: ShowroomStep }) {
       <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted">
         <DoodleIcon name="message" size={13} /> Something not right here?
       </p>
-      <p className="mt-1 text-[12.5px] text-muted">A word that is wrong, a step that is missing, something a {side} would trip over. It goes straight onto the list with this step attached.</p>
+      <p className="mt-1 text-[12.5px] text-muted">A word that is wrong, a step that is missing, something {side === "backoffice" ? "the office" : `a ${side}`} would trip over. It goes straight onto the list with this step attached.</p>
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}

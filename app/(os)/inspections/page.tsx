@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
+import WalkthroughLink from "@/components/showroom/WalkthroughLink";
 import DoodleIcon from "@/components/DoodleIcon";
 import StatTile, { toneFor } from "@/components/StatTile";
 import { Pill } from "@/components/Wire";
@@ -192,6 +193,7 @@ export default function Inspections() {
         searchValue={q}
         onSearch={setQ}
         searchPlaceholder="Search addresses, tenants, landlords…"
+        actions={<WalkthroughLink step="visits" />}
       />
 
       <div className="mt-10 grid grid-cols-2 gap-4 xl:grid-cols-4">

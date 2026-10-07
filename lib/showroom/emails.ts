@@ -69,7 +69,7 @@ export function showroomEmailMeta(id: string) {
     entry.audience === "tenant" ? "To the tenant"
     : entry.audience === "landlord" ? "To the landlord"
     : entry.audience === "contractor" ? "To the contractor"
-    : id === "works-compliance-done" ? "To compliance"
+    : id === "works-compliance-done" || id === "certificate-shared-compliance" ? "To compliance"
     : id === "works-accounts-invoice" ? "To accounts"
     : "To you";
   return { id, name: entry.name, when: words?.when ?? entry.trigger, summary: words?.says ?? entry.summary, to, status: statusOf(id) };

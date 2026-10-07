@@ -4,6 +4,7 @@ import { asOf } from "@/lib/as-of";
 import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
+import WalkthroughLink from "@/components/showroom/WalkthroughLink";
 import ComplianceDrawer from "@/components/ComplianceDrawer";
 import StatTile, { toneFor } from "@/components/StatTile";
 import {
@@ -205,6 +206,7 @@ export default function Compliance() {
         illustrationAspect={1.7998}
         illustrationNudge={-10}
         lineBreak="none"
+        actions={<WalkthroughLink step="compliance" />}
       />
 
       {/* ── The four counts. Each is also the filter for the book below. ── */}

@@ -26,6 +26,8 @@
  */
 
 import type { TenantStageKey } from "@/lib/tenant-journey";
+import { BACK_OFFICE_EMAIL_IDS } from "@/lib/showroom/back-office";
+import { VISIT_MOMENTS, repairAt } from "@/lib/showroom/demo-world";
 
 export type ShowroomSide = "tenant" | "landlord" | "agent";
 
@@ -55,6 +57,8 @@ export interface ShowroomStep {
   guide?: string;
   /** Named honestly: what is not there yet. */
   notYet?: string[];
+  /** The back office walkthrough that shows this from every side (lib/showroom/back-office). */
+  walkthrough?: { step: string; way?: string; label: string };
 }
 
 export const SIDES: { id: ShowroomSide; label: string; says: string; ready: boolean }[] = [
@@ -230,6 +234,43 @@ export const TENANT_STEPS: ShowroomStep[] = [
       "No emails yet for the deposit, the agreement, the first rent or move-in day.",
       "Signing the agreement in their area is not switched on yet.",
     ],
+  },
+  /* Living there (7 Oct 2026): the back office's work, from the tenant's side. */
+  {
+    id: "repairs",
+    title: "Reporting a repair",
+    lead: "Once they have the keys, Maintenance opens in their area. They say where and what in their own words, and can see where it has got to. Or they ring, and the office logs it while they talk.",
+    sees: [
+      "Where it is and what is wrong, in their words. No urgency to pick: a real emergency is told to ring.",
+      "What they have reported, with where each one is: with us, being arranged, booked in, done.",
+      "Emails as it moves: someone has been found, the date, and \"are you happy?\" once it is done.",
+      "If they ring instead, \"We've got your repair\" by email the moment the office logs it.",
+    ],
+    agent: { says: "It lands on Maintenance. If they ring, press Report a repair while they are on the line.", href: "/maintenance" },
+    screens: [
+      { label: "Reporting it", href: `/tenant/demo/maintenance?stage=living&story=repair&at=${repairAt("before")}`, device: "phone" },
+      { label: "Booked in", href: `/tenant/demo/maintenance?stage=living&story=repair&at=${repairAt("booked")}`, device: "phone" },
+      { label: "Was it sorted?", href: `/preview/{token}/back-office/repair?story=repair&at=${repairAt("done")}`, device: "phone" },
+    ],
+    emails: ["works-tenant-received", "works-tenant-found", "works-tenant-booked", "works-tenant-happy"],
+    walkthrough: { step: "repair", way: "portal", label: "Watch a repair from every side" },
+    notYet: ["Reporting it in the portal sends them no email yet - it shows in their area as With us."],
+  },
+  {
+    id: "visits-gas",
+    title: "Visits and the gas safety",
+    lead: "Twice a year we ask to visit, and once a year a gas engineer comes. Both are arranged with them in writing, and the new gas certificate comes to them by email.",
+    sees: [
+      "An email asking to visit, with a link to pick a time, say none suit, or say no - each the same size.",
+      "A confirmation with the date, the time and who is coming.",
+      "The engineer's date for the gas safety check.",
+      "Their copy of the new gas safety certificate, which they must have within 28 days of the check.",
+    ],
+    agent: { says: "Visits are booked on Inspections; the gas safety is a planned job on Maintenance.", href: "/inspections" },
+    screens: [{ label: "May we come round?", href: `/preview/{token}/back-office/visit?story=visits&at=${VISIT_MOMENTS.indexOf("asked")}`, device: "phone" }],
+    emails: ["inspection-tenant-access", "inspection-tenant-booked", "works-tenant-booked", "certificate-shared-tenant"],
+    walkthrough: { step: "visits", label: "Watch a visit from every side" },
+    notYet: ["Their Documents page does not show their certificates yet - they come by email."],
   },
 ];
 
@@ -420,6 +461,57 @@ export const LANDLORD_STEPS: ShowroomStep[] = [
       "inspection-landlord-report", "certificate-shared-landlord", "compliance-chase-landlord", "invoice-sent",
     ],
   },
+  /* The managed home, job by job (7 Oct 2026): the back office's work, from the landlord's side. */
+  {
+    id: "repair",
+    title: "A repair on their home",
+    lead: "They hear about a repair the way they asked to: the report, the date, and a quote to say yes to if it is over their limit. Their Maintenance page shows every job in their own words, and they can tell us about one themselves.",
+    sees: [
+      "The report when it comes in, and what is happening now on each job.",
+      "A quote to approve if it is over their limit (£150 unless their terms say otherwise).",
+      "Who is coming and when, then done, with what it cost.",
+      "Tell us, on the same page, for anything they have noticed or their tenant has told them.",
+    ],
+    agent: { says: "It follows the job on Maintenance. Record their yes with Landlord approved.", href: "/maintenance" },
+    screens: [
+      { label: "A quote waiting on them", href: `/landlord/demo/maintenance?stage=managed&story=repair&at=${repairAt("quote")}`, device: "desktop" },
+      { label: "Done, with the cost", href: `/landlord/demo/maintenance?stage=managed&story=repair&at=${repairAt("invoiced")}`, device: "desktop" },
+      { label: "Telling us", href: `/landlord/demo/maintenance?stage=managed&story=repair&at=${repairAt("before")}&way=landlord`, device: "desktop" },
+    ],
+    emails: ["works-landlord-report", "works-landlord-approval", "works-landlord-arranged"],
+    walkthrough: { step: "repair", way: "landlord", label: "Watch a repair from every side" },
+    notYet: [
+      "There is no approve button. They reply to the email, or you ring them.",
+      "They can be emailed about every job, only over an amount, or not at all - the office sets it on the job.",
+    ],
+  },
+  {
+    id: "certificates",
+    title: "Certificates and the gas safety",
+    lead: "Every certificate on their home, with the date it runs out. We renew them before they fall due; a landlord with their own engineer sends the new one from its row, and it is checked before it goes on the record.",
+    sees: [
+      "Each certificate with its expiry, and Send the new one on any that is running out.",
+      "The new certificate by email once compliance have checked it, with the PDF attached.",
+    ],
+    agent: { says: "Certificates are on Compliance, under Portfolio.", href: "/compliance" },
+    screens: [{ label: "Their certificates", href: "/landlord/demo/documents?stage=managed&story=compliance&at=0", device: "desktop" }],
+    emails: ["certificate-shared-landlord"],
+    walkthrough: { step: "gas", label: "Watch the gas safety from every side" },
+    notYet: ["No reminder goes to the landlord before a certificate runs out - only the agent is emailed."],
+  },
+  {
+    id: "visits",
+    title: "Visits and the report",
+    lead: "A visit every six months (every three for an HMO), arranged with their tenant, and a report to them afterwards: how the home is kept, room by room, and what is happening about anything found.",
+    sees: [
+      "The visit on their Maintenance page: due, booked, then done with its condition.",
+      "The report by email, with every check and every room.",
+    ],
+    agent: { says: "Book and record visits on Inspections, under Portfolio.", href: "/inspections" },
+    screens: [{ label: "Visits on their page", href: `/landlord/demo/maintenance?stage=managed&story=visits&at=${VISIT_MOMENTS.indexOf("sent")}`, device: "desktop" }],
+    emails: ["inspection-landlord-report"],
+    walkthrough: { step: "visits", label: "Watch a visit from every side" },
+  },
   {
     id: "sign-in",
     title: "Signing in and messages",
@@ -447,8 +539,8 @@ Object.assign(EMAIL_WORDS, {
   "landlord-questions-chase": { when: "2, 5 and 9 days after signing, while questions are unanswered", says: "What is still to answer about the home, and a button back to it.", status: "built" },
   "landlord-docs-nudge": { when: "When you press Send a nudge for the documents", says: "Just the paperwork left: which certificates we still need.", status: "built" },
   "application-accepted-landlord": { when: "When an offer is accepted and handed over", says: "Who is moving in, the rent and the dates, and what happens between now and move-in.", status: "ready" },
-  "works-landlord-report": { when: "When a repair is reported", says: "What is wrong, the two ways forward, and what happens next." },
-  "works-landlord-approval": { when: "When a quote is over what they have said we can spend", says: "The quote, and a button to approve it.", status: "built" },
+  "works-landlord-report": { when: "When you tell the landlord and choose to email the report", says: "What is wrong, the two ways forward, and what happens next." },
+  "works-landlord-approval": { when: "When a quote is over what they have said we can spend", says: "The quote, why we are asking, and a one-word reply to go ahead.", status: "built" },
   "works-landlord-arranged": { when: "Once the repair has a date", says: "Who is coming, and when.", status: "built" },
   "inspection-landlord-report": { when: "When the visit report is sent", says: "How the home is being kept, room by room, and what happens about each thing found." },
   "certificate-shared-landlord": { when: "When a renewed certificate is filed on their home", says: "The new certificate, attached, and when it next runs out.", status: "ready" },
@@ -584,6 +676,7 @@ export const AGENT_STEPS: ShowroomStep[] = [
       "A reminder when something of your own is missing or running out.",
     ],
     agent: { says: "The certificates are on Compliance; your own are on your profile.", href: "/compliance" },
+    walkthrough: { step: "compliance", label: "Watch compliance from every side, live" },
     screens: [],
     emails: ["compliance-chase-agent", "own-compliance"],
   },
@@ -596,12 +689,13 @@ export const AGENT_STEPS: ShowroomStep[] = [
     lead: "A repair comes in from the tenant's portal or a phone call, becomes a job, and runs one step at a time: approve, find a contractor, book, done, check. Everybody hears at the right moment, from you.",
     sees: [
       "A works order with the next step on it, and the history underneath.",
-      "The contractor's own page: accept the job, book a time, upload the certificate and the invoice.",
-      "The landlord approves a quote on their portal, and sees the job through to done.",
+      "The contractor's own page: book a time, mark it done, and upload photos, the certificate and the invoice.",
+      "Over their limit the landlord says yes to the quote by replying to the email, and follows the job to done on their portal.",
       "The tenant is told it is logged, who is coming and when, and asked if they are happy once it is done.",
       "Compliance checks every finished job, and the invoice goes to accounts.",
     ],
     agent: { says: "Raise and run jobs on Maintenance, under Portfolio.", href: "/maintenance" },
+    walkthrough: { step: "repair", label: "Watch a repair from every side, live" },
     screens: [],
     emails: [
       "works-tenant-received", "works-landlord-approval", "works-contractor-order", "works-contractor-booked", "works-tenant-found",
@@ -621,6 +715,7 @@ export const AGENT_STEPS: ShowroomStep[] = [
       "The landlord's report, with the checks and the photos on it.",
     ],
     agent: { says: "Book and record visits on Inspections, under Portfolio.", href: "/inspections" },
+    walkthrough: { step: "visits", label: "Watch a visit from every side, live" },
     screens: [],
     emails: ["inspection-tenant-access", "inspection-tenant-booked", "inspection-landlord-report"],
     notYet: ["Inspections are switched off for agents until they are released after launch."],
@@ -653,4 +748,4 @@ export const SAMPLE_WHO: Record<ShowroomSide, string> = {
 };
 
 /** Every email the showroom shows - the only ones its preview route will render. */
-export const SHOWROOM_EMAIL_IDS: ReadonlySet<string> = new Set([...TENANT_STEPS, ...LANDLORD_STEPS, ...AGENT_STEPS].flatMap((s) => s.emails));
+export const SHOWROOM_EMAIL_IDS: ReadonlySet<string> = new Set([...[...TENANT_STEPS, ...LANDLORD_STEPS, ...AGENT_STEPS].flatMap((s) => s.emails), ...BACK_OFFICE_EMAIL_IDS]);

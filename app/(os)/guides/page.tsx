@@ -4,6 +4,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import { GUIDES, GUIDE_SECTIONS } from "@/lib/guides";
 import { AGENT_GUIDES } from "@/lib/agent-guides";
 import GuideButton from "@/components/GuideButton";
+import { BACK_OFFICE } from "@/lib/showroom/back-office";
 
 /**
  * The shelf.
@@ -56,6 +57,29 @@ export default function GuidesPage() {
               </span>
               <span className="mt-1.5 block max-w-2xl text-[12px] leading-relaxed text-muted">{g.blurb}</span>
             </GuideButton>
+          ))}
+        </div>
+      </section>
+
+      {/* The back office's walkthroughs live in the Showroom, where each one
+          is a guide to read and a live demo on the real screens (7 Oct 2026). */}
+      <section className="fade-up mt-8">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">The back office, step by step</p>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          {BACK_OFFICE.map((j) => (
+            <Link
+              key={j.id}
+              href={`/showroom?side=backoffice&step=${j.id}`}
+              className="block-pop block rounded-2xl border border-line/80 bg-panel p-5"
+            >
+              <span className="flex flex-wrap items-baseline gap-2.5">
+                <DoodleIcon name="magic-wand" size={18} className="self-center text-accent-dark" />
+                <span className="hand text-[17px]">{j.title}</span>
+                <span className="text-[10.5px] text-muted">Guide and live demo · {j.scenes(j.ways?.[0]?.id ?? "portal").length} scenes</span>
+                <span className="ml-auto text-muted">→</span>
+              </span>
+              <span className="mt-1.5 block text-[12px] leading-relaxed text-muted">{j.lead}</span>
+            </Link>
           ))}
         </div>
       </section>

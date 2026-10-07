@@ -79,7 +79,8 @@ const NOW: Record<StepId, string> = {
   closed: "Closed",
 };
 
-function jobOf(o: WorksOrder): MaintJob {
+/** One job in the landlord's words. Exported for the Showroom's walkthroughs, which draw it from an invented job. */
+export function jobOf(o: WorksOrder): MaintJob {
   const step = stepOf(o);
   const open = ["reported", "approval", "approved", "scheduled"].includes(o.status);
   const state: MaintJob["state"] = o.status === "cancelled" ? "cancelled" : open ? "open" : "done";
