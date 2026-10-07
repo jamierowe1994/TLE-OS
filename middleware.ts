@@ -601,13 +601,9 @@ export const config = {
        share token, and because everything under it is self-contained: mock
        rail, sample figures, no fetches, no writes, no session. See
        lib/preview-token.ts - that token must never gate anything real. */
-    /* `rehearsal` is the maintenance walkthrough, and it is exempt for the
-       same reason: James sends it to people who have no account. It is safe
-       because its own token is checked at the layout and again on every API
-       call, and because that API can only ever touch a job flagged
-       `rehearsal` - a real works order id in the URL opens nothing. Its
-       emails are written and kept rather than sent, so nothing anybody
-       presses in there can reach a customer. See lib/rehearsal.ts. */
+    /* The maintenance rehearsal (/rehearsal) was retired on 7 Oct 2026 for the
+       Showroom's back office walkthroughs, which live under `preview` and
+       write nothing, so its exemption went with it. */
     /* `email` is public/email: the artwork every email we send points at.
        It sat behind the door, so a mail client - which is nobody, signed in
        nowhere - got a 307 to the sign-in page instead of a picture. Every
@@ -654,6 +650,6 @@ export const config = {
        browser fetches it with no say over the redirect, and a 307 to the
        sign-in page means no phone alerts at all. A static file, at the root
        only, holding nothing but the code that shows an alert. */
-    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|visit|api/visit|rehearsal|api/rehearsal|proof|send|api/tenant/passport|api/tenant/feedback|api/tenant/apply|api/tenant/homes|api/tenant/session|api/tenant/maintenance|api/tenant/documents|api/landlord|api/calendar|brand|email|mail-img|nl|rex|r|api/r|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$|sw\\.js$).*)",
+    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|visit|api/visit|proof|send|api/tenant/passport|api/tenant/feedback|api/tenant/apply|api/tenant/homes|api/tenant/session|api/tenant/maintenance|api/tenant/documents|api/landlord|api/calendar|brand|email|mail-img|nl|rex|r|api/r|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$|sw\\.js$).*)",
   ],
 };

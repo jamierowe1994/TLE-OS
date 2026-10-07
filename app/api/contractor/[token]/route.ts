@@ -31,8 +31,10 @@ import type { SharePerson } from "@/lib/certificate-share";
  * row and so can never be fanned out to a landlord or a tenant; the amount
  * only ever travels down the accounts path.
  *
- * A REHEARSAL (lib/rehearsal) uses this same page, and files nothing: its
- * house is invented, so a certificate stays a file on the job.
+ * A REHEARSAL job files nothing: its house is invented, so a certificate
+ * stays a file on the job. The rehearsal itself was retired on 7 Oct 2026
+ * (the Showroom's back office walkthroughs replaced it), but its old job is
+ * still in the database with a working contractor link, so the guard stays.
  */
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

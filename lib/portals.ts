@@ -304,11 +304,11 @@ export const PORTAL_FOLDERS: PortalFolder[] = [
     items: [
       {
         kind: "open",
-        id: "maintenance-rehearsal",
-        name: "All four views of a repair",
+        id: "maintenance-walkthrough",
+        name: "A repair from every side",
         blurb:
-          "One repair, and what it looks like to the agent, the landlord, the tenant and the contractor. The real screens and the real emails, on four tabs.",
-        href: "/admin/rehearsal",
+          "The Showroom's live demo: one repair on the real screens - the tenant, the office, the landlord and the contractor - with every email, and nothing saved or sent.",
+        href: "/showroom?side=backoffice&step=repair",
       },
       {
         kind: "email",
