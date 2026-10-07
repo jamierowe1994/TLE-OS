@@ -84,6 +84,8 @@ export interface ChaseRow {
   undated?: boolean;
   /** Alarms answered by the gas safety record: chased as the gas, never twice. */
   viaGas?: boolean;
+  /** Marked not needed on this home, by whom and why. */
+  notNeeded?: { by: string; reason: string; at: string };
 }
 
 export interface TrackerBook {
@@ -91,6 +93,8 @@ export interface TrackerBook {
   outstanding: ChaseRow[];
   /** On file from the clean sweep with no expiry recorded (7 Oct 2026). */
   undated: ChaseRow[];
+  /** Marked not needed by the compliance office: off every list, undoable. */
+  notNeeded: ChaseRow[];
   /** In date but inside a chase band. */
   upcoming: ChaseRow[];
   counts: {
@@ -106,6 +110,7 @@ export interface TrackerBook {
     dateWithoutDocument: number;
     /** On file, no expiry date recorded: not outstanding, not finished. */
     undated: number;
+    notNeeded: number;
     /** Duplicate property rows collapsed — a property listed twice is still
      *  one property, and chasing it twice is how a landlord stops reading. */
     duplicateRowsCollapsed: number;
@@ -266,10 +271,31 @@ export function buildTracker(
     .sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0));
 
   const undated = rows.filter((r) => r.undated);
+  const notNeeded: ChaseRow[] = book.flatMap((p) =>
+    (Object.entries(p.certs) as [CertKey, CompProperty["certs"][CertKey]][])
+      .filter(([, c]) => c?.notNeeded)
+      .map(([key, c]) => ({
+        propertyId: p.id,
+        property: p.name,
+        locality: p.locality,
+        cert: key,
+        certLabel: CERT_META[key]?.label ?? key,
+        status: statusOf(c),
+        daysLeft: c?.expires ?? null,
+        band: null,
+        attached: Boolean(c?.attached),
+        landlord: p.landlord,
+        agent: whoFor(p),
+        tenant: p.tenant,
+        reason: `Marked not needed by ${c!.notNeeded!.by}${c!.notNeeded!.reason ? `: ${c!.notNeeded!.reason}` : "."}`,
+        notNeeded: c!.notNeeded,
+      }))
+  );
 
   return {
     outstanding,
     undated,
+    notNeeded,
     upcoming,
     counts: {
       properties: book.length,
@@ -283,6 +309,7 @@ export function buildTracker(
       // documents across 100 sampled entries. A date we cannot evidence.
       dateWithoutDocument: rows.filter((r) => r.status !== "missing" && !r.attached).length,
       undated: undated.length,
+      notNeeded: notNeeded.length,
       duplicateRowsCollapsed: collapsed,
     },
     duplicateAddresses,

@@ -100,6 +100,8 @@ export type Cert = {
   fromOs?: boolean;
   /** Smoke and CO alarms, evidenced by the gas safety record. */
   viaGas?: boolean;
+  /** Marked not needed on this home by the compliance office (7 Oct 2026). */
+  notNeeded?: { by: string; reason: string; at: string };
 };
 
 export type CompProperty = {
@@ -206,6 +208,11 @@ export const isOurs = (p: CompProperty): boolean =>
  * for a legionella review it was never chased for.
  */
 export function requiredCerts(p: CompProperty): CertKey[] {
+  /* A person marked it not needed on this home (os_cert_not_needed). */
+  return ruleCerts(p).filter((k) => !p.certs[k]?.notNeeded);
+}
+
+function ruleCerts(p: CompProperty): CertKey[] {
   return [
     "eicr" as const,
     ...(p.hasGas ? ["gas" as const] : []),

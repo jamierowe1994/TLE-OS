@@ -2,6 +2,7 @@ import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { notLetFrom } from "@/lib/not-let";
 import { osCertsFor } from "@/lib/os-certs";
+import { notNeededAll } from "@/lib/cert-not-needed";
 import type { Cert, CertKey, CompProperty } from "@/lib/compliance";
 
 /**
@@ -93,12 +94,14 @@ function better(held: Cert | undefined, next: Cert): boolean {
  * the OS record have had their say, before rooms inherit from their house.
  */
 export async function applySweep(properties: CompProperty[]): Promise<void> {
-  const [answers, vault] = await Promise.all([
+  const [answers, vault, notNeeded] = await Promise.all([
     sweepAnswers().catch(() => new Map<string, SweepAnswers>()),
     osCertsFor([...new Set(properties.map((p) => String(p.id)).filter((id) => /^\d+$/.test(id)))]).catch(
       () => new Map<string, Partial<Record<CertKey, Cert>>>()
     ),
+    notNeededAll().catch(() => []),
   ]);
+  const exempt = new Map(notNeeded.map((n) => [`${n.propertyId}|${n.cert}`, n]));
   for (const p of properties) {
     /* The OS's own certificate on a REX home: filed here, and REX refused it
        or has not caught up. The later expiry is the true one. */
@@ -135,6 +138,15 @@ export async function applySweep(properties: CompProperty[]): Promise<void> {
     const alarms = p.certs.alarms;
     if (gas && gas.expires != null && (!alarms || (alarms.expires == null && !alarms.undated))) {
       p.certs.alarms = { expires: gas.expires, attached: gas.attached, viaGas: true };
+    }
+
+    /* Marked not needed by the compliance office: the record stays as it is,
+       flagged, so requiredCerts leaves it out everywhere. */
+    for (const [k, n] of exempt) {
+      const [pid, cert] = k.split("|");
+      if (pid !== String(p.id)) continue;
+      const held = p.certs[cert as CertKey];
+      p.certs[cert as CertKey] = { ...(held ?? { expires: null, attached: false }), notNeeded: { by: n.by, reason: n.reason, at: n.at } };
     }
   }
 }

@@ -2356,6 +2356,18 @@ ALTER TABLE os_certificates ADD COLUMN IF NOT EXISTS share_people JSONB NOT NULL
 ALTER TABLE os_certificates ADD COLUMN IF NOT EXISTS shared_at TIMESTAMPTZ;
 ALTER TABLE os_compliance_checks ADD COLUMN IF NOT EXISTS told TEXT NOT NULL DEFAULT '';
 ALTER TABLE os_compliance_checks ADD COLUMN IF NOT EXISTS told_at TIMESTAMPTZ;
+-- Not needed (James, 7 Oct 2026): a certificate the rule asks for that this
+-- home does not need - a fire risk assessment on one of the few exceptions,
+-- say. Marked by the compliance office from the tracker, with a reason, and
+-- undone the same way. property_id is the compliance book's id (REX or pm-).
+CREATE TABLE IF NOT EXISTS os_cert_not_needed (
+  property_id TEXT NOT NULL,
+  cert        TEXT NOT NULL,
+  reason      TEXT NOT NULL DEFAULT '',
+  by_name     TEXT NOT NULL DEFAULT '',
+  at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (property_id, cert)
+);
 
 -- THE OS'S OWN PROPERTY RECORD (6 Sep 2026). One row per REX PM property, linked
 -- to its REX CRM property where the address matched, "not on REX" where it did

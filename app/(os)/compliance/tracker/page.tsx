@@ -220,6 +220,63 @@ function UploadPanel({ row, onFiled, onClose }: { row: ChaseRow; onFiled: (expir
 }
 
 /**
+ * Not needed on this home (James, 7 Oct 2026): the rule asks for it, and this
+ * is one of the few exceptions. A reason is asked for, not required - the
+ * name goes on it either way, and it can be undone from the Not needed tab.
+ */
+function NotNeededPanel({ row, onDone, onClose }: { row: ChaseRow; onDone: (reason: string, by: string) => void; onClose: () => void }) {
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  async function save() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const j = await fetch("/api/compliance/not-needed", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ propertyId: row.propertyId, cert: row.cert, reason }),
+      }).then((r) => r.json());
+      if (!j.ok) setMsg(j.error || "That did not save.");
+      else onDone(reason.trim(), j.notNeeded?.by ?? "you");
+    } catch {
+      setMsg("That did not save - the OS could not be reached. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="rounded-xl border border-line/70 bg-page p-3.5">
+      <p className="text-[12px] leading-relaxed">
+        {row.certLabel} isn&apos;t needed at <span className="font-semibold">{row.property}</span>. It comes off the list
+        here and on the agent&apos;s side.
+      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <input
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Why not? (optional)"
+          maxLength={300}
+          className="min-w-[220px] flex-1 rounded-lg border border-line/80 bg-white px-2.5 py-1.5 text-[12.5px]"
+        />
+        <button type="button" onClick={onClose} className="rounded-full border border-line/80 px-3.5 py-1.5 text-[12px]">
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={busy}
+          className="rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40"
+        >
+          {busy ? "Saving…" : "Mark not needed"}
+        </button>
+      </div>
+      {msg && <p className="mt-1.5 text-[11.5px] text-accent-dark">{msg}</p>}
+    </div>
+  );
+}
+
+/**
  * Agent before landlord, and headed "Chase via". Michael never writes to a
  * landlord: "he will always go through the agent" (James, 20 Sep 2026). The
  * landlord is on the row so he knows whose home it is, not who to ring.
@@ -228,8 +285,26 @@ function UploadPanel({ row, onFiled, onClose }: { row: ChaseRow; onFiled: (expir
  * is past its reminders and is a conversation, not an email. Undefined leaves
  * the column off; null says the log could not be read.
  */
-function Rows({ rows, empty, sent, onFiled }: { rows: ChaseRow[]; empty: string; sent?: Sent | null; onFiled: (r: ChaseRow, expiry: string) => void }) {
+function Rows({
+  rows,
+  empty,
+  sent,
+  onFiled,
+  onNotNeeded,
+  onUndo,
+}: {
+  rows: ChaseRow[];
+  empty: string;
+  sent?: Sent | null;
+  onFiled: (r: ChaseRow, expiry: string) => void;
+  /** Offers Not needed on each row. Left off where the row is not a gap. */
+  onNotNeeded?: (r: ChaseRow, reason: string, by: string) => void;
+  /** The Not needed tab: Undo instead of Upload. */
+  onUndo?: (r: ChaseRow) => void;
+}) {
   const [open, setOpen] = useState<string | null>(null);
+  const [mode, setMode] = useState<"upload" | "na">("upload");
+  const [undoing, setUndoing] = useState<string | null>(null);
   if (!rows.length) return <p className="py-6 text-[12.5px] text-muted">{empty}</p>;
   return (
     <div className="overflow-x-auto">
@@ -284,26 +359,77 @@ function Rows({ rows, empty, sent, onFiled }: { rows: ChaseRow[]; empty: string;
                 </td>
               )}
               <td className={`${cell} text-right`}>
-                <button
-                  type="button"
-                  onClick={() => setOpen(open === k ? null : k)}
-                  className={`whitespace-nowrap rounded-full px-3 py-1 text-[11.5px] font-semibold ${open === k ? "border border-line/80" : "bg-ink text-white"}`}
-                >
-                  {open === k ? "Close" : "Upload"}
-                </button>
+                {onUndo ? (
+                  <button
+                    type="button"
+                    disabled={undoing === k}
+                    onClick={() => {
+                      setUndoing(k);
+                      onUndo(r);
+                    }}
+                    className="whitespace-nowrap rounded-full border border-line/80 px-3 py-1 text-[11.5px] font-semibold disabled:opacity-40"
+                  >
+                    {undoing === k ? "Undoing…" : "Undo"}
+                  </button>
+                ) : open === k ? (
+                  <button
+                    type="button"
+                    onClick={() => setOpen(null)}
+                    className="whitespace-nowrap rounded-full border border-line/80 px-3 py-1 text-[11.5px] font-semibold"
+                  >
+                    Close
+                  </button>
+                ) : (
+                  <div className="flex justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode("upload");
+                        setOpen(k);
+                      }}
+                      className="whitespace-nowrap rounded-full bg-ink px-3 py-1 text-[11.5px] font-semibold text-white"
+                    >
+                      Upload
+                    </button>
+                    {onNotNeeded && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMode("na");
+                          setOpen(k);
+                        }}
+                        title="This home doesn't need it"
+                        className="whitespace-nowrap rounded-full border border-line/80 px-3 py-1 text-[11.5px] font-semibold"
+                      >
+                        Not needed
+                      </button>
+                    )}
+                  </div>
+                )}
               </td>
             </tr>
             {open === k && (
               <tr className="border-b border-line/40">
                 <td colSpan={sent !== undefined ? 7 : 6} className="px-3 pb-3">
-                  <UploadPanel
-                    row={r}
-                    onClose={() => setOpen(null)}
-                    onFiled={(expiry) => {
-                      setOpen(null);
-                      onFiled(r, expiry);
-                    }}
-                  />
+                  {mode === "na" && onNotNeeded ? (
+                    <NotNeededPanel
+                      row={r}
+                      onClose={() => setOpen(null)}
+                      onDone={(reason, by) => {
+                        setOpen(null);
+                        onNotNeeded(r, reason, by);
+                      }}
+                    />
+                  ) : (
+                    <UploadPanel
+                      row={r}
+                      onClose={() => setOpen(null)}
+                      onFiled={(expiry) => {
+                        setOpen(null);
+                        onFiled(r, expiry);
+                      }}
+                    />
+                  )}
                 </td>
               </tr>
             )}
@@ -324,7 +450,7 @@ function Rows({ rows, empty, sent, onFiled }: { rows: ChaseRow[]; empty: string;
 export default function ComplianceTracker() {
   const [d, setD] = useState<Payload | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"outstanding" | "undated" | "upcoming" | "queue">("outstanding");
+  const [tab, setTab] = useState<"outstanding" | "undated" | "notNeeded" | "upcoming" | "queue">("outstanding");
   const [filed, setFiled] = useState<string[]>([]);
   const [find, setFind] = useState("");
 
@@ -352,6 +478,40 @@ export default function ComplianceTracker() {
       };
     });
   }
+  /* Off the list at once; on the Not needed tab with the name on it. */
+  function onNotNeeded(r: ChaseRow, reason: string, by: string) {
+    const gone = (x: ChaseRow) => x.propertyId === r.propertyId && x.cert === r.cert;
+    setD((cur) => {
+      if (!cur) return cur;
+      const was = cur.outstanding.find(gone);
+      const marked: ChaseRow = { ...r, undated: false, reason: `Marked not needed by ${by}${reason ? `: ${reason}` : "."}`, notNeeded: { by, reason, at: new Date().toISOString() } };
+      return {
+        ...cur,
+        outstanding: cur.outstanding.filter((x) => !gone(x)),
+        undated: (cur.undated ?? []).filter((x) => !gone(x)),
+        notNeeded: [marked, ...(cur.notNeeded ?? []).filter((x) => !gone(x))],
+        counts: {
+          ...cur.counts,
+          expired: cur.counts.expired - (was?.status === "expired" ? 1 : 0),
+          missing: cur.counts.missing - (was?.status === "missing" ? 1 : 0),
+          notNeeded: (cur.counts.notNeeded ?? 0) + 1,
+        },
+      };
+    });
+  }
+
+  /* Back on the list. The page reads the tracker again, which reads the book
+     the undo has just put right. */
+  async function onUndo(r: ChaseRow) {
+    await fetch("/api/compliance/not-needed", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ propertyId: r.propertyId, cert: r.cert }),
+    }).catch(() => null);
+    const p = (await fetch("/api/compliance/tracker").then((x) => x.json()).catch(() => null)) as Payload | null;
+    if (p && p.ok !== false) setD(p);
+  }
+
   const match = (rows: ChaseRow[]) => {
     const t = find.trim().toLowerCase();
     return t ? rows.filter((r) => `${r.property} ${r.locality} ${r.agent ?? ""} ${r.landlord} ${r.certLabel}`.toLowerCase().includes(t)) : rows;
@@ -437,6 +597,7 @@ export default function ComplianceTracker() {
                 [
                   ["outstanding", `Outstanding (${d.outstanding.length})`],
                   ...((d.undated?.length ?? 0) > 0 ? [["undated", `On file, no date (${d.undated.length})`] as const] : []),
+                  ...((d.notNeeded?.length ?? 0) > 0 ? [["notNeeded", `Not needed (${d.notNeeded.length})`] as const] : []),
                   ["upcoming", `Coming up (${d.upcoming.length})`],
                   ["queue", `Chase queue (${d.queue.length})`],
                 ] as const
@@ -474,7 +635,17 @@ export default function ComplianceTracker() {
                 rows={match(d.outstanding)}
                 empty={find ? "Nothing outstanding matches that." : "Nothing expired and nothing missing. That would be a first."}
                 onFiled={onFiled}
+                onNotNeeded={onNotNeeded}
               />
+            )}
+            {tab === "notNeeded" && (
+              <>
+                <p className="mb-3 text-[11.5px] leading-relaxed text-muted">
+                  Certificates the rule asks for that someone has marked as not needed on that home. They are off every
+                  list, the agent&apos;s included. Undo puts one back.
+                </p>
+                <Rows rows={match(d.notNeeded ?? [])} empty="Nothing has been marked not needed." onFiled={onFiled} onUndo={(r) => void onUndo(r)} />
+              </>
             )}
             {tab === "undated" && (
               <>
@@ -482,7 +653,7 @@ export default function ComplianceTracker() {
                   The clean sweep found these on file, but nobody has recorded when they run out. They are not
                   counted as outstanding. Upload the certificate with its date to finish each one.
                 </p>
-                <Rows rows={match(d.undated ?? [])} empty="Every certificate on file has its date." onFiled={onFiled} />
+                <Rows rows={match(d.undated ?? [])} empty="Every certificate on file has its date." onFiled={onFiled} onNotNeeded={onNotNeeded} />
               </>
             )}
             {tab === "upcoming" && (

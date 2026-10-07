@@ -86,6 +86,23 @@ export async function heldComplianceBook(): Promise<CachedBook | null> {
   return memory ?? (await readStored());
 }
 
+/**
+ * Change the held book in place and keep it, without a REX sweep. For a mark
+ * a person has just made (not needed) that every screen should show at once;
+ * the next full refresh reads the same answer from the database anyway.
+ */
+export async function patchHeldBook(fn: (book: ComplianceBook) => void): Promise<boolean> {
+  const held = memory ?? (await readStored());
+  if (!held) return false;
+  fn(held.book);
+  memory = held;
+  /* Keep the book's own age: a mark does not make old REX figures new. */
+  if (hasDb()) {
+    await q(`UPDATE os_cache SET payload = $2 WHERE key = $1`, [CACHE_KEY, JSON.stringify({ book: held.book })]).catch(() => null);
+  }
+  return true;
+}
+
 export function refreshComplianceBook(): Promise<CachedBook> {
   if (!refreshing) {
     refreshing = fetchComplianceBook()
