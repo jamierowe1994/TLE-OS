@@ -10,6 +10,7 @@ import { useDesk } from "@/components/compliance-desk/useDesk";
 import TodoCard from "@/components/compliance-desk/TodoCard";
 import type { ChaseRow, TrackerBook } from "@/lib/compliance-tracker";
 import { asOf } from "@/lib/as-of";
+import { SPECS, type Notice } from "@/lib/section-notices-spec";
 
 /**
  * Michael's first screen: his job, in the order he does it.
@@ -108,6 +109,18 @@ export default function ComplianceDashboard() {
   const { desk, error } = useDesk();
   const [book, setBook] = useState<Tracker | null>(null);
   const [bookError, setBookError] = useState<string | null>(null);
+  /* Section 13s and 8s waiting for his decision (7 Oct 2026). */
+  const [sections, setSections] = useState<Notice[] | null>(null);
+  const [sectionsError, setSectionsError] = useState(false);
+
+  useEffect(() => {
+    let gone = false;
+    fetch("/api/section-notices/desk", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (!gone) { if (j?.ok) setSections(j.notices as Notice[]); else setSectionsError(true); } })
+      .catch(() => !gone && setSectionsError(true));
+    return () => { gone = true; };
+  }, []);
 
   useEffect(() => {
     let gone = false;
@@ -225,6 +238,32 @@ export default function ComplianceDashboard() {
           )}
         </section>
       </div>
+
+      {/* ── Section 13s and 8s waiting for his decision (7 Oct 2026) ── */}
+      {(() => {
+        const waiting = (sections ?? []).filter((n) => n.status === "submitted" || n.status === "legal");
+        const toServe = (sections ?? []).filter((n) => n.status === "approved").length;
+        return (
+          <Link href="/compliance-desk/sections" data-search className={`fade-up flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[22px] p-5 transition-colors ${waiting.length ? "bg-accent-soft hover:bg-accent-soft/80" : `${card} hover:border-ink/30`}`}>
+            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${waiting.length ? "bg-white/80 text-[#9d4340]" : "bg-accent-soft text-accent-dark"}`}>
+              <DoodleIcon name="file-contract" size={17} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[17px] font-bold leading-tight">
+                {sections === null ? (sectionsError ? "Sections" : "Sections") : waiting.length ? `${waiting.length} ${waiting.length === 1 ? "notice" : "notices"} waiting for your decision` : "Sections"}
+              </span>
+              <span className="mt-0.5 block text-[12px] text-muted">
+                {sections === null
+                  ? sectionsError ? "Could not read the notices." : "Reading the notices…"
+                  : waiting.length
+                    ? waiting.slice(0, 3).map((n) => `${SPECS[n.kind].short} · ${n.answers.fields.address || n.propertyLabel}`).join("   ")
+                    : `Section 13 rent increases and Section 8 notices. Nothing waiting${toServe ? `, ${toServe} approved to serve` : ""}.`}
+              </span>
+            </span>
+            <span className="flex items-center gap-1 text-[12px] font-semibold text-muted">Open Sections <DoodleIcon name="trend-up" size={11} /></span>
+          </Link>
+        );
+      })()}
 
       {/* ── his own list: the jobs for a person rather than a queue ── */}
       <TodoCard />

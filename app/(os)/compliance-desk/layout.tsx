@@ -16,6 +16,9 @@ import type { RailGroup } from "@/components/WorkspaceRail";
  *   Agents        "all of the agents are compliant"
  *   Works orders  "the last thing that he does is check on works orders"
  *
+ * Sections (7 Oct 2026) sits under To verify: the agents' Section 13 and
+ * Section 8 checklists, waiting for his approval before he serves them.
+ *
  * Same frame as Kirstie's (app/(os)/pre-tenancy/layout): the agent sidebar
  * gives way to this rail and it stays put while the pages beside it change.
  * Properties and Agents are the screens that already existed, drawn here so
@@ -28,6 +31,7 @@ const RAIL: RailGroup[] = [
       { href: "/compliance-desk", label: "Dashboard", exact: true, icon: "home" },
       { href: "/compliance-desk/properties", label: "Properties", icon: "shield" },
       { href: "/compliance-desk/verify", label: "To verify", icon: "checklist" },
+      { href: "/compliance-desk/sections", label: "Sections", icon: "file-contract" },
       { href: "/compliance-desk/plc", label: "PLC queue", icon: "list" },
       { href: "/compliance-desk/id-checks", label: "ID checks", icon: "user" },
       { href: "/compliance-desk/agents", label: "Agents", icon: "user" },

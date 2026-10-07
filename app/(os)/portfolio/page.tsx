@@ -18,6 +18,7 @@ import { rexContactUrl, rexListingUrl } from "@/lib/business/rex-links";
 import { housesIn, houseByListing, roomLabel, tabLabel, tenantsInOrder, pickerOption, MANAGED_READERS as R, type House } from "@/lib/houses";
 import RoomPicker from "@/components/RoomPicker";
 import ReletAction from "@/components/portfolio/ReletAction";
+import HomeNotices from "@/components/sections/HomeNotices";
 import PhotoLightbox from "@/components/PhotoLightbox";
 import { useDocumentOpen } from "@/lib/doc-sheet";
 import {
@@ -443,6 +444,34 @@ function PropertyPanel({
                 </p>
               )}
             </section>
+          )}
+
+          {/* Rent review (Section 13) and Serve notice (Section 8): Michael's
+              checklists, filled in here and decided on his Sections tab
+              (7 Oct 2026). A house let by the room is a tenancy per room, so
+              those start from the room. */}
+          {houseView && house && !lets ? (
+            <section className="mt-6">
+              <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Rent review and notices</p>
+              <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">Each room is its own tenancy. Open a room above to start its rent review or notice.</p>
+            </section>
+          ) : (
+            <HomeNotices
+              key={p.listingId}
+              className="mt-6"
+              home={{
+                listingId: String(p.listingId),
+                propertyId: p.propertyId,
+                label: house ? `${house.name}${room ? ` · ${roomLabel(room)}` : ""}` : p.name,
+                test: Boolean(p.test),
+                address: [p.address || p.name, p.postcode && !(p.address || p.name).toUpperCase().includes(p.postcode.toUpperCase()) ? p.postcode : ""].filter(Boolean).join(", "),
+                landlord: landlord?.name ?? "",
+                tenants: (house && lets && !room ? tenantsInOrder(house, house.rooms[0], R) : p.tenants).map((t) => t.name),
+                agent: p.agent?.name ?? null,
+                rentMonthly: p.rentMonthly,
+                letSince: p.letSince,
+              }}
+            />
           )}
 
           {/* The property file - the same panel the listing, the application

@@ -10,6 +10,8 @@ import { queriesFor, verifyQueue, worksToCheck } from "@/lib/compliance-desk";
 import { followUpsDue } from "@/lib/id-checks";
 import { newLeadsFor } from "@/lib/lead-ledger";
 import { newBookingsFor } from "@/lib/rex-viewings";
+import { decisionsFor, waitingOnDesk } from "@/lib/section-notices";
+import { SPECS, STATUS_LABEL } from "@/lib/section-notices-spec";
 
 /**
  * What the bell shows, gathered from the tables where things already happen.
@@ -47,6 +49,9 @@ import { newBookingsFor } from "@/lib/rex-viewings";
  *   viewings booked          the agent whose diary it is in, when somebody
  *                            else booked it; owners, every new one (lib/rex-
  *                            viewings newBookingsFor, 5 Oct 2026)
+ *   section notices          a Section 13 or 8 submitted: the desk, until he
+ *                            decides it. His decision: the agent who sent it,
+ *                            for a fortnight (7 Oct 2026)
  *   documents to verify,     the compliance role alone (Michael, 20 Sep 2026:
  *   finished works orders    "he needs to also be notified"). Read from his
  *                            own two lists, so a notice goes when he ticks the
@@ -82,7 +87,7 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
      desk's notices as well as Michael and Josel. */
   const desk = me.role === "compliance" || me.role === "pretenancy";
 
-  const [deals, steps, handovers, reminders, toVerify, toCheck] = await Promise.all([
+  const [deals, steps, handovers, reminders, toVerify, toCheck, sections, decided] = await Promise.all([
     listDealEvents({ agentEmail: whole ? null : me.email, limit }).catch(() => []),
     office
       ? q<{ id: string; campaign_id: string; subject: string; detail: string; at: Date; name: string }>(
@@ -105,6 +110,8 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
     remindersFor(me.id, limit).catch(() => []),
     desk ? verifyQueue().catch(() => []) : [],
     desk ? worksToCheck().catch(() => []) : [],
+    desk ? waitingOnDesk().catch(() => []) : [],
+    decisionsFor(me.email).catch(() => []),
   ]);
 
   /* An appraisal somebody else booked for you: the pre-presentation goes in
@@ -330,6 +337,28 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
       body: `Job #${o.ref} is finished: ${o.title}${o.contractor ? `, ${o.contractor}` : ""}. Waiting for you to check.`,
       href: "/compliance-desk/works",
       tone: "warn",
+    });
+  }
+  for (const x of sections) {
+    out.push({
+      id: `section:${x.id}`,
+      kind: "compliance",
+      at: x.at,
+      title: x.label,
+      body: `${SPECS[x.kind].short} ${x.kind === "s13" ? "rent increase" : "possession notice"} ${x.again ? "sent back" : "submitted"} by ${x.by || "an agent"}. Waiting for your decision.`,
+      href: `/compliance-desk/sections?open=${encodeURIComponent(x.id)}`,
+      tone: "warn",
+    });
+  }
+  for (const x of decided) {
+    out.push({
+      id: `section-decided:${x.id}:${x.status}`,
+      kind: "compliance",
+      at: x.at,
+      title: x.label,
+      body: `${SPECS[x.kind].short}: ${STATUS_LABEL[x.status].toLowerCase()}${x.by ? ` by ${x.by}` : ""}.${x.note && x.status !== "approved" ? ` ${x.note}` : ""}`,
+      href: `/portfolio?open=${encodeURIComponent(x.listingId)}&notice=${encodeURIComponent(x.id)}`,
+      tone: x.status === "approved" || x.status === "served" ? "ok" : "warn",
     });
   }
   out.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));

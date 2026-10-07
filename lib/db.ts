@@ -3612,6 +3612,54 @@ CREATE INDEX IF NOT EXISTS os_team_messages_room
   ON os_team_messages (room_id, created_at);
 CREATE INDEX IF NOT EXISTS os_team_messages_reply
   ON os_team_messages (reply_to) WHERE reply_to IS NOT NULL;
+
+-- Section 13 rent increases and Section 8 possession notices (7 Oct 2026,
+-- lib/section-notices). Michael's two pre-approval checklists, filled in by
+-- the agent on the home's file and decided on his Sections tab. Nothing here
+-- serves a notice: he does that through PayProp by hand. answers holds the
+-- agent's ticks and fields, review his, post_service what happened after.
+CREATE TABLE IF NOT EXISTS os_section_notices (
+  id             TEXT PRIMARY KEY,
+  kind           TEXT NOT NULL,
+  status         TEXT NOT NULL DEFAULT 'draft',
+  listing_id     TEXT NOT NULL DEFAULT '',
+  property_id    TEXT,
+  property_label TEXT NOT NULL DEFAULT '',
+  answers        JSONB NOT NULL DEFAULT '{}',
+  review         JSONB NOT NULL DEFAULT '{}',
+  post_service   JSONB NOT NULL DEFAULT '{}',
+  history        JSONB NOT NULL DEFAULT '[]',
+  agent_id       TEXT NOT NULL DEFAULT '',
+  agent_name     TEXT NOT NULL DEFAULT '',
+  agent_email    TEXT NOT NULL DEFAULT '',
+  is_test        BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  submitted_at   TIMESTAMPTZ,
+  decided_at     TIMESTAMPTZ,
+  decided_by     TEXT NOT NULL DEFAULT '',
+  served_at      TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS os_section_notices_home
+  ON os_section_notices (listing_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS os_section_notices_queue
+  ON os_section_notices (kind, status, submitted_at);
+-- The evidence, against the checklist line it proves. side 'compliance' is
+-- Michael's own: the final notice and the proof of service.
+CREATE TABLE IF NOT EXISTS os_section_notice_files (
+  id             TEXT PRIMARY KEY,
+  notice_id      TEXT NOT NULL,
+  line_id        TEXT NOT NULL,
+  side           TEXT NOT NULL DEFAULT 'agent',
+  name           TEXT NOT NULL,
+  r2_key         TEXT NOT NULL,
+  mime           TEXT NOT NULL DEFAULT '',
+  size_bytes     BIGINT NOT NULL DEFAULT 0,
+  by_name        TEXT NOT NULL DEFAULT '',
+  at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_section_notice_files_notice
+  ON os_section_notice_files (notice_id, at);
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a
