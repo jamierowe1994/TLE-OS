@@ -6,6 +6,7 @@ import {
   statusOf,
   CERT_META,
   renewalHoldEnds,
+  renewalHeld,
   type CertKey,
   type CertStatus,
   type CompProperty,
@@ -47,11 +48,6 @@ import {
  */
 
 const todayLondon = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
-const addDays = (ymd: string, n: number) => {
-  const d = new Date(`${ymd}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-};
 const prettyDay = (ymd: string) =>
   new Date(`${ymd.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" });
 
@@ -153,13 +149,13 @@ function rowsFor(p: CompProperty, agent: string | null): ChaseRow[] {
     const attached = Boolean(cert?.attached);
 
     const undated = Boolean(cert?.undated);
-    /* A renewal note belongs to the licence it was written about: once a
-       newer licence (expiring after the hold) is on file, the note is spent. */
-    const expiryDay = daysLeft != null ? addDays(todayLondon(), daysLeft) : null;
+    /* A renewal at the council (lib/compliance renewalHeld): held off the
+       list for six months; spent once a newer licence is on file. */
     const noted = cert?.renewalApplied;
-    const ra = noted && !(expiryDay && expiryDay > renewalHoldEnds(noted.appliedOn)) ? noted : undefined;
+    const holding = renewalHeld(cert);
+    const spent = Boolean(noted && !holding && cert?.expires != null && cert.expires >= 0);
+    const ra = noted && !spent ? noted : undefined;
     const holdEnds = ra ? renewalHoldEnds(ra.appliedOn) : null;
-    const holding = Boolean(ra && holdEnds && holdEnds > todayLondon());
     const reason = ra && holding
       ? `Renewal applied for on ${prettyDay(ra.appliedOn)}${ra.ref ? ` (ref ${ra.ref})` : ""}, marked by ${ra.by}. Back on the list on ${prettyDay(holdEnds!)} if no new licence has been filed.`
       : ra

@@ -134,6 +134,35 @@ export function renewalHoldEnds(appliedOn: string): string {
   return d.toISOString().slice(0, 10);
 }
 
+const londonToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+
+/**
+ * Is a renewal at the council holding this licence off every list right now?
+ * Inside six months of the application, and only for the licence the note was
+ * written about: once a newer licence (expiring after the hold) is on file,
+ * the note is spent. One answer for the tracker, the Compliance page and the
+ * drawer.
+ */
+export function renewalHeld(c: Cert | undefined): boolean {
+  const ra = c?.renewalApplied;
+  if (!ra) return false;
+  const ends = renewalHoldEnds(ra.appliedOn);
+  const today = londonToday();
+  if (ends <= today) return false;
+  if (c?.expires != null) {
+    const d = new Date(`${today}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + c.expires);
+    if (d.toISOString().slice(0, 10) > ends) return false;
+  }
+  return true;
+}
+
+/** The status a screen should grade on: a licence held by its renewal is
+ *  watched, not overdue. */
+export function shownStatus(c: Cert | undefined): CertStatus {
+  return renewalHeld(c) ? "watch" : statusOf(c);
+}
+
 export type CompProperty = {
   id: string;
   name: string;
@@ -411,6 +440,7 @@ export function dueWithin(days: number, book: CompProperty[] = COMP_BOOK) {
     for (const key of headlineCerts(p)) {
       const cert = p.certs[key];
       const s = statusOf(cert);
+      if (renewalHeld(cert)) continue; // with the council (Michael, 7 Oct 2026)
       if (s === "expired" || (s === "urgent" && (cert!.expires ?? 99) <= days)) {
         out.push({ p, key, cert, status: s });
       }

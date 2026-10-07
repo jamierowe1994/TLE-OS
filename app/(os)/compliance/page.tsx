@@ -1,14 +1,14 @@
 "use client";
 
 import { asOf } from "@/lib/as-of";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import WalkthroughLink from "@/components/showroom/WalkthroughLink";
 import ComplianceDrawer from "@/components/ComplianceDrawer";
 import StatTile, { toneFor } from "@/components/StatTile";
 import {
-  BIG_THREE, CERT_META, COMP_BOOK, dueWithin, headlineCerts, isOurs, isStaleRecord, statusOf,
+  BIG_THREE, CERT_META, COMP_BOOK, dueWithin, headlineCerts, isOurs, isStaleRecord, renewalHeld, shownStatus,
   type CertKey, type CertStatus, type CompProperty,
 } from "@/lib/compliance";
 
@@ -35,9 +35,10 @@ const TONE: Record<CertStatus, string> = {
 };
 
 function CertPill({ cert, name }: { cert: CompProperty["certs"][CertKey]; name?: string }) {
-  const s = statusOf(cert);
-  const text =
-    s === "expired"
+  const s = shownStatus(cert);
+  const text = renewalHeld(cert)
+    ? "with council"
+    : s === "expired"
       ? `${Math.abs(cert!.expires!)}d over`
       : s === "missing"
         ? isStaleRecord(cert) ? "old record" : "no record"
@@ -84,9 +85,13 @@ export default function Compliance() {
        sample is for a laptop with nothing connected, and the server says so. */
   }>({ properties: [], live: false, loading: true });
 
+  /* Read again after a change made in the drawer (a renewal noted), quietly:
+     the rows stay up while it loads. */
+  const [version, setVersion] = useState(0);
+  const reload = useCallback(() => setVersion((v) => v + 1), []);
   useEffect(() => {
     let gone = false;
-    fetch("/api/compliance")
+    fetch("/api/compliance", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => {
         if (gone) return;
@@ -103,7 +108,7 @@ export default function Compliance() {
       })
       .catch(() => { if (!gone) setSource({ properties: [], live: false, loading: false, reason: "The certificates didn't load. Try again in a minute." }); });
     return () => { gone = true; };
-  }, []);
+  }, [version]);
 
   /* The book carries one record per leased listing, so a home let three
      times came three times; the page shows each home once. */
@@ -134,7 +139,7 @@ export default function Compliance() {
   const graded = useMemo(
     () =>
       BOOK.map((p) => {
-        const statuses = headlineCerts(p).map((k) => statusOf(p.certs[k]));
+        const statuses = headlineCerts(p).map((k) => shownStatus(p.certs[k]));
         const worst: CertStatus = statuses.includes("expired")
           ? "expired"
           : statuses.includes("urgent")
@@ -400,6 +405,7 @@ export default function Compliance() {
         property={open}
         book={BOOK}
         onClose={() => setOpenId(null)}
+        onChanged={reload}
       />
 
     </>

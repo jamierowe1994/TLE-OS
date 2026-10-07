@@ -5,6 +5,8 @@ import { matchProperty, pendingKeyFor, type MatchResult } from "@/lib/property-m
 import { listVault, type VaultFile } from "@/lib/vault";
 import { rexConfigured } from "@/lib/rex";
 import { osCertRows } from "@/lib/os-certs";
+import { notNeededAll } from "@/lib/cert-not-needed";
+import { renewalHeld, renewalHoldEnds } from "@/lib/compliance";
 import { isOsPropertyId } from "@/lib/os-properties";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { scopeFor } from "@/lib/scope";
@@ -66,7 +68,11 @@ export interface FileRow {
   files: VaultFile[];
   /** Held on the house (or another room of it), not this room's own record. */
   fromHouse?: string;
+  /** An HMO licence renewal at the council (Michael, 7 Oct 2026): not outstanding until holdEnds. */
+  renewal?: { appliedOn: string; ref: string; holdEnds: string; by: string };
 }
+
+const LICENCE_TYPES = new Set(["mandatory_hmo_license", "additional_hmo_license", "selective_hmo_license"]);
 
 /* A shared house: the certificate is the building's. When a room's own
    record lacks a type, the house's row (or another room's) stands in for it,
@@ -169,6 +175,21 @@ export async function GET(req: NextRequest) {
   }
   rows.sort((a, b) => (ORDER.indexOf(a.type) + 1 || 99) - (ORDER.indexOf(b.type) + 1 || 99));
 
+  /* A licence renewal noted at the council holds the licence row off the
+     outstanding count, as on the tracker and the Compliance page. */
+  if (propertyId && rows.some((r) => LICENCE_TYPES.has(r.type) && (r.state === "expired" || r.state === "missing"))) {
+    const mark = (await notNeededAll().catch(() => [])).find((n) => n.propertyId === propertyId && n.cert === "licence" && n.kind === "renewal_applied");
+    if (mark?.appliedOn) {
+      const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+      for (const r of rows) {
+        if (!LICENCE_TYPES.has(r.type) || (r.state !== "expired" && r.state !== "missing")) continue;
+        const expires = r.expiry ? Math.round((new Date(`${r.expiry.slice(0, 10)}T12:00:00Z`).getTime() - new Date(`${today}T12:00:00Z`).getTime()) / 86400000) : null;
+        const ra = { by: mark.by, at: mark.at, appliedOn: mark.appliedOn, ref: mark.ref ?? "" };
+        if (renewalHeld({ expires, attached: false, renewalApplied: ra })) r.renewal = { appliedOn: ra.appliedOn, ref: ra.ref, holdEnds: renewalHoldEnds(ra.appliedOn), by: ra.by };
+      }
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     live: rexConfigured(),
@@ -177,6 +198,6 @@ export async function GET(req: NextRequest) {
     checked: rex.checked,
     match: match ? { verdict: match.verdict, how: match.how, targets: match.targets, possible: match.possible } : null,
     rows,
-    outstanding: rows.filter((r) => r.state === "expired" || r.state === "expiring" || r.state === "missing").length,
+    outstanding: rows.filter((r) => !r.renewal && (r.state === "expired" || r.state === "expiring" || r.state === "missing")).length,
   });
 }

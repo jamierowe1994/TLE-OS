@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAnyCapability } from "@/lib/admin";
+import { requireAnyCapability, whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
 import { clearNotNeeded, markNotNeeded } from "@/lib/cert-not-needed";
 import { patchHeldBook, refreshComplianceBook } from "@/lib/compliance-cache";
@@ -44,11 +44,14 @@ async function read(req: NextRequest): Promise<Body | string> {
 }
 
 export async function POST(req: NextRequest) {
-  const me = await gate(req);
-  if (!me) return NextResponse.json({ ok: false, error: "Only the compliance office can mark a certificate not needed." }, { status: 403 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
   const r = await read(req);
   if (typeof r === "string") return NextResponse.json({ ok: false, error: r }, { status: 400 });
+  /* Not needed is the office's call. A licence renewal at the council is a
+     fact any of us may know first - the agent often does - so anyone signed
+     in may note it, with their name on it (7 Oct 2026). */
+  const me = r.kind === "renewal_applied" ? (await whoIs(req)).actor : await gate(req);
+  if (!me) return NextResponse.json({ ok: false, error: r.kind === "renewal_applied" ? "Sign in first." : "Only the compliance office can mark a certificate not needed." }, { status: r.kind === "renewal_applied" ? 401 : 403 });
   const by = me.name || me.email;
   const n = await markNotNeeded(r.propertyId, r.cert, r.reason, by, { kind: r.kind, appliedOn: r.appliedOn, ref: r.ref });
   await patchHeldBook((book) => {

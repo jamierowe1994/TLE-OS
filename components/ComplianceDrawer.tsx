@@ -5,7 +5,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PropertyFile from "@/components/PropertyFile";
 import SaveChip, { SaveScopeProvider, useSaveScope } from "@/components/SaveChip";
 import { Pill } from "@/components/Wire";
-import { CERT_META, isLetOnly, requiredCerts, statusOf, type CertKey, type CompProperty } from "@/lib/compliance";
+import { CERT_META, isLetOnly, renewalHeld, renewalHoldEnds, requiredCerts, shownStatus, statusOf, type CertKey, type CompProperty } from "@/lib/compliance";
 import { COMPLIANCE_READERS as R, houseByListing, housesIn, pickerOption, roomLabel, tabLabel, type House } from "@/lib/houses";
 import RoomPicker from "@/components/RoomPicker";
 import { useDocumentOpen } from "@/lib/doc-sheet";
@@ -58,15 +58,83 @@ function certLine(expires: number | null): string {
   return `~${months} month${months === 1 ? "" : "s"}`;
 }
 
+
+const prettyDay = (ymd: string) =>
+  new Date(`${ymd.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" });
+
+/**
+ * Renewal applied for, on an HMO licence that has run out (Michael, 7 Oct
+ * 2026): the council can take six months, and until then it is not a job.
+ * The same mark as the compliance tracker's (/api/compliance/not-needed).
+ */
+function RenewalApplied({ propertyId, onSaved }: { propertyId: string; onSaved?: () => void }) {
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+  const [open, setOpen] = useState(false);
+  const [appliedOn, setAppliedOn] = useState(today);
+  const [ref, setRef] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+  if (done) return <p className="mt-2 text-[11px] text-muted">Noted. It comes off the overdue list while the council decides.</p>;
+  if (!open)
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="mt-2 inline-block rounded-full border border-line/80 px-3 py-1 text-[11px] transition-colors hover:border-ink">
+        Renewal applied for
+      </button>
+    );
+  async function save() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const j = await fetch("/api/compliance/not-needed", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ propertyId, cert: "licence", kind: "renewal_applied", appliedOn, ref }),
+      }).then((r) => r.json());
+      if (!j.ok) setMsg(j.error || "That did not save.");
+      else {
+        setDone(true);
+        onSaved?.();
+      }
+    } catch {
+      setMsg("That did not save. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="mt-2 space-y-1.5">
+      <label className="block text-[10px] text-muted">
+        Applied for on
+        <input type="date" value={appliedOn} max={today} onChange={(e) => setAppliedOn(e.target.value)} className="mt-0.5 block w-full rounded-lg border border-line/80 bg-white px-2 py-1 text-[12px]" />
+      </label>
+      <label className="block text-[10px] text-muted">
+        Council reference (optional)
+        <input value={ref} onChange={(e) => setRef(e.target.value)} maxLength={80} className="mt-0.5 block w-full rounded-lg border border-line/80 bg-white px-2 py-1 text-[12px]" />
+      </label>
+      <div className="flex gap-1.5">
+        <button type="button" onClick={() => setOpen(false)} className="rounded-full border border-line/80 px-2.5 py-1 text-[11px]">Cancel</button>
+        <button type="button" disabled={busy || !appliedOn} onClick={() => void save()} className="rounded-full bg-ink px-3 py-1 text-[11px] font-semibold text-white disabled:opacity-40">
+          {busy ? "Saving…" : "Save"}
+        </button>
+      </div>
+      {msg && <p className="text-[11px] text-accent-dark">{msg}</p>}
+    </div>
+  );
+}
+
 export default function ComplianceDrawer({
   property,
   book,
   onClose,
+  onChanged,
 }: {
   property: CompProperty | null;
   /** The whole book, so a room can find its house. */
   book: CompProperty[];
   onClose: () => void;
+  /** Something here changed the book (a renewal noted): read it again. */
+  onChanged?: () => void;
 }) {
   const [shown, setShown] = useState(false);
   const [tab, setTab] = useState<string>("house");
@@ -137,7 +205,7 @@ export default function ComplianceDrawer({
   const worstOf = (k: CertKey) => {
     const members = house ? house.members : [p];
     const order = ["expired", "urgent", "missing", "watch", "ok"];
-    return members.map((m) => m.certs[k]).sort((a, b) => order.indexOf(statusOf(a)) - order.indexOf(statusOf(b)))[0];
+    return members.map((m) => m.certs[k]).sort((a, b) => order.indexOf(shownStatus(a)) - order.indexOf(shownStatus(b)))[0];
   };
 
   return (
@@ -181,7 +249,7 @@ export default function ComplianceDrawer({
                 The house
               </button>
               <RoomPicker
-                options={house.rooms.map((r) => ({ id: r.id, ...pickerOption(house, r, R), bad: requiredCerts(r).some((k) => ["expired", "urgent", "missing"].includes(statusOf(r.certs[k]))) }))}
+                options={house.rooms.map((r) => ({ id: r.id, ...pickerOption(house, r, R), bad: requiredCerts(r).some((k) => ["expired", "urgent", "missing"].includes(shownStatus(r.certs[k]))) }))}
                 value={tab === "house" ? null : tab}
                 onChange={setTab}
                 placeholder={lets ? "Tenants" : "Rooms"}
@@ -250,7 +318,8 @@ export default function ComplianceDrawer({
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {required.map((k) => {
               const cert = houseView ? worstOf(k) : p.certs[k];
-              const s = statusOf(cert);
+              const held = k === "licence" && renewalHeld(cert);
+              const s = shownStatus(cert);
               const bad = s === "expired" || s === "urgent" || s === "missing";
               return (
                 <div key={k} className={`rounded-xl border px-3.5 py-3 ${s === "expired" ? "border-accent-dark bg-accent-soft/30" : bad ? "border-accent-dark/40" : "border-line/70"}`}>
@@ -259,9 +328,19 @@ export default function ComplianceDrawer({
                     {CERT_META[k].short}
                   </p>
                   <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[12.5px]">
-                    <Pill tone={bad ? "accent" : "good"}>{k === "gas" && !p.hasGas ? "No gas" : certLine(cert?.expires ?? null)}</Pill>
+                    <Pill tone={bad ? "accent" : held ? "neutral" : "good"}>
+                      {held && cert?.renewalApplied
+                        ? `Renewal with the council until ${prettyDay(renewalHoldEnds(cert.renewalApplied.appliedOn))}`
+                        : k === "gas" && !p.hasGas ? "No gas" : certLine(cert?.expires ?? null)}
+                    </Pill>
                     {cert?.inherited && <span className="text-[10.5px] text-muted">from the house</span>}
                   </p>
+                  {/* Only an HMO licence that has run out or has no record (Michael, 7 Oct 2026). */}
+                  {k === "licence" && !held && (s === "expired" || s === "missing") && (
+                    <div>
+                      <RenewalApplied propertyId={(houseView ? book.find((r) => r.certs.licence === cert)?.id : null) ?? p.id} onSaved={onChanged} />
+                    </div>
+                  )}
                   {bad && !(k === "gas" && !p.hasGas) && (
                     <a
                       href={`/maintenance?raise=planned&property=${encodeURIComponent(p.id)}&category=${encodeURIComponent(BOOK_AS[k])}&due=${dueDate(cert?.expires ?? 0)}`}
@@ -280,7 +359,7 @@ export default function ComplianceDrawer({
               <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Rooms</p>
               <ul className="overflow-hidden rounded-xl border border-line/50 bg-white">
                 {house.rooms.map((r) => {
-                  const bad = requiredCerts(r).filter((k) => ["expired", "urgent", "missing"].includes(statusOf(r.certs[k])));
+                  const bad = requiredCerts(r).filter((k) => ["expired", "urgent", "missing"].includes(shownStatus(r.certs[k])));
                   return (
                     <li key={r.id} className="border-b border-line/40 last:border-0">
                       <button type="button" onClick={() => setTab(r.id)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[12.5px] transition-colors hover:bg-box">

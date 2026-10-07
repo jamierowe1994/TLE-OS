@@ -22,7 +22,7 @@ import { useSaveReporter } from "@/components/SaveChip";
  */
 
 interface VaultFile { key: string; certKey: string; label: string; name: string; size: number; uploadedAt: string | null; open: string }
-interface Row { type: string; label: string; state: "valid" | "expiring" | "expired" | "missing" | "not-required" | "held-here"; expiry: string | null; issued: string | null; inRex: boolean; fileInRex: boolean; files: VaultFile[]; fromHouse?: string }
+interface Row { type: string; label: string; state: "valid" | "expiring" | "expired" | "missing" | "not-required" | "held-here"; expiry: string | null; issued: string | null; inRex: boolean; fileInRex: boolean; files: VaultFile[]; fromHouse?: string; renewal?: { appliedOn: string; ref: string; holdEnds: string; by: string } }
 interface Candidate { id: string; name: string; locality: string }
 interface Answer {
   ok: boolean;
@@ -364,12 +364,13 @@ export default function PropertyFile({
           {rows.map((r) => {
             const s = STATE[r.state];
             return (
-              <li key={r.type} className={`rounded-xl border p-3 ${r.state === "expired" ? "border-accent-dark bg-accent-soft/30" : r.state === "missing" || r.state === "expiring" ? "border-accent-dark/40" : "border-line/70"}`}>
+              <li key={r.type} className={`rounded-xl border p-3 ${r.renewal ? "border-line/70" : r.state === "expired" ? "border-accent-dark bg-accent-soft/30" : r.state === "missing" || r.state === "expiring" ? "border-accent-dark/40" : "border-line/70"}`}>
                 <div className="flex flex-wrap items-center gap-2.5">
                   <span className="text-[13px] font-semibold">{r.label}</span>
-                  <Pill tone={s.tone}>{stateLabel(r)}</Pill>
+                  <Pill tone={r.renewal ? "neutral" : s.tone}>{r.renewal ? "With the council" : stateLabel(r)}</Pill>
                   <span className="text-[11px] text-muted">
                     {r.expiry ? `${r.state === "expired" ? "Expired" : "Expires"} ${day(r.expiry)}` : r.issued ? `Issued ${day(r.issued)}` : ""}
+                    {r.renewal ? ` · renewal applied for ${day(r.renewal.appliedOn)}${r.renewal.ref ? ` (ref ${r.renewal.ref})` : ""}, back on the list ${day(r.renewal.holdEnds)} if no new licence` : ""}
                     {r.inRex && !r.fileInRex && r.expiry ? " · no document on file" : ""}
                     {r.fromHouse ? ` · held on ${r.fromHouse}` : ""}
                   </span>
