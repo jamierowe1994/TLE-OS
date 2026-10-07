@@ -40,6 +40,19 @@ function nextAction(a: Application): { label: string; strong: boolean } {
   return { label: "View application", strong: false };
 }
 
+/**
+ * A LET IN PROGRESS (7 Oct 2026, James): "just because we've got an offer on
+ * a property doesn't mean it should move to applications" - the home is still
+ * taking viewings until the offer is accepted. So this board is accepted
+ * offers only, accepted in REX or by the agent in the OS (lib/offer-decisions).
+ * Open offers live on their listing (Listings > Offers in), and ?open=<id>
+ * still opens any application by name, accepted or not.
+ */
+const isLet = (a: Application) => a.status === "accepted" || (a.status !== "unsuccessful" && a.osDecision?.decision === "accepted");
+
+/** Accepted here, and REX still to be told by hand. */
+const rexToMark = (a: Application) => a.status !== "accepted" && a.osDecision?.decision === "accepted";
+
 /** Still in play: not turned down, not moved in, home not gone elsewhere. */
 const isOpen = (a: Application) => a.status !== "unsuccessful" && !a.closed;
 
@@ -68,6 +81,8 @@ function StatusPill({ a }: { a: Application }) {
   const text = a.stageLabel ?? a.statusLabel;
   if (a.closed)
     return <span className="whitespace-nowrap rounded-full bg-panel px-2.5 py-1 text-[11px] font-semibold text-muted">{a.closed}</span>;
+  if (rexToMark(a))
+    return <span className="whitespace-nowrap rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-semibold text-accent-dark">Mark in REX</span>;
   if (a.status === "accepted")
     return <span className="whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: SAGE_WASH, color: SAGE_INK }}>{text}</span>;
   if (a.status === "communicated")
@@ -105,11 +120,10 @@ function Initials({ name }: { name: string }) {
  * recorded answer. The number is counted from the live data, not asserted.
  */
 
+/* Received, Communicated and Unsuccessful went on 7 Oct 2026: an offer that
+   is not accepted is on its listing, not here. */
 const STAGES = [
-  { key: "received", label: "Received", icon: "message", blurb: "In, and not yet put to the landlord." },
-  { key: "communicated", label: "Communicated", icon: "mail", blurb: "With the landlord, waiting on their decision." },
-  { key: "accepted", label: "Accepted", icon: "checklist", blurb: "Landlord has said yes. The deal opens from here." },
-  { key: "unsuccessful", label: "Unsuccessful", icon: "cross", blurb: "Turned down, or the applicant withdrew." },
+  { key: "rex", label: "Mark in REX", icon: "mail", blurb: "Accepted in the OS. REX still has to be marked accepted by hand." },
 ] as const;
 
 /* Closed: REX still calls these open and they are not - the tenant has moved
@@ -121,7 +135,9 @@ type StageKey = (typeof STAGES)[number]["key"] | "attention" | "closed";
 
 const gbp = (n: number | null) => (n == null ? "—" : `£${n.toLocaleString("en-GB")}`);
 
-type AppsAnswer = { applications?: Application[]; error?: string; scope?: string; everything?: boolean; stale?: boolean };
+/** An offer saved in the OS and accepted there, with no REX application yet. */
+type OsAccepted = { id: string; name: string; address: string; listingId: string | null; amount: number | null; moveIn: string | null; by: string; at: string };
+type AppsAnswer = { applications?: Application[]; osAccepted?: OsAccepted[]; error?: string; scope?: string; everything?: boolean; stale?: boolean };
 const APPS_URL = "/api/applications?limit=200";
 
 /**
@@ -176,6 +192,15 @@ function checksFor(a: Application): Check[] {
 export default function Applications() {
   useEffect(() => whenIdle(() => { void loadApplicationDrawer(); }), []);
   const [apps, setApps] = useState<Application[] | null>(() => peekJson<AppsAnswer>(APPS_URL)?.applications ?? null);
+  const [osAccepted, setOsAccepted] = useState<OsAccepted[]>(() => peekJson<AppsAnswer>(APPS_URL)?.osAccepted ?? []);
+  /* Offers still waiting on a decision, across the listings - they live there now. */
+  const [openOffers, setOpenOffers] = useState<number | null>(null);
+  useEffect(() => {
+    fetch("/api/offers/open", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; total?: number }) => setOpenOffers(j.ok ? (j.total ?? 0) : null))
+      .catch(() => null);
+  }, []);
   const [error, setError] = useState<string | null>(null);
   /* Customer updates still to tell, for the header link. */
   const [updatesOpen, setUpdatesOpen] = useState(0);
@@ -223,6 +248,7 @@ export default function Applications() {
         if (d.error) setError(d.error);
         if (d.scope) setScope({ label: d.scope, everything: Boolean(d.everything) });
         setApps(d.applications ?? []);
+        setOsAccepted(d.osAccepted ?? []);
       })
       .catch((e: Error) => live && setError(e.message));
     return () => {
@@ -232,8 +258,10 @@ export default function Applications() {
   }, []);
 
   const all = apps ?? [];
-  const agents = useMemo(() => [...new Set(all.map((a) => a.agent).filter((x): x is string => Boolean(x)))].sort(), [all]);
-  const mine = useMemo(() => (fAgent ? all.filter((a) => a.agent === fAgent) : all), [all, fAgent]);
+  /* The board is lets in progress; `all` keeps every application so ?open= can still find one. */
+  const lets = useMemo(() => all.filter(isLet), [all]);
+  const agents = useMemo(() => [...new Set(lets.map((a) => a.agent).filter((x): x is string => Boolean(x)))].sort(), [lets]);
+  const mine = useMemo(() => (fAgent ? lets.filter((a) => a.agent === fAgent) : lets), [lets, fAgent]);
   /* Latest activity (James, 6 Oct 2026): the application somebody last did
      something on comes first - accepted, a comment, the PLC pack moving -
      rather than the newest created. Read when the button is first pressed. */
@@ -258,9 +286,7 @@ export default function Applications() {
           ? mine.filter((a) => needsAttention(a) !== null)
           : stage === "closed"
             ? mine.filter((a) => a.closed)
-            : stage === "unsuccessful"
-              ? mine.filter((a) => a.status === stage)
-              : mine.filter((a) => a.status === stage && !a.closed);
+            : mine.filter((a) => rexToMark(a) && !a.closed);
     if (!byActivity) return picked;
     const at = (a: Application) => {
       const ours = activityAt?.[String(a.id)] ?? "";
@@ -276,8 +302,8 @@ export default function Applications() {
     open: mine.filter(isOpen).length,
     attention: mine.filter((a) => needsAttention(a) !== null).length,
     closed: mine.filter((a) => a.closed).length,
-    by: (k: string) => mine.filter((a) => a.status === k && (k === "unsuccessful" || !a.closed)).length,
-  }), [mine]);
+    by: (k: string) => (k === "rex" ? mine.filter((a) => rexToMark(a) && !a.closed).length + osAccepted.length : 0),
+  }), [mine, osAccepted]);
   const open = all.find((a) => a.id === openId) ?? null;
   /* Asked for by name but not on the board (an accepted let whose move-in has
      passed is cut from it): fetch that one and add it, rather than opening
@@ -314,8 +340,8 @@ export default function Applications() {
         title="Applications"
         blurb={
           scope && !scope.everything
-            ? `${scope.label}'s applications. See where each deal is, what needs attention, and take the next step.`
-            : "Track every application in one place. See where each deal is, what needs attention, and take the next step."
+            ? `${scope.label}'s lets in progress. An offer comes here once it is accepted; until then it is on its listing.`
+            : "Every let in progress. An offer comes here once it is accepted; until then it is on its listing, still taking viewings."
         }
         /* The line runs THROUGH her, at the waist. She is drawn full length
            and set at twice the shared height, so 250 still shows above the
@@ -357,10 +383,10 @@ export default function Applications() {
         stages={[
           {
             id: "open" as const,
-            label: "All open",
+            label: "In progress",
             icon: "analytics",
             count: apps === null ? null : counts.open,
-            blurb: "Everything still in play",
+            blurb: "Accepted, and working through to a tenancy",
           },
           ...STAGES.map((st) => ({
             id: st.key as StageKey,
@@ -374,14 +400,14 @@ export default function Applications() {
             label: "Closed",
             icon: "key",
             count: apps === null ? null : counts.closed,
-            blurb: "Moved in, or the home went to someone else or came off the market.",
+            blurb: "Moved in, or it came off the market after it was accepted.",
           },
           {
             id: "attention" as const,
             label: "Needs attention",
             icon: "bell",
             count: apps === null ? null : counts.attention,
-            blurb: "Rent over 40% of income, adverse credit, or no landlord answer in 60 days",
+            blurb: "Rent over 40% of income, or adverse credit",
           },
         ]}
       />
@@ -393,21 +419,21 @@ export default function Applications() {
         <h2 className="hand mb-3 text-[17px] leading-tight">What to focus on today</h2>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
-            { id: "communicated" as const, icon: "clock", n: counts.by("communicated"), title: "Awaiting landlord decision", sub: "With the landlord. Chase the ones going quiet." },
-            { id: "attention" as const, icon: "bell", n: counts.attention, title: "Need attention", sub: "Rent over 40% of income, credit to talk about, or gone quiet." },
-            { id: "accepted" as const, icon: "checklist", n: counts.by("accepted"), title: "Ready to progress", sub: "The landlord has said yes. The deal opens from here." },
+            { id: "offers" as const, icon: "coin", n: openOffers ?? 0, title: "Open offers", sub: "Waiting on a decision. They are on their listings - Listings, Offers in." },
+            { id: "attention" as const, icon: "bell", n: counts.attention, title: "Need attention", sub: "Rent over 40% of income, or credit to talk about." },
+            { id: "rex" as const, icon: "checklist", n: counts.by("rex"), title: "Mark in REX", sub: "Accepted here. REX still has to be marked accepted." },
           ].map((f) => (
             <button
               key={f.id}
               type="button"
-              onClick={() => setStage(stage === f.id ? "open" : f.id)}
+              onClick={() => (f.id === "offers" ? (window.location.href = "/listings?stage=offers") : setStage(stage === f.id ? "open" : f.id))}
               className={`fade-up flex items-start gap-3 rounded-[22px] border p-4 text-left transition-colors ${stage === f.id ? "border-accent/70 bg-accent-soft/40" : "border-line/50 bg-white hover:border-ink/40"}`}
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
                 <DoodleIcon name={f.icon} size={15} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="figures block text-[24px] leading-none">{apps === null ? "•" : f.n}</span>
+                <span className="figures block text-[24px] leading-none">{apps === null || (f.id === "offers" && openOffers === null) ? "•" : f.n}</span>
                 <span className="mt-1 block text-[12.5px] font-semibold leading-snug">{f.title}</span>
                 <span className="mt-0.5 block text-[11px] leading-snug text-muted">{f.sub}</span>
               </span>
@@ -418,16 +444,16 @@ export default function Applications() {
             <span aria-hidden className="pointer-events-none absolute -bottom-16 -right-10 h-40 w-40 rounded-full bg-white/50" />
             <div className="relative flex h-full flex-col">
               <p className="flex items-center gap-2 text-[12.5px] font-semibold" style={{ color: SAGE_INK }}>
-                <DoodleIcon name="rocket" size={14} /> Keep applications moving
+                <DoodleIcon name="rocket" size={14} /> Keep lets moving
               </p>
               <p className="mt-1 text-[11px] leading-snug text-muted">
-                A quicker process means happier tenants and fewer fall-throughs. Every row opens the file with its next step.
+                Accept or decline offers on the listing. Once one is accepted it comes here, and every row opens the file with its next step.
               </p>
               {/* The gap sits OUTSIDE the button: pt-2 on the button padded its
                   inside and left it touching the text (19 Sep 2026). */}
               <div className="mt-auto pt-3">
                 <button type="button" onClick={() => { setStage("open"); setFAgent(null); }} className={`${primary} w-full`}>
-                  View all applications <span aria-hidden>→</span>
+                  View every let <span aria-hidden>→</span>
                 </button>
               </div>
             </div>
@@ -440,7 +466,7 @@ export default function Applications() {
           <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
             <h2 className="hand text-[17px]">
               {stage === "open"
-                ? "Open applications"
+                ? "Lets in progress"
                 : stage === "attention"
                   ? "Needs attention"
                   : stage === "closed"
@@ -451,7 +477,7 @@ export default function Applications() {
             <div className="ml-auto flex flex-wrap items-center gap-2">
               {stage !== "open" && (
                 <button type="button" onClick={() => setStage("open")} className="text-[11.5px] text-muted underline transition-colors hover:text-ink">
-                  Show all open
+                  Show every let
                 </button>
               )}
               <button
@@ -470,15 +496,45 @@ export default function Applications() {
             </div>
           </div>
 
+          {/* Accepted in the OS, with no application in REX behind them yet
+              (7 Oct 2026). Each opens its offer; the handover needs the REX
+              application, which is still made by hand. */}
+          {(stage === "open" || stage === "rex") && osAccepted.length > 0 && (
+            <div className="mb-4 rounded-[18px] border border-accent/40 bg-accent-soft/30 p-4">
+              <p className="text-[12.5px] font-semibold">Accepted here, not in REX yet</p>
+              <p className="mt-0.5 text-[11.5px] leading-snug text-muted">Create the application in REX and accept it there, so the handover can start.</p>
+              <ul className="mt-2.5 divide-y divide-line/40">
+                {osAccepted.map((o) => (
+                  <li key={o.id}>
+                    <Link href={`/offers/${encodeURIComponent(o.id)}`} className="flex items-center gap-3 py-2.5 transition-colors hover:bg-white/60">
+                      <span className="min-w-0 flex-1">
+                        <span className="hand block truncate text-[13.5px]">{o.name}</span>
+                        <span className="block truncate text-[11px] text-muted">
+                          {o.address} · accepted by {o.by} {new Date(o.at).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" })}
+                        </span>
+                      </span>
+                      {o.amount != null && <span className="figures whitespace-nowrap text-[13px]">{gbp(o.amount)} pcm</span>}
+                      <span aria-hidden className="text-[13px] text-muted/70">›</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {apps === null ? (
             <BoardSkeleton label="Loading applications…" count={6} />
           ) : error ? (
             <p className="py-10 text-center text-[12.5px] text-muted">{error}</p>
-          ) : rows.length === 0 ? (
+          ) : rows.length === 0 && !(stage === "rex" && osAccepted.length) ? (
             <p className="py-10 text-center text-[12.5px] text-muted">
-              {stage === "attention" ? "Nothing needs a hand. Rare, and good." : "Nothing at this stage."}
+              {stage === "attention"
+                ? "Nothing needs a hand. Rare, and good."
+                : stage === "open"
+                  ? "No lets in progress. Accepted offers come here from their listing."
+                  : "Nothing at this stage."}
             </p>
-          ) : (
+          ) : rows.length === 0 ? null : (
             <ul className="space-y-3">
               {shown.map((a) => {
                 const lead = a.applicants.find((p) => p.isPrimary) ?? a.applicants[0];

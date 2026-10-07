@@ -144,7 +144,7 @@ export default function AgentOfferRecorder({
   const [err, setErr] = useState("");
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [saved, setSaved] = useState<{ id: string; copy: string; passport: string } | null>(null);
+  const [saved, setSaved] = useState<{ id: string; copy: string; passport: string; href?: string } | null>(null);
 
   const set = <K extends OfferFieldKey>(k: K, v: OfferPassport[K]) => setPp((cur) => ({ ...cur, [k]: v }));
   /* With a passport, the household is the ticked people; without one, the steppers. */
@@ -219,7 +219,7 @@ export default function AgentOfferRecorder({
       .catch(() => null);
     setBusy(false);
     if (!r?.ok) return setErr(r?.error ?? "That didn't save. Try again.");
-    setSaved({ id: r.id, copy: r.copy, passport: r.passport });
+    setSaved({ id: r.id, copy: r.copy, passport: r.passport, href: r.href });
     setDone(true);
   }
 
@@ -295,7 +295,7 @@ export default function AgentOfferRecorder({
               {saved.copy === "sent" ? `${name}'s copy has gone.` : saved.copy === "not asked for" ? `${name} wasn't sent a copy.` : `${name}'s copy didn't go: ${saved.copy.replace(/^not sent: /, "").replace(/\.$/, "")}.`}{" "}
               Passport {saved.passport}.
             </p>
-            <a href={`/offers/${saved.id}`} className="mt-5 inline-block rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-white">
+            <a href={saved.href ?? `/offers/${saved.id}`} className="mt-5 inline-block rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-white">
               Open the offer
             </a>
           </>

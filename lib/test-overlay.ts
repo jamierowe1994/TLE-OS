@@ -492,6 +492,16 @@ export function testJourney(app: Application, deal: TestDeal | null, plc: PlcCas
       who: "you",
       test: "accept",
     });
+    /* An agent can turn an offer down as well (James, 7 Oct 2026), not only
+       the landlord. */
+    actions.push({
+      id: "test-decline",
+      label: "Decline the offer",
+      detail: "Turn this offer down. It stays on the listing as declined and the home keeps taking viewings and offers. The tenant isn't told automatically.",
+      href: null,
+      who: "you",
+      test: "decline",
+    });
   } else if (!plc) {
     actions.push({ id: "plc-start", label: "Start the PLC check", detail: "The pre-let compliance pack has not been started for this let.", href: plcHref, who: "you" });
   } else {
@@ -583,6 +593,72 @@ export async function acceptTestOffer(appId: string, by: { name: string; email: 
     agentEmail: who.owner,
   };
   await putTestRecord(who.kitId, who.owner, "deal", deal);
+}
+
+/** "Decline the offer" on a test application: unsuccessful, and off the board. */
+export async function declineTestOffer(appId: string, by: { email: string }): Promise<void> {
+  if (!(await mayPlay(appId, by.email))) throw new Error("That test application isn't one of yours.");
+  const t = await testApplication(appId);
+  if (t?.deal) throw new Error("This one has a deal started, so it can't be declined from here.");
+  await q(
+    `UPDATE os_test_records SET payload = payload || jsonb_build_object('status', 'unsuccessful')
+      WHERE kind = 'offer' AND payload->>'appId' = $1`,
+    [appId]
+  );
+}
+
+/**
+ * An offer made on a TEST listing (7 Oct 2026, James: the Make an offer
+ * button vanished on 14 Test Street). Filed on the listing's own test file,
+ * the same row a test kit's "offer received" makes, so the landlord's portal,
+ * Accept and Decline all treat it as they treat any test offer. Nothing
+ * leaves the OS.
+ */
+export async function addTestOffer(p: {
+  listingId: number;
+  by: { email: string };
+  name: string;
+  email: string;
+  amount: number;
+  moveIn: string;
+  adults: number;
+  children: number;
+  pets: boolean;
+}): Promise<string> {
+  const r = await rows<TestListing>("listing", "(payload->>'listingId')::bigint = $2", [p.listingId]);
+  const home = r[0];
+  if (!home) throw new Error("That test listing isn't there any more.");
+  const kit = await q<{ id: string }>(
+    `SELECT id FROM os_test_kits WHERE id = $1 AND cleared_at IS NULL
+        AND (created_by = LOWER($2) OR refs->'viewers' ? LOWER($2) OR $3 = LOWER($2))`,
+    [home.kit_id, p.by.email, home.owner_email]
+  ).catch(() => []);
+  if (!kit[0]) throw new Error("That test listing isn't one of yours.");
+  const appId = String(newTestId());
+  const offer: TestOffer = {
+    appId,
+    listingId: p.listingId,
+    appraisalId: home.payload.appraisalId,
+    applicantName: p.name,
+    applicantEmail: p.email.toLowerCase(),
+    amount: p.amount,
+    moveIn: p.moveIn,
+    months: 0,
+    adults: p.adults,
+    children: p.children,
+    pets: p.pets,
+    status: "received",
+    received: new Date().toISOString(),
+    accepted: null,
+  };
+  await putTestRecord(home.kit_id, home.owner_email, "offer", offer);
+  return appId;
+}
+
+/** The offers on one test listing, newest first. */
+export async function testOffersForListing(listingId: number): Promise<TestOffer[]> {
+  const r = await rows<TestOffer>("offer", "(payload->>'listingId')::bigint = $2", [listingId]);
+  return r.map((x) => x.payload);
 }
 
 /** "Move the deal on" on a test application: one stage, from where it really is. */

@@ -3,10 +3,10 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { getCase } from "@/lib/plc-store";
 import { caseIdFor } from "@/lib/plc";
-import { acceptTestOffer, advanceTestDeal, isTestId } from "@/lib/test-overlay";
+import { acceptTestOffer, advanceTestDeal, declineTestOffer, isTestId } from "@/lib/test-overlay";
 
 /**
- * POST /api/applications/{id}/test { action: "accept" | "advance" }
+ * POST /api/applications/{id}/test { action: "accept" | "decline" | "advance" }
  *
  * The two steps a TEST application takes that a real one takes in REX or
  * Propoly - the agent accepting it, and the deal moving on - played by the
@@ -28,10 +28,12 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   try {
     if (body.action === "accept") {
       await acceptTestOffer(id, { name: me.name ?? "", email: me.email });
+    } else if (body.action === "decline") {
+      await declineTestOffer(id, { email: me.email });
     } else if (body.action === "advance") {
       await advanceTestDeal(id, { email: me.email }, await getCase(caseIdFor(id)).catch(() => null));
     } else {
-      return NextResponse.json({ ok: false, error: "Accept or advance." }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "Accept, decline or advance." }, { status: 400 });
     }
     return NextResponse.json({ ok: true });
   } catch (e) {

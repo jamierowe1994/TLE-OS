@@ -12,6 +12,8 @@ import { scopeFor } from "@/lib/scope";
 import { testApplicationsFor } from "@/lib/test-overlay";
 import { whoIs } from "@/lib/admin";
 import { ASSEMBLE_AT, assembled, cut, markApplicationsFiled } from "@/lib/applications-board";
+import { acceptedRexRefs } from "@/lib/offer-decisions";
+import { hasDb, q } from "@/lib/db";
 
 /**
  * GET  /api/applications?limit=100  → the live book from REX, newest first
@@ -50,9 +52,13 @@ export async function GET(req: NextRequest) {
   try {
     /* The tester's own test offers (lib/test-overlay), on top - never anyone
        else's. Read alongside the book rather than after it. */
-    const [{ held, stale }, testRows] = await Promise.all([
+    const [{ held, stale }, testRows, decided, osAccepted] = await Promise.all([
       assembled(scope.rexUserId),
       req.nextUrl.searchParams.get("tests") === "0" ? Promise.resolve([]) : testApplicationsFor(actor?.email).catch(() => []),
+      /* The agent's Accept or Decline in the OS (7 Oct 2026): the board shows
+         an offer once it is accepted, here or in REX. */
+      acceptedRexRefs().catch(() => new Map()),
+      osAcceptedOffers(scope.everything ? null : actor?.email ?? null).catch(() => []),
     ]);
     const { applications, stages, closed } = held.value;
     const tests = testRows.map((a) => ({ ...a, stageLabel: a.stageLabel ?? a.statusLabel, test: true }));
@@ -71,7 +77,9 @@ export async function GET(req: NextRequest) {
         ...a,
         stageLabel: stages.get(a.id) ?? a.statusLabel,
         closed: closed.get(a.id) ?? null,
+        osDecision: decided.get(`rex:${a.id}`) ?? null,
       }))],
+      osAccepted,
       scope: scope.label,
       everything: scope.everything,
       /* When REX actually said this, not when it was served. */
@@ -82,6 +90,34 @@ export async function GET(req: NextRequest) {
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message, applications: [] }, { status: 502 });
   }
+}
+
+/**
+ * Offers saved in the OS and accepted there (lib/offer-decisions) - no REX
+ * application behind them yet, so the board lists them on their own with the
+ * job of creating it in REX. An agent sees the ones on listings they are
+ * emailed for or that they put forward; the owner sees them all.
+ */
+async function osAcceptedOffers(email: string | null) {
+  if (!hasDb()) return [];
+  const rows = await q<{ id: string; name: string; address: string; listing_id: string | null; payload: { amount?: number; moveIn?: string }; by_name: string; decided_at: Date }>(
+    `SELECT r.id, r.name, r.address, r.listing_id, r.payload, d.by_name, d.decided_at
+       FROM os_offer_decisions d JOIN os_tenant_viewing_responses r ON d.ref = 'os:' || r.id
+      WHERE d.decision = 'accepted'
+        AND ($1::text IS NULL OR LOWER(COALESCE(r.sent_to, '')) = LOWER($1) OR LOWER(COALESCE(r.payload->'recordedBy'->>'email', '')) = LOWER($1) OR LOWER(d.by_email) = LOWER($1))
+      ORDER BY d.decided_at DESC LIMIT 100`,
+    [email]
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    address: r.address,
+    listingId: r.listing_id,
+    amount: typeof r.payload?.amount === "number" ? r.payload.amount : null,
+    moveIn: r.payload?.moveIn ?? null,
+    by: r.by_name,
+    at: new Date(r.decided_at).toISOString(),
+  }));
 }
 
 export async function POST(req: NextRequest) {

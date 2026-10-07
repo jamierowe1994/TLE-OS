@@ -1454,6 +1454,22 @@ CREATE TABLE IF NOT EXISTS os_tenant_viewing_responses (
 CREATE INDEX IF NOT EXISTS os_tenant_viewing_responses_listing ON os_tenant_viewing_responses (listing_id) WHERE kind = 'offer';
 CREATE INDEX IF NOT EXISTS os_tenant_viewing_responses_email_idx ON os_tenant_viewing_responses (LOWER(email), created_at DESC);
 
+-- The agent's Accept or Decline on an offer (7 Oct 2026, James: an offer is
+-- not an application until it is accepted, and an agent can decline one as
+-- well as accept it). OS only - REX is still updated by hand. ref is
+-- "os:<os_tenant_viewing_responses.id>" or "rex:<TenancyApplication id>";
+-- test offers keep their status on the test file instead.
+CREATE TABLE IF NOT EXISTS os_offer_decisions (
+  ref          TEXT PRIMARY KEY,
+  listing_id   TEXT,
+  decision     TEXT NOT NULL CHECK (decision IN ('accepted', 'declined')),
+  note         TEXT NOT NULL DEFAULT '',
+  by_name      TEXT NOT NULL DEFAULT '',
+  by_email     TEXT NOT NULL DEFAULT '',
+  decided_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_offer_decisions_listing ON os_offer_decisions (listing_id);
+
 -- New-home alerts a tenant asked for, with the moment they agreed to the
 -- emails. consent_at is never set by us: the only way in is the tenant
 -- ticking the box. One alert per tenant; saving again replaces it.

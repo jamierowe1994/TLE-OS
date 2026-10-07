@@ -64,7 +64,7 @@ export async function activity(): Promise<Activity> {
   const app = new Map<string, number>();
   const listing = new Map<string, number>();
 
-  const [book, comments, plc, handovers, updates, viewings, archived] = await Promise.all([
+  const [book, comments, plc, handovers, updates, viewings, archived, decided] = await Promise.all([
     getApplications(300).catch(() => []),
     rows<{ id: string; at: string }>(
       `SELECT application_id AS id, MAX(created_at) AS at FROM os_application_comments GROUP BY 1`
@@ -84,6 +84,11 @@ export async function activity(): Promise<Activity> {
          FROM os_viewings WHERE listing_id IS NOT NULL GROUP BY 1`
     ),
     rows<{ id: string; at: string }>(`SELECT listing_id AS id, MAX(at) AS at FROM os_listing_archive GROUP BY 1`),
+    /* Offers accepted by the agent in the OS (lib/offer-decisions, 7 Oct
+       2026): the home is let agreed from then, as it is when REX accepts. */
+    rows<{ ref: string; listing_id: string | null; at: string }>(
+      `SELECT ref, listing_id, decided_at AS at FROM os_offer_decisions WHERE decision = 'accepted' AND decided_at > NOW() - INTERVAL '60 days'`
+    ),
   ]);
 
   for (const a of book) bump(app, a.id, Math.max(ms(a.updatedAt), ms(a.createdAt)));
@@ -110,6 +115,14 @@ export async function activity(): Promise<Activity> {
         .map((a) => String(a.listingId))
     ),
   ];
+  const byApp = new Map(book.map((a) => [`rex:${a.id}`, a]));
+  for (const d of decided) {
+    const a = byApp.get(d.ref);
+    if (a && a.status === "unsuccessful") continue;
+    const id = d.listing_id ?? (a?.listingId != null ? String(a.listingId) : null);
+    if (id && !accepted.includes(id)) accepted.push(id);
+    if (id) bump(listing, id, ms(d.at));
+  }
 
   const out = (m: Map<string, number>) =>
     Object.fromEntries([...m].filter(([, t]) => t <= now + 60_000).map(([k, t]) => [k, new Date(t).toISOString()]));

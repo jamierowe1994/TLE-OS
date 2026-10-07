@@ -135,6 +135,8 @@ export interface Applicant {
   keyInfo: KeyInfo | null;
 }
 
+export type OfferDecision = { decision: "accepted" | "declined"; by: string; at: string };
+
 export interface Application {
   id: string;
   status: string;
@@ -150,6 +152,12 @@ export interface Application {
    * the list route from closedReasons(); null means it is genuinely in play.
    */
   closed?: string | null;
+  /**
+   * The agent's Accept or Decline in the OS (lib/offer-decisions), which REX
+   * does not know about yet - it is still updated by hand. Filled by the
+   * list routes; absent when nobody has decided in the OS.
+   */
+  osDecision?: OfferDecision | null;
   listingId: number | null;
   /** The PROPERTY, not the listing. Compliance certificates hang off this. */
   propertyId: string | null;

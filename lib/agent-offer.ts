@@ -11,6 +11,7 @@ import { renderTleEmail } from "@/lib/email/tle-emails";
 import { sendAsAgent } from "@/lib/send-as-agent";
 import { sendEmail } from "@/lib/resend";
 import { proseEmail } from "@/lib/email/prose";
+import { addTestOffer, isTestId, testListing } from "@/lib/test-overlay";
 
 /**
  * An offer the AGENT puts forward for a tenant (1 Oct 2026, James: "build the
@@ -40,6 +41,15 @@ export type OfferContext = {
 
 /** The home and the tenant's passport, for the screen to open on. */
 export async function offerContext(p: { listingId: string; email: string; name: string }): Promise<OfferContext> {
+  /* A test listing (negative id, lib/test-overlay) is read off its test file,
+     and nobody's passport is read for it. */
+  if (/^-\d+$/.test(p.listingId)) {
+    const t = await testListing(p.listingId).catch(() => null);
+    return {
+      home: t ? { id: p.listingId, address: t.name, locality: t.locality, askingPcm: t.rent, beds: t.beds, photo: t.images[0] ?? null } : null,
+      tenant: { name: p.name, email: p.email, passport: null, passportDoneOn: null },
+    };
+  }
   const h = /^\d+$/.test(p.listingId) ? await homeOnMarket(p.listingId).catch(() => null) : null;
   const rec = emailOk(p.email) ? await passportFor(p.email) : null;
   return {
@@ -101,12 +111,40 @@ function cleanPassport(raw: unknown, was: OfferPassport): OfferPassport {
 
 export class OfferRefused extends Error {}
 
-export async function saveAgentOffer(me: OsUser, raw: Record<string, unknown>): Promise<{ id: string; copy: string; passport: string }> {
+export async function saveAgentOffer(me: OsUser, raw: Record<string, unknown>): Promise<{ id: string; copy: string; passport: string; href?: string }> {
   if (!hasDb()) throw new OfferRefused("This can't be saved on this environment.");
   const email = str(raw.email, 200).toLowerCase();
   const name = str(raw.name, 120);
   if (!emailOk(email)) throw new OfferRefused("The tenant needs an email address on their record first.");
   if (!name) throw new OfferRefused("Who is the offer for?");
+
+  /* A TEST listing (7 Oct 2026): the same checks, filed on the test file as
+     a test offer. No passport is touched, nobody is emailed. */
+  if (isTestId(raw.listingId)) {
+    const t = await testListing(str(raw.listingId, 20)).catch(() => null);
+    if (!t) throw new OfferRefused("That test listing isn't there any more.");
+    const amount = Math.round(Number(str(raw.amount, 20).replace(/[£,\s]/g, "")));
+    if (!Number.isFinite(amount) || amount <= 0) throw new OfferRefused("Put in the rent they are offering.");
+    if (t.rent && amount > t.rent) throw new OfferRefused(`The advertised rent is ${gbp(t.rent)} a month, so an offer can't be above that.`);
+    const moveIn = str(raw.moveIn, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(moveIn)) throw new OfferRefused("Choose the day they'd like to move in.");
+    if (raw.consent !== true) throw new OfferRefused("Tick to say the tenant has agreed the details.");
+    const pp = cleanPassport(raw.passport, { ...offerSubset(null), numAdults: "1", numChildren: "0" });
+    const appId = await addTestOffer({
+      listingId: t.listingId,
+      by: { email: me.email },
+      name,
+      email,
+      amount,
+      moveIn,
+      adults: Number(pp.numAdults) || 1,
+      children: Number(pp.numChildren) || 0,
+      pets: pp.pets === true,
+    }).catch((e) => {
+      throw new OfferRefused(e instanceof Error ? e.message : "That didn't save.");
+    });
+    return { id: appId, copy: "not asked for", passport: "unchanged, this is a test file", href: `/applications?open=${encodeURIComponent(appId)}` };
+  }
 
   /* The home, read again here: the rent cap is the law, so it is checked on
      the server against the live advert, not taken from the page. */

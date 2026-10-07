@@ -1248,7 +1248,9 @@ function ApplicationsWidget({ w, h }: { w: number; h: number }) {
   return (
     <>
       <div className="flex items-center justify-between gap-2">
-        <Head icon="pack/checklist" label="Applications" />
+        {/* "Offers" since 7 Oct 2026: these are offers waiting on a decision,
+            which live on their listing until accepted (James). */}
+        <Head icon="pack/checklist" label="Offers" />
         {w >= 2 && data && <FlowTag from="REX" />}
       </div>
       {w === 1 && h === 1 && <BigCount value={count} hint={hint} />}
@@ -1360,8 +1362,8 @@ export const WIDGETS: Record<string, WidgetDef> = {
   },
 
   applications: {
-    label: "Applications", icon: "pack/checklist", hint: "count → by stage → the stalled",
-    href: "/applications",
+    label: "Offers", icon: "pack/checklist", hint: "open offers → by stage → the stalled",
+    href: "/listings?stage=offers",
     defaultW: 1, defaultH: 1,
     render: (w, h) => <ApplicationsWidget w={w} h={h} />,
   },

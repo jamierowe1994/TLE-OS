@@ -415,7 +415,18 @@ export default function Listings() {
      the tabs now, which answers the same question and three others beside it,
      and two controls for one filter is how a screen starts to disagree with
      itself. */
-  const [stage, setStage] = useState<"all" | "Available" | "Let agreed" | "Draft" | "photos" | "compliance" | "archived">("all");
+  const [stage, setStage] = useState<"all" | "Available" | "offers" | "Let agreed" | "Draft" | "photos" | "compliance" | "archived">("all");
+  /* Offers still waiting on a decision, per listing (7 Oct 2026). An offer
+     stays on its listing until it is accepted, so this is where they are
+     found across the book; ?stage=offers is the Applications page's link. */
+  const [openOffers, setOpenOffers] = useState<Record<string, number> | null>(null);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("stage") === "offers") setStage("offers");
+    fetch("/api/offers/open", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; byListing?: Record<string, number> }) => setOpenOffers(j.ok ? (j.byListing ?? {}) : {}))
+      .catch(() => setOpenOffers({}));
+  }, []);
   const [period, setPeriod] = useState<PeriodId>("any");
   /* Tiles by default, like Market Appraisals (James, 11 Sep 2026). */
   const [view, setView] = useState<"list" | "tiles">("tiles");
@@ -629,6 +640,8 @@ export default function Listings() {
         if (l.imageCount > 0) return false;
       } else if (stage === "compliance") {
         if (l.epcExpiry != null) return false;
+      } else if (stage === "offers") {
+        if (!(openOffers?.[String(l.id)] ?? 0)) return false;
       } else if (stage === "archived") {
         /* The source IS the archive - there is no status left to test. */
       } else if (stage === "all") {
@@ -655,7 +668,7 @@ export default function Listings() {
        Most-recently-cold first is the order somebody scanning it wants. */
     else if (stage === "archived") rows.sort((a, b) => (b.archivedSince ?? "").localeCompare(a.archivedSince ?? ""));
     return rows;
-  }, [WORKING, archive.listings, q, sort, rentBand, loc, stage, period, activityAt]);
+  }, [WORKING, archive.listings, q, sort, rentBand, loc, stage, period, activityAt, openOffers]);
 
   /* ── READY TO PUBLISH, ON THE PUSH ROUTE'S OWN WORD (17 Sep 2026) ───────
      The book cannot see council tax, bills, furnishing or key features, so a
@@ -765,6 +778,13 @@ export default function Listings() {
         stages={[
           { id: "all" as const, label: "All listings", icon: "analytics", count: WORKING.length - (byStage["Let agreed"] ?? 0), blurb: "Everything still being marketed. Let agreed has its own tab" },
           { id: "Available" as const, label: "Available", icon: "home", count: byStage.Available, blurb: "Published, and not let agreed - what you can put somebody in now" },
+          {
+            id: "offers" as const,
+            label: "Offers in",
+            icon: "coin",
+            count: openOffers === null ? null : WORKING.filter((l) => (openOffers[String(l.id)] ?? 0) > 0).length,
+            blurb: "An offer waiting on a decision. Still taking viewings until one is accepted",
+          },
           { id: "Let agreed" as const, label: "Let agreed", icon: "key", count: byStage["Let agreed"], blurb: "Taken, and working through to a tenancy" },
           { id: "Draft" as const, label: "Draft", icon: "doc", count: byStage.Draft, blurb: `Not on the portals yet - drafted in the last ${Math.round(ARCHIVE_AFTER_DAYS / 30)} months` },
           /* Two jobs rather than two states: what is holding a listing back. */
@@ -808,7 +828,7 @@ export default function Listings() {
       <div className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5">
         <div className="mb-4 flex items-baseline justify-between gap-3">
           <h2 className="hand text-[17px]">
-            {stage === "all" ? "All listings" : stage === "photos" ? "Missing photos" : stage === "compliance" ? "Needs compliance" : stage === "archived" ? "Archived" : stage}
+            {stage === "all" ? "All listings" : stage === "offers" ? "Offers in" : stage === "photos" ? "Missing photos" : stage === "compliance" ? "Needs compliance" : stage === "archived" ? "Archived" : stage}
             <span className="figures ml-2 text-[14px] text-muted">{board.length}</span>
           </h2>
           {stage !== "all" && (
@@ -961,6 +981,9 @@ export default function Listings() {
                       {l.tenant && <Tag tone="neutral">Tenanted</Tag>}
                       {/* The jobs-to-do chips are about getting a listing OUT.
                           On something already filed away they are noise. */}
+                      {!l.archived && (openOffers?.[String(l.id)] ?? 0) > 0 && (
+                        <Tag tone="accent">{openOffers![String(l.id)] === 1 ? "1 offer" : `${openOffers![String(l.id)]} offers`}</Tag>
+                      )}
                       {!l.archived && l.imageCount === 0 && <Tag tone="accent">No photos</Tag>}
                       {!l.archived && l.epcExpiry == null && <Tag tone="neutral">EPC not filed</Tag>}
                     </span>

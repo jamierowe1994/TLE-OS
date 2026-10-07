@@ -15,7 +15,7 @@ import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-ev
 import { WhatsAppButton } from "@/components/WhatsAppQr";
 import FileDocuments from "@/components/FileDocuments";
 
-type JourneyAction = { id: string; label: string; detail: string; href: string | null; who: "you" | "kirstie" | "landlord" | "tenant"; test?: "accept" | "advance" };
+type JourneyAction = { id: string; label: string; detail: string; href: string | null; who: "you" | "kirstie" | "landlord" | "tenant"; test?: "accept" | "decline" | "advance"; decide?: "accepted" | "declined" | "undo" };
 type Journey = {
   ok: boolean;
   error?: string;
@@ -350,17 +350,32 @@ export default function ApplicationDrawer({
     };
   }, [app.id, journeyTick]);
 
-  /* A test application's step that a real one takes elsewhere (lib/test-overlay). */
+  /* Declining asks twice: the first press turns the button into "Yes, decline it". */
+  const [confirming, setConfirming] = useState<string | null>(null);
+  /* A test application's step that a real one takes elsewhere (lib/test-overlay),
+     or the agent's Accept / Decline on a real offer (lib/offer-decisions). */
   const play = async (a: JourneyAction) => {
-    if (!a.test || playing) return;
+    if ((!a.test && !a.decide) || playing) return;
+    const declining = a.test === "decline" || a.decide === "declined";
+    if (declining && confirming !== a.id) {
+      setConfirming(a.id);
+      return;
+    }
+    setConfirming(null);
     setPlaying(a.id);
     setPlayError(null);
     try {
-      const r = await fetch(`/api/applications/${encodeURIComponent(app.id)}/test`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: a.test }),
-      });
+      const r = a.decide
+        ? await fetch("/api/offers/decide", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ ref: `rex:${app.id}`, decision: a.decide }),
+          })
+        : await fetch(`/api/applications/${encodeURIComponent(app.id)}/test`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ action: a.test }),
+          });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!j.ok) setPlayError(j.error ?? "That didn't work.");
       else setJourneyTick((n) => n + 1);
@@ -633,14 +648,21 @@ export default function ApplicationDrawer({
                                 {a.who === "you" ? "You" : a.who === "kirstie" ? "Kirstie" : a.who === "landlord" ? "Landlord" : "Tenant"}
                               </Pill>
                               <span className="min-w-0 flex-1">
-                                {a.test ? (
+                                {a.test || a.decide ? (
                                   <button
                                     type="button"
                                     onClick={() => void play(a)}
+                                    onBlur={() => confirming === a.id && setConfirming(null)}
                                     disabled={playing !== null}
-                                    className="mb-1 rounded-full border border-ink/80 px-3.5 py-1.5 text-[12px] font-semibold transition-colors hover:bg-ink hover:text-page disabled:opacity-50"
+                                    className={`mb-1 rounded-full border px-3.5 py-1.5 text-[12px] font-semibold transition-colors disabled:opacity-50 ${
+                                      confirming === a.id
+                                        ? "border-accent-dark bg-accent-dark text-white"
+                                        : a.test === "decline" || a.decide === "declined" || a.decide === "undo"
+                                          ? "border-line text-muted hover:border-ink/60 hover:text-ink"
+                                          : "border-ink/80 hover:bg-ink hover:text-page"
+                                    }`}
                                   >
-                                    {playing === a.id ? "Working…" : a.label}
+                                    {playing === a.id ? "Working…" : confirming === a.id ? "Yes, decline it" : a.label}
                                   </button>
                                 ) : a.href ? (
                                   <a

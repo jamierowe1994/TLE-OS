@@ -59,6 +59,7 @@ import FileDocuments from "@/components/FileDocuments";
 import ListingOwner from "@/components/listing/ListingOwner";
 import RecordPapers from "@/components/listing/RecordPapers";
 import OfferWhoPicker, { type OfferPerson } from "@/components/offers/OfferWhoPicker";
+import ListingOffers, { type ListingOffer } from "@/components/listing/ListingOffers";
 
 /**
  * The property record — the leads drawer's shape, aimed at a thing instead of
@@ -131,7 +132,9 @@ type TabKey = "home" | "applications" | "viewings" | "marketing" | "compliance" 
    one place), compliance, documents. Home brings you back. */
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: "home", label: "Home", icon: "home" },
-  { key: "applications", label: "Applications", icon: "coin" },
+  /* "Offers" since 7 Oct 2026: an offer is not an application until it is
+     accepted (James). The key stays, for ?tab= links and Steve. */
+  { key: "applications", label: "Offers", icon: "coin" },
   { key: "viewings", label: "Viewings", icon: "calendar" },
   { key: "marketing", label: "Marketing", icon: "megaphone" },
   { key: "compliance", label: "Compliance", icon: "shield" },
@@ -465,13 +468,6 @@ function ListingDrawerBody({
         setViewings({ upcoming: j.upcoming ?? [], past: j.past ?? [] });
       })
       .catch(() => { if (!gone) setViewings({ upcoming: [], past: [] }); });
-    setSavedOffers(null);
-    fetch(`/api/listings/${encodeURIComponent(id)}/offers`, { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j: { ok?: boolean; offers?: { id: string; name: string; amount: number | null; moveIn: string | null; by: string | null; at: string }[] }) => {
-        if (!gone) setSavedOffers(j.ok ? (j.offers ?? []) : []);
-      })
-      .catch(() => { if (!gone) setSavedOffers([]); });
     fetch(`/api/listings/${encodeURIComponent(id)}/applications`, { cache: "no-store" })
       .then((r) => r.json())
       .then((j: { ok?: boolean; applications?: { id: string; statusLabel?: string; status?: string; listingId?: string | number; applicants?: { name?: string }[]; offerAmount?: number | null; dateReceived?: number | null }[] }) => {
@@ -539,7 +535,28 @@ function ListingDrawerBody({
      real offer form on /offers/new. Offers saved against this listing are
      read back below so the agent sees it landed. */
   const [pickingOfferer, setPickingOfferer] = useState(false);
-  const [savedOffers, setSavedOffers] = useState<{ id: string; name: string; amount: number | null; moveIn: string | null; by: string | null; at: string }[] | null>(null);
+  const [savedOffers, setSavedOffers] = useState<ListingOffer[] | null>(null);
+  /* Bumped after an Accept, Decline or Undo, so the list reads again. */
+  const [offersTick, setOffersTick] = useState(0);
+  const offersFor = useRef<string | null>(null);
+  useEffect(() => {
+    const id = listing?.id;
+    if (id == null) return;
+    let gone = false;
+    /* Another listing: never show the last one's offers while this one's load. */
+    if (offersFor.current !== String(id)) setSavedOffers(null);
+    offersFor.current = String(id);
+    fetch(`/api/listings/${encodeURIComponent(String(id))}/offers`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; offers?: ListingOffer[] }) => {
+        if (!gone) setSavedOffers(j.ok ? (j.offers ?? []) : []);
+      })
+      .catch(() => { if (!gone) setSavedOffers([]); });
+    return () => {
+      gone = true;
+    };
+  }, [listing?.id, offersTick]);
+  const openOffers = savedOffers?.filter((o) => o.status === "open").length ?? 0;
 
   /* The link, made from the accepted offer. Derived rather than typed again:
      the tenants on the offer ARE the tenants on the tenancy, and re-entering
@@ -817,7 +834,7 @@ function ListingDrawerBody({
   const isLive = pub ? pub.status === "published" : listing.publicationStatus === "published";
   /* An offer can only go on a home that is live, not let agreed and has a
      rent - the same test the offer form's save makes (lib/agent-offer). */
-  const canOffer = isLive && !listing.letAgreed && (listing.rent ?? 0) > 0 && /^\d+$/.test(String(listing.id));
+  const canOffer = isLive && !listing.letAgreed && (listing.rent ?? 0) > 0 && /^-?\d+$/.test(String(listing.id));
 
   /* The upcoming viewings, for an access request to hang off. */
   const upcomingOptions = (viewings?.upcoming ?? [])
@@ -955,7 +972,7 @@ function ListingDrawerBody({
             {TABS.map((t) => {
               const count =
                 t.key === "applications"
-                  ? offers.length + (liveApps?.length ?? 0) + (enquiries?.length ?? 0) + (savedOffers?.length ?? 0)
+                  ? openOffers + (enquiries?.length ?? 0)
                   : t.key === "viewings"
                     ? booked.length + (viewings?.upcoming.length ?? 0)
                     : 0;
@@ -1333,7 +1350,12 @@ function ListingDrawerBody({
                 {[
                   { icon: "target", title: enquiries === null ? "Reading the enquiries…" : `${enquiries.length} enquir${enquiries.length === 1 ? "y" : "ies"}`, sub: "From the portals, on this listing", to: "applications" as TabKey },
                   { icon: "calendar", title: viewings === null ? "Reading the diary…" : `${viewings.upcoming.length + booked.length} booked · ${viewings.past.length} done`, sub: "Viewings", to: "viewings" as TabKey },
-                  { icon: "coin", title: liveApps === null ? "Reading the applications…" : `${(liveApps?.length ?? 0) + offers.length} application${(liveApps?.length ?? 0) + offers.length === 1 ? "" : "s"}`, sub: liveApps?.some((a) => /accept/i.test(a.statusLabel)) ? "One accepted" : "None accepted yet", to: "applications" as TabKey },
+                  {
+                    icon: "coin",
+                    title: savedOffers === null ? "Reading the offers…" : `${savedOffers.length} offer${savedOffers.length === 1 ? "" : "s"}`,
+                    sub: savedOffers?.some((o) => o.status === "accepted") ? "One accepted" : openOffers ? `${openOffers} waiting on a decision` : "None accepted yet",
+                    to: "applications" as TabKey,
+                  },
                   { icon: "folder", title: `${listing.imageCount} photo${listing.imageCount === 1 ? "" : "s"} on file`, sub: listing.daysOnMarket != null ? `${listing.daysOnMarket} day${listing.daysOnMarket === 1 ? "" : "s"} on the market` : "Not published yet", to: "marketing" as TabKey },
                 ].map((g) => (
                   <li key={g.sub + g.title}>
@@ -1530,7 +1552,7 @@ function ListingDrawerBody({
             {(() => {
               const at = Math.min(step, LISTING_TRACK.length - 1);
               const n = (viewings?.upcoming.length ?? 0) + (viewings?.past.length ?? 0) + booked.length;
-              const apps = (liveApps?.length ?? 0) + offers.length;
+              const apps = (savedOffers?.length ?? 0) + offers.length;
               const accepted = liveApps?.some((a) => /accept/i.test(a.statusLabel)) || (here.id === "accepted" || here.id === "handover");
               const ticks: Record<string, { label: string; done: boolean; detail?: string }[]> = {
                 live: [
@@ -1540,7 +1562,7 @@ function ListingDrawerBody({
                 viewings: [
                   { label: "Enquiries in", done: (enquiries?.length ?? 0) > 0, detail: enquiries?.length ? String(enquiries.length) : undefined },
                   { label: "Viewings booked", done: n > 0, detail: n ? String(n) : undefined },
-                  { label: "Applications in", done: apps > 0, detail: apps ? String(apps) : undefined },
+                  { label: "Offers in", done: apps > 0, detail: apps ? String(apps) : undefined },
                 ],
                 offers: [{ label: "Sent to the landlord", done: at > 2 }],
                 accepted: [{ label: "Offer accepted", done: Boolean(accepted) }],
@@ -1634,7 +1656,7 @@ function ListingDrawerBody({
 
           <div key={`view-${tab}`} className={tab === "home" ? "" : "fade-up"}>
             {tab === "applications" && (
-              <ViewTitle title="Applications" sub={LISTING_OFFERS_LIVE ? "Who has enquired and who has offered. Start an application from anybody here, and put the offers to the landlord when the viewings stop." : "Who has enquired and who has applied. Open an application to put it to the landlord and take it on from there."} wash="blush" art="/brand/art/keys-handover.png" />
+              <ViewTitle title="Offers" sub={LISTING_OFFERS_LIVE ? "Who has enquired and who has offered. Start an application from anybody here, and put the offers to the landlord when the viewings stop." : "Who has enquired and who has offered. Put each offer to the landlord, then accept one or decline it. The home keeps taking viewings until one is accepted, and the accepted one moves to Applications."} wash="blush" art="/brand/art/keys-handover.png" />
             )}
             {tab === "viewings" && (
               <ViewTitle title="Viewings" sub="Everything in the diary for this property. Ask for access against a viewing, and mark it granted when they say yes." wash="sage" art="/brand/art/viewing.png" />
@@ -1694,9 +1716,9 @@ function ListingDrawerBody({
               /* One column that may shrink: a long name or link inside a card
                  otherwise widens the grid past a phone's edge. */
               <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
-                {/* The applications on this listing, on their own tab. */}
+                {/* Every offer on this listing, with Accept and Decline (7 Oct 2026). */}
                 <Card
-                  title="Applications"
+                  title="Offers"
                   icon="coin"
                   action={
                     LISTING_OFFERS_LIVE ? (
@@ -1718,62 +1740,8 @@ function ListingDrawerBody({
                     ) : undefined
                   }
                 >
-                  {/* Offers saved in the OS on this listing - put forward by an
-                      agent or made by the tenant - each opening in full. */}
-                  {savedOffers && savedOffers.length > 0 && (
-                    <>
-                      <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">Offers</p>
-                      <ul className="mb-3 divide-y divide-line/40">
-                        {savedOffers.map((o) => (
-                          <li key={o.id}>
-                            <Link href={`/offers/${encodeURIComponent(o.id)}`} className="flex items-center gap-3 py-2 transition-colors hover:bg-page">
-                              <span className="min-w-0 flex-1">
-                                <span className="hand block truncate text-[13px]">{o.name}</span>
-                                <span className="block truncate text-[10.5px] text-muted">
-                                  {[
-                                    `Made ${new Date(o.at).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" })}`,
-                                    o.by ? `by ${o.by}` : "by the tenant",
-                                    o.moveIn ? `moving in ${new Date(`${o.moveIn}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : "",
-                                  ].filter(Boolean).join(" · ")}
-                                </span>
-                              </span>
-                              <Tag tone="accent">Offer</Tag>
-                              {o.amount != null && <span className="figures text-[13px]">£{o.amount.toLocaleString("en-GB")}</span>}
-                              <span aria-hidden className="text-[13px] text-muted/70">›</span>
-                            </Link>
-                          </li>
-                        ))}
-                      </ul>
-                      {liveApps && liveApps.length > 0 && <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">Applications</p>}
-                    </>
-                  )}
-                  {/* The real applications on this listing first. Each opens
-                      on Applications, where the next step lives. */}
-                  {liveApps && liveApps.length > 0 && (
-                    <ul className="mb-3 divide-y divide-line/40">
-                      {liveApps.map((a) => (
-                        <li key={a.id}>
-                          <Link href={`/applications?open=${encodeURIComponent(a.id)}`} className="flex items-center gap-3 py-2 transition-colors hover:bg-page">
-                            <span className="hand min-w-0 flex-1 truncate text-[13px]">{a.applicants || "Applicant not named"}</span>
-                            <Tag tone={/accept/i.test(a.statusLabel) ? "good" : /unsuccess|withdraw|declin/i.test(a.statusLabel) ? "neutral" : "accent"}>{a.statusLabel}</Tag>
-                            {a.offerAmount != null && <span className="figures text-[13px]">£{a.offerAmount.toLocaleString("en-GB")}</span>}
-                            <span aria-hidden className="text-[13px] text-muted/70">›</span>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
                   {!LISTING_OFFERS_LIVE ? (
-                    liveApps === null ? (
-                      <p className="flex items-center justify-center gap-2 py-6 text-[12px] text-muted">
-                        <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
-                        Reading the applications&hellip;
-                      </p>
-                    ) : liveApps.length === 0 && !savedOffers?.length ? (
-                      <p className="py-6 text-center text-[12px] leading-relaxed text-muted">
-                        No offers or applications on this listing yet.{canOffer ? " Press Make an offer to put one forward for a tenant." : " They land here, and on Applications, as applicants fill in the form."}
-                      </p>
-                    ) : null
+                    <ListingOffers offers={savedOffers} canOffer={canOffer} onChanged={() => setOffersTick((n) => n + 1)} />
                   ) : offers.length ? (
                     <ul className="space-y-3">
                       {offers.map((o, i) => (

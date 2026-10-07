@@ -1,5 +1,6 @@
 import { sameHome } from "@/lib/address-parse";
 import type { Application } from "@/lib/applications";
+import { decisionsFor } from "@/lib/offer-decisions";
 import { buildHandoff } from "@/lib/deal-handoff";
 import { handoverMode, latestHandover } from "@/lib/handover";
 import { getCase } from "@/lib/plc-store";
@@ -59,7 +60,10 @@ export interface JourneyAction {
   /** Whose move it is. "you" is the agent looking at it. */
   who: "you" | "kirstie" | "landlord" | "tenant";
   /** A test application's own step, played by a button (lib/test-overlay). */
-  test?: "accept" | "advance";
+  test?: "accept" | "decline" | "advance";
+  /** The agent's Accept or Decline on a real offer, kept in the OS
+   *  (lib/offer-decisions, 7 Oct 2026); "undo" opens it again. */
+  decide?: "accepted" | "declined" | "undo";
 }
 
 export interface ApplicationJourney {
@@ -151,6 +155,38 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
     tone: accepted ? "ok" : unsuccessful ? "none" : "none",
     state: unsuccessful ? "off" : accepted ? "done" : "current",
   });
+
+  /* THE AGENT'S DECISION (7 Oct 2026, James: we need to be able to reject an
+     offer as well as accept it). Kept in the OS; REX is still marked by hand,
+     so once it is decided here the job is to make REX say the same. REX's own
+     accepted or unsuccessful always wins. */
+  if (!accepted && !unsuccessful && !app.closed) {
+    const ref = `rex:${app.id}`;
+    const mine = app.osDecision !== undefined ? app.osDecision : ((await decisionsFor([ref]).catch(() => new Map())).get(ref) ?? null);
+    const decisionStop = stops[stops.length - 1];
+    const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" });
+    if (!mine) {
+      actions.push(
+        { id: "decide-accept", label: "Accept the offer", detail: "Once the landlord has said yes. It moves onto Applications as a let in progress; mark it accepted in REX as well.", href: null, who: "you", decide: "accepted" },
+        { id: "decide-decline", label: "Decline the offer", detail: "Turn it down. It stays on the listing as declined and the home keeps taking viewings and offers. The tenant isn't told automatically.", href: null, who: "you", decide: "declined" }
+      );
+    } else if (mine.decision === "accepted") {
+      /* Still the current stop: REX has to catch up before the handover can run. */
+      decisionStop.sub = `Accepted by ${mine.by} ${day(mine.at)} - REX to mark`;
+      decisionStop.tone = "ok";
+      actions.push(
+        { id: "decide-rex-accept", label: "Mark it accepted in REX", detail: `Accepted here by ${mine.by} on ${day(mine.at)}. REX still has it as ${app.statusLabel.toLowerCase()}; accept it there so the handover can start.`, href: null, who: "you" },
+        { id: "decide-undo", label: "Undo the accept", detail: "Puts it back to an open offer on the listing.", href: null, who: "you", decide: "undo" }
+      );
+    } else {
+      decisionStop.sub = `Declined by ${mine.by} ${day(mine.at)}`;
+      decisionStop.state = "off";
+      actions.push(
+        { id: "decide-rex-decline", label: "Mark it unsuccessful in REX", detail: `Declined here by ${mine.by} on ${day(mine.at)}. REX still has it as ${app.statusLabel.toLowerCase()}; mark it unsuccessful there too.`, href: null, who: "you" },
+        { id: "decide-undo", label: "Undo the decline", detail: "Puts it back to an open offer on the listing.", href: null, who: "you", decide: "undo" }
+      );
+    }
+  }
 
   /* The three sources the rest reads from, in parallel. */
   const [handoff, run, plcCase, allDeals, mode] = await Promise.all([

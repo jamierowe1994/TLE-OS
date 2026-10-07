@@ -1,4 +1,5 @@
 import "server-only";
+import { decisionsFor } from "@/lib/offer-decisions";
 import { EXTRA_DOC_KINDS, REQUIRED_DOCS_CASE, isExtraDocKind, type ExtraDocKind, type RequiredDocsCase } from "@/lib/landlord-doc-kinds";
 import { cookies } from "next/headers";
 import { hasDb, q } from "@/lib/db";
@@ -382,9 +383,14 @@ export async function landlordOffers(propertyIds: Array<string | null | undefine
   const lists = new Set(listingIds.filter((x): x is string | number => x != null && x !== "").map(String));
   if (!props.size && !lists.size) return [];
   const [rex, ours] = await Promise.all([rexOffers(props, lists), osOffers(props, lists).catch(() => [] as ViewOffer[])]);
+  /* An offer the agent has declined (lib/offer-decisions, 7 Oct 2026) is
+     off the table, so it is off the landlord's screen too. */
+  const refOf = (o: ViewOffer) => (o.id.startsWith("os-") ? `os:${o.id.slice(3)}` : `rex:${o.id}`);
+  const decided = await decisionsFor([...rex, ...ours].map(refOf)).catch(() => new Map());
+  const live = (o: ViewOffer) => decided.get(refOf(o))?.decision !== "declined";
   /* Ours first among the unaccepted, newest first: the order a landlord
      reads in, with an accepted REX offer still floating to the very top. */
-  const all = [...rex, ...ours];
+  const all = [...rex, ...ours].filter(live);
   all.sort((a, b) => {
     const acc = Number(b.status === "accepted") - Number(a.status === "accepted");
     if (acc) return acc;
