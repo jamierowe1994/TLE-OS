@@ -115,7 +115,9 @@ async function getJson<T>(url: string): Promise<T> {
 }
 
 const eyebrow = "text-[10.5px] font-semibold uppercase tracking-wide text-muted";
-const card = "rounded-[22px] border border-line/50 bg-white";
+const card = "rounded-xl border border-line/50 bg-white";
+/** The outlined boxes the page is built from - white, a fine line, gentle corners. */
+const box = "rounded-2xl border border-line/70 bg-white";
 
 function Loading({ label }: { label: string }) {
   return (
@@ -416,7 +418,13 @@ export default function PropertyPage() {
   const latest = activity.filter((a) => a.at).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 6);
 
   const chip = "inline-flex items-center gap-1.5 rounded-full border border-line/60 bg-white px-3 py-1.5 text-[12px] transition-colors hover:border-ink/40";
-  const tile = "flex min-h-[86px] flex-col items-start justify-between gap-2 rounded-2xl border border-line/60 bg-white p-3.5 text-left text-[12.5px] font-semibold leading-tight transition-colors hover:border-ink/40 disabled:opacity-40";
+  const tile = "flex min-h-[72px] flex-col items-start justify-between gap-2 rounded-xl border border-line/60 bg-white p-3.5 text-left text-[12.5px] font-semibold leading-tight transition-colors hover:border-ink/40 disabled:opacity-40";
+  const tileText = (label: string, what: string) => (
+    <span className="block">
+      <span className="block">{label}</span>
+      <span className="mt-0.5 block text-[11.5px] font-normal leading-snug text-muted">{what}</span>
+    </span>
+  );
   const tileIcon = (name: string) => (
     <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft text-accent-dark"><DoodleIcon name={name} size={14} /></span>
   );
@@ -454,44 +462,47 @@ export default function PropertyPage() {
           )}
         </div>
 
-        {/* Two columns from lg: the home on the left, what to do on the right.
-            On a phone the right column comes straight after the photos and
-            the name, so the actions are never at the bottom of a long page. */}
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
-          {/* ── the photos, the name, the facts ─────────────────────────── */}
-          <div className="min-w-0 space-y-5 lg:col-start-1 lg:row-start-1">
-            <div className={`grid gap-2 ${shots.length > 1 ? "sm:grid-cols-[minmax(0,1fr)_170px]" : ""}`}>
-              <button
-                type="button"
-                onClick={() => shots.length && setLightbox(0)}
-                aria-label={shots.length ? "See the photos" : "No photos"}
-                className="group relative overflow-hidden rounded-[22px] border border-line/50 bg-white"
-              >
-                <PropertyPhoto src={shots[0] ?? null} alt="" width={1400} height={875} className="aspect-[16/10] h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.015]" />
-                {shots.length > 0 && (
-                  <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-[11.5px] font-semibold backdrop-blur">
-                    <DoodleIcon name="pack/photo" size={12} /> {shots.length} {shots.length === 1 ? "photo" : "photos"}
-                  </span>
+        {/* Three rows, each a box on the left and its partner on the right,
+            the same height side by side (James, 7 Oct 2026): the photos and
+            the name beside the actions; the facts and the people beside the
+            latest activity; the sections beside the map. On a phone they
+            simply stack, actions straight after the photos. */}
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_460px]">
+          {/* ── 1. the photos and the name ──────────────────────────────── */}
+          <section className={`${box} min-w-0 p-3 lg:col-start-1 lg:row-start-1`}>
+              <div className={`grid gap-2 ${shots.length > 1 ? "sm:grid-cols-[minmax(0,1fr)_140px] 2xl:grid-cols-[minmax(0,1fr)_170px]" : ""}`}>
+                {/* The three down the side are square; the big one takes their
+                    height, so it never sets the box's height itself. */}
+                <button
+                  type="button"
+                  onClick={() => shots.length && setLightbox(0)}
+                  aria-label={shots.length ? "See the photos" : "No photos"}
+                  className={`group relative aspect-[16/10] overflow-hidden rounded-xl bg-box ${shots.length > 1 ? "sm:aspect-auto" : ""}`}
+                >
+                  <PropertyPhoto src={shots[0] ?? null} alt="" width={1400} height={875} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.015]" />
+                  {shots.length > 0 && (
+                    <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-[11.5px] font-semibold backdrop-blur">
+                      <DoodleIcon name="pack/photo" size={12} /> {shots.length} {shots.length === 1 ? "photo" : "photos"}
+                    </span>
+                  )}
+                </button>
+                {shots.length > 1 && (
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-1">
+                    {[0, 1, 2].map((i) => {
+                      const src = shots[i + 1];
+                      if (!src) return <span key={i} aria-hidden className="aspect-square rounded-xl bg-box" />;
+                      const more = i === 2 && shots.length > 4 ? shots.length - 4 : 0;
+                      return (
+                        <button key={src + i} type="button" onClick={() => setLightbox(i + 1)} aria-label={more ? `${more} more photos` : `Photo ${i + 2}`} className="group relative aspect-square overflow-hidden rounded-xl bg-box">
+                          <PropertyPhoto src={src} alt="" className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
+                          {more > 0 && <span className="absolute inset-0 flex items-center justify-center bg-ink/45 text-[18px] font-semibold text-white">+{more}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
-              </button>
-              {shots.length > 1 && (
-                <div className="relative">
-                <div className="grid grid-cols-3 gap-2 sm:absolute sm:inset-0 sm:grid-cols-1 sm:grid-rows-3">
-                  {shots.slice(1, 4).map((src, i) => {
-                    const more = i === 2 && shots.length > 4 ? shots.length - 4 : 0;
-                    return (
-                      <button key={src + i} type="button" onClick={() => setLightbox(i + 1)} aria-label={more ? `${more} more photos` : `Photo ${i + 2}`} className="group relative min-h-0 overflow-hidden rounded-2xl border border-line/50 bg-white">
-                        <PropertyPhoto src={src} alt="" className="aspect-[4/3] h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03] sm:aspect-auto" />
-                        {more > 0 && <span className="absolute inset-0 flex items-center justify-center bg-ink/45 text-[18px] font-semibold text-white">+{more}</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-                </div>
-              )}
-            </div>
-
-            <div>
+              </div>
+            <div className="px-2 pb-1.5 pt-4">
               <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
                 <h1 className="hand min-w-0 text-[28px] leading-[1.1] sm:text-[32px]">{title}</h1>
                 <span className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-semibold text-accent-dark">
@@ -521,7 +532,33 @@ export default function PropertyPage() {
                 </div>
               )}
 
-              <p className={`${eyebrow} mt-5`}>General info</p>
+            </div>
+          </section>
+
+          {/* ── the actions, level with the photos ─────────────────────── */}
+            <section className={`${box} flex flex-col p-4 lg:col-start-2 lg:row-start-1`}>
+              <p className={`${eyebrow} mb-3 px-1`}>Actions</p>
+              <div className="grid flex-1 auto-rows-fr grid-cols-2 gap-2">
+                <button type="button" disabled={!canAct} onClick={() => act({ kind: "repair" })} className={tile}>{tileIcon("setting")}{tileText("Report a repair", "Tenant and landlord told at each step")}</button>
+                <button type="button" disabled={!canAct} onClick={() => act({ kind: "planned" })} className={tile}>{tileIcon("calendar")}{tileText("Plan a job", "A service or certificate, by a date")}</button>
+                <button type="button" disabled={!canAct || visits.state !== "ready"} onClick={() => void bookVisit()} className={tile}>{tileIcon("checklist")}{tileText("Book an inspection", "A date, who goes, and telling the tenant")}</button>
+                <button type="button" onClick={() => act({ kind: "notices" })} className={tile}>{tileIcon("file-contract")}{tileText("Serve notice", "Section 8, checked by compliance")}</button>
+                <button type="button" onClick={() => act({ kind: "notices" })} className={tile}>{tileIcon("coin")}{tileText("Rent review", "Section 13 rent increase")}</button>
+                <button type="button" disabled={!canAct || !tenants.length} onClick={() => act({ kind: "tenant-notice" })} className={tile}>{tileIcon("logout")}{tileText("Tenant gave notice", "Starts the move-out")}</button>
+                <button type="button" disabled={!propertyId} onClick={() => { pickTab("compliance"); setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }} className={tile}>{tileIcon("shield")}{tileText("Add a certificate", "Read and filed on the home")}</button>
+                {canAct && p.onRex !== false ? (
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3.5 top-3.5">{tileIcon("pack/house")}</span>
+                    <ReletAction home={p} className="flex h-full min-h-[72px] w-full items-end gap-1 rounded-xl border border-line/60 bg-white p-3.5 pb-[34px] text-left text-[12.5px] font-semibold leading-tight transition-colors hover:border-ink/40" />
+                    <span className="pointer-events-none absolute bottom-3.5 left-3.5 right-3.5 truncate text-[11.5px] leading-snug text-muted">Back on Listings, same home</span>
+                  </div>
+                ) : null}
+              </div>
+            </section>
+
+          {/* ── 2. the facts and the people ────────────────────────────── */}
+          <section className={`${box} min-w-0 p-4 sm:p-5 lg:col-start-1 lg:row-start-2`}>
+              <p className={eyebrow}>General info</p>
               <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-[12.5px]">
                 <Info icon="key" text={p.letType ?? "Let type not set"} />
                 <Info icon="calendar" text={p.letSince ? `Let since ${day(p.letSince)}` : "Let date not set"} />
@@ -558,12 +595,54 @@ export default function PropertyPage() {
                     : `${tenants.length} ${tenants.length === 1 ? "tenant" : "tenants"}`}
                 </button>
               </div>
-            </div>
-          </div>
+            <div className="mt-5 grid gap-4 2xl:grid-cols-2">
+              <section className={`${card} p-3.5 sm:p-5`}>
+                <p className={`${eyebrow} mb-3`}>{roomsOnly ? "Rooms" : tenants.length === 1 ? "Tenant" : "Tenants"}</p>
+                {roomsOnly && house ? (
+                  <ul className="overflow-hidden rounded-xl border border-line/50">
+                    {house.rooms.map((r) => (
+                      <li key={r.listingId} className="border-b border-line/40 last:border-0">
+                        <button type="button" onClick={() => setRoom(r.listingId)} className="grid w-full grid-cols-[70px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 text-left text-[12.5px] transition-colors hover:bg-box">
+                          <span className="font-semibold">{roomLabel(r)}</span>
+                          <span className="min-w-0 truncate">{r.tenants[0]?.name ?? <span className="text-muted">Empty</span>}</span>
+                          <span className="figures text-right">{r.rent == null ? <span className="text-muted">—</span> : `${money(r.rent)}${r.rentPeriod === "week" ? " pw" : ""}`}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : tenants.length ? (
+                  <ul className="space-y-2">{tenants.map((t) => <PartyCard key={t.contactId} p={t} />)}</ul>
+                ) : (
+                  <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">No tenant on record. It is empty, or the let has not been recorded.</p>
+                )}
+                {tenants.length > 0 && (
+                  <div className="mt-3 rounded-xl bg-box px-4 py-3 text-[12.5px]">
+                    {tenancy.state === "loading" ? <Loading label="Reading the tenancy dates" />
+                      : tenancy.state === "failed" ? <span className="text-muted">The tenancy dates could not be read.</span>
+                      : tenancy.data.tenancy ? <TenancyLine t={tenancy.data.tenancy} long />
+                      : <span className="text-muted">{tenancy.data.ready ? "No tenancy dates on record for this home." : tenancy.data.error ?? "The tenancy dates are still being read. Look again in a minute."}</span>}
+                  </div>
+                )}
+              </section>
 
-          {/* ── the right: the action box, the actions, the map ──────────── */}
-          <aside className="space-y-4 lg:sticky lg:top-5 lg:col-start-2 lg:row-span-2 lg:row-start-1">
-            <section id="action-box" className="scroll-mt-5 rounded-[22px] border border-accent-dark/10 bg-accent-soft/70 p-5">
+              <section className={`${card} p-3.5 sm:p-5`}>
+                <p className={`${eyebrow} mb-3`}>Landlord</p>
+                {landlord ? (
+                  <div className="text-[13px]">
+                    <PartyCard p={landlord} plain />
+                    {landlord.email && landlord.email.includes("@") && (
+                      <LandlordJobEmails key={landlord.email} compact landlord={landlord.email} name={landlord.name} className="mt-3 border-t border-line/40 pt-3" />
+                    )}
+                  </div>
+                ) : (
+                  <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">No landlord on record for this home.</p>
+                )}
+              </section>
+            </div>
+          </section>
+
+          {/* ── on this home, level with the facts ─────────────────────── */}
+            <section id="action-box" className="scroll-mt-5 rounded-2xl border border-accent-dark/15 bg-accent-soft/60 p-5 lg:col-start-2 lg:row-start-2">
               {action ? (
                 <>
                   <div className="mb-4 flex items-center justify-between gap-3">
@@ -624,7 +703,7 @@ export default function PropertyPage() {
                     <ul className="mt-3 space-y-2">
                       {latest.map((a) => (
                         <li key={a.key}>
-                          <button type="button" onClick={a.go} className="flex w-full items-start gap-3 rounded-2xl bg-white px-3.5 py-3 text-left transition-colors hover:bg-white/70">
+                          <button type="button" onClick={a.go} className="flex w-full items-start gap-3 rounded-xl bg-white px-3.5 py-3 text-left transition-colors hover:bg-white/70">
                             <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${a.hot ? "bg-accent-dark text-white" : "bg-accent-soft text-accent-dark"}`}>
                               <DoodleIcon name={a.icon} size={12} />
                             </span>
@@ -640,7 +719,7 @@ export default function PropertyPage() {
                   ) : reading ? (
                     <div className="mt-3"><Loading label="Reading what has happened here" /></div>
                   ) : (
-                    <p className="mt-3 rounded-2xl bg-white px-4 py-5 text-center text-[12.5px] text-muted">Nothing recorded on this home yet. Pick an action below and it shows here.</p>
+                    <p className="mt-3 rounded-2xl bg-white px-4 py-5 text-center text-[12.5px] text-muted">Nothing recorded on this home yet. Pick an action and it shows here.</p>
                   )}
                   {reading && latest.length > 0 && <div className="mt-3"><Loading label="Still reading" /></div>}
                 </>
@@ -648,82 +727,9 @@ export default function PropertyPage() {
               {actionErr && <p className="mt-3 text-[12px] text-accent-dark">{actionErr}</p>}
             </section>
 
-            <section className={`${card} p-4`}>
-              <p className={`${eyebrow} mb-3 px-1`}>Actions</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button type="button" disabled={!canAct} onClick={() => act({ kind: "repair" })} className={tile}>{tileIcon("setting")}Report a repair</button>
-                <button type="button" disabled={!canAct} onClick={() => act({ kind: "planned" })} className={tile}>{tileIcon("calendar")}Plan a job</button>
-                <button type="button" disabled={!canAct || visits.state !== "ready"} onClick={() => void bookVisit()} className={tile}>{tileIcon("checklist")}Book an inspection</button>
-                <button type="button" onClick={() => act({ kind: "notices" })} className={tile}>{tileIcon("file-contract")}Serve notice</button>
-                <button type="button" onClick={() => act({ kind: "notices" })} className={tile}>{tileIcon("coin")}Rent review</button>
-                <button type="button" disabled={!canAct || !tenants.length} onClick={() => act({ kind: "tenant-notice" })} className={tile}>{tileIcon("logout")}Tenant gave notice</button>
-                <button type="button" disabled={!propertyId} onClick={() => { pickTab("compliance"); setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }} className={tile}>{tileIcon("shield")}Add a certificate</button>
-                {canAct && p.onRex !== false ? (
-                  <div className="relative">
-                    <span className="pointer-events-none absolute left-3.5 top-3.5">{tileIcon("pack/house")}</span>
-                    <ReletAction home={p} className="flex h-full min-h-[86px] w-full items-end gap-1 rounded-2xl border border-line/60 bg-white p-3.5 text-left text-[12.5px] font-semibold leading-tight transition-colors hover:border-ink/40" />
-                  </div>
-                ) : null}
-              </div>
-            </section>
-
-            {MAPS && p.lat != null && p.lng != null && (
-              <section className={`${card} overflow-hidden`}>
-                <div className="h-[220px] overflow-hidden">
-                  <PortfolioMap properties={[p]} attention={new Set()} onOpen={() => {}} />
-                </div>
-              </section>
-            )}
-          </aside>
-
-          {/* ── the people, then the detail ────────────────────────────── */}
-          <div className="min-w-0 space-y-5 lg:col-start-1 lg:row-start-2">
-            <div className="grid gap-5 2xl:grid-cols-2">
-              <section className={`${card} p-5`}>
-                <p className={`${eyebrow} mb-3`}>{roomsOnly ? "Rooms" : tenants.length === 1 ? "Tenant" : "Tenants"}</p>
-                {roomsOnly && house ? (
-                  <ul className="overflow-hidden rounded-xl border border-line/50">
-                    {house.rooms.map((r) => (
-                      <li key={r.listingId} className="border-b border-line/40 last:border-0">
-                        <button type="button" onClick={() => setRoom(r.listingId)} className="grid w-full grid-cols-[70px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 text-left text-[12.5px] transition-colors hover:bg-box">
-                          <span className="font-semibold">{roomLabel(r)}</span>
-                          <span className="min-w-0 truncate">{r.tenants[0]?.name ?? <span className="text-muted">Empty</span>}</span>
-                          <span className="figures text-right">{r.rent == null ? <span className="text-muted">—</span> : `${money(r.rent)}${r.rentPeriod === "week" ? " pw" : ""}`}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : tenants.length ? (
-                  <ul className="space-y-2">{tenants.map((t) => <PartyCard key={t.contactId} p={t} />)}</ul>
-                ) : (
-                  <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">No tenant on record. It is empty, or the let has not been recorded.</p>
-                )}
-                {tenants.length > 0 && (
-                  <div className="mt-3 rounded-xl bg-box px-4 py-3 text-[12.5px]">
-                    {tenancy.state === "loading" ? <Loading label="Reading the tenancy dates" />
-                      : tenancy.state === "failed" ? <span className="text-muted">The tenancy dates could not be read.</span>
-                      : tenancy.data.tenancy ? <TenancyLine t={tenancy.data.tenancy} long />
-                      : <span className="text-muted">{tenancy.data.ready ? "No tenancy dates on record for this home." : tenancy.data.error ?? "The tenancy dates are still being read. Look again in a minute."}</span>}
-                  </div>
-                )}
-              </section>
-
-              <section className={`${card} p-5`}>
-                <p className={`${eyebrow} mb-3`}>Landlord</p>
-                {landlord ? (
-                  <div className="text-[13px]">
-                    <PartyCard p={landlord} plain />
-                    {landlord.email && landlord.email.includes("@") && (
-                      <LandlordJobEmails key={landlord.email} landlord={landlord.email} name={landlord.name} className="mt-3 border-t border-line/40 pt-3" />
-                    )}
-                  </div>
-                ) : (
-                  <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">No landlord on record for this home.</p>
-                )}
-              </section>
-            </div>
-
-            <nav id="sections" className="-mx-1 flex scroll-mt-5 gap-1.5 overflow-x-auto px-1 pb-1" aria-label="Sections">
+          {/* ── 3. the sections ────────────────────────────────────────── */}
+          <section id="sections" className={`${box} min-w-0 scroll-mt-5 p-5 lg:col-start-1 lg:row-start-3`}>
+            <nav className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1" aria-label="Sections">
               {TABS.map((t) => (
                 <button
                   key={t.id}
@@ -739,9 +745,8 @@ export default function PropertyPage() {
                 </button>
               ))}
             </nav>
-
             {tab === "compliance" && (
-              <div>
+              <div className="mt-4 [&>section]:rounded-none [&>section]:border-0 [&>section]:p-0">
                 {houseView && house && !house.house && !lets && (
                   <p className="mb-2 text-[11.5px] text-muted">This house is held as its rooms only, so the file below is the first room&apos;s. Every room shares the house&apos;s certificates.</p>
                 )}
@@ -754,7 +759,7 @@ export default function PropertyPage() {
             )}
 
             {tab === "maintenance" && (
-              <section className={`${card} p-5`}>
+              <section className="mt-4">
                 {works.state === "loading" ? <Loading label="Reading the jobs on this home" /> : works.state === "failed" ? <Failed error={works.error} /> : (
                   <JobsList orders={works.data.orders} carried={works.data.carried} onOpen={setOpenJob} />
                 )}
@@ -762,7 +767,7 @@ export default function PropertyPage() {
             )}
 
             {tab === "inspections" && (
-              <section className={`${card} p-5`}>
+              <section className="mt-4">
                 {visits.state === "loading" ? <Loading label="Reading the visits on this home" /> : visits.state === "failed" ? <Failed error={visits.error} /> : (
                   <VisitsList data={visits.data} />
                 )}
@@ -770,7 +775,7 @@ export default function PropertyPage() {
             )}
 
             {tab === "tenancy" && (
-              <div className="grid gap-5 md:grid-cols-2">
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <section className={`${card} p-5`}>
                   <p className={`${eyebrow} mb-3`}>The tenancy</p>
                   {tenancy.state === "loading" ? <Loading label="Reading the tenancy" /> : tenancy.state === "failed" ? <Failed error={tenancy.error} /> : (
@@ -823,12 +828,19 @@ export default function PropertyPage() {
               </div>
             )}
 
+          </section>
+
+          {MAPS && p.lat != null && p.lng != null && (
+            <section className={`${box} h-[260px] overflow-hidden lg:col-start-2 lg:row-start-3 lg:self-start`}>
+              <PortfolioMap properties={[p]} attention={new Set()} onOpen={() => {}} />
+            </section>
+          )}
+
             {everything && !p.test && p.onRex !== false && (
-              <p className="text-[11.5px] text-muted">
+              <p className="text-[11.5px] text-muted lg:col-start-1 lg:row-start-4">
                 <a href={rexListingUrl(p.listingId, "leased")} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">Open the record behind this home</a>
               </p>
             )}
-          </div>
         </div>
       </div>
 
@@ -903,13 +915,14 @@ function JobsList({ orders, carried, onOpen }: { orders: WorksOrder[]; carried: 
     const next = nextFor(o);
     return (
       <li key={o.id} className="border-b border-line/40 last:border-0">
-        <button type="button" onClick={() => onOpen(o)} className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-box sm:grid-cols-[90px_minmax(0,1fr)_minmax(0,220px)_auto]">
-          <span className="hidden text-[11.5px] text-muted sm:block">#{o.ref} · {o.kind === "repair" ? "Repair" : "Planned"}</span>
+        <button type="button" onClick={() => onOpen(o)} className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-box 2xl:grid-cols-[90px_minmax(0,1fr)_minmax(0,240px)_auto]">
+          <span className="hidden text-[11.5px] text-muted 2xl:block">#{o.ref} · {o.kind === "repair" ? "Repair" : "Planned"}</span>
           <span className="min-w-0">
             <span className="block truncate text-[13px] font-semibold">{o.title}</span>
             <span className="block truncate text-[11.5px] text-muted">{o.category} · reported {shortDay(o.reportedAt ?? o.createdAt)}</span>
+            <span className={`mt-0.5 block truncate text-[11.5px] 2xl:hidden ${next.hot ? "font-semibold text-accent-dark" : "text-muted"}`}>{next.text}</span>
           </span>
-          <span className={`hidden truncate text-[12px] sm:block ${next.hot ? "font-semibold text-accent-dark" : "text-muted"}`}>{next.text}</span>
+          <span className={`hidden truncate text-[12px] 2xl:block ${next.hot ? "font-semibold text-accent-dark" : "text-muted"}`}>{next.text}</span>
           <Pill tone={o.status === "done" || o.status === "paid" ? "good" : next.hot ? "accent" : "neutral"}>{STATUS_LABEL[o.status]}</Pill>
         </button>
       </li>
