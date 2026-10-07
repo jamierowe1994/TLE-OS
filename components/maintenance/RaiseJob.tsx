@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PressButton } from "@/components/Bits";
+import LandlordJobEmails from "@/components/LandlordJobEmails";
 import type { Contractor, WorksOrder, Kind, Urgency } from "@/lib/works-orders";
 import { PLANNED_CATEGORIES, REPAIR_CATEGORIES, URGENCIES } from "@/lib/works-catalogue";
 import { CATEGORY_CERT, ContractorPick, REPORTED_BY, type Property } from "@/components/maintenance/works-ui";
+
+type Group = "property" | "what" | "urgency" | "when" | "tenant" | "landlord" | "check";
 
 /** Report a repair or plan a job. On /maintenance and on the property's own page. */
 export default function RaiseJob({ kind, contractors, home = null, inline = false, onClose, onRaised }: {
@@ -160,6 +163,47 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
     setTimeout(() => onRaised(r.order), 1100);
   }
 
+  /* ── In the action box: a few questions to a screen ─────────────────────
+     James, 7 Oct 2026: too many questions on one screen are split into
+     groups that belong together - what is wrong, how urgent, the tenant and
+     getting in, the landlord and whether they are emailed - which slide
+     across like the presentation's questionnaire, then one screen to check
+     it all before it goes. The pop-up on Maintenance stays one screen. */
+  const steps: { id: Group; title: string; blurb: string }[] = [
+    ...(picked ? [] : [{ id: "property" as const, title: "Which property", blurb: "Start typing the address." }]),
+    kind === "repair"
+      ? { id: "what", title: "What's wrong", blurb: "In a few words, then whatever the tenant told you." }
+      : { id: "what", title: "The job", blurb: "What needs doing, and anything the contractor should know." },
+    kind === "repair"
+      ? { id: "urgency", title: "How urgent", blurb: "The urgency sets how soon a contractor has to attend." }
+      : { id: "when", title: "When it's due", blurb: "And the contractor, if it's already arranged." },
+    { id: "tenant", title: kind === "repair" ? "The tenant and getting in" : "Access", blurb: "Their email is told at every step of the job. Leave it empty and they won't be." },
+    { id: "landlord", title: "The landlord", blurb: "Who the job is reported to, and how they hear about it." },
+    { id: "check", title: "Check and send", blurb: kind === "repair" ? "Nothing goes until you press Report it." : "Nothing goes until you press Plan it." },
+  ];
+  const [step, setStep] = useState(0);
+  const [dir, setDir] = useState<1 | -1>(1);
+  const here = steps[Math.min(step, steps.length - 1)];
+  const at = (g: Group) => !inline || here.id === g;
+  const last = step >= steps.length - 1;
+  function go(d: 1 | -1) {
+    if (d > 0) {
+      if (here.id === "property" && !picked && !manual.trim()) return setErr("Which property?");
+      if (here.id === "what" && !title.trim()) return setErr(kind === "repair" ? "What is wrong, in a few words?" : "What is the job?");
+      if (here.id === "when" && !dueAt) return setErr("When is it due?");
+    }
+    setErr(null);
+    setDir(d);
+    setStep((n) => Math.max(0, Math.min(steps.length - 1, n + d)));
+  }
+  const jump = (id: Group) => {
+    const i = steps.findIndex((x) => x.id === id);
+    if (i < 0) return;
+    setErr(null);
+    setDir(-1);
+    setStep(i);
+  };
+
   const cats = kind === "repair" ? REPAIR_CATEGORIES : PLANNED_CATEGORIES;
   const field = "w-full rounded-lg border border-line/80 bg-box px-3 py-2.5 text-[13px] outline-none focus:border-ink";
   const label = "block text-[10px] font-bold uppercase tracking-wider text-muted";
@@ -185,7 +229,31 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
           <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted hover:text-ink">✕</button>
         </div>
 
-        <div className={inline ? "mt-5 flex flex-col gap-4" : "mt-5 grid gap-4 sm:grid-cols-2"}>
+        {inline && (
+          <div className="mt-4 flex gap-1" aria-hidden>
+            {steps.map((x, i) => (
+              <span key={x.id} className={`h-1 flex-1 rounded-full transition-colors duration-300 ${i <= step ? "bg-accent-dark" : "bg-white"}`} />
+            ))}
+          </div>
+        )}
+        <div
+          key={inline ? here.id : "all"}
+          className={inline ? "mt-4 flex flex-col gap-4" : "mt-5 grid gap-4 sm:grid-cols-2"}
+          style={inline ? { animation: "slideIn 340ms cubic-bezier(0.22,1,0.36,1) both", ["--from" as string]: `${dir * 28}px` } : undefined}
+          onKeyDown={inline ? (e) => {
+            if (e.key !== "Enter" || (e.target as HTMLElement).tagName !== "INPUT") return;
+            e.preventDefault();
+            if (last) void raise(); else go(1);
+          } : undefined}
+        >
+          {inline && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted">{step + 1} of {steps.length}</p>
+              <p className="mt-0.5 text-[16px] font-semibold leading-tight">{here.title}</p>
+              <p className="mt-1 text-[12px] leading-relaxed text-muted">{here.blurb}</p>
+            </div>
+          )}
+          {at("property") && (
           <div className="relative sm:col-span-2">
             <label className={label}>Property</label>
             {picked ? (
@@ -221,20 +289,25 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
               </>
             )}
           </div>
+          )}
 
+          {at("what") && (
           <div className="sm:col-span-2">
             <label className={label}>{kind === "repair" ? "What is wrong" : "The job"}</label>
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={kind === "repair" ? "Boiler not firing, no hot water" : "Annual gas safety"} className={`mt-1 ${field}`} />
           </div>
+          )}
 
+          {at("what") && (
           <div>
             <label className={label}>Category</label>
             <select value={category} onChange={(e) => setCategory(e.target.value)} className={`mt-1 ${field}`}>
               {cats.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
+          )}
 
-          {kind === "repair" ? (
+          {at(kind === "repair" ? "urgency" : "when") && (kind === "repair" ? (
             <div>
               <label className={label}>How urgent</label>
               <div className="mt-1 flex gap-1.5">
@@ -256,20 +329,24 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
                 </p>
               )}
             </div>
-          )}
+          ))}
 
+          {at("what") && (
           <div className="sm:col-span-2">
             <label className={label}>Detail</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder={kind === "repair" ? "What the tenant said, where it is, when it started." : "Anything the contractor needs to know."} className={`mt-1 ${field}`} />
           </div>
+          )}
 
+          {at((kind === "repair" ? "urgency" : "when")) && (
           <div>
             <label className={label}>Reported by</label>
             <select value={reportedBy} onChange={(e) => setReportedBy(e.target.value)} className={`mt-1 ${field}`}>
               {REPORTED_BY.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
-          {tenants.length > 1 && (
+          )}
+          {at("tenant") && tenants.length > 1 && (
             <div className="sm:col-span-2">
               <label className={label}>{kind === "repair" ? "Which of them reported it" : "Who we'll arrange access with"}</label>
               <select value={whichTenant} onChange={(e) => chooseTenant(tenants, Number(e.target.value))} className={`mt-1 ${field}`}>
@@ -280,36 +357,50 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
               <p className="mt-1 text-[11px] text-muted">{tenants.length} tenants on this home. The one you pick is who the emails go to.</p>
             </div>
           )}
+          {at("tenant") && (
           <div>
             <label className={label}>Tenant</label>
             <input value={tenant} onChange={(e) => setTenant(e.target.value)} placeholder="Their name" className={`mt-1 ${field}`} />
           </div>
+          )}
+          {at("tenant") && (
           <div>
             <label className={label}>Tenant's number</label>
             <input value={tenantPhone} onChange={(e) => setTenantPhone(e.target.value)} placeholder="For access" className={`mt-1 ${field}`} />
           </div>
+          )}
+          {at("tenant") && (
           <div>
             <label className={label}>Tenant's email</label>
             <input type="email" value={tenantEmail} onChange={(e) => setTenantEmail(e.target.value)} placeholder="So they're told at each step" className={`mt-1 ${field}`} />
           </div>
+          )}
+          {at("landlord") && (
           <div>
             <label className={label}>Landlord</label>
             <input value={landlordName} onChange={(e) => setLandlordName(e.target.value)} placeholder="Their name" className={`mt-1 ${field}`} />
           </div>
+          )}
+          {at("landlord") && (
           <div>
             <label className={label}>Landlord's email</label>
             <input type="email" value={landlordEmail} onChange={(e) => setLandlordEmail(e.target.value)} placeholder="For the report and approvals" className={`mt-1 ${field}`} />
           </div>
+          )}
+          {at("landlord") && (
           <div>
             <label className={label}>Landlord's mobile</label>
             <input value={landlordMobile} onChange={(e) => setLandlordMobile(e.target.value)} placeholder="To ring them first" className={`mt-1 ${field}`} />
           </div>
+          )}
+          {at("tenant") && (
           <div className="sm:col-span-2">
             <label className={label}>Access notes</label>
             <input value={access} onChange={(e) => setAccess(e.target.value)} placeholder="Key safe, tenant works days, dog in the garden" className={`mt-1 ${field}`} />
           </div>
+          )}
 
-          {kind === "planned" && (
+          {at("when") && kind === "planned" && (
             <>
               <div>
                 <label className={label}>Contractor, if already known</label>
@@ -321,15 +412,53 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
               </div>
             </>
           )}
+          {inline && at("landlord") && (
+            landlordEmail.includes("@") ? (
+              <LandlordJobEmails key={landlordEmail} compact landlord={landlordEmail} name={landlordName || "the landlord"} className="rounded-xl bg-white px-3.5 py-3" />
+            ) : (
+              <p className="rounded-xl bg-white px-3.5 py-3 text-[12px] text-muted">No email for the landlord, so they won&apos;t be emailed about this job - ring them.</p>
+            )
+          )}
+          {inline && at("check") && (
+            <dl className="divide-y divide-line/50 overflow-hidden rounded-xl bg-white text-[12.5px]">
+              {([
+                [steps.find((x) => x.id === "what")!.title, "what", [title || "—", category, description].filter(Boolean).join(" · ")],
+                kind === "repair"
+                  ? ["How urgent", "urgency", `${URGENCIES.find((u) => u.id === urgency)?.label ?? urgency} · reported by ${reportedBy.toLowerCase()}`]
+                  : ["Due", "when", [dueAt ? new Date(dueAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—", contractors.find((c) => c.id === contractorId)?.name, scheduledAt ? `booked ${new Date(scheduledAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : null].filter(Boolean).join(" · ")],
+                ["Tenant", "tenant", [tenant || "—", tenantEmail ? `emailed at ${tenantEmail}` : "not emailed", access ? `access: ${access}` : null].filter(Boolean).join(" · ")],
+                ["Landlord", "landlord", [landlordName || "—", landlordEmail ? `emailed at ${landlordEmail}` : "not emailed", landlordMobile || null].filter(Boolean).join(" · ")],
+              ] as [string, Group, string][]).map(([k, g, v]) => (
+                <div key={g} className="flex items-start gap-3 px-3.5 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <dt className="text-[10px] font-bold uppercase tracking-wider text-muted">{k}</dt>
+                    <dd className="mt-0.5 break-words">{v}</dd>
+                  </div>
+                  <button type="button" onClick={() => jump(g)} className="shrink-0 text-[11px] text-muted underline underline-offset-2 hover:text-ink">Change</button>
+                </div>
+              ))}
+            </dl>
+          )}
         </div>
 
         {err && <p className="mt-4 text-[12.5px] text-accent-dark">{err}</p>}
-        <div className="mt-5 flex items-center justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-full border border-line/80 px-4 py-2 text-[12.5px] text-muted hover:text-ink">Cancel</button>
-          <PressButton onClick={() => void raise()} className={`rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page ${busy ? "opacity-50" : ""}`}>
-            {busy ? "Raising…" : kind === "repair" ? "Report it" : "Plan it"}
-          </PressButton>
-        </div>
+        {inline && !last ? (
+          <div className="mt-5 flex items-center justify-between gap-2">
+            <button type="button" onClick={() => (step === 0 ? onClose() : go(-1))} className="rounded-full border border-line/80 bg-white px-4 py-2 text-[12.5px] text-muted hover:text-ink">
+              {step === 0 ? "Cancel" : "Back"}
+            </button>
+            <PressButton onClick={() => go(1)} className="rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page">
+              Continue
+            </PressButton>
+          </div>
+        ) : (
+          <div className={`mt-5 flex items-center gap-2 ${inline ? "justify-between" : "justify-end"}`}>
+            <button type="button" onClick={() => (inline ? go(-1) : onClose())} className="rounded-full border border-line/80 px-4 py-2 text-[12.5px] text-muted hover:text-ink">{inline ? "Back" : "Cancel"}</button>
+            <PressButton onClick={() => void raise()} className={`rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page ${busy ? "opacity-50" : ""}`}>
+              {busy ? "Raising…" : kind === "repair" ? "Report it" : "Plan it"}
+            </PressButton>
+          </div>
+        )}
       </div>
     </div>
   );

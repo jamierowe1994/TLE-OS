@@ -19,7 +19,7 @@ import type { WorksOrder } from "@/lib/works-orders";
 const pounds = (pence: number | null | undefined) =>
   pence == null ? "—" : `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: pence % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
 
-export default function LandlordJobEmails({ job, landlord, name, order, className = "" }: {
+export default function LandlordJobEmails({ job, landlord, name, order, className = "", compact = false }: {
   /** The works order id - the job sheet. */
   job?: string;
   /** The landlord's email - a Portfolio card. */
@@ -28,6 +28,8 @@ export default function LandlordJobEmails({ job, landlord, name, order, classNam
   /** The job itself, for the "ring them for approval" line. */
   order?: Pick<WorksOrder, "status" | "quotePence" | "authorityPence">;
   className?: string;
+  /** Short labels at every width, for a narrow box. */
+  compact?: boolean;
 }) {
   const reporter = useSaveReporter();
   const [pref, setPref] = useState<LandlordPref | null>(null);
@@ -102,8 +104,8 @@ export default function LandlordJobEmails({ job, landlord, name, order, classNam
           onChange={(v) => { if (v !== pref.jobEmails) void save(v, over); }}
           options={[
             { id: "all", label: "Every job" },
-            { id: "over", label: <><span className="sm:hidden">Over £{over}</span><span className="hidden sm:inline">Only over £{over}</span></>, title: `Only jobs over £${over}` },
-            { id: "none", label: <><span className="sm:hidden">None</span><span className="hidden sm:inline">None - we ring them</span></>, title: "None - we ring them" },
+            { id: "over", label: compact ? <>Over £{over}</> : <><span className="sm:hidden">Over £{over}</span><span className="hidden sm:inline">Only over £{over}</span></>, title: `Only jobs over £${over}` },
+            { id: "none", label: compact ? <>None</> : <><span className="sm:hidden">None</span><span className="hidden sm:inline">None - we ring them</span></>, title: "None - we ring them" },
           ]}
         />
         {pref.jobEmails === "over" && (
