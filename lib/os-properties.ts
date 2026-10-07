@@ -32,6 +32,8 @@ export interface OsProperty {
   management: string | null;
   categories: string[];
   hmo: boolean;
+  /** The office said it is not an HMO, whatever REX's licence entries suggest (7 Oct 2026). */
+  notHmo: boolean;
   noGas: boolean;
   rexPropertyId: string | null;
   matchHow: string | null;
@@ -64,6 +66,7 @@ type Row = {
   management: string | null;
   categories: string[] | null;
   hmo: boolean;
+  not_hmo?: boolean | null;
   no_gas: boolean;
   rex_property_id: string | null;
   match_how: string | null;
@@ -92,7 +95,8 @@ const rowTo = (r: Row): OsProperty => ({
   bedrooms: r.bedrooms,
   management: r.management,
   categories: r.categories ?? [],
-  hmo: Boolean(r.hmo),
+  hmo: Boolean(r.hmo) && !r.not_hmo,
+  notHmo: Boolean(r.not_hmo),
   noGas: Boolean(r.no_gas),
   rexPropertyId: r.rex_property_id,
   matchHow: r.match_how,
@@ -159,7 +163,7 @@ export async function activeOsProperties(): Promise<OsProperty[]> {
   return rows.map(rowTo);
 }
 
-type OsFacts = { hmo: boolean; noGas: boolean; ref: string; landlordName: string | null; agentName: string | null; tenantNames: string | null; serviceLevel: string | null };
+type OsFacts = { hmo: boolean; notHmo: boolean; noGas: boolean; ref: string; landlordName: string | null; agentName: string | null; tenantNames: string | null; serviceLevel: string | null };
 
 /** What the OS knows about a REX property from its own record: HMO, no gas, and who owns and looks after it. */
 export async function factsByRexId(): Promise<Map<string, OsFacts>> {
@@ -170,6 +174,7 @@ export async function factsByRexId(): Promise<Map<string, OsFacts>> {
     const held = out.get(r.rex_property_id as string);
     out.set(r.rex_property_id as string, {
       hmo: Boolean(r.hmo) || Boolean(held?.hmo),
+      notHmo: Boolean(r.not_hmo) || Boolean(held?.notHmo),
       noGas: Boolean(r.no_gas) || Boolean(held?.noGas),
       ref: r.ref,
       landlordName: held?.landlordName || r.landlord_name?.trim() || null,

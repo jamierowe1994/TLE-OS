@@ -67,6 +67,8 @@ type PropRow = {
   landlord_name: string | null; agent_name: string | null; tenant_names: string | null; payprop_no: string | null;
   /** The landlord's signed terms say there is no gas at the home. */
   no_gas?: boolean | null;
+  /** The office said it is not an HMO (7 Oct 2026). */
+  not_hmo?: boolean | null;
 };
 type FactRow = { property_id: string; field: string; value: string | null; file_key: string | null; source: string; source_ref: string | null; checked_against: string | null; captured_at: Date; captured_by: string | null; verified_at?: Date | null; verified_by?: string | null };
 
@@ -123,6 +125,7 @@ const RRA_SHEET = new Set(["rra_sheet_served", "doc_rra_sheet"]);
 const RRA_FROM = "2026-05-01";
 
 function homeIsHmo(p: PropRow, facts: Map<string, FactRow>): boolean {
+  if (p.not_hmo) return false;
   if (p.hmo) return true;
   if ((p.categories ?? []).some((c) => /hmo/i.test(c))) return true;
   return /hmo/i.test(facts.get("property_type")?.value ?? "");
@@ -180,8 +183,20 @@ interface CertsOnFile {
   eicrOk: boolean;
   /** Scotland: an in-date EICR answers the smoke and CO alarms column (James, 28 Sep 2026). */
   eicrAlarms: boolean;
+  /**
+   * Michael's Compliance tracker, counted here too (James, 7 Oct 2026: "will
+   * this go towards the clean sweep?"). `onFile`: the book holds a record for
+   * the certificate - REX, the OS vault, or one uploaded on a tracker row.
+   * `notNeeded`: somebody marked it Not needed on the tracker.
+   */
+  onFile: Set<string>;
+  notNeeded: Set<string>;
 }
-const NO_CERTS: CertsOnFile = { gas: false, gasOk: false, eicrOk: false, eicrAlarms: false };
+const NO_CERTS: CertsOnFile = { gas: false, gasOk: false, eicrOk: false, eicrAlarms: false, onFile: new Set(), notNeeded: new Set() };
+
+/** The sweep's columns each tracker certificate answers. A licence on file gives its date and file; its type and number are still asked. */
+const CERT_ON_FILE_ANSWERS: Record<string, string> = { pat_expiry: "pat", alarms_expiry: "alarms", legionella_expiry: "legionella", licence_expiry: "licence", doc_licence: "licence" };
+const CERT_NOT_NEEDED_ANSWERS: Record<string, string> = { ...CERT_ON_FILE_ANSWERS, licence_type: "licence", licence_number: "licence", epc_rating: "epc" };
 /**
  * The Repairing Standard (James, 28 Sep 2026): a Scottish home counts as
  * checked when every certificate the standard rests on is held - an in-date
@@ -195,6 +210,9 @@ const STANDARD_COLUMNS = ["pat_expiry", "alarms_expiry", "legionella_expiry"];
  */
 function held(key: string, facts: Map<string, FactRow>, certs: CertsOnFile = NO_CERTS): boolean {
   const has = (k: string) => { const f = facts.get(k); return Boolean(f && (f.value || f.file_key)); };
+  /* Marked Not needed on the Compliance tracker, or a certificate the book holds (7 Oct 2026). */
+  if (CERT_NOT_NEEDED_ANSWERS[key] && certs.notNeeded.has(CERT_NOT_NEEDED_ANSWERS[key])) return true;
+  if (CERT_ON_FILE_ANSWERS[key] && certs.onFile.has(CERT_ON_FILE_ANSWERS[key])) return true;
   if (key === "landlord_aml") return has("landlord_aml") || has("landlord_photo_id");
   if (key === "alarms_expiry") return has(key) || certs.gas || certs.eicrAlarms;
   /* Or the landlord signed our terms of business, which bind them to the
@@ -216,11 +234,14 @@ async function certified(): Promise<CertIndex> {
     if (!got) return new Map();
     return new Map(got.book.properties.map((e) => {
       const gas = e.certs?.gas; const eicr = e.certs?.eicr;
+      const all = Object.entries(e.certs ?? {}) as [string, NonNullable<(typeof e.certs)[keyof typeof e.certs]>][];
       return [String(e.id), {
         gas: gas?.expires != null || Boolean(gas?.attached),
         gasOk: Boolean(gas?.notRequired) || (gas?.expires != null && gas.expires >= 0),
         eicrOk: eicr?.expires != null && eicr.expires >= 0,
         eicrAlarms: false,
+        onFile: new Set(all.filter(([, c]) => c && !c.notNeeded && (c.expires != null || c.attached || c.undated)).map(([k]) => k)),
+        notNeeded: new Set(all.filter(([, c]) => c?.notNeeded).map(([k]) => k)),
       }];
     }));
   } catch {
@@ -234,7 +255,7 @@ function certsFor(p: PropRow, book: CertIndex): CertsOnFile {
 
 async function load(): Promise<{ props: PropRow[]; facts: Map<string, Map<string, FactRow>> }> {
   const props = await q<PropRow>(
-    `SELECT id, address, ref, postcode, hmo, categories, management, rex_property_id, service_level, landlord_name, agent_name, tenant_names, payprop_no, no_gas
+    `SELECT id, address, ref, postcode, hmo, categories, management, rex_property_id, service_level, landlord_name, agent_name, tenant_names, payprop_no, no_gas, not_hmo
        FROM os_properties WHERE active`
   );
   const rows = await q<FactRow>(`SELECT * FROM os_property_facts`).catch(() => []);
@@ -364,6 +385,9 @@ export async function sweepDetail(id: string): Promise<SweepDetail | null> {
   const list = (await sweepList()).find((h) => h.id === id)!;
 
   let certs: SweepDetail["certs"] = null;
+  /* The tracker's certificates and Not needed marks, as the list counts them (7 Oct 2026). */
+  let trackerOnFile = new Set<string>();
+  let trackerNotNeeded = new Set<string>();
   try {
     /* The book is cached and usually instant; cold, it rebuilds from REX and
        can take minutes. The certificates are a side line on this screen, so
@@ -372,6 +396,11 @@ export async function sweepDetail(id: string): Promise<SweepDetail | null> {
     if (!got) throw new Error("book not ready");
     const { book } = got;
     const e = book.properties.find((x) => x.id === (p.rex_property_id ?? "") || x.id === id);
+    if (e) {
+      const all = Object.entries(e.certs ?? {}) as [string, NonNullable<(typeof e.certs)[keyof typeof e.certs]>][];
+      trackerOnFile = new Set(all.filter(([, c]) => c && !c.notNeeded && (c.expires != null || c.attached || c.undated)).map(([k]) => k));
+      trackerNotNeeded = new Set(all.filter(([, c]) => c?.notNeeded).map(([k]) => k));
+    }
     if (e) certs = Object.entries(e.certs).map(([k, c]) => {
       const days = c?.expires ?? null;
       const on = days == null ? null : new Date(Date.now() + days * 864e5).toLocaleDateString("en-CA", { timeZone: "Europe/London" });
@@ -390,6 +419,8 @@ export async function sweepDetail(id: string): Promise<SweepDetail | null> {
     gasOk: Boolean(gasCert?.notRequired) || Boolean(p.no_gas) || (gasCert?.days != null && gasCert.days >= 0),
     eicrOk: eicrCert?.days != null && eicrCert.days >= 0,
     eicrAlarms: false,
+    onFile: trackerOnFile,
+    notNeeded: trackerNotNeeded,
   };
   onFile.eicrAlarms = isScotland(p) && onFile.eicrOk;
   const facts: SweepFact[] = FIELDS.filter((x) => x.group !== "Sign-off").map((x) => {
@@ -399,9 +430,13 @@ export async function sweepDetail(id: string): Promise<SweepDetail | null> {
     const byEicr = x.key === "alarms_expiry" && !own && !onFile.gas && onFile.eicrAlarms;
     const byTerms = x.key === "repairing_standard" && !own && Boolean(f.get("doc_terms_of_business")?.value || f.get("doc_terms_of_business")?.file_key);
     const byStandard = x.key === "repairing_standard" && !own && !byTerms && standardMet(f, onFile);
+    const byNotNeeded = !own && Boolean(CERT_NOT_NEEDED_ANSWERS[x.key] && onFile.notNeeded.has(CERT_NOT_NEEDED_ANSWERS[x.key]));
+    const byTracker = !own && !byNotNeeded && Boolean(CERT_ON_FILE_ANSWERS[x.key] && onFile.onFile.has(CERT_ON_FILE_ANSWERS[x.key]));
     return {
       key: x.key, label: x.label, group: x.group, kind: x.kind, needed: need.has(x.key), held: held(x.key, f, onFile),
-      note: byGas ? "Covered by the gas safety record"
+      note: byNotNeeded ? "Marked Not needed on the Compliance tracker"
+        : byTracker ? "The certificate is on file in Compliance"
+        : byGas ? "Covered by the gas safety record"
         : byEicr ? "Covered by the in-date EICR"
         : byTerms ? "Agreed in the landlord's terms of business, which bind them to the Repairing Standard"
         : byStandard ? "Met on the certificates held: EICR and gas in date (or no gas), PAT, alarms and legionella on file" : null,

@@ -2421,6 +2421,11 @@ ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS pm_status TEXT;
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS pm_upcoming_vacancy BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS pm_service TEXT;
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS pm_read_at TIMESTAMPTZ;
+-- "Not an HMO" (James, 7 Oct 2026): the office's own answer, which beats REX's
+-- guess. REX makes a home an HMO from any HMO licence entry on it, even one
+-- marked not required, and REX is read-only to us - so the answer lives here.
+-- Michael had ticked every HMO certificate on two such homes Not needed.
+ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS not_hmo BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- Every column of Susan's clean-sweep sheet, per home (24 Sep 2026): a word, a
 -- date, a number or a file, and where it came from. One row per home per field

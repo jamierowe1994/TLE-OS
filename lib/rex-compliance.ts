@@ -428,10 +428,13 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
      make a home an HMO or a no-gas home even where REX CRM holds no licence
      entry or no not-required gas entry. */
   const facts = await factsByRexId().catch(() => new Map());
+  const notHmo = new Set<string>();
   for (const p of properties) {
     const f = facts.get(p.id);
     if (!f) continue;
     if (f.hmo) p.hmo = true;
+    /* The office's "not an HMO" beats REX's licence entries (7 Oct 2026). */
+    if (f.notHmo) { p.hmo = false; notHmo.add(p.id); }
     if (f.noGas && p.certs.gas?.expires == null) { p.hasGas = false; p.gasAnswered = true; }
     /* Susan's PayProp clean sweep (24 Sep 2026) names the landlord and agent
        where REX CRM has nobody. REX still wins wherever it has a name. */
@@ -474,6 +477,7 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
     const o = extra.find((x) => x.id === p.id);
     if (o) {
       p.hmo = o.hmo; p.hasGas = !o.noGas; p.gasAnswered = o.noGas || Boolean(p.certs.gas);
+      if (o.notHmo) notHmo.add(p.id);
       if (p.landlord === "—" && o.landlordName) p.landlord = o.landlordName;
       if (!p.agent && o.agentName) p.agent = o.agentName;
       if (!p.tenant && o.tenantNames) p.tenant = o.tenantNames;
@@ -485,6 +489,7 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
   }
   for (const o of extra) {
     if (listings.some((l) => l.propertyId === o.id)) continue;
+    if (o.notHmo) notHmo.add(o.id);
     const certs = extraCerts.get(o.id) ?? {};
     properties.push({
       id: o.id,
@@ -529,14 +534,14 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
       if (!held || (c.expires != null && (held.expires == null || c.expires > held.expires))) best[k] = c;
     }
     const anyGas = members.some((m) => m.hasGas);
-    const anyHmo = members.some((m) => m.hmo);
+    const anyHmo = members.some((m) => m.hmo && !notHmo.has(m.id));
     for (const m of members) {
       for (const [k, c] of Object.entries(best) as [CertKey, NonNullable<CompProperty["certs"][CertKey]>][]) {
         const own = m.certs[k];
         if (!own || (c.expires != null && (own.expires == null || c.expires > own.expires))) m.certs[k] = { ...c, inherited: true };
       }
       m.hasGas = anyGas && !(m.certs.gas?.notRequired && m.certs.gas?.expires == null);
-      m.hmo = anyHmo;
+      m.hmo = anyHmo && !notHmo.has(m.id);
     }
   }
 
