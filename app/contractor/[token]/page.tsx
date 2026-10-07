@@ -11,8 +11,9 @@ import { useParams } from "next/navigation";
  * THE CERTIFICATE BOX IS NOT A SECOND UPLOAD BUTTON (14 Sep 2026). A photo is
  * a file on a job; a certificate is a compliance record, so this one asks for
  * the two facts the PDF cannot be trusted to give - what it is, and the date
- * it runs out - and the OS then files it on the property, writes it into REX
- * and sends it to the landlord and the tenant. Asking the contractor for the
+ * it runs out - and the OS then files it on the property and writes it into
+ * REX. The landlord and the tenant get it once compliance has checked it
+ * (4 Oct 2026), so the page says that, not "sent". Asking the contractor for the
  * expiry is right: they are holding the certificate, and the alternative is
  * somebody in the office reading it off a scan a week later.
  */
@@ -80,7 +81,8 @@ export default function ContractorPage() {
       /* What actually happened, not "thanks": a contractor who has just
          handed over a legal document wants to know it landed somewhere. */
       if (r.certificate?.rehearsal) return setFlash("Rehearsal - on a real job the certificate would now be filed on the property's record. Nothing was filed.");
-      return setFlash("Thanks - the certificate is on the property's record and the landlord and tenant are being sent a copy.");
+      if (r.certificate && !r.certificate.filed) return setFlash("Thanks - we already have this certificate on the property's record, so nothing was filed twice.");
+      return setFlash("Thanks - the certificate is on the property's record. Once our compliance team has checked it, the landlord and tenant are sent a copy.");
     }
     setFlash(kind === "invoice" ? "Thanks - your invoice is on the job and accounts have been told." : "Photo added.");
   }
@@ -143,7 +145,7 @@ export default function ContractorPage() {
 
             <div style={box}>
               <span style={label}>A certificate from the visit</span>
-              <p style={{ margin: "0 0 10px", fontSize: 13, color: "#6b6b70" }}>Gas, electrical, PAT, anything with an expiry date. It goes on the property&apos;s record and we send a copy to the landlord and the tenant.</p>
+              <p style={{ margin: "0 0 10px", fontSize: 13, color: "#6b6b70" }}>Gas, electrical, PAT, anything with an expiry date. It goes on the property&apos;s record, and once our compliance team has checked it we send a copy to the landlord and the tenant.</p>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 <select value={certType} onChange={(e) => setCertType(e.target.value)} style={field}>
                   <option value="">What is it?</option>
