@@ -5,7 +5,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PropertyFile from "@/components/PropertyFile";
 import SaveChip, { SaveScopeProvider, useSaveScope } from "@/components/SaveChip";
 import { Pill } from "@/components/Wire";
-import { CERT_META, isLetOnly, renewalHeld, renewalHoldEnds, requiredCerts, shownStatus, statusOf, type CertKey, type CompProperty } from "@/lib/compliance";
+import { CERT_META, heldToNextTenancy, isLetOnly, renewalHeld, renewalHoldEnds, requiredCerts, shownStatus, statusOf, type CertKey, type CompProperty } from "@/lib/compliance";
 import { COMPLIANCE_READERS as R, houseByListing, housesIn, pickerOption, roomLabel, tabLabel, type House } from "@/lib/houses";
 import RoomPicker from "@/components/RoomPicker";
 import { useDocumentOpen } from "@/lib/doc-sheet";
@@ -319,6 +319,7 @@ export default function ComplianceDrawer({
             {required.map((k) => {
               const cert = houseView ? worstOf(k) : p.certs[k];
               const held = k === "licence" && renewalHeld(cert);
+              const nextT = heldToNextTenancy(cert);
               const s = shownStatus(cert);
               const bad = s === "expired" || s === "urgent" || s === "missing";
               return (
@@ -328,9 +329,11 @@ export default function ComplianceDrawer({
                     {CERT_META[k].short}
                   </p>
                   <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[12.5px]">
-                    <Pill tone={bad ? "accent" : held ? "neutral" : "good"}>
+                    <Pill tone={bad ? "accent" : held || nextT ? "neutral" : "good"}>
                       {held && cert?.renewalApplied
                         ? `Renewal with the council until ${prettyDay(renewalHoldEnds(cert.renewalApplied.appliedOn))}`
+                        : nextT
+                        ? `${certLine(cert?.expires ?? null)} · not due until the next tenancy`
                         : k === "gas" && !p.hasGas ? "No gas" : certLine(cert?.expires ?? null)}
                     </Pill>
                     {cert?.inherited && <span className="text-[10.5px] text-muted">from the house</span>}

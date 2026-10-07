@@ -5,7 +5,7 @@ import { fetchListingBook } from "@/lib/rex-listings";
 import type { CertKey, CompProperty } from "@/lib/compliance";
 import { activeOsProperties, factsByRexId } from "@/lib/os-properties";
 import { osCertsFor } from "@/lib/os-certs";
-import { applySweep } from "@/lib/sweep-certs";
+import { applySweep, holdToNextTenancy } from "@/lib/sweep-certs";
 import { houseKeyOf, isRoomAddress } from "@/lib/address-parse";
 import { allAgents } from "@/lib/rex-agents";
 import { listTegPeople, normEmail } from "@/lib/teg-people";
@@ -544,6 +544,9 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
       m.hmo = anyHmo && !notHmo.has(m.id);
     }
   }
+  /* Scotland's EPC and legionella, held to the next tenancy (Michael, 7 Oct
+     2026): on the finished book, each home on its own tenancy. */
+  await holdToNextTenancy(properties).catch(() => null);
 
   return {
     properties,

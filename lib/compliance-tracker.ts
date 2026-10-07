@@ -1,5 +1,5 @@
 import "server-only";
-import {
+import { heldToNextTenancy,
   BIG_THREE,
   isOurs,
   requiredCerts,
@@ -95,6 +95,8 @@ export interface ChaseRow {
   /** The licence renewal is with the council, and when that stops holding it
    *  off the list. Set only while the hold is running. */
   renewal?: { by: string; at: string; appliedOn: string; ref: string; holdEnds: string };
+  /** Scotland: an EPC or legionella running out during this tenancy, due at the next (Michael, 7 Oct 2026). */
+  nextTenancy?: { tenancyStart: string };
 }
 
 export interface TrackerBook {
@@ -106,6 +108,8 @@ export interface TrackerBook {
   notNeeded: ChaseRow[];
   /** Licences past their date with the renewal at the council (up to six months). */
   renewals: ChaseRow[];
+  /** Held to the next tenancy, off Outstanding and the chases. */
+  nextTenancy: ChaseRow[];
   /** In date but inside a chase band. */
   upcoming: ChaseRow[];
   counts: {
@@ -123,6 +127,7 @@ export interface TrackerBook {
     undated: number;
     notNeeded: number;
     renewals: number;
+    nextTenancy: number;
     /** Duplicate property rows collapsed — a property listed twice is still
      *  one property, and chasing it twice is how a landlord stops reading. */
     duplicateRowsCollapsed: number;
@@ -145,7 +150,9 @@ function rowsFor(p: CompProperty, agent: string | null): ChaseRow[] {
     const cert = p.certs[key];
     const status = statusOf(cert);
     const daysLeft = cert?.expires ?? null;
-    const band = bandFor(daysLeft);
+    /* Held to the next tenancy: nothing to chase while this tenancy lasts. */
+    const nextT = heldToNextTenancy(cert) ? cert!.toNextTenancy! : null;
+    const band = nextT ? null : bandFor(daysLeft);
     const attached = Boolean(cert?.attached);
 
     const undated = Boolean(cert?.undated);
@@ -156,7 +163,9 @@ function rowsFor(p: CompProperty, agent: string | null): ChaseRow[] {
     const spent = Boolean(noted && !holding && cert?.expires != null && cert.expires >= 0);
     const ra = noted && !spent ? noted : undefined;
     const holdEnds = ra ? renewalHoldEnds(ra.appliedOn) : null;
-    const reason = ra && holding
+    const reason = nextT
+      ? `Scotland: ${status === "expired" ? `ran out ${Math.abs(daysLeft ?? 0)} days ago` : `runs out in ${daysLeft} days`}, during the tenancy that began ${prettyDay(nextT.tenancyStart)}. Not due until the next tenancy starts.`
+      : ra && holding
       ? `Renewal applied for on ${prettyDay(ra.appliedOn)}${ra.ref ? ` (ref ${ra.ref})` : ""}, marked by ${ra.by}. Back on the list on ${prettyDay(holdEnds!)} if no new licence has been filed.`
       : ra
         ? `The renewal applied for on ${prettyDay(ra.appliedOn)} has had six months and no new licence has been filed. Chase the council.`
@@ -193,6 +202,7 @@ function rowsFor(p: CompProperty, agent: string | null): ChaseRow[] {
       ...(undated ? { undated: true } : {}),
       ...(cert?.viaGas ? { viaGas: true } : {}),
       ...(ra && holding ? { renewal: { ...ra, holdEnds: holdEnds! } } : {}),
+      ...(nextT ? { nextTenancy: nextT } : {}),
     };
   });
 }
@@ -287,7 +297,7 @@ export function buildTracker(
   const rows = book.flatMap((p) => rowsFor(p, whoFor(p)));
 
   const outstanding = rows
-    .filter((r) => !r.undated && !r.renewal && (r.status === "expired" || r.status === "missing"))
+    .filter((r) => !r.undated && !r.renewal && !r.nextTenancy && (r.status === "expired" || r.status === "missing"))
     .sort((a, b) => urgency(a) - urgency(b));
 
   const upcoming = rows
@@ -298,6 +308,7 @@ export function buildTracker(
   /* A licence still in date with a renewal noted needs nothing yet, so only
      the ones the hold is actually keeping off Outstanding are listed. */
   const renewals = rows.filter((r) => r.renewal && (r.status === "expired" || r.status === "missing"));
+  const nextTenancy = rows.filter((r) => r.nextTenancy).sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0));
   const notNeeded: ChaseRow[] = book.flatMap((p) =>
     (Object.entries(p.certs) as [CertKey, CompProperty["certs"][CertKey]][])
       .filter(([, c]) => c?.notNeeded)
@@ -324,11 +335,12 @@ export function buildTracker(
     undated,
     notNeeded,
     renewals,
+    nextTenancy,
     upcoming,
     counts: {
       properties: book.length,
-      expired: rows.filter((r) => r.status === "expired" && !r.renewal).length,
-      missing: rows.filter((r) => r.status === "missing" && !r.undated && !r.renewal).length,
+      expired: rows.filter((r) => r.status === "expired" && !r.renewal && !r.nextTenancy).length,
+      missing: rows.filter((r) => r.status === "missing" && !r.undated && !r.renewal && !r.nextTenancy).length,
       band30: upcoming.filter((r) => r.band === 30).length,
       band14: upcoming.filter((r) => r.band === 14).length,
       band7: upcoming.filter((r) => r.band === 7).length,
@@ -339,6 +351,7 @@ export function buildTracker(
       undated: undated.length,
       notNeeded: notNeeded.length,
       renewals: renewals.length,
+      nextTenancy: nextTenancy.length,
       duplicateRowsCollapsed: collapsed,
     },
     duplicateAddresses,

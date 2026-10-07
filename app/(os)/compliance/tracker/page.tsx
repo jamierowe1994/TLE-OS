@@ -563,7 +563,7 @@ function Rows({
 export default function ComplianceTracker() {
   const [d, setD] = useState<Payload | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"outstanding" | "undated" | "notNeeded" | "renewals" | "upcoming" | "queue">("outstanding");
+  const [tab, setTab] = useState<"outstanding" | "undated" | "notNeeded" | "renewals" | "nextTenancy" | "upcoming" | "queue">("outstanding");
   const [filed, setFiled] = useState<string[]>([]);
   const [find, setFind] = useState("");
 
@@ -717,6 +717,7 @@ export default function ComplianceTracker() {
                   ["outstanding", `Outstanding (${d.outstanding.length})`],
                   ...((d.undated?.length ?? 0) > 0 ? [["undated", `On file, no date (${d.undated.length})`] as const] : []),
                   ...((d.renewals?.length ?? 0) > 0 ? [["renewals", `Renewal applied for (${d.renewals.length})`] as const] : []),
+                  ...((d.nextTenancy?.length ?? 0) > 0 ? [["nextTenancy", `Next tenancy (${d.nextTenancy.length})`] as const] : []),
                   ...((d.notNeeded?.length ?? 0) > 0 ? [["notNeeded", `Not needed (${d.notNeeded.length})`] as const] : []),
                   ["upcoming", `Coming up (${d.upcoming.length})`],
                   ["queue", `Chase queue (${d.queue.length})`],
@@ -767,6 +768,16 @@ export default function ComplianceTracker() {
                   arrives.
                 </p>
                 <Rows rows={match(d.renewals ?? [])} empty="No licence renewals waiting on the council." onFiled={onFiled} onUndo={(r) => void onUndo(r)} />
+              </>
+            )}
+            {tab === "nextTenancy" && (
+              <>
+                <p className="mb-3 text-[11.5px] leading-relaxed text-muted">
+                  Scottish homes whose EPC or legionella risk assessment runs out, or has run out, during the current
+                  tenancy. Neither is due again until the next tenancy starts (Michael, 7 October), so they are off
+                  Outstanding and nobody is chased. Each comes back the day a new tenancy begins.
+                </p>
+                <Rows rows={match(d.nextTenancy ?? [])} empty="Nothing held to the next tenancy." onFiled={onFiled} />
               </>
             )}
             {tab === "notNeeded" && (

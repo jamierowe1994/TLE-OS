@@ -3,7 +3,7 @@ import { hasDb, q } from "@/lib/db";
 import { notLetFrom } from "@/lib/not-let";
 import { osCertsFor } from "@/lib/os-certs";
 import { notNeededAll } from "@/lib/cert-not-needed";
-import { withMark, type Cert, type CertKey, type CompProperty } from "@/lib/compliance";
+import { NEXT_TENANCY_CERTS, isScottishHome, withMark, type Cert, type CertKey, type CompProperty } from "@/lib/compliance";
 
 /**
  * What the clean sweep and the OS's own vault already hold, folded into the
@@ -147,6 +147,32 @@ export async function applySweep(properties: CompProperty[]): Promise<void> {
       if (pid !== String(p.id)) continue;
       const held = p.certs[cert as CertKey];
       p.certs[cert as CertKey] = withMark(held, n);
+    }
+  }
+}
+
+/**
+ * Scotland's EPC and legionella, held to the next tenancy (Michael, 7 Oct
+ * 2026; lib/compliance heldToNextTenancy). Run on the finished book, after
+ * rooms inherit from their house, so each home is judged on its OWN tenancy:
+ * a room let after the house's EPC ran out was let without one, and is not held.
+ *
+ * Held when the home is let, its tenancy start is known (the clean sweep's
+ * tenancy_start), and the certificate was still valid on that day - so it
+ * runs out, or ran out, during this tenancy. Due again when the next begins.
+ */
+export async function holdToNextTenancy(properties: CompProperty[]): Promise<void> {
+  const answers = await sweepAnswers().catch(() => new Map<string, SweepAnswers>());
+  for (const p of properties) {
+    if (!isScottishHome(p) || p.notLet) continue;
+    const start = (answers.get(String(p.id))?.facts.get("tenancy_start")?.value ?? "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) continue;
+    const startDays = daysUntil(start);
+    if (startDays == null || startDays > 0) continue; /* a tenancy not begun yet is the next tenancy */
+    for (const k of NEXT_TENANCY_CERTS) {
+      const c = p.certs[k];
+      if (!c || c.expires == null || c.notNeeded) continue;
+      if (c.expires >= startDays) p.certs[k] = { ...c, toNextTenancy: { tenancyStart: start } };
     }
   }
 }

@@ -105,6 +105,9 @@ export type Cert = {
   /** An HMO licence renewal is with the council (Michael, 7 Oct 2026): off
    *  the outstanding list for six months from the day it went in. */
   renewalApplied?: { by: string; at: string; appliedOn: string; ref: string };
+  /** Scotland: runs out during the current tenancy, so it is not due until
+   *  the next one starts (Michael, 7 Oct 2026). See heldToNextTenancy. */
+  toNextTenancy?: { tenancyStart: string };
 };
 
 /** A person's mark (lib/cert-not-needed) on a certificate, as the book holds it. */
@@ -157,10 +160,25 @@ export function renewalHeld(c: Cert | undefined): boolean {
   return true;
 }
 
-/** The status a screen should grade on: a licence held by its renewal is
- *  watched, not overdue. */
+/**
+ * SCOTLAND, EPC AND LEGIONELLA (Michael, 7 Oct 2026): "if the EPC expires, it
+ * is technically not due for renewal until the next tenancy ... the same
+ * applies to Legionella." One that was valid on the day the current tenancy
+ * began and runs out during it is due when the next tenant moves in, not on
+ * its own date. Set on the book by lib/sweep-certs holdToNextTenancy, which
+ * knows each home's tenancy start; one valid at the start of nobody's tenancy
+ * is not held.
+ */
+export const NEXT_TENANCY_CERTS: readonly CertKey[] = ["epc", "legionella"];
+
+export function heldToNextTenancy(c: Cert | undefined): boolean {
+  return Boolean(c?.toNextTenancy);
+}
+
+/** The status a screen should grade on: a licence held by its renewal, or a
+ *  Scottish EPC or legionella held to the next tenancy, is watched, not overdue. */
 export function shownStatus(c: Cert | undefined): CertStatus {
-  return renewalHeld(c) ? "watch" : statusOf(c);
+  return renewalHeld(c) || heldToNextTenancy(c) ? "watch" : statusOf(c);
 }
 
 export type CompProperty = {
@@ -441,6 +459,7 @@ export function dueWithin(days: number, book: CompProperty[] = COMP_BOOK) {
       const cert = p.certs[key];
       const s = statusOf(cert);
       if (renewalHeld(cert)) continue; // with the council (Michael, 7 Oct 2026)
+      if (heldToNextTenancy(cert)) continue; // Scotland: due at the next tenancy (Michael, 7 Oct 2026)
       if (s === "expired" || (s === "urgent" && (cert!.expires ?? 99) <= days)) {
         out.push({ p, key, cert, status: s });
       }
