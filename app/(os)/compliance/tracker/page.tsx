@@ -1,7 +1,7 @@
 "use client";
 
 import { asOf } from "@/lib/as-of";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
 import type { ChaseRow, QueuedReminder, TrackerBook } from "@/lib/compliance-tracker";
@@ -35,6 +35,190 @@ type Sent = Map<string, { to: string; at: string }>;
 
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 
+
+/** REX's certificate types for each tracker key. The first is the default. */
+const TYPES: Record<string, { id: string; label: string }[]> = {
+  gas: [{ id: "gas_safety", label: "Gas safety record" }],
+  eicr: [{ id: "eicr", label: "EICR" }],
+  epc: [{ id: "epc", label: "EPC" }],
+  pat: [{ id: "portable_appliance_testing", label: "PAT report" }],
+  legionella: [{ id: "legionella_risk_assessment", label: "Legionella risk assessment" }],
+  fire: [{ id: "emergency_lighting_fire_exit", label: "Fire risk assessment / fire safety" }],
+  alarms: [
+    { id: "smoke_alarms", label: "Smoke alarms" },
+    { id: "co_alarms", label: "CO alarms" },
+  ],
+  licence: [
+    { id: "mandatory_hmo_license", label: "Mandatory HMO licence" },
+    { id: "additional_hmo_license", label: "Additional HMO licence" },
+    { id: "selective_hmo_license", label: "Selective licence" },
+  ],
+};
+
+type Read = { expiry: string | null; issue: string | null; expiryDerived: boolean; address: string; postcode: string; confidence: string; notes: string; type: string };
+
+const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+const pretty = (ymd: string) =>
+  new Date(`${ymd}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+
+/**
+ * Upload the certificate straight from the tracker (James, 7 Oct 2026: "I
+ * can't click on it, then open out the file, then upload it").
+ *
+ * The file goes through the same door as every other certificate
+ * (/api/compliance/certificates): into the home's vault, into REX, and -
+ * filed by the compliance office - ticked as checked, so the agent's side
+ * reads it done without them doing a thing. The date is read off the
+ * document first so nobody types it; it is still shown to confirm.
+ */
+function UploadPanel({ row, onFiled, onClose }: { row: ChaseRow; onFiled: (expiry: string) => void; onClose: () => void }) {
+  const types = TYPES[row.cert] ?? [];
+  const [type, setType] = useState(types[0]?.id ?? "");
+  const [file, setFile] = useState<File | null>(null);
+  const [expiry, setExpiry] = useState("");
+  const [issue, setIssue] = useState("");
+  const [read, setRead] = useState<Read | null>(null);
+  const [reading, setReading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const pick = useRef<HTMLInputElement>(null);
+
+  async function choose(f: File) {
+    setFile(f);
+    setRead(null);
+    setMsg(null);
+    setReading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+      fd.append("expect", type);
+      const j = await fetch("/api/compliance/certificates/read", { method: "POST", body: fd }).then((r) => r.json());
+      if (j.ok && j.read) {
+        setRead(j.read);
+        if (j.read.expiry) setExpiry(j.read.expiry);
+        if (j.read.issue) setIssue(j.read.issue);
+      } else setMsg("We couldn't read the date off it. Type it in below.");
+    } catch {
+      setMsg("We couldn't read the date off it. Type it in below.");
+    } finally {
+      setReading(false);
+    }
+  }
+
+  /* The postcode printed on the certificate against the home's. A
+     certificate for the wrong flat is the mistake worth catching here. */
+  const pc = (read?.postcode ?? "").replace(/\s+/g, "").toUpperCase();
+  const home = `${row.property} ${row.locality}`.replace(/\s+/g, "").toUpperCase();
+  const wrongHome = Boolean(pc) && !home.includes(pc);
+
+  async function submit() {
+    if (!file || !/^\d{4}-\d{2}-\d{2}$/.test(expiry)) return;
+    setBusy(true);
+    setMsg(null);
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("propertyId", row.propertyId);
+    fd.append("propertyName", [row.property, row.locality].filter(Boolean).join(", "));
+    fd.append("type", type);
+    fd.append("expiry", expiry);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(issue)) fd.append("issue", issue);
+    fd.append("source", "Compliance tracker");
+    try {
+      const j = await fetch("/api/compliance/certificates?refresh=1", { method: "POST", body: fd }).then((r) => r.json());
+      if (!j.ok) setMsg(j.error || "That certificate did not file.");
+      else onFiled(expiry);
+    } catch {
+      setMsg("That did not file - the OS could not be reached. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const field = "rounded-lg border border-line/80 bg-white px-2.5 py-1.5 text-[12.5px] text-ink";
+  return (
+    <div className="rounded-xl border border-line/70 bg-page p-3.5">
+      <div className="flex flex-wrap items-end gap-3">
+        {types.length > 1 && (
+          <label className="flex flex-col gap-1 text-[10.5px] text-muted">
+            Type
+            <select value={type} onChange={(e) => setType(e.target.value)} className={field}>
+              {types.map((t) => (
+                <option key={t.id} value={t.id}>{t.label}</option>
+              ))}
+            </select>
+          </label>
+        )}
+        <div className="flex flex-col gap-1 text-[10.5px] text-muted">
+          File
+          <button type="button" onClick={() => pick.current?.click()} className="rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12px] text-ink">
+            {file ? file.name.slice(0, 40) : "Choose the certificate"}
+          </button>
+          <input
+            ref={pick}
+            type="file"
+            accept="application/pdf,image/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void choose(f);
+              e.target.value = "";
+            }}
+          />
+        </div>
+        <label className="flex flex-col gap-1 text-[10.5px] text-muted">
+          Expires
+          <input type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} className={field} />
+        </label>
+        <label className="flex flex-col gap-1 text-[10.5px] text-muted">
+          Issued (optional)
+          <input type="date" value={issue} onChange={(e) => setIssue(e.target.value)} className={field} />
+        </label>
+        <div className="ml-auto flex gap-2">
+          <button type="button" onClick={onClose} className="rounded-full border border-line/80 px-3.5 py-1.5 text-[12px]">
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void submit()}
+            disabled={!file || !expiry || busy || reading}
+            className="rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40"
+          >
+            {busy ? "Filing…" : "File it"}
+          </button>
+        </div>
+      </div>
+      {reading && (
+        <p className="mt-2 flex items-center gap-2 text-[11.5px] text-muted">
+          <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-line border-t-ink" aria-hidden />
+          Reading the dates off the certificate…
+        </p>
+      )}
+      {read && !reading && (
+        <p className="mt-2 text-[11.5px] leading-relaxed text-muted">
+          {read.expiry ? (
+            <>
+              Read off the document: expires <span className="font-semibold text-ink">{pretty(read.expiry)}</span>
+              {read.expiryDerived ? " (worked out from the issue date)" : ""}. Check it before filing.
+            </>
+          ) : (
+            "No expiry date could be read off it. Type it in."
+          )}
+          {read.address && <> Address on it: {read.address}{read.postcode ? `, ${read.postcode}` : ""}.</>}
+        </p>
+      )}
+      {wrongHome && (
+        <p className="mt-1.5 text-[11.5px] font-semibold text-accent-dark">
+          The postcode on this certificate ({read?.postcode}) isn&apos;t this home&apos;s. Make sure it&apos;s the right file.
+        </p>
+      )}
+      {expiry && expiry < today() && (
+        <p className="mt-1.5 text-[11.5px] text-accent-dark">That date has passed, so it will still show as expired once filed.</p>
+      )}
+      {msg && <p className="mt-1.5 text-[11.5px] text-accent-dark">{msg}</p>}
+    </div>
+  );
+}
+
 /**
  * Agent before landlord, and headed "Chase via". Michael never writes to a
  * landlord: "he will always go through the agent" (James, 20 Sep 2026). The
@@ -44,7 +228,8 @@ const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "n
  * is past its reminders and is a conversation, not an email. Undefined leaves
  * the column off; null says the log could not be read.
  */
-function Rows({ rows, empty, sent }: { rows: ChaseRow[]; empty: string; sent?: Sent | null }) {
+function Rows({ rows, empty, sent, onFiled }: { rows: ChaseRow[]; empty: string; sent?: Sent | null; onFiled: (r: ChaseRow, expiry: string) => void }) {
+  const [open, setOpen] = useState<string | null>(null);
   if (!rows.length) return <p className="py-6 text-[12.5px] text-muted">{empty}</p>;
   return (
     <div className="overflow-x-auto">
@@ -57,11 +242,15 @@ function Rows({ rows, empty, sent }: { rows: ChaseRow[]; empty: string; sent?: S
             <th className={cell}>Chase via</th>
             <th className={cell}>Landlord</th>
             {sent !== undefined && <th className={cell}>Agent emailed</th>}
+            <th className={cell} />
           </tr>
         </thead>
         <tbody>
-          {rows.slice(0, 200).map((r) => (
-            <tr key={`${r.propertyId}-${r.cert}`} className="border-b border-line/40 last:border-0">
+          {rows.slice(0, 200).map((r) => {
+            const k = `${r.propertyId}-${r.cert}`;
+            return (
+            <Fragment key={k}>
+            <tr className={`${open === k ? "" : "border-b border-line/40"} last:border-0`}>
               <td className={cell}>
                 <span className="block">{r.property}</span>
                 <span className="block text-[10.5px] text-muted">{r.locality}</span>
@@ -94,8 +283,33 @@ function Rows({ rows, empty, sent }: { rows: ChaseRow[]; empty: string; sent?: S
                   )}
                 </td>
               )}
+              <td className={`${cell} text-right`}>
+                <button
+                  type="button"
+                  onClick={() => setOpen(open === k ? null : k)}
+                  className={`whitespace-nowrap rounded-full px-3 py-1 text-[11.5px] font-semibold ${open === k ? "border border-line/80" : "bg-ink text-white"}`}
+                >
+                  {open === k ? "Close" : "Upload"}
+                </button>
+              </td>
             </tr>
-          ))}
+            {open === k && (
+              <tr className="border-b border-line/40">
+                <td colSpan={sent !== undefined ? 7 : 6} className="px-3 pb-3">
+                  <UploadPanel
+                    row={r}
+                    onClose={() => setOpen(null)}
+                    onFiled={(expiry) => {
+                      setOpen(null);
+                      onFiled(r, expiry);
+                    }}
+                  />
+                </td>
+              </tr>
+            )}
+            </Fragment>
+            );
+          })}
         </tbody>
       </table>
       {rows.length > 200 && (
@@ -110,7 +324,38 @@ function Rows({ rows, empty, sent }: { rows: ChaseRow[]; empty: string; sent?: S
 export default function ComplianceTracker() {
   const [d, setD] = useState<Payload | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"outstanding" | "upcoming" | "queue">("outstanding");
+  const [tab, setTab] = useState<"outstanding" | "undated" | "upcoming" | "queue">("outstanding");
+  const [filed, setFiled] = useState<string[]>([]);
+  const [find, setFind] = useState("");
+
+  /* Off the list the moment it is filed, so the number goes down while the
+     book rebuilds behind it (a minute or two). A date already past stays:
+     the home is still expired, and saying otherwise would be untrue. */
+  function onFiled(r: ChaseRow, expiry: string) {
+    const label = `${r.certLabel}, ${r.property}`;
+    setFiled((f) => [label, ...f].slice(0, 6));
+    if (expiry < today()) return;
+    setD((cur) => {
+      if (!cur) return cur;
+      const gone = (x: ChaseRow) => x.propertyId === r.propertyId && x.cert === r.cert;
+      const was = cur.outstanding.find(gone);
+      return {
+        ...cur,
+        outstanding: cur.outstanding.filter((x) => !gone(x)),
+        undated: (cur.undated ?? []).filter((x) => !gone(x)),
+        upcoming: cur.upcoming.filter((x) => !gone(x)),
+        counts: {
+          ...cur.counts,
+          expired: cur.counts.expired - (was?.status === "expired" ? 1 : 0),
+          missing: cur.counts.missing - (was?.status === "missing" ? 1 : 0),
+        },
+      };
+    });
+  }
+  const match = (rows: ChaseRow[]) => {
+    const t = find.trim().toLowerCase();
+    return t ? rows.filter((r) => `${r.property} ${r.locality} ${r.agent ?? ""} ${r.landlord} ${r.certLabel}`.toLowerCase().includes(t)) : rows;
+  };
 
   useEffect(() => {
     let live = true;
@@ -191,6 +436,7 @@ export default function ComplianceTracker() {
               {(
                 [
                   ["outstanding", `Outstanding (${d.outstanding.length})`],
+                  ...((d.undated?.length ?? 0) > 0 ? [["undated", `On file, no date (${d.undated.length})`] as const] : []),
                   ["upcoming", `Coming up (${d.upcoming.length})`],
                   ["queue", `Chase queue (${d.queue.length})`],
                 ] as const
@@ -208,14 +454,39 @@ export default function ComplianceTracker() {
               ))}
             </div>
 
+            {tab !== "queue" && (
+              <div className="mb-3 flex flex-wrap items-center gap-3">
+                <input
+                  value={find}
+                  onChange={(e) => setFind(e.target.value)}
+                  placeholder="Find an address, agent or landlord"
+                  className="w-full max-w-[340px] rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12.5px]"
+                />
+                {filed.length > 0 && (
+                  <p className="text-[11.5px] text-muted">
+                    <span className="font-semibold text-ink">Filed:</span> {filed.join(" · ")}. On the home&apos;s file, sent to REX and ticked as checked.
+                  </p>
+                )}
+              </div>
+            )}
             {tab === "outstanding" && (
               <Rows
-                rows={d.outstanding}
-                empty="Nothing expired and nothing missing. That would be a first."
+                rows={match(d.outstanding)}
+                empty={find ? "Nothing outstanding matches that." : "Nothing expired and nothing missing. That would be a first."}
+                onFiled={onFiled}
               />
             )}
+            {tab === "undated" && (
+              <>
+                <p className="mb-3 text-[11.5px] leading-relaxed text-muted">
+                  The clean sweep found these on file, but nobody has recorded when they run out. They are not
+                  counted as outstanding. Upload the certificate with its date to finish each one.
+                </p>
+                <Rows rows={match(d.undated ?? [])} empty="Every certificate on file has its date." onFiled={onFiled} />
+              </>
+            )}
             {tab === "upcoming" && (
-              <Rows rows={d.upcoming} empty="Nothing falls due in the next 30 days." sent={sent} />
+              <Rows rows={match(d.upcoming)} empty="Nothing falls due in the next 30 days." sent={sent} onFiled={onFiled} />
             )}
             {tab === "queue" && (
               <>

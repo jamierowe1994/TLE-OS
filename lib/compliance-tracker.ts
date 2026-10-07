@@ -79,11 +79,18 @@ export interface ChaseRow {
   tenant: string | null | undefined;
   /** Why this is on the list, in the words Michael would use. */
   reason: string;
+  /** On file with no date read off it (the clean sweep's licences and alarm
+   *  tests): off the outstanding list, still wanting its date. */
+  undated?: boolean;
+  /** Alarms answered by the gas safety record: chased as the gas, never twice. */
+  viaGas?: boolean;
 }
 
 export interface TrackerBook {
   /** Expired or no record at all — nothing to schedule, someone must act. */
   outstanding: ChaseRow[];
+  /** On file from the clean sweep with no expiry recorded (7 Oct 2026). */
+  undated: ChaseRow[];
   /** In date but inside a chase band. */
   upcoming: ChaseRow[];
   counts: {
@@ -97,6 +104,8 @@ export interface TrackerBook {
     noAgent: number;
     /** In date, but we hold a date with no document behind it. */
     dateWithoutDocument: number;
+    /** On file, no expiry date recorded: not outstanding, not finished. */
+    undated: number;
     /** Duplicate property rows collapsed — a property listed twice is still
      *  one property, and chasing it twice is how a landlord stops reading. */
     duplicateRowsCollapsed: number;
@@ -122,8 +131,14 @@ function rowsFor(p: CompProperty, agent: string | null): ChaseRow[] {
     const band = bandFor(daysLeft);
     const attached = Boolean(cert?.attached);
 
-    const reason =
-      status === "missing"
+    const undated = Boolean(cert?.undated);
+    const reason = undated
+      ? "On file from the clean sweep, but nobody has recorded its expiry date. Upload it again with the date to finish it."
+      : cert?.viaGas && status !== "missing"
+        ? status === "expired"
+          ? `Checked at the gas safety inspection, and that record ran out ${Math.abs(daysLeft ?? 0)} days ago.`
+          : `Checked at the gas safety inspection: due again with the gas in ${daysLeft} days.`
+        : status === "missing"
         ? daysLeft != null
           ? `The last certificate on file ran out ${Math.abs(daysLeft)} days ago and no renewal has reached us.`
           : "No record at all — we cannot say whether this exists."
@@ -147,6 +162,8 @@ function rowsFor(p: CompProperty, agent: string | null): ChaseRow[] {
       agent,
       tenant: p.tenant,
       reason,
+      ...(undated ? { undated: true } : {}),
+      ...(cert?.viaGas ? { viaGas: true } : {}),
     };
   });
 }
@@ -241,20 +258,23 @@ export function buildTracker(
   const rows = book.flatMap((p) => rowsFor(p, whoFor(p)));
 
   const outstanding = rows
-    .filter((r) => r.status === "expired" || r.status === "missing")
+    .filter((r) => !r.undated && (r.status === "expired" || r.status === "missing"))
     .sort((a, b) => urgency(a) - urgency(b));
 
   const upcoming = rows
     .filter((r) => r.band !== null)
     .sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0));
 
+  const undated = rows.filter((r) => r.undated);
+
   return {
     outstanding,
+    undated,
     upcoming,
     counts: {
       properties: book.length,
       expired: rows.filter((r) => r.status === "expired").length,
-      missing: rows.filter((r) => r.status === "missing").length,
+      missing: rows.filter((r) => r.status === "missing" && !r.undated).length,
       band30: upcoming.filter((r) => r.band === 30).length,
       band14: upcoming.filter((r) => r.band === 14).length,
       band7: upcoming.filter((r) => r.band === 7).length,
@@ -262,6 +282,7 @@ export function buildTracker(
       // In date, document absent. EPC is the worst offender — measured at zero
       // documents across 100 sampled entries. A date we cannot evidence.
       dateWithoutDocument: rows.filter((r) => r.status !== "missing" && !r.attached).length,
+      undated: undated.length,
       duplicateRowsCollapsed: collapsed,
     },
     duplicateAddresses,
@@ -298,7 +319,7 @@ export function buildQueue(tracker: TrackerBook): QueuedReminder[] {
   const blocked = (r: ChaseRow) =>
     r.agent ? null : "No agent on this property — the chase would reach the landlord without their agent knowing.";
   const due = tracker.upcoming
-    .filter((r) => r.band !== null)
+    .filter((r) => r.band !== null && !r.viaGas)
     .map((r) => ({
       key: `${r.propertyId}:${r.cert}:${r.band}`,
       band: r.band as Band,
@@ -318,7 +339,7 @@ export function buildQueue(tracker: TrackerBook): QueuedReminder[] {
      six months) is not here: that is Michael's list to work, and 278 of them
      in an agent's inbox on day one would bury the real ones. */
   const expired = tracker.outstanding
-    .filter((r) => r.status === "expired" && r.daysLeft != null)
+    .filter((r) => r.status === "expired" && r.daysLeft != null && !r.viaGas)
     .map((r) => ({
       key: `${r.propertyId}:${r.cert}:0`,
       band: 0 as const,

@@ -5,6 +5,7 @@ import { fetchListingBook } from "@/lib/rex-listings";
 import type { CertKey, CompProperty } from "@/lib/compliance";
 import { activeOsProperties, factsByRexId } from "@/lib/os-properties";
 import { osCertsFor } from "@/lib/os-certs";
+import { applySweep } from "@/lib/sweep-certs";
 import { houseKeyOf, isRoomAddress } from "@/lib/address-parse";
 import { allAgents } from "@/lib/rex-agents";
 import { listTegPeople, normEmail } from "@/lib/teg-people";
@@ -501,6 +502,11 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
       onRex: false,
     });
   }
+
+  /* What the clean sweep and the OS vault already hold (7 Oct 2026): PAT,
+     alarms, legionella and licences from the sweep, certificates filed here
+     that REX has not got, and the homes the sweep parks. See lib/sweep-certs. */
+  await applySweep(properties).catch(() => null);
 
   /* A shared house's certificates are the house's (James, 6 Sep): gas, EICR,
      EPC and the licence are done for the building. Every room inherits the

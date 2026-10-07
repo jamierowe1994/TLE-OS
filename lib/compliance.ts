@@ -91,6 +91,15 @@ export type Cert = {
   /** Is the actual certificate file on the record? (REX truth: EICRs yes,
    *  EPCs almost never — a date without a document is half a record.) */
   attached: boolean;
+  /** On file with no date read off it - a licence, a "fire alarm test on
+   *  file" - from the clean sweep. Not outstanding; the date is still wanted. */
+  undated?: boolean;
+  /** Answered by the clean sweep's record rather than REX's (7 Oct 2026). */
+  fromSweep?: boolean;
+  /** Filed in the OS and not (yet) in REX's compliance table. */
+  fromOs?: boolean;
+  /** Smoke and CO alarms, evidenced by the gas safety record. */
+  viaGas?: boolean;
 };
 
 export type CompProperty = {
@@ -131,6 +140,9 @@ export type CompProperty = {
    *  else, so the certificates, renewals and contracts are the landlord's
    *  (James, 2 Oct 2026). */
   rentCollect?: boolean;
+  /** The clean sweep parks this home: nobody has moved in, or it is archived
+   *  or vacant with no letting agreement (lib/not-let). Not ours to chase. */
+  notLet?: boolean;
 };
 
 /**
@@ -181,7 +193,7 @@ export const isLetOnly = (p: CompProperty): boolean => p.service === "Let Only";
  * only thing that speaks for it.
  */
 export const isOurs = (p: CompProperty): boolean =>
-  Boolean(p.managedByPm) && !isLetOnly(p) && !p.agentLeft && !p.rentCollect;
+  Boolean(p.managedByPm) && !isLetOnly(p) && !p.agentLeft && !p.rentCollect && !p.notLet;
 
 /**
  * What this property is REQUIRED to hold.

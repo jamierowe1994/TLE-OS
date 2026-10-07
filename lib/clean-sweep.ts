@@ -4,6 +4,7 @@ import { hasDb, q } from "@/lib/db";
 import { FIELDS, FIELD_BY_KEY, type FactField } from "@/lib/property-facts";
 import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
 import { getComplianceBook } from "@/lib/compliance-cache";
+import { notLetFrom } from "@/lib/not-let";
 
 /**
  * THE CLEAN SWEEP (James, Susan and Howard, 24 Sep 2026).
@@ -248,20 +249,8 @@ async function load(): Promise<{ props: PropRow[]; facts: Map<string, Map<string
  * parked, off the lists and out of the missing count, until somebody moves in.
  */
 export function notLetYet(p: PropRow & { tenant_names?: string | null }, facts: Map<string, FactRow>): boolean {
-  /* Not with us any more (James, 28 Sep 2026): REX PM has the home archived,
-     or vacant with no letting agreement. Susan's sheets still list some of
-     them, which is how 24 Ann Street and 278 Rowan Road showed 17 gaps each
-     for files that were never going to exist. rex_pm_status is read from
-     REX PM's own property record. */
-  if (/^(archived|vacant, no letting agreement)/i.test(facts.get("rex_pm_status")?.value ?? "")) return true;
-  /* Susan's deposit report (28 Sep) marks homes archived or sold, to come off PayProp. */
-  if (/^archived/i.test(facts.get("deposit_status")?.value ?? "")) return true;
-  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
-  const start = (facts.get("tenancy_start")?.value ?? "").slice(0, 10);
-  if (start && start > today) return true;
-  const named = Boolean((p.tenant_names ?? "").trim());
-  const counted = Number(facts.get("tenants_count")?.value ?? 0) > 0;
-  return !named && !counted;
+  /* The rule lives in lib/not-let, so the compliance book parks the same homes. */
+  return notLetFrom(p.tenant_names, facts);
 }
 
 /**
