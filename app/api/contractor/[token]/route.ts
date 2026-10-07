@@ -30,6 +30,9 @@ import type { SharePerson } from "@/lib/certificate-share";
  * invoices, so how much things cost." An invoice never becomes a certificate
  * row and so can never be fanned out to a landlord or a tenant; the amount
  * only ever travels down the accounts path.
+ *
+ * A REHEARSAL (lib/rehearsal) uses this same page, and files nothing: its
+ * house is invented, so a certificate stays a file on the job.
  */
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -87,36 +90,50 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
         if (!PLAUSIBLE(expiry)) return NextResponse.json({ ok: false, error: "Put the date it runs out on it." }, { status: 400 });
         if (issue && !YMD.test(issue)) return NextResponse.json({ ok: false, error: "The issue date does not look right." }, { status: 400 });
         if (!next.completedAt) next = await moveOrder(o.id, { action: "done", note: "Marked done by the contractor with their certificate." }, by);
-        /* Who the book cannot name. The works order's own landlord and tenant
-           are the fallback for a home REX's managed book does not carry, and
-           the contractor is only ever knowable from here. */
-        const c = await getContractor(o.contractorId).catch(() => null);
-        const people: SharePerson[] = [
-          ...(o.landlordEmail ? [{ role: "landlord" as const, name: o.landlord, email: o.landlordEmail }] : []),
-          ...(o.tenantEmail ? [{ role: "tenant" as const, name: o.tenant, email: o.tenantEmail }] : []),
-          ...(c?.email ? [{ role: "contractor" as const, name: c.contact || c.name, email: c.email }] : []),
-        ];
-        const filed = await fileCertificate({
-          bytes: new Uint8Array(body),
-          fileName: file.name,
-          contentType: file.type,
-          propertyId: o.propertyId || pendingKeyFor([o.propertyName, o.locality].filter(Boolean).join(", ")),
-          propertyName: [o.propertyName, o.locality].filter(Boolean).join(", "),
-          type,
-          expiry,
-          issue: issue || null,
-          source: `the contractor's page, job #${o.ref}`,
-          by,
-          people,
-        });
-        await logEvent(
-          o.id,
-          "TLE OS",
-          "compliance",
-          filed.duplicate
-            ? `${file.name} is already on this home's compliance record; nothing filed twice.`
-            : `${file.name} filed as a certificate on the property. ${filed.row.rex_note || "REX not written."} ${filed.share?.line ?? ""}`.trim()
-        );
+        /* A rehearsal stops here (7 Oct 2026). Its house is invented, so
+           filing would put a real os_certificates row on an address that does
+           not exist - on Michael's To verify list, and into REX if the write
+           is armed. The file stays on the job like any other, and the
+           timeline says what a real job would have done. */
+        let certificate: { filed: boolean; share: string | null; rehearsal?: true };
+        if (o.rehearsal) {
+          await logEvent(o.id, "TLE OS", "compliance", `Rehearsal: ${file.name} would be filed as a certificate on the property here; nothing was filed.`);
+          certificate = { filed: false, share: null, rehearsal: true };
+        } else {
+          /* Who the book cannot name. The works order's own landlord and tenant
+             are the fallback for a home REX's managed book does not carry, and
+             the contractor is only ever knowable from here. */
+          const c = await getContractor(o.contractorId).catch(() => null);
+          const people: SharePerson[] = [
+            ...(o.landlordEmail ? [{ role: "landlord" as const, name: o.landlord, email: o.landlordEmail }] : []),
+            ...(o.tenantEmail ? [{ role: "tenant" as const, name: o.tenant, email: o.tenantEmail }] : []),
+            ...(c?.email ? [{ role: "contractor" as const, name: c.contact || c.name, email: c.email }] : []),
+          ];
+          const filed = await fileCertificate({
+            bytes: new Uint8Array(body),
+            fileName: file.name,
+            contentType: file.type,
+            propertyId: o.propertyId || pendingKeyFor([o.propertyName, o.locality].filter(Boolean).join(", ")),
+            propertyName: [o.propertyName, o.locality].filter(Boolean).join(", "),
+            type,
+            expiry,
+            issue: issue || null,
+            source: `the contractor's page, job #${o.ref}`,
+            by,
+            people,
+          });
+          await logEvent(
+            o.id,
+            "TLE OS",
+            "compliance",
+            filed.duplicate
+              ? `${file.name} is already on this home's compliance record; nothing filed twice.`
+              : `${file.name} filed as a certificate on the property. ${filed.row.rex_note || "REX not written."} ${filed.share?.line ?? ""}`.trim()
+          );
+          certificate = { filed: !filed.duplicate, share: filed.share?.line ?? null };
+        }
+        /* Rehearsal or not, these keep their own gate: a rehearsal's emails
+           are written and kept on the walkthrough, never sent. */
         if (me) for (const e of await emailsForMove(next, "done", me).catch(() => [])) await logEvent(o.id, "TLE OS", "email", outcomeLine(e));
         /* "done", not "file". The file ping exists to tell compliance a
            document landed on a finished job, and this document announces
@@ -124,7 +141,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
            the expiry and everybody who now has it. The completion ping still
            goes once, because the job did just finish. */
         await pingCompliance(next, "done");
-        return NextResponse.json({ ok: true, job: publicView(next), certificate: { filed: !filed.duplicate, share: filed.share?.line ?? null } });
+        return NextResponse.json({ ok: true, job: publicView(next), certificate });
       }
       if (kind === "invoice" && Number.isFinite(amount) && amount > 0) {
         if (!next.completedAt) next = await moveOrder(o.id, { action: "done", note: String(form.get("note") ?? "").trim() || "Marked done by the contractor with their invoice." }, by);
@@ -132,7 +149,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
         const settings = await invoiceSettings();
         const told = await tellAccounts(next, settings.accountsEmail ?? "");
         if (told.sent) await markAccountsTold(o.id);
-        await logEvent(o.id, "TLE OS", "email", told.sent ? `Accounts told: ${pounds(next.invoicePence)} to pay, at ${told.address}.` : `Accounts not told: ${told.reason}.`);
+        await logEvent(
+          o.id,
+          "TLE OS",
+          "email",
+          told.via === "the rehearsal" ? outcomeLine(told) : told.sent ? `Accounts told: ${pounds(next.invoicePence)} to pay, at ${told.address}.` : `Accounts not told: ${told.reason}.`
+        );
         if (me) for (const e of await emailsForMove(next, "done", me).catch(() => [])) await logEvent(o.id, "TLE OS", "email", outcomeLine(e));
         await pingCompliance(next, "done");
       } else {

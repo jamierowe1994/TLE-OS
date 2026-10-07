@@ -79,6 +79,7 @@ export default function ContractorPage() {
       setCertType(""); setCertExpiry("");
       /* What actually happened, not "thanks": a contractor who has just
          handed over a legal document wants to know it landed somewhere. */
+      if (r.certificate?.rehearsal) return setFlash("Rehearsal - on a real job the certificate would now be filed on the property's record. Nothing was filed.");
       return setFlash("Thanks - the certificate is on the property's record and the landlord and tenant are being sent a copy.");
     }
     setFlash(kind === "invoice" ? "Thanks - your invoice is on the job and accounts have been told." : "Photo added.");
