@@ -18,7 +18,8 @@ import MarketPicturePanel, {
 } from "@/components/MarketPicture";
 import type { MarketPicture } from "@/lib/market-picture";
 import PresentDeck from "@/components/PresentDeck";
-import PreAppraisalBrochure, { brochureCount, brochureCovers, brochureIndexOf } from "@/components/PreAppraisalBrochure";
+import PreAppraisalBrochure from "@/components/PreAppraisalBrochure";
+import { brochureCount, brochureCovers, brochureIndexOf } from "@/lib/brochure";
 import RmGuidePanel from "@/components/RmGuidePanel";
 import type { RmGuide } from "@/lib/rm-guide";
 import {

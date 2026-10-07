@@ -3,7 +3,8 @@ import { readPresentation, presentationExpiry, deletePresentation } from "@/lib/
 import { SAMPLE_DECK, DECK_KINDS, asStyle, deckKind, slidesFor } from "@/lib/present";
 import StylePicker from "@/components/StylePicker";
 import PresentDeck from "@/components/PresentDeck";
-import PreAppraisalBrochure, { brochureCount } from "@/components/PreAppraisalBrochure";
+import PreAppraisalBrochure from "@/components/PreAppraisalBrochure";
+import { brochureCount } from "@/lib/brochure";
 import { getRecording, mp4UrlFor } from "@/lib/flow-video";
 
 /**

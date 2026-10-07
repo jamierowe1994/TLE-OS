@@ -7,12 +7,12 @@ import {
   defaultBio,
   initialsOf,
   type PresentDeck as Deck,
-  type SlideId,
 } from "@/lib/present";
 import { icsFor } from "@/lib/appraisal-email";
 import { Line, Stage, useStage, STEP_ICONS, WelcomeVideoButton, welcomeReady, type IconName } from "@/components/present-kit";
 import { FROM_US, FROM_YOU } from "@/components/PresentDeck";
 import { caveat, figtree } from "@/lib/brochure-fonts";
+import { brochurePositions } from "@/lib/brochure";
 
 /**
  * THE PRE-APPRAISAL IN THE BROCHURE LOOK. James, 7 Oct 2026, from a design
@@ -904,33 +904,19 @@ function Close({ c }: { c: Ctx }) {
 
 /* ───────────────────────── the viewer ───────────────────────── */
 
-/* `covers` is the slide in the deck's own list (lib/present, SLIDES_BY_KIND)
-   that each of these stands for, so the presentation builder's slide list
-   and its preview can talk to each other in either direction. */
-const SLIDES: { id: string; title: string; covers: SlideId; render: (c: Ctx) => React.ReactNode }[] = [
-  { id: "welcome", title: "Welcome", covers: "welcome", render: (c) => <Welcome c={c} /> },
-  { id: "day", title: "On the day", covers: "appointment", render: (c) => <TheDay c={c} /> },
-  { id: "prepare", title: "Before we arrive", covers: "appointment", render: (c) => <Prepare c={c} /> },
-  { id: "agent", title: "Who you're meeting", covers: "agent", render: (c) => <Agent c={c} /> },
-  { id: "why", title: "Our commitment", covers: "why", render: (c) => <Commitment c={c} /> },
-  { id: "answers", title: "Quick answers", covers: "questions", render: (c) => <Answers c={c} /> },
-  { id: "questions", title: "Before we meet", covers: "questions", render: (c) => <Close c={c} /> },
+/* One per entry in lib/brochure's BROCHURE_COVERS, in the same order - that
+   list is what the server and the builder count and map against. */
+const SLIDES: { id: string; title: string; render: (c: Ctx) => React.ReactNode }[] = [
+  { id: "welcome", title: "Welcome", render: (c) => <Welcome c={c} /> },
+  { id: "day", title: "On the day", render: (c) => <TheDay c={c} /> },
+  { id: "prepare", title: "Before we arrive", render: (c) => <Prepare c={c} /> },
+  { id: "agent", title: "Who you're meeting", render: (c) => <Agent c={c} /> },
+  { id: "why", title: "Our commitment", render: (c) => <Commitment c={c} /> },
+  { id: "answers", title: "Quick answers", render: (c) => <Answers c={c} /> },
+  { id: "questions", title: "Before we meet", render: (c) => <Close c={c} /> },
 ];
 
-/* The builder lets an agent switch "Why The Letting Experts" off (it is the
-   one removable slide in the pre-appraisal), and the brochure obeys: the
-   commitments slide goes with it. */
-const slidesOf = (deck: Deck) => SLIDES.filter((s) => !(s.covers === "why" && deck.hidden?.includes("why")));
-
-/** How many slides this deck's brochure has. */
-export const brochureCount = (deck: Deck) => slidesOf(deck).length;
-/** The first brochure slide that stands for one of the deck's slide ids. */
-export const brochureIndexOf = (deck: Deck, id: SlideId | undefined) => Math.max(0, slidesOf(deck).findIndex((s) => s.covers === id));
-/** Which of the deck's slide ids a brochure slide stands for. */
-export const brochureCovers = (deck: Deck, i: number): SlideId => {
-  const list = slidesOf(deck);
-  return list[Math.max(0, Math.min(list.length - 1, i))].covers;
-};
+const slidesOf = (deck: Deck) => brochurePositions(deck).map((p) => SLIDES[p]);
 
 export default function PreAppraisalBrochure({
   token,
