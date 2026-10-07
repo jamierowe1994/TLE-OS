@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
 import { readPresentation, presentationExpiry, deletePresentation } from "@/lib/present-store";
-import { SAMPLE_DECK, DECK_KINDS, asStyle, slidesFor } from "@/lib/present";
+import { SAMPLE_DECK, DECK_KINDS, asStyle, deckKind, slidesFor } from "@/lib/present";
 import StylePicker from "@/components/StylePicker";
 import PresentDeck from "@/components/PresentDeck";
+import PreAppraisalBrochure, { brochureCount } from "@/components/PreAppraisalBrochure";
 import { getRecording, mp4UrlFor } from "@/lib/flow-video";
 
 /**
@@ -70,8 +71,19 @@ export default async function PresentPage({
        exactly the confusion it is here to end. */
     const kinds = DECK_KINDS.map((k) => ({
       ...k,
-      count: slidesFor({ ...SAMPLE_DECK, kind: k.id }).length,
+      count: k.id === "pre-appraisal" ? brochureCount(SAMPLE_DECK) : slidesFor({ ...SAMPLE_DECK, kind: k.id }).length,
     }));
+    /* THE PRE-APPRAISAL IS THE BROCHURE (James, 7 Oct 2026), here as on a
+       real link. The before-and-after harness (?embed=1) still frames the
+       slide deck, which is the only thing it knows how to step through. */
+    if (asked === "pre-appraisal" && !frame) {
+      return (
+        <>
+          <PreAppraisalBrochure token="sample" deck={deck} />
+          <StylePicker kind={asked} style={chosen} kinds={kinds} />
+        </>
+      );
+    }
     return (
       <>
         <PresentDeck
@@ -130,6 +142,9 @@ export default async function PresentPage({
 
   /* The builder's own ticks are for the builder; the landlord's page has no use for them. */
   deck = { ...deck, builder: null, terms: deck.terms ? { ...deck.terms, signUrl: null } : deck.terms };
+  /* The pre-appraisal goes out as the brochure (James, 7 Oct 2026); the two
+     long decks are still the slide deck. */
+  if (deckKind(deck) === "pre-appraisal") return <PreAppraisalBrochure token={row.token} deck={deck} />;
   return <PresentDeck token={row.token} deck={deck} slides={slidesFor(deck)} />;
 }
 

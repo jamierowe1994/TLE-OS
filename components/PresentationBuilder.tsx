@@ -18,11 +18,13 @@ import MarketPicturePanel, {
 } from "@/components/MarketPicture";
 import type { MarketPicture } from "@/lib/market-picture";
 import PresentDeck from "@/components/PresentDeck";
+import PreAppraisalBrochure, { brochureCount, brochureCovers, brochureIndexOf } from "@/components/PreAppraisalBrochure";
 import RmGuidePanel from "@/components/RmGuidePanel";
 import type { RmGuide } from "@/lib/rm-guide";
 import {
   SECTIONS,
   STANDARD_FEES,
+  deckKind,
   defaultBio,
   firstNameOf,
   slideHasContent,
@@ -2581,6 +2583,14 @@ function DeckPreview({
   useEffect(() => onAtRef.current?.(at), [at]);
   const [tall, setTall] = useState(PREVIEW_H);
   const slides = useMemo(() => slidesFor(deck), [deck]);
+  /* The pre-appraisal previews as the brochure the landlord will get, which
+     has its own seven slides. `at` and `goTo` stay in the builder's slide
+     list's terms; these translate to and from the brochure's cells. */
+  const brochure = deckKind(deck) === "pre-appraisal";
+  const cells = brochure ? brochureCount(deck) : slides.length;
+  const toCell = (i: number) => (brochure ? brochureIndexOf(deck, slides[i]?.id) : i);
+  const fromCell = (c: number) => (brochure ? Math.max(0, slides.findIndex((s) => s.id === brochureCovers(deck, c))) : c);
+  const [cell, setCell] = useState(0);
   const scroller = () => box.current?.querySelector<HTMLElement>("[data-index]")?.parentElement ?? null;
 
   useEffect(() => {
@@ -2600,7 +2610,9 @@ function DeckPreview({
     let raf = 0;
     const onScroll = () => {
       if (!row) return;
-      setAt(Math.round(row.scrollLeft / Math.max(1, row.clientWidth)));
+      const c = Math.round(row.scrollLeft / Math.max(1, row.clientWidth));
+      setCell(c);
+      setAt(fromCell(c));
     };
     const hook = () => {
       row = scroller();
@@ -2619,16 +2631,17 @@ function DeckPreview({
   useEffect(() => {
     setTall(PREVIEW_H);
     const raf = requestAnimationFrame(() => {
-      const cell = scroller()?.children[at] as HTMLElement | undefined;
-      if (cell) setTall(Math.max(PREVIEW_H, Math.min(cell.scrollHeight, PREVIEW_H * 2.5)));
+      const el = scroller()?.children[cell] as HTMLElement | undefined;
+      if (el) setTall(Math.max(PREVIEW_H, Math.min(el.scrollHeight, PREVIEW_H * 2.5)));
     });
     return () => cancelAnimationFrame(raf);
-  }, [at, deck]);
+  }, [cell, deck]);
 
-  const go = (i: number) => {
+  /* Back and Next step through the preview's own cells. */
+  const go = (c: number) => {
     const row = scroller();
     if (!row) return;
-    const to = Math.max(0, Math.min(slides.length - 1, i));
+    const to = Math.max(0, Math.min(cells - 1, c));
     row.scrollTo({ left: to * row.clientWidth, behavior: "smooth" });
   };
 
@@ -2639,9 +2652,11 @@ function DeckPreview({
     if (!goTo) return;
     const row = scroller();
     if (!row) return;
-    const to = Math.max(0, Math.min(slides.length - 1, goTo.i));
+    const i = Math.max(0, Math.min(slides.length - 1, goTo.i));
+    const to = toCell(i);
     row.scrollTo({ left: to * row.clientWidth, behavior: "instant" as ScrollBehavior });
-    setAt(to);
+    setCell(to);
+    setAt(i);
     const r = box.current?.getBoundingClientRect();
     if (r && (r.top < 0 || r.top > window.innerHeight - 120)) {
       box.current?.scrollIntoView({ block: "start", behavior: "smooth" });
@@ -2658,20 +2673,24 @@ function DeckPreview({
         style={{ height: Math.round(tall * scale) }}
       >
         <div className="absolute left-0 top-0 w-[1280px] origin-top-left" style={{ height: tall, transform: `scale(${scale})` }}>
-          <PresentDeck token="preview" deck={deck} slides={slides} embedded />
+          {brochure ? (
+            <PreAppraisalBrochure token="preview" deck={deck} embedded />
+          ) : (
+            <PresentDeck token="preview" deck={deck} slides={slides} embedded />
+          )}
         </div>
       </div>
       <div className="mt-3 flex items-center justify-end gap-2">
         <span className="mr-1 text-[11.5px] text-muted">
-          Slide {Math.min(at + 1, slides.length)} of {slides.length}
+          Slide {Math.min(cell + 1, cells)} of {cells}
         </span>
         {([["Back", -1], ["Next", 1]] as const).map(([label, dir]) => {
-          const can = dir < 0 ? at > 0 : at < slides.length - 1;
+          const can = dir < 0 ? cell > 0 : cell < cells - 1;
           return (
             <button
               key={label}
               type="button"
-              onClick={() => go(at + dir)}
+              onClick={() => go(cell + dir)}
               disabled={!can}
               className="rounded-full border border-line/70 bg-white px-4 py-1.5 text-[12px] font-semibold transition-colors hover:border-ink/40 disabled:opacity-40"
             >
