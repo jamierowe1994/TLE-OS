@@ -3,29 +3,20 @@
 import { asOf } from "@/lib/as-of";
 import { currentLets } from "@/lib/current-lets";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { rememberOrder } from "@/lib/portfolio-order";
 import DoodleIcon from "@/components/DoodleIcon";
 import StatTile from "@/components/StatTile";
 import PageHeader from "@/components/PageHeader";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import PortfolioMap from "@/components/PortfolioMap";
 import FindingData from "@/components/business/FindingData";
-import PropertyFile from "@/components/PropertyFile";
-import SaveChip, { SaveScopeProvider, useSaveScope } from "@/components/SaveChip";
-import LandlordJobEmails from "@/components/LandlordJobEmails";
 import PropertyAnswers from "@/components/PropertyAnswers";
 import { Pill } from "@/components/Wire";
-import { rexContactUrl, rexListingUrl } from "@/lib/business/rex-links";
-import { housesIn, houseByListing, roomLabel, tabLabel, tenantsInOrder, pickerOption, MANAGED_READERS as R, type House } from "@/lib/houses";
-import RoomPicker from "@/components/RoomPicker";
-import ReletAction from "@/components/portfolio/ReletAction";
-import HomeNotices from "@/components/sections/HomeNotices";
-import PhotoLightbox from "@/components/PhotoLightbox";
-import { useDocumentOpen } from "@/lib/doc-sheet";
-import {
-  CERT_META, headlineCerts, isOurs, requiredCerts, statusOf,
-  type CertKey, type CertStatus, type CompProperty,
-} from "@/lib/compliance";
-import type { ManagedBook, ManagedLandlord, ManagedProperty, Party } from "@/lib/portfolio-types";
+import { housesIn, houseByListing, MANAGED_READERS as R, type House } from "@/lib/houses";
+import { headlineCerts, isOurs, statusOf, type CertStatus, type CompProperty } from "@/lib/compliance";
+import type { ManagedBook, ManagedLandlord, ManagedProperty } from "@/lib/portfolio-types";
 import PickOne from "@/components/PickOne";
 import Segmented from "@/components/Segmented";
 
@@ -141,378 +132,6 @@ const needsLook = (s: CertSummary | null) => !!s && (s.worst === "expired" || s.
    draw exactly this tile too. */
 const StatCard = StatTile;
 
-function Contact({ p, muted = false }: { p: Party; muted?: boolean }) {
-  return (
-    <span className={`flex flex-wrap items-baseline gap-x-2 ${muted ? "text-muted" : ""}`}>
-      <span>{p.name}</span>
-      {p.phone && <a href={`tel:${p.phone.replace(/\s+/g, "")}`} className="text-[11px] text-muted hover:text-ink">{p.phone}</a>}
-      {p.email && <a href={`mailto:${p.email}`} className="truncate text-[11px] text-muted hover:text-ink">{p.email}</a>}
-    </span>
-  );
-}
-
-/* ----------------------------------------------------------- the panel -- */
-
-function PropertyPanel({
-  property, house, certFor, certsState, everything, onClose, onStep,
-}: {
-  property: ManagedProperty;
-  /** The shared house this listing belongs to, when it is one. */
-  house: House | null;
-  certFor: (p: ManagedProperty) => CompProperty | undefined;
-  certsState: CertsState["status"];
-  everything: boolean;
-  onClose: () => void;
-  onStep: (d: number) => void;
-}) {
-  const [shown, setShown] = useState(false);
-  /* The photo set popped out full size; null when closed. */
-  const [lightbox, setLightbox] = useState<number | null>(null);
-  /* "house", or a room's listing id. A plain home has no tabs. */
-  const [tab, setTab] = useState<string>("house");
-  /* A certificate is up from the bottom: slide aside until it goes. */
-  const docOpen = useDocumentOpen();
-  /* The Auto save chip by the close button (23 Sep 2026). The saves here are
-     the property file's; the scope starts again as ‹ › step to the next home. */
-  const saves = useSaveScope(property.listingId);
-
-  useEffect(() => {
-    const t = requestAnimationFrame(() => setShown(true));
-    return () => cancelAnimationFrame(t);
-  }, []);
-  useEffect(() => {
-    setLightbox(null);
-    /* Opened from a room's row or the search bar: land on that room. */
-    const opened = house ? house.rooms.find((r) => r.listingId === property.listingId || (house.kind === "rooms" && roomLabel(r).toLowerCase() === roomLabel(property).toLowerCase())) : null;
-    setTab(opened && house?.house?.listingId !== property.listingId ? opened.listingId : "house");
-  }, [property.listingId, house]);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-      if (e.key === "ArrowRight") onStep(1);
-      if (e.key === "ArrowLeft") onStep(-1);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, onStep]);
-
-  const room = house && tab !== "house" ? house.rooms.find((r) => r.listingId === tab) ?? null : null;
-  /* What the body describes: a room, the house's own record, or the home. */
-  const p: ManagedProperty = room ?? house?.house ?? (house ? house.rooms[0] : property);
-  const houseView = Boolean(house) && !room;
-  const shots = p.images.length ? p.images : p.image ? [p.image] : [];
-  const cert = certFor(p);
-  void certsState;
-
-  const summary = summarise(cert);
-  const certRows: Array<{ key: CertKey; status: CertStatus; expires: number | null; attached: boolean }> = cert
-    ? requiredCerts(cert).map((key) => {
-        const c = cert.certs[key];
-        return { key, status: statusOf(c), expires: c?.expires ?? null, attached: c?.attached ?? false };
-      })
-    : [];
-  void certRows;
-  void summary;
-
-  const fact = (label: string, value: React.ReactNode) => (
-    <div>
-      <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">{label}</p>
-      <p className="mt-0.5 text-[13px]">{value}</p>
-    </div>
-  );
-
-  const letRooms = house ? house.rooms.filter((r) => r.tenants.length > 0) : [];
-  const roomRent = house ? house.rooms.reduce((a, r) => a + (r.rentMonthly ?? 0), 0) : 0;
-  const earliest = house ? house.members.map((m) => m.onBooksSince).filter(Boolean).sort()[0] ?? null : null;
-  const landlord = house ? house.house?.landlord ?? house.rooms.find((r) => r.landlord)?.landlord ?? null : p.landlord;
-
-  const title = house ? house.name : p.name;
-  const lets = house?.kind === "lets";
-  const sub = house
-    ? lets
-      ? `${house.locality || "—"} · ${house.rooms.length} lets on record in REX${p.service ? ` · ${p.service}` : ""}`
-      : `${house.locality || "—"} · shared house · ${house.rooms.length} ${house.rooms.length === 1 ? "room" : "rooms"}, ${letRooms.length} let${house.house?.service ? ` · ${house.house.service}` : ""}`
-    : p.test ? `${p.locality || "—"} · ${p.service ?? "Managed"} · test home, only you can see it`
-    : `${p.locality || "—"}${p.onRex === false ? ` · ${p.service ?? "Managed"} in REX PM${p.ref ? ` (${p.ref})` : ""} · not on REX` : p.service ? ` · ${p.service}` : " · service not set in REX"}`;
-
-  const tenantCard = (t: Party) => (
-    <li key={t.contactId} className="rounded-xl border border-line/50 bg-white px-4 py-3 text-[13px]">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="font-semibold">{t.name}</span>
-        {t.phone && <a href={`tel:${t.phone.replace(/\s+/g, "")}`} className="text-[12px] text-muted hover:text-ink">{t.phone}</a>}
-        {t.email && <a href={`mailto:${t.email}`} className="truncate text-[12px] text-muted hover:text-ink">{t.email}</a>}
-        {p.onRex !== false && /^\d+$/.test(t.contactId) && (
-          <a href={rexContactUrl(t.contactId)} target="_blank" rel="noreferrer" className="ml-auto rounded-full border border-line/80 px-3 py-1 text-[11px] hover:border-ink/40">
-            Tenant&apos;s file
-          </a>
-        )}
-      </div>
-    </li>
-  );
-
-  return (
-    <SaveScopeProvider scope={saves}>
-    <div className="fixed inset-0 z-[130]">
-      <button
-        aria-label="Close"
-        onClick={onClose}
-        className={`absolute inset-0 cursor-default bg-ink/35 transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0"}`}
-      />
-      <aside
-        className={`absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden rounded-l-2xl bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[420ms] lg:w-[calc(100%-17rem)] ${shown && !docOpen ? "translate-x-0" : "translate-x-full"}`}
-        style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
-      >
-        <div className="shrink-0 border-b border-line/70 px-6 pt-5">
-          {/* Buttons above the title on a phone, so the chip is never squeezed. */}
-          <div className="flex flex-col-reverse gap-3 pb-5 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <h2 className="text-[20px] leading-tight">{title}</h2>
-              <p className="mt-1 text-[12px] text-muted">{sub}</p>
-              {/* On a phone the button row has no room for it: under the name instead. */}
-              {!p.test && p.onRex !== false && p.propertyId && (
-                <ReletAction
-                  home={p}
-                  className="mt-3 rounded-full bg-[var(--brown)] px-4 py-2 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 sm:hidden"
-                />
-              )}
-            </div>
-            <div className="flex items-center justify-end gap-1.5 sm:shrink-0">
-              {/* Coming up for relet: back onto Listings from here, on the same
-                  home record (components/portfolio/ReletAction). Up here, not
-                  at the foot of a long drawer, so it is found. */}
-              {!p.test && p.onRex !== false && p.propertyId && (
-                <ReletAction
-                  home={p}
-                  className="mr-1 hidden h-9 whitespace-nowrap rounded-full bg-[var(--brown)] px-4 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 sm:inline-flex sm:items-center sm:gap-1"
-                />
-              )}
-              <SaveChip scope={saves} className="mr-0.5" />
-              <button type="button" aria-label="Previous property" onClick={() => onStep(-1)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">‹</button>
-              <button type="button" aria-label="Next property" onClick={() => onStep(1)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">›</button>
-              <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">✕</button>
-            </div>
-          </div>
-          {house && (
-            /* The house, and one dropdown for the rooms: the tenant's name
-               and the room they hold. Not a tab per room (James, 6 Sep). */
-            <div className="flex flex-wrap items-center gap-2 pb-4">
-              <button
-                type="button"
-                onClick={() => setTab("house")}
-                className={`rounded-full border px-4 py-2 text-[12.5px] font-semibold transition-colors ${tab === "house" ? "border-accent-dark bg-accent-dark text-page" : "border-line/80 hover:border-ink"}`}
-              >
-                The house
-              </button>
-              <RoomPicker
-                options={house.rooms.map((r) => ({ id: r.listingId, ...pickerOption(house, r, R) }))}
-                value={tab === "house" ? null : tab}
-                onChange={setTab}
-                placeholder={lets ? "Tenants" : "Rooms"}
-              />
-            </div>
-          )}
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-          {/* Every photo, small, the same grid as the listing (James, 7 Sep);
-              any of them pops the set out full size. */}
-          {shots.length ? (
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
-              {shots.map((src, i) => (
-                <button
-                  key={src + i}
-                  type="button"
-                  onClick={() => setLightbox(i)}
-                  aria-label={`Photo ${i + 1}`}
-                  className="group overflow-hidden rounded-xl border border-line/60 transition-colors hover:border-ink"
-                >
-                  <PropertyPhoto src={src} alt="" className="aspect-[4/3] w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="overflow-hidden rounded-[22px] border border-line/50 bg-white">
-              <PropertyPhoto src={null} alt="" className="h-[180px] w-full object-cover" />
-            </div>
-          )}
-
-          {houseView && house ? (
-            <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 lg:grid-cols-6">
-              {lets ? fact("Lets on record", String(house.rooms.length)) : fact("Rooms", `${house.rooms.length}, ${letRooms.length} let`)}
-              {lets
-                ? fact("Rent", p.rent == null ? "Not set" : `${money(p.rent)} ${p.rentPeriod === "week" ? "per week" : "pcm"} on the latest let`)
-                : fact("Rent roll", roomRent ? `${money(roomRent)} pcm` : "Not set")}
-              {fact("Postcode", p.postcode ?? "—")}
-              {fact("Agent", p.agent?.name ?? "—")}
-              {fact("On the books since", day(earliest))}
-              {fact("In REX as", lets ? "one listing per let, no rooms named" : house.house ? "the house and its rooms" : "the rooms only")}
-            </div>
-          ) : (
-            <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 lg:grid-cols-6">
-              {fact("Rent", p.rent == null ? "Not set" : `${money(p.rent)} ${p.rentPeriod === "week" ? "per week" : "pcm"}`)}
-              {fact("Let type", p.letType ?? "—")}
-              {fact("Let since", day(p.letSince))}
-              {fact("On the books since", day(p.onBooksSince))}
-              {fact("Agent", p.agent?.name ?? "—")}
-              {fact("Postcode", p.postcode ?? "—")}
-            </div>
-          )}
-
-          {/* A room's tenant comes first: that is what the room tab is for. */}
-          {room && (
-            <section className="mt-6">
-              <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">{p.tenants.length === 1 ? "Tenant" : "Tenants"}</p>
-              {p.tenants.length ? (
-                <ul className="space-y-2">{tenantsInOrder(house, p, R).map(tenantCard)}</ul>
-              ) : (
-                <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">No tenant on this room in REX. It is empty, or the let has not been recorded.</p>
-              )}
-              {lets && p.tenants.length > 1 && (
-                <p className="mt-2 text-[11.5px] text-muted">REX names everyone on the tenancy on each let. This let&apos;s own tenant is first.</p>
-              )}
-            </section>
-          )}
-
-          {houseView && house && lets && (
-            /* REX names no rooms here: the people on the newest let are the
-               tenancy today; every earlier let stays folded away. */
-            <section className="mt-6">
-              <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Tenants</p>
-              <ul className="space-y-2">{tenantsInOrder(house, house.rooms[0], R).map(tenantCard)}</ul>
-              {house.rooms.length > 1 && (
-                <details className="mt-2">
-                  <summary className="cursor-pointer text-[11.5px] text-muted underline-offset-2 hover:underline">{house.rooms.length - 1} earlier {house.rooms.length - 1 === 1 ? "let" : "lets"} on record in REX</summary>
-                  <ul className="mt-2 overflow-hidden rounded-xl border border-line/50 bg-white">
-                    {house.rooms.slice(1).map((r) => (
-                      <li key={r.listingId} className="border-b border-line/40 last:border-0">
-                        <button type="button" onClick={() => setTab(r.listingId)} className="grid w-full grid-cols-[minmax(0,1fr)_100px_80px] items-center gap-3 px-4 py-2 text-left text-[12px] transition-colors hover:bg-box">
-                          <span className="min-w-0 truncate">{tabLabel(house, r, R)}</span>
-                          <span className="text-muted">{day(r.letSince)}</span>
-                          <span className="figures text-right">{r.rent == null ? "—" : money(r.rent)}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              )}
-            </section>
-          )}
-
-          {houseView && house && !lets && (
-            <section className="mt-6">
-              <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Rooms</p>
-              <ul className="overflow-hidden rounded-xl border border-line/50 bg-white">
-                {house.rooms.map((r) => (
-                  <li key={r.listingId} className="border-b border-line/40 last:border-0">
-                    <button type="button" onClick={() => setTab(r.listingId)} className="grid w-full grid-cols-[84px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 text-left text-[12.5px] transition-colors hover:bg-box sm:grid-cols-[84px_minmax(0,1fr)_100px_90px]">
-                      <span className="font-semibold">{roomLabel(r)}</span>
-                      <span className="min-w-0 truncate">{r.tenants[0]?.name ?? <span className="text-muted">Empty</span>}{r.tenants.length > 1 ? <span className="text-muted"> +{r.tenants.length - 1}</span> : null}</span>
-                      <span className="hidden text-muted sm:block">{day(r.letSince)}</span>
-                      <span className="figures text-right">{r.rent == null ? <span className="text-muted">—</span> : `${money(r.rent)}${r.rentPeriod === "week" ? " pw" : ""}`}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          <section className="mt-6">
-            <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Landlord</p>
-            {landlord ? (
-              <div className="rounded-xl border border-line/50 bg-white px-4 py-3 text-[13px]">
-                <Contact p={landlord} />
-                {/* Their say over the maintenance job emails (6 Oct 2026). */}
-                {landlord.email && landlord.email.includes("@") && <LandlordJobEmails key={landlord.email} landlord={landlord.email} name={landlord.name} className="mt-2.5 border-t border-line/40 pt-2.5" />}
-              </div>
-            ) : (
-              <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">
-                No landlord on the REX record. The owner relationship on this listing is empty, so nobody is being guessed at.
-              </p>
-            )}
-          </section>
-
-          {!house && (
-            <section className="mt-5">
-              <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">
-                {p.tenants.length === 1 ? "Tenant" : "Tenants"}
-              </p>
-              {p.tenants.length ? (
-                <ul className="space-y-2">{p.tenants.map(tenantCard)}</ul>
-              ) : (
-                <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">
-                  No tenant on the REX record.
-                </p>
-              )}
-            </section>
-          )}
-
-          {/* Rent review (Section 13) and Serve notice (Section 8): Michael's
-              checklists, filled in here and decided on his Sections tab
-              (7 Oct 2026). A house let by the room is a tenancy per room, so
-              those start from the room. */}
-          {houseView && house && !lets ? (
-            <section className="mt-6">
-              <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Rent review and notices</p>
-              <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">Each room is its own tenancy. Open a room above to start its rent review or notice.</p>
-            </section>
-          ) : (
-            <HomeNotices
-              key={p.listingId}
-              className="mt-6"
-              home={{
-                listingId: String(p.listingId),
-                propertyId: p.propertyId,
-                label: house ? `${house.name}${room ? ` · ${roomLabel(room)}` : ""}` : p.name,
-                test: Boolean(p.test),
-                address: [p.address || p.name, p.postcode && !(p.address || p.name).toUpperCase().includes(p.postcode.toUpperCase()) ? p.postcode : ""].filter(Boolean).join(", "),
-                landlord: landlord?.name ?? "",
-                tenants: (house && lets && !room ? tenantsInOrder(house, house.rooms[0], R) : p.tenants).map((t) => t.name),
-                agent: p.agent?.name ?? null,
-                rentMonthly: p.rentMonthly,
-                letSince: p.letSince,
-              }}
-            />
-          )}
-
-          {/* The property file - the same panel the listing, the application
-              and the appraisal show, so the certificates travel with the home.
-              A room reads the house's certificates where it has none of its own. */}
-          <div className="mt-5">
-            {houseView && house && !house.house && !lets && (
-              <p className="mb-2 text-[11.5px] text-muted">REX holds this house as its rooms only, so the file below is the first room&apos;s. Every room shares the house&apos;s certificates.</p>
-            )}
-            {p.propertyId ? (
-              <PropertyFile key={p.propertyId} propertyId={p.propertyId} propertyName={house ? `${house.name}${room ? ` · ${roomLabel(room)}` : ""}` : p.name} screen="the portfolio" />
-            ) : (
-              <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">REX holds no property record for this listing, so there is nothing to check.</p>
-            )}
-          </div>
-
-          <div className="mt-6 flex flex-wrap items-center gap-2">
-            {p.test ? (
-              <span className="text-[11.5px] text-muted">A test home from your Test files - only you can see it, and it is never counted in the figures above.</span>
-            ) : p.onRex === false ? (
-              <span className="text-[11.5px] text-muted">Not on REX: the OS is this home&apos;s record, brought over from REX PM.</span>
-            ) : (
-              <a
-                href={rexListingUrl(p.listingId, "leased")}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-full border border-ink/80 px-4 py-2 text-[12px] font-semibold transition-colors hover:bg-ink hover:text-page"
-              >
-                {room ? `Open ${lets ? "this let" : roomLabel(room)} in REX` : "Open in REX"}
-              </a>
-            )}
-            {everything && p.agent && <span className="text-[11.5px] text-muted">Looked after by {p.agent.name}</span>}
-          </div>
-        </div>
-      </aside>
-      {lightbox != null && <PhotoLightbox photos={shots} start={lightbox} name={house ? house.name : p.name} onClose={() => setLightbox(null)} />}
-    </div>
-    </SaveScopeProvider>
-  );
-}
-
 /* ------------------------------------------------------------ the page -- */
 
 export default function Portfolio() {
@@ -527,12 +146,15 @@ export default function Portfolio() {
   /* Homes REX CRM has no property for: the OS holds them from REX PM (6 Sep 2026). */
   const [notOnRexOnly, setNotOnRexOnly] = useState(false);
   const [sort, setSort] = useState<string | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
-  /* ?open=<listing id> from the search bar. */
+  const router = useRouter();
+  /* ?open=<listing id> from the search bar: straight to the home's own page. */
   useEffect(() => {
     const wanted = new URLSearchParams(window.location.search).get("open");
-    if (wanted) setOpenId(wanted);
-  }, []);
+    if (!wanted) return;
+    /* A notice from the bell (&notice=) opens on the Tenancy section. */
+    const notice = new URLSearchParams(window.location.search).get("notice");
+    router.replace(`/portfolio/${encodeURIComponent(wanted)}${notice ? `?tab=tenancy&notice=${encodeURIComponent(notice)}` : ""}`);
+  }, [router]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const load = useCallback(() => {
@@ -713,21 +335,6 @@ export default function Portfolio() {
     });
   }, [book, filtered, q, filtering, service, agent, town, lookOnly]);
 
-  /* Keyed as text: ?open=518547 from the search bar arrives as a string. */
-  const byId = useMemo(() => new Map((book?.properties ?? []).map((p) => [String(p.listingId), p])), [book]);
-  const open = openId ? byId.get(String(openId)) ?? null : null;
-  const step = useCallback(
-    (d: number) => {
-      setOpenId((id) => {
-        if (!id || !filtered.length) return id;
-        const i = filtered.findIndex((p) => p.listingId === id);
-        const next = filtered[(i + d + filtered.length) % filtered.length];
-        return next?.listingId ?? id;
-      });
-    },
-    [filtered]
-  );
-  const close = useCallback(() => setOpenId(null), []);
 
   /* Counted and added up on each home's latest let only (lib/current-lets);
      the list itself still shows every let. */
@@ -746,6 +353,19 @@ export default function Portfolio() {
     }
     return out;
   }, [filtered, houseOf]);
+
+  /* Keyed as text: listing ids arrive as strings from links and the search bar. */
+  const byId = useMemo(() => new Map((book?.properties ?? []).map((p) => [String(p.listingId), p])), [book]);
+  /* The home opens on its own page (James, 7 Oct 2026). The list's order goes
+     with it, so ‹ › there steps through what was on screen here. */
+  const remember = useCallback(() => rememberOrder(listRows.map((r) => String(r.p.listingId))), [listRows]);
+  const openHome = useCallback(
+    (id: string) => {
+      remember();
+      router.push(`/portfolio/${encodeURIComponent(id)}`);
+    },
+    [remember, router]
+  );
 
   const blurb =
     state.status === "loading" ? "Fetching the managed book from REX…"
@@ -902,9 +522,9 @@ export default function Portfolio() {
                     const landlord = house ? house.house?.landlord ?? house.rooms.find((r) => r.landlord)?.landlord ?? null : p.landlord;
                     return (
                       <li key={house ? house.key : p.listingId} className="border-b border-line/40 last:border-0">
-                        <button
-                          type="button"
-                          onClick={() => setOpenId(p.listingId)}
+                        <Link
+                          href={`/portfolio/${encodeURIComponent(p.listingId)}`}
+                          onClick={remember}
                           className="grid w-full grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-panel md:grid-cols-[56px_minmax(0,2fr)_90px_100px_minmax(0,1.3fr)_120px] xl:grid-cols-[56px_minmax(0,2.2fr)_90px_100px_minmax(0,1.4fr)_minmax(0,1fr)_100px_120px]"
                         >
                           <PropertyPhoto src={p.image ?? house?.rooms.find((r) => r.image)?.image ?? null} alt="" className="h-11 w-14 rounded-lg object-cover" />
@@ -939,7 +559,7 @@ export default function Portfolio() {
                               <span className="text-[11px] text-muted">Checking…</span>
                             )}
                           </span>
-                        </button>
+                        </Link>
                       </li>
                     );
                   })}
@@ -998,7 +618,7 @@ export default function Portfolio() {
                               const s = summaryOf(p);
                               return (
                                 <li key={p.listingId}>
-                                  <button type="button" onClick={() => setOpenId(p.listingId)} className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-panel">
+                                  <Link href={`/portfolio/${encodeURIComponent(p.listingId)}`} onClick={remember} className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-panel">
                                     <PropertyPhoto src={p.image} alt="" className="h-9 w-12 rounded-md object-cover" />
                                     <span className="min-w-0 flex-1">
                                       <span className="block truncate text-[12.5px]">{p.name}</span>
@@ -1006,7 +626,7 @@ export default function Portfolio() {
                                     </span>
                                     <span className="figures text-[12.5px]">{money(p.rentMonthly)}</span>
                                     {s && needsLook(s) && <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${s.tone}`}>{s.label}</span>}
-                                  </button>
+                                  </Link>
                                 </li>
                               );
                             })}
@@ -1041,24 +661,13 @@ export default function Portfolio() {
               {state.status === "loading" ? (
                 <div className="flex h-full items-center justify-center rounded-2xl border border-line/70 bg-card"><FindingData label="Reading the managed book" /></div>
               ) : (
-                <PortfolioMap properties={filtered} attention={attention} onOpen={setOpenId} />
+                <PortfolioMap properties={filtered} attention={attention} onOpen={openHome} />
               )}
             </div>
           )}
         </>
       )}
 
-      {open && (
-        <PropertyPanel
-          property={open}
-          house={houseOf.get(String(open.listingId)) ?? null}
-          certFor={(hp) => (certBy && hp.propertyId ? certBy.get(hp.propertyId) : undefined)}
-          certsState={certs.status}
-          everything={everything}
-          onClose={close}
-          onStep={step}
-        />
-      )}
     </>
   );
 }

@@ -771,7 +771,7 @@ export function fileHref(kind: FileKind, id: string): string | null {
   const v = encodeURIComponent(id);
   if (!id) return null;
   if (kind === "listing") return `/listings?open=${v}`;
-  if (kind === "portfolio") return `/portfolio?open=${v}`;
+  if (kind === "portfolio") return `/portfolio/${v}`;
   if (kind === "appraisal") return `/market-appraisals/${v}`;
   if (kind === "lead") return `/leads?open=${v}`;
   return null;

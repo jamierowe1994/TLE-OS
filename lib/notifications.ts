@@ -357,7 +357,7 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
       at: x.at,
       title: x.label,
       body: `${SPECS[x.kind].short}: ${STATUS_LABEL[x.status].toLowerCase()}${x.by ? ` by ${x.by}` : ""}.${x.note && x.status !== "approved" ? ` ${x.note}` : ""}`,
-      href: `/portfolio?open=${encodeURIComponent(x.listingId)}&notice=${encodeURIComponent(x.id)}`,
+      href: `/portfolio/${encodeURIComponent(x.listingId)}?tab=tenancy&notice=${encodeURIComponent(x.id)}`,
       tone: x.status === "approved" || x.status === "served" ? "ok" : "warn",
     });
   }

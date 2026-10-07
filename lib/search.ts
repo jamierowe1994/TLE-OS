@@ -79,7 +79,7 @@ export async function searchEverything(needle: string, rexUserId: string | null)
     if (!cap(50)) break;
     if (seenListing.has(String(m.listingId))) continue;
     if (matches(needle, m.name, m.locality, m.address) || idMatch(needle, m.propertyId) || idMatch(needle, m.listingId)) {
-      push({ kind: "property", title: m.name, sub: `${m.locality} · managed`, href: `/portfolio?open=${encodeURIComponent(m.listingId)}` }, `${m.name}, ${m.locality}`);
+      push({ kind: "property", title: m.name, sub: `${m.locality} · managed`, href: `/portfolio/${encodeURIComponent(m.listingId)}` }, `${m.name}, ${m.locality}`);
     }
   }
   for (const l of leads) {

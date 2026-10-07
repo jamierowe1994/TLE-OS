@@ -236,6 +236,9 @@ export function openMoveOuts(tasks: RexpmTask[], reviews: Review[], done: MoveOu
     if (r.outcome !== "ending" || taken.has(`review:${r.id}`)) continue;
     if (r.rexPropertyId && onList.has(r.rexPropertyId)) continue;
     const p = r.rexPropertyId ? byProperty.get(r.rexPropertyId) ?? null : null;
+    /* Notice recorded from the property's own page (7 Oct 2026) carries the
+       day they leave as its date, so the board counts down to it. */
+    const at = r.dueOn ? endOfDay(r.dueOn) : null;
     out.push({
       key: `review:${r.id}`,
       reviewId: r.id,
@@ -247,11 +250,11 @@ export function openMoveOuts(tasks: RexpmTask[], reviews: Review[], done: MoveOu
       tenant: r.tenant,
       landlord: r.landlord,
       service: "",
-      moveOutOn: null,
-      moveOutAt: null,
-      daysAway: null,
+      moveOutOn: r.dueOn,
+      moveOutAt: at,
+      daysAway: at ? londonDayOffset(at, now) : null,
       followUpOn: null,
-      progress: "Notice recorded at review",
+      progress: r.note.startsWith("Notice given") ? "Notice recorded" : "Notice recorded at review",
       priority: "",
       managedBy: r.doneBy,
       from: "review",
