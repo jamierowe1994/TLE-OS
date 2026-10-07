@@ -14,7 +14,8 @@ import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view
  * GET  ?id=<listing>              → the link, to show and copy, and whether the
  *                                   home is on the market (the form only takes
  *                                   applications for one that is).
- * POST { listingId, emails[] }    → the catalogue's application-form-invite to
+ * POST { listingId, emails[], kind? } → the catalogue's application-form-invite
+ *                                   (or offer-link-invite with kind "offer") to
  *                                   each address, from the agent's own mailbox
  *                                   where connected (lib/send-as-agent), so it
  *                                   obeys the customer email switch like every
@@ -36,13 +37,15 @@ async function me(req: NextRequest) {
 }
 
 const linkFor = (req: NextRequest, id: string) => `${publicOrigin(req)}/tenant/apply?listing=${encodeURIComponent(id)}`;
+/* The same form as an offer (7 Oct 2026): /tenant/offer, sent with its own email. */
+const offerLinkFor = (req: NextRequest, id: string) => `${publicOrigin(req)}/tenant/offer?listing=${encodeURIComponent(id)}`;
 
 export async function GET(req: NextRequest) {
   if (!(await me(req))) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const id = (req.nextUrl.searchParams.get("id") ?? "").trim();
-  if (!/^\d+$/.test(id)) return NextResponse.json({ ok: true, url: null, onMarket: false });
+  if (!/^\d+$/.test(id)) return NextResponse.json({ ok: true, url: null, offerUrl: null, onMarket: false });
   const home = await homeOnMarket(id).catch(() => null);
-  return NextResponse.json({ ok: true, url: linkFor(req, id), onMarket: Boolean(home) });
+  return NextResponse.json({ ok: true, url: linkFor(req, id), offerUrl: offerLinkFor(req, id), onMarket: Boolean(home) });
 }
 
 export async function POST(req: NextRequest) {
@@ -55,7 +58,8 @@ export async function POST(req: NextRequest) {
   const user = await me(req);
   if (!user) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
 
-  const b = (await req.json().catch(() => ({}))) as { listingId?: string | number; emails?: unknown };
+  const b = (await req.json().catch(() => ({}))) as { listingId?: string | number; emails?: unknown; kind?: string };
+  const asOffer = b.kind === "offer";
   const id = String(b.listingId ?? "").trim();
   const emails = [...new Set((Array.isArray(b.emails) ? b.emails : []).map((e) => String(e ?? "").trim().toLowerCase()).filter(Boolean))];
   if (!emails.length) return NextResponse.json({ ok: false, error: "Add at least one email address." }, { status: 400 });
@@ -69,11 +73,11 @@ export async function POST(req: NextRequest) {
   }
   const rent = home.rentPeriod === "week" ? `${gbp(home.rent)} a week` : `${gbp(home.rent)} a month`;
   const address = [home.name, home.locality].filter(Boolean).join(", ");
-  const { subject, html } = await renderTleEmailLive("application-form-invite", {
+  const { subject, html } = await renderTleEmailLive(asOffer ? "offer-link-invite" : "application-form-invite", {
     address,
     rent,
     agentName: user.name || "The Letting Experts",
-    link: linkFor(req, id),
+    link: asOffer ? offerLinkFor(req, id) : linkFor(req, id),
   });
 
   const results: { email: string; sent: boolean; detail: string }[] = [];

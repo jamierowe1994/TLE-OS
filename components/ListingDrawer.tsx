@@ -1811,7 +1811,7 @@ function ListingDrawerBody({
                     </p>
                   )}
                 </Card>
-                {/* The form itself, to copy or send (Howard, 1 Oct 2026). */}
+                {/* The offer link, to copy or send (Howard, 1 Oct 2026; the offer link 7 Oct). */}
                 <ApplicationFormCard listingId={String(listing.id)} />
               </div>
             )}

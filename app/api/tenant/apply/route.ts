@@ -138,6 +138,9 @@ export async function POST(req: NextRequest) {
   if (errors.length) return NextResponse.json({ ok: false, errors: [...new Set(errors)] }, { status: 400 });
 
   const lead = applicants.find((a) => a.isPrimary) ?? applicants[0];
+  /* Sent from the offer link (/tenant/offer, 7 Oct 2026) rather than the
+     application form: the same answers, called an offer to the agent too. */
+  const asOffer = body.via === "offer-link";
   const address = [home.property, home.locality].filter(Boolean).join(", ");
 
   /* Sent twice by a double press: the first one stands. */
@@ -183,7 +186,7 @@ export async function POST(req: NextRequest) {
     changes: [],
     /* Where it came from, and every applicant's own answers - the landlord's
        screen reads the lead's, the agent's email carries them all. */
-    via: "Application form",
+    via: asOffer ? "Offer link" : "Application form",
     applicants,
   };
 
@@ -204,9 +207,9 @@ export async function POST(req: NextRequest) {
       `Right to rent: ${yn(a.rightToRent)} · Landlord reference: ${yn(a.landlordRef)} · Guarantor: ${yn(a.guarantor)} · Adverse credit: ${yn(a.adverseCredit)}${a.adverseCredit && a.adverseCreditNote ? ` (${a.adverseCreditNote})` : ""}`,
     ].join("\n");
   });
-  const subject = `Application from ${lead.name}: ${gbp(app.offerAmount)} a month on ${address}`;
+  const subject = `${asOffer ? "Offer" : "Application"} from ${lead.name}: ${gbp(app.offerAmount)} a month on ${address}`;
   const text = [
-    `${lead.name} has applied for ${address} through the application form.`,
+    asOffer ? `${lead.name} has made an offer on ${address} through the offer link.` : `${lead.name} has applied for ${address} through the application form.`,
     [
       `Offer: ${gbp(app.offerAmount)} a month${home.askingPcm ? ` (advertised at ${gbp(home.askingPcm)})` : ""}`,
       `Move in: ${moveIn}`,
@@ -215,7 +218,7 @@ export async function POST(req: NextRequest) {
     ].filter(Boolean).join("\n"),
     ...people,
     app.conditions ? `Anything else, in their words:\n${app.conditions}` : "",
-    `Open the application: ${link}`,
+    `Open the ${asOffer ? "offer" : "application"}: ${link}`,
     "Put it to the landlord, and reply to them either way.",
   ];
 

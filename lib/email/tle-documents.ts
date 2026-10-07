@@ -584,6 +584,30 @@ export const APPLICATION_FORM_INVITE = {
 } as const;
 
 /**
+ * Tenant: the offer link for one home, sent from its listing (7 Oct 2026,
+ * Howard: "could there be a make an offer button, or one that is shared").
+ * The application form under its offer name - a button to
+ * /tenant/offer?listing=<id>. Never the passport.
+ */
+export const OFFER_LINK_INVITE = {
+  subject: "Make an offer on {{address}}",
+  preheader: "Your offer for {{address}}. About ten minutes, and it goes straight to {{agentName}}.",
+  mode: "blocks",
+  blocks: [
+    H("ol1", "Make an Offer on {{address}}"),
+    T("ol2", "Hi,<br><br>Here is the offer form for <strong>{{address}}</strong>, advertised at {{rent}}."),
+    T("ol3", "Put in the rent you'd like to offer and the day you'd like to move in. Everyone over 18 who will live there fills in their own part, because the right to rent check is a legal one for every adult. It takes about ten minutes and goes straight to {{agentName}}, who puts it to the landlord."),
+    SP("ol4", 8),
+    BTN("ol5", "Make my offer", "{{link}}"),
+    SP("ol6", 8),
+    T("ol7", "Offers can be at or below the advertised rent, not above it. Nothing is owed by making an offer."),
+    T("ol8", "Any questions, just reply to this email.<br><br>{{agentName}}<br>The Letting Experts"),
+    FOOT("ol9", "You're getting this because you asked about a home with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/**
  * Tenant: the passport on its own, BEFORE any viewing (1 Oct 2026).
  *
  * Rhiannon: "The rental passport should just be the initial request to

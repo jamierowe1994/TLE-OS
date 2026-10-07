@@ -23,7 +23,7 @@ export const runtime = "nodejs";
 type Row = {
   id: string; email: string; name: string; address: string; listing_id: string | null; kind: string; sent_to: string | null; outcome: string | null; created_at: Date;
   payload: {
-    amount?: number; asking?: number | null; moveIn?: string; term?: string; movingIn?: string[]; works?: string[]; recordedBy?: { name: string; email: string; how: string }; source?: string; adults?: number; children?: number; pets?: boolean; petsNote?: string; note?: string;
+    amount?: number; asking?: number | null; moveIn?: string; term?: string; movingIn?: string[]; works?: string[]; recordedBy?: { name: string; email: string; how: string }; source?: string; via?: string; adults?: number; children?: number; pets?: boolean; petsNote?: string; note?: string;
     passport?: OfferPassport; changes?: OfferChange[];
     reasons?: string[]; topics?: string[]; message?: string;
     /* Howard's four questions, when the offer came from the viewing feedback page. */
@@ -99,7 +99,7 @@ export default async function OfferPage({ params }: { params: Promise<{ id: stri
               <p className={eyebrow}>The offer</p>
               {p.source === "application-form" && (
                 <div className="mt-2 rounded-[12px] bg-accent-soft/60 px-3.5 py-2.5 text-[12.5px] leading-snug">
-                  From the application form. The landlord doesn&apos;t see it until you put it forward.{" "}
+                  {p.via === "Offer link" ? "From the offer link" : "From the application form"}. The landlord doesn&apos;t see it until you put it forward.{" "}
                   {r.listing_id && (
                     <a
                       href={`/offers/new?${new URLSearchParams({ listing: String(r.listing_id), name: r.name || "", email: r.email })}`}

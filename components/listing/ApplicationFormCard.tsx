@@ -5,8 +5,12 @@ import DoodleIcon from "@/components/DoodleIcon";
 import { PressButton } from "@/components/Bits";
 
 /**
- * The listing's application form, to copy or to send (Howard's ticket,
- * approved by James 1 Oct 2026).
+ * The listing's OFFER LINK, to copy or to send (7 Oct 2026, Howard: "could
+ * there be a make an offer button, or one that is shared"). It is the
+ * application form (Howard's ticket, approved by James 1 Oct 2026) under the
+ * name agents use for it: /tenant/offer?listing=<id> opens the same form
+ * worded as an offer, and Send offer link emails offer-link-invite. Links
+ * already sent to /tenant/apply keep working.
  *
  * The link is /tenant/apply?listing=<id>: the applicant fills it in with no
  * account, and it lands with the listing's agent and on /offers. Send
@@ -37,8 +41,8 @@ export default function ApplicationFormCard({ listingId }: { listingId: string }
     setProblem(null);
     fetch(`/api/listings/application-form?id=${encodeURIComponent(listingId)}`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j: { ok?: boolean; url?: string | null; onMarket?: boolean }) => {
-        if (live) setInfo({ url: j.url ?? null, onMarket: Boolean(j.onMarket) });
+      .then((j: { ok?: boolean; url?: string | null; offerUrl?: string | null; onMarket?: boolean }) => {
+        if (live) setInfo({ url: j.offerUrl ?? null, onMarket: Boolean(j.onMarket) });
       })
       .catch(() => live && setInfo({ url: null, onMarket: false }));
     return () => {
@@ -82,7 +86,7 @@ export default function ApplicationFormCard({ listingId }: { listingId: string }
       const r = await fetch("/api/listings/application-form", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ listingId, emails: list }),
+        body: JSON.stringify({ listingId, emails: list, kind: "offer" }),
       });
       const j = (await r.json().catch(() => ({}))) as { results?: { email: string; sent: boolean; detail: string }[]; error?: string };
       if (j.results) {
@@ -101,12 +105,12 @@ export default function ApplicationFormCard({ listingId }: { listingId: string }
     <section className="rounded-[22px] border border-line/50 bg-white p-5" data-steve="listing.application-form">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="hand flex items-center gap-2.5 text-[15px]">
-          <DoodleIcon name="doc" size={15} className="text-accent-dark" />
-          Application Form
+          <DoodleIcon name="link" size={15} className="text-accent-dark" />
+          Offer Link
         </h3>
       </div>
       <p className="text-[12px] leading-relaxed text-muted">
-        The form for this home. Applicants fill it in without an account, and it comes to the listing&apos;s agent with every adult&apos;s answers.
+        Share this and the tenant makes their offer themselves, without an account. Every adult fills in their own part, and it comes to the listing&apos;s agent and shows above under Offers.
       </p>
 
       {info === null ? (
@@ -115,7 +119,7 @@ export default function ApplicationFormCard({ listingId }: { listingId: string }
           Reading the link&hellip;
         </p>
       ) : !info.url ? (
-        <p className="mt-3 text-[12px] text-muted">This listing has no application form yet.</p>
+        <p className="mt-3 text-[12px] text-muted">This listing has no offer link yet.</p>
       ) : (
         <>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -146,7 +150,7 @@ export default function ApplicationFormCard({ listingId }: { listingId: string }
           </div>
           {!info.onMarket && (
             <p className="mt-2 text-[11.5px] leading-relaxed text-accent-dark">
-              This home isn&apos;t on the market, so the form says it&apos;s closed. It opens when the listing goes live.
+              This home isn&apos;t on the market, so the link says it isn&apos;t taking offers. It opens when the listing goes live.
             </p>
           )}
 
@@ -157,7 +161,7 @@ export default function ApplicationFormCard({ listingId }: { listingId: string }
               className={`press-ring mt-4 flex items-center gap-2 rounded-full px-4 py-2.5 text-[12.5px] font-semibold text-white ${info.onMarket ? "bg-[var(--brown)]" : "cursor-not-allowed bg-[var(--brown)]/40"}`}
             >
               <DoodleIcon name="mail" size={14} />
-              Send application form
+              Send offer link
             </PressButton>
           ) : (
             <div className="mt-4 rounded-2xl border border-line/60 bg-page p-3.5">
@@ -216,7 +220,7 @@ export default function ApplicationFormCard({ listingId }: { listingId: string }
                   className="min-w-[160px] flex-1 bg-transparent py-0.5 text-[12.5px] outline-none"
                 />
               </div>
-              <p className="mt-1.5 text-[11px] text-muted">One or more. Each gets their own email with the link to this home&apos;s form.</p>
+              <p className="mt-1.5 text-[11px] text-muted">One or more. Each gets their own email with the link to make an offer on this home.</p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <PressButton
                   onClick={() => void send()}

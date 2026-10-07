@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 
 /**
@@ -17,6 +17,10 @@ import DoodleIcon from "@/components/DoodleIcon";
  * The people offered are the ones who viewed this home and the ones who
  * enquired on it, with "Someone else" for anybody who isn't either. An email
  * is required because the offer is filed against their passport.
+ *
+ * Or the tenant does it themselves: the foot of the pop-up copies the
+ * listing's offer link (/tenant/offer?listing=<id>, the Offer Link card on
+ * the Applications tab), for a WhatsApp or a text.
  */
 
 export type OfferPerson = { key: string; name: string; email: string; phone: string; note: string };
@@ -45,6 +49,28 @@ export default function OfferWhoPicker({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [err, setErr] = useState("");
+  const [link, setLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    let live = true;
+    fetch(`/api/listings/application-form?id=${encodeURIComponent(listingId)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { offerUrl?: string | null; onMarket?: boolean }) => live && setLink(j.onMarket ? (j.offerUrl ?? null) : null))
+      .catch(() => null);
+    return () => {
+      live = false;
+    };
+  }, [listingId]);
+  const copy = async () => {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch {
+      (document.getElementById("offer-link-copy") as HTMLInputElement | null)?.select();
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
 
   const shown = useMemo(() => {
     const qy = query.trim().toLowerCase();
@@ -165,6 +191,31 @@ export default function OfferWhoPicker({
           )}
 
           {err && <p className="mt-3 rounded-[12px] bg-[#fdefec] px-3.5 py-2.5 text-[12.5px] text-[#9d4340]">{err}</p>}
+
+          {/* Or they make it themselves, from a link. */}
+          {link && (
+            <div className="mt-5 border-t border-line/60 pt-4">
+              <p className="text-[13px] font-semibold text-ink">Or send them the offer link</p>
+              <p className="mt-0.5 text-[12px] leading-snug text-muted">They fill in the offer themselves, without an account, and it lands on this listing.</p>
+              <div className="mt-2.5 flex items-center gap-2">
+                <input
+                  id="offer-link-copy"
+                  readOnly
+                  value={link}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="h-10 min-w-0 flex-1 truncate rounded-[12px] border border-line/70 bg-white px-3 text-[12px] text-muted outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => void copy()}
+                  className="flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-ink/25 bg-white px-3.5 text-[12px] font-semibold"
+                >
+                  <DoodleIcon name="link" size={13} />
+                  {copied ? "Copied" : "Copy link"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex shrink-0 items-center justify-end gap-2 border-t border-line/70 px-6 py-4">

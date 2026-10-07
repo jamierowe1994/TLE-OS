@@ -54,6 +54,7 @@ import {
   TENANT_OFFER_COPY,
   CUSTOMER_UPDATE,
   APPLICATION_FORM_INVITE,
+  OFFER_LINK_INVITE,
   TENANT_VIEWING_BOOKED,
   LANDLORD_SIGN_IN,
   TENANT_SIGN_IN,
@@ -997,6 +998,27 @@ The Letting Experts`
           rent: "£850 a month",
           agentName: "Sam Whitaker",
           link: `${SITE}/tenant/apply?listing=828057`,
+        })
+      )(),
+  },
+  {
+    id: "offer-link-invite",
+    group: "Doorways",
+    name: "Make an Offer - Offer Link",
+    audience: "tenant",
+    trigger: "An agent presses Send offer link on a listing and types in one or more addresses",
+    fires: "Wired 7 Oct 2026. Listing > Applications > Offer Link > Send offer link -> POST /api/listings/application-form with kind offer, one email per address, from the agent's own Outlook where connected. Needs customer email on. Links to /tenant/offer?listing=<id> (the application form, worded as an offer); never mints or links a passport.",
+    to: "Each address the agent typed in",
+    draft: false,
+    summary: "The offer form for one home, with a button straight to it. Says to put in the rent and the move-in day, that every adult fills in their own part for the right to rent check, that offers can't go above the advertised rent, and that nothing is owed by offering.",
+    doc: OFFER_LINK_INVITE,
+    render: (o) =>
+      blocksAs("tenant")(
+        withSample(o ?? OFFER_LINK_INVITE, {
+          address: "8 Recreation Terrace, Nottingham",
+          rent: "£850 a month",
+          agentName: "Sam Whitaker",
+          link: `${SITE}/tenant/offer?listing=828057`,
         })
       )(),
   },

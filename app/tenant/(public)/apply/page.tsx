@@ -137,6 +137,13 @@ function YesNo({
 /* ── the form ─────────────────────────────────────────────────────────────── */
 
 export default function Apply() {
+  /* The same form under two names (7 Oct 2026, Howard: "could there be a
+     make an offer button, or one that is shared"). /tenant/offer?listing=<id>
+     is the offer link the agent shares from the listing; it asks exactly what
+     the application form asks - the rent offered, the move-in day, every
+     adult - and is filed the same way, worded as an offer. */
+  const [asOffer, setAsOffer] = useState(false);
+  useEffect(() => setAsOffer(window.location.pathname.startsWith("/tenant/offer")), []);
   /* Which home: the link's own listing, or the sample. "gone" when the
      listing isn't on the market any more - never a form for a home that
      cannot take it. */
@@ -153,7 +160,13 @@ export default function Apply() {
         if (j.ok && j.home) {
           setHome({ state: "live", home: j.home });
           setOffer(String(j.home.askingPcm));
-        } else setHome({ state: "gone", says: j.error ?? "This home isn't taking applications any more." });
+        } else
+          setHome({
+            state: "gone",
+            says: window.location.pathname.startsWith("/tenant/offer")
+              ? "This home has been let or taken off the market, so it isn't taking offers any more. Have a look at what else we have on."
+              : (j.error ?? "This home isn't taking applications any more."),
+          });
       })
       .catch(() => setHome({ state: "gone", says: "We couldn't load this home just now. Please try again in a minute." }));
   }, []);
@@ -225,6 +238,7 @@ export default function Apply() {
           askingRent: LISTING.askingPcm,
           offerAmount: offerNum,
           startDate,
+          ...(asOffer ? { via: "offer-link" } : {}),
           ...(live ? {} : { agreementMonths: months }),
           occupants,
           dependents,
@@ -260,7 +274,7 @@ export default function Apply() {
 
   if (sent) {
     return (
-      <div className="py-16">
+      <div className="px-4 py-16">
         <div className="mx-auto max-w-xl rounded-2xl border border-black/10 bg-white p-8 text-center">
           <div
             className="mx-auto flex h-12 w-12 items-center justify-center rounded-full text-[22px] text-white"
@@ -268,9 +282,9 @@ export default function Apply() {
           >
             ✓
           </div>
-          <h1 className="mt-4 text-[20px] font-bold">Application received</h1>
+          <h1 className="mt-4 text-[20px] font-bold">{asOffer ? "Offer Received" : "Application received"}</h1>
           <p className="mx-auto mt-2 max-w-md text-[13.5px] leading-relaxed text-black/60">
-            Your application for {LISTING.property} at {gbp(offerNum)} a month is with{" "}
+            Your {asOffer ? "offer on" : "application for"} {LISTING.property} at {gbp(offerNum)} a month is with{" "}
             {LISTING.agent}, who will put it to the landlord and come back to you -
             usually within a working day. Nothing is owed yet, and nothing is agreed
             until the landlord says yes.
@@ -290,9 +304,9 @@ export default function Apply() {
   }
   if (home.state === "gone") {
     return (
-      <div className="py-16">
+      <div className="px-4 py-16">
         <div className="mx-auto max-w-xl rounded-2xl border border-black/10 bg-white p-8 text-center">
-          <h1 className="text-[20px] font-bold">This Application Form Is Closed</h1>
+          <h1 className="text-[20px] font-bold">{asOffer ? "This Home Isn't Taking Offers" : "This Application Form Is Closed"}</h1>
           <p className="mx-auto mt-2 max-w-md text-[13.5px] leading-relaxed text-black/60">{home.says}</p>
         </div>
       </div>
@@ -300,13 +314,13 @@ export default function Apply() {
   }
 
   return (
-    <div className="py-10">
+    <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
       {/* What you're applying for — never a blank form asking which property. */}
       <div className="flex items-center gap-4 rounded-2xl border border-black/10 bg-white p-4">
         <PropertyPhoto src={LISTING.photo} className="h-16 w-20 shrink-0 rounded-xl" />
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-black/40">
-            You&apos;re applying for
+            {asOffer ? "You're making an offer on" : "You're applying for"}
           </p>
           <p className="mt-0.5 truncate text-[15px] font-bold">{LISTING.property}</p>
           <p className="text-[12.5px] text-black/50">
@@ -315,9 +329,9 @@ export default function Apply() {
         </div>
       </div>
 
-      <h1 className="mt-8 text-[22px] font-bold leading-tight">Your application</h1>
+      <h1 className="mt-8 text-[22px] font-bold leading-tight">{asOffer ? "Make an Offer" : "Your application"}</h1>
       <p className="mt-1.5 max-w-2xl text-[13.5px] leading-relaxed text-black/60">
-        Ten minutes, and it goes straight to {LISTING.agent}. We ask everyone who&apos;ll
+        {asOffer ? "Put in the rent you'd like to offer and the day you'd like to move in. " : ""}Ten minutes, and it goes straight to {LISTING.agent}. We ask everyone who&apos;ll
         be living there, not just the lead name - the right to rent check is required by
         law for every adult in the household.
       </p>
@@ -587,7 +601,7 @@ export default function Apply() {
         className="mt-6 w-full rounded-xl px-5 py-3.5 text-[14px] font-bold text-white transition-opacity disabled:opacity-35"
         style={{ background: CTA }}
       >
-        {sending ? "Sending…" : "Send my application"}
+        {sending ? "Sending…" : asOffer ? "Send my offer" : "Send my application"}
       </button>
       <p className="mt-2 text-center text-[11.5px] leading-relaxed text-black/45">
         Nothing is owed yet. A holding deposit is only asked for once the landlord accepts.
