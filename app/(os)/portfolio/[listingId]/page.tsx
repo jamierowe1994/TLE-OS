@@ -197,7 +197,7 @@ export default function PropertyPage() {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
-      if (action || openJob || lightbox != null) return;
+      if (action || openJob || showAll || lightbox != null) return;
       if (e.key === "ArrowRight") step(1);
       if (e.key === "ArrowLeft") step(-1);
     };
@@ -290,6 +290,7 @@ export default function PropertyPage() {
   const [action, setAction] = useState<Action | null>(null);
   const [openJob, setOpenJob] = useState<WorksOrder | null>(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
 
   /* ── drafts: a form started and not sent (lib/property-drafts) ───────── */
   const [drafts, setDrafts] = useState<Loaded<PropertyDraft[]>>({ state: "loading" });
@@ -392,15 +393,17 @@ export default function PropertyPage() {
   async function bookVisit() {
     if (!p || !propertyId || visits.state !== "ready") return;
     setActionErr(null);
-    const inHand = visits.data.inspections.find((i) => ["due", "arranging", "no_access"].includes(i.status));
+    /* A property visit - the six-monthly look round on a twelve-month cycle
+       (James, 7 Oct 2026) - not a check-in or check-out inspection. */
+    const inHand = visits.data.inspections.find((i) => i.kind === "interim" && ["due", "arranging", "no_access"].includes(i.status));
     if (inHand) return act({ kind: "inspection", inspection: inHand });
-    const owed = visits.data.due[0];
+    const owed = visits.data.due.find((d) => d.kind === "interim");
     const t = tenants[0];
     const r = await fetch("/api/inspections", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        kind: owed?.kind ?? "interim",
+        kind: "interim",
         propertyName: house ? house.name : p.name,
         locality: p.locality,
         propertyId,
@@ -491,10 +494,11 @@ export default function PropertyPage() {
     }
   }
   /* Unfinished first - they are waiting on somebody - then newest first. */
-  const latest = activity
+  const allActivity = activity
     .filter((a) => a.at)
-    .sort((a, b) => Number(Boolean(b.unfinished)) - Number(Boolean(a.unfinished)) || b.at.localeCompare(a.at))
-    .slice(0, 6);
+    .sort((a, b) => Number(Boolean(b.unfinished)) - Number(Boolean(a.unfinished)) || b.at.localeCompare(a.at));
+  /* Five in the box; the rest in View all (James, 7 Oct 2026). */
+  const latest = allActivity.slice(0, 5);
 
   const chip = "inline-flex items-center gap-1.5 rounded-full border border-line/60 bg-white px-3 py-1.5 text-[12px] transition-colors hover:border-ink/40";
   /* The tiles pop too, tighter - 2px up, a 3px slab - so a lifted tile never
@@ -622,7 +626,7 @@ export default function PropertyPage() {
               <div className="grid flex-1 auto-rows-fr grid-cols-2 gap-2">
                 <button type="button" disabled={!canAct} onClick={() => act({ kind: "repair" })} className={tile}>{tileIcon("setting")}{tileText("Report a repair", "Tenant and landlord told at each step")}</button>
                 <button type="button" disabled={!canAct} onClick={() => act({ kind: "planned" })} className={tile}>{tileIcon("calendar")}{tileText("Plan a job", "A service or certificate, by a date")}</button>
-                <button type="button" disabled={!canAct || visits.state !== "ready"} onClick={() => void bookVisit()} className={tile}>{tileIcon("checklist")}{tileText("Book an inspection", "A date, who goes, and telling the tenant")}</button>
+                <button type="button" disabled={!canAct || visits.state !== "ready"} onClick={() => void bookVisit()} className={tile}>{tileIcon("checklist")}{tileText("Book a property visit", "Every 6 months: the home and the tenant")}</button>
                 <button type="button" onClick={() => act({ kind: "notices", start: "s8" })} disabled={roomsOnly} className={tile}>{tileIcon("file-contract")}{tileText("Serve notice", "Section 8, checked by compliance")}</button>
                 <button type="button" onClick={() => act({ kind: "notices", start: "s13" })} disabled={roomsOnly} className={tile}>{tileIcon("coin")}{tileText("Rent review", "Section 13 rent increase")}</button>
                 <button type="button" disabled={!canAct || !tenants.length} onClick={() => act({ kind: "tenant-notice" })} className={tile}>{tileIcon("logout")}{tileText("Tenant gave notice", "Starts the move-out")}</button>
@@ -728,28 +732,17 @@ export default function PropertyPage() {
               {(
                 <>
                   <p className={eyebrow}>On this home{drafts.state === "ready" && drafts.data.length > 0 ? ` · ${drafts.data.length} not finished` : ""}</p>
-                  <h2 className="hand mt-1 text-[18px] leading-tight">Latest activity</h2>
+                  <div className="mt-1 flex items-baseline justify-between gap-3">
+                    <h2 className="hand text-[18px] leading-tight">Latest activity</h2>
+                    {allActivity.length > 0 && (
+                      <button type="button" onClick={() => setShowAll(true)} className="shrink-0 text-[12px] font-semibold text-accent-dark underline-offset-2 hover:underline">
+                        View all{allActivity.length > latest.length ? ` ${allActivity.length}` : ""}
+                      </button>
+                    )}
+                  </div>
                   {latest.length > 0 ? (
                     <ul className="mt-3 space-y-2">
-                      {latest.map((a) => (
-                        <li key={a.key} className={`flex items-stretch rounded-xl bg-white ${a.unfinished ? "border border-dashed border-accent-dark/50" : ""}`}>
-                          <button type="button" onClick={a.go} className="flex min-w-0 flex-1 items-start gap-3 rounded-xl px-3.5 py-3 text-left transition-colors hover:bg-box/60">
-                            <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${a.hot ? "bg-accent-dark text-white" : "bg-accent-soft text-accent-dark"}`}>
-                              <DoodleIcon name={a.icon} size={12} />
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-[12.5px] font-semibold">{a.title}</span>
-                              <span className={`block truncate text-[11.5px] ${a.hot ? "text-accent-dark" : "text-muted"}`}>{a.sub}</span>
-                            </span>
-                            <span className="shrink-0 pt-0.5 text-[11px] text-muted">{a.unfinished ? "Carry on" : shortDay(a.at)}</span>
-                          </button>
-                          {a.bin && (
-                            <button type="button" onClick={() => void a.bin?.()} aria-label="Bin this draft" title="Bin this draft" className="flex w-10 shrink-0 items-center justify-center rounded-r-xl border-l border-dashed border-accent-dark/30 text-muted transition-colors hover:bg-accent-soft hover:text-accent-dark">
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" /></svg>
-                            </button>
-                          )}
-                        </li>
-                      ))}
+                      {latest.map((a) => <ActivityRow key={a.key} a={a} />)}
                     </ul>
                   ) : reading ? (
                     <div className="mt-3"><Loading label="Reading what has happened here" /></div>
@@ -881,6 +874,8 @@ export default function PropertyPage() {
 
       {lightbox != null && <PhotoLightbox photos={shots} start={lightbox} name={title} onClose={() => setLightbox(null)} />}
 
+      {showAll && <AllActivity title={title} items={allActivity} reading={reading} onClose={() => setShowAll(false)} />}
+
       {/* ── the pop-ups ───────────────────────────────────────────────── */}
       {action && (action.kind === "repair" || action.kind === "planned") && raiseHome && (
         <Modal onClose={closeAction} wide>
@@ -904,7 +899,7 @@ export default function PropertyPage() {
         </Modal>
       )}
       {action?.kind === "inspection" && visits.state === "ready" && (
-        <Modal onClose={closeAction} title="Book an inspection">
+        <Modal onClose={closeAction} title="Book a property visit" wide>
           <BookVisit
             inspection={action.inspection}
             team={visits.data.team}
@@ -1144,7 +1139,7 @@ function BookVisit({ inspection, team, me, onBooked }: { inspection: Inspection;
   return (
     <div>
       <p className="mb-3 text-[12px] text-muted">{VISIT_KIND[inspection.kind] ?? "Visit"} · {inspection.propertyName}</p>
-      <BookForm inspection={inspection} team={team} me={me} busy={busy} onMove={move} />
+      <BookForm inspection={inspection} team={team} me={me} busy={busy} onMove={move} styled />
       {err && <p className="mt-3 text-[12.5px] text-accent-dark">{err}</p>}
       <p className="mt-4 text-[11.5px] text-muted">
         The full visit sheet, with the write-up and the report, is on <Link href={`/inspections?open=${encodeURIComponent(inspection.id)}`} className="underline underline-offset-2">Inspections</Link>.
@@ -1251,8 +1246,8 @@ function Modal({ title, wide = false, onClose, children }: { title?: string; wid
   }, [onClose]);
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-[150] flex items-start justify-center overflow-y-auto p-4 sm:items-center">
-      <button type="button" aria-label="Close" onClick={onClose} className="fixed inset-0 cursor-default bg-ink/35" />
-      <div className={`fade-up relative w-full ${wide ? "max-w-xl" : "max-w-lg"} rounded-2xl border border-line/70 bg-page p-6 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.35)]`}>
+      <button type="button" aria-label="Close" onClick={onClose} className="fixed inset-0 cursor-default bg-ink/55 backdrop-blur-[3px]" />
+      <div className={`fade-up relative w-full ${wide ? "max-w-[760px]" : "max-w-[600px]"} rounded-2xl border border-line/70 bg-page p-6 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.45)] sm:p-8`}>
         {title && (
           <div className="mb-4 flex items-start justify-between gap-3">
             <h2 className="text-[22px] leading-tight">{title}</h2>
@@ -1261,6 +1256,88 @@ function Modal({ title, wide = false, onClose, children }: { title?: string; wid
         )}
         {children}
       </div>
+    </div>
+  );
+}
+
+/** One line of activity: open it, or for a draft carry on or bin it. */
+function ActivityRow({ a }: { a: Activity }) {
+  return (
+    <li className={`flex items-stretch rounded-xl bg-white ${a.unfinished ? "border border-dashed border-accent-dark/50" : ""}`}>
+      <button type="button" onClick={a.go} className="flex min-w-0 flex-1 items-start gap-3 rounded-xl px-3.5 py-3 text-left transition-colors hover:bg-box/60">
+        <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${a.hot ? "bg-accent-dark text-white" : "bg-accent-soft text-accent-dark"}`}>
+          <DoodleIcon name={a.icon} size={12} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[12.5px] font-semibold">{a.title}</span>
+          <span className={`block truncate text-[11.5px] ${a.hot ? "text-accent-dark" : "text-muted"}`}>{a.sub}</span>
+        </span>
+        <span className="shrink-0 pt-0.5 text-[11px] text-muted">{a.unfinished ? "Carry on" : shortDay(a.at)}</span>
+      </button>
+      {a.bin && (
+        <button type="button" onClick={() => void a.bin?.()} aria-label="Bin this draft" title="Bin this draft" className="flex w-10 shrink-0 items-center justify-center rounded-r-xl border-l border-dashed border-accent-dark/30 text-muted transition-colors hover:bg-accent-soft hover:text-accent-dark">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" /></svg>
+        </button>
+      )}
+    </li>
+  );
+}
+
+/**
+ * Everything that has happened on the home, pulled out from the right
+ * (James, 7 Oct 2026: five in the box, "a view all button where they can see
+ * a full breakdown"). Unfinished first, then month by month, newest first.
+ */
+function AllActivity({ title, items, reading, onClose }: { title: string; items: Activity[]; reading: boolean; onClose: () => void }) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const t = requestAnimationFrame(() => setShown(true));
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => { cancelAnimationFrame(t); window.removeEventListener("keydown", onKey); };
+  }, [onClose]);
+  /* Opening one closes the drawer, so what it opens is not underneath it. */
+  const rows = items.map((a) => ({ ...a, go: a.go ? () => { onClose(); a.go?.(); } : undefined }));
+  const unfinished = rows.filter((a) => a.unfinished);
+  const months = new Map<string, Activity[]>();
+  for (const a of rows.filter((x) => !x.unfinished)) {
+    const d = new Date(a.at);
+    const k = Number.isFinite(d.getTime()) ? d.toLocaleDateString("en-GB", { month: "long", year: "numeric" }) : "Undated";
+    months.set(k, [...(months.get(k) ?? []), a]);
+  }
+  return (
+    <div className="fixed inset-0 z-[150]">
+      <button type="button" aria-label="Close" onClick={onClose} className={`absolute inset-0 cursor-default bg-ink/45 transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0"}`} />
+      <aside
+        role="dialog"
+        aria-label="All activity"
+        className={`absolute inset-y-0 right-0 flex w-full max-w-[480px] flex-col overflow-hidden bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[380ms] sm:rounded-l-2xl ${shown ? "translate-x-0" : "translate-x-full"}`}
+        style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
+      >
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-line/70 px-6 pb-4 pt-5">
+          <div className="min-w-0">
+            <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">All activity · {items.length}</p>
+            <h2 className="hand mt-1 truncate text-[20px] leading-tight">{title}</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted hover:text-ink">✕</button>
+        </div>
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto bg-accent-soft/30 px-6 py-5">
+          {unfinished.length > 0 && (
+            <section>
+              <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-accent-dark">Not finished</p>
+              <ul className="space-y-2">{unfinished.map((a) => <ActivityRow key={a.key} a={a} />)}</ul>
+            </section>
+          )}
+          {[...months.entries()].map(([m, list]) => (
+            <section key={m}>
+              <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">{m}</p>
+              <ul className="space-y-2">{list.map((a) => <ActivityRow key={a.key} a={a} />)}</ul>
+            </section>
+          ))}
+          {reading && <Loading label="Still reading" />}
+          {!items.length && !reading && <p className="text-[12.5px] text-muted">Nothing recorded on this home yet.</p>}
+        </div>
+      </aside>
     </div>
   );
 }

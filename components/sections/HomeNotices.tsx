@@ -156,6 +156,7 @@ export default function HomeNotices({ home, className = "", stacked = false, sta
         agentName={me}
         onClose={() => { setOpen(null); onDone?.(); }}
         onChange={onChange}
+        stepped
       />
     ) : null;
   }
@@ -204,6 +205,7 @@ export default function HomeNotices({ home, className = "", stacked = false, sta
           agentName={me}
           onClose={() => setOpen(null)}
           onChange={onChange}
+          stepped
         />
       )}
     </section>

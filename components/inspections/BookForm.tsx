@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { PressButton } from "@/components/Bits";
 import type { Inspection } from "@/lib/inspections";
+import FieldSelect from "@/components/FieldSelect";
 
 /**
  * BOOK THE VISIT (James, 3 Oct 2026: "we need to be able to book inspections,
@@ -52,6 +53,7 @@ export default function BookForm({
   onMove,
   onDone,
   submitLabel,
+  styled = false,
 }: {
   inspection: Inspection;
   team: Person[];
@@ -60,6 +62,8 @@ export default function BookForm({
   onMove: Move;
   onDone?: () => void;
   submitLabel?: string;
+  /** Our own drop-downs and a roomier layout (the property page's pop-up). */
+  styled?: boolean;
 }) {
   const was = inspection.bookedAt ? new Date(inspection.bookedAt) : null;
   const [date, setDate] = useState(was ? ymd(was) : firstDay(inspection.noticeHours || 24));
@@ -82,7 +86,7 @@ export default function BookForm({
   const inspectorId = [picked, inspection.inspectorId ?? "", me?.id ?? "", people[0]?.id ?? ""].find((x) => x && people.some((p) => p.id === x)) ?? "";
   const who = people.find((p) => p.id === inspectorId);
 
-  const field = "w-full rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]";
+  const field = styled ? "w-full rounded-lg border border-line/80 bg-box px-3 py-2.5 text-[13px] outline-none focus:border-ink" : "w-full rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]";
   const lab = "mb-1 block text-[10.5px] font-bold uppercase tracking-wider text-muted";
 
   return (
@@ -94,14 +98,21 @@ export default function BookForm({
         </label>
         <label className="block">
           <span className={lab}>Time</span>
+          {styled ? (
+            <FieldSelect value={time} onChange={setTime} options={TIMES.map((t) => ({ value: t, label: t }))} />
+          ) : (
           <select value={time} onChange={(e) => setTime(e.target.value)} className={field}>
             {TIMES.map((t) => (
               <option key={t}>{t}</option>
             ))}
           </select>
+          )}
         </label>
         <label className="block">
           <span className={lab}>How long</span>
+          {styled ? (
+            <FieldSelect value={String(mins)} onChange={(v) => setMins(Number(v))} options={[15, 20, 30, 45, 60, 90].map((m) => ({ value: String(m), label: `${m} minutes` }))} />
+          ) : (
           <select value={mins} onChange={(e) => setMins(Number(e.target.value))} className={field}>
             {[15, 20, 30, 45, 60, 90].map((m) => (
               <option key={m} value={m}>
@@ -109,9 +120,13 @@ export default function BookForm({
               </option>
             ))}
           </select>
+          )}
         </label>
         <label className="block">
           <span className={lab}>Who is going</span>
+          {styled ? (
+            <FieldSelect value={inspectorId} onChange={setPicked} options={people.map((p) => ({ value: p.id, label: `${p.name}${me && p.id === me.id ? " (you)" : ""}` }))} />
+          ) : (
           <select value={inspectorId} onChange={(e) => setPicked(e.target.value)} className={field}>
             {people.map((p) => (
               <option key={p.id} value={p.id}>
@@ -120,6 +135,7 @@ export default function BookForm({
               </option>
             ))}
           </select>
+          )}
         </label>
       </div>
 

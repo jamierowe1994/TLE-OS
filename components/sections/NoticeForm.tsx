@@ -58,7 +58,7 @@ function Tick({ on }: { on: boolean }) {
 const kb = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`);
 
 export default function NoticeForm({
-  kind, home, notice: initial, prefill, agentName, onClose, onChange,
+  kind, home, notice: initial, prefill, agentName, onClose, onChange, stepped = false,
 }: {
   kind: NoticeKind;
   home: HomeFacts;
@@ -70,6 +70,9 @@ export default function NoticeForm({
   agentName: string;
   onClose: () => void;
   onChange: (n: Notice) => void;
+  /** A pop-up in the middle, a section to a screen (the property page, James
+   *  7 Oct 2026): the home, then each of Michael's sections, then send. */
+  stepped?: boolean;
 }) {
   const spec = SPECS[kind];
   const [notice, setNotice] = useState<Notice | null>(initial);
@@ -245,7 +248,40 @@ export default function NoticeForm({
   const done = Math.max(0, Math.min(total, total - missing.length));
   const warnings = kind === "s13" ? s13Warnings(answers) : [];
 
+  /* ── stepped: a section to a screen ── */
+  const steps = useMemo(
+    () => [
+      { id: "home", title: "The Home" },
+      ...spec.sections.map((x) => ({ id: x.id, title: x.title })),
+      { id: "send", title: "Documents and declaration" },
+    ],
+    [spec]
+  );
+  const [step, setStep] = useState(0);
+  const [dir, setDir] = useState<1 | -1>(1);
+  const here = steps[Math.min(step, steps.length - 1)];
+  const lastStep = step >= steps.length - 1;
+  const show = (id: string) => !stepped || here.id === id;
+  const go = (d: 1 | -1) => {
+    setDir(d);
+    setStep((n) => Math.max(0, Math.min(steps.length - 1, n + d)));
+    setTimeout(() => document.getElementById("notice-steps")?.scrollTo({ top: 0 }), 0);
+  };
+  /** Which screen a line is on, so "next to do" can take you to it. */
+  const stepOf = (id: string) => {
+    if (HEADER.some((h) => h.id === id)) return 0;
+    const i = spec.sections.findIndex((x) => x.lines.some((l) => l.id === id) || (x.risk && (id === NO_RISKS || id === "risk_details")));
+    return i >= 0 ? i + 1 : steps.length - 1;
+  };
+
   const jump = (id: string) => {
+    if (stepped && stepOf(id) !== step) {
+      const to = stepOf(id);
+      setDir(to > step ? 1 : -1);
+      setStep(to);
+      setTimeout(() => jump(id), 60);
+      return;
+    }
     const el = document.getElementById(`nl-${id}`);
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -475,10 +511,14 @@ export default function NoticeForm({
 
   /* z-[195]: above Steve and Report a problem (189-191), whose corner the sheet's own buttons share. */
   const body = (
-    <div className="fixed inset-0 z-[195]">
-      <button aria-label="Close" onClick={close} className={`absolute inset-0 cursor-default bg-ink/40 transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0"}`} />
+    <div className={stepped ? "fixed inset-0 z-[195] flex items-center justify-center p-3 sm:p-6" : "fixed inset-0 z-[195]"}>
+      <button aria-label="Close" onClick={close} className={`absolute inset-0 cursor-default transition-opacity duration-300 ${stepped ? "bg-ink/55 backdrop-blur-[3px]" : "bg-ink/40"} ${shown ? "opacity-100" : "opacity-0"}`} />
       <aside
-        className={`absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[380ms] sm:rounded-l-2xl lg:max-w-[880px] ${shown ? "translate-x-0" : "translate-x-full"}`}
+        className={
+          stepped
+            ? `relative flex max-h-[min(92vh,940px)] w-full max-w-[880px] flex-col overflow-hidden rounded-2xl border border-line/70 bg-page shadow-[0_30px_80px_-24px_rgba(0,0,0,0.45)] transition-[opacity,transform] duration-300 ${shown ? "scale-100 opacity-100" : "scale-[0.97] opacity-0"}`
+            : `absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[380ms] sm:rounded-l-2xl lg:max-w-[880px] ${shown ? "translate-x-0" : "translate-x-full"}`
+        }
         style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
         role="dialog"
         aria-label={spec.title}
@@ -498,11 +538,28 @@ export default function NoticeForm({
                 <button type="button" onClick={close} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">✕</button>
               </div>
             </div>
+            {stepped && (
+              <div className="mt-4">
+                <div className="flex gap-1" aria-hidden>
+                  {steps.map((x, i) => (
+                    <button key={x.id} type="button" tabIndex={-1} onClick={() => { setDir(i > step ? 1 : -1); setStep(i); }} className={`h-1 flex-1 rounded-full transition-colors duration-300 ${i <= step ? "bg-accent-dark" : "bg-line/70"}`} />
+                  ))}
+                </div>
+                <p className="mt-2 text-[11.5px] text-muted">
+                  <span className="font-semibold text-ink">{step + 1} of {steps.length}</span> · {here.title}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* ── the checklist ── */}
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5 sm:px-6">
-            {banner && (
+          <div
+            id="notice-steps"
+            key={stepped ? here.id : "all"}
+            className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5 sm:px-8 sm:py-6"
+            style={stepped ? { animation: "slideIn 340ms cubic-bezier(0.22,1,0.36,1) both", ["--from" as string]: `${dir * 28}px` } : undefined}
+          >
+            {show("home") && banner && (
               <div className={`rounded-[18px] px-4 py-3.5 text-[13px] leading-snug ${banner.tone}`}>
                 <p className="font-semibold">{banner.head}</p>
                 {banner.body && <p className="mt-1 whitespace-pre-line">{banner.body}</p>}
@@ -510,21 +567,21 @@ export default function NoticeForm({
               </div>
             )}
 
-            <section className={card}>
+            {show("home") && <section className={card}>
               <p className="text-[13.5px] leading-snug">{spec.purpose}</p>
               <p className="mt-1 text-[12.5px] leading-snug text-muted">{spec.intro}</p>
-            </section>
+            </section>}
 
-            <section className={card}>
+            {show("home") && <section className={card}>
               <h3 className="text-[16px] leading-tight">The Home</h3>
               <ul className="mt-2 grid gap-x-3 sm:grid-cols-2">
                 {HEADER.map((h) => fieldRow(h))}
               </ul>
-            </section>
+            </section>}
 
-            {spec.sections.map((s, i) => sectionCard(s, i + 1))}
+            {spec.sections.map((s, i) => (show(s.id) ? sectionCard(s, i + 1) : null))}
 
-            <section className={card}>
+            {show("send") && <section className={card}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h3 className="text-[16px] leading-tight">Other Supporting Documents</h3>
@@ -534,11 +591,11 @@ export default function NoticeForm({
               </div>
               {fileChips("other")}
               {!editable && !counts.other && <p className="mt-2 text-[12.5px] text-muted">None.</p>}
-            </section>
+            </section>}
 
-            {decl}
+            {show("send") && decl}
 
-            {notice && notice.history.length > 0 && (
+            {show("send") && notice && notice.history.length > 0 && (
               <details className="px-1 text-[12px] text-muted">
                 <summary className="cursor-pointer select-none underline-offset-2 hover:underline">History</summary>
                 <ul className="mt-2 space-y-1">
@@ -550,12 +607,22 @@ export default function NoticeForm({
                 </ul>
               </details>
             )}
-            <p className="px-1 pb-2 text-[11.5px] text-muted">{spec.footer[0]}</p>
+            {show("send") && <p className="px-1 pb-2 text-[11.5px] text-muted">{spec.footer[0]}</p>}
           </div>
 
           {/* ── foot ── */}
-          <div className="shrink-0 border-t border-line/70 bg-page px-4 py-3 sm:px-6">
-            {editable ? (
+          <div className="shrink-0 border-t border-line/70 bg-page px-4 py-3 sm:px-8">
+            {stepped && !lastStep ? (
+              <div className="flex items-center justify-between gap-3">
+                <button type="button" onClick={() => (step === 0 ? close() : go(-1))} className="rounded-full border border-line/80 px-4 py-2.5 text-[12.5px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink">
+                  {step === 0 ? "Close" : "Back"}
+                </button>
+                {editable && <span className="hidden text-[12px] text-muted sm:inline">{done} of {total} done · it saves as you go</span>}
+                <button type="button" onClick={() => go(1)} className="rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page">
+                  Continue
+                </button>
+              </div>
+            ) : editable ? (
               <div className="flex flex-wrap items-center gap-3">
                 <div className="min-w-[min(100%,220px)] flex-1">
                   <div className="flex items-baseline justify-between gap-2 text-[12px]">
@@ -571,6 +638,9 @@ export default function NoticeForm({
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
+                  {stepped && (
+                    <button type="button" onClick={() => go(-1)} className="rounded-full border border-line/80 px-4 py-2.5 text-[12.5px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink">Back</button>
+                  )}
                   {notice && (
                     <button type="button" onClick={() => void withdraw()} className="rounded-full border border-line/80 px-4 py-2.5 text-[12.5px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink">
                       {status === "draft" ? "Throw away" : "Withdraw"}

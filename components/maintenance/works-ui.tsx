@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { Contractor, WorksOrder, Status, PaidHow } from "@/lib/works-orders";
 import { stepOf } from "@/lib/works-steps";
 import { ContractorForm } from "@/components/WorksNow";
+import FieldSelect from "@/components/FieldSelect";
 
 /**
  * The words and small pieces every maintenance screen shares: the board on
@@ -72,7 +73,7 @@ export function Fact({ k, v }: { k: string; v: string }) {
 
 /* ── Picking a contractor, or adding one without leaving the job ────────── */
 
-export function ContractorPick({ contractors, value, onChange, className }: { contractors: Contractor[]; value: string; onChange: (id: string) => void; className: string }) {
+export function ContractorPick({ contractors, value, onChange, className, styled = false }: { contractors: Contractor[]; value: string; onChange: (id: string) => void; className: string; styled?: boolean }) {
   const [list, setList] = useState(contractors);
   const [adding, setAdding] = useState(false);
   useEffect(() => setList(contractors), [contractors]);
@@ -80,12 +81,27 @@ export function ContractorPick({ contractors, value, onChange, className }: { co
   const corp = list.filter((c) => c.active && !c.ownerId);
   return (
     <div>
+      {styled ? (
+        <FieldSelect
+          className="mt-1"
+          value={value}
+          onChange={onChange}
+          placeholder="Not yet"
+          options={[
+            { value: "", label: "Not yet" },
+            ...mine.map((c) => ({ value: c.id, label: c.name, sub: c.trade, group: "Your contractors" })),
+            ...corp.map((c) => ({ value: c.id, label: c.name, sub: c.trade, group: "The company's" })),
+          ]}
+          extra={{ label: "+ Add a contractor", onPick: () => setAdding(true) }}
+        />
+      ) : (
       <select value={adding ? "__add" : value} onChange={(e) => { if (e.target.value === "__add") setAdding(true); else onChange(e.target.value); }} className={className}>
         <option value="">Not yet</option>
         {mine.length > 0 && <optgroup label="Your contractors">{mine.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.trade}</option>)}</optgroup>}
         {corp.length > 0 && <optgroup label="The company's">{corp.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.trade}</option>)}</optgroup>}
         <option value="__add">+ Add a contractor…</option>
       </select>
+      )}
       {adding && (
         <div className="mt-2 rounded-xl border border-line/80 bg-card p-3">
           <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-muted">New contractor, in your book</p>

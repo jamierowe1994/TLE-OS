@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PressButton } from "@/components/Bits";
 import LandlordJobEmails from "@/components/LandlordJobEmails";
+import FieldSelect from "@/components/FieldSelect";
 import type { Contractor, WorksOrder, Kind, Urgency } from "@/lib/works-orders";
 import { PLANNED_CATEGORIES, REPAIR_CATEGORIES, URGENCIES } from "@/lib/works-catalogue";
 import { CATEGORY_CERT, ContractorPick, REPORTED_BY, type Property } from "@/components/maintenance/works-ui";
@@ -263,7 +264,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
         )}
         <div
           key={inline ? here.id : "all"}
-          className={inline ? "mt-4 flex flex-col gap-4" : "mt-5 grid gap-4 sm:grid-cols-2"}
+          className={inline ? "mt-5 grid gap-x-5 gap-y-4 sm:grid-cols-2" : "mt-5 grid gap-4 sm:grid-cols-2"}
           style={inline ? { animation: "slideIn 340ms cubic-bezier(0.22,1,0.36,1) both", ["--from" as string]: `${dir * 28}px` } : undefined}
           onKeyDown={inline ? (e) => {
             if (e.key !== "Enter" || (e.target as HTMLElement).tagName !== "INPUT") return;
@@ -272,7 +273,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
           } : undefined}
         >
           {inline && (
-            <div>
+            <div className="sm:col-span-2">
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted">{step + 1} of {steps.length}</p>
               <p className="mt-0.5 text-[16px] font-semibold leading-tight">{here.title}</p>
               <p className="mt-1 text-[12px] leading-relaxed text-muted">{here.blurb}</p>
@@ -326,9 +327,13 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
           {at("what") && (
           <div>
             <label className={label}>Category</label>
-            <select value={category} onChange={(e) => setCategory(e.target.value)} className={`mt-1 ${field}`}>
-              {cats.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
+            {inline ? (
+              <FieldSelect className="mt-1" value={category} onChange={setCategory} options={cats.map((c) => ({ value: c, label: c }))} />
+            ) : (
+              <select value={category} onChange={(e) => setCategory(e.target.value)} className={`mt-1 ${field}`}>
+                {cats.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            )}
           </div>
           )}
 
@@ -366,19 +371,27 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
           {at((kind === "repair" ? "urgency" : "when")) && (
           <div>
             <label className={label}>Reported by</label>
-            <select value={reportedBy} onChange={(e) => setReportedBy(e.target.value)} className={`mt-1 ${field}`}>
-              {REPORTED_BY.map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
+            {inline ? (
+              <FieldSelect className="mt-1" value={reportedBy} onChange={setReportedBy} options={REPORTED_BY.map((r) => ({ value: r, label: r }))} />
+            ) : (
+              <select value={reportedBy} onChange={(e) => setReportedBy(e.target.value)} className={`mt-1 ${field}`}>
+                {REPORTED_BY.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            )}
           </div>
           )}
           {at("tenant") && tenants.length > 1 && (
             <div className="sm:col-span-2">
               <label className={label}>{kind === "repair" ? "Which of them reported it" : "Who we'll arrange access with"}</label>
-              <select value={whichTenant} onChange={(e) => chooseTenant(tenants, Number(e.target.value))} className={`mt-1 ${field}`}>
-                {tenants.map((t, i) => (
-                  <option key={`${t.name}-${i}`} value={i}>{t.name}{t.phone ? ` · ${t.phone}` : ""}</option>
-                ))}
-              </select>
+              {inline ? (
+                <FieldSelect className="mt-1" value={String(whichTenant)} onChange={(v) => chooseTenant(tenants, Number(v))} options={tenants.map((t, i) => ({ value: String(i), label: t.name, sub: [t.phone, t.email].filter(Boolean).join(" · ") }))} />
+              ) : (
+                <select value={whichTenant} onChange={(e) => chooseTenant(tenants, Number(e.target.value))} className={`mt-1 ${field}`}>
+                  {tenants.map((t, i) => (
+                    <option key={`${t.name}-${i}`} value={i}>{t.name}{t.phone ? ` · ${t.phone}` : ""}</option>
+                  ))}
+                </select>
+              )}
               <p className="mt-1 text-[11px] text-muted">{tenants.length} tenants on this home. The one you pick is who the emails go to.</p>
             </div>
           )}
@@ -429,7 +442,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
             <>
               <div>
                 <label className={label}>Contractor, if already known</label>
-                <ContractorPick contractors={contractors} value={contractorId} onChange={setContractorId} className={`mt-1 ${field}`} />
+                <ContractorPick contractors={contractors} value={contractorId} onChange={setContractorId} className={`mt-1 ${field}`} styled={inline} />
               </div>
               <div>
                 <label className={label}>Booked for, if already booked</label>
@@ -439,13 +452,13 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
           )}
           {inline && at("landlord") && (
             landlordEmail.includes("@") ? (
-              <LandlordJobEmails key={landlordEmail} compact landlord={landlordEmail} name={landlordName || "the landlord"} className="rounded-xl bg-white px-3.5 py-3" />
+              <LandlordJobEmails key={landlordEmail} landlord={landlordEmail} name={landlordName || "the landlord"} className="rounded-xl border border-line/60 bg-white px-4 py-3 sm:col-span-2" />
             ) : (
-              <p className="rounded-xl bg-white px-3.5 py-3 text-[12px] text-muted">No email for the landlord, so they won&apos;t be emailed about this job - ring them.</p>
+              <p className="rounded-xl border border-line/60 bg-white px-4 py-3 text-[12px] text-muted sm:col-span-2">No email for the landlord, so they won&apos;t be emailed about this job - ring them.</p>
             )
           )}
           {inline && at("check") && (
-            <dl className="divide-y divide-line/50 overflow-hidden rounded-xl bg-white text-[12.5px]">
+            <dl className="divide-y divide-line/50 overflow-hidden rounded-xl border border-line/60 bg-white text-[12.5px] sm:col-span-2">
               {([
                 [steps.find((x) => x.id === "what")!.title, "what", [title || "—", category, description].filter(Boolean).join(" · ")],
                 kind === "repair"
