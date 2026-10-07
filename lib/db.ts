@@ -1998,6 +1998,22 @@ CREATE TABLE IF NOT EXISTS os_cache (
   computed_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Half-filled forms on a home's page (James, 7 Oct 2026): a repair report,
+-- a planned job or a tenant's notice started and not sent. Shown in the
+-- home's latest activity to pick up again or bin (lib/property-drafts).
+CREATE TABLE IF NOT EXISTS os_property_drafts (
+  id             TEXT PRIMARY KEY,
+  listing_id     TEXT NOT NULL,
+  property_id    TEXT,
+  kind           TEXT NOT NULL,
+  data           JSONB NOT NULL DEFAULT '{}'::jsonb,
+  started_by     TEXT NOT NULL DEFAULT '',
+  started_by_id  TEXT NOT NULL DEFAULT '',
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_property_drafts_listing ON os_property_drafts (listing_id, updated_at DESC);
+
 -- The assistant's standing brief: who he is and how he behaves.
 --
 -- James, 29 Aug: "I need to give some general context about what he's here to

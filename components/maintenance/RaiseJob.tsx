@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PressButton } from "@/components/Bits";
 import LandlordJobEmails from "@/components/LandlordJobEmails";
 import type { Contractor, WorksOrder, Kind, Urgency } from "@/lib/works-orders";
@@ -9,14 +9,25 @@ import { CATEGORY_CERT, ContractorPick, REPORTED_BY, type Property } from "@/com
 
 type Group = "property" | "what" | "urgency" | "when" | "tenant" | "landlord" | "check";
 
+/** What an unfinished report holds, to pick it up again. */
+export interface RaiseDraft {
+  title?: string; description?: string; category?: string; urgency?: string; dueAt?: string; reportedBy?: string;
+  tenant?: string; tenantPhone?: string; tenantEmail?: string; landlordName?: string; landlordEmail?: string; landlordMobile?: string;
+  access?: string; contractorId?: string; scheduledAt?: string; step?: number;
+}
+
 /** Report a repair or plan a job. On /maintenance and on the property's own page. */
-export default function RaiseJob({ kind, contractors, home = null, inline = false, onClose, onRaised }: {
+export default function RaiseJob({ kind, contractors, home = null, inline = false, draft = null, onDraft, onClose, onRaised }: {
   kind: Kind;
   contractors: Contractor[];
   /** Raised from the property's own page: the home is already known. */
   home?: Property | null;
   /** Drawn inside a box on the page (the property's action panel), not over it. */
   inline?: boolean;
+  /** Answers saved from an earlier, unfinished go (the property page's drafts). */
+  draft?: RaiseDraft | null;
+  /** Called a moment after each change, once there is something worth keeping. */
+  onDraft?: (d: RaiseDraft) => void;
   onClose: () => void;
   onRaised: (o: WorksOrder) => void;
 }) {
@@ -24,28 +35,28 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
   const [pq, setPq] = useState("");
   const [picked, setPicked] = useState<Property | null>(home);
   const [manual, setManual] = useState("");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [category, setCategory] = useState<string>(kind === "repair" ? REPAIR_CATEGORIES[0] : PLANNED_CATEGORIES[0]);
-  const [urgency, setUrgency] = useState<Urgency>("routine");
-  const [dueAt, setDueAt] = useState("");
-  const [reportedBy, setReportedBy] = useState(kind === "repair" ? "Tenant" : "Compliance tracker");
-  const [tenant, setTenant] = useState("");
-  const [tenantPhone, setTenantPhone] = useState("");
-  const [tenantEmail, setTenantEmail] = useState("");
+  const [title, setTitle] = useState(draft?.title ?? "");
+  const [description, setDescription] = useState(draft?.description ?? "");
+  const [category, setCategory] = useState<string>(draft?.category ?? (kind === "repair" ? REPAIR_CATEGORIES[0] : PLANNED_CATEGORIES[0]));
+  const [urgency, setUrgency] = useState<Urgency>((draft?.urgency as Urgency) ?? "routine");
+  const [dueAt, setDueAt] = useState(draft?.dueAt ?? "");
+  const [reportedBy, setReportedBy] = useState(draft?.reportedBy ?? (kind === "repair" ? "Tenant" : "Compliance tracker"));
+  const [tenant, setTenant] = useState(draft?.tenant ?? "");
+  const [tenantPhone, setTenantPhone] = useState(draft?.tenantPhone ?? "");
+  const [tenantEmail, setTenantEmail] = useState(draft?.tenantEmail ?? "");
   /* Every tenant on the home, so a shared house can say which of them rang. */
   const [tenants, setTenants] = useState<{ name: string; email: string; phone: string }[]>([]);
   const [whichTenant, setWhichTenant] = useState(0);
-  const [landlordEmail, setLandlordEmail] = useState("");
-  const [landlordMobile, setLandlordMobile] = useState("");
-  const [landlordName, setLandlordName] = useState("");
+  const [landlordEmail, setLandlordEmail] = useState(draft?.landlordEmail ?? "");
+  const [landlordMobile, setLandlordMobile] = useState(draft?.landlordMobile ?? "");
+  const [landlordName, setLandlordName] = useState(draft?.landlordName ?? "");
   const [source, setSource] = useState("");
-  const [access, setAccess] = useState("");
+  const [access, setAccess] = useState(draft?.access ?? "");
   const [place, setPlace] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
   const [filled, setFilled] = useState<string[] | null>(null);
   const [sent, setSent] = useState<WorksOrder | null>(null);
-  const [contractorId, setContractorId] = useState("");
-  const [scheduledAt, setScheduledAt] = useState("");
+  const [contractorId, setContractorId] = useState(draft?.contractorId ?? "");
+  const [scheduledAt, setScheduledAt] = useState(draft?.scheduledAt ?? "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -74,7 +85,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
       if (hit) setPicked(hit);
     }
   }, [props, pq, picked]);
-  useEffect(() => { if (picked?.tenant) setTenant(picked.tenant); }, [picked]);
+  useEffect(() => { if (picked?.tenant && !draft) setTenant(picked.tenant); }, [picked]); // eslint-disable-line react-hooks/exhaustive-deps
   /* Picking a tenant from the list fills the three fields together. */
   const chooseTenant = useCallback((list: { name: string; email: string; phone: string }[], i: number) => {
     const t = list[i];
@@ -96,6 +107,10 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
       const list = (Array.isArray(j.tenants) ? j.tenants : []) as { name: string; email: string; phone: string }[];
       const l = j.landlord as { name: string; email: string; phone: string } | null;
       setTenants(list);
+      setPlace({ lat: j.lat ?? null, lng: j.lng ?? null });
+      setSource(typeof j.source === "string" ? j.source : "");
+      /* A draft keeps what was typed; the record only fills a fresh form. */
+      if (draft) { setFilled([]); return; }
       if (list.length) {
         chooseTenant(list, 0);
         got.push(list.length === 1 ? "the tenant" : `${list.length} tenants`);
@@ -104,17 +119,15 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
       if (l?.email) { setLandlordEmail(l.email); got.push("landlord's email"); }
       if (l?.phone) { setLandlordMobile(l.phone); got.push("landlord's mobile"); }
       if (j.access) { setAccess(j.access); got.push("access notes"); }
-      setPlace({ lat: j.lat ?? null, lng: j.lng ?? null });
-      setSource(typeof j.source === "string" ? j.source : "");
       setFilled(got);
     }).catch(() => { if (live) setFilled([]); });
     return () => { live = false; };
-  }, [picked]);
+  }, [picked]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* A planned job is due when the certificate we hold runs out, so picking
      the home and the category fills the date in. Only while the date is
      untouched - a date typed by hand always wins. */
-  const [dueTouched, setDueTouched] = useState(false);
+  const [dueTouched, setDueTouched] = useState(Boolean(draft?.dueAt));
   useEffect(() => {
     if (kind !== "planned" || dueTouched || !picked) return;
     const key = CATEGORY_CERT[category];
@@ -181,11 +194,23 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
     { id: "landlord", title: "The landlord", blurb: "Who the job is reported to, and how they hear about it." },
     { id: "check", title: "Check and send", blurb: kind === "repair" ? "Nothing goes until you press Report it." : "Nothing goes until you press Plan it." },
   ];
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(draft?.step ?? 0);
   const [dir, setDir] = useState<1 | -1>(1);
   const here = steps[Math.min(step, steps.length - 1)];
   const at = (g: Group) => !inline || here.id === g;
   const last = step >= steps.length - 1;
+  /* Kept as it is typed, once there is something to keep - a few words of
+     what is wrong is enough - so closing the form never loses it. */
+  const draftRef = useRef(onDraft);
+  draftRef.current = onDraft;
+  useEffect(() => {
+    if (!draftRef.current || sent || !(title.trim() || description.trim())) return;
+    const t = setTimeout(() => draftRef.current?.({
+      title, description, category, urgency, dueAt, reportedBy, tenant, tenantPhone, tenantEmail,
+      landlordName, landlordEmail, landlordMobile, access, contractorId, scheduledAt, step,
+    }), 700);
+    return () => clearTimeout(t);
+  }, [title, description, category, urgency, dueAt, reportedBy, tenant, tenantPhone, tenantEmail, landlordName, landlordEmail, landlordMobile, access, contractorId, scheduledAt, step, sent]);
   function go(d: 1 | -1) {
     if (d > 0) {
       if (here.id === "property" && !picked && !manual.trim()) return setErr("Which property?");
@@ -213,7 +238,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
       {!inline && <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 cursor-default bg-ink/35" />}
       <div className={inline ? "relative" : "fade-up relative w-full max-w-2xl rounded-3xl border border-line/80 bg-page p-6 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.35)]"}>
         {sent && (
-          <div className={`absolute inset-0 z-10 flex flex-col items-center justify-center rounded-3xl ${inline ? "bg-accent-soft/95" : "bg-page/95"}`}>
+          <div className={`absolute inset-0 z-10 flex flex-col items-center justify-center rounded-3xl bg-page/95`}>
             <span className="fade-up flex h-16 w-16 items-center justify-center rounded-full bg-ink text-page">
               <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7" /></svg>
             </span>
@@ -232,7 +257,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
         {inline && (
           <div className="mt-4 flex gap-1" aria-hidden>
             {steps.map((x, i) => (
-              <span key={x.id} className={`h-1 flex-1 rounded-full transition-colors duration-300 ${i <= step ? "bg-accent-dark" : "bg-white"}`} />
+              <span key={x.id} className={`h-1 flex-1 rounded-full transition-colors duration-300 ${i <= step ? "bg-accent-dark" : "bg-line/70"}`} />
             ))}
           </div>
         )}

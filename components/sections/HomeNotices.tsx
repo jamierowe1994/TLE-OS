@@ -55,11 +55,18 @@ function prefillFor(kind: NoticeKind, h: HomeNoticeFacts, me: string): Answers {
   return { fields, checks: {}, signature: "", auto: Object.keys(fields) };
 }
 
-export default function HomeNotices({ home, className = "", stacked = false }: {
+export default function HomeNotices({ home, className = "", stacked = false, start, bare = false, onDone }: {
   home: HomeNoticeFacts;
   className?: string;
-  /** One button under the other, for a narrow box (the property page's action box). */
+  /** One button under the other, for a narrow box. */
   stacked?: boolean;
+  /** Open this kind's checklist straight away - the open one if there is one,
+   *  else a new one (the property page's Serve notice and Rent review tiles). */
+  start?: NoticeKind;
+  /** Draw nothing but the checklist itself. */
+  bare?: boolean;
+  /** The checklist was closed. */
+  onDone?: () => void;
 }) {
   const [notices, setNotices] = useState<Notice[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -96,6 +103,15 @@ export default function HomeNotices({ home, className = "", stacked = false }: {
     if (n) { asked.current = true; setOpen({ kind: n.kind, notice: n }); }
   }, [notices]);
 
+  /* Asked for a kind: open it once the home's notices are known, so an open
+     one is carried on rather than a second started. */
+  const started = useRef(false);
+  useEffect(() => {
+    if (!start || started.current || notices === null) return;
+    started.current = true;
+    setOpen({ kind: start, notice: notices.find((n) => n.kind === start && OPEN.includes(n.status)) ?? null });
+  }, [start, notices]);
+
   const onChange = useCallback((n: Notice) => {
     setNotices((list) => {
       const rest = (list ?? []).filter((x) => x.id !== n.id);
@@ -128,6 +144,21 @@ export default function HomeNotices({ home, className = "", stacked = false }: {
       </button>
     );
   };
+
+  if (bare) {
+    return open ? (
+      <NoticeForm
+        key={open.notice?.id ?? `new-${open.kind}`}
+        kind={open.kind}
+        home={home}
+        notice={open.notice}
+        prefill={prefillFor(open.kind, home, me)}
+        agentName={me}
+        onClose={() => { setOpen(null); onDone?.(); }}
+        onChange={onChange}
+      />
+    ) : null;
+  }
 
   return (
     <section className={className}>

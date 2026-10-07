@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -14,12 +14,13 @@ import HomeNotices from "@/components/sections/HomeNotices";
 import SaveChip, { SaveScopeProvider, useSaveReporter, useSaveScope } from "@/components/SaveChip";
 import { Pill } from "@/components/Wire";
 import { PressButton } from "@/components/Bits";
-import RaiseJob from "@/components/maintenance/RaiseJob";
+import RaiseJob, { type RaiseDraft } from "@/components/maintenance/RaiseJob";
 import JobDrawer from "@/components/maintenance/JobDrawer";
 import { OPEN, STATUS_LABEL, day as shortDay, nextFor } from "@/components/maintenance/works-ui";
 import BookForm, { type Person } from "@/components/inspections/BookForm";
 import PortfolioMap from "@/components/PortfolioMap";
-import { SPECS, STATUS_LABEL as NOTICE_STATUS, type Notice } from "@/lib/section-notices-spec";
+import { SPECS, STATUS_LABEL as NOTICE_STATUS, type Notice, type NoticeKind } from "@/lib/section-notices-spec";
+import type { PropertyDraft } from "@/lib/property-drafts";
 import { readJson } from "@/lib/page-cache";
 import { ORDER_KEY } from "@/lib/portfolio-order";
 import { rexListingUrl } from "@/lib/business/rex-links";
@@ -54,23 +55,17 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "tenancy", label: "Tenancy", icon: "key" },
 ];
 
-/** What the action box at the top right is showing, when not the latest activity. */
+/** The pop-up open over the page: an action, picked up from a draft or fresh. */
 type Action =
-  | { kind: "repair" | "planned" }
+  | { kind: "repair" | "planned"; draft?: PropertyDraft }
   | { kind: "inspection"; inspection: Inspection }
-  | { kind: "notices" }
-  | { kind: "tenant-notice" };
-const ACTION_TITLE: Record<Action["kind"], string> = {
-  repair: "Report a repair",
-  planned: "Plan a job",
-  inspection: "Book an inspection",
-  notices: "Rent review and notices",
-  "tenant-notice": "Tenant gave notice",
-};
+  | { kind: "notices"; start: NoticeKind }
+  | { kind: "tenant-notice"; draft?: PropertyDraft };
+const DRAFT_TITLE: Record<string, string> = { repair: "Report a repair", planned: "Plan a job", "tenant-notice": "Tenant gave notice" };
 const MAPS = Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY);
 
 /** One line on the latest activity list. */
-type Activity = { key: string; at: string; icon: string; title: string; sub: string; hot?: boolean; go?: () => void };
+type Activity = { key: string; at: string; icon: string; title: string; sub: string; hot?: boolean; go?: () => void; unfinished?: boolean; bin?: () => void };
 const REVIEW_OUTCOME: Record<string, string> = {
   increase: "Rent increased", renewed: "Renewed, same rent", no_change: "No change", ending: "Tenancy ending", other: "Reviewed",
 };
@@ -117,7 +112,13 @@ async function getJson<T>(url: string): Promise<T> {
 const eyebrow = "text-[10.5px] font-semibold uppercase tracking-wide text-muted";
 const card = "rounded-xl border border-line/50 bg-white";
 /** The outlined boxes the page is built from - white, a fine line, gentle corners. */
-const box = "rounded-2xl border border-line/70 bg-white";
+/* The dashboard's hover (block-pop in globals.css): the box steps up and
+   left and a hard ink slab shows on the right and bottom. Written out here
+   rather than the class, so it can stand still while a box holds a pop-up -
+   a moved box would carry a fixed pop-up inside it along with it. */
+const pop =
+  "transition-[translate,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] [&:hover:not(:has(.fixed))]:-translate-x-[3px] [&:hover:not(:has(.fixed))]:-translate-y-[3px] [&:hover:not(:has(.fixed))]:shadow-[6px_6px_0_0_color-mix(in_srgb,var(--ink)_72%,var(--page))]";
+const box = `${pop} rounded-2xl border border-line/70 bg-white`;
 
 function Loading({ label }: { label: string }) {
   return (
@@ -289,13 +290,58 @@ export default function PropertyPage() {
   const [action, setAction] = useState<Action | null>(null);
   const [openJob, setOpenJob] = useState<WorksOrder | null>(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
-  /* An action opens in the box at the top right; on a phone that box is
-     above the details, so bring it into view. */
+
+  /* ── drafts: a form started and not sent (lib/property-drafts) ───────── */
+  const [drafts, setDrafts] = useState<Loaded<PropertyDraft[]>>({ state: "loading" });
+  const loadDrafts = useCallback(() => {
+    if (!p) return;
+    getJson<{ drafts: PropertyDraft[] }>(`/api/property-drafts?listing=${encodeURIComponent(p.listingId)}`)
+      .then((j) => setDrafts({ state: "ready", data: j.drafts ?? [] }))
+      .catch((e) => setDrafts({ state: "failed", error: e.message }));
+  }, [p?.listingId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadDrafts(); }, [loadDrafts]);
+  /* One draft per open form; saves run one after another so the first
+     save's id is the one every later save updates. */
+  const draftId = useRef<string | null>(null);
+  const saving = useRef<Promise<void>>(Promise.resolve());
+  const keepDraft = (kind: PropertyDraft["kind"], data: Record<string, unknown>) => {
+    if (!p) return;
+    const listing = p.listingId;
+    const property = p.propertyId;
+    saving.current = saving.current.then(async () => {
+      const r = await fetch("/api/property-drafts", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: draftId.current, listingId: listing, propertyId: property, kind, data }),
+      }).then((x) => x.json()).catch(() => null);
+      if (r?.ok) draftId.current = r.draft.id;
+    });
+  };
+  const binDraft = async (id: string | null) => {
+    if (!id) return;
+    await fetch(`/api/property-drafts?id=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => null);
+  };
+
+  /* Every action is a pop-up over the page (James, 7 Oct 2026); what it
+     leaves behind shows in the latest activity. */
   const act = useCallback((a: Action | null) => {
+    if (a) draftId.current = "draft" in a && a.draft ? a.draft.id : null;
     setAction(a);
     setActionErr(null);
-    if (a) setTimeout(() => document.getElementById("action-box")?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 40);
   }, []);
+  /* Closed without sending: whatever was typed is a draft now. */
+  const closeAction = useCallback(() => {
+    setAction(null);
+    void saving.current.then(() => loadDrafts());
+  }, [loadDrafts]);
+  /* Sent: the draft has done its job. */
+  const finishAction = useCallback(async () => {
+    setAction(null);
+    await saving.current;
+    await binDraft(draftId.current);
+    draftId.current = null;
+    loadDrafts();
+  }, [loadDrafts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (book.state === "loading") {
     return (
@@ -385,7 +431,7 @@ export default function PropertyPage() {
   const rentLine = p.rent == null ? null : `${money(p.rent)} ${p.rentPeriod === "week" ? "pw" : "pcm"}`;
 
   /* ── the latest activity: every board's newest, one list ─────────────── */
-  const reading = [works, visits, ending, notices, certs].some((x) => x.state === "loading");
+  const reading = [works, visits, ending, notices, certs, drafts].some((x) => x.state === "loading");
   const activity: Activity[] = [];
   if (works.state === "ready") {
     for (const o of works.data.orders) {
@@ -404,7 +450,21 @@ export default function PropertyPage() {
   }
   if (notices.state === "ready") {
     for (const n of notices.data) {
-      activity.push({ key: `notice-${n.id}`, at: n.servedAt ?? n.decidedAt ?? n.submittedAt ?? n.createdAt, icon: n.kind === "s13" ? "coin" : "file-contract", title: `${SPECS[n.kind].button} · ${SPECS[n.kind].short}`, sub: `${NOTICE_STATUS[n.status]} · ${n.agentName}`, hot: n.status === "returned", go: () => act({ kind: "notices" }) });
+      const draft = n.status === "draft";
+      activity.push({
+        key: `notice-${n.id}`,
+        at: n.updatedAt ?? n.createdAt,
+        icon: n.kind === "s13" ? "coin" : "file-contract",
+        title: draft ? `${SPECS[n.kind].button} · not finished` : `${SPECS[n.kind].button} · ${SPECS[n.kind].short}`,
+        sub: draft ? `Started by ${n.agentName} · ${SPECS[n.kind].short}` : `${NOTICE_STATUS[n.status]} · ${n.agentName}`,
+        hot: n.status === "returned",
+        unfinished: draft,
+        go: () => act({ kind: "notices", start: n.kind }),
+        bin: draft ? async () => {
+          await fetch(`/api/section-notices/${encodeURIComponent(n.id)}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "withdraw" }) }).catch(() => null);
+          loadNotices();
+        } : undefined,
+      });
     }
   }
   if (ending.state === "ready") {
@@ -415,10 +475,31 @@ export default function PropertyPage() {
   if (certs.state === "ready") {
     for (const f of certs.data.filed) activity.push({ key: `cert-${f.label}-${f.at}`, at: f.at, icon: "shield", title: `${f.label} filed`, sub: "Certificate on the file", go: () => pickTab("compliance") });
   }
-  const latest = activity.filter((a) => a.at).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 6);
+  if (drafts.state === "ready") {
+    for (const d of drafts.data) {
+      const what = String((d.data as RaiseDraft).title || (d.data as { leaving?: string }).leaving && `leaving ${day(String((d.data as { leaving?: string }).leaving))}` || "");
+      activity.push({
+        key: `draft-${d.id}`,
+        at: d.updatedAt,
+        icon: d.kind === "repair" ? "setting" : d.kind === "planned" ? "calendar" : "logout",
+        title: `${DRAFT_TITLE[d.kind] ?? "Form"} · not finished`,
+        sub: [what, `started by ${d.startedBy}`].filter(Boolean).join(" · "),
+        unfinished: true,
+        go: () => act(d.kind === "tenant-notice" ? { kind: "tenant-notice", draft: d } : { kind: d.kind, draft: d }),
+        bin: async () => { await binDraft(d.id); loadDrafts(); },
+      });
+    }
+  }
+  /* Unfinished first - they are waiting on somebody - then newest first. */
+  const latest = activity
+    .filter((a) => a.at)
+    .sort((a, b) => Number(Boolean(b.unfinished)) - Number(Boolean(a.unfinished)) || b.at.localeCompare(a.at))
+    .slice(0, 6);
 
   const chip = "inline-flex items-center gap-1.5 rounded-full border border-line/60 bg-white px-3 py-1.5 text-[12px] transition-colors hover:border-ink/40";
-  const tile = "flex min-h-[72px] flex-col items-start justify-between gap-2 rounded-xl border border-line/60 bg-white p-3.5 text-left text-[12.5px] font-semibold leading-tight transition-colors hover:border-ink/40 disabled:opacity-40";
+  /* The tiles pop too, tighter - 2px up, a 3px slab - so a lifted tile never
+     reaches the one beside it. */
+  const tile = "flex min-h-[72px] flex-col items-start justify-between gap-2 rounded-xl border border-line/60 bg-white p-3.5 text-left text-[12.5px] font-semibold leading-tight transition-[transform,box-shadow,border-color] duration-200 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:border-ink/60 hover:shadow-[3px_3px_0_0_color-mix(in_srgb,var(--ink)_72%,var(--page))] disabled:pointer-events-none disabled:opacity-40";
   const tileText = (label: string, what: string) => (
     <span className="block">
       <span className="block">{label}</span>
@@ -542,14 +623,14 @@ export default function PropertyPage() {
                 <button type="button" disabled={!canAct} onClick={() => act({ kind: "repair" })} className={tile}>{tileIcon("setting")}{tileText("Report a repair", "Tenant and landlord told at each step")}</button>
                 <button type="button" disabled={!canAct} onClick={() => act({ kind: "planned" })} className={tile}>{tileIcon("calendar")}{tileText("Plan a job", "A service or certificate, by a date")}</button>
                 <button type="button" disabled={!canAct || visits.state !== "ready"} onClick={() => void bookVisit()} className={tile}>{tileIcon("checklist")}{tileText("Book an inspection", "A date, who goes, and telling the tenant")}</button>
-                <button type="button" onClick={() => act({ kind: "notices" })} className={tile}>{tileIcon("file-contract")}{tileText("Serve notice", "Section 8, checked by compliance")}</button>
-                <button type="button" onClick={() => act({ kind: "notices" })} className={tile}>{tileIcon("coin")}{tileText("Rent review", "Section 13 rent increase")}</button>
+                <button type="button" onClick={() => act({ kind: "notices", start: "s8" })} disabled={roomsOnly} className={tile}>{tileIcon("file-contract")}{tileText("Serve notice", "Section 8, checked by compliance")}</button>
+                <button type="button" onClick={() => act({ kind: "notices", start: "s13" })} disabled={roomsOnly} className={tile}>{tileIcon("coin")}{tileText("Rent review", "Section 13 rent increase")}</button>
                 <button type="button" disabled={!canAct || !tenants.length} onClick={() => act({ kind: "tenant-notice" })} className={tile}>{tileIcon("logout")}{tileText("Tenant gave notice", "Starts the move-out")}</button>
                 <button type="button" disabled={!propertyId} onClick={() => { pickTab("compliance"); setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }} className={tile}>{tileIcon("shield")}{tileText("Add a certificate", "Read and filed on the home")}</button>
                 {canAct && p.onRex !== false ? (
                   <div className="relative">
                     <span className="pointer-events-none absolute left-3.5 top-3.5">{tileIcon("pack/house")}</span>
-                    <ReletAction home={p} className="flex h-full min-h-[72px] w-full items-end gap-1 rounded-xl border border-line/60 bg-white p-3.5 pb-[34px] text-left text-[12.5px] font-semibold leading-tight transition-colors hover:border-ink/40" />
+                    <ReletAction home={p} className="peer flex h-full min-h-[72px] w-full items-end gap-1 rounded-xl border border-line/60 bg-white p-3.5 pb-[34px] text-left text-[12.5px] font-semibold leading-tight transition-[transform,box-shadow,border-color] duration-200 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:border-ink/60 hover:shadow-[3px_3px_0_0_color-mix(in_srgb,var(--ink)_72%,var(--page))]" />
                     <span className="pointer-events-none absolute bottom-3.5 left-3.5 right-3.5 truncate text-[11.5px] leading-snug text-muted">Back on Listings, same home</span>
                   </div>
                 ) : null}
@@ -557,13 +638,14 @@ export default function PropertyPage() {
             </section>
 
           {/* ── 2. the facts and the people ────────────────────────────── */}
-          <section className={`${box} min-w-0 p-4 sm:p-5 lg:col-start-1 lg:row-start-2`}>
+          <section className={`${box} flex min-w-0 flex-col p-4 sm:p-5 lg:col-start-1 lg:row-start-2`}>
               <p className={eyebrow}>General info</p>
-              <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-[12.5px]">
-                <Info icon="key" text={p.letType ?? "Let type not set"} />
-                <Info icon="calendar" text={p.letSince ? `Let since ${day(p.letSince)}` : "Let date not set"} />
-                <Info icon="user" text={p.agent?.name ?? "No agent"} />
-                <Info icon="clock" text={`On the books since ${day(houseView && house ? house.members.map((m) => m.onBooksSince).filter(Boolean).sort()[0] ?? null : p.onBooksSince)}`} />
+              {/* Spread across the box, four even columns, each a label over its value. */}
+              <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+                <Info icon="key" label="Let type" text={p.letType ?? "Not set"} />
+                <Info icon="calendar" label="Let since" text={p.letSince ? day(p.letSince) : "Not set"} />
+                <Info icon="user" label="Agent" text={p.agent?.name ?? "No agent"} />
+                <Info icon="clock" label="On the books since" text={day(houseView && house ? house.members.map((m) => m.onBooksSince).filter(Boolean).sort()[0] ?? null : p.onBooksSince)} />
               </div>
 
               {/* How it stands: one chip per board, each opens its section. */}
@@ -595,7 +677,7 @@ export default function PropertyPage() {
                     : `${tenants.length} ${tenants.length === 1 ? "tenant" : "tenants"}`}
                 </button>
               </div>
-            <div className="mt-5 grid gap-4 2xl:grid-cols-2">
+            <div className="mt-5 grid flex-1 gap-4 2xl:grid-cols-2">
               <section className={`${card} p-3.5 sm:p-5`}>
                 <p className={`${eyebrow} mb-3`}>{roomsOnly ? "Rooms" : tenants.length === 1 ? "Tenant" : "Tenants"}</p>
                 {roomsOnly && house ? (
@@ -642,68 +724,16 @@ export default function PropertyPage() {
           </section>
 
           {/* ── on this home, level with the facts ─────────────────────── */}
-            <section id="action-box" className="scroll-mt-5 rounded-2xl border border-accent-dark/15 bg-accent-soft/60 p-5 lg:col-start-2 lg:row-start-2">
-              {action ? (
+            <section id="action-box" className={`${pop} scroll-mt-5 rounded-2xl border border-accent-dark/15 bg-accent-soft/60 p-5 lg:col-start-2 lg:row-start-2`}>
+              {(
                 <>
-                  <div className="mb-4 flex items-center justify-between gap-3">
-                    <button type="button" onClick={() => act(null)} className="inline-flex items-center gap-1.5 text-[12px] text-muted hover:text-ink">
-                      <span aria-hidden>←</span> Latest activity
-                    </button>
-                    {action.kind !== "repair" && action.kind !== "planned" && (
-                      <button type="button" onClick={() => act(null)} aria-label="Close" className="flex h-8 w-8 items-center justify-center rounded-full border border-line/80 bg-white text-[12px] text-muted hover:text-ink">✕</button>
-                    )}
-                  </div>
-                  {action.kind !== "repair" && action.kind !== "planned" && action.kind !== "notices" && <h2 className="hand mb-3 text-[18px] leading-tight">{ACTION_TITLE[action.kind]}</h2>}
-                  {(action.kind === "repair" || action.kind === "planned") && raiseHome ? (
-                    <RaiseJob
-                      key={action.kind}
-                      inline
-                      kind={action.kind}
-                      home={raiseHome}
-                      contractors={works.state === "ready" ? works.data.contractors : []}
-                      onClose={() => act(null)}
-                      onRaised={(o) => {
-                        act(null);
-                        loadWorks();
-                        pickTab("maintenance");
-                        /* Straight on to telling the landlord, as on Maintenance. */
-                        setOpenJob(o);
-                      }}
-                    />
-                  ) : action.kind === "inspection" && visits.state === "ready" ? (
-                    <BookVisit
-                      inspection={action.inspection}
-                      team={visits.data.team}
-                      me={visits.data.me}
-                      onBooked={() => { act(null); loadVisits(); pickTab("inspections"); }}
-                    />
-                  ) : action.kind === "notices" ? (
-                    roomsOnly ? (
-                      <p className="text-[12.5px] text-muted">Each room is its own tenancy. Pick a room on the left to start its rent review or notice.</p>
-                    ) : (
-                      <HomeNotices key={`panel-${p.listingId}`} home={noticeHome} stacked />
-                    )
-                  ) : action.kind === "tenant-notice" && propertyId ? (
-                    <NoticeSheet
-                      propertyId={propertyId}
-                      propertyName={house ? house.name : p.name}
-                      tenants={tenants}
-                      landlord={landlord?.name ?? ""}
-                      rent={rentLine ?? ""}
-                      onClose={() => act(null)}
-                      onSaved={() => { act(null); loadEnding(); pickTab("tenancy"); }}
-                    />
-                  ) : null}
-                </>
-              ) : (
-                <>
-                  <p className={eyebrow}>On this home</p>
+                  <p className={eyebrow}>On this home{drafts.state === "ready" && drafts.data.length > 0 ? ` · ${drafts.data.length} not finished` : ""}</p>
                   <h2 className="hand mt-1 text-[18px] leading-tight">Latest activity</h2>
                   {latest.length > 0 ? (
                     <ul className="mt-3 space-y-2">
                       {latest.map((a) => (
-                        <li key={a.key}>
-                          <button type="button" onClick={a.go} className="flex w-full items-start gap-3 rounded-xl bg-white px-3.5 py-3 text-left transition-colors hover:bg-white/70">
+                        <li key={a.key} className={`flex items-stretch rounded-xl bg-white ${a.unfinished ? "border border-dashed border-accent-dark/50" : ""}`}>
+                          <button type="button" onClick={a.go} className="flex min-w-0 flex-1 items-start gap-3 rounded-xl px-3.5 py-3 text-left transition-colors hover:bg-box/60">
                             <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${a.hot ? "bg-accent-dark text-white" : "bg-accent-soft text-accent-dark"}`}>
                               <DoodleIcon name={a.icon} size={12} />
                             </span>
@@ -711,8 +741,13 @@ export default function PropertyPage() {
                               <span className="block truncate text-[12.5px] font-semibold">{a.title}</span>
                               <span className={`block truncate text-[11.5px] ${a.hot ? "text-accent-dark" : "text-muted"}`}>{a.sub}</span>
                             </span>
-                            <span className="shrink-0 pt-0.5 text-[11px] text-muted">{shortDay(a.at)}</span>
+                            <span className="shrink-0 pt-0.5 text-[11px] text-muted">{a.unfinished ? "Carry on" : shortDay(a.at)}</span>
                           </button>
+                          {a.bin && (
+                            <button type="button" onClick={() => void a.bin?.()} aria-label="Bin this draft" title="Bin this draft" className="flex w-10 shrink-0 items-center justify-center rounded-r-xl border-l border-dashed border-accent-dark/30 text-muted transition-colors hover:bg-accent-soft hover:text-accent-dark">
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" /></svg>
+                            </button>
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -846,6 +881,58 @@ export default function PropertyPage() {
 
       {lightbox != null && <PhotoLightbox photos={shots} start={lightbox} name={title} onClose={() => setLightbox(null)} />}
 
+      {/* ── the pop-ups ───────────────────────────────────────────────── */}
+      {action && (action.kind === "repair" || action.kind === "planned") && raiseHome && (
+        <Modal onClose={closeAction} wide>
+          <RaiseJob
+            key={`${action.kind}-${action.draft?.id ?? "new"}`}
+            inline
+            kind={action.kind}
+            home={raiseHome}
+            draft={(action.draft?.data as RaiseDraft | undefined) ?? null}
+            onDraft={(d) => keepDraft(action.kind, d as Record<string, unknown>)}
+            contractors={works.state === "ready" ? works.data.contractors : []}
+            onClose={closeAction}
+            onRaised={(o) => {
+              void finishAction();
+              loadWorks();
+              pickTab("maintenance");
+              /* Straight on to telling the landlord, as on Maintenance. */
+              setOpenJob(o);
+            }}
+          />
+        </Modal>
+      )}
+      {action?.kind === "inspection" && visits.state === "ready" && (
+        <Modal onClose={closeAction} title="Book an inspection">
+          <BookVisit
+            inspection={action.inspection}
+            team={visits.data.team}
+            me={visits.data.me}
+            onBooked={() => { setAction(null); loadVisits(); pickTab("inspections"); }}
+          />
+        </Modal>
+      )}
+      {action?.kind === "tenant-notice" && propertyId && (
+        <Modal onClose={closeAction} title="Tenant gave notice">
+          <NoticeSheet
+            propertyId={propertyId}
+            propertyName={house ? house.name : p.name}
+            tenants={tenants}
+            landlord={landlord?.name ?? ""}
+            rent={rentLine ?? ""}
+            draft={(action.draft?.data as NoticeDraft | undefined) ?? null}
+            onDraft={(d) => keepDraft("tenant-notice", d as Record<string, unknown>)}
+            onClose={closeAction}
+            onSaved={() => { void finishAction(); loadEnding(); pickTab("tenancy"); }}
+          />
+        </Modal>
+      )}
+      {/* Michael's Section 8 / 13 checklist is its own pop-up already. */}
+      {action?.kind === "notices" && !roomsOnly && (
+        <HomeNotices key={`start-${action.start}-${p.listingId}`} home={noticeHome} start={action.start} bare onDone={() => { setAction(null); loadNotices(); }} />
+      )}
+
       {openJob && (
         <JobDrawer
           order={openJob}
@@ -861,12 +948,17 @@ export default function PropertyPage() {
 
 /* ── small pieces ─────────────────────────────────────────────────────── */
 
-function Info({ icon, text }: { icon: string; text: string }) {
+function Info({ icon, label, text }: { icon: string; label: string; text: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5">
-      <DoodleIcon name={icon} size={13} className="text-muted" />
-      {text}
-    </span>
+    <div className="flex min-w-0 items-start gap-2.5">
+      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
+        <DoodleIcon name={icon} size={13} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[10.5px] font-semibold uppercase tracking-wide text-muted">{label}</span>
+        <span className="block truncate text-[13px]">{text}</span>
+      </span>
+    </div>
   );
 }
 
@@ -1063,20 +1155,32 @@ function BookVisit({ inspection, team, me, onBooked }: { inspection: Inspection;
 
 /* ── notice, recorded from the home ───────────────────────────────────── */
 
+type NoticeDraft = { served?: string; leaving?: string; note?: string };
+
 function NoticeSheet({
-  propertyId, propertyName, tenants, landlord, rent, onClose, onSaved,
+  propertyId, propertyName, tenants, landlord, rent, draft = null, onDraft, onClose, onSaved,
 }: {
   propertyId: string;
   propertyName: string;
   tenants: Party[];
   landlord: string;
   rent: string;
+  draft?: NoticeDraft | null;
+  onDraft?: (d: NoticeDraft) => void;
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [served, setServed] = useState(ymd(new Date()));
-  const [leaving, setLeaving] = useState("");
-  const [note, setNote] = useState("");
+  const [served, setServed] = useState(draft?.served ?? ymd(new Date()));
+  const [leaving, setLeaving] = useState(draft?.leaving ?? "");
+  const [note, setNote] = useState(draft?.note ?? "");
+  /* Kept as it is typed once a leaving day or a note is in. */
+  const keep = useRef(onDraft);
+  keep.current = onDraft;
+  useEffect(() => {
+    if (!keep.current || !(leaving || note.trim())) return;
+    const t = setTimeout(() => keep.current?.({ served, leaving, note }), 700);
+    return () => clearTimeout(t);
+  }, [served, leaving, note]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const field = "mt-1 w-full rounded-lg border border-line/80 bg-box px-3 py-2.5 text-[13px] outline-none focus:border-ink";
@@ -1133,6 +1237,29 @@ function NoticeSheet({
         <PressButton onClick={() => void save()} className={`rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page ${busy ? "opacity-50" : ""}`}>
           {busy ? "Recording…" : "Record notice"}
         </PressButton>
+      </div>
+    </div>
+  );
+}
+
+/** A pop-up over the page: the actions open here and leave their mark in the latest activity. */
+function Modal({ title, wide = false, onClose, children }: { title?: string; wide?: boolean; onClose: () => void; children: React.ReactNode }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-[150] flex items-start justify-center overflow-y-auto p-4 sm:items-center">
+      <button type="button" aria-label="Close" onClick={onClose} className="fixed inset-0 cursor-default bg-ink/35" />
+      <div className={`fade-up relative w-full ${wide ? "max-w-xl" : "max-w-lg"} rounded-2xl border border-line/70 bg-page p-6 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.35)]`}>
+        {title && (
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <h2 className="text-[22px] leading-tight">{title}</h2>
+            <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted hover:text-ink">✕</button>
+          </div>
+        )}
+        {children}
       </div>
     </div>
   );
