@@ -81,6 +81,10 @@ const STATE: Record<Row["state"], { label: string; tone: "good" | "accent" | "ne
 /* James, 6 Sep: "not required" reads as optional. A gas entry marked not
    required means there is no gas at the property, so say that. */
 const stateLabel = (r: Row) => (r.state === "not-required" && r.type === "gas_safety" ? "No gas at the property" : STATE[r.state].label);
+/* James, 7 Oct: a file full of "Not required" licences and fire safety rows is
+   noise, so they are hidden. Gas stays - "No gas at the property" is a fact
+   about the home - and so does any row with a document on it. */
+const worthShowing = (r: Row) => r.state !== "not-required" || r.type === "gas_safety" || r.files.length > 0;
 
 const day = (iso: string | null) => {
   if (!iso) return "";
@@ -250,6 +254,8 @@ export default function PropertyFile({
     </button>
   );
 
+  const rows = data ? data.rows.filter(worthShowing) : [];
+
   return (
     <section className="rounded-[22px] border border-line/50 bg-white p-5">
       <input ref={input} type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void chose(f); }} />
@@ -258,7 +264,7 @@ export default function PropertyFile({
           <DoodleIcon name="shield" size={17} className="text-accent-dark" />
           {title}
           {data && data.outstanding > 0 && <Pill tone="accent">{data.outstanding} outstanding</Pill>}
-          {data && data.rows.length > 0 && data.outstanding === 0 && data.checked && <Pill tone="good">All in date</Pill>}
+          {data && rows.length > 0 && data.outstanding === 0 && data.checked && <Pill tone="good">All in date</Pill>}
         </h3>
         {attachAll}
       </div>
@@ -349,13 +355,13 @@ export default function PropertyFile({
         <p className="text-[12px] text-accent-dark">{error}</p>
       ) : !data ? (
         <p className="text-[12px] text-muted">Reading the file…</p>
-      ) : !data.rows.length ? (
+      ) : !rows.length ? (
         <p className="text-[12px] leading-relaxed text-muted">
           {effectiveId ? (data.checked ? "No certificates held for this home yet." : "The records did not answer for this home, so nothing can be said about it.") : "Nothing held yet."}
         </p>
       ) : (
         <ul className="space-y-2">
-          {data.rows.map((r) => {
+          {rows.map((r) => {
             const s = STATE[r.state];
             return (
               <li key={r.type} className={`rounded-xl border p-3 ${r.state === "expired" ? "border-accent-dark bg-accent-soft/30" : r.state === "missing" || r.state === "expiring" ? "border-accent-dark/40" : "border-line/70"}`}>
@@ -403,7 +409,7 @@ export default function PropertyFile({
           })}
         </ul>
       )}
-      {data && !data.checked && effectiveId && data.rows.length > 0 && (
+      {data && !data.checked && effectiveId && rows.length > 0 && (
         <p className="mt-2 text-[11px] text-muted">The records did not give a complete answer for this home; what is shown may be short.</p>
       )}
 
