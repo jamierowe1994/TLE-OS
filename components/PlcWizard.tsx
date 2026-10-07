@@ -18,6 +18,7 @@ import {
   type PlcCase,
 } from "@/lib/plc";
 import PlcDocuments from "@/components/PlcDocuments";
+import { DateField } from "@/components/offers/OfferParts";
 import type { Prefill } from "@/lib/plc-prefill";
 import { demoCase } from "@/lib/plc-demo";
 import { prettyWhen } from "@/components/PlcReview";
@@ -551,37 +552,42 @@ export default function PlcWizard({
                       measured against, so it is changed here, plainly, and
                       can be changed again from the last screen. */}
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
-                    <dt className="w-full shrink-0 text-xs uppercase tracking-wide text-muted sm:w-32">
-                      <label htmlFor="plc-move-in">Move-in date</label>
+                    <dt className="w-full shrink-0 self-start pt-2.5 text-xs uppercase tracking-wide text-muted sm:w-32">
+                      Move-in date
                     </dt>
                     <dd className="min-w-0 flex-1 text-sm">
-                      <input
-                        id="plc-move-in"
-                        type="date"
-                        value={moveIn}
-                        onChange={(e) => setMoveIn(e.target.value)}
-                        className="rounded-lg border border-line bg-transparent px-2 py-1 text-sm"
-                      />
+                      {/* The OS's own calendar, the one the offer screens use,
+                          rather than the browser's plain one (7 Oct 2026). */}
+                      <div className="max-w-sm">
+                        <DateField
+                          value={moveIn}
+                          onChange={setMoveIn}
+                          placeholder="Choose the move-in date"
+                          className="block h-10 w-full min-w-0 rounded-[12px] border border-line/80 bg-white px-3.5 text-[14px] outline-none focus:border-accent-dark"
+                        />
+                      </div>
                       {!prefill.moveInDate ? (
-                        <span className="ml-2 text-xs text-amber-700">not on the application, so add it</span>
+                        <span className="mt-1.5 block text-xs text-amber-700">Not on the application, so add it.</span>
                       ) : moveIn && moveIn !== prefill.moveInDate ? (
-                        <span className="ml-2 text-xs text-muted">
-                          changed from {prettyDate(prefill.moveInDate)}
+                        <span className="mt-1.5 block text-xs text-muted">
+                          Changed from {prettyDate(prefill.moveInDate)}
                         </span>
                       ) : null}
                     </dd>
                   </div>
-                  {/* Home or HMO (James, 6 Oct 2026: "this property is an HMO,
-                      and therefore it needs a PAT test"). Guessed from the
-                      property; the agent has the last word. */}
+                  {/* Residential or HMO (James, 6 Oct 2026: "this property is an
+                      HMO, and therefore it needs a PAT test"). Guessed from the
+                      property; the agent has the last word. Two words and no
+                      explanation underneath (7 Oct): agents know what an HMO
+                      needs. */}
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
                     <dt className="w-full shrink-0 text-xs uppercase tracking-wide text-muted sm:w-32">
-                      Type of let
+                      Property type
                     </dt>
                     <dd className="flex min-w-0 flex-1 flex-wrap gap-2">
                       {([
-                        ["home", "A whole home"],
-                        ["hmo", "An HMO, or a room in one"],
+                        ["home", "Residential"],
+                        ["hmo", "HMO"],
                       ] as const).map(([v, label]) => (
                         <button
                           key={v}
@@ -596,11 +602,6 @@ export default function PlcWizard({
                         </button>
                       ))}
                     </dd>
-                    {letType === "hmo" && (
-                      <p className="w-full text-xs text-muted sm:pl-36">
-                        The PAT test, fire risk assessment and alarm record are asked for as well.
-                      </p>
-                    )}
                   </div>
                 </dl>
                 {prefill.warnings.length > 0 && (
