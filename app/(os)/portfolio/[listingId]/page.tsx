@@ -18,12 +18,14 @@ import RaiseJob from "@/components/maintenance/RaiseJob";
 import JobDrawer from "@/components/maintenance/JobDrawer";
 import { OPEN, STATUS_LABEL, day as shortDay, nextFor } from "@/components/maintenance/works-ui";
 import BookForm, { type Person } from "@/components/inspections/BookForm";
+import PortfolioMap from "@/components/PortfolioMap";
+import { SPECS, STATUS_LABEL as NOTICE_STATUS, type Notice } from "@/lib/section-notices-spec";
 import { readJson } from "@/lib/page-cache";
 import { ORDER_KEY } from "@/lib/portfolio-order";
 import { rexListingUrl } from "@/lib/business/rex-links";
 import { housesIn, houseByListing, roomLabel, tenantsInOrder, pickerOption, MANAGED_READERS as R, type House } from "@/lib/houses";
 import type { ManagedProperty, Party } from "@/lib/portfolio-types";
-import type { Contractor, Kind, WorksOrder } from "@/lib/works-orders";
+import type { Contractor, WorksOrder } from "@/lib/works-orders";
 import type { CarriedJob } from "@/lib/works-carried";
 import type { DueVisit, Inspection } from "@/lib/inspections";
 import type { DueReview, Review } from "@/lib/tenancy-reviews";
@@ -44,14 +46,34 @@ import type { MoveOut, OpenMoveOut } from "@/lib/move-outs";
  * fails says it failed and the rest of the page stands. Nothing is a sample.
  */
 
-type Tab = "overview" | "compliance" | "maintenance" | "inspections" | "tenancy";
+type Tab = "maintenance" | "compliance" | "inspections" | "tenancy";
 const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: "overview", label: "Overview", icon: "pack/house" },
-  { id: "compliance", label: "Compliance", icon: "shield" },
   { id: "maintenance", label: "Maintenance", icon: "setting" },
+  { id: "compliance", label: "Compliance", icon: "shield" },
   { id: "inspections", label: "Inspections", icon: "checklist" },
   { id: "tenancy", label: "Tenancy", icon: "key" },
 ];
+
+/** What the action box at the top right is showing, when not the latest activity. */
+type Action =
+  | { kind: "repair" | "planned" }
+  | { kind: "inspection"; inspection: Inspection }
+  | { kind: "notices" }
+  | { kind: "tenant-notice" };
+const ACTION_TITLE: Record<Action["kind"], string> = {
+  repair: "Report a repair",
+  planned: "Plan a job",
+  inspection: "Book an inspection",
+  notices: "Rent review and notices",
+  "tenant-notice": "Tenant gave notice",
+};
+const MAPS = Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY);
+
+/** One line on the latest activity list. */
+type Activity = { key: string; at: string; icon: string; title: string; sub: string; hot?: boolean; go?: () => void };
+const REVIEW_OUTCOME: Record<string, string> = {
+  increase: "Rent increased", renewed: "Renewed, same rent", no_change: "No change", ending: "Tenancy ending", other: "Reviewed",
+};
 
 
 type Loaded<T> = { state: "loading" } | { state: "failed"; error: string } | { state: "ready"; data: T };
@@ -93,8 +115,6 @@ async function getJson<T>(url: string): Promise<T> {
 }
 
 const eyebrow = "text-[10.5px] font-semibold uppercase tracking-wide text-muted";
-const pill =
-  "inline-flex items-center gap-1.5 rounded-full border border-line/70 bg-white px-3.5 py-2 text-[12px] font-semibold transition-colors hover:border-ink/40";
 const card = "rounded-[22px] border border-line/50 bg-white";
 
 function Loading({ label }: { label: string }) {
@@ -115,7 +135,7 @@ export default function PropertyPage() {
   const router = useRouter();
 
   const [book, setBook] = useState<Loaded<Book>>({ state: "loading" });
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>("maintenance");
   const [room, setRoom] = useState<string>("house");
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [order, setOrder] = useState<string[]>([]);
@@ -140,16 +160,10 @@ export default function PropertyPage() {
     setTab(t);
     try {
       const u = new URL(window.location.href);
-      if (t === "overview") u.searchParams.delete("tab"); else u.searchParams.set("tab", t);
+      if (t === "maintenance") u.searchParams.delete("tab"); else u.searchParams.set("tab", t);
       window.history.replaceState(null, "", u.toString());
     } catch { /* fine */ }
   }, []);
-
-  /* Serve notice is Michael's Section 8 checklist, on the Tenancy section. */
-  const goToNotices = useCallback(() => {
-    pickTab("tenancy");
-    setTimeout(() => document.getElementById("notices")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
-  }, [pickTab]);
 
   const properties = book.state === "ready" ? book.data.properties : [];
   const everything = book.state === "ready" && Boolean(book.data.everything);
@@ -174,13 +188,13 @@ export default function PropertyPage() {
   const step = (d: number) => {
     const i = order.indexOf(listingId);
     if (i < 0 || order.length < 2) return;
-    router.push(`/portfolio/${encodeURIComponent(order[(i + d + order.length) % order.length])}${tab === "overview" ? "" : `?tab=${tab}`}`);
+    router.push(`/portfolio/${encodeURIComponent(order[(i + d + order.length) % order.length])}${tab === "maintenance" ? "" : `?tab=${tab}`}`);
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
-      if (raising || openJob || booking || noticing || lightbox != null) return;
+      if (action || openJob || lightbox != null) return;
       if (e.key === "ArrowRight") step(1);
       if (e.key === "ArrowLeft") step(-1);
     };
@@ -194,7 +208,8 @@ export default function PropertyPage() {
   const [visits, setVisits] = useState<Loaded<Visits>>({ state: "loading" });
   const [ending, setEnding] = useState<Loaded<Ending>>({ state: "loading" });
   const [tenancy, setTenancy] = useState<Loaded<Tenancy>>({ state: "loading" });
-  const [certs, setCerts] = useState<Loaded<{ outstanding: number; checked: boolean; rows: number }>>({ state: "loading" });
+  const [certs, setCerts] = useState<Loaded<{ outstanding: number; checked: boolean; rows: number; filed: { label: string; at: string }[] }>>({ state: "loading" });
+  const [notices, setNotices] = useState<Loaded<Notice[]>>({ state: "loading" });
 
   const loadWorks = useCallback(() => {
     if (!propertyId) return;
@@ -239,13 +254,29 @@ export default function PropertyPage() {
     loadWorks();
     loadVisits();
     loadEnding();
-    getJson<{ outstanding: number; checked: boolean; rows: { state: string }[] }>(`/api/property-file?property=${encodeURIComponent(propertyId)}`)
-      .then((j) => setCerts({ state: "ready", data: { outstanding: j.outstanding ?? 0, checked: Boolean(j.checked), rows: (j.rows ?? []).filter((r) => r.state !== "not-required").length } }))
+    getJson<{ outstanding: number; checked: boolean; rows: { state: string; label: string; files: { uploadedAt: string | null }[] }[] }>(`/api/property-file?property=${encodeURIComponent(propertyId)}`)
+      .then((j) => setCerts({
+        state: "ready",
+        data: {
+          outstanding: j.outstanding ?? 0,
+          checked: Boolean(j.checked),
+          rows: (j.rows ?? []).filter((r) => r.state !== "not-required").length,
+          filed: (j.rows ?? []).flatMap((r) => (r.files ?? []).filter((f) => f.uploadedAt).map((f) => ({ label: r.label, at: f.uploadedAt as string }))),
+        },
+      }))
       .catch((e) => setCerts({ state: "failed", error: e.message }));
   }, [p?.listingId, propertyId, loadWorks, loadVisits, loadEnding]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const loadNotices = useCallback(() => {
+    if (!p) return;
+    getJson<{ notices: Notice[] }>(`/api/section-notices?listing=${encodeURIComponent(p.listingId)}`)
+      .then((j) => setNotices({ state: "ready", data: j.notices ?? [] }))
+      .catch((e) => setNotices({ state: "failed", error: e.message }));
+  }, [p?.listingId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!p) return;
+    setNotices({ state: "loading" });
+    loadNotices();
     setTenancy({ state: "loading" });
     getJson<Tenancy>(`/api/portfolio/tenancy?listing=${encodeURIComponent(p.listingId)}`)
       .then((j) => setTenancy({ state: "ready", data: j }))
@@ -253,11 +284,16 @@ export default function PropertyPage() {
   }, [p?.listingId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── the things you do to a home ────────────────────────────────────── */
-  const [raising, setRaising] = useState<Kind | null>(null);
+  const [action, setAction] = useState<Action | null>(null);
   const [openJob, setOpenJob] = useState<WorksOrder | null>(null);
-  const [booking, setBooking] = useState<Inspection | null>(null);
-  const [noticing, setNoticing] = useState(false);
   const [actionErr, setActionErr] = useState<string | null>(null);
+  /* An action opens in the box at the top right; on a phone that box is
+     above the details, so bring it into view. */
+  const act = useCallback((a: Action | null) => {
+    setAction(a);
+    setActionErr(null);
+    if (a) setTimeout(() => document.getElementById("action-box")?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 40);
+  }, []);
 
   if (book.state === "loading") {
     return (
@@ -309,7 +345,7 @@ export default function PropertyPage() {
     if (!p || !propertyId || visits.state !== "ready") return;
     setActionErr(null);
     const inHand = visits.data.inspections.find((i) => ["due", "arranging", "no_access"].includes(i.status));
-    if (inHand) return setBooking(inHand);
+    if (inHand) return act({ kind: "inspection", inspection: inHand });
     const owed = visits.data.due[0];
     const t = tenants[0];
     const r = await fetch("/api/inspections", {
@@ -334,15 +370,69 @@ export default function PropertyPage() {
     }).then((x) => x.json()).catch(() => null);
     if (!r?.ok) return setActionErr(r?.error ?? "The visit could not be raised.");
     loadVisits();
-    setBooking(r.inspection);
+    act({ kind: "inspection", inspection: r.inspection });
   }
 
   const openJobs = works.state === "ready" ? works.data.orders.filter((o) => OPEN.includes(o.status)) : [];
   const openVisits = visits.state === "ready" ? visits.data.inspections.filter((i) => OPEN_VISIT.includes(i.status)) : [];
-  const nextVisit = openVisits.find((i) => i.bookedAt) ?? null;
+  /* Only a visit still to happen is "booked"; one already made is history. */
+  const nextVisit = openVisits.find((i) => i.bookedAt && !i.visitedAt && new Date(i.bookedAt).getTime() > Date.now()) ?? null;
   const owedVisit = visits.state === "ready" ? visits.data.due[0] ?? null : null;
   const leaving = ending.state === "ready" ? ending.data.open[0] ?? null : null;
   const reviewDue = ending.state === "ready" ? ending.data.reviewsDue[0] ?? null : null;
+  const rentLine = p.rent == null ? null : `${money(p.rent)} ${p.rentPeriod === "week" ? "pw" : "pcm"}`;
+
+  /* ── the latest activity: every board's newest, one list ─────────────── */
+  const reading = [works, visits, ending, notices, certs].some((x) => x.state === "loading");
+  const activity: Activity[] = [];
+  if (works.state === "ready") {
+    for (const o of works.data.orders) {
+      const next = nextFor(o);
+      activity.push({ key: `job-${o.id}`, at: o.reportedAt ?? o.createdAt, icon: o.kind === "repair" ? "setting" : "calendar", title: `${o.kind === "repair" ? "Repair" : "Planned job"} · ${o.title}`, sub: `${STATUS_LABEL[o.status]} · ${next.text}`, hot: next.hot && OPEN.includes(o.status), go: () => setOpenJob(o) });
+    }
+    for (const c of works.data.carried) {
+      if (c.reportedOn) activity.push({ key: `carried-${c.taskId}`, at: c.reportedOn, icon: "setting", title: c.title, sub: `${c.progress || "Not started"} · from the old system`, hot: c.overdue, go: () => pickTab("maintenance") });
+    }
+  }
+  if (visits.state === "ready") {
+    for (const i of visits.data.inspections) {
+      const at = i.closedAt ?? i.reportedAt ?? i.visitedAt ?? i.bookedAt ?? i.createdAt;
+      activity.push({ key: `visit-${i.id}`, at, icon: "checklist", title: VISIT_KIND[i.kind] ?? "Visit", sub: `${VISIT_STATUS[i.status] ?? i.status}${i.bookedAt && !i.visitedAt ? ` · ${stamp(i.bookedAt)}` : ""}`, hot: i.status === "no_access", go: () => router.push(`/inspections?open=${encodeURIComponent(i.id)}`) });
+    }
+  }
+  if (notices.state === "ready") {
+    for (const n of notices.data) {
+      activity.push({ key: `notice-${n.id}`, at: n.servedAt ?? n.decidedAt ?? n.submittedAt ?? n.createdAt, icon: n.kind === "s13" ? "coin" : "file-contract", title: `${SPECS[n.kind].button} · ${SPECS[n.kind].short}`, sub: `${NOTICE_STATUS[n.status]} · ${n.agentName}`, hot: n.status === "returned", go: () => act({ kind: "notices" }) });
+    }
+  }
+  if (ending.state === "ready") {
+    for (const r of ending.data.reviewsDone) activity.push({ key: `review-${r.id}`, at: r.doneAt, icon: "key", title: "Tenancy review", sub: `${REVIEW_OUTCOME[r.outcome] ?? "Reviewed"} · ${r.doneBy}`, go: () => pickTab("tenancy") });
+    for (const m of ending.data.open) activity.push({ key: `leaving-${m.key}`, at: m.moveOutAt ?? new Date().toISOString(), icon: "logout", title: m.moveOutOn ? `Leaving ${day(m.moveOutOn)}` : "Leaving, date to set", sub: m.progress, hot: true, go: () => pickTab("tenancy") });
+    for (const m of ending.data.done) activity.push({ key: `moved-${m.id}`, at: m.doneAt, icon: "logout", title: m.outcome === "moved_out" ? "Moved out" : m.outcome === "staying" ? "Notice withdrawn" : "Move-out closed", sub: m.tenant || m.doneBy, go: () => pickTab("tenancy") });
+  }
+  if (certs.state === "ready") {
+    for (const f of certs.data.filed) activity.push({ key: `cert-${f.label}-${f.at}`, at: f.at, icon: "shield", title: `${f.label} filed`, sub: "Certificate on the file", go: () => pickTab("compliance") });
+  }
+  const latest = activity.filter((a) => a.at).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 6);
+
+  const chip = "inline-flex items-center gap-1.5 rounded-full border border-line/60 bg-white px-3 py-1.5 text-[12px] transition-colors hover:border-ink/40";
+  const tile = "flex min-h-[86px] flex-col items-start justify-between gap-2 rounded-2xl border border-line/60 bg-white p-3.5 text-left text-[12.5px] font-semibold leading-tight transition-colors hover:border-ink/40 disabled:opacity-40";
+  const tileIcon = (name: string) => (
+    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft text-accent-dark"><DoodleIcon name={name} size={14} /></span>
+  );
+  const noticeHome = {
+    listingId: String(p.listingId),
+    propertyId: p.propertyId,
+    label: house ? `${house.name}${roomP ? ` · ${roomLabel(roomP)}` : ""}` : p.name,
+    test: Boolean(p.test),
+    address: [p.address || p.name, p.postcode && !(p.address || p.name).toUpperCase().includes(p.postcode.toUpperCase()) ? p.postcode : ""].filter(Boolean).join(", "),
+    landlord: landlord?.name ?? "",
+    tenants: tenants.map((t) => t.name),
+    agent: p.agent?.name ?? null,
+    rentMonthly: p.rentMonthly,
+    letSince: p.letSince,
+  };
+  const roomsOnly = houseView && Boolean(house) && !lets;
 
   return (
     <SaveScopeProvider scope={saves}>
@@ -364,334 +454,385 @@ export default function PropertyPage() {
           )}
         </div>
 
-        {/* ── the hero: the home, what to do to it, and how it stands ───── */}
-        <header className="fade-up relative overflow-hidden rounded-[22px] border border-line/50 bg-accent-soft/60">
-          <div className="relative grid gap-6 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:p-7">
-            <div className="min-w-0">
-              <div className="grid gap-5 sm:grid-cols-[180px_minmax(0,1fr)] sm:items-start">
-                <button
-                  type="button"
-                  onClick={() => shots.length && setLightbox(0)}
-                  aria-label={shots.length ? "See the photos" : "No photos"}
-                  className="overflow-hidden rounded-2xl border border-line/50 bg-white"
-                >
-                  <PropertyPhoto src={shots[0] ?? null} alt="" className="aspect-[4/3] w-full object-cover" />
-                </button>
-                <div className="min-w-0">
-                  <p className={eyebrow}>{p.test ? "Test home · only you can see it" : p.service ?? "Property"}</p>
-                  <h1 className="hand mt-1.5 text-[28px] leading-[1.1] sm:text-[32px]">{title}</h1>
-                  <p className="mt-1.5 text-[13px] text-muted">{sub}</p>
-                  {house && (
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setRoom("house")}
-                        className={`rounded-full border px-4 py-2 text-[12.5px] font-semibold transition-colors ${room === "house" ? "border-accent-dark bg-accent-dark text-page" : "border-line/80 bg-white hover:border-ink"}`}
-                      >
-                        The house
+        {/* Two columns from lg: the home on the left, what to do on the right.
+            On a phone the right column comes straight after the photos and
+            the name, so the actions are never at the bottom of a long page. */}
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
+          {/* ── the photos, the name, the facts ─────────────────────────── */}
+          <div className="min-w-0 space-y-5 lg:col-start-1 lg:row-start-1">
+            <div className={`grid gap-2 ${shots.length > 1 ? "sm:grid-cols-[minmax(0,1fr)_170px]" : ""}`}>
+              <button
+                type="button"
+                onClick={() => shots.length && setLightbox(0)}
+                aria-label={shots.length ? "See the photos" : "No photos"}
+                className="group relative overflow-hidden rounded-[22px] border border-line/50 bg-white"
+              >
+                <PropertyPhoto src={shots[0] ?? null} alt="" width={1400} height={875} className="aspect-[16/10] h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.015]" />
+                {shots.length > 0 && (
+                  <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-[11.5px] font-semibold backdrop-blur">
+                    <DoodleIcon name="pack/photo" size={12} /> {shots.length} {shots.length === 1 ? "photo" : "photos"}
+                  </span>
+                )}
+              </button>
+              {shots.length > 1 && (
+                <div className="relative">
+                <div className="grid grid-cols-3 gap-2 sm:absolute sm:inset-0 sm:grid-cols-1 sm:grid-rows-3">
+                  {shots.slice(1, 4).map((src, i) => {
+                    const more = i === 2 && shots.length > 4 ? shots.length - 4 : 0;
+                    return (
+                      <button key={src + i} type="button" onClick={() => setLightbox(i + 1)} aria-label={more ? `${more} more photos` : `Photo ${i + 2}`} className="group relative min-h-0 overflow-hidden rounded-2xl border border-line/50 bg-white">
+                        <PropertyPhoto src={src} alt="" className="aspect-[4/3] h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03] sm:aspect-auto" />
+                        {more > 0 && <span className="absolute inset-0 flex items-center justify-center bg-ink/45 text-[18px] font-semibold text-white">+{more}</span>}
                       </button>
-                      <RoomPicker
-                        options={house.rooms.map((r) => ({ id: r.listingId, ...pickerOption(house, r, R) }))}
-                        value={room === "house" ? null : room}
-                        onChange={setRoom}
-                        placeholder={lets ? "Tenants" : "Rooms"}
-                      />
-                    </div>
-                  )}
+                    );
+                  })}
                 </div>
-              </div>
-
-              {/* What you would do to a home, from the home. */}
-              <div className="mt-5 flex flex-wrap gap-2">
-                <button type="button" disabled={!canAct} onClick={() => setRaising("repair")} className={`${pill} disabled:opacity-40`}>
-                  <DoodleIcon name="setting" size={13} className="text-accent-dark" /> Report a repair
-                </button>
-                <button type="button" disabled={!canAct} onClick={() => setRaising("planned")} className={`${pill} disabled:opacity-40`}>
-                  <DoodleIcon name="calendar" size={13} className="text-accent-dark" /> Plan a job
-                </button>
-                <button type="button" disabled={!canAct || visits.state !== "ready"} onClick={() => void bookVisit()} className={`${pill} disabled:opacity-40`}>
-                  <DoodleIcon name="checklist" size={13} className="text-accent-dark" /> Book an inspection
-                </button>
-                <button type="button" onClick={goToNotices} className={pill}>
-                  <DoodleIcon name="file-contract" size={13} className="text-accent-dark" /> Serve notice
-                </button>
-                {canAct && p.onRex !== false && <ReletAction home={p} className={pill} />}
-              </div>
-              {actionErr && <p className="mt-2 text-[12px] text-accent-dark">{actionErr}</p>}
+                </div>
+              )}
             </div>
 
-            {/* At a glance: one line per board, each its own live read. */}
-            <aside className="rounded-2xl border border-line/40 bg-white p-5">
-              <p className="hand flex items-center gap-2 text-[15px]">
-                <DoodleIcon name="magic-wand" size={15} className="text-accent-dark" />
-                At a glance
-              </p>
-              <ul className="mt-4 space-y-3.5 text-[12.5px]">
-                <Glance icon="shield" label="Compliance" onClick={() => pickTab("compliance")}>
-                  {certs.state === "loading" ? <Loading label="Checking" /> : certs.state === "failed" ? <span className="text-muted">Not available</span>
-                    : certs.data.outstanding > 0 ? <span className="font-semibold text-accent-dark">{certs.data.outstanding} outstanding</span>
-                    : certs.data.checked && certs.data.rows > 0 ? "All in date" : <span className="text-muted">Nothing held yet</span>}
-                </Glance>
-                <Glance icon="setting" label="Maintenance" onClick={() => pickTab("maintenance")}>
-                  {works.state === "loading" ? <Loading label="Reading" /> : works.state === "failed" ? <span className="text-muted">Not available</span>
-                    : openJobs.length + works.data.carried.length > 0 ? <span className="font-semibold">{openJobs.length + works.data.carried.length} open {openJobs.length + works.data.carried.length === 1 ? "job" : "jobs"}</span>
+            <div>
+              <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+                <h1 className="hand min-w-0 text-[28px] leading-[1.1] sm:text-[32px]">{title}</h1>
+                <span className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-semibold text-accent-dark">
+                  <span className="h-1.5 w-1.5 rounded-full bg-accent-dark" />
+                  {p.test ? "Test home" : p.service ?? "Service not set"}
+                </span>
+              </div>
+              {(houseView && house && !lets ? roomRent > 0 : rentLine) && (
+                <p className="figures mt-1.5 text-[20px] font-semibold">{houseView && house && !lets ? `${money(roomRent)} pcm across the rooms` : rentLine}</p>
+              )}
+              <p className="mt-1 text-[13px] text-muted">{sub}</p>
+              {house && (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRoom("house")}
+                    className={`rounded-full border px-4 py-2 text-[12.5px] font-semibold transition-colors ${room === "house" ? "border-accent-dark bg-accent-dark text-page" : "border-line/80 bg-white hover:border-ink"}`}
+                  >
+                    The house
+                  </button>
+                  <RoomPicker
+                    options={house.rooms.map((r) => ({ id: r.listingId, ...pickerOption(house, r, R) }))}
+                    value={room === "house" ? null : room}
+                    onChange={setRoom}
+                    placeholder={lets ? "Tenants" : "Rooms"}
+                  />
+                </div>
+              )}
+
+              <p className={`${eyebrow} mt-5`}>General info</p>
+              <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-[12.5px]">
+                <Info icon="key" text={p.letType ?? "Let type not set"} />
+                <Info icon="calendar" text={p.letSince ? `Let since ${day(p.letSince)}` : "Let date not set"} />
+                <Info icon="user" text={p.agent?.name ?? "No agent"} />
+                <Info icon="clock" text={`On the books since ${day(houseView && house ? house.members.map((m) => m.onBooksSince).filter(Boolean).sort()[0] ?? null : p.onBooksSince)}`} />
+              </div>
+
+              {/* How it stands: one chip per board, each opens its section. */}
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button type="button" className={chip} onClick={() => pickTab("compliance")}>
+                  <DoodleIcon name="shield" size={12} className="text-accent-dark" />
+                  {certs.state === "loading" ? <Loading label="Compliance" /> : certs.state === "failed" ? "Compliance not available"
+                    : certs.data.outstanding > 0 ? <b className="font-semibold text-accent-dark">{certs.data.outstanding} certificates outstanding</b>
+                    : certs.data.checked && certs.data.rows > 0 ? "Certificates all in date" : "No certificates held yet"}
+                </button>
+                <button type="button" className={chip} onClick={() => pickTab("maintenance")}>
+                  <DoodleIcon name="setting" size={12} className="text-accent-dark" />
+                  {works.state === "loading" ? <Loading label="Jobs" /> : works.state === "failed" ? "Jobs not available"
+                    : openJobs.length + works.data.carried.length > 0 ? <b className="font-semibold">{openJobs.length + works.data.carried.length} open {openJobs.length + works.data.carried.length === 1 ? "job" : "jobs"}</b>
                     : "No open jobs"}
-                </Glance>
-                <Glance icon="checklist" label="Inspections" onClick={() => pickTab("inspections")}>
-                  {visits.state === "loading" ? <Loading label="Reading" /> : visits.state === "failed" ? <span className="text-muted">Not available</span>
-                    : nextVisit ? `Booked ${stamp(nextVisit.bookedAt)}`
-                    : owedVisit ? <span className={owedVisit.daysAway < 0 ? "font-semibold text-accent-dark" : ""}>{VISIT_KIND[owedVisit.kind] ?? "Visit"} {owedVisit.daysAway < 0 ? "overdue since" : "due"} {day(owedVisit.dueAt)}</span>
-                    : openVisits.length ? `${openVisits.length} in hand` : "Nothing owed"}
-                </Glance>
-                <Glance icon="key" label="Tenancy" onClick={() => pickTab("tenancy")}>
-                  {leaving ? <span className="font-semibold text-accent-dark">Leaving {leaving.moveOutOn ? day(leaving.moveOutOn) : "· date to set"}</span>
-                    : tenancy.state === "loading" ? <Loading label="Reading" />
+                </button>
+                <button type="button" className={chip} onClick={() => pickTab("inspections")}>
+                  <DoodleIcon name="checklist" size={12} className="text-accent-dark" />
+                  {visits.state === "loading" ? <Loading label="Inspections" /> : visits.state === "failed" ? "Inspections not available"
+                    : nextVisit ? `Inspection ${stamp(nextVisit.bookedAt)}`
+                    : owedVisit ? <b className={`font-semibold ${owedVisit.daysAway < 0 ? "text-accent-dark" : ""}`}>{VISIT_KIND[owedVisit.kind] ?? "Visit"} {owedVisit.daysAway < 0 ? "overdue" : `due ${day(owedVisit.dueAt)}`}</b>
+                    : "No inspection owed"}
+                </button>
+                <button type="button" className={chip} onClick={() => pickTab("tenancy")}>
+                  <DoodleIcon name="key" size={12} className="text-accent-dark" />
+                  {leaving ? <b className="font-semibold text-accent-dark">Leaving {leaving.moveOutOn ? day(leaving.moveOutOn) : "· date to set"}</b>
+                    : tenancy.state === "loading" ? <Loading label="Tenancy" />
                     : tenancy.state === "ready" && tenancy.data.tenancy ? <TenancyLine t={tenancy.data.tenancy} />
-                    : tenants.length ? `${tenants.length} ${tenants.length === 1 ? "tenant" : "tenants"}` : <span className="text-muted">No tenant on record</span>}
-                </Glance>
-              </ul>
-            </aside>
+                    : `${tenants.length} ${tenants.length === 1 ? "tenant" : "tenants"}`}
+                </button>
+              </div>
+            </div>
           </div>
-        </header>
 
-        {/* ── the sections ─────────────────────────────────────────────── */}
-        <nav className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1" aria-label="Sections">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => pickTab(t.id)}
-              aria-current={tab === t.id ? "page" : undefined}
-              className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-[12.5px] font-semibold transition-colors ${tab === t.id ? "border-ink bg-ink text-page" : "border-line/70 bg-white hover:border-ink/40"}`}
-            >
-              <DoodleIcon name={t.icon} size={13} />
-              {t.label}
-              {t.id === "maintenance" && works.state === "ready" && openJobs.length > 0 && <span className={`rounded-full px-1.5 text-[10.5px] ${tab === t.id ? "bg-page/20" : "bg-accent-soft text-accent-dark"}`}>{openJobs.length}</span>}
-              {t.id === "compliance" && certs.state === "ready" && certs.data.outstanding > 0 && <span className={`rounded-full px-1.5 text-[10.5px] ${tab === t.id ? "bg-page/20" : "bg-accent-soft text-accent-dark"}`}>{certs.data.outstanding}</span>}
-            </button>
-          ))}
-        </nav>
-
-        {tab === "overview" && (
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-            <section className={`${card} p-5 lg:col-span-2`}>
-              {houseView && house ? (
-                <div className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 lg:grid-cols-6">
-                  <Fact label={lets ? "Lets on record" : "Rooms"} value={lets ? String(house.rooms.length) : `${house.rooms.length}, ${letRooms.length} let`} />
-                  <Fact label={lets ? "Rent" : "Rent roll"} value={lets ? (p.rent == null ? "Not set" : `${money(p.rent)} ${p.rentPeriod === "week" ? "pw" : "pcm"}`) : roomRent ? `${money(roomRent)} pcm` : "Not set"} />
-                  <Fact label="Postcode" value={p.postcode ?? "—"} />
-                  <Fact label="Agent" value={p.agent?.name ?? "—"} />
-                  <Fact label="On the books since" value={day(house.members.map((m) => m.onBooksSince).filter(Boolean).sort()[0] ?? null)} />
-                  <Fact label="Service" value={house.house?.service ?? p.service ?? "Not set"} />
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 lg:grid-cols-6">
-                  <Fact label="Rent" value={p.rent == null ? "Not set" : `${money(p.rent)} ${p.rentPeriod === "week" ? "per week" : "pcm"}`} />
-                  <Fact label="Let type" value={p.letType ?? "—"} />
-                  <Fact label="Let since" value={day(p.letSince)} />
-                  <Fact label="On the books since" value={day(p.onBooksSince)} />
-                  <Fact label="Agent" value={p.agent?.name ?? "—"} />
-                  <Fact label="Postcode" value={p.postcode ?? "—"} />
-                </div>
-              )}
-            </section>
-
-            <section className={`${card} p-5`}>
-              <p className={`${eyebrow} mb-3`}>{houseView && house && !lets ? "Rooms" : tenants.length === 1 ? "Tenant" : "Tenants"}</p>
-              {houseView && house && !lets ? (
-                <ul className="overflow-hidden rounded-xl border border-line/50">
-                  {house.rooms.map((r) => (
-                    <li key={r.listingId} className="border-b border-line/40 last:border-0">
-                      <button type="button" onClick={() => setRoom(r.listingId)} className="grid w-full grid-cols-[84px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 text-left text-[12.5px] transition-colors hover:bg-box">
-                        <span className="font-semibold">{roomLabel(r)}</span>
-                        <span className="min-w-0 truncate">{r.tenants[0]?.name ?? <span className="text-muted">Empty</span>}</span>
-                        <span className="figures text-right">{r.rent == null ? <span className="text-muted">—</span> : `${money(r.rent)}${r.rentPeriod === "week" ? " pw" : ""}`}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : tenants.length ? (
-                <ul className="space-y-2">{tenants.map((t) => <PartyCard key={t.contactId} p={t} />)}</ul>
-              ) : (
-                <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">No tenant on record. It is empty, or the let has not been recorded.</p>
-              )}
-              {tenants.length > 0 && (
-                <div className="mt-3 rounded-xl bg-box px-4 py-3 text-[12.5px]">
-                  {tenancy.state === "loading" ? <Loading label="Reading the tenancy dates" />
-                    : tenancy.state === "failed" ? <span className="text-muted">The tenancy dates could not be read.</span>
-                    : tenancy.data.tenancy ? <TenancyLine t={tenancy.data.tenancy} long />
-                    : <span className="text-muted">{tenancy.data.ready ? "No tenancy dates on record for this home." : tenancy.data.error ?? "The tenancy dates are still being read. Look again in a minute."}</span>}
-                </div>
-              )}
-            </section>
-
-            <section className={`${card} p-5`}>
-              <p className={`${eyebrow} mb-3`}>Landlord</p>
-              {landlord ? (
-                <div className="text-[13px]">
-                  <PartyCard p={landlord} plain />
-                  {landlord.email && landlord.email.includes("@") && (
-                    <LandlordJobEmails key={landlord.email} landlord={landlord.email} name={landlord.name} className="mt-3 border-t border-line/40 pt-3" />
-                  )}
-                </div>
-              ) : (
-                <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">No landlord on record for this home.</p>
-              )}
-            </section>
-
-            {shots.length > 1 && (
-              <section className={`${card} p-5 lg:col-span-2`}>
-                <p className={`${eyebrow} mb-3`}>Photos</p>
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-8">
-                  {shots.map((src, i) => (
-                    <button key={src + i} type="button" onClick={() => setLightbox(i)} aria-label={`Photo ${i + 1}`} className="group overflow-hidden rounded-xl border border-line/60 transition-colors hover:border-ink">
-                      <PropertyPhoto src={src} alt="" className="aspect-[4/3] w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
+          {/* ── the right: the action box, the actions, the map ──────────── */}
+          <aside className="space-y-4 lg:sticky lg:top-5 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+            <section id="action-box" className="scroll-mt-5 rounded-[22px] border border-accent-dark/10 bg-accent-soft/70 p-5">
+              {action ? (
+                <>
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <button type="button" onClick={() => act(null)} className="inline-flex items-center gap-1.5 text-[12px] text-muted hover:text-ink">
+                      <span aria-hidden>←</span> Latest activity
                     </button>
-                  ))}
+                    {action.kind !== "repair" && action.kind !== "planned" && (
+                      <button type="button" onClick={() => act(null)} aria-label="Close" className="flex h-8 w-8 items-center justify-center rounded-full border border-line/80 bg-white text-[12px] text-muted hover:text-ink">✕</button>
+                    )}
+                  </div>
+                  {action.kind !== "repair" && action.kind !== "planned" && action.kind !== "notices" && <h2 className="hand mb-3 text-[18px] leading-tight">{ACTION_TITLE[action.kind]}</h2>}
+                  {(action.kind === "repair" || action.kind === "planned") && raiseHome ? (
+                    <RaiseJob
+                      key={action.kind}
+                      inline
+                      kind={action.kind}
+                      home={raiseHome}
+                      contractors={works.state === "ready" ? works.data.contractors : []}
+                      onClose={() => act(null)}
+                      onRaised={(o) => {
+                        act(null);
+                        loadWorks();
+                        pickTab("maintenance");
+                        /* Straight on to telling the landlord, as on Maintenance. */
+                        setOpenJob(o);
+                      }}
+                    />
+                  ) : action.kind === "inspection" && visits.state === "ready" ? (
+                    <BookVisit
+                      inspection={action.inspection}
+                      team={visits.data.team}
+                      me={visits.data.me}
+                      onBooked={() => { act(null); loadVisits(); pickTab("inspections"); }}
+                    />
+                  ) : action.kind === "notices" ? (
+                    roomsOnly ? (
+                      <p className="text-[12.5px] text-muted">Each room is its own tenancy. Pick a room on the left to start its rent review or notice.</p>
+                    ) : (
+                      <HomeNotices key={`panel-${p.listingId}`} home={noticeHome} stacked />
+                    )
+                  ) : action.kind === "tenant-notice" && propertyId ? (
+                    <NoticeSheet
+                      propertyId={propertyId}
+                      propertyName={house ? house.name : p.name}
+                      tenants={tenants}
+                      landlord={landlord?.name ?? ""}
+                      rent={rentLine ?? ""}
+                      onClose={() => act(null)}
+                      onSaved={() => { act(null); loadEnding(); pickTab("tenancy"); }}
+                    />
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <p className={eyebrow}>On this home</p>
+                  <h2 className="hand mt-1 text-[18px] leading-tight">Latest activity</h2>
+                  {latest.length > 0 ? (
+                    <ul className="mt-3 space-y-2">
+                      {latest.map((a) => (
+                        <li key={a.key}>
+                          <button type="button" onClick={a.go} className="flex w-full items-start gap-3 rounded-2xl bg-white px-3.5 py-3 text-left transition-colors hover:bg-white/70">
+                            <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${a.hot ? "bg-accent-dark text-white" : "bg-accent-soft text-accent-dark"}`}>
+                              <DoodleIcon name={a.icon} size={12} />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[12.5px] font-semibold">{a.title}</span>
+                              <span className={`block truncate text-[11.5px] ${a.hot ? "text-accent-dark" : "text-muted"}`}>{a.sub}</span>
+                            </span>
+                            <span className="shrink-0 pt-0.5 text-[11px] text-muted">{shortDay(a.at)}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : reading ? (
+                    <div className="mt-3"><Loading label="Reading what has happened here" /></div>
+                  ) : (
+                    <p className="mt-3 rounded-2xl bg-white px-4 py-5 text-center text-[12.5px] text-muted">Nothing recorded on this home yet. Pick an action below and it shows here.</p>
+                  )}
+                  {reading && latest.length > 0 && <div className="mt-3"><Loading label="Still reading" /></div>}
+                </>
+              )}
+              {actionErr && <p className="mt-3 text-[12px] text-accent-dark">{actionErr}</p>}
+            </section>
+
+            <section className={`${card} p-4`}>
+              <p className={`${eyebrow} mb-3 px-1`}>Actions</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" disabled={!canAct} onClick={() => act({ kind: "repair" })} className={tile}>{tileIcon("setting")}Report a repair</button>
+                <button type="button" disabled={!canAct} onClick={() => act({ kind: "planned" })} className={tile}>{tileIcon("calendar")}Plan a job</button>
+                <button type="button" disabled={!canAct || visits.state !== "ready"} onClick={() => void bookVisit()} className={tile}>{tileIcon("checklist")}Book an inspection</button>
+                <button type="button" onClick={() => act({ kind: "notices" })} className={tile}>{tileIcon("file-contract")}Serve notice</button>
+                <button type="button" onClick={() => act({ kind: "notices" })} className={tile}>{tileIcon("coin")}Rent review</button>
+                <button type="button" disabled={!canAct || !tenants.length} onClick={() => act({ kind: "tenant-notice" })} className={tile}>{tileIcon("logout")}Tenant gave notice</button>
+                <button type="button" disabled={!propertyId} onClick={() => { pickTab("compliance"); setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }} className={tile}>{tileIcon("shield")}Add a certificate</button>
+                {canAct && p.onRex !== false ? (
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3.5 top-3.5">{tileIcon("pack/house")}</span>
+                    <ReletAction home={p} className="flex h-full min-h-[86px] w-full items-end gap-1 rounded-2xl border border-line/60 bg-white p-3.5 text-left text-[12.5px] font-semibold leading-tight transition-colors hover:border-ink/40" />
+                  </div>
+                ) : null}
+              </div>
+            </section>
+
+            {MAPS && p.lat != null && p.lng != null && (
+              <section className={`${card} overflow-hidden`}>
+                <div className="h-[220px] overflow-hidden">
+                  <PortfolioMap properties={[p]} attention={new Set()} onOpen={() => {}} />
                 </div>
               </section>
             )}
+          </aside>
+
+          {/* ── the people, then the detail ────────────────────────────── */}
+          <div className="min-w-0 space-y-5 lg:col-start-1 lg:row-start-2">
+            <div className="grid gap-5 2xl:grid-cols-2">
+              <section className={`${card} p-5`}>
+                <p className={`${eyebrow} mb-3`}>{roomsOnly ? "Rooms" : tenants.length === 1 ? "Tenant" : "Tenants"}</p>
+                {roomsOnly && house ? (
+                  <ul className="overflow-hidden rounded-xl border border-line/50">
+                    {house.rooms.map((r) => (
+                      <li key={r.listingId} className="border-b border-line/40 last:border-0">
+                        <button type="button" onClick={() => setRoom(r.listingId)} className="grid w-full grid-cols-[70px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 text-left text-[12.5px] transition-colors hover:bg-box">
+                          <span className="font-semibold">{roomLabel(r)}</span>
+                          <span className="min-w-0 truncate">{r.tenants[0]?.name ?? <span className="text-muted">Empty</span>}</span>
+                          <span className="figures text-right">{r.rent == null ? <span className="text-muted">—</span> : `${money(r.rent)}${r.rentPeriod === "week" ? " pw" : ""}`}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : tenants.length ? (
+                  <ul className="space-y-2">{tenants.map((t) => <PartyCard key={t.contactId} p={t} />)}</ul>
+                ) : (
+                  <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">No tenant on record. It is empty, or the let has not been recorded.</p>
+                )}
+                {tenants.length > 0 && (
+                  <div className="mt-3 rounded-xl bg-box px-4 py-3 text-[12.5px]">
+                    {tenancy.state === "loading" ? <Loading label="Reading the tenancy dates" />
+                      : tenancy.state === "failed" ? <span className="text-muted">The tenancy dates could not be read.</span>
+                      : tenancy.data.tenancy ? <TenancyLine t={tenancy.data.tenancy} long />
+                      : <span className="text-muted">{tenancy.data.ready ? "No tenancy dates on record for this home." : tenancy.data.error ?? "The tenancy dates are still being read. Look again in a minute."}</span>}
+                  </div>
+                )}
+              </section>
+
+              <section className={`${card} p-5`}>
+                <p className={`${eyebrow} mb-3`}>Landlord</p>
+                {landlord ? (
+                  <div className="text-[13px]">
+                    <PartyCard p={landlord} plain />
+                    {landlord.email && landlord.email.includes("@") && (
+                      <LandlordJobEmails key={landlord.email} landlord={landlord.email} name={landlord.name} className="mt-3 border-t border-line/40 pt-3" />
+                    )}
+                  </div>
+                ) : (
+                  <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">No landlord on record for this home.</p>
+                )}
+              </section>
+            </div>
+
+            <nav id="sections" className="-mx-1 flex scroll-mt-5 gap-1.5 overflow-x-auto px-1 pb-1" aria-label="Sections">
+              {TABS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => pickTab(t.id)}
+                  aria-current={tab === t.id ? "page" : undefined}
+                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-[12.5px] font-semibold transition-colors ${tab === t.id ? "border-ink bg-ink text-page" : "border-line/70 bg-white hover:border-ink/40"}`}
+                >
+                  <DoodleIcon name={t.icon} size={13} />
+                  {t.label}
+                  {t.id === "maintenance" && works.state === "ready" && openJobs.length > 0 && <span className={`rounded-full px-1.5 text-[10.5px] ${tab === t.id ? "bg-page/20" : "bg-accent-soft text-accent-dark"}`}>{openJobs.length}</span>}
+                  {t.id === "compliance" && certs.state === "ready" && certs.data.outstanding > 0 && <span className={`rounded-full px-1.5 text-[10.5px] ${tab === t.id ? "bg-page/20" : "bg-accent-soft text-accent-dark"}`}>{certs.data.outstanding}</span>}
+                </button>
+              ))}
+            </nav>
+
+            {tab === "compliance" && (
+              <div>
+                {houseView && house && !house.house && !lets && (
+                  <p className="mb-2 text-[11.5px] text-muted">This house is held as its rooms only, so the file below is the first room&apos;s. Every room shares the house&apos;s certificates.</p>
+                )}
+                {propertyId ? (
+                  <PropertyFile key={propertyId} propertyId={propertyId} propertyName={house ? `${house.name}${roomP ? ` · ${roomLabel(roomP)}` : ""}` : p.name} screen="the property page" />
+                ) : (
+                  <p className={`${card} p-5 text-[12.5px] text-muted`}>There is no property record behind this home yet, so there are no certificates to check.</p>
+                )}
+              </div>
+            )}
+
+            {tab === "maintenance" && (
+              <section className={`${card} p-5`}>
+                {works.state === "loading" ? <Loading label="Reading the jobs on this home" /> : works.state === "failed" ? <Failed error={works.error} /> : (
+                  <JobsList orders={works.data.orders} carried={works.data.carried} onOpen={setOpenJob} />
+                )}
+              </section>
+            )}
+
+            {tab === "inspections" && (
+              <section className={`${card} p-5`}>
+                {visits.state === "loading" ? <Loading label="Reading the visits on this home" /> : visits.state === "failed" ? <Failed error={visits.error} /> : (
+                  <VisitsList data={visits.data} />
+                )}
+              </section>
+            )}
+
+            {tab === "tenancy" && (
+              <div className="grid gap-5 md:grid-cols-2">
+                <section className={`${card} p-5`}>
+                  <p className={`${eyebrow} mb-3`}>The tenancy</p>
+                  {tenancy.state === "loading" ? <Loading label="Reading the tenancy" /> : tenancy.state === "failed" ? <Failed error={tenancy.error} /> : (
+                    <dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-[13px]">
+                      <Fact label="Tenants" value={tenants.length ? tenants.map((t) => t.name).join(", ") : "None on record"} />
+                      <Fact label="Rent" value={rentLine ?? "Not set"} />
+                      <Fact label="Started" value={tenancy.data.tenancy?.startDate ? day(tenancy.data.tenancy.startDate) : day(p.letSince)} />
+                      <Fact label="Ends" value={tenancy.data.tenancy ? (tenancy.data.tenancy.endDate ? day(tenancy.data.tenancy.endDate) : "Rolling, no end date") : "—"} />
+                      <Fact label="Deposit" value={tenancy.data.tenancy?.depositId ? `Registered · ${tenancy.data.tenancy.depositId}` : "—"} />
+                      <Fact label="Rent and legal protection" value={tenancy.data.protection === "protected" ? "On" : tenancy.data.protection === "without" ? "Not taken" : "—"} />
+                    </dl>
+                  )}
+                  {tenancy.state === "ready" && !tenancy.data.ready && (
+                    <p className="mt-3 text-[11.5px] text-muted">{tenancy.data.error ?? "The tenancy dates are still being read. Look again in a minute."}</p>
+                  )}
+                </section>
+
+                <section className={`${card} p-5`}>
+                  <p className={`${eyebrow} mb-3`}>Moving out</p>
+                  {ending.state === "loading" ? <Loading label="Reading reviews and move-outs" /> : ending.state === "failed" ? <Failed error={ending.error} /> : (
+                    <EndingList data={ending.data} />
+                  )}
+                </section>
+
+                {/* Rent review (Section 13) and Serve notice (Section 8):
+                    Michael's checklists, decided on his Sections tab. Here
+                    for the record; the bell's notice links open them here. */}
+                <div id="notices" className={`${card} scroll-mt-6 p-5 md:col-span-2`}>
+                  {roomsOnly ? (
+                    <>
+                      <p className={`${eyebrow} mb-2`}>Rent review and notices</p>
+                      <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">Each room is its own tenancy. Pick a room at the top to start its rent review or notice.</p>
+                    </>
+                  ) : (
+                    <HomeNotices key={p.listingId} home={noticeHome} />
+                  )}
+                </div>
+
+                {reviewDue && (
+                  <section className={`${card} p-5 md:col-span-2`}>
+                    <p className={`${eyebrow} mb-2`}>Tenancy review</p>
+                    <p className="text-[13px]">
+                      {reviewDue.dueOn ? `Due ${day(reviewDue.dueOn)}` : "Due, no date set"}
+                      {reviewDue.agreement ? <span className="text-muted"> · {reviewDue.agreement}</span> : null}
+                    </p>
+                    {reviewDue.why && <p className="mt-1 text-[12px] text-muted">{reviewDue.why}</p>}
+                    <Link href="/tenancy-reviews" className="mt-3 inline-block text-[12px] underline underline-offset-2">Record the review</Link>
+                  </section>
+                )}
+              </div>
+            )}
 
             {everything && !p.test && p.onRex !== false && (
-              <p className="text-[11.5px] text-muted lg:col-span-2">
+              <p className="text-[11.5px] text-muted">
                 <a href={rexListingUrl(p.listingId, "leased")} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">Open the record behind this home</a>
               </p>
             )}
           </div>
-        )}
-
-        {tab === "compliance" && (
-          <div>
-            {houseView && house && !house.house && !lets && (
-              <p className="mb-2 text-[11.5px] text-muted">This house is held as its rooms only, so the file below is the first room&apos;s. Every room shares the house&apos;s certificates.</p>
-            )}
-            {propertyId ? (
-              <PropertyFile key={propertyId} propertyId={propertyId} propertyName={house ? `${house.name}${roomP ? ` · ${roomLabel(roomP)}` : ""}` : p.name} screen="the property page" />
-            ) : (
-              <p className={`${card} p-5 text-[12.5px] text-muted`}>There is no property record behind this home yet, so there are no certificates to check.</p>
-            )}
-          </div>
-        )}
-
-        {tab === "maintenance" && (
-          <section className={`${card} p-5`}>
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <h2 className="hand flex items-center gap-2 text-[16px]"><DoodleIcon name="setting" size={16} className="text-accent-dark" /> Maintenance</h2>
-              <div className="flex flex-wrap gap-2">
-                <button type="button" disabled={!canAct} onClick={() => setRaising("repair")} className={`${pill} disabled:opacity-40`}>Report a repair</button>
-                <button type="button" disabled={!canAct} onClick={() => setRaising("planned")} className={`${pill} disabled:opacity-40`}>Plan a job</button>
-              </div>
-            </div>
-            {works.state === "loading" ? <Loading label="Reading the jobs on this home" /> : works.state === "failed" ? <Failed error={works.error} /> : (
-              <JobsList orders={works.data.orders} carried={works.data.carried} onOpen={setOpenJob} />
-            )}
-          </section>
-        )}
-
-        {tab === "inspections" && (
-          <section className={`${card} p-5`}>
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <h2 className="hand flex items-center gap-2 text-[16px]"><DoodleIcon name="checklist" size={16} className="text-accent-dark" /> Inspections</h2>
-              <button type="button" disabled={!canAct || visits.state !== "ready"} onClick={() => void bookVisit()} className={`${pill} disabled:opacity-40`}>Book an inspection</button>
-            </div>
-            {visits.state === "loading" ? <Loading label="Reading the visits on this home" /> : visits.state === "failed" ? <Failed error={visits.error} /> : (
-              <VisitsList data={visits.data} />
-            )}
-          </section>
-        )}
-
-        {tab === "tenancy" && (
-          <div className="grid gap-5 lg:grid-cols-2">
-            <section className={`${card} p-5`}>
-              <p className={`${eyebrow} mb-3`}>The tenancy</p>
-              {tenancy.state === "loading" ? <Loading label="Reading the tenancy" /> : tenancy.state === "failed" ? <Failed error={tenancy.error} /> : (
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-[13px]">
-                  <Fact label="Tenants" value={tenants.length ? tenants.map((t) => t.name).join(", ") : "None on record"} />
-                  <Fact label="Rent" value={p.rent == null ? "Not set" : `${money(p.rent)} ${p.rentPeriod === "week" ? "per week" : "pcm"}`} />
-                  <Fact label="Started" value={tenancy.data.tenancy?.startDate ? day(tenancy.data.tenancy.startDate) : day(p.letSince)} />
-                  <Fact label="Ends" value={tenancy.data.tenancy ? (tenancy.data.tenancy.endDate ? day(tenancy.data.tenancy.endDate) : "Rolling, no end date") : "—"} />
-                  <Fact label="Deposit" value={tenancy.data.tenancy?.depositId ? `Registered · ${tenancy.data.tenancy.depositId}` : "—"} />
-                  <Fact label="Rent and legal protection" value={tenancy.data.protection === "protected" ? "On" : tenancy.data.protection === "without" ? "Not taken" : "—"} />
-                </dl>
-              )}
-              {tenancy.state === "ready" && !tenancy.data.ready && (
-                <p className="mt-3 text-[11.5px] text-muted">{tenancy.data.error ?? "The tenancy dates are still being read. Look again in a minute."}</p>
-              )}
-            </section>
-
-            <section className={`${card} p-5`}>
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <p className={eyebrow}>Moving out</p>
-                <button type="button" disabled={!canAct || !tenants.length} onClick={() => setNoticing(true)} className={`${pill} disabled:opacity-40`}>
-                  <DoodleIcon name="logout" size={13} className="text-accent-dark" /> Tenant gave notice
-                </button>
-              </div>
-              {ending.state === "loading" ? <Loading label="Reading reviews and move-outs" /> : ending.state === "failed" ? <Failed error={ending.error} /> : (
-                <EndingList data={ending.data} />
-              )}
-            </section>
-
-            {/* Rent review (Section 13) and Serve notice (Section 8): Michael's
-                checklists, filled in here and decided on his Sections tab
-                (components/sections). A house let by the room is a tenancy
-                per room, so those start from the room. */}
-            <div id="notices" className={`${card} scroll-mt-6 p-5 lg:col-span-2`}>
-              {houseView && house && !lets ? (
-                <>
-                  <p className={`${eyebrow} mb-2`}>Rent review and notices</p>
-                  <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">Each room is its own tenancy. Pick a room at the top to start its rent review or notice.</p>
-                </>
-              ) : (
-                <HomeNotices
-                  key={p.listingId}
-                  home={{
-                    listingId: String(p.listingId),
-                    propertyId: p.propertyId,
-                    label: house ? `${house.name}${roomP ? ` · ${roomLabel(roomP)}` : ""}` : p.name,
-                    test: Boolean(p.test),
-                    address: [p.address || p.name, p.postcode && !(p.address || p.name).toUpperCase().includes(p.postcode.toUpperCase()) ? p.postcode : ""].filter(Boolean).join(", "),
-                    landlord: landlord?.name ?? "",
-                    tenants: tenants.map((t) => t.name),
-                    agent: p.agent?.name ?? null,
-                    rentMonthly: p.rentMonthly,
-                    letSince: p.letSince,
-                  }}
-                />
-              )}
-            </div>
-
-            {reviewDue && (
-              <section className={`${card} p-5 lg:col-span-2`}>
-                <p className={`${eyebrow} mb-2`}>Tenancy review</p>
-                <p className="text-[13px]">
-                  {reviewDue.dueOn ? `Due ${day(reviewDue.dueOn)}` : "Due, no date set"}
-                  {reviewDue.agreement ? <span className="text-muted"> · {reviewDue.agreement}</span> : null}
-                </p>
-                {reviewDue.why && <p className="mt-1 text-[12px] text-muted">{reviewDue.why}</p>}
-                <Link href="/tenancy-reviews" className="mt-3 inline-block text-[12px] underline underline-offset-2">Record the review</Link>
-              </section>
-            )}
-          </div>
-        )}
+        </div>
       </div>
 
       {lightbox != null && <PhotoLightbox photos={shots} start={lightbox} name={title} onClose={() => setLightbox(null)} />}
-
-      {raising && raiseHome && (
-        <RaiseJob
-          kind={raising}
-          home={raiseHome}
-          contractors={works.state === "ready" ? works.data.contractors : []}
-          onClose={() => setRaising(null)}
-          onRaised={(o) => {
-            setRaising(null);
-            loadWorks();
-            pickTab("maintenance");
-            /* Straight on to telling the landlord, as on Maintenance. */
-            setOpenJob(o);
-          }}
-        />
-      )}
 
       {openJob && (
         <JobDrawer
@@ -702,33 +843,20 @@ export default function PropertyPage() {
           onChanged={(o) => { setOpenJob(o); loadWorks(); }}
         />
       )}
-
-      {booking && visits.state === "ready" && (
-        <BookVisit
-          inspection={booking}
-          team={visits.data.team}
-          me={visits.data.me}
-          onClose={() => setBooking(null)}
-          onBooked={() => { setBooking(null); loadVisits(); pickTab("inspections"); }}
-        />
-      )}
-
-      {noticing && propertyId && (
-        <NoticeSheet
-          propertyId={propertyId}
-          propertyName={house ? house.name : p.name}
-          tenants={tenants}
-          landlord={landlord?.name ?? ""}
-          rent={p.rent == null ? "" : `${money(p.rent)} ${p.rentPeriod === "week" ? "pw" : "pcm"}`}
-          onClose={() => setNoticing(false)}
-          onSaved={() => { setNoticing(false); loadEnding(); pickTab("tenancy"); }}
-        />
-      )}
     </SaveScopeProvider>
   );
 }
 
 /* ── small pieces ─────────────────────────────────────────────────────── */
+
+function Info({ icon, text }: { icon: string; text: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <DoodleIcon name={icon} size={13} className="text-muted" />
+      {text}
+    </span>
+  );
+}
 
 function Fact({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -736,22 +864,6 @@ function Fact({ label, value }: { label: string; value: React.ReactNode }) {
       <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">{label}</p>
       <p className="mt-0.5 text-[13px]">{value}</p>
     </div>
-  );
-}
-
-function Glance({ icon, label, onClick, children }: { icon: string; label: string; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <li>
-      <button type="button" onClick={onClick} className="group flex w-full items-start gap-3 text-left">
-        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-soft/70 text-accent-dark">
-          <DoodleIcon name={icon} size={13} />
-        </span>
-        <span className="min-w-0">
-          <span className="block text-[10.5px] font-semibold uppercase tracking-wide text-muted group-hover:text-ink">{label}</span>
-          <span className="block">{children}</span>
-        </span>
-      </button>
-    </li>
   );
 }
 
@@ -903,7 +1015,7 @@ function EndingList({ data }: { data: Ending }) {
 
 /* ── book a visit, in place ───────────────────────────────────────────── */
 
-function BookVisit({ inspection, team, me, onClose, onBooked }: { inspection: Inspection; team: Person[]; me: Person | null; onClose: () => void; onBooked: () => void }) {
+function BookVisit({ inspection, team, me, onBooked }: { inspection: Inspection; team: Person[]; me: Person | null; onBooked: () => void }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const reporter = useSaveReporter();
@@ -925,13 +1037,14 @@ function BookVisit({ inspection, team, me, onClose, onBooked }: { inspection: In
     return true;
   };
   return (
-    <Modal title="Book an inspection" eyebrowText={`${VISIT_KIND[inspection.kind] ?? "Visit"} · ${inspection.propertyName}`} onClose={onClose}>
+    <div>
+      <p className="mb-3 text-[12px] text-muted">{VISIT_KIND[inspection.kind] ?? "Visit"} · {inspection.propertyName}</p>
       <BookForm inspection={inspection} team={team} me={me} busy={busy} onMove={move} />
       {err && <p className="mt-3 text-[12.5px] text-accent-dark">{err}</p>}
       <p className="mt-4 text-[11.5px] text-muted">
         The full visit sheet, with the write-up and the report, is on <Link href={`/inspections?open=${encodeURIComponent(inspection.id)}`} className="underline underline-offset-2">Inspections</Link>.
       </p>
-    </Modal>
+    </div>
   );
 }
 
@@ -983,11 +1096,11 @@ function NoticeSheet({
   }
 
   return (
-    <Modal title="Tenant gave notice" eyebrowText={propertyName} onClose={onClose}>
+    <div>
       <p className="text-[12.5px] leading-relaxed text-muted">
         Record the notice the {tenants.length > 1 ? "tenants have" : "tenant has"} given. It goes onto Move-outs with the day they leave, so the check-out, keys, meters, deposit and re-let follow from there. A notice from the landlord is Serve notice, on this page.
       </p>
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+      <div className="mt-4 grid gap-4">
         <label>
           <span className={label}>Notice given on</span>
           <input type="date" value={served} onChange={(e) => setServed(e.target.value)} className={field} />
@@ -996,7 +1109,7 @@ function NoticeSheet({
           <span className={label}>They leave on</span>
           <input type="date" value={leaving} min={served} onChange={(e) => setLeaving(e.target.value)} className={field} />
         </label>
-        <label className="sm:col-span-2">
+        <label>
           <span className={label}>Note</span>
           <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="How it was served, the reason, anything agreed." className={field} />
         </label>
@@ -1007,29 +1120,6 @@ function NoticeSheet({
         <PressButton onClick={() => void save()} className={`rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page ${busy ? "opacity-50" : ""}`}>
           {busy ? "Recording…" : "Record notice"}
         </PressButton>
-      </div>
-    </Modal>
-  );
-}
-
-function Modal({ title, eyebrowText, onClose, children }: { title: string; eyebrowText: string; onClose: () => void; children: React.ReactNode }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  return (
-    <div role="dialog" aria-modal="true" className="fixed inset-0 z-[150] flex items-start justify-center overflow-y-auto p-4 sm:items-center">
-      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 cursor-default bg-ink/35" />
-      <div className="fade-up relative w-full max-w-xl rounded-3xl border border-line/80 bg-page p-6 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.35)]">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="truncate text-[10px] font-bold uppercase tracking-wider text-muted">{eyebrowText}</p>
-            <h2 className="mt-1 text-[22px] leading-tight">{title}</h2>
-          </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted hover:text-ink">✕</button>
-        </div>
-        {children}
       </div>
     </div>
   );

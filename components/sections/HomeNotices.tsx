@@ -55,7 +55,12 @@ function prefillFor(kind: NoticeKind, h: HomeNoticeFacts, me: string): Answers {
   return { fields, checks: {}, signature: "", auto: Object.keys(fields) };
 }
 
-export default function HomeNotices({ home, className = "" }: { home: HomeNoticeFacts; className?: string }) {
+export default function HomeNotices({ home, className = "", stacked = false }: {
+  home: HomeNoticeFacts;
+  className?: string;
+  /** One button under the other, for a narrow box (the property page's action box). */
+  stacked?: boolean;
+}) {
   const [notices, setNotices] = useState<Notice[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [me, setMe] = useState("");
@@ -127,7 +132,7 @@ export default function HomeNotices({ home, className = "" }: { home: HomeNotice
   return (
     <section className={className}>
       <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Rent review and notices</p>
-      <div className="flex flex-col gap-2 sm:flex-row">
+      <div className={stacked ? "flex flex-col gap-2" : "flex flex-col gap-2 sm:flex-row"}>
         {button("s13")}
         {button("s8")}
       </div>

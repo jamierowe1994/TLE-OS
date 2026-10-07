@@ -7,11 +7,13 @@ import { PLANNED_CATEGORIES, REPAIR_CATEGORIES, URGENCIES } from "@/lib/works-ca
 import { CATEGORY_CERT, ContractorPick, REPORTED_BY, type Property } from "@/components/maintenance/works-ui";
 
 /** Report a repair or plan a job. On /maintenance and on the property's own page. */
-export default function RaiseJob({ kind, contractors, home = null, onClose, onRaised }: {
+export default function RaiseJob({ kind, contractors, home = null, inline = false, onClose, onRaised }: {
   kind: Kind;
   contractors: Contractor[];
   /** Raised from the property's own page: the home is already known. */
   home?: Property | null;
+  /** Drawn inside a box on the page (the property's action panel), not over it. */
+  inline?: boolean;
   onClose: () => void;
   onRaised: (o: WorksOrder) => void;
 }) {
@@ -163,11 +165,11 @@ export default function RaiseJob({ kind, contractors, home = null, onClose, onRa
   const label = "block text-[10px] font-bold uppercase tracking-wider text-muted";
 
   return (
-    <div className="fixed inset-0 z-[150] flex items-start justify-center overflow-y-auto p-4 sm:items-center">
-      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 cursor-default bg-ink/35" />
-      <div className="fade-up relative w-full max-w-2xl rounded-3xl border border-line/80 bg-page p-6 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.35)]">
+    <div className={inline ? "contents" : "fixed inset-0 z-[150] flex items-start justify-center overflow-y-auto p-4 sm:items-center"}>
+      {!inline && <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 cursor-default bg-ink/35" />}
+      <div className={inline ? "relative" : "fade-up relative w-full max-w-2xl rounded-3xl border border-line/80 bg-page p-6 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.35)]"}>
         {sent && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-3xl bg-page/95">
+          <div className={`absolute inset-0 z-10 flex flex-col items-center justify-center rounded-3xl ${inline ? "bg-accent-soft/95" : "bg-page/95"}`}>
             <span className="fade-up flex h-16 w-16 items-center justify-center rounded-full bg-ink text-page">
               <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7" /></svg>
             </span>
@@ -183,7 +185,7 @@ export default function RaiseJob({ kind, contractors, home = null, onClose, onRa
           <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted hover:text-ink">✕</button>
         </div>
 
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <div className={inline ? "mt-5 flex flex-col gap-4" : "mt-5 grid gap-4 sm:grid-cols-2"}>
           <div className="relative sm:col-span-2">
             <label className={label}>Property</label>
             {picked ? (
