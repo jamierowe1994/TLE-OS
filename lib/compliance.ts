@@ -102,7 +102,37 @@ export type Cert = {
   viaGas?: boolean;
   /** Marked not needed on this home by the compliance office (7 Oct 2026). */
   notNeeded?: { by: string; reason: string; at: string };
+  /** An HMO licence renewal is with the council (Michael, 7 Oct 2026): off
+   *  the outstanding list for six months from the day it went in. */
+  renewalApplied?: { by: string; at: string; appliedOn: string; ref: string };
 };
+
+/** A person's mark (lib/cert-not-needed) on a certificate, as the book holds it. */
+export type CertMark = { kind: "not_needed" | "renewal_applied"; by: string; reason: string; at: string; appliedOn?: string | null; ref?: string };
+
+export function withMark(held: Cert | undefined, m: CertMark): Cert {
+  const base: Cert = clearMarks(held ?? { expires: null, attached: false });
+  return m.kind === "renewal_applied"
+    ? { ...base, renewalApplied: { by: m.by, at: m.at, appliedOn: m.appliedOn ?? m.at.slice(0, 10), ref: m.ref ?? "" } }
+    : { ...base, notNeeded: { by: m.by, reason: m.reason, at: m.at } };
+}
+
+export function clearMarks(c: Cert): Cert {
+  const { notNeeded: _n, renewalApplied: _r, ...rest } = c;
+  void _n;
+  void _r;
+  return rest;
+}
+
+/** Six months from the day the renewal went in (Michael: "it can take 6 months"). */
+export const RENEWAL_HOLD_DAYS = 183;
+
+/** The day a renewal stops holding the licence off the list, YYYY-MM-DD. */
+export function renewalHoldEnds(appliedOn: string): string {
+  const d = new Date(`${appliedOn.slice(0, 10)}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + RENEWAL_HOLD_DAYS);
+  return d.toISOString().slice(0, 10);
+}
 
 export type CompProperty = {
   id: string;

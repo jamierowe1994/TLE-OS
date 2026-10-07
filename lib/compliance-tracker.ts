@@ -5,6 +5,7 @@ import {
   requiredCerts,
   statusOf,
   CERT_META,
+  renewalHoldEnds,
   type CertKey,
   type CertStatus,
   type CompProperty,
@@ -44,6 +45,15 @@ import {
  * first batch, and the queue is independently useful anyway — Michael can work
  * it by hand from day one.
  */
+
+const todayLondon = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+const addDays = (ymd: string, n: number) => {
+  const d = new Date(`${ymd}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+const prettyDay = (ymd: string) =>
+  new Date(`${ymd.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" });
 
 /** The three chase points, furthest out first. */
 export const BANDS = [30, 14, 7] as const;
@@ -86,6 +96,9 @@ export interface ChaseRow {
   viaGas?: boolean;
   /** Marked not needed on this home, by whom and why. */
   notNeeded?: { by: string; reason: string; at: string };
+  /** The licence renewal is with the council, and when that stops holding it
+   *  off the list. Set only while the hold is running. */
+  renewal?: { by: string; at: string; appliedOn: string; ref: string; holdEnds: string };
 }
 
 export interface TrackerBook {
@@ -95,6 +108,8 @@ export interface TrackerBook {
   undated: ChaseRow[];
   /** Marked not needed by the compliance office: off every list, undoable. */
   notNeeded: ChaseRow[];
+  /** Licences past their date with the renewal at the council (up to six months). */
+  renewals: ChaseRow[];
   /** In date but inside a chase band. */
   upcoming: ChaseRow[];
   counts: {
@@ -111,6 +126,7 @@ export interface TrackerBook {
     /** On file, no expiry date recorded: not outstanding, not finished. */
     undated: number;
     notNeeded: number;
+    renewals: number;
     /** Duplicate property rows collapsed — a property listed twice is still
      *  one property, and chasing it twice is how a landlord stops reading. */
     duplicateRowsCollapsed: number;
@@ -137,7 +153,18 @@ function rowsFor(p: CompProperty, agent: string | null): ChaseRow[] {
     const attached = Boolean(cert?.attached);
 
     const undated = Boolean(cert?.undated);
-    const reason = undated
+    /* A renewal note belongs to the licence it was written about: once a
+       newer licence (expiring after the hold) is on file, the note is spent. */
+    const expiryDay = daysLeft != null ? addDays(todayLondon(), daysLeft) : null;
+    const noted = cert?.renewalApplied;
+    const ra = noted && !(expiryDay && expiryDay > renewalHoldEnds(noted.appliedOn)) ? noted : undefined;
+    const holdEnds = ra ? renewalHoldEnds(ra.appliedOn) : null;
+    const holding = Boolean(ra && holdEnds && holdEnds > todayLondon());
+    const reason = ra && holding
+      ? `Renewal applied for on ${prettyDay(ra.appliedOn)}${ra.ref ? ` (ref ${ra.ref})` : ""}, marked by ${ra.by}. Back on the list on ${prettyDay(holdEnds!)} if no new licence has been filed.`
+      : ra
+        ? `The renewal applied for on ${prettyDay(ra.appliedOn)} has had six months and no new licence has been filed. Chase the council.`
+        : undated
       ? "On file from the clean sweep, but nobody has recorded its expiry date. Upload it again with the date to finish it."
       : cert?.viaGas && status !== "missing"
         ? status === "expired"
@@ -169,6 +196,7 @@ function rowsFor(p: CompProperty, agent: string | null): ChaseRow[] {
       reason,
       ...(undated ? { undated: true } : {}),
       ...(cert?.viaGas ? { viaGas: true } : {}),
+      ...(ra && holding ? { renewal: { ...ra, holdEnds: holdEnds! } } : {}),
     };
   });
 }
@@ -263,14 +291,17 @@ export function buildTracker(
   const rows = book.flatMap((p) => rowsFor(p, whoFor(p)));
 
   const outstanding = rows
-    .filter((r) => !r.undated && (r.status === "expired" || r.status === "missing"))
+    .filter((r) => !r.undated && !r.renewal && (r.status === "expired" || r.status === "missing"))
     .sort((a, b) => urgency(a) - urgency(b));
 
   const upcoming = rows
     .filter((r) => r.band !== null)
     .sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0));
 
-  const undated = rows.filter((r) => r.undated);
+  const undated = rows.filter((r) => r.undated && !r.renewal);
+  /* A licence still in date with a renewal noted needs nothing yet, so only
+     the ones the hold is actually keeping off Outstanding are listed. */
+  const renewals = rows.filter((r) => r.renewal && (r.status === "expired" || r.status === "missing"));
   const notNeeded: ChaseRow[] = book.flatMap((p) =>
     (Object.entries(p.certs) as [CertKey, CompProperty["certs"][CertKey]][])
       .filter(([, c]) => c?.notNeeded)
@@ -296,11 +327,12 @@ export function buildTracker(
     outstanding,
     undated,
     notNeeded,
+    renewals,
     upcoming,
     counts: {
       properties: book.length,
-      expired: rows.filter((r) => r.status === "expired").length,
-      missing: rows.filter((r) => r.status === "missing" && !r.undated).length,
+      expired: rows.filter((r) => r.status === "expired" && !r.renewal).length,
+      missing: rows.filter((r) => r.status === "missing" && !r.undated && !r.renewal).length,
       band30: upcoming.filter((r) => r.band === 30).length,
       band14: upcoming.filter((r) => r.band === 14).length,
       band7: upcoming.filter((r) => r.band === 7).length,
@@ -310,6 +342,7 @@ export function buildTracker(
       dateWithoutDocument: rows.filter((r) => r.status !== "missing" && !r.attached).length,
       undated: undated.length,
       notNeeded: notNeeded.length,
+      renewals: renewals.length,
       duplicateRowsCollapsed: collapsed,
     },
     duplicateAddresses,

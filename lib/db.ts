@@ -2368,6 +2368,12 @@ CREATE TABLE IF NOT EXISTS os_cert_not_needed (
   at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (property_id, cert)
 );
+-- Renewal applied for (Michael, 7 Oct 2026): an HMO licence past its date
+-- whose renewal is with the council, which can take six months. Same row,
+-- its own kind, with the date it went in and the council's reference.
+ALTER TABLE os_cert_not_needed ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'not_needed';
+ALTER TABLE os_cert_not_needed ADD COLUMN IF NOT EXISTS applied_on DATE;
+ALTER TABLE os_cert_not_needed ADD COLUMN IF NOT EXISTS ref TEXT NOT NULL DEFAULT '';
 
 -- THE OS'S OWN PROPERTY RECORD (6 Sep 2026). One row per REX PM property, linked
 -- to its REX CRM property where the address matched, "not on REX" where it did

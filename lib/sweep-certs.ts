@@ -3,7 +3,7 @@ import { hasDb, q } from "@/lib/db";
 import { notLetFrom } from "@/lib/not-let";
 import { osCertsFor } from "@/lib/os-certs";
 import { notNeededAll } from "@/lib/cert-not-needed";
-import type { Cert, CertKey, CompProperty } from "@/lib/compliance";
+import { withMark, type Cert, type CertKey, type CompProperty } from "@/lib/compliance";
 
 /**
  * What the clean sweep and the OS's own vault already hold, folded into the
@@ -146,7 +146,7 @@ export async function applySweep(properties: CompProperty[]): Promise<void> {
       const [pid, cert] = k.split("|");
       if (pid !== String(p.id)) continue;
       const held = p.certs[cert as CertKey];
-      p.certs[cert as CertKey] = { ...(held ?? { expires: null, attached: false }), notNeeded: { by: n.by, reason: n.reason, at: n.at } };
+      p.certs[cert as CertKey] = withMark(held, n);
     }
   }
 }

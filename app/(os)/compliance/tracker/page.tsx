@@ -277,6 +277,69 @@ function NotNeededPanel({ row, onDone, onClose }: { row: ChaseRow; onDone: (reas
 }
 
 /**
+ * Renewal applied for (Michael, 7 Oct 2026): an HMO licence has run out and
+ * the renewal is with the council, which can take six months. It comes off
+ * Outstanding until six months after the date it went in, or until the new
+ * licence is uploaded, whichever comes first.
+ */
+function RenewalPanel({ row, onDone, onClose }: { row: ChaseRow; onDone: () => void; onClose: () => void }) {
+  const [appliedOn, setAppliedOn] = useState(today());
+  const [ref, setRef] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  async function save() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const j = await fetch("/api/compliance/not-needed", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ propertyId: row.propertyId, cert: row.cert, kind: "renewal_applied", appliedOn, ref }),
+      }).then((r) => r.json());
+      if (!j.ok) setMsg(j.error || "That did not save.");
+      else onDone();
+    } catch {
+      setMsg("That did not save - the OS could not be reached. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  const field = "rounded-lg border border-line/80 bg-white px-2.5 py-1.5 text-[12.5px] text-ink";
+  return (
+    <div className="rounded-xl border border-line/70 bg-page p-3.5">
+      <p className="text-[12px] leading-relaxed">
+        The licence renewal for <span className="font-semibold">{row.property}</span> is with the council. It comes off
+        Outstanding for six months from the day it went in, or until the new licence is uploaded.
+      </p>
+      <div className="mt-2 flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-1 text-[10.5px] text-muted">
+          Applied for on
+          <input type="date" value={appliedOn} max={today()} onChange={(e) => setAppliedOn(e.target.value)} className={field} />
+        </label>
+        <label className="flex min-w-[200px] flex-1 flex-col gap-1 text-[10.5px] text-muted">
+          Council reference (optional)
+          <input value={ref} onChange={(e) => setRef(e.target.value)} maxLength={80} className={field} />
+        </label>
+        <div className="ml-auto flex gap-2">
+          <button type="button" onClick={onClose} className="rounded-full border border-line/80 px-3.5 py-1.5 text-[12px]">
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={busy || !appliedOn}
+            className="rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40"
+          >
+            {busy ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
+      {msg && <p className="mt-1.5 text-[11.5px] text-accent-dark">{msg}</p>}
+    </div>
+  );
+}
+
+/**
  * Agent before landlord, and headed "Chase via". Michael never writes to a
  * landlord: "he will always go through the agent" (James, 20 Sep 2026). The
  * landlord is on the row so he knows whose home it is, not who to ring.
@@ -292,6 +355,7 @@ function Rows({
   onFiled,
   onNotNeeded,
   onUndo,
+  onRenewal,
 }: {
   rows: ChaseRow[];
   empty: string;
@@ -301,9 +365,11 @@ function Rows({
   onNotNeeded?: (r: ChaseRow, reason: string, by: string) => void;
   /** The Not needed tab: Undo instead of Upload. */
   onUndo?: (r: ChaseRow) => void;
+  /** Offers Renewal applied for on licence rows. */
+  onRenewal?: () => void;
 }) {
   const [open, setOpen] = useState<string | null>(null);
-  const [mode, setMode] = useState<"upload" | "na">("upload");
+  const [mode, setMode] = useState<"upload" | "na" | "renewal">("upload");
   const [undoing, setUndoing] = useState<string | null>(null);
   if (!rows.length) return <p className="py-6 text-[12.5px] text-muted">{empty}</p>;
   return (
@@ -332,8 +398,10 @@ function Rows({
               </td>
               <td className={cell}>{r.certLabel}</td>
               <td className={cell}>
-                <Pill tone={r.status === "expired" || r.status === "missing" ? "accent" : "neutral"}>
-                  {r.status === "expired"
+                <Pill tone={!r.renewal && (r.status === "expired" || r.status === "missing") ? "accent" : "neutral"}>
+                  {r.renewal
+                    ? "With the council"
+                    : r.status === "expired"
                     ? "Expired"
                     : r.status === "missing"
                       ? "No record"
@@ -359,7 +427,31 @@ function Rows({
                 </td>
               )}
               <td className={`${cell} text-right`}>
-                {onUndo ? (
+                {onUndo && r.renewal && open !== k ? (
+                  <div className="flex justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode("upload");
+                        setOpen(k);
+                      }}
+                      className="whitespace-nowrap rounded-full bg-ink px-3 py-1 text-[11.5px] font-semibold text-white"
+                    >
+                      Upload
+                    </button>
+                    <button
+                      type="button"
+                      disabled={undoing === k}
+                      onClick={() => {
+                        setUndoing(k);
+                        onUndo(r);
+                      }}
+                      className="whitespace-nowrap rounded-full border border-line/80 px-3 py-1 text-[11.5px] font-semibold disabled:opacity-40"
+                    >
+                      {undoing === k ? "Undoing…" : "Undo"}
+                    </button>
+                  </div>
+                ) : onUndo && !r.renewal ? (
                   <button
                     type="button"
                     disabled={undoing === k}
@@ -391,6 +483,18 @@ function Rows({
                     >
                       Upload
                     </button>
+                    {onRenewal && r.cert === "licence" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMode("renewal");
+                          setOpen(k);
+                        }}
+                        className="whitespace-nowrap rounded-full border border-line/80 px-3 py-1 text-[11.5px] font-semibold"
+                      >
+                        Renewal applied for
+                      </button>
+                    )}
                     {onNotNeeded && (
                       <button
                         type="button"
@@ -411,7 +515,16 @@ function Rows({
             {open === k && (
               <tr className="border-b border-line/40">
                 <td colSpan={sent !== undefined ? 7 : 6} className="px-3 pb-3">
-                  {mode === "na" && onNotNeeded ? (
+                  {mode === "renewal" && onRenewal ? (
+                    <RenewalPanel
+                      row={r}
+                      onClose={() => setOpen(null)}
+                      onDone={() => {
+                        setOpen(null);
+                        onRenewal();
+                      }}
+                    />
+                  ) : mode === "na" && onNotNeeded ? (
                     <NotNeededPanel
                       row={r}
                       onClose={() => setOpen(null)}
@@ -450,7 +563,7 @@ function Rows({
 export default function ComplianceTracker() {
   const [d, setD] = useState<Payload | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"outstanding" | "undated" | "notNeeded" | "upcoming" | "queue">("outstanding");
+  const [tab, setTab] = useState<"outstanding" | "undated" | "notNeeded" | "renewals" | "upcoming" | "queue">("outstanding");
   const [filed, setFiled] = useState<string[]>([]);
   const [find, setFind] = useState("");
 
@@ -469,6 +582,7 @@ export default function ComplianceTracker() {
         ...cur,
         outstanding: cur.outstanding.filter((x) => !gone(x)),
         undated: (cur.undated ?? []).filter((x) => !gone(x)),
+        renewals: (cur.renewals ?? []).filter((x) => !gone(x)),
         upcoming: cur.upcoming.filter((x) => !gone(x)),
         counts: {
           ...cur.counts,
@@ -500,16 +614,21 @@ export default function ComplianceTracker() {
     });
   }
 
-  /* Back on the list. The page reads the tracker again, which reads the book
-     the undo has just put right. */
+  /* The page reads the tracker again, which reads the book the mark has
+     just put right (patched in place, so it is quick). */
+  async function reload() {
+    const p = (await fetch("/api/compliance/tracker").then((x) => x.json()).catch(() => null)) as Payload | null;
+    if (p && p.ok !== false) setD(p);
+  }
+
+  /* Back on the list. */
   async function onUndo(r: ChaseRow) {
     await fetch("/api/compliance/not-needed", {
       method: "DELETE",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ propertyId: r.propertyId, cert: r.cert }),
     }).catch(() => null);
-    const p = (await fetch("/api/compliance/tracker").then((x) => x.json()).catch(() => null)) as Payload | null;
-    if (p && p.ok !== false) setD(p);
+    await reload();
   }
 
   const match = (rows: ChaseRow[]) => {
@@ -597,6 +716,7 @@ export default function ComplianceTracker() {
                 [
                   ["outstanding", `Outstanding (${d.outstanding.length})`],
                   ...((d.undated?.length ?? 0) > 0 ? [["undated", `On file, no date (${d.undated.length})`] as const] : []),
+                  ...((d.renewals?.length ?? 0) > 0 ? [["renewals", `Renewal applied for (${d.renewals.length})`] as const] : []),
                   ...((d.notNeeded?.length ?? 0) > 0 ? [["notNeeded", `Not needed (${d.notNeeded.length})`] as const] : []),
                   ["upcoming", `Coming up (${d.upcoming.length})`],
                   ["queue", `Chase queue (${d.queue.length})`],
@@ -636,7 +756,18 @@ export default function ComplianceTracker() {
                 empty={find ? "Nothing outstanding matches that." : "Nothing expired and nothing missing. That would be a first."}
                 onFiled={onFiled}
                 onNotNeeded={onNotNeeded}
+                onRenewal={() => void reload()}
               />
+            )}
+            {tab === "renewals" && (
+              <>
+                <p className="mb-3 text-[11.5px] leading-relaxed text-muted">
+                  HMO licences past their date with the renewal at the council. Each comes back onto Outstanding six months
+                  after the application went in, unless the new licence has been uploaded by then. Upload it here when it
+                  arrives.
+                </p>
+                <Rows rows={match(d.renewals ?? [])} empty="No licence renewals waiting on the council." onFiled={onFiled} onUndo={(r) => void onUndo(r)} />
+              </>
             )}
             {tab === "notNeeded" && (
               <>
@@ -653,7 +784,7 @@ export default function ComplianceTracker() {
                   The clean sweep found these on file, but nobody has recorded when they run out. They are not
                   counted as outstanding. Upload the certificate with its date to finish each one.
                 </p>
-                <Rows rows={match(d.undated ?? [])} empty="Every certificate on file has its date." onFiled={onFiled} onNotNeeded={onNotNeeded} />
+                <Rows rows={match(d.undated ?? [])} empty="Every certificate on file has its date." onFiled={onFiled} onNotNeeded={onNotNeeded} onRenewal={() => void reload()} />
               </>
             )}
             {tab === "upcoming" && (
