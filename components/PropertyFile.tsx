@@ -82,9 +82,9 @@ const STATE: Record<Row["state"], { label: string; tone: "good" | "accent" | "ne
    required means there is no gas at the property, so say that. */
 const stateLabel = (r: Row) => (r.state === "not-required" && r.type === "gas_safety" ? "No gas at the property" : STATE[r.state].label);
 /* James, 7 Oct: a file full of "Not required" licences and fire safety rows is
-   noise, so they are hidden. Gas stays - "No gas at the property" is a fact
-   about the home - and so does any row with a document on it. */
-const worthShowing = (r: Row) => r.state !== "not-required" || r.type === "gas_safety" || r.files.length > 0;
+   noise, so they are hidden - "No gas at the property" too. A row with a
+   document on it still shows, so nothing filed goes out of sight. */
+const worthShowing = (r: Row) => r.state !== "not-required" || r.files.length > 0;
 
 const day = (iso: string | null) => {
   if (!iso) return "";
