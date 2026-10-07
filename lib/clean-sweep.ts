@@ -516,6 +516,12 @@ export interface SweepSummary {
   sections: { key: SectionKey; label: string; who: string; homes: number; missing: number; signedOff: number }[];
   /** What is missing, column by column (by the column's label), across the same homes. */
   byColumn: Record<string, number>;
+  /**
+   * Homes done, exactly as the Clean sweep screen's "X of Y done" counts them:
+   * everything held, or checked by hand before the button went (7 Oct 2026,
+   * so the Clean Sweep Check artifact can quote the figure Susan sees).
+   */
+  done: { homes: number; allHeld: number; checkedWithGaps: number };
 }
 
 /** Every let home on the sheets, and for each column how many still lack it. */
@@ -548,5 +554,10 @@ export async function sweepSummary(): Promise<SweepSummary> {
       signedOff: queues[i].filter((h) => h.doneAt || h.complete).length,
     })),
     byColumn,
+    done: {
+      homes: onSheet.filter((h) => h.checkedAt || h.missing === 0).length,
+      allHeld: onSheet.filter((h) => h.missing === 0).length,
+      checkedWithGaps: onSheet.filter((h) => h.checkedAt && h.missing > 0).length,
+    },
   };
 }
