@@ -472,7 +472,7 @@ export default function PlcWizard({
   };
 
   const documents = kase?.documents ?? [];
-  const filedFor = (id: CheckId) => documents.some((d) => d.checkId === id);
+  const filedFor = (id: CheckId) => documents.some((d) => d.checkId === id || d.covers?.includes(id));
   const stepNumber = useMemo(() => ORDER.indexOf(step), [step]);
 
   const panel = `mx-auto w-full max-w-2xl ${leaving ? "plc-panel-out" : "plc-panel-in"}`;
@@ -815,7 +815,7 @@ export default function PlcWizard({
                         {c.label}
                       </button>
                       <span className="ml-auto text-xs text-muted">
-                        {has ? (count === 1 ? "1 file" : `${count} files`) : waiver ? "not needed" : blocked ? "needed" : "nothing attached"}
+                        {has ? (count === 0 ? "in the reference report" : count === 1 ? "1 file" : `${count} files`) : waiver ? "not needed" : blocked ? "needed" : "nothing attached"}
                       </span>
                       {!has && !waiver && (
                         <button type="button" onClick={() => fill(c.id)} className="text-xs underline underline-offset-2 hover:text-ink">
@@ -847,7 +847,11 @@ export default function PlcWizard({
                                     ? "Why not needed? e.g. Booked for the 8th, will follow"
                                     : c.id === "alarms"
                                       ? "Why not needed? e.g. Tested at check-in, record to follow"
-                                      : "Why not needed? e.g. Council has no licensing scheme here"
+                                      : c.id === "emergency-lighting"
+                                        ? "Why not needed? e.g. No emergency lighting fitted at the property"
+                                        : c.id === "holding-deposit"
+                                          ? "Why not needed? e.g. No holding deposit was taken"
+                                          : "Why not needed? e.g. Council has no licensing scheme here"
                           }
                           className="min-w-0 flex-1 rounded-lg border border-line bg-white px-3 py-1.5 text-xs outline-none focus:border-ink"
                         />

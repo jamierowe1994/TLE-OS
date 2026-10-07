@@ -31,7 +31,12 @@
 /* ───────────────────────────── the checks ───────────────────────────────── */
 
 export type CheckId =
+  /* Was "Landlord ID & AML" until 7 Oct 2026 (Michael: "they are two separate
+     things"). The id is kept so packs filed before the split still read; it
+     is the ID now, and AML and proof of ownership have their own boxes. */
   | "landlord-id-aml"
+  | "landlord-aml"
+  | "proof-of-ownership"
   | "tenant-checks"
   | "guarantor-checks"
   | "gas-safety"
@@ -40,11 +45,14 @@ export type CheckId =
   | "licensing"
   | "tenancy-agreement"
   | "right-to-rent"
+  /* The signed holding deposit form (Michael, 7 Oct 2026). */
+  | "holding-deposit"
   /* The HMO set (6 Oct 2026, Rhiannon's room at 5b Newton Road): a room in a
      shared house cannot be checked without them, and there was nowhere to
      put a PAT test. Asked of every pack, required only of an HMO. */
   | "pat"
   | "fire-safety"
+  | "emergency-lighting"
   | "alarms"
   | "legionella"
   /* Whatever the reader could not place. Never required, never pushed. */
@@ -108,11 +116,27 @@ export type Gate = "required" | "conditional" | "after" | "manual" | "optional";
 export const PLC_CHECKS: Check[] = [
   {
     id: "landlord-id-aml",
-    label: "Landlord ID & AML",
-    needs: "Photo ID and proof of address for every named owner",
+    label: "Landlord ID",
+    needs: "Photo ID for every named owner - add one for each landlord",
+    scan: "reading",
+    why: "We have to know who we are acting for, and every owner on the title signs.",
+    gate: "required",
+  },
+  {
+    id: "landlord-aml",
+    label: "Landlord AML",
+    needs: "The AML check and proof of address for every named owner - add one for each landlord",
     scan: "reading",
     why: "Money laundering checks are on the agent, not the landlord, and the fine lands here.",
     gate: "required",
+  },
+  {
+    id: "proof-of-ownership",
+    label: "Proof of ownership",
+    needs: "Land Registry title, or the mortgage or deeds naming the owners",
+    scan: "reading",
+    why: "The people giving us the keys have to be the people who own the home.",
+    gate: "optional",
   },
   {
     id: "tenant-checks",
@@ -163,20 +187,28 @@ export const PLC_CHECKS: Check[] = [
     gate: "conditional",
   },
   {
-    id: "tenancy-agreement",
-    label: "Tenancy agreement",
-    needs: "The agreement as it will be signed",
-    scan: "reading",
-    why: "Names, dates, rent and deposit have to match the rest of the pack.",
-    gate: "after",
-  },
-  {
     id: "right-to-rent",
     label: "Right to Rent",
     needs: "Share code or original document check for each adult occupier",
     scan: "none",
     why: "A statutory check with a manual step. The model must not be asked to certify it.",
     gate: "manual",
+  },
+  {
+    id: "holding-deposit",
+    label: "Holding deposit form, signed",
+    needs: "The holding deposit form the tenant signed",
+    scan: "presence",
+    why: "A holding deposit taken without the signed terms has to be handed back.",
+    gate: "conditional",
+  },
+  {
+    id: "tenancy-agreement",
+    label: "Tenancy agreement",
+    needs: "The agreement as it will be signed",
+    scan: "reading",
+    why: "Names, dates, rent and deposit have to match the rest of the pack.",
+    gate: "after",
   },
   {
     id: "pat",
@@ -190,9 +222,18 @@ export const PLC_CHECKS: Check[] = [
   {
     id: "fire-safety",
     label: "Fire risk assessment",
-    needs: "Current fire risk assessment, plus emergency lighting and fire alarm certificates where fitted",
+    needs: "Current fire risk assessment, plus the fire alarm certificate where one is fitted",
     scan: "dates",
     why: "Every HMO needs one, and the council asks for it before anything else.",
+    gate: "optional",
+    hmoGate: "conditional",
+  },
+  {
+    id: "emergency-lighting",
+    label: "Emergency lighting",
+    needs: "Emergency lighting test certificate, usually yearly",
+    scan: "dates",
+    why: "Where a shared house has emergency lighting, it has to be tested and the test kept.",
     gate: "optional",
     hmoGate: "conditional",
   },
@@ -248,13 +289,13 @@ export const CHECK_GROUPS: { id: "landlord" | "tenant"; title: string; blurb: st
     id: "landlord",
     title: "Landlord Documents",
     blurb: "The landlord's ID and every certificate for the property.",
-    checks: ["landlord-id-aml", "gas-safety", "epc", "eicr", "licensing", "pat", "fire-safety", "alarms", "legionella"],
+    checks: ["landlord-id-aml", "landlord-aml", "proof-of-ownership", "gas-safety", "epc", "eicr", "licensing", "pat", "fire-safety", "emergency-lighting", "alarms", "legionella"],
   },
   {
     id: "tenant",
     title: "Tenant Documents",
     blurb: "Referencing, guarantors and Right to Rent for everyone moving in.",
-    checks: ["tenant-checks", "guarantor-checks", "right-to-rent", "tenancy-agreement"],
+    checks: ["tenant-checks", "guarantor-checks", "right-to-rent", "holding-deposit", "tenancy-agreement"],
   },
 ];
 
@@ -277,12 +318,19 @@ export const groupOf = (id: CheckId): "landlord" | "tenant" =>
 const FILENAME_HINTS: [RegExp, CheckId][] = [
   [/\bpat\b|portable.?appliance/i, "pat"],
   [/legionella/i, "legionella"],
-  [/fire.?risk|\bfra\b|emergency.?light|fire.?alarm|fire.?door/i, "fire-safety"],
+  [/emergency.?light/i, "emergency-lighting"],
+  [/fire.?risk|\bfra\b|fire.?alarm|fire.?door/i, "fire-safety"],
+  [/holding.?deposit/i, "holding-deposit"],
+  [/ownership|title.?(plan|register)|land.?reg|deeds/i, "proof-of-ownership"],
+  [/\baml\b|anti.?money|money.?laund|kyc|proof.?of.?address|utility|council.?tax/i, "landlord-aml"],
   [/smoke|carbon.?monoxide|\bco.?alarm|alarm/i, "alarms"],
   [/cp-?12|gas/i, "gas-safety"],
   [/eicr|electric|nice?ic|periodic.?inspect/i, "eicr"],
   [/epc|energy.?perf/i, "epc"],
   [/licen[cs]|hmo|selective/i, "licensing"],
+  /* A referencing report, before "landlord": "Legal for Landlords reference.pdf"
+     is the tenant's, not the landlord's ID. */
+  [/referenc|goodlord|homelet|let.?alliance/i, "tenant-checks"],
   /* The landlord's own passport is ID, not Right to Rent: checked before the
      passport pattern below catches it. */
   [/landlord|\bll\b|owner/i, "landlord-id-aml"],
@@ -290,7 +338,7 @@ const FILENAME_HINTS: [RegExp, CheckId][] = [
   [/right.?to.?rent|share.?code|passport|visa|brp/i, "right-to-rent"],
   [/ast|tenancy.?agree|agreement/i, "tenancy-agreement"],
   [/referenc|goodlord|rightmove|van.?mildert|credit/i, "tenant-checks"],
-  [/aml|anti.?money|proof.?of.?address|landlord.?id|\bid\b|driving|utility/i, "landlord-id-aml"],
+  [/landlord.?id|\bid\b|driving/i, "landlord-id-aml"],
 ];
 
 /** Null when nothing matched, which the wizard shows as "choose a check". */
@@ -417,6 +465,19 @@ export type PlcDocument = {
   placeholder?: boolean;
   /** What the reader made of the file when it was dropped. */
   read?: FileRead | null;
+  /** SHA-256 of the bytes, so the same file is never on a pack twice (7 Oct 2026). */
+  hash?: string;
+  /**
+   * Other checks this one document answers (Michael, 7 Oct 2026): a Legal for
+   * Landlords reference report carries the tenant's ID, Right to Rent and AML,
+   * so filed under Tenant checks it ticks Right to Rent too.
+   */
+  covers?: CheckId[];
+};
+
+/** Which checks a document filed under one check may also answer. */
+export const COVERABLE: Partial<Record<CheckId, CheckId[]>> = {
+  "tenant-checks": ["right-to-rent"],
 };
 
 /**
@@ -439,6 +500,8 @@ export type FileRead = {
   names: string[];
   confidence: "high" | "medium" | "low";
   note?: string;
+  /** Other checks the reader saw this document answer (a reference report's Right to Rent). */
+  alsoCovers?: CheckId[];
   at: string;
 };
 
@@ -559,7 +622,7 @@ export type PlcCase = {
  * elsewhere, and blocking on it would stop every genuine submission.
  */
 export function missingDocuments(c: Pick<PlcCase, "documents" | "waivers" | "letType">): Check[] {
-  const have = new Set(c.documents.map((d) => d.checkId));
+  const have = new Set(c.documents.flatMap((d) => [d.checkId, ...(d.covers ?? [])]));
   const waived = new Set((c.waivers ?? []).map((w) => w.checkId));
   return PLC_CHECKS.filter((k) => {
     const g = gateOf(k, c.letType);

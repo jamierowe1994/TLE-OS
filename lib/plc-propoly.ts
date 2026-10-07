@@ -52,6 +52,11 @@ const COMPLIANCE_TYPES = new Set([
 export function propolyTypeFor(checkId: CheckId, name: string): string | null {
   const n = name.toLowerCase();
   switch (checkId) {
+    case "landlord-aml":
+      if (/address|utility|council.?tax|bank|statement|bill/.test(n)) return "DealLlProofOfAddressAttachment";
+      return "DealLandlordAmlCheckAttachment";
+    case "proof-of-ownership":
+      return "DealLlProofOfOwnershipAttachment";
     case "landlord-id-aml":
       if (/aml|money.?laund|kyc/.test(n)) return "DealLandlordAmlCheckAttachment";
       if (/address|utility|council.?tax|bank|statement|bill/.test(n)) return "DealLlProofOfAddressAttachment";

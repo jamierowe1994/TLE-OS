@@ -28,10 +28,13 @@ not printed, unless the document type has a standard life and you say you derive
 Dates as YYYY-MM-DD.
 
 Slots:
-- landlord-id-aml: the landlord's photo ID (passport, driving licence), proof of address
-  (utility bill, bank or council tax statement), proof of ownership (Land Registry title), AML check
+- landlord-id-aml: the LANDLORD's photo ID (passport, driving licence)
+- landlord-aml: the landlord's AML or KYC check, or their proof of address (utility bill, bank or
+  council tax statement)
+- proof-of-ownership: Land Registry title register or plan, deeds, or a mortgage statement naming the owner
 - tenant-checks: a tenant referencing report or outcome (Goodlord, Homelet, Let Alliance, Propoly
   referencing, Legal for Landlords, credit check)
+- holding-deposit: a holding deposit form or agreement signed by the tenant
 - guarantor-checks: a guarantor's referencing report, or a signed deed of guarantee
 - right-to-rent: a TENANT's passport, visa, BRP, share code result, or Right to Rent check
 - gas-safety: Gas Safety Record / CP12 (12 months)
@@ -39,14 +42,20 @@ Slots:
 - eicr: Electrical Installation Condition Report or Electrical Installation Certificate (usually 5 years)
 - licensing: HMO, additional or selective licence, or the council saying none is needed
 - pat: Portable Appliance Test report (usually 12 months)
-- fire-safety: fire risk assessment, emergency lighting or fire alarm certificate (usually 12 months)
+- fire-safety: fire risk assessment or fire alarm certificate (usually 12 months)
+- emergency-lighting: emergency lighting test certificate (usually 12 months)
 - alarms: smoke or carbon monoxide alarm test record or certificate
 - legionella: legionella risk assessment (usually 2 years)
 - tenancy-agreement: a tenancy agreement (AST, room let agreement, occupation contract)
 - other: anything else (inventory, floor plan, photos, invoices)
 
 A passport or driving licence is the landlord's ID if the name matches the landlord; if the
-name matches a tenant, or you cannot tell and it looks like a tenant's, it is right-to-rent.`;
+name matches a tenant, or you cannot tell and it looks like a tenant's, it is right-to-rent.
+
+A referencing report (Legal for Landlords, Goodlord and the like) often includes the tenant's
+identity check and a Right to Rent result. File it under tenant-checks, and set
+right_to_rent_confirmed only if the report itself states the Right to Rent check was passed or
+approved.`;
 
 const SLOTS = PLC_CHECKS.map((c) => c.id);
 
@@ -67,6 +76,10 @@ const TOOL: Anthropic.Tool = {
       names: { type: "array", items: { type: "string" }, description: "People named on it, as printed" },
       confidence: { type: "string", enum: ["high", "medium", "low"] },
       note: { type: "string", description: "One short sentence, only if something needs saying (expired, unsigned, wrong address)" },
+      right_to_rent_confirmed: {
+        type: "boolean",
+        description: "A referencing report that states the tenant's Right to Rent check passed or was approved",
+      },
     },
     required: ["slot", "what", "confidence"],
   },
@@ -147,6 +160,7 @@ export async function readDroppedFile(
       names: Array.isArray(i.names) ? i.names.map((n) => String(n).slice(0, 80)).slice(0, 8) : [],
       confidence,
       ...(i.note ? { note: String(i.note).slice(0, 240) } : {}),
+      ...(slot === "tenant-checks" && i.right_to_rent_confirmed === true ? { alsoCovers: ["right-to-rent" as CheckId] } : {}),
       at,
     };
   } catch (e) {

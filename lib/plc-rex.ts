@@ -96,6 +96,8 @@ export function rexTypeFor(checkId: CheckId, name: string): string | null {
       return "legionella_risk_assessment";
     case "alarms":
       return /carbon|\bco\b/.test(n) ? "co_alarms" : "smoke_alarms";
+    case "emergency-lighting":
+      return "emergency_lighting_fire_exit";
     default:
       /* ID, references, right to rent, agreements: not certificates. */
       return null;

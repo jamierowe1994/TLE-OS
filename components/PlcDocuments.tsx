@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import {
   CHECK_GROUPS,
+  COVERABLE,
   gateOf,
   groupOf,
   guessCheck,
@@ -53,6 +54,16 @@ type Row = {
 };
 
 const PARALLEL = 3;
+
+/** SHA-256 of a file, hex. Null where the browser will not do it (an insecure origin). */
+async function hashOf(file: File): Promise<string | null> {
+  try {
+    const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+    return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+  } catch {
+    return null;
+  }
+}
 
 /** What can go on a pack: a PDF or a photograph. Everything else is skipped, said so. */
 const OK_TYPE = /^(application\/pdf|image\/(jpeg|png|webp|heic))$/;
@@ -167,6 +178,9 @@ export default function PlcDocuments({
   const latest = useRef(kase);
   latest.current = kase;
   const counter = useRef(0);
+  /* Contents already claimed by a file in this drop, so the same PDF twice in
+     one folder is caught before either has been filed. */
+  const claimed = useRef(new Map<string, string>());
 
   const update = (id: string, patch: Partial<Row>) =>
     setRows((all) => all.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -233,6 +247,26 @@ export default function PlcDocuments({
       let placeholder = false;
       let read: FileRead | null = null;
 
+      /* Never the same file twice (Michael, 7 Oct 2026). Same contents as a
+         file already on the pack, or in this drop: skipped, and it says where
+         the first one is. A pack filed before contents were recorded is
+         matched on the file name instead. */
+      const hash = demo ? null : await hashOf(row.file);
+      const docs = latest.current.documents;
+      const twin = (hash && docs.find((d) => d.hash === hash)) || docs.find((d) => !d.hash && d.name === row.file.name);
+      if (twin) {
+        update(row.id, { state: "skipped", error: `Already on the pack as "${twin.name}" under ${checkById(twin.checkId)?.label ?? "Anything else"}.` });
+        return;
+      }
+      if (hash) {
+        const first = claimed.current.get(hash);
+        if (first && first !== row.id) {
+          update(row.id, { state: "skipped", error: "The same file is in this drop twice, so it was added once." });
+          return;
+        }
+        claimed.current.set(hash, row.id);
+      }
+
       if (demo) {
         placeholder = true;
         key = `documents/sample/${name.replace(/[^\w.\- ]+/g, "")}`;
@@ -290,14 +324,15 @@ export default function PlcDocuments({
         }
         const res = await api<{ case: PlcCase }>(`/api/plc/${c.id}/documents`, {
           method: "POST",
-          body: JSON.stringify({ checkId, name, key, placeholder, read }),
+          body: JSON.stringify({ checkId, name, key, placeholder, read, hash }),
         });
         latest.current = res.case;
         onChanged(res.case);
       }));
       update(row.id, { state: "done", filedAs: checkId });
     } catch (e) {
-      update(row.id, { state: "failed", error: (e as Error).message });
+      const message = (e as Error).message;
+      update(row.id, { state: /^Already on the pack/.test(message) ? "skipped" : "failed", error: message });
     }
   };
 
@@ -365,6 +400,28 @@ export default function PlcDocuments({
     }
   };
 
+  /* A reference report that carries the Right to Rent check too: ticked here,
+     and the Right to Rent line reads as covered. */
+  const setCovers = async (d: PlcDocument, covers: CheckId[]) => {
+    setErr(null);
+    if (demo) {
+      onChanged({ ...kase, documents: kase.documents.map((x) => (x.key === d.key ? { ...x, covers } : x)) });
+      return;
+    }
+    setBusyKey(d.key);
+    try {
+      const res = await api<{ case: PlcCase }>(`/api/plc/${kase.id}/documents`, {
+        method: "PATCH",
+        body: JSON.stringify({ key: d.key, covers }),
+      });
+      onChanged(res.case);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
   const addTo = (id: CheckId) => {
     forceNext.current = id;
     addInput.current?.click();
@@ -406,6 +463,25 @@ export default function PlcDocuments({
             <span className="block text-xs text-amber-700">Recorded by name only</span>
           ) : null}
         </div>
+        {(COVERABLE[d.checkId] ?? []).length > 0 && (
+          <div className="order-last flex w-full flex-wrap gap-x-4 gap-y-1 pl-[3.25rem]">
+            {(COVERABLE[d.checkId] ?? []).map((other) => {
+              const on = Boolean(d.covers?.includes(other));
+              return (
+                <label key={other} className="flex items-center gap-1.5 text-xs text-muted">
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    disabled={busyKey === d.key}
+                    onChange={() => void setCovers(d, on ? (d.covers ?? []).filter((x) => x !== other) : [...(d.covers ?? []), other])}
+                    className="h-3.5 w-3.5 accent-[#56634a]"
+                  />
+                  This report covers {checkById(other)?.label ?? other} too
+                </label>
+              );
+            })}
+          </div>
+        )}
         <div className="flex w-full items-center gap-2 sm:w-auto">
           <select
             value={d.checkId}
@@ -570,6 +646,8 @@ export default function PlcDocuments({
       <ul className="mt-6 space-y-3">
         {checks.map((c) => {
           const filed = kase.documents.filter((d) => d.checkId === c.id);
+          const coveredBy = kase.documents.filter((d) => d.checkId !== c.id && d.covers?.includes(c.id));
+          const has = filed.length > 0 || coveredBy.length > 0;
           const b = badge(c.id);
           return (
             <li
@@ -579,11 +657,15 @@ export default function PlcDocuments({
             >
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
                 <span
-                  className={`mt-1 h-2 w-2 shrink-0 self-center rounded-full ${filed.length ? "bg-emerald-500" : "bg-neutral-300"}`}
+                  className={`mt-1 h-2 w-2 shrink-0 self-center rounded-full ${has ? "bg-emerald-500" : "bg-neutral-300"}`}
                 />
-                <span className={`text-sm ${filed.length ? "text-ink" : ""}`}>{c.label}</span>
-                <span className={`text-xs ${filed.length ? "text-emerald-700" : b.tone}`}>
-                  {filed.length ? (filed.length === 1 ? "1 file" : `${filed.length} files`) : b.text}
+                <span className={`text-sm ${has ? "text-ink" : ""}`}>{c.label}</span>
+                <span className={`text-xs ${has ? "text-emerald-700" : b.tone}`}>
+                  {filed.length
+                    ? filed.length === 1 ? "1 file" : `${filed.length} files`
+                    : coveredBy.length
+                      ? `Covered by the ${checkById(coveredBy[0].checkId)?.label.toLowerCase() ?? "report"}`
+                      : b.text}
                 </span>
                 <button
                   type="button"
@@ -595,6 +677,10 @@ export default function PlcDocuments({
               </div>
               {filed.length ? (
                 <ul className="mt-2 space-y-1.5">{filed.map(docRow)}</ul>
+              ) : coveredBy.length ? (
+                <p className="mt-0.5 pl-5 text-xs text-muted">
+                  In {coveredBy.map((d) => `"${d.name}"`).join(", ")}. Add its own document too if you have one.
+                </p>
               ) : (
                 <p className="mt-0.5 pl-5 text-xs text-muted">{c.needs}</p>
               )}

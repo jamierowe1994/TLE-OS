@@ -253,6 +253,25 @@ function outcomeRules(f: DocFacts, label: string): RuleResult["reasons"] {
  * Every entry answers one question: given what we read, what should happen?
  * Nothing here consults the model, and nothing here reads the network.
  */
+/** The landlord's ID, AML and ownership papers: names read, never verified. */
+function landlordNames(f: DocFacts): RuleResult["reasons"] {
+  const out: RuleResult["reasons"] = [];
+  if (!f.peopleNamed.length) {
+    out.push({
+      verdict: "review",
+      rule: "Nobody named",
+      because: "no person could be read off it, so it cannot be matched to an owner.",
+    });
+  } else {
+    out.push({
+      verdict: "review",
+      rule: "Names read, not verified",
+      because: `it names ${f.peopleNamed.join(", ")}, and whether they are the owners is not something I can know.`,
+    });
+  }
+  return out;
+}
+
 const CHECK_RULES: Partial<Record<CheckId, (f: DocFacts, moveIn: string | null) => RuleResult["reasons"]>> = {
   "gas-safety": (f, moveIn) => [
     ...dateRules(f, moveIn),
@@ -298,23 +317,9 @@ const CHECK_RULES: Partial<Record<CheckId, (f: DocFacts, moveIn: string | null) 
        result stated". */
   ],
 
-  "landlord-id-aml": (f) => {
-    const out: RuleResult["reasons"] = [];
-    if (!f.peopleNamed.length) {
-      out.push({
-        verdict: "review",
-        rule: "Nobody named",
-        because: "no person could be read off it, so it cannot be matched to an owner.",
-      });
-    } else {
-      out.push({
-        verdict: "review",
-        rule: "Names read, not verified",
-        because: `it names ${f.peopleNamed.join(", ")}, and whether they are the owners is not something I can know.`,
-      });
-    }
-    return out;
-  },
+  "landlord-aml": (f) => landlordNames(f),
+  "proof-of-ownership": (f) => landlordNames(f),
+  "landlord-id-aml": (f) => landlordNames(f),
 
   "tenant-checks": (f) => [
     ...outcomeRules(f, "reference"),

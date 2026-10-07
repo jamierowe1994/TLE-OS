@@ -259,7 +259,7 @@ function AgentSide({
 
         <ul>
           {data.checks.map((check) => {
-            const filed = c.documents.filter((d) => d.checkId === check.id);
+            const filed = c.documents.filter((d) => d.checkId === check.id || d.covers?.includes(check.id));
             const short = data.missing.includes(check.id);
             return (
               <li

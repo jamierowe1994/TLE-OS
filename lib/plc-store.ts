@@ -15,6 +15,7 @@ import {
   type CheckId,
   type FileRead,
   type LetType,
+  COVERABLE,
   type Finding,
   type PlcCase,
   type PlcDocument,
@@ -366,6 +367,8 @@ export async function attachDocument(
     addedBy: string;
     placeholder?: boolean;
     read?: FileRead | null;
+    hash?: string;
+    covers?: CheckId[];
   }
 ): Promise<PlcCase> {
   return mutate(id, (c) => {
@@ -383,9 +386,17 @@ export async function attachDocument(
       addedBy: doc.addedBy,
       ...(doc.placeholder ? { placeholder: true as const } : {}),
       ...(doc.read ? { read: doc.read } : {}),
+      ...(doc.hash ? { hash: doc.hash } : {}),
+      ...(doc.covers?.length ? { covers: doc.covers } : {}),
     };
-    /* The same file dropped twice (a folder dropped again) is filed once. */
-    if (c.documents.some((d) => d.key === next.key)) return c;
+    /* The same file dropped twice (a folder dropped again) is filed once -
+       by its key, and by its contents (7 Oct 2026: the same PDF under two
+       names, or uploaded twice, was filed twice). */
+    if (c.documents.some((d) => d.key === next.key || (next.hash && d.hash === next.hash))) {
+      const twin = c.documents.find((d) => next.hash && d.hash === next.hash);
+      if (twin) throw new PlcRefused(`Already on the pack as "${twin.name}" under ${checkById(twin.checkId)?.label ?? twin.checkId}.`);
+      return c;
+    }
     return { ...c, documents: [...c.documents, next] };
   });
 }
@@ -402,6 +413,20 @@ export async function moveDocument(id: string, key: string, checkId: CheckId): P
     }
     if (!c.documents.some((d) => d.key === key)) throw new PlcRefused("That file isn't on this pack.");
     return { ...c, documents: c.documents.map((d) => (d.key === key ? { ...d, checkId } : d)) };
+  });
+}
+
+/** What else a document answers (a reference report's Right to Rent), set by the agent. */
+export async function setCovers(id: string, key: string, covers: CheckId[]): Promise<PlcCase> {
+  return mutate(id, (c) => {
+    if (c.state !== "assembling") {
+      throw new PlcRefused("This pack is with compliance. Ask them to send it back to change it.");
+    }
+    const doc = c.documents.find((d) => d.key === key);
+    if (!doc) throw new PlcRefused("That file isn't on this pack.");
+    const allowed = COVERABLE[doc.checkId] ?? [];
+    const next = covers.filter((x) => allowed.includes(x));
+    return { ...c, documents: c.documents.map((d) => (d.key === key ? { ...d, covers: next } : d)) };
   });
 }
 

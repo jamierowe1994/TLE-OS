@@ -481,7 +481,7 @@ export async function scanCase(c: PlcCase): Promise<ScanOutcome> {
 
   for (const check of PLC_CHECKS) {
     if (check.scan === "none") continue;
-    const filed = c.documents.filter((d) => d.checkId === check.id);
+    const filed = c.documents.filter((d) => d.checkId === check.id || d.covers?.includes(check.id));
     if (filed.length) continue;
     /* Not filed, and the gate says that is fine: the agreement is generated
        after the check, and a conditional check the agent has waived carries

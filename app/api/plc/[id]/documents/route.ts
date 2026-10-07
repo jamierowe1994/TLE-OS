@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { attachDocument, moveDocument, PlcRefused, removeDocument } from "@/lib/plc-store";
-import { checkById, missingDocuments, PLC_CHECKS, type CheckId, type FileRead } from "@/lib/plc";
+import { attachDocument, moveDocument, PlcRefused, removeDocument, setCovers } from "@/lib/plc-store";
+import { checkById, COVERABLE, missingDocuments, PLC_CHECKS, type CheckId, type FileRead } from "@/lib/plc";
 import { keyIsOurs, r2Configured } from "@/lib/r2";
 import { actorName } from "@/lib/plc-actor";
 
@@ -26,7 +26,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
-  let body: { checkId?: string; name?: string; key?: string; placeholder?: boolean; read?: FileRead | null };
+  let body: { checkId?: string; name?: string; key?: string; placeholder?: boolean; read?: FileRead | null; hash?: string };
   try {
     body = await req.json();
   } catch {
@@ -78,6 +78,10 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       addedBy: await actorName(req, "Agent"),
       placeholder,
       read: cleanRead(body.read),
+      hash: typeof body.hash === "string" && /^[0-9a-f]{64}$/.test(body.hash) ? body.hash : undefined,
+      /* The reader saw a reference report pass Right to Rent: ticked, and the
+         agent can untick it on the file. */
+      covers: (cleanRead(body.read)?.alsoCovers ?? []).filter((x) => COVERABLE[checkId]?.includes(x)),
     });
     return NextResponse.json({
       ok: true,
@@ -91,11 +95,21 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
-  let body: { key?: string; checkId?: string };
+  let body: { key?: string; checkId?: string; covers?: string[] };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ ok: false, error: "Expected JSON." }, { status: 400 });
+  }
+  /* What else this file answers ({ key, covers }): the tick on a reference
+     report that it carries the Right to Rent check too. */
+  if (body.key && Array.isArray(body.covers)) {
+    try {
+      const updated = await setCovers(id, body.key, body.covers.filter((x): x is CheckId => Boolean(checkById(x as CheckId))));
+      return NextResponse.json({ ok: true, case: updated, missing: missingDocuments(updated).map((m) => m.id) });
+    } catch (e) {
+      return fail(e);
+    }
   }
   const checkId = body.checkId as CheckId | undefined;
   if (!body.key || !checkId || !checkById(checkId)) {
@@ -123,6 +137,7 @@ function cleanRead(r: FileRead | null | undefined): FileRead | null {
     names: Array.isArray(r.names) ? r.names.map((n) => String(n).slice(0, 80)).slice(0, 8) : [],
     confidence: r.confidence === "high" || r.confidence === "medium" ? r.confidence : "low",
     ...(r.note ? { note: String(r.note).slice(0, 240) } : {}),
+    ...(Array.isArray(r.alsoCovers) ? { alsoCovers: r.alsoCovers.filter((x) => checkById(x as CheckId)) as CheckId[] } : {}),
     at: typeof r.at === "string" ? r.at.slice(0, 40) : new Date().toISOString(),
   };
 }

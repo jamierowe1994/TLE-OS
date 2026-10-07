@@ -333,7 +333,8 @@ export function ComplianceSide({
         </div>
         <ul>
           {data.checks.map((check) => {
-            const filed = c.documents.filter((d) => d.checkId === check.id);
+            /* A reference report that covers Right to Rent is listed under both. */
+            const filed = c.documents.filter((d) => d.checkId === check.id || d.covers?.includes(check.id));
             const waived = (c.waivers ?? []).find((w) => w.checkId === check.id);
             /* Optional on this let and nothing filed: an empty line about a
                PAT test on an ordinary flat is noise (6 Oct 2026). */
