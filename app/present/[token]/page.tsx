@@ -143,9 +143,10 @@ export default async function PresentPage({
 
   /* The builder's own ticks are for the builder; the landlord's page has no use for them. */
   deck = { ...deck, builder: null, terms: deck.terms ? { ...deck.terms, signUrl: null } : deck.terms };
-  /* The pre-appraisal goes out as the brochure (James, 7 Oct 2026); the two
-     long decks are still the slide deck. */
-  if (deckKind(deck) === "pre-appraisal") return <PreAppraisalBrochure token={row.token} deck={deck} />;
+  /* The pre-appraisal goes out as the brochure (James, 7 Oct 2026), except a
+     deck pinned to the look it was already sent as - see PresentDeck.look.
+     The two long decks are still the slide deck. */
+  if (deckKind(deck) === "pre-appraisal" && deck.look !== "house") return <PreAppraisalBrochure token={row.token} deck={deck} />;
   return <PresentDeck token={row.token} deck={deck} slides={slidesFor(deck)} />;
 }
 

@@ -229,6 +229,34 @@ function Stars({ n, color = CLAY }: { n: number; color?: string }) {
   );
 }
 
+/**
+ * Holds its children to one screen on a phone. The welcome is meant to be a
+ * one-pager there (James, 7 Oct 2026) - heading, line, ticket, Next - and
+ * phones differ by 200px of height once Safari's bars are counted, so rather
+ * than guess a size it measures how far the slide runs past the screen and
+ * zooms this block down by exactly that, never below 72%. `zoom` rather than
+ * a transform so the text is laid out again crisp, as the stage does.
+ */
+function FitScreen({ children }: { children: React.ReactNode }) {
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = box.current;
+    const cell = el?.closest<HTMLElement>("[data-index]");
+    if (!el || !cell) return;
+    const fit = () => {
+      el.style.zoom = "1";
+      const over = cell.scrollHeight - cell.clientHeight;
+      const h = el.offsetHeight;
+      el.style.zoom = over > 0 && h > 0 ? String(Math.max(0.72, (h - over) / h)) : "1";
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(cell);
+    return () => ro.disconnect();
+  }, []);
+  return <div ref={box}>{children}</div>;
+}
+
 /** The date pieces the badge and the sign-off need, in UK time. */
 function datePieces(startsAt: string | null | undefined, whenPretty?: string | null) {
   if (!startsAt) return null;
@@ -278,9 +306,9 @@ function Slide({ c, ground = "#FFFFFF", stage, phone }: { c: Ctx; ground?: strin
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/brand/tle-logo-coral.png" alt="The Letting Experts" style={{ height: 34 }} />
             </div>
-            <div className="px-5 pb-6 pt-8">{phone}</div>
+            <div className="px-5 pb-5 pt-6">{phone}</div>
             {c.i < c.total - 1 && (
-              <div className="flex justify-end px-5 pb-10">
+              <div className="flex justify-end px-5 pb-8">
                 <button type="button" onClick={() => c.go(c.i + 1)} className="bro-btn" style={{ ...pill(true), background: DARK, paddingRight: 8 }}>
                   Next <span style={{ fontWeight: 400, opacity: 0.7 }}>{c.titles[c.i + 1]}</span>
                   <span style={{ display: "grid", placeItems: "center", width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.14)" }}><Arrow /></span>
@@ -350,21 +378,24 @@ function Ticket({ c, width }: { c: Ctx; width: number }) {
   /* A phone's ticket is narrower, so the date and the stamp both come down
      a size rather than meeting in the middle. */
   const tight = width < 400;
-  const stamp = tight ? 74 : 92;
+  const stamp = tight ? 70 : 92;
+  /* ...and on a phone everything in it tightens, so the welcome is one
+     screen: heading, line, ticket, Next (James, 7 Oct 2026). */
+  const disc = tight ? 38 : 44;
   return (
-    <div style={{ position: "relative", width, maxWidth: "100%", padding: "20px 0" }}>
+    <div style={{ position: "relative", width, maxWidth: "100%", padding: tight ? "8px 0" : "20px 0" }}>
       <div className={show ? "bro-ticket" : "bro-off"} style={{ position: "relative", borderRadius: 28, background: DARK, color: "#FFFFFF" }}>
-        <div style={{ padding: "30px 30px 26px", position: "relative" }}>
+        <div style={{ padding: tight ? "22px 22px 16px" : "30px 30px 26px", position: "relative" }}>
           <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: ".24em", textTransform: "uppercase", color: ON_BROWN }}>Your valuation</div>
           {when ? (
             <>
-              <div style={{ marginTop: 18, fontFamily: DISPLAY, fontWeight: 700, fontSize: tight ? 42 : 56, lineHeight: 0.95, letterSpacing: "-0.045em" }}>{when.day.slice(0, 3)} {when.short}</div>
-              <div style={{ marginTop: 8, fontSize: 20, fontWeight: 500, color: "#D8D2CE" }}>{when.time}</div>
+              <div style={{ marginTop: tight ? 12 : 18, fontFamily: DISPLAY, fontWeight: 700, fontSize: tight ? 40 : 56, lineHeight: 0.95, letterSpacing: "-0.045em" }}>{when.day.slice(0, 3)} {when.short}</div>
+              <div style={{ marginTop: tight ? 4 : 8, fontSize: tight ? 17 : 20, fontWeight: 500, color: "#D8D2CE" }}>{when.time}</div>
             </>
           ) : (
             <div style={{ marginTop: 18, maxWidth: 230, fontSize: 19, fontWeight: 500, lineHeight: 1.35, color: "#D8D2CE" }}>{a.firstName || "Your agent"} will confirm a time with you directly</div>
           )}
-          <div className={show ? "bro-stamp" : "bro-off"} style={{ position: "absolute", top: tight ? 18 : 22, right: tight ? 18 : 22, width: stamp, height: stamp, borderRadius: "50%", border: `2px solid ${ON_BROWN}`, display: "grid", placeItems: "center", textAlign: "center", color: ON_BROWN }}>
+          <div className={show ? "bro-stamp" : "bro-off"} style={{ position: "absolute", top: tight ? 16 : 22, right: tight ? 16 : 22, width: stamp, height: stamp, borderRadius: "50%", border: `2px solid ${ON_BROWN}`, display: "grid", placeItems: "center", textAlign: "center", color: ON_BROWN }}>
             <div style={{ position: "absolute", inset: 5, borderRadius: "50%", border: "1px dashed #B98F87" }} />
             <div style={{ lineHeight: 1 }}>
               <div style={{ fontFamily: DISPLAY, fontWeight: 800, fontSize: tight ? 24 : 30, letterSpacing: "-0.04em" }}>{deck.minutes}</div>
@@ -373,26 +404,26 @@ function Ticket({ c, width }: { c: Ctx; width: number }) {
           </div>
         </div>
         {/* the perforation */}
-        <div style={{ position: "relative", height: 28 }} aria-hidden>
-          <span style={{ position: "absolute", left: -14, top: 0, width: 28, height: 28, borderRadius: "50%", background: c.ground }} />
-          <span style={{ position: "absolute", right: -14, top: 0, width: 28, height: 28, borderRadius: "50%", background: c.ground }} />
-          <span style={{ position: "absolute", left: 26, right: 26, top: 13, borderTop: "2px dashed #6E5751" }} />
+        <div style={{ position: "relative", height: tight ? 22 : 28 }} aria-hidden>
+          <span style={{ position: "absolute", left: tight ? -11 : -14, top: 0, width: tight ? 22 : 28, height: tight ? 22 : 28, borderRadius: "50%", background: c.ground }} />
+          <span style={{ position: "absolute", right: tight ? -11 : -14, top: 0, width: tight ? 22 : 28, height: tight ? 22 : 28, borderRadius: "50%", background: c.ground }} />
+          <span style={{ position: "absolute", left: 26, right: 26, top: tight ? 10 : 13, borderTop: "2px dashed #6E5751" }} />
         </div>
-        <div style={{ padding: "18px 30px 30px", display: "flex", flexDirection: "column", gap: 18 }}>
+        <div style={{ padding: tight ? "12px 22px 20px" : "18px 30px 30px", display: "flex", flexDirection: "column", gap: tight ? 12 : 18 }}>
           {where && (
             <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-              <span style={{ flex: "none", width: 44, height: 44, borderRadius: "50%", background: "#5C4741", display: "grid", placeItems: "center", color: ON_BROWN }}><Line name="pin" size={20} /></span>
-              <div><div style={label}>Where</div><div style={{ marginTop: 3, fontSize: 16, fontWeight: 600, lineHeight: 1.3 }}>{where.value}</div></div>
+              <span style={{ flex: "none", width: disc, height: disc, borderRadius: "50%", background: "#5C4741", display: "grid", placeItems: "center", color: ON_BROWN }}><Line name="pin" size={tight ? 18 : 20} /></span>
+              <div><div style={label}>Where</div><div style={{ marginTop: 3, fontSize: tight ? 15 : 16, fontWeight: 600, lineHeight: 1.3 }}>{where.value}</div></div>
             </div>
           )}
           {a.name && (
             <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-              <Avatar deck={deck} size={44} dark />
-              <div><div style={label}>Who</div><div style={{ marginTop: 3, fontSize: 16, fontWeight: 600 }}>{a.name}{a.title ? ` · ${a.title}` : ""}</div></div>
+              <Avatar deck={deck} size={disc} dark />
+              <div><div style={label}>Who</div><div style={{ marginTop: 3, fontSize: tight ? 15 : 16, fontWeight: 600 }}>{a.name}{a.title ? ` · ${a.title}` : ""}</div></div>
             </div>
           )}
           {ics && (
-            <a href={`data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`} download="market-appraisal.ics" className="bro-grow" style={{ marginTop: 6, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, minHeight: 54, borderRadius: 16, background: ON_BROWN, color: DARK, textDecoration: "none", fontWeight: 700, fontSize: 16 }}>
+            <a href={`data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`} download="market-appraisal.ics" className="bro-grow" style={{ marginTop: tight ? 2 : 6, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, minHeight: tight ? 48 : 54, borderRadius: 16, background: ON_BROWN, color: DARK, textDecoration: "none", fontWeight: 700, fontSize: 16 }}>
               <Line name="calendar" size={19} />
               Add it to my calendar
             </a>
@@ -421,10 +452,14 @@ function Welcome({ c }: { c: Ctx }) {
   );
   const intro = (fx: boolean) => (
     <>
-      <p className={enter(show)} style={{ ...at(0), margin: "0 0 22px", fontSize: 13, fontWeight: 600, letterSpacing: ".22em", textTransform: "uppercase", color: BODY }}>
-        Welcome{landlord ? `, ${landlord}` : ""}
-      </p>
-      <h1 style={{ margin: 0, fontFamily: DISPLAY, fontWeight: 700, fontSize: fx ? 108 : 52, lineHeight: 0.94, letterSpacing: "-0.05em", color: INK }}>
+      {/* On a phone the welcome is one screen - heading, line, ticket, Next
+          (James, 7 Oct 2026) - so the eyebrow, the button and the strip go. */}
+      {fx && (
+        <p className={enter(show)} style={{ ...at(0), margin: "0 0 22px", fontSize: 13, fontWeight: 600, letterSpacing: ".22em", textTransform: "uppercase", color: BODY }}>
+          Welcome{landlord ? `, ${landlord}` : ""}
+        </p>
+      )}
+      <h1 style={{ margin: 0, fontFamily: DISPLAY, fontWeight: 700, fontSize: fx ? 108 : 43, lineHeight: 0.94, letterSpacing: "-0.05em", color: INK }}>
         <span className="bro-ln">{w("Let’s", 0.1)} {w("get", 0.18)} {w("your", 0.26)}</span>
         <span className="bro-ln">
           {w("property", 0.34)}{" "}
@@ -436,16 +471,18 @@ function Welcome({ c }: { c: Ctx }) {
         </span>
         <span className="bro-ln">{w("to", 0.5)} {w("let.", 0.58)}</span>
       </h1>
-      <p className={enter(show)} style={{ ...at(0.8), ...lead, marginTop: 30, maxWidth: 520, fontSize: fx ? 19 : 17 }}>
+      <p className={enter(show)} style={{ ...at(0.8), ...lead, marginTop: fx ? 30 : 12, maxWidth: 520, fontSize: fx ? 19 : 15.5, lineHeight: fx ? 1.6 : 1.5 }}>
         A short guide to your valuation. What happens on the day, who you&rsquo;ll meet, and what you can expect from us.
       </p>
-      <div className={enter(show)} style={{ ...at(1), marginTop: 34, display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-        <button type="button" onClick={() => c.go(1)} className="bro-btn" style={{ ...pill(true), background: DARK, minHeight: 54, padding: "0 26px", fontSize: 16 }}>
-          Show me what happens
-          <span className="bro-nudge" style={{ display: "flex" }}><Arrow /></span>
-        </button>
-        <span style={{ fontSize: 14, color: BODY }}>2-minute read</span>
-      </div>
+      {fx && (
+        <div className={enter(show)} style={{ ...at(1), marginTop: 34, display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+          <button type="button" onClick={() => c.go(1)} className="bro-btn" style={{ ...pill(true), background: DARK, minHeight: 54, padding: "0 26px", fontSize: 16 }}>
+            Show me what happens
+            <span className="bro-nudge" style={{ display: "flex" }}><Arrow /></span>
+          </button>
+          <span style={{ fontSize: 14, color: BODY }}>2-minute read</span>
+        </div>
+      )}
     </>
   );
   /* The three key facts, under the hero, between two hairlines. */
@@ -471,9 +508,10 @@ function Welcome({ c }: { c: Ctx }) {
       }
       phone={
         <>
-          {intro(false)}
-          <div className="mt-10 flex justify-center"><Ticket c={c} width={360} /></div>
-          <div className="mt-8">{strip(false)}</div>
+          <FitScreen>
+            {intro(false)}
+            <div className="mt-3 flex justify-center"><Ticket c={c} width={350} /></div>
+          </FitScreen>
         </>
       }
     />
@@ -877,7 +915,7 @@ function Close({ c }: { c: Ctx }) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className={show ? "bro-zoom" : ""} src="/brand/photo/welcome.jpg" alt="Someone at a coral front door, about to knock" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "50% 38%", display: "block" }} />
       </div>
-      <Note show={show} delay={1} size={34} color={SAGE_DEEP} line={240} style={{ position: "absolute", right: "-4%", bottom: "-12%", transform: "rotate(-5deg)" }}>
+      <Note show={show} delay={1} size={34} color={SAGE_DEEP} line={240} style={{ position: "absolute", right: "-4%", bottom: W < 400 ? "-26%" : "-12%", transform: "rotate(-5deg)" }}>
         bring your questions.
       </Note>
     </div>
@@ -894,7 +932,7 @@ function Close({ c }: { c: Ctx }) {
       phone={
         <>
           {words(false)}
-          <div className="mt-14 flex justify-center px-6 pb-14">{picture(300)}</div>
+          <div className="mt-14 flex justify-center px-6 pb-24">{picture(300)}</div>
           <p style={{ textAlign: "center", fontSize: 11.5, fontWeight: 600, letterSpacing: ".26em", textTransform: "uppercase", color: BODY }}>Your property. Our priority.</p>
         </>
       }

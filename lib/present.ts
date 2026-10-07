@@ -310,6 +310,15 @@ export type PresentDeck = {
   /** Which look it wears. Only House exists now; absent or anything older
    *  resolves to it - see asStyle. */
   style?: PresentStyle;
+  /**
+   * "house" pins a pre-appraisal to the slide deck it was sent as. The line in
+   * the sand (James, 7 Oct 2026): the two pre-appraisals emailed before the
+   * brochure went live keep the look their landlord was sent; every other
+   * pre-appraisal, and every one sent from now on, is the brochure. Set on
+   * those two rows by hand; nothing writes it, and "Update presentation"
+   * replaces the deck, which drops it - a re-sent deck is a new send.
+   */
+  look?: "house" | null;
   /** Post-appraisal only. See PresentValuation. */
   valuation?: PresentValuation | null;
   /** Post-appraisal only. See PresentTerms. */

@@ -53,11 +53,12 @@ export default function StylePicker({
 }) {
   return (
     <div
-      /* Below the logo on a phone, not on top of it; docked to the top right
-         on a desktop since 13 Sep 2026, because the entrance screen centres
-         the brand at the top and a review control printed over the logo is
-         the first thing anybody reviewing would report. */
-      className="fixed left-1/2 top-[74px] z-40 flex -translate-x-1/2 flex-col gap-1 rounded-[20px] px-1.5 py-1.5 sm:left-auto sm:right-4 sm:top-4 sm:translate-x-0"
+      /* Not on a phone at all (James, 7 Oct 2026): it sat over the slide's
+         heading and he wanted to see the page as a landlord gets it. Docked
+         to the top right from sm up since 13 Sep 2026, because the entrance
+         screen centres the brand at the top and a review control printed
+         over the logo is the first thing anybody reviewing would report. */
+      className="fixed left-1/2 top-[74px] z-40 hidden -translate-x-1/2 flex-col gap-1 rounded-[20px] px-1.5 py-1.5 sm:left-auto sm:right-4 sm:top-4 sm:flex sm:translate-x-0"
       style={{
         background: "rgba(255,255,255,0.94)",
         boxShadow: "0 6px 24px rgba(0,0,0,0.13)",
