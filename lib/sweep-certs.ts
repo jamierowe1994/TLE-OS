@@ -161,6 +161,9 @@ export async function applySweep(properties: CompProperty[]): Promise<void> {
  * tenancy_start), and the certificate was still valid on that day - so it
  * runs out, or ran out, during this tenancy. Due again when the next begins.
  */
+/** The furthest out the tracker chases (its 30-day band): nearer than this, a held certificate is said so. */
+const NEXT_TENANCY_FROM_DAYS = 30;
+
 export async function holdToNextTenancy(properties: CompProperty[]): Promise<void> {
   const answers = await sweepAnswers().catch(() => new Map<string, SweepAnswers>());
   for (const p of properties) {
@@ -172,6 +175,9 @@ export async function holdToNextTenancy(properties: CompProperty[]): Promise<voi
     for (const k of NEXT_TENANCY_CERTS) {
       const c = p.certs[k];
       if (!c || c.expires == null || c.notNeeded) continue;
+      /* Only one that would otherwise be on a list: run out, or inside the
+         30-day chase. An EPC good until 2031 is simply in date. */
+      if (c.expires > NEXT_TENANCY_FROM_DAYS) continue;
       if (c.expires >= startDays) p.certs[k] = { ...c, toNextTenancy: { tenancyStart: start } };
     }
   }

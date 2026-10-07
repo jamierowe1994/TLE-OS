@@ -164,7 +164,7 @@ function rowsFor(p: CompProperty, agent: string | null): ChaseRow[] {
     const ra = noted && !spent ? noted : undefined;
     const holdEnds = ra ? renewalHoldEnds(ra.appliedOn) : null;
     const reason = nextT
-      ? `Scotland: ${status === "expired" ? `ran out ${Math.abs(daysLeft ?? 0)} days ago` : `runs out in ${daysLeft} days`}, during the tenancy that began ${prettyDay(nextT.tenancyStart)}. Not due until the next tenancy starts.`
+      ? `Scotland: ${(daysLeft ?? 0) < 0 ? `ran out ${Math.abs(daysLeft ?? 0)} days ago` : `runs out in ${daysLeft} days`}, during the tenancy that began ${prettyDay(nextT.tenancyStart)}. Not due until the next tenancy starts.`
       : ra && holding
       ? `Renewal applied for on ${prettyDay(ra.appliedOn)}${ra.ref ? ` (ref ${ra.ref})` : ""}, marked by ${ra.by}. Back on the list on ${prettyDay(holdEnds!)} if no new licence has been filed.`
       : ra
