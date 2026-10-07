@@ -58,6 +58,7 @@ import SaveChip, { SaveScopeProvider, useSaveScope, type SaveScope } from "@/com
 import FileDocuments from "@/components/FileDocuments";
 import ListingOwner from "@/components/listing/ListingOwner";
 import RecordPapers from "@/components/listing/RecordPapers";
+import OfferWhoPicker, { type OfferPerson } from "@/components/offers/OfferWhoPicker";
 
 /**
  * The property record — the leads drawer's shape, aimed at a thing instead of
@@ -464,6 +465,13 @@ function ListingDrawerBody({
         setViewings({ upcoming: j.upcoming ?? [], past: j.past ?? [] });
       })
       .catch(() => { if (!gone) setViewings({ upcoming: [], past: [] }); });
+    setSavedOffers(null);
+    fetch(`/api/listings/${encodeURIComponent(id)}/offers`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; offers?: { id: string; name: string; amount: number | null; moveIn: string | null; by: string | null; at: string }[] }) => {
+        if (!gone) setSavedOffers(j.ok ? (j.offers ?? []) : []);
+      })
+      .catch(() => { if (!gone) setSavedOffers([]); });
     fetch(`/api/listings/${encodeURIComponent(id)}/applications`, { cache: "no-store" })
       .then((r) => r.json())
       .then((j: { ok?: boolean; applications?: { id: string; statusLabel?: string; status?: string; listingId?: string | number; applicants?: { name?: string }[]; offerAmount?: number | null; dateReceived?: number | null }[] }) => {
@@ -527,6 +535,11 @@ function ListingDrawerBody({
     null
   );
   const [offering, setOffering] = useState(false);
+  /* Make an offer (7 Oct 2026, Howard): asks who it is from, then opens the
+     real offer form on /offers/new. Offers saved against this listing are
+     read back below so the agent sees it landed. */
+  const [pickingOfferer, setPickingOfferer] = useState(false);
+  const [savedOffers, setSavedOffers] = useState<{ id: string; name: string; amount: number | null; moveIn: string | null; by: string | null; at: string }[] | null>(null);
 
   /* The link, made from the accepted offer. Derived rather than typed again:
      the tenants on the offer ARE the tenants on the tenancy, and re-entering
@@ -623,6 +636,48 @@ function ListingDrawerBody({
     const q = tenantQuery.trim().toLowerCase();
     return q ? all.filter((c) => c.name.toLowerCase().includes(q)) : all.slice(0, otherTenants ? 40 : 12);
   }, [liveDiary, listing?.name, otherTenants, tenantQuery, viewings]);
+  /* Who an offer can be from: everyone who viewed this home (REX's diary
+     for it, cancelled ones left out) and everyone who enquired, one row a
+     person, viewers first because that is who offers nearly always. */
+  const offerPeople = useMemo<OfferPerson[]>(() => {
+    const out = new Map<string, OfferPerson>();
+    const keyOf = (name: string, email: string | null | undefined) => (email ?? "").trim().toLowerCase() || name.trim().toLowerCase();
+    /* REX hangs the landlord on the viewing too; they never make the offer. */
+    const owner = landlord.status === "known" ? landlord.landlord : null;
+    const isOwner = (name: string, email: string | null | undefined) =>
+      !!owner &&
+      ((!!owner.email && (email ?? "").trim().toLowerCase() === owner.email.trim().toLowerCase()) || name.trim().toLowerCase() === owner.name.trim().toLowerCase());
+    const allViewings = [...(viewings?.past ?? []), ...(viewings?.upcoming ?? [])]
+      .filter((v) => !v.cancelled)
+      .sort((a, b) => new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime());
+    for (const v of allViewings) {
+      const when = new Date(v.startsAt);
+      for (const c of v.contacts) {
+        if (!c.name.trim() || isOwner(c.name, c.email)) continue;
+        const k = keyOf(c.name, c.email);
+        if (out.has(k)) continue;
+        out.set(k, {
+          key: k,
+          name: c.name,
+          email: (c.email ?? "").trim(),
+          phone: c.phone ?? "",
+          note: `${when.getTime() > Date.now() ? "Viewing booked" : "Viewed"} ${when.toLocaleDateString("en-GB", { day: "numeric", month: "short", ...(when.getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {}), timeZone: "Europe/London" })}`,
+        });
+      }
+    }
+    for (const e of enquiries ?? []) {
+      if (!e.name.trim() || isOwner(e.name, e.email)) continue;
+      const k = keyOf(e.name, e.email);
+      const byName = [...out.values()].find((p) => p.name.trim().toLowerCase() === e.name.trim().toLowerCase());
+      if (out.has(k)) continue;
+      if (byName) {
+        if (!byName.email && e.email) byName.email = e.email.trim();
+        continue;
+      }
+      out.set(k, { key: k, name: e.name, email: (e.email ?? "").trim(), phone: e.phone ?? "", note: `Enquired ${e.received}`.trim() });
+    }
+    return [...out.values()];
+  }, [viewings, enquiries, landlord]);
   const [reviewing, setReviewing] = useState(false);
   const [draftRent, setDraftRent] = useState("");
   const [draftTenants, setDraftTenants] = useState<TenantIn[]>([]);
@@ -760,6 +815,9 @@ function ListingDrawerBody({
   ];
   const readyToGoLive = certs != null && requirements.every((r) => r.done) && !(pub?.blockers.length);
   const isLive = pub ? pub.status === "published" : listing.publicationStatus === "published";
+  /* An offer can only go on a home that is live, not let agreed and has a
+     rent - the same test the offer form's save makes (lib/agent-offer). */
+  const canOffer = isLive && !listing.letAgreed && (listing.rent ?? 0) > 0 && /^\d+$/.test(String(listing.id));
 
   /* The upcoming viewings, for an access request to hang off. */
   const upcomingOptions = (viewings?.upcoming ?? [])
@@ -897,7 +955,7 @@ function ListingDrawerBody({
             {TABS.map((t) => {
               const count =
                 t.key === "applications"
-                  ? offers.length + (liveApps?.length ?? 0) + (enquiries?.length ?? 0)
+                  ? offers.length + (liveApps?.length ?? 0) + (enquiries?.length ?? 0) + (savedOffers?.length ?? 0)
                   : t.key === "viewings"
                     ? booked.length + (viewings?.upcoming.length ?? 0)
                     : 0;
@@ -1120,7 +1178,7 @@ function ListingDrawerBody({
                   </div>
                 )}
 
-                {/* Two buttons, side by side, both in the dark chocolate (James,
+                {/* The quick actions, stacked. The first two in the dark chocolate (James,
                     11 Sep): getting INTO the property, and getting it OUT to
                     the database. They used to be one ambiguous "Email to
                     tenants". */}
@@ -1151,6 +1209,18 @@ function ListingDrawerBody({
                     >
                       <DoodleIcon name="calendar" size={14} />
                       Book a viewing
+                    </PressButton>
+                  )}
+                  {/* Next in the journey after a viewing (Howard, 7 Oct 2026):
+                      asks who it is from, then opens the offer form. */}
+                  {canOffer && (
+                    <PressButton
+                      data-steve="listing.make-offer"
+                      onClick={() => setPickingOfferer(true)}
+                      className="press-ring flex items-center gap-2 rounded-full border border-line/60 bg-white px-4 py-2.5 text-[12.5px] font-semibold"
+                    >
+                      <DoodleIcon name="coin" size={14} className="text-accent-dark" />
+                      Make an offer
                     </PressButton>
                   )}
                 </div>
@@ -1621,7 +1691,9 @@ function ListingDrawerBody({
               </div>
             )}
             {tab === "applications" && (
-              <div className="grid gap-4">
+              /* One column that may shrink: a long name or link inside a card
+                 otherwise widens the grid past a phone's edge. */
+              <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
                 {/* The applications on this listing, on their own tab. */}
                 <Card
                   title="Applications"
@@ -1635,9 +1707,46 @@ function ListingDrawerBody({
                         <DoodleIcon name="coin" size={13} />
                         Make an offer
                       </PressButton>
+                    ) : canOffer ? (
+                      <PressButton
+                        onClick={() => setPickingOfferer(true)}
+                        className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-3.5 py-2 text-[11.5px] font-semibold text-page"
+                      >
+                        <DoodleIcon name="coin" size={13} />
+                        Make an offer
+                      </PressButton>
                     ) : undefined
                   }
                 >
+                  {/* Offers saved in the OS on this listing - put forward by an
+                      agent or made by the tenant - each opening in full. */}
+                  {savedOffers && savedOffers.length > 0 && (
+                    <>
+                      <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">Offers</p>
+                      <ul className="mb-3 divide-y divide-line/40">
+                        {savedOffers.map((o) => (
+                          <li key={o.id}>
+                            <Link href={`/offers/${encodeURIComponent(o.id)}`} className="flex items-center gap-3 py-2 transition-colors hover:bg-page">
+                              <span className="min-w-0 flex-1">
+                                <span className="hand block truncate text-[13px]">{o.name}</span>
+                                <span className="block truncate text-[10.5px] text-muted">
+                                  {[
+                                    `Made ${new Date(o.at).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" })}`,
+                                    o.by ? `by ${o.by}` : "by the tenant",
+                                    o.moveIn ? `moving in ${new Date(`${o.moveIn}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : "",
+                                  ].filter(Boolean).join(" · ")}
+                                </span>
+                              </span>
+                              <Tag tone="accent">Offer</Tag>
+                              {o.amount != null && <span className="figures text-[13px]">£{o.amount.toLocaleString("en-GB")}</span>}
+                              <span aria-hidden className="text-[13px] text-muted/70">›</span>
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                      {liveApps && liveApps.length > 0 && <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">Applications</p>}
+                    </>
+                  )}
                   {/* The real applications on this listing first. Each opens
                       on Applications, where the next step lives. */}
                   {liveApps && liveApps.length > 0 && (
@@ -1660,9 +1769,9 @@ function ListingDrawerBody({
                         <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
                         Reading the applications&hellip;
                       </p>
-                    ) : liveApps.length === 0 ? (
+                    ) : liveApps.length === 0 && !savedOffers?.length ? (
                       <p className="py-6 text-center text-[12px] leading-relaxed text-muted">
-                        No applications on this listing yet. They land here, and on Applications, as applicants fill in the form.
+                        No offers or applications on this listing yet.{canOffer ? " Press Make an offer to put one forward for a tenant." : " They land here, and on Applications, as applicants fill in the form."}
                       </p>
                     ) : null
                   ) : offers.length ? (
@@ -1908,6 +2017,17 @@ function ListingDrawerBody({
             </p>
           </div>
         </div>
+      )}
+
+      {pickingOfferer && (
+        <OfferWhoPicker
+          listingId={String(listing.id)}
+          address={[listing.name, listing.locality].filter(Boolean).join(", ")}
+          asking={listing.rent ? `£${listing.rent.toLocaleString("en-GB")} ${per}` : ""}
+          people={offerPeople}
+          loading={viewings === null || enquiries === null}
+          onClose={() => setPickingOfferer(false)}
+        />
       )}
 
       {/* ── The offer form: rent, then everyone who'd live there. ── */}
