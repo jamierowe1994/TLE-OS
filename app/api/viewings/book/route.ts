@@ -11,6 +11,7 @@ import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view
 import { addTestViewing, isTestId } from "@/lib/test-overlay";
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
+import { copyBlockAccess, type BlockAccess } from "@/lib/viewing-block";
 
 /**
  * POST → a viewing booked in the OS, carried everywhere it needs to be
@@ -22,7 +23,9 @@ import { uid } from "@/lib/auth";
  * It does NOT email the applicant (17 Sep 2026). The agent is shown the
  * confirmation next, can rewrite it, and sends it through /api/confirmations.
  *
- * Body: { leadId, listingId, contactId, applicantName, applicantEmail, address, startsAt, minutes }.
+ * Body: { leadId, listingId, contactId, applicantName, applicantEmail, address, startsAt, minutes, blockOf? }.
+ * blockOf (8 Oct 2026) is the viewing this one is added after - "Add another
+ * viewing to this slot" - and the new viewing takes its access (lib/viewing-block).
  * Answers with what happened at each, in words, for the lead's row. Never while
  * viewing as somebody: it would land in the wrong diary under the wrong name.
  */
@@ -45,6 +48,7 @@ export async function POST(req: NextRequest) {
     leadId?: string; listingId?: string | number | null; contactId?: string | number | null;
     applicantName?: string; applicantEmail?: string | null; address?: string; startsAt?: string; minutes?: number;
     unaccompanied?: boolean;
+    blockOf?: string | null;
   };
   if (!b.leadId || !b.startsAt || Number.isNaN(new Date(b.startsAt).getTime())) {
     return NextResponse.json({ ok: false, said: "Which lead, and when?" }, { status: 400 });
@@ -54,6 +58,12 @@ export async function POST(req: NextRequest) {
   const minutes = Number(b.minutes) || 30;
   const listingId = b.listingId != null && b.listingId !== "" ? String(b.listingId) : null;
   const unaccompanied = b.unaccompanied === true;
+  const blockOf = typeof b.blockOf === "string" && /^(rex|os)-[A-Za-z0-9-]{1,64}$/.test(b.blockOf) ? b.blockOf : null;
+  /* Part of a block: the new viewing shares the first one's access. */
+  const joinBlock = async (viewingId: string | null, propertyId: string | null): Promise<BlockAccess | null> =>
+    blockOf && viewingId
+      ? copyBlockAccess({ listingId, propertyId, fromViewingId: blockOf, toViewingId: viewingId, startsAt: b.startsAt!, by: actor.name || actor.email }).catch(() => "none" as const)
+      : null;
 
   /* A TEST LISTING (negative id, lib/test-overlay): the viewing goes in the
      tester's own diary and onto the test file, and stops there. Nothing
@@ -71,10 +81,13 @@ export async function POST(req: NextRequest) {
       authorName: actor.name ?? "",
       leadId: String(b.leadId),
     }).catch(() => null);
+    const testViewingId = made ? `os-${made.appointmentId}` : null;
+    const blockAccess = await joinBlock(testViewingId, null);
     return NextResponse.json({
       ok: Boolean(made),
       test: true,
-      viewingId: made ? `os-${made.appointmentId}` : null,
+      viewingId: testViewingId,
+      blockAccess,
       said: made
         ? "Test viewing. It is in your diary and on the test file - nothing went to Outlook, REX or the applicant."
         : "That test listing has gone. Reset the test file and try again.",
@@ -191,5 +204,6 @@ export async function POST(req: NextRequest) {
   /* For the agent's row: their diary and the email. The REX mirror is in the
      response for owners, never in the words an agent reads. */
   const said = [outlook.ok ? "In your Outlook calendar." : outlook.detail, "Confirmation not sent yet."].filter(Boolean).join(" ");
-  return NextResponse.json({ ok: true, said, outlook, rex, tenant, viewingId });
+  const blockAccess = await joinBlock(viewingId, listingDetails?.propertyId ?? null);
+  return NextResponse.json({ ok: true, said, outlook, rex, tenant, viewingId, blockAccess });
 }

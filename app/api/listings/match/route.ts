@@ -11,7 +11,7 @@ import { testListingsFor } from "@/lib/test-overlay";
  * THE LISTING BEHIND A DIARY ENTRY, AND ITS KEYS - ONE ROUND TRIP (2 Oct 2026).
  *
  *   GET ?address=<the appointment's where + what>
- *     → { ok, match: { propertyId, image, locality, name } | null,
+ *     → { ok, match: { listingId, propertyId, image, locality, name } | null,
  *         keysOk, keys }
  *
  * The viewing and appointment drawers used to download the whole listing
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
     });
     if (!hit) return NextResponse.json({ ok: true, match: null, keysOk: true, keys: [] });
 
-    const match = { propertyId: hit.propertyId ?? null, image: hit.image ?? null, locality: hit.locality, name: hit.name };
+    const match = { listingId: String(hit.id), propertyId: hit.propertyId ?? null, image: hit.image ?? null, locality: hit.locality, name: hit.name };
     if (!match.propertyId) return NextResponse.json({ ok: true, match, keysOk: true, keys: [] });
     let keysOk = true;
     let keys: KeySet[] = [];

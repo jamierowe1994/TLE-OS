@@ -7,6 +7,7 @@ import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import { PressButton } from "@/components/Bits";
 import { canChangeTime } from "@/components/viewings/ChangeViewing";
+import { anchorFromAppt, type BlockAnchor } from "@/components/viewings/AddToBlock";
 import type { Outcome } from "@/components/ViewingDrawer";
 import type { KeySet } from "@/lib/rex-keys";
 import { KIND_META, type Appt } from "@/lib/diary";
@@ -74,6 +75,7 @@ export default function AppointmentDrawer({
   onClose: closeNow,
   onOpenViewing,
   onChangeTime,
+  onAddToBlock,
   sentExtra,
   onSend,
 }: {
@@ -84,6 +86,8 @@ export default function AppointmentDrawer({
   onOpenViewing: (a: Appt) => void;
   /** Change time: the booker on this viewing (6 Oct 2026). */
   onChangeTime?: (a: Appt) => void;
+  /** "Add another viewing to this slot" (8 Oct 2026): this viewing as the block's first. */
+  onAddToBlock?: (anchor: BlockAnchor) => void;
   sentExtra: Set<string>;
   onSend: (apptId: string, label: string) => void;
 }) {
@@ -99,7 +103,7 @@ export default function AppointmentDrawer({
   /* The property behind it, and its keys. Live REX entries carry no listing
      link, so the address text is the only join; matched conservatively,
      because a wrong property here would show somebody the wrong keys. */
-  const [match, setMatch] = useState<{ propertyId: string | null; locality: string } | null | undefined>(undefined);
+  const [match, setMatch] = useState<{ listingId: string | null; propertyId: string | null; locality: string } | null | undefined>(undefined);
   const [keys, setKeys] = useState<KeySet[] | null>(null);
   useEffect(() => {
     setMatch(undefined);
@@ -111,12 +115,12 @@ export default function AppointmentDrawer({
        used to download the whole listing book to find one address. */
     fetch(`/api/listings/match?address=${encodeURIComponent(target)}`)
       .then((r) => r.json())
-      .then((j: { ok?: boolean; match?: { propertyId: string | null; locality: string } | null; keysOk?: boolean; keys?: KeySet[] }) => {
+      .then((j: { ok?: boolean; match?: { listingId?: string | null; propertyId: string | null; locality: string } | null; keysOk?: boolean; keys?: KeySet[] }) => {
         if (gone) return;
         if (!j.ok) return setMatch(null);
         const hit = j.match;
         if (!hit) return setMatch(null);
-        setMatch({ propertyId: hit.propertyId ?? null, locality: hit.locality });
+        setMatch({ listingId: hit.listingId ?? null, propertyId: hit.propertyId ?? null, locality: hit.locality });
         if (!hit.propertyId) return setKeys([]);
         setKeys(j.keysOk ? (j.keys ?? []) : []);
       })
@@ -395,6 +399,16 @@ export default function AppointmentDrawer({
                   Change time
                 </button>
               )}
+              {(() => {
+                /* REX entries carry no listing; the address match above finds it. */
+                const anchor = anchorFromAppt({ ...appt, listingId: appt.listingId ?? match?.listingId ?? null });
+                return onAddToBlock && anchor ? (
+                  <button type="button" data-steve="appointment.add-to-block" onClick={() => onAddToBlock({ ...anchor, locality: match?.locality })} className={secondary}>
+                    <DoodleIcon name="user" size={13} />
+                    Add another viewing to this slot
+                  </button>
+                ) : null;
+              })()}
               {appt.link && (
                 <Link href={appt.link.href} className={secondary} title={appt.link.label}>
                   <DoodleIcon name="home" size={13} />

@@ -62,7 +62,11 @@ async function ours(authorId: string | null, selfId: string): Promise<Appt[]> {
         // ...and on the LONDON clock, not the server's (lib/london-time).
         day: londonDayOffset(at),
         start: londonHHMM(at),
-        mins: Math.min(Math.max(r.mins || 30, 15), 8 * 60),
+        /* Down to 5 minutes (8 Oct 2026): a viewing block books people in
+           every 5, 10 or 15 minutes, and a floor of 15 drew a 10-minute
+           viewing running into the next one. The grid keeps its own
+           minimum height. */
+        mins: Math.min(Math.max(r.mins || 30, 5), 8 * 60),
         kind: (["viewing", "appraisal", "takeon", "movein", "inspection", "travel", "other"]
           .includes(r.kind) ? r.kind : "other") as ApptKind,
         what: r.title,

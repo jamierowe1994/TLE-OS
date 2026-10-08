@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { canChangeTime } from "@/components/viewings/ChangeViewing";
+import { anchorFromAppt, type BlockAnchor } from "@/components/viewings/AddToBlock";
 import { useSlideOver } from "@/lib/use-slide-over";
 import { SAGE_INK, SAGE_WASH } from "@/components/ListingTags";
 import { createPortal } from "react-dom";
@@ -138,6 +139,8 @@ type DrawerProps = {
   /** Change time through the booker, with the email shown first (6 Oct
    *  2026). Given, Reschedule opens that instead of the quick move here. */
   onChangeTime?: (a: Appt) => void;
+  /** "Add another viewing to this slot" (8 Oct 2026): this viewing as the block's first. */
+  onAddToBlock?: (anchor: BlockAnchor) => void;
 };
 
 /* The OS's own notes on a viewing, kept in os_case_state under kind
@@ -164,6 +167,7 @@ function ViewingDrawerBody({
   sentExtra,
   onSend,
   onChangeTime,
+  onAddToBlock,
   saves,
 }: DrawerProps & { saves: SaveScope }) {
   /* Every way out plays the drawer out first (lib/use-slide-over). */
@@ -240,7 +244,7 @@ function ViewingDrawerBody({
      669 of 671 events), so the only join available is the address text.
      Matched conservatively: a wrong property here would show somebody the
      wrong keys. */
-  const [match, setMatch] = useState<{ propertyId: string | null; image: string | null; locality: string } | null>(null);
+  const [match, setMatch] = useState<{ listingId: string | null; propertyId: string | null; image: string | null; locality: string } | null>(null);
   const [keys, setKeys] = useState<KeySet[] | null>(null);
   /** The address didn't match a listing, so we know nothing about access. */
   const [noMatch, setNoMatch] = useState(false);
@@ -255,11 +259,11 @@ function ViewingDrawerBody({
        matches sixty properties and none of them reliably). */
     fetch(`/api/listings/match?address=${encodeURIComponent(target)}`)
       .then((r) => r.json())
-      .then((j: { ok?: boolean; match?: { propertyId: string | null; image: string | null; locality: string } | null; keysOk?: boolean; keys?: KeySet[] }) => {
+      .then((j: { ok?: boolean; match?: { listingId?: string | null; propertyId: string | null; image: string | null; locality: string } | null; keysOk?: boolean; keys?: KeySet[] }) => {
         if (gone || !j.ok) return;
         const hit = j.match;
         if (!hit) { setMatch(null); setKeys([]); setNoMatch(true); return; }
-        setMatch({ propertyId: hit.propertyId ?? null, image: hit.image ?? null, locality: hit.locality });
+        setMatch({ listingId: hit.listingId ?? null, propertyId: hit.propertyId ?? null, image: hit.image ?? null, locality: hit.locality });
         if (hit.propertyId) {
           if (j.keysOk) setKeys(j.keys ?? []);
         } else setKeys([]);
@@ -517,6 +521,19 @@ function ViewingDrawerBody({
                   <DoodleIcon name="calendar" size={13} />
                   Change time
                 </PressButton>
+                {(() => {
+                  /* REX entries carry no listing; the address match above finds it. */
+                  const anchor = anchorFromAppt({ ...appt, listingId: appt.listingId ?? match?.listingId ?? null });
+                  return onAddToBlock && anchor ? (
+                    <PressButton
+                      onClick={() => onAddToBlock({ ...anchor, locality: match?.locality })}
+                      className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-4 py-2 text-[11.5px] font-semibold text-white"
+                    >
+                      <DoodleIcon name="user" size={13} />
+                      Add another viewing to this slot
+                    </PressButton>
+                  ) : null;
+                })()}
                 <PressButton
                   onClick={() => setCancelFlow(true)}
                   className="press-ring rounded-full border border-line/80 px-4 py-2 text-[11.5px] font-semibold text-muted transition-colors hover:border-ink hover:text-ink"

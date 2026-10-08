@@ -149,6 +149,7 @@ export default function ViewingBooker({
   suggested = null,
   skipProperty = false,
   editing = null,
+  onAddAnother,
 }: {
   open: boolean;
   onClose: () => void;
@@ -191,6 +192,12 @@ export default function ViewingBooker({
    * caller moves it rather than booking another.
    */
   editing?: { startsAt: string; minutes: number; unaccompanied?: boolean } | null;
+  /**
+   * "Add another viewing to this slot" (James, 8 Oct 2026): offered once a
+   * viewing is booked, with the booking as the block's first viewing. The
+   * caller closes this and opens components/viewings/AddToBlock.
+   */
+  onAddAnother?: (anchor: { viewingId: string; listingId: string; property: string; locality: string; startsAt: string; minutes: number; unaccompanied: boolean; who: string }) => void;
   /**
    * `startsAt` and `minutes` are the booking as a MACHINE reads it, and they
    * are not decoration. Everything downstream — the landlord's calendar file,
@@ -631,6 +638,36 @@ export default function ViewingBooker({
   })();
 
   /* `startsAt` is computed up with the hooks — the travel lookup needs it. */
+
+  /* "Add another viewing to this slot" (8 Oct 2026): once a viewing is in,
+     more people can be booked in straight after it while we have access. */
+  const addAnother =
+    onAddAnother && mode === "viewing" && !editing && result?.viewingId && !result.failed && property?.id && startsAt ? (
+      <div className="mt-6 w-full max-w-md rounded-2xl border border-line/60 bg-white p-4 text-left">
+        <p className="text-[13px] font-semibold">More people to see it while we have access?</p>
+        <p className="mt-0.5 text-[11.5px] leading-snug text-muted">Book them in straight after this one, with the same access.</p>
+        <PressButton
+          onClick={() => {
+            const anchor = {
+              viewingId: result.viewingId!,
+              listingId: property.id,
+              property: property.name,
+              locality: property.locality,
+              startsAt,
+              minutes: mins,
+              unaccompanied: !accompanied,
+              who: chosen?.name ?? "",
+            };
+            onClose();
+            onAddAnother(anchor);
+          }}
+          className="press-ring mt-3 inline-flex items-center gap-2 rounded-full bg-accent-dark px-4 py-2 text-[12.5px] font-semibold text-white"
+        >
+          <DoodleIcon name="user" size={14} />
+          Add another viewing to this slot
+        </PressButton>
+      </div>
+    ) : null;
 
   const legOf = (id: string): Leg | undefined =>
     travel.status === "ready" ? travel.legs.find((l) => l.id === id) : undefined;
@@ -1770,6 +1807,7 @@ export default function ViewingBooker({
                   : "This viewing is not on a listing we can record access against yet. Check the keys or ask whoever lives there, then note it on the listing."}
               </p>
               {landlordSaid && <p className="mt-4 text-[12px] text-muted">{landlordSaid}</p>}
+              {addAnother}
               {result?.goTo && (
                 <p className="mt-6 text-[12px] text-muted">
                   {result.goTo.ask}{" "}
@@ -1814,6 +1852,7 @@ export default function ViewingBooker({
                   </p>
                   {/* The pre-presentation, straight after an appraisal is booked (1 Oct 2026). */}
                   {result?.pre && <PreSendOffer pre={result.pre} />}
+                  {addAnother}
                   {result?.goTo && !flow && (
                     <div className="mt-6 w-full max-w-md rounded-2xl border border-line/60 bg-card p-5">
                       <p className="text-[13.5px] leading-snug">{result.goTo.ask}</p>

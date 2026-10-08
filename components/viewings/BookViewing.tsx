@@ -7,6 +7,7 @@ import { PressButton } from "@/components/Bits";
 import ViewingBooker, { type BookedResult } from "@/components/ViewingBooker";
 import { OS_LEAD_PREFIX } from "@/lib/contacts-as-leads";
 import type { ScoredMatch } from "@/lib/contact-match";
+import AddToBlock, { type BlockAnchor } from "@/components/viewings/AddToBlock";
 
 /**
  * Book a viewing from a LISTING or from the Viewings screen (Howard's tickets,
@@ -32,7 +33,7 @@ export type BookHome = {
   propertyId?: string | null;
 };
 
-type OnFile = {
+export type OnFile = {
   leadId: string;
   name: string;
   email: string;
@@ -63,6 +64,9 @@ export default function BookViewing({
 }) {
   const [person, setPerson] = useState<OnFile | null>(null);
   const [booker, setBooker] = useState(false);
+  /* "Add another viewing to this slot" from the booker's last step: it
+     outlives this booker, which has closed by then. */
+  const [blockAnchor, setBlockAnchor] = useState<BlockAnchor | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -120,11 +124,12 @@ export default function BookViewing({
     };
   }
 
-  if (!open) return null;
+  if (!open && !blockAnchor) return null;
 
   return (
     <>
-      {!booker && (
+      <AddToBlock anchor={blockAnchor} onClose={() => setBlockAnchor(null)} />
+      {open && !booker && (
         <WhoIsViewing
           home={home}
           onClose={onClose}
@@ -135,7 +140,7 @@ export default function BookViewing({
         />
       )}
       <ViewingBooker
-        open={booker && person != null}
+        open={open && booker && person != null}
         onClose={onClose}
         lead={person ? { name: person.name, email: person.email, phone: person.phone } : null}
         leadId={person?.leadId ?? null}
@@ -146,6 +151,7 @@ export default function BookViewing({
         /* Whose diary the grid shows: the person booking it. */
         agent=""
         onBooked={(v) => (person ? book(person, v) : undefined)}
+        onAddAnother={setBlockAnchor}
       />
     </>
   );
@@ -153,7 +159,21 @@ export default function BookViewing({
 
 /* ── Who's viewing ──────────────────────────────────────────────────────── */
 
-function WhoIsViewing({ home, onClose, onPick }: { home: BookHome | null; onClose: () => void; onPick: (p: OnFile) => void }) {
+/* Exported for "Add another viewing to this slot" (components/viewings/AddToBlock),
+   which asks the same question with its own heading. */
+export function WhoIsViewing({
+  home,
+  onClose,
+  onPick,
+  title = "Who's viewing?",
+  sub,
+}: {
+  home: BookHome | null;
+  onClose: () => void;
+  onPick: (p: OnFile) => void;
+  title?: string;
+  sub?: string;
+}) {
   const [mode, setMode] = useState<"file" | "new">("file");
   const [find, setFind] = useState("");
   const [people, setPeople] = useState<OnFile[] | null>(null);
@@ -213,8 +233,8 @@ function WhoIsViewing({ home, onClose, onPick }: { home: BookHome | null; onClos
       <div className="fade-up relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line/70 px-6 py-4">
           <div className="min-w-0">
-            <h2 className="text-[19px] leading-tight">Who&apos;s viewing?</h2>
-            <p className="mt-0.5 truncate text-[12px] text-muted">{home ? `${home.name}${home.locality ? `, ${home.locality}` : ""}` : "Pick the person, then the home"}</p>
+            <h2 className="text-[19px] leading-tight">{title}</h2>
+            <p className="mt-0.5 truncate text-[12px] text-muted">{sub ?? (home ? `${home.name}${home.locality ? `, ${home.locality}` : ""}` : "Pick the person, then the home")}</p>
           </div>
           <button
             type="button"

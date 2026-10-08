@@ -60,6 +60,7 @@ import ListingOwner from "@/components/listing/ListingOwner";
 import RecordPapers from "@/components/listing/RecordPapers";
 import OfferWhoPicker, { type OfferPerson } from "@/components/offers/OfferWhoPicker";
 import ListingOffers, { type ListingOffer } from "@/components/listing/ListingOffers";
+import AddToBlock, { type BlockAnchor } from "@/components/viewings/AddToBlock";
 
 /**
  * The property record — the leads drawer's shape, aimed at a thing instead of
@@ -535,6 +536,8 @@ function ListingDrawerBody({
      real offer form on /offers/new. Offers saved against this listing are
      read back below so the agent sees it landed. */
   const [pickingOfferer, setPickingOfferer] = useState(false);
+  /* "Add another viewing to this slot" on an upcoming viewing (8 Oct 2026). */
+  const [blockAnchor, setBlockAnchor] = useState<BlockAnchor | null>(null);
   const [savedOffers, setSavedOffers] = useState<ListingOffer[] | null>(null);
   /* Bumped after an Accept, Decline or Undo, so the list reads again. */
   const [offersTick, setOffersTick] = useState(0);
@@ -868,10 +871,10 @@ function ListingDrawerBody({
     const who = v.contacts.map((c) => c.name).join(", ");
     const past = start.getTime() < Date.now();
     return (
-      <li key={v.id} className="border-b border-line/40 last:border-0">
+      <li key={v.id} className="flex items-center gap-2 border-b border-line/40 last:border-0">
         {/* The whole row opens the viewing (James, 20 Sep 2026): its details
             and, above all, whether we can get in. */}
-        <button type="button" onClick={() => setOpenViewing(v.id)} className="flex w-full items-center gap-3 py-2.5 text-left transition-colors hover:bg-page">
+        <button type="button" onClick={() => setOpenViewing(v.id)} className="flex min-w-0 flex-1 items-center gap-3 py-2.5 text-left transition-colors hover:bg-page">
           <span className="w-28 shrink-0 text-[11px] text-muted">
             {start.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: past ? undefined : undefined })} · {hhmm(start)}
           </span>
@@ -889,6 +892,28 @@ function ListingDrawerBody({
             return <Tag tone="accent">{r ? "Access asked" : "Access to ask"}</Tag>;
           })()}
         </button>
+        {/* Book more people in straight after this one, with its access. */}
+        {!past && !v.cancelled && listing && (
+          <button
+            type="button"
+            title="Add another viewing to this slot"
+            onClick={() =>
+              setBlockAnchor({
+                viewingId: v.id,
+                listingId: String(listing.id),
+                property: listing.name,
+                locality: listing.locality,
+                startsAt: v.startsAt,
+                minutes: v.mins || 15,
+                unaccompanied: /unaccompanied/i.test(`${v.type ?? ""} ${v.title}`),
+                who,
+              })
+            }
+            className="shrink-0 rounded-full border border-line/80 px-2.5 py-1 text-[10.5px] font-semibold text-muted transition-colors hover:border-accent-dark hover:text-accent-dark"
+          >
+            + Add after
+          </button>
+        )}
       </li>
     );
   };
@@ -1986,6 +2011,8 @@ function ListingDrawerBody({
           </div>
         </div>
       )}
+
+      <AddToBlock anchor={blockAnchor} onClose={() => setBlockAnchor(null)} />
 
       {pickingOfferer && (
         <OfferWhoPicker

@@ -22,6 +22,7 @@ import { EMPTY_PROPERTY, type PropertyFactsData } from "@/lib/lead-facts-shape";
 import ReferToAgent, { isSalesIntent, SALES_TAGS } from "@/components/ReferToAgent";
 import SignaturePanel, { type Signer } from "@/components/SignaturePanel";
 import ViewingBooker from "@/components/ViewingBooker";
+import AddToBlock, { type BlockAnchor } from "@/components/viewings/AddToBlock";
 import MailThread from "@/components/MailThread";
 import TenantPropertySearch from "@/components/TenantPropertySearch";
 import LogTouch, { type LogMode } from "@/components/LogTouch";
@@ -1210,6 +1211,8 @@ function LeadDrawerBody({
     setAppraising(false);
   }, [lead?.id]);
   const [booking, setBooking] = useState(false);
+  /* "Add another viewing to this slot", from the booker's last step (8 Oct 2026). */
+  const [blockAnchor, setBlockAnchor] = useState<BlockAnchor | null>(null);
   /* The tenant passport, sent by hand. There is an automatic send off a booked
      viewing; James, 9 Sep: an agent must also be able to send it whenever they
      like, see whether it already went, and copy the link to paste anywhere. */
@@ -3927,7 +3930,9 @@ function LeadDrawerBody({
           if (bookMode === "viewing") return { said: said.join(" "), viewingId: bookedViewingId, failed: !viewingMade };
           return said.length ? { said: said.join(" ") } : undefined;
         }}
+        onAddAnother={bookMode === "viewing" ? setBlockAnchor : undefined}
       />
+      <AddToBlock anchor={blockAnchor} onClose={() => setBlockAnchor(null)} />
 
       {/* ── Recording the appraisal: what was found, what was said. Saving
           writes a real note and moves the record to the follow-up. ── */}

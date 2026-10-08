@@ -21,6 +21,7 @@ import { useDiary } from "@/lib/diary-store";
 import { fetchMe } from "@/lib/me";
 import BookViewing from "@/components/viewings/BookViewing";
 import ChangeViewing from "@/components/viewings/ChangeViewing";
+import AddToBlock, { type BlockAnchor } from "@/components/viewings/AddToBlock";
 import { PressButton } from "@/components/Bits";
 
 /**
@@ -75,6 +76,8 @@ export default function Viewings() {
   const [fullId, setFullId] = useState<string | null>(null);
   /* Change time: the booker opened on this viewing (6 Oct 2026). */
   const [changing, setChanging] = useState<Appt | null>(null);
+  /* "Add another viewing to this slot" (8 Oct 2026). */
+  const [blockAnchor, setBlockAnchor] = useState<BlockAnchor | null>(null);
   /** undefined = not decided yet; null = everyone; a name = that person. */
   const [fAgent, setFAgent] = useState<string | null | undefined>(undefined);
   const [fKind, setFKind] = useState<ApptKind | null>(null);
@@ -390,6 +393,10 @@ export default function Viewings() {
           setQuickId(null);
           setChanging(a);
         }}
+        onAddToBlock={(anchor) => {
+          setQuickId(null);
+          setBlockAnchor(anchor);
+        }}
         sentExtra={sentExtra}
         onSend={(id, label) => setSentExtra((cur) => new Set(cur).add(`${id}:${label}`))}
       />
@@ -401,12 +408,17 @@ export default function Viewings() {
           setFullId(null);
           setChanging(a);
         }}
+        onAddToBlock={(anchor) => {
+          setFullId(null);
+          setBlockAnchor(anchor);
+        }}
         sentExtra={sentExtra}
         onSend={(id, label) => setSentExtra((cur) => new Set(cur).add(`${id}:${label}`))}
       />
 
       <BookViewing open={booking} onClose={() => setBooking(false)} />
       <ChangeViewing appt={changing} onClose={() => setChanging(null)} />
+      <AddToBlock anchor={blockAnchor} onClose={() => setBlockAnchor(null)} />
     </>
   );
 }
