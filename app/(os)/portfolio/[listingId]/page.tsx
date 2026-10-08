@@ -552,10 +552,10 @@ export default function PropertyPage() {
             the name beside the actions; the facts and the people beside the
             latest activity; the sections beside the map. On a phone they
             simply stack, actions straight after the photos. */}
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_460px]">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_460px]">
           {/* ── 1. the photos and the name ──────────────────────────────── */}
           <section className={`${box} min-w-0 p-3 lg:col-start-1 lg:row-start-1`}>
-              <div className={`grid gap-2 ${shots.length > 1 ? "sm:grid-cols-[minmax(0,1fr)_140px] 2xl:grid-cols-[minmax(0,1fr)_170px]" : ""}`}>
+              <div className={`grid grid-cols-1 gap-2 ${shots.length > 1 ? "sm:grid-cols-[minmax(0,1fr)_140px] 2xl:grid-cols-[minmax(0,1fr)_170px]" : ""}`}>
                 {/* The three down the side are square; the big one takes their
                     height, so it never sets the box's height itself. */}
                 <button
@@ -681,7 +681,7 @@ export default function PropertyPage() {
                     : `${tenants.length} ${tenants.length === 1 ? "tenant" : "tenants"}`}
                 </button>
               </div>
-            <div className="mt-5 grid flex-1 gap-4 2xl:grid-cols-2">
+            <div className="mt-5 grid flex-1 grid-cols-1 gap-4 2xl:grid-cols-2">
               <section className={`${card} p-3.5 sm:p-5`}>
                 <p className={`${eyebrow} mb-3`}>{roomsOnly ? "Rooms" : tenants.length === 1 ? "Tenant" : "Tenants"}</p>
                 {roomsOnly && house ? (
@@ -803,7 +803,7 @@ export default function PropertyPage() {
             )}
 
             {tab === "tenancy" && (
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                 <section className={`${card} p-5`}>
                   <p className={`${eyebrow} mb-3`}>The tenancy</p>
                   {tenancy.state === "loading" ? <Loading label="Reading the tenancy" /> : tenancy.state === "failed" ? <Failed error={tenancy.error} /> : (
