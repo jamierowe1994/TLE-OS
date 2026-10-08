@@ -18,7 +18,8 @@ import type { Lead } from "@/lib/leads-sample";
 /** The sage tick, the same as the drawer's. */
 export function PassportDonePill({ at }: { at?: string }) {
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-sage/40 px-2 py-0.5 text-[10.5px] font-semibold text-ink">
+    /* Pink (James, 8 Oct 2026), the same as the lead's own Passport done. */
+    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-accent-dark px-2 py-0.5 text-[10.5px] font-semibold text-white">
       <span aria-hidden>✓</span> Passport done{at ? ` · ${doneAgo(at)}` : ""}
     </span>
   );

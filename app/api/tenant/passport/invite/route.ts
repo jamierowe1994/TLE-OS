@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
   const me = userId ? await findUserById(userId) : null;
   if (!me) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
 
-  let body: { name?: string; email?: string; address?: string; whenPretty?: string; again?: boolean };
+  let body: { name?: string; email?: string; address?: string; whenPretty?: string; again?: boolean; preview?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -115,6 +115,17 @@ export async function POST(req: NextRequest) {
   }
   const email = (body.email ?? "").trim();
   const name = (body.name ?? "").trim();
+  /* THE EMAIL AS IT WILL GO, for the agent to read first (8 Oct 2026: sending
+     passports from a listing's Enquiries in one go). Mints nothing, sends
+     nothing, needs no address: the link is shown as a placeholder. */
+  if (body.preview === true) {
+    const { subject, html } = renderTleEmail("tenant-passport-request", {
+      firstName: name.split(/\s+/)[0] || "there",
+      agentName: me.name || "your agent",
+      link: `${publicOrigin(req)}/tenant/passport/your-own-link`,
+    });
+    return NextResponse.json({ ok: true, preview: true, subject, html });
+  }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ ok: false, error: "The viewing has no usable email for the tenant." }, { status: 400 });
   }

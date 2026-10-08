@@ -628,12 +628,12 @@ export default function Leads() {
                 onClick={() => pickPassports(!passportsOn)}
                 aria-pressed={passportsOn}
                 className={`flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[12px] font-semibold transition-colors ${
-                  passportsOn ? "border-brown bg-brown text-page" : "border-line/80 bg-white text-ink hover:border-ink/40"
+                  passportsOn ? "border-accent-dark bg-accent-dark text-white" : "border-accent-dark/60 bg-accent-soft text-accent-dark hover:bg-accent-dark hover:text-white"
                 }`}
               >
                 <DoodleIcon name="user" size={13} />
                 Passports Done
-                {donePassports && <span className={`figures ${passportsOn ? "text-page/80" : "text-muted"}`}>{donePassports.length.toLocaleString("en-GB")}</span>}
+                {donePassports && <span className={`figures ${passportsOn ? "text-white/80" : "opacity-80"}`}>{donePassports.length.toLocaleString("en-GB")}</span>}
               </button>
             )}
             {/* The shape switch sits BEFORE the button that makes a lead, and

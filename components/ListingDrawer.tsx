@@ -60,6 +60,7 @@ import ListingOwner from "@/components/listing/ListingOwner";
 import RecordPapers from "@/components/listing/RecordPapers";
 import OfferWhoPicker, { type OfferPerson } from "@/components/offers/OfferWhoPicker";
 import ListingOffers, { type ListingOffer } from "@/components/listing/ListingOffers";
+import ListingEnquiries from "@/components/listing/ListingEnquiries";
 import AddToBlock, { type BlockAnchor } from "@/components/viewings/AddToBlock";
 import BookSlot from "@/components/viewings/BookSlot";
 import { apptStartIso } from "@/components/viewings/ChangeViewing";
@@ -126,7 +127,7 @@ type LandlordState =
   | { status: "none" }
   | { status: "problem"; says: string };
 
-type TabKey = "home" | "applications" | "viewings" | "marketing" | "compliance" | "documents";
+type TabKey = "home" | "enquiries" | "applications" | "viewings" | "marketing" | "compliance" | "documents";
 
 /* SIX VIEWS, ONE RECORD (James, 11 Sep 2026). Home is the record itself -
    the hero, the landlord, at a glance, next up and the spine. The rest each
@@ -135,6 +136,9 @@ type TabKey = "home" | "applications" | "viewings" | "marketing" | "compliance" 
    one place), compliance, documents. Home brings you back. */
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: "home", label: "Home", icon: "home" },
+  /* Enquiries apart from Offers (James, 8 Oct 2026): people asking from the
+     portals have not offered - "it's not an offer". */
+  { key: "enquiries", label: "Enquiries", icon: "target" },
   /* "Offers" since 7 Oct 2026: an offer is not an application until it is
      accepted (James). The key stays, for ?tab= links and Steve. */
   { key: "applications", label: "Offers", icon: "coin" },
@@ -564,6 +568,9 @@ function ListingDrawerBody({
     };
   }, [listing?.id, offersTick]);
   const openOffers = savedOffers?.filter((o) => o.status === "open").length ?? 0;
+  /* People, not enquiry records: the same tenant enquiring twice is one
+     person to send one passport to (8 Oct 2026). */
+  const enquirers = new Set((enquiries ?? []).map((e) => (e.email || "").trim().toLowerCase() || e.id)).size;
 
   /* The link, made from the accepted offer. Derived rather than typed again:
      the tenants on the offer ARE the tenants on the tenancy, and re-entering
@@ -1005,8 +1012,10 @@ function ListingDrawerBody({
           <div className="ml-auto flex min-w-0 max-w-full gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {TABS.map((t) => {
               const count =
-                t.key === "applications"
-                  ? openOffers + (enquiries?.length ?? 0)
+                t.key === "enquiries"
+                  ? enquirers
+                  : t.key === "applications"
+                  ? openOffers
                   : t.key === "viewings"
                     ? booked.length + (viewings?.upcoming.length ?? 0)
                     : 0;
@@ -1014,8 +1023,10 @@ function ListingDrawerBody({
               /* A pink dot where something needs doing on that tab, so nobody
                  has to guess which one to open (James, 11 Sep). */
               const needs =
-                t.key === "applications"
-                  ? (enquiries?.length ?? 0) > 0 || (liveApps ?? []).some((a) => !/accept|unsuccess|withdraw|declin/i.test(a.statusLabel))
+                t.key === "enquiries"
+                  ? (enquiries?.length ?? 0) > 0
+                  : t.key === "applications"
+                  ? openOffers > 0
                   : t.key === "viewings"
                     ? (viewings?.upcoming ?? []).some((v) => !v.cancelled && access.kind && access.kind !== "vacant" && !(access.requests ?? {})[v.id]?.grantedAt) ||
                       (viewings?.past ?? []).some((v) => !v.cancelled && !v.feedbackId)
@@ -1392,7 +1403,7 @@ function ListingDrawerBody({
               <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">At a glance</p>
               <ul className="mt-3 space-y-3">
                 {[
-                  { icon: "target", title: enquiries === null ? "Reading the enquiries…" : `${enquiries.length} enquir${enquiries.length === 1 ? "y" : "ies"}`, sub: "From the portals, on this listing", to: "applications" as TabKey },
+                  { icon: "target", title: enquiries === null ? "Reading the enquiries…" : `${enquirers} enquir${enquirers === 1 ? "y" : "ies"}`, sub: "From the portals, on this listing", to: "enquiries" as TabKey },
                   { icon: "calendar", title: viewings === null ? "Reading the diary…" : `${viewings.upcoming.length + booked.length} booked · ${viewings.past.length} done`, sub: "Viewings", to: "viewings" as TabKey },
                   {
                     icon: "coin",
@@ -1700,7 +1711,10 @@ function ListingDrawerBody({
 
           <div key={`view-${tab}`} className={tab === "home" ? "" : "fade-up"}>
             {tab === "applications" && (
-              <ViewTitle title="Offers" sub={LISTING_OFFERS_LIVE ? "Who has enquired and who has offered. Start an application from anybody here, and put the offers to the landlord when the viewings stop." : "Who has enquired and who has offered. Put each offer to the landlord, then accept one or decline it. The home keeps taking viewings until one is accepted, and the accepted one moves to Applications."} wash="blush" art="/brand/art/keys-handover.png" />
+              <ViewTitle title="Offers" sub={LISTING_OFFERS_LIVE ? "Who has enquired and who has offered. Start an application from anybody here, and put the offers to the landlord when the viewings stop." : "Only the people who have offered. Put each offer to the landlord, then accept one or decline it. The home keeps taking viewings until one is accepted, and the accepted one moves to Applications."} wash="blush" art="/brand/art/keys-handover.png" />
+            )}
+            {tab === "enquiries" && (
+              <ViewTitle title="Enquiries" sub="Everyone who has asked about this home, from the portals and the rest. Send them the tenant passport in one go, and see whose is done." wash="sage" art="/brand/art/viewing.png" />
             )}
             {tab === "viewings" && (
               <ViewTitle title="Viewings" sub="Everything in the diary for this property. Ask for access against a viewing, and mark it granted when they say yes." wash="sage" art="/brand/art/viewing.png" />
@@ -1714,48 +1728,15 @@ function ListingDrawerBody({
             {tab === "documents" && (
               <ViewTitle title="Documents" sub="How we get into the property, the terms of business, and everything signed or filed against this listing." />
             )}
-            {tab === "applications" && enquiries !== null && (
-              /* ── The enquiries REX holds against this listing, as REX's own
-                    Leads tab shows them. Each opens on the Leads board. ── */
-              <div className="mb-4">
-              <Card title={`Enquiries · ${enquiries.length}`} icon="target">
-                {enquiries.length ? (
-                  <ul className="divide-y divide-line/40">
-                    {enquiries.slice(0, 12).map((e) => (
-                      <li key={e.id} className="flex items-center gap-2">
-                        <a href={`/leads?open=${encodeURIComponent(e.id)}`} className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 py-2.5 transition-colors hover:bg-page sm:grid-cols-[minmax(0,1.2fr)_110px_minmax(0,1fr)_90px]">
-                          <span className="min-w-0">
-                            <span className="hand block truncate text-[13px]">{e.name}</span>
-                            <span className="block truncate text-[10.5px] text-muted">{[e.phone, e.email].filter(Boolean).join(" · ") || "No contact details"}</span>
-                          </span>
-                          <span className="hidden sm:block"><Tag tone="neutral">{e.source}</Tag></span>
-                          <span className="hidden min-w-0 truncate text-[11px] text-muted sm:block">{e.message || "—"}</span>
-                          <span className="text-right text-[11px] text-muted">{e.received}</span>
-                        </a>
-                        {/* An enquirer is a tenant we hold a file on, so an
-                            application can start right here - once offers
-                            made here are saved. */}
-                        {LISTING_OFFERS_LIVE && (
-                          <button
-                            type="button"
-                            onClick={() => applyFor({ id: e.id, name: e.name, phone: e.phone })}
-                            className="shrink-0 rounded-full border border-line/80 px-2.5 py-1 text-[10.5px] font-semibold text-muted transition-colors hover:border-accent-dark hover:text-accent-dark"
-                          >
-                            Apply
-                          </button>
-                        )}
-                      </li>
-                    ))}
-                    {enquiries.length > 12 && (
-                      <li className="pt-2 text-[11px] text-muted">{enquiries.length - 12} more on the Leads board.</li>
-                    )}
-                  </ul>
-                ) : (
-                  <p className="py-4 text-center text-[12px] text-muted">No enquiries on this listing yet.</p>
-                )}
-              </Card>
-              </div>
-            )}
+            {tab === "enquiries" &&
+              (enquiries === null ? (
+                <p className="flex items-center justify-center gap-2 py-8 text-[12px] text-muted">
+                  <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+                  Reading the enquiries&hellip;
+                </p>
+              ) : (
+                <ListingEnquiries enquiries={enquiries} />
+              ))}
             {tab === "applications" && (
               /* One column that may shrink: a long name or link inside a card
                  otherwise widens the grid past a phone's edge. */

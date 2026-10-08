@@ -23,6 +23,7 @@ import ReferToAgent, { isSalesIntent, SALES_TAGS } from "@/components/ReferToAge
 import SignaturePanel, { type Signer } from "@/components/SignaturePanel";
 import ViewingBooker from "@/components/ViewingBooker";
 import AddToBlock, { type BlockAnchor } from "@/components/viewings/AddToBlock";
+import PassportAnswers from "@/components/passport/PassportAnswers";
 import MailThread from "@/components/MailThread";
 import TenantPropertySearch from "@/components/TenantPropertySearch";
 import LogTouch, { type LogMode } from "@/components/LogTouch";
@@ -1213,6 +1214,8 @@ function LeadDrawerBody({
   const [booking, setBooking] = useState(false);
   /* "Add another viewing to this slot", from the booker's last step (8 Oct 2026). */
   const [blockAnchor, setBlockAnchor] = useState<BlockAnchor | null>(null);
+  /* Their passport as a list of answers (8 Oct 2026), not the tenant's own form. */
+  const [answersOpen, setAnswersOpen] = useState(false);
   /* The tenant passport, sent by hand. There is an automatic send off a booked
      viewing; James, 9 Sep: an agent must also be able to send it whenever they
      like, see whether it already went, and copy the link to paste anywhere. */
@@ -2633,10 +2636,12 @@ function LeadDrawerBody({
                   key={t.key}
                   type="button"
                   onClick={() => setTab(active ? null : t.key)}
-                  className={`flex items-center gap-2 rounded-full border px-4 py-2 text-[12px] transition-colors ${
+                  /* Buttons that look like buttons (James, 8 Oct 2026: "they blend
+                     too much into the background and people keep missing" them). */
+                  className={`flex items-center gap-2 rounded-full border px-4 py-2 text-[12px] font-semibold transition-colors ${
                     active
-                      ? "border-transparent bg-accent-soft text-accent-dark"
-                      : "border-line/80 text-muted hover:text-ink"
+                      ? "border-accent-dark bg-accent-dark text-white"
+                      : "border-accent-dark/50 bg-white text-accent-dark hover:bg-accent-soft"
                   }`}
                 >
                   {t.label}
@@ -2661,13 +2666,21 @@ function LeadDrawerBody({
               <button
                 data-steve="lead.passport"
                 type="button"
-                onClick={() => (passport?.done && passport.path ? window.open(passport.path, "_blank") : setPassportFlow("ask"))}
+                onClick={() => (passport?.done ? setAnswersOpen(true) : setPassportFlow("ask"))}
                 disabled={!passport?.done && (!passportEmail || passportBusy)}
-                title={passport?.done ? "Open their answers" : passportEmail ? "Ask for their details" : "No email on this lead"}
-                className="hidden items-center gap-2 rounded-full border border-line/80 px-4 py-2 text-[12px] text-muted transition-colors hover:text-ink disabled:opacity-50 md:flex"
+                title={passport?.done ? "Open their answers" : passport?.sent ? "Sent - send it again" : passportEmail ? "Ask for their details" : "No email on this lead"}
+                /* Pink, like the Leads board (8 Oct 2026): filled to send,
+                   outlined once sent, solid with a tick when done. */
+                className={`hidden items-center gap-2 rounded-full border px-4 py-2 text-[12px] font-semibold transition-colors disabled:opacity-50 md:flex ${
+                  passport?.done
+                    ? "border-accent-dark bg-accent-dark text-white hover:opacity-90"
+                    : passport?.sent
+                      ? "border-accent-dark/60 bg-white text-accent-dark hover:bg-accent-soft"
+                      : "border-accent-dark bg-accent-soft text-accent-dark hover:bg-accent-dark hover:text-white"
+                }`}
               >
                 <DoodleIcon name="user" size={13} />
-                {passport?.done ? "Passport done" : passportBusy ? "Sending…" : passport?.sent ? "Passport sent" : "Send passport"}
+                {passport?.done ? "✓ Passport done" : passportBusy ? "Sending…" : passport?.sent ? "Passport sent" : "Send passport"}
               </button>
             )}
           </div>
@@ -2723,11 +2736,12 @@ function LeadDrawerBody({
                           <h2 className="hand text-[32px] leading-[1.1]">{lead.name}</h2>
                         )}
                         {lostNow ? <Pill tone="neutral">Lost</Pill> : <Pill tone={STAGE_TONE[lead.stage]}>{lead.stage}</Pill>}
-                        {passport?.done && passport.path && (
-                          <a href={passport.path} target="_blank" rel="noreferrer" className="rounded-full bg-sage/40 px-2.5 py-1 text-[11px] font-semibold transition-opacity hover:opacity-80" title="Open their passport">
+                        {passport?.done && (
+                          <button type="button" onClick={() => setAnswersOpen(true)} className="rounded-full bg-accent-dark px-2.5 py-1 text-[11px] font-semibold text-white transition-opacity hover:opacity-90" title="Open their answers">
                             ✓ Passport done
-                          </a>
+                          </button>
                         )}
+                        {!passport?.done && passport?.sent && <span className="rounded-full border border-accent-dark/60 bg-white px-2.5 py-1 text-[11px] font-semibold text-accent-dark">Passport sent</span>}
                       </div>
                       <p className="mt-1.5 text-[13.5px] text-muted">
                         {enqProperty && enqProperty !== "—" ? enqProperty : interestedIn || (lead.subject === "Viewing enquiry" ? "Viewing enquiry" : "General enquiry")} · via {enquiry?.source || lead.source}
@@ -3933,6 +3947,7 @@ function LeadDrawerBody({
         onAddAnother={bookMode === "viewing" ? setBlockAnchor : undefined}
       />
       <AddToBlock anchor={blockAnchor} onClose={() => setBlockAnchor(null)} />
+      <PassportAnswers email={answersOpen ? passportEmail || null : null} name={lead.name} onClose={() => setAnswersOpen(false)} />
 
       {/* ── Recording the appraisal: what was found, what was said. Saving
           writes a real note and moves the record to the follow-up. ── */}
