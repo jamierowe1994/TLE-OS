@@ -18,7 +18,7 @@ import RaiseJob, { type RaiseDraft } from "@/components/maintenance/RaiseJob";
 import JobDrawer from "@/components/maintenance/JobDrawer";
 import { OPEN, STATUS_LABEL, day as shortDay, nextFor } from "@/components/maintenance/works-ui";
 import BookForm, { type Person } from "@/components/inspections/BookForm";
-import PortfolioMap from "@/components/PortfolioMap";
+import RentBox from "@/components/portfolio/RentBox";
 import { SPECS, STATUS_LABEL as NOTICE_STATUS, type Notice, type NoticeKind } from "@/lib/section-notices-spec";
 import type { PropertyDraft } from "@/lib/property-drafts";
 import { readJson } from "@/lib/page-cache";
@@ -62,7 +62,6 @@ type Action =
   | { kind: "notices"; start: NoticeKind }
   | { kind: "tenant-notice"; draft?: PropertyDraft };
 const DRAFT_TITLE: Record<string, string> = { repair: "Report a repair", planned: "Plan a job", "tenant-notice": "Tenant gave notice" };
-const MAPS = Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY);
 
 /** One line on the latest activity list. */
 type Activity = { key: string; at: string; icon: string; title: string; sub: string; hot?: boolean; go?: () => void; unfinished?: boolean; bin?: () => void };
@@ -858,11 +857,9 @@ export default function PropertyPage() {
 
           </section>
 
-          {MAPS && p.lat != null && p.lng != null && (
-            <section className={`${box} h-[260px] overflow-hidden lg:col-start-2 lg:row-start-3 lg:self-start`}>
-              <PortfolioMap properties={[p]} attention={new Set()} onOpen={() => {}} />
-            </section>
-          )}
+          {/* Rent where the map was (James, 8 Oct 2026): up to date or how
+              far behind, and the money in and out, live from PayProp. */}
+          {!p.test && <RentBox listingId={String(p.listingId)} className={`${box} lg:col-start-2 lg:row-start-3 lg:self-start`} />}
 
             {everything && !p.test && p.onRex !== false && (
               <p className="text-[11.5px] text-muted lg:col-start-1 lg:row-start-4">

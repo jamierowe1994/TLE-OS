@@ -1478,6 +1478,21 @@ CREATE TABLE IF NOT EXISTS os_offer_decisions (
 );
 CREATE INDEX IF NOT EXISTS os_offer_decisions_listing ON os_offer_decisions (listing_id);
 
+-- Rent behind, told to the agent (lib/rent-nudges, 8 Oct 2026). One row per
+-- tenant per rent day, so an agent hears once; "run|<hour>" rows mark that
+-- an hour's check has been made.
+CREATE TABLE IF NOT EXISTS os_rent_nudges (
+  key          TEXT PRIMARY KEY,
+  listing_id   TEXT,
+  address      TEXT NOT NULL DEFAULT '',
+  tenant       TEXT NOT NULL DEFAULT '',
+  owed         NUMERIC,
+  due_on       TEXT,
+  sent_to      TEXT,
+  outcome      TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- New-home alerts a tenant asked for, with the moment they agreed to the
 -- emails. consent_at is never set by us: the only way in is the tenant
 -- ticking the box. One alert per tenant; saving again replaces it.

@@ -1,3 +1,4 @@
+import { runRentNudges } from "@/lib/rent-nudges";
 import { runUpdateNudges } from "@/lib/customer-updates";
 import { runNewsletters } from "@/lib/newsletters";
 import { NextRequest, NextResponse } from "next/server";
@@ -283,10 +284,13 @@ export async function POST(req: NextRequest) {
   /* Customer updates nobody has dealt with: the agent is reminded, then
      Kirstie hears (lib/customer-updates). Never the customer. */
   const updates = await runUpdateNudges().catch((e) => ({ error: e instanceof Error ? e.message : "Update nudges failed." }));
+  /* Rent 48 hours behind: the home's agent hears, once (lib/rent-nudges).
+     Never the tenant - PayProp reminds them. At most hourly, in working hours. */
+  const rent = await runRentNudges(publicOrigin(req)).catch((e) => ({ error: e instanceof Error ? e.message : "Rent nudges failed." }));
   /* Steve's standing jobs (lib/steve-jobs, 2 Oct 2026). Last, because each is
      a model call and the sends above must never wait behind one. */
   const steveJobs = await runDueJobs().catch((e) => ({ ran: 0, failed: [e instanceof Error ? e.message : "Steve's jobs failed."] }));
-  return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, skipped: skipped.length, failed, decks, nudges, instructions, newsletters, updates, steveJobs });
+  return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, skipped: skipped.length, failed, decks, nudges, instructions, newsletters, updates, rent, steveJobs });
 }
 
 /** A dry read: what is due, without sending it. Same key as the run: this

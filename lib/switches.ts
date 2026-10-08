@@ -293,6 +293,22 @@ export const SWITCHES: Switch[] = [
   },
   {
     /**
+     * Rent behind (James, 8 Oct 2026): when a managed home's rent is 48 hours
+     * past due and still owed, the home's agent hears - "nothing you need to
+     * action, this is more for your records". PayProp sends the tenant's own
+     * reminder (Michael's set-up); the OS never emails the tenant. Once per
+     * due date, weekdays 8am to 6pm, only for rent due in the last 10 days.
+     */
+    key: "rent_nudges",
+    label: "Rent behind: tell the agent",
+    what: "Emails the home's agent when a tenant is 48 hours past the rent day and still owes, once per rent day. For their records only - PayProp has already reminded the tenant.",
+    who: "TLE agents (the home's agent, or Howard when the home has none). Never the tenant.",
+    confirm: "TELL AGENTS",
+    legacyEnv: "RENT_NUDGES",
+    legacyOn: "on",
+  },
+  {
+    /**
      * The Propoly watcher tells the AGENT when their deal moves. The feed
      * records every move whether this is on or not; this only decides whether
      * an email goes out about it. Off until Kirstie has watched the feed agree
