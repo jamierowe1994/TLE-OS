@@ -302,7 +302,7 @@ export const SWITCHES: Switch[] = [
     key: "rent_nudges",
     label: "Rent behind: tell the agent",
     what: "Emails the home's agent when a tenant is 48 hours past the rent day and still owes, once per rent day. For their records only - PayProp has already reminded the tenant.",
-    who: "TLE agents (the home's agent, or Howard when the home has none). Never the tenant.",
+    who: "TLE agents (the home's agent, or Howard when the home has none). Never the tenant. NOT LIVE: held off in code (lib/rent-nudges RENT_NUDGES_FROM) - this switch does nothing until then, and Howard is not sent them either.",
     confirm: "TELL AGENTS",
     legacyEnv: "RENT_NUDGES",
     legacyOn: "on",

@@ -5,7 +5,7 @@ import { currentLets } from "@/lib/current-lets";
 import { findUserByRexId } from "@/lib/users";
 import { sendEmail } from "@/lib/resend";
 import { proseEmail } from "@/lib/email/prose";
-import { ALWAYS_SEND_TO, sendsAnyway, switchOn } from "@/lib/switches";
+import { ALWAYS_SEND_TO, switchOn } from "@/lib/switches";
 import { current, lastDueDate, matchHome, rentBook } from "@/lib/rent-status";
 
 /**
@@ -24,11 +24,22 @@ import { current, lastDueDate, matchHome, rentBook } from "@/lib/rent-status";
  * 6pm London. A tenant counts when they still owe at least £1 and the rent
  * day passed at least 48 hours ago - and only rent days in the last 10 days,
  * so switching it on does not email every agent about every old debt at once.
- * Once per tenant per rent day (os_rent_nudges). Behind the "Rent behind:
- * tell the agent" switch; Howard's copies go regardless, as for every switch.
+ * Once per tenant per rent day (os_rent_nudges). Off in code until
+ * RENT_NUDGES_FROM is set, then behind the "Rent behind: tell the agent"
+ * switch for everyone - Howard is NOT sent these while it is off.
  */
 
 const DAY = 86_400_000;
+
+/**
+ * OFF, IN CODE (James, 8 Oct 2026: "they should not go out under any
+ * circumstances. They're not ready to go out yet."). While this is null
+ * nothing is sent to anybody - not with the switch on, and not to Howard,
+ * who otherwise gets every switch's emails. Two went to him on 8 Oct before
+ * this was here. Going live is a code change: set it to the day they start,
+ * "YYYY-MM-DD", and only rent days from that day on are ever told.
+ */
+export const RENT_NUDGES_FROM: string | null = null;
 
 function londonParts(now = new Date()) {
   const f = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", weekday: "short", hour: "2-digit", hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
@@ -42,6 +53,7 @@ const dayWords = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString("en
 export async function runRentNudges(origin: string, opts: { force?: boolean } = {}): Promise<{ checked: number; sent: number; held: number; skipped?: string; failed: string[] }> {
   const out = { checked: 0, sent: 0, held: 0, failed: [] as string[] };
   if (!hasDb()) return { ...out, skipped: "no database" };
+  if (!RENT_NUDGES_FROM) return { ...out, skipped: "not live - nothing is sent until RENT_NUDGES_FROM is set" };
   const t = londonParts();
   if (!opts.force) {
     if (t.weekday === "Sat" || t.weekday === "Sun" || t.hour < 8 || t.hour >= 18) return { ...out, skipped: "outside working hours" };
@@ -67,12 +79,19 @@ export async function runRentNudges(origin: string, opts: { force?: boolean } = 
       if (!dueOn) continue;
       const due = new Date(`${dueOn}T00:00:00Z`).getTime();
       if (now - due < 2 * DAY || now - due > 10 * DAY) continue;
+      /* ONLY NEWLY BEHIND (James, 8 Oct 2026): "only new properties moving
+         forwards ... not properties that are already behind". A rent day
+         before going live is never told; nor is a tenant owing more than this
+         one rent, who was behind already. */
+      if (dueOn < RENT_NUDGES_FROM) continue;
+      if (tenant.rent && tenant.owed > tenant.rent + 1) continue;
       /* A tenancy that had not started by the rent day owes nothing yet. */
       if (tenant.tenancyStart && tenant.tenancyStart.slice(0, 10) > dueOn) continue;
 
       const agent = home.agent?.id ? await findUserByRexId(home.agent.id).catch(() => null) : null;
       const to = agent?.email ?? ALWAYS_SEND_TO[0];
-      if (!armed && !sendsAnyway(to)) {
+      /* The switch as well, for every recipient - Howard included. */
+      if (!armed) {
         out.held++;
         continue;
       }
