@@ -67,7 +67,7 @@ async function ours(authorId: string | null, selfId: string): Promise<Appt[]> {
            viewing running into the next one. The grid keeps its own
            minimum height. */
         mins: Math.min(Math.max(r.mins || 30, 5), 8 * 60),
-        kind: (["viewing", "appraisal", "takeon", "movein", "inspection", "travel", "other"]
+        kind: (["viewing", "appraisal", "takeon", "movein", "inspection", "travel", "other", "slot"]
           .includes(r.kind) ? r.kind : "other") as ApptKind,
         what: r.title,
         where: r.where_at ?? "",

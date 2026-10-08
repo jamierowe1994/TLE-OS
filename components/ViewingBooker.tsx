@@ -62,10 +62,6 @@ type Listing = {
   propertyId?: string | null;
 };
 
-/* What the booker's own Length box offers: up to the four hours a drag
-   allows. Starts is typed to the minute. */
-const LENGTHS = Array.from({ length: 16 }, (_, i) => (i + 1) * 15);
-
 function lengthWords(n: number): string {
   const h = Math.floor(n / 60);
   const m = n % 60;
@@ -1143,17 +1139,26 @@ export default function ViewingBooker({
             className="figures w-full min-w-0 rounded-lg border border-line/80 bg-card px-2.5 py-2 text-[13px] text-ink"
           />
         </label>
+        {/* ENDS, typed (James, 8 Oct 2026): "we should actually just allow them
+            to pick the end time ... rather than us trying to guess what time
+            they want to view for". It was a list of quarter-hour lengths. The
+            length is worked out from the two times, and shown under it. */}
         <label className="flex min-w-0 flex-col gap-1 text-[11px] text-muted">
-          Length
-          <select
-            value={mins}
-            onChange={(e) => setMins(Number(e.target.value))}
-            className="w-full min-w-0 rounded-lg border border-line/80 bg-card px-2.5 py-2 text-[13px] text-ink"
-          >
-            {(LENGTHS.includes(mins) ? LENGTHS : [...LENGTHS, mins].sort((a, b) => a - b)).map((n) => (
-              <option key={n} value={n}>{lengthWords(n)}</option>
-            ))}
-          </select>
+          Ends
+          <input
+            type="time"
+            step={60}
+            value={endOf(slot, mins)}
+            onChange={(e) => {
+              if (!/^\d{2}:\d{2}$/.test(e.target.value)) return;
+              const [sh, sm] = slot.split(":").map(Number);
+              const [eh, em] = e.target.value.split(":").map(Number);
+              const length = eh * 60 + em - (sh * 60 + sm);
+              if (length >= 5 && length <= 8 * 60) setMins(length);
+            }}
+            className="figures w-full min-w-0 rounded-lg border border-line/80 bg-card px-2.5 py-2 text-[13px] text-ink"
+          />
+          <span className="text-[10.5px] text-muted">{lengthWords(mins)}</span>
         </label>
       </div>
   ) : null;

@@ -28,7 +28,11 @@ export type ApptKind =
   /** Everything else in a real working day — appointments, training, the
    *  private entries that show only as "Busy". Hiding these would tell you
    *  an agent is free when they are not. */
-  | "other";
+  | "other"
+  /** A VIEWING SLOT (James, 8 Oct 2026): time held at a property - "she has an
+   *  hour tomorrow, 12 till 1" - that viewings are then booked within, one
+   *  by one ("Book within slot"). The OS's own entry; nobody is invited. */
+  | "slot";
 
 export type Appt = {
   id: string;
@@ -151,6 +155,7 @@ export const KIND_META: Record<ApptKind, { label: string; icon: string }> = {
      at least reads as "somewhere to get to". */
   travel: { label: "Travel time", icon: "target" },
   other: { label: "In the diary", icon: "clock" },
+  slot: { label: "Viewing slot", icon: "calendar" },
 };
 
 /** "10:15" → minutes since midnight. */

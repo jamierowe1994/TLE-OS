@@ -8,6 +8,8 @@ import DoodleIcon from "@/components/DoodleIcon";
 import { PressButton } from "@/components/Bits";
 import { canChangeTime } from "@/components/viewings/ChangeViewing";
 import { anchorFromAppt, type BlockAnchor } from "@/components/viewings/AddToBlock";
+import { refreshDiary, useDiary } from "@/lib/diary-store";
+import { apptStartIso } from "@/components/viewings/ChangeViewing";
 import type { Outcome } from "@/components/ViewingDrawer";
 import type { KeySet } from "@/lib/rex-keys";
 import { KIND_META, type Appt } from "@/lib/diary";
@@ -46,7 +48,7 @@ import { WhatsAppButton } from "@/components/WhatsAppQr";
  */
 
 /** Kinds that happen AT a property, and so have keys and an occupier. */
-const AT_PROPERTY = new Set(["viewing", "takeon", "movein", "inspection"]);
+const AT_PROPERTY = new Set(["viewing", "takeon", "movein", "inspection", "slot"]);
 
 function Section({ icon, title, children }: { icon: string; title: string; children: React.ReactNode }) {
   return (
@@ -91,6 +93,14 @@ export default function AppointmentDrawer({
   sentExtra: Set<string>;
   onSend: (apptId: string, label: string) => void;
 }) {
+  /* A slot: the viewings booked inside it, from the same diary (8 Oct 2026). */
+  const { appts: diary } = useDiary();
+  const [removing, setRemoving] = useState<"ask" | "busy" | null>(null);
+  const [slotSaid, setSlotSaid] = useState<string | null>(null);
+  useEffect(() => {
+    setRemoving(null);
+    setSlotSaid(null);
+  }, [appt?.id]);
   /* Every way out plays the card out first (lib/use-slide-over). */
   const { shown, close: onClose } = useSlideOver(Boolean(appt), closeNow, appt?.id);
   useEffect(() => {
@@ -221,7 +231,39 @@ export default function AppointmentDrawer({
             </Section>
           )}
 
+          {/* ── A slot: who is booked in it, in order. ── */}
+          {appt.kind === "slot" && (() => {
+            const from = new Date(apptStartIso(appt)).getTime();
+            const to = from + appt.mins * 60_000;
+            const inside = diary
+              .filter((a) => a.kind === "viewing" && ((appt.listingId && a.listingId === appt.listingId) || (!!appt.where && a.where === appt.where)))
+              .filter((a) => {
+                const t = new Date(apptStartIso(a)).getTime();
+                return t < to && t + a.mins * 60_000 > from;
+              })
+              .sort((a, b) => apptStartIso(a).localeCompare(apptStartIso(b)));
+            return (
+              <Section icon="user" title={`Booked in this slot · ${inside.length}`}>
+                {inside.length ? (
+                  <ul className="space-y-1.5">
+                    {inside.map((a) => (
+                      <li key={a.id} className="flex items-center gap-3">
+                        <span className="figures w-12 shrink-0 text-[12px] text-muted">{a.start}</span>
+                        <span className="min-w-0 flex-1 truncate font-semibold">{a.who || "Viewer"}</span>
+                        <span className="text-[11px] text-muted">{a.mins} min</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-muted">Nobody booked in it yet. Book within slot to add the first tenant.</p>
+                )}
+                <p className="mt-2 text-[11px] text-muted">Held time - nobody is told about the slot itself.</p>
+              </Section>
+            );
+          })()}
+
           {/* ── Who ── */}
+          {appt.kind !== "slot" && (
           <Section icon="user" title={appt.kind === "viewing" ? (past ? "Who viewed" : "Who's coming") : "Who it's with"}>
             {appt.who ? <p className="font-semibold">{appt.who}</p> : <p className="text-muted">Nobody named on this entry.</p>}
             {appt.contact ? (
@@ -244,6 +286,7 @@ export default function AppointmentDrawer({
             )}
             <p className="mt-2 text-[11px] text-muted">Diary: {appt.agent || "not recorded"}</p>
           </Section>
+          )}
 
           {/* ── Access: stated even when the answer is "we don't know" - an
                  agent on a doorstep needs the blank as much as the fact. ── */}
@@ -302,7 +345,7 @@ export default function AppointmentDrawer({
           )}
 
           {/* ── Confirmations: did the messages actually go? ── */}
-          {appt.kind !== "other" && appt.kind !== "travel" && (
+          {appt.kind !== "other" && appt.kind !== "travel" && appt.kind !== "slot" && (
             <Section icon="mail" title="Confirmations">
               {appt.comms.length === 0 ? (
                 <p className="text-muted">
@@ -387,7 +430,45 @@ export default function AppointmentDrawer({
 
         {/* ── The way in: one button to the file. ── */}
         <div className="shrink-0 border-t border-line/60 px-5 py-4">
-          {appt.kind === "viewing" ? (
+          {appt.kind === "slot" ? (
+            /* A slot: book tenants within it, or let the time go. */
+            <div className="flex flex-wrap gap-2">
+              {(() => {
+                const anchor = anchorFromAppt({ ...appt, listingId: appt.listingId ?? match?.listingId ?? null });
+                return onAddToBlock && anchor ? (
+                  <button type="button" data-steve="appointment.book-within-slot" onClick={() => onAddToBlock({ ...anchor, locality: match?.locality })} className={`${primary} flex-1`}>
+                    <DoodleIcon name="user" size={13} />
+                    Book within slot
+                  </button>
+                ) : null;
+              })()}
+              {appt.id.startsWith("os-") && (
+                <button
+                  type="button"
+                  disabled={removing === "busy"}
+                  onBlur={() => removing === "ask" && setRemoving(null)}
+                  onClick={async () => {
+                    if (removing !== "ask") return setRemoving("ask");
+                    setRemoving("busy");
+                    const j = await fetch("/api/viewings/slot", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ slotId: appt.id }) })
+                      .then((r) => r.json() as Promise<{ ok?: boolean; said?: string }>)
+                      .catch(() => null);
+                    if (!j?.ok) {
+                      setRemoving(null);
+                      setSlotSaid(j?.said ?? "That didn't remove it. Try again.");
+                      return;
+                    }
+                    await refreshDiary().catch(() => null);
+                    onClose();
+                  }}
+                  className={secondary}
+                >
+                  {removing === "busy" ? "Removing…" : removing === "ask" ? "Yes, remove the slot" : "Remove slot"}
+                </button>
+              )}
+              {slotSaid && <p className="w-full text-[11.5px] text-accent-dark">{slotSaid}</p>}
+            </div>
+          ) : appt.kind === "viewing" ? (
             <div className="flex flex-wrap gap-2">
               <button type="button" data-steve="appointment.open-viewing" onClick={() => onOpenViewing(appt)} className={`${primary} flex-1`}>
                 <DoodleIcon name="folder" size={13} />

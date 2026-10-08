@@ -116,7 +116,7 @@ export function groupByDay(appts: Appt[]): Map<number, Appt[]> {
  * pink; anything else in the day is quiet grey. Travel is a gap and reads
  * as one.
  */
-export type Tone = "accent" | "sage" | "neutral" | "travel" | "unaccompanied";
+export type Tone = "accent" | "sage" | "neutral" | "travel" | "unaccompanied" | "slot";
 
 /* An unaccompanied viewing keeps the viewing's pink but hollow - a dashed
    outline on white - so it still reads as a viewing, and plainly as one with
@@ -125,6 +125,7 @@ export function toneOf(kind: ApptKind, unaccompanied?: boolean): Tone {
   if (kind === "viewing") return unaccompanied ? "unaccompanied" : "accent";
   if (kind === "travel") return "travel";
   if (kind === "other") return "neutral";
+  if (kind === "slot") return "slot";
   return "sage";
 }
 
@@ -132,6 +133,8 @@ export function toneOf(kind: ApptKind, unaccompanied?: boolean): Tone {
 export function bubble(tone: Tone): { className: string; style?: React.CSSProperties } {
   if (tone === "accent") return { className: "bg-accent-soft text-accent-dark" };
   if (tone === "unaccompanied") return { className: "border border-dashed border-accent/70 bg-white text-accent-dark" };
+  /* A slot is held time, not a booking: the pink outline, dashed, on the wash. */
+  if (tone === "slot") return { className: "border border-dashed border-accent-dark/60 bg-accent-soft/40 text-accent-dark" };
   if (tone === "sage") return { className: "", style: { background: SAGE_WASH, color: SAGE_INK } };
   return { className: "bg-panel text-muted" };
 }
@@ -146,6 +149,7 @@ export function block(tone: Tone, past: boolean): { className: string; style?: R
   if (past) return { className: "border-line/60 bg-white text-muted" };
   if (tone === "accent") return { className: "border-accent/50 bg-accent-soft/80 text-ink" };
   if (tone === "unaccompanied") return { className: "border-dashed border-accent/70 bg-white text-ink" };
+  if (tone === "slot") return { className: "border-dashed border-accent-dark/60 bg-accent-soft/40 text-ink" };
   if (tone === "sage") return { className: "border-transparent text-ink", style: { background: SAGE_WASH } };
   return { className: "border-line/60 bg-panel text-ink" };
 }

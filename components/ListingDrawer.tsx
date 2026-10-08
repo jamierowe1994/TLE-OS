@@ -61,6 +61,8 @@ import RecordPapers from "@/components/listing/RecordPapers";
 import OfferWhoPicker, { type OfferPerson } from "@/components/offers/OfferWhoPicker";
 import ListingOffers, { type ListingOffer } from "@/components/listing/ListingOffers";
 import AddToBlock, { type BlockAnchor } from "@/components/viewings/AddToBlock";
+import BookSlot from "@/components/viewings/BookSlot";
+import { apptStartIso } from "@/components/viewings/ChangeViewing";
 
 /**
  * The property record — the leads drawer's shape, aimed at a thing instead of
@@ -538,6 +540,8 @@ function ListingDrawerBody({
   const [pickingOfferer, setPickingOfferer] = useState(false);
   /* "Add another viewing to this slot" on an upcoming viewing (8 Oct 2026). */
   const [blockAnchor, setBlockAnchor] = useState<BlockAnchor | null>(null);
+  /* Book a slot (8 Oct 2026): held time at the home, tenants booked within it. */
+  const [slotting, setSlotting] = useState(false);
   const [savedOffers, setSavedOffers] = useState<ListingOffer[] | null>(null);
   /* Bumped after an Accept, Decline or Undo, so the list reads again. */
   const [offersTick, setOffersTick] = useState(0);
@@ -837,6 +841,11 @@ function ListingDrawerBody({
   const isLive = pub ? pub.status === "published" : listing.publicationStatus === "published";
   /* An offer can only go on a home that is live, not let agreed and has a
      rent - the same test the offer form's save makes (lib/agent-offer). */
+  /* This home's viewing slots still to come, from the shared diary. */
+  const homeSlots = liveDiary
+    .filter((a) => a.kind === "slot" && a.listingId != null && String(a.listingId) === String(listing.id))
+    .filter((a) => new Date(apptStartIso(a)).getTime() + a.mins * 60_000 > Date.now())
+    .sort((a, b) => apptStartIso(a).localeCompare(apptStartIso(b)));
   const canOffer = isLive && !listing.letAgreed && (listing.rent ?? 0) > 0 && /^-?\d+$/.test(String(listing.id));
 
   /* The upcoming viewings, for an access request to hang off. */
@@ -1251,6 +1260,16 @@ function ListingDrawerBody({
                     >
                       <DoodleIcon name="calendar" size={14} />
                       Book a viewing
+                    </PressButton>
+                  )}
+                  {LISTING_BOOKER_LIVE && (
+                    <PressButton
+                      data-steve="listing.book-slot"
+                      onClick={() => setSlotting(true)}
+                      className="press-ring flex items-center gap-2 rounded-full border border-line/60 bg-white px-4 py-2.5 text-[12.5px] font-semibold"
+                    >
+                      <DoodleIcon name="clock" size={14} />
+                      Book a slot
                     </PressButton>
                   )}
                   {/* Next in the journey after a viewing (Howard, 7 Oct 2026):
@@ -1817,16 +1836,55 @@ function ListingDrawerBody({
                     icon="calendar"
                     action={
                       LISTING_BOOKER_LIVE ? (
-                        <PressButton
-                          onClick={() => setBooking(true)}
-                          className="press-ring flex items-center gap-2 rounded-full border border-ink/25 px-3.5 py-2 text-[11.5px] font-semibold"
-                        >
-                          <DoodleIcon name="calendar" size={13} />
-                          Book a viewing
-                        </PressButton>
+                        <span className="flex flex-wrap justify-end gap-2">
+                          <PressButton
+                            onClick={() => setSlotting(true)}
+                            className="press-ring flex items-center gap-2 rounded-full border border-ink/25 px-3.5 py-2 text-[11.5px] font-semibold"
+                          >
+                            <DoodleIcon name="clock" size={13} />
+                            Book a slot
+                          </PressButton>
+                          <PressButton
+                            onClick={() => setBooking(true)}
+                            className="press-ring flex items-center gap-2 rounded-full border border-ink/25 px-3.5 py-2 text-[11.5px] font-semibold"
+                          >
+                            <DoodleIcon name="calendar" size={13} />
+                            Book a viewing
+                          </PressButton>
+                        </span>
                       ) : undefined
                     }
                   >
+                    {/* The slots held at this home, each with Book within slot. */}
+                    {homeSlots.length > 0 && (
+                      <ul className="mb-2 space-y-2">
+                        {homeSlots.map((a) => {
+                          const startIso = apptStartIso(a);
+                          const end = new Date(new Date(startIso).getTime() + a.mins * 60_000);
+                          const endHm = end.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
+                          const inside = liveDiary.filter((v) => v.kind === "viewing" && v.listingId === a.listingId && v.day === a.day && v.start >= a.start && v.start < endHm).length;
+                          return (
+                            <li key={a.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-dashed border-accent-dark/50 bg-accent-soft/30 px-3.5 py-2.5">
+                              <span className="min-w-0 flex-1">
+                                <span className="block text-[12.5px] font-semibold">
+                                  Viewing slot · {new Date(startIso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/London" })}, {a.start}-{endHm}
+                                </span>
+                                <span className="block text-[11px] text-muted">{inside ? `${inside} booked in it` : "Nobody booked in it yet"}</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setBlockAnchor({ viewingId: a.id, listingId: String(listing.id), property: listing.name, locality: listing.locality, startsAt: startIso, minutes: a.mins, slot: true })
+                                }
+                                className="shrink-0 rounded-full bg-accent-dark px-3.5 py-1.5 text-[11.5px] font-semibold text-white"
+                              >
+                                Book within slot
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
                     {(viewings?.upcoming.length ?? 0) + booked.length > 0 ? (
                       <ul>
                         {(viewings?.upcoming ?? []).map(viewingRow)}
@@ -2013,6 +2071,12 @@ function ListingDrawerBody({
       )}
 
       <AddToBlock anchor={blockAnchor} onClose={() => setBlockAnchor(null)} />
+      <BookSlot
+        open={slotting}
+        home={{ id: String(listing.id), name: listing.name, locality: listing.locality }}
+        onClose={() => setSlotting(false)}
+        onBookWithin={(slot) => setBlockAnchor(slot)}
+      />
 
       {pickingOfferer && (
         <OfferWhoPicker
