@@ -35,6 +35,9 @@ import { rentKey } from "@/lib/business/payprop-portfolio";
  * that fails, or leaves an agency out, is tried again every half hour until
  * it works. A copy more than a day and a bit old is not shown at all: the box
  * says when it was last checked instead.
+ *
+ * AND AGAIN AT 4PM (James, 8 Oct 2026: "add a 4 pm read as well"), so rent
+ * paid during the day shows that afternoon, not the next morning.
  */
 
 export type TenantBalance = {
@@ -64,10 +67,11 @@ type MonthRents = { month: string; byProperty: Record<string, { in: string; amou
 type Book = { at: number; balances: TenantBalance[]; properties: PpProperty[]; unreachable: PayPropAccountId[]; rents: MonthRents[] };
 
 const KEY = "rent-status:v4";
-/** The morning read, London time. */
-const READ_HOUR = 10;
-/** Older than this and the copy is not shown - the 10am read has failed. */
-const TOO_OLD_MS = 27 * 3_600_000;
+/** The reads, London time: 10am and 4pm. */
+const READ_HOURS = [10, 16];
+/** Older than this and the copy is not shown. The longest gap between reads
+ *  is 4pm to 10am (18 hours); three more for the half-hourly retries. */
+const TOO_OLD_MS = 21 * 3_600_000;
 let held: Book | null = null;
 let inFlight: Promise<Book | null> | null = null;
 
@@ -164,7 +168,7 @@ async function compute(): Promise<Book | null> {
   return { at: Date.now(), balances, properties, unreachable, rents };
 }
 
-/** The stored morning read. Never calls PayProp. */
+/** The stored read, from 10am or 4pm. Never calls PayProp. */
 export async function rentBook(): Promise<Book | null> {
   const stored = await readCache<Book>(KEY).catch(() => null);
   if (stored?.data && (!held || stored.data.at > held.at)) held = stored.data;
@@ -211,17 +215,22 @@ async function readsQ<T extends Record<string, unknown> = Record<string, unknown
 
 /**
  * Called by the scheduled-sends cron every few minutes. Reads PayProp only
- * when the stored copy is from before this morning's 10am (or there is none
- * at all) - once a day, across every server, claimed in os_rent_reads. A read
+ * when the stored copy is from before the latest 10am or 4pm (or there is
+ * none at all) - once per read, across every server, claimed in
+ * os_rent_reads (its "day" column holds the slot, "2026-10-08T16"). A read
  * that fails or misses an agency is tried again after half an hour. Starts
  * the read and returns; the cron does not wait on PayProp.
  */
 export async function runDailyRentRead(now = new Date()): Promise<{ skipped?: string; started?: string }> {
   if (!hasDb()) return { skipped: "no database" };
   const t = londonStamp(now);
-  /* The read this copy should be from: today's 10am, or yesterday's before then. */
-  const slotDay = t.hour >= READ_HOUR ? t.day : londonStamp(now.getTime() - 86_400_000).day;
-  const slot = `${slotDay}T${String(READ_HOUR).padStart(2, "0")}`;
+  /* The read this copy should be from: the latest 10am or 4pm that has passed,
+     or yesterday's 4pm before 10am. */
+  const hh = (h: number) => String(h).padStart(2, "0");
+  const today = READ_HOURS.filter((h) => h <= t.hour);
+  const slot = today.length
+    ? `${t.day}T${hh(today[today.length - 1])}`
+    : `${londonStamp(now.getTime() - 86_400_000).day}T${hh(READ_HOURS[READ_HOURS.length - 1])}`;
   const book = await rentBook();
   if (book && londonStamp(book.at).stamp >= slot && !book.unreachable.length) return { skipped: "already read" };
 
@@ -230,7 +239,7 @@ export async function runDailyRentRead(now = new Date()): Promise<{ skipped?: st
      ON CONFLICT (day) DO UPDATE SET started_at = NOW(), error = NULL
       WHERE os_rent_reads.finished_at IS NULL AND os_rent_reads.started_at < NOW() - INTERVAL '30 minutes'
      RETURNING day`,
-    [slotDay]
+    [slot]
   ).catch(() => []);
   if (!claimed.length) return { skipped: "read in hand or tried in the last half hour" };
 
@@ -241,11 +250,11 @@ export async function runDailyRentRead(now = new Date()): Promise<{ skipped?: st
         whole
           ? `UPDATE os_rent_reads SET finished_at = NOW(), error = NULL WHERE day = $1`
           : `UPDATE os_rent_reads SET error = $2 WHERE day = $1`,
-        whole ? [slotDay] : [slotDay, b ? `Not everything read: ${[...b.unreachable, ...b.rents.filter((m) => !m.byProperty).map((m) => m.month)].join(", ")}` : "PayProp couldn't be read"]
+        whole ? [slot] : [slot, b ? `Not everything read: ${[...b.unreachable, ...b.rents.filter((m) => !m.byProperty).map((m) => m.month)].join(", ")}` : "PayProp couldn't be read"]
       ).catch(() => {});
     })
     .catch(() => {});
-  return { started: slotDay };
+  return { started: slot };
 }
 
 /** The one PayProp property that is this home, or why there isn't one. */
@@ -306,10 +315,10 @@ const monthKey = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 
 
 export async function rentStatusFor(home: { name: string; address?: string | null; postcode: string | null }): Promise<RentStatus> {
   const book = await rentBook();
-  if (!book) return { state: "unreachable", detail: "The rent is checked with PayProp at 10am each day, and the first check hasn't finished yet." };
+  if (!book) return { state: "unreachable", detail: "The rent is checked with PayProp at 10am and 4pm each day, and the first check hasn't finished yet." };
   if (Date.now() - book.at > TOO_OLD_MS) {
     const when = new Date(book.at).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
-    return { state: "unreachable", detail: `PayProp couldn't be read this morning, so the rent can't be shown. It was last checked on ${when}.` };
+    return { state: "unreachable", detail: `PayProp couldn't be read at the last check, so the rent can't be shown. It was last checked on ${when}.` };
   }
   const hit = matchHome(book, home);
   if (hit === "unsure") return { state: "unmatched", detail: "More than one PayProp property has this address, so we can't say which is this home." };
@@ -321,7 +330,7 @@ export async function rentStatusFor(home: { name: string; address?: string | nul
   const tenants = book.balances.filter((b) => b.account === hit.account && b.propertyId === hit.id && current(b));
   const owed = Math.round(tenants.reduce((s, t) => s + Math.max(0, t.owed), 0) * 100) / 100;
 
-  /* The last three months of rent in and out, from the same morning read. */
+  /* The last three months of rent in and out, from the same read. */
   const history = book.rents.map(({ month, byProperty }) => {
     if (!byProperty) return { month, in: null, amountToLandlord: null, paidOut: null };
     const mine = byProperty[hit.id];

@@ -287,7 +287,7 @@ export async function POST(req: NextRequest) {
   const updates = await runUpdateNudges().catch((e) => ({ error: e instanceof Error ? e.message : "Update nudges failed." }));
   /* Rent 48 hours behind: the home's agent hears, once (lib/rent-nudges).
      Never the tenant - PayProp reminds them. At most hourly, in working hours. */
-  /* PayProp's rent read, once a day at 10am (lib/rent-status). Starts it and
+  /* PayProp's rent read, at 10am and 4pm (lib/rent-status). Starts it and
      moves on - the screens read what it stores. */
   const rentRead = await runDailyRentRead().catch((e) => ({ error: e instanceof Error ? e.message : "Rent read failed." }));
   const rent = await runRentNudges(publicOrigin(req)).catch((e) => ({ error: e instanceof Error ? e.message : "Rent nudges failed." }));

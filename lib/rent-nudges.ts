@@ -62,9 +62,9 @@ export async function runRentNudges(origin: string, opts: { force?: boolean } = 
     if (!claimed.length) return { ...out, skipped: "already checked this hour" };
   }
 
-  /* This morning's 10am read only - the nudges never call PayProp themselves. */
+  /* Today's 10am or 4pm read only - the nudges never call PayProp themselves. */
   const book = await rentBook();
-  if (!book || Date.now() - book.at > 12 * 3_600_000) return { ...out, skipped: "no rent read from this morning" };
+  if (!book || Date.now() - book.at > 12 * 3_600_000) return { ...out, skipped: "no rent read from today" };
   const { book: homes } = await managedBookFor(null);
   const armed = await switchOn("rent_nudges");
   const now = Date.now();

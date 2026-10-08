@@ -11,7 +11,7 @@ import DoodleIcon from "@/components/DoodleIcon";
  * by ... a payment in and out box." Live from PayProp through
  * /api/portfolio/rent; while it reads it says so, and when PayProp can't be
  * read or the home can't be matched it says that - never an old figure.
- * PayProp is read once a day at 10am, so the box says when (lib/rent-status).
+ * PayProp is read at 10am and 4pm, so the box says when (lib/rent-status).
  */
 
 type Status =
@@ -109,7 +109,7 @@ export default function RentBox({ listingId, className }: { listingId: string; c
               <li key={h.month} className="flex items-center gap-3 px-3 py-2 text-[12px]">
                 <span className="w-[72px] shrink-0 font-semibold">{monthName(h.month)}</span>
                 {h.amountToLandlord === null ? (
-                  <span className="text-muted">Not read this morning</span>
+                  <span className="text-muted">Not read at the last check</span>
                 ) : h.in ? (
                   <span className="min-w-0 flex-1">
                     <span>In {day(h.in)}</span>
@@ -124,7 +124,7 @@ export default function RentBox({ listingId, className }: { listingId: string; c
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-[10.5px] text-muted">From PayProp, checked {checked(s.checkedAt)}. Checked again each day at 10am.</p>
+          <p className="mt-2 text-[10.5px] text-muted">From PayProp, checked {checked(s.checkedAt)}. Checked each day at 10am and 4pm.</p>
         </>
       )}
     </section>
