@@ -423,6 +423,38 @@ export default function PropertyPage() {
     act({ kind: "inspection", inspection: r.inspection });
   }
 
+  /* Book the check-out: the one already open on this home, or a new
+     check-out visit due on the day they leave. Only offered once notice is in. */
+  async function bookCheckout() {
+    if (!p || !propertyId || visits.state !== "ready") return;
+    setActionErr(null);
+    const inHand = visits.data.inspections.find((i) => i.kind === "check_out" && OPEN_VISIT.includes(i.status));
+    if (inHand) return act({ kind: "inspection", inspection: inHand });
+    const t = tenants[0];
+    const r = await fetch("/api/inspections", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        kind: "check_out",
+        propertyName: house ? house.name : p.name,
+        locality: p.locality,
+        propertyId,
+        listingId: p.listingId,
+        landlord: landlord?.name ?? "",
+        landlordEmail: landlord?.email ?? "",
+        tenant: leaving?.tenant || t?.name || "",
+        tenantEmail: t?.email || "",
+        tenantPhone: t?.phone || "",
+        tenancyStart: tenancy.state === "ready" ? tenancy.data.tenancy?.startDate ?? null : null,
+        dueAt: leaving?.moveOutAt ?? new Date().toISOString(),
+        osPropertyId: leaving?.osPropertyId ?? null,
+      }),
+    }).then((x) => x.json()).catch(() => null);
+    if (!r?.ok) return setActionErr(r?.error ?? "The check-out could not be raised.");
+    loadVisits();
+    act({ kind: "inspection", inspection: r.inspection });
+  }
+
   const openJobs = works.state === "ready" ? works.data.orders.filter((o) => OPEN.includes(o.status)) : [];
   const openVisits = visits.state === "ready" ? visits.data.inspections.filter((i) => OPEN_VISIT.includes(i.status)) : [];
   /* Only a visit still to happen is "booked"; one already made is history. */
@@ -430,6 +462,24 @@ export default function PropertyPage() {
   const owedVisit = visits.state === "ready" ? visits.data.due[0] ?? null : null;
   const leaving = ending.state === "ready" ? ending.data.open[0] ?? null : null;
   const reviewDue = ending.state === "ready" ? ending.data.reviewsDue[0] ?? null : null;
+
+  /* RE-LET AND CHECK-OUT WAIT FOR NOTICE (Michael and James, 8 Oct 2026).
+     "Technically they could relet that property by accident" - a new listing
+     on a home whose tenant is still in contract, and Portfolio then thinks
+     nobody lives there. So both buttons stay hidden until notice is in: the
+     tenant has given notice (an open move-out, ours or REX PM's), or a
+     Section 8 has been approved by compliance and served. Re-let also stays
+     once the move-out is closed as moved out since this let began. Not "no
+     tenant on the record": REX names nobody on hundreds of let homes, and the
+     PayProp tenancy reads blank when it is not read yet or matches an older
+     let, so blank never means empty. A board still loading, or one that
+     failed, counts as no notice, and keeps both hidden. */
+  const s8Served = notices.state === "ready" && notices.data.some((n) => n.kind === "s8" && n.status === "served");
+  const noticeIn = Boolean(leaving) || s8Served;
+  const letFrom = p.letSince ? p.letSince.slice(0, 10) : "";
+  const movedOut = ending.state === "ready" && ending.data.done.some((m) => m.outcome === "moved_out" && (m.movedOutOn ?? m.doneAt.slice(0, 10)) >= letFrom);
+  const mayRelet = noticeIn || movedOut;
+
   const rentLine = p.rent == null ? null : `${money(p.rent)} ${p.rentPeriod === "week" ? "pw" : "pcm"}`;
 
   /* ── the latest activity: every board's newest, one list ─────────────── */
@@ -630,7 +680,10 @@ export default function PropertyPage() {
                 <button type="button" onClick={() => act({ kind: "notices", start: "s13" })} disabled={roomsOnly} className={tile}>{tileIcon("coin")}{tileText("Rent review", "Section 13 rent increase")}</button>
                 <button type="button" disabled={!canAct || !tenants.length} onClick={() => act({ kind: "tenant-notice" })} className={tile}>{tileIcon("logout")}{tileText("Tenant gave notice", "Starts the move-out")}</button>
                 <button type="button" disabled={!propertyId} onClick={() => { pickTab("compliance"); setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }} className={tile}>{tileIcon("shield")}{tileText("Add a certificate", "Read and filed on the home")}</button>
-                {canAct && p.onRex !== false ? (
+                {canAct && noticeIn ? (
+                  <button type="button" disabled={visits.state !== "ready"} onClick={() => void bookCheckout()} className={tile}>{tileIcon("key")}{tileText("Book the check-out", leaving?.moveOutOn ? `They leave ${day(leaving.moveOutOn)}` : "Notice is in")}</button>
+                ) : null}
+                {canAct && p.onRex !== false && mayRelet ? (
                   <div className="relative">
                     <span className="pointer-events-none absolute left-3.5 top-3.5">{tileIcon("pack/house")}</span>
                     <ReletAction home={p} className="peer flex h-full min-h-[72px] w-full items-end gap-1 rounded-xl border border-line/60 bg-white p-3.5 pb-[34px] text-left text-[12.5px] font-semibold leading-tight transition-[transform,box-shadow,border-color] duration-200 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:border-ink/60 hover:shadow-[3px_3px_0_0_color-mix(in_srgb,var(--ink)_72%,var(--page))]" />
@@ -896,7 +949,7 @@ export default function PropertyPage() {
         </Modal>
       )}
       {action?.kind === "inspection" && visits.state === "ready" && (
-        <Modal onClose={closeAction} title="Book a property visit" wide>
+        <Modal onClose={closeAction} title={action.inspection.kind === "check_out" ? "Book the check-out" : "Book a property visit"} wide>
           <BookVisit
             inspection={action.inspection}
             team={visits.data.team}
