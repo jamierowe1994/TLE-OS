@@ -73,7 +73,9 @@ function docDescription(type: string, expiry: string, name: string): string {
   return `${TYPE_WORDS[type] ?? type} - expires ${expiry} - ${plainName(name)}`.slice(0, 200);
 }
 
-const LIFE_MONTHS: Partial<Record<string, number>> = { eicr: 60, gas_safety: 12, epc: 120, legionella_risk_assessment: 24, portable_appliance_testing: 12 };
+const LIFE_MONTHS: Partial<Record<string, number>> = { eicr: 60, gas_safety: 12, epc: 120, legionella_risk_assessment: 24, portable_appliance_testing: 12, emergency_lighting_fire_exit: 12 };
+/** REX types whose entry has a tested or checked date and no expiry field. */
+const NO_EXPIRY = new Set(["portable_appliance_testing", "emergency_lighting_fire_exit"]);
 
 /** Which REX compliance type a check writes, by check and then by filename. */
 export function rexTypeFor(checkId: CheckId, name: string): string | null {
@@ -221,14 +223,18 @@ export async function writeCertificateToRex(input: {
     /* A licence entry has no notes field (getSchemaForType, 6 Sep): its text field is `conditions`, which is the licence's, not ours. */
     const licence = /_hmo_license$/.test(input.type);
     if (!licence) detail.notes = notes;
-    /* Per REX's own schema (getSchemaForType, read 6 Sep): a PAT entry holds
-       only the tested date, no expiry, and gas, PAT and legionella each
-       carry a required not_required checkbox. */
-    if (input.type !== "portable_appliance_testing") detail.expiry_date = input.expiry;
+    /* Per REX's own schema (getSchemaForType, every type re-read 8 Oct):
+       PAT and emergency lighting hold only the tested/checked date, no
+       expiry - sending one is refused ("'expiry_date' is not allowed"). And
+       every type but the EICR carries a required not_required checkbox:
+       sent only for gas, PAT, legionella and licences until 8 Oct, so 21 of
+       Michael's fire safety uploads never reached REX, and smoke alarms, CO
+       alarms and oil would have gone the same way. */
+    if (!NO_EXPIRY.has(input.type)) detail.expiry_date = input.expiry;
     if (issue) detail.issue_date = issue;
     if (input.type === "eicr") detail.status = "eicr_satisfactory";
     if (input.type === "gas_safety") detail.status = "pass";
-    if (input.type === "gas_safety" || input.type === "portable_appliance_testing" || input.type === "legionella_risk_assessment" || licence) detail.not_required = false;
+    if (input.type !== "eicr") detail.not_required = false;
     if (input.existingEntryId) {
       let entryNote: string;
       if (rexWritesLocked("ComplianceEntries", "update")) {
