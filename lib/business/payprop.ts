@@ -159,6 +159,97 @@ export function payPropClient(account: PayPropAccountId) {
 const tokens = new Map<PayPropAccountId, { token: string; expiresAt: number }>();
 const pending = new Map<PayPropAccountId, Promise<string | null>>();
 
+/* ── ONE REFRESHER, ACROSS EVERY PROCESS (8 Oct 2026) ─────────────────────
+   James: "that seems to keep cutting out". E&W's sign-in died in August and
+   again by 5 Oct. PayProp mints a new refresh token on every refresh and
+   kills the old one, so two things lose it for good:
+
+   1. A save that fails after PayProp has rotated. The old code swallowed
+      that write's error, so the row went on holding a dead token and every
+      refresh after it got invalid_grant.
+   2. Two OS processes refreshing at once - there are two on every deploy,
+      the old one draining and the new one starting - each with the same
+      stored token. Only one can win, and the row can end up holding the
+      loser's.
+
+   So the access token PayProp gives is shared through os_payprop_session,
+   and only the process holding the lease (30 seconds, taken in one UPDATE)
+   ever refreshes; the rest wait for its token. The rotated refresh token is
+   saved with retries, and a failure - PayProp refusing, or a save that will
+   not land - is recorded there and emailed once a day to whoever connected
+   the account, so it is never silently dead again. */
+
+const SESSION_SQL = `CREATE TABLE IF NOT EXISTS os_payprop_session (
+  account TEXT PRIMARY KEY,
+  access_token TEXT,
+  expires_at TIMESTAMPTZ,
+  lease_until TIMESTAMPTZ,
+  last_error TEXT,
+  failed_at TIMESTAMPTZ,
+  alerted_at TIMESTAMPTZ,
+  refreshed_at TIMESTAMPTZ
+)`;
+let sessionReady: Promise<void> | null = null;
+
+async function sessionQ<T extends Record<string, unknown>>(text: string, params?: unknown[]): Promise<T[]> {
+  const { q: osQ } = await import("@/lib/db");
+  sessionReady ??= osQ(SESSION_SQL).then(() => undefined).catch(() => { sessionReady = null; });
+  await sessionReady;
+  return osQ<T>(text, params);
+}
+
+/** A shared access token another process already has. Its expires_at is
+ *  already a minute short of PayProp's, so 30 seconds left is still safe. */
+async function sharedToken(account: PayPropAccountId): Promise<string | null> {
+  const rows = await sessionQ<{ access_token: string | null; expires_at: Date | null }>(
+    `SELECT access_token, expires_at FROM os_payprop_session WHERE account = $1`,
+    [account]
+  ).catch(() => []);
+  const r = rows[0];
+  if (!r?.access_token || !r.expires_at) return null;
+  const left = new Date(r.expires_at).getTime() - Date.now();
+  if (left < 30_000) return null;
+  tokens.set(account, { token: r.access_token, expiresAt: Date.now() + left });
+  return r.access_token;
+}
+
+/** Say it stopped, and tell whoever connected it - at most once a day. */
+async function recordFailure(account: PayPropAccountId, why: string): Promise<void> {
+  await sessionQ(
+    `INSERT INTO os_payprop_session (account, last_error, failed_at) VALUES ($1, $2, NOW())
+     ON CONFLICT (account) DO UPDATE SET last_error = EXCLUDED.last_error, failed_at = NOW()`,
+    [account, why.slice(0, 500)]
+  ).catch(() => {});
+  const due = await sessionQ<{ account: string }>(
+    `UPDATE os_payprop_session SET alerted_at = NOW()
+      WHERE account = $1 AND (alerted_at IS NULL OR alerted_at < NOW() - INTERVAL '24 hours') RETURNING account`,
+    [account]
+  ).catch(() => []);
+  if (!due.length) return;
+  try {
+    const { getPayPropTokens } = await import("@/lib/business/payprop-tokens");
+    const who = (await getPayPropTokens(account))?.connectedBy ?? "";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(who)) return;
+    const { sendEmail } = await import("@/lib/resend");
+    const { proseEmail } = await import("@/lib/email/prose");
+    const label = account === "uk" ? "England and Wales" : "Scotland";
+    await sendEmail({
+      to: who,
+      subject: `PayProp ${label} has stopped connecting`,
+      html: proseEmail(
+        [
+          `The OS can no longer sign in to PayProp ${label}, so its rents, arrears and money figures can't be read.`,
+          `PayProp said: ${why}`,
+          `To fix it: Admin, then Wiring, then Connect under PayProp ${label}, and approve. You'll get this at most once a day until it is back.`,
+        ].join("\n\n")
+      ),
+      audience: "internal",
+    });
+  } catch {
+    /* The record above is the part that matters; the email is a courtesy. */
+  }
+}
+
 async function fetchToken(account: PayPropAccountId): Promise<string | null> {
   const creds = oauthFor(account);
   if (!creds) return null;
@@ -169,6 +260,36 @@ async function fetchToken(account: PayPropAccountId): Promise<string | null> {
   // so we store whatever comes back.
   const { getPayPropTokens, updatePayPropRefreshToken, savePayPropTokens } =
     await import("@/lib/business/payprop-tokens");
+  const { hasDb: dbHere } = await import("@/lib/business/db");
+  const shared = dbHere();
+
+  /* Another process may already hold a good token: use it, never refresh. */
+  if (shared) {
+    const t = await sharedToken(account);
+    if (t) return t;
+    /* The lease: one refresher at a time, across every process. */
+    const got = await sessionQ<{ account: string }>(
+      `INSERT INTO os_payprop_session (account, lease_until) VALUES ($1, NOW() + INTERVAL '30 seconds')
+       ON CONFLICT (account) DO UPDATE SET lease_until = EXCLUDED.lease_until
+        WHERE os_payprop_session.lease_until IS NULL OR os_payprop_session.lease_until < NOW()
+       RETURNING account`,
+      [account]
+    ).catch(() => null);
+    if (got && !got.length) {
+      /* Somebody else is refreshing: wait for the token they get. */
+      for (let i = 0; i < 16; i++) {
+        await sleep(750);
+        const t2 = await sharedToken(account);
+        if (t2) return t2;
+      }
+      return null;
+    }
+  }
+
+  const release = () =>
+    shared ? sessionQ(`UPDATE os_payprop_session SET lease_until = NULL WHERE account = $1`, [account]).catch(() => {}) : Promise.resolve();
+
+  // Read only now, inside the lease, so it is the newest token there is.
   const stored = await getPayPropTokens(account);
 
   // A refresh token can also be seeded from the environment. That matters for
@@ -184,7 +305,10 @@ async function fetchToken(account: PayPropAccountId): Promise<string | null> {
     process.env[`PAYPROP_REFRESH_TOKEN_${account.toUpperCase()}`] ??
     process.env.PAYPROP_REFRESH_TOKEN;
   const refreshToken = stored?.refreshToken ?? seeded;
-  if (!refreshToken) return null;
+  if (!refreshToken) {
+    await release();
+    return null;
+  }
 
   try {
     const res = await fetch(tokenUrl(), {
@@ -199,7 +323,12 @@ async function fetchToken(account: PayPropAccountId): Promise<string | null> {
       cache: "no-store",
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const said = await res.text().catch(() => "");
+      const code = /"error"\s*:\s*"([^"]+)"/.exec(said)?.[1] ?? "";
+      if (shared) await recordFailure(account, `${res.status}${code ? ` ${code}` : ""} when refreshing the sign-in`);
+      return null;
+    }
     const data = (await res.json()) as {
       access_token?: string;
       expires_in?: number;
@@ -208,25 +337,56 @@ async function fetchToken(account: PayPropAccountId): Promise<string | null> {
     if (!data.access_token) return null;
     // Persist the rotated token. If we started from the env seed there's no
     // record yet, so write a full one — after this the volume is the source of
-    // truth and the seed is only a fallback.
+    // truth and the seed is only a fallback. NEVER swallowed: PayProp has
+    // already killed the old one, so a lost write is a lost connection.
     if (data.refresh_token && data.refresh_token !== refreshToken) {
-      if (stored) {
-        await updatePayPropRefreshToken(account, data.refresh_token).catch(() => {});
-      } else {
-        await savePayPropTokens(account, {
-          refreshToken: data.refresh_token,
-          connectedBy: "seeded from environment",
-          connectedAt: new Date().toISOString(),
-        }).catch(() => {});
+      let saved = false;
+      let lastWhy = "";
+      for (let attempt = 0; attempt < 4 && !saved; attempt++) {
+        try {
+          if (stored) await updatePayPropRefreshToken(account, data.refresh_token);
+          else
+            await savePayPropTokens(account, {
+              refreshToken: data.refresh_token,
+              connectedBy: "seeded from environment",
+              connectedAt: new Date().toISOString(),
+            });
+          saved = true;
+        } catch (e) {
+          lastWhy = e instanceof Error ? e.message : String(e);
+          await sleep(500 * (attempt + 1));
+        }
       }
+      if (!saved && shared) await recordFailure(account, `PayProp gave a new sign-in but it could not be saved (${lastWhy.slice(0, 120)})`);
     }
     // Retire it a minute early so no call starts with a token about to die.
-    const ttl = Math.max((data.expires_in ?? 3600) * 1000 - 60_000, 30_000);
-    tokens.set(account, { token: data.access_token, expiresAt: Date.now() + ttl });
+    const ttlMs = Math.max((data.expires_in ?? 3600) * 1000 - 60_000, 30_000);
+    tokens.set(account, { token: data.access_token, expiresAt: Date.now() + ttlMs });
+    if (shared) {
+      await sessionQ(
+        `UPDATE os_payprop_session SET access_token = $2, expires_at = NOW() + ($3 || ' milliseconds')::interval,
+                last_error = NULL, failed_at = NULL, alerted_at = NULL, refreshed_at = NOW()
+          WHERE account = $1`,
+        [account, data.access_token, String(ttlMs)]
+      ).catch(() => {});
+    }
     return data.access_token;
-  } catch {
+  } catch (e) {
+    if (shared) await recordFailure(account, `couldn't reach PayProp to refresh (${e instanceof Error ? e.name : "network"})`);
     return null;
+  } finally {
+    await release();
   }
+}
+
+/** Why an account last failed to sign in, for the wiring screen. */
+export async function payPropLastFailure(account: PayPropAccountId): Promise<{ error: string; at: string } | null> {
+  const rows = await sessionQ<{ last_error: string | null; failed_at: Date | null }>(
+    `SELECT last_error, failed_at FROM os_payprop_session WHERE account = $1`,
+    [account]
+  ).catch(() => []);
+  const r = rows[0];
+  return r?.last_error && r.failed_at ? { error: r.last_error, at: new Date(r.failed_at).toISOString() } : null;
 }
 
 /**
