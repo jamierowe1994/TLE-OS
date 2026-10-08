@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { hasDb } from "@/lib/db";
-import { orderByToken, moveOrder, logEvent, markAccountsTold, stepOf, pounds, getContractor, type WorksOrder } from "@/lib/works-orders";
+import { orderByToken, moveOrder, logEvent, markAccountsTold, stepOf, pounds, tenantsOf, type WorksOrder } from "@/lib/works-orders";
 import { emailsForMove, outcomeLine, tellAccounts } from "@/lib/works-emails";
 import { pingCompliance } from "@/lib/works-compliance";
 import { agentFor } from "@/lib/works-agent";
 import { invoiceSettings } from "@/lib/invoices";
 import { withR2, R2_BUCKET, safeName, r2Configured } from "@/lib/r2";
-import { pendingKeyFor } from "@/lib/property-match";
-import { CERT_TYPES, PLAUSIBLE, YMD, fileCertificate } from "@/lib/certificate-intake";
-import type { SharePerson } from "@/lib/certificate-share";
+import { fileJobCertificate, CertificateRefused } from "@/lib/works-certificate";
 
 /**
  * The contractor's page for one job, reached by the token in their works
@@ -41,8 +39,10 @@ export const runtime = "nodejs";
 
 function publicView(o: WorksOrder) {
   return {
-    ref: o.ref, title: o.title, category: o.category, description: o.description, status: o.status, step: stepOf(o),
-    address: [o.propertyName, o.locality].filter(Boolean).join(", "), access: o.access, tenant: [o.tenant, o.tenantPhone].filter(Boolean).join(" · "), contractorName: o.contractorName,
+    ref: o.ref, kind: o.kind, title: o.title, category: o.category, description: o.description, status: o.status, step: stepOf(o),
+    address: [o.propertyName, o.locality].filter(Boolean).join(", "), access: o.access, contractorName: o.contractorName,
+    /* Every tenant to arrange access with (a shared house has several). */
+    tenant: tenantsOf(o).map((t) => [`${t.name}${t.room ? ` (${t.room})` : ""}`, t.phone].filter(Boolean).join(" · ")).join("; "),
     scheduledAt: o.scheduledAt, completedAt: o.completedAt, invoicePence: o.invoicePence, invoiceRef: o.invoiceRef,
     files: o.files.map((f) => ({ name: f.name, at: f.at })),
   };
@@ -71,80 +71,39 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
       if (!(file instanceof File) || file.size === 0) return NextResponse.json({ ok: false, error: "No file." }, { status: 400 });
       if (file.size > 25 * 1024 * 1024) return NextResponse.json({ ok: false, error: "Files up to 25 MB, please." }, { status: 400 });
       if (!r2Configured) return NextResponse.json({ ok: false, error: "Storage isn't connected on this environment." }, { status: 503 });
-      const key = `documents/works-${o.ref}/${Date.now()}-${safeName(file.name) || "file"}`;
-      const body = Buffer.from(await file.arrayBuffer());
-      await withR2((client) => client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: file.type || "application/octet-stream" })));
-      let next = await moveOrder(o.id, { action: "file", file: { key, name: file.name, type: file.type } }, by);
       const kind = String(form.get("kind") ?? "photo");
-      const amount = Number(String(form.get("amount") ?? "").replace(/[£,\s]/g, ""));
       if (kind === "certificate") {
-        /* Filed properly, not just attached. The type and the expiry are the
-           two facts nobody can read off the PDF reliably, so the contractor
-           types them - they are the person holding the certificate.
-           The file is now in R2 TWICE, once on the job and once in the
-           property's compliance vault, and that is deliberate: the job keeps
-           its own paperwork for the timeline, and compliance keeps a copy
-           filed by property and type that survives the job being archived. */
-        const type = String(form.get("type") ?? "").trim();
-        const expiry = String(form.get("expiry") ?? "").trim();
-        const issue = String(form.get("issue") ?? "").trim();
-        if (!CERT_TYPES.has(type)) return NextResponse.json({ ok: false, error: "Choose what the certificate is." }, { status: 400 });
-        if (!PLAUSIBLE(expiry)) return NextResponse.json({ ok: false, error: "Put the date it runs out on it." }, { status: 400 });
-        if (issue && !YMD.test(issue)) return NextResponse.json({ ok: false, error: "The issue date does not look right." }, { status: 400 });
-        if (!next.completedAt) next = await moveOrder(o.id, { action: "done", note: "Marked done by the contractor with their certificate." }, by);
-        /* A rehearsal stops here (7 Oct 2026). Its house is invented, so
-           filing would put a real os_certificates row on an address that does
-           not exist - on Michael's To verify list, and into REX if the write
-           is armed. The file stays on the job like any other, and the
-           timeline says what a real job would have done. */
-        let certificate: { filed: boolean; share: string | null; rehearsal?: true };
-        if (o.rehearsal) {
-          await logEvent(o.id, "TLE OS", "compliance", `Rehearsal: ${file.name} would be filed as a certificate on the property here; nothing was filed.`);
-          certificate = { filed: false, share: null, rehearsal: true };
-        } else {
-          /* Who the book cannot name. The works order's own landlord and tenant
-             are the fallback for a home REX's managed book does not carry, and
-             the contractor is only ever knowable from here. */
-          const c = await getContractor(o.contractorId).catch(() => null);
-          const people: SharePerson[] = [
-            ...(o.landlordEmail ? [{ role: "landlord" as const, name: o.landlord, email: o.landlordEmail }] : []),
-            ...(o.tenantEmail ? [{ role: "tenant" as const, name: o.tenant, email: o.tenantEmail }] : []),
-            ...(c?.email ? [{ role: "contractor" as const, name: c.contact || c.name, email: c.email }] : []),
-          ];
-          const filed = await fileCertificate({
-            bytes: new Uint8Array(body),
-            fileName: file.name,
-            contentType: file.type,
-            propertyId: o.propertyId || pendingKeyFor([o.propertyName, o.locality].filter(Boolean).join(", ")),
-            propertyName: [o.propertyName, o.locality].filter(Boolean).join(", "),
-            type,
-            expiry,
-            issue: issue || null,
-            source: `the contractor's page, job #${o.ref}`,
-            by,
-            people,
+        /* Filed properly, not just attached (lib/works-certificate). The type
+           and the expiry are the two facts nobody can read off the PDF
+           reliably, so the contractor types them - they are the person
+           holding the certificate. */
+        let filed: Awaited<ReturnType<typeof fileJobCertificate>>;
+        try {
+          filed = await fileJobCertificate(o, {
+            bytes: new Uint8Array(await file.arrayBuffer()), fileName: file.name, contentType: file.type,
+            type: String(form.get("type") ?? ""), expiry: String(form.get("expiry") ?? ""), issue: String(form.get("issue") ?? ""),
+            by, source: `the contractor's page, job #${o.ref}`, doneNote: "Marked done by the contractor with their certificate.",
           });
-          await logEvent(
-            o.id,
-            "TLE OS",
-            "compliance",
-            filed.duplicate
-              ? `${file.name} is already on this home's compliance record; nothing filed twice.`
-              : `${file.name} filed as a certificate on the property. ${filed.row.rex_note || "REX not written."} ${filed.share?.line ?? ""}`.trim()
-          );
-          certificate = { filed: !filed.duplicate, share: filed.share?.line ?? null };
+        } catch (e) {
+          if (e instanceof CertificateRefused) return NextResponse.json({ ok: false, error: e.message }, { status: 400 });
+          throw e;
         }
         /* Rehearsal or not, these keep their own gate: a rehearsal's emails
            are written and kept on the walkthrough, never sent. */
-        if (me) for (const e of await emailsForMove(next, "done", me).catch(() => [])) await logEvent(o.id, "TLE OS", "email", outcomeLine(e));
+        if (me) for (const e of await emailsForMove(filed.next, "done", me).catch(() => [])) await logEvent(o.id, "TLE OS", "email", outcomeLine(e));
         /* "done", not "file". The file ping exists to tell compliance a
            document landed on a finished job, and this document announces
            itself far better: the certificate's own email names the property,
            the expiry and everybody who now has it. The completion ping still
            goes once, because the job did just finish. */
-        await pingCompliance(next, "done");
-        return NextResponse.json({ ok: true, job: publicView(next), certificate });
+        await pingCompliance(filed.next, "done");
+        return NextResponse.json({ ok: true, job: publicView(filed.next), certificate: filed.certificate });
       }
+      const key = `documents/works-${o.ref}/${Date.now()}-${safeName(file.name) || "file"}`;
+      const body = Buffer.from(await file.arrayBuffer());
+      await withR2((client) => client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: file.type || "application/octet-stream" })));
+      let next = await moveOrder(o.id, { action: "file", file: { key, name: file.name, type: file.type } }, by);
+      const amount = Number(String(form.get("amount") ?? "").replace(/[£,\s]/g, ""));
       if (kind === "invoice" && Number.isFinite(amount) && amount > 0) {
         if (!next.completedAt) next = await moveOrder(o.id, { action: "done", note: String(form.get("note") ?? "").trim() || "Marked done by the contractor with their invoice." }, by);
         next = await moveOrder(o.id, { action: "invoice", invoicePence: Math.round(amount * 100), invoiceRef: String(form.get("ref") ?? "").trim() }, by);

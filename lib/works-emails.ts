@@ -7,7 +7,7 @@ import { accountsInvoiceEmail, complianceJobEmail } from "@/lib/email/works-inte
 import { msConnectionFor, msSendMail, MailboxNotConnected } from "@/lib/microsoft";
 import { switchOn } from "@/lib/switches";
 import { isInternalAddress } from "@/lib/email-policy";
-import { pounds, URGENCIES, type Move, type WorksOrder } from "@/lib/works-orders";
+import { pounds, tenantsOf, URGENCIES, type Move, type WorksOrder } from "@/lib/works-orders";
 import type { OsUser } from "@/lib/users";
 import { getLandlordPref, landlordHold } from "@/lib/landlord-prefs";
 
@@ -81,6 +81,9 @@ async function contractorOf(id: string | null): Promise<{ name: string; contact:
 }
 
 const first = (name: string) => (name || "there").trim().split(/\s+/)[0];
+const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const day = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long", year: "numeric" }).replace(",", "") : "not recorded";
 const when = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "a date to be agreed";
 
@@ -116,6 +119,13 @@ async function varsFor(o: WorksOrder, me: OsUser): Promise<Record<string, string
     agentPhone: phone || me.email,
     completionNote: o.completionNote || "the work is complete.",
     contractorLink: `${ORIGIN}/contractor/${o.contractorToken ?? ""}`,
+    /* The planned works order's own four (works-contractor-planned). */
+    dueDay: day(o.dueAt),
+    tenantsList: tenantsOf(o).map((t) => [`${esc(t.name || "Tenant")}${t.room ? ` (${esc(t.room)})` : ""}`, esc(t.phone), esc(t.email)].filter(Boolean).join(" · ")).join("<br>") || "None on file - ring us and we'll arrange access.",
+    bookingLine: o.scheduledAt
+      ? `It's already booked for <strong>${esc(when(o.scheduledAt))}</strong>. If that changes, tell us on the same page.`
+      : "Once you've agreed a time with the tenants, press the button and tell us the date and time.",
+    buttonLabel: o.scheduledAt ? "Open the job" : "Let us know the date and time",
     happyLink: `${ORIGIN}/repair/${o.tenantToken ?? ""}?happy=yes`,
     notHappyLink: `${ORIGIN}/repair/${o.tenantToken ?? ""}?happy=no`,
   };
@@ -236,13 +246,19 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
   const vars = await varsFor(o, me);
   const contractor = await contractorOf(o.contractorId);
 
-  const contractorOrder = async () => { if (contractor) out.push(await send(o, "works-contractor-order", contractor.email, vars, me, "contractor")); };
+  /* Planned maintenance (James, 8 Oct 2026): the contractor arranges a gas
+     safety with the tenants directly, so the tenants hear nothing on their
+     own - the agent sends the booking when they choose (tell_tenants_booked) -
+     and a skipped landlord hears nothing at all. */
+  const planned = o.kind === "planned";
+  const contractorOrder = async () => { if (contractor) out.push(await send(o, planned ? "works-contractor-planned" : "works-contractor-order", contractor.email, vars, me, "contractor")); };
   const contractorBooked = async () => { if (contractor && o.scheduledAt) out.push(await send(o, "works-contractor-booked", contractor.email, vars, me, "contractor")); };
-  const tenantBooked = async () => { if (o.scheduledAt) out.push(await send(o, "works-tenant-booked", o.tenantEmail, vars, me, "tenant")); };
+  const tenantBooked = async () => { if (o.scheduledAt && !planned) out.push(await send(o, "works-tenant-booked", o.tenantEmail, vars, me, "tenant")); };
   /* The landlord's choice, read once and only when a landlord email is due.
      A failed read is the old behaviour - every job - rather than a lost
      approval request. */
   const landlord = async (id: string, kind: "notice" | "approval") => {
+    if (o.landlordSkipped) return;
     const held = o.landlordEmail.includes("@") ? landlordHold(o, await getLandlordPref(o.landlordEmail).catch(() => ({ jobEmails: "all" as const, overAmount: 0, updatedBy: "", updatedAt: null })), kind) : null;
     out.push(held ? { to: "landlord", sent: false, address: o.landlordEmail, reason: held } : await send(o, id, o.landlordEmail, vars, me, "landlord"));
   };
@@ -250,7 +266,11 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
   switch (action) {
     case "raised":
       if (o.kind === "repair") out.push(await send(o, "works-tenant-received", o.tenantEmail, vars, me, "tenant"));
-      if (contractor && o.scheduledAt) {
+      /* Planned: the works order goes when the agent pressed Send, which is
+         what stamped contractorContactedAt. */
+      if (planned) {
+        if (contractor && o.contractorContactedAt) await contractorOrder();
+      } else if (contractor && o.scheduledAt) {
         await contractorOrder();
         await tenantBooked();
       }
@@ -267,7 +287,13 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
       /* Together, as James asked: the works order to the contractor and
          "we've found someone" to the tenant, in the same breath. */
       await contractorOrder();
-      out.push(await send(o, "works-tenant-found", o.tenantEmail, vars, me, "tenant"));
+      if (!planned) out.push(await send(o, "works-tenant-found", o.tenantEmail, vars, me, "tenant"));
+      break;
+    case "tell_tenants_booked":
+      /* Every tenant on the job with an address, each greeted by name. */
+      for (const t of tenantsOf(o).filter((x) => x.email.includes("@"))) {
+        out.push(await send(o, "works-tenant-booked", t.email, { ...vars, tenantName: first(t.name) }, me, "tenant"));
+      }
       break;
     case "assign":
       await contractorOrder();
@@ -287,7 +313,7 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
     case "done":
       /* The done note says what was done; the happy email asks the one
          question. Repairs get the question; a gas safety does not. */
-      out.push(await send(o, o.kind === "repair" ? "works-tenant-happy" : "works-tenant-done", o.tenantEmail, vars, me, "tenant"));
+      if (!planned) out.push(await send(o, "works-tenant-happy", o.tenantEmail, vars, me, "tenant"));
       break;
     case "cancel":
       if (contractor) out.push(await send(o, "works-contractor-cancelled", contractor.email, vars, me, "contractor"));
@@ -296,6 +322,18 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
       break;
   }
   return out;
+}
+
+/**
+ * An email exactly as it would go, without sending it: the Send screen on
+ * Plan a job shows the contractor what they are about to get (James, 8 Oct
+ * 2026: "it should show a preview of what's going to get sent").
+ */
+export async function previewJobEmail(o: WorksOrder, id: string, me: OsUser, over: Record<string, string> = {}): Promise<{ subject: string; html: string; to: string; contractorName: string }> {
+  const vars = { ...(await varsFor(o, me)), ...over };
+  const c = await contractorOf(o.contractorId);
+  const { subject, html } = await renderTleEmailLive(id, vars);
+  return { subject, html, to: c?.email ?? "", contractorName: c?.name ?? o.contractorName };
 }
 
 /** One line per outcome, for the job's timeline. */

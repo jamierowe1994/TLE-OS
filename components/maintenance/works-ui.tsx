@@ -74,7 +74,8 @@ export function Fact({ k, v, wrap = false }: { k: string; v: string; wrap?: bool
 
 /* ── Picking a contractor, or adding one without leaving the job ────────── */
 
-export function ContractorPick({ contractors, value, onChange, className, styled = false }: { contractors: Contractor[]; value: string; onChange: (id: string) => void; className: string; styled?: boolean }) {
+/** `onAdd`, given, hands "+ Add a contractor" to the caller, who draws the form full width (Plan a job, 8 Oct 2026: the form squeezed into half a column "looks awful"). */
+export function ContractorPick({ contractors, value, onChange, className, styled = false, onAdd }: { contractors: Contractor[]; value: string; onChange: (id: string) => void; className: string; styled?: boolean; onAdd?: () => void }) {
   const [list, setList] = useState(contractors);
   const [adding, setAdding] = useState(false);
   useEffect(() => setList(contractors), [contractors]);
@@ -93,10 +94,10 @@ export function ContractorPick({ contractors, value, onChange, className, styled
             ...mine.map((c) => ({ value: c.id, label: c.name, sub: c.trade, group: "Your contractors" })),
             ...corp.map((c) => ({ value: c.id, label: c.name, sub: c.trade, group: "The company's" })),
           ]}
-          extra={{ label: "+ Add a contractor", onPick: () => setAdding(true) }}
+          extra={{ label: "+ Add a contractor", onPick: () => (onAdd ? onAdd() : setAdding(true)) }}
         />
       ) : (
-      <select value={adding ? "__add" : value} onChange={(e) => { if (e.target.value === "__add") setAdding(true); else onChange(e.target.value); }} className={className}>
+      <select value={adding ? "__add" : value} onChange={(e) => { if (e.target.value === "__add") (onAdd ? onAdd() : setAdding(true)); else onChange(e.target.value); }} className={className}>
         <option value="">Not yet</option>
         {mine.length > 0 && <optgroup label="Your contractors">{mine.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.trade}</option>)}</optgroup>}
         {corp.length > 0 && <optgroup label="The company's">{corp.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.trade}</option>)}</optgroup>}

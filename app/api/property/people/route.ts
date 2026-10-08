@@ -3,6 +3,8 @@ import { hasDb, q } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { peopleForProperty, type Person } from "@/lib/rex-property-people";
+import { addrOf, houseKeyOf, isRoomAddress, norm, parseAddress } from "@/lib/address-parse";
+import { roomLabel } from "@/lib/houses";
 
 /**
  * Who is on a home: the landlord, every sitting tenant, where it is, and
@@ -41,7 +43,7 @@ export async function GET(req: NextRequest) {
   if (!id) return NextResponse.json({ ok: false, error: "Which property?" }, { status: 400 });
 
   let landlord: Person | null = null;
-  let tenants: Person[] = [];
+  let tenants: (Person & { room?: string })[] = [];
   let lat: number | null = null;
   let lng: number | null = null;
   let source = "nothing on file";
@@ -52,6 +54,37 @@ export async function GET(req: NextRequest) {
     if (p) {
       landlord = p.landlord ? { contactId: p.landlord.contactId, name: p.landlord.name, email: p.landlord.email ?? "", phone: p.landlord.phone ?? "" } : null;
       tenants = p.tenants.map((t) => ({ contactId: t.contactId, name: t.name, email: t.email ?? "", phone: t.phone ?? "" }));
+      /* A shared house (James, 8 Oct 2026): "especially if it's an HMO, we
+         need to pull through every tenant under that property". REX lets each
+         room as its own listing, so the house's other rooms - and the
+         one-listing-per-let houses that repeat the same address - are read
+         too, each tenant marked with their room. Flats share a house key but
+         are separate homes, so only rooms and the house's own line join. */
+      const here = addrOf(p);
+      const key = houseKeyOf(here);
+      const hereIsRoom = isRoomAddress(here);
+      const siblings = book.properties.filter((x) => {
+        if (x === p) return false;
+        const there = addrOf(x);
+        if (norm(there) === norm(here)) return true;
+        if (!key || houseKeyOf(there) !== key) return false;
+        return isRoomAddress(there) || (hereIsRoom && parseAddress(there).unit == null);
+      });
+      if (siblings.length) {
+        const label = (x: { name: string; locality: string }) => (isRoomAddress(addrOf(x)) ? roomLabel(x) : undefined);
+        tenants = tenants.map((t) => ({ ...t, room: label(p) }));
+        for (const x of siblings) {
+          for (const t of x.tenants) tenants.push({ contactId: t.contactId, name: t.name, email: t.email ?? "", phone: t.phone ?? "", room: label(x) });
+        }
+        /* The same person on two listings is one tenant. */
+        const seen = new Set<string>();
+        tenants = tenants.filter((t) => {
+          const k = (t.email || t.contactId || t.name).toLowerCase();
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+      }
       lat = p.lat ?? null;
       lng = p.lng ?? null;
       if (landlord || tenants.length) source = "the managed book";
@@ -85,7 +118,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     landlord: shape(landlord),
-    tenants: tenants.map((t) => ({ name: t.name, email: t.email, phone: t.phone })),
+    tenants: tenants.map((t) => ({ name: t.name, email: t.email, phone: t.phone, ...(t.room ? { room: t.room } : {}) })),
     /** Kept so anything still reading the old shape does not break. */
     tenant: shape(tenants[0] ?? null),
     lat,

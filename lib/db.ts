@@ -494,6 +494,14 @@ ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS rehearsal               BOO
 /* Michael's ping, once per job (James, 7 Sep 2026): compliance hears when a
    job is finished, never while it is open. */
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS compliance_told_at      TIMESTAMPTZ;
+/* Planned maintenance (James, 8 Oct 2026). Every tenant on the home, not just
+   the one who rang - a shared house has several and the contractor arranges
+   access with all of them. The landlord can be skipped: some do not want to
+   hear about a gas safety. And the tenants are told the booking only when the
+   agent presses the button, so when that was is kept. */
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenants                 JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_skipped        BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenants_told_booked_at  TIMESTAMPTZ;
 /* The tenant's number on its own (James, 7 Sep 2026: "name, then number
    after"). The tenant column was one string with both in it, which every
    email then had to pick apart with a regex. */

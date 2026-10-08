@@ -59,6 +59,7 @@ import {
   LANDLORD_SIGN_IN,
   TENANT_SIGN_IN,
   WORKS_CONTRACTOR_ORDER,
+  WORKS_CONTRACTOR_PLANNED,
   WORKS_CONTRACTOR_BOOKED,
   WORKS_CONTRACTOR_CANCELLED,
   WORKS_TENANT_RECEIVED,
@@ -1143,6 +1144,8 @@ const WORKS_SAMPLE: Record<string, string> = {
   description: "Tenant rang at 8am. Pressure gauge reads zero, boiler shows fault code F22.", quote: "£240", authority: "£150",
   agentName: "Sam Whitaker", agentEmail: "sam@thelettingexperts.co.uk", agentPhone: "0115 123 4567", completionNote: "PCB replaced, system repressurised and tested.",
   number: "INV-00042", toName: "Raj", total: "£264", dueDate: "21 September 2026", reference: "job #1042, boiler repair", link: `${SITE}/invoice/sample`,
+  dueDay: "Monday 26 April 2027", tenantsList: "Sophie Turner (Room 1) · 07700 900456 · sophie@example.com<br>Raj Patel (Room 2) · 07700 900789",
+  bookingLine: "Once you've agreed a time with the tenants, press the button and tell us the date and time.", buttonLabel: "Let us know the date and time",
   contractorLink: `${SITE}/contractor/sample`, happyLink: `${SITE}/repair/sample?happy=yes`, notHappyLink: `${SITE}/repair/sample?happy=no`,
 };
 const worksEntry = (id: string, name: string, audience: CatalogEntry["audience"], trigger: string, to: string, summary: string, doc: EmailDoc, group = "Maintenance"): CatalogEntry => ({
@@ -1151,6 +1154,7 @@ const worksEntry = (id: string, name: string, audience: CatalogEntry["audience"]
 });
 TLE_EMAILS.push(
   worksEntry("works-contractor-order", "Works Order to the Contractor", "contractor", "When a contractor is put on a job", "The contractor", "The job sheet by email: what, where, how urgent, access, the tenant to arrange with, and the rule that anything over the landlord's authority needs a quote first.", WORKS_CONTRACTOR_ORDER as unknown as EmailDoc),
+  worksEntry("works-contractor-planned", "Planned Works Order to the Contractor", "contractor", "When a planned job is sent to a contractor", "The contractor", "A gas safety, an EICR, a boiler service: the job, the date the certificate runs out, every tenant to arrange access with, and the button to tell us the time.", WORKS_CONTRACTOR_PLANNED as unknown as EmailDoc),
   worksEntry("works-contractor-booked", "Booking Confirmed to the Contractor", "contractor", "When a job is booked for a date", "The contractor", "The date, the address, the access. Short, because they have the order already.", WORKS_CONTRACTOR_BOOKED as unknown as EmailDoc),
   worksEntry("works-contractor-cancelled", "Cancelled to the Contractor", "contractor", "When a job with a contractor on it is cancelled", "The contractor", "Don't attend, and why.", WORKS_CONTRACTOR_CANCELLED as unknown as EmailDoc),
   worksEntry("works-tenant-received", "Repair Logged to the Tenant", "tenant", "When a repair is reported and the tenant's address is on the job", "The tenant", "It's logged, how urgent we've marked it, when to expect somebody, and what to do if it gets worse.", WORKS_TENANT_RECEIVED as unknown as EmailDoc),

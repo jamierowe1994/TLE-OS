@@ -46,3 +46,46 @@ export const categoriesOf = (category: string | null | undefined): string[] =>
   [...new Set((category ?? "").split(",").map((c) => c.trim()).filter(Boolean))];
 
 export const joinCategories = (list: readonly string[]): string => [...new Set(list.map((c) => c.trim()).filter(Boolean))].join(", ");
+
+/**
+ * The certificates a job can bring back, in REX's vocabulary and the words a
+ * contractor would use. Gas and electrical first because they are most of
+ * what comes back. Read by the contractor's page and the job sheet, so both
+ * file a certificate under the same type (lib/certificate-intake CERT_TYPES).
+ */
+export const JOB_CERT_TYPES: { id: string; label: string }[] = [
+  { id: "gas_safety", label: "Gas safety (CP12)" },
+  { id: "eicr", label: "Electrical safety (EICR)" },
+  { id: "epc", label: "EPC" },
+  { id: "portable_appliance_testing", label: "PAT test" },
+  { id: "legionella_risk_assessment", label: "Legionella risk assessment" },
+  { id: "smoke_alarms", label: "Smoke alarms" },
+  { id: "co_alarms", label: "CO alarms" },
+  { id: "emergency_lighting_fire_exit", label: "Fire safety" },
+];
+
+/** The certificate a planned category brings back, to start the job sheet's upload on the right one. */
+export const CATEGORY_CERT_TYPE: Record<string, string> = {
+  "Gas safety (CP12)": "gas_safety",
+  EICR: "eicr",
+  EPC: "epc",
+  "PAT test": "portable_appliance_testing",
+  "Legionella risk assessment": "legionella_risk_assessment",
+  "Smoke & CO alarms": "smoke_alarms",
+};
+
+/** The trade a planned category wants, to start "Add a contractor" on a trade rather than a job name. */
+export const CATEGORY_TRADE: Record<string, string> = {
+  "Gas safety (CP12)": "Gas Safe engineer",
+  "Boiler service": "Gas Safe engineer",
+  EICR: "Electrician",
+  "PAT test": "Electrician",
+  "Smoke & CO alarms": "Electrician",
+  EPC: "EPC assessor",
+  "Legionella risk assessment": "Legionella assessor",
+  "Fire risk assessment": "Fire risk assessor",
+  "HMO licence inspection": "Inspector",
+  "Property inspection": "Inventory clerk",
+  "Inventory & check-in": "Inventory clerk",
+  "Check-out": "Inventory clerk",
+};

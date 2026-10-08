@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 import { openDocument } from "@/lib/doc-sheet";
 import type { Contractor, WorksOrder, WorksEvent, Move, Urgency, PaidHow } from "@/lib/works-orders";
 import { URGENCIES, categoriesOf } from "@/lib/works-catalogue";
-import { WorksNow } from "@/components/WorksNow";
+import { stepOf } from "@/lib/works-steps";
+import { WorksNow, CertificateUpload } from "@/components/WorksNow";
+import FieldDate from "@/components/FieldDate";
+import FieldSelect from "@/components/FieldSelect";
 import SaveChip, { SaveScopeProvider, useSaveScope } from "@/components/SaveChip";
 import LandlordJobEmails from "@/components/LandlordJobEmails";
 import { ContractorPick, Fact, OPEN, PAID_HOW, STATUS_LABEL, day, pounds, stamp, toPence } from "@/components/maintenance/works-ui";
@@ -55,6 +58,27 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
     setF({});
     onChanged(r.order);
     settle({ ok: true });
+  }
+
+  /* The certificate from the visit (app/api/works-orders/[id]/certificate):
+     on the job, done, and the home's current certificate once checked. */
+  const [addingCert, setAddingCert] = useState(false);
+  async function certificate(fd: FormData): Promise<string | null> {
+    setBusy(true);
+    setErr(null);
+    const settle = reporter.begin("Certificate");
+    const r = await fetch(`/api/works-orders/${o.id}/certificate`, { method: "POST", body: fd }).then((x) => x.json()).catch(() => null);
+    setBusy(false);
+    if (!r?.ok) {
+      const problem = r?.error ?? "The certificate did not file.";
+      settle({ ok: false, problem });
+      return problem;
+    }
+    setO(r.order);
+    setEvents(r.events ?? []);
+    onChanged(r.order);
+    settle({ ok: true });
+    return null;
   }
 
   async function upload(file: File) {
@@ -146,6 +170,7 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
             err={act ? null : err}
             canCorporate={canCorporate}
             onInvoiceLandlord={() => void invoiceLandlord()}
+            onCertificate={certificate}
           />
 
           {/* The landlord's say over the job emails, by the job it governs. */}
@@ -160,23 +185,31 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
                 {x.label}
               </button>
             ))}
+            {o.status !== "cancelled" && !(o.kind === "planned" && stepOf(o) === "visit") && (
+              <button type="button" onClick={() => setAddingCert((v) => !v)} className={btn}>Add a certificate</button>
+            )}
             <label className={`${btn} cursor-pointer`}>
               Add a file
               <input type="file" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void upload(file); e.target.value = ""; }} />
             </label>
           </div>
+          {addingCert && (
+            <div className="mt-3">
+              <CertificateUpload o={o} busy={busy} onCertificate={certificate} onDone={() => setAddingCert(false)} />
+            </div>
+          )}
           <div className={act ? "rounded-[22px] border border-line/50 bg-white p-4 mt-3" : ""}>
             {act && (
               <div className="mt-4 rounded-xl border border-line/80 bg-card p-4">
                 {act === "assign" && (
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <ContractorPick contractors={contractors} value={f.contractorId ?? o.contractorId ?? ""} onChange={(v) => setF({ ...f, contractorId: v })} className={field} />
-                    <input type="datetime-local" value={f.scheduledAt ?? ""} onChange={(e) => setF({ ...f, scheduledAt: e.target.value })} className={field} />
+                    <ContractorPick contractors={contractors} value={f.contractorId ?? o.contractorId ?? ""} onChange={(v) => setF({ ...f, contractorId: v })} className={field} styled />
+                    <FieldDate className="mt-1" withTime clearable value={f.scheduledAt ?? ""} onChange={(v) => setF({ ...f, scheduledAt: v })} placeholder="Booked for, if it is" />
                     <input value={f.note ?? ""} onChange={(e) => setF({ ...f, note: e.target.value })} placeholder="A line for the timeline (optional)" className={`${field} sm:col-span-2`} />
 
                   </div>
                 )}
-                {act === "schedule" && <input type="datetime-local" value={f.scheduledAt ?? ""} onChange={(e) => setF({ ...f, scheduledAt: e.target.value })} className={field} />}
+                {act === "schedule" && <FieldDate withTime value={f.scheduledAt ?? ""} onChange={(v) => setF({ ...f, scheduledAt: v })} placeholder="The date and time" />}
                 {act === "quote" && (
                   <div className="grid gap-3 sm:grid-cols-2">
                     <input value={f.amount ?? ""} onChange={(e) => setF({ ...f, amount: e.target.value })} placeholder="£ quote" className={field} />
@@ -193,7 +226,7 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
                 {act === "done" && (
                   <div className="grid gap-3">
                     <textarea value={f.note ?? ""} onChange={(e) => setF({ ...f, note: e.target.value })} rows={3} placeholder="What was done. If a certificate was issued, add it as a file too." className={field} />
-                    <input type="datetime-local" value={f.completedAt ?? ""} onChange={(e) => setF({ ...f, completedAt: e.target.value })} className={field} />
+                    <FieldDate withTime clearable value={f.completedAt ?? ""} onChange={(v) => setF({ ...f, completedAt: v })} placeholder="When it was done (today if left)" />
                   </div>
                 )}
                 {act === "invoice" && (
@@ -228,11 +261,9 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
                     <input value={f.access ?? o.access} onChange={(e) => setF({ ...f, access: e.target.value })} placeholder="Access notes" className={`${field} sm:col-span-2`} />
                     <input value={f.authority ?? String(o.authorityPence / 100)} onChange={(e) => setF({ ...f, authority: e.target.value })} placeholder="£ landlord's authority" className={field} />
                     {o.kind === "repair" ? (
-                      <select value={f.urgency ?? o.urgency ?? "routine"} onChange={(e) => setF({ ...f, urgency: e.target.value })} className={field}>
-                        {URGENCIES.map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
-                      </select>
+                      <FieldSelect value={f.urgency ?? o.urgency ?? "routine"} onChange={(v) => setF({ ...f, urgency: v })} options={URGENCIES.map((u) => ({ value: u.id, label: u.label }))} />
                     ) : (
-                      <input type="date" value={f.dueAt ?? (o.dueAt ? o.dueAt.slice(0, 10) : "")} onChange={(e) => setF({ ...f, dueAt: e.target.value })} className={field} />
+                      <FieldDate value={f.dueAt ?? (o.dueAt ? o.dueAt.slice(0, 10) : "")} onChange={(v) => setF({ ...f, dueAt: v })} placeholder="Expiry date" />
                     )}
                   </div>
                 )}
@@ -278,10 +309,18 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
                   {o.kind === "repair" ? <Fact k="Urgency" v={URGENCIES.find((u) => u.id === o.urgency)?.label ?? "—"} /> : <Fact k="Due" v={day(o.dueAt)} />}
                   {o.kind === "repair" && <Fact k="Attend by" v={stamp(o.dueAt)} />}
                   <Fact k="Reported by" v={`${o.reportedBy || "—"} · ${day(o.reportedAt)}`} />
-                  <Fact k="Tenant" v={o.tenant || "—"} />
-                  <Fact k="Tenant's number" v={o.tenantPhone || "—"} />
-                  <Fact k="Tenant's email" v={o.tenantEmail || "none - not being told"} />
-                  <Fact k="Landlord's email" v={o.landlordEmail || "none - not being told"} />
+                  {o.tenants.length > 1 ? (
+                    <div className="col-span-2 sm:col-span-3">
+                      <Fact k={`Tenants (${o.tenants.length})`} wrap v={o.tenants.map((t) => [`${t.name}${t.room ? ` (${t.room})` : ""}`, t.phone].filter(Boolean).join(" ")).join(" · ")} />
+                    </div>
+                  ) : (
+                    <>
+                      <Fact k="Tenant" v={o.tenant || "—"} />
+                      <Fact k="Tenant's number" v={o.tenantPhone || "—"} />
+                      <Fact k="Tenant's email" v={o.tenantEmail ? o.tenantEmail : o.kind === "planned" ? "—" : "none - not being told"} />
+                    </>
+                  )}
+                  <Fact k="Landlord's email" v={o.landlordSkipped ? "skipped - not involved" : o.landlordEmail || "none - not being told"} />
                   <Fact k="Landlord's mobile" v={o.landlordMobile || "—"} />
                   <Fact k="Landlord told" v={o.landlordToldAt ? stamp(o.landlordToldAt) : "not yet"} />
                   <Fact k="Arranging" v={o.arranging === "landlord" ? `Landlord · follow up ${day(o.landlordFollowUpAt)}` : o.arranging === "us" ? "Us" : "—"} />

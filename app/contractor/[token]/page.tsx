@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { JOB_CERT_TYPES } from "@/lib/works-catalogue";
 
 /**
  * The contractor's page for one job. No sign-in: the link in their works
@@ -19,24 +20,13 @@ import { useParams } from "next/navigation";
  */
 
 type Job = {
-  ref: number; title: string; category: string; description: string; status: string; step: string; address: string; access: string; tenant: string;
+  ref: number; kind?: string; title: string; category: string; description: string; status: string; step: string; address: string; access: string; tenant: string;
   contractorName: string; scheduledAt: string | null; completedAt: string | null; invoicePence: number | null; invoiceRef: string; files: { name: string; at: string }[];
 };
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "");
 
-/* The same vocabulary REX uses, in the words a contractor would use. Gas and
-   electrical first because they are most of what comes back this way. */
-const CERT_TYPES: { id: string; label: string }[] = [
-  { id: "gas_safety", label: "Gas safety (CP12)" },
-  { id: "eicr", label: "Electrical safety (EICR)" },
-  { id: "epc", label: "EPC" },
-  { id: "portable_appliance_testing", label: "PAT test" },
-  { id: "legionella_risk_assessment", label: "Legionella risk assessment" },
-  { id: "smoke_alarms", label: "Smoke alarms" },
-  { id: "co_alarms", label: "CO alarms" },
-  { id: "emergency_lighting_fire_exit", label: "Fire safety" },
-];
+const CERT_TYPES = JOB_CERT_TYPES;
 
 export default function ContractorPage() {
   const { token } = useParams<{ token: string }>();
@@ -62,7 +52,7 @@ export default function ContractorPage() {
     setBusy(null);
     if (!r?.ok) return setErr(r?.error ?? "That didn't work.");
     setJob(r.job);
-    setFlash(label === "date" ? "Thanks - the date's on the job and the tenant and landlord have been told." : "Thanks - marked done.");
+    setFlash(label === "date" ? (r.job?.kind === "planned" ? "Thanks - the date's on the job." : "Thanks - the date's on the job and the tenant and landlord have been told.") : "Thanks - marked done.");
   }
   async function upload(file: File, kind: "photo" | "invoice" | "certificate") {
     const fd = new FormData();
@@ -105,7 +95,7 @@ export default function ContractorPage() {
             <div style={box}>
               <span style={label}>The job</span>
               <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6 }}>{job.description || job.category}</p>
-              <p style={{ margin: "10px 0 0", fontSize: 13, color: "#6b6b70" }}><strong>Access:</strong> {job.access || "none recorded"}<br /><strong>Tenant:</strong> {job.tenant || "on the works order"}</p>
+              <p style={{ margin: "10px 0 0", fontSize: 13, color: "#6b6b70" }}><strong>Access:</strong> {job.access || "none recorded"}<br /><strong>{job.tenant.includes(";") ? "Tenants" : "Tenant"}:</strong> {job.tenant ? job.tenant.split("; ").map((t, i) => <span key={i}>{i ? <br /> : null}{t}</span>) : "on the works order"}</p>
             </div>
             {flash && <p style={{ ...box, borderColor: "#3f8f5f", color: "#3f8f5f", fontSize: 14 }}>{flash}</p>}
             {err && job && <p style={{ color: "#a85a51", marginTop: 12, fontSize: 13 }}>{err}</p>}

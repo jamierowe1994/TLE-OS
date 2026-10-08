@@ -26,7 +26,11 @@ export type StepId = (typeof STEPS)[number]["id"];
 export function stepOf(o: StepOrder): StepId {
   if (o.status === "cancelled") return "closed";
   if (o.status === "paid") return "closed";
-  if (!o.landlordToldAt) return "tell_landlord";
+  /* Planned maintenance raised since 8 Oct 2026 is ours to arrange from the
+     start (arranging "us"), so it goes straight to the contractor: no landlord
+     to ring about a gas safety (James). Older planned jobs walk the old line. */
+  const ours = o.kind === "planned" && o.arranging === "us";
+  if (!o.landlordToldAt && !ours) return "tell_landlord";
   if (!o.arranging) return "arranging";
   if (o.arranging === "landlord") return o.landlordResolvedAt ? "closed" : "landlord_follow_up";
   if (!o.contractorId) return "pick_contractor";

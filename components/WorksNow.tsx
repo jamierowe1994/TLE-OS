@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import type { Contractor, Move, RankedContractor, WorksOrder, PaidHow } from "@/lib/works-orders";
 import { STEPS, stepOf, type StepId } from "@/lib/works-steps";
-import { categoriesOf } from "@/lib/works-catalogue";
+import { categoriesOf, CATEGORY_CERT_TYPE, JOB_CERT_TYPES } from "@/lib/works-catalogue";
+import FieldDate from "@/components/FieldDate";
+import FieldSelect from "@/components/FieldSelect";
 
 /**
  * The Now card on a job: one thing at a time, in the order James and
@@ -37,13 +39,15 @@ const btn = "rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] transi
 const primary = "rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page disabled:opacity-50";
 const tile = "flex-1 rounded-xl border px-4 py-3 text-left transition-colors";
 
-export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, ranked, canAdd = true }: {
+export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, ranked, canAdd = true, onCertificate }: {
   o: WorksOrder;
   move: (m: Move) => Promise<void>;
   busy: boolean;
   err: string | null;
   canCorporate: boolean;
   onInvoiceLandlord: () => void;
+  /** Files a certificate from the visit on the job and the home. Returns a problem, or null. */
+  onCertificate?: (fd: FormData) => Promise<string | null>;
   /** Given, the trades come from the caller rather than the book's own API.
    *  The rehearsal passes its own shelf so a shared link never shows the
    *  real contractors or their numbers. */
@@ -82,7 +86,7 @@ export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, 
         {step === "pick_contractor" && <PickContractor o={o} move={move} busy={busy} canCorporate={canCorporate} given={ranked} canAdd={canAdd} />}
         {step === "contractor_confirm" && <ContractorConfirm o={o} move={move} busy={busy} canCorporate={canCorporate} given={ranked} canAdd={canAdd} />}
         {step === "booking" && <Booking o={o} f={f} setF={setF} move={move} busy={busy} />}
-        {step === "visit" && <Visit o={o} f={f} setF={setF} move={move} busy={busy} />}
+        {step === "visit" && <Visit o={o} f={f} setF={setF} move={move} busy={busy} onCertificate={onCertificate} />}
         {step === "aftercare" && <Aftercare o={o} f={f} setF={setF} move={move} busy={busy} />}
         {step === "payment" && <Payment o={o} move={move} busy={busy} />}
         {step === "invoice" && <Money o={o} f={f} setF={setF} move={move} busy={busy} onInvoiceLandlord={onInvoiceLandlord} />}
@@ -175,7 +179,7 @@ function Arranging({ o, f, setF, move, busy }: StepProps) {
         <div className="mt-3 flex flex-wrap items-end gap-2">
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-wider text-muted">Follow up on</label>
-            <input type="date" value={f.followUp ?? localDate(3)} onChange={(e) => setF({ ...f, followUp: e.target.value })} className={`mt-1 ${field}`} />
+            <FieldDate className="mt-1 w-52" value={f.followUp ?? localDate(3)} onChange={(v) => setF({ ...f, followUp: v })} min={localDate(0)} />
           </div>
           <button type="button" disabled={busy} onClick={() => void move({ action: "arranging", who: "landlord", followUpAt: new Date(f.followUp ?? localDate(3)).toISOString() })} className={primary}>Leave it with them</button>
         </div>
@@ -196,7 +200,7 @@ function LandlordFollowUp({ o, f, setF, move, busy }: StepProps) {
         <div>
           <label className="block text-[10px] font-bold uppercase tracking-wider text-muted">Not yet - follow up again on</label>
           <div className="mt-1 flex gap-2">
-            <input type="date" value={f.followUp ?? localDate(3)} onChange={(e) => setF({ ...f, followUp: e.target.value })} className={field} />
+            <FieldDate className="w-52" value={f.followUp ?? localDate(3)} onChange={(v) => setF({ ...f, followUp: v })} min={localDate(0)} />
             <button type="button" disabled={busy} onClick={() => void move({ action: "arranging", who: "landlord", followUpAt: new Date(f.followUp ?? localDate(3)).toISOString(), note: f.note })} className={`${btn} whitespace-nowrap`}>Push it</button>
           </div>
         </div>
@@ -278,37 +282,134 @@ function ContractorConfirm({ o, move, busy, canCorporate, given, canAdd }: { o: 
 }
 
 function Booking({ o, f, setF, move, busy }: StepProps) {
+  const planned = o.kind === "planned";
   return (
     <div>
-      <p className="text-[13px]">{o.contractorName} has the works order and can set the date from their page. Or type it in when they tell you.</p>
+      <p className="text-[13px]">{o.contractorName} has the works order{planned ? " and arranges a time with the tenants" : ""}. They can set the date from their page, or type it in when they tell you.</p>
       <div className="mt-3 flex flex-wrap items-end gap-2">
-        <div>
-          <label className="block text-[10px] font-bold uppercase tracking-wider text-muted">Arranged for</label>
-          <input type="datetime-local" value={f.at ?? ""} onChange={(e) => setF({ ...f, at: e.target.value })} className={`mt-1 ${field}`} />
+        <div className="w-full sm:w-72">
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-muted">Booked for</label>
+          <FieldDate className="mt-1" withTime value={f.at ?? ""} onChange={(v) => setF({ ...f, at: v })} placeholder="The date and time agreed" min={localDate(-30)} />
         </div>
         <button type="button" disabled={busy || !f.at} onClick={() => void move({ action: "schedule", scheduledAt: new Date(f.at).toISOString() })} className={primary}>That's the date</button>
       </div>
-      <p className="mt-2 text-[11.5px] text-muted">Setting it tells the tenant and the contractor, and lets the landlord know it's arranged.</p>
+      <p className="mt-2 text-[11.5px] text-muted">
+        {planned
+          ? `Setting it confirms it with ${o.contractorName || "the contractor"}${o.landlordSkipped ? "" : " and lets the landlord know it's arranged"}. The tenants are only sent it if you choose to, on the next step.`
+          : "Setting it tells the tenant and the contractor, and lets the landlord know it's arranged."}
+      </p>
       <ContractorLink o={o} />
     </div>
   );
 }
 
-function Visit({ o, f, setF, move, busy }: StepProps) {
+function Visit({ o, f, setF, move, busy, onCertificate }: StepProps & { onCertificate?: (fd: FormData) => Promise<string | null> }) {
   const past = o.scheduledAt ? new Date(o.scheduledAt).getTime() < Date.now() : false;
+  const planned = o.kind === "planned";
+  const [moving, setMoving] = useState(false);
   return (
-    <div>
+    <div className="space-y-3">
       <p className="text-[13px]">{o.contractorName} booked for {stamp(o.scheduledAt)}.{past ? " That's passed - has it been done?" : ""}</p>
-      <p className="mt-1 text-[11.5px] text-muted">The contractor can mark it done from their page with photos and their invoice, and gets asked the morning after. Or mark it here.</p>
-      <textarea value={f.note ?? ""} onChange={(e) => setF({ ...f, note: e.target.value })} rows={2} placeholder="What was done" className={`mt-3 ${field}`} />
-      <div className="mt-2 flex flex-wrap items-end gap-2">
-        <button type="button" disabled={busy} onClick={() => void move({ action: "done", note: f.note ?? "" })} className={primary}>Mark it done</button>
-        <div className="flex items-center gap-2">
-          <input type="datetime-local" value={f.at ?? ""} onChange={(e) => setF({ ...f, at: e.target.value })} className={field} />
-          <button type="button" disabled={busy || !f.at} onClick={() => void move({ action: "schedule", scheduledAt: new Date(f.at).toISOString() })} className={`${btn} whitespace-nowrap`}>Move the date</button>
+      {planned && <TellTenants o={o} move={move} busy={busy} />}
+      {planned && onCertificate && <CertificateUpload o={o} busy={busy} onCertificate={onCertificate} title="Done? Put the certificate on" />}
+      <div className="rounded-xl border border-line/80 bg-card p-3">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-muted">{planned ? "Done with no certificate" : "Mark it done"}</p>
+        <p className="mt-1 text-[11.5px] text-muted">{planned ? "A boiler service, an inspection: anything that doesn't leave a certificate. " : ""}The contractor can mark it done from their page and gets asked the morning after. Or mark it here.</p>
+        <textarea value={f.note ?? ""} onChange={(e) => setF({ ...f, note: e.target.value })} rows={2} placeholder="What was done" className={`mt-2 ${field}`} />
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button type="button" disabled={busy} onClick={() => void move({ action: "done", note: f.note ?? "" })} className={primary}>Mark it done</button>
+          {!moving && <button type="button" onClick={() => setMoving(true)} className={btn}>Move the date</button>}
         </div>
+        {moving && (
+          <div className="mt-2 flex flex-wrap items-end gap-2">
+            <FieldDate className="w-full sm:w-72" withTime value={f.at ?? ""} onChange={(v) => setF({ ...f, at: v })} placeholder="The new date and time" />
+            <button type="button" disabled={busy || !f.at} onClick={() => void move({ action: "schedule", scheduledAt: new Date(f.at).toISOString() })} className={primary}>Move it</button>
+            <button type="button" onClick={() => setMoving(false)} className={btn}>Back</button>
+          </div>
+        )}
       </div>
       <ContractorLink o={o} />
+    </div>
+  );
+}
+
+/**
+ * The booking to the tenants, on a planned job, by hand. James, 8 Oct 2026:
+ * "It should then show an option saying, 'Send confirmation to tenant,' but
+ * it shouldn't be mandatory." The contractor agreed the time with them, so
+ * most of the time nobody needs it in writing.
+ */
+function TellTenants({ o, move, busy }: { o: WorksOrder; move: (m: Move) => Promise<void>; busy: boolean }) {
+  const all = o.tenants.length ? o.tenants : o.tenant || o.tenantEmail ? [{ name: o.tenant, phone: o.tenantPhone, email: o.tenantEmail }] : [];
+  const withEmail = all.filter((t) => t.email.includes("@"));
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line/80 bg-card px-3 py-2.5">
+      <p className="min-w-0 text-[12.5px]">
+        {o.tenantsToldBookedAt
+          ? `Booking sent to the tenants ${stamp(o.tenantsToldBookedAt)}.`
+          : withEmail.length
+            ? `Optional: send the booking to ${withEmail.length === 1 ? (withEmail[0].name || "the tenant") : `all ${withEmail.length} tenants`}.`
+            : "No tenant on this job has an email, so the booking can't be sent to them."}
+        <span className="block text-[11px] text-muted">They agreed the time with the contractor, so this is only if you want it in writing.</span>
+      </p>
+      {withEmail.length > 0 && (
+        <button type="button" disabled={busy} onClick={() => void move({ action: "tell_tenants_booked" })} className={o.tenantsToldBookedAt ? btn : primary}>
+          {o.tenantsToldBookedAt ? "Send again" : "Send confirmation to the tenants"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The certificate from the visit, put on by the office when the contractor
+ * sent it by text or email rather than their page (James, 8 Oct 2026). It
+ * marks the job done and becomes the home's current certificate, exactly as
+ * the contractor's own upload does (lib/works-certificate).
+ */
+export function CertificateUpload({ o, busy, onCertificate, title = "Add a certificate", onDone }: { o: WorksOrder; busy: boolean; onCertificate: (fd: FormData) => Promise<string | null>; title?: string; onDone?: () => void }) {
+  const guess = categoriesOf(o.category).map((c) => CATEGORY_CERT_TYPE[c]).find(Boolean) ?? "";
+  const [type, setType] = useState(guess);
+  const [expiry, setExpiry] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [sending, setSending] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const ready = !!type && !!expiry && !!file;
+  const go = async () => {
+    if (!file) return;
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("type", type);
+    fd.append("expiry", expiry);
+    setSending(true);
+    setProblem(null);
+    const p = await onCertificate(fd);
+    setSending(false);
+    if (p) return setProblem(p);
+    setDone(file.name);
+    setFile(null);
+    setExpiry("");
+    onDone?.();
+  };
+  return (
+    <div className="rounded-xl border border-accent-dark/30 bg-accent-soft/20 p-3">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-muted">{title}</p>
+      <p className="mt-1 text-[11.5px] text-muted">It goes on the job{o.completedAt ? "" : ", marks it done"} and replaces the home&apos;s current certificate once compliance have checked it.</p>
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        <FieldSelect value={type} onChange={setType} placeholder="What is it?" options={JOB_CERT_TYPES.map((t) => ({ value: t.id, label: t.label }))} />
+        <FieldDate value={expiry} onChange={setExpiry} placeholder="The date it runs out" min={localDate(0)} />
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <label className={`${btn} cursor-pointer bg-white`}>
+          {file ? file.name : "Choose the file"}
+          <input type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setDone(null); e.target.value = ""; }} />
+        </label>
+        <button type="button" disabled={busy || sending || !ready} onClick={() => void go()} className={primary}>{sending ? "Filing…" : o.completedAt ? "Put it on" : "Put it on and mark done"}</button>
+      </div>
+      {!ready && !done && <p className="mt-1.5 text-[11px] text-muted">Say what it is and when it runs out, then choose the file.</p>}
+      {done && <p className="mt-1.5 text-[11.5px] text-accent-dark">{done} is on the job and waiting for compliance to check it.</p>}
+      {problem && <p className="mt-1.5 text-[11.5px] text-accent-dark">{problem}</p>}
     </div>
   );
 }
@@ -397,7 +498,7 @@ export function ContractorForm({ initial, canCorporate, onSaved, onClose, compac
   const [c, setC] = useState<Partial<Contractor> & { scope?: "mine" | "corporate" }>({ ...BLANK_CONTRACTOR, ...initial, scope: initial.id ? (initial.ownerId ? "mine" : "corporate") : "mine" });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const field = "w-full rounded-lg border border-line/80 bg-box px-3 py-2 text-[12.5px] outline-none focus:border-ink";
+  const field = "w-full rounded-lg border border-line/80 bg-box px-3 py-2.5 text-[13px] outline-none focus:border-ink";
   const label = "block text-[10px] font-bold uppercase tracking-wider text-muted";
   async function save() {
     if (!c.name?.trim() || !c.trade?.trim()) return setErr("A name and a trade, at least.");
@@ -431,11 +532,16 @@ export function ContractorForm({ initial, canCorporate, onSaved, onClose, compac
         ) : (
           <span className="text-[11.5px] text-muted">Goes in your own book.</span>
         )}
-        <label className="flex items-center gap-2 text-[12.5px]"><input type="checkbox" checked={c.active !== false} onChange={(e) => setC({ ...c, active: e.target.checked })} /> Active</label>
+        <button type="button" role="switch" aria-checked={c.active !== false} onClick={() => setC({ ...c, active: c.active === false })} className="flex items-center gap-2 text-[12.5px]">
+          <span className={`relative block h-5 w-9 shrink-0 rounded-full transition-colors ${c.active !== false ? "bg-accent-dark" : "bg-line"}`}>
+            <span className={`absolute left-0 top-0.5 block h-4 w-4 rounded-full bg-white shadow transition-transform ${c.active !== false ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+          </span>
+          {c.active !== false ? "Active - offered on jobs" : "Not active"}
+        </button>
         {err && <span className="text-[12px] text-accent-dark">{err}</span>}
         <span className="ml-auto flex gap-2">
-          <button type="button" onClick={onClose} className="rounded-full border border-line/80 px-4 py-1.5 text-[12px] text-muted">Cancel</button>
-          <button type="button" disabled={busy} onClick={() => void save()} className="rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page">{busy ? "Saving…" : "Save"}</button>
+          <button type="button" onClick={onClose} className="rounded-full border border-line/80 bg-white px-4 py-2 text-[12.5px] text-muted hover:text-ink">Cancel</button>
+          <button type="button" disabled={busy} onClick={() => void save()} className="rounded-full bg-ink px-5 py-2 text-[12.5px] font-semibold text-page">{busy ? "Saving…" : "Save contractor"}</button>
         </span>
       </div>
     </div>

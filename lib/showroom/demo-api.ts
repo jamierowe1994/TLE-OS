@@ -60,6 +60,12 @@ function applyMove(w: DemoWorld, o: WorksOrder, move: Move, by: string): WorksOr
       n.landlordToldAt = at;
       text = `Landlord told - ${move.how === "both" ? "rang and emailed" : move.how === "rang" ? "rang them" : move.how === "text" ? "texted them" : "emailed the report"}.`;
       break;
+    case "tell_tenants_booked":
+      if (!o.scheduledAt) throw new Error("There is no date to tell them yet.");
+      n.tenantsToldBookedAt = at;
+      kind = "note";
+      text = "Booking confirmation sent to the tenants.";
+      break;
     case "arranging":
       n.arranging = move.who;
       if (move.who === "landlord") {
@@ -180,6 +186,21 @@ function applyMove(w: DemoWorld, o: WorksOrder, move: Move, by: string): WorksOr
 /** KEEP IN STEP with emailsForMove (lib/works-emails): which emails a move sends. */
 function emailsFor(o: WorksOrder, action: string, how?: string): string[] {
   const hasContractor = Boolean(o.contractorId);
+  /* Planned: the tenants only hear when the agent sends the booking; a skipped landlord never does. */
+  if (o.kind === "planned") {
+    switch (action) {
+      case "raised": return hasContractor && o.contractorContactedAt ? ["works-contractor-planned"] : [];
+      case "contact_contractor": return hasContractor ? ["works-contractor-report"] : [];
+      case "contractor_confirmed": case "assign": return ["works-contractor-planned"];
+      case "schedule": return ["works-contractor-booked", ...(o.landlordSkipped ? [] : ["works-landlord-arranged"])];
+      case "tell_tenants_booked": return ["works-tenant-booked"];
+      case "quote": return o.status === "approval" && !o.landlordSkipped ? ["works-landlord-approval"] : [];
+      case "done": return ["works-compliance-done"];
+      case "invoice": return ["works-accounts-invoice"];
+      case "cancel": return hasContractor ? ["works-contractor-cancelled"] : [];
+      default: return [];
+    }
+  }
   switch (action) {
     case "raised": return [...(o.kind === "repair" ? ["works-tenant-received"] : []), ...(hasContractor && o.scheduledAt ? ["works-contractor-order", "works-tenant-booked"] : [])];
     case "tell_landlord": return how === "emailed" || how === "both" ? ["works-landlord-report"] : [];
@@ -188,7 +209,7 @@ function emailsFor(o: WorksOrder, action: string, how?: string): string[] {
     case "assign": return ["works-contractor-order", ...(o.scheduledAt ? ["works-tenant-booked"] : [])];
     case "schedule": return ["works-contractor-booked", "works-tenant-booked", "works-landlord-arranged"];
     case "quote": return o.status === "approval" ? ["works-landlord-approval"] : [];
-    case "done": return [o.kind === "repair" ? "works-tenant-happy" : "works-tenant-done", "works-compliance-done"];
+    case "done": return ["works-tenant-happy", "works-compliance-done"];
     case "invoice": return ["works-accounts-invoice"];
     case "cancel": return hasContractor ? ["works-contractor-cancelled"] : [];
     default: return [];
@@ -201,6 +222,7 @@ const TOLD: Record<string, string> = {
   "works-landlord-report": `Landlord emailed the report (${CAST.landlord.email}).`,
   "works-contractor-report": "Contractor emailed the report.",
   "works-contractor-order": "Contractor emailed the works order.",
+  "works-contractor-planned": "Contractor emailed the works order, with every tenant to arrange access with.",
   "works-tenant-found": `Tenant emailed: "We've found someone" (${CAST.tenant.email}).`,
   "works-tenant-booked": "Tenant emailed the date.",
   "works-contractor-booked": "Contractor emailed the date.",
@@ -234,17 +256,23 @@ function summaryOf(orders: WorksOrder[]) {
 }
 
 /** createOrder's defaults (lib/works-orders): the urgency sets the clock. */
-function raise(w: DemoWorld, b: Partial<WorksOrder>, by: string): WorksOrder {
+function raise(w: DemoWorld, b: Partial<WorksOrder> & { send?: boolean }, by: string): WorksOrder {
   const at = nowIso();
+  /* KEEP IN STEP with createOrder: planned is ours to arrange; Send puts the works order out. */
+  const planned = b.kind === "planned";
+  const sent = planned && !!b.contractorId && b.send === true;
+  const confirmed = sent || (planned && !!b.contractorId && !!b.scheduledAt);
+  const skipped = planned && b.landlordSkipped === true;
   const ref = Math.max(1000, ...w.orders.map((o) => o.ref)) + 1;
   const hours = b.kind === "planned" ? null : URGENCIES.find((u) => u.id === (b.urgency ?? "routine"))?.hours ?? 24 * 14;
   const o: WorksOrder = {
     ...(w.orders[0] ?? ({} as WorksOrder)),
-    id: `demo-new-${ref}`, ref, kind: b.kind ?? "repair", status: "reported",
+    id: `demo-new-${ref}`, ref, kind: b.kind ?? "repair", status: b.contractorId && b.scheduledAt ? "scheduled" : sent ? "approved" : "reported",
     propertyId: b.propertyId ?? null, propertyName: b.propertyName ?? CAST.property, locality: b.locality ?? CAST.locality,
     landlord: b.landlord ?? CAST.landlord.name, tenant: b.tenant ?? CAST.tenant.name, tenantPhone: b.tenantPhone ?? CAST.tenant.phone, tenantEmail: b.tenantEmail ?? CAST.tenant.email,
-    landlordEmail: b.landlordEmail ?? CAST.landlord.email, landlordMobile: b.landlordMobile ?? CAST.landlord.phone,
-    landlordToldAt: null, arranging: null, landlordFollowUpAt: null, landlordResolvedAt: null, contractorContactedAt: null, contractorConfirmedAt: null, landlordArrangedAt: null,
+    landlordEmail: skipped ? "" : (b.landlordEmail ?? CAST.landlord.email), landlordMobile: skipped ? "" : (b.landlordMobile ?? CAST.landlord.phone),
+    tenants: b.tenants ?? [], landlordSkipped: skipped, tenantsToldBookedAt: null,
+    landlordToldAt: null, arranging: planned ? "us" : null, landlordFollowUpAt: null, landlordResolvedAt: null, contractorContactedAt: sent ? at : null, contractorConfirmedAt: confirmed ? at : null, landlordArrangedAt: null,
     tenantHappy: null, tenantHappyAt: null, tenantHappyNote: "", payee: null, contractorToken: null, tenantToken: null, accountsToldAt: null, complianceToldAt: null,
     title: b.title ?? "A repair", description: b.description ?? "", category: b.category ?? "Other", urgency: b.kind === "planned" ? null : (b.urgency ?? "routine"),
     dueAt: b.kind === "planned" ? (b.dueAt ?? null) : new Date(Date.now() + (hours ?? 336) * 3_600_000).toISOString(),
@@ -298,6 +326,29 @@ export function answer(w: DemoWorld, method: string, url: URL, body: Body): Demo
     if (p === "/api/works-orders/landlord-pref") {
       const pref = { jobEmails: "all", overAmount: 250, updatedBy: "", updatedAt: null, ...(method === "PATCH" ? (body as object) : {}) };
       return ok({ hasEmail: true, pref }, [], method === "PATCH" ? "landlord_pref" : undefined);
+    }
+    /* The Send screen's preview of the planned works order. The real one is
+       rendered on the server from the catalogue; the walkthrough shows the
+       same facts plainly, and sends nothing. */
+    if (p === "/api/works-orders/preview" && method === "POST") {
+      const b = (body ?? {}) as { title?: string; category?: string; dueAt?: string; contractorId?: string; tenants?: { name: string; phone: string; room?: string }[]; access?: string };
+      const c = w.contractors.find((x) => x.id === b.contractorId);
+      if (!c) return no("Pick a contractor first.");
+      const esc = (v: string) => v.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[ch] ?? ch);
+      const who = (b.tenants ?? []).map((t) => `${esc(t.name)}${t.room ? ` (${esc(t.room)})` : ""} · ${esc(t.phone || "")}`).join("<br>") || "None on file";
+      const html = `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.5;color:#222;padding:24px"><h2 style="margin:0 0 12px">Works order</h2><p>Hi ${esc(c.contact || c.name)},</p><p>Please could you carry out the following for us. The tenants' details are below so you can arrange a time with them directly.</p><p><strong>${esc(b.title ?? "")}</strong><br>${esc(CAST.property)}<br>${esc(b.category ?? "")}<br><strong>Expiry date:</strong> ${esc(b.dueAt ?? "")}</p><p><strong>Tenants to arrange access with</strong><br>${who}</p><p><strong>Access notes:</strong> ${esc(b.access || "none recorded")}</p><p><span style="display:inline-block;background:#222;color:#fff;padding:10px 16px;border-radius:999px">Let us know the date and time</span></p><p style="color:#888">Showroom: nothing is sent.</p></div>`;
+      return ok({ subject: `Works order: ${b.title ?? ""} at ${CAST.property}`, html, to: c.email, contractorName: c.name });
+    }
+    const certJob = p.match(/^\/api\/works-orders\/([^/]+)\/certificate$/);
+    if (certJob && method === "POST") {
+      const o = w.orders.find((x) => x.id === decodeURIComponent(certJob[1]));
+      if (!o) return no("No such job.", 404);
+      const name = body instanceof FormData && body.get("file") instanceof File ? (body.get("file") as File).name : "certificate.pdf";
+      let n = applyMove(w, o, { action: "file", file: { key: "demo", name, type: "application/pdf" } }, CAST.agent.name);
+      const ids: string[] = [];
+      if (!n.completedAt) { n = applyMove(w, n, { action: "done", note: `Done. Certificate put on by ${CAST.agent.name}.` }, CAST.agent.name); ids.push(...emailsFor(n, "done")); }
+      log(w, n.id, "TLE OS", "compliance", `${name} filed as the home's current certificate, waiting for compliance to check it.`);
+      return ok({ order: n, events: w.events[n.id] ?? [], certificate: { filed: true, share: null }, emails: outcomes(w, n, ids) }, ids, "certificate");
     }
     const job = p.match(/^\/api\/works-orders\/([^/]+)$/);
     if (job) {

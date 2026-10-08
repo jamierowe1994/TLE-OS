@@ -771,6 +771,39 @@ export const WORKS_CONTRACTOR_ORDER = {
   branding: { showSignoff: false },
 } as const;
 
+/**
+ * The works order for planned maintenance (James, 8 Oct 2026): a gas safety,
+ * an EICR, a boiler service. Different from a repair's in three ways - every
+ * tenant on the home is on it, because the contractor arranges access with
+ * them directly and a shared house has several; it carries the date the
+ * current certificate runs out rather than an urgency; and the button is how
+ * they tell us the time they have agreed, on the same page they later upload
+ * the certificate to. {{tenantsList}}, {{dueDay}}, {{bookingLine}} and
+ * {{buttonLabel}} are filled by lib/works-emails.
+ */
+export const WORKS_CONTRACTOR_PLANNED = {
+  subject: "Works order #{{ref}}: {{title}} at {{address}}",
+  preheader: "A planned job from The Letting Experts, with the tenants to arrange it with.",
+  mode: "blocks",
+  blocks: [
+    H("wp1", "Works order #{{ref}}"),
+    T("wp2", "Hi {{contractorGreeting}},<br><br>Please could you carry out the following for us. The tenants' details are below so you can arrange a time with them directly."),
+    T("wp3", "<strong>{{title}}</strong><br>{{address}}<br>{{category}}<br><strong>Expiry date:</strong> {{dueDay}}"),
+    T("wp4", "{{description}}"),
+    T("wp5", "<strong>Tenants to arrange access with</strong><br>{{tenantsList}}"),
+    T("wp6", "<strong>Access notes:</strong> {{access}}"),
+    SP("wp7", 8),
+    T("wp8", "{{bookingLine}}"),
+    BTN("wp9", "{{buttonLabel}}", "{{contractorLink}}"),
+    SP("wp10", 8),
+    T("wp11", "When the job is done, upload the certificate on the same page and it goes straight onto the property's record. Please quote works order #{{ref}} on your invoice."),
+    SP("wp12", 8),
+    T("wp13", "Thanks,<br>{{agentName}}<br>The Letting Experts · {{agentPhone}} · {{agentEmail}}"),
+    FOOT("wp14", "You're getting this because you're on The Letting Experts' trades book."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
 export const WORKS_CONTRACTOR_BOOKED = {
   subject: "Confirmed: #{{ref}} {{title}}, {{scheduledAt}}",
   preheader: "The booking, the address and the access.",
