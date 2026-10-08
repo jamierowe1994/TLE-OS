@@ -1594,8 +1594,8 @@ export function getRlpTakeUp(month: string): Promise<RlpTakeUp | null> {
 }
 
 /** Rent received in a month, per property. Cached and persisted like the rest. */
-export function getRentReceived(month: string): Promise<RentReceived | null> {
-  return cachedAsync(`rent:${month}`, () => computeRentReceived(month));
+export function getRentReceived(month: string, opts: { wait?: boolean } = {}): Promise<RentReceived | null> {
+  return cachedAsync(`rent:${month}`, () => computeRentReceived(month), opts);
 }
 
 export function getMoveIns(month: string): Promise<MoveIns | null> {

@@ -11,6 +11,7 @@ import DoodleIcon from "@/components/DoodleIcon";
  * by ... a payment in and out box." Live from PayProp through
  * /api/portfolio/rent; while it reads it says so, and when PayProp can't be
  * read or the home can't be matched it says that - never an old figure.
+ * PayProp is read once a day at 10am, so the box says when (lib/rent-status).
  */
 
 type Status =
@@ -27,7 +28,15 @@ type Status =
 const gbp = (n: number) => `£${n.toLocaleString("en-GB", { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 })}`;
 const day = (s: string | null) => (s ? new Date(s.length === 10 ? `${s}T12:00:00` : s).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" }) : null);
 const monthName = (m: string) => new Date(`${m}-15T12:00:00`).toLocaleDateString("en-GB", { month: "long" });
-const time = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
+const londonDay = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+const thisMonth = () => londonDay(new Date()).slice(0, 7);
+function checked(iso: string) {
+  const at = new Date(iso);
+  const t = at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
+  if (londonDay(at) === londonDay(new Date())) return `today at ${t}`;
+  if (londonDay(at) === londonDay(new Date(Date.now() - 86_400_000))) return `yesterday at ${t}`;
+  return `${at.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" })} at ${t}`;
+}
 
 export default function RentBox({ listingId, className }: { listingId: string; className: string }) {
   const [s, setS] = useState<Status | null>(null);
@@ -62,7 +71,7 @@ export default function RentBox({ listingId, className }: { listingId: string; c
       ) : s === null ? (
         <p className="mt-3 flex items-center gap-2 text-[12.5px] text-muted">
           <span aria-hidden className="h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
-          Checking the rent with PayProp…
+          Loading the rent…
         </p>
       ) : s.state !== "ok" ? (
         <p className="mt-3 text-[12.5px] leading-relaxed text-muted">{s.detail}</p>
@@ -100,7 +109,7 @@ export default function RentBox({ listingId, className }: { listingId: string; c
               <li key={h.month} className="flex items-center gap-3 px-3 py-2 text-[12px]">
                 <span className="w-[72px] shrink-0 font-semibold">{monthName(h.month)}</span>
                 {h.amountToLandlord === null ? (
-                  <span className="text-muted">Still reading PayProp</span>
+                  <span className="text-muted">Not read this morning</span>
                 ) : h.in ? (
                   <span className="min-w-0 flex-1">
                     <span>In {day(h.in)}</span>
@@ -110,12 +119,12 @@ export default function RentBox({ listingId, className }: { listingId: string; c
                     </span>
                   </span>
                 ) : (
-                  <span className="text-muted">{h.month === s.history[0]?.month ? "Nothing in yet this month" : "No rent in"}</span>
+                  <span className="text-muted">{h.month === thisMonth() ? "Nothing in yet this month" : "No rent in"}</span>
                 )}
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-[10.5px] text-muted">From PayProp, checked at {time(s.checkedAt)}.</p>
+          <p className="mt-2 text-[10.5px] text-muted">From PayProp, checked {checked(s.checkedAt)}. Checked again each day at 10am.</p>
         </>
       )}
     </section>
