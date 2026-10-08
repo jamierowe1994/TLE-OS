@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { attachDocument, moveDocument, PlcRefused, removeDocument, setCovers } from "@/lib/plc-store";
 import { checkById, COVERABLE, missingDocuments, PLC_CHECKS, type CheckId, type FileRead } from "@/lib/plc";
 import { keyIsOurs, r2Configured } from "@/lib/r2";
-import { actorName } from "@/lib/plc-actor";
+import { actorName, currentUser } from "@/lib/plc-actor";
+import { mirrorToFile } from "@/lib/plc-from-file";
 
 /**
  * POST   /api/plc/<id>/documents  → file an already-uploaded document
@@ -83,6 +84,13 @@ export async function POST(req: NextRequest, ctx: Ctx) {
          agent can untick it on the file. */
       covers: (cleanRead(body.read)?.alsoCovers ?? []).filter((x) => COVERABLE[checkId]?.includes(x)),
     });
+    /* On the home's Documents tab too, so the listing, the application and
+       the pre-tenancy deal all have it without a second upload. */
+    if (!placeholder) {
+      const me = await currentUser(req);
+      const name = (body.name ?? "").trim() || "Document";
+      await mirrorToFile(updated, { checkId, name, key }, { id: me?.id ?? "", name: me?.name ?? updated.agentName });
+    }
     return NextResponse.json({
       ok: true,
       case: updated,

@@ -144,3 +144,44 @@ export async function removeFileDoc(id: string, me: { id: string; name: string; 
   );
   return rows.length > 0;
 }
+
+/** One of a home's documents with its stored key, for a PLC pack to pull in (lib/plc-from-file). */
+export interface StoredFileDoc {
+  id: string;
+  type: string;
+  name: string;
+  fileName: string;
+  r2Key: string;
+  mime: string;
+  at: string;
+  fromKind: string;
+}
+
+export async function storedDocsForHome(home: Home): Promise<StoredFileDoc[]> {
+  if (!hasDb()) return [];
+  const address = clean(home.address);
+  const propertyId = clean(home.propertyId);
+  const street = address ? parseAddress(address).street : "";
+  if (!street && !propertyId) return [];
+  const rows = await q<Row>(
+    `SELECT id, address, rex_property_id, from_kind, from_id, type, name, file_name, r2_key, mime, size_bytes, by_id, by_name, at
+       FROM os_file_documents
+      WHERE removed_at IS NULL
+        AND (($1 <> '' AND rex_property_id = $1) OR ($2 <> '' AND street = $2))
+      ORDER BY at DESC
+      LIMIT 400`,
+    [propertyId, street]
+  );
+  return rows
+    .filter((r) => isThisHome(r, { address, propertyId }))
+    .map((r) => ({
+      id: r.id,
+      type: r.type,
+      name: r.name,
+      fileName: r.file_name,
+      r2Key: r.r2_key,
+      mime: r.mime,
+      at: new Date(r.at).toISOString(),
+      fromKind: r.from_kind,
+    }));
+}

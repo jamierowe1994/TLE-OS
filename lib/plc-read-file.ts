@@ -102,7 +102,7 @@ const UNREAD = "Not read automatically, so sorted by its file name. Check it is 
  */
 export async function readDroppedFile(
   doc: Pick<PlcDocument, "key" | "name" | "placeholder">,
-  context: { address: string; landlordName?: string | null; tenantNames?: string[] }
+  context: { address: string; landlordName?: string | null; tenantNames?: string[]; label?: string | null }
 ): Promise<FileRead> {
   const at = new Date().toISOString();
   const blank = (note: string): FileRead => ({
@@ -132,6 +132,9 @@ export async function readDroppedFile(
     context.landlordName ? `The landlord is ${context.landlordName}.` : "",
     context.tenantNames?.length ? `The tenants are ${context.tenantNames.join(", ")}.` : "",
     `The file is named "${doc.name}".`,
+    /* What the agent picked on the Documents tab. Often right, sometimes the
+       wrong entry in the list, so the page itself wins. */
+    context.label ? `Whoever uploaded it labelled it "${context.label}" - go by what the document shows if they differ.` : "",
   ]
     .filter(Boolean)
     .join(" ");

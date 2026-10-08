@@ -2305,6 +2305,10 @@ ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS rlp_wanted BOOLEAN;
 -- Ordinary home or HMO, which decides whether the HMO documents are needed (6 Oct 2026).
 ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS let_type TEXT;
 ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS rlp_request JSONB;
+-- The home's Documents-tab files already offered to this pack (8 Oct 2026, Kirstie:
+-- uploaded on the board, then had to upload them all again on the PLC). Kept so a
+-- file the agent took off the pack is not brought back in the next time it opens.
+ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS file_keys JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 -- Certificates that came in OUTSIDE a PLC pack (5 Sep 2026): the backlog
 -- downloaded out of Propoly and dropped in, batch by batch. The OS keeps the

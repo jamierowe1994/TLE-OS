@@ -473,6 +473,8 @@ export type PlcDocument = {
    * so filed under Tenant checks it ticks Right to Rent too.
    */
   covers?: CheckId[];
+  /** Brought in from the home's Documents tab rather than uploaded on the pack (8 Oct 2026). */
+  fromFile?: boolean;
 };
 
 /** Which checks a document filed under one check may also answer. */
@@ -579,6 +581,11 @@ export type PlcCase = {
   moveInDate: string | null;
   /** Ordinary home or HMO. Null until the agent says (older packs). */
   letType?: LetType | null;
+  /**
+   * The home's Documents-tab files (lib/file-documents) already offered to
+   * this pack, filed or not, so one the agent took off is not brought back.
+   */
+  fileKeys?: string[];
   /** What the agent wanted compliance to know. Free text, not a field. */
   agentNote: string;
   /** Conditional checks declared not needed, each with its reason. */

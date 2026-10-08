@@ -200,6 +200,9 @@ export default function PlcWizard({
   const [busy, setBusy] = useState(false);
   /** What the agent wants compliance to know. Optional. */
   const [note, setNote] = useState("");
+  /* The home's Documents-tab files being brought into the pack (lib/plc-from-file). */
+  const [pulled, setPulled] = useState<"busy" | { added: number; failed?: boolean } | null>(null);
+  const pulling = useRef<string | null>(null);
   /* The demo seam is a fresh object on every render of whatever mounts this.
      Held in a ref so re-rendering the page around the wizard (ticking a
      practice step, say) never re-runs the opening read and yanks the agent
@@ -280,6 +283,26 @@ export default function PlcWizard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kase?.id, kase?.state]);
 
+  /* Once per pack per visit: whatever is on the home's Documents tab is read
+     and filed, so nothing uploaded there has to be uploaded again here. */
+  const pullFromFile = (c: PlcCase) => {
+    if (demo || c.state !== "assembling" || pulling.current === c.id) return;
+    pulling.current = c.id;
+    setPulled("busy");
+    api<{ case: PlcCase; added: { name: string }[] }>(`/api/plc/${c.id}/from-file`, {
+      method: "POST",
+      body: JSON.stringify({
+        tenants: prefill?.tenants.map((t) => t.name) ?? [],
+        landlord: prefill?.landlordName ?? null,
+      }),
+    })
+      .then((res) => {
+        if (res.added.length) setKase(res.case);
+        setPulled({ added: res.added.length });
+      })
+      .catch(() => setPulled({ added: 0, failed: true }));
+  };
+
   const startAndContinue = async () => {
     if (!prefill) return;
     if (demo) {
@@ -330,6 +353,7 @@ export default function PlcWizard({
         if (patched.rexMoveIn) setRexNote(patched.rexMoveIn);
       }
       setKase(current);
+      pullFromFile(current);
       go(returnTo ?? "landlord");
       setReturnTo(null);
     } catch (e) {
@@ -650,6 +674,23 @@ export default function PlcWizard({
             {rexNote && step === "landlord" && (
               <p className={`mb-3 mt-2 text-xs ${rexNote.ok ? "text-emerald-700" : "text-amber-700"}`}>
                 Move-in date {prettyDate(kase.moveInDate)}. {rexNote.note}
+              </p>
+            )}
+            {pulled === "busy" && (
+              <p className="mt-2 flex items-center gap-2 text-sm text-muted">
+                <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-accent-dark" />
+                Bringing in anything already on this home&apos;s Documents tab…
+              </p>
+            )}
+            {pulled && pulled !== "busy" && pulled.added > 0 && (
+              <p className="mt-2 text-sm text-emerald-700">
+                {pulled.added} document{pulled.added === 1 ? "" : "s"} brought in from this home&apos;s Documents tab - no
+                need to upload {pulled.added === 1 ? "it" : "them"} again. Check each is in the right place.
+              </p>
+            )}
+            {pulled && pulled !== "busy" && pulled.failed && (
+              <p className="mt-2 text-sm text-amber-700">
+                The home&apos;s Documents tab couldn&apos;t be read just now, so upload anything that isn&apos;t below.
               </p>
             )}
             <PlcDocuments

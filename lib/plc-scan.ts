@@ -227,12 +227,12 @@ const REPORT_TOOL: Anthropic.Tool = {
             type: "array",
             items: { type: "string" },
             description:
-              "Anything the certificate flags as needing work or being at risk - C1, C2 or FI on an EICR, 'at risk' or 'immediately dangerous' on a CP12, a reading outside the normal range. One short phrase each. Empty if none.",
+              "Anything the certificate flags as needing work or being at risk - C1, C2 or FI on an EICR, 'at risk' or 'immediately dangerous' on a CP12, a reading outside the normal range. One short phrase each. Do NOT list C3 (improvement recommended) items: they are advice and do not stop a let. Empty if none.",
           },
           signed: {
             type: "string",
             enum: ["yes", "no", "unclear"],
-            description: "Signed and dated by whoever issued it.",
+            description: "Signed and dated by whoever issued it. Use \"unclear\" for documents that are never signed (search results, title registers, screenshots, reports).",
           },
           peopleNamed: {
             type: "array",
@@ -348,8 +348,12 @@ export async function readDocument(
     const f = r as { level?: string; message?: string; foundDate?: string };
     const message = (f.message ?? "").trim();
     if (!message) return [];
-    const level: FindingLevel =
-      f.level === "blocker" || f.level === "query" || f.level === "ok" ? f.level : "query";
+    /* The model's own "blocker" is shown as a query. Only the rules in
+       lib/plc-rules hold a pack back (8 Oct 2026: Kirstie's pack was stopped
+       twice over for one gas address - once by the rule, once by the model
+       saying the same thing in its own words, and once more for a licence
+       that was never needed). */
+    const level: FindingLevel = f.level === "ok" ? "ok" : "query";
     return [
       {
         checkId: context.checkId,

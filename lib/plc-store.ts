@@ -72,6 +72,7 @@ interface Row extends Record<string, unknown> {
   rlp_wanted: boolean | null;
   rlp_request: RlpRequest | null;
   let_type: string | null;
+  file_keys: string[] | null;
   submitted_at: string | Date | null;
   scanned_at: string | Date | null;
   decided_at: string | Date | null;
@@ -106,6 +107,7 @@ function rowTo(r: Row): PlcCase {
     state: r.state as PlcState,
     moveInDate: ymd(r.move_in_date),
     letType: r.let_type === "hmo" || r.let_type === "home" ? r.let_type : null,
+    fileKeys: Array.isArray(r.file_keys) ? r.file_keys : [],
     agentNote: r.agent_note ?? "",
     documents: Array.isArray(r.documents) ? r.documents : [],
     findings: Array.isArray(r.findings) ? r.findings : [],
@@ -130,7 +132,7 @@ function rowTo(r: Row): PlcCase {
 const COLS = `id, application_ref, address, agent_name, agent_email, state,
               move_in_date, agent_note, documents, findings, waivers, propoly_push, rex_push, submitted_at,
               scanned_at, decided_at, decided_by, decision_note, created_at,
-              checked_at, checked_by, checked_by_email, check_note, rlp_wanted, rlp_request, let_type`;
+              checked_at, checked_by, checked_by_email, check_note, rlp_wanted, rlp_request, let_type, file_keys`;
 
 /* ──────────────────────────── the file backend ──────────────────────────── */
 
@@ -170,6 +172,7 @@ async function mutate(id: string, fn: (c: PlcCase) => PlcCase): Promise<PlcCase>
               waivers = $12::jsonb, propoly_push = $13::jsonb, rex_push = $14::jsonb,
               checked_at = $15, checked_by = $16, checked_by_email = $17, check_note = $18,
               rlp_wanted = $19, rlp_request = $20::jsonb, let_type = $21,
+              file_keys = $22::jsonb,
               updated_at = NOW()
         WHERE id = $1
         RETURNING ${COLS}`,
@@ -195,6 +198,7 @@ async function mutate(id: string, fn: (c: PlcCase) => PlcCase): Promise<PlcCase>
         next.rlpWanted ?? null,
         next.rlpRequest ? JSON.stringify(next.rlpRequest) : null,
         next.letType ?? null,
+        JSON.stringify(next.fileKeys ?? []),
       ]
     );
     return rowTo(saved[0]);
@@ -369,6 +373,7 @@ export async function attachDocument(
     read?: FileRead | null;
     hash?: string;
     covers?: CheckId[];
+    fromFile?: boolean;
   }
 ): Promise<PlcCase> {
   return mutate(id, (c) => {
@@ -388,6 +393,7 @@ export async function attachDocument(
       ...(doc.read ? { read: doc.read } : {}),
       ...(doc.hash ? { hash: doc.hash } : {}),
       ...(doc.covers?.length ? { covers: doc.covers } : {}),
+      ...(doc.fromFile ? { fromFile: true } : {}),
     };
     /* The same file dropped twice (a folder dropped again) is filed once -
        by its key, and by its contents (7 Oct 2026: the same PDF under two
@@ -398,6 +404,18 @@ export async function attachDocument(
       return c;
     }
     return { ...c, documents: [...c.documents, next] };
+  });
+}
+
+/**
+ * Documents-tab files this pack has now been offered, filed or not
+ * (lib/plc-from-file), so the next pull skips them.
+ */
+export async function noteFileKeys(id: string, keys: string[]): Promise<PlcCase> {
+  return mutate(id, (c) => {
+    const had = new Set(c.fileKeys ?? []);
+    const fresh = keys.filter((k) => k && !had.has(k));
+    return fresh.length ? { ...c, fileKeys: [...had, ...fresh] } : c;
   });
 }
 

@@ -114,10 +114,35 @@ const TIGHT_DAYS = 30;
  * more than the check-specific ones: a perfectly valid EICR filed against the
  * gas safety check would otherwise sail through on dates alone.
  */
-function universal(f: DocFacts, moveInDate: string | null): RuleResult["reasons"] {
+/**
+ * Which checks a signature, and the address, mean anything on (Kirstie,
+ * 8 Oct 2026, on the first real pack to hit the reader: "what's not
+ * signed?"). An AML search, a title register and a council licensing check
+ * are never signed, and a passport or a reference report carries no property
+ * address - so asking either of them is a fail nobody can fix.
+ */
+const SIGNED_CHECKS = new Set<CheckId>(["gas-safety", "eicr", "holding-deposit"]);
+const NO_ADDRESS_CHECKS = new Set<CheckId>([
+  "landlord-id-aml",
+  "landlord-aml",
+  "tenant-checks",
+  "guarantor-checks",
+  "right-to-rent",
+]);
+
+function universal(checkId: CheckId, f: DocFacts, moveInDate: string | null): RuleResult["reasons"] {
   const out: RuleResult["reasons"] = [];
 
-  if (f.isExpectedType === "no") {
+  if (f.isExpectedType === "no" && checkId === "licensing") {
+    /* Licensing is answered as often by proof that no licence is needed (a
+       council letter, a Kamma check) as by a licence, and that is not a
+       document type the reader can be sure of. */
+    out.push({
+      verdict: "review",
+      rule: "Licensing evidence",
+      because: `this looks like ${f.documentType ?? "something other than a licence"}. Fine if it shows no licence is needed - the checker reads it.`,
+    });
+  } else if (f.isExpectedType === "no") {
     out.push({
       verdict: "fail",
       rule: "Wrong document",
@@ -131,7 +156,19 @@ function universal(f: DocFacts, moveInDate: string | null): RuleResult["reasons"
     });
   }
 
-  if (f.addressMatches === "no") {
+  if (NO_ADDRESS_CHECKS.has(checkId)) {
+    /* Nothing to match. */
+  } else if (f.addressMatches === "no" && checkId === "gas-safety") {
+    /* A flat on communal heating has the building's plant room certificate,
+       under the building's own name and postcode (Apartment 30, Wheatsheaf
+       Court: "the gas cert is for the entire building"). Right as often as
+       wrong, so a person decides. */
+    out.push({
+      verdict: "review",
+      rule: "Address differs",
+      because: `it is for ${f.addressOnDocument ?? "a different address"}. Fine if that is the building's communal boiler - say so in the note.`,
+    });
+  } else if (f.addressMatches === "no") {
     out.push({
       verdict: "fail",
       rule: "Wrong property",
@@ -145,11 +182,11 @@ function universal(f: DocFacts, moveInDate: string | null): RuleResult["reasons"
     });
   }
 
-  if (f.signed === "no") {
+  if (f.signed === "no" && SIGNED_CHECKS.has(checkId)) {
     out.push({
       verdict: "fail",
       rule: "Not signed",
-      because: "it is not signed, and an unsigned certificate is not a certificate.",
+      because: checkId === "holding-deposit" ? "the tenant has not signed it." : "it is not signed, and an unsigned certificate is not a certificate.",
     });
   }
 
@@ -227,14 +264,25 @@ function outcomeRules(f: DocFacts, label: string): RuleResult["reasons"] {
       because: `the ${label} records an unsatisfactory result.`,
     });
   }
-  if (f.outstandingDefects.length) {
+  /* C3 is "improvement recommended": advice, not a defect, and a home can be
+     let with them (Kirstie, 8 Oct 2026). Only C1, C2, FI and the gas
+     equivalents stop a let. The reader is told this too, but is not relied on. */
+  const advisory = (d: string) => /\bC3\b|improvement recommended/i.test(d) && !/\b(C1|C2|FI)\b/i.test(d);
+  const defects = f.outstandingDefects.filter((d) => !advisory(d));
+  if (defects.length) {
     /* Not a pass even when the overall outcome says satisfactory. An EICR can
        be marked satisfactory and still carry a C2, and the C2 is the thing
        that matters. */
     out.push({
       verdict: "fail",
       rule: "Defects outstanding",
-      because: f.outstandingDefects.join("; "),
+      because: defects.join("; "),
+    });
+  } else if (f.outstandingDefects.length) {
+    out.push({
+      verdict: "pass",
+      rule: "Improvements recommended only",
+      because: `${f.outstandingDefects.length} C3 item${f.outstandingDefects.length === 1 ? "" : "s"}, which do not stop a let.`,
     });
   }
   if (f.outcome === "not stated") {
@@ -377,7 +425,7 @@ export function judge(
 ): RuleResult {
   const specific = CHECK_RULES[checkId];
   const reasons = [
-    ...universal(facts, moveInDate),
+    ...universal(checkId, facts, moveInDate),
     ...(specific ? specific(facts, moveInDate) : []),
   ];
   /* No rules for this check at all means REVIEW, not PASS. A check that has
