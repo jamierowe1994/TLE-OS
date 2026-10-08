@@ -201,7 +201,7 @@ export default function PlcWizard({
   /** What the agent wants compliance to know. Optional. */
   const [note, setNote] = useState("");
   /* The home's Documents-tab files being brought into the pack (lib/plc-from-file). */
-  const [pulled, setPulled] = useState<"busy" | { added: number; failed?: boolean } | null>(null);
+  const [pulled, setPulled] = useState<"busy" | { file: number; certificates: number; landlord: number; failed?: boolean } | null>(null);
   const pulling = useRef<string | null>(null);
   /* The demo seam is a fresh object on every render of whatever mounts this.
      Held in a ref so re-rendering the page around the wizard (ticking a
@@ -289,18 +289,20 @@ export default function PlcWizard({
     if (demo || c.state !== "assembling" || pulling.current === c.id) return;
     pulling.current = c.id;
     setPulled("busy");
-    api<{ case: PlcCase; added: { name: string }[] }>(`/api/plc/${c.id}/from-file`, {
+    api<{ case: PlcCase; added: { name: string; source: "file" | "certificates" | "landlord" }[] }>(`/api/plc/${c.id}/from-file`, {
       method: "POST",
       body: JSON.stringify({
         tenants: prefill?.tenants.map((t) => t.name) ?? [],
         landlord: prefill?.landlordName ?? null,
+        propertyId: prefill?.propertyId ?? null,
       }),
     })
       .then((res) => {
         if (res.added.length) setKase(res.case);
-        setPulled({ added: res.added.length });
+        const n = (s: string) => res.added.filter((a) => a.source === s).length;
+        setPulled({ file: n("file"), certificates: n("certificates"), landlord: n("landlord") });
       })
-      .catch(() => setPulled({ added: 0, failed: true }));
+      .catch(() => setPulled({ file: 0, certificates: 0, landlord: 0, failed: true }));
   };
 
   const startAndContinue = async () => {
@@ -679,13 +681,21 @@ export default function PlcWizard({
             {pulled === "busy" && (
               <p className="mt-2 flex items-center gap-2 text-sm text-muted">
                 <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-line border-t-accent-dark" />
-                Bringing in anything already on this home&apos;s Documents tab…
+                Bringing in what we already hold for this home and this landlord…
               </p>
             )}
-            {pulled && pulled !== "busy" && pulled.added > 0 && (
-              <p className="mt-2 text-sm text-emerald-700">
-                {pulled.added} document{pulled.added === 1 ? "" : "s"} brought in from this home&apos;s Documents tab - no
-                need to upload {pulled.added === 1 ? "it" : "them"} again. Check each is in the right place.
+            {pulled && pulled !== "busy" && pulled.file + pulled.certificates + pulled.landlord > 0 && (
+              <p className="mt-2 mb-3 text-sm text-emerald-700">
+                Already brought in, so no need to upload {pulled.file + pulled.certificates + pulled.landlord === 1 ? "it" : "them"}{" "}
+                again:{" "}
+                {[
+                  pulled.file && `${pulled.file} from this home's Documents tab`,
+                  pulled.certificates && `${pulled.certificates} in-date certificate${pulled.certificates === 1 ? "" : "s"} on file for this home`,
+                  pulled.landlord && `${pulled.landlord} of the landlord's ID and AML papers from their other homes`,
+                ]
+                  .filter(Boolean)
+                  .join(", ")}
+                . Check each is in the right place.
               </p>
             )}
             {pulled && pulled !== "busy" && pulled.failed && (

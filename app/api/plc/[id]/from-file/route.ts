@@ -5,9 +5,10 @@ import { pullFileDocs } from "@/lib/plc-from-file";
 import { actorName } from "@/lib/plc-actor";
 
 /**
- * POST /api/plc/<id>/from-file → file everything already on the home's
- * Documents tab into this pack (lib/plc-from-file). The wizard calls it once
- * when a pack opens; calling it again only picks up files added since.
+ * POST /api/plc/<id>/from-file → file what the OS already holds into this
+ * pack (lib/plc-from-file): the home's Documents tab, its certificates on
+ * file, and the landlord's ID and AML from their other homes. The wizard calls
+ * it when a pack opens; calling it again only picks up what is new.
  */
 
 export const dynamic = "force-dynamic";
@@ -18,7 +19,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
-  let body: { tenants?: string[]; landlord?: string | null } = {};
+  let body: { tenants?: string[]; landlord?: string | null; propertyId?: string | null } = {};
   try {
     body = await req.json();
   } catch {
@@ -29,6 +30,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       by: await actorName(req, "Agent"),
       tenants: Array.isArray(body.tenants) ? body.tenants.map(String).slice(0, 8) : [],
       landlord: typeof body.landlord === "string" ? body.landlord : null,
+      propertyId: typeof body.propertyId === "string" && /^[\w-]{1,40}$/.test(body.propertyId) ? body.propertyId : null,
     });
     return NextResponse.json({
       ok: true,

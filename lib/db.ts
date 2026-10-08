@@ -2309,6 +2309,10 @@ ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS rlp_request JSONB;
 -- uploaded on the board, then had to upload them all again on the PLC). Kept so a
 -- file the agent took off the pack is not brought back in the next time it opens.
 ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS file_keys JSONB NOT NULL DEFAULT '[]'::jsonb;
+-- Which REX property and which landlord a pack is for (8 Oct 2026), so a
+-- landlord's ID on one pack can be offered to the packs for their other homes.
+ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS rex_property_id TEXT;
+ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS landlord_name TEXT;
 
 -- Certificates that came in OUTSIDE a PLC pack (5 Sep 2026): the backlog
 -- downloaded out of Propoly and dropped in, batch by batch. The OS keeps the

@@ -60,6 +60,8 @@ export interface Prefill {
   hmo?: boolean;
   /** The landlord on the OS's property record, so the reader can tell their ID from a tenant's. */
   landlordName?: string | null;
+  /** The REX property, so the pack can find the certificates already on file for the home. */
+  propertyId?: string | null;
 }
 
 /** REX gives a date as a stamp, a string, or nothing. Only YYYY-MM-DD survives. */
@@ -109,6 +111,7 @@ function shape(a: Application, facts?: { hmo: boolean; landlordName: string | nu
     warnings,
     hmo: Boolean(facts?.hmo) || ROOM.test(a.property),
     landlordName: facts?.landlordName ?? null,
+    propertyId: a.propertyId ? String(a.propertyId) : null,
   };
 }
 
