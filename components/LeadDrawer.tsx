@@ -2670,13 +2670,14 @@ function LeadDrawerBody({
                 disabled={!passport?.done && (!passportEmail || passportBusy)}
                 title={passport?.done ? "Open their answers" : passport?.sent ? "Sent - send it again" : passportEmail ? "Ask for their details" : "No email on this lead"}
                 /* Pink, like the Leads board (8 Oct 2026): filled to send,
-                   outlined once sent, solid with a tick when done. */
+                   outlined once sent, solid with a tick when done. Send
+                   passport reads black until hovered (James, 8 Oct). */
                 className={`hidden items-center gap-2 rounded-full border px-4 py-2 text-[12px] font-semibold transition-colors disabled:opacity-50 md:flex ${
                   passport?.done
                     ? "border-accent-dark bg-accent-dark text-white hover:opacity-90"
                     : passport?.sent
                       ? "border-accent-dark/60 bg-white text-accent-dark hover:bg-accent-soft"
-                      : "border-accent-dark bg-accent-soft text-accent-dark hover:bg-accent-dark hover:text-white"
+                      : "border-accent-dark bg-accent-soft text-ink hover:bg-accent-dark hover:text-white"
                 }`}
               >
                 <DoodleIcon name="user" size={13} />
