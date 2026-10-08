@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   BRING_ALONG,
   VISIT_STEPS,
@@ -108,6 +109,8 @@ const CSS = `
 .bro-grow:hover{transform:scale(1.04)}
 .bro-grow:active{transform:scale(.99)}
 .bro-grow:focus-visible{outline:3px solid #F4E6E3;outline-offset:3px}
+.bro-sheet-row{transition:background-color .2s}
+.bro-sheet-row:active{background-color:#F6F1EF}
 .bro-row{transition:padding-left .35s cubic-bezier(.2,.8,.2,1)}
 .bro-row:hover{padding-left:10px}
 .bro-off{opacity:0}
@@ -631,6 +634,157 @@ function Prepare({ c }: { c: Ctx }) {
 
 /* ───────────────────────── 4. The agent ───────────────────────── */
 
+/**
+ * The agent's contact details as a sheet that rises from the foot of the
+ * screen - the phone's version of the Call / Email / WhatsApp buttons (James,
+ * 8 Oct 2026: "rather than having separate buttons, we'll have a pull-up
+ * sheet... which should then save a bit of room").
+ *
+ * Portalled to the body: the slide's entrance animations put a transform on
+ * its ancestors, and a fixed element inside a transform is fixed to that box,
+ * not to the screen. Closes on the backdrop, the close button, Escape, or a
+ * drag down of more than 90px from the handle.
+ */
+function ContactSheet({ deck, open, onClose }: { deck: Deck; open: boolean; onClose: () => void }) {
+  const a = deck.agent;
+  const first = a.firstName || "";
+  const tel = a.phone.replace(/\s+/g, "");
+  const wa = tel.replace(/^0/, "44");
+  const area = deck.property.postcode ? deck.property.postcode.split(" ")[0] : "";
+  const [mounted, setMounted] = useState(false);
+  const [up, setUp] = useState(false);
+  const [drag, setDrag] = useState(0);
+  const start = useRef<number | null>(null);
+  const closeBtn = useRef<HTMLButtonElement>(null);
+
+  /* Mount, then rise a frame later so the transition runs; on close, fall,
+     then unmount once it has gone. */
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      const r = requestAnimationFrame(() => requestAnimationFrame(() => setUp(true)));
+      return () => cancelAnimationFrame(r);
+    }
+    setUp(false);
+    const t = setTimeout(() => setMounted(false), 420);
+    return () => clearTimeout(t);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  /* Focus moves into the sheet once it is on screen, and back to whatever
+     opened it when it goes. */
+  const opener = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (up) {
+      opener.current = document.activeElement as HTMLElement | null;
+      closeBtn.current?.focus({ preventScroll: true });
+    } else {
+      opener.current?.focus({ preventScroll: true });
+      opener.current = null;
+    }
+  }, [up]);
+
+  if (!mounted || typeof document === "undefined") return null;
+
+  const rows: { key: string; icon: "phone" | "whatsapp" | "mail"; label: string; value: string; href: string; external?: boolean }[] = [
+    ...(a.phone ? [{ key: "call", icon: "phone" as const, label: `Call ${first || "us"}`, value: a.phone, href: `tel:${tel}` }] : []),
+    ...(a.phone ? [{ key: "wa", icon: "whatsapp" as const, label: "WhatsApp", value: "Send a message", href: `https://wa.me/${wa}`, external: true }] : []),
+    ...(a.email ? [{ key: "mail", icon: "mail" as const, label: `Email ${first || "us"}`, value: a.email, href: `mailto:${a.email}` }] : []),
+  ];
+
+  const onDown = (e: React.PointerEvent) => {
+    start.current = e.clientY;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onMove = (e: React.PointerEvent) => {
+    if (start.current == null) return;
+    setDrag(Math.max(0, e.clientY - start.current));
+  };
+  const onUp = () => {
+    if (start.current == null) return;
+    start.current = null;
+    if (drag > 90) onClose();
+    setDrag(0);
+  };
+
+  return createPortal(
+    <div className={`bro ${figtree.variable} ${caveat.variable}`} style={{ position: "fixed", inset: 0, zIndex: 80, fontFamily: "var(--font-figtree), system-ui, sans-serif", color: INK }}>
+      <div
+        aria-hidden
+        onClick={onClose}
+        style={{ position: "absolute", inset: 0, background: "rgba(38,30,28,.45)", opacity: up ? 1 : 0, transition: "opacity .32s ease" }}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Contact ${a.name || "your agent"}`}
+        style={{
+          position: "absolute", left: 0, right: 0, bottom: 0, background: "#FFFFFF", borderRadius: "24px 24px 0 0",
+          boxShadow: "0 -20px 50px -20px rgba(43,37,35,.4)", paddingBottom: "max(20px, env(safe-area-inset-bottom))",
+          transform: up ? `translateY(${drag}px)` : "translateY(100%)",
+          transition: start.current != null ? "none" : "transform .42s cubic-bezier(.32,.72,0,1)",
+          overscrollBehavior: "contain",
+        }}
+      >
+        {/* the handle and the header are the drag area */}
+        <div onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} style={{ touchAction: "none", cursor: "grab" }}>
+          <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px" }}>
+            <span style={{ width: 40, height: 5, borderRadius: 3, background: "#E2DAD7" }} />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 20px 16px" }}>
+            <Avatar deck={deck} size={52} />
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontFamily: DISPLAY, fontWeight: 700, fontSize: 22, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{a.name || "Your agent"}</div>
+              <div style={{ marginTop: 3, fontSize: 14, color: BODY }}>{a.title || "Lettings Expert"}{area ? ` · ${area}` : ""}</div>
+            </div>
+            <button
+              ref={closeBtn}
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              style={{ flex: "none", width: 44, height: 44, borderRadius: "50%", border: 0, background: "#F4EFED", color: INK, display: "grid", placeItems: "center", cursor: "pointer" }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          </div>
+        </div>
+        <div style={{ borderTop: `1.5px solid ${HAIR}`, padding: "6px 8px 0" }}>
+          {rows.map((r) => (
+            <a
+              key={r.key}
+              href={r.href}
+              {...(r.external ? { target: "_blank", rel: "noreferrer" } : {})}
+              className="bro-sheet-row"
+              style={{ display: "flex", alignItems: "center", gap: 14, minHeight: 64, padding: "10px 12px", borderRadius: 16, color: INK, textDecoration: "none" }}
+            >
+              <span style={{ flex: "none", width: 44, height: 44, borderRadius: "50%", background: r.key === "wa" ? SAGE : PINK, color: r.key === "wa" ? SAGE_INK : BROWN, display: "grid", placeItems: "center" }}>
+                <Line name={r.icon} size={20} />
+              </span>
+              <span style={{ minWidth: 0, flex: 1 }}>
+                <span style={{ display: "block", fontWeight: 600, fontSize: 16 }}>{r.label}</span>
+                <span style={{ display: "block", marginTop: 2, fontSize: 14, color: BODY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.value}</span>
+              </span>
+              <span style={{ color: "#B5ABA8", display: "flex" }}><Arrow /></span>
+            </a>
+          ))}
+          {welcomeReady(deck.welcomeVideo) && (
+            <div style={{ padding: "10px 12px 0" }}>
+              <WelcomeVideoButton video={deck.welcomeVideo} firstName={first} className="bro-btn" style={{ ...pill(false), width: "100%", justifyContent: "center", border: "1.5px solid #E2DDDA" }} />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 /** Who the one person is for - the default introduction's own three things. */
 const ONE_PERSON_FOR = ["The valuation", "The marketing", "The call when there’s an offer"];
 
@@ -649,6 +803,9 @@ function Agent({ c }: { c: Ctx }) {
   const paragraphs = own ? own.split(/\n{2,}/) : [defaultBio(first).split(/\n{2,}/)[1]];
   const t = deck.testimonial;
   const stars = t?.rating != null ? Math.max(0, Math.min(5, Math.round(t.rating))) : 0;
+  const [sheet, setSheet] = useState(false);
+  const closeSheet = useCallback(() => setSheet(false), []);
+  const reachable = Boolean(a.phone || a.email || welcomeReady(deck.welcomeVideo));
   const portrait = (W: number) => (
     <div style={{ position: "relative", width: W, maxWidth: "100%", paddingBottom: 40 }}>
       <div className={show ? "bro-wipe" : "bro-off"} style={{ position: "relative", width: "100%", aspectRatio: "485 / 620", borderRadius: 28, overflow: "hidden" }}>
@@ -684,6 +841,17 @@ function Agent({ c }: { c: Ctx }) {
       <h2 className={enter(show)} style={{ ...h2(fx ? 72 : 42), lineHeight: 0.96, letterSpacing: "-0.045em", ...at(0.1) }}>
         You&rsquo;ll be dealing{fx ? <br /> : " "}with <span style={{ color: BROWN }}>{first || "us"}.</span>
       </h2>
+      {/* On a phone the separate buttons become one, near the top, which
+          raises the contact sheet. */}
+      {!fx && reachable && (
+        <div className={enter(show)} style={{ ...at(0.15), marginTop: 18 }}>
+          <button type="button" onClick={() => setSheet(true)} aria-haspopup="dialog" className="bro-btn" style={{ ...pill(true), background: DARK }}>
+            <Line name="phone" size={18} />
+            Contact {first || "us"}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M6 15l6-6 6 6" /></svg>
+          </button>
+        </div>
+      )}
       {paragraphs.map((para, n) => (
         <p key={n} className={enter(show)} style={{ ...at(0.2 + n * 0.05), ...lead, margin: n === 0 ? "22px 0 0" : "12px 0 0", maxWidth: 560, lineHeight: 1.62 }}>{para}</p>
       ))}
@@ -700,6 +868,7 @@ function Agent({ c }: { c: Ctx }) {
           </div>
         </div>
       )}
+      {fx && (
       <div className={enter(show)} style={{ ...at(0.4), marginTop: 26, display: "flex", flexWrap: "wrap", gap: 12 }}>
         {a.phone && (
           <a href={`tel:${tel}`} className="bro-btn" style={{ ...pill(true), background: DARK }}>
@@ -720,6 +889,7 @@ function Agent({ c }: { c: Ctx }) {
           </a>
         )}
       </div>
+      )}
       {t?.quote && (
         <figure className={enter(show)} style={{ ...at(0.55), margin: "30px 0 0", padding: "22px 0 0", borderTop: `1.5px solid ${HAIR}` }}>
           {stars > 0 && <Stars n={stars} color={DARK} />}
@@ -742,6 +912,7 @@ function Agent({ c }: { c: Ctx }) {
         <>
           <div className="flex justify-center px-6 pb-10">{portrait(300)}</div>
           {words(false)}
+          <ContactSheet deck={deck} open={sheet} onClose={closeSheet} />
         </>
       }
     />
