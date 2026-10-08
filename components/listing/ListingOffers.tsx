@@ -94,7 +94,7 @@ export default function ListingOffers({
   if (!offers.length) {
     return (
       <p className="py-6 text-center text-[12px] leading-relaxed text-muted">
-        No offers on this home yet.{canOffer ? " Press Make an offer to put one forward, or share the offer link below." : ""}
+        No offers on this home yet.{canOffer ? " Press Make New Offer to put one forward, or share the offer link below." : ""}
       </p>
     );
   }

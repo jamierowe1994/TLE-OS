@@ -1086,28 +1086,6 @@ function ListingDrawerBody({
                     <span className="absolute bottom-2 right-2 rounded-full bg-black/45 px-2 py-0.5 text-[10.5px] font-semibold text-white">{photos.length} photos</span>
                   )}
                 </button>
-                <div className="hidden">
-                  {(portalsLoading || portals.length > 0) && (
-                    <div className="mt-1 flex flex-wrap gap-1.5">
-                      {portalsLoading && portals.length === 0 ? (
-                        <span className="rounded-full border border-line/60 bg-white px-2.5 py-1 text-[11px] text-muted">Checking the portals…</span>
-                      ) : (
-                        portals.map((p) => (
-                          <a
-                            key={p.portal}
-                            href={p.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title={`Open this property on ${p.portal}`}
-                            className="press-ring rounded-full border border-line/60 bg-white px-2.5 py-1 text-[11px] font-semibold transition-colors hover:border-ink/40"
-                          >
-                            {p.portal}
-                          </a>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
               </div>
 
               {/* The listing itself. */}
@@ -1141,59 +1119,14 @@ function ListingDrawerBody({
                       {terms.signed ? "Terms signed" : "No terms on file"}
                     </button>
                   )}
-                  {listing.publishedAt && (
-                    <span className="text-[11.5px] text-muted">
-                      Live since {new Date(listing.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                    </span>
-                  )}
-                  {/* On and off the portals, once it is published. Its own
-                      switch decides who may press it (lib/area-map). */}
-                  {isLive && pub && !publishHidden && (
-                    portalConfirm ? (
-                      <span className="inline-flex flex-wrap items-center gap-1.5 rounded-full border border-line/60 bg-white py-1 pl-3 pr-1 text-[11px]" data-steve-never>
-                        {pub.onPortals ? "Take it off Rightmove, OnTheMarket and Zoopla?" : "Put it back on Rightmove, OnTheMarket and Zoopla?"}
-                        <button type="button" disabled={portalBusy} onClick={() => setPortalConfirm(false)} className="rounded-full px-2 py-0.5 text-muted hover:text-ink disabled:opacity-50">
-                          Not yet
-                        </button>
-                        <button
-                          type="button"
-                          disabled={portalBusy}
-                          onClick={() => void flipPortals(pub.onPortals ? "off" : "on")}
-                          className="rounded-full bg-[var(--brown)] px-2.5 py-0.5 font-semibold text-white disabled:opacity-60"
-                        >
-                          {portalBusy ? "Telling the portals…" : pub.onPortals ? "Yes, take it off" : "Yes, put it back"}
-                        </button>
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        data-steve-never
-                        onClick={() => (publishCanPress ? setPortalConfirm(true) : setPortalNote(lockedSentence(publishArea, publishLevel)))}
-                        className="press-ring rounded-full border border-line/60 bg-white px-2.5 py-1 text-[11px] font-semibold transition-colors hover:border-ink/40"
-                      >
-                        {pub.onPortals ? "Take off the portals" : "Put back on the portals"}
-                      </button>
-                    )
-                  )}
-                  {/* The portals this property is actually feeding, from REX. */}
-                  {portalsLoading && portals.length === 0 ? (
-                    <span className="rounded-full border border-line/60 bg-white px-2.5 py-1 text-[11px] text-muted">Checking the portals…</span>
-                  ) : (
-                    portals.map((p) => (
-                      <a
-                        key={p.portal}
-                        href={p.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title={`Open this property on ${p.portal}`}
-                        className="press-ring rounded-full border border-line/60 bg-white px-2.5 py-1 text-[11px] font-semibold transition-colors hover:border-ink/40"
-                      >
-                        {p.portal}
-                      </a>
-                    ))
-                  )}
                 </div>
-                {portalNote && <p className="mt-2 text-[11.5px] leading-snug text-muted">{portalNote}</p>}
+                {/* When it went live, a line of its own (James, 8 Oct 2026). The
+                    portals themselves are on the Marketing tab. */}
+                {listing.publishedAt && (
+                  <p className="mt-2 text-[11.5px] text-muted">
+                    Live since {new Date(listing.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                  </p>
+                )}
 
                 {/* ── THE TWO-MONTH DRAFT CAP, on the record itself ──────
                     Filing a draft away is a decision about THIS property, so
@@ -1240,11 +1173,11 @@ function ListingDrawerBody({
                   </div>
                 )}
 
-                {/* The quick actions, stacked. The first two in the dark chocolate (James,
-                    11 Sep): getting INTO the property, and getting it OUT to
-                    the database. They used to be one ambiguous "Email to
-                    tenants". */}
-                <div className="mt-4 flex flex-col items-start gap-2">
+                {/* The quick actions, two by two (James, 8 Oct 2026). The first two in
+                    the dark chocolate (11 Sep): getting INTO the property, and
+                    getting it OUT to the database. Make an offer lives on the
+                    Offers tab now. */}
+                <div className="mt-4 grid w-full max-w-[440px] grid-cols-2 gap-2">
                   <AccessRequest
                     value={access}
                     onChange={setAccess}
@@ -1255,11 +1188,12 @@ function ListingDrawerBody({
                     landlord={landlord.status === "known" ? landlord.landlord : null}
                     viewings={upcomingOptions}
                     onBook={LISTING_BOOKER_LIVE ? () => setBooking(true) : undefined}
+                    className="w-full"
                   />
                   <PressButton
                     data-steve="listing.mail-db"
                     onClick={() => setEmailing(true)}
-                    className="press-ring flex items-center gap-2 rounded-full bg-[var(--brown)] px-4 py-2.5 text-[12.5px] font-semibold text-white"
+                    className="press-ring flex w-full items-center justify-center gap-2 rounded-full bg-[var(--brown)] px-4 py-2.5 text-[12.5px] font-semibold text-white"
                   >
                     <DoodleIcon name="megaphone" size={14} />
                     Mail the database
@@ -1267,7 +1201,7 @@ function ListingDrawerBody({
                   {LISTING_BOOKER_LIVE && (
                     <PressButton
                       onClick={() => setBooking(true)}
-                      className="press-ring flex items-center gap-2 rounded-full border border-line/60 bg-white px-4 py-2.5 text-[12.5px] font-semibold"
+                      className="press-ring flex w-full items-center justify-center gap-2 rounded-full border border-line/60 bg-white px-4 py-2.5 text-[12.5px] font-semibold"
                     >
                       <DoodleIcon name="calendar" size={14} />
                       Book a viewing
@@ -1277,22 +1211,10 @@ function ListingDrawerBody({
                     <PressButton
                       data-steve="listing.book-slot"
                       onClick={() => setSlotting(true)}
-                      className="press-ring flex items-center gap-2 rounded-full border border-line/60 bg-white px-4 py-2.5 text-[12.5px] font-semibold"
+                      className="press-ring flex w-full items-center justify-center gap-2 rounded-full border border-line/60 bg-white px-4 py-2.5 text-[12.5px] font-semibold"
                     >
                       <DoodleIcon name="clock" size={14} />
                       Book a slot
-                    </PressButton>
-                  )}
-                  {/* Next in the journey after a viewing (Howard, 7 Oct 2026):
-                      asks who it is from, then opens the offer form. */}
-                  {canOffer && (
-                    <PressButton
-                      data-steve="listing.make-offer"
-                      onClick={() => setPickingOfferer(true)}
-                      className="press-ring flex items-center gap-2 rounded-full border border-line/60 bg-white px-4 py-2.5 text-[12.5px] font-semibold"
-                    >
-                      <DoodleIcon name="coin" size={14} className="text-accent-dark" />
-                      Make an offer
                     </PressButton>
                   )}
                 </div>
@@ -1711,7 +1633,20 @@ function ListingDrawerBody({
 
           <div key={`view-${tab}`} className={tab === "home" ? "" : "fade-up"}>
             {tab === "applications" && (
-              <ViewTitle title="Offers" sub={LISTING_OFFERS_LIVE ? "Who has enquired and who has offered. Start an application from anybody here, and put the offers to the landlord when the viewings stop." : "Only the people who have offered. Put each offer to the landlord, then accept one or decline it. The home keeps taking viewings until one is accepted, and the accepted one moves to Applications."} wash="blush" art="/brand/art/keys-handover.png" />
+              <ViewTitle title="Offers" sub={LISTING_OFFERS_LIVE ? "Who has enquired and who has offered. Start an application from anybody here, and put the offers to the landlord when the viewings stop." : "Only the people who have offered. Put each offer to the landlord, then accept one or decline it. The home keeps taking viewings until one is accepted, and the accepted one moves to Applications."} wash="blush" art="/brand/art/keys-handover.png">
+                {/* Off the home screen and up here (James, 8 Oct 2026): who it
+                    is from, then the offer form. */}
+                {(LISTING_OFFERS_LIVE || canOffer) && (
+                  <PressButton
+                    data-steve="listing.make-offer"
+                    onClick={() => (LISTING_OFFERS_LIVE ? setOffering(true) : setPickingOfferer(true))}
+                    className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-4 py-2.5 text-[12.5px] font-semibold text-page"
+                  >
+                    <DoodleIcon name="coin" size={14} />
+                    Make New Offer
+                  </PressButton>
+                )}
+              </ViewTitle>
             )}
             {tab === "enquiries" && (
               <ViewTitle title="Enquiries" sub="Everyone who has asked about this home, from the portals and the rest. Send them the tenant passport in one go, and see whose is done." wash="sage" art="/brand/art/viewing.png" />
@@ -1721,6 +1656,66 @@ function ListingDrawerBody({
             )}
             {tab === "marketing" && (
               <ViewTitle title="Marketing" sub="The property's facts, the advert the portals show, and the photographs. What a tenant sees, all in one place." wash="blush" art="/brand/art/marketing-desk.png" />
+            )}
+            {/* Where the advert is, once it is live (James, 8 Oct 2026: off the
+                home screen, under Marketing's top). */}
+            {tab === "marketing" && (listing.publishedAt || isLive) && (
+              <section className="mb-5 rounded-[22px] border border-line/50 bg-white p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  {listing.publishedAt && (
+                    <span className="mr-1 text-[12px] font-semibold">
+                      Live since {new Date(listing.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                    </span>
+                  )}
+                  {/* On and off the portals, once it is published. Its own
+                      switch decides who may press it (lib/area-map). */}
+                  {isLive && pub && !publishHidden && (
+                    portalConfirm ? (
+                      <span className="inline-flex flex-wrap items-center gap-1.5 rounded-full border border-line/60 bg-white py-1 pl-3 pr-1 text-[11px]" data-steve-never>
+                        {pub.onPortals ? "Take it off Rightmove, OnTheMarket and Zoopla?" : "Put it back on Rightmove, OnTheMarket and Zoopla?"}
+                        <button type="button" disabled={portalBusy} onClick={() => setPortalConfirm(false)} className="rounded-full px-2 py-0.5 text-muted hover:text-ink disabled:opacity-50">
+                          Not yet
+                        </button>
+                        <button
+                          type="button"
+                          disabled={portalBusy}
+                          onClick={() => void flipPortals(pub.onPortals ? "off" : "on")}
+                          className="rounded-full bg-[var(--brown)] px-2.5 py-0.5 font-semibold text-white disabled:opacity-60"
+                        >
+                          {portalBusy ? "Telling the portals…" : pub.onPortals ? "Yes, take it off" : "Yes, put it back"}
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        data-steve-never
+                        onClick={() => (publishCanPress ? setPortalConfirm(true) : setPortalNote(lockedSentence(publishArea, publishLevel)))}
+                        className="press-ring rounded-full border border-line/60 bg-white px-2.5 py-1 text-[11px] font-semibold transition-colors hover:border-ink/40"
+                      >
+                        {pub.onPortals ? "Take off the portals" : "Put back on the portals"}
+                      </button>
+                    )
+                  )}
+                  {/* The portals this property is actually feeding, from REX. */}
+                  {portalsLoading && portals.length === 0 ? (
+                    <span className="rounded-full border border-line/60 bg-white px-2.5 py-1 text-[11px] text-muted">Checking the portals…</span>
+                  ) : (
+                    portals.map((p) => (
+                      <a
+                        key={p.portal}
+                        href={p.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={`Open this property on ${p.portal}`}
+                        className="press-ring rounded-full border border-line/60 bg-white px-2.5 py-1 text-[11px] font-semibold transition-colors hover:border-ink/40"
+                      >
+                        {p.portal}
+                      </a>
+                    ))
+                  )}
+                </div>
+                {portalNote && <p className="mt-2 text-[11.5px] leading-snug text-muted">{portalNote}</p>}
+              </section>
             )}
             {tab === "compliance" && (
               <ViewTitle title="Compliance" sub="Every certificate the property needs, where it stands, and the files on hand. Drop a certificate and it is read and filed." />
@@ -1742,29 +1737,7 @@ function ListingDrawerBody({
                  otherwise widens the grid past a phone's edge. */
               <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
                 {/* Every offer on this listing, with Accept and Decline (7 Oct 2026). */}
-                <Card
-                  title="Offers"
-                  icon="coin"
-                  action={
-                    LISTING_OFFERS_LIVE ? (
-                      <PressButton
-                        onClick={() => setOffering(true)}
-                        className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-3.5 py-2 text-[11.5px] font-semibold text-page"
-                      >
-                        <DoodleIcon name="coin" size={13} />
-                        Make an offer
-                      </PressButton>
-                    ) : canOffer ? (
-                      <PressButton
-                        onClick={() => setPickingOfferer(true)}
-                        className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-3.5 py-2 text-[11.5px] font-semibold text-page"
-                      >
-                        <DoodleIcon name="coin" size={13} />
-                        Make an offer
-                      </PressButton>
-                    ) : undefined
-                  }
-                >
+                <Card title="Offers" icon="coin">
                   {!LISTING_OFFERS_LIVE ? (
                     <ListingOffers offers={savedOffers} canOffer={canOffer} onChanged={() => setOffersTick((n) => n + 1)} />
                   ) : offers.length ? (
@@ -2400,7 +2373,7 @@ function ListingDrawerBody({
  * drawings for the working tabs (James, 11 Sep: "very bland and a little
  * bit depressing"). The drawing stands on the band's bottom edge, clipped.
  */
-function ViewTitle({ title, sub, wash, art }: { title: string; sub: string; wash?: "blush" | "sage"; art?: string }) {
+function ViewTitle({ title, sub, wash, art, children }: { title: string; sub: string; wash?: "blush" | "sage"; art?: string; children?: React.ReactNode }) {
   if (!wash) {
     return (
       <div className="mb-5">
@@ -2411,17 +2384,18 @@ function ViewTitle({ title, sub, wash, art }: { title: string; sub: string; wash
   }
   return (
     <div
-      className="relative mb-5 min-h-[150px] overflow-hidden rounded-[22px] border border-line/50"
+      className={`relative mb-5 overflow-hidden rounded-[22px] border border-line/50 ${children ? "min-h-[190px]" : "min-h-[150px]"}`}
       style={{ background: wash === "sage" ? SAGE_WASH : "color-mix(in srgb, var(--accent-soft) 70%, white)" }}
     >
       <Doodles tone={wash} />
       <div className="relative max-w-[60%] p-6 sm:max-w-[62%]">
         <h2 className="hand text-[26px] leading-tight">{title}</h2>
         <p className="mt-1.5 text-[13px] leading-relaxed text-muted">{sub}</p>
+        {children && <div className="mt-4 flex flex-wrap items-center gap-2">{children}</div>}
       </div>
       {art && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={art} alt="" aria-hidden className="pointer-events-none absolute -bottom-6 right-4 hidden h-[190px] w-auto sm:block" />
+        <img src={art} alt="" aria-hidden className={`pointer-events-none absolute -bottom-6 right-4 hidden w-auto sm:block ${children ? "h-[225px]" : "h-[190px]"}`} />
       )}
     </div>
   );
