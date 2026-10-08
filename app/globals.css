@@ -1377,8 +1377,18 @@ html[data-os-toast="up"] .os-toast-lift {
     width 420ms cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
 }
+/* AT REST, A FLAT 2D TRANSFORM AND NO will-change (James, 8 Oct 2026: "the
+   pullout drawer looks blurry"). translate3d plus will-change kept an open
+   drawer on its own GPU layer for as long as it was open, and Chrome draws
+   text on a layer like that with greyscale smoothing - soft on a standard
+   monitor, and softer again in the listing and application drawers, whose
+   drifting doodles repaint that layer every frame. The slide itself still
+   runs on the compositor (Chrome promotes a transform while it animates).
+   Still a transform, not none, so the pop-ups inside a drawer keep the
+   drawer as their frame, exactly as before. */
 .so-panel[data-shown="true"] {
-  transform: translate3d(0, 0, 0);
+  transform: translateX(0);
+  will-change: auto;
   transition:
     transform 620ms cubic-bezier(0.32, 0.72, 0, 1),
     width 420ms cubic-bezier(0.22, 1, 0.36, 1);
