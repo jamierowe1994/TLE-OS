@@ -170,9 +170,12 @@ export default function AppointmentDrawer({
         data-shown={shown}
         className="so-scrim absolute inset-0 cursor-default bg-ink/30"
       />
+      {/* In the middle of the screen, not off the right edge (James, 8 Oct
+          2026): Steve sits in the bottom right corner and was covering the
+          card's buttons. On a phone it stops short of his corner too. */}
       <aside
         data-shown={shown}
-        className="so-panel so-panel-float absolute inset-y-0 right-0 flex w-full max-w-[460px] flex-col overflow-hidden bg-white shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] sm:inset-y-3 sm:right-3 sm:rounded-[22px] sm:border sm:border-line/50"
+        className="so-panel so-panel-centre absolute inset-0 m-auto flex h-fit max-h-[calc(100dvh-200px)] w-[calc(100%-32px)] max-w-[620px] flex-col overflow-hidden rounded-[22px] border border-line/50 bg-white shadow-[0_30px_80px_-24px_rgba(0,0,0,0.45)] sm:max-h-[calc(100dvh-64px)]"
       >
         {/* ── The head: what, when, and the way out. ── */}
         <div className="shrink-0 border-b border-line/60 px-5 pb-4 pt-5">
