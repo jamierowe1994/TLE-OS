@@ -4,6 +4,7 @@ import PageHeader from "@/components/PageHeader";
 import WorkspaceLoading from "@/components/WorkspaceLoading";
 import CheckRow, { GREEN } from "@/components/compliance-desk/CheckRow";
 import { useDesk } from "@/components/compliance-desk/useDesk";
+import { categoriesOf } from "@/lib/works-catalogue";
 
 /**
  * Works orders: every finished job, until Michael has checked it.
@@ -47,7 +48,7 @@ export default function WorksToCheck() {
               key={o.id}
               title={`#${o.ref} ${o.title} - ${o.property}`}
               sub={`${o.contractor ? `${o.contractor}. ` : ""}Raised by ${o.raisedBy || "somebody"}.${o.completionNote ? ` "${o.completionNote}"` : ""}`}
-              chips={[o.kind === "planned" ? "Planned" : "Repair", o.category, o.status === "done" ? "No invoice yet" : o.status === "invoiced" ? "Invoiced" : o.status === "paid" ? "Paid" : o.status, o.files.length ? "" : "No files on the job"]}
+              chips={[o.kind === "planned" ? "Planned" : "Repair", ...categoriesOf(o.category), o.status === "done" ? "No invoice yet" : o.status === "invoiced" ? "Invoiced" : o.status === "paid" ? "Paid" : o.status, o.files.length ? "" : "No files on the job"]}
               files={o.files.map((f) => ({ key: f.key, name: f.name }))}
               openHref={`/maintenance?open=${encodeURIComponent(o.id)}`}
               openLabel="Open the job"

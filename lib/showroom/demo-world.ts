@@ -36,6 +36,7 @@ import type { CompProperty, Cert } from "@/lib/compliance";
 import type { VerifyItem } from "@/lib/compliance-desk";
 import type { DueVisit, Finding, Inspection, InspectionEvent } from "@/lib/inspections";
 import { stepOf as visitStepOf } from "@/lib/inspection-steps";
+import { categoriesOf } from "@/lib/works-catalogue";
 
 export type StoryId = "repair" | "gas" | "compliance" | "visits";
 /** How a repair reaches us. */
@@ -77,7 +78,7 @@ export function rankedFor(o: WorksOrder): RankedContractor[] {
     "Heating & boiler": ["heating", "gas"], Gas: ["gas"], "Gas safety (CP12)": ["gas"], "Boiler service": ["heating", "gas"],
     Plumbing: ["plumb"], Electrical: ["electric"], EICR: ["electric"], "Smoke & CO alarms": ["electric"], "Locks & security": ["lock"], "Windows & doors": ["glaz", "lock"],
   };
-  const want = words[o.category] ?? [];
+  const want = categoriesOf(o.category).flatMap((c) => words[c] ?? []);
   const miles: Record<string, number> = { "c-mercer": 1.4, "c-trent": 2.6, "c-spark": 3.1, "c-castle": 1.9 };
   return CONTRACTORS.map((c) => ({ ...c, lat: null, lng: null, miles: miles[c.id] ?? null, fits: want.length === 0 || want.some((w) => c.trade.toLowerCase().includes(w)) }))
     .sort((a, b) => Number(b.fits) - Number(a.fits) || (a.miles ?? 99) - (b.miles ?? 99));

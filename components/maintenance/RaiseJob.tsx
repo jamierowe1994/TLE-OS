@@ -4,8 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PressButton } from "@/components/Bits";
 import LandlordJobEmails from "@/components/LandlordJobEmails";
 import FieldSelect from "@/components/FieldSelect";
+import FieldMultiSelect from "@/components/FieldMultiSelect";
 import type { Contractor, WorksOrder, Kind, Urgency } from "@/lib/works-orders";
-import { PLANNED_CATEGORIES, REPAIR_CATEGORIES, URGENCIES } from "@/lib/works-catalogue";
+import { PLANNED_CATEGORIES, REPAIR_CATEGORIES, URGENCIES, categoriesOf, joinCategories } from "@/lib/works-catalogue";
 import { CATEGORY_CERT, ContractorPick, REPORTED_BY, type Property } from "@/components/maintenance/works-ui";
 
 type Group = "property" | "what" | "urgency" | "when" | "tenant" | "landlord" | "check";
@@ -38,7 +39,11 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
   const [manual, setManual] = useState("");
   const [title, setTitle] = useState(draft?.title ?? "");
   const [description, setDescription] = useState(draft?.description ?? "");
-  const [category, setCategory] = useState<string>(draft?.category ?? (kind === "repair" ? REPAIR_CATEGORIES[0] : PLANNED_CATEGORIES[0]));
+  /* A repair is one category. A planned job can be several at once - a boiler
+     service and an EPC on the same visit - kept together as "Boiler service,
+     EPC" (lib/works-catalogue), so it starts with none ticked. */
+  const [category, setCategory] = useState<string>(draft?.category ?? (kind === "repair" ? REPAIR_CATEGORIES[0] : ""));
+  const picks = useMemo(() => categoriesOf(category), [category]);
   const [urgency, setUrgency] = useState<Urgency>((draft?.urgency as Urgency) ?? "routine");
   const [dueAt, setDueAt] = useState(draft?.dueAt ?? "");
   const [reportedBy, setReportedBy] = useState(draft?.reportedBy ?? (kind === "repair" ? "Tenant" : "Compliance tracker"));
@@ -126,18 +131,25 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
   }, [picked]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* A planned job is due when the certificate we hold runs out, so picking
-     the home and the category fills the date in. Only while the date is
-     untouched - a date typed by hand always wins. */
+     the home and the category fills the date in - the soonest of them, when
+     more than one is ticked. Only while the date is untouched - a date typed
+     by hand always wins. */
   const [dueTouched, setDueTouched] = useState(Boolean(draft?.dueAt));
+  const certDays = useMemo(() => {
+    let soonest: number | null = null;
+    for (const c of picks) {
+      const key = CATEGORY_CERT[c];
+      const days = key ? picked?.certs?.[key]?.expires : null;
+      if (days != null && (soonest == null || days < soonest)) soonest = days;
+    }
+    return soonest;
+  }, [picks, picked]);
   useEffect(() => {
-    if (kind !== "planned" || dueTouched || !picked) return;
-    const key = CATEGORY_CERT[category];
-    const days = key ? picked.certs?.[key]?.expires : null;
-    if (days == null) return;
+    if (kind !== "planned" || dueTouched || !picked || certDays == null) return;
     const d = new Date();
-    d.setDate(d.getDate() + days);
+    d.setDate(d.getDate() + certDays);
     setDueAt(d.toISOString().slice(0, 10));
-  }, [kind, picked, category, dueTouched]);
+  }, [kind, picked, certDays, dueTouched]);
 
   const hits = useMemo(() => {
     const needle = pq.trim().toLowerCase();
@@ -155,6 +167,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
     const propertyName = picked?.name ?? manual.trim();
     if (!propertyName) return setErr("Which property?");
     if (!title.trim()) return setErr(kind === "repair" ? "What is wrong, in a few words?" : "What is the job?");
+    if (!picks.length) return setErr("Tick at least one category.");
     if (kind === "planned" && !dueAt) return setErr("When is it due?");
     setBusy(true);
     setErr(null);
@@ -216,6 +229,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
     if (d > 0) {
       if (here.id === "property" && !picked && !manual.trim()) return setErr("Which property?");
       if (here.id === "what" && !title.trim()) return setErr(kind === "repair" ? "What is wrong, in a few words?" : "What is the job?");
+      if (here.id === "what" && !picks.length) return setErr("Tick at least one category.");
       if (here.id === "when" && !dueAt) return setErr("When is it due?");
     }
     setErr(null);
@@ -264,7 +278,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
         )}
         <div
           key={inline ? here.id : "all"}
-          className={inline ? "mt-5 grid gap-x-5 gap-y-4 sm:grid-cols-2" : "mt-5 grid gap-4 sm:grid-cols-2"}
+          className={inline ? "mt-5 grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2" : "mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2"}
           style={inline ? { animation: "slideIn 340ms cubic-bezier(0.22,1,0.36,1) both", ["--from" as string]: `${dir * 28}px` } : undefined}
           onKeyDown={inline ? (e) => {
             if (e.key !== "Enter" || (e.target as HTMLElement).tagName !== "INPUT") return;
@@ -324,7 +338,27 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
           </div>
           )}
 
-          {at("what") && (
+          {at("what") && kind === "planned" && (
+          <div className="sm:col-span-2">
+            <label className={label}>Category <span className="font-normal normal-case tracking-normal">- tick as many as the visit covers</span></label>
+            <div className="mt-1 grid gap-2 sm:grid-cols-2 sm:gap-5">
+              <FieldMultiSelect values={picks} onChange={(v) => setCategory(joinCategories(v))} options={cats.map((c) => ({ value: c, label: c }))} placeholder="Choose the categories" />
+              <ul className="flex flex-wrap content-start gap-1.5" aria-label="Chosen categories">
+                {picks.length === 0 && <li className="py-2.5 text-[12px] text-muted">Nothing ticked yet.</li>}
+                {picks.map((c) => (
+                  <li key={c} className="fade-up flex items-center gap-1 rounded-full border border-accent-dark/40 bg-accent-soft/40 py-1 pl-3 pr-1 text-[12px] text-accent-dark">
+                    {c}
+                    <button type="button" onClick={() => setCategory(joinCategories(picks.filter((x) => x !== c)))} aria-label={`Remove ${c}`} className="flex h-5 w-5 items-center justify-center rounded-full hover:bg-accent-dark/10">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          )}
+
+          {at("what") && kind === "repair" && (
           <div>
             <label className={label}>Category</label>
             {inline ? (
@@ -353,9 +387,9 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
             <div>
               <label className={label}>Due by</label>
               <input type="date" value={dueAt} onChange={(e) => { setDueTouched(true); setDueAt(e.target.value); }} className={`mt-1 ${field}`} />
-              {picked && CATEGORY_CERT[category] && picked.certs?.[CATEGORY_CERT[category]]?.expires != null && !dueTouched && (
+              {picked && certDays != null && !dueTouched && (
                 <p className="mt-1 text-[11px] text-muted">
-                  {(picked.certs[CATEGORY_CERT[category]]!.expires as number) < 0 ? "Overdue - the certificate we hold ran out on this date." : "From the certificate we hold on this home."}
+                  {certDays < 0 ? "Overdue - the certificate we hold ran out on this date." : picks.filter((c) => CATEGORY_CERT[c]).length > 1 ? "From the soonest of the certificates we hold on this home." : "From the certificate we hold on this home."}
                 </p>
               )}
             </div>

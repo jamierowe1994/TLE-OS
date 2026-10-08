@@ -47,7 +47,7 @@ import { uid } from "@/lib/auth";
    component can draw an urgency without keeping its own copy. Imported for use
    in this file AND re-exported, so every existing importer of this module
    carries on unchanged. */
-import { KINDS, URGENCIES, REPAIR_CATEGORIES, PLANNED_CATEGORIES, type Kind, type Urgency } from "./works-catalogue";
+import { KINDS, URGENCIES, REPAIR_CATEGORIES, PLANNED_CATEGORIES, categoriesOf, type Kind, type Urgency } from "./works-catalogue";
 export { KINDS, URGENCIES, REPAIR_CATEGORIES, PLANNED_CATEGORIES };
 export type { Kind, Urgency };
 
@@ -762,7 +762,8 @@ export interface RankedContractor extends Contractor {
 export async function contractorsFor(order: WorksOrder, forUserId: string): Promise<RankedContractor[]> {
   if (!hasDb()) return [];
   const rows = await q<Row>(`SELECT * FROM os_contractors WHERE active AND rehearsal = $2 AND (owner_id IS NULL OR owner_id = $1)`, [forUserId, order.rehearsal]);
-  const words = TRADE_WORDS[order.category] ?? [];
+  /* A boiler service and an EPC on one job: a contractor fits on either trade. */
+  const words = [...new Set(categoriesOf(order.category).flatMap((c) => TRADE_WORDS[c] ?? []))];
   const here = order.propertyLat != null && order.propertyLng != null ? { lat: order.propertyLat, lng: order.propertyLng } : null;
   return rows
     .map((r) => {

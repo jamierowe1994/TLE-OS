@@ -62,11 +62,12 @@ export const CATEGORY_CERT: Record<string, string> = {
   "HMO licence inspection": "licence",
 };
 
-export function Fact({ k, v }: { k: string; v: string }) {
+/** `wrap` for a value that must be read whole - a planned job's several categories. */
+export function Fact({ k, v, wrap = false }: { k: string; v: string; wrap?: boolean }) {
   return (
     <div className="min-w-0">
       <dt className="text-[9.5px] font-bold uppercase tracking-wider text-muted">{k}</dt>
-      <dd className="mt-0.5 truncate" title={v}>{v}</dd>
+      <dd className={`mt-0.5 ${wrap ? "break-words" : "truncate"}`} title={v}>{v}</dd>
     </div>
   );
 }

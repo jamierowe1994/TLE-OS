@@ -33,3 +33,16 @@ export const PLANNED_CATEGORIES = [
   "Gas safety (CP12)", "EICR", "EPC", "Boiler service", "Legionella risk assessment", "PAT test", "Smoke & CO alarms", "Fire risk assessment",
   "HMO licence inspection", "Property inspection", "Inventory & check-in", "Check-out", "Other",
 ] as const;
+
+/**
+ * A planned job can be several things at once - a boiler service and an EPC
+ * on the same visit. James, 8 Oct 2026. The job keeps one category column, so
+ * the ticked ones are kept in it together, "Boiler service, EPC", and every
+ * screen that shows the category shows all of them for free. Anything that
+ * acts on a category (the contractor's trade, the certificate's due date)
+ * reads them apart with this. No category name has a comma in it.
+ */
+export const categoriesOf = (category: string | null | undefined): string[] =>
+  [...new Set((category ?? "").split(",").map((c) => c.trim()).filter(Boolean))];
+
+export const joinCategories = (list: readonly string[]): string => [...new Set(list.map((c) => c.trim()).filter(Boolean))].join(", ");

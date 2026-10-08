@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Contractor, Move, RankedContractor, WorksOrder, PaidHow } from "@/lib/works-orders";
 import { STEPS, stepOf, type StepId } from "@/lib/works-steps";
+import { categoriesOf } from "@/lib/works-catalogue";
 
 /**
  * The Now card on a job: one thing at a time, in the order James and
@@ -242,7 +243,7 @@ function RankedList({ o, move, busy, canCorporate, onPicked, given, canAdd = tru
       {!placed && ranked && ranked.length > 0 && <p className="mt-1.5 text-[11px] text-muted">The property has no map position, so this is by trade only.</p>}
       {!canAdd ? null : adding ? (
         <div className="mt-3 rounded-xl border border-line/80 bg-card p-3">
-          <ContractorForm initial={{ trade: o.category }} canCorporate={canCorporate} compact onClose={() => setAdding(false)} onSaved={() => { setAdding(false); load(); }} />
+          <ContractorForm initial={{ trade: categoriesOf(o.category)[0] ?? "" }} canCorporate={canCorporate} compact onClose={() => setAdding(false)} onSaved={() => { setAdding(false); load(); }} />
         </div>
       ) : (
         <button type="button" onClick={() => setAdding(true)} className={`mt-2 ${btn}`}>+ Add a contractor</button>

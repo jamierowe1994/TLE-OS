@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { openDocument } from "@/lib/doc-sheet";
 import type { Contractor, WorksOrder, WorksEvent, Move, Urgency, PaidHow } from "@/lib/works-orders";
-import { URGENCIES } from "@/lib/works-catalogue";
+import { URGENCIES, categoriesOf } from "@/lib/works-catalogue";
 import { WorksNow } from "@/components/WorksNow";
 import SaveChip, { SaveScopeProvider, useSaveScope } from "@/components/SaveChip";
 import LandlordJobEmails from "@/components/LandlordJobEmails";
@@ -274,7 +274,7 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
                 <p className="text-[10px] font-bold uppercase tracking-wider text-muted">The job</p>
                 <p className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed">{o.description || <span className="text-muted">No detail recorded.</span>}</p>
                 <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[12px] sm:grid-cols-3">
-                  <Fact k="Category" v={o.category} />
+                  <Fact k={categoriesOf(o.category).length > 1 ? "Categories" : "Category"} v={o.category} wrap />
                   {o.kind === "repair" ? <Fact k="Urgency" v={URGENCIES.find((u) => u.id === o.urgency)?.label ?? "—"} /> : <Fact k="Due" v={day(o.dueAt)} />}
                   {o.kind === "repair" && <Fact k="Attend by" v={stamp(o.dueAt)} />}
                   <Fact k="Reported by" v={`${o.reportedBy || "—"} · ${day(o.reportedAt)}`} />
