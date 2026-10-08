@@ -188,6 +188,43 @@ export async function sendAddedWelcome(p: { contactId: string; name: string; ema
   return out[0] ?? null;
 }
 
+/* ── Thank you for your passport ───────────────────────────────────────── */
+
+/**
+ * The moment a tenant finishes their passport (James, 8 Oct 2026). Once per
+ * passport, whichever of the two finishing presses gets here first - the
+ * passport's own last button, or the account step after it.
+ *
+ * Not behind the Automatic tenant emails switch: it answers something the
+ * tenant has just done, like the sign-in link the account step sends, rather
+ * than a step the office runs. Customer email still governs it, inside the
+ * send itself, and our own addresses always get it for testing.
+ */
+export async function sendPassportThanks(token: string): Promise<ReminderResult | null> {
+  if (!hasDb() || !token) return null;
+  const { getPassport, passportEmailedTo } = await import("@/lib/passport");
+  const rec = await getPassport(token).catch(() => null);
+  if (!rec || !rec.submittedAt) return null;
+  const to = ((await passportEmailedTo(token).catch(() => null)) ?? rec.data.email ?? rec.email ?? "").trim();
+  const name = (rec.data.legalName || rec.name || "").trim();
+  const agent = rec.agentId ? await findUserById(rec.agentId).catch(() => null) : null;
+  const out: Out = [];
+  await sendOne(out, false, {
+    key: `tenant-passport-thanks:${token}`,
+    emailId: "tenant-passport-thanks",
+    to,
+    toName: name,
+    agent,
+    would: `Would thank ${name || "them"} for their passport.`,
+    vars: async () => ({
+      firstName: firstName(name),
+      agentName: agent?.name || "The Letting Experts",
+      link: `${SITE}/tenant/sign-in`,
+    }),
+  });
+  return out[0] ?? null;
+}
+
 /* ── How was it? ───────────────────────────────────────────────────────── */
 
 type ViewingRow = {

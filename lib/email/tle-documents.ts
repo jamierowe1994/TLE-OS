@@ -1462,6 +1462,29 @@ export const TENANT_ADDED_WELCOME = {
   branding: { showSignoff: false },
 } as const;
 
+/**
+ * The moment the passport is finished (James, 8 Oct 2026): "a quick, nice,
+ * and easy email just to confirm that their profile's all been finished".
+ * {{link}} is the tenant sign-in page.
+ */
+export const TENANT_PASSPORT_THANKS = {
+  subject: "Thank you, {{firstName}} - your passport is complete",
+  preheader: "Your profile is finished and with your agent. Log in any time.",
+  mode: "blocks",
+  blocks: [
+    H("tpt1", "Thank you for your passport"),
+    T("tpt2", "Hi {{firstName}},<br><br>Thank you for filling out your tenant passport. Your profile is complete and it's with {{agentName}} now."),
+    T("tpt3", "If you're successful, your agent will be in touch shortly about the next steps."),
+    T("tpt4", "You can log in to your account at any time to check or update your details."),
+    SP("tpt5", 8),
+    BTN("tpt6", "Log in to my account", "{{link}}"),
+    SP("tpt7", 8),
+    T("tpt8", "Thanks again,<br>{{agentName}}<br>The Letting Experts"),
+    FOOT("tpt9", "You're getting this because you completed a tenant passport with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
 /** Two days after the passport invite, nothing typed. */
 export const TENANT_PASSPORT_NUDGE_1 = {
   subject: "Your tenant passport is ready when you are",

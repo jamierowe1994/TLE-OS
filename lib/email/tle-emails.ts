@@ -89,6 +89,7 @@ import {
   APPLICATION_ACCEPTED_TENANT,
   TENANT_ENQUIRY_REPLY,
   TENANT_ADDED_WELCOME,
+  TENANT_PASSPORT_THANKS,
   TENANT_PASSPORT_NUDGE_1,
   TENANT_PASSPORT_NUDGE_2,
   TENANT_MATCHES,
@@ -1427,6 +1428,16 @@ TLE_EMAILS.push(
     "The search, not a property: what we need to know, to tell us by reply, and a promise to send what fits the same day.",
     TENANT_ADDED_WELCOME,
     { link: `${SITE}/tenant/welcome` }
+  ),
+  tenantEntry(
+    "tenant-passport-thanks",
+    "Thank You for Your Passport",
+    "A tenant finishes their passport",
+    "Wired 8 Oct 2026. lib/tenant-journey-emails sendPassportThanks, the moment they press Great, create my passport (and again from the account step, which it never repeats). From the agent who sent the passport. A direct reply to the tenant's own press, like the sign-in link, so it needs customer email only, not the Automatic tenant emails switch.",
+    "The tenant who finished",
+    "Thank you, the profile is complete and with the agent, the agent will be in touch if they're successful, and a button to log in any time.",
+    TENANT_PASSPORT_THANKS,
+    { link: `${SITE}/tenant/sign-in` }
   ),
   tenantEntry(
     "tenant-passport-nudge-1",

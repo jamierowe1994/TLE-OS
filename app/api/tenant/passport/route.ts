@@ -11,6 +11,7 @@ import {
   type PassportData,
 } from "@/lib/passport";
 import { passportQuestions, setPassportAnswer, valuesFor } from "@/lib/attributes";
+import { sendPassportThanks } from "@/lib/tenant-journey-emails";
 
 /**
  * The tenant's own passport, reached by the link in their email.
@@ -121,6 +122,8 @@ export async function POST(req: NextRequest) {
     }
     const rec = await submitPassport(token).catch(() => null);
     if (!rec) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    /* "Thank you for your passport", once (lib/tenant-journey-emails). */
+    await sendPassportThanks(token).catch(() => null);
     return NextResponse.json({ passport: rec });
   }
 

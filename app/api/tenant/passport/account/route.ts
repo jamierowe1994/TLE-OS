@@ -7,6 +7,7 @@ import { normaliseEmail } from "@/lib/users";
 import { startVerification } from "@/lib/verification";
 import { renderTenantSignIn } from "@/lib/email/tle-emails";
 import { sendEmail } from "@/lib/resend";
+import { sendPassportThanks } from "@/lib/tenant-journey-emails";
 
 /**
  * The end of the passport: an account, and straight in.
@@ -64,6 +65,7 @@ export async function POST(req: NextRequest) {
   if (emailedTo && (!typed || normaliseEmail(typed) === normaliseEmail(emailedTo))) {
     const account = await createTenantFromPassport({ email, name, password, passportToken: token });
     await submitPassport(token).catch(() => null);
+    await sendPassportThanks(token).catch(() => null);
     const res = NextResponse.json({ ok: true, name: account.name });
     res.cookies.set(TENANT_COOKIE, createPortalToken("tenant", account.id), portalCookieOptions());
     return res;
@@ -74,6 +76,7 @@ export async function POST(req: NextRequest) {
   const to = normaliseEmail(typed || email);
   await upsertTenantAccount({ email: to, name: name.trim() || to });
   await submitPassport(token).catch(() => null);
+  await sendPassportThanks(token).catch(() => null);
   try {
     const { token: vt } = await startVerification(to, "tenant");
     const origin = process.env.OS_ORIGIN?.replace(/\/+$/, "") || req.nextUrl.origin;
