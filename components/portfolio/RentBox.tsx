@@ -38,7 +38,93 @@ function checked(iso: string) {
   return `${at.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" })} at ${t}`;
 }
 
-export default function RentBox({ listingId, className }: { listingId: string; className: string }) {
+/**
+ * HOW THE HOME EARNS (James, 9 Oct 2026): "show the total amount of income
+ * that the property produces and then the breakdown ... what it costs per
+ * room, unless it's just a total cost ... we need to be able to distinguish
+ * between the two." Read from the data, never set by hand: a house whose
+ * rooms carry their own rents is let by the room; a home PayProp bills each
+ * tenant on separately is rent per tenant; several tenants on one invoice is
+ * one rent for the house.
+ */
+export type RentShape =
+  | { kind: "rooms"; rooms: Array<{ id: string; label: string; tenant: string | null; rent: number | null; period: "week" | "month" | null; monthly: number | null }> }
+  | { kind: "home"; rent: number | null; tenants: string[] };
+
+/** `who` and `rent` columns show only when the basis has them: a room has a
+ *  tenant (or is empty); a shared rent has no per-line figure. */
+type Income = { total: number | null; basis: string; who: boolean; rent: boolean; lines: Array<{ id: string; label: string; who: string | null; rent: string | null }> };
+
+function incomeOf(shape: RentShape | undefined, s: Status | null): Income | null {
+  if (!shape) return null;
+  if (shape.kind === "rooms") {
+    const priced = shape.rooms.filter((r) => r.monthly);
+    if (priced.length) {
+      return {
+        total: priced.reduce((a, r) => a + (r.monthly ?? 0), 0),
+        basis: `Rent per room${priced.length < shape.rooms.length ? ` · ${shape.rooms.length - priced.length} with no rent set` : ""}`,
+        who: true,
+        rent: true,
+        lines: shape.rooms.map((r) => ({ id: r.id, label: r.label, who: r.tenant, rent: r.rent ? `${gbp(r.rent)}${r.period === "week" ? " pw" : ""}` : null })),
+      };
+    }
+    /* No room carries a rent. A figure on the house's own record is not the
+       house's rent: 166 Gloucester Road North holds £795 there, which is one
+       room's rent, and 2 Norwich Street £550 across five rooms. So no total. */
+    return {
+      total: null,
+      basis: "Rent per room · no room rents recorded yet",
+      who: true,
+      rent: true,
+      lines: shape.rooms.map((r) => ({ id: r.id, label: r.label, who: r.tenant, rent: null })),
+    };
+  }
+  const billed = s?.state === "ok" ? s.tenants.filter((t) => t.rent) : [];
+  if (billed.length > 1) {
+    return {
+      total: billed.reduce((a, t) => a + (t.rent ?? 0), 0),
+      basis: "Rent per tenant",
+      who: false,
+      rent: true,
+      lines: billed.map((t) => ({ id: t.name, label: t.name, who: null, rent: gbp(t.rent ?? 0) })),
+    };
+  }
+  if (shape.tenants.length < 2) return null;
+  const total = billed[0]?.rent ?? shape.rent;
+  if (!total) return null;
+  return {
+    total,
+    basis: `One rent for the house · shared by ${shape.tenants.length} tenants`,
+    who: false,
+    rent: false,
+    lines: shape.tenants.map((t) => ({ id: t, label: t, who: null, rent: null })),
+  };
+}
+
+function IncomeBlock({ income }: { income: Income }) {
+  return (
+    <div className="mt-2 border-b border-line/50 pb-4">
+      {income.total != null && (
+        <p className="figures text-[22px] font-semibold">
+          {gbp(Math.round(income.total * 100) / 100)}
+          <span className="text-[12px] font-normal text-muted"> pcm</span>
+        </p>
+      )}
+      <p className="text-[12px] text-muted">{income.basis}</p>
+      <ul className="mt-2 divide-y divide-line/40 rounded-xl border border-line/50 bg-white">
+        {income.lines.map((l) => (
+          <li key={l.id} className="flex items-center gap-3 px-3 py-2 text-[12px]">
+            <span className={`truncate font-semibold ${income.who ? "w-[72px] shrink-0" : "min-w-0 flex-1"}`}>{l.label}</span>
+            {income.who && <span className="min-w-0 flex-1 truncate">{l.who ?? <span className="text-muted">Empty</span>}</span>}
+            {income.rent && (l.rent ? <span className="figures shrink-0">{l.rent}</span> : <span className="shrink-0 text-muted">Not set</span>)}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export default function RentBox({ listingId, className, shape }: { listingId: string; className: string; shape?: RentShape }) {
   const [s, setS] = useState<Status | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
 
@@ -65,6 +151,13 @@ export default function RentBox({ listingId, className }: { listingId: string; c
         <DoodleIcon name="coin" size={13} className="text-accent-dark" />
         Rent
       </p>
+
+      {/* What the home brings in. A house let by the room is read from the
+          book and shows at once; a home's split needs PayProp's answer. */}
+      {(() => {
+        const income = incomeOf(shape, s);
+        return income ? <IncomeBlock income={income} /> : null;
+      })()}
 
       {failed ? (
         <p className="mt-3 text-[12.5px] text-muted">{failed}</p>

@@ -377,6 +377,10 @@ export default function PropertyPage() {
   const tenants: Party[] = house ? (roomP || lets ? tenantsInOrder(house, roomP ?? house.rooms[0], R) : []) : p.tenants;
   const letRooms = house ? house.rooms.filter((r) => r.tenants.length > 0) : [];
   const roomRent = house ? house.rooms.reduce((a, r) => a + (r.rentMonthly ?? 0), 0) : 0;
+  /* What the house brings in (James, 9 Oct 2026): the rooms' rents added
+     up. A rent on the house's own record is not a total (see RentBox). */
+  const pricedRooms = house ? house.rooms.filter((r) => r.rentMonthly).length : 0;
+  const houseLine = !house || lets || roomRent <= 0 ? null : `${money(roomRent)} pcm from ${pricedRooms} ${pricedRooms === 1 ? "room" : "rooms"}`;
   const sub = [
     house ? house.locality : p.locality,
     p.postcode && !(house ? house.locality : p.locality).includes(p.postcode) ? p.postcode : null,
@@ -644,8 +648,8 @@ export default function PropertyPage() {
                   {p.test ? "Test home" : p.service ?? "Service not set"}
                 </span>
               </div>
-              {(houseView && house && !lets ? roomRent > 0 : rentLine) && (
-                <p className="figures mt-1.5 text-[20px] font-semibold">{houseView && house && !lets ? `${money(roomRent)} pcm across the rooms` : rentLine}</p>
+              {(houseView && house && !lets ? houseLine : rentLine) && (
+                <p className="figures mt-1.5 text-[20px] font-semibold">{houseView && house && !lets ? houseLine : rentLine}</p>
               )}
               <p className="mt-1 text-[13px] text-muted">{sub}</p>
               {house && (
@@ -912,7 +916,15 @@ export default function PropertyPage() {
 
           {/* Rent where the map was (James, 8 Oct 2026): up to date or how
               far behind, and the money in and out, live from PayProp. */}
-          {!p.test && <RentBox listingId={String(p.listingId)} className={`${box} lg:col-start-2 lg:row-start-3 lg:self-start`} />}
+          {!p.test && (
+            <RentBox
+              listingId={String(p.listingId)}
+              className={`${box} lg:col-start-2 lg:row-start-3 lg:self-start`}
+              shape={houseView && house && !lets
+                ? { kind: "rooms", rooms: house.rooms.map((r) => ({ id: String(r.listingId), label: roomLabel(r), tenant: r.tenants[0]?.name ?? null, rent: r.rent, period: r.rentPeriod, monthly: r.rentMonthly })) }
+                : { kind: "home", rent: p.rentMonthly, tenants: tenants.map((t) => t.name) }}
+            />
+          )}
 
             {everything && !p.test && p.onRex !== false && (
               <p className="text-[11.5px] text-muted lg:col-start-1 lg:row-start-4">

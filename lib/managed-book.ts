@@ -415,7 +415,7 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
     const o = pmFor.get(p.propertyId);
     if (!o?.tenantNames) continue;
     if ("pmStatus" in o && (o as PmHome).pmStatus === "vacant") continue;
-    p.tenants = o.tenantNames.split(/\s*,\s*/).filter(Boolean).map((name, i) => ({ contactId: `rexpm:${o.id}:${i}`, name, email: null, phone: null }));
+    p.tenants = o.tenantNames.split(/\s*[,;]\s*/).filter(Boolean).map((name, i) => ({ contactId: `rexpm:${o.id}:${i}`, name, email: null, phone: null }));
   }
   /* PayProp's rent where REX holds none (2 Oct 2026). 234 of the 527 homes
      had no rent in REX, so the rent roll was short by a third. PayProp's is
