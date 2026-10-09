@@ -477,20 +477,39 @@ function Cover({ d, pct, closed = false, w = 210, badge = true }: { d: PassportD
       </svg>
       <span className="pointer-events-none absolute inset-y-3 left-2.5 border-l border-dashed border-white/15" aria-hidden />
 
-      <p className="absolute inset-x-0 font-semibold uppercase tracking-[0.26em] text-white/45" style={{ top: px(20), fontSize: px(10.5) }}>Tenant Passport</p>
+      <p className="absolute inset-x-0 font-semibold uppercase tracking-[0.26em] text-white/55" style={{ top: px(20), fontSize: px(10.5), textShadow: "0 -1px 0 rgba(255,255,255,0.12), 0 1px 1px rgba(0,0,0,0.9)" }}>Tenant Passport</p>
 
-      {/* Closed: the company's mark, in the palette's pink. */}
+      {/* Closed: the company's mark, the pin in the palette's pink and the
+          words in white (James, 9 Oct 2026), raised off the leather like an
+          embossed foil stamp - lit from the top left, a shadow below. One
+          logo file, coloured in two: the pin is the left third of it (it ends
+          at 272 of 869px and the words start at 306), so each colour is the
+          logo used as a mask and clipped to its own side. */}
       <div className={`${face} justify-center`} style={{ opacity: closed ? 1 : 0 }} aria-hidden={!closed}>
         <span
           role="img"
           aria-label="The Letting Experts"
-          className="block"
+          className="relative block"
           style={{
-            width: px(112), height: px(60), backgroundColor: PINK,
-            WebkitMaskImage: "url(/brand/tle-logo-coral.png)", maskImage: "url(/brand/tle-logo-coral.png)",
-            WebkitMaskSize: "contain", maskSize: "contain", WebkitMaskRepeat: "no-repeat", maskRepeat: "no-repeat", WebkitMaskPosition: "center", maskPosition: "center",
+            width: px(118), height: px(63),
+            filter: `drop-shadow(${px(-0.6)} ${px(-0.6)} 0 rgba(255,255,255,0.28)) drop-shadow(${px(0.8)} ${px(1.4)} ${px(1)} rgba(0,0,0,0.85))`,
           }}
-        />
+        >
+          {([
+            { clip: "inset(0 66.5% 0 0)", fill: `linear-gradient(155deg, #F6C3BC 0%, ${PINK} 45%, #B9706A 100%)` },
+            { clip: "inset(0 0 0 33.5%)", fill: "linear-gradient(155deg, #FFFFFF 0%, #F1ECEA 50%, #C9C0BD 100%)" },
+          ] as const).map((l) => (
+            <span
+              key={l.clip}
+              className="absolute inset-0"
+              style={{
+                background: l.fill, clipPath: l.clip,
+                WebkitMaskImage: "url(/brand/tle-logo-coral.png)", maskImage: "url(/brand/tle-logo-coral.png)",
+                WebkitMaskSize: "contain", maskSize: "contain", WebkitMaskRepeat: "no-repeat", maskRepeat: "no-repeat", WebkitMaskPosition: "center", maskPosition: "center",
+              }}
+            />
+          ))}
+        </span>
       </div>
 
       {/* Open: their photo, the ring of how much is done, their name. */}
