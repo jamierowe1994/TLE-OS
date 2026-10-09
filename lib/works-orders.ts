@@ -137,6 +137,8 @@ export interface WorksOrder {
   landlordMobile: string;
   /** Planned jobs: the agent skipped the landlord, who hears nothing about this one. */
   landlordSkipped: boolean;
+  /** A discreet repair: no automatic email goes to any tenant on it. */
+  quietTenants: boolean;
   /** Planned jobs: when the tenants were sent the booking, by hand. */
   tenantsToldBookedAt: string | null;
   /* ── the workflow's facts (James and Michael, 7 Sep 2026) ── */
@@ -239,6 +241,7 @@ function toOrder(r: Row): WorksOrder {
     landlordEmail: s(r.landlord_email),
     landlordMobile: s(r.landlord_mobile),
     landlordSkipped: r.landlord_skipped === true,
+    quietTenants: r.quiet_tenants === true,
     tenantsToldBookedAt: iso(r.tenants_told_booked_at),
     landlordToldAt: iso(r.landlord_told_at),
     arranging: r.arranging === "landlord" || r.arranging === "us" ? r.arranging : null,
@@ -294,7 +297,7 @@ const COLS = `id, ref, kind, status, property_id, property_name, locality, landl
   title, description, category, urgency,
   due_at, reported_by, reported_at, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence, quote_pence,
   approved_by, approved_at, completed_at, completion_note, invoice_pence, invoice_ref, invoiced_at, paid_at, paid_how,
-  cancelled_reason, files, rehearsal, tenants, landlord_skipped, tenants_told_booked_at, created_at, updated_at`;
+  cancelled_reason, files, rehearsal, tenants, landlord_skipped, quiet_tenants, tenants_told_booked_at, created_at, updated_at`;
 
 /* ── contractors ────────────────────────────────────────────────────────── */
 
@@ -382,12 +385,14 @@ export interface NewOrder {
   authorityPence?: number;
   contractorId?: string | null;
   scheduledAt?: string | null;
-  /** Every tenant on the home (planned jobs). */
+  /** Every tenant on the home who goes on the works order. */
   tenants?: JobTenant[];
-  /** Planned: the landlord is not involved and hears nothing. */
+  /** The landlord is not involved and hears nothing. */
   landlordSkipped?: boolean;
-  /** Planned, with a contractor: the works order goes to them as the job is raised. */
+  /** With a contractor: the works order goes to them as the job is raised. */
   send?: boolean;
+  /** A repair: false keeps every automatic tenant email off (a discreet job). */
+  tellTenants?: boolean;
 }
 
 /** Repairs: the urgency sets the date. Planned: the caller says when. */
@@ -410,10 +415,13 @@ export async function createOrder(input: NewOrder, by: string): Promise<WorksOrd
   /* Planned maintenance is ours to arrange (James, 8 Oct 2026): there is no
      "tell the landlord, who's arranging it" stage on a gas safety. Sent as it
      is raised, the works order is out and the contractor is on it - the next
-     thing is the date, which they set from their page or we type in. */
+     thing is the date, which they set from their page or we type in.
+     A repair sent as it is raised is ours too (Lianna, 9 Oct 2026); it still
+     asks for the landlord to be told unless they were skipped (lib/works-steps). */
   const planned = kind === "planned";
-  const sent = planned && !!input.contractorId && input.send === true;
-  const skipped = planned && input.landlordSkipped === true;
+  const sent = !!input.contractorId && input.send === true;
+  const skipped = input.landlordSkipped === true;
+  const quiet = kind === "repair" && input.tellTenants === false;
   /* Already booked with them is already confirmed. */
   const confirmed = sent || (planned && !!input.contractorId && !!input.scheduledAt);
   /* A job with a contractor and a date already has its booking; one without
@@ -426,9 +434,9 @@ export async function createOrder(input: NewOrder, by: string): Promise<WorksOrd
        (id, kind, status, property_id, property_name, locality, landlord, tenant, tenant_email, landlord_email, title, description, category, urgency, due_at,
         reported_by, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence,
         landlord_mobile, contractor_token, tenant_token, property_lat, property_lng, rehearsal, tenant_phone,
-        arranging, contractor_contacted_at, contractor_confirmed_at, tenants, landlord_skipped)
+        arranging, contractor_contacted_at, contractor_confirmed_at, tenants, landlord_skipped, quiet_tenants)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29,
-        $30, $31, $32, $33::jsonb, $34)
+        $30, $31, $32, $33::jsonb, $34, $35)
      RETURNING ${COLS}`,
     [
       id, kind, status, input.propertyId ?? null, input.propertyName.trim(), (input.locality ?? "").trim(), (input.landlord ?? "").trim(),
@@ -438,12 +446,13 @@ export async function createOrder(input: NewOrder, by: string): Promise<WorksOrd
       (input.access ?? "").trim(), Number.isFinite(input.authorityPence) ? Number(input.authorityPence) : DEFAULT_AUTHORITY_PENCE,
       skipped ? "" : (input.landlordMobile ?? "").trim(), randomBytes(16).toString("base64url"), randomBytes(16).toString("base64url"),
       input.propertyLat ?? null, input.propertyLng ?? null, input.rehearsal === true, (input.tenantPhone ?? "").trim(),
-      planned ? "us" : null, sent ? now : null, confirmed ? now : null, JSON.stringify(tenants), skipped,
+      planned || sent ? "us" : null, sent ? now : null, confirmed ? now : null, JSON.stringify(tenants), skipped, quiet,
     ]
   );
   const order = toOrder(r);
   await logEvent(order.id, by, "raised", `${kind === "repair" ? `${URGENCIES.find((u) => u.id === urgency)?.label ?? "Routine"} repair` : "Planned job"} raised: ${order.title}. Reported by ${order.reportedBy}.`);
   if (skipped) await logEvent(order.id, by, "note", "Landlord skipped: they are not involved in this job and are not emailed about it.");
+  if (quiet) await logEvent(order.id, by, "note", "Discreet job: the tenants are not emailed about it.");
   if (sent && status !== "scheduled") await logEvent(order.id, by, "contacted", `Works order sent to ${contractorName} with the job and ${tenants.length === 2 ? "both tenants'" : tenants.length > 2 ? `all ${tenants.length} tenants'` : "the tenant's"} details, to arrange a date.`);
   if (status === "scheduled") await logEvent(order.id, by, "scheduled", `Booked with ${contractorName} for ${when(input.scheduledAt)}.`);
   return order;

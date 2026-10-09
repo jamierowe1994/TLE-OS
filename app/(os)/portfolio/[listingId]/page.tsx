@@ -61,7 +61,7 @@ type Action =
   | { kind: "inspection"; inspection: Inspection }
   | { kind: "notices"; start: NoticeKind }
   | { kind: "tenant-notice"; draft?: PropertyDraft };
-const DRAFT_TITLE: Record<string, string> = { repair: "Report a repair", planned: "Plan a job", "tenant-notice": "Tenant gave notice" };
+const DRAFT_TITLE: Record<string, string> = { repair: "Report a repair", planned: "Plan a certificate", "tenant-notice": "Tenant gave notice" };
 
 /** One line on the latest activity list. */
 type Activity = { key: string; at: string; icon: string; title: string; sub: string; hot?: boolean; go?: () => void; unfinished?: boolean; bin?: () => void };
@@ -678,7 +678,7 @@ export default function PropertyPage() {
               <p className={`${eyebrow} mb-3 px-1`}>Actions</p>
               <div className="grid flex-1 auto-rows-fr grid-cols-2 gap-2">
                 <button type="button" disabled={!canAct} onClick={() => act({ kind: "repair" })} className={tile}>{tileIcon("setting")}{tileText("Report a repair", "Tenant and landlord told at each step")}</button>
-                <button type="button" disabled={!canAct} onClick={() => act({ kind: "planned" })} className={tile}>{tileIcon("calendar")}{tileText("Plan a job", "A service or certificate, by a date")}</button>
+                <button type="button" disabled={!canAct} onClick={() => act({ kind: "planned" })} className={tile}>{tileIcon("calendar")}{tileText("Plan a certificate", "A gas safety, EICR or service, by a date")}</button>
                 <button type="button" disabled={!canAct || visits.state !== "ready"} onClick={() => void bookVisit()} className={tile}>{tileIcon("checklist")}{tileText("Book a property visit", "Every 6 months: the home and the tenant")}</button>
                 <button type="button" onClick={() => act({ kind: "notices", start: "s8" })} disabled={roomsOnly} className={tile}>{tileIcon("file-contract")}{tileText("Serve notice", "Section 8, checked by compliance")}</button>
                 <button type="button" onClick={() => act({ kind: "notices", start: "s13" })} disabled={roomsOnly} className={tile}>{tileIcon("coin")}{tileText("Rent review", "Section 13 rent increase")}</button>
@@ -1058,7 +1058,7 @@ function JobsList({ orders, carried, onOpen }: { orders: WorksOrder[]; carried: 
   const open = orders.filter((o) => OPEN.includes(o.status));
   const closed = orders.filter((o) => !OPEN.includes(o.status));
   if (!orders.length && !carried.length) {
-    return <p className="rounded-xl border border-dashed border-line/80 px-4 py-6 text-center text-[12.5px] text-muted">No jobs on this home yet. Report a repair or plan a job and it lands here.</p>;
+    return <p className="rounded-xl border border-dashed border-line/80 px-4 py-6 text-center text-[12.5px] text-muted">No jobs on this home yet. Report a repair or plan a certificate and it lands here.</p>;
   }
   const row = (o: WorksOrder) => {
     const next = nextFor(o);

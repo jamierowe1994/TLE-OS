@@ -149,7 +149,7 @@ export default function Maintenance() {
               <span className="text-[15px] leading-none">+</span> Report a repair
             </PressButton>
             <PressButton onClick={() => { setSection("planned"); setRaising("planned"); }} className="flex items-center gap-2 rounded-full border border-line/80 px-5 py-2.5 text-[13px] font-semibold">
-              <span className="text-[15px] leading-none">+</span> Plan a job
+              <span className="text-[15px] leading-none">+</span> Plan a certificate
             </PressButton>
             <WalkthroughLink step="repair" />
           </div>
@@ -248,14 +248,14 @@ export default function Maintenance() {
             <p className="mt-2 max-w-[46ch] text-[13px] leading-relaxed text-muted">
               {section === "repair"
                 ? "Report a repair when a tenant or landlord lets you know, and we'll help you keep everything on track."
-                : "Plan a job from a certificate that is due, or straight from here."}
+                : "Plan a certificate from Compliance when one is coming up, or straight from here."}
             </p>
             <PressButton
               onClick={() => { setRaising(section === "repair" ? "repair" : "planned"); }}
               className="mt-5 inline-flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-page"
             >
               <span className="text-[15px] leading-none">+</span>
-              {section === "repair" ? "Report a repair" : "Plan a job"}
+              {section === "repair" ? "Report a repair" : "Plan a certificate"}
             </PressButton>
           </div>
         </div>

@@ -80,7 +80,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     purpose: "Every job on the managed book, reported through paid: repairs on an urgency, planned jobs like a gas safety on a date.",
     does: [
       "Report a repair: the property, what is wrong, how urgent. Emergency means attend within 24 hours, urgent within 3 days, routine within 14. The clock starts when it is reported.",
-      "Plan a job: a gas safety, an EICR, a boiler service, an inspection, with the date it is due. Compliance can raise one from a certificate that is coming up.",
+      "Plan a certificate: a gas safety, an EICR, a boiler service, an inspection, with the date it is due. Compliance can raise one from a certificate that is coming up.",
       "Open a job for its sheet: what needs doing next, the contractor, the quote and the landlord's authority, the invoice, the timeline under each person's name, and the files on it.",
       "A quote over the landlord's authority waits on their yes and says so; under it, the job is approved on the spot.",
       "Keep the trades book under Contractors, with Gas Safe and NICEIC numbers.",

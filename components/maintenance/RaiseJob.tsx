@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PressButton } from "@/components/Bits";
 import LandlordJobEmails from "@/components/LandlordJobEmails";
 import FieldSelect from "@/components/FieldSelect";
@@ -21,8 +21,10 @@ export interface RaiseDraft {
   title?: string; description?: string; category?: string; urgency?: string; dueAt?: string; reportedBy?: string;
   tenant?: string; tenantPhone?: string; tenantEmail?: string; landlordName?: string; landlordEmail?: string; landlordMobile?: string;
   access?: string; contractorId?: string; scheduledAt?: string; step?: number;
-  /** Planned: every tenant, ticked or not, and whether the landlord was skipped. */
+  /** Every tenant, ticked or not, and whether the landlord was skipped. */
   tenants?: TenantRow[]; landlordSkipped?: boolean;
+  /** Repair: whether the tenants are told, and which of them reported it. */
+  tellTenants?: boolean; reporter?: number;
 }
 
 /** Report a repair or plan a job. On /maintenance and on the property's own page. */
@@ -41,34 +43,41 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
   onRaised: (o: WorksOrder) => void;
 }) {
   const planned = kind === "planned";
-  /* A few questions to a screen. On the property page for both kinds; on
-     Maintenance's own pop-up for a planned job too, because its last screen
-     is the works order going to the contractor (James, 8 Oct 2026). */
-  const stepped = inline || planned;
+  /* A few questions to a screen, everywhere and for both kinds: the last
+     screen is the works order going to the contractor (James, 8 Oct 2026;
+     a repair too since 9 Oct). */
+  const stepped = true;
   const [props, setProps] = useState<Property[] | null>(null);
   const [pq, setPq] = useState("");
   const [picked, setPicked] = useState<Property | null>(home);
+  /* The address, changed from the last screen (Lianna, 9 Oct 2026: realising
+     at the end it went on the wrong home meant back, back, back and cancel). */
+  const [moving, setMoving] = useState(false);
   const [manual, setManual] = useState("");
   const [title, setTitle] = useState(draft?.title ?? "");
   const [description, setDescription] = useState(draft?.description ?? "");
-  /* A repair is one category. A planned job can be several at once - a boiler
-     service and an EPC on the same visit - kept together as "Boiler service,
-     EPC" (lib/works-catalogue), so it starts with none ticked. */
-  const [category, setCategory] = useState<string>(draft?.category ?? (kind === "repair" ? REPAIR_CATEGORIES[0] : ""));
+  /* Several categories at once - a boiler service and an EPC on the same
+     visit, or pests and holes to fill on a repair (Lianna, 9 Oct 2026) - kept
+     together as "Pests, General repairs" (lib/works-catalogue), so it starts
+     with none ticked. */
+  const [category, setCategory] = useState<string>(draft?.category ?? "");
   const picks = useMemo(() => categoriesOf(category), [category]);
   const [urgency, setUrgency] = useState<Urgency>((draft?.urgency as Urgency) ?? "routine");
   const [dueAt, setDueAt] = useState(draft?.dueAt ?? "");
   const [reportedBy, setReportedBy] = useState(draft?.reportedBy ?? (kind === "repair" ? "Tenant" : "Compliance tracker"));
-  const [tenant, setTenant] = useState(draft?.tenant ?? "");
-  const [tenantPhone, setTenantPhone] = useState(draft?.tenantPhone ?? "");
-  const [tenantEmail, setTenantEmail] = useState(draft?.tenantEmail ?? "");
-  /* Every tenant on the home, so a shared house can say which of them rang. */
-  const [tenants, setTenants] = useState<JobTenant[]>([]);
-  const [whichTenant, setWhichTenant] = useState(0);
-  /* Planned: every tenant in the house, all on the works order unless unticked
+  /* Which of the tenants on the job reported it (a repair): the job's lead
+     tenant, so the emails that still go to one person go to them. */
+  const [reporter, setReporter] = useState(draft?.reporter ?? 0);
+  /* A repair tells the tenants a contractor is coming - never the works order,
+     which can carry notes they shouldn't read (Lianna, 9 Oct 2026). Off for
+     a discreet job, and then nothing automatic goes to them at all. */
+  const [tellTenants, setTellTenants] = useState(draft?.tellTenants ?? true);
+  /* Every tenant in the house, all on the works order unless unticked
      (James, 8 Oct 2026: "especially if it's an HMO, we need to pull through
-     every tenant under that property"). */
-  const [rows, setRows] = useState<TenantRow[]>(draft?.tenants ?? []);
+     every tenant under that property"). A repair too, since 9 Oct. */
+  const [rows, setRows] = useState<TenantRow[]>(
+    draft?.tenants ?? (draft?.tenant ? [{ name: draft.tenant, phone: draft.tenantPhone ?? "", email: draft.tenantEmail ?? "", on: true }] : [])
+  );
   const [adding, setAdding] = useState<JobTenant | null>(null);
   const [landlordEmail, setLandlordEmail] = useState(draft?.landlordEmail ?? "");
   const [landlordMobile, setLandlordMobile] = useState(draft?.landlordMobile ?? "");
@@ -115,49 +124,52 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
       if (hit) setPicked(hit);
     }
   }, [props, pq, picked]);
-  useEffect(() => { if (picked?.tenant && !draft) setTenant(picked.tenant); }, [picked]); // eslint-disable-line react-hooks/exhaustive-deps
-  /* Picking a tenant from the list fills the three fields together. */
-  const chooseTenant = useCallback((list: JobTenant[], i: number) => {
-    const t = list[i];
-    setWhichTenant(i);
-    setTenant(t?.name ?? "");
-    setTenantPhone(t?.phone ?? "");
-    setTenantEmail(t?.email ?? "");
-  }, []);
+  /* A draft's home is filled from the draft; a home picked afterwards - the
+     address changed on the last screen - is filled from its own records. */
+  const filledFor = useRef<string | null>(draft && home ? home.id : null);
   /* What the OS knows about the home fills the form: the tenants' names,
      numbers and emails, the landlord's email and mobile, the access notes on
      file. James, 7 Sep 2026: "all of this stuff should be automated." */
   useEffect(() => {
     if (!picked) { setFilled(null); return; }
     let live = true;
+    const fromDraft = filledFor.current === picked.id;
+    filledFor.current = null;
     setFilled([]);
     fetch(`/api/property/people?id=${encodeURIComponent(picked.id)}`, { cache: "no-store" }).then((r) => r.json()).then((j) => {
       if (!live || !j.ok) return;
       const got: string[] = [];
       const list = (Array.isArray(j.tenants) ? j.tenants : []) as JobTenant[];
       const l = j.landlord as { name: string; email: string; phone: string } | null;
-      setTenants(list);
       setPlace({ lat: j.lat ?? null, lng: j.lng ?? null });
       setSource(typeof j.source === "string" ? j.source : "");
       /* A draft keeps what was typed; the record only fills a fresh form. */
-      if (draft) { setFilled([]); return; }
-      if (list.length) {
-        chooseTenant(list, 0);
-        setRows(list.map((t) => ({ ...t, on: true })));
-        got.push(list.length === 1 ? "the tenant" : `${list.length} tenants`);
-      }
-      if (l?.name) { setLandlordName(l.name); got.push("landlord"); }
-      if (l?.email) { setLandlordEmail(l.email); got.push("landlord's email"); }
-      if (l?.phone) { setLandlordMobile(l.phone); got.push("landlord's mobile"); }
-      if (j.access) { setAccess(j.access); got.push("access notes"); }
+      if (fromDraft) { setFilled([]); return; }
+      setRows(list.map((t) => ({ ...t, on: true })));
+      setReporter(0);
+      if (list.length) got.push(list.length === 1 ? "the tenant" : `${list.length} tenants`);
+      else if (picked.tenant) setRows([{ name: picked.tenant, phone: "", email: "", on: true }]);
+      setLandlordName(l?.name ?? picked.landlord ?? "");
+      setLandlordEmail(l?.email ?? "");
+      setLandlordMobile(l?.phone ?? "");
+      setLandlordSkipped(false);
+      if (l?.name) got.push("landlord");
+      if (l?.email) got.push("landlord's email");
+      if (l?.phone) got.push("landlord's mobile");
+      setAccess(j.access ?? "");
+      if (j.access) got.push("access notes");
       setFilled(got);
     }).catch(() => { if (live) setFilled([]); });
     return () => { live = false; };
   }, [picked]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* The tenants who go on a planned job: the ticked ones. Their first is the
-     job's own tenant, for every screen that still reads one. */
-  const onJob = useMemo(() => rows.filter((r) => r.on).map(({ on: _on, ...t }) => t), [rows]);
+  /* The tenants who go on the job: the ticked ones. The first is the job's
+     own tenant, for every screen that still reads one - on a repair, the one
+     who reported it. */
+  const ticked = useMemo(() => rows.filter((r) => r.on).map(({ on: _on, ...t }) => t), [rows]);
+  const lead = planned ? 0 : Math.min(reporter, Math.max(0, ticked.length - 1));
+  const onJobCount = ticked.length;
+  const onJob = useMemo(() => (lead > 0 ? [ticked[lead], ...ticked.filter((_, i) => i !== lead)] : ticked), [ticked, lead]);
 
   /* A planned job carries the date the certificate we hold runs out, so
      picking the home and the category fills it in - the soonest of them, when
@@ -201,19 +213,20 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
     if (send && !contractorId) return setErr("Pick a contractor to send it to.");
     setBusy(true);
     setErr(null);
-    const lead = planned ? onJob[0] : null;
+    const first = onJob[0] ?? null;
     const r = await fetch("/api/works-orders", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         kind, propertyId: picked?.id ?? null, propertyName, locality: picked?.locality ?? "",
         landlord: landlordName || picked?.landlord || "",
-        tenant: lead ? lead.name : planned ? "" : tenant, tenantPhone: lead ? lead.phone : planned ? "" : tenantPhone, tenantEmail: lead ? lead.email : planned ? "" : tenantEmail,
+        tenant: first?.name ?? "", tenantPhone: first?.phone ?? "", tenantEmail: first?.email ?? "",
         landlordEmail: landlordSkipped ? "" : landlordEmail, landlordMobile: landlordSkipped ? "" : landlordMobile,
         propertyLat: place.lat, propertyLng: place.lng,
         title, description, category, urgency: kind === "repair" ? urgency : null, dueAt: planned ? new Date(dueAt).toISOString() : null,
         reportedBy, access, contractorId: contractorId || null, scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
-        ...(planned ? { tenants: onJob, landlordSkipped, send } : {}),
+        tenants: onJob, landlordSkipped, send,
+        ...(planned ? {} : { tellTenants }),
       }),
     }).then((x) => x.json()).catch(() => null);
     setBusy(false);
@@ -230,20 +243,22 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
      job's last screen is the works order itself, as the contractor will get
      it (8 Oct 2026). */
   const steps: { id: Group; title: string; blurb: string }[] = [
-    ...(picked ? [] : [{ id: "property" as const, title: "Which property", blurb: "Start typing the address." }]),
+    ...(picked && !moving ? [] : [{ id: "property" as const, title: "Which property", blurb: moving ? "Pick the right home. Its tenants and landlord fill in again." : "Start typing the address." }]),
     kind === "repair"
       ? { id: "what", title: "What's wrong", blurb: "In a few words, then whatever the tenant told you." }
       : { id: "what", title: "The job", blurb: "What needs doing, every category the visit covers, and anything the contractor should know." },
     kind === "repair"
-      ? { id: "urgency", title: "How urgent", blurb: "The urgency sets how soon a contractor has to attend." }
+      ? { id: "urgency", title: "Urgency and contractor", blurb: "How soon a contractor has to attend, and who is doing it." }
       : { id: "when", title: "Expiry and contractor", blurb: "When the current certificate runs out, and who is doing it." },
     planned
       ? { id: "tenant", title: "The tenants", blurb: "The contractor arranges a time with them directly. Untick anyone who shouldn't be on it." }
-      : { id: "tenant", title: "The tenant and getting in", blurb: "Their email is told at every step of the job. Leave it empty and they won't be." },
-    { id: "landlord", title: "The landlord", blurb: planned ? "Who the job is reported to, and how they hear about it. Skip them if they don't need to be involved." : "Who the job is reported to, and how they hear about it." },
-    planned
-      ? { id: "check", title: contractor ? `Send to ${contractor.name}` : "Check and plan", blurb: contractor ? "This is the works order they'll get. Nothing goes until you press Send." : "No contractor yet: plan it now and pick one on the job." }
-      : { id: "check", title: "Check and send", blurb: "Nothing goes until you press Report it." },
+      : { id: "tenant", title: "The tenants", blurb: "Every tenant goes on the works order so the contractor can ring them. Untick anyone who shouldn't be on it." },
+    { id: "landlord", title: "The landlord", blurb: "Who the job is reported to, and how they hear about it. Skip them if they don't need to be involved." },
+    contractor
+      ? { id: "check", title: `Send to ${contractor.name}`, blurb: "This is the works order they'll get. Nothing goes until you press Send." }
+      : planned
+        ? { id: "check", title: "Check and plan", blurb: "No contractor yet: plan it now and pick one on the job." }
+        : { id: "check", title: "Check and report", blurb: "No contractor yet: report it now and pick one on the job." },
   ];
   const [step, setStep] = useState(draft?.step ?? 0);
   const [dir, setDir] = useState<1 | -1>(1);
@@ -257,15 +272,17 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
   useEffect(() => {
     if (!draftRef.current || sent || !(title.trim() || description.trim())) return;
     const t = setTimeout(() => draftRef.current?.({
-      title, description, category, urgency, dueAt, reportedBy, tenant, tenantPhone, tenantEmail,
-      landlordName, landlordEmail, landlordMobile, access, contractorId, scheduledAt, step,
-      ...(planned ? { tenants: rows, landlordSkipped } : {}),
+      title, description, category, urgency, dueAt, reportedBy,
+      landlordName, landlordEmail, landlordMobile, access, contractorId, scheduledAt, step: moving ? Math.max(0, step - 1) : step,
+      tenants: rows, landlordSkipped, ...(planned ? {} : { tellTenants, reporter }),
     }), 700);
     return () => clearTimeout(t);
-  }, [title, description, category, urgency, dueAt, reportedBy, tenant, tenantPhone, tenantEmail, landlordName, landlordEmail, landlordMobile, access, contractorId, scheduledAt, step, sent, rows, landlordSkipped, planned]);
+  }, [title, description, category, urgency, dueAt, reportedBy, landlordName, landlordEmail, landlordMobile, access, contractorId, scheduledAt, step, sent, rows, landlordSkipped, planned, tellTenants, reporter, moving]);
   function go(d: 1 | -1) {
     if (d > 0) {
       if (here.id === "property" && !picked && !manual.trim()) return setErr("Which property?");
+      /* Changed the address: straight back to the last screen to check it. */
+      if (here.id === "property" && moving) { backToCheck(); return; }
       if (here.id === "what" && !title.trim()) return setErr(kind === "repair" ? "What is wrong, in a few words?" : "What is the job?");
       if (here.id === "what" && !picks.length) return setErr("Tick at least one category.");
       if (here.id === "when" && !dueAt) return setErr("When does it expire?");
@@ -275,6 +292,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
     setStep((n) => Math.max(0, Math.min(steps.length - 1, n + d)));
   }
   const jump = (id: Group) => {
+    if (id === "property") { setErr(null); setDir(-1); setMoving(true); setStep(0); return; }
     const i = steps.findIndex((x) => x.id === id);
     if (i < 0) return;
     setErr(null);
@@ -282,20 +300,29 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
     setStep(i);
   };
   const skipLandlord = () => { setLandlordSkipped(true); go(1); };
+  /* Out of the address and back to the last screen. The address step stays
+     in the list only while no home from the book is picked. */
+  function backToCheck() {
+    setErr(null);
+    setMoving(false);
+    setDir(1);
+    setStep(picked ? steps.length - 2 : steps.length - 1);
+  }
 
   /* The works order, as the contractor will get it. Read when the last
      screen opens, and again if anything on it changed since. */
   const [preview, setPreview] = useState<{ key: string; subject: string; html: string; to: string } | { key: string; error: string } | null>(null);
-  const previewKey = JSON.stringify([title, description, category, dueAt, scheduledAt, access, contractorId, onJob, picked?.id, manual]);
+  const previewKey = JSON.stringify([title, description, category, urgency, dueAt, scheduledAt, access, contractorId, onJob, picked?.id, manual]);
   useEffect(() => {
-    if (!planned || here.id !== "check" || !contractorId || preview?.key === previewKey) return;
+    if (here.id !== "check" || !contractorId || preview?.key === previewKey) return;
     let live = true;
     fetch("/api/works-orders/preview", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
+        kind, urgency: planned ? null : urgency,
         title, description, category, access, contractorId, tenants: onJob,
-        dueAt: dueAt || null, scheduledAt: scheduledAt || null,
+        dueAt: planned ? dueAt || null : null, scheduledAt: scheduledAt || null,
         propertyName: picked?.name ?? manual.trim(), locality: picked?.locality ?? "",
       }),
     }).then((r) => r.json()).then((j) => {
@@ -303,13 +330,13 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
       setPreview(j?.ok ? { key: previewKey, subject: j.subject, html: j.html, to: j.to } : { key: previewKey, error: j?.error ?? "The preview could not be written." });
     }).catch(() => { if (live) setPreview({ key: previewKey, error: "The preview could not be written." }); });
     return () => { live = false; };
-  }, [planned, here.id, contractorId, previewKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [here.id, contractorId, previewKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cats = kind === "repair" ? REPAIR_CATEGORIES : PLANNED_CATEGORIES;
   const field = "w-full rounded-lg border border-line/80 bg-box px-3 py-2.5 text-[13px] outline-none focus:border-ink";
   const label = "block text-[10px] font-bold uppercase tracking-wider text-muted";
   const hint = "mt-1 text-[11px] leading-snug text-muted";
-  const canSend = planned && !!contractor;
+  const canSend = !!contractor;
   const contractorHasEmail = !!contractor?.email?.includes("@");
 
   return (
@@ -321,10 +348,10 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
             <span className="fade-up flex h-16 w-16 items-center justify-center rounded-full bg-ink text-page">
               <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7" /></svg>
             </span>
-            <p className="hand mt-4 text-[22px]">{kind === "repair" ? "Report sent" : sent.to ? `Sent to ${sent.to}` : "Job planned"}</p>
+            <p className="hand mt-4 text-[22px]">{sent.to ? `Sent to ${sent.to}` : kind === "repair" ? "Repair reported" : "Job planned"}</p>
             <p className="mt-1 text-[12px] text-muted">
               {kind === "repair"
-                ? `${sent.order.tenantEmail ? "The tenant has been told. " : ""}Now the landlord.`
+                ? `${sent.to ? "They'll arrange a time with the tenants. " : ""}${tellTenants && onJob.some((t) => t.email) ? "The tenants have been told. " : ""}${landlordSkipped ? "" : "Now the landlord."}`
                 : sent.to
                   ? "They'll arrange a time with the tenants and tell us the date."
                   : "Pick a contractor on the job when you're ready."}
@@ -334,7 +361,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted">{kind === "repair" ? "Repair" : "Planned maintenance"}</p>
-            <h2 className="mt-1 text-[22px] leading-tight">{kind === "repair" ? "Report a repair" : "Plan a job"}</h2>
+            <h2 className="mt-1 text-[22px] leading-tight">{kind === "repair" ? "Report a repair" : "Plan a certificate"}</h2>
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted hover:text-ink">✕</button>
         </div>
@@ -354,7 +381,6 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
             if (e.key !== "Enter" || (e.target as HTMLElement).tagName !== "INPUT") return;
             e.preventDefault();
             if (!last) go(1);
-            else if (!planned) void raise();
           } : undefined}
         >
           {stepped && (
@@ -409,9 +435,9 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
           </div>
           )}
 
-          {at("what") && planned && (
+          {at("what") && (
           <div className="sm:col-span-2">
-            <label className={label}>Category <span className="font-normal normal-case tracking-normal">- tick as many as the visit covers</span></label>
+            <label className={label}>Category <span className="font-normal normal-case tracking-normal">- {planned ? "tick as many as the visit covers" : "type to find, tick as many as it needs"}</span></label>
             <div className="mt-1 grid gap-2 sm:grid-cols-2 sm:gap-5">
               <FieldMultiSelect values={picks} onChange={(v) => setCategory(joinCategories(v))} options={cats.map((c) => ({ value: c, label: c }))} placeholder="Choose the categories" />
               <ul className="flex flex-wrap content-start gap-1.5" aria-label="Chosen categories">
@@ -429,15 +455,8 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
           </div>
           )}
 
-          {at("what") && kind === "repair" && (
-          <div>
-            <label className={label}>Category</label>
-            <FieldSelect className="mt-1" value={category} onChange={setCategory} options={cats.map((c) => ({ value: c, label: c }))} />
-          </div>
-          )}
-
           {at("urgency") && kind === "repair" && (
-            <div>
+            <div className="sm:col-span-2">
               <label className={label}>How urgent</label>
               <div className="mt-1 flex gap-1.5">
                 {URGENCIES.map((u) => (
@@ -479,7 +498,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
           </div>
           )}
 
-          {at("when") && planned && (
+          {at(planned ? "when" : "urgency") && (
             <div className="grid gap-x-5 gap-y-4 sm:col-span-2 sm:grid-cols-2">
               <div>
                 <label className={label}>Contractor</label>
@@ -501,7 +520,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
                     <button type="button" onClick={() => setAddingContractor(false)} aria-label="Close" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line/80 text-[12px] text-muted hover:text-ink">✕</button>
                   </div>
                   <ContractorForm
-                    initial={{ trade: picks.map((c) => CATEGORY_TRADE[c]).find(Boolean) ?? "" }}
+                    initial={{ trade: picks.map((c) => CATEGORY_TRADE[c] ?? (planned ? "" : c)).find(Boolean) ?? "" }}
                     canCorporate={false}
                     onClose={() => setAddingContractor(false)}
                     onSaved={(c) => { setAdded((cur) => [c, ...cur.filter((x) => x.id !== c.id)]); setContractorId(c.id); setAddingContractor(false); }}
@@ -511,8 +530,8 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
             </div>
           )}
 
-          {/* ── the tenants: every one on a planned job, the one who rang on a repair ── */}
-          {at("tenant") && planned && (
+          {/* ── the tenants: every one in the house, on either kind of job ── */}
+          {at("tenant") && (
             <div className="sm:col-span-2">
               <label className={label}>{rows.length > 1 ? `Tenants on the works order (${onJob.length} of ${rows.length})` : "Tenant on the works order"}</label>
               {rows.length > 0 && (
@@ -544,33 +563,28 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
               ) : (
                 <button type="button" onClick={() => setAdding({ name: "", phone: "", email: "" })} className="mt-2 rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12px] hover:border-ink/40">+ Add someone</button>
               )}
-              <p className={hint}>On a planned job the tenants aren&apos;t emailed by us. The contractor rings them, and you can send them the booking once it&apos;s made.</p>
+              {planned && <p className={hint}>On a planned job the tenants aren&apos;t emailed by us. The contractor rings them, and you can send them the booking once it&apos;s made.</p>}
             </div>
           )}
-          {at("tenant") && !planned && tenants.length > 1 && (
-            <div className="sm:col-span-2">
+          {at("tenant") && !planned && reportedBy === "Tenant" && onJobCount > 1 && (
+            <div>
               <label className={label}>Which of them reported it</label>
-              <FieldSelect className="mt-1" value={String(whichTenant)} onChange={(v) => chooseTenant(tenants, Number(v))} options={tenants.map((t, i) => ({ value: String(i), label: t.name, sub: [t.room, t.phone, t.email].filter(Boolean).join(" · ") }))} />
-              <p className={hint}>{tenants.length} tenants on this home. The one you pick is who the emails go to.</p>
+              <FieldSelect className="mt-1" value={String(lead)} onChange={(v) => setReporter(Number(v))} options={ticked.map((t, i) => ({ value: String(i), label: t.name || "No name", sub: [t.room, t.phone, t.email].filter(Boolean).join(" · ") }))} />
+              <p className={hint}>They&apos;re the job&apos;s lead tenant: the booking and the follow-up go to them.</p>
             </div>
           )}
           {at("tenant") && !planned && (
-          <div>
-            <label className={label}>Tenant</label>
-            <input value={tenant} onChange={(e) => setTenant(e.target.value)} placeholder="Their name" className={`mt-1 ${field}`} />
-          </div>
-          )}
-          {at("tenant") && !planned && (
-          <div>
-            <label className={label}>Tenant&apos;s number</label>
-            <input value={tenantPhone} onChange={(e) => setTenantPhone(e.target.value)} placeholder="For access" className={`mt-1 ${field}`} />
-          </div>
-          )}
-          {at("tenant") && !planned && (
-          <div>
-            <label className={label}>Tenant&apos;s email</label>
-            <input type="email" value={tenantEmail} onChange={(e) => setTenantEmail(e.target.value)} placeholder="So they're told at each step" className={`mt-1 ${field}`} />
-          </div>
+            <label className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 sm:col-span-2 ${tellTenants ? "border-accent-dark/50 bg-accent-soft/30" : "border-line/70 bg-white"}`}>
+              <input type="checkbox" checked={tellTenants} onChange={(e) => setTellTenants(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--accent-dark)]" />
+              <span className="min-w-0">
+                <span className="block text-[13px] font-semibold">Let the tenants know</span>
+                <span className="mt-0.5 block text-[11.5px] leading-snug text-muted">
+                  {tellTenants
+                    ? `Everyone ticked with an email gets a short note: we've had the report${contractor ? ` and ${contractor.name} will be in touch to arrange a time` : ""}. They never see the works order or its notes.`
+                    : "A discreet job: nothing automatic goes to the tenants about it, now or later."}
+                </span>
+              </span>
+            </label>
           )}
           {at("tenant") && (
           <div className="sm:col-span-2">
@@ -580,7 +594,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
           )}
 
           {/* ── the landlord, or skipped ── */}
-          {at("landlord") && planned && landlordSkipped ? (
+          {at("landlord") && landlordSkipped ? (
             <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-line bg-white px-4 py-3 sm:col-span-2">
               <p className="text-[12.5px]"><strong>Skipped.</strong> {landlordName || "The landlord"} isn&apos;t involved and won&apos;t be emailed about this job.</p>
               <button type="button" onClick={() => setLandlordSkipped(false)} className="shrink-0 text-[12px] text-muted underline underline-offset-2 hover:text-ink">Undo</button>
@@ -619,13 +633,16 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
           {stepped && at("check") && (
             <dl className="divide-y divide-line/50 overflow-hidden rounded-xl border border-line/60 bg-white text-[12.5px] sm:col-span-2">
               {([
+                ["Property", "property", [picked ? `${picked.name}${picked.locality ? `, ${picked.locality}` : ""}` : manual.trim() || "—"].join("")],
                 [steps.find((x) => x.id === "what")!.title, "what", [title || "—", category, description].filter(Boolean).join(" · ")],
                 kind === "repair"
-                  ? ["How urgent", "urgency", `${URGENCIES.find((u) => u.id === urgency)?.label ?? urgency} · reported by ${reportedBy.toLowerCase()}`]
+                  ? ["Urgency and contractor", "urgency", [URGENCIES.find((u) => u.id === urgency)?.label ?? urgency, `reported by ${reportedBy.toLowerCase()}`, contractor?.name ?? "no contractor yet", scheduledAt ? `booked ${sayDate(scheduledAt, true)}` : null].filter(Boolean).join(" · ")]
                   : ["Expiry and contractor", "when", [dueAt ? `expires ${sayDate(dueAt)}` : "—", contractor?.name ?? "no contractor yet", scheduledAt ? `booked ${sayDate(scheduledAt, true)}` : null].filter(Boolean).join(" · ")],
-                planned
-                  ? ["Tenants", "tenant", [onJob.length ? onJob.map((t) => `${t.name}${t.room ? ` (${t.room})` : ""}`).join(", ") : "none on the works order", access ? `access: ${access}` : null].filter(Boolean).join(" · ")]
-                  : ["Tenant", "tenant", [tenant || "—", tenantEmail ? `emailed at ${tenantEmail}` : "not emailed", access ? `access: ${access}` : null].filter(Boolean).join(" · ")],
+                ["Tenants", "tenant", [
+                  onJob.length ? onJob.map((t) => `${t.name}${t.room ? ` (${t.room})` : ""}`).join(", ") : "none on the works order",
+                  planned ? null : tellTenants ? (onJob.some((t) => t.email) ? "told a contractor is coming" : "no emails to tell them") : "not told - discreet",
+                  access ? `access: ${access}` : null,
+                ].filter(Boolean).join(" · ")],
                 ["Landlord", "landlord", landlordSkipped ? "Skipped - not involved, not emailed" : [landlordName || "—", landlordEmail ? `emailed at ${landlordEmail}` : "not emailed", landlordMobile || null].filter(Boolean).join(" · ")],
               ] as [string, Group, string][]).map(([k, g, v]) => (
                 <div key={g} className="flex items-start gap-3 px-3.5 py-2.5">
@@ -665,11 +682,11 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
         {err && <p className="mt-4 text-[12.5px] text-accent-dark">{err}</p>}
         {stepped && !last ? (
           <div className="mt-5 flex items-center justify-between gap-2">
-            <button type="button" onClick={() => (step === 0 ? onClose() : go(-1))} className="rounded-full border border-line/80 bg-white px-4 py-2 text-[12.5px] text-muted hover:text-ink">
-              {step === 0 ? "Cancel" : "Back"}
+            <button type="button" onClick={() => (moving ? backToCheck() : step === 0 ? onClose() : go(-1))} className="rounded-full border border-line/80 bg-white px-4 py-2 text-[12.5px] text-muted hover:text-ink">
+              {step === 0 && !moving ? "Cancel" : "Back"}
             </button>
             <span className="flex items-center gap-2">
-              {planned && here.id === "landlord" && !landlordSkipped && (
+              {here.id === "landlord" && !landlordSkipped && (
                 <button type="button" onClick={skipLandlord} className="rounded-full border border-line/80 bg-white px-4 py-2 text-[12.5px] hover:border-ink/40" title="They aren't involved: no emails to them about this job">
                   Skip the landlord
                 </button>
@@ -684,8 +701,8 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
             <button type="button" onClick={() => (stepped ? go(-1) : onClose())} className="rounded-full border border-line/80 bg-white px-4 py-2 text-[12.5px] text-muted hover:text-ink">{stepped ? "Back" : "Cancel"}</button>
             {canSend && contractorHasEmail ? (
               <span className="flex flex-wrap items-center gap-2">
-                <button type="button" disabled={busy} onClick={() => void raise(false)} className="rounded-full border border-line/80 bg-white px-4 py-2 text-[12.5px] hover:border-ink/40 disabled:opacity-50" title="The job goes on the board; nothing is sent">
-                  Plan it without sending
+                <button type="button" disabled={busy} onClick={() => void raise(false)} className="rounded-full border border-line/80 bg-white px-4 py-2 text-[12.5px] hover:border-ink/40 disabled:opacity-50" title="The job goes on the board; nothing is sent to the contractor">
+                  {planned ? "Plan it without sending" : "Report it without sending"}
                 </button>
                 <PressButton onClick={() => void raise(true)} className={`flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page ${busy ? "opacity-50" : ""}`}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M22 2L11 13" /><path d="M22 2l-7 20-4-9-9-4 20-7z" /></svg>

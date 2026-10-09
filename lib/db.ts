@@ -501,6 +501,9 @@ ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS compliance_told_at      TIM
    agent presses the button, so when that was is kept. */
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenants                 JSONB NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_skipped        BOOLEAN NOT NULL DEFAULT false;
+-- A discreet repair (Lianna, 9 Oct 2026): Let the tenants know was unticked,
+-- so no automatic email goes to any tenant on the job, then or later.
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS quiet_tenants           BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenants_told_booked_at  TIMESTAMPTZ;
 /* The tenant's number on its own (James, 7 Sep 2026: "name, then number
    after"). The tenant column was one string with both in it, which every

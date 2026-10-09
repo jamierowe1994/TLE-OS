@@ -417,7 +417,7 @@ export function CertificateUpload({ o, busy, onCertificate, title = "Add a certi
 function Aftercare({ o, f, setF, move, busy }: StepProps) {
   return (
     <div>
-      <p className="text-[13px]">Done {stamp(o.completedAt)}. The tenant has been asked whether they're happy, with a yes and a no in the email.</p>
+      <p className="text-[13px]">Done {stamp(o.completedAt)}. {o.quietTenants ? "A discreet job, so the tenant wasn't emailed to ask whether they're happy." : "The tenant has been asked whether they're happy, with a yes and a no in the email."}</p>
       <p className="mt-1 text-[11.5px] text-muted">If they tell you on the phone instead, record it here. A no comes back to you either way.</p>
       <input value={f.note ?? ""} onChange={(e) => setF({ ...f, note: e.target.value })} placeholder="What they said (optional)" className={`mt-3 ${field}`} />
       <div className="mt-2 flex flex-wrap gap-2">

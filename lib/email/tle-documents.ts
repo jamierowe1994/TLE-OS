@@ -758,11 +758,15 @@ export const WORKS_CONTRACTOR_ORDER = {
   mode: "blocks",
   blocks: [
     H("wc1", "Works order #{{ref}}"),
-    T("wc2", "Hi {{contractorGreeting}},<br><br>Please could you attend the following for us. Reply to this email with your earliest date, or a quote if the job needs one first."),
+    T("wc2", "Hi {{contractorGreeting}},<br><br>Please could you attend the following for us. The tenants' details are below so you can arrange a time with them directly. If the job needs a quote first, reply to this email with it."),
     T("wc3", "<strong>{{title}}</strong><br>{{address}}<br>{{category}} · {{urgency}} · attend by {{dueBy}}"),
     T("wc4", "{{description}}"),
-    T("wc5", "<strong>Access:</strong> {{access}}<br><strong>Tenant:</strong> {{tenantName}} {{tenantPhone}}"),
+    T("wc5", "<strong>Tenants to arrange access with</strong><br>{{tenantsList}}"),
+    T("wc5a", "<strong>Access notes:</strong> {{access}}"),
     SP("wc6", 8),
+    T("wc6a", "{{bookingLine}}"),
+    BTN("wc6b", "{{buttonLabel}}", "{{contractorLink}}"),
+    SP("wc6c", 8),
     T("wc7", "Please quote works order #{{ref}} on your invoice. Anything over the landlord's pre-authorised spend needs their yes before you go ahead, so send a quote first if it looks like more than a call-out."),
     SP("wc8", 8),
     T("wc9", "Thanks,<br>{{agentName}}<br>The Letting Experts · {{agentPhone}} · {{agentEmail}}"),
@@ -957,6 +961,28 @@ export const WORKS_CONTRACTOR_REPORT = {
 } as const;
 
 /* To the tenant, the moment a contractor says yes (step 5). */
+/**
+ * To every tenant on a repair once a contractor has it (Lianna, 9 Oct 2026):
+ * "send all tenants a notification email so the tenants know One For All
+ * will be contacting them... and it's not a scam". Never the works order,
+ * which can carry notes for the contractor's eyes only. Not "thanks for
+ * reporting it", because in a shared house most of them didn't.
+ */
+export const WORKS_TENANT_NOTICE = {
+  subject: "{{contractorName}} will be in touch about {{title}}",
+  preheader: "A contractor is coming to {{address}}. It's genuinely us.",
+  mode: "blocks",
+  blocks: [
+    H("wtn1", "A contractor is on the way"),
+    T("wtn2", "Hi {{tenantName}},<br><br>We've asked <strong>{{contractorName}}</strong> to sort <strong>{{title}}</strong> at {{address}} (job #{{ref}})."),
+    T("wtn3", "They'll contact you directly to arrange a time to come round. If you're ever unsure whether a call is genuine, ring us on {{agentPhone}} and we'll confirm."),
+    SP("wtn4", 8),
+    T("wtn5", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    FOOT("wtn6", "You're getting this because you live at a property managed by The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
 export const WORKS_TENANT_FOUND = {
   subject: "We've found someone for {{title}}",
   preheader: "{{contractorName}} will be in touch to arrange access.",

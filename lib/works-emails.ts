@@ -265,7 +265,18 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
   const planned = o.kind === "planned";
   const contractorOrder = async () => { if (contractor) out.push(await send(o, planned ? "works-contractor-planned" : "works-contractor-order", contractor.email, vars, me, "contractor")); };
   const contractorBooked = async () => { if (contractor && o.scheduledAt) out.push(await send(o, "works-contractor-booked", contractor.email, vars, me, "contractor")); };
-  const tenantBooked = async () => { if (o.scheduledAt && !planned) out.push(await send(o, "works-tenant-booked", o.tenantEmail, vars, me, "tenant")); };
+  /* A discreet repair (Let the tenants know unticked, Lianna 9 Oct 2026):
+     nothing automatic goes to any tenant on it. */
+  const quiet = !planned && o.quietTenants;
+  const tenantBooked = async () => { if (o.scheduledAt && !planned && !quiet) out.push(await send(o, "works-tenant-booked", o.tenantEmail, vars, me, "tenant")); };
+  /* Every tenant on a repair hears that a contractor will ring them - never
+     the works order, which can carry notes for the contractor only. */
+  const tenantNotice = async () => {
+    if (planned || quiet || !contractor) return;
+    for (const t of tenantsOf(o).filter((x) => x.email.includes("@"))) {
+      out.push(await send(o, "works-tenant-notice", t.email, { ...vars, tenantName: first(t.name) }, me, "tenant"));
+    }
+  };
   /* The landlord's choice, read once and only when a landlord email is due.
      A failed read is the old behaviour - every job - rather than a lost
      approval request. */
@@ -277,14 +288,17 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
 
   switch (action) {
     case "raised":
-      if (o.kind === "repair") out.push(await send(o, "works-tenant-received", o.tenantEmail, vars, me, "tenant"));
-      /* Planned: the works order goes when the agent pressed Send, which is
-         what stamped contractorContactedAt. */
+      /* The works order goes when the agent pressed Send, which is what
+         stamped contractorContactedAt - a repair too, since 9 Oct 2026. */
       if (planned) {
         if (contractor && o.contractorContactedAt) await contractorOrder();
-      } else if (contractor && o.scheduledAt) {
+      } else if (contractor && (o.contractorContactedAt || o.scheduledAt)) {
         await contractorOrder();
-        await tenantBooked();
+        if (o.scheduledAt) await tenantBooked();
+        else await tenantNotice();
+      } else if (!quiet) {
+        /* No contractor yet: the one who reported it hears it's logged. */
+        out.push(await send(o, "works-tenant-received", o.tenantEmail, vars, me, "tenant"));
       }
       break;
     case "tell_landlord":
@@ -299,7 +313,7 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
       /* Together, as James asked: the works order to the contractor and
          "we've found someone" to the tenant, in the same breath. */
       await contractorOrder();
-      if (!planned) out.push(await send(o, "works-tenant-found", o.tenantEmail, vars, me, "tenant"));
+      await tenantNotice();
       break;
     case "tell_tenants_booked":
       /* Every tenant on the job with an address, each greeted by name. */
@@ -310,6 +324,7 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
     case "assign":
       await contractorOrder();
       if (o.scheduledAt) await tenantBooked();
+      else await tenantNotice();
       break;
     case "schedule":
       await contractorBooked();
@@ -325,7 +340,7 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
     case "done":
       /* The done note says what was done; the happy email asks the one
          question. Repairs get the question; a gas safety does not. */
-      if (!planned) out.push(await send(o, "works-tenant-happy", o.tenantEmail, vars, me, "tenant"));
+      if (!planned && !quiet) out.push(await send(o, "works-tenant-happy", o.tenantEmail, vars, me, "tenant"));
       break;
     case "cancel":
       if (contractor) out.push(await send(o, "works-contractor-cancelled", contractor.email, vars, me, "contractor"));

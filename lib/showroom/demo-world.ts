@@ -100,6 +100,7 @@ function blankOrder(over: Partial<WorksOrder> & Pick<WorksOrder, "id" | "ref" | 
     landlordMobile: CAST.landlord.phone,
     tenants: [],
     landlordSkipped: false,
+    quietTenants: false,
     tenantsToldBookedAt: null,
     landlordToldAt: null,
     arranging: null,

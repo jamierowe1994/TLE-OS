@@ -69,6 +69,7 @@ import {
   WORKS_LANDLORD_REPORT,
   WORKS_CONTRACTOR_REPORT,
   WORKS_TENANT_FOUND,
+  WORKS_TENANT_NOTICE,
   WORKS_LANDLORD_ARRANGED,
   WORKS_CONTRACTOR_DONE_REQUEST,
   WORKS_TENANT_HAPPY,
@@ -1154,7 +1155,7 @@ const worksEntry = (id: string, name: string, audience: CatalogEntry["audience"]
   render: (o) => blocks(withSample(o ?? doc, WORKS_SAMPLE), audience)(),
 });
 TLE_EMAILS.push(
-  worksEntry("works-contractor-order", "Works Order to the Contractor", "contractor", "When a contractor is put on a job", "The contractor", "The job sheet by email: what, where, how urgent, access, the tenant to arrange with, and the rule that anything over the landlord's authority needs a quote first.", WORKS_CONTRACTOR_ORDER as unknown as EmailDoc),
+  worksEntry("works-contractor-order", "Works Order to the Contractor", "contractor", "When a contractor is put on a job", "The contractor", "The job sheet by email: what, where, how urgent, every tenant to arrange access with, the button to tell us the date, and the rule that anything over the landlord's authority needs a quote first.", WORKS_CONTRACTOR_ORDER as unknown as EmailDoc),
   worksEntry("works-contractor-planned", "Planned Works Order to the Contractor", "contractor", "When a planned job is sent to a contractor", "The contractor", "A gas safety, an EICR, a boiler service: the job, the date the certificate runs out, every tenant to arrange access with, and the button to tell us the time.", WORKS_CONTRACTOR_PLANNED as unknown as EmailDoc),
   worksEntry("works-contractor-booked", "Booking Confirmed to the Contractor", "contractor", "When a job is booked for a date", "The contractor", "The date, the address, the access. Short, because they have the order already.", WORKS_CONTRACTOR_BOOKED as unknown as EmailDoc),
   worksEntry("works-contractor-cancelled", "Cancelled to the Contractor", "contractor", "When a job with a contractor on it is cancelled", "The contractor", "Don't attend, and why.", WORKS_CONTRACTOR_CANCELLED as unknown as EmailDoc),
@@ -1164,6 +1165,7 @@ TLE_EMAILS.push(
   worksEntry("works-landlord-approval", "Quote for Approval to the Landlord", "landlord", "When a quote comes in over the landlord's authority", "The landlord", "The quote, why we're asking, and a one-word reply to go ahead.", WORKS_LANDLORD_APPROVAL as unknown as EmailDoc),
   worksEntry("works-landlord-report", "Repair Reported to the Landlord", "landlord", "Step 1: when the agent emails the report after ringing", "The landlord", "What the tenant reported, how urgent, and the two ways forward: they arrange it, or we do.", WORKS_LANDLORD_REPORT as unknown as EmailDoc),
   worksEntry("works-contractor-report", "Can You Take This? to the Contractor", "contractor", "Step 4: when the agent contacts a contractor about a job", "The contractor", "The job in brief and a yes-or-no. The works order follows once they say yes.", WORKS_CONTRACTOR_REPORT as unknown as EmailDoc),
+  worksEntry("works-tenant-notice", "A Contractor Will Be in Touch to the Tenants", "tenant", "When a repair goes to a contractor and Let the tenants know is ticked", "Every tenant on the job", "Who is coming and that they'll ring to arrange a time - never the works order or its notes.", WORKS_TENANT_NOTICE as unknown as EmailDoc),
   worksEntry("works-tenant-found", "We've Found Someone to the Tenant", "tenant", "Step 5: the moment a contractor confirms, alongside the works order", "The tenant", "Who's coming, that they'll be in touch to arrange access, and what to do if they aren't.", WORKS_TENANT_FOUND as unknown as EmailDoc),
   worksEntry("works-landlord-arranged", "Arranged to the Landlord", "landlord", "Step 6: once a date is set", "The landlord", "Who's booked and when, and that nothing is needed from them.", WORKS_LANDLORD_ARRANGED as unknown as EmailDoc),
   worksEntry("works-contractor-done-request", "All Done? to the Contractor", "contractor", "Step 7: the day after the booked date", "The contractor", "One page to mark it done, add photos and drop in the invoice, which goes straight to accounts.", WORKS_CONTRACTOR_DONE_REQUEST as unknown as EmailDoc),

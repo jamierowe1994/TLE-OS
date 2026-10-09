@@ -6,6 +6,7 @@
 export type StepOrder = {
   status: string; kind: string; landlordToldAt: string | null; arranging: "landlord" | "us" | null; landlordResolvedAt: string | null;
   contractorId: string | null; contractorConfirmedAt: string | null; scheduledAt: string | null; completedAt: string | null; tenantHappy: "yes" | "no" | null; payee: "contractor" | "agent" | null;
+  landlordSkipped?: boolean;
 };
 
 export const STEPS = [
@@ -28,8 +29,10 @@ export function stepOf(o: StepOrder): StepId {
   if (o.status === "paid") return "closed";
   /* Planned maintenance raised since 8 Oct 2026 is ours to arrange from the
      start (arranging "us"), so it goes straight to the contractor: no landlord
-     to ring about a gas safety (James). Older planned jobs walk the old line. */
-  const ours = o.kind === "planned" && o.arranging === "us";
+     to ring about a gas safety (James). Older planned jobs walk the old line.
+     A repair sent to the contractor as it was raised is ours too (9 Oct 2026),
+     but the landlord still hears about a repair - unless they were skipped. */
+  const ours = o.arranging === "us" && (o.kind === "planned" || o.landlordSkipped === true);
   if (!o.landlordToldAt && !ours) return "tell_landlord";
   if (!o.arranging) return "arranging";
   if (o.arranging === "landlord") return o.landlordResolvedAt ? "closed" : "landlord_follow_up";
