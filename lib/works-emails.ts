@@ -10,6 +10,7 @@ import { isInternalAddress } from "@/lib/email-policy";
 import { pounds, tenantsOf, URGENCIES, type Move, type WorksOrder } from "@/lib/works-orders";
 import type { OsUser } from "@/lib/users";
 import { getLandlordPref, landlordHold } from "@/lib/landlord-prefs";
+import { propertyAgentFor } from "@/lib/works-property-agent";
 
 /**
  * The emails a job sends as it moves: to the contractor, the tenant and the
@@ -44,6 +45,8 @@ export interface SendOutcome {
   reason?: string;
   /** "own mailbox" when it went from the agent's Outlook, "public sender" otherwise. */
   via?: string;
+  /** Who was copied in: the home's agent on a contractor email. */
+  cc?: string;
 }
 
 /**
@@ -147,6 +150,13 @@ async function send(o: WorksOrder, id: string, to: string, vars: Record<string, 
     return { to: who, sent: false, address, reason: e instanceof Error ? e.message : "the email could not be written" };
   }
   if (o.rehearsal) return keep(o.id, who, address, subject, html);
+  /* The home's agent is copied into everything the contractor is sent
+     (James, 9 Oct 2026), so they see the job go out even when the office
+     sends it. Not when they ARE the sender from their own mailbox: it is
+     already in their Sent Items, and a copy to yourself is noise. */
+  const agent = who === "contractor" ? await propertyAgentFor(o).catch(() => null) : null;
+  const ccFor = (fromOwnMailbox: boolean) =>
+    agent && agent.email.toLowerCase() !== address.toLowerCase() && !(fromOwnMailbox && agent.email.toLowerCase() === me.email.trim().toLowerCase()) ? agent : null;
   try {
     const conn = await msConnectionFor(me.id).catch(() => null);
     /* The customer switch as well (18 Sep 2026). This road checked only the
@@ -155,8 +165,9 @@ async function send(o: WorksOrder, id: string, to: string, vars: Record<string, 
        the works sweep comes down this road on a timer. Our own people pass. */
     const mayWrite = isInternalAddress(address) || (await switchOn("customer_email"));
     if (mayWrite && conn?.connected && (await switchOn("assistant_email"))) {
-      await msSendMail(me.id, { to: { email: address }, subject, body: html, rexUserId: me.rexUserId });
-      return { to: who, sent: true, address, via: "own mailbox" };
+      const cc = ccFor(true);
+      await msSendMail(me.id, { to: { email: address }, ...(cc ? { cc: [{ email: cc.email, name: cc.name }] } : {}), subject, body: html, rexUserId: me.rexUserId });
+      return { to: who, sent: true, address, via: "own mailbox", ...(cc ? { cc: cc.name } : {}) };
     }
   } catch (e) {
     if (!(e instanceof MailboxNotConnected)) {
@@ -165,8 +176,9 @@ async function send(o: WorksOrder, id: string, to: string, vars: Record<string, 
     }
   }
   try {
-    await sendEmail({ to: address, subject, html, audience: "customer", replyTo: me.email });
-    return { to: who, sent: true, address, via: "public sender" };
+    const cc = ccFor(false);
+    await sendEmail({ to: address, subject, html, audience: "customer", replyTo: me.email, ...(cc ? { cc: [cc.email] } : {}) });
+    return { to: who, sent: true, address, via: "public sender", ...(cc ? { cc: cc.name } : {}) };
   } catch (e) {
     return { to: who, sent: false, address, reason: e instanceof ResendBlocked ? e.message : e instanceof Error ? e.message : "the email did not send" };
   }
@@ -344,6 +356,6 @@ export function outcomeLine(s: SendOutcome): string {
   const who = s.to === "accounts" ? "Accounts" : s.to === "compliance" ? "Compliance" : `the ${s.to}`;
   const Who = s.to === "accounts" ? "Accounts'" : s.to === "compliance" ? "Compliance'" : `The ${s.to}'s`;
   if (s.via === "the rehearsal") return `Emailed ${who} at ${s.address} - written and kept here, not sent.`;
-  if (s.sent) return `Emailed ${who} at ${s.address}${s.via === "own mailbox" ? ", from your own mailbox" : ""}.`;
+  if (s.sent) return `Emailed ${who} at ${s.address}${s.via === "own mailbox" ? ", from your own mailbox" : ""}${s.cc ? `, copying ${s.cc} in` : ""}.`;
   return `${office ? `${who} were` : `The ${s.to} was`} not emailed: ${(s.reason ?? "").replace(/\.+$/, "")}.`;
 }

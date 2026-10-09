@@ -149,6 +149,10 @@ export async function sendEmail(msg: {
   html: string;
   text?: string;
   replyTo?: string;
+  /** Copies to OUR OWN people only - the agent on a works order, say. Any
+   *  address that is not internal is dropped here, so a copy can never be the
+   *  way a customer email slips past the rules above. */
+  cc?: string[];
   /** Who this is for. "customer" goes out on the public sender and may reach
    *  anyone; "internal" (the default) keeps the OS domain and its guard. */
   audience?: Audience;
@@ -214,6 +218,8 @@ export async function sendEmail(msg: {
     throw new ResendBlocked("The email needs a subject and a body.");
   }
 
+  const cc = (msg.cc ?? []).map((a) => a.trim()).filter((a) => a.includes("@") && isInternalAddress(a) && a.toLowerCase() !== to.toLowerCase());
+
   const res = await fetch(API, {
     method: "POST",
     headers: {
@@ -227,6 +233,7 @@ export async function sendEmail(msg: {
       html: msg.html,
       ...(msg.text ? { text: msg.text } : {}),
       ...(msg.replyTo ? { reply_to: msg.replyTo } : {}),
+      ...(cc.length ? { cc } : {}),
       ...(msg.attachments?.length ? { attachments: msg.attachments } : {}),
     }),
     signal: AbortSignal.timeout(20_000),

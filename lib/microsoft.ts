@@ -338,6 +338,8 @@ export interface GraphSend {
   subject: string;
   /** HTML. */
   body: string;
+  /** Copies, shown to the recipient - the agent on a works order (9 Oct 2026). */
+  cc?: { email: string; name?: string }[];
   /** Their REX user id, so the message is BCC'd onto the REX timeline. */
   rexUserId?: string | null;
   /** Files to go with it, base64 - a viewing's calendar file, say. */
@@ -381,6 +383,7 @@ export async function msSendMail(userId: string, msg: GraphSend): Promise<{ bccd
         subject: msg.subject,
         body: { contentType: "HTML", content },
         toRecipients: [{ emailAddress: { address: msg.to.email, name: msg.to.name } }],
+        ...(msg.cc?.length ? { ccRecipients: msg.cc.map((c) => ({ emailAddress: { address: c.email, name: c.name } })) } : {}),
         ...(bcc ? { bccRecipients: [{ emailAddress: { address: bcc } }] } : {}),
         /* Graph wants the type named on every attachment, and the bytes inline.
            Fine for what we send here - a calendar file is under a kilobyte.
