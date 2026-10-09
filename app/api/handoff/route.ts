@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { handoffFor } from "@/lib/deal-handoff";
 import { ensureHandoverTodos, handoverMode, handoversFor, runHandover } from "@/lib/handover";
-import { dealDraftFor, DEAL_TEMPLATES, PAYMENT_SCHEDULES, SERVICE_LEVELS, type DealTerms } from "@/lib/handover-deal";
+import { dealDraftFor, DEAL_TEMPLATES, DEPOSIT_SCHEMES, PAYMENT_SCHEDULES, SERVICE_LEVELS, TENANCY_TYPES, type DealTerms } from "@/lib/handover-deal";
 import { switchOn } from "@/lib/switches";
 import { rexConfigured } from "@/lib/rex";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
       ...handoff,
       mode,
       runs,
-      deal: draft ? { ...draft, templates: DEAL_TEMPLATES, services: SERVICE_LEVELS, schedules: PAYMENT_SCHEDULES } : null,
+      deal: draft ? { ...draft, templates: DEAL_TEMPLATES, services: SERVICE_LEVELS, schedules: PAYMENT_SCHEDULES, tenancyTypes: TENANCY_TYPES, schemes: DEPOSIT_SCHEMES } : null,
     });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 502 });

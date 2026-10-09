@@ -22,17 +22,25 @@ import { isHmoType, isScottish } from "@/lib/property-flags";
  *   - service level: full_managed, tenant_find, rent_collect.
  *   - payment schedule: monthly, upfront_and_monthly.
  *
- * TWO VALUES PROPOLY WILL NOT SHOW US. The tenancy type appears on no deal,
- * and checking it needs a real property (Propoly looks the property up
- * before anything else, so a made-up one tells us nothing). The deposit
- * scheme is not on a deal either. Both come from Railway -
- * PROPOLY_DEAL_TENANCY_TYPE and PROPOLY_DEAL_DEPOSIT_SCHEME (and
- * _SCOTLAND if Scotland differs) - and until they are set the deal step
- * says so and the agent starts the deal by hand, as before.
+ * PROVEN ON A TEST HOME, 9 Oct 2026 ("TLE OS TEST - DELETE ME, 1 Test
+ * Street", deals 6d9e7a20 and e6231dec). What Propoly actually takes:
+ *   - the fields wrapped in { deal: {...} }. Sent flat, a real property
+ *     answers "Missing required fields: property_id".
+ *   - tenancy_type: assured_periodic_tenancy, renewal, non_assured_tenancy,
+ *     company_let, licence, scottish_tenancy (Propoly's own list).
+ *   - tenancy_service_level: managed, rent_collection, letting_only - NOT
+ *     the full_managed / tenant_find / rent_collect a deal reads back as.
+ *   - deposit_protection_scheme: tds_custodial, tds_insured, dps_custodial,
+ *     dps_insured, my_deposits_custodial, my_deposits_insured.
+ *   - ast_template: the name as /configuration/tenancy_agreements gives it.
+ *   - holding_fee_pence and deposit_pence are kept.
+ * A landlord related to the property lands on the deal by itself. Propoly
+ * also adds its Flatfair "DEPOSIT REPLACEMENT" clause to every deal made
+ * this way, and extra_clauses: [] does not stop it - the run says so, and
+ * it is taken off in Propoly when the tenant is not using Flatfair.
  *
- * Holding fee and deposit go as holding_fee_pence and deposit_pence, the
- * names the deal hands back when read. Propoly does not list them as
- * required, so whether it keeps them is checked by reading the deal back.
+ * Which deposit scheme a let uses is the agent's to say; the office's usual
+ * one comes from PROPOLY_DEAL_DEPOSIT_SCHEME on Railway as the starting value.
  */
 
 type Row = Record<string, unknown>;
@@ -54,6 +62,33 @@ export const SERVICE_LEVELS = {
 } as const;
 export type ServiceLevel = keyof typeof SERVICE_LEVELS;
 
+/** What the deal reads back as → what Propoly takes when it is made. */
+const SERVICE_ON_WRITE: Record<ServiceLevel, string> = {
+  full_managed: "managed",
+  tenant_find: "letting_only",
+  rent_collect: "rent_collection",
+};
+
+export const TENANCY_TYPES = {
+  assured_periodic_tenancy: "Assured periodic",
+  scottish_tenancy: "Scottish tenancy",
+  company_let: "Company let",
+  non_assured_tenancy: "Non-assured",
+  licence: "Licence",
+  renewal: "Renewal",
+} as const;
+export type TenancyType = keyof typeof TENANCY_TYPES;
+
+export const DEPOSIT_SCHEMES = {
+  tds_custodial: "TDS Custodial",
+  tds_insured: "TDS Insured",
+  dps_custodial: "DPS Custodial",
+  dps_insured: "DPS Insured",
+  my_deposits_custodial: "My Deposits Custodial",
+  my_deposits_insured: "My Deposits Insured",
+} as const;
+export type DepositScheme = keyof typeof DEPOSIT_SCHEMES;
+
 export const PAYMENT_SCHEDULES = {
   monthly: "Monthly",
   upfront_and_monthly: "Upfront, then monthly",
@@ -68,6 +103,8 @@ export interface DealTerms {
   template: string;
   serviceLevel: ServiceLevel | null;
   paymentSchedule: PaymentSchedule;
+  tenancyType: TenancyType;
+  depositScheme: DepositScheme | null;
   depositPounds: number | null;
   /** None in Scotland; otherwise one week's rent, rounded down to the penny. */
   holdingFeePounds: number | null;
@@ -113,6 +150,8 @@ export function dealDefaults(packet: Handoff, listing: Row): DealTerms {
     template: scotland ? (hmo ? "Propoly HMO Scotland Lease" : "Propoly Scotland Lease") : "Standard Propoly APT",
     serviceLevel: serviceOf(listing),
     paymentSchedule: "monthly",
+    tenancyType: scotland ? "scottish_tenancy" : "assured_periodic_tenancy",
+    depositScheme: officeScheme(),
     depositPounds: Number.isFinite(bond) && bond > 0 ? bond : null,
     holdingFeePounds: holdingFeeFor(packet.rentPcm, scotland),
     scotland,
@@ -131,6 +170,8 @@ export function withChanges(base: DealTerms, change: Partial<DealTerms> | null |
   if (typeof change.template === "string" && (DEAL_TEMPLATES as readonly string[]).includes(change.template)) out.template = change.template;
   if (typeof change.serviceLevel === "string" && change.serviceLevel in SERVICE_LEVELS) out.serviceLevel = change.serviceLevel;
   if (typeof change.paymentSchedule === "string" && change.paymentSchedule in PAYMENT_SCHEDULES) out.paymentSchedule = change.paymentSchedule;
+  if (typeof change.tenancyType === "string" && change.tenancyType in TENANCY_TYPES) out.tenancyType = change.tenancyType;
+  if (typeof change.depositScheme === "string" && change.depositScheme in DEPOSIT_SCHEMES) out.depositScheme = change.depositScheme;
   const dep = money(change.depositPounds);
   if (dep !== undefined) out.depositPounds = dep;
   /* The holding fee follows the rent; it is never typed. */
@@ -138,45 +179,44 @@ export function withChanges(base: DealTerms, change: Partial<DealTerms> | null |
   return out;
 }
 
-/** The two values from Railway. Null when unset. */
-export function dealConfig(scotland: boolean): { tenancyType: string | null; depositScheme: string | null } {
-  const env = (k: string) => (process.env[k] ?? "").trim() || null;
-  return {
-    tenancyType: (scotland ? env("PROPOLY_DEAL_TENANCY_TYPE_SCOTLAND") : null) ?? env("PROPOLY_DEAL_TENANCY_TYPE"),
-    depositScheme: (scotland ? env("PROPOLY_DEAL_DEPOSIT_SCHEME_SCOTLAND") : null) ?? env("PROPOLY_DEAL_DEPOSIT_SCHEME"),
-  };
+/**
+ * The office's usual scheme, from Railway. Takes Propoly's key
+ * ("tds_custodial") or its label ("TDS Custodial"); anything else is ignored.
+ */
+function officeScheme(): DepositScheme | null {
+  const raw = (process.env.PROPOLY_DEAL_DEPOSIT_SCHEME ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  return raw in DEPOSIT_SCHEMES ? (raw as DepositScheme) : null;
 }
 
 /** What stops the deal being started, in plain words. Empty = ready. */
 export function dealProblems(t: DealTerms): string[] {
-  const cfg = dealConfig(t.scotland);
   const out: string[] = [];
   if (!t.rentPcm) out.push("No agreed rent.");
   if (!t.moveIn) out.push("No move-in date.");
   if (!t.termMonths) out.push("No term.");
   if (!t.serviceLevel) out.push("No service level: pick fully managed, tenant find or rent collect.");
-  if (!cfg.tenancyType) out.push("The tenancy type for Propoly isn't set yet (PROPOLY_DEAL_TENANCY_TYPE on Railway).");
-  if (!cfg.depositScheme) out.push("The deposit scheme for Propoly isn't set yet (PROPOLY_DEAL_DEPOSIT_SCHEME on Railway).");
+  if (!t.depositScheme) out.push("No deposit scheme picked.");
   return out;
 }
 
-/** The POST /api/v1/deals body. Flat: Propoly reads the fields at the top. */
+/** The POST /api/v1/deals body, wrapped as Propoly needs it. */
 export function dealPayload(t: DealTerms, propertyUuid: string, managedBy: string): Record<string, unknown> {
-  const cfg = dealConfig(t.scotland);
   const pence = (p: number | null) => (p == null ? undefined : Math.round(p * 100));
   return {
-    property_id: propertyUuid,
-    managed_by_user_id: managedBy,
-    term_months: t.termMonths,
-    price_pcm_pence: pence(t.rentPcm),
-    move_in_date: t.moveIn,
-    ast_template: t.template,
-    deposit_protection_scheme: cfg.depositScheme,
-    tenancy_type: cfg.tenancyType,
-    tenancy_service_level: t.serviceLevel,
-    payment_schedule: t.paymentSchedule,
-    deposit_pence: pence(t.depositPounds),
-    holding_fee_pence: pence(t.holdingFeePounds),
+    deal: {
+      property_id: propertyUuid,
+      managed_by_user_id: managedBy,
+      term_months: t.termMonths,
+      price_pcm_pence: pence(t.rentPcm),
+      move_in_date: t.moveIn,
+      ast_template: t.template,
+      deposit_protection_scheme: t.depositScheme,
+      tenancy_type: t.tenancyType,
+      tenancy_service_level: t.serviceLevel ? SERVICE_ON_WRITE[t.serviceLevel] : null,
+      payment_schedule: t.paymentSchedule,
+      deposit_pence: pence(t.depositPounds),
+      holding_fee_pence: pence(t.holdingFeePounds),
+    },
   };
 }
 

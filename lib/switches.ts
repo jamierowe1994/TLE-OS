@@ -269,8 +269,8 @@ export const SWITCHES: Switch[] = [
      */
     key: "handover_deal",
     label: "Push to Propoly also starts the deal and adds the tenants",
-    what: "After the landlord and the home, Push to Propoly creates the Propoly deal from the accepted offer (rent, move-in, term, agreement template, service level, deposit scheme) and adds each tenant to it. Never a second deal: a live deal already on the home is used instead. Needs PROPOLY_DEAL_TENANCY_TYPE and PROPOLY_DEAL_DEPOSIT_SCHEME on Railway.",
-    who: "Propoly is WRITTEN TO: a deal and its tenants. Propoly may email the tenants itself, as it does when a deal is keyed in by hand. Handover (above) must be on too.",
+    what: "After the landlord and the home, Push to Propoly creates the Propoly deal from the accepted offer (rent, move-in, term, tenancy type, agreement, service level, deposit scheme, holding fee) and adds each tenant to it; the landlord comes with the home. Never a second deal: a live deal already on the home is used instead. PROPOLY_DEAL_DEPOSIT_SCHEME on Railway sets the usual deposit scheme the agent starts from.",
+    who: "Propoly is WRITTEN TO: a deal and its tenants. Propoly may email the tenants itself, as it does when a deal is keyed in by hand, and adds its Flatfair clause to each deal (the agent takes it off if not used). Handover (above) must be on too.",
     confirm: "START DEALS",
     legacyEnv: "HANDOVER_DEAL",
     legacyOn: "on",

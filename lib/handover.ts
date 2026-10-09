@@ -12,7 +12,7 @@ import { createUpdate, type UpdateRecipient } from "@/lib/customer-updates";
 import { userByName } from "@/lib/tenant-email-send";
 import { isScottish } from "@/lib/property-flags";
 import { parseAddress, postcodeOf, sameHome } from "@/lib/address-parse";
-import { dealDefaults, dealPayload, dealProblems, withChanges, type DealTerms } from "@/lib/handover-deal";
+import { DEPOSIT_SCHEMES, TENANCY_TYPES, dealDefaults, dealPayload, dealProblems, withChanges, type DealTerms } from "@/lib/handover-deal";
 import { refreshPropolyDealsNow } from "@/lib/business/propoly-deals";
 
 /**
@@ -647,6 +647,8 @@ function termWords(t: DealTerms): string {
     `${t.termMonths ?? "?"} months`,
     t.template,
     t.serviceLevel ? t.serviceLevel.replace(/_/g, " ") : "no service level",
+    TENANCY_TYPES[t.tenancyType],
+    t.depositScheme ? DEPOSIT_SCHEMES[t.depositScheme] : "no deposit scheme",
     `holding fee ${pounds(t.holdingFeePounds)}`,
     `deposit ${pounds(t.depositPounds)}`,
   ].join(", ");
@@ -728,21 +730,9 @@ async function pushDeal(
   /* 3. A new deal. */
   if (!dealUuid) {
     const problems = dealProblems(terms);
-    /* The two Railway values are the office's to set, not the agent's: until
-       they are, the deal is started by hand as before and the push is not
-       held up for it. */
-    const officeOnly = problems.length > 0 && problems.every((p) => /Railway/.test(p));
     if (problems.length) {
-      await rec.add({
-        id: "deal",
-        label,
-        state: officeOnly ? "skipped" : o.live ? "blocked" : "would",
-        detail: officeOnly
-          ? `Start the deal in Propoly by hand for now. ${problems.join(" ")}`
-          : `The deal can't be started yet: ${problems.join(" ")}`,
-        request: { terms },
-      });
-      return officeOnly ? "ok" : o.live ? "blocked" : "would";
+      await rec.add({ id: "deal", label, state: o.live ? "blocked" : "would", detail: `The deal can't be started yet: ${problems.join(" ")}`, request: { terms } });
+      return o.live ? "blocked" : "would";
     }
     if (!realProperty) {
       await rec.add({ id: "deal", label, state: o.live ? "skipped" : "would", detail: o.live ? "Skipped: the home isn't in Propoly, so there is nothing to start a deal on." : `Would start the deal: ${termWords(terms)}.`, request: { terms } });
@@ -796,7 +786,8 @@ async function pushDeal(
     }
     const contact = t.contactId ? await rexCall("Contacts", "read", { id: t.contactId }).catch(() => null) : null;
     const cc = ((contact?.ok ? contact.result : null) ?? {}) as Row;
-    const payload = { deal_id: dealUuid, deal_uuid: dealUuid, tenant: { user_attributes: tenantAttributes(cc, t) } };
+    /* reference_required: every deal keyed by hand has it on (9 Oct 2026). */
+    const payload = { deal_id: dealUuid, deal_uuid: dealUuid, tenant: { user_attributes: tenantAttributes(cc, t), reference_required: true } };
     const res = await propolyPost("/api/v1/tenants", payload);
     if (res.status >= 200 && res.status < 300) {
       await rec.add({ id: sid, label: tlabel, state: "ok", detail: "Added to the deal.", request: payload, response: res.body });
@@ -816,12 +807,17 @@ async function pushDeal(
     if (str(tm.move_in_date) && terms.moveIn && str(tm.move_in_date)?.slice(0, 10) !== terms.moveIn) differs.push(`move-in is ${dayOf(str(tm.move_in_date))}`);
     if (!found && terms.holdingFeePounds && !p(tm.holding_fee_pence)) differs.push("no holding fee is set");
     const tenants = ((after.tenants ?? []) as Row[]).length;
+    /* Propoly puts its Flatfair clause on every deal made from here. */
+    const flatfair = !found && ((after.extra_clauses ?? []) as unknown[]).some((c) => /deposit replacement|flatfair/i.test(String(c ?? "")));
+    if (flatfair) differs.push("Propoly added its Flatfair deposit replacement clause - take it off unless they're using Flatfair");
+    const landlordsOn = ((after.landlords ?? []) as Row[]).length;
+    if (!landlordsOn) differs.push("no landlord is on the deal");
     await rec.add({
       id: "deal-check",
       label: "The deal as Propoly holds it",
       state: "ok",
       detail:
-        `${pounds(p(tm.price_pcm_pence))} pcm, moving in ${dayOf(str(tm.move_in_date))}, holding fee ${pounds(p(tm.holding_fee_pence))}, deposit ${pounds(p(tm.deposit_pence))}, ${tenants} tenant${tenants === 1 ? "" : "s"}.` +
+        `${pounds(p(tm.price_pcm_pence))} pcm, moving in ${dayOf(str(tm.move_in_date))}, holding fee ${pounds(p(tm.holding_fee_pence))}, deposit ${pounds(p(tm.deposit_pence))}, ${landlordsOn} landlord${landlordsOn === 1 ? "" : "s"}, ${tenants} tenant${tenants === 1 ? "" : "s"}.` +
         (differs.length ? ` Check in Propoly: ${differs.join("; ")}.` : ""),
       response: { uuid: dealUuid },
     });

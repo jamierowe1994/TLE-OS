@@ -42,6 +42,8 @@ type DealTerms = {
   template: string;
   serviceLevel: string | null;
   paymentSchedule: string;
+  tenancyType: string;
+  depositScheme: string | null;
   depositPounds: number | null;
   holdingFeePounds: number | null;
   scotland: boolean;
@@ -52,6 +54,8 @@ type DealDraft = {
   templates: string[];
   services: Record<string, string>;
   schedules: Record<string, string>;
+  tenancyTypes: Record<string, string>;
+  schemes: Record<string, string>;
 };
 type Party = { name: string; email: string | null; phone: string | null };
 
@@ -124,9 +128,9 @@ export default function NextStepCard({
     ...(terms && !terms.moveIn ? ["Add the move-in date."] : []),
     ...(terms && !terms.termMonths ? ["Add the term."] : []),
     ...(terms && !terms.serviceLevel ? ["Pick the service."] : []),
+    ...(terms && !terms.depositScheme ? ["Pick the deposit scheme."] : []),
     ...tenants.filter((t) => !t.email).map((t) => `${t.name} has no email, and Propoly needs one.`),
   ];
-  const officeProblems = (draft?.problems ?? []).filter((p) => /Railway/.test(p));
   const dealStarted = priorDeal || Boolean(run?.mode === "live" && run.steps.some((x) => x.id === "deal" && x.state === "ok"));
 
   async function push(extra: { propertyUuid?: string; newProperty?: boolean } = {}) {
@@ -136,7 +140,7 @@ export default function NextStepCard({
       const r = await fetch("/api/handoff", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ applicationId, ...extra, ...(terms && !officeProblems.length && !dealStarted ? { deal: terms } : {}) }),
+        body: JSON.stringify({ applicationId, ...extra, ...(terms && !dealStarted ? { deal: terms } : {}) }),
       });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; run?: Run };
       if (j.run) {
@@ -229,11 +233,6 @@ export default function NextStepCard({
               {!match && terms && !dealStarted && (
                 <div className="mb-3 rounded-2xl border border-line/60 bg-accent-soft/25 p-4" data-steve="application.deal-terms">
                   <p className="text-[13px] font-semibold">The Deal It Will Start in Propoly</p>
-                  {officeProblems.length ? (
-                    <p className="mt-1 text-[12px] leading-snug text-muted">
-                      Not yet: the office still has to finish setting this up, so the landlord and the home go over and you start the deal in Propoly as before.
-                    </p>
-                  ) : (
                     <>
                       <p className="mt-0.5 text-[12px] leading-snug text-muted">From the accepted offer. Check it - Propoly builds the agreement from this.</p>
                       <div className="mt-3 grid grid-cols-2 gap-2.5 text-[12px]">
@@ -258,6 +257,23 @@ export default function NextStepCard({
                           <select value={terms.template} onChange={(e) => set("template", e.target.value)} className="rounded-lg border border-line/70 bg-white px-2.5 py-1.5">
                             {(draft?.templates ?? []).map((t) => (
                               <option key={t} value={t}>{t}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="flex flex-col gap-1">
+                          <span className="text-muted">Tenancy</span>
+                          <select value={terms.tenancyType} onChange={(e) => set("tenancyType", e.target.value)} className="rounded-lg border border-line/70 bg-white px-2.5 py-1.5">
+                            {Object.entries(draft?.tenancyTypes ?? {}).map(([k, v]) => (
+                              <option key={k} value={k}>{v}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="flex flex-col gap-1">
+                          <span className="text-muted">Deposit scheme</span>
+                          <select value={terms.depositScheme ?? ""} onChange={(e) => set("depositScheme", e.target.value || null)} className="rounded-lg border border-line/70 bg-white px-2.5 py-1.5">
+                            <option value="">Pick one</option>
+                            {Object.entries(draft?.schemes ?? {}).map(([k, v]) => (
+                              <option key={k} value={k}>{v}</option>
                             ))}
                           </select>
                         </label>
@@ -294,12 +310,11 @@ export default function NextStepCard({
                       )}
                       {agentProblems.length > 0 && <p className="mt-2 text-[12px] leading-snug text-accent-dark">{agentProblems.join(" ")}</p>}
                     </>
-                  )}
                 </div>
               )}
 
               {!match && (
-                <button type="button" onClick={() => void push()} disabled={pushing || (Boolean(terms) && !dealStarted && !officeProblems.length && agentProblems.length > 0)} className={`${primary} w-full`}>
+                <button type="button" onClick={() => void push()} disabled={pushing || (Boolean(terms) && !dealStarted && agentProblems.length > 0)} className={`${primary} w-full`}>
                   <DoodleIcon name="rocket" size={14} />
                   {pushing ? "Pushing to Propoly…" : "Push to Propoly"}
                 </button>
