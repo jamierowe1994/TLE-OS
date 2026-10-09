@@ -649,8 +649,9 @@ function termWords(t: DealTerms): string {
     t.serviceLevel ? t.serviceLevel.replace(/_/g, " ") : "no service level",
     TENANCY_TYPES[t.tenancyType],
     t.depositScheme ? DEPOSIT_SCHEMES[t.depositScheme] : "no deposit scheme",
+    t.zeroDeposit ? "zero deposit through Flatfair" : "deposit taken",
     `holding fee ${pounds(t.holdingFeePounds)}`,
-    `deposit ${pounds(t.depositPounds)}`,
+    `${t.zeroDeposit ? "Flatfair cover" : "deposit"} ${pounds(t.depositPounds)}`,
   ].join(", ");
 }
 
@@ -807,9 +808,11 @@ async function pushDeal(
     if (str(tm.move_in_date) && terms.moveIn && str(tm.move_in_date)?.slice(0, 10) !== terms.moveIn) differs.push(`move-in is ${dayOf(str(tm.move_in_date))}`);
     if (!found && terms.holdingFeePounds && !p(tm.holding_fee_pence)) differs.push("no holding fee is set");
     const tenants = ((after.tenants ?? []) as Row[]).length;
-    /* Propoly puts its Flatfair clause on every deal made from here. */
-    const flatfair = !found && ((after.extra_clauses ?? []) as unknown[]).some((c) => /deposit replacement|flatfair/i.test(String(c ?? "")));
-    if (flatfair) differs.push("Propoly added its Flatfair deposit replacement clause - take it off unless they're using Flatfair");
+    /* Propoly puts its Flatfair clause on every deal made from here. Right
+       when the landlord opted into zero deposit; otherwise it comes off. */
+    const flatfair = ((after.extra_clauses ?? []) as unknown[]).some((c) => /deposit replacement|flatfair/i.test(String(c ?? "")));
+    if (!found && flatfair && !terms.zeroDeposit) differs.push("Propoly added its Flatfair deposit replacement clause, but the landlord hasn't opted into zero deposit - take it off in Propoly");
+    if (!found && !flatfair && terms.zeroDeposit) differs.push("the landlord opted into zero deposit but the deal has no Flatfair clause - add it in Propoly");
     const landlordsOn = ((after.landlords ?? []) as Row[]).length;
     if (!landlordsOn) differs.push("no landlord is on the deal");
     await rec.add({

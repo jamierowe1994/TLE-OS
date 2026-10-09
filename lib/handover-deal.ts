@@ -39,8 +39,14 @@ import { isHmoType, isScottish } from "@/lib/property-flags";
  * this way, and extra_clauses: [] does not stop it - the run says so, and
  * it is taken off in Propoly when the tenant is not using Flatfair.
  *
- * Which deposit scheme a let uses is the agent's to say; the office's usual
- * one comes from PROPOLY_DEAL_DEPOSIT_SCHEME on Railway as the starting value.
+ * DEPOSITS (James, 9 Oct 2026): "all agents go through Flatfair - if the
+ * landlord opts in, the zero deposit scheme becomes available, and if not,
+ * TDS is the only standard one." So the agent says whether the landlord
+ * opted in; either way the deal carries a TDS scheme (Propoly requires one),
+ * and the Flatfair clause Propoly adds is right only when they did. Nothing
+ * in the OS records the opt-in yet, so it is the agent's tick.
+ * PROPOLY_DEAL_DEPOSIT_SCHEME on Railway picks custodial or insured as the
+ * starting value.
  */
 
 type Row = Record<string, unknown>;
@@ -79,13 +85,11 @@ export const TENANCY_TYPES = {
 } as const;
 export type TenancyType = keyof typeof TENANCY_TYPES;
 
+/* Propoly also takes dps_custodial, dps_insured, my_deposits_custodial and
+   my_deposits_insured; TLE uses TDS only. */
 export const DEPOSIT_SCHEMES = {
   tds_custodial: "TDS Custodial",
   tds_insured: "TDS Insured",
-  dps_custodial: "DPS Custodial",
-  dps_insured: "DPS Insured",
-  my_deposits_custodial: "My Deposits Custodial",
-  my_deposits_insured: "My Deposits Insured",
 } as const;
 export type DepositScheme = keyof typeof DEPOSIT_SCHEMES;
 
@@ -105,6 +109,8 @@ export interface DealTerms {
   paymentSchedule: PaymentSchedule;
   tenancyType: TenancyType;
   depositScheme: DepositScheme | null;
+  /** The landlord opted into Flatfair's zero deposit: the clause stays and the figure is the cover. */
+  zeroDeposit: boolean;
   depositPounds: number | null;
   /** None in Scotland; otherwise one week's rent, rounded down to the penny. */
   holdingFeePounds: number | null;
@@ -152,6 +158,7 @@ export function dealDefaults(packet: Handoff, listing: Row): DealTerms {
     paymentSchedule: "monthly",
     tenancyType: scotland ? "scottish_tenancy" : "assured_periodic_tenancy",
     depositScheme: officeScheme(),
+    zeroDeposit: false,
     depositPounds: Number.isFinite(bond) && bond > 0 ? bond : null,
     holdingFeePounds: holdingFeeFor(packet.rentPcm, scotland),
     scotland,
@@ -172,6 +179,7 @@ export function withChanges(base: DealTerms, change: Partial<DealTerms> | null |
   if (typeof change.paymentSchedule === "string" && change.paymentSchedule in PAYMENT_SCHEDULES) out.paymentSchedule = change.paymentSchedule;
   if (typeof change.tenancyType === "string" && change.tenancyType in TENANCY_TYPES) out.tenancyType = change.tenancyType;
   if (typeof change.depositScheme === "string" && change.depositScheme in DEPOSIT_SCHEMES) out.depositScheme = change.depositScheme;
+  if (typeof change.zeroDeposit === "boolean") out.zeroDeposit = change.zeroDeposit;
   const dep = money(change.depositPounds);
   if (dep !== undefined) out.depositPounds = dep;
   /* The holding fee follows the rent; it is never typed. */

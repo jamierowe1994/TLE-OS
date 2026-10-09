@@ -44,6 +44,7 @@ type DealTerms = {
   paymentSchedule: string;
   tenancyType: string;
   depositScheme: string | null;
+  zeroDeposit: boolean;
   depositPounds: number | null;
   holdingFeePounds: number | null;
   scotland: boolean;
@@ -249,7 +250,7 @@ export default function NextStepCard({
                           <input type="number" min={1} max={60} step={1} value={terms.termMonths ?? ""} onChange={(e) => set("termMonths", e.target.value === "" ? null : Number(e.target.value))} className="rounded-lg border border-line/70 bg-white px-2.5 py-1.5" />
                         </label>
                         <label className="flex flex-col gap-1">
-                          <span className="text-muted">Deposit (£)</span>
+                          <span className="text-muted">{terms.zeroDeposit ? "Flatfair cover (£)" : "Deposit (£)"}</span>
                           <input type="number" min={0} step="0.01" inputMode="decimal" value={terms.depositPounds ?? ""} onChange={(e) => set("depositPounds", e.target.value === "" ? null : Number(e.target.value))} className="rounded-lg border border-line/70 bg-white px-2.5 py-1.5" />
                         </label>
                         <label className="col-span-2 flex flex-col gap-1">
@@ -259,6 +260,15 @@ export default function NextStepCard({
                               <option key={t} value={t}>{t}</option>
                             ))}
                           </select>
+                        </label>
+                        <label className="col-span-2 flex cursor-pointer items-start gap-2.5 rounded-lg border border-line/70 bg-white px-2.5 py-2">
+                          <input type="checkbox" className="mt-0.5" checked={terms.zeroDeposit} onChange={(e) => set("zeroDeposit", e.target.checked)} />
+                          <span>
+                            Landlord opted into zero deposit
+                            <span className="block text-[11px] text-muted">
+                              {terms.zeroDeposit ? "Flatfair instead of a deposit. Propoly's Flatfair clause stays on the deal." : "A deposit held with TDS. Propoly adds its Flatfair clause to every deal - you'll be told to take it off."}
+                            </span>
+                          </span>
                         </label>
                         <label className="flex flex-col gap-1">
                           <span className="text-muted">Tenancy</span>
