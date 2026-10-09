@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
-import { can } from "@/lib/roles";
 import { hasDb, q } from "@/lib/db";
 import { scopeForWho } from "@/lib/scope";
+import { mayOfferOn, NOT_YOURS } from "@/lib/offer-access";
 import { assembled } from "@/lib/applications-board";
 import { rexConfigured } from "@/lib/rex";
 import { isTestId, testOffersForListing } from "@/lib/test-overlay";
@@ -68,7 +68,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const who = hasDb() ? await whoIs(req).catch(() => null) : null;
   const actor = who?.actor ?? null;
-  if (!actor || !can(actor.role, "staff:internal")) return NextResponse.json({ ok: false, error: "Sign in first.", offers: [] }, { status: 401 });
+  if (!actor) return NextResponse.json({ ok: false, error: "Sign in first.", offers: [] }, { status: 401 });
+  /* The office on any listing, an agent on their own (lib/offer-access). */
+  if (!(await mayOfferOn(req, who, listingId))) return NextResponse.json({ ok: false, error: NOT_YOURS, offers: [] }, { status: 403 });
 
   try {
     const offers: ListingOffer[] = [];

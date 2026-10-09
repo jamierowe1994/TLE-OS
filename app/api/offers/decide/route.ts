@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
-import { can } from "@/lib/roles";
+import { mayDecideRexApp, mayOfferOn } from "@/lib/offer-access";
 import { hasDb, q } from "@/lib/db";
 import { clearDecision, isDecisionRef, recordDecision } from "@/lib/offer-decisions";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
@@ -27,8 +27,9 @@ export async function POST(req: NextRequest) {
     if (e instanceof ViewingAsRefused) return NextResponse.json({ ok: false, error: e.message }, { status: 423 });
     throw e;
   }
-  const { actor } = await whoIs(req).catch(() => ({ actor: null }));
-  if (!actor || !can(actor.role, "staff:internal")) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
+  const who = await whoIs(req).catch(() => null);
+  const actor = who?.actor ?? null;
+  if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "This can't be saved on this environment." }, { status: 503 });
 
   const b = (await req.json().catch(() => ({}))) as { ref?: unknown; listingId?: unknown; decision?: unknown };
@@ -48,6 +49,10 @@ export async function POST(req: NextRequest) {
     if (!row[0]) return NextResponse.json({ ok: false, error: "That offer isn't there any more." }, { status: 404 });
     listingId = row[0].listing_id;
   }
+  /* The office on any offer; an agent on the offers on their own listings,
+     and a REX application only when it is in their own scope. */
+  const mine = ref.startsWith("os:") ? await mayOfferOn(req, who, listingId) : await mayDecideRexApp(req, who, ref.slice(4)).catch(() => false);
+  if (!mine) return NextResponse.json({ ok: false, error: "That offer isn't on your book." }, { status: 403 });
 
   try {
     if (decision === "undo") await clearDecision(ref);

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
-import { can } from "@/lib/roles";
+import { offerListingIds } from "@/lib/offer-access";
 import { hasDb, q } from "@/lib/db";
 import { scopeForWho } from "@/lib/scope";
 import { assembled } from "@/lib/applications-board";
@@ -26,7 +26,7 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
   const who = hasDb() ? await whoIs(req).catch(() => null) : null;
   const actor = who?.actor ?? null;
-  if (!actor || !can(actor.role, "staff:internal")) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
+  if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
 
   const byListing: Record<string, number> = {};
   const add = (id: unknown) => {
@@ -53,9 +53,12 @@ export async function GET(req: NextRequest) {
         : Promise.resolve([]),
       testApplicationsFor(actor.email).catch(() => []),
     ]);
+    /* An agent counts only the offers saved on their own listings; the REX
+       half is scoped already, and test offers are their own. */
+    const mine = await offerListingIds(req, who);
     const decided = await decisionsFor(rex.map((a) => `rex:${a.id}`));
     for (const a of rex) if (!decided.has(`rex:${a.id}`)) add(a.listingId);
-    for (const r of os) add(r.listing_id);
+    for (const r of os) if (!mine || mine.has(String(r.listing_id))) add(r.listing_id);
     for (const t of tests) if (t.status === "received" || t.status === "communicated") add(t.listingId);
     const total = Object.values(byListing).reduce((n, x) => n + x, 0);
     return NextResponse.json({ ok: true, byListing, total });
