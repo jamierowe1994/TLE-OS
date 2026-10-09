@@ -248,7 +248,12 @@ export async function runHandover(
     const listing = (listingRes.result ?? {}) as Row;
     const related = (listing.related ?? {}) as Row;
     const owners = ((related.contact_reln_listing ?? []) as Row[])
-      .filter((r) => str((r.reln_type as Row | null)?.id) === "owner")
+      /* Howard's test is the PARENT type (9 Oct 2026, his current export):
+         a joint or company owner has its own reln type under "owner". */
+      .filter((r) => {
+        const t = (r.reln_type ?? null) as Row | null;
+        return [str(t?.id), str((t?.parent_type as Row | null)?.id)].some((x) => (x ?? "").toLowerCase() === "owner");
+      })
       .map((r) => (r.contact ?? null) as Row | null)
       .filter((c): c is Row => Boolean(c));
     const uniqueOwners: Row[] = [];
@@ -407,16 +412,7 @@ export async function runHandover(
       /* Not there: Howard reads the contact for its parts, then creates. */
       const contact = await rexCall("Contacts", "read", { id: str(c.id) });
       const cc = ((contact.ok ? contact.result : null) ?? c) as Row;
-      const payload = {
-        landlord: {
-          title: str(cc.title) ?? (norm(cc.marketing_gender) === "female" ? "Ms" : "Mr"),
-          first_name: (str(cc.first_name) ?? name.split(/\s+/)[0] ?? "").slice(0, 20),
-          middle_name: str(cc.middle_name) ?? "",
-          last_name: str(cc.last_name) ?? name.split(/\s+/).slice(1).join(" "),
-          mobileno: str(cc.system_e164_phone_number) ?? str(cc.phone_number) ?? "",
-          email,
-        },
-      };
+      const payload = { landlord: landlordPayload(cc, name, email) };
       if (!live) {
         await rec.add({ id: `landlord:${str(c.id)}`, label: `Landlord: ${name}`, state: "would", detail: `Not in Propoly. Would create with these details.`, request: payload });
         landlordUuids.push(`(new landlord: ${email})`);
@@ -450,8 +446,9 @@ export async function runHandover(
           district: str(property.adr_locality) ?? "",
           postcode,
           rent_type: "entire_property",
-          number_of_bedrooms: attrs.attr_bedrooms ?? listing.attr_bedrooms ?? null,
-          gas: attrs.attr_has_gas ?? listing.attr_has_gas ?? null,
+          /* Howard reads these off the property, and sends a number and a yes/no, never null. */
+          number_of_bedrooms: Number(property.attr_bedrooms ?? attrs.attr_bedrooms ?? listing.attr_bedrooms ?? 0) || 0,
+          gas: (property.attr_has_gas ?? attrs.attr_has_gas ?? listing.attr_has_gas) === true,
         },
       };
       if (!managedBy) {
@@ -590,6 +587,48 @@ export async function runHandover(
 }
 
 class Stop extends Error {}
+
+/**
+ * A new Propoly landlord, field for field as Howard's flow builds it (his
+ * export of 9 Oct 2026). The port on 3 Sep sent the name, phone and email
+ * only, so a landlord made by the OS had no address, no company flag, no
+ * name for the contracts, and Propoly did not know the agent signs for them.
+ * REX keeps a person's parts under related.contact_names / contact_phones;
+ * the flat fields are the fallback.
+ */
+function landlordPayload(cc: Row, name: string, email: string) {
+  const rel = (cc.related ?? {}) as Row;
+  const n = (((rel.contact_names ?? []) as Row[])[0] ?? {}) as Row;
+  const ph = (((rel.contact_phones ?? []) as Row[])[0] ?? {}) as Row;
+  const company = str(cc.company_name);
+  /* No person's name on a company: Howard splits the company name, last word as the surname. */
+  const whole = (company ?? str(cc.system_search_key) ?? name).trim().split(/\s+/);
+  const first = str(n.name_first) ?? str(cc.first_name) ?? (whole.length > 1 ? whole.slice(0, -1).join(" ") : whole[0] ?? "");
+  const last = str(n.name_last) ?? str(cc.last_name) ?? (whole.length > 1 ? whole[whole.length - 1] : "");
+  const middle = str(n.name_middle) ?? str(cc.middle_name) ?? "";
+  /* REX's address is one string, a line per part: "12 Cliff Road\nPaignton, Devon TQ4 6DG". */
+  const lines = (str(cc.address) ?? "").split(/\n/).map((x) => x.trim()).filter(Boolean);
+  const lastLine = lines[lines.length - 1] ?? "";
+  const pc = postcodeOf(lastLine) ?? "";
+  const afterComma = lastLine.includes(",") ? lastLine.slice(lastLine.lastIndexOf(",") + 1).trim() : "";
+  return {
+    title: str(n.name_title) ?? str(cc.title) ?? (norm(cc.marketing_gender) === "female" ? "Ms" : "Mr"),
+    first_name: first.slice(0, 20),
+    middle_name: middle,
+    last_name: last,
+    mobileno: str(ph.system_e164_phone_number) ?? str(ph.phone_number) ?? str(cc.system_e164_phone_number) ?? str(cc.phone_number) ?? "",
+    email: email.toLowerCase(),
+    is_company: Boolean(company),
+    name_on_contracts: company ?? [first, middle, last].filter(Boolean).join(" "),
+    agent_signs_on_behalf: true,
+    email_updates: true,
+    address_line1: lines[0] ?? "",
+    address_line2: "",
+    town: lines.length > 1 ? (lastLine.split(",")[0] ?? "").trim() : "",
+    county: afterComma.replace(pc, "").trim().split(/\s+/)[0] ?? "",
+    postcode: pc,
+  };
+}
 
 /** A Propoly property offered to the agent as a possible match. */
 export interface PropertyCandidate {
