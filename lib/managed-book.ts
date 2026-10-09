@@ -4,6 +4,7 @@ import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import { activeOsProperties, pmManagedHomes, type OsProperty, type PmHome } from "@/lib/os-properties";
 import { getPortfolioBook, rentKey } from "@/lib/business/payprop-portfolio";
 import { getTenancyRegister } from "@/lib/business/payprop-tenancy";
+import { attach, payPropContacts } from "@/lib/business/payprop-tenant-contacts";
 import { sittingTenantsByProperty } from "@/lib/rex-tenants";
 import { parseAddress, sameDoor, type Parsed } from "@/lib/address-parse";
 import type {
@@ -416,6 +417,21 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
     if (!o?.tenantNames) continue;
     if ("pmStatus" in o && (o as PmHome).pmStatus === "vacant") continue;
     p.tenants = o.tenantNames.split(/\s*[,;]\s*/).filter(Boolean).map((name, i) => ({ contactId: `rexpm:${o.id}:${i}`, name, email: null, phone: null }));
+  }
+  /* Email and mobile from PayProp where the book has neither (9 Oct 2026):
+     REX PM gives names only. Joined by the home's address, and given only to
+     the tenant PayProp names as the lead (lib/business/payprop-tenant-contacts). */
+  const ppContacts = await payPropContacts().catch(() => null);
+  if (ppContacts?.size) {
+    for (const p of currentLets(properties)) {
+      if (!p.tenants.some((t) => !t.email && !t.phone)) continue;
+      const found = attach(p.tenants.map((t) => t.name), ppContacts.get(rentKey(p.address || p.name, p.postcode)) ?? []);
+      for (const [i, c] of found) {
+        const t = p.tenants[i];
+        if (t.email || t.phone) continue;
+        p.tenants[i] = { ...t, email: c.email, phone: c.phone };
+      }
+    }
   }
   /* PayProp's rent where REX holds none (2 Oct 2026). 234 of the 527 homes
      had no rent in REX, so the rent roll was short by a third. PayProp's is
