@@ -81,8 +81,10 @@ function StatusPill({ a }: { a: Application }) {
   const text = a.stageLabel ?? a.statusLabel;
   if (a.closed)
     return <span className="whitespace-nowrap rounded-full bg-panel px-2.5 py-1 text-[11px] font-semibold text-muted">{a.closed}</span>;
+  /* Accepted here: a let in progress like any other (9 Oct 2026). It was
+     "Mark in REX", as if nothing could happen until REX caught up. */
   if (rexToMark(a))
-    return <span className="whitespace-nowrap rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-semibold text-accent-dark">Mark in REX</span>;
+    return <span className="whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: SAGE_WASH, color: SAGE_INK }}>Accepted</span>;
   if (a.status === "accepted")
     return <span className="whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: SAGE_WASH, color: SAGE_INK }}>{text}</span>;
   if (a.status === "communicated")
@@ -722,9 +724,11 @@ export default function Applications() {
           }}
           stages={[...STAGES]}
           checklist={checksFor(open)}
-          // Only once the landlord has said yes. Before that there is no deal
-          // to hand over, and offering one invites somebody to jump the gun.
-          aside={open.status === "accepted" ? <HandoffPanel applicationId={open.id} /> : undefined}
+          // Only once the offer is accepted - in REX or here (9 Oct 2026: an
+          // accept in the OS never showed it, and the file stalled). Before
+          // that there is nothing to push, and offering it invites somebody
+          // to jump the gun.
+          aside={isLet(open) ? <HandoffPanel applicationId={open.id} /> : undefined}
           onClose={() => setOpenId(null)}
         />
       )}

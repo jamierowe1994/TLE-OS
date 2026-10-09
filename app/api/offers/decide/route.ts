@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { mayDecideRexApp, mayOfferOn } from "@/lib/offer-access";
+import { getApplicationById } from "@/lib/applications";
 import { hasDb, q } from "@/lib/db";
 import { clearDecision, isDecisionRef, recordDecision } from "@/lib/offer-decisions";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
@@ -48,6 +49,13 @@ export async function POST(req: NextRequest) {
     ).catch(() => []);
     if (!row[0]) return NextResponse.json({ ok: false, error: "That offer isn't there any more." }, { status: 404 });
     listingId = row[0].listing_id;
+  }
+  /* A REX application decided from its file comes without its listing, and
+     then the home never showed as let agreed (12b Cliff Road, 9 Oct 2026).
+     The application knows its listing. */
+  if (ref.startsWith("rex:") && !listingId) {
+    const app = await getApplicationById(ref.slice(4)).catch(() => null);
+    if (app?.listingId != null) listingId = String(app.listingId);
   }
   /* The office on any offer; an agent on the offers on their own listings,
      and a REX application only when it is in their own scope. */

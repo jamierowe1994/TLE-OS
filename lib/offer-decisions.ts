@@ -58,7 +58,7 @@ export async function recordDecision(p: { ref: DecisionRef; listingId: string | 
   await q(
     `INSERT INTO os_offer_decisions (ref, listing_id, decision, note, by_name, by_email, decided_at)
      VALUES ($1,$2,$3,$4,$5,$6,NOW())
-     ON CONFLICT (ref) DO UPDATE SET decision = EXCLUDED.decision, note = EXCLUDED.note, by_name = EXCLUDED.by_name, by_email = EXCLUDED.by_email, decided_at = NOW()`,
+     ON CONFLICT (ref) DO UPDATE SET decision = EXCLUDED.decision, listing_id = COALESCE(EXCLUDED.listing_id, os_offer_decisions.listing_id), note = EXCLUDED.note, by_name = EXCLUDED.by_name, by_email = EXCLUDED.by_email, decided_at = NOW()`,
     [p.ref, p.listingId, p.decision, (p.note ?? "").slice(0, 1000), p.by.name, p.by.email.toLowerCase()]
   );
 }

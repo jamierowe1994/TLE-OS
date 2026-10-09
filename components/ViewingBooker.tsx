@@ -60,6 +60,8 @@ type Listing = {
   /** REX's property behind the listing, where the caller knows it. Carried so
    *  a booking can say WHICH home, not just its address. */
   propertyId?: string | null;
+  /** Why a let-agreed home is still here: its holding fee isn't paid yet. */
+  heldNote?: string | null;
 };
 
 function lengthWords(n: number): string {
@@ -279,13 +281,29 @@ export default function ViewingBooker({
     let live = true;
     /* Test listings included: a test file's home is booked here like any
        other, and the booking stays in the test world (/api/viewings/book). */
-    fetch("/api/listings", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => {
+    /* HELD HOMES STAY (9 Oct 2026, James): a home with an accepted offer is
+       still shown round until that tenant's holding fee is paid, so a let
+       agreed home with the fee outstanding stays here, saying so. */
+    Promise.all([
+      fetch("/api/listings", { cache: "no-store" }).then((r) => r.json()),
+      fetch("/api/listings/held", { cache: "no-store" })
+        .then((r) => r.json())
+        .catch(() => null),
+    ])
+      .then(([j, h]) => {
         if (!live || !j?.ok || !Array.isArray(j.listings)) return;
+        const held = (h?.ok ? h.held : {}) as Record<string, { words: string }>;
         const rows = (j.listings as Array<Listing & { letAgreed?: boolean }>)
-          .filter((l) => !l.letAgreed)
-          .map((l) => ({ id: String(l.id), name: l.name, locality: l.locality, rent: l.rent, image: l.image, propertyId: l.propertyId ?? null }));
+          .filter((l) => !l.letAgreed || held[String(l.id)])
+          .map((l) => ({
+            id: String(l.id),
+            name: l.name,
+            locality: l.locality,
+            rent: l.rent,
+            image: l.image,
+            propertyId: l.propertyId ?? null,
+            heldNote: held[String(l.id)]?.words ?? null,
+          }));
         setBook(rows);
       })
       .catch(() => undefined);
@@ -1337,6 +1355,7 @@ export default function ViewingBooker({
                       <span className="min-w-0 flex-1">
                         <span className="hand block truncate text-[13.5px]">{p.name}</span>
                         <span className="block truncate text-[11px] text-muted">{p.locality}{p.rent ? ` · £${p.rent.toLocaleString("en-GB")} pcm` : ""}</span>
+                        {p.heldNote && <span className="mt-0.5 block truncate text-[10.5px] font-semibold text-accent-dark">{p.heldNote}</span>}
                       </span>
                       <span aria-hidden className="text-muted">›</span>
                     </button>

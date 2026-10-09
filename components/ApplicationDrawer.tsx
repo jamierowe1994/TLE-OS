@@ -14,8 +14,9 @@ import GuideButton from "@/components/GuideButton";
 import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-events";
 import { WhatsAppButton } from "@/components/WhatsAppQr";
 import FileDocuments from "@/components/FileDocuments";
+import NextStepCard, { type NextAction } from "@/components/NextStepCard";
 
-type JourneyAction = { id: string; label: string; detail: string; href: string | null; who: "you" | "kirstie" | "landlord" | "tenant"; test?: "accept" | "decline" | "advance"; decide?: "accepted" | "declined" | "undo" };
+type JourneyAction = NextAction;
 type Journey = {
   ok: boolean;
   error?: string;
@@ -620,7 +621,7 @@ export default function ApplicationDrawer({
                   marks it not needed. Draws nothing when nobody is waiting. */}
               <div className="mt-5 empty:hidden">
                 <CustomerUpdates
-                  key={`${app.id}:${journey?.ok ? journey.deal?.id ?? "" : ""}`}
+                  key={`${app.id}:${journey?.ok ? journey.deal?.id ?? "" : ""}:${journeyTick}`}
                   applicationId={app.id}
                   dealId={journey?.ok ? journey.deal?.id ?? null : null}
                   openOnly
@@ -711,40 +712,20 @@ export default function ApplicationDrawer({
                   )}
                 </Card>
 
-                <Card title="Checklist" icon="checklist" action={<span className="figures text-[12px] text-muted">{ticked}/{checklist.length}</span>}>
-                  {/* WHAT IS DONE COLLAPSES; WHAT IS LEFT DOES NOT.
-                      Danielle, 11 Sep: the completed items should fold away.
-                      They were all drawn the same - four items, every one with
-                      its explanatory line under it - so a checklist reading 3
-                      of 4 gave the same weight to the three that are finished
-                      as to the one thing somebody has to go and do, and the
-                      outstanding item did not stand out at all.
-
-                      A done row keeps its tick and its label and loses the
-                      note: the note explains what is needed, and nothing is
-                      needed any more. The outstanding rows keep everything and
-                      are the only ones in full ink. Nothing is hidden - a
-                      checklist that hides what was ticked cannot be audited,
-                      and this one is read months later by somebody asking why
-                      a tenancy was allowed to start. */}
-                  <ul className="space-y-2.5">
-                    {[...checklist].sort((a, b) => Number(a.done) - Number(b.done)).map((c) => (
-                      <li key={c.label} className={`flex items-start gap-2.5 ${c.done ? "text-[12px]" : "text-[13px]"}`}>
-                        <span
-                          className={`flex shrink-0 items-center justify-center rounded-full border-[1.5px] text-[9px] ${
-                            c.done ? "mt-0 h-[15px] w-[15px] border-accent-dark bg-accent-dark text-white" : "mt-0.5 h-[17px] w-[17px] border-line bg-white text-muted"
-                          }`}
-                        >
-                          {c.done ? "✓" : ""}
-                        </span>
-                        <span className="min-w-0">
-                          <span className={c.done ? "text-muted line-through" : "font-semibold"}>{c.label}</span>
-                          {c.note && !c.done ? <span className="mt-0.5 block text-[11.5px] leading-snug text-muted">{c.note}</span> : null}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </Card>
+                {/* NEXT STEP (9 Oct 2026, James): the one thing to do now,
+                    with its button, where the checklist was. The four checks
+                    sit under it, outstanding only - all of them are still on
+                    At a glance and the Applicants tab. */}
+                <NextStepCard
+                  applicationId={app.id}
+                  actions={journey?.ok ? journey.actions ?? [] : null}
+                  loading={journey === null}
+                  checks={checklist}
+                  onPlay={(a) => void play(a)}
+                  playing={playing}
+                  confirming={confirming}
+                  onChanged={() => setJourneyTick((n) => n + 1)}
+                />
 
                 <Card
                   title="Activity & comments"

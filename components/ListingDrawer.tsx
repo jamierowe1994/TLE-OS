@@ -1633,7 +1633,7 @@ function ListingDrawerBody({
 
           <div key={`view-${tab}`} className={tab === "home" ? "" : "fade-up"}>
             {tab === "applications" && (
-              <ViewTitle title="Offers" sub={LISTING_OFFERS_LIVE ? "Who has enquired and who has offered. Start an application from anybody here, and put the offers to the landlord when the viewings stop." : "Only the people who have offered. Put each offer to the landlord, then accept one or decline it. The home keeps taking viewings until one is accepted, and the accepted one moves to Applications."} wash="blush" art="/brand/art/keys-handover.png">
+              <ViewTitle title="Offers" sub={LISTING_OFFERS_LIVE ? "Who has enquired and who has offered. Start an application from anybody here, and put the offers to the landlord when the viewings stop." : "Only the people who have offered. Put each offer to the landlord, then accept one or decline it. The accepted one moves to Applications. The rest are held, and the home keeps taking viewings, until its holding fee is paid."} wash="blush" art="/brand/art/keys-handover.png">
                 {/* Off the home screen and up here (James, 8 Oct 2026): who it
                     is from, then the offer form. */}
                 {(LISTING_OFFERS_LIVE || canOffer) && (

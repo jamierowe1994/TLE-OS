@@ -100,6 +100,10 @@ export default function ListingOffers({
   }
 
   const sorted = [...offers].sort((a, b) => ORDER[a.status] - ORDER[b.status]);
+  /* HELD (9 Oct 2026, James): once one offer is accepted the others are not
+     declined - they wait, open, until that tenant's holding fee is paid, in
+     case they drop out. The application file asks to let them go once it is. */
+  const taken = offers.find((o) => o.status === "accepted") ?? null;
   return (
     <ul className="divide-y divide-line/40">
       {sorted.map((o) => {
@@ -117,19 +121,22 @@ export default function ListingOffers({
                 {o.decided && <span className="block truncate text-[10.5px] text-muted">{o.decided}</span>}
               </Link>
               <Tag tone={o.status === "accepted" ? "good" : o.status === "declined" ? "neutral" : "accent"}>
-                {o.status === "accepted" ? "Accepted" : o.status === "declined" ? "Declined" : "Open"}
+                {o.status === "accepted" ? "Accepted" : o.status === "declined" ? "Declined" : taken ? "Held" : "Open"}
               </Tag>
               {o.amount != null && <span className="figures whitespace-nowrap text-[13px]">£{o.amount.toLocaleString("en-GB")}</span>}
               {o.status === "open" ? (
                 <span className="flex shrink-0 items-center gap-1.5">
-                  <button
-                    type="button"
-                    disabled={busy !== null}
-                    onClick={() => void act(o, "accepted")}
-                    className="rounded-full bg-[var(--brown)] px-3 py-1.5 text-[11.5px] font-semibold text-white disabled:opacity-50"
-                  >
-                    {busy === o.ref ? "Saving…" : "Accept"}
-                  </button>
+                  {/* One accepted at a time: undo or decline that one first. */}
+                  {!taken && (
+                    <button
+                      type="button"
+                      disabled={busy !== null}
+                      onClick={() => void act(o, "accepted")}
+                      className="rounded-full bg-[var(--brown)] px-3 py-1.5 text-[11.5px] font-semibold text-white disabled:opacity-50"
+                    >
+                      {busy === o.ref ? "Saving…" : "Accept"}
+                    </button>
+                  )}
                   <button
                     type="button"
                     disabled={busy !== null}
@@ -153,11 +160,19 @@ export default function ListingOffers({
                 </button>
               ) : null}
             </div>
-            {o.status === "accepted" && o.kind !== "test" && o.undoable && (
+            {o.status === "accepted" && o.kind === "rex" && (
               <p className="mt-1.5 text-[11px] leading-snug text-muted">
-                {o.kind === "rex"
-                  ? "On Applications now. Mark it accepted in REX as well, so the handover can start."
-                  : "On Applications now. Create the application in REX and accept it there, so the handover can start."}
+                On Applications now. Open it and Push to Propoly from Next Step.
+              </p>
+            )}
+            {o.status === "accepted" && o.kind === "os" && o.undoable && (
+              <p className="mt-1.5 text-[11px] leading-snug text-muted">
+                On Applications now. It needs an application on the system before it can go to Propoly - ask the office to add one.
+              </p>
+            )}
+            {o.status === "open" && taken && (
+              <p className="mt-1.5 text-[11px] leading-snug text-muted">
+                Held until {taken.name}&apos;s holding fee is paid. The home keeps taking viewings meanwhile.
               </p>
             )}
             {err?.ref === o.ref && <p className="mt-1.5 text-[11.5px] text-accent-dark">{err.text}</p>}

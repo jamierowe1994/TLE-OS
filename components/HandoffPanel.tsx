@@ -80,6 +80,7 @@ const niceDay = (iso: string) => {
  * rewriting the record.
  */
 const STEP_LABEL: Record<string, string> = {
+  "property-match": "Property in Propoly",
   "rex-uuid": "Listing linked to Propoly",
   "rex-tenants": "Tenants on the listing",
 };
@@ -150,8 +151,8 @@ export default function HandoffPanel({ applicationId }: { applicationId: string 
         const words =
           d.run.mode === "shadow"
             ? d.run.status === "ok"
-              ? "Rehearsed. Nothing was written - this is what a live run would do."
-              : "Rehearsed, and something would not go through. See the steps."
+              ? "Practice run: every step would go through. Nothing was written."
+              : "Practice run: something would not go through. See the steps."
             : d.run.status === "ok"
               ? "Handed over."
               : d.run.status === "blocked"
@@ -207,7 +208,7 @@ export default function HandoffPanel({ applicationId }: { applicationId: string 
         aria-expanded={expanded}
         className="flex w-full flex-wrap items-center gap-x-4 gap-y-1.5 px-5 py-3.5 text-left"
       >
-        <span className="text-[13.5px] font-semibold">Hand over to the deal</span>
+        <span className="text-[13.5px] font-semibold">What Goes to Propoly</span>
         <span className="min-w-0 flex-1 basis-full truncate text-[12px] text-muted sm:basis-0">{summary}</span>
         <span className="ml-auto flex shrink-0 items-center gap-2.5">
           <Pill tone={ready ? "accent" : "neutral"}>
@@ -347,44 +348,21 @@ export default function HandoffPanel({ applicationId }: { applicationId: string 
         </div>
       )}
 
-      {h.mode === "live" ? (
-        <>
-          <button
-            type="button"
-            onClick={() => void send(false)}
-            disabled={!ready || sending}
-            className="mt-4 w-full rounded-lg bg-accent-dark px-3.5 py-2.5 text-[12.5px] font-semibold text-white transition-opacity disabled:opacity-40"
-          >
-            {sending ? "Handing over…" : "Hand over to the deal"}
-          </button>
-          <button
-            type="button"
-            onClick={() => void send(true)}
-            disabled={sending}
-            className="mt-2 w-full rounded-lg border border-line/80 px-3.5 py-2 text-[12px] font-semibold transition-colors hover:border-ink/40 disabled:opacity-40"
-          >
-            Rehearse first
-          </button>
-        </>
-      ) : (
-        <>
-          <button
-            type="button"
-            onClick={() => void send(true)}
-            disabled={sending}
-            className="mt-4 w-full rounded-lg bg-accent-dark px-3.5 py-2.5 text-[12.5px] font-semibold text-white transition-opacity disabled:opacity-40"
-          >
-            {sending ? "Rehearsing…" : "Rehearse the handover"}
-          </button>
-          {/* Agent-facing (16 Sep 2026): it named REX, Howard's flow and the
-              Admin switch. What the agent needs is that pressing it changes
-              nothing and that the real handover still happens without them. */}
-          <p className="mt-2 text-[11px] leading-relaxed text-muted">
-            A practice run: it checks every step of the handover and changes nothing. The real
-            handover still happens on its own once an application is accepted.
-          </p>
-        </>
-      )}
+      {/* The push itself is the Next Step button (9 Oct 2026), so there is one
+          way to send it and it can stop to ask about the property. This keeps
+          the practice run: every step checked, nothing written. */}
+      <button
+        type="button"
+        onClick={() => void send(true)}
+        disabled={sending}
+        className="mt-4 w-full rounded-lg border border-line/80 px-3.5 py-2 text-[12px] font-semibold transition-colors hover:border-ink/40 disabled:opacity-40"
+      >
+        {sending ? "Checking…" : "Practice run"}
+      </button>
+      <p className="mt-2 text-[11px] leading-relaxed text-muted">
+        Checks every step of the push and changes nothing.{" "}
+        {h.mode === "live" ? "Push to Propoly from Next Step when it's ready." : "The push is in practice mode for now, so Next Step does the same."}
+      </p>
       {result && <p className="mt-2 text-[11.5px] leading-relaxed text-muted">{result}</p>}
 
       {/* The last few runs, each with its steps. This is the record. */}
@@ -400,7 +378,7 @@ export default function HandoffPanel({ applicationId }: { applicationId: string 
                   className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left"
                 >
                   <span className="min-w-0 text-[12px]">
-                    <span className="font-semibold">{r.mode === "shadow" ? "Rehearsal" : "Live"}</span>
+                    <span className="font-semibold">{r.mode === "shadow" ? "Practice run" : "Push"}</span>
                     <span className="text-muted">
                       {" "}· {new Date(r.startedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · {r.triggeredBy}
                     </span>

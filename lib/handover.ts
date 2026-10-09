@@ -11,6 +11,7 @@ import { HOLDING_FEE_WORDING, SITE, WEEK_AHEAD_LINES } from "@/lib/email/tle-doc
 import { createUpdate, type UpdateRecipient } from "@/lib/customer-updates";
 import { userByName } from "@/lib/tenant-email-send";
 import { isScottish } from "@/lib/property-flags";
+import { parseAddress, postcodeOf, sameHome } from "@/lib/address-parse";
 
 /**
  * The offer-accepted handover, run by the OS.
@@ -24,15 +25,18 @@ import { isScottish } from "@/lib/property-flags";
  * guessed:
  *
  *   1. the listing, and its owners (deduplicated by email)
- *   2. each landlord in Propoly: found by email, or created
- *   3. the property in Propoly: the uuid REX already holds on the listing
- *      (custom field api.propolyPropertyUUID), else matched by postcode and
- *      first line, else created under the listing agent's Propoly user
- *   4. that uuid written back to the REX listing
- *   5. each landlord related to the property
- *   6. the tenants put on the REX listing as purchtenant
- *   7. the accepted email to the landlord (REX template 10978)
- *   8. the accepted email to the tenant (REX template 10979)
+ *   2. the property in Propoly, found FIRST: the uuid REX already holds on
+ *      the listing (custom field api.propolyPropertyUUID), else the one the
+ *      agent picked, else matched by postcode and door; short of a sure match
+ *      a live run stops and asks before anything is written (9 Oct 2026)
+ *   3. each landlord in Propoly: found by email, or created
+ *   4. the property created, only when the agent has said it is new, under
+ *      the listing agent's Propoly user
+ *   5. that uuid written back to the REX listing
+ *   6. each landlord related to the property
+ *   7. the tenants put on the REX listing as purchtenant
+ *   8. the accepted email to the landlord (REX template 10978)
+ *   9. the accepted email to the tenant (REX template 10979)
  *
  * ── Shadow first ──────────────────────────────────────────────────────────
  *
@@ -168,15 +172,24 @@ class Recorder {
  */
 export async function runHandover(
   applicationId: string,
-  opts: { by: string; byId?: string | null; mode?: HandoverMode; force?: boolean }
+  opts: {
+    by: string;
+    byId?: string | null;
+    mode?: HandoverMode;
+    force?: boolean;
+    /** The Propoly property the agent picked from the close matches. */
+    propertyUuid?: string | null;
+    /** The agent has said this home really is new to Propoly. */
+    newProperty?: boolean;
+  }
 ): Promise<HandoverRun> {
   if (!hasDb()) throw new Error("No database on this environment, so a handover has nowhere to be recorded.");
   const switchMode = await handoverMode();
   const mode: HandoverMode = opts.mode === "shadow" ? "shadow" : switchMode;
   const live = mode === "live";
 
-  /* NEVER TWICE (18 Sep sweep, item 14). A live run that finished is a deal
-     in Propoly; a second one would make another. Force is the only way past,
+  /* NEVER TWICE (18 Sep sweep, item 14). A live run that finished has put
+     the landlord and property in Propoly; a second one could make more. Force is the only way past,
      and it is a person pressing it with the first run in front of them. */
   if (live && !opts.force) {
     const prior = await q<{ id: string; finished_at: Date | null }>(
@@ -265,7 +278,113 @@ export async function runHandover(
       throw new Stop();
     }
 
-    /* 2. Each landlord in Propoly. */
+    /* 2. The property in Propoly, looked for BEFORE anything is created
+       (9 Oct 2026, James: "we cannot afford to have people, when they accept
+       an offer, duplicate the Propoly record"). A home already on our books
+       reuses its record; only a new listing makes a new one.
+
+       In order: the uuid REX holds on the listing; the property the agent
+       picked; a sure match in Propoly by postcode and door (lib/address-parse
+       sameHome, so "12b Cliff Road" and "Flat B, 12 Cliff Road" are one home,
+       and "Flat 2, 76 Fore Street" is never "76 Fore Street"). Short of a sure
+       match a live run stops here, before any landlord is written, and asks:
+       the close matches to pick from, or a yes that it is new. */
+    const cf = await rexCall("CustomFields", "getValuesKeyedByFieldName", {
+      service_name: "Listings",
+      service_object_id: packet.listingId,
+    });
+    const cfValues = ((cf.ok ? cf.result : null) ?? {}) as Row;
+    let propertyUuid = str(cfValues[PROPERTY_UUID_FIELD]);
+    let propertyFrom = "";
+
+    const property = (listing.property ?? listing) as Row;
+    const line1 = [str(property.adr_unit_number), str(property.adr_street_number), str(property.adr_street_name)]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    const postcode = str(property.adr_postcode) ?? "";
+    const ours = `${line1}, ${postcode}`;
+    const oursParsed = parseAddress(ours);
+    const candidates: PropertyCandidate[] = [];
+
+    if (propertyUuid) {
+      propertyFrom = "REX already holds the Propoly uuid on the listing.";
+    } else if (opts.propertyUuid) {
+      const picked = await propolyGet(`/api/v1/properties/${encodeURIComponent(opts.propertyUuid)}`);
+      const p = ((picked.body as Row | null)?.property ?? picked.body) as Row | null;
+      if (picked.status >= 200 && picked.status < 300 && p) {
+        propertyUuid = str(p.uuid ?? p.id) ?? opts.propertyUuid;
+        propertyFrom = `Picked by ${opts.by} from the close matches (${candidateOf(p).address}).`;
+      } else {
+        await rec.add({ id: "property-match", label: "Property in Propoly", state: live ? "blocked" : "would", detail: `The property picked couldn't be read from Propoly (answered ${picked.status || "nothing"}). Nothing was created. Try again in a few minutes.` });
+        if (live) {
+          status = "blocked";
+          throw new Stop();
+        }
+      }
+    } else {
+      for (let page = 1; page <= MAX_PROPERTY_PAGES && !propertyUuid; page++) {
+        const res = await propolyGet(`/api/v1/properties?page=${page}&per_page=25`);
+        /* A refused or failed page is NOT "not in Propoly" (18 Sep sweep, item
+           14): it was being recorded as "would create", and live would have
+           created a second home. Not knowing stops a live run. */
+        if (res.status >= 400 || res.status === 0) {
+          await rec.add({
+            id: "property-match",
+            label: "Property in Propoly",
+            state: live ? "blocked" : "would",
+            detail: `Propoly would not list its properties (answered ${res.status || "nothing"} on page ${page}), so it is not known whether this home is already there. Not created. Try again in a few minutes.`,
+          });
+          if (live) {
+            status = "blocked";
+            throw new Stop();
+          }
+          break;
+        }
+        const items = listOf(res.body);
+        if (!items.length) break;
+        for (const p of items) {
+          const c = candidateOf(p);
+          if (!c.uuid) continue;
+          const samePostcode = Boolean(postcode) && norm(c.postcode) === norm(postcode);
+          /* Howard's exact match, then the door-aware one. */
+          const exact = samePostcode && norm(p.address_line1) === norm(line1);
+          if (exact || (samePostcode && sameHome(ours, `${c.address}, ${c.postcode}`))) {
+            propertyUuid = c.uuid;
+            propertyFrom = `Matched in Propoly on postcode and door (page ${page}): ${c.address}.`;
+            break;
+          }
+          /* Close: the same postcode, or the same building on the same street
+             under a postcode typed differently. Shown, never assumed. */
+          const theirs = parseAddress(c.address);
+          const sameBuilding = Boolean(oursParsed.street) && theirs.street === oursParsed.street && oursParsed.building != null && theirs.building === oursParsed.building;
+          if ((samePostcode || sameBuilding) && candidates.length < 8) candidates.push(c);
+        }
+        if (items.length < 25) break;
+      }
+    }
+
+    if (propertyUuid) {
+      await rec.add({ id: "property-match", label: "Property in Propoly", state: "ok", detail: `${propertyFrom} Reusing it, so nothing is duplicated.`, response: { uuid: propertyUuid } });
+    } else if (!opts.newProperty) {
+      await rec.add({
+        id: "property-match",
+        label: "Property in Propoly",
+        state: live ? "blocked" : "would",
+        detail: candidates.length
+          ? `Not sure this home is in Propoly yet. ${candidates.length} close match${candidates.length === 1 ? "" : "es"} - pick the right one, or say it's new.`
+          : "This home isn't in Propoly yet. Say it's new and it will be created.",
+        response: { candidates, ours: { address: line1, postcode } },
+      });
+      if (live) {
+        status = "blocked";
+        throw new Stop();
+      }
+    } else {
+      await rec.add({ id: "property-match", label: "Property in Propoly", state: "ok", detail: `${opts.by} confirmed this home is new to Propoly.` });
+    }
+
+    /* 3. Each landlord in Propoly - only once the property is settled. */
     const landlordUuids: string[] = [];
     for (const c of uniqueOwners) {
       const email = str(c.email_address);
@@ -275,7 +394,9 @@ export async function runHandover(
         status = "failed";
         continue;
       }
-      const found = await propolyGet(`/api/v1/landlords?email=${encodeURIComponent(email)}&page=1&per_page=10`);
+      /* Lower case: Propoly's email search is case-sensitive, and REX keeps
+         whatever was typed ("Rhiannon.Dodge@" found nobody, 9 Oct 2026). */
+      const found = await propolyGet(`/api/v1/landlords?email=${encodeURIComponent(email.toLowerCase())}&page=1&per_page=10`);
       const hit = firstMatch(found.body, (l) => norm(l.email) === norm(email));
       if (hit && str(hit.uuid ?? hit.id)) {
         const uuid = str(hit.uuid ?? hit.id) as string;
@@ -312,62 +433,11 @@ export async function runHandover(
       }
     }
 
-    /* 3. The property in Propoly. */
-    const cf = await rexCall("CustomFields", "getValuesKeyedByFieldName", {
-      service_name: "Listings",
-      service_object_id: packet.listingId,
-    });
-    const cfValues = ((cf.ok ? cf.result : null) ?? {}) as Row;
-    let propertyUuid = str(cfValues[PROPERTY_UUID_FIELD]);
-    let propertyFrom = "";
-
-    const property = (listing.property ?? listing) as Row;
-    const line1 = [str(property.adr_unit_number), str(property.adr_street_number), str(property.adr_street_name)]
-      .filter(Boolean)
-      .join(" ")
-      .trim();
-    const postcode = str(property.adr_postcode) ?? "";
-
-    if (propertyUuid) {
-      propertyFrom = "REX already holds the Propoly uuid on the listing.";
-    } else {
-      /* Page Propoly's properties, matching on normalised postcode and first line - Howard's match. */
-      for (let page = 1; page <= MAX_PROPERTY_PAGES && !propertyUuid; page++) {
-        const res = await propolyGet(`/api/v1/properties?page=${page}&per_page=25`);
-        /* A refused or failed page is NOT "not in Propoly" (18 Sep sweep, item
-           14): it was being recorded as "would create", and live would have
-           created a second home. Not knowing stops a live run. */
-        if (res.status >= 400 || res.status === 0) {
-          await rec.add({
-            id: "property",
-            label: "Property in Propoly",
-            state: live ? "blocked" : "would",
-            detail: `Propoly would not list its properties (answered ${res.status || "nothing"} on page ${page}), so it is not known whether this home is already there. Not created. Try again in a few minutes.`,
-          });
-          if (live) {
-            status = "blocked";
-            throw new Stop();
-          }
-          break;
-        }
-        const items = listOf(res.body);
-        if (!items.length) break;
-        const hit = items.find(
-          (p) => norm(p.postcode) === norm(postcode) && norm(p.address_line1) === norm(line1)
-        );
-        if (hit) {
-          propertyUuid = str(hit.uuid ?? hit.id);
-          propertyFrom = `Matched in Propoly on postcode and first line (page ${page}).`;
-        }
-        if (items.length < 25) break;
-      }
-    }
-
-    if (propertyUuid) {
-      await rec.add({ id: "property", label: "Property in Propoly", state: "ok", detail: `${propertyFrom} ${propertyUuid}`, response: { uuid: propertyUuid } });
-    } else {
+    /* 4. A new property, only when nothing matched and the agent said it is new. */
+    if (!propertyUuid) {
       const agentEmail = str((listing.listing_agent_1 as Row | null)?.email_address) ?? str((listing.system_owner_user as Row | null)?.email_address);
-      const user = agentEmail ? await propolyGet(`/api/v1/users?email=${encodeURIComponent(agentEmail)}`) : null;
+      /* Lower case, as above: REX had "Rhiannon.Dodge@...", Propoly matched only "rhiannon.dodge@...". */
+      const user = agentEmail ? await propolyGet(`/api/v1/users?email=${encodeURIComponent(agentEmail.toLowerCase())}`) : null;
       const managedBy = user ? str(firstMatch(user.body, () => true)?.id ?? firstMatch(user.body, () => true)?.uuid) : null;
       const attrs = ((listing.attributes ?? property.attributes ?? {}) as Row);
       const payload = {
@@ -403,7 +473,7 @@ export async function runHandover(
       }
     }
 
-    /* 4. The uuid back onto the REX listing. */
+    /* 5. The uuid back onto the REX listing. */
     if (propertyUuid && !str(cfValues[PROPERTY_UUID_FIELD])) {
       const payload = { service_name: "Listings", service_object_id: packet.listingId, value_map: { [PROPERTY_UUID_FIELD]: propertyUuid } };
       if (!live) {
@@ -422,7 +492,7 @@ export async function runHandover(
       await rec.add({ id: "rex-uuid", label: "Propoly uuid on the REX listing", state: "ok", detail: "Already on the listing." });
     }
 
-    /* 5. Each landlord related to the property.
+    /* 6. Each landlord related to the property.
 
        Propoly's read API shows no landlord-property relationship anywhere,
        but a deal on the property lists its landlords. So a landlord who is
@@ -454,7 +524,7 @@ export async function runHandover(
       if (!ok) status = "failed";
     }
 
-    /* 6. The tenants on the REX listing. */
+    /* 7. The tenants on the REX listing. */
     const tenantIds = packet.tenants.map((t) => t.contactId).filter((x): x is string => Boolean(x));
     if (tenantIds.length) {
       const payload = { data: { id: packet.listingId, related: { contact_reln_listing: tenantIds.map((contact_id) => ({ contact_id, reln_type_id: "purchtenant" })) } } };
@@ -475,7 +545,7 @@ export async function runHandover(
       status = "failed";
     }
 
-    /* 7 and 8. The accepted emails - written here, SENT BY THE AGENT.
+    /* 8 and 9. The accepted emails - written here, SENT BY THE AGENT.
 
        They were REX merge templates 10978 and 10979 (Howard's words, then our
        own from 16 Sep). Since 2 Oct 2026 (James: "allow the agent to push all
@@ -520,6 +590,18 @@ export async function runHandover(
 }
 
 class Stop extends Error {}
+
+/** A Propoly property offered to the agent as a possible match. */
+export interface PropertyCandidate {
+  uuid: string;
+  address: string;
+  postcode: string;
+}
+
+function candidateOf(p: Row): PropertyCandidate {
+  const address = [str(p.address_line1), str(p.address_line2)].filter(Boolean).join(", ");
+  return { uuid: str(p.uuid ?? p.id) ?? "", address, postcode: str(p.postcode) ?? postcodeOf(address) ?? "" };
+}
 
 /** Propoly lists come back as {data: [...]}, {landlords: [...]}, or a bare array. */
 function listOf(body: unknown): Row[] {

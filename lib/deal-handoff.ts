@@ -299,14 +299,16 @@ export async function buildHandoff(application: Application): Promise<Handoff> {
   }
   if (!application.startDate) blockers.push("No move-in date agreed.");
   if (!application.offerAmount) blockers.push("No agreed rent on the application.");
-  // Right to Rent is the one that must not be discovered late — a tenancy
-  // granted without it is the agent's liability, not the landlord's.
-  if (application.rightToRentIncomplete) {
-    blockers.push("Right to rent isn't recorded for every applicant.");
-  }
-  for (const m of missing) {
-    blockers.push(`${m.label}: ${m.why}`);
-  }
+  /* Right to rent no longer stops the push to Propoly (9 Oct 2026). The push
+     comes BEFORE the holding fee and referencing (James: handover, deal
+     started, holding fee), and the check belongs before the tenancy, not
+     before the deal exists. It stays on the file as the agent's job
+     ("Record right to rent"), and on the PLC check. */
+  /* Missing certificates no longer stop the push to Propoly (9 Oct 2026).
+     The push only puts the landlord and the home in Propoly so the deal can
+     start and the holding fee be taken; holding that up for a gas
+     certificate risks the tenant. They stay on the file as the landlord's
+     jobs (`missing`), and the PLC check is where they are enforced. */
 
   return {
     applicationId: application.id,
