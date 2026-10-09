@@ -1089,6 +1089,14 @@ body {
   border-color: rgba(86, 66, 62, 0.12);
 }
 
+/* The phone passport (components/passport/PassportPhone, 9 Oct 2026) is a
+   clean white screen, as in the examples James chose - the pink stays for
+   the desktop passport. */
+@media (max-width: 39.99rem) {
+  [data-surface="tenant"]:has([data-passport-phone]) { background: #fff; }
+  [data-surface="tenant"]:has([data-passport-phone]) main { padding-bottom: 0; }
+}
+
 /* The passport is one screen and never scrolls, so on desktop the left
    column's type and spacing are sized to the height of the window: a small
    laptop gets a smaller headline and tighter gaps rather than a question cut

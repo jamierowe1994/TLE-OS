@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PassportBook, { CLAY, COVER, PassportBack, photoPosition, type PassportFocus } from "@/components/PassportBook";
 import PassportScene, { PassportFlat } from "@/components/PassportScene";
+import PassportPhone, { PassportPhoneFinish } from "@/components/passport/PassportPhone";
 import {
   APPLICANT_TYPES,
   WORK_HOURS,
@@ -1691,7 +1692,12 @@ export default function PassportForm({
   if (phase === "loading" || phase === "done" || phase === "docked") {
     return (
       <div data-passport-page>
-        <FinishStage data={d} phase={phase} token={token} demo={demo} onBack={() => setPhase("form")} />
+        <div className="hidden sm:block">
+          <FinishStage data={d} phase={phase} token={token} demo={demo} onBack={() => setPhase("form")} />
+        </div>
+        <div className="sm:hidden" data-passport-phone>
+          <PassportPhoneFinish d={d} phase={phase} token={token} demo={demo} onBack={() => setPhase("form")} />
+        </div>
       </div>
     );
   }
@@ -1701,7 +1707,7 @@ export default function PassportForm({
     <PassportToken.Provider value={token}>
     <div
       data-passport-page
-      className="lg:grid lg:h-[calc(100vh-64px)] lg:grid-cols-[minmax(0,46%)_minmax(0,54%)] lg:overflow-hidden"
+      className="hidden sm:block lg:grid lg:h-[calc(100vh-64px)] lg:grid-cols-[minmax(0,46%)_minmax(0,54%)] lg:overflow-hidden"
       style={phase === "leaving" ? { opacity: 0, transform: "translateY(28px)", transition: "opacity 400ms ease, transform 400ms ease" } : undefined}
     >
       {/* ── Left: the headline, one question, the way on ── */}
@@ -1835,6 +1841,27 @@ export default function PassportForm({
           <p className="mt-6 text-[12.5px] leading-relaxed text-muted">Nothing here is shared with a landlord unless you apply for their property.</p>
         </div>
       </aside>
+    </div>
+    {/* A phone gets its own way through (components/passport/PassportPhone,
+        James 9 Oct 2026): the passport on top, the questions as a short list
+        under it, each one a bottom sheet. Same data, same autosave. */}
+    <div className="sm:hidden" data-passport-page data-passport-phone>
+      <PassportPhone
+        d={d}
+        set={set}
+        answers={answers}
+        setAnswer={(id, v) => setAnswers((a) => ({ ...a, [id]: v }))}
+        questions={questions}
+        agentName={agentName}
+        demo={demo}
+        saveState={state}
+        submitted={submitted}
+        accountExists={accountExists}
+        pct={bar.pct}
+        allDone={allDone}
+        onFinish={() => void finish()}
+        renderAddress={(value, onChange, onPicked) => <TenantAddress label="" value={value} onChange={onChange} onPicked={onPicked} />}
+      />
     </div>
     </PassportToken.Provider>
     </QuietFocus.Provider>
