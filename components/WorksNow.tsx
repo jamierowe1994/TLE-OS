@@ -39,8 +39,27 @@ const btn = "rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] transi
 const primary = "rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page disabled:opacity-50";
 const tile = "flex-1 rounded-xl border px-4 py-3 text-left transition-colors";
 
-export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, ranked, canAdd = true, onCertificate }: {
+/** The steps by a short name, for the labelled track on the job sheet. */
+const SHORT: Record<StepId, string> = {
+  tell_landlord: "Landlord",
+  arranging: "Who arranges",
+  landlord_follow_up: "Landlord",
+  pick_contractor: "Contractor",
+  contractor_confirm: "Confirmed",
+  booking: "Date",
+  visit: "Visit",
+  aftercare: "Tenant happy",
+  payment: "Payee",
+  invoice: "Money",
+  closed: "Closed",
+};
+
+export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, ranked, canAdd = true, onCertificate, variant = "card" }: {
   o: WorksOrder;
+  /** "feature": the job sheet's own (9 Oct 2026, James: "very overwhelming:
+   *  where to look, what to click on") - a coloured band with the step by
+   *  name and a labelled track. "card": the plain one the property page uses. */
+  variant?: "card" | "feature";
   move: (m: Move) => Promise<void>;
   busy: boolean;
   err: string | null;
@@ -60,6 +79,70 @@ export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, 
   const at = LINE.indexOf(step);
   const meta = STEPS.find((s) => s.id === step)!;
   const hot = o.urgency === "emergency" && step !== "closed";
+  const line = LINE.filter((s) => o.kind === "repair" || s !== "aftercare");
+  const isDone = (s: StepId) => { const idx = LINE.indexOf(s); return at > idx || (step === "landlord_follow_up" && idx < 2); };
+  const isHere = (s: StepId) => s === step || (step === "landlord_follow_up" && s === "arranging");
+
+  const body = (
+    <>
+      {step === "tell_landlord" && <TellLandlord o={o} f={f} setF={setF} move={move} busy={busy} />}
+      {step === "arranging" && <Arranging o={o} f={f} setF={setF} move={move} busy={busy} />}
+      {step === "landlord_follow_up" && <LandlordFollowUp o={o} f={f} setF={setF} move={move} busy={busy} />}
+      {step === "pick_contractor" && <PickContractor o={o} move={move} busy={busy} canCorporate={canCorporate} given={ranked} canAdd={canAdd} />}
+      {step === "contractor_confirm" && <ContractorConfirm o={o} move={move} busy={busy} canCorporate={canCorporate} given={ranked} canAdd={canAdd} />}
+      {step === "booking" && <Booking o={o} f={f} setF={setF} move={move} busy={busy} />}
+      {step === "visit" && <Visit o={o} f={f} setF={setF} move={move} busy={busy} onCertificate={onCertificate} />}
+      {step === "aftercare" && <Aftercare o={o} f={f} setF={setF} move={move} busy={busy} />}
+      {step === "payment" && <Payment o={o} move={move} busy={busy} />}
+      {step === "invoice" && <Money o={o} f={f} setF={setF} move={move} busy={busy} onInvoiceLandlord={onInvoiceLandlord} />}
+      {step === "closed" && (
+        <p className="text-[13px]">
+          {o.status === "cancelled" ? `Cancelled. ${o.cancelledReason}` : o.status === "paid" ? `Paid ${dayOf(o.paidAt)}.` : `The landlord sorted it themselves, resolved ${dayOf(o.landlordResolvedAt)}.`}
+        </p>
+      )}
+    </>
+  );
+
+  if (variant === "feature") {
+    const n = line.findIndex(isHere) + 1;
+    return (
+      <section className={`overflow-hidden rounded-[22px] border-2 bg-white ${hot ? "border-accent-dark/60" : "border-accent/50"}`}>
+        <div className={`px-5 pb-4 pt-4 ${hot ? "bg-accent-soft" : "bg-accent-soft/55"}`}>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-white px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-accent-dark">
+              {step === "closed" ? "Closed" : n > 0 ? `Next step · ${n} of ${line.length}` : "Next step"}
+            </span>
+            {hot && <span className="rounded-full bg-accent-dark px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-white">Emergency</span>}
+          </div>
+          <h3 className="mt-2 text-[20px] leading-tight">{meta.label}</h3>
+          {meta.blurb && <p className="mt-1 max-w-[70ch] text-[12.5px] leading-relaxed text-ink/70">{meta.blurb}</p>}
+          {step !== "closed" && (
+            <ol className="mt-4 flex items-start" aria-label="Progress">
+              {line.map((s, i) => {
+                const done = isDone(s);
+                const here = isHere(s);
+                return (
+                  <li key={s} className="relative flex min-w-0 flex-1 flex-col items-center text-center" title={STEPS.find((x) => x.id === s)?.label}>
+                    {i > 0 && <span aria-hidden className={`absolute right-1/2 top-[9px] h-[2px] w-full ${done || here ? "bg-sage" : "bg-white"}`} />}
+                    <span
+                      className={`relative z-[1] flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
+                        here ? "bg-accent-dark text-white ring-4 ring-white" : done ? "bg-sage text-white" : "border-2 border-white bg-accent-soft text-transparent"
+                      }`}
+                    >
+                      {done ? "✓" : here ? i + 1 : ""}
+                    </span>
+                    <span className={`mt-1.5 hidden w-full truncate px-0.5 text-[10.5px] sm:block ${here ? "font-semibold text-accent-dark" : done ? "text-ink/70" : "text-ink/45"}`}>{SHORT[s]}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </div>
+        <div className="p-5">{body}</div>
+        {err && <p className="px-5 pb-4 text-[12px] text-accent-dark">{err}</p>}
+      </section>
+    );
+  }
 
   return (
     <div className={`rounded-2xl border p-4 ${hot ? "border-accent-dark/50 bg-accent-soft/30" : "border-line/50 bg-white"}`}>
@@ -79,23 +162,7 @@ export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, 
       <h3 className={`mt-1 text-[16px] ${hot ? "font-semibold text-accent-dark" : ""}`}>{meta.label}</h3>
       {meta.blurb && <p className="mt-0.5 text-[12px] text-muted">{meta.blurb}</p>}
 
-      <div className="mt-3">
-        {step === "tell_landlord" && <TellLandlord o={o} f={f} setF={setF} move={move} busy={busy} />}
-        {step === "arranging" && <Arranging o={o} f={f} setF={setF} move={move} busy={busy} />}
-        {step === "landlord_follow_up" && <LandlordFollowUp o={o} f={f} setF={setF} move={move} busy={busy} />}
-        {step === "pick_contractor" && <PickContractor o={o} move={move} busy={busy} canCorporate={canCorporate} given={ranked} canAdd={canAdd} />}
-        {step === "contractor_confirm" && <ContractorConfirm o={o} move={move} busy={busy} canCorporate={canCorporate} given={ranked} canAdd={canAdd} />}
-        {step === "booking" && <Booking o={o} f={f} setF={setF} move={move} busy={busy} />}
-        {step === "visit" && <Visit o={o} f={f} setF={setF} move={move} busy={busy} onCertificate={onCertificate} />}
-        {step === "aftercare" && <Aftercare o={o} f={f} setF={setF} move={move} busy={busy} />}
-        {step === "payment" && <Payment o={o} move={move} busy={busy} />}
-        {step === "invoice" && <Money o={o} f={f} setF={setF} move={move} busy={busy} onInvoiceLandlord={onInvoiceLandlord} />}
-        {step === "closed" && (
-          <p className="text-[13px]">
-            {o.status === "cancelled" ? `Cancelled. ${o.cancelledReason}` : o.status === "paid" ? `Paid ${dayOf(o.paidAt)}.` : `The landlord sorted it themselves, resolved ${dayOf(o.landlordResolvedAt)}.`}
-          </p>
-        )}
-      </div>
+      <div className="mt-3">{body}</div>
       {err && <p className="mt-2 text-[12px] text-accent-dark">{err}</p>}
     </div>
   );
@@ -145,8 +212,8 @@ function TellLandlord({ o, f, setF, move, busy }: StepProps) {
             <input type="email" value={email} onChange={(e) => setF({ ...f, email: e.target.value })} placeholder="Their email - none on the property" className={`mt-2 ${field}`} />
           )}
         </div>
-        <div className="rounded-xl border border-line/80 bg-card p-3 text-[12.5px] leading-relaxed">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-muted">What to say</p>
+        <div className="rounded-xl border border-sage/60 bg-[#f1f4ec] p-3 text-[12.5px] leading-relaxed">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-[#56634a]">What to say</p>
           <p className="mt-1">{o.title}{o.description ? `: ${o.description}` : ""}.</p>
           <p className="mt-1 text-muted">Do they want to sort it with their own people, or shall we? The email report says the same and asks the same.</p>
         </div>
