@@ -652,7 +652,7 @@ function FinishStage({ data, phase, token, demo, onBack }: { data: PassportData;
       const r = await fetch("/api/tenant/passport/account", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ token, password: pw }),
+        body: JSON.stringify({ token, password: pw, data }),
       });
       const j = (await r.json()) as { ok?: boolean; error?: string; verify?: boolean; email?: string };
       if (!j.ok) {
@@ -959,10 +959,10 @@ export default function PassportForm({
   /* Debounced autosave. The guard on the first render matters: without it the
      page saves the moment it loads, writing back what it just read. */
   const save = useCallback(
-    async (next: PassportData) => {
+    async (next: PassportData): Promise<boolean> => {
       if (demo) {
         setState("saved");
-        return;
+        return true;
       }
       setState("saving");
       try {
@@ -972,12 +972,28 @@ export default function PassportForm({
           body: JSON.stringify({ data: next, answers: answersRef.current }),
         });
         setState(r.ok ? "saved" : "error");
+        return r.ok;
       } catch {
         setState("error");
+        return false;
       }
     },
     [token, demo]
   );
+
+  /* A save that failed is tried again (9 Oct 2026): every 10 seconds, and the
+     moment the phone says it is back online. Angela Serwaa Mensah's signal
+     dropped on the last page and nothing after it ever arrived. */
+  useEffect(() => {
+    if (state !== "error" || demo) return;
+    const retry = () => void save(d);
+    const id = window.setInterval(retry, 10_000);
+    window.addEventListener("online", retry);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("online", retry);
+    };
+  }, [state, demo, save, d]);
 
   useEffect(() => {
     if (first.current) {
@@ -1028,11 +1044,13 @@ export default function PassportForm({
       : `${sectionsLeft} section${sectionsLeft === 1 ? "" : "s"} to go`;
 
   async function finish() {
+    /* Saved first, or not finished at all (9 Oct 2026): the tenant stays on
+       the page, told it did not save, and presses again. */
+    if (!(await save(d))) return;
     setPhase("leaving");
     window.setTimeout(() => setPhase("loading"), 420);
     window.setTimeout(() => setPhase("done"), 420 + 2000);
     window.setTimeout(() => setPhase("docked"), 420 + 2000 + 900);
-    await save(d);
     if (!demo) {
       await fetch(`/api/tenant/passport?token=${encodeURIComponent(token)}&submit=1`, { method: "POST" }).catch(() => null);
     }
@@ -1685,7 +1703,7 @@ export default function PassportForm({
     demo ? "A sample - nothing you type is saved."
     : submitted && accountExists && lastStep && lastScreen ? "Your passport is with us. Change anything here and it updates straight away."
     : state === "saving" ? "Saving…"
-    : state === "error" ? "Not saved - check your connection"
+    : state === "error" ? "Not saved yet - check your signal, we'll keep trying"
     : state === "saved" ? "Saved"
     : "Everything saves as you go.";
 

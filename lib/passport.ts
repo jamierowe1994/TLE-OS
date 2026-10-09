@@ -252,5 +252,5 @@ export async function submitPassport(token: string): Promise<PassportRecord | nu
   return rows[0] ? toRecord(rows[0]) : null;
 }
 
-export { EMPTY_PASSPORT, SECTIONS, completeness } from "@/lib/passport-shape";
+export { EMPTY_PASSPORT, SECTIONS, completeness, cleanPassportData, passportComplete, INCOMPLETE } from "@/lib/passport-shape";
 export type { PassportData } from "@/lib/passport-shape";

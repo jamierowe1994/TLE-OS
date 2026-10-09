@@ -7,7 +7,9 @@ import {
   getPassport,
   savePassport,
   submitPassport,
-  EMPTY_PASSPORT,
+  cleanPassportData,
+  passportComplete,
+  INCOMPLETE,
   type PassportData,
 } from "@/lib/passport";
 import { passportQuestions, setPassportAnswer, valuesFor } from "@/lib/attributes";
@@ -76,13 +78,7 @@ export async function PUT(req: NextRequest) {
   /* Only known fields are kept. Anything else in the payload is dropped rather
      than stored - the row is JSONB, so without this it would happily accept
      whatever a caller invented and hand it back to the next reader. */
-  const clean = { ...EMPTY_PASSPORT };
-  for (const key of Object.keys(EMPTY_PASSPORT) as (keyof PassportData)[]) {
-    const v = body.data[key];
-    if (typeof v === "string" || typeof v === "boolean" || v === null) {
-      (clean as Record<string, unknown>)[key] = v;
-    }
-  }
+  const clean = cleanPassportData(body.data);
 
   try {
     const saved = await savePassport(token, clean);
@@ -119,6 +115,14 @@ export async function POST(req: NextRequest) {
   if (token) {
     if (!req.nextUrl.searchParams.get("submit")) {
       return NextResponse.json({ error: "Nothing to do." }, { status: 400 });
+    }
+    /* Never finished with answers missing (9 Oct 2026, Angela Serwaa Mensah:
+       her phone lost signal on the last page, those answers never arrived,
+       and the passport was marked finished without them). */
+    const existing = await getPassport(token).catch(() => null);
+    if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    if (!passportComplete(existing.data)) {
+      return NextResponse.json({ error: INCOMPLETE, incomplete: true }, { status: 409 });
     }
     const rec = await submitPassport(token).catch(() => null);
     if (!rec) return NextResponse.json({ error: "Not found." }, { status: 404 });

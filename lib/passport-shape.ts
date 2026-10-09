@@ -269,9 +269,35 @@ export const SECTIONS: {
     title: "A few last things",
     blurb: "Better said now than found later. None of these is automatically a no.",
     stamp: "DECLARED",
-    done: (d) => d.adverseCredit !== null && d.guarantor !== null && d.pets !== null,
+    /* Smoker too (9 Oct 2026): it was asked but never required, so three
+       passports finished without it. */
+    done: (d) => d.adverseCredit !== null && d.guarantor !== null && d.pets !== null && d.smoker !== null,
   },
 ];
+
+/**
+ * Only known fields, of the right kind (moved here from PUT /api/tenant/passport
+ * on 9 Oct 2026 so the account step can save with the same rule). Anything
+ * else in a payload is dropped rather than stored in the JSONB.
+ */
+export function cleanPassportData(raw: Partial<Record<keyof PassportData, unknown>>): PassportData {
+  const clean = { ...EMPTY_PASSPORT };
+  for (const key of Object.keys(EMPTY_PASSPORT) as (keyof PassportData)[]) {
+    const v = raw[key];
+    if (typeof v === "string" || typeof v === "boolean" || v === null) {
+      (clean as Record<string, unknown>)[key] = v;
+    }
+  }
+  return clean;
+}
+
+/** What the tenant is told when the server is missing answers they gave. */
+export const INCOMPLETE = "Some of your answers haven't reached us yet - your signal may have dropped. Go back, check each page is filled in, and press again.";
+
+/** Every section answered: the server's test before a passport is marked finished. */
+export function passportComplete(d: PassportData): boolean {
+  return SECTIONS.every((s) => s.done(d));
+}
 
 export function completeness(d: PassportData): { done: number; total: number; pct: number } {
   const done = SECTIONS.filter((s) => s.done(d)).length;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hasDb } from "@/lib/db";
-import { getPassport, passportEmailedTo, submitPassport } from "@/lib/passport";
+import { cleanPassportData, getPassport, INCOMPLETE, passportComplete, passportEmailedTo, savePassport, submitPassport } from "@/lib/passport";
 import { createTenantFromPassport, tenantHasPassword, upsertTenantAccount } from "@/lib/tenant-account";
 import { createPortalToken, TENANT_COOKIE, portalCookieOptions } from "@/lib/auth";
 import { normaliseEmail } from "@/lib/users";
@@ -31,7 +31,7 @@ export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
-  let body: { token?: string; password?: string } = {};
+  let body: { token?: string; password?: string; data?: Record<string, unknown> } = {};
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -42,8 +42,20 @@ export async function POST(req: NextRequest) {
   if (!token) return NextResponse.json({ ok: false, error: "That passport link is missing its code." }, { status: 400 });
   if (password.length < 8) return NextResponse.json({ ok: false, error: "Your password needs at least 8 characters." }, { status: 400 });
 
-  const record = await getPassport(token).catch(() => null);
+  let record = await getPassport(token).catch(() => null);
   if (!record) return NextResponse.json({ ok: false, error: "That passport could not be found." }, { status: 404 });
+
+  /* The answers come with the password (9 Oct 2026). Angela Serwaa Mensah's
+     phone lost signal on the last page: those saves never arrived, the signal
+     came back for this step, and the passport was finished without them. Now
+     this step saves what the screen holds, and nothing is finished, and no
+     account made, while a required answer is still missing. */
+  if (body.data && typeof body.data === "object" && !record.submittedAt) {
+    record = (await savePassport(token, cleanPassportData(body.data)).catch(() => null)) ?? record;
+  }
+  if (!record.submittedAt && !passportComplete(record.data)) {
+    return NextResponse.json({ ok: false, incomplete: true, error: INCOMPLETE }, { status: 409 });
+  }
 
   const emailedTo = await passportEmailedTo(token);
   const typed = (record.data.email || record.email || "").trim();

@@ -326,7 +326,7 @@ export default function PassportPhone({
     return () => window.clearTimeout(t);
   }, [leaving]);
 
-  const savedNote = demo ? "A sample, nothing is saved" : saveState === "saving" ? "Saving…" : saveState === "error" ? "Not saved, check your connection" : saveState === "saved" ? "Saved" : "Saves as you go";
+  const savedNote = demo ? "A sample, nothing is saved" : saveState === "saving" ? "Saving…" : saveState === "error" ? "Not saved yet, check your signal. We'll keep trying" : saveState === "saved" ? "Saved" : "Saves as you go";
 
   /* One panel of the swiping area: the welcome's words, or a page's lines. */
   const panel = (s: "intro" | number) => {
@@ -1069,7 +1069,7 @@ export function PassportPhoneFinish({ d, phase, token, demo, onBack }: { d: Pass
     if (demo) return setSampleDone(true);
     setBusy(true);
     try {
-      const r = await fetch("/api/tenant/passport/account", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, password: pw }) });
+      const r = await fetch("/api/tenant/passport/account", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, password: pw, data: d }) });
       const j = (await r.json()) as { ok?: boolean; error?: string; verify?: boolean; email?: string };
       if (!j.ok) { setErr(j.error ?? "That didn't work. Try again in a moment."); setBusy(false); return; }
       if (j.verify) { setLinkSentTo(j.email ?? "your email address"); setBusy(false); return; }
