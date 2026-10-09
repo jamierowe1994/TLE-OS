@@ -18,6 +18,7 @@ import { housesIn, houseByListing, MANAGED_READERS as R, type House } from "@/li
 import { headlineCerts, isOurs, statusOf, type CertStatus, type CompProperty } from "@/lib/compliance";
 import type { ManagedBook, ManagedLandlord, ManagedProperty } from "@/lib/portfolio-types";
 import PickOne from "@/components/PickOne";
+import PastTenancies from "@/components/portfolio/PastTenancies";
 import Segmented from "@/components/Segmented";
 
 /**
@@ -58,7 +59,7 @@ type CertsState =
   | { status: "slow" }
   | { status: "failed"; error: string };
 
-type View = "properties" | "landlords" | "map";
+type View = "properties" | "landlords" | "map" | "past";
 
 const SORTS = [
   { id: "let-new", label: "Let most recently" },
@@ -74,6 +75,13 @@ const CERT_MAX_TRIES = 40; // four minutes, then say it is slow rather than spin
 
 const money = (n: number | null | undefined) =>
   n == null ? "—" : `£${Math.round(n).toLocaleString("en-GB")}`;
+
+/* "31 Oct", for a leaving day in a pill. */
+const shortDay = (iso: string | null) => {
+  if (!iso) return "";
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+};
 
 const day = (iso: string | null) => {
   if (!iso) return "—";
@@ -145,6 +153,8 @@ export default function Portfolio() {
   const [lookOnly, setLookOnly] = useState(false);
   /* Homes REX CRM has no property for: the OS holds them from REX PM (6 Sep 2026). */
   const [notOnRexOnly, setNotOnRexOnly] = useState(false);
+  /* Homes whose tenants have given notice (lib/portfolio-notice). */
+  const [reletOnly, setReletOnly] = useState(false);
   const [sort, setSort] = useState<string | null>(null);
   const router = useRouter();
   /* ?open=<listing id> from the search bar: straight to the home's own page. */
@@ -287,6 +297,7 @@ export default function Portfolio() {
       if (town && p.town !== town) return false;
       if (lookOnly && !attention.has(p.listingId)) return false;
       if (notOnRexOnly && p.onRex !== false && p.rexLet !== false) return false;
+      if (reletOnly && !p.notice) return false;
       if (needle) {
         const hay = [p.address, p.name, p.locality, p.landlord?.name, p.landlord?.email, p.agent?.name, ...p.tenants.map((t) => t.name)]
           .filter(Boolean).join(" ").toLowerCase();
@@ -315,9 +326,10 @@ export default function Portfolio() {
     });
     /* A tester's own test home sits at the top, whatever the order. */
     return [...rows.filter((p) => p.test), ...rows.filter((p) => !p.test)];
-  }, [book, q, service, agent, town, lookOnly, notOnRexOnly, sort, attention, certBy, summaryOf]);
+  }, [book, q, service, agent, town, lookOnly, notOnRexOnly, reletOnly, sort, attention, certBy, summaryOf]);
 
-  const filtering = Boolean(q.trim() || service || agent || town || lookOnly || notOnRexOnly);
+  const filtering = Boolean(q.trim() || service || agent || town || lookOnly || notOnRexOnly || reletOnly);
+  const relets = useMemo(() => (book ? currentLets(book.properties).filter((p) => p.notice).length : 0), [book]);
 
   /* Landlords: those with at least one property in the filtered set, or, when
      only the search box is in play, a name or email that matches it. */
@@ -469,6 +481,7 @@ export default function Portfolio() {
                 { id: "properties" as const, label: book ? `Properties · ${filteredHomes.length}` : "Properties", icon: <DoodleIcon name="list" size={14} /> },
                 { id: "landlords" as const, label: book ? `Landlords · ${landlords.length}` : "Landlords", icon: <DoodleIcon name="user" size={14} /> },
                 { id: "map" as const, label: "Map", icon: <DoodleIcon name="target" size={14} /> },
+                { id: "past" as const, label: "Archive", icon: <DoodleIcon name="clock" size={14} /> },
               ]}
             />
             <span className="hidden h-6 w-px bg-line/80 sm:block" />
@@ -487,13 +500,16 @@ export default function Portfolio() {
             <button type="button" onClick={() => setNotOnRexOnly((v) => !v)} className={pillClass(notOnRexOnly)} title="Homes REX PM manages that REX either has no property for, or does not mark as let">
               Not on REX
             </button>
+            <button type="button" onClick={() => setReletOnly((v) => !v)} className={pillClass(reletOnly)} title="Tenants have given notice: the home stays here until they move out">
+              Relet{relets ? ` · ${relets}` : ""}
+            </button>
             <PickOne label="Sort" options={SORTS} value={sort} onChange={setSort} />
           </div>
 
           {book && filtering && (
             <p className="mt-2 text-[11.5px] text-muted">
               {filteredHomes.length} of {book.counts.properties} properties · {money(rentRoll)} pcm ·{" "}
-              <button type="button" onClick={() => { setQ(""); setService(null); setAgent(null); setTown(null); setLookOnly(false); setNotOnRexOnly(false); }} className="underline hover:text-ink">
+              <button type="button" onClick={() => { setQ(""); setService(null); setAgent(null); setTown(null); setLookOnly(false); setNotOnRexOnly(false); setReletOnly(false); }} className="underline hover:text-ink">
                 clear
               </button>
             </p>
@@ -520,6 +536,7 @@ export default function Portfolio() {
                     const letRooms = house ? house.rooms.filter((r) => r.tenants.length > 0).length : 0;
                     const rent = house && house.kind === "rooms" ? house.rooms.reduce((a, r) => a + (r.rentMonthly ?? 0), 0) : p.rentMonthly;
                     const landlord = house ? house.house?.landlord ?? house.rooms.find((r) => r.landlord)?.landlord ?? null : p.landlord;
+                    const notice = house ? house.rooms.find((r) => r.notice)?.notice ?? null : p.notice ?? null;
                     return (
                       <li key={house ? house.key : p.listingId} className="border-b border-line/40 last:border-0">
                         <Link
@@ -532,6 +549,7 @@ export default function Portfolio() {
                             <span className="block truncate text-[13px]">{house ? house.name : p.name}{p.test && <span className="ml-1.5 text-[11px] font-semibold text-accent-dark md:hidden">Test</span>}</span>
                             <span className="block truncate text-[11px] text-muted">
                               {house ? `${house.locality} · ${house.kind === "lets" ? `${house.rooms.length} lets on record` : `${house.rooms.length} rooms, ${letRooms} let`}` : p.locality}
+                              {notice && <span className="font-semibold text-accent-dark md:hidden"> · Relet{notice.leavingOn ? ` ${shortDay(notice.leavingOn)}` : ""}</span>}
                               <span className="md:hidden">{landlord ? ` · ${landlord.name}` : ""}</span>
                             </span>
                           </span>
@@ -541,7 +559,8 @@ export default function Portfolio() {
                           <span className="hidden md:block">
                             {p.service ? <Pill tone={p.service === "Managed" ? "good" : "neutral"}>{p.service}</Pill> : <span className="text-[11px] text-muted">Not set</span>}
                             {p.test ? <Pill tone="accent">Test</Pill> : p.onRex === false && <Pill tone="accent">Not on REX</Pill>}
-                            {p.onRex !== false && p.rexLet === false && <Pill tone="neutral">Not let in REX</Pill>}
+                            {p.onRex !== false && p.rexLet === false && !p.held && <Pill tone="neutral">Not let in REX</Pill>}
+                            {notice && <Pill tone="accent">Relet{notice.leavingOn ? ` · ${shortDay(notice.leavingOn)}` : ""}</Pill>}
                           </span>
                           <span className="hidden min-w-0 truncate text-[12px] md:block">
                             {landlord ? landlord.name : <span className="text-muted">Not on record</span>}
@@ -663,6 +682,13 @@ export default function Portfolio() {
               ) : (
                 <PortfolioMap properties={filtered} attention={attention} onOpen={openHome} />
               )}
+            </div>
+          )}
+
+          {/* ------------------------------------ the archive: past tenancies -- */}
+          {view === "past" && (
+            <div className="mt-4">
+              <PastTenancies search={q} />
             </div>
           )}
         </>

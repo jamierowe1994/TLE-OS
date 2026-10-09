@@ -1,6 +1,8 @@
 import "server-only";
 import { hasDb, q } from "./db";
 import { fetchManagedBook } from "./managed-book";
+import { archiveBook } from "./tenancy-archive";
+import { withNotice } from "./portfolio-notice";
 import { certificatesFor, type ComplianceBook } from "./rex-compliance";
 import type { ManagedBook } from "./portfolio-types";
 
@@ -132,7 +134,31 @@ export function failureFor(key: string): { at: number; message: string } | null 
 
 /* ------------------------------------------------------------ the book -- */
 
+/* Each fresh read from REX is written into the tenancy archive as it lands
+   (lib/tenancy-archive, 9 Oct 2026), so nothing the book showed is lost when
+   a home later drops off it. */
+const readBook = (rexUserId: string | null) =>
+  fetchManagedBook(rexUserId).then(async (book) => {
+    await archiveBook(book.properties).catch(() => {});
+    return book;
+  });
+
+/**
+ * The book, with notice laid over it on every read (lib/portfolio-notice):
+ * homes whose tenants have given notice are relets, and stay on until they
+ * move out. Laid on at read rather than stored, so notice recorded a moment
+ * ago shows without waiting ten minutes for the next REX read.
+ */
 export async function managedBookFor(rexUserId: string | null): Promise<{
+  book: ManagedBook;
+  ageMs: number;
+  stale: boolean;
+}> {
+  const raw = await rawBookFor(rexUserId);
+  return { ...raw, book: await withNotice(raw.book, rexUserId) };
+}
+
+async function rawBookFor(rexUserId: string | null): Promise<{
   book: ManagedBook;
   ageMs: number;
   stale: boolean;
@@ -142,11 +168,11 @@ export async function managedBookFor(rexUserId: string | null): Promise<{
   const age = h ? Date.now() - h.at : Infinity;
   if (h && age < BOOK_FRESH_MS) return { book: h.data, ageMs: age, stale: false };
   if (h && age < BOOK_STALE_MS) {
-    void refresh(key, () => fetchManagedBook(rexUserId)).catch(() => {});
+    void refresh(key, () => readBook(rexUserId)).catch(() => {});
     return { book: h.data, ageMs: age, stale: true };
   }
   try {
-    const fresh = await refresh(key, () => fetchManagedBook(rexUserId));
+    const fresh = await refresh(key, () => readBook(rexUserId));
     return { book: fresh.data, ageMs: 0, stale: false };
   } catch (e) {
     /* A stale answer beats no answer, but the caller is told which it is. */

@@ -347,3 +347,22 @@ export async function rentStatusFor(home: { name: string; address?: string | nul
     history,
   };
 }
+
+/**
+ * What a home's sitting tenants owed at the last read, from a rent book the
+ * caller already holds - for the tenancy archive (lib/tenancy-archive), which
+ * keeps the last known figure after the tenants have gone. Null when the
+ * read is too old or the home can't be matched for certain: a wrong match
+ * would pin a debt on the wrong tenant.
+ */
+export function owedFromBook(book: Book | null, home: { name: string; address?: string | null; postcode: string | null }): { owed: number; tenants: Array<{ name: string; owed: number; lastPayment: string | null }>; checkedAt: string } | null {
+  if (!book || Date.now() - book.at > TOO_OLD_MS) return null;
+  const hit = matchHome(book, home);
+  if (hit === "none" || hit === "unsure") return null;
+  const tenants = book.balances.filter((b) => b.account === hit.account && b.propertyId === hit.id && current(b));
+  return {
+    owed: Math.round(tenants.reduce((s, t) => s + Math.max(0, t.owed), 0) * 100) / 100,
+    tenants: tenants.map((t) => ({ name: t.tenant, owed: Math.max(0, t.owed), lastPayment: t.lastPayment })),
+    checkedAt: new Date(book.at).toISOString(),
+  };
+}

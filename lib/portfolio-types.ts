@@ -72,6 +72,14 @@ export interface ManagedProperty {
   rentSource?: "payprop";
   /** A tester's own live-tenancy home (lib/test-overlay): shown to them alone, never counted. */
   test?: boolean;
+  /**
+   * The tenants have given notice and not yet moved out (lib/portfolio-notice,
+   * 9 Oct 2026): the home is a relet, and it stays on the book until they go.
+   */
+  notice?: { leavingOn: string | null; tenant: string };
+  /** REX no longer shows this let, but the tenants haven't moved out yet, so
+   *  it is kept on the book from the tenancy archive until they do. */
+  held?: boolean;
 }
 
 export interface ManagedLandlord {

@@ -161,7 +161,7 @@ function toProperty(r: Row): ManagedProperty {
 }
 
 /** Group the book by owner contact. Biggest landlord first. */
-function landlordsOf(properties: ManagedProperty[]): ManagedLandlord[] {
+export function landlordsOf(properties: ManagedProperty[]): ManagedLandlord[] {
   const by = new Map<string, ManagedLandlord>();
   for (const p of properties) {
     if (!p.landlord) continue;
@@ -206,7 +206,7 @@ function pmCounts(pm: PmHome[], inBook: Set<string> | null): Pick<ManagedCounts,
   };
 }
 
-function countsOf(all: ManagedProperty[], landlords: ManagedLandlord[]): ManagedCounts {
+export function countsOf(all: ManagedProperty[], landlords: ManagedLandlord[]): ManagedCounts {
   /* Each home once, on its latest let - see lib/current-lets. */
   const properties = currentLets(all);
   const rents = properties.map((p) => p.rentMonthly).filter((r): r is number => r != null);

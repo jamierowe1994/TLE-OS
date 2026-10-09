@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { forgetNotices } from "@/lib/portfolio-notice";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { scopeFor } from "@/lib/scope";
@@ -117,6 +118,7 @@ export async function POST(req: NextRequest) {
       newRentFrom: ymd(b.newRentFrom),
       note: b.note,
     }, by);
+    forgetNotices();
     return NextResponse.json({ ok: true, review });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not record it." }, { status: 400 });

@@ -31,6 +31,7 @@ import type { CarriedJob } from "@/lib/works-carried";
 import type { DueVisit, Inspection } from "@/lib/inspections";
 import type { DueReview, Review } from "@/lib/tenancy-reviews";
 import type { MoveOut, OpenMoveOut } from "@/lib/move-outs";
+import PastTenancies from "@/components/portfolio/PastTenancies";
 
 /**
  * One home, the whole of it, on one page.
@@ -731,12 +732,19 @@ export default function PropertyPage() {
                 </button>
                 <button type="button" className={chip} onClick={() => pickTab("tenancy")}>
                   <DoodleIcon name="key" size={12} className="text-accent-dark" />
-                  {leaving ? <b className="font-semibold text-accent-dark">Leaving {leaving.moveOutOn ? day(leaving.moveOutOn) : "· date to set"}</b>
+                  {leaving ? <b className="font-semibold text-accent-dark">Relet · leaving {leaving.moveOutOn ? day(leaving.moveOutOn) : "date to set"}</b>
                     : tenancy.state === "loading" ? <Loading label="Tenancy" />
                     : tenancy.state === "ready" && tenancy.data.tenancy ? <TenancyLine t={tenancy.data.tenancy} />
                     : `${tenants.length} ${tenants.length === 1 ? "tenant" : "tenants"}`}
                 </button>
               </div>
+              {/* Kept on the book through notice (lib/portfolio-notice, 9 Oct 2026). */}
+              {p.held && (
+                <p className="mt-3 rounded-xl border border-accent-dark/40 bg-accent-soft/40 px-4 py-2.5 text-[12.5px] leading-relaxed">
+                  <strong>Kept on your book until the tenants move out{p.notice?.leavingOn ? ` on ${day(p.notice.leavingOn)}` : ""}.</strong>{" "}
+                  REX no longer shows this let, so this is the home as it last did. It drops off once the move-out is closed, and comes back with the next let.
+                </p>
+              )}
             <div className="mt-5 grid flex-1 grid-cols-1 gap-4 2xl:grid-cols-2">
               <section className={`${card} p-3.5 sm:p-5`}>
                 <p className={`${eyebrow} mb-3`}>{roomsOnly ? "Rooms" : tenants.length === 1 ? "Tenant" : "Tenants"}</p>
@@ -883,6 +891,15 @@ export default function PropertyPage() {
                     <EndingList data={ending.data} />
                   )}
                 </section>
+
+                {/* Every let this home has had since the archive started, with
+                    what was owed at the last PayProp read (lib/tenancy-archive). */}
+                {p.propertyId && (
+                  <section className={`${card} p-5 md:col-span-2`}>
+                    <p className={`${eyebrow} mb-3`}>Past tenancies</p>
+                    <PastTenancies propertyId={p.propertyId} compact />
+                  </section>
+                )}
 
                 {/* Rent review (Section 13) and Serve notice (Section 8):
                     Michael's checklists, decided on his Sections tab. Here

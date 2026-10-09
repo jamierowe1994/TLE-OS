@@ -2476,6 +2476,33 @@ ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS tenant_names TEXT;
 -- Whether we manage the home or only found the tenant (25 Sep 2026): decided
 -- by the OS from the newest of REX PM's agreement and PayProp's let, and why.
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS service_level TEXT;
+
+-- The tenancy archive (James, 9 Oct 2026): every let the managed book has
+-- ever shown, kept after the home leaves Portfolio. "Just because the
+-- property disappears doesn't mean we can lose the information" - who the
+-- tenants were, the rent, the landlord, and what they owed the last time
+-- PayProp was read, so a tenant who left owing can still be found.
+-- One row per REX let (its listing id), refreshed each time the book is read;
+-- last_seen stops moving the day the home drops off. Never written to REX.
+CREATE TABLE IF NOT EXISTS os_tenancy_archive (
+  listing_id     TEXT PRIMARY KEY,
+  property_id    TEXT,
+  name           TEXT NOT NULL DEFAULT '',
+  locality       TEXT NOT NULL DEFAULT '',
+  tenants        TEXT NOT NULL DEFAULT '',
+  landlord       TEXT NOT NULL DEFAULT '',
+  agent_id       TEXT,
+  agent_name     TEXT NOT NULL DEFAULT '',
+  rent_monthly   NUMERIC,
+  let_since      DATE,
+  snapshot       JSONB NOT NULL,
+  owed           NUMERIC,
+  owed_tenants   JSONB,
+  owed_checked_at TIMESTAMPTZ,
+  first_seen     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_tenancy_archive_property ON os_tenancy_archive (property_id, last_seen DESC);
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS service_basis TEXT;
 -- REX PM's own "Active letting agreement" list, read off its Properties screen
 -- (2 Oct 2026): pm_managed is the book REX PM's dashboard counts (527 that

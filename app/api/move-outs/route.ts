@@ -7,6 +7,7 @@ import { rexConfigured } from "@/lib/rex";
 import { lastImport, openTasks } from "@/lib/rexpm-tasks";
 import { listReviews } from "@/lib/tenancy-reviews";
 import type { ManagedProperty } from "@/lib/portfolio-types";
+import { forgetNotices } from "@/lib/portfolio-notice";
 import { listMoveOuts, openMoveOuts, recordMoveOut, summarise, OUTCOME_IDS, type MoveOut, type NewMoveOut, type Outcome } from "@/lib/move-outs";
 
 /**
@@ -88,6 +89,7 @@ export async function POST(req: NextRequest) {
       steps: Array.isArray(b.steps) ? b.steps.map(String) : [],
       note: b.note,
     }, by);
+    forgetNotices();
     return NextResponse.json({ ok: true, moveOut });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not close it." }, { status: 400 });
