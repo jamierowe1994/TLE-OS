@@ -14,6 +14,8 @@ import { whoIs } from "@/lib/admin";
 import { ASSEMBLE_AT, assembled, cut, markApplicationsFiled } from "@/lib/applications-board";
 import { acceptedRexRefs } from "@/lib/offer-decisions";
 import { hasDb, q } from "@/lib/db";
+import { can } from "@/lib/roles";
+import { propolyOnlyLets } from "@/lib/propoly-only-lets";
 
 /**
  * GET  /api/applications?limit=100  → the live book from REX, newest first
@@ -52,13 +54,15 @@ export async function GET(req: NextRequest) {
   try {
     /* The tester's own test offers (lib/test-overlay), on top - never anyone
        else's. Read alongside the book rather than after it. */
-    const [{ held, stale }, testRows, decided, osAccepted] = await Promise.all([
+    const [{ held, stale }, testRows, decided, osAccepted, propolyOnly] = await Promise.all([
       assembled(scope.rexUserId),
       req.nextUrl.searchParams.get("tests") === "0" ? Promise.resolve([]) : testApplicationsFor(actor?.email).catch(() => []),
       /* The agent's Accept or Decline in the OS (7 Oct 2026): the board shows
          an offer once it is accepted, here or in REX. */
       acceptedRexRefs().catch(() => new Map()),
       osAcceptedOffers(scope.everything ? null : actor?.email ?? null).catch(() => []),
+      /* Lets that only Propoly knows about (9 Oct 2026, 54 Maple Avenue). */
+      propolyOnlyLets(scope, { canPretenancy: Boolean(actor && can(actor.role as never, "see:pretenancy")) }).catch(() => []),
     ]);
     const { applications, stages, closed } = held.value;
     const tests = testRows.map((a) => ({ ...a, stageLabel: a.stageLabel ?? a.statusLabel, test: true }));
@@ -80,6 +84,7 @@ export async function GET(req: NextRequest) {
         osDecision: decided.get(`rex:${a.id}`) ?? null,
       }))],
       osAccepted,
+      propolyOnly,
       scope: scope.label,
       everything: scope.everything,
       /* When REX actually said this, not when it was served. */

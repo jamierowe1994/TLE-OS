@@ -137,7 +137,9 @@ const gbp = (n: number | null) => (n == null ? "—" : `£${n.toLocaleString("en
 
 /** An offer saved in the OS and accepted there, with no REX application yet. */
 type OsAccepted = { id: string; name: string; address: string; listingId: string | null; amount: number | null; moveIn: string | null; by: string; at: string };
-type AppsAnswer = { applications?: Application[]; osAccepted?: OsAccepted[]; error?: string; scope?: string; everything?: boolean; stale?: boolean };
+/* A let only Propoly knows about (lib/propoly-only-lets, 9 Oct 2026). */
+type PropolyOnly = { id: string; address: string; locality: string; tenants: string; status: string; stage: string; offer: number | null; moveIn: string | null; received: string | null; agentName: string | null; href: string; external: boolean };
+type AppsAnswer = { applications?: Application[]; osAccepted?: OsAccepted[]; propolyOnly?: PropolyOnly[]; error?: string; scope?: string; everything?: boolean; stale?: boolean };
 const APPS_URL = "/api/applications?limit=200";
 
 /**
@@ -193,6 +195,7 @@ export default function Applications() {
   useEffect(() => whenIdle(() => { void loadApplicationDrawer(); }), []);
   const [apps, setApps] = useState<Application[] | null>(() => peekJson<AppsAnswer>(APPS_URL)?.applications ?? null);
   const [osAccepted, setOsAccepted] = useState<OsAccepted[]>(() => peekJson<AppsAnswer>(APPS_URL)?.osAccepted ?? []);
+  const [propolyOnly, setPropolyOnly] = useState<PropolyOnly[]>(() => peekJson<AppsAnswer>(APPS_URL)?.propolyOnly ?? []);
   /* Offers still waiting on a decision, across the listings - they live there now. */
   const [openOffers, setOpenOffers] = useState<number | null>(null);
   useEffect(() => {
@@ -249,6 +252,7 @@ export default function Applications() {
         if (d.scope) setScope({ label: d.scope, everything: Boolean(d.everything) });
         setApps(d.applications ?? []);
         setOsAccepted(d.osAccepted ?? []);
+        setPropolyOnly(d.propolyOnly ?? []);
       })
       .catch((e: Error) => live && setError(e.message));
     return () => {
@@ -262,6 +266,13 @@ export default function Applications() {
   const lets = useMemo(() => all.filter(isLet), [all]);
   const agents = useMemo(() => [...new Set(lets.map((a) => a.agent).filter((x): x is string => Boolean(x)))].sort(), [lets]);
   const mine = useMemo(() => (fAgent ? lets.filter((a) => a.agent === fAgent) : lets), [lets, fAgent]);
+  /* Propoly names people its own way (Kirstie is Mulholland there, Wallington
+     in the book), so the agent filter matches on the first name. */
+  const propolyMine = useMemo(() => {
+    if (!fAgent) return propolyOnly;
+    const first = fAgent.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+    return propolyOnly.filter((p) => (p.agentName ?? "").trim().split(/\s+/)[0]?.toLowerCase() === first);
+  }, [propolyOnly, fAgent]);
   /* Latest activity (James, 6 Oct 2026): the application somebody last did
      something on comes first - accepted, a comment, the PLC pack moving -
      rather than the newest created. Read when the button is first pressed. */
@@ -299,11 +310,11 @@ export default function Applications() {
   const pages = Math.max(1, Math.ceil(rows.length / PER_PAGE));
   const shown = rows.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
   const counts = useMemo(() => ({
-    open: mine.filter(isOpen).length,
+    open: mine.filter(isOpen).length + propolyMine.length,
     attention: mine.filter((a) => needsAttention(a) !== null).length,
     closed: mine.filter((a) => a.closed).length,
     by: (k: string) => (k === "rex" ? mine.filter((a) => rexToMark(a) && !a.closed).length + osAccepted.length : 0),
-  }), [mine, osAccepted]);
+  }), [mine, osAccepted, propolyMine]);
   const open = all.find((a) => a.id === openId) ?? null;
   /* Asked for by name but not on the board (an accepted let whose move-in has
      passed is cut from it): fetch that one and add it, rather than opening
@@ -472,7 +483,7 @@ export default function Applications() {
                   : stage === "closed"
                     ? "Closed"
                     : STAGES.find((st) => st.key === stage)?.label}
-              <span className="figures ml-2 text-[14px] text-muted">{rows.length}</span>
+              <span className="figures ml-2 text-[14px] text-muted">{rows.length + (stage === "open" ? propolyMine.length : 0)}</span>
             </h2>
             <div className="ml-auto flex flex-wrap items-center gap-2">
               {stage !== "open" && (
@@ -522,11 +533,47 @@ export default function Applications() {
             </div>
           )}
 
+          {/* Let through Propoly alone (9 Oct 2026): found a tenant without
+              marketing it, so there is no application on the book. Shown from
+              Propoly, under the agent Propoly names, and opened there. */}
+          {stage === "open" && propolyMine.length > 0 && (
+            <div className="mb-4 rounded-[18px] border border-line/60 bg-white p-4">
+              <p className="text-[12.5px] font-semibold">Let Through Propoly</p>
+              <p className="mt-0.5 text-[11.5px] leading-snug text-muted">
+                In Propoly with no application here, so they are shown from Propoly. Open one to see where it is up to.
+              </p>
+              <ul className="mt-2.5 divide-y divide-line/40">
+                {propolyMine.map((p) => (
+                  <li key={p.id}>
+                    <Link
+                      href={p.href}
+                      {...(p.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                      className="flex items-center gap-3 py-2.5 transition-colors hover:bg-page/60"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="hand block truncate text-[13.5px]">{p.address}</span>
+                        <span className="block truncate text-[11px] text-muted">
+                          {p.tenants}
+                          {p.status ? ` · ${p.status}` : ""}
+                          {p.moveIn ? ` · moving in ${new Date(`${p.moveIn}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}
+                          {scope?.everything && p.agentName ? ` · ${p.agentName}` : ""}
+                        </span>
+                      </span>
+                      {p.offer != null && <span className="figures whitespace-nowrap text-[13px]">{gbp(p.offer)} pcm</span>}
+                      <span className="hidden whitespace-nowrap rounded-full border border-line/60 px-2 py-0.5 text-[10.5px] text-muted sm:inline-block">Propoly</span>
+                      <span aria-hidden className="text-[13px] text-muted/70">{p.external ? "↗" : "›"}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {apps === null ? (
             <BoardSkeleton label="Loading applications…" count={6} />
           ) : error ? (
             <p className="py-10 text-center text-[12.5px] text-muted">{error}</p>
-          ) : rows.length === 0 && !(stage === "rex" && osAccepted.length) ? (
+          ) : rows.length === 0 && !(stage === "rex" && osAccepted.length) && !(stage === "open" && propolyMine.length) ? (
             <p className="py-10 text-center text-[12.5px] text-muted">
               {stage === "attention"
                 ? "Nothing needs a hand. Rare, and good."
