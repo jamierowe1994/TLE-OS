@@ -162,7 +162,10 @@ export async function pushCaseToPropoly(caseId: string, by: string): Promise<Pro
     try {
       const { bytes, type: mime } = await bytesOf(doc);
       const form = new FormData();
-      form.set("deal_id", dealId);
+      /* deal_uuid, as Propoly's spec has it. deal_id was sent until 9 Oct
+         2026 and Propoly answers it "Missing required parameter: deal_uuid" -
+         no approved pack had reached here yet, so nothing was lost. */
+      form.set("deal_uuid", dealId);
       form.set("type", type);
       form.set("name", doc.name);
       if (expiry) form.set("expiration", expiry);
