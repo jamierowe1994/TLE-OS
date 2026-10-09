@@ -2,6 +2,7 @@ import "server-only";
 import { payPropAccounts, payPropGetAll, type PayPropAccountId } from "@/lib/business/payprop";
 import { readCache, writeCache } from "@/lib/business/integration-cache";
 import { parseAddress } from "@/lib/address-parse";
+import { payPropInvoices, rentByProperty } from "@/lib/business/payprop-rent-invoices";
 
 // The managed book out of PayProp, attributable to the partner who runs each
 // property. PayProp names them in `responsible_agent` — a free-text name, not
@@ -302,17 +303,18 @@ async function computePortfolioBook(): Promise<PortfolioBook | null> {
   const accounts = payPropAccounts();
   if (accounts.length === 0) return null;
 
-  const perAccount: Array<{ account: PayPropAccountId; rows: PropertyRow[] }> = [];
+  const perAccount: Array<{ account: PayPropAccountId; rows: PropertyRow[]; invoiced: Record<string, number> }> = [];
   for (const a of accounts) {
     try {
-      perAccount.push({
-        account: a,
-        rows: await payPropGetAll<PropertyRow>(a, "export/properties", {
-          is_archived: "false",
-          include_active_tenancies: "true",
-          include_contract_amount: "true",
-        }),
+      const rows = await payPropGetAll<PropertyRow>(a, "export/properties", {
+        is_archived: "false",
+        include_active_tenancies: "true",
+        include_contract_amount: "true",
       });
+      const invoiced = Object.fromEntries(
+        Object.entries(rentByProperty(await payPropInvoices(a))).map(([pid, r]) => [pid, r.monthly])
+      );
+      perAccount.push({ account: a, rows, invoiced });
     } catch (e) {
       // One agency short means the business-wide total would be wrong, so the
       // whole book fails — but say which agency, so it's diagnosable.
@@ -336,14 +338,17 @@ async function computePortfolioBook(): Promise<PortfolioBook | null> {
   const rentsByKey = new Map<string, Set<number>>();
   const slices: AccountSlice[] = [];
 
-  for (const { account, rows } of perAccount) {
+  for (const { account, rows, invoiced } of perAccount) {
     let accProperties = 0;
     let accRent = 0;
     const accLevels: Record<string, number> = {};
     for (const r of rows) {
-      // contract_amount is the agreed rent; monthly_payment_required is what's
-      // actually collected each month. Prefer the latter, fall back.
-      const rent = money(r.monthly_payment_required) || money(r.contract_amount);
+      /* The Rent invoice first (9 Oct 2026): what the tenant is billed, as a
+         month. monthly_payment_required is a setting that goes stale (6 Ruskin
+         Place: £1,000 against a £1,200 invoice), so it only stands in where a
+         property has no Rent invoice, then contract_amount. James, 9 Oct 2026:
+         homes with no tenant keep their setting in the rent roll. */
+      const rent = invoiced[text(r.id)] ?? (money(r.monthly_payment_required) || money(r.contract_amount));
       totalProperties++;
       totalRentRoll += rent;
       accProperties++;

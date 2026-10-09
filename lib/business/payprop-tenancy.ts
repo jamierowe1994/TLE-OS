@@ -2,6 +2,7 @@ import "server-only";
 import { payPropAccounts, payPropGetAll, payPropRaw, type PayPropAccountId } from "@/lib/business/payprop";
 import { propertyKey, rentKey } from "@/lib/business/payprop-portfolio";
 import { readCache, writeCache } from "@/lib/business/integration-cache";
+import { payPropInvoices, rentByProperty } from "@/lib/business/payprop-rent-invoices";
 
 // The tenancy register: two facts per managed property that the 2 Aug 2026
 // probe proved PayProp holds and nothing else does.
@@ -130,17 +131,6 @@ export const SCHEME_PATTERNS: Array<[RegExp, string]> = [
   [/my\s*deposits/i, "My Deposits Custodial"],
 ];
 
-/** An invoice's frequency_code as months: what one bill is worth per month. */
-const MONTHS_PER: Record<string, number> = {
-  M: 1,
-  W: 52 / 12,
-  "2W": 26 / 12,
-  "4W": 13 / 12,
-  Q: 1 / 3,
-  "6M": 1 / 6,
-  A: 1 / 12,
-};
-
 /** Rent by rentKey. A key two properties answer to belongs to neither. */
 function rentsByKey(byId: Record<string, number>, keyById: Record<string, string>): Record<string, number> {
   const claims = new Map<string, string[]>();
@@ -175,11 +165,10 @@ async function computeRegister(): Promise<TenancyRegister | null> {
   // a contradiction to drop, not a row-order race (review find).
   const schemeSeen = new Map<string, Map<string, string>>();
   const holdingByPropertyId: Record<string, HoldingInvoice> = {};
-  // Rent being billed today, a month's worth, per property id, and the
-  // rentKey each property id answers to (from the invoice's own address).
+  // Rent being billed today, a month's worth, per account|property id, and
+  // the rentKey each answers to (from the invoice's own address).
   const rentByPropertyId: Record<string, number> = {};
   const rentKeyByPropertyId: Record<string, string> = {};
-  const today = new Date().toISOString().slice(0, 10);
 
   for (const account of accounts as PayPropAccountId[]) {
     // ---- tenancies ----
@@ -281,41 +270,22 @@ async function computeRegister(): Promise<TenancyRegister | null> {
       }
     }
 
+    // ---- the rent, from the Rent invoices (see payprop-rent-invoices) ----
+    const invoices = await payPropInvoices(account);
+    for (const [pid, r] of Object.entries(rentByProperty(invoices))) {
+      const key = `${account}|${pid}`;
+      rentByPropertyId[key] = r.monthly;
+      const rk = rentKey(r.name ?? r.firstLine ?? "", r.postcode);
+      if (rk) rentKeyByPropertyId[key] = rk;
+    }
+
     // ---- holding-deposit invoices ----
     // "Holding deposit" is a real invoice category in PayProp's own
     // vocabulary (seen verbatim on the Scotland category list). Invoice rows
     // carry category.name whether or not the key can read the category LIST,
     // so this works on both agencies today.
-    const invoices = await payPropGetAll<Record<string, unknown>>(
-      account,
-      "export/invoices"
-    );
     for (const inv of invoices) {
       const cat = str((inv.category as Record<string, unknown> | undefined)?.name);
-      /* THE RENT ITSELF (9 Oct 2026). The property's monthly_payment_required
-         is a setting nobody keeps up: 6 Ruskin Place read £1,000 there while
-         its Rent invoice bills £1,200, and 80 of the 123 homes taking their
-         rent from PayProp were off. The Rent invoice is what the tenant is
-         actually charged. Only invoices in force today count (a re-let's next
-         invoice is already listed before its start), turned into a month by
-         their frequency, and two on one property (joint tenants billed apart)
-         add up. A frequency we don't know adds nothing rather than a guess. */
-      if (cat && /^rent$/i.test(cat)) {
-        const prop = inv.property as Record<string, unknown> | undefined;
-        const pid = str(prop?.id);
-        const perMonth = MONTHS_PER[str(inv.frequency_code) ?? ""];
-        const amount = Number(inv.gross_amount);
-        const from = str(inv.from_date)?.slice(0, 10) ?? null;
-        const to = str(inv.to_date)?.slice(0, 10) ?? null;
-        if (pid && perMonth && Number.isFinite(amount) && amount > 0 && (!from || from <= today) && (!to || to >= today)) {
-          const key = `${account}|${pid}`;
-          rentByPropertyId[key] = Math.round(((rentByPropertyId[key] ?? 0) + amount * perMonth) * 100) / 100;
-          const addr = prop?.address as Record<string, unknown> | undefined;
-          const rk = rentKey(str(prop?.name) ?? str(addr?.first_line) ?? "", str(addr?.postal_code));
-          if (rk) rentKeyByPropertyId[key] = rk;
-        }
-        continue;
-      }
       if (!cat || !/holding\s*deposit/i.test(cat)) continue;
       const prop = inv.property as Record<string, unknown> | undefined;
       // Field-name fallbacks, because PayProp shapes drift between endpoints
