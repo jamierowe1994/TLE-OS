@@ -436,6 +436,11 @@ export async function runHandover(
       const user = agentEmail ? await propolyGet(`/api/v1/users?email=${encodeURIComponent(agentEmail.toLowerCase())}`) : null;
       const managedBy = user ? str(firstMatch(user.body, () => true)?.id ?? firstMatch(user.body, () => true)?.uuid) : null;
       const attrs = ((listing.attributes ?? property.attributes ?? {}) as Row);
+      const pick = (k: string) => property[k] ?? attrs[k] ?? listing[k];
+      /* REX says gas as "yes"/"no", not true/false (12b Cliff Road: "yes", 9 Oct
+         2026), so every home went to Propoly as no gas - and Propoly refuses a
+         gas certificate on a no-gas property. */
+      const gasRaw = pick("attr_has_gas");
       const payload = {
         property: {
           managed_by_user_id: managedBy,
@@ -447,8 +452,8 @@ export async function runHandover(
           postcode,
           rent_type: "entire_property",
           /* Howard reads these off the property, and sends a number and a yes/no, never null. */
-          number_of_bedrooms: Number(property.attr_bedrooms ?? attrs.attr_bedrooms ?? listing.attr_bedrooms ?? 0) || 0,
-          gas: (property.attr_has_gas ?? attrs.attr_has_gas ?? listing.attr_has_gas) === true,
+          number_of_bedrooms: Number(pick("attr_bedrooms") ?? 0) || 0,
+          gas: gasRaw === true || gasRaw === 1 || norm(gasRaw) === "yes",
         },
       };
       if (!managedBy) {
