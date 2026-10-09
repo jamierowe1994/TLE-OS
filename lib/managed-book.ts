@@ -5,6 +5,7 @@ import { activeOsProperties, pmManagedHomes, type OsProperty, type PmHome } from
 import { getPortfolioBook, rentKey } from "@/lib/business/payprop-portfolio";
 import { getTenancyRegister } from "@/lib/business/payprop-tenancy";
 import { attach, payPropContacts } from "@/lib/business/payprop-tenant-contacts";
+import { nameKey, tenantContacts } from "@/lib/tenant-contacts";
 import { sittingTenantsByProperty } from "@/lib/rex-tenants";
 import { parseAddress, sameDoor, type Parsed } from "@/lib/address-parse";
 import type {
@@ -411,12 +412,19 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
      tenants in residence, so where REX gives no one, the home's latest let
      reads REX PM's names - never on an older let, and never on a home REX PM
      itself shows as vacant. Names only: there is no REX contact behind them. */
+  /* Their email and mobile from REX PM's Tenancies report, imported into
+     os_tenant_contacts on 9 Oct 2026 (lib/tenant-contacts). */
+  const held = await tenantContacts().catch(() => new Map<string, Map<string, { email: string | null; phone: string | null }>>());
   for (const p of currentLets(properties)) {
     if (p.tenants.length || !p.propertyId) continue;
     const o = pmFor.get(p.propertyId);
     if (!o?.tenantNames) continue;
     if ("pmStatus" in o && (o as PmHome).pmStatus === "vacant") continue;
-    p.tenants = o.tenantNames.split(/\s*[,;]\s*/).filter(Boolean).map((name, i) => ({ contactId: `rexpm:${o.id}:${i}`, name, email: null, phone: null }));
+    const known = held.get(o.id);
+    p.tenants = o.tenantNames.split(/\s*[,;]\s*/).filter(Boolean).map((name, i) => {
+      const c = known?.get(nameKey(name));
+      return { contactId: `rexpm:${o.id}:${i}`, name, email: c?.email ?? null, phone: c?.phone ?? null };
+    });
   }
   /* Email and mobile from PayProp where the book has neither (9 Oct 2026):
      REX PM gives names only. Joined by the home's address, and given only to
