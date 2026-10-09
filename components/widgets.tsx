@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import DiaryCalendar from "@/components/DiaryCalendar";
+import ListPopout, { ViewAllButton } from "@/components/ListPopout";
 import DiaryGrid from "@/components/DiaryGrid";
 import LeadSourceChart from "@/components/LeadSourceChart";
 import OutstandingTermsWidget from "@/components/OutstandingTerms";
@@ -296,6 +297,8 @@ function DiaryWidget({ w, h }: { w: number; h: number }) {
 /* ── The Today widget carries its own calendar modal. ── */
 function TodayWidget({ w, h }: { w: number; h: number }) {
   const [open, setOpen] = useState(false);
+  /* Today's whole list, popped out (James, 9 Oct 2026). */
+  const [all, setAll] = useState(false);
   const { appts, loading, error, whose } = useMyDiary();
   /**
    * IN TIME ORDER, all-day first.
@@ -336,8 +339,9 @@ function TodayWidget({ w, h }: { w: number; h: number }) {
   /** The next thing with an actual time on it. */
   const nextUp = today.find((a) => !a.allDay)?.start ?? "—";
   return (
-    <>
-      <button type="button" onClick={() => setOpen(true)} className="block w-full text-left">
+    <div className="flex h-full flex-col">
+      {/* The list takes what room is left; the buttons stay on the tile. */}
+      <button type="button" onClick={() => setOpen(true)} className={`flex min-h-0 w-full flex-1 flex-col justify-start overflow-hidden text-left ${h >= 2 ? "[mask-image:linear-gradient(to_bottom,black_calc(100%-24px),transparent)]" : ""}`}>
         <div className="flex items-center justify-between gap-2">
           <Head icon="calendar" label="Today" />
           {w >= 2 && <DiaryOwnerTag whose={whose} />}
@@ -383,14 +387,62 @@ function TodayWidget({ w, h }: { w: number; h: number }) {
             )}
           </div>
         )}
-        {h >= 2 && (
-          <span className="mt-3 block text-[11px] font-semibold text-muted">
-            {today.length > 4 ? `+${today.length - 4} more today — open the full calendar →` : "Open the full calendar →"}
-          </span>
-        )}
       </button>
+      {/* Buttons, not "+3 more": the tile cannot scroll (James, 9 Oct 2026). */}
+      {h >= 2 && !loading && !(error && today.length === 0) && (
+        <div className="mt-3 flex shrink-0 flex-wrap items-center gap-2">
+          <ViewAllButton
+            /* A one-wide tile below desktop width has no room for the long
+               label on one line. */
+            label={w >= 2 ? "View full calendar" : <><span className="hidden xl:inline">View full calendar</span><span className="xl:hidden">Full calendar</span></>}
+            onClick={() => setOpen(true)}
+          />
+          <ViewAllButton onClick={() => setAll(true)} />
+        </div>
+      )}
+      <ListPopout
+        open={all}
+        onClose={() => setAll(false)}
+        icon="calendar"
+        title="Today"
+        sub={new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/London" })}
+        footer={
+          <ViewAllButton
+            label="View full calendar"
+            onClick={() => {
+              setAll(false);
+              setOpen(true);
+            }}
+          />
+        }
+      >
+        <DayList list={today} empty={emptyLine} />
+        <p className="mb-2 mt-6 text-[10px] font-semibold uppercase tracking-wide text-muted">Tomorrow</p>
+        <DayList list={tomorrow} empty="Nothing in the diary tomorrow." muted />
+      </ListPopout>
       <DiaryCalendar open={open} onClose={() => setOpen(false)} />
-    </>
+    </div>
+  );
+}
+
+/** One day's appointments in full, for the Today pop-out. */
+function DayList({ list, empty, muted = false }: { list: Appt[]; empty: string; muted?: boolean }) {
+  if (list.length === 0) return <p className="text-[12px] text-muted">{empty}</p>;
+  return (
+    <ul>
+      {list.map((t) => (
+        <li key={t.id} className="flex items-baseline gap-3 border-b border-line/40 py-2.5 last:border-0">
+          <span className={`w-12 shrink-0 ${muted ? "text-muted" : "text-accent-dark"} ${t.allDay ? "text-[9.5px] uppercase tracking-wide" : "figures text-[13px]"}`}>
+            {t.allDay ? "all day" : t.start}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13px]">{t.what}</span>
+            {t.who && <span className="block text-[11.5px] text-muted">{t.who}</span>}
+            {t.where && <span className="block text-[11.5px] text-muted">{t.where}</span>}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -412,13 +464,66 @@ function AttentionWidget({ w, h }: { w: number; h: number }) {
     (j) => (j.ok && Array.isArray(j.notices) ? { notices: j.notices as Notice[], unread: Number(j.unread ?? 0), seenAt: (j.seenAt as string | null) ?? null } : null)
   );
   const [done, setDone] = useState<Set<string>>(new Set());
+  /* "View all" pops the whole list out (James, 9 Oct 2026): the tile cannot
+     scroll, so growing it in place ran off the bottom. The tile reads 12;
+     the pop-out reads the bell's full list when it opens. */
   const [showAll, setShowAll] = useState(false);
-  const items = (data?.notices ?? []).map((n) => ({
+  const [everything, setEverything] = useState<Notice[] | null>(null);
+  const [allError, setAllError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!showAll) return;
+    let gone = false;
+    setAllError(null);
+    fetch("/api/notifications?limit=100", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; notices?: Notice[] }) => {
+        if (gone) return;
+        if (j.ok && Array.isArray(j.notices)) setEverything(j.notices);
+        else setAllError("The rest of the list couldn't be read just now.");
+      })
+      .catch(() => { if (!gone) setAllError("The rest of the list couldn't be read just now."); });
+    return () => { gone = true; };
+  }, [showAll]);
+  const shape = (n: Notice) => ({
     id: n.id,
     text: n.title + (n.body ? ` - ${n.body}` : ""),
     href: n.href,
     hot: n.tone === "warn" || (data?.seenAt ? n.at > data.seenAt : true),
-  }));
+  });
+  const items = (data?.notices ?? []).map(shape);
+  const allItems = everything ? everything.map(shape) : items;
+  const tick = (id: string) =>
+    setDone((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  /** One line with its tick, on the tile and in the pop-out alike. */
+  const line = (a: (typeof items)[number], onOpen?: () => void) => {
+    const ticked = done.has(a.id);
+    return (
+      <li key={a.id} className="flex items-start gap-2.5">
+        <button
+          type="button"
+          aria-label={ticked ? "Untick" : "Tick"}
+          onClick={() => tick(a.id)}
+          className={`mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors ${
+            ticked ? "border-accent-dark bg-accent-soft text-accent-dark" : "border-line"
+          }`}
+        >
+          {ticked && <span className="text-[10px] leading-none">✓</span>}
+        </button>
+        {a.href ? (
+          <Link href={a.href} onClick={onOpen} className={`text-[12.5px] leading-snug hover:underline ${ticked ? "text-muted line-through opacity-60" : a.hot ? "" : "text-muted"}`}>
+            {a.text}
+          </Link>
+        ) : (
+          <span className={`text-[12.5px] leading-snug ${ticked ? "text-muted line-through opacity-60" : a.hot ? "" : "text-muted"}`}>{a.text}</span>
+        )}
+      </li>
+    );
+  };
   const open = items.filter((a) => !done.has(a.id)).length;
   if (h === 1) {
     return (
@@ -429,8 +534,8 @@ function AttentionWidget({ w, h }: { w: number; h: number }) {
     );
   }
   return (
-    <>
-      <div className="flex items-center justify-between gap-2">
+    <div className="flex h-full flex-col">
+      <div className="flex shrink-0 items-center justify-between gap-2">
         <Head icon="bell" label="Needs attention" />
         {!loading && !error && <Pill tone="accent">{open}</Pill>}
       </div>
@@ -441,53 +546,29 @@ function AttentionWidget({ w, h }: { w: number; h: number }) {
       ) : items.length === 0 ? (
         <p className="mt-5 text-[11.5px] text-muted">Nothing needs you right now.</p>
       ) : (
-        <ul className="mt-5 space-y-2.5">
-          {(showAll ? items : items.slice(0, 4)).map((a) => {
-            const ticked = done.has(a.id);
-            return (
-              <li key={a.id} className="flex items-start gap-2.5">
-                <button
-                  type="button"
-                  aria-label={ticked ? "Untick" : "Tick"}
-                  onClick={() =>
-                    setDone((cur) => {
-                      const next = new Set(cur);
-                      if (next.has(a.id)) next.delete(a.id);
-                      else next.add(a.id);
-                      return next;
-                    })
-                  }
-                  className={`mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors ${
-                    ticked ? "border-accent-dark bg-accent-soft text-accent-dark" : "border-line"
-                  }`}
-                >
-                  {ticked && <span className="text-[10px] leading-none">✓</span>}
-                </button>
-                {a.href ? (
-                  <Link href={a.href} className={`text-[12.5px] leading-snug hover:underline ${ticked ? "text-muted line-through opacity-60" : a.hot ? "" : "text-muted"}`}>
-                    {a.text}
-                  </Link>
-                ) : (
-                  <span className={`text-[12.5px] leading-snug ${ticked ? "text-muted line-through opacity-60" : a.hot ? "" : "text-muted"}`}>{a.text}</span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        /* The list takes what room is left; the button stays on the tile. */
+        <ul className="[mask-image:linear-gradient(to_bottom,black_calc(100%-24px),transparent)] mt-5 min-h-0 flex-1 space-y-2.5 overflow-hidden">{items.slice(0, 4).map((a) => line(a))}</ul>
       )}
-      {items.length > 4 && !showAll && (
-        <button
-          type="button"
-          onClick={() => setShowAll(true)}
-          className="mt-3 text-[11px] font-semibold text-muted transition-colors hover:text-ink"
-        >
-          +{items.length - 4} more →
-        </button>
+      {items.length > 0 && (
+        <div className="mt-3 shrink-0">
+          <ViewAllButton onClick={() => setShowAll(true)} />
+        </div>
       )}
+      <ListPopout
+        open={showAll}
+        onClose={() => setShowAll(false)}
+        icon="bell"
+        title="Needs Attention"
+        sub="The same list as the bell, newest first. Ticking hides a line on this screen."
+      >
+        <ul className="space-y-3">{allItems.map((a) => line(a, () => setShowAll(false)))}</ul>
+        {everything === null && !allError && <p className="mt-4 text-[11.5px] text-muted">Reading the rest of the list…</p>}
+        {allError && <p className="mt-4 text-[11.5px] text-accent-dark">{allError}</p>}
+      </ListPopout>
       {w >= 2 && !loading && !error && (
-        <p className="mt-3 border-t border-line/50 pt-2 text-[10px] text-muted">The same list as the bell, newest first. Opening the bell marks it read.</p>
+        <p className="mt-3 shrink-0 border-t border-line/50 pt-2 text-[10px] text-muted">The same list as the bell, newest first. Opening the bell marks it read.</p>
       )}
-    </>
+    </div>
   );
 }
 
