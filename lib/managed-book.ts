@@ -3,6 +3,7 @@ import "server-only";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import { activeOsProperties, pmManagedHomes, type OsProperty, type PmHome } from "@/lib/os-properties";
 import { getPortfolioBook, rentKey } from "@/lib/business/payprop-portfolio";
+import { getTenancyRegister } from "@/lib/business/payprop-tenancy";
 import { sittingTenantsByProperty } from "@/lib/rex-tenants";
 import { parseAddress, sameDoor, type Parsed } from "@/lib/address-parse";
 import type {
@@ -422,11 +423,17 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
      (E&W while its connection is down) adds nothing rather than an old figure.
      Never overrides a rent REX does hold - where the two disagree is the
      Rent Check's business, not the book's. */
-  const pp = await getPortfolioBook().catch(() => null);
-  if (pp?.rentByKey) {
+  /* The Rent invoice first (9 Oct 2026): what the tenant is billed. The
+     property's monthly_payment_required setting is the fallback only, as it
+     goes stale - 6 Ruskin Place showed £1,000 against a £1,200 invoice. A
+     register over a day old is not used for this. */
+  const [pp, reg] = await Promise.all([getPortfolioBook().catch(() => null), getTenancyRegister().catch(() => null)]);
+  const invoiced = reg?.rentByRentKey && Date.now() - Date.parse(reg.computedAt) < 26 * 3_600_000 ? reg.rentByRentKey : null;
+  if (pp?.rentByKey || invoiced) {
     for (const p of properties) {
       if (p.rentMonthly) continue;
-      const rent = pp.rentByKey[rentKey(p.address || p.name, p.postcode)];
+      const key = rentKey(p.address || p.name, p.postcode);
+      const rent = invoiced?.[key] ?? pp?.rentByKey?.[key];
       if (!rent) continue;
       p.rent = rent;
       p.rentPeriod = "month";
