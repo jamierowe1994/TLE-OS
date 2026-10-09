@@ -1,7 +1,7 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { notLetFrom } from "@/lib/not-let";
-import { osCertsFor } from "@/lib/os-certs";
+import { checkingFor, osCertsFor } from "@/lib/os-certs";
 import { notNeededAll } from "@/lib/cert-not-needed";
 import { NEXT_TENANCY_CERTS, isScottishHome, withMark, type Cert, type CertKey, type CompProperty } from "@/lib/compliance";
 
@@ -94,12 +94,13 @@ function better(held: Cert | undefined, next: Cert): boolean {
  * the OS record have had their say, before rooms inherit from their house.
  */
 export async function applySweep(properties: CompProperty[]): Promise<void> {
-  const [answers, vault, notNeeded] = await Promise.all([
+  const [answers, vault, notNeeded, checking] = await Promise.all([
     sweepAnswers().catch(() => new Map<string, SweepAnswers>()),
     osCertsFor([...new Set(properties.map((p) => String(p.id)).filter((id) => /^\d+$/.test(id)))]).catch(
       () => new Map<string, Partial<Record<CertKey, Cert>>>()
     ),
     notNeededAll().catch(() => []),
+    checkingFor([...new Set(properties.map((p) => String(p.id)))]).catch(() => new Map()),
   ]);
   const exempt = new Map(notNeeded.map((n) => [`${n.propertyId}|${n.cert}`, n]));
   for (const p of properties) {
@@ -112,6 +113,14 @@ export async function applySweep(properties: CompProperty[]): Promise<void> {
       }
     }
 
+    /* A newer gas safety record or EICR waiting for the compliance team's
+       check (lib/cert-hold): shown beside the live one, never counted. */
+    const ch = checking.get(String(p.id));
+    if (ch) {
+      for (const [k, c] of Object.entries(ch) as [CertKey, NonNullable<Cert["checking"]>][]) {
+        p.certs[k] = { ...(p.certs[k] ?? { expires: null, attached: false }), checking: c };
+      }
+    }
     const a = answers.get(String(p.id));
     if (a) {
       /* A tenant REX names is a tenant in, whatever the OS record lacks. */

@@ -6,6 +6,7 @@ import { R2_BUCKET, safeName, withR2 } from "@/lib/r2";
 import { rexWriteBlockedBecause, writeCertificateToRex } from "@/lib/plc-rex";
 import { refreshComplianceBook } from "@/lib/compliance-cache";
 import { shareCertificate, type SharePerson, type ShareResult } from "@/lib/certificate-share";
+import { CHECKING_LABEL, HELD_FOR_CHECK } from "@/lib/cert-hold";
 
 /**
  * FILING A CERTIFICATE. One path, whichever door it came in by.
@@ -81,6 +82,8 @@ export interface CertRow extends Record<string, unknown> {
   rex_at: Date | null;
   share_people?: unknown;
   shared_at?: Date | null;
+  /** Held for compliance's check (lib/cert-hold): not in REX, not counted. */
+  awaiting_check?: boolean;
 }
 
 export const ymd = (v: Date | string | null) =>
@@ -98,6 +101,7 @@ export const outCert = (r: CertRow) => ({
   addedBy: r.added_by,
   addedAt: new Date(r.added_at).toISOString(),
   rex: { entryId: r.rex_entry_id, note: r.rex_note, at: r.rex_at ? new Date(r.rex_at).toISOString() : null, ok: Boolean(r.rex_entry_id) },
+  awaitingCheck: Boolean(r.awaiting_check),
 });
 
 /**
@@ -184,12 +188,25 @@ export interface FileCertificate {
 }
 
 /** What filing says about the send, while the certificate waits for its check. */
-const waitingForCheck = (): ShareResult => ({
+const waitingForCheck = (held: boolean): ShareResult => ({
   armed: false,
   skipped: "waiting for compliance to check it",
   outcomes: [],
-  line: "Goes to the landlord and tenants once compliance has checked it.",
+  line: held
+    ? `${CHECKING_LABEL}. It goes live, and to the landlord and tenants, once they have verified it.`
+    : "Goes to the landlord and tenants once compliance has checked it.",
 });
+
+/**
+ * Compliance has verified a certificate that was held for them (9 Oct 2026):
+ * it stops waiting, goes into REX, and the book is refreshed so every screen
+ * shows it in date. Once only - the flag is the claim.
+ */
+export async function releaseHeldCertificate(certificateId: string): Promise<CertRow | null> {
+  const rows = await q<CertRow>(`UPDATE os_certificates SET awaiting_check = false WHERE id = $1 AND awaiting_check RETURNING *`, [certificateId]);
+  if (!rows[0]) return null;
+  return writeCertificateRow(rows[0], `Written by TLE OS from ${rows[0].source} (${rows[0].name}), verified by compliance.`, true);
+}
 
 /**
  * Compliance has checked it: send it on to everyone entitled to it.
@@ -234,13 +251,18 @@ export async function fileCertificate(input: FileCertificate): Promise<{ row: Ce
       })
     )
   );
+  /* A gas safety record or EICR from anyone but the compliance office waits
+     for their check before it goes live (lib/cert-hold): not into REX, not
+     counted, until releaseHeldCertificate. */
+  const held = !input.checkedBy && HELD_FOR_CHECK.has(input.type);
   const rows = await q<CertRow>(
-    `INSERT INTO os_certificates (id, property_id, property_name, type_id, expiry, issue, r2_key, name, source, added_by, share_people)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb) RETURNING *`,
-    [id, input.propertyId, input.propertyName, input.type, input.expiry, input.issue || null, key, input.fileName, input.source, input.by, JSON.stringify(input.people ?? [])]
+    `INSERT INTO os_certificates (id, property_id, property_name, type_id, expiry, issue, r2_key, name, source, added_by, share_people, awaiting_check, rex_note, rex_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, CASE WHEN $12 THEN NOW() END) RETURNING *`,
+    [id, input.propertyId, input.propertyName, input.type, input.expiry, input.issue || null, key, input.fileName, input.source, input.by, JSON.stringify(input.people ?? []), held, held ? "Waiting for compliance to verify it before it goes into REX." : null]
   );
+  if (held) return { row: rows[0], duplicate: false, share: waitingForCheck(true) };
   const row = await writeCertificateRow(rows[0], `Written by TLE OS from ${input.source} (${input.fileName}).`, input.refreshBook === true);
-  if (!input.checkedBy) return { row, duplicate: false, share: waitingForCheck() };
+  if (!input.checkedBy) return { row, duplicate: false, share: waitingForCheck(false) };
   /* The office filed it: their tick, and on it goes. */
   await q(
     `INSERT INTO os_compliance_checks (kind, subject_id, state, note, by_name) VALUES ('certificate', $1, 'verified', $2, $3)

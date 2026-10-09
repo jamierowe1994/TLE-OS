@@ -80,6 +80,11 @@ export async function POST(req: NextRequest) {
   if (retry) {
     let rows = await q<CertRow>(`SELECT * FROM os_certificates WHERE id = $1`, [retry]);
     if (!rows[0]) return NextResponse.json({ ok: false, error: "No such certificate." }, { status: 404 });
+    /* Held for compliance's check (lib/cert-hold): it goes into REX when they
+       verify it, not before. */
+    if (rows[0].awaiting_check) {
+      return NextResponse.json({ ok: false, error: "Waiting for the compliance team to verify it. It goes into REX once they have." }, { status: 409 });
+    }
     /* A corrected date travels with the retry (6 Sep: the small reader gave
        1905 and 1994 on a handful, the bigger one read them right). The
        stored row is put right first, then REX is brought up to it. */

@@ -4,7 +4,9 @@ import { getComplianceItemsFor, type ComplianceItem } from "@/lib/business/rex-s
 import { matchProperty, pendingKeyFor, type MatchResult } from "@/lib/property-match";
 import { listVault, type VaultFile } from "@/lib/vault";
 import { rexConfigured } from "@/lib/rex";
-import { osCertRows } from "@/lib/os-certs";
+import { checkingFor, osCertRows } from "@/lib/os-certs";
+import { HELD_FOR_CHECK, type CertChecking } from "@/lib/cert-hold";
+import { q } from "@/lib/db";
 import { notNeededAll } from "@/lib/cert-not-needed";
 import { renewalHeld, renewalHoldEnds } from "@/lib/compliance";
 import { isOsPropertyId } from "@/lib/os-properties";
@@ -70,6 +72,10 @@ export interface FileRow {
   fromHouse?: string;
   /** An HMO licence renewal at the council (Michael, 7 Oct 2026): not outstanding until holdEnds. */
   renewal?: { appliedOn: string; ref: string; holdEnds: string; by: string };
+  /** A newer certificate with the compliance team for their check (lib/cert-hold, 9 Oct 2026). */
+  checking?: CertChecking;
+  /** The certificate shown was verified by the compliance team: the green tick. */
+  verified?: { by: string; at: string };
 }
 
 const LICENCE_TYPES = new Set(["mandatory_hmo_license", "additional_hmo_license", "selective_hmo_license"]);
@@ -173,6 +179,35 @@ export async function GET(req: NextRequest) {
       if (at >= 0) rows[at] = h; else rows.push(h);
     }
   }
+  /* Gas and EICR (lib/cert-hold): a newer one with the compliance team shows
+     as "Being processed by the compliance team" beside whatever is live; the
+     live one carries a green tick once they have verified it. */
+  if (propertyId) {
+    const [checking, verified] = await Promise.all([
+      checkingFor([propertyId]).catch(() => new Map()),
+      q<{ type_id: string; expiry: string; by_name: string; at: Date }>(
+        `SELECT DISTINCT ON (c.type_id) c.type_id, c.expiry::text AS expiry, k.by_name, k.at
+           FROM os_certificates c
+           JOIN os_compliance_checks k ON k.kind = 'certificate' AND k.subject_id = c.id AND k.state = 'verified'
+          WHERE c.property_id = $1 AND c.type_id = ANY($2) AND NOT c.awaiting_check
+          ORDER BY c.type_id, c.expiry DESC`,
+        [propertyId, [...HELD_FOR_CHECK]]
+      ).catch(() => []),
+    ]);
+    const held = (checking.get(propertyId) ?? {}) as Partial<Record<string, CertChecking>>;
+    for (const type of HELD_FOR_CHECK) {
+      const ch = held[type === "gas_safety" ? "gas" : type];
+      const v = verified.find((x) => x.type_id === type);
+      let row = rows.find((r) => r.type === type && !r.fromHouse);
+      if (!row && ch) {
+        row = { type, label: type === "gas_safety" ? "Gas safety" : "EICR", state: "missing", expiry: null, issued: null, inRex: false, fileInRex: false, files: [] };
+        rows.push(row);
+      }
+      if (!row) continue;
+      if (ch) row.checking = ch;
+      if (v && row.expiry && row.expiry.slice(0, 10) === String(v.expiry).slice(0, 10)) row.verified = { by: v.by_name, at: new Date(v.at).toISOString() };
+    }
+  }
   rows.sort((a, b) => (ORDER.indexOf(a.type) + 1 || 99) - (ORDER.indexOf(b.type) + 1 || 99));
 
   /* A licence renewal noted at the council holds the licence row off the
@@ -198,6 +233,8 @@ export async function GET(req: NextRequest) {
     checked: rex.checked,
     match: match ? { verdict: match.verdict, how: match.how, targets: match.targets, possible: match.possible } : null,
     rows,
-    outstanding: rows.filter((r) => !r.renewal && (r.state === "expired" || r.state === "expiring" || r.state === "missing")).length,
+    /* A renewal with the compliance team is not outstanding: the agent has done their part. */
+    outstanding: rows.filter((r) => !r.renewal && !(r.checking && !r.checking.queried) && (r.state === "expired" || r.state === "expiring" || r.state === "missing")).length,
+    checking: rows.filter((r) => r.checking && !r.checking.queried).length,
   });
 }

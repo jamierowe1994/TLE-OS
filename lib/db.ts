@@ -2422,6 +2422,12 @@ ALTER TABLE os_certificates ADD COLUMN IF NOT EXISTS share_people JSONB NOT NULL
 ALTER TABLE os_certificates ADD COLUMN IF NOT EXISTS shared_at TIMESTAMPTZ;
 ALTER TABLE os_compliance_checks ADD COLUMN IF NOT EXISTS told TEXT NOT NULL DEFAULT '';
 ALTER TABLE os_compliance_checks ADD COLUMN IF NOT EXISTS told_at TIMESTAMPTZ;
+-- Held for compliance's check, 9 Oct 2026 (James: a gas certificate goes to
+-- Michael, and only goes live once he has verified it). A gas safety record
+-- or EICR filed by anyone but the compliance office waits here: not written
+-- to REX, not counted as in date anywhere, shown as "Being processed by the
+-- compliance team". His Verified clears it, writes it to REX and sends it on.
+ALTER TABLE os_certificates ADD COLUMN IF NOT EXISTS awaiting_check BOOLEAN NOT NULL DEFAULT false;
 -- Not needed (James, 7 Oct 2026): a certificate the rule asks for that this
 -- home does not need - a fire risk assessment on one of the few exceptions,
 -- say. Marked by the compliance office from the tracker, with a reason, and

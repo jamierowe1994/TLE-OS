@@ -37,6 +37,16 @@ export default function RegisterCheck({
   const read = reg?.read ?? null;
   const [reading, setReading] = useState(false);
   const [copied, setCopied] = useState(false);
+  /* Gas is two checks on the Gas Safe Register (James, 9 Oct 2026): the
+     business, by its registration number, and the engineer, by the licence
+     number on their ID card. */
+  const gas = read?.scheme === "gas_safe" || /gas/i.test(item.what);
+  const [licence, setLicence] = useState("");
+  const [copiedLicence, setCopiedLicence] = useState(false);
+  useEffect(() => {
+    if (read?.licence && !licence) setLicence(read.licence);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [read?.licence]);
 
   /* Read it the first time the row is shown. */
   useEffect(() => {
@@ -65,13 +75,13 @@ export default function RegisterCheck({
   const name = reg.registerName ?? "the register";
   const who = [read?.engineer, read?.business].filter(Boolean).join(", ");
 
-  async function openRegister() {
-    const n = number.trim();
+  async function openRegister(value = number, done: (v: boolean) => void = setCopied) {
+    const n = value.trim();
     if (n) {
       try {
         await navigator.clipboard.writeText(n);
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 2500);
+        done(true);
+        window.setTimeout(() => done(false), 2500);
       } catch {
         /* No clipboard (an old browser, or not allowed): the number is on screen to type. */
       }
@@ -123,7 +133,7 @@ export default function RegisterCheck({
 
       <div className="mt-2.5 flex flex-wrap items-center gap-2">
         <label className="flex items-center gap-2 text-[12px] text-muted">
-          Number checked
+          {gas ? "Business number" : "Number checked"}
           <input
             value={number}
             onChange={(e) => setNumber(e.target.value.replace(/[^A-Za-z0-9/-]/g, "").slice(0, 30))}
@@ -135,13 +145,40 @@ export default function RegisterCheck({
         {reg.registerUrl && (
           <button
             type="button"
-            onClick={openRegister}
+            onClick={() => void openRegister()}
             className="flex items-center gap-1.5 rounded-full border border-line/80 bg-white px-3 py-1.5 text-[12px] font-semibold transition hover:border-ink/40"
           >
             <DoodleIcon name="search" size={12} className="text-accent-dark" />
-            {copied ? "Copied - paste it in" : `Copy and open ${name}`}
+            {copied ? "Copied - paste it in" : gas ? "Check the business" : `Copy and open ${name}`}
           </button>
         )}
+      </div>
+      {gas && reg.registerUrl && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-[12px] text-muted">
+            Engineer&rsquo;s licence
+            <input
+              value={licence}
+              onChange={(e) => setLicence(e.target.value.replace(/[^0-9]/g, "").slice(0, 7))}
+              inputMode="numeric"
+              placeholder="7 digits, ID card"
+              className="w-[150px] rounded-lg border border-line/80 bg-white px-2.5 py-1.5 text-[12.5px] tabular-nums text-ink outline-none focus:border-ink/40"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => void openRegister(licence, setCopiedLicence)}
+            className="flex items-center gap-1.5 rounded-full border border-line/80 bg-white px-3 py-1.5 text-[12px] font-semibold transition hover:border-ink/40"
+          >
+            <DoodleIcon name="search" size={12} className="text-accent-dark" />
+            {copiedLicence ? "Copied - paste it in" : "Check the engineer"}
+          </button>
+          {!licence && read && read.state === "read" && (
+            <span className="text-[11.5px] text-muted">Not printed on this one - ask for the engineer&rsquo;s Gas Safe ID card number.</span>
+          )}
+        </div>
+      )}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         {read && read.scheme !== "none" && (
           <button
             type="button"

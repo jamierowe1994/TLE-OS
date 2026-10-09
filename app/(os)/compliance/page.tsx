@@ -1,5 +1,6 @@
 "use client";
 
+import { CHECKING_LABEL } from "@/lib/cert-hold";
 import { asOf } from "@/lib/as-of";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -8,7 +9,7 @@ import WalkthroughLink from "@/components/showroom/WalkthroughLink";
 import ComplianceDrawer from "@/components/ComplianceDrawer";
 import StatTile, { toneFor } from "@/components/StatTile";
 import {
-  BIG_THREE, CERT_META, COMP_BOOK, dueWithin, headlineCerts, isOurs, isStaleRecord, renewalHeld, shownStatus,
+  BIG_THREE, CERT_META, COMP_BOOK, dueWithin, headlineCerts, isOurs, isStaleRecord, renewalHeld, shownStatus, statusOf,
   type CertKey, type CertStatus, type CompProperty,
 } from "@/lib/compliance";
 import { searchMatches } from "@/lib/search-match";
@@ -36,6 +37,14 @@ const TONE: Record<CertStatus, string> = {
 };
 
 function CertPill({ cert, name }: { cert: CompProperty["certs"][CertKey]; name?: string }) {
+  /* A renewal with the compliance team (lib/cert-hold): not an alarm while they check it. */
+  if (cert?.checking && !cert.checking.queried && statusOf(cert) !== "ok" && statusOf(cert) !== "watch") {
+    return (
+      <span className="figures inline-block whitespace-nowrap rounded-full border border-line/80 px-2.5 py-1 text-[10.5px] font-semibold text-muted" title={`${name ?? ""}: ${CHECKING_LABEL}`}>
+        with compliance
+      </span>
+    );
+  }
   const s = shownStatus(cert);
   const text = renewalHeld(cert)
     ? "with council"

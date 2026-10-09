@@ -47,7 +47,10 @@ export type Scheme = "gas_safe" | "niceic" | "napit" | "elecsa" | "stroma" | "ot
  *  government-approved) are searched on the Electrical Competent Person
  *  register, which covers every scheme. */
 export const REGISTERS: Record<Exclude<Scheme, "none">, { name: string; url: string }> = {
-  gas_safe: { name: "Gas Safe Register", url: "https://www.gassaferegister.co.uk/find-an-engineer/check-an-engineer/" },
+  /* One page, its Check tab takes both numbers off a gas certificate: the
+     business registration number (1-6 digits) and the engineer's own 7-digit
+     licence number from their Gas Safe ID card (checked 9 Oct 2026). */
+  gas_safe: { name: "Gas Safe Register", url: "https://www.gassaferegister.co.uk/find-an-engineer-or-check-the-register/" },
   niceic: { name: "NICEIC", url: "https://www.niceic.com/find-a-contractor" },
   napit: { name: "NAPIT", url: "https://search.napit.org.uk/" },
   elecsa: { name: "Electrical Competent Person register", url: "https://www.electricalcompetentperson.co.uk/" },

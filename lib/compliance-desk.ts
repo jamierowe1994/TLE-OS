@@ -4,7 +4,7 @@ import { hasDb, q } from "@/lib/db";
 import { DOC_KINDS } from "@/lib/landlord-account";
 import { readable, readsFor, REGISTERS, type RegisterRead } from "@/lib/cert-register";
 import { heldComplianceBook } from "@/lib/compliance-cache";
-import { fileCertificate, PLAUSIBLE, YMD, shareOnceChecked } from "@/lib/certificate-intake";
+import { fileCertificate, PLAUSIBLE, YMD, releaseHeldCertificate, shareOnceChecked } from "@/lib/certificate-intake";
 import { pendingKeyFor } from "@/lib/property-match";
 import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
 import { documentQueriedEmail } from "@/lib/email/agent-emails";
@@ -477,8 +477,12 @@ export async function answer(p: {
     /* Who it goes to is read off the whole managed book, and on a cold book
        that is a walk of REX. His click must not wait on it: after eight
        seconds he is answered, and the send finishes behind him. */
+    /* A gas safety record or EICR held for this check (lib/cert-hold) goes
+       live now: into REX, onto the book, then on to the landlord and tenants. */
     const share = await Promise.race([
-      shareOnceChecked(p.id).catch(() => null),
+      releaseHeldCertificate(p.id)
+        .catch(() => null)
+        .then(() => shareOnceChecked(p.id).catch(() => null)),
       new Promise<"slow">((r) => setTimeout(() => r("slow"), 8000)),
     ]);
     if (share === "slow") return "Verified. Who it goes to is still being worked out; the result shows on the home's file in a minute or two.";

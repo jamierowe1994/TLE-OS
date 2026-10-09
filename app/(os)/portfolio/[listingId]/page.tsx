@@ -211,7 +211,7 @@ export default function PropertyPage() {
   const [visits, setVisits] = useState<Loaded<Visits>>({ state: "loading" });
   const [ending, setEnding] = useState<Loaded<Ending>>({ state: "loading" });
   const [tenancy, setTenancy] = useState<Loaded<Tenancy>>({ state: "loading" });
-  const [certs, setCerts] = useState<Loaded<{ outstanding: number; checked: boolean; rows: number; filed: { label: string; at: string }[] }>>({ state: "loading" });
+  const [certs, setCerts] = useState<Loaded<{ outstanding: number; checking: number; checked: boolean; rows: number; filed: { label: string; at: string }[] }>>({ state: "loading" });
   const [notices, setNotices] = useState<Loaded<Notice[]>>({ state: "loading" });
 
   const loadWorks = useCallback(() => {
@@ -257,11 +257,12 @@ export default function PropertyPage() {
     loadWorks();
     loadVisits();
     loadEnding();
-    getJson<{ outstanding: number; checked: boolean; rows: { state: string; label: string; files: { uploadedAt: string | null }[] }[] }>(`/api/property-file?property=${encodeURIComponent(propertyId)}`)
+    getJson<{ outstanding: number; checking?: number; checked: boolean; rows: { state: string; label: string; files: { uploadedAt: string | null }[] }[] }>(`/api/property-file?property=${encodeURIComponent(propertyId)}`)
       .then((j) => setCerts({
         state: "ready",
         data: {
           outstanding: j.outstanding ?? 0,
+          checking: j.checking ?? 0,
           checked: Boolean(j.checked),
           rows: (j.rows ?? []).filter((r) => r.state !== "not-required").length,
           filed: (j.rows ?? []).flatMap((r) => (r.files ?? []).filter((f) => f.uploadedAt).map((f) => ({ label: r.label, at: f.uploadedAt as string }))),
@@ -715,6 +716,7 @@ export default function PropertyPage() {
                   <DoodleIcon name="shield" size={12} className="text-accent-dark" />
                   {certs.state === "loading" ? <Loading label="Compliance" /> : certs.state === "failed" ? "Compliance not available"
                     : certs.data.outstanding > 0 ? <b className="font-semibold text-accent-dark">{certs.data.outstanding} certificates outstanding</b>
+                    : certs.data.checking > 0 ? `${certs.data.checking === 1 ? "A certificate is" : `${certs.data.checking} certificates are`} with the compliance team for checking`
                     : certs.data.checked && certs.data.rows > 0 ? "Certificates all in date" : "No certificates held yet"}
                 </button>
                 <button type="button" className={chip} onClick={() => pickTab("maintenance")}>

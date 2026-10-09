@@ -16,6 +16,7 @@ import {
   type LandlordMessage,
 } from "@/lib/landlord-account";
 import { geocode } from "@/lib/geocode";
+import { CHECKING_LABEL } from "@/lib/cert-hold";
 import { epcForAddress } from "@/lib/epc";
 import { takeOnBooking, takeOnTimes } from "@/lib/takeon";
 import { DECK_KINDS } from "@/lib/present";
@@ -330,6 +331,18 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
      file; the EPC also counts as in if the deck found one on the register. */
   const mine = docs.filter((d) => !d.appraisalId || d.appraisalId === a.id);
   const uploaded = (kind: LandlordDocument["kind"]) => mine.find((d) => d.kind === kind) ?? null;
+  /* Their gas safety record or EICR is with the compliance team until
+     verified (lib/cert-hold, 9 Oct 2026). */
+  const heldIds = mine.filter((d) => d.kind === "gas" || d.kind === "eicr").map((d) => d.id);
+  const { hasDb, q } = await import("@/lib/db");
+  const verifiedIds = new Set(
+    heldIds.length && hasDb()
+      ? (await q<{ subject_id: string }>(
+          `SELECT subject_id FROM os_compliance_checks WHERE kind = 'landlord_document' AND state = 'verified' AND subject_id = ANY($1)`,
+          [heldIds]
+        ).catch(() => [])).map((r) => r.subject_id)
+      : []
+  );
   const documents: LandlordView["documents"] = [
     {
       title: "Terms of business",
@@ -339,6 +352,7 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
     },
     ...needDocs.map((r) => {
       const u = uploaded(r.kind);
+      if (u && heldIds.includes(u.id) && !verifiedIds.has(u.id)) return { title: r.title, sub: `${CHECKING_LABEL}  •  sent ${day(u.uploadedAt) ?? ""}`, state: "pending" as const, href: `/api/landlord/documents/${u.id}` };
       if (u) return { title: r.title, sub: `Uploaded  •  ${day(u.uploadedAt) ?? ""}`, state: "uploaded" as const, href: `/api/landlord/documents/${u.id}` };
       /* The national register counts. A current certificate is public and we
          can see it, so nobody is asked to send a copy (James, 17 Sep 2026). */

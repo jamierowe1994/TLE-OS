@@ -309,7 +309,7 @@ async function fromCertificates(run: Run, ids: string[]) {
   const rows = await q<{ type_id: string; expiry: string; issue: string | null; r2_key: string; name: string; source: string }>(
     `SELECT type_id, expiry::text AS expiry, issue::text AS issue, r2_key, name, source
        FROM os_certificates
-      WHERE property_id = ANY($1) AND expiry >= $2::date
+      WHERE property_id = ANY($1) AND expiry >= $2::date AND NOT awaiting_check
       ORDER BY expiry DESC, added_at DESC`,
     [ids, validOn]
   ).catch(() => []);

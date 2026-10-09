@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     await q(`UPDATE os_certificates SET property_id = $2, r2_key = $3 WHERE r2_key = $1`, [f.key, propertyId, to]);
     moved.push(to);
   }
-  const rows = await q<{ id: string }>(`SELECT id FROM os_certificates WHERE property_id = $1 AND (rex_entry_id IS NULL OR rex_entry_id = '')`, [propertyId]);
+  const rows = await q<{ id: string }>(`SELECT id FROM os_certificates WHERE property_id = $1 AND (rex_entry_id IS NULL OR rex_entry_id = '') AND NOT awaiting_check`, [propertyId]);
   /* REX writes go through the intake's own retry, so the switch and the
      allowlist are honoured the same way as everywhere else. */
   const origin = req.nextUrl.origin;

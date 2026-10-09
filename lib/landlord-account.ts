@@ -21,7 +21,8 @@ import { getMeta } from "@/lib/business/deal-store";
 import { derivedStageFor } from "@/lib/business/deal-stage";
 import { PORTAL_STAGES } from "@/lib/business/propoly-stages";
 import { propertyKey } from "@/lib/business/payprop-portfolio";
-import { CERT_META, requiredCerts, statusOf, type CertKey, type CertStatus, type CompProperty } from "@/lib/compliance";
+import { CERT_META, requiredCerts, statusOf, withCompliance, type CertKey, type CertStatus, type CompProperty } from "@/lib/compliance";
+import { CHECKING_LABEL } from "@/lib/cert-hold";
 
 /**
  * Who a landlord is, and what is theirs.
@@ -187,6 +188,8 @@ export interface LandlordCert {
   line: string;
   /** Alarms and legionella: no fixed expiry, so "no record" is not a fault. */
   quiet: boolean;
+  /** A renewal is with the compliance team for their check (lib/cert-hold). */
+  checking?: boolean;
   /** Where the landlord opens the file, via our own route. Null when REX holds only a date. */
   href: string | null;
 }
@@ -217,13 +220,18 @@ function summarise(p: CompProperty): LandlordCompliance {
   today.setHours(0, 0, 0, 0);
   const certs: LandlordCert[] = requiredCerts(p).map((key) => {
     const c = p.certs[key];
-    const status = statusOf(c);
+    const live = statusOf(c);
+    /* A renewal with the compliance team (lib/cert-hold): not a fault while they check it. */
+    const checking = withCompliance(c);
+    const status: CertStatus = checking && (live === "expired" || live === "missing" || live === "urgent") ? "watch" : live;
     const daysLeft = c?.expires ?? null;
     const expires = daysLeft == null ? null : new Date(today.getTime() + daysLeft * 86400000).toISOString().slice(0, 10);
     const quiet = key === "alarms" || key === "legionella";
-    const line = quiet && status === "missing" ? "Checked at each visit - no dated record" : certLine(status, daysLeft, expires);
+    const line = checking
+      ? live === "ok" || live === "watch" ? `${certLine(live, daysLeft, expires)} - the new one is ${CHECKING_LABEL.toLowerCase()}` : `A new certificate is ${CHECKING_LABEL.toLowerCase()}`
+      : quiet && status === "missing" ? "Checked at each visit - no dated record" : certLine(status, daysLeft, expires);
     const href = c?.fileUrl ? `/api/landlord/certificate?property=${encodeURIComponent(p.id)}&cert=${key}` : null;
-    return { key, label: CERT_META[key].label, status, daysLeft, expires, attached: Boolean(c?.attached), line, quiet, href };
+    return { key, label: CERT_META[key].label, status, daysLeft, expires, attached: Boolean(c?.attached), line, quiet, href, ...(checking ? { checking: true } : {}) };
   });
   /* The quiet duties have no fixed expiry, so "no record" on alarms or
      legionella is not a fault the landlord can act on. The headline reads

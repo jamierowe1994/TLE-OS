@@ -1,6 +1,13 @@
 import { DOC_KINDS, landlordProperties, type DocKind, type LandlordAccount } from "@/lib/landlord-account";
 import { loadLandlordHome, requiredDocsFor } from "@/lib/landlord-home-view";
 import { DECK_KINDS } from "@/lib/present";
+import { CHECKING_LABEL } from "@/lib/cert-hold";
+import { hasDb, q } from "@/lib/db";
+
+/* The landlord's own gas safety record or EICR goes to the compliance team
+   before it counts (lib/cert-hold, 9 Oct 2026): shown as being processed
+   until they verify it, then ticked. */
+const LANDLORD_HELD = new Set(["gas", "eicr"]);
 
 /**
  * The Documents page's view: everything we hold on a landlord's file, and
@@ -57,6 +64,15 @@ export async function loadLandlordDocuments(me: LandlordAccount, pick?: string |
   const [{ open, compliance, docs }, managed] = await Promise.all([loadLandlordHome(me, pick), landlordProperties(me)]);
   const j = open[0] ?? null;
   const mine = j ? docs.filter((d) => !d.appraisalId || d.appraisalId === j.appraisal.id) : docs;
+  const heldIds = mine.filter((d) => LANDLORD_HELD.has(d.kind)).map((d) => d.id);
+  const verifiedIds = new Set(
+    heldIds.length && hasDb()
+      ? (await q<{ subject_id: string }>(
+          `SELECT subject_id FROM os_compliance_checks WHERE kind = 'landlord_document' AND state = 'verified' AND subject_id = ANY($1)`,
+          [heldIds]
+        ).catch(() => [])).map((r) => r.subject_id)
+      : []
+  );
   const latest = j?.decks[0] ?? null;
   const epcOnRegister = latest?.deck.property?.epc ?? null;
 
@@ -77,8 +93,10 @@ export async function loadLandlordDocuments(me: LandlordAccount, pick?: string |
   const sent: DocRow[] = [
     ...mine.map((d) => ({
       title: d.kind === "other" ? d.name : kindLabel(d.kind),
-      sub: `${d.kind === "other" ? "Sent" : d.name}  •  ${day(d.uploadedAt) ?? ""}`,
-      state: "uploaded" as const,
+      sub: LANDLORD_HELD.has(d.kind) && !verifiedIds.has(d.id)
+        ? `${CHECKING_LABEL}  •  sent ${day(d.uploadedAt) ?? ""}`
+        : `${d.kind === "other" ? "Sent" : d.name}  •  ${day(d.uploadedAt) ?? ""}`,
+      state: (LANDLORD_HELD.has(d.kind) && !verifiedIds.has(d.id) ? "pending" : "uploaded") as "pending" | "uploaded",
       href: `/api/landlord/documents/${d.id}`,
       kind: d.kind,
     })),
@@ -125,7 +143,7 @@ export async function loadLandlordDocuments(me: LandlordAccount, pick?: string |
         /* No em dashes in front of a customer. */
         title: c.label.replace(/\s+—\s+/g, " - "),
         sub: c.line,
-        state: c.status === "ok" ? "uploaded" : c.status === "watch" || c.status === "urgent" ? "watch" : c.quiet ? "pending" : "missing",
+        state: c.checking && c.status !== "ok" ? "pending" : c.status === "ok" ? "uploaded" : c.status === "watch" || c.status === "urgent" ? "watch" : c.quiet ? "pending" : "missing",
         href: c.href,
         cta: c.href ? "Open" : undefined,
         /* Gas, EICR and EPC can be renewed by the landlord's own engineer; the

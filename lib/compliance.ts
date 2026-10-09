@@ -1,3 +1,4 @@
+import type { CertChecking } from "@/lib/cert-hold";
 /**
  * Compliance: the rules a rented home has to keep, and where each property
  * stands against them.
@@ -100,6 +101,10 @@ export type Cert = {
   fromOs?: boolean;
   /** Smoke and CO alarms, evidenced by the gas safety record. */
   viaGas?: boolean;
+  /** A newer certificate filed and waiting for the compliance team's check
+   *  (lib/cert-hold, 9 Oct 2026). Not counted: expires above is still the
+   *  last live one. Every screen shows CHECKING_LABEL beside it. */
+  checking?: CertChecking;
   /** Marked not needed on this home by the compliance office (7 Oct 2026). */
   notNeeded?: { by: string; reason: string; at: string };
   /** An HMO licence renewal is with the council (Michael, 7 Oct 2026): off
@@ -177,7 +182,14 @@ export function heldToNextTenancy(c: Cert | undefined): boolean {
 
 /** The status a screen should grade on: a licence held by its renewal, or a
  *  Scottish EPC or legionella held to the next tenancy, is watched, not overdue. */
+/** A renewal filed and with the compliance team for their check, not queried
+ *  (lib/cert-hold, 9 Oct 2026): nothing to chase, the agent has done their part. */
+export function withCompliance(c: Cert | undefined): boolean {
+  return Boolean(c?.checking && !c.checking.queried);
+}
+
 export function shownStatus(c: Cert | undefined): CertStatus {
+  if (withCompliance(c) && (statusOf(c) === "expired" || statusOf(c) === "missing" || statusOf(c) === "urgent")) return "watch";
   return renewalHeld(c) || heldToNextTenancy(c) ? "watch" : statusOf(c);
 }
 
@@ -460,6 +472,7 @@ export function dueWithin(days: number, book: CompProperty[] = COMP_BOOK) {
       const s = statusOf(cert);
       if (renewalHeld(cert)) continue; // with the council (Michael, 7 Oct 2026)
       if (heldToNextTenancy(cert)) continue; // Scotland: due at the next tenancy (Michael, 7 Oct 2026)
+      if (withCompliance(cert)) continue; // the renewal is with the compliance team (9 Oct 2026)
       if (s === "expired" || (s === "urgent" && (cert!.expires ?? 99) <= days)) {
         out.push({ p, key, cert, status: s });
       }

@@ -1,5 +1,6 @@
 "use client";
 
+import { CHECKING_LABEL, VERIFIED_LABEL, type CertChecking } from "@/lib/cert-hold";
 import { useCallback, useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import { Pill } from "@/components/Wire";
@@ -22,7 +23,7 @@ import { useSaveReporter } from "@/components/SaveChip";
  */
 
 interface VaultFile { key: string; certKey: string; label: string; name: string; size: number; uploadedAt: string | null; open: string }
-interface Row { type: string; label: string; state: "valid" | "expiring" | "expired" | "missing" | "not-required" | "held-here"; expiry: string | null; issued: string | null; inRex: boolean; fileInRex: boolean; files: VaultFile[]; fromHouse?: string; renewal?: { appliedOn: string; ref: string; holdEnds: string; by: string } }
+interface Row { type: string; label: string; state: "valid" | "expiring" | "expired" | "missing" | "not-required" | "held-here"; expiry: string | null; issued: string | null; inRex: boolean; fileInRex: boolean; files: VaultFile[]; fromHouse?: string; renewal?: { appliedOn: string; ref: string; holdEnds: string; by: string }; checking?: CertChecking; verified?: { by: string; at: string } }
 interface Candidate { id: string; name: string; locality: string }
 interface Answer {
   ok: boolean;
@@ -33,6 +34,7 @@ interface Answer {
   match: { verdict: "confident" | "check" | "no match"; how: string; targets: Candidate[]; possible: Candidate[] } | null;
   rows: Row[];
   outstanding: number;
+  checking?: number;
   error?: string;
 }
 interface Read { type: string; issue: string | null; expiry: string | null; expiryDerived: boolean; address: string; postcode: string; confidence: string; notes: string }
@@ -264,7 +266,8 @@ export default function PropertyFile({
           <DoodleIcon name="shield" size={17} className="text-accent-dark" />
           {title}
           {data && data.outstanding > 0 && <Pill tone="accent">{data.outstanding} outstanding</Pill>}
-          {data && rows.length > 0 && data.outstanding === 0 && data.checked && <Pill tone="good">All in date</Pill>}
+          {data && (data.checking ?? 0) > 0 && <Pill tone="neutral">{data.checking} with compliance</Pill>}
+          {data && rows.length > 0 && data.outstanding === 0 && !(data.checking ?? 0) && data.checked && <Pill tone="good">All in date</Pill>}
         </h3>
         {attachAll}
       </div>
@@ -363,11 +366,29 @@ export default function PropertyFile({
         <ul className="space-y-2">
           {rows.map((r) => {
             const s = STATE[r.state];
+            /* With the compliance team (lib/cert-hold, 9 Oct 2026): the
+               renewal is in, so nothing here is an alarm while they check it. */
+            const withCompliance = Boolean(r.checking && !r.checking.queried);
+            const liveOk = r.state === "valid" || r.state === "not-required" || r.state === "held-here";
             return (
-              <li key={r.type} className={`rounded-xl border p-3 ${r.renewal ? "border-line/70" : r.state === "expired" ? "border-accent-dark bg-accent-soft/30" : r.state === "missing" || r.state === "expiring" ? "border-accent-dark/40" : "border-line/70"}`}>
+              <li key={r.type} className={`rounded-xl border p-3 ${r.renewal || withCompliance ? "border-line/70" : r.state === "expired" ? "border-accent-dark bg-accent-soft/30" : r.state === "missing" || r.state === "expiring" ? "border-accent-dark/40" : "border-line/70"}`}>
                 <div className="flex flex-wrap items-center gap-2.5">
                   <span className="text-[13px] font-semibold">{r.label}</span>
-                  <Pill tone={r.renewal ? "neutral" : s.tone}>{r.renewal ? "With the council" : stateLabel(r)}</Pill>
+                  {r.verified && liveOk && (
+                    <span title={`${VERIFIED_LABEL}: ${r.verified.by}, ${day(r.verified.at.slice(0, 10))}`} className="inline-flex items-center gap-1 text-[11px] font-medium text-[#56634a]">
+                      <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden className="text-emerald-600">
+                        <circle cx="8" cy="8" r="7.25" fill="currentColor" opacity="0.14" />
+                        <path d="M4.5 8.4 L7 10.8 L11.6 5.6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      Verified
+                    </span>
+                  )}
+                  {withCompliance && !liveOk ? (
+                    /* Wraps on a phone rather than running off the card. */
+                    <span className="rounded-lg bg-page px-2.5 py-0.5 text-[11px] font-medium leading-snug text-muted">{CHECKING_LABEL}</span>
+                  ) : (
+                    <Pill tone={r.renewal ? "neutral" : s.tone}>{r.renewal ? "With the council" : stateLabel(r)}</Pill>
+                  )}
                   <span className="text-[11px] text-muted">
                     {r.expiry ? `${r.state === "expired" ? "Expired" : "Expires"} ${day(r.expiry)}` : r.issued ? `Issued ${day(r.issued)}` : ""}
                     {r.renewal ? ` · renewal applied for ${day(r.renewal.appliedOn)}${r.renewal.ref ? ` (ref ${r.renewal.ref})` : ""}, back on the list ${day(r.renewal.holdEnds)} if no new licence` : ""}
@@ -378,6 +399,13 @@ export default function PropertyFile({
                     Attach
                   </button>
                 </div>
+                {r.checking && (
+                  <p className={`mt-2 rounded-lg px-2.5 py-1.5 text-[12px] leading-snug ${r.checking.queried ? "bg-accent-soft/40 text-accent-dark" : "bg-box text-ink/80"}`}>
+                    {r.checking.queried
+                      ? `Queried by the compliance team: ${r.checking.queried}`
+                      : `${liveOk ? `New certificate, ${CHECKING_LABEL.toLowerCase()}. ` : ""}Filed ${day(r.checking.at.slice(0, 10))}${r.checking.by ? ` by ${r.checking.by}` : ""}, runs to ${day(r.checking.expiry)}. It goes live once the compliance team have verified it.`}
+                  </p>
+                )}
                 {/* The newest file IS the certificate; a new one attached
                     on top replaces it here, the older ones fold away. Click
                     opens it in the sheet from the bottom of the page. */}

@@ -1,5 +1,6 @@
 "use client";
 
+import { CHECKING_LABEL } from "@/lib/cert-hold";
 import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyFile from "@/components/PropertyFile";
@@ -321,7 +322,10 @@ export default function ComplianceDrawer({
               const held = k === "licence" && renewalHeld(cert);
               const nextT = heldToNextTenancy(cert);
               const s = shownStatus(cert);
-              const bad = s === "expired" || s === "urgent" || s === "missing";
+              /* With the compliance team (lib/cert-hold): the renewal is in. */
+              const ch = cert?.checking;
+              const checking = Boolean(ch && !ch.queried);
+              const bad = !checking && (s === "expired" || s === "urgent" || s === "missing");
               return (
                 <div key={k} className={`rounded-xl border px-3.5 py-3 ${s === "expired" ? "border-accent-dark bg-accent-soft/30" : bad ? "border-accent-dark/40" : "border-line/70"}`}>
                   <p className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-muted">
@@ -338,6 +342,11 @@ export default function ComplianceDrawer({
                     </Pill>
                     {cert?.inherited && <span className="text-[10.5px] text-muted">from the house</span>}
                   </p>
+                  {ch && (
+                    <p className={`mt-1.5 text-[11px] leading-snug ${ch.queried ? "text-accent-dark" : "text-muted"}`}>
+                      {ch.queried ? `Queried by the compliance team: ${ch.queried}` : `${CHECKING_LABEL}: new one filed ${prettyDay(ch.at.slice(0, 10))}, runs to ${prettyDay(ch.expiry)}.`}
+                    </p>
+                  )}
                   {/* Only an HMO licence that has run out or has no record (Michael, 7 Oct 2026). */}
                   {k === "licence" && !held && (s === "expired" || s === "missing") && (
                     <div>

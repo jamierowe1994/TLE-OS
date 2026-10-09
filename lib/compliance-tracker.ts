@@ -1,4 +1,5 @@
 import "server-only";
+import { CHECKING_LABEL, type CertChecking } from "@/lib/cert-hold";
 import { heldToNextTenancy,
   BIG_THREE,
   isOurs,
@@ -97,6 +98,8 @@ export interface ChaseRow {
   renewal?: { by: string; at: string; appliedOn: string; ref: string; holdEnds: string };
   /** Scotland: an EPC or legionella running out during this tenancy, due at the next (Michael, 7 Oct 2026). */
   nextTenancy?: { tenancyStart: string };
+  /** A renewal filed and with the compliance team for their check (lib/cert-hold). */
+  checking?: CertChecking;
 }
 
 export interface TrackerBook {
@@ -128,6 +131,8 @@ export interface TrackerBook {
     notNeeded: number;
     renewals: number;
     nextTenancy: number;
+    /** Renewals filed and waiting for the compliance team's check: not chased. */
+    checking: number;
     /** Duplicate property rows collapsed — a property listed twice is still
      *  one property, and chasing it twice is how a landlord stops reading. */
     duplicateRowsCollapsed: number;
@@ -163,7 +168,14 @@ function rowsFor(p: CompProperty, agent: string | null): ChaseRow[] {
     const spent = Boolean(noted && !holding && cert?.expires != null && cert.expires >= 0);
     const ra = noted && !spent ? noted : undefined;
     const holdEnds = ra ? renewalHoldEnds(ra.appliedOn) : null;
-    const reason = nextT
+    /* A renewal is with the compliance team (lib/cert-hold): nobody is chased
+       for it while they check it, unless they have queried it. */
+    const ch = cert?.checking;
+    const reason = ch
+      ? ch.queried
+        ? `Queried by the compliance team: ${ch.queried}`
+        : `${CHECKING_LABEL}: a new certificate filed ${prettyDay(ch.at.slice(0, 10))} by ${ch.by || "the agent"}, running to ${prettyDay(ch.expiry)}.`
+      : nextT
       ? `Scotland: ${(daysLeft ?? 0) < 0 ? `ran out ${Math.abs(daysLeft ?? 0)} days ago` : `runs out in ${daysLeft} days`}, during the tenancy that began ${prettyDay(nextT.tenancyStart)}. Not due until the next tenancy starts.`
       : ra && holding
       ? `Renewal applied for on ${prettyDay(ra.appliedOn)}${ra.ref ? ` (ref ${ra.ref})` : ""}, marked by ${ra.by}. Back on the list on ${prettyDay(holdEnds!)} if no new licence has been filed.`
@@ -203,6 +215,7 @@ function rowsFor(p: CompProperty, agent: string | null): ChaseRow[] {
       ...(cert?.viaGas ? { viaGas: true } : {}),
       ...(ra && holding ? { renewal: { ...ra, holdEnds: holdEnds! } } : {}),
       ...(nextT ? { nextTenancy: nextT } : {}),
+      ...(ch ? { checking: ch } : {}),
     };
   });
 }
@@ -296,12 +309,14 @@ export function buildTracker(
   const collapsed = ours.length - book.length;
   const rows = book.flatMap((p) => rowsFor(p, whoFor(p)));
 
+  /* With the compliance team and not queried: the renewal is in, nobody to chase. */
+  const withCompliance = (r: ChaseRow) => Boolean(r.checking && !r.checking.queried);
   const outstanding = rows
-    .filter((r) => !r.undated && !r.renewal && !r.nextTenancy && (r.status === "expired" || r.status === "missing"))
+    .filter((r) => !r.undated && !r.renewal && !r.nextTenancy && !withCompliance(r) && (r.status === "expired" || r.status === "missing"))
     .sort((a, b) => urgency(a) - urgency(b));
 
   const upcoming = rows
-    .filter((r) => r.band !== null)
+    .filter((r) => r.band !== null && !withCompliance(r))
     .sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0));
 
   const undated = rows.filter((r) => r.undated && !r.renewal);
@@ -352,6 +367,7 @@ export function buildTracker(
       notNeeded: notNeeded.length,
       renewals: renewals.length,
       nextTenancy: nextTenancy.length,
+      checking: rows.filter(withCompliance).length,
       duplicateRowsCollapsed: collapsed,
     },
     duplicateAddresses,
