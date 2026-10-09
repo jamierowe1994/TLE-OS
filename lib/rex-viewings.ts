@@ -215,7 +215,9 @@ export async function recordViewings(incoming: Viewing[]): Promise<void> {
 
   /* An appointment booked in the OS that has since reached REX comes back
      here as a REX event. Same place, same start (to the minute), and the OS
-     row is marked with the REX id so nothing shows it twice. */
+     row is marked with the REX id so nothing shows it twice. Never a slot
+     (9 Oct 2026): it is held time that never goes to REX, and the first
+     viewing booked at its start matched it, which hid the slot. */
   for (const v of viewings) {
     if (!v.listingLabel && !v.title) continue;
     const street = (v.listingLabel ?? v.title).split(",")[0].trim().toLowerCase();
@@ -223,6 +225,7 @@ export async function recordViewings(incoming: Viewing[]): Promise<void> {
     await q(
       `UPDATE os_appointments SET rex_event_id = $1, synced_at = COALESCE(synced_at, NOW())
         WHERE rex_event_id IS NULL
+          AND kind <> 'slot'
           AND ABS(EXTRACT(EPOCH FROM (starts_at - $2::timestamptz))) <= 120
           AND (LOWER(where_at) LIKE $3 OR LOWER(title) LIKE $3)`,
       [v.id, v.startsAt, `%${street}%`]

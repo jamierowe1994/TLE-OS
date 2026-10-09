@@ -853,6 +853,28 @@ function ListingDrawerBody({
     .filter((a) => a.kind === "slot" && a.listingId != null && String(a.listingId) === String(listing.id))
     .filter((a) => new Date(apptStartIso(a)).getTime() + a.mins * 60_000 > Date.now())
     .sort((a, b) => apptStartIso(a).localeCompare(apptStartIso(b)));
+  /* Each slot with the viewings booked inside it, nested under it (James,
+     9 Oct 2026: "show the slot, then the different viewings within the slot").
+     The listing's REX list gives the full rows; a booking made a moment ago
+     shows from the diary until that list is read again. */
+  const slotWindow = (a: (typeof homeSlots)[number]) => {
+    const from = new Date(apptStartIso(a)).getTime();
+    return { from, to: from + a.mins * 60_000 };
+  };
+  const slotGroups = homeSlots.map((a) => {
+    const { from, to } = slotWindow(a);
+    const within = (iso: string) => { const t = new Date(iso).getTime(); return t >= from && t < to; };
+    const rows = (viewings?.upcoming ?? []).filter((v) => within(v.startsAt));
+    const known = new Set(rows.map((v) => v.id));
+    const fresh = liveDiary
+      .filter((d) => d.kind === "viewing" && !known.has(d.id))
+      .filter((d) => (d.listingId != null && String(d.listingId) === String(listing.id)) || (!!a.where && d.where === a.where))
+      .filter((d) => within(apptStartIso(d)))
+      .sort((x, y) => apptStartIso(x).localeCompare(apptStartIso(y)));
+    return { slot: a, rows, fresh };
+  });
+  const slotted = new Set(slotGroups.flatMap((g) => g.rows.map((v) => v.id)));
+  const looseUpcoming = (viewings?.upcoming ?? []).filter((v) => !slotted.has(v.id));
   const canOffer = isLive && !listing.letAgreed && (listing.rent ?? 0) > 0 && /^-?\d+$/.test(String(listing.id));
 
   /* The upcoming viewings, for an access request to hang off. */
@@ -880,7 +902,7 @@ function ListingDrawerBody({
   // calendar shows, filtered to this property.
 
   /* One diary entry, opening out to its details on a click. */
-  const viewingRow = (v: LiveViewing) => {
+  const viewingRow = (v: LiveViewing, inSlot = false) => {
     const start = new Date(v.startsAt);
     const end = v.endsAt ? new Date(v.endsAt) : null;
     const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -891,8 +913,9 @@ function ListingDrawerBody({
         {/* The whole row opens the viewing (James, 20 Sep 2026): its details
             and, above all, whether we can get in. */}
         <button type="button" onClick={() => setOpenViewing(v.id)} className="flex min-w-0 flex-1 items-center gap-3 py-2.5 text-left transition-colors hover:bg-page">
-          <span className="w-28 shrink-0 text-[11px] text-muted">
-            {start.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: past ? undefined : undefined })} · {hhmm(start)}
+          {/* In a slot the day is on the slot, so the time alone. */}
+          <span className={`${inSlot ? "figures w-12" : "w-28"} shrink-0 text-[11px] text-muted`}>
+            {inSlot ? hhmm(start) : `${start.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} · ${hhmm(start)}`}
           </span>
           <span className="min-w-0 flex-1 truncate text-[12.5px]">{who || v.title || "Viewing"}</span>
           <Tag tone={v.cancelled ? "neutral" : past ? (v.feedbackId ? "good" : "accent") : "good"}>
@@ -908,8 +931,9 @@ function ListingDrawerBody({
             return <Tag tone="accent">{r ? "Access asked" : "Access to ask"}</Tag>;
           })()}
         </button>
-        {/* Book more people in straight after this one, with its access. */}
-        {!past && !v.cancelled && listing && (
+        {/* Book more people in straight after this one, with its access.
+            Inside a slot, Book within slot on the slot does that. */}
+        {!past && !v.cancelled && !inSlot && listing && (
           <button
             type="button"
             title="Add another viewing to this slot"
@@ -1809,39 +1833,59 @@ function ListingDrawerBody({
                       ) : undefined
                     }
                   >
-                    {/* The slots held at this home, each with Book within slot. */}
-                    {homeSlots.length > 0 && (
-                      <ul className="mb-2 space-y-2">
-                        {homeSlots.map((a) => {
+                    {/* The slots held at this home, each with the viewings
+                        booked inside it listed underneath (9 Oct 2026). */}
+                    {slotGroups.length > 0 && (
+                      <ul className="mb-3 space-y-3">
+                        {slotGroups.map(({ slot: a, rows, fresh }) => {
                           const startIso = apptStartIso(a);
-                          const end = new Date(new Date(startIso).getTime() + a.mins * 60_000);
-                          const endHm = end.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
-                          const inside = liveDiary.filter((v) => v.kind === "viewing" && v.listingId === a.listingId && v.day === a.day && v.start >= a.start && v.start < endHm).length;
+                          const { to } = slotWindow(a);
+                          const endHm = new Date(to).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
+                          const count = rows.filter((v) => !v.cancelled).length + fresh.length;
                           return (
-                            <li key={a.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-dashed border-accent-dark/50 bg-accent-soft/30 px-3.5 py-2.5">
-                              <span className="min-w-0 flex-1">
-                                <span className="block text-[12.5px] font-semibold">
-                                  Viewing slot · {new Date(startIso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/London" })}, {a.start}-{endHm}
+                            <li key={a.id} className="rounded-2xl border border-dashed border-accent-dark/50 bg-accent-soft/30 p-2">
+                              <div className="flex flex-wrap items-center gap-3 px-1.5 py-1">
+                                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-accent-dark">
+                                  <DoodleIcon name="clock" size={14} />
                                 </span>
-                                <span className="block text-[11px] text-muted">{inside ? `${inside} booked in it` : "Nobody booked in it yet"}</span>
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setBlockAnchor({ viewingId: a.id, listingId: String(listing.id), property: listing.name, locality: listing.locality, startsAt: startIso, minutes: a.mins, slot: true })
-                                }
-                                className="shrink-0 rounded-full bg-accent-dark px-3.5 py-1.5 text-[11.5px] font-semibold text-white"
-                              >
-                                Book within slot
-                              </button>
+                                <span className="min-w-0 flex-1">
+                                  <span className="block text-[12.5px] font-semibold">
+                                    Viewing slot · {new Date(startIso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/London" })}, {a.start}-{endHm}
+                                  </span>
+                                  <span className="block text-[11px] text-muted">
+                                    {viewings === null ? "Reading who is booked in it…" : count ? `${count} ${count === 1 ? "viewing" : "viewings"} booked in it` : "Nobody booked in it yet"}
+                                  </span>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setBlockAnchor({ viewingId: a.id, listingId: String(listing.id), property: listing.name, locality: listing.locality, startsAt: startIso, minutes: a.mins, slot: true })
+                                  }
+                                  className="shrink-0 rounded-full bg-accent-dark px-3.5 py-1.5 text-[11.5px] font-semibold text-white"
+                                >
+                                  Book within slot
+                                </button>
+                              </div>
+                              {rows.length + fresh.length > 0 && (
+                                <ul className="mt-2 rounded-xl border border-line/50 bg-white px-3">
+                                  {rows.map((v) => viewingRow(v, true))}
+                                  {fresh.map((d) => (
+                                    <li key={d.id} className="flex items-center gap-3 border-b border-line/40 py-2.5 last:border-0">
+                                      <span className="figures w-12 shrink-0 text-[11px] text-muted">{d.start}</span>
+                                      <span className="min-w-0 flex-1 truncate text-[12.5px]">{d.who || "Viewer"}</span>
+                                      <Tag tone="good">Booked</Tag>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
                             </li>
                           );
                         })}
                       </ul>
                     )}
-                    {(viewings?.upcoming.length ?? 0) + booked.length > 0 ? (
+                    {looseUpcoming.length + booked.length > 0 ? (
                       <ul>
-                        {(viewings?.upcoming ?? []).map(viewingRow)}
+                        {looseUpcoming.map((v) => viewingRow(v))}
                         {booked.map((v, i) => (
                           <li key={`b${i}`} className="flex items-center gap-3 border-b border-line/40 py-2.5 last:border-0">
                             <span className="figures w-28 shrink-0 text-[12px] text-accent-dark">{v.when}</span>
@@ -1852,14 +1896,14 @@ function ListingDrawerBody({
                       </ul>
                     ) : viewings === null ? (
                       <p className="py-4 text-center text-[12px] text-muted">Reading the diary…</p>
-                    ) : (
+                    ) : slotGroups.length ? null : (
                       <p className="py-4 text-center text-[12px] text-muted">Nothing in the diary yet.</p>
                     )}
                   </Card>
 
                   <Card title={viewings?.past.length ? `Past viewings · ${viewings.past.length}` : "Past viewings"} icon="clock">
                     {viewings?.past.length ? (
-                      <ul>{viewings.past.slice(0, 20).map(viewingRow)}{viewings.past.length > 20 && <li className="pt-2 text-[11px] text-muted">{viewings.past.length - 20} earlier, kept on file.</li>}</ul>
+                      <ul>{viewings.past.slice(0, 20).map((v) => viewingRow(v))}{viewings.past.length > 20 && <li className="pt-2 text-[11px] text-muted">{viewings.past.length - 20} earlier, kept on file.</li>}</ul>
                     ) : viewings === null ? (
                       <p className="py-4 text-center text-[12px] text-muted">Reading the diary…</p>
                     ) : (
