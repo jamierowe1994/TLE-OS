@@ -29,8 +29,9 @@ import GroupsCustomiser from "@/components/GroupsCustomiser";
 import CornerSwell from "@/components/CornerSwell";
 import { usePref } from "@/lib/prefs-store";
 import { dropJson, peekJson, readJson } from "@/lib/page-cache";
-import PassportsDoneList, { PassportDonePill } from "@/components/PassportsDoneList";
-import type { DonePassport } from "@/lib/passports-done-shape";
+import PassportsDoneList from "@/components/PassportsDoneList";
+import { doneAgo, type DonePassport } from "@/lib/passports-done-shape";
+import { PASSPORT_LABEL, type PassportState, type PassportStateRow } from "@/lib/passport-states-shape";
 
 /**
  * Leads: one inbox for every channel, with the record open beside it.
@@ -89,6 +90,38 @@ function sourceFrom(j: LeadsAnswer): LeadSource {
     failed: !j.unlinked,
     reason: j.reason ?? "We couldn't read your leads just now. Nothing is lost - try again in a minute.",
   };
+}
+
+/** The Passport filter, in the order a passport goes. */
+const PASSPORT_OPTIONS: { id: PassportState | "none"; label: string }[] = (["none", "sent", "started", "done"] as const).map((id) => ({
+  id,
+  label: PASSPORT_LABEL[id],
+}));
+
+/**
+ * One passport's state on the board. Completed is the solid pink of the
+ * drawer's Passport done (James, 8 Oct 2026); Started and Sent step down
+ * from it; Not sent is quiet, because it is most of the list.
+ */
+function PassportChip({ state, at }: { state: PassportState | "none"; at: string | null }) {
+  const when = at ? doneAgo(at) : "";
+  const look =
+    state === "done"
+      ? "bg-accent-dark text-white"
+      : state === "started"
+        ? "bg-accent-soft text-accent-dark"
+        : state === "sent"
+          ? "border border-accent-dark/60 text-accent-dark"
+          : "border border-line/80 text-muted";
+  const title =
+    state === "done" ? `Passport completed ${when}` : state === "started" ? `Started, last filled in ${when}` : state === "sent" ? `Passport sent ${when}, not started` : "No passport sent yet";
+  return (
+    <span title={title} className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${look}`}>
+      {state === "done" && <span aria-hidden>✓</span>}
+      {PASSPORT_LABEL[state]}
+      {when && <span className="font-normal opacity-80">· {when}</span>}
+    </span>
+  );
 }
 
 /**
@@ -231,20 +264,49 @@ export default function Leads() {
     else u.searchParams.delete("passports");
     window.history.replaceState(null, "", u);
   };
-  /* Which lead a finished passport is: by the lead the server matched, else
-     by email. Empty until the read lands, so no row claims a tick early. */
-  const passportOf = useMemo(() => {
-    const byLead = new Map<string, DonePassport>();
-    const byEmail = new Map<string, DonePassport>();
-    for (const p of donePassports ?? []) {
-      if (p.leadId && !byLead.has(p.leadId)) byLead.set(p.leadId, p);
-      const e = p.email.trim().toLowerCase();
-      if (e && !byEmail.has(e)) byEmail.set(e, p);
-    }
-    return (l: Lead): DonePassport | null =>
-      leadSide(l) !== "tenant" ? null : byLead.get(l.id) ?? byEmail.get((l.email ?? "").trim().toLowerCase()) ?? null;
-  }, [donePassports]);
   const showPassports = side === "tenant" && passportsOn;
+
+  /* ── Every tenant's passport, sent or not (James, 9 Oct 2026) ──────────
+     The Passport column and filter: Not sent, Sent, Started, Completed. One
+     read for the board, re-read when a drawer closes (a passport sent from
+     the drawer shows at once). Not on the landlord side, where there are no
+     passports. Null while it reads; a failure leaves the column saying so,
+     never Not sent standing in for an answer we don't have. */
+  const passportsWanted = side !== "landlord";
+  const [passportRows, setPassportRows] = useState<PassportStateRow[] | null>(null);
+  const [passportRowsFailed, setPassportRowsFailed] = useState(false);
+  useEffect(() => {
+    if (!passportsWanted || !drawerShut) return;
+    let gone = false;
+    fetch("/api/tenant/passports/states", { cache: "no-store" })
+      .then((r) => r.json().catch(() => null))
+      .then((j: { ok?: boolean; passports?: PassportStateRow[] } | null) => {
+        if (gone) return;
+        if (j?.ok && Array.isArray(j.passports)) {
+          setPassportRows(j.passports);
+          setPassportRowsFailed(false);
+        } else setPassportRowsFailed(true);
+      })
+      .catch(() => { if (!gone) setPassportRowsFailed(true); });
+    return () => { gone = true; };
+  }, [passportsWanted, drawerShut]);
+  /** A tenant lead's passport: by email, else by the OS contact it was made from. Null on a landlord. */
+  const passportStateOf = useMemo(() => {
+    const byEmail = new Map<string, PassportStateRow>();
+    const byContact = new Map<string, PassportStateRow>();
+    for (const r of passportRows ?? []) {
+      if (r.email) byEmail.set(r.email, r);
+      if (r.contactId) byContact.set(`os-${r.contactId}`, r);
+    }
+    return (l: Lead): { state: PassportState | "none"; at: string | null } | null => {
+      if (leadSide(l) !== "tenant") return null;
+      const hit = byEmail.get((l.email ?? "").trim().toLowerCase()) ?? byContact.get(l.id);
+      return hit ? { state: hit.state, at: hit.at } : { state: "none", at: null };
+    };
+  }, [passportRows]);
+  const [fPassport, setFPassport] = useState<PassportState | "none" | null>(null);
+  /* Off the landlord side the filter has nothing to filter. */
+  useEffect(() => { if (!passportsWanted) setFPassport(null); }, [passportsWanted]);
   /* "Add new lead" in the sidebar lands here with ?new=1 and opens the panel. */
   const wantsNew = params.get("new") === "1";
   useEffect(() => {
@@ -418,6 +480,8 @@ export default function Leads() {
       if (fAgent && l.agent !== fAgent) return false;
       if (fStage && (l.spineLabel ?? l.stage) !== fStage) return false;
       if (fTags.length) { const mine = tagsOf(l); if (!fTags.every((t) => mine.includes(t))) return false; }
+      /* A passport filter is a question about tenants: landlords drop out. */
+      if (fPassport && passportStateOf(l)?.state !== fPassport) return false;
       /* Phone and address are in the needle too. Somebody looking a landlord up
          mid-call has the number in front of them far more often than the town,
          and a search that silently ignores what you typed reads as "not in the
@@ -434,9 +498,11 @@ export default function Leads() {
     /* Lost is off the working list (Howard, 24 Sep 2026), and since 1 Oct so
        is everything else that is done - lost, a viewing or an appraisal
        booked, closed. Groups keeps them: it has its own Completed box. */
-    const keep = view === "groups" || showDone || Boolean(fStage) || Boolean(needle);
+    /* A passport filter finds them too: a tenant whose REX enquiry is closed
+       can still be the one with a finished passport, ready to book. */
+    const keep = view === "groups" || showDone || Boolean(fStage) || Boolean(fPassport) || Boolean(needle);
     return { book: keep ? all : all.filter((l) => !isCompleted(l)), doneCount: all.filter(isCompleted).length };
-  }, [ALL, side, fSource, fAgent, fStage, fTags, tagsOf, q, view, showDone]);
+  }, [ALL, side, fSource, fAgent, fStage, fTags, fPassport, passportStateOf, q, view, showDone]);
   /* Nobody's yet (Howard, 1 Oct 2026: a new valuation request can arrive with
      no agent, and support assigns it). Counted on the side being looked at,
      for the chip that filters to them. */
@@ -454,7 +520,7 @@ export default function Leads() {
   // A filter change can strand the page number past the end of the list.
   useEffect(() => {
     setPage(0);
-  }, [side, fSource, fAgent, fStage, fTags, q, perPage]);
+  }, [side, fSource, fAgent, fStage, fTags, fPassport, q, perPage]);
   /* A lead opened by link may be one the list is not showing (completed):
      the drawer still opens it. */
   const open = book.find((l) => l.id === openId) ?? ALL.find((l) => l.id === openId) ?? null;
@@ -477,16 +543,40 @@ export default function Leads() {
            agent's - the owner's view (Susan, 19 Sep 2026). Here rather than
            only in the Agent column, which is off unless switched on. */
         render: (l) => {
-          /* The passport tick on the row itself, so a ready tenant shows
-             without opening anybody (Kirstie, 6 Oct 2026). */
-          const done = passportOf(l);
           return (
             <span className="block whitespace-nowrap">
               <span className="hand text-[13px]">{l.name}</span>
-              {done && <span className="ml-2 align-middle"><PassportDonePill at={done.submittedAt} /></span>}
               {manyAgents && <span className="block text-[10.5px] text-muted">{l.agent && l.agent !== "Unassigned" ? `For ${l.agent}` : "Not assigned"}</span>}
             </span>
           );
+        },
+      },
+      /* Straight after the name (James, 9 Oct 2026), so a ready tenant shows
+         without opening anybody - it replaces the tick that sat on the name
+         (Kirstie, 6 Oct). Tenants only; a landlord row is blank. */
+      ...(passportsWanted
+        ? [{
+            key: "passport", label: "Passport", cell: "whitespace-nowrap",
+            render: (l: Lead) => {
+              const p = passportStateOf(l);
+              if (!p) return null;
+              if (!passportRows) {
+                return passportRowsFailed
+                  ? <span className="text-[11px] text-muted" title="The passports didn't load. Try again in a minute.">Didn&apos;t load</span>
+                  : <span className="block h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" aria-label="Loading" />;
+              }
+              return <PassportChip state={p.state} at={p.at} />;
+            },
+          } satisfies ColumnDef<Lead>]
+        : []),
+      /* The home itself, not "Letting" (James, 9 Oct 2026: it is a lettings
+         platform, the word says nothing). The listing they asked about; a
+         landlord's own address; the town when neither is known. */
+      {
+        key: "property", label: "Property", cell: "max-w-[280px] truncate",
+        render: (l) => {
+          const home = l.address || (l.preferred && l.preferred !== "—" ? l.preferred : "") || l.area;
+          return <span title={home}>{home}</span>;
         },
       },
       {
@@ -497,8 +587,9 @@ export default function Leads() {
         render: (l) => l.email,
       },
       { key: "phone", label: "Phone", optional: true, cell: "whitespace-nowrap text-muted", render: (l) => l.phone },
-      { key: "enquiry", label: "Enquiry", cell: "whitespace-nowrap text-muted", render: (l) => l.enquiry },
-      { key: "area", label: "Area", cell: "whitespace-nowrap", render: (l) => l.area },
+      /* Off unless switched on: Property says where, and "Letting" said nothing. */
+      { key: "enquiry", label: "Enquiry", optional: true, cell: "whitespace-nowrap text-muted", render: (l) => (l.enquiry === "Letting" ? "Tenant" : l.enquiry) },
+      { key: "area", label: "Area", optional: true, cell: "whitespace-nowrap", render: (l) => l.area },
       { key: "budget", label: "Budget", cell: "figures whitespace-nowrap", render: (l) => l.budget },
       { key: "source", label: "Source", cell: "text-muted", render: (l) => <SourceMark source={l.source} /> },
       { key: "received", label: "Received", cell: "whitespace-nowrap text-[11px] text-muted", render: (l) => l.received },
@@ -516,9 +607,12 @@ export default function Leads() {
           ),
       },
     ],
-    [manyAgents, passportOf]
+    [manyAgents, passportsWanted, passportStateOf, passportRows, passportRowsFailed]
   );
-  const cols = useColumns<Lead>("leads", defs);
+  /* v2 (9 Oct 2026): Passport and Property arrived and Enquiry/Area went
+     optional. Saved layouts from before would have put the new columns at
+     the far end and kept "Letting" on, so everybody starts from the new one. */
+  const cols = useColumns<Lead>("leads-v2", defs);
 
   /**
    * What was read, and what was left out of it.
@@ -710,6 +804,7 @@ export default function Leads() {
                 <PickOne tone="pink" label="All agents" options={agents.map((o) => ({ id: o, label: o }))} value={fAgent} onChange={setFAgent} />
                 <PickOne tone="pink" label="All stages" options={stages.map((o) => ({ id: o, label: o }))} value={fStage} onChange={setFStage} />
                 <TagsPick tone="pink" tags={tagCounts} value={fTags} onChange={setFTags} />
+            {passportsWanted && <PickOne tone="pink" label="All passports" options={PASSPORT_OPTIONS} value={fPassport} onChange={setFPassport} />}
                 {unassignedChip}
                 <div className="ml-auto">
                   <GroupsCustomiser value={groupsConfig} onChange={saveGroupsConfig} />
@@ -741,6 +836,7 @@ export default function Leads() {
             <PickOne tone="pink" label="All agents" options={agents.map((o) => ({ id: o, label: o }))} value={fAgent} onChange={setFAgent} />
             <PickOne tone="pink" label="All stages" options={stages.map((o) => ({ id: o, label: o }))} value={fStage} onChange={setFStage} />
             <TagsPick tone="pink" tags={tagCounts} value={fTags} onChange={setFTags} />
+            {passportsWanted && <PickOne tone="pink" label="All passports" options={PASSPORT_OPTIONS} value={fPassport} onChange={setFPassport} />}
             {unassignedChip}
             <div className="ml-auto">
               <ColumnCustomiser cols={cols} tone="pink" />
@@ -763,7 +859,7 @@ export default function Leads() {
             <p className="flex items-center gap-2.5 text-[11px] text-muted">
               Showing {book.length ? page * perPage + 1 : 0}–
               {Math.min((page + 1) * perPage, book.length)} of {book.length} leads
-              {doneCount > 0 && !fStage && !q.trim() && (
+              {doneCount > 0 && !fStage && !fPassport && !q.trim() && (
                 <button
                   type="button"
                   onClick={() => setShowDone((v) => !v)}
