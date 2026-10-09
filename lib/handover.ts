@@ -425,7 +425,7 @@ export async function runHandover(
         await rec.add({ id: `landlord:${str(c.id)}`, label: `Landlord: ${name}`, state: "ok", detail: `Created in Propoly (${uuid}).`, request: payload, response: made.body });
       } else {
         status = "failed";
-        await rec.add({ id: `landlord:${str(c.id)}`, label: `Landlord: ${name}`, state: "failed", detail: `Propoly answered ${made.status}.`, request: payload, response: made.body });
+        await rec.add({ id: `landlord:${str(c.id)}`, label: `Landlord: ${name}`, state: "failed", detail: `Propoly said no: ${refusal(made)}`, request: payload, response: made.body });
       }
     }
 
@@ -465,7 +465,7 @@ export async function runHandover(
           await rec.add({ id: "property", label: "Property in Propoly", state: "ok", detail: `Created in Propoly (${uuid}).`, request: payload, response: made.body });
         } else {
           status = "failed";
-          await rec.add({ id: "property", label: "Property in Propoly", state: "failed", detail: `Propoly answered ${made.status}.`, request: payload, response: made.body });
+          await rec.add({ id: "property", label: "Property in Propoly", state: "failed", detail: `Propoly said no: ${refusal(made)}`, request: payload, response: made.body });
         }
       }
     }
@@ -517,13 +517,21 @@ export async function runHandover(
       }
       const res = await propolyPatch(`/api/v1/landlords/${uuid}/relationships`, payload);
       const ok = (res.status >= 200 && res.status < 300) || res.status === 409;
-      await rec.add({ id: `relationship:${uuid}`, label: `Landlord ${uuid} ↔ property`, state: ok ? "ok" : "failed", detail: res.status === 409 ? "Already related." : ok ? "Related." : `Propoly answered ${res.status}.`, request: payload, response: res.body });
+      await rec.add({ id: `relationship:${uuid}`, label: `Landlord ${uuid} ↔ property`, state: ok ? "ok" : "failed", detail: res.status === 409 ? "Already related." : ok ? "Related." : `Propoly said no: ${refusal(res)}`, request: payload, response: res.body });
       if (!ok) status = "failed";
     }
 
-    /* 7. The tenants on the REX listing. */
+    /* 7. The tenants on the REX listing - once. A push that stopped part-way
+       is pushed again (12b Cliff Road, 9 Oct 2026: property in, landlord
+       refused), and Listings/update would add the same tenants a second
+       time. A step an earlier live push finished is not done again. */
     const tenantIds = packet.tenants.map((t) => t.contactId).filter((x): x is string => Boolean(x));
-    if (tenantIds.length) {
+    const tenantsDone = live
+      ? (await handoversFor(applicationId, 10).catch(() => [])).find((r) => r.id !== id && r.mode === "live" && r.steps.some((s) => s.id === "rex-tenants" && s.state === "ok"))
+      : null;
+    if (tenantsDone) {
+      await rec.add({ id: "rex-tenants", label: "Tenants on the REX listing", state: "ok", detail: `Already on the listing from the push on ${new Date(tenantsDone.startedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" })}.` });
+    } else if (tenantIds.length) {
       const payload = { data: { id: packet.listingId, related: { contact_reln_listing: tenantIds.map((contact_id) => ({ contact_id, reln_type_id: "purchtenant" })) } } };
       if (!live) {
         await rec.add({ id: "rex-tenants", label: "Tenants on the REX listing", state: "would", detail: `Would put ${tenantIds.length} tenant${tenantIds.length === 1 ? "" : "s"} on the listing as purchtenant.`, request: payload });
@@ -628,6 +636,13 @@ function landlordPayload(cc: Row, name: string, email: string) {
     county: afterComma.replace(pc, "").trim().split(/\s+/)[0] ?? "",
     postcode: pc,
   };
+}
+
+/** Propoly's own reason for a refusal, in its words: "Mobile number can't be blank". */
+function refusal(res: { status: number; body: unknown }): string {
+  const b = (res.body ?? {}) as Row;
+  const errs = Array.isArray(b.errors) ? (b.errors as unknown[]).map(String).join("; ") : null;
+  return str(b.message) ?? errs ?? `it answered ${res.status || "nothing"}.`;
 }
 
 /** A Propoly property offered to the agent as a possible match. */
