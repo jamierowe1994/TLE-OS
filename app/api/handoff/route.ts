@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { handoffFor } from "@/lib/deal-handoff";
 import { ensureHandoverTodos, handoverMode, handoversFor, runHandover } from "@/lib/handover";
+import { dealDraftFor, DEAL_TEMPLATES, PAYMENT_SCHEDULES, SERVICE_LEVELS, type DealTerms } from "@/lib/handover-deal";
+import { switchOn } from "@/lib/switches";
 import { rexConfigured } from "@/lib/rex";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
@@ -13,7 +15,9 @@ import type { OsUser } from "@/lib/users";
 /**
  * GET  /api/handoff?application=37709 → the packet, what's missing, the mode,
  *                                       and the last few runs
- * POST /api/handoff { applicationId, force?, rehearse?, propertyUuid?, newProperty? }
+ *                                       and, with the deal switch on, the
+ *                                       deal's terms for the agent to check
+ * POST /api/handoff { applicationId, force?, rehearse?, propertyUuid?, newProperty?, deal? }
  *                                     → run the handover ("Push to Propoly")
  *
  * The OS runs the handover itself now (lib/handover). With the switch off it
@@ -67,8 +71,16 @@ export async function GET(req: NextRequest) {
     const app = await getApplicationById(id).catch(() => null);
     const refused = notTheirs(me, app?.agent);
     if (refused) return NextResponse.json({ error: refused }, { status: 403 });
-    const [mode, runs] = await Promise.all([handoverMode(), handoversFor(id, 5)]);
-    return NextResponse.json({ ...handoff, mode, runs });
+    const [mode, runs, dealOn] = await Promise.all([handoverMode(), handoversFor(id, 5), switchOn("handover_deal")]);
+    /* The deal the push would start, for the agent to check first. Only
+       when the push would really start one. */
+    const draft = mode === "live" && dealOn ? await dealDraftFor(handoff).catch(() => null) : null;
+    return NextResponse.json({
+      ...handoff,
+      mode,
+      runs,
+      deal: draft ? { ...draft, templates: DEAL_TEMPLATES, services: SERVICE_LEVELS, schedules: PAYMENT_SCHEDULES } : null,
+    });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 502 });
   }
@@ -83,7 +95,7 @@ export async function POST(req: NextRequest) {
     if (e instanceof ViewingAsRefused) return NextResponse.json({ error: e.message }, { status: 423 });
     throw e;
   }
-  type Body = { applicationId?: string; force?: boolean; rehearse?: boolean; propertyUuid?: string; newProperty?: boolean };
+  type Body = { applicationId?: string; force?: boolean; rehearse?: boolean; propertyUuid?: string; newProperty?: boolean; deal?: Partial<DealTerms> };
   let body: Body;
   try {
     body = (await req.json()) as Body;
@@ -124,6 +136,8 @@ export async function POST(req: NextRequest) {
       force: body.force === true,
       propertyUuid: uuid,
       newProperty: body.newProperty === true,
+      /* Checked field by field in lib/handover-deal withChanges. */
+      deal: body.deal && typeof body.deal === "object" ? body.deal : null,
     });
     return NextResponse.json({ ok: run.status === "ok", run });
   } catch (e) {

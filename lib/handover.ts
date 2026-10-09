@@ -12,6 +12,8 @@ import { createUpdate, type UpdateRecipient } from "@/lib/customer-updates";
 import { userByName } from "@/lib/tenant-email-send";
 import { isScottish } from "@/lib/property-flags";
 import { parseAddress, postcodeOf, sameHome } from "@/lib/address-parse";
+import { dealDefaults, dealPayload, dealProblems, withChanges, type DealTerms } from "@/lib/handover-deal";
+import { refreshPropolyDealsNow } from "@/lib/business/propoly-deals";
 
 /**
  * The offer-accepted handover, run by the OS.
@@ -181,6 +183,8 @@ export async function runHandover(
     propertyUuid?: string | null;
     /** The agent has said this home really is new to Propoly. */
     newProperty?: boolean;
+    /** The agent's changes to the deal's terms on the confirm panel. */
+    deal?: Partial<DealTerms> | null;
   }
 ): Promise<HandoverRun> {
   if (!hasDb()) throw new Error("No database on this environment, so a handover has nowhere to be recorded.");
@@ -430,11 +434,9 @@ export async function runHandover(
     }
 
     /* 4. A new property, only when nothing matched and the agent said it is new. */
+    const agentEmail = str((listing.listing_agent_1 as Row | null)?.email_address) ?? str((listing.system_owner_user as Row | null)?.email_address);
     if (!propertyUuid) {
-      const agentEmail = str((listing.listing_agent_1 as Row | null)?.email_address) ?? str((listing.system_owner_user as Row | null)?.email_address);
-      /* Lower case, as above: REX had "Rhiannon.Dodge@...", Propoly matched only "rhiannon.dodge@...". */
-      const user = agentEmail ? await propolyGet(`/api/v1/users?email=${encodeURIComponent(agentEmail.toLowerCase())}`) : null;
-      const managedBy = user ? str(firstMatch(user.body, () => true)?.id ?? firstMatch(user.body, () => true)?.uuid) : null;
+      const managedBy = await propolyUserFor(agentEmail);
       const attrs = ((listing.attributes ?? property.attributes ?? {}) as Row);
       const pick = (k: string) => property[k] ?? attrs[k] ?? listing[k];
       /* REX says gas as "yes"/"no", not true/false (12b Cliff Road: "yes", 9 Oct
@@ -521,9 +523,32 @@ export async function runHandover(
         continue;
       }
       const res = await propolyPatch(`/api/v1/landlords/${uuid}/relationships`, payload);
-      const ok = (res.status >= 200 && res.status < 300) || res.status === 409;
-      await rec.add({ id: `relationship:${uuid}`, label: `Landlord ${uuid} ↔ property`, state: ok ? "ok" : "failed", detail: res.status === 409 ? "Already related." : ok ? "Related." : `Propoly said no: ${refusal(res)}`, request: payload, response: res.body });
+      /* "Landlord already associated with this property" is the answer we
+         want, whatever status it comes with. */
+      const already = res.status === 409 || /already associated/i.test(refusal(res));
+      const ok = (res.status >= 200 && res.status < 300) || already;
+      await rec.add({ id: `relationship:${uuid}`, label: `Landlord ${uuid} ↔ property`, state: ok ? "ok" : "failed", detail: already ? "Already related." : ok ? "Related." : `Propoly said no: ${refusal(res)}`, request: payload, response: res.body });
       if (!ok) status = "failed";
+    }
+
+    /* 6b. The deal, and the tenants on it (lib/handover-deal). Its own
+       switch: with it off the agent starts the deal by hand, as before. */
+    const dealOn = await switchOn("handover_deal");
+    if (live && !dealOn) {
+      await rec.add({ id: "deal", label: "The deal in Propoly", state: "skipped", detail: "Starting the deal from here is switched off. Start it in Propoly by hand." });
+    } else {
+      const outcome = await pushDeal(rec, {
+        live,
+        applicationId,
+        runId: id,
+        packet,
+        listing,
+        propertyUuid,
+        agentEmail,
+        change: opts.deal ?? null,
+      });
+      if (outcome === "failed") status = "failed";
+      else if (outcome === "blocked" && status === "ok") status = "blocked";
     }
 
     /* 7. The tenants on the REX listing - once. A push that stopped part-way
@@ -601,6 +626,242 @@ export async function runHandover(
 
 class Stop extends Error {}
 
+/** The Propoly user an agent is, by email. Lower case: Propoly matched only "rhiannon.dodge@", REX had "Rhiannon.Dodge@". */
+async function propolyUserFor(email: string | null): Promise<string | null> {
+  if (!email) return null;
+  const user = await propolyGet(`/api/v1/users?email=${encodeURIComponent(email.toLowerCase())}`);
+  const hit = firstMatch(user.body, () => true);
+  return hit ? str(hit.id ?? hit.uuid) : null;
+}
+
+const CLOSED_DEAL = new Set(["complete", "cancelled", "archived"]);
+const pounds = (p: number | null | undefined) =>
+  p == null ? "none" : `£${p.toLocaleString("en-GB", { minimumFractionDigits: p % 1 ? 2 : 0, maximumFractionDigits: 2 })}`;
+const dayOf = (iso: string | null | undefined) =>
+  iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" }) : "no date";
+
+function termWords(t: DealTerms): string {
+  return [
+    `${pounds(t.rentPcm)} pcm`,
+    `moving in ${dayOf(t.moveIn)}`,
+    `${t.termMonths ?? "?"} months`,
+    t.template,
+    t.serviceLevel ? t.serviceLevel.replace(/_/g, " ") : "no service level",
+    `holding fee ${pounds(t.holdingFeePounds)}`,
+    `deposit ${pounds(t.depositPounds)}`,
+  ].join(", ");
+}
+
+/** A Propoly deal read live: the deal object, whichever way it is wrapped. */
+async function readDeal(uuid: string): Promise<Row | null> {
+  const res = await propolyGet(`/api/v1/deals/${encodeURIComponent(uuid)}`);
+  if (res.status < 200 || res.status >= 300) return null;
+  const b = (res.body ?? {}) as Row;
+  return ((b.deal as Row | undefined) ?? b) as Row;
+}
+const dealEmails = (deal: Row | null) =>
+  new Set(
+    ((deal?.tenants ?? []) as Row[])
+      .map((t) => norm(t.email ?? t.user_email ?? (t.user_details as Row | null)?.email))
+      .filter(Boolean)
+  );
+
+/**
+ * Step 6b: start the deal in Propoly and put the tenants on it.
+ *
+ * Never two deals for one let. In order: a deal an earlier push of this
+ * application started; a live deal already on the home (an agent who keyed
+ * it in by hand, as Rhiannon did on 12b Cliff Road); only then a new one. A
+ * deal found is used as it is - its terms are Propoly's - and only the
+ * tenants it lacks are added. Afterwards the deal is read back, so the run
+ * says what Propoly actually holds rather than what was sent.
+ */
+async function pushDeal(
+  rec: Recorder,
+  o: {
+    live: boolean;
+    applicationId: string;
+    runId: string;
+    packet: Handoff;
+    listing: Row;
+    propertyUuid: string | null;
+    agentEmail: string | null;
+    change: Partial<DealTerms> | null;
+  }
+): Promise<"ok" | "would" | "blocked" | "failed"> {
+  const label = "The deal in Propoly";
+  const terms = withChanges(dealDefaults(o.packet, o.listing), o.change);
+  const realProperty = o.propertyUuid && !o.propertyUuid.startsWith("(") ? o.propertyUuid : null;
+
+  /* 1. A deal an earlier push of this application started. */
+  let dealUuid: string | null = null;
+  let found = "";
+  if (o.live) {
+    const prior = (await handoversFor(o.applicationId, 10).catch(() => []))
+      .filter((r) => r.id !== o.runId && r.mode === "live")
+      .flatMap((r) => r.steps)
+      .find((s) => s.id === "deal" && s.state === "ok" && str((s.response as Row | null)?.uuid));
+    if (prior) {
+      dealUuid = str((prior.response as Row).uuid);
+      found = `Started by an earlier push on ${dayOf(prior.at)}; used again, not doubled.`;
+    }
+  }
+
+  /* 2. A live deal already on this home. Read fresh in a live run: the agent
+     may have keyed it in a minute ago. */
+  if (!dealUuid && realProperty) {
+    if (o.live) await refreshPropolyDealsNow().catch(() => null);
+    const deals = await getAllPropolyDeals().catch(() => null);
+    if (!deals) {
+      await rec.add({ id: "deal", label, state: o.live ? "blocked" : "would", detail: "Propoly's deals couldn't be read, so it isn't known whether this home already has one. No deal was started. Try again in a few minutes." });
+      return o.live ? "blocked" : "would";
+    }
+    const open = deals
+      .filter((d) => d.app.propoly?.propertyUuid === realProperty && !CLOSED_DEAL.has(d.statusKey))
+      .sort((a, b) => (b.app.dateReceived ?? "").localeCompare(a.app.dateReceived ?? ""));
+    if (open[0]) {
+      dealUuid = open[0].app.id;
+      found = `Propoly already has a live deal on this home (started ${dayOf(open[0].app.dateReceived)}), so that one is used, not doubled.`;
+    }
+  }
+
+  /* 3. A new deal. */
+  if (!dealUuid) {
+    const problems = dealProblems(terms);
+    /* The two Railway values are the office's to set, not the agent's: until
+       they are, the deal is started by hand as before and the push is not
+       held up for it. */
+    const officeOnly = problems.length > 0 && problems.every((p) => /Railway/.test(p));
+    if (problems.length) {
+      await rec.add({
+        id: "deal",
+        label,
+        state: officeOnly ? "skipped" : o.live ? "blocked" : "would",
+        detail: officeOnly
+          ? `Start the deal in Propoly by hand for now. ${problems.join(" ")}`
+          : `The deal can't be started yet: ${problems.join(" ")}`,
+        request: { terms },
+      });
+      return officeOnly ? "ok" : o.live ? "blocked" : "would";
+    }
+    if (!realProperty) {
+      await rec.add({ id: "deal", label, state: o.live ? "skipped" : "would", detail: o.live ? "Skipped: the home isn't in Propoly, so there is nothing to start a deal on." : `Would start the deal: ${termWords(terms)}.`, request: { terms } });
+      return o.live ? "failed" : "would";
+    }
+    const managedBy = await propolyUserFor(o.agentEmail);
+    if (!managedBy) {
+      await rec.add({ id: "deal", label, state: o.live ? "blocked" : "would", detail: `No Propoly user matches the listing agent${o.agentEmail ? ` (${o.agentEmail})` : ""}, so the deal has nobody to manage it. Start it in Propoly by hand.`, request: { terms } });
+      return o.live ? "blocked" : "would";
+    }
+    const payload = dealPayload(terms, realProperty, managedBy);
+    if (!o.live) {
+      await rec.add({ id: "deal", label, state: "would", detail: `Would start the deal: ${termWords(terms)}.`, request: payload });
+      for (const t of o.packet.tenants) {
+        await rec.add({ id: `deal-tenant:${t.contactId ?? t.name}`, label: `Tenant on the deal: ${t.name}`, state: "would", detail: "Would add them to the deal." });
+      }
+      return "would";
+    }
+    const made = await propolyPost("/api/v1/deals", payload);
+    const body = (made.body ?? {}) as Row;
+    const uuid = str((body.deal as Row | null)?.uuid) ?? str(body.uuid) ?? str((body.data as Row | null)?.uuid);
+    if (made.status < 200 || made.status >= 300) {
+      await rec.add({ id: "deal", label, state: "failed", detail: `Propoly said no: ${refusal(made)} Nothing was started; start it by hand or fix this and push again.`, request: payload, response: made.body });
+      return "failed";
+    }
+    if (!uuid) {
+      await rec.add({ id: "deal", label, state: "failed", detail: "Propoly says it started the deal but didn't say which one, so the tenants couldn't be added. Check the deal in Propoly; pushing again uses it rather than starting another.", request: payload, response: made.body });
+      return "failed";
+    }
+    dealUuid = uuid;
+    await rec.add({ id: "deal", label, state: "ok", detail: `Started in Propoly: ${termWords(terms)}.`, request: payload, response: { uuid, propoly: made.body } });
+  } else {
+    await rec.add({ id: "deal", label, state: "ok", detail: found, response: { uuid: dealUuid } });
+  }
+
+  /* 4. The tenants, the ones the deal hasn't got. */
+  let result: "ok" | "failed" = "ok";
+  const before = await readDeal(dealUuid);
+  const have = dealEmails(before);
+  for (const t of o.packet.tenants) {
+    const sid = `deal-tenant:${t.contactId ?? t.name}`;
+    const tlabel = `Tenant on the deal: ${t.name}`;
+    if (!t.email) {
+      await rec.add({ id: sid, label: tlabel, state: "failed", detail: "No email address, and Propoly needs one. Add it in REX and push again, or add them in Propoly." });
+      result = "failed";
+      continue;
+    }
+    if (have.has(norm(t.email))) {
+      await rec.add({ id: sid, label: tlabel, state: "ok", detail: "Already on the deal." });
+      continue;
+    }
+    const contact = t.contactId ? await rexCall("Contacts", "read", { id: t.contactId }).catch(() => null) : null;
+    const cc = ((contact?.ok ? contact.result : null) ?? {}) as Row;
+    const payload = { deal_id: dealUuid, deal_uuid: dealUuid, tenant: { user_attributes: tenantAttributes(cc, t) } };
+    const res = await propolyPost("/api/v1/tenants", payload);
+    if (res.status >= 200 && res.status < 300) {
+      await rec.add({ id: sid, label: tlabel, state: "ok", detail: "Added to the deal.", request: payload, response: res.body });
+    } else {
+      result = "failed";
+      await rec.add({ id: sid, label: tlabel, state: "failed", detail: `Propoly said no: ${refusal(res)} Add them in Propoly, or fix it and push again.`, request: payload, response: res.body });
+    }
+  }
+
+  /* 5. What Propoly holds now, in its own figures. */
+  const after = await readDeal(dealUuid);
+  if (after) {
+    const tm = (after.terms ?? {}) as Row;
+    const p = (v: unknown) => (typeof v === "number" ? v / 100 : null);
+    const differs: string[] = [];
+    if (p(tm.price_pcm_pence) != null && terms.rentPcm != null && p(tm.price_pcm_pence) !== terms.rentPcm) differs.push(`rent is ${pounds(p(tm.price_pcm_pence))}, not ${pounds(terms.rentPcm)}`);
+    if (str(tm.move_in_date) && terms.moveIn && str(tm.move_in_date)?.slice(0, 10) !== terms.moveIn) differs.push(`move-in is ${dayOf(str(tm.move_in_date))}`);
+    if (!found && terms.holdingFeePounds && !p(tm.holding_fee_pence)) differs.push("no holding fee is set");
+    const tenants = ((after.tenants ?? []) as Row[]).length;
+    await rec.add({
+      id: "deal-check",
+      label: "The deal as Propoly holds it",
+      state: "ok",
+      detail:
+        `${pounds(p(tm.price_pcm_pence))} pcm, moving in ${dayOf(str(tm.move_in_date))}, holding fee ${pounds(p(tm.holding_fee_pence))}, deposit ${pounds(p(tm.deposit_pence))}, ${tenants} tenant${tenants === 1 ? "" : "s"}.` +
+        (differs.length ? ` Check in Propoly: ${differs.join("; ")}.` : ""),
+      response: { uuid: dealUuid },
+    });
+  }
+  /* The screens read Propoly's deals from a stored copy; the next walk picks the new deal up. */
+  void refreshPropolyDealsNow().catch(() => null);
+  return result;
+}
+
+/**
+ * A phone number the way Propoly's own records hold them: "07779927613".
+ * REX keeps "07779 927613" and "+447779927613" side by side; Propoly's
+ * people, keyed in by hand, are all the national form with no spaces.
+ */
+function ukMobile(raw: string | null): string {
+  const digits = (raw ?? "").replace(/[^\d+]/g, "");
+  if (digits.startsWith("+44")) return `0${digits.slice(3)}`;
+  if (digits.startsWith("0044")) return `0${digits.slice(4)}`;
+  return digits;
+}
+
+/** A tenant for POST /api/v1/tenants, from the REX contact where it has the parts. */
+function tenantAttributes(cc: Row, t: Handoff["tenants"][number]) {
+  const rel = (cc.related ?? {}) as Row;
+  const n = (((rel.contact_names ?? []) as Row[])[0] ?? {}) as Row;
+  const ph = (((rel.contact_phones ?? []) as Row[])[0] ?? {}) as Row;
+  const whole = t.name.trim().split(/\s+/);
+  const first = str(n.name_first) ?? str(cc.first_name) ?? (whole.length > 1 ? whole.slice(0, -1).join(" ") : whole[0] ?? "");
+  const last = str(n.name_last) ?? str(cc.last_name) ?? (whole.length > 1 ? whole[whole.length - 1] : "");
+  const gender = norm(cc.marketing_gender);
+  const title = str(n.name_title) ?? str(cc.title) ?? (gender === "female" ? "Ms" : gender === "male" ? "Mr" : "Mx");
+  return {
+    email: (t.email ?? "").toLowerCase(),
+    title: title.replace(/\.$/, ""),
+    first_name: first,
+    last_name: last,
+    mobileno: ukMobile(str(ph.phone_number) ?? str(ph.system_e164_phone_number) ?? str(t.phone)),
+  };
+}
+
 /**
  * A new Propoly landlord, field for field as Howard's flow builds it (his
  * export of 9 Oct 2026). The port on 3 Sep sent the name, phone and email
@@ -629,7 +890,7 @@ function landlordPayload(cc: Row, name: string, email: string) {
     first_name: first.slice(0, 20),
     middle_name: middle,
     last_name: last,
-    mobileno: str(ph.system_e164_phone_number) ?? str(ph.phone_number) ?? str(cc.system_e164_phone_number) ?? str(cc.phone_number) ?? "",
+    mobileno: ukMobile(str(ph.phone_number) ?? str(ph.system_e164_phone_number) ?? str(cc.phone_number) ?? str(cc.system_e164_phone_number)),
     email: email.toLowerCase(),
     is_company: Boolean(company),
     name_on_contracts: company ?? [first, middle, last].filter(Boolean).join(" "),

@@ -260,6 +260,23 @@ export const SWITCHES: Switch[] = [
   },
   {
     /**
+     * The deal itself, on top of the handover (9 Oct 2026). Propoly added
+     * POST /api/v1/deals after Howard's flow was built - it was not there on
+     * 4 Sep. With this on, Push to Propoly starts the deal (rent, term,
+     * move-in, template, service level) and puts the tenants on it, so the
+     * agent no longer keys it in by hand. Its own switch because it is a new
+     * kind of write: the deal is what Propoly builds the contracts from.
+     */
+    key: "handover_deal",
+    label: "Push to Propoly also starts the deal and adds the tenants",
+    what: "After the landlord and the home, Push to Propoly creates the Propoly deal from the accepted offer (rent, move-in, term, agreement template, service level, deposit scheme) and adds each tenant to it. Never a second deal: a live deal already on the home is used instead. Needs PROPOLY_DEAL_TENANCY_TYPE and PROPOLY_DEAL_DEPOSIT_SCHEME on Railway.",
+    who: "Propoly is WRITTEN TO: a deal and its tenants. Propoly may email the tenants itself, as it does when a deal is keyed in by hand. Handover (above) must be on too.",
+    confirm: "START DEALS",
+    legacyEnv: "HANDOVER_DEAL",
+    legacyOn: "on",
+  },
+  {
+    /**
      * A RENEWED CERTIFICATE GOES OUT TO EVERYONE WHO IS ENTITLED TO IT.
      *
      * Michael, 7 Sep 2026: by law the tenant must have it, within 30 days, and

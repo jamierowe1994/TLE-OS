@@ -15,6 +15,7 @@ import { stageEvidence } from "@/lib/business/stage-evidence";
 import { withoutDuplicates } from "@/lib/business/deal-dupes";
 import { flatbondForDeal, loadFlatbonds } from "@/lib/business/flatfair-deal";
 import { PORTAL_STAGES, propolyDealUrl } from "@/lib/business/propoly-stages";
+import { switchOn } from "@/lib/switches";
 import { closedReasons, getApplications } from "@/lib/applications";
 import { feeOf, otherOpenOffers } from "@/lib/offer-hold";
 
@@ -233,12 +234,13 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
   }
 
   /* The three sources the rest reads from, in parallel. */
-  const [handoff, run, plcCase, allDeals, mode] = await Promise.all([
+  const [handoff, run, plcCase, allDeals, mode, dealOn] = await Promise.all([
     buildHandoff(app).catch(() => null),
     latestHandover(app.id).catch(() => null),
     getCase(`plc-${app.id}`).catch(() => null),
     accepted ? deals() : Promise.resolve(null),
     handoverMode().catch(() => "shadow" as const),
+    switchOn("handover_deal").catch(() => false),
   ]);
 
   const deal = accepted && allDeals ? findDeal(app, allDeals) : null;
@@ -266,9 +268,16 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
     handoverStop = { id: "handover", label: "Handover", sub: "In Propoly", tone: "ok", state: "done" };
   } else if (run?.mode === "live" && run.status === "ok") {
     handoverStop = { id: "handover", label: "Handover", sub: `In Propoly ${dayWords(run.finishedAt ?? run.startedAt)}`, tone: "ok", state: "done" };
-    /* The push put the landlord and the home in Propoly. Propoly allows no
-       deal to be made from outside, so the deal itself is started there. */
-    actions.push({ id: "deal-start", label: "Start the deal in Propoly", detail: "The landlord and the home are in Propoly now. Start the deal there for these tenants - the holding fee is taken from the deal.", href: null, who: "kirstie" });
+    /* Since 9 Oct 2026 the push can start the deal too (lib/handover-deal,
+       switch handover_deal). Until Propoly's deals are next read the deal
+       is known from the run; with the switch off it is started by hand. */
+    const started = run.steps.find((s) => s.id === "deal" && s.state === "ok");
+    const startedUuid = started ? ((started.response as { uuid?: string } | null)?.uuid ?? null) : null;
+    if (startedUuid) {
+      actions.push({ id: "fee", label: "Waiting on the holding fee", detail: "The deal is in Propoly with the tenants on it, and the holding fee is taken from it.", href: propolyDealUrl(startedUuid), who: "tenant" });
+    } else {
+      actions.push({ id: "deal-start", label: "Start the deal in Propoly", detail: "The landlord and the home are in Propoly now. Start the deal there for these tenants - the holding fee is taken from the deal.", href: null, who: "kirstie" });
+    }
   } else if (run?.mode === "live") {
     const failed = run.steps.find((s) => s.state === "failed" || s.state === "blocked");
     handoverStop = { id: "handover", label: "Handover", sub: failed ? `Stopped at ${failed.label.toLowerCase()}` : "Did not finish", tone: "warn", state: "current" };
@@ -286,7 +295,7 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
        then the button below IS the handover. */
     actions.push(
       mode === "live"
-        ? { id: "handover", label: "Push to Propoly", detail: "Accepted. Push it to Propoly: the landlord and the home go over, using the records Propoly already has where it has them, so nothing is duplicated.", href: null, who: "you", push: true }
+        ? { id: "handover", label: "Push to Propoly", detail: dealOn ? "Accepted. Push it to Propoly: the landlord, the home and the deal with its tenants go over, using what Propoly already has where it has it, so nothing is duplicated." : "Accepted. Push it to Propoly: the landlord and the home go over, using the records Propoly already has where it has them, so nothing is duplicated.", href: null, who: "you", push: true }
         : { id: "handover", label: "Push to Propoly", detail: "Accepted. The push is still in practice mode, so pressing it checks every step and writes nothing.", href: null, who: "you", push: true }
     );
   }

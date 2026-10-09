@@ -35,6 +35,25 @@ type Candidate = { uuid: string; address: string; postcode: string };
 type RunStep = { id: string; label: string; state: string; detail: string; response?: { candidates?: Candidate[]; ours?: { address: string; postcode: string } } };
 type Run = { id: string; mode: "shadow" | "live"; status: "running" | "ok" | "failed" | "blocked"; steps: RunStep[] };
 type Held = { ref: string; name: string; amount: number | null; people: number };
+type DealTerms = {
+  rentPcm: number | null;
+  moveIn: string | null;
+  termMonths: number | null;
+  template: string;
+  serviceLevel: string | null;
+  paymentSchedule: string;
+  depositPounds: number | null;
+  holdingFeePounds: number | null;
+  scotland: boolean;
+};
+type DealDraft = {
+  terms: DealTerms;
+  problems: string[];
+  templates: string[];
+  services: Record<string, string>;
+  schedules: Record<string, string>;
+};
+type Party = { name: string; email: string | null; phone: string | null };
 
 const WHO: Record<NextAction["who"], string> = { you: "You", kirstie: "Kirstie", landlord: "The landlord", tenant: "The tenant" };
 const gbp = (n: number | null) => (n == null ? "" : ` · £${n.toLocaleString("en-GB")} pcm`);
@@ -74,6 +93,42 @@ export default function NextStepCard({
   const match = run?.status === "blocked" ? run.steps.find((s) => s.id === "property-match" && s.state === "blocked" && s.response?.candidates) ?? null : null;
   const candidates = match?.response?.candidates ?? [];
 
+  /* ── the deal it will start (switch handover_deal), checked first ── */
+  const [draft, setDraft] = useState<DealDraft | null>(null);
+  const [terms, setTerms] = useState<DealTerms | null>(null);
+  const [tenants, setTenants] = useState<Party[]>([]);
+  /* A deal an earlier push started: pushing again finishes the rest and uses it. */
+  const [priorDeal, setPriorDeal] = useState(false);
+  useEffect(() => {
+    if (!next?.push) return;
+    let live = true;
+    fetch(`/api/handoff?application=${encodeURIComponent(applicationId)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { deal?: DealDraft | null; tenants?: Party[]; runs?: Run[] }) => {
+        if (!live) return;
+        setPriorDeal(Boolean(j.runs?.some((r) => r.mode === "live" && r.steps.some((x) => x.id === "deal" && x.state === "ok"))));
+        setDraft(j.deal ?? null);
+        setTerms(j.deal?.terms ?? null);
+        setTenants(j.tenants ?? []);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [applicationId, next?.push]);
+  const set = (k: keyof DealTerms, v: unknown) => setTerms((t) => (t ? { ...t, [k]: v } : t));
+  /* The holding fee follows the rent, as the server works it out. */
+  const holding = terms ? (terms.scotland ? 0 : terms.rentPcm ? Math.floor(((terms.rentPcm * 12) / 52) * 100) / 100 : null) : null;
+  const agentProblems = [
+    ...(terms && !terms.rentPcm ? ["Add the agreed rent."] : []),
+    ...(terms && !terms.moveIn ? ["Add the move-in date."] : []),
+    ...(terms && !terms.termMonths ? ["Add the term."] : []),
+    ...(terms && !terms.serviceLevel ? ["Pick the service."] : []),
+    ...tenants.filter((t) => !t.email).map((t) => `${t.name} has no email, and Propoly needs one.`),
+  ];
+  const officeProblems = (draft?.problems ?? []).filter((p) => /Railway/.test(p));
+  const dealStarted = priorDeal || Boolean(run?.mode === "live" && run.steps.some((x) => x.id === "deal" && x.state === "ok"));
+
   async function push(extra: { propertyUuid?: string; newProperty?: boolean } = {}) {
     setPushing(true);
     setPushError(null);
@@ -81,7 +136,7 @@ export default function NextStepCard({
       const r = await fetch("/api/handoff", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ applicationId, ...extra }),
+        body: JSON.stringify({ applicationId, ...extra, ...(terms && !officeProblems.length && !dealStarted ? { deal: terms } : {}) }),
       });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; run?: Run };
       if (j.run) {
@@ -171,8 +226,80 @@ export default function NextStepCard({
           {/* PUSH TO PROPOLY */}
           {next.push && (
             <div className="mt-4">
+              {!match && terms && !dealStarted && (
+                <div className="mb-3 rounded-2xl border border-line/60 bg-accent-soft/25 p-4" data-steve="application.deal-terms">
+                  <p className="text-[13px] font-semibold">The Deal It Will Start in Propoly</p>
+                  {officeProblems.length ? (
+                    <p className="mt-1 text-[12px] leading-snug text-muted">
+                      Not yet: the office still has to finish setting this up, so the landlord and the home go over and you start the deal in Propoly as before.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="mt-0.5 text-[12px] leading-snug text-muted">From the accepted offer. Check it - Propoly builds the agreement from this.</p>
+                      <div className="mt-3 grid grid-cols-2 gap-2.5 text-[12px]">
+                        <label className="flex flex-col gap-1">
+                          <span className="text-muted">Rent (£ pcm)</span>
+                          <input type="number" min={0} step="0.01" inputMode="decimal" value={terms.rentPcm ?? ""} onChange={(e) => set("rentPcm", e.target.value === "" ? null : Number(e.target.value))} className="rounded-lg border border-line/70 bg-white px-2.5 py-1.5" />
+                        </label>
+                        <label className="flex flex-col gap-1">
+                          <span className="text-muted">Move in</span>
+                          <input type="date" value={terms.moveIn ?? ""} onChange={(e) => set("moveIn", e.target.value || null)} className="rounded-lg border border-line/70 bg-white px-2.5 py-1.5" />
+                        </label>
+                        <label className="flex flex-col gap-1">
+                          <span className="text-muted">Term (months)</span>
+                          <input type="number" min={1} max={60} step={1} value={terms.termMonths ?? ""} onChange={(e) => set("termMonths", e.target.value === "" ? null : Number(e.target.value))} className="rounded-lg border border-line/70 bg-white px-2.5 py-1.5" />
+                        </label>
+                        <label className="flex flex-col gap-1">
+                          <span className="text-muted">Deposit (£)</span>
+                          <input type="number" min={0} step="0.01" inputMode="decimal" value={terms.depositPounds ?? ""} onChange={(e) => set("depositPounds", e.target.value === "" ? null : Number(e.target.value))} className="rounded-lg border border-line/70 bg-white px-2.5 py-1.5" />
+                        </label>
+                        <label className="col-span-2 flex flex-col gap-1">
+                          <span className="text-muted">Agreement</span>
+                          <select value={terms.template} onChange={(e) => set("template", e.target.value)} className="rounded-lg border border-line/70 bg-white px-2.5 py-1.5">
+                            {(draft?.templates ?? []).map((t) => (
+                              <option key={t} value={t}>{t}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="flex flex-col gap-1">
+                          <span className="text-muted">Service</span>
+                          <select value={terms.serviceLevel ?? ""} onChange={(e) => set("serviceLevel", e.target.value || null)} className="rounded-lg border border-line/70 bg-white px-2.5 py-1.5">
+                            <option value="">Pick one</option>
+                            {Object.entries(draft?.services ?? {}).map(([k, v]) => (
+                              <option key={k} value={k}>{v}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="flex flex-col gap-1">
+                          <span className="text-muted">Rent paid</span>
+                          <select value={terms.paymentSchedule} onChange={(e) => set("paymentSchedule", e.target.value)} className="rounded-lg border border-line/70 bg-white px-2.5 py-1.5">
+                            {Object.entries(draft?.schedules ?? {}).map(([k, v]) => (
+                              <option key={k} value={k}>{v}</option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                      <p className="mt-2.5 text-[12px] text-muted">
+                        Holding fee: {terms.scotland ? "none in Scotland" : holding != null ? `£${holding.toLocaleString("en-GB", { minimumFractionDigits: holding % 1 ? 2 : 0, maximumFractionDigits: 2 })} (one week's rent)` : "worked out from the rent"}
+                      </p>
+                      {tenants.length > 0 && (
+                        <ul className="mt-2 space-y-1 border-t border-line/50 pt-2 text-[12px] leading-snug">
+                          {tenants.map((t) => (
+                            <li key={`${t.name}-${t.email ?? ""}`}>
+                              <span className="font-semibold">{t.name}</span>
+                              <span className="text-muted"> · {t.email ?? "no email"} · {t.phone ?? "no mobile"}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {agentProblems.length > 0 && <p className="mt-2 text-[12px] leading-snug text-accent-dark">{agentProblems.join(" ")}</p>}
+                    </>
+                  )}
+                </div>
+              )}
+
               {!match && (
-                <button type="button" onClick={() => void push()} disabled={pushing} className={`${primary} w-full`}>
+                <button type="button" onClick={() => void push()} disabled={pushing || (Boolean(terms) && !dealStarted && !officeProblems.length && agentProblems.length > 0)} className={`${primary} w-full`}>
                   <DoodleIcon name="rocket" size={14} />
                   {pushing ? "Pushing to Propoly…" : "Push to Propoly"}
                 </button>
@@ -224,8 +351,12 @@ export default function NextStepCard({
                       ? "Practice run: every step would go through. Nothing was written."
                       : `Practice run: it would stop at ${run.steps.find((s) => s.state === "failed" || s.state === "blocked")?.label.toLowerCase() ?? "a step"}. Nothing was written.`
                     : run.status === "ok"
-                      ? "In Propoly. Start the deal there next."
-                      : `Stopped: ${run.steps.find((s) => s.state === "failed" || s.state === "blocked")?.detail ?? "a step didn't finish."}`}
+                      ? run.steps.some((x) => x.id === "deal" && x.state === "ok")
+                        ? `Deal started in Propoly with the tenants on it. ${run.steps.find((x) => x.id === "deal-check")?.detail ?? ""}`.trim()
+                        : "In Propoly. Start the deal there next."
+                      : dealStarted
+                        ? `The deal is in Propoly, but one step didn't finish: ${run.steps.find((s) => s.state === "failed" || s.state === "blocked")?.detail ?? "a step didn't finish."} Push again to finish it - the deal isn't doubled.`
+                        : `Stopped: ${run.steps.find((s) => s.state === "failed" || s.state === "blocked")?.detail ?? "a step didn't finish."}`}
                 </p>
               )}
               {pushError && <p className="mt-2.5 text-[12px] text-accent-dark">{pushError}</p>}
