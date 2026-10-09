@@ -50,6 +50,7 @@ import PreTenancyHero from "@/components/pretenancy/Hero";
 import SaveChip, { SaveScopeProvider, useSaveReporter, useSaveScope } from "@/components/SaveChip";
 import FileDocuments from "@/components/FileDocuments";
 import { fetchMe } from "@/lib/me";
+import { searchMatches } from "@/lib/search-match";
 
 /* ------------------------------- data shapes ------------------------------- */
 
@@ -549,22 +550,14 @@ function Board({ user }: { user: UserProfile }) {
   // Base set: agent + search filters only. Stage is a TAB, not a filter.
   // 2025 deals are hidden for now (see isFrom2025).
   const base = useMemo(() => {
-    const needle = q.trim().toLowerCase();
+    const needle = q.trim();
     return (deals ?? [])
       .filter((d) => !isFrom2025(d))
       .filter((d) => !d.archived)
       .filter((d) => d.agentName === agent || agent === "all")
       .filter((d) => {
         if (!needle) return true;
-        const hay = [
-          d.app.propertyName,
-          d.app.locality,
-          d.agentName ?? "",
-          ...d.app.tenants.map((tn) => tn.name),
-        ]
-          .join(" ")
-          .toLowerCase();
-        return hay.includes(needle);
+        return searchMatches(needle, d.app.propertyName, d.app.locality, d.agentName, ...d.app.tenants.map((tn) => tn.name));
       });
   }, [deals, q, agent]);
 

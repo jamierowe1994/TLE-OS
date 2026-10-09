@@ -10,6 +10,7 @@ import { ErrorLine, Sheet, Spinner, TopBar, dialable, mapsHref, whatsappHref, Wh
 import { RadiusSheet, type RadiusPick } from "../radius";
 import SlideTabs from "@/components/app/SlideTabs";
 import FloatSearch from "@/components/app/FloatSearch";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * PEOPLE (3 Oct 2026), from James's mockup - "this is how I would like the
@@ -112,11 +113,11 @@ export default function PhonePeople() {
 
   const list = useMemo(() => {
     const all = book ? (side === "tenant" ? book.tenants : book.landlords) : [];
-    const n = needle.trim().toLowerCase();
+    const n = needle.trim();
     const nd = n.replace(/\D/g, "");
     const hits = all.filter((p) => {
       if (!n) return true;
-      if ([p.name, p.address, p.locality, p.email].some((f) => f && f.toLowerCase().includes(n))) return true;
+      if (searchMatches(n, p.name, p.address, p.locality, p.email)) return true;
       return nd.length >= 5 && p.phone.replace(/\D/g, "").includes(nd);
     });
     const by: Record<Sort, (a: BookPerson, b: BookPerson) => number> = {

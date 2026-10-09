@@ -5,6 +5,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { loadGoogle } from "@/components/MarketMap";
 import type { OsListing as Listing } from "@/lib/rex-listings";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * What this tenant could actually be shown, out of the live book.
@@ -152,9 +153,9 @@ export default function TenantPropertySearch({
   );
 
   const results = useMemo(() => {
-    const needle = q.trim().toLowerCase();
+    const needle = q.trim();
     const rows = withDistance.filter(({ l, miles }) => {
-      if (needle && !`${l.name} ${l.locality} ${l.postcode ?? ""}`.toLowerCase().includes(needle)) return false;
+      if (needle && !searchMatches(needle, l.name, l.locality, l.postcode)) return false;
       if (town && !(l.locality ?? "").toLowerCase().includes(town.toLowerCase())) return false;
       if (type && l.propertyType !== type) return false;
       if (maxRent != null && (l.rentMonthly ?? l.rent ?? 0) > maxRent) return false;

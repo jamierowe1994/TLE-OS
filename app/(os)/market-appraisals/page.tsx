@@ -22,6 +22,7 @@ import {
 } from "@/lib/market-appraisal";
 import GuideButton from "@/components/GuideButton";
 import BookAppraisalWizard from "@/components/appraisal/BookAppraisalWizard";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * Market Appraisals — the landlord side, from booked to won.
@@ -133,11 +134,11 @@ export default function MarketAppraisals() {
   const all = useMemo(() => live ?? [], [live]);
 
   const rows = useMemo(() => {
-    const needle = q.trim().toLowerCase();
+    const needle = q.trim();
     const withStage = all
       .map((m) => ({ ...m, live: effectiveStage(m) }))
       .filter((m) => inPeriod(m.appointmentAt, period))
-      .filter((m) => !needle || `${m.address} ${m.postcode} ${m.landlord} ${m.agent ?? ""}`.toLowerCase().includes(needle));
+      .filter((m) => !needle || searchMatches(needle, m.address, m.postcode, m.landlord, m.agent));
     const open = withStage.filter((m) => m.live !== "won" && m.live !== "lost");
     return (filter === "open" ? open : withStage.filter((m) => m.live === filter)).sort(
       (a, b) => urgencyOf(a) - urgencyOf(b)

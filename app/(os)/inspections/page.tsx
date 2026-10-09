@@ -17,6 +17,7 @@ import RecordVisit from "@/components/inspections/RecordVisit";
 import { asChecks, checkLines, checksDone, CHECKS } from "@/lib/inspection-checks";
 import { REPAIR_CATEGORIES, URGENCIES } from "@/lib/works-catalogue";
 import SaveChip, { SaveScopeProvider, useSaveReporter, useSaveScope } from "@/components/SaveChip";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * Inspections: the visits we owe the book, and the permission that lets us in.
@@ -126,12 +127,12 @@ export default function Inspections() {
   }, []);
 
   const all = data?.inspections ?? [];
-  const needle = q.trim().toLowerCase();
-  const match = (s: string) => !needle || s.toLowerCase().includes(needle);
+  const needle = q.trim();
+  const match = (...fields: (string | null | undefined)[]) => !needle || searchMatches(needle, ...fields);
 
-  const inHand = useMemo(() => all.filter((i) => !["closed", "cancelled"].includes(i.status) && match(`${i.propertyName} ${i.locality} ${i.tenant} ${i.landlord} ${i.ref}`)), [all, needle]);
-  const done = useMemo(() => all.filter((i) => ["closed", "cancelled"].includes(i.status) && match(`${i.propertyName} ${i.locality} ${i.tenant} ${i.landlord} ${i.ref}`)), [all, needle]);
-  const due = useMemo(() => (data?.due ?? []).filter((d) => match(`${d.propertyName} ${d.locality} ${d.tenant} ${d.landlord}`)), [data, needle]);
+  const inHand = useMemo(() => all.filter((i) => !["closed", "cancelled"].includes(i.status) && match(i.propertyName, i.locality, i.tenant, i.landlord, String(i.ref))), [all, needle]);
+  const done = useMemo(() => all.filter((i) => ["closed", "cancelled"].includes(i.status) && match(i.propertyName, i.locality, i.tenant, i.landlord, String(i.ref))), [all, needle]);
+  const due = useMemo(() => (data?.due ?? []).filter((d) => match(d.propertyName, d.locality, d.tenant, d.landlord)), [data, needle]);
   const s = data?.summary ?? null;
 
   /* `newDue` (6 Oct 2026): the due date changed from the Due list. The visit

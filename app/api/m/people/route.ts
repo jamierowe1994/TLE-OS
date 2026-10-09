@@ -9,6 +9,7 @@ import { peopleLike, rememberPeople } from "@/lib/rex-people-store";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import type { Lead } from "@/lib/leads-sample";
 import { peopleBook } from "@/lib/m-people-book";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * GET /api/m/people?q=… → a name, and how to reach them. The phone view's
@@ -50,16 +51,8 @@ export interface PhonePerson {
 
 const digits = (s: string) => s.replace(/\D/g, "");
 
-function matches(needle: string, ...fields: (string | null | undefined)[]): boolean {
-  const n = needle.toLowerCase();
-  const nd = digits(needle);
-  return fields.some((f) => {
-    if (!f) return false;
-    const v = String(f).toLowerCase();
-    if (v.includes(n)) return true;
-    return nd.length >= 5 && digits(v).includes(nd);
-  });
-}
+/* Every word, any order, as the search bar does (9 Oct 2026). */
+const matches = searchMatches;
 
 async function cachedLeads(rexUserId: string | null): Promise<Lead[]> {
   if (!hasDb()) return [];

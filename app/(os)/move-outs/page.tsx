@@ -9,6 +9,7 @@ import { Pill } from "@/components/Wire";
 import Segmented from "@/components/Segmented";
 import { PressButton } from "@/components/Bits";
 import type { MoveOut, OpenMoveOut } from "@/lib/move-outs";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * Move-outs (2 Oct 2026). See lib/move-outs.
@@ -77,10 +78,10 @@ export default function MoveOuts() {
   }, []);
   useEffect(load, [load]);
 
-  const needle = q.trim().toLowerCase();
-  const match = (s: string) => !needle || s.toLowerCase().includes(needle);
-  const open = useMemo(() => (data?.open ?? []).filter((d) => match(`${d.propertyName} ${d.locality} ${d.tenant} ${d.landlord} ${d.managedBy ?? ""}`)), [data, needle]);
-  const done = useMemo(() => (data?.done ?? []).filter((r) => match(`${r.propertyName} ${r.tenant} ${r.landlord} ${r.doneBy}`)), [data, needle]);
+  const needle = q.trim();
+  const match = (...fields: (string | null | undefined)[]) => !needle || searchMatches(needle, ...fields);
+  const open = useMemo(() => (data?.open ?? []).filter((d) => match(d.propertyName, d.locality, d.tenant, d.landlord, d.managedBy)), [data, needle]);
+  const done = useMemo(() => (data?.done ?? []).filter((r) => match(r.propertyName, r.tenant, r.landlord, r.doneBy)), [data, needle]);
   const s = data?.summary ?? null;
   const today = todayLondon();
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * "Make an offer" on a listing (7 Oct 2026, Howard: "On the listing, could
@@ -73,8 +74,8 @@ export default function OfferWhoPicker({
   };
 
   const shown = useMemo(() => {
-    const qy = query.trim().toLowerCase();
-    return qy ? people.filter((p) => `${p.name} ${p.email} ${p.phone}`.toLowerCase().includes(qy)) : people;
+    const qy = query.trim();
+    return qy ? people.filter((p) => searchMatches(qy, p.name, p.email, p.phone)) : people;
   }, [people, query]);
 
   const choose = (p: OfferPerson) => {

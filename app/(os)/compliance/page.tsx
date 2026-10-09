@@ -11,6 +11,7 @@ import {
   BIG_THREE, CERT_META, COMP_BOOK, dueWithin, headlineCerts, isOurs, isStaleRecord, renewalHeld, shownStatus,
   type CertKey, type CertStatus, type CompProperty,
 } from "@/lib/compliance";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * Compliance — the page that keeps every home legal and every tenant safe.
@@ -164,8 +165,7 @@ export default function Compliance() {
   };
 
   const book = graded.filter(({ p, worst }) => {
-    if (query && !`${p.name} ${p.locality} ${p.landlord} ${p.tenant ?? ""}`.toLowerCase().includes(query.toLowerCase()))
-      return false;
+    if (query.trim() && !searchMatches(query, p.name, p.locality, p.landlord, p.tenant)) return false;
     if (filter === "all") return true;
     if (filter === "ok") return worst === "ok" || worst === "watch";
     return worst === filter;

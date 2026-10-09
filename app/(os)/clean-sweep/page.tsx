@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import WorkspaceLoading from "@/components/WorkspaceLoading";
 import DoodleIcon from "@/components/DoodleIcon";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * THE CLEAN SWEEP (24 Sep 2026).
@@ -66,11 +67,11 @@ export default function CleanSweep() {
   useEffect(() => { void loadList(); }, [loadList]);
 
   const shown = useMemo(() => {
-    const n = search.trim().toLowerCase();
+    const n = search.trim();
     return (homes ?? []).filter((h) =>
       (!sheetOnly || h.onSheet) &&
       (filter === "all" || (filter === "done" ? Boolean(h.checkedAt) || h.missing === 0 : !h.checkedAt && h.missing > 0)) &&
-      (!n || `${h.address} ${h.landlord ?? ""} ${h.agent ?? ""} ${h.tenants ?? ""} ${h.paypropNo ?? ""}`.toLowerCase().includes(n))
+      (!n || searchMatches(n, h.address, h.landlord, h.agent, h.tenants, h.paypropNo))
     );
   }, [homes, filter, sheetOnly, search]);
 

@@ -4,6 +4,7 @@ import { managedBookFor } from "@/lib/managed-book-cache";
 import { archiveOf } from "@/lib/listing-archive";
 import { archiveOverrides } from "@/lib/listing-archive-store";
 import { letsByProperty, letElsewhereOf } from "@/lib/listings-archive-view";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * A property, and the few facts an agent needs standing outside it - the
@@ -44,10 +45,8 @@ export type PropertyGroup = "market" | "letagreed" | "draft" | "managed" | "arch
 const money = (n: number | null, period: "month" | "week" | null) =>
   n == null ? "" : `£${Math.round(n).toLocaleString("en-GB")} ${period === "week" ? "pw" : "pcm"}`;
 
-function matches(needle: string, ...fields: (string | null | undefined)[]): boolean {
-  const n = needle.toLowerCase().replace(/\s+/g, " ");
-  return fields.some((f) => Boolean(f) && String(f).toLowerCase().replace(/\s+/g, " ").includes(n));
-}
+/* Every word, any order, as the search bar does (9 Oct 2026). */
+const matches = searchMatches;
 
 /** Null when neither book loaded, so the caller can say so rather than show nothing. */
 export async function searchPhoneProperties(rexUserId: string | null, needle: string): Promise<PhoneProperty[] | null> {

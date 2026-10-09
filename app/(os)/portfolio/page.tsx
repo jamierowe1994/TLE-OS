@@ -20,6 +20,7 @@ import type { ManagedBook, ManagedLandlord, ManagedProperty } from "@/lib/portfo
 import PickOne from "@/components/PickOne";
 import PastTenancies from "@/components/portfolio/PastTenancies";
 import Segmented from "@/components/Segmented";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * Portfolio — the managed book. Every property the business looks after,
@@ -290,7 +291,7 @@ export default function Portfolio() {
 
   const filtered = useMemo(() => {
     if (!book) return [] as ManagedProperty[];
-    const needle = q.trim().toLowerCase();
+    const needle = q.trim();
     const rows = book.properties.filter((p) => {
       if (service && (p.service ?? "Not set") !== service) return false;
       if (agent && p.agent?.id !== agent) return false;
@@ -298,11 +299,7 @@ export default function Portfolio() {
       if (lookOnly && !attention.has(p.listingId)) return false;
       if (notOnRexOnly && p.onRex !== false && p.rexLet !== false) return false;
       if (reletOnly && !p.notice) return false;
-      if (needle) {
-        const hay = [p.address, p.name, p.locality, p.landlord?.name, p.landlord?.email, p.agent?.name, ...p.tenants.map((t) => t.name)]
-          .filter(Boolean).join(" ").toLowerCase();
-        if (!hay.includes(needle)) return false;
-      }
+      if (needle && !searchMatches(needle, p.address, p.name, p.locality, p.landlord?.name, p.landlord?.email, p.agent?.name, ...p.tenants.map((t) => t.name))) return false;
       return true;
     });
     /* Most recently let first by default. "Needs a look first" is offered,
@@ -336,12 +333,12 @@ export default function Portfolio() {
   const landlords = useMemo(() => {
     if (!book) return [] as ManagedLandlord[];
     const ids = new Set(filtered.map((p) => p.listingId));
-    const needle = q.trim().toLowerCase();
+    const needle = q.trim();
     return book.landlords.filter((l) => {
       if (l.listingIds.some((id) => ids.has(id))) return true;
       if (!filtering) return true;
       if (needle && !service && !agent && !town && !lookOnly) {
-        return `${l.name} ${l.email ?? ""} ${l.phone ?? ""}`.toLowerCase().includes(needle);
+        return searchMatches(needle, l.name, l.email, l.phone);
       }
       return false;
     });

@@ -5,6 +5,7 @@ import { DoneTick, PressButton } from "@/components/Bits";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { note } from "@/lib/trail";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * Sending someone properties — the thing an agent does more than anything
@@ -125,10 +126,10 @@ export default function EmailProperties({
 
   const all = [...properties, ...extra.filter((e) => !properties.some((p) => p.id === e.id))];
   const picked = all.filter((p) => chosen.includes(p.id));
-  const needle = find.trim().toLowerCase();
+  const needle = find.trim();
   const results = (book ?? [])
     .filter((l) => !all.some((p) => p.id === l.id))
-    .filter((l) => !needle || `${l.name} ${l.locality}`.toLowerCase().includes(needle))
+    .filter((l) => !needle || searchMatches(needle, l.name, l.locality))
     .slice(0, needle ? 30 : 8);
   const homes = picked.map((p) => ({ id: p.id, name: p.name, locality: p.locality, rent: p.rent }));
 

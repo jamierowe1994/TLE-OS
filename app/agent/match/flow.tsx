@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { PinMap, type Pin } from "./map";
 import { Sheet } from "../bits";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * THE MATCH FLOW (3 Oct 2026). James: "it should feel like, when they click on
@@ -518,8 +519,8 @@ function ListStep({
   setPicked: (s: Set<string>) => void;
 }) {
   const [needle, setNeedle] = useState("");
-  const n = needle.trim().toLowerCase();
-  const shown = n ? items.filter((i) => [i.title, i.line, i.meta].some((f) => f.toLowerCase().includes(n))) : items;
+  const n = needle.trim();
+  const shown = n ? items.filter((i) => searchMatches(n, i.title, i.line, i.meta)) : items;
   const allOn = shown.length > 0 && shown.every((i) => picked.has(i.id));
   return (
     <>

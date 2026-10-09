@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import CornerSwell from "@/components/CornerSwell";
 import { doneAgo, type DonePassport } from "@/lib/passports-done-shape";
 import type { Lead } from "@/lib/leads-sample";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * Leads > Tenants > Passports done.
@@ -53,13 +54,12 @@ export default function PassportsDoneList({
       /* The book is newest first, so the first lead an email meets is its newest. */
       if (e && !byEmail.has(e)) byEmail.set(e, l);
     }
-    const needle = q.trim().toLowerCase();
+    const needle = q.trim();
     return passports
       .map((p) => ({ p, lead: (p.leadId ? byId.get(p.leadId) : undefined) ?? byEmail.get(p.email.trim().toLowerCase()) ?? null }))
       .filter(({ p, lead }) => {
         if (!needle) return true;
-        const homes = [...p.homes, lead?.address ?? "", lead?.preferred ?? ""].join(" ");
-        return `${p.name} ${p.email} ${p.phone ?? ""} ${homes} ${p.agent ?? ""}`.toLowerCase().includes(needle);
+        return searchMatches(needle, p.name, p.email, p.phone, ...p.homes, lead?.address, lead?.preferred, p.agent);
       });
   }, [passports, leads, q]);
 

@@ -23,6 +23,7 @@ import {
   type Stage,
 } from "@/lib/radar-signals";
 import PickOne from "@/components/PickOne";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * Landlord Radar — the board and the panel beside it.
@@ -396,7 +397,7 @@ export default function RadarBoard({
   }, [rows, mine]);
 
   const book = useMemo(() => {
-    const needle = near ? "" : q.trim().toLowerCase();
+    const needle = near ? "" : q.trim();
     return rows.filter((r) => {
       /* A step on the process bar names its doors outright - a won door
          is not an open stage, and it must still show under Won. */
@@ -415,10 +416,7 @@ export default function RadarBoard({
         if (r.lat == null || r.lon == null) return false;
         if (milesBetween(near.lat, near.lon, r.lat, r.lon) > radius) return false;
       }
-      if (needle) {
-        const hay = `${r.address} ${r.street ?? ""} ${r.postcode} ${r.agent ?? ""} ${r.notes}`.toLowerCase();
-        if (!hay.includes(needle)) return false;
-      }
+      if (needle && !searchMatches(needle, r.address, r.street, r.postcode, r.agent, r.notes)) return false;
       return true;
     });
   }, [rows, q, signalsOn, fDistrict, fAgent, fStage, area, near, radius, mine, onlyKeys]);

@@ -1,5 +1,6 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
+import { tidyAddressLine } from "@/lib/address-tidy";
 
 /**
  * The OS's own property record.
@@ -88,7 +89,9 @@ const rowTo = (r: Row): OsProperty => ({
   source: r.source,
   ref: r.ref,
   address: r.address,
-  name: r.name,
+  /* Number first, flat first, town once (9 Oct 2026): REX PM spells it
+     "Ruskin Place 6, Dalkeith". The raw address above is left as read. */
+  name: tidyAddressLine(r.name, { town: r.town ?? String(r.locality ?? "").replace(/\s*[a-z]{1,2}\d[a-z\d]?\s*\d[a-z]{2}\s*$/i, "") }),
   locality: r.locality,
   postcode: r.postcode,
   town: r.town,

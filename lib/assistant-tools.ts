@@ -16,6 +16,7 @@ import { listAppraisals } from "@/lib/appraisal-store";
 import { MORE_TOOLS } from "@/lib/assistant-steve-more";
 import { PA_TOOLS } from "@/lib/assistant-steve-pa";
 import type { ScreenSnapshot } from "@/lib/steve-never";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * WHAT STEVE CAN ACTUALLY GO AND FIND OUT.
@@ -70,8 +71,6 @@ export interface AssistantTool {
 }
 
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
-/** Lower case, punctuation to spaces, one space between words. */
-const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 /** REX rows arrive as `{rows:[…]}` or a bare array depending on the method. */
 function rowsOf(result: unknown): Record<string, unknown>[] {
@@ -151,14 +150,11 @@ const findProperty: AssistantTool = {
     /* Word by word, punctuation aside (2 Oct 2026): he searches with the
        address as he last said it - "4 Williams Court, The Green, Cullompton" -
        and a plain substring missed it on the commas. Every word of the query
-       has to be somewhere in the address. */
-    const words = norm(query).split(" ").filter(Boolean);
-    const hits = (hay: string) => {
-      const h = ` ${norm(hay)} `;
-      return words.every((w) => h.includes(` ${w} `) || (w.length > 3 && h.includes(w)));
-    };
+       has to be somewhere in the address - the same matcher as the search bar
+       (lib/search-match). */
+    const hits = (...fields: (string | null | undefined)[]) => searchMatches(query, ...fields);
     const mine = book.listings
-      .filter((l) => hits(`${l.name} ${l.locality}`))
+      .filter((l) => hits(l.name, l.locality))
       .slice(0, 8)
       .map((l) => ({
         listingId: l.id,
@@ -202,14 +198,14 @@ const findProperty: AssistantTool = {
     const managed = await managedBookFor(ctx.scope.rexUserId).catch(() => null);
     for (const m of managed?.book.properties ?? []) {
       if (files.length >= 6) break;
-      if (!hits(`${m.name} ${m.locality} ${m.address}`)) continue;
+      if (!hits(m.name, m.locality, m.address)) continue;
       files.push({ kind: "portfolio", id: String(m.listingId), address: `${m.name}, ${m.locality}`, what: "a home we manage - its Portfolio file" });
     }
     const appraisals = await listAppraisals().catch(() => []);
     for (const a of appraisals) {
       if (files.length >= 10) break;
       if (!ctx.scope.everything && a.agent !== ctx.scope.label) continue;
-      if (!hits(`${a.address} ${a.postcode ?? ""}`)) continue;
+      if (!hits(a.address, a.postcode)) continue;
       files.push({ kind: "appraisal", id: a.id, address: a.address, what: `a market appraisal for ${a.landlord}` });
     }
 

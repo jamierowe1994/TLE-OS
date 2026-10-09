@@ -9,6 +9,7 @@ import { listCampaigns } from "@/lib/bond-campaigns";
 import { bondSummary, recentActivity } from "@/lib/bond";
 import { saleMatches, type RecentSale } from "@/lib/sales";
 import { listNudges, NUDGE_LABEL } from "@/lib/bond-nudges";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * Ask Bond: Claude, with Bond's data in front of it.
@@ -303,9 +304,8 @@ const door: Tool = {
     if (!query) return { error: "Say which door." };
     let p = await getProspect(query);
     if (!p) {
-      const needle = query.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
       const all = await listProspects();
-      const hits = all.filter((x) => `${x.address} ${x.street ?? ""} ${x.postcode}`.toLowerCase().replace(/[^a-z0-9]+/g, " ").includes(needle));
+      const hits = all.filter((x) => searchMatches(query, x.address, x.street, x.postcode));
       if (hits.length === 0) return { error: `Nothing on the board matches "${query}". It may not be flagged: the Look up room can search any address on the register and add it by hand.` };
       if (hits.length > 1) {
         return { several_match: hits.slice(0, 8).map((x) => ({ property_key: x.property_key, address: `${x.address}, ${x.postcode}`, score: x.score })), note: "Ask which one, or call again with the property_key." };
@@ -360,9 +360,8 @@ const landlord: Tool = {
     if (!query) return { error: "Say which landlord." };
     let hit = await getLandlord(query);
     if (!hit) {
-      const needle = query.toLowerCase();
       const all = await listLandlords();
-      const hits = all.filter((l) => l.name.toLowerCase().includes(needle) || (l.company_number ?? "") === query.toUpperCase());
+      const hits = all.filter((l) => searchMatches(query, l.name) || (l.company_number ?? "") === query.toUpperCase());
       if (hits.length === 0) return { error: `No landlord on the list matches "${query}".` };
       if (hits.length > 1) return { several_match: hits.slice(0, 8).map((l) => ({ landlord_key: l.landlord_key, name: l.name, portfolio: l.portfolio_size, score: l.score })) };
       hit = await getLandlord(hits[0].landlord_key);

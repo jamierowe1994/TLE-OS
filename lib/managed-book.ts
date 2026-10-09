@@ -8,6 +8,7 @@ import { attach, payPropContacts } from "@/lib/business/payprop-tenant-contacts"
 import { nameKey, tenantContacts } from "@/lib/tenant-contacts";
 import { sittingTenantsByProperty } from "@/lib/rex-tenants";
 import { parseAddress, sameDoor, type Parsed } from "@/lib/address-parse";
+import { tidyAddressLine } from "@/lib/address-tidy";
 import type {
   ManagedBook,
   ManagedCounts,
@@ -118,7 +119,9 @@ function addressOf(p: Row | null): {
   const unit = str(p.adr_unit_number);
   const town = str(p.adr_suburb_or_town);
   const postcode = str(p.adr_postcode);
-  const name = [unit, building, street].filter(Boolean).join(", ") || str(p.system_search_key) || "Address not recorded";
+  /* Tidied (9 Oct 2026): REX can say "6A, Douglas Gardens Mews Douglas
+     Gardens Mews". The address below stays as REX has it. */
+  const name = tidyAddressLine([unit, building, street].filter(Boolean).join(", "), { town }) || str(p.system_search_key) || "Address not recorded";
   const locality = [town, postcode].filter(Boolean).join(" ");
   const address = str(p.system_search_key) ?? [name, locality].filter(Boolean).join(", ");
   return { name, locality, address, town, postcode };

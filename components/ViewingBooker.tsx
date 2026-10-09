@@ -19,6 +19,7 @@ import ConfirmEditor, { payloadOf, type ConfirmDraft, type ConfirmEditorHandle, 
 import PreSendOffer from "@/components/appraisal/PreSendOffer";
 import type { PreOnBooking } from "@/lib/pre-send-time";
 import AccessNow from "@/components/viewings/AccessNow";
+import { searchMatches } from "@/lib/search-match";
 
 /** What the record did with a booking, told back to the booker's done screen. */
 export type BookedResult = {
@@ -611,8 +612,8 @@ export default function ViewingBooker({
   if (!open) return null;
 
   const property = everyHome.find((p) => p.id === propertyId) ?? properties[0] ?? null;
-  const needle = find.trim().toLowerCase();
-  const found = everyHome.filter((p) => !needle || `${p.name} ${p.locality}`.toLowerCase().includes(needle));
+  const needle = find.trim();
+  const found = everyHome.filter((p) => !needle || searchMatches(needle, p.name, p.locality));
   /* The booking's real length, in words, so the confirmation cannot promise
      half an hour for a visit the agent has just set aside ninety minutes for.
      That mismatch is exactly how a landlord ends up with somewhere else to be

@@ -11,6 +11,7 @@ import { useAdmin, when, type Person } from "@/lib/admin-client";
 import { ROLES, ROLE_LABEL, ROLE_BLURB } from "@/lib/roles";
 import PickOne from "@/components/PickOne";
 import { fetchMe } from "@/lib/me";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * The list, filtered and ordered. Pure, so the rules are readable in one
@@ -27,9 +28,9 @@ function shown(
   role: string,
   order: "recent" | "stale" | "name"
 ): Person[] {
-  const needle = q.trim().toLowerCase();
+  const needle = q.trim();
   const out = people.filter((p) => {
-    if (needle && !`${p.name} ${p.email}`.toLowerCase().includes(needle)) return false;
+    if (needle && !searchMatches(needle, p.name, p.email)) return false;
     if (role === "all") return true;
     if (role === "none") return !p.hasAccount;
     return p.hasAccount && p.role === role;

@@ -6,6 +6,7 @@ import type { Lead } from "@/lib/leads-sample";
 import { ErrorLine, Sheet, Spinner, TopBar, WhatsAppIcon, dialable, mapsHref, whatsappHref } from "../bits";
 import SlideTabs from "@/components/app/SlideTabs";
 import FloatSearch from "@/components/app/FloatSearch";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * LEADS (3 Oct 2026). James: "at no point on this app should we ever get
@@ -110,12 +111,12 @@ export default function PhoneLeads() {
   };
 
   const shown = useMemo(() => {
-    const n = needle.trim().toLowerCase();
+    const n = needle.trim();
     const nd = n.replace(/\D/g, "");
     const hits = (leads ?? []).filter((l) => {
       if (!inTab(l, tab)) return false;
       if (!n) return true;
-      if ([l.name, l.email, l.address, l.area, l.source].some((f) => f && f.toLowerCase().includes(n))) return true;
+      if (searchMatches(n, l.name, l.email, l.address, l.area, l.source)) return true;
       return nd.length >= 5 && l.phone.replace(/\D/g, "").includes(nd);
     });
     const at = (l: Lead) => l.receivedAt ?? "";

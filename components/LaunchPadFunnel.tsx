@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import type { Funnel, LeadBucket, LeadDetail, MirroredLead } from "@/lib/launchpad";
 import { fetchMe } from "@/lib/me";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * The Launch Pad funnel, worked from inside the OS.
@@ -450,15 +451,11 @@ export default function LaunchPadFunnel() {
 
   const shown = useMemo(() => {
     if (load.state !== "ready") return [];
-    const needle = term.trim().toLowerCase();
+    const needle = term.trim();
     return load.funnel.leads
       .filter((l) => l.bucket === tab)
       .filter((l) =>
-        !needle
-          ? true
-          : [l.name, l.phone, l.email, l.adName, l.source]
-              .filter(Boolean)
-              .some((v) => String(v).toLowerCase().includes(needle))
+        !needle ? true : searchMatches(needle, l.name, l.phone, l.email, l.adName, l.source)
       );
   }, [load, tab, term]);
 

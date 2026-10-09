@@ -9,6 +9,7 @@ import { ErrorLine, Spinner, TopBar, HomeHero } from "../bits";
 import { endOf, loadDiary, nowHm } from "../diary-bits";
 import SlideTabs from "@/components/app/SlideTabs";
 import FloatSearch from "@/components/app/FloatSearch";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * VIEWINGS (3 Oct 2026), the app's own page - James: "build the viewings page
@@ -80,8 +81,8 @@ export default function PhoneViewings() {
 
   /* Grouped by day: soonest first ahead, most recent first behind. */
   const groups = useMemo(() => {
-    const n = needle.trim().toLowerCase();
-    const hits = (appts ?? []).filter((a) => inTab(a, tab) && (!n || [a.who, a.where, a.what].some((f) => f && f.toLowerCase().includes(n))));
+    const n = needle.trim();
+    const hits = (appts ?? []).filter((a) => inTab(a, tab) && (!n || searchMatches(n, a.who, a.where, a.what)));
     const past = tab === "past";
     hits.sort((x, y) => (past ? y.day - x.day || y.start.localeCompare(x.start) : x.day - y.day || x.start.localeCompare(y.start)));
     const out: Array<{ day: number; rows: Appt[] }> = [];

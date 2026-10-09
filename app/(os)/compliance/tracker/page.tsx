@@ -5,6 +5,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
 import type { ChaseRow, QueuedReminder, TrackerBook } from "@/lib/compliance-tracker";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * Michael's tracker — the back-office view of compliance.
@@ -632,8 +633,8 @@ export default function ComplianceTracker() {
   }
 
   const match = (rows: ChaseRow[]) => {
-    const t = find.trim().toLowerCase();
-    return t ? rows.filter((r) => `${r.property} ${r.locality} ${r.agent ?? ""} ${r.landlord} ${r.certLabel}`.toLowerCase().includes(t)) : rows;
+    const t = find.trim();
+    return t ? rows.filter((r) => searchMatches(t, r.property, r.locality, r.agent, r.landlord, r.certLabel)) : rows;
   };
 
   useEffect(() => {

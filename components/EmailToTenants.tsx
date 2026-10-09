@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import { DoneTick, PressButton } from "@/components/Bits";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * One property, out to the book - Mail the database on a listing.
@@ -108,8 +109,8 @@ export default function EmailToTenants({
   const perPress = found.state === "ready" ? found.perPress : 50;
   const picked = people.filter((p) => chosen.includes(p.email));
   const tooMany = picked.length > perPress;
-  const needle = find.trim().toLowerCase();
-  const visible = people.filter((p) => !needle || `${p.name} ${p.email} ${p.askedAbout}`.toLowerCase().includes(needle));
+  const needle = find.trim();
+  const visible = people.filter((p) => !needle || searchMatches(needle, p.name, p.email, p.askedAbout));
   const per = listing.rentPeriod === "week" ? "per week" : "pcm";
 
   async function openReview() {

@@ -10,6 +10,7 @@ import { ContractorForm } from "@/components/WorksNow";
 import type { Contractor, JobTenant, WorksOrder, Kind, Urgency } from "@/lib/works-orders";
 import { CATEGORY_TRADE, PLANNED_CATEGORIES, REPAIR_CATEGORIES, URGENCIES, categoriesOf, joinCategories } from "@/lib/works-catalogue";
 import { CATEGORY_CERT, ContractorPick, REPORTED_BY, type Property } from "@/components/maintenance/works-ui";
+import { searchMatches } from "@/lib/search-match";
 
 type Group = "property" | "what" | "urgency" | "when" | "tenant" | "landlord" | "check";
 
@@ -193,9 +194,9 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
   }, [planned, picked, certDays, dueTouched]);
 
   const hits = useMemo(() => {
-    const needle = pq.trim().toLowerCase();
+    const needle = pq.trim();
     if (!props || needle.length < 2) return [];
-    return props.filter((p) => `${p.name} ${p.locality}`.toLowerCase().includes(needle)).slice(0, 8);
+    return props.filter((p) => searchMatches(needle, p.name, p.locality)).slice(0, 8);
   }, [props, pq]);
 
   useEffect(() => {

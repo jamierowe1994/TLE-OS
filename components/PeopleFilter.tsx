@@ -3,6 +3,7 @@
 import { useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PickOne from "@/components/PickOne";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * The filter row every people-picker shares: a name search, and a radius
@@ -46,7 +47,7 @@ export function passesFilters(
   p: { name: string; lat?: number | null; lng?: number | null },
   f: Filters
 ): boolean {
-  if (f.query && !p.name.toLowerCase().includes(f.query.toLowerCase())) return false;
+  if (f.query.trim() && !searchMatches(f.query, p.name)) return false;
   if (f.centre) {
     if (p.lat == null || p.lng == null) return false;
     if (milesBetween(f.centre, { lat: p.lat, lng: p.lng }) > f.miles) return false;

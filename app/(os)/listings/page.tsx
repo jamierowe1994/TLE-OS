@@ -12,6 +12,7 @@ import PickOne from "@/components/PickOne";
 import Segmented from "@/components/Segmented";
 import StageTabs from "@/components/StageTabs";
 import CornerSwell from "@/components/CornerSwell";
+import { searchMatches } from "@/lib/search-match";
 /* 2,400 lines: off the first load, fetched while the board sits idle. */
 const loadListingDrawer = () => import("@/components/ListingDrawer");
 const ListingDrawer = dynamic(loadListingDrawer, { ssr: false });
@@ -625,11 +626,11 @@ export default function Listings() {
   const archivedInBook = useMemo(() => LISTINGS.filter((l) => l.archived).length, [LISTINGS]);
 
   const board = useMemo(() => {
-    const needle = q.trim().toLowerCase();
+    const needle = q.trim();
     const band = RENT_BANDS.find((b) => b.id === rentBand);
     const source = stage === "archived" ? archive.listings : WORKING;
     const rows = source.filter((l) => {
-      if (needle && !`${l.name} ${l.locality}`.toLowerCase().includes(needle)) return false;
+      if (needle && !searchMatches(needle, l.name, l.locality)) return false;
       const cmp = l.rentMonthly ?? l.rent;
       if (band && !(cmp != null && band.test(cmp))) return false;
       if (loc && l.locality !== loc) return false;

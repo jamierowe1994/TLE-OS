@@ -25,6 +25,7 @@ import DropZone, { type DropKind } from "@/components/listing/DropZone";
 import Doodles from "@/components/Doodles";
 import { LISTING_BOOKER_LIVE } from "@/lib/viewing-sends";
 import { LISTING_TRACK, listingStartingStep } from "@/lib/journey";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * Offers made on the listing itself are off (16 Sep 2026).
@@ -664,8 +665,8 @@ function ListingDrawerBody({
       });
     }
     const all = [...seen.values()];
-    const q = tenantQuery.trim().toLowerCase();
-    return q ? all.filter((c) => c.name.toLowerCase().includes(q)) : all.slice(0, otherTenants ? 40 : 12);
+    const q = tenantQuery.trim();
+    return q ? all.filter((c) => searchMatches(q, c.name)) : all.slice(0, otherTenants ? 40 : 12);
   }, [liveDiary, listing?.name, otherTenants, tenantQuery, viewings]);
   /* Who an offer can be from: everyone who viewed this home (REX's diary
      for it, cancelled ones left out) and everyone who enquired, one row a

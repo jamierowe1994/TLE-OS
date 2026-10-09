@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { searchMatches } from "@/lib/search-match";
 
 // Rail search — a quiet command-palette over the agent's own properties.
 // Pulls their market listings and managed portfolio once per open session,
@@ -78,10 +79,10 @@ export default function SearchOverlay({
 
   const results = useMemo(() => {
     if (!items) return [];
-    const q = query.trim().toLowerCase();
+    const q = query.trim();
     if (!q) return items.slice(0, 8);
     return items
-      .filter((i) => `${i.address} ${i.section}`.toLowerCase().includes(q))
+      .filter((i) => searchMatches(q, i.address, i.section))
       .slice(0, 12);
   }, [items, query]);
 

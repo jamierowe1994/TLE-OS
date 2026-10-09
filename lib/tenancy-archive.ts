@@ -2,6 +2,7 @@ import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { owedFromBook, rentBook } from "@/lib/rent-status";
 import type { ManagedProperty } from "@/lib/portfolio-types";
+import { searchLikes, searchMatches } from "@/lib/search-match";
 
 /**
  * The tenancy archive (James, 9 Oct 2026).
@@ -158,10 +159,11 @@ export async function listArchive(opts: { propertyId?: string | null; search?: s
   const args: unknown[] = [];
   if (opts.propertyId) { args.push(opts.propertyId); where.push(`property_id = $${args.length}`); }
   if (opts.agentId) { args.push(opts.agentId); where.push(`agent_id = $${args.length}`); }
-  const needle = (opts.search ?? "").trim().toLowerCase();
-  if (needle) {
-    args.push(`%${needle.replace(/[%_\\]/g, (m) => `\\${m}`)}%`);
-    where.push(`lower(name || ' ' || locality || ' ' || tenants || ' ' || landlord) LIKE $${args.length}`);
+  /* Every word, any order (9 Oct 2026). */
+  const needle = (opts.search ?? "").trim();
+  if (needle && searchLikes(needle).length) {
+    args.push(searchLikes(needle));
+    where.push(`concat_ws(' ', name, locality, tenants, landlord) ILIKE ALL($${args.length}::text[])`);
   }
   /* "Left the book": every let except those on the book now. */
   if (opts.notIn?.length) { args.push(opts.notIn); where.push(`NOT (listing_id = ANY($${args.length}::text[]))`); }
@@ -171,5 +173,6 @@ export async function listArchive(opts: { propertyId?: string | null; search?: s
       ORDER BY last_seen DESC, let_since DESC NULLS LAST LIMIT $${args.length}`,
     args
   );
-  return rows.map(toArchived);
+  const all = rows.map(toArchived);
+  return needle ? all.filter((t) => searchMatches(needle, t.name, t.locality, t.tenants, t.landlord)) : all;
 }

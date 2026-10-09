@@ -12,6 +12,7 @@ import { tleBrand, tleSocial } from "@/lib/campaign-mail";
 import { londonParts, londonTime } from "@/lib/london-time";
 import type { Newsletter, Person, Recipient } from "@/lib/newsletters";
 import { statusLine, whenText } from "../status";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * One newsletter or event email, start to finish (James, 30 Sep 2026: "it
@@ -324,8 +325,8 @@ function Audience({
       ? onChange(chosen.filter((c) => c.email.toLowerCase() !== p.email))
       : onChange([...chosen, { email: p.email, name: p.name }]);
 
-  const q = find.trim().toLowerCase();
-  const shown = q ? people.filter((p) => p.name.toLowerCase().includes(q) || p.email.includes(q)) : people;
+  const q = find.trim();
+  const shown = q ? people.filter((p) => searchMatches(q, p.name, p.email)) : people;
   const signedUp = people.filter((p) => p.signedUp).length;
 
   /* Anyone picked who is no longer on the list (left, or renamed) still

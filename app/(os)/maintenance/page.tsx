@@ -18,6 +18,7 @@ import WalkthroughLink from "@/components/showroom/WalkthroughLink";
 import RaiseJob from "@/components/maintenance/RaiseJob";
 import JobDrawer from "@/components/maintenance/JobDrawer";
 import { Fact, OPEN, STATUS_LABEL, day, nextFor, pounds, type Property } from "@/components/maintenance/works-ui";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * Maintenance: every job on the managed book, reported through paid.
@@ -77,11 +78,11 @@ export default function Maintenance() {
 
   const orders = data?.orders ?? [];
   const rows = useMemo(() => {
-    const needle = q.trim().toLowerCase();
+    const needle = q.trim();
     return orders.filter((o) => {
       if (section !== "contractors" && section !== "invoices" && section !== "accounts" && o.kind !== section) return false;
       if (!showClosed && !OPEN.includes(o.status)) return false;
-      if (needle && !`${o.propertyName} ${o.locality} ${o.title} ${o.category} ${o.contractorName} ${o.landlord} ${o.tenant} ${o.ref}`.toLowerCase().includes(needle)) return false;
+      if (needle && !searchMatches(needle, o.propertyName, o.locality, o.title, o.category, o.contractorName, o.landlord, o.tenant, String(o.ref))) return false;
       return true;
     });
   }, [orders, section, showClosed, q]);
@@ -89,8 +90,8 @@ export default function Maintenance() {
   /* Jobs still in the old system (lib/works-carried): on the board, in the
      figures, until somebody takes them on here. */
   const carried = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    return (data?.carried ?? []).filter((j) => j.kind === section && (!needle || `${j.title} ${j.address} ${j.tenant} ${j.landlord} ${j.managedBy} ${j.category}`.toLowerCase().includes(needle)));
+    const needle = q.trim();
+    return (data?.carried ?? []).filter((j) => j.kind === section && (!needle || searchMatches(needle, j.title, j.address, j.tenant, j.landlord, j.managedBy, j.category)));
   }, [data, section, q]);
   const [takingOn, setTakingOn] = useState<string | null>(null);
   async function takeOn(j: CarriedJob) {
@@ -582,8 +583,8 @@ function Contractors({ onChange, openJob }: { onChange: () => void; openJob: (id
   }, []);
   useEffect(load, [load]);
   const all = data?.contractors ?? [];
-  const needle = q.trim().toLowerCase();
-  const match = (c: Contractor) => !needle || `${c.name} ${c.contact} ${c.trade} ${c.phone} ${c.email} ${c.notes} ${c.registration}`.toLowerCase().includes(needle);
+  const needle = q.trim();
+  const match = (c: Contractor) => !needle || searchMatches(needle, c.name, c.contact, c.trade, c.phone, c.email, c.notes, c.registration);
   const mine = all.filter((c) => c.ownerId && match(c));
   const corporate = all.filter((c) => !c.ownerId && match(c));
 
@@ -755,9 +756,9 @@ function PropertyInvoice({ onClose, onPick }: { onClose: () => void; onPick: (id
       .catch(() => setProps([]));
   }, []);
   const hits = useMemo(() => {
-    const needle = q.trim().toLowerCase();
+    const needle = q.trim();
     if (!props || needle.length < 2) return [];
-    return props.filter((p) => `${p.name} ${p.locality}`.toLowerCase().includes(needle)).slice(0, 8);
+    return props.filter((p) => searchMatches(needle, p.name, p.locality)).slice(0, 8);
   }, [props, q]);
   const field = "w-full rounded-lg border border-line/80 bg-box px-3 py-2.5 text-[13px] outline-none focus:border-ink";
   return (

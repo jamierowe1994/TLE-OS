@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { HsAddress } from "@/lib/ma-research";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * Pick the property by hand when Homesearch cannot match the address.
@@ -77,8 +78,8 @@ export default function AddressPicker({
       .map((x) => ({ ...x.a, closest: x.s >= 3 }));
   }, [all, asked]);
 
-  const words = find.toLowerCase().split(/[\s,]+/).filter(Boolean);
-  const shown: Array<HsAddress & { closest?: boolean }> = (wide ?? ranked).filter((a) => words.every((w) => a.label.toLowerCase().includes(w)));
+  const needle = find.trim();
+  const shown: Array<HsAddress & { closest?: boolean }> = (wide ?? ranked).filter((a) => !needle || searchMatches(needle, a.label));
 
   async function searchWide() {
     const q = find.trim();

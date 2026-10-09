@@ -7,6 +7,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import type { Appt } from "@/lib/diary";
 import type { PhonePerson } from "@/app/api/m/people/route";
 import { ErrorLine, PhoneTop, SearchBox, Spinner } from "../bits";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * RIGHT TO RENT ID: who, which document, the photos, sent.
@@ -299,7 +300,7 @@ export default function PhoneIdCheck() {
               ) : (
                 <ul className="grid grid-cols-1 gap-2">
                   {today
-                    .filter((a) => !query.trim() || a.who.toLowerCase().includes(query.trim().toLowerCase()))
+                    .filter((a) => !query.trim() || searchMatches(query, a.who))
                     .map((a, i) => (
                       <li key={`${a.id}-${i}`}>
                         <button type="button" onClick={() => pick(a.who, a.where, a.id)} className="flex w-full items-center gap-3 rounded-2xl border border-[color:var(--m-line)] bg-card px-4 py-3 text-left active:bg-panel">

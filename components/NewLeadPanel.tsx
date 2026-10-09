@@ -11,6 +11,7 @@ import PropertyPhoto from "@/components/PropertyPhoto";
 import { LEAD_SOURCES } from "@/lib/leads-sample";
 import { rexContactUrl } from "@/lib/business/rex-links";
 import { OS_LEAD_PREFIX } from "@/lib/contacts-as-leads";
+import { searchMatches } from "@/lib/search-match";
 
 /** They chose an existing REX record to carry on with, rather than a new one. */
 function Continuing({ match, onClear }: { match: ScoredMatch | null; onClear: () => void }) {
@@ -456,9 +457,9 @@ export default function NewLeadPanel({
   }
   const onMarket = (market ?? []).filter((l) => l.publicationStatus === "published" && !l.letAgreed);
   const shortlist = picked.map((id) => onMarket.find((l) => l.id === id)).filter((l): l is Listing => Boolean(l));
-  const words = marketQ.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const marketNeedle = marketQ.trim();
   const available = onMarket.filter(
-    (l) => !picked.includes(l.id) && words.every((w) => `${l.name} ${l.locality} ${l.postcode ?? ""}`.toLowerCase().includes(w))
+    (l) => !picked.includes(l.id) && (!marketNeedle || searchMatches(marketNeedle, l.name, l.locality, l.postcode))
   );
 
   const field =
@@ -1297,7 +1298,7 @@ export default function NewLeadPanel({
                         ))}
                         {market && !available.length && (
                           <p className="py-6 text-center text-[12px] text-muted">
-                            {words.length ? `Nothing on the market matches "${marketQ.trim()}".` : "Everything on the market is shortlisted."}
+                            {marketNeedle ? `Nothing on the market matches "${marketQ.trim()}".` : "Everything on the market is shortlisted."}
                           </p>
                         )}
                       </ul>

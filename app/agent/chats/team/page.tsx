@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ErrorLine, Sheet, Spinner } from "../../bits";
 import { ChatHead, Face } from "../bits";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * FIND YOUR LOCAL AGENTS (James, 3 Oct 2026): the team, nearest first by the
@@ -67,8 +68,8 @@ export default function FindLocalAgents() {
     if (r.ok) router.push(`/agent/chats/room/${encodeURIComponent(invite!)}`);
   };
 
-  const n = needle.trim().toLowerCase();
-  const shown = (people ?? []).filter((p) => !n || p.name.toLowerCase().includes(n) || (p.town ?? "").toLowerCase().includes(n));
+  const n = needle.trim();
+  const shown = (people ?? []).filter((p) => !n || searchMatches(n, p.name, p.town));
   const near = shown.filter((p) => p.miles != null);
   const rest = shown.filter((p) => p.miles == null);
 

@@ -9,6 +9,7 @@ import { Pill } from "@/components/Wire";
 import Segmented from "@/components/Segmented";
 import { PressButton } from "@/components/Bits";
 import type { DueReview, Review, ReviewRules } from "@/lib/tenancy-reviews";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * Tenancy reviews (1 Oct 2026). See lib/tenancy-reviews.
@@ -85,10 +86,10 @@ export default function TenancyReviews() {
   }, []);
   useEffect(load, [load]);
 
-  const needle = q.trim().toLowerCase();
-  const match = (s: string) => !needle || s.toLowerCase().includes(needle);
-  const due = useMemo(() => (data?.due ?? []).filter((d) => match(`${d.propertyName} ${d.locality} ${d.tenant} ${d.landlord} ${d.managedBy ?? ""}`)), [data, needle]);
-  const done = useMemo(() => (data?.done ?? []).filter((r) => match(`${r.propertyName} ${r.tenant} ${r.landlord} ${r.doneBy}`)), [data, needle]);
+  const needle = q.trim();
+  const match = (...fields: (string | null | undefined)[]) => !needle || searchMatches(needle, ...fields);
+  const due = useMemo(() => (data?.due ?? []).filter((d) => match(d.propertyName, d.locality, d.tenant, d.landlord, d.managedBy)), [data, needle]);
+  const done = useMemo(() => (data?.done ?? []).filter((r) => match(r.propertyName, r.tenant, r.landlord, r.doneBy)), [data, needle]);
   const s = data?.summary ?? null;
 
   return (

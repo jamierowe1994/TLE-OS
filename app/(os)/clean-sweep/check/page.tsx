@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import WorkspaceLoading from "@/components/WorkspaceLoading";
 import DoodleIcon from "@/components/DoodleIcon";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * THE SECOND PASS (James, 25 Sep 2026).
@@ -207,7 +208,7 @@ export default function SecondPass() {
   }, [go, idx, saveNext, tickAll]);
 
   if (!section || !queue) return <WorkspaceLoading />;
-  const matches = jump.trim() ? queue.map((h, i) => ({ h, i })).filter(({ h }) => `${h.address} ${h.landlord ?? ""}`.toLowerCase().includes(jump.trim().toLowerCase())).slice(0, 8) : [];
+  const matches = jump.trim() ? queue.map((h, i) => ({ h, i })).filter(({ h }) => searchMatches(jump, h.address, h.landlord)).slice(0, 8) : [];
 
   return (
     <div className="mx-auto max-w-[1180px] pb-40">

@@ -12,6 +12,7 @@ import BondToday, { rememberSearch, type TodayData } from "@/components/BondToda
 import { QrModal, QrPanel } from "@/components/BondQr";
 import BondProcess, { loadProcess } from "@/components/BondProcess";
 import PostcardStudio from "@/components/PostcardStudio";
+import { searchMatches } from "@/lib/search-match";
 
 /**
  * Bond — the prospecting workspace.
@@ -1261,7 +1262,7 @@ function Landlords({ districts, openDoor, onAsk }: { districts: string[]; openDo
 
   const shown = (rows ?? []).filter((l) => {
     if (kind !== "all" && l.kind !== kind) return false;
-    if (q.trim() && !`${l.name} ${l.address} ${l.company_number ?? ""}`.toLowerCase().includes(q.trim().toLowerCase())) return false;
+    if (q.trim() && !searchMatches(q, l.name, l.address, l.company_number)) return false;
     return true;
   });
 
@@ -1532,7 +1533,7 @@ function Competitors({ districts, lookUp }: { districts: string[]; lookUp: (addr
 
   const shown = (doors ?? []).filter((d) => {
     if (state !== "all" && d.state !== state) return false;
-    if (q.trim() && !`${d.address} ${d.postcode} ${d.agent}`.toLowerCase().includes(q.trim().toLowerCase())) return false;
+    if (q.trim() && !searchMatches(q, d.address, d.postcode, d.agent)) return false;
     return true;
   });
   const totals = agents ? agents.reduce((a, r) => ({ stock: a.stock + r.stock, tenanted: a.tenanted + r.tenanted, ann: a.ann + r.anniversaries_90 }), { stock: 0, tenanted: 0, ann: 0 }) : null;

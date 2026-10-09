@@ -1,5 +1,6 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
+import { searchLikes, searchMatches } from "@/lib/search-match";
 
 /**
  * RIGHT TO RENT CHECKS, KEPT BY THE OS (4 Oct 2026, tracker s11).
@@ -114,16 +115,18 @@ const shape = (r: Row): IdCheck => ({
 export async function listIdChecks(opts: { search?: string; limit?: number } = {}): Promise<IdCheck[]> {
   if (!hasDb()) return [];
   const term = (opts.search ?? "").trim();
+  const likes = searchLikes(term);
   const rows = await q<Row>(
     `SELECT id, person_name, property, method, doc_type, pages, checked_by_name, checked_at, seen_in_person, likeness,
             right_until, no_time_limit, follow_up_on, share_code, lead_id, file_key
        FROM os_id_checks
-      WHERE ($1 = '' OR person_name ILIKE '%' || $1 || '%' OR property ILIKE '%' || $1 || '%')
+      WHERE (cardinality($1::text[]) = 0 OR concat_ws(' ', person_name, property) ILIKE ALL($1::text[]))
       ORDER BY checked_at DESC
       LIMIT $2`,
-    [term, Math.min(500, opts.limit ?? 200)]
+    [likes, Math.min(500, opts.limit ?? 200)]
   );
-  return rows.map(shape);
+  const all = rows.map(shape);
+  return likes.length ? all.filter((c) => searchMatches(term, c.name, c.property)) : all;
 }
 
 /** Time-limited rights whose follow-up check falls within `days` (or has passed), soonest first. */

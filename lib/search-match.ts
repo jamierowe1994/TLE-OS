@@ -11,7 +11,8 @@ import { parseAddress, sameDoor } from "@/lib/address-parse";
  *   - the phrase is split into words, and EVERY word has to appear somewhere
  *     in the record, in any order ("newton 5b room 2" finds it too);
  *   - a word with a digit in it is a whole word: "2" is Room 2, never Room 20,
- *     and "5b" is never "15b";
+ *     and "5b" is never "15b"; a bare number also finds its lettered doors
+ *     ("6" finds 6a), never the other way round (9 Oct 2026);
  *   - a word without one may start a word ("newt" finds Newton);
  *   - five or more digits still match a phone number however it is spaced.
  *
@@ -32,8 +33,18 @@ export function searchTokens(needle: string): string[] {
   return words(needle);
 }
 
+/**
+ * The same search for SQL: one ILIKE pattern a word, for
+ * `concat_ws(' ', ...) ILIKE ALL($n::text[])`. Loose on purpose (any word
+ * inside any word); the rows that come back go through searchMatches for
+ * the whole-number rule.
+ */
+export function searchLikes(needle: string): string[] {
+  return words(needle).map((w) => `%${w.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
+}
+
 function tokenIn(token: string, haystack: string[]): boolean {
-  if (/\d/.test(token)) return haystack.includes(token);
+  if (/\d/.test(token)) return haystack.some((w) => w === token || (/^\d+$/.test(token) && w.length === token.length + 1 && w.startsWith(token) && /[a-z]$/.test(w)));
   return haystack.some((w) => w.startsWith(token));
 }
 
@@ -42,7 +53,9 @@ export function searchMatches(needle: string, ...fields: (string | null | undefi
   const tokens = words(needle);
   if (!tokens.length) return false;
   const present = fields.filter((f): f is string => Boolean(f));
-  const hay = present.flatMap((f) => words(String(f)));
+  /* An email is one word, so typing it whole works, and its pieces too:
+     "doe" finds jane.doe@mail.com. */
+  const hay = present.flatMap((f) => words(String(f))).flatMap((w) => (/[@.+]/.test(w) ? [w, ...w.split(/[@.+]+/).filter(Boolean)] : [w]));
   if (tokens.every((t) => tokenIn(t, hay))) return true;
   const nd = digits(needle);
   return nd.length >= 5 && /^[\d\s+()-]+$/.test(needle.trim()) && present.some((f) => digits(String(f)).includes(nd));

@@ -1,6 +1,7 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
 import type { Lead } from "@/lib/leads-sample";
+import { searchLikes, searchMatches } from "@/lib/search-match";
 
 /**
  * The lead ledger: every enquiry the OS has ever seen, kept.
@@ -152,21 +153,26 @@ export async function ledgerBoard(rexUserId: string | null, limit = 500): Promis
 export async function searchLedger(rexUserId: string | null, needle: string, limit = 60): Promise<Lead[]> {
   const text = needle.trim();
   if (!hasDb() || text.length < 3) return [];
-  const like = `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  /* Every word, any order (9 Oct 2026): "6 ruskin place" finds the lead
+     whose address reads "Ruskin Place 6". */
+  const likes = searchLikes(text);
+  if (!likes.length) return [];
   const digits = text.replace(/\D/g, "");
-  const params: unknown[] = [like, digits.length >= 5 ? `%${digits}%` : null, limit];
+  const params: unknown[] = [likes, digits.length >= 5 ? `%${digits}%` : null, limit * 3];
   if (rexUserId) params.push(rexUserId);
-  const rows = await q<{ payload: Lead }>(
-    `SELECT payload FROM os_leads
+  const rows = await q<{ payload: Lead; name: string | null; email: string | null; address: string | null; agent: string | null; area: string | null; phone: string | null }>(
+    `SELECT payload, name, email, address, agent, payload->>'area' AS area, phone FROM os_leads
       WHERE ${NOT_SALES}
         ${rexUserId ? "AND assignee_id = $4" : ""}
-        AND (name ILIKE $1 OR email ILIKE $1 OR address ILIKE $1 OR agent ILIKE $1
-             OR payload->>'area' ILIKE $1
+        AND (concat_ws(' ', name, email, address, agent, payload->>'area') ILIKE ALL($1::text[])
              OR ($2::text IS NOT NULL AND regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') LIKE $2))
       ORDER BY received_at DESC NULLS LAST LIMIT $3`,
     params
   ).catch(() => []);
-  return rows.map((r) => r.payload);
+  return rows
+    .filter((r) => searchMatches(text, r.name, r.email, r.address, r.agent, r.area, r.phone))
+    .slice(0, limit)
+    .map((r) => r.payload);
 }
 
 export async function ledgerStats(): Promise<LedgerStats> {

@@ -8,6 +8,7 @@ import { useSearchParams } from "next/navigation";
 import { PressButton } from "@/components/Bits";
 import AddedHere from "@/components/AddedHere";
 import { contactToLead, type ContactRow } from "@/lib/contacts-as-leads";
+import { searchMatches } from "@/lib/search-match";
 /* The drawer is 4,000 lines and the new-lead panel 1,300: off the first load,
    fetched while the board sits idle (see whenIdle below). */
 const loadLeadDrawer = () => import("@/components/LeadDrawer");
@@ -473,7 +474,7 @@ export default function Leads() {
      them either way. */
   const [showDone, setShowDone] = useState(false);
   const { book, doneCount } = useMemo(() => {
-    const needle = q.trim().toLowerCase();
+    const needle = q.trim();
     const all = ALL.filter((l) => {
       if (side && leadSide(l) !== side) return false;
       if (fSource && l.source !== fSource) return false;
@@ -488,10 +489,9 @@ export default function Leads() {
          system". Punctuation is stripped from both sides so 07876 703066 finds
          07876703066. */
       if (needle) {
-        const hay = `${l.name} ${l.email} ${l.area} ${l.preferred} ${l.phone} ${l.address ?? ""} ${l.agent}`.toLowerCase();
         const digits = needle.replace(/\D/g, "");
         const phoneHit = digits.length >= 5 && l.phone.replace(/\D/g, "").includes(digits);
-        if (!hay.includes(needle) && !phoneHit) return false;
+        if (!searchMatches(needle, l.name, l.email, l.area, l.preferred, l.phone, l.address, l.agent) && !phoneHit) return false;
       }
       return true;
     });
