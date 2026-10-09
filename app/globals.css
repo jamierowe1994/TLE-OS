@@ -1095,6 +1095,18 @@ body {
 @media (max-width: 39.99rem) {
   [data-surface="tenant"]:has([data-passport-phone]) { background: #fff; }
   [data-surface="tenant"]:has([data-passport-phone]) main { padding-bottom: 0; }
+  /* One screen, no scrolling: the footer's links move onto the welcome. */
+  [data-surface="tenant"]:has([data-passport-phone]) > footer,
+  [data-surface="tenant"]:has([data-passport-phone]) footer { display: none; }
+}
+/* The phone passport's pages swipe across whole: the old one out one side as
+   the new one comes in the other. */
+@keyframes pp-in-next { from { transform: translate3d(100%, 0, 0); } to { transform: none; } }
+@keyframes pp-in-back { from { transform: translate3d(-100%, 0, 0); } to { transform: none; } }
+@keyframes pp-out-next { from { transform: none; } to { transform: translate3d(-100%, 0, 0); } }
+@keyframes pp-out-back { from { transform: none; } to { transform: translate3d(100%, 0, 0); } }
+@media (prefers-reduced-motion: reduce) {
+  [data-passport-phone] [style*="pp-in-"], [data-passport-phone] [style*="pp-out-"] { animation: none !important; }
 }
 
 /* The passport is one screen and never scrolls, so on desktop the left

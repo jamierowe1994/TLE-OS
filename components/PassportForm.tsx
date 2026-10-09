@@ -1216,7 +1216,7 @@ export default function PassportForm({
           },
           {
             key: "contact",
-            done: Boolean(d.email.trim()),
+            done: Boolean(d.email.trim() && d.mobile.trim()),
             node: (
               <>
                 <Note>Last one for this page: how we reach you.</Note>
@@ -1224,7 +1224,7 @@ export default function PassportForm({
                   <Field label="Email address">
                     <input type="email" className={input} value={d.email} placeholder="you@example.com" onChange={(e) => set("email", e.target.value)} {...onEnter} />
                   </Field>
-                  <Field label="Mobile number">
+                  <Field label="Mobile number" hint="So your agent can reach you.">
                     <input type="tel" className={input} value={d.mobile} placeholder="e.g. 07123 456789" onChange={(e) => set("mobile", e.target.value)} {...onEnter} />
                   </Field>
                 </div>
@@ -1854,13 +1854,13 @@ export default function PassportForm({
         questions={questions}
         agentName={agentName}
         demo={demo}
+        token={token}
         saveState={state}
         submitted={submitted}
         accountExists={accountExists}
         pct={bar.pct}
         allDone={allDone}
         onFinish={() => void finish()}
-        renderAddress={(value, onChange, onPicked) => <TenantAddress label="" value={value} onChange={onChange} onPicked={onPicked} />}
       />
     </div>
     </PassportToken.Provider>

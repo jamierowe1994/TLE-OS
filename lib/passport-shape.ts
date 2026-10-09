@@ -233,7 +233,8 @@ export const SECTIONS: {
     title: "Who you are",
     blurb: "Your legal name as it appears on your ID, so referencing matches first time.",
     stamp: "IDENTITY",
-    done: (d) => Boolean(d.legalName.trim() && d.dob && d.nationality.trim() && d.email.trim()),
+    /* Mobile too (James, 9 Oct 2026): "we're going to need to be able to contact these people". */
+    done: (d) => Boolean(d.legalName.trim() && d.dob && d.nationality.trim() && d.email.trim() && d.mobile.trim()),
   },
   {
     key: "right-to-rent",
