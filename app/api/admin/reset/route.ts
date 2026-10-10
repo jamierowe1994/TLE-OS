@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { clientIp } from "@/lib/client-ip";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 import { requireOwner } from "@/lib/admin";
 import { findUserById } from "@/lib/users";
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest) {
     actorId: owner.id, actorEmail: owner.email,
     subjectId: subject.id, subjectEmail: subject.email,
     detail: "sent by an owner from the admin centre",
-    ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "",
+    ip: clientIp(req),
   });
 
   return NextResponse.json({ ok: true, message: `Reset link sent to ${subject.email}.` });

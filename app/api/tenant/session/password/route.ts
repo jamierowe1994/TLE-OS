@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { clientIp } from "@/lib/client-ip";
 import { hasDb } from "@/lib/db";
 import { tenantByPassword } from "@/lib/tenant-account";
 import { createPortalToken, TENANT_COOKIE, portalCookieOptions } from "@/lib/auth";
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
   } catch {
     /* falls through */
   }
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "unknown";
+  const ip = clientIp(req) || "unknown";
   const email = String(body.email ?? "").trim().toLowerCase();
   if (!allowed(`ip:${ip}`) || !allowed(`email:${email}`)) {
     return NextResponse.json({ ok: false, error: "Too many tries. Wait ten minutes, or use Email me a link instead." }, { status: 429 });

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { clientIp } from "@/lib/client-ip";
 import { startVerification, VerificationError } from "@/lib/verification";
 import { landlordByEmail, upsertLandlordAccount } from "@/lib/landlord-account";
 import { renderLandlordSignIn } from "@/lib/email/tle-emails";
@@ -47,10 +48,7 @@ function ipAllowed(ip: string): boolean {
 }
 
 export async function POST(req: NextRequest) {
-  const ip =
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip") ||
-    "unknown";
+  const ip = clientIp(req) || "unknown";
 
   let email = "";
   try {

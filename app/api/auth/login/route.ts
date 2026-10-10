@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { clientIp } from "@/lib/client-ip";
 import { record } from "@/lib/audit";
 import { q } from "@/lib/db";
 import { createSessionToken, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
@@ -20,20 +21,29 @@ export async function POST(req: NextRequest) {
   }
 
   const email = (body.email ?? "").trim().toLowerCase();
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
+  const ip = clientIp(req);
   /* NO RATE LIMIT AT ALL on staff sign-in until 22 Sep 2026 (18 Sep sweep,
      item 12). The audit trail already holds every failed attempt with the
      address and the IP, so the limit reads from it: eight wrong goes against
      one address or from one IP in a quarter of an hour, and the door waits.
      Counted before the password is checked, so a locked address costs the
      attacker nothing to learn and us nothing to serve. */
-  const recent = await q<{ n: string }>(
-    `SELECT COUNT(*)::text AS n FROM os_audit
+  /* Two counts, not one (Rig run 2, P-010, 10 Oct 2026). Eight wrong from
+     anywhere used to lock the ADDRESS, so a stranger could keep Susan out of
+     sign-in by typing eight wrong passwords every quarter of an hour; and the
+     IP was the one the visitor writes, so it never limited anybody. Now:
+     eight from one real address (clientIp) waits, wherever they aim; and an
+     account waits only after thirty wrong goes from everywhere at once, which
+     is a spray across many machines, not somebody locking a colleague out. */
+  const recent = await q<{ by_ip: string; by_email: string }>(
+    `SELECT COUNT(*) FILTER (WHERE $2 <> '' AND ip = $2)::text AS by_ip,
+            COUNT(*) FILTER (WHERE actor_email = $1)::text AS by_email
+       FROM os_audit
       WHERE kind = 'sign_in_failed' AND at > NOW() - INTERVAL '15 minutes'
         AND (actor_email = $1 OR ($2 <> '' AND ip = $2))`,
     [email, ip]
   ).catch(() => []);
-  if (Number(recent[0]?.n ?? 0) >= 8) {
+  if (Number(recent[0]?.by_ip ?? 0) >= 8 || Number(recent[0]?.by_email ?? 0) >= 30) {
     return NextResponse.json({ ok: false, error: "Too many attempts. Wait fifteen minutes and try again." }, { status: 429 });
   }
 
@@ -44,7 +54,7 @@ export async function POST(req: NextRequest) {
     await record({
       kind: "sign_in_failed",
       actorEmail: (body.email ?? "").trim().toLowerCase(),
-      ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "",
+      ip: clientIp(req),
     });
     return NextResponse.json({ ok: false, error: "That email and password don't match." }, { status: 401 });
   }
@@ -58,7 +68,7 @@ export async function POST(req: NextRequest) {
     kind: "sign_in",
     actorId: user.id,
     actorEmail: user.email,
-    ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "",
+    ip: clientIp(req),
   });
 
   const res = NextResponse.json({ ok: true, user });

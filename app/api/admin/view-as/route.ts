@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { clientIp } from "@/lib/client-ip";
 import { requireOwner } from "@/lib/admin";
 import { findUserById, ensureRexLink } from "@/lib/users";
 import { lettingsAgents } from "@/lib/rex-agents";
@@ -19,7 +20,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const ipOf = (req: NextRequest) =>
-  req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "";
+  clientIp(req);
 
 export async function POST(req: NextRequest) {
   const owner = await requireOwner(req);
