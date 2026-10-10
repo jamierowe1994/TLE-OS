@@ -1510,8 +1510,11 @@ html[data-os-toast="up"] .os-toast-lift {
   --launch-hover: rgba(0, 0, 0, 0.04);
   --launch-active: rgba(0, 0, 0, 0.065);
   --launch-guide: rgba(0, 0, 0, 0.09);
+  /* A board's columns (Applications): one grey, white cards on it. */
+  --board-col: #f4f4f5;
 }
 :root[data-theme="dark"] {
+  --board-col: #1a1a1a;
   --shell-bg: #111111;
   --shell-nav-bg: #111111;
   --shell-pill: rgba(255, 255, 255, 0.085);

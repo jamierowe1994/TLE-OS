@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import DoodleIcon from "@/components/DoodleIcon";
 import PickOne from "@/components/PickOne";
+import ListSearch from "@/components/ListSearch";
 import Segmented from "@/components/Segmented";
 import StageTabs from "@/components/StageTabs";
 import CornerSwell from "@/components/CornerSwell";
@@ -20,7 +21,6 @@ import {
   type MarketAppraisal,
   type MaStage,
 } from "@/lib/market-appraisal";
-import GuideButton from "@/components/GuideButton";
 import BookAppraisalWizard from "@/components/appraisal/BookAppraisalWizard";
 import { searchMatches } from "@/lib/search-match";
 
@@ -200,6 +200,7 @@ export default function MarketAppraisals() {
         <BookAppraisalWizard onClose={() => setBooking(false)} onFinished={() => setReload((n) => n + 1)} />
       ) : null}
       <PageHeader
+        guide="appraisals"
         title="Market Appraisals"
         blurb="Booked, prepared, appraised, won. Everything between a landlord saying yes to a visit and signing terms."
         /* His hair starts near the very top of the artwork, so this one
@@ -240,9 +241,9 @@ export default function MarketAppraisals() {
         illustrationAspect={0.9704}
         illustrationCrop
         lineBreak="none"
-        searchValue={q}
-        onSearch={setQ}
-        searchPlaceholder="Search appraisals…"
+        /* The board's search is the icon at the list's top right
+           (components/ListSearch, 11 Oct 2026); finding anything is ⌘K. */
+        search={false}
         actions={
           /* flex-wrap, like every other actions row. Without it the date
              picker and the view switch are one unbreakable 233px block, which
@@ -284,10 +285,6 @@ export default function MarketAppraisals() {
               clearable={false}
               neutral="any"
             />
-            <GuideButton
-              id="appraisals"
-              className="flex items-center gap-1.5 rounded-full border border-line/80 px-3.5 py-2 text-[12px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink"
-            />
           </div>
         }
       />
@@ -318,16 +315,19 @@ export default function MarketAppraisals() {
       </div>
 
       <div className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5">
-        <div className="mb-4 flex items-baseline justify-between gap-3">
+        <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="hand text-[17px]">
             {filter === "open" ? "Open appraisals" : MA_STAGES.find((s) => s.id === filter)?.label}
             <span className="figures ml-2 text-[14px] text-muted">{rows.length}</span>
           </h2>
-          {filter !== "open" && (
-            <button type="button" onClick={() => setFilter("open")} className="text-[11.5px] text-muted underline">
-              Show all open
-            </button>
-          )}
+          <span className="flex items-center gap-3">
+            {filter !== "open" && (
+              <button type="button" onClick={() => setFilter("open")} className="text-[11.5px] text-muted underline">
+                Show all open
+              </button>
+            )}
+            <ListSearch value={q} onChange={setQ} placeholder="Address, postcode, landlord…" />
+          </span>
         </div>
 
         {loadError && <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-[12.5px] text-red-700">{loadError}</p>}

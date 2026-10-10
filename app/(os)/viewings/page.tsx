@@ -4,8 +4,9 @@ import AccessBoard from "@/components/viewings/AccessBoard";
 import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
-import GuideButton from "@/components/GuideButton";
 import PickOne from "@/components/PickOne";
+import ListSearch from "@/components/ListSearch";
+import { searchMatches } from "@/lib/search-match";
 import Segmented from "@/components/Segmented";
 import FeedbackReport from "@/components/viewings/FeedbackReport";
 import ViewingDrawer, { type Outcome } from "@/components/ViewingDrawer";
@@ -81,6 +82,9 @@ export default function Viewings() {
   /** undefined = not decided yet; null = everyone; a name = that person. */
   const [fAgent, setFAgent] = useState<string | null | undefined>(undefined);
   const [fKind, setFKind] = useState<ApptKind | null>(null);
+  /* The diary's own search (components/ListSearch, 11 Oct 2026): who, where,
+     what it is, and whose. */
+  const [q, setQ] = useState("");
   /** "apptId:label" for anything sent from a drawer this session. */
   const [sentExtra, setSentExtra] = useState<Set<string>>(new Set());
   /* Book a viewing from here: the person, then the home (Howard, 1 Oct 2026). */
@@ -120,8 +124,8 @@ export default function Viewings() {
 
   /** The book being looked at: one person, and the kinds asked for. */
   const scoped = useMemo(
-    () => DIARY.filter((a) => (!fAgent || a.agent === fAgent) && (!fKind || a.kind === fKind)),
-    [DIARY, fAgent, fKind]
+    () => DIARY.filter((a) => (!fAgent || a.agent === fAgent) && (!fKind || a.kind === fKind) && (!q.trim() || searchMatches(q, a.who, a.where, a.what, a.agent))),
+    [DIARY, fAgent, fKind, q]
   );
   const byDay = useMemo(() => groupByDay(scoped), [scoped]);
 
@@ -204,7 +208,10 @@ export default function Viewings() {
   return (
     <>
       <PageHeader
+        guide="viewings"
         title="Viewings"
+        /* Search is the icon over the diary (components/ListSearch); finding anything is ⌘K. */
+        search={false}
         blurb="Your day, and the week around it. Every appointment opens into what it is, where it is, who's coming and what you need before you knock."
         illustration="/illustrations/scooter-still.webp"
         /* Measured at 390px on 14 Sep 2026: the artwork landed on the Feedback tab and the Everything filter.
@@ -262,10 +269,6 @@ export default function Viewings() {
                   onChange={setFKind}
                 />
               )}
-              <GuideButton
-                id="viewings"
-                className="flex items-center gap-1.5 rounded-full border border-line/80 px-3.5 py-2 text-[12px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink"
-              />
             </div>
           </div>
         }
@@ -275,6 +278,11 @@ export default function Viewings() {
           view, because it is the thing that stops a viewing happening. */}
       <div className="mt-4">
         <AccessBoard />
+      </div>
+
+      {/* The search, at the top right over the diary, as on every board. */}
+      <div className="mt-4 flex justify-end">
+        <ListSearch value={q} onChange={setQ} placeholder="Who, where or what…" />
       </div>
 
       {view === "feedback" ? (

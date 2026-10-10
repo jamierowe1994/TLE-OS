@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Wordmark from "@/components/Wordmark";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import DoodleIcon from "@/components/DoodleIcon";
+import LineIcon from "@/components/LineIcon";
 
 /**
  * The rail every workspace uses. One frame, whoever you are.
@@ -106,82 +106,87 @@ export default function WorkspaceRail({
            the agent sidebar, and the page's white panel starts after it
            (components/Shell frame, 10 Oct 2026). The spacer below holds its
            place in the row. A tablet keeps the card. */
-        className={`sticky top-3 mb-3 hidden h-[calc(100vh-24px)] shrink-0 flex-col overflow-hidden rounded-3xl border border-line/80 bg-panel py-5 transition-[width,padding] duration-200 md:flex lg:fixed lg:left-2 lg:z-[50] lg:mb-0 lg:rounded-none lg:border-0 lg:bg-transparent lg:py-3 ${
-          collapsed ? "px-2.5" : "px-4"
-        }`}
+        /* The same frame as the agent's sidebar (components/LaunchNav, James
+           11 Oct 2026: "the same width ... the same structure as the standard
+           navigation bar"): the wordmark at 21, one row height, line icons,
+           quiet section names, the page you are on as a soft fill. From lg it
+           sits on the shell's grey at the window's left and the page's white
+           panel starts after it; the spacer below holds its place. */
+        className="sticky top-3 mb-3 hidden h-[calc(100vh-24px)] shrink-0 flex-col overflow-hidden bg-[var(--shell-nav-bg)] px-2.5 py-3 transition-[width] duration-200 md:flex lg:fixed lg:left-2 lg:z-[50] lg:mb-0"
       >
-        <div className={`relative flex items-center px-1 ${collapsed ? "flex-col gap-3" : "justify-between"}`}>
-          {/* The wordmark, as on the agent rail (2 Oct 2026): no house. */}
-          <Wordmark collapsed={collapsed} />
-          {/* The same arrow, in the same place, as the agent rail's. */}
+        <div className={`flex h-9 items-center ${collapsed ? "justify-center" : "gap-2 px-2"}`}>
+          <Wordmark collapsed={collapsed} size={21} />
+          {!collapsed && (
+            <>
+              <span className="truncate text-[12px] text-[var(--launch-icon)]">{label}</span>
+              <span className="flex-1" />
+              <button
+                type="button"
+                onClick={fold}
+                title="Collapse"
+                aria-label="Collapse the menu"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--launch-icon)] hover:bg-[var(--launch-hover)] hover:text-ink"
+              >
+                <LineIcon name="panel" size={15} />
+              </button>
+            </>
+          )}
+        </div>
+        {collapsed && (
           <button
             type="button"
             onClick={fold}
-            title={collapsed ? "Expand" : "Collapse"}
-            aria-label={collapsed ? "Expand the menu" : "Collapse the menu"}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-line/80 text-[11px] text-muted transition-colors hover:text-ink"
+            title="Expand"
+            aria-label="Expand the menu"
+            className="mx-auto mt-2 flex h-7 w-7 items-center justify-center rounded-md text-[var(--launch-icon)] hover:bg-[var(--launch-hover)] hover:text-ink"
           >
-            {collapsed ? "»" : "«"}
+            <LineIcon name="panel" size={15} />
           </button>
-        </div>
-        <p
-          className={`mt-1 px-1 text-[9px] font-bold uppercase tracking-[0.16em] text-accent-dark transition-[max-height,opacity] duration-200 ${
-            collapsed ? "max-h-0 overflow-hidden opacity-0" : "max-h-5 opacity-100"
-          }`}
-        >
-          {label}
-        </p>
+        )}
 
-        {/* The line around the outside is the panel's border; this is the one
-            under the mark, exactly as the agent rail has it. */}
-        <div className="mb-1 mt-3 border-t border-line/70 pt-3" />
+        <div className="mx-auto mt-3 w-4/5 border-t border-[var(--launch-guide)]" />
 
-        <nav aria-label={label} className="min-h-0 flex-1 overflow-y-auto">
+        <nav aria-label={label} className="mt-4 min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-2">
           {groups.map((g, i) => (
-            <div
-              key={g.title ?? `group-${i}`}
-              className={g.rule ? "mt-5 border-t border-line/70 pt-4" : g.title ? "mt-3" : ""}
-            >
+            <div key={g.title ?? `group-${i}`} className={i === 0 ? "" : "mt-4"}>
               {g.title && !collapsed && (
-                <p className="mb-1.5 px-3 text-[9px] font-bold uppercase tracking-[0.14em] text-muted/70">
-                  {g.title}
-                </p>
+                <p className="mb-0.5 flex h-6 items-center px-2 text-[11.5px] font-medium text-[var(--launch-icon)]">{g.title}</p>
               )}
-              <ul className="space-y-0.5">
-                {g.items.map((t) => (
-                  <li key={t.href}>
-                    <Link
-                      href={t.href}
-                      data-admin-nav={t.href}
-                      title={collapsed ? t.label : undefined}
-                      className={`flex items-center rounded-lg py-2 text-[12.5px] transition-colors ${
-                        collapsed ? "justify-center px-0" : "gap-3 px-3"
-                      } ${
-                        isOn(t)
-                          ? "bg-accent-soft font-semibold text-accent-dark lg:bg-[var(--shell-pill)] lg:text-ink lg:shadow-[0_1px_2px_rgba(0,0,0,0.06),0_0_0_1px_var(--shell-rim)]"
-                          : "text-muted hover:text-ink lg:hover:bg-[var(--shell-pill)]"
-                      }`}
-                    >
-                      {t.icon && <DoodleIcon name={t.icon} size={16} className={isOn(t) ? "text-accent-dark" : ""} />}
-                      {/* The word itself goes to nothing rather than being
-                          dropped, so the fold is one movement and the icons
-                          do not jump into place afterwards. */}
-                      <span
-                        className={`overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 ${
-                          collapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"
+              {g.title && collapsed && <div className="mx-auto mb-2 w-5 border-t border-[var(--launch-guide)]" />}
+              <ul className="space-y-px">
+                {g.items.map((t) => {
+                  const on = isOn(t);
+                  return (
+                    <li key={t.href}>
+                      <Link
+                        href={t.href}
+                        data-admin-nav={t.href}
+                        title={collapsed ? t.label : undefined}
+                        className={`group flex h-8 items-center rounded-md text-[13px] transition-colors ${collapsed ? "justify-center px-0" : "gap-2.5 px-2"} ${
+                          on ? "bg-[var(--launch-active)] text-ink" : "text-[var(--launch-text)] hover:bg-[var(--launch-hover)] hover:text-ink"
                         }`}
                       >
-                        {t.label}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
+                        {t.icon ? (
+                          <LineIcon name={t.icon} className={on ? "text-ink" : "text-[var(--launch-icon)] group-hover:text-ink"} />
+                        ) : collapsed ? (
+                          <span className="text-[11px] font-semibold">{t.label.slice(0, 2)}</span>
+                        ) : null}
+                        {!collapsed && <span className="min-w-0 flex-1 truncate">{t.label}</span>}
+                      </Link>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}
         </nav>
 
-        {footer && !collapsed ? <div className="mt-auto pt-3">{footer}</div> : null}
+        {footer && !collapsed ? (
+          <>
+            <div className="mx-auto my-2 w-4/5 border-t border-[var(--launch-guide)]" />
+            <div>{footer}</div>
+          </>
+        ) : null}
       </aside>
       <div aria-hidden className="hidden shrink-0 lg:block" style={{ width: (collapsed ? 72 : 240) - 12 }} />
 

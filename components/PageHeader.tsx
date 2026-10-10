@@ -1,5 +1,6 @@
 import NotificationBell from "@/components/NotificationBell";
 import GlobalSearch from "@/components/GlobalSearch";
+import GuideButton from "@/components/GuideButton";
 import DoodleIcon from "@/components/DoodleIcon";
 
 /**
@@ -243,6 +244,7 @@ export default function PageHeader({
   searchPlaceholder = "Search properties, tenants…",
   /** Actions that belong to the page, sitting on the search row. */
   actions,
+  guide,
 }: {
   title: string;
   blurb: string;
@@ -314,6 +316,9 @@ export default function PageHeader({
   onSearch?: (v: string) => void;
   searchPlaceholder?: string;
   actions?: React.ReactNode;
+  /** The page's guide (lib/agent-guides id): a small round How this works
+   *  beside the title, the same place on every screen (11 Oct 2026). */
+  guide?: string;
 }) {
   const hasArt = Boolean(illustration || illustrationNode || sprite);
   const dipWidth = Math.round(illustrationHeight * (lineBreak === "sink" ? 0.82 : 0.66));
@@ -637,7 +642,10 @@ export default function PageHeader({
              lets the number fall away only on the screens that cannot hold it.
              The pages still all match each other, which is what the one number
              was for. */}
-          <h1 className="os-mast-title text-balance leading-tight" style={{ fontSize: `min(${titleSize}px, 8.5vw)` }}>{title}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="os-mast-title text-balance leading-tight" style={{ fontSize: `min(${titleSize}px, 8.5vw)` }}>{title}</h1>
+            {guide && <GuideButton id={guide} />}
+          </div>
           <p className="mt-2.5 max-w-md text-[13px] text-muted">{blurb}</p>
           {/* The page's own controls, in the gap between the blurb and the
               rule - pushed down to sit just above the line rather than

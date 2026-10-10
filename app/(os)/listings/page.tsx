@@ -11,6 +11,7 @@ import PageHeader from "@/components/PageHeader";
 import PickOne from "@/components/PickOne";
 import Segmented from "@/components/Segmented";
 import StageTabs from "@/components/StageTabs";
+import ListSearch from "@/components/ListSearch";
 import CornerSwell from "@/components/CornerSwell";
 import { searchMatches } from "@/lib/search-match";
 /* 2,400 lines: off the first load, fetched while the board sits idle. */
@@ -711,6 +712,7 @@ export default function Listings() {
   return (
     <>
       <PageHeader
+        guide="listings"
         title="Listings"
         blurb={
           book.loading
@@ -731,9 +733,9 @@ export default function Listings() {
         illustration="/illustrations/app/crescent.webp"
         illustrationAspect={1.3471}
         lineBreak="none"
-        searchValue={q}
-        onSearch={setQ}
-        searchPlaceholder="Search properties…"
+        /* The board's search is the icon on the filter row (components/
+           ListSearch, 11 Oct 2026); finding anything is the sidebar's ⌘K. */
+        search={false}
         /* One row of chrome: the filters, then the button that makes more
            houses. Nothing else stands between the agent and the board. */
         actions={
@@ -791,10 +793,9 @@ export default function Listings() {
           /* Two jobs rather than two states: what is holding a listing back. */
           { id: "photos" as const, label: "Missing photos", icon: "folder", count: WORKING.filter((l) => l.imageCount === 0).length, blurb: "No photographs on the listing" },
           { id: "compliance" as const, label: "Needs compliance", icon: "shield", count: WORKING.filter((l) => l.epcExpiry == null).length, blurb: "No EPC filed" },
-          /* Last, and deliberately: it is where things go, not where work
-             starts. The count grows once the tab is opened and REX's
-             withdrawn listings come in with it. */
-          { id: "archived" as const, label: "Archived", icon: "folder", count: archivedKnown, blurb: `${archivedInBook} cold drafts from the book, plus every listing that came off without a tenant` },
+          /* The Archived tab came off on 11 Oct 2026 (James: one tab too many
+             put the row onto a second line). Cold drafts and withdrawn
+             listings still leave the working board; there is no tab for them. */
         ]}
       />
           <div className="ml-auto mt-4 flex items-center gap-2">
@@ -827,16 +828,21 @@ export default function Listings() {
           11 Sep and taken straight back out: "the pink background doesn't
           work". */}
       <div className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5">
-        <div className="mb-4 flex items-baseline justify-between gap-3">
+        {/* The list's own search sits at its top right, as on every board
+            (components/ListSearch, 11 Oct 2026). */}
+        <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="hand text-[17px]">
             {stage === "all" ? "All listings" : stage === "offers" ? "Offers in" : stage === "photos" ? "Missing photos" : stage === "compliance" ? "Needs compliance" : stage === "archived" ? "Archived" : stage}
             <span className="figures ml-2 text-[14px] text-muted">{board.length}</span>
           </h2>
-          {stage !== "all" && (
-            <button type="button" onClick={() => setStage("all")} className="text-[11.5px] text-muted underline transition-colors hover:text-ink">
-              Show all listings
-            </button>
-          )}
+          <span className="flex items-center gap-3">
+            {stage !== "all" && (
+              <button type="button" onClick={() => setStage("all")} className="text-[11.5px] text-muted underline transition-colors hover:text-ink">
+                Show all listings
+              </button>
+            )}
+            <ListSearch value={q} onChange={setQ} placeholder="Search properties…" />
+          </span>
         </div>
         {/* What the archive IS, said once, at the top of it. An agent opening
             a tab of 300 properties they have never seen before deserves the

@@ -7,10 +7,11 @@ import { whenIdle } from "@/lib/when-idle";
 import { dropJson, peekJson, readJson } from "@/lib/page-cache";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
-import GuideButton from "@/components/GuideButton";
 import PageHeader from "@/components/PageHeader";
 import PickOne from "@/components/PickOne";
 import StageTabs from "@/components/StageTabs";
+import ListSearch from "@/components/ListSearch";
+import { searchMatches } from "@/lib/search-match";
 import LetsBoard from "@/components/applications/LetsBoard";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import type { Check } from "@/components/ApplicationDrawer";
@@ -221,6 +222,11 @@ export default function Applications() {
      on (James, 10 Oct 2026); the list is a press away. */
   const [view, setView] = useState<"board" | "list">("board");
   const [boardDeal, setBoardDeal] = useState<string | null>(null);
+  /* The board's and the list's own search (components/ListSearch, 11 Oct 2026). */
+  const [q, setQ] = useState("");
+  /* The board's agent picker, drawn on the same row as the search. */
+  const [boardAgents, setBoardAgents] = useState<string[]>([]);
+  const [boardAgent, setBoardAgent] = useState<string | null>(null);
   /* ?open=<id>: the PLC wizard sends people back here to a named
      application, and this is what opens it. Read once, on arrival. */
   useEffect(() => {
@@ -305,15 +311,18 @@ export default function Applications() {
           : stage === "closed"
             ? mine.filter((a) => a.closed)
             : mine.filter((a) => rexToMark(a) && !a.closed);
-    if (!byActivity) return picked;
+    const found = q.trim()
+      ? picked.filter((a) => searchMatches(q, a.property, a.locality, a.agent, ...a.applicants.map((p) => p.name), ...a.applicants.map((p) => p.email ?? "")))
+      : picked;
+    if (!byActivity) return found;
     const at = (a: Application) => {
       const ours = activityAt?.[String(a.id)] ?? "";
       const rex = a.updatedAt ? new Date(a.updatedAt * 1000).toISOString() : "";
       return ours > rex ? ours : rex;
     };
-    return [...picked].sort((a, b) => at(b).localeCompare(at(a)));
-  }, [mine, stage, byActivity, activityAt]);
-  useEffect(() => { setPage(0); }, [stage, fAgent, byActivity]);
+    return [...found].sort((a, b) => at(b).localeCompare(at(a)));
+  }, [mine, stage, byActivity, activityAt, q]);
+  useEffect(() => { setPage(0); }, [stage, fAgent, byActivity, q]);
   const pages = Math.max(1, Math.ceil(rows.length / PER_PAGE));
   const shown = rows.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
   const counts = useMemo(() => ({
@@ -355,7 +364,10 @@ export default function Applications() {
   return (
     <>
       <PageHeader
+        guide="applications"
         title="Applications"
+        /* Search is the icon over the board and the list (components/ListSearch); finding anything is ⌘K. */
+        search={false}
         blurb={
           scope && !scope.everything
             ? `${scope.label}'s lets in progress. An offer comes here once it is accepted; until then it is on its listing.`
@@ -382,10 +394,6 @@ export default function Applications() {
               Customer updates
               {updatesOpen ? <span className="figures rounded-full bg-accent px-1.5 text-[10.5px] text-white">{updatesOpen}</span> : null}
             </Link>
-            <GuideButton
-              id="applications"
-              className="flex items-center gap-1.5 rounded-full border border-line/80 px-3.5 py-2 text-[12px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink"
-            />
           </span>
         }
       />
@@ -401,6 +409,12 @@ export default function Applications() {
             {v === "board" ? "Board" : "List"}
           </button>
         ))}
+        <span className="ml-auto flex items-center gap-2">
+          {view === "board" && boardAgents.length > 1 && (
+            <PickOne tone="pink" label="All agents" icon="user" options={boardAgents.map((a) => ({ id: a, label: a }))} value={boardAgent} onChange={setBoardAgent} />
+          )}
+          <ListSearch value={q} onChange={setQ} placeholder="Property, tenant or agent…" />
+        </span>
       </div>
 
       {view === "board" && (
@@ -413,6 +427,9 @@ export default function Applications() {
             return hit?.id ?? null;
           }}
           onOpenApplication={setOpenId}
+          q={q}
+          agent={boardAgent}
+          onAgents={setBoardAgents}
           openDeal={boardDeal}
           onDealClosed={() => setBoardDeal(null)}
         />

@@ -20,6 +20,7 @@ import type { ManagedBook, ManagedLandlord, ManagedProperty } from "@/lib/portfo
 import PickOne from "@/components/PickOne";
 import PastTenancies from "@/components/portfolio/PastTenancies";
 import Segmented from "@/components/Segmented";
+import ListSearch from "@/components/ListSearch";
 import { searchMatches } from "@/lib/search-match";
 
 /**
@@ -417,12 +418,9 @@ export default function Portfolio() {
         illustrationAspect={3.11}
         seat={0.96}
         illustrationCrop
-        /* The bar under the header IS the book's filter - one search per
-           page (James, 6 Sep 2026), not a global bar above and a second box
-           in the pill row. */
-        searchValue={q}
-        onSearch={setQ}
-        searchPlaceholder="Address, landlord, tenant or agent…"
+        /* The book's search is the icon at the end of the row over the list
+           (components/ListSearch, 11 Oct 2026); finding anything is ⌘K. */
+        search={false}
       />
 
       {state.status === "failed" ? (
@@ -501,6 +499,9 @@ export default function Portfolio() {
               Relet{relets ? ` · ${relets}` : ""}
             </button>
             <PickOne label="Sort" options={SORTS} value={sort} onChange={setSort} />
+            <span className="ml-auto">
+              <ListSearch value={q} onChange={setQ} placeholder="Address, landlord, tenant or agent…" />
+            </span>
           </div>
 
           {book && filtering && (

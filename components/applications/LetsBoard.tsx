@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PickOne from "@/components/PickOne";
+import { searchMatches } from "@/lib/search-match";
 import BoardLoading from "@/components/business/BoardLoading";
 import { useSlideOver } from "@/lib/use-slide-over";
 import { PORTAL_STAGES, PORTAL_STAGE_BY_KEY, propolyDealUrl } from "@/lib/business/propoly-stages";
@@ -31,16 +32,18 @@ const RED_PILL = "bg-[#fdefec] text-[#9d4340]";
 const AMBER_PILL = "bg-amber-50 text-amber-700";
 const QUIET_PILL = "bg-page text-muted";
 
-/** The same soft tint per column as Kirstie's board. */
-const COLUMN_TINT: Record<string, string> = {
-  deal_started: "bg-[#fdefec]/70",
-  holding_fee: "bg-amber-50/70",
-  referencing: "bg-orange-50/70",
-  plc: "bg-[#f1f4ec]",
-  deposit: "bg-sky-50/70",
-  tenancy_agreement: "bg-[#f1f4ec]",
-  rent_payment: "bg-[#f1f4ec]",
-  move_day: "bg-[#fdefec]/70",
+/* One grey for every column (James, 11 Oct 2026: "make the backgrounds the
+   same grey ... a little bit more uniform"), white cards on it, and the stage
+   told apart by a small coloured bar beside its name. */
+const STAGE_MARK: Record<string, string> = {
+  deal_started: "#cfa096",
+  holding_fee: "#e0a54a",
+  referencing: "#5aa1d6",
+  plc: "#7fb3a8",
+  deposit: "#8c7fd1",
+  tenancy_agreement: "#6b8fd6",
+  rent_payment: "#86b06a",
+  move_day: "#4f9a62",
 };
 
 const STAGE_DOODLE: Record<string, string> = {
@@ -127,7 +130,7 @@ function DealCard({ d, stageKey, onOpen }: { d: Deal; stageKey: string; onOpen: 
   const lead = d.app.tenants.find((t) => t.isPrimary) ?? d.app.tenants[0];
   const st = cardStatus(d, stageKey);
   return (
-    <button type="button" onClick={onOpen} className="btn-press group flex w-full flex-col overflow-hidden rounded-2xl border border-line/60 bg-card p-2 text-left transition hover:border-black/25">
+    <button type="button" onClick={onOpen} className="btn-press group flex w-full flex-col overflow-hidden rounded-xl border border-black/[0.06] bg-card p-2 text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition hover:border-black/20">
       <Photo src={d.app.image} className="aspect-[16/10] w-full rounded-xl" />
       <div className="px-1 pb-1 pt-2.5">
         <p className="truncate text-[13px] font-semibold leading-tight">{d.app.propertyName}</p>
@@ -244,7 +247,16 @@ export default function LetsBoard({
   onOpenApplication,
   openDeal = null,
   onDealClosed,
+  q = "",
+  agent: agentIn,
+  onAgents,
 }: {
+  /** When the page draws the agent picker on its own toolbar row, it holds the
+   *  choice and is told the names; otherwise the board draws its own. */
+  agent?: string | null;
+  onAgents?: (names: string[]) => void;
+  /** The page's search: a let shows when every word is in its address, tenants or agent. */
+  q?: string;
   /** A let the page wants opened (the Propoly box under List). */
   openDeal?: string | null;
   onDealClosed?: () => void;
@@ -257,7 +269,8 @@ export default function LetsBoard({
   const [deals, setDeals] = useState<Deal[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [agent, setAgent] = useState<string | null>(null);
+  const [ownAgent, setAgent] = useState<string | null>(null);
+  const agent = agentIn !== undefined ? agentIn : ownAgent;
   /* The route says whose deals it sent; the page's own scope is the fallback. */
   const [wholeBook, setWholeBook] = useState<boolean | null>(null);
   const all = wholeBook ?? everything;
@@ -287,25 +300,31 @@ export default function LetsBoard({
   }, []);
 
   const live = useMemo(
-    () => (deals ?? []).filter((d) => !d.archived && d.statusKey !== "cancelled" && !isStale(d) && (!all || !agent || d.agentName === agent)),
-    [deals, all, agent]
+    () => (deals ?? []).filter((d) => !d.archived && d.statusKey !== "cancelled" && !isStale(d) && (!all || !agent || d.agentName === agent) && (!q.trim() || searchMatches(q, d.app.propertyName, d.app.locality, d.agentName, ...d.app.tenants.map((t) => t.name)))),
+    [deals, all, agent, q]
   );
   const open = (deals ?? []).find((d) => d.app.id === openId) ?? null;
   const agents = useMemo(() => [...new Set((deals ?? []).map((d) => d.agentName).filter((n): n is string => Boolean(n)))].sort(), [deals]);
+  useEffect(() => {
+    if (onAgents) onAgents(all ? agents : []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agents.join("|"), all]);
 
   if (error) return <p className="rounded-[22px] border border-line/50 bg-white p-6 text-center text-[13px] text-accent-dark">{error}</p>;
   if (deals === null) return <BoardLoading />;
 
   return (
     <>
-      {all && agents.length > 1 && (
+      {all && agents.length > 1 && !onAgents && (
         <div className="mb-3 flex justify-end">
           <PickOne tone="pink" label="All agents" icon="user" options={agents.map((a) => ({ id: a, label: a }))} value={agent} onChange={setAgent} />
         </div>
       )}
       {live.length === 0 ? (
         <p className="rounded-[22px] border border-line/50 bg-white p-8 text-center text-[13px] text-muted">
-          No lets in progress{all ? "" : " on your book"} yet. Once an offer is accepted and Kirstie starts the deal, it shows here.
+          {q.trim()
+            ? "No let matches that search."
+            : `No lets in progress${all ? "" : " on your book"} yet. Once an offer is accepted and Kirstie starts the deal, it shows here.`}
         </p>
       ) : (
         <section className="fade-up -mx-1 overflow-x-auto px-1 pb-4">
@@ -313,14 +332,15 @@ export default function LetsBoard({
             {PORTAL_STAGES.map((s) => {
               const dealsIn = live.filter((d) => d.effectiveStatusKey === s.key);
               return (
-                <div key={s.key} style={{ width: "clamp(190px, 14.4vw, 260px)" }} className={`flex shrink-0 flex-col rounded-[18px] p-2 ${COLUMN_TINT[s.key] ?? "bg-panel"}`}>
-                  <div className="flex items-center gap-2 px-1.5 pb-2 pt-1">
-                    <span className="truncate text-[13px] font-semibold text-ink">{s.label}</span>
-                    <span className="ml-auto rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-semibold text-ink">{dealsIn.length}</span>
+                <div key={s.key} style={{ width: "clamp(200px, 14.4vw, 260px)" }} className="flex shrink-0 flex-col rounded-[16px] bg-[var(--board-col)] p-2">
+                  <div className="flex items-center gap-2 px-1.5 pb-2.5 pt-1.5">
+                    <span aria-hidden className="h-3.5 w-[3px] rounded-full" style={{ background: STAGE_MARK[s.key] ?? "var(--muted)" }} />
+                    <span className="truncate text-[13px] font-medium text-ink">{s.label}</span>
+                    <span className="ml-auto rounded-md bg-[var(--shell-panel)] px-1.5 py-0.5 text-[11px] font-medium text-muted">{dealsIn.length}</span>
                   </div>
                   <div className="space-y-2">
                     {dealsIn.map((d) => <DealCard key={d.app.id} d={d} stageKey={s.key} onOpen={() => setOpenId(d.app.id)} />)}
-                    {dealsIn.length === 0 ? <p className="rounded-xl border border-dashed border-line/70 px-2 py-6 text-center text-[11px] text-muted">Nothing here</p> : null}
+                    {dealsIn.length === 0 ? <p className="rounded-xl border border-dashed border-black/10 px-2 py-6 text-center text-[11px] text-muted">Nothing here</p> : null}
                   </div>
                 </div>
               );

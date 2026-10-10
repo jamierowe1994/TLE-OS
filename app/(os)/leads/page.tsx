@@ -24,6 +24,7 @@ import PickOne from "@/components/PickOne";
 import TagsPick from "@/components/TagsPick";
 import { defaultTags } from "@/lib/lead-facts-shape";
 import Segmented from "@/components/Segmented";
+import ListSearch from "@/components/ListSearch";
 import DoodleIcon from "@/components/DoodleIcon";
 import LeadGroups, { DEFAULT_GROUPS, isCompleted, type GroupsConfig } from "@/components/LeadGroups";
 import GroupsCustomiser from "@/components/GroupsCustomiser";
@@ -709,9 +710,9 @@ export default function Leads() {
         lineBreak="none"
         /* The bar under the header is the list's search - one search per
            page (James, 6 Sep 2026). */
-        searchValue={q}
-        onSearch={setQ}
-        searchPlaceholder="Search every lead - name, phone, address or agent…"
+        /* The board's search is the icon on the filter row (components/
+           ListSearch, 11 Oct 2026); finding anything is the sidebar's ⌘K. */
+        search={false}
         actions={
           <div className="flex flex-wrap items-center gap-2.5">
             {/* Tenants only: the people who have finished their passport, and
@@ -786,6 +787,10 @@ export default function Leads() {
             )}
           </div>
         ) : showPassports ? (
+          <>
+          <div className="mb-3 flex justify-end">
+            <ListSearch value={q} onChange={setQ} placeholder="Name, phone, address or agent…" />
+          </div>
           <PassportsDoneList
             passports={donePassports}
             error={passportsError}
@@ -795,6 +800,7 @@ export default function Leads() {
             q={q}
             manyAgents={manyAgents}
           />
+          </>
         ) : view === "groups" ? (
           <>
             <div className="fade-up relative z-20 rounded-[22px] border border-line/50 bg-white px-5 py-4">
@@ -806,7 +812,8 @@ export default function Leads() {
                 <TagsPick tone="pink" tags={tagCounts} value={fTags} onChange={setFTags} />
             {passportsWanted && <PickOne tone="pink" label="All passports" options={PASSPORT_OPTIONS} value={fPassport} onChange={setFPassport} />}
                 {unassignedChip}
-                <div className="ml-auto">
+                <div className="ml-auto flex items-center gap-2">
+                  <ListSearch value={q} onChange={setQ} placeholder="Name, phone, address or agent…" />
                   <GroupsCustomiser value={groupsConfig} onChange={saveGroupsConfig} />
                 </div>
               </div>
@@ -829,8 +836,8 @@ export default function Leads() {
         <div className="fade-up relative min-w-0 rounded-[22px] border border-line/50 bg-white p-5">
           <CornerSwell />
           {/* Filters, with the column customiser at the end of the row. */}
-          {/* The search itself is the bar under the header - one search per
-              page (James, 6 Sep 2026). This row is only the filters. */}
+          {/* The filters, then the search icon and the column customiser
+              (components/ListSearch, 11 Oct 2026). */}
           <div className="relative flex flex-wrap items-center gap-2.5">
             <PickOne tone="pink" label="All sources" options={sources.map((o) => ({ id: o, label: o }))} value={fSource} onChange={setFSource} />
             <PickOne tone="pink" label="All agents" options={agents.map((o) => ({ id: o, label: o }))} value={fAgent} onChange={setFAgent} />
@@ -838,7 +845,8 @@ export default function Leads() {
             <TagsPick tone="pink" tags={tagCounts} value={fTags} onChange={setFTags} />
             {passportsWanted && <PickOne tone="pink" label="All passports" options={PASSPORT_OPTIONS} value={fPassport} onChange={setFPassport} />}
             {unassignedChip}
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-2">
+              <ListSearch value={q} onChange={setQ} placeholder="Name, phone, address or agent…" />
               <ColumnCustomiser cols={cols} tone="pink" />
             </div>
           </div>
