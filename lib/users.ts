@@ -44,6 +44,9 @@ export interface OsUser {
    *  linked, and a null here is why somebody would see nothing rather than
    *  everything. */
   rexUserId: string | null;
+  /** Locked out by an owner (lib/lockout). Only read by findUserById and
+   *  authenticate - the two doors - so it is absent, not false, elsewhere. */
+  locked?: boolean;
 }
 
 interface Row extends Record<string, unknown> {
@@ -55,6 +58,7 @@ interface Row extends Record<string, unknown> {
   created_at: Date | string;
   password_hash?: string;
   rex_user_id?: string | null;
+  locked_at?: Date | string | null;
 }
 
 function toUser(r: Row): OsUser {
@@ -66,6 +70,7 @@ function toUser(r: Row): OsUser {
     photo: r.photo,
     createdAt: new Date(r.created_at).toISOString(),
     rexUserId: r.rex_user_id ?? null,
+    ...(r.locked_at !== undefined ? { locked: r.locked_at !== null } : {}),
   };
 }
 
@@ -80,7 +85,7 @@ export async function countUsers(): Promise<number> {
 export async function findUserById(id: string): Promise<OsUser | null> {
   if (!hasDb() || !id) return null;
   const rows = await q<Row>(
-    "SELECT id, email, name, role, photo, created_at, rex_user_id FROM os_users WHERE id = $1",
+    "SELECT id, email, name, role, photo, created_at, rex_user_id, locked_at FROM os_users WHERE id = $1",
     [id]
   );
   return rows[0] ? toUser(rows[0]) : null;
@@ -141,13 +146,15 @@ export async function createUser(params: {
 export async function authenticate(email: string, password: string): Promise<OsUser | null> {
   if (!hasDb()) return null;
   const rows = await q<Row>(
-    "SELECT id, email, name, role, photo, created_at, rex_user_id, password_hash FROM os_users WHERE email = $1",
+    "SELECT id, email, name, role, photo, created_at, rex_user_id, password_hash, locked_at FROM os_users WHERE email = $1",
     [normaliseEmail(email)]
   );
   const row = rows[0];
   const stored = row?.password_hash ?? `${"0".repeat(32)}:${"0".repeat(128)}`;
   const ok = verifyPassword(password, stored);
   if (!row || !ok) return null;
+  /* A locked person gets no "last in" stamp: the caller refuses them. */
+  if (row.locked_at) return toUser(row);
   await q("UPDATE os_users SET last_seen_at = NOW() WHERE id = $1", [row.id]);
   return toUser(row);
 }

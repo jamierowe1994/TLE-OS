@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import AdminLoadFailed from "@/components/AdminLoadFailed";
 import { useAdmin, when, AUDIT_KIND } from "@/lib/admin-client";
@@ -20,6 +21,10 @@ import { useAdmin, when, AUDIT_KIND } from "@/lib/admin-client";
  */
 
 type Sent = { id: string; to: string; subject: string; sentAt: string };
+type Reader = {
+  userId: string; name: string; email: string; locked: boolean;
+  openedHour: number; openedDay: number; callsDay: number; afterHours: number; lastAt: string; flags: string[];
+};
 type Opened = { id: string; to: string; subject: string; html: string; sentAt: string };
 
 export default function AdminActivity() {
@@ -27,6 +32,19 @@ export default function AdminActivity() {
   const [sent, setSent] = useState<Sent[]>([]);
   const [open, setOpen] = useState<Opened | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  /* Who has been reading how much (lib/read-log). null while loading. */
+  const [readers, setReaders] = useState<Reader[] | null>(null);
+  const [readersErr, setReadersErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/admin/reading", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; readers?: Reader[]; error?: string }) => {
+        if (!j.ok || !j.readers) throw new Error(j.error ?? "We couldn't read the log just now.");
+        setReaders(j.readers);
+      })
+      .catch((e) => setReadersErr(e instanceof Error ? e.message : "We couldn't read the log just now."));
+  }, []);
 
   useEffect(() => {
     fetch("/api/admin/sent-emails", { cache: "no-store" })
@@ -59,10 +77,59 @@ export default function AdminActivity() {
     <>
       <PageHeader illustration="/illustrations/people/taking-notes.svg" illustrationAspect={1.0} lineBreak="none"
         title="Activity"
-        blurb="Who's signed in, who couldn't, every view-as, and every email that went out."
+        blurb="Who's been reading how much, who's signed in, who couldn't, every view-as, and every email that went out."
       />
 
+      {/* Who has been reading how much (lib/read-log, 10 Oct 2026): the
+          screen that shows somebody copying the book. Most first. */}
       <section className="fade-up mt-8 rounded-[22px] border border-line/50 bg-white p-5">
+        <h2 className="hand text-[17px] leading-tight">Who&apos;s been reading</h2>
+        <p className="mt-1 text-[11.5px] leading-relaxed text-muted">
+          The last 24 hours, most first. &ldquo;Opened&rdquo; is the different records and pages
+          somebody asked for, not every call. Anybody well above the rest is flagged; open their
+          file to see exactly what they opened, and to lock them out.
+        </p>
+        {readersErr ? (
+          <p className="mt-3 text-[12.5px] text-accent-dark">{readersErr}</p>
+        ) : !readers ? (
+          <p className="mt-3 text-[12.5px] text-muted">Reading the log…</p>
+        ) : readers.length === 0 ? (
+          <p className="mt-3 text-[12.5px] text-muted">Nobody has opened anything in the last 24 hours.</p>
+        ) : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[560px] text-left text-[12px]">
+              <thead>
+                <tr className="border-b border-line/60 text-[10.5px] uppercase tracking-[0.12em] text-muted">
+                  <th className="py-2 pr-3 font-semibold">Person</th>
+                  <th className="py-2 pr-3 text-right font-semibold">Last hour</th>
+                  <th className="py-2 pr-3 text-right font-semibold">24 hours</th>
+                  <th className="py-2 pr-3 text-right font-semibold">10pm-6am</th>
+                  <th className="py-2 text-right font-semibold">Last</th>
+                </tr>
+              </thead>
+              <tbody>
+                {readers.map((r) => (
+                  <tr key={r.userId} className={`border-b border-line/40 last:border-0 ${r.flags.length ? "bg-accent-soft/40" : ""}`}>
+                    <td className="py-2 pr-3">
+                      <Link href={`/admin/people/${r.userId}`} className="underline decoration-line hover:decoration-ink">
+                        {r.name}
+                      </Link>
+                      {r.locked && <span className="ml-1.5 text-accent-dark">locked out</span>}
+                      {r.flags.length > 0 && <span className="block text-[11px] text-accent-dark">{r.flags.join(", ")}</span>}
+                    </td>
+                    <td className="figures py-2 pr-3 text-right">{r.openedHour.toLocaleString("en-GB")}</td>
+                    <td className="figures py-2 pr-3 text-right">{r.openedDay.toLocaleString("en-GB")}</td>
+                    <td className="figures py-2 pr-3 text-right">{r.afterHours.toLocaleString("en-GB")}</td>
+                    <td className="py-2 text-right text-muted">{when(r.lastAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5">
         <h2 className="hand text-[17px] leading-tight">Emails sent</h2>
         <p className="mt-1 text-[11.5px] leading-relaxed text-muted">
           Open one to see it exactly as it was received, not as the template looks today.

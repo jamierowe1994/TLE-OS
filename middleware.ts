@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { clientIp } from "@/lib/client-ip";
 import { areaForPage, areaForWrite, canAct, canSee, levelOf, lockedSentence, needsTargetCheck, type AreaAccess } from "@/lib/area-map";
 
 /**
@@ -80,11 +81,7 @@ function b64url(buf: ArrayBuffer): string {
  * Checking merely that the cookie EXISTS would mean typing `os_session=x` into
  * a browser walks straight past this.
  */
-async function hasValidSession(token: string | undefined): Promise<boolean> {
-  return (await sessionUserId(token, process.env.AUTH_SECRET)) !== null;
-}
-
-/** The same check, answering WHO: the user id in a valid token, or null. */
+/** The user id in a valid token, or null. */
 async function sessionUserId(token: string | undefined, secret: string | undefined): Promise<string | null> {
   if (!token || !secret) return null;
   const parts = token.split(".");
@@ -452,6 +449,10 @@ async function areaGate(req: NextRequest): Promise<{ closed: NextResponse | null
  * without checking it refuses when its secret is missing.
  */
 const MACHINE_ROUTES = [
+  /* The read log's own hand-over from this file (lib/read-log). The route
+     refuses anything not signed with AUTH_SECRET, so the door adds nothing,
+     and logging it would log the log. */
+  "/api/internal/read-log",
   "/api/business/backfill",           // freezes closed months into gci_months
   "/api/business/income-months/warm", // the warmer James already scheduled
   "/api/teg/sync",                    // pulls the roster from the TEG Hub
@@ -565,6 +566,123 @@ export async function middleware(req: NextRequest) {
   return doorAfterGate(req);
 }
 
+/* ── The read log (10 Oct 2026, lib/read-log) ──────────────────────────────
+
+   Every signed-in API call, written down against the person: the record of
+   who has been reading what, and the only signal there is when somebody (or
+   an AI in their browser) copies the book. Taken here because this is the one
+   place every call passes with the person known. Queued in memory and handed
+   to /api/internal/read-log in one signed batch every few seconds, never on
+   the request's own time. */
+const LOG_NOISE = new Set([
+  /* What an open screen asks by itself on a timer. It would bury what the
+     person chose to open and says nothing about them. */
+  "/api/auth/me",
+  "/api/auth/lock-state",
+  "/api/area-access",
+  "/api/notifications",
+  "/api/m/chats",
+  "/api/m/focus",
+  "/api/track",
+  "/api/prefs",
+  "/api/business/freshness",
+  "/api/clean-sweep/summary",
+  "/api/pretenancy/refresh",
+]);
+/* Query values never written down, whatever route carries them. */
+const LOG_SECRET_PARAM = /^(token|sig|signature|code|password|secret|state|apikey|api_key)$/i;
+const LOG_FLUSH_MS = 5_000;
+const LOG_BATCH = 1_000;
+const LOG_MAX_QUEUED = 5_000;
+type LogEntry = { at: number; userId: string; method: string; path: string; query: string; ip: string };
+let logQueue: LogEntry[] = [];
+let logTimer: ReturnType<typeof setTimeout> | null = null;
+let logFlushing = false;
+/* The latest request: askSelf works out this server's own address from one. */
+let logVia: NextRequest | null = null;
+
+function noteCall(req: NextRequest, userId: string): void {
+  try {
+    const path = req.nextUrl.pathname;
+    if (!path.startsWith("/api/") || LOG_NOISE.has(path)) return;
+    const query: string[] = [];
+    for (const [k, v] of req.nextUrl.searchParams) query.push(LOG_SECRET_PARAM.test(k) ? `${k}=…` : `${k}=${v}`);
+    logQueue.push({
+      at: Date.now(),
+      userId,
+      method: req.method,
+      path: path.slice(0, 300),
+      query: query.join("&").slice(0, 300),
+      ip: clientIp(req).slice(0, 64),
+    });
+    if (logQueue.length > LOG_MAX_QUEUED) logQueue.splice(0, logQueue.length - LOG_MAX_QUEUED);
+    logVia = req;
+    /* Due by size or by age - the age check as well as the timer, so a
+       queue still goes if a timer never fires in this runtime. */
+    if (logQueue.length >= LOG_BATCH || Date.now() - logQueue[0].at > LOG_FLUSH_MS * 2) void flushLog();
+    else if (!logTimer) logTimer = setTimeout(() => void flushLog(), LOG_FLUSH_MS);
+  } catch {
+    /* Never in the way of the request. */
+  }
+}
+
+async function flushLog(): Promise<void> {
+  if (logTimer) clearTimeout(logTimer);
+  logTimer = null;
+  if (logFlushing) return;
+  const via = logVia;
+  const secret = process.env.AUTH_SECRET || (process.env.NODE_ENV !== "production" ? DEV_SECRET : undefined);
+  if (!via || !secret || !logQueue.length) return;
+  logFlushing = true;
+  const batch = logQueue.splice(0, LOG_BATCH);
+  try {
+    const body = JSON.stringify(batch);
+    const res = await askSelf(via, "/api/internal/read-log", 5_000, {
+      method: "POST",
+      body,
+      headers: { "content-type": "application/json", "x-os-log-sig": await hmac(secret, `read-log.${body}`) },
+    });
+    /* Not taken: back on the front of the queue for the next go, inside the
+       cap, so an outage costs the oldest calls and never the memory. */
+    if (!res) logQueue = [...batch, ...logQueue].slice(-LOG_MAX_QUEUED);
+  } catch {
+    logQueue = [...batch, ...logQueue].slice(-LOG_MAX_QUEUED);
+  } finally {
+    logFlushing = false;
+  }
+  if (logQueue.length && !logTimer) logTimer = setTimeout(() => void flushLog(), LOG_FLUSH_MS);
+}
+
+/* The same words as lib/lockout LOCKED_MESSAGE, which this edge file cannot
+   import (it reaches the database). */
+const LOCKED_MESSAGE = "Your access to TLE OS has been paused. Speak to James.";
+const LOCK_TTL_MS = 20_000;
+const lockCache = new Map<string, { at: number; locked: boolean }>();
+
+/**
+ * Has an owner locked this person out? Asked of /api/auth/lock-state, which
+ * can read the database, and remembered for twenty seconds per person, so it
+ * is one small internal call per person per twenty seconds. No answer is
+ * "not locked" for five seconds: the routes still refuse a locked person from
+ * their own list, so a blip here costs a tidy exit, never the lock itself.
+ */
+async function isLocked(req: NextRequest, userId: string): Promise<boolean> {
+  if (req.nextUrl.pathname === "/api/auth/lock-state") return false;
+  const hit = lockCache.get(userId);
+  if (hit && Date.now() < hit.at) return hit.locked;
+  let locked: boolean | null = null;
+  try {
+    const res = await askSelf(req, "/api/auth/lock-state", 1_500);
+    const j = res ? ((await res.json()) as { ok?: boolean; locked?: boolean }) : null;
+    if (j?.ok) locked = j.locked === true;
+  } catch {
+    /* Not JSON: no answer. */
+  }
+  if (lockCache.size > 2_000) lockCache.clear();
+  lockCache.set(userId, { at: Date.now() + (locked === null ? 5_000 : LOCK_TTL_MS), locked: locked === true });
+  return locked === true;
+}
+
 /** The sign-in half of the door, after the area switches have had their say. */
 async function doorAfterGate(req: NextRequest): Promise<NextResponse> {
   /**
@@ -578,8 +696,24 @@ async function doorAfterGate(req: NextRequest): Promise<NextResponse> {
    */
   if (!process.env.AUTH_SECRET) return NextResponse.next();
 
-  if (await hasValidSession(req.cookies.get("os_session")?.value)) {
-    return NextResponse.next();
+  const userId = await sessionUserId(req.cookies.get("os_session")?.value, process.env.AUTH_SECRET);
+  if (userId) {
+    if (!(await isLocked(req, userId))) {
+      noteCall(req, userId);
+      return NextResponse.next();
+    }
+    /* Locked out by an owner (lib/lockout, 10 Oct 2026). The routes refuse
+       them anyway; this ends the visit cleanly: the cookie goes, a call gets
+       the signed-out answer the shell's fetch watcher acts on, and a page goes
+       to sign-in, which says why. */
+    const res = req.nextUrl.pathname.startsWith("/api/")
+      ? NextResponse.json(
+          { ok: false, error: LOCKED_MESSAGE, signedOut: true, locked: true },
+          { status: 401, headers: { "x-os-signed-out": "1" } }
+        )
+      : NextResponse.redirect(new URL("/sign-in?locked=1", req.url));
+    res.cookies.delete("os_session");
+    return res;
   }
 
   /* An API call gets an answer it can read (Rig run 4, P-054, 10 Oct 2026):

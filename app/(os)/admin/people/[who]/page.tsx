@@ -30,7 +30,10 @@ import { when } from "@/lib/admin-client";
 type Counted = { total: number | null; failed: boolean };
 type Data = {
   person: { rexId: string | null; name: string; email: string; photo: string | null; position: string | null; phone: string | null; onRex: boolean };
-  account: { id: string; role: string; hasPhoto: boolean; createdAt: string; rexUserId: string | null; lastSeenAt: string | null } | null;
+  account: {
+    id: string; role: string; hasPhoto: boolean; createdAt: string; rexUserId: string | null; lastSeenAt: string | null;
+    lock: { locked: boolean; lockedAt: string | null; lockedBy: string | null; reason: string } | null;
+  } | null;
   book: {
     listings: Counted; onMarket: Counted; managed: Counted;
     properties: Counted; contacts: Counted; leads: Counted;
@@ -40,6 +43,21 @@ type Data = {
   } | null;
   audit: Array<{ id: string; kind: string; at: string }>;
 };
+
+type Reading = {
+  openedHour: number; openedDay: number; openedWeek: number; callsWeek: number; afterHoursWeek: number;
+  flags: string[];
+  recent: Array<{ at: string; method: string; path: string; query: string; ip: string }>;
+};
+
+function Figure({ label, n }: { label: string; n: number }) {
+  return (
+    <div className="rounded-[22px] border border-line/50 bg-white p-4">
+      <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">{label}</p>
+      <p className="figures mt-1.5 text-[24px] leading-none">{n.toLocaleString("en-GB")}</p>
+    </div>
+  );
+}
 
 function Count({ label, c }: { label: string; c: Counted }) {
   return (
@@ -59,6 +77,15 @@ export default function PersonPage({ params }: { params: Promise<{ who: string }
   const [d, setD] = useState<Data | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /* Locking out (lib/lockout): a confirm step, then the press. */
+  const [lockOpen, setLockOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [lockBusy, setLockBusy] = useState(false);
+  const [lockErr, setLockErr] = useState<string | null>(null);
+  /* What they have opened (lib/read-log). null while loading. */
+  const [reading, setReading] = useState<Reading | null>(null);
+  const [readingErr, setReadingErr] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     fetch(`/api/admin/person/${who}`)
@@ -66,6 +93,40 @@ export default function PersonPage({ params }: { params: Promise<{ who: string }
       .then(setD)
       .catch(() => setErr("Couldn't load that person."));
   }, [who]);
+
+  const accountId = d?.account?.id ?? null;
+  useEffect(() => {
+    if (!accountId) return;
+    fetch(`/api/admin/reading?user=${encodeURIComponent(accountId)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; reading?: Reading; error?: string }) => {
+        if (!j.ok || !j.reading) throw new Error(j.error ?? "We couldn't read the log just now.");
+        setReading(j.reading);
+      })
+      .catch((e) => setReadingErr(e instanceof Error ? e.message : "We couldn't read the log just now."));
+  }, [accountId]);
+
+  async function setLock(action: "lock" | "unlock") {
+    if (!d?.account) return;
+    setLockBusy(true);
+    setLockErr(null);
+    try {
+      const r = await fetch("/api/admin/lock", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId: d.account.id, action, reason }),
+      });
+      const j = (await r.json()) as { ok?: boolean; error?: string; lock?: NonNullable<Data["account"]>["lock"] };
+      if (!j.ok) throw new Error(j.error ?? "That didn't work.");
+      setD({ ...d, account: { ...d.account, lock: j.lock ?? null } });
+      setLockOpen(false);
+      setReason("");
+    } catch (e) {
+      setLockErr(e instanceof Error ? e.message : "That didn't work.");
+    } finally {
+      setLockBusy(false);
+    }
+  }
 
   /* Works whether or not they have an OS account. Most of the team has not
      been invited yet, and the people worth testing as are exactly those. */
@@ -89,6 +150,9 @@ export default function PersonPage({ params }: { params: Promise<{ who: string }
   if (!d) return <p className="mt-6 text-[12.5px] text-muted">Loading their book…</p>;
 
   const p = d.person;
+  const first = p.name.split(" ")[0];
+  const lock = d.account?.lock ?? null;
+  const canLock = Boolean(d.account && d.account.role !== "owner");
 
   return (
     <>
@@ -122,23 +186,156 @@ export default function PersonPage({ params }: { params: Promise<{ who: string }
                   <Pill tone="accent">Never signed in</Pill>
                 )}
                 {!d.account.rexUserId && <Pill tone="neutral">Not linked to REX</Pill>}
+                {lock?.locked && <Pill tone="accent">Locked out</Pill>}
               </>
             ) : (
               <Pill tone="neutral">Not invited yet</Pill>
             )}
           </p>
         </div>
-        {d.account?.role !== "owner" && (
+        <div className="flex shrink-0 flex-wrap gap-2">
+          {d.account?.role !== "owner" && (
+            <button
+              type="button"
+              onClick={viewAs}
+              disabled={busy}
+              className="shrink-0 rounded-lg bg-accent-dark px-4 py-2.5 text-[12.5px] font-semibold text-white disabled:opacity-40"
+            >
+              {busy ? "Opening…" : `View as ${first}`}
+            </button>
+          )}
+          {canLock && !lock?.locked && !lockOpen && (
+            <button
+              type="button"
+              onClick={() => setLockOpen(true)}
+              className="shrink-0 rounded-lg border border-accent-dark/60 px-4 py-2.5 text-[12.5px] font-semibold text-accent-dark"
+            >
+              Lock out
+            </button>
+          )}
+        </div>
+      </header>
+
+      {/* Lock out (lib/lockout): said plainly before it happens, and how to
+          undo it, because it ends somebody's working day on the spot. */}
+      {lockOpen && !lock?.locked && (
+        <section className="fade-up mt-4 rounded-[22px] border border-accent-dark/40 bg-accent-soft/40 p-5">
+          <h2 className="hand text-[17px] leading-tight">Lock {first} out of TLE OS?</h2>
+          <p className="mt-1.5 text-[12.5px] leading-relaxed">
+            Every session {first} has open ends within half a minute, on every device, and
+            signing in tells them their access is paused. Their account, their work and their
+            history stay exactly as they are, and you can let them back in at any time.
+          </p>
+          <label htmlFor="lock-reason" className="mt-3 block text-[10px] uppercase tracking-wider text-muted">
+            Why (kept in the activity log, not shown to {first})
+          </label>
+          <textarea
+            id="lock-reason"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            maxLength={500}
+            rows={2}
+            className="mt-1.5 w-full rounded-lg border border-line/80 bg-white px-3 py-2 text-[13px]"
+          />
+          {lockErr && <p className="mt-2 text-[12px] text-accent-dark">{lockErr}</p>}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void setLock("lock")}
+              disabled={lockBusy}
+              className="rounded-lg bg-accent-dark px-4 py-2.5 text-[12.5px] font-semibold text-white disabled:opacity-40"
+            >
+              {lockBusy ? "Locking…" : `Lock ${first} out now`}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLockOpen(false);
+                setLockErr(null);
+              }}
+              disabled={lockBusy}
+              className="rounded-lg border border-line/80 px-4 py-2.5 text-[12.5px]"
+            >
+              Cancel
+            </button>
+          </div>
+        </section>
+      )}
+
+      {lock?.locked && (
+        <section className="fade-up mt-4 rounded-[22px] border border-accent-dark/40 bg-accent-soft/40 p-5">
+          <h2 className="hand text-[17px] leading-tight">{first} is locked out</h2>
+          <p className="mt-1.5 text-[12.5px] leading-relaxed">
+            Since {when(lock.lockedAt)}
+            {lock.lockedBy ? `, by ${lock.lockedBy}` : ""}. Nothing they had open works, and
+            signing in tells them their access is paused.
+            {lock.reason ? <span className="text-muted"> Reason: {lock.reason}</span> : null}
+          </p>
+          {lockErr && <p className="mt-2 text-[12px] text-accent-dark">{lockErr}</p>}
           <button
             type="button"
-            onClick={viewAs}
-            disabled={busy}
-            className="shrink-0 rounded-lg bg-accent-dark px-4 py-2.5 text-[12.5px] font-semibold text-white disabled:opacity-40"
+            onClick={() => void setLock("unlock")}
+            disabled={lockBusy}
+            className="mt-3 rounded-lg border border-line/80 bg-white px-4 py-2.5 text-[12.5px] font-semibold disabled:opacity-40"
           >
-            {busy ? "Opening…" : `View as ${p.name.split(" ")[0]}`}
+            {lockBusy ? "Letting them in…" : `Let ${first} back in`}
           </button>
-        )}
-      </header>
+        </section>
+      )}
+
+      {/* What they have opened (lib/read-log): the counts first, then the
+          list, newest first. */}
+      {d.account && (
+        <section className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5">
+          <h2 className="hand text-[17px] leading-tight">What {first} has opened</h2>
+          {readingErr ? (
+            <p className="mt-2 text-[12.5px] text-accent-dark">{readingErr}</p>
+          ) : !reading ? (
+            <p className="mt-2 text-[12.5px] text-muted">Reading the log…</p>
+          ) : (
+            <>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <Figure label="Last hour" n={reading.openedHour} />
+                <Figure label="Last 24 hours" n={reading.openedDay} />
+                <Figure label="Last 7 days" n={reading.openedWeek} />
+                <Figure label="10pm-6am, 7 days" n={reading.afterHoursWeek} />
+              </div>
+              {reading.flags.length > 0 && (
+                <p className="mt-3 rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-3 text-[12.5px] leading-relaxed">
+                  More than usual: {reading.flags.join(", ")}.
+                </p>
+              )}
+              {reading.recent.length === 0 ? (
+                <p className="mt-3 text-[12.5px] text-muted">Nothing opened since the log started on 10 October 2026.</p>
+              ) : (
+                <ul className="mt-3 space-y-0.5">
+                  {(showAll ? reading.recent : reading.recent.slice(0, 40)).map((r, i) => (
+                    <li key={`${r.at}-${i}`} className="flex flex-wrap items-baseline gap-x-3 border-b border-line/40 py-1.5 text-[11.5px] last:border-0">
+                      <span className="w-[104px] shrink-0 text-muted">{when(r.at)}</span>
+                      <span className="min-w-0 flex-1 break-all">
+                        {r.method !== "GET" && <span className="mr-1 text-accent-dark">{r.method}</span>}
+                        {r.path.replace(/^\/api\//, "")}
+                        {r.query && <span className="text-muted">?{r.query}</span>}
+                      </span>
+                      <span className="shrink-0 text-muted">{r.ip}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {!showAll && reading.recent.length > 40 && (
+                <button type="button" onClick={() => setShowAll(true)} className="mt-2 text-[12px] underline">
+                  Show the last {reading.recent.length}
+                </button>
+              )}
+              <p className="mt-3 border-t border-line/70 pt-2.5 text-[10.5px] leading-relaxed text-muted">
+                Counts are the different things opened, not every call: one screen makes several.
+                Everything {first} opens is recorded from 10 October 2026 and kept for a year. The
+                bell, chats and other calls an open screen makes by itself are left out.
+              </p>
+            </>
+          )}
+        </section>
+      )}
 
       {!d.book ? (
         /* No REX record, so there is no book to count. Said in a sentence,

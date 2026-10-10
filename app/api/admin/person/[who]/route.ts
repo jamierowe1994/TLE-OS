@@ -5,6 +5,7 @@ import { lettingsAgents } from "@/lib/rex-agents";
 import { findUserByEmail, findUserById } from "@/lib/users";
 import { recent } from "@/lib/audit";
 import { hasDb, q } from "@/lib/db";
+import { lockStateOf } from "@/lib/lockout";
 
 /**
  * One person, everything we hold. Owner-only; 404 for everyone else.
@@ -83,6 +84,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ who: string
           createdAt: account.createdAt,
           rexUserId: account.rexUserId,
           lastSeenAt,
+          /* Locked out (lib/lockout): who pressed it, when and why. */
+          lock: await lockStateOf(account.id).catch(() => null),
         }
       : null,
     book,

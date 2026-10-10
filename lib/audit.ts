@@ -57,7 +57,12 @@ export type AuditKind =
   /* The advert edited from the OS into REX: which fields, and any photo or
      floor plan uploaded (15 Sep 2026). */
   | "listing_edited"
-  | "listing_owner_changed";
+  | "listing_owner_changed"
+  /* An owner locked somebody out of the OS, or let them back in (10 Oct
+     2026, lib/lockout), and every sign-in a locked person tried. */
+  | "user_locked"
+  | "user_unlocked"
+  | "sign_in_locked";
 
 export interface AuditRow {
   id: string;

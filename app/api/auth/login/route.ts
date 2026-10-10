@@ -5,6 +5,7 @@ import { q } from "@/lib/db";
 import { createSessionToken, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
 import { authenticate } from "@/lib/users";
 import { hasDb } from "@/lib/db";
+import { LOCKED_MESSAGE } from "@/lib/lockout";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -71,6 +72,13 @@ export async function POST(req: NextRequest) {
       ip: clientIp(req),
     });
     return NextResponse.json({ ok: false, error: "That email and password don't match." }, { status: 401 });
+  }
+
+  /* Locked out by an owner (lib/lockout). Only said once the password is
+     right, so it tells nobody without it whether an address is locked. */
+  if (user.locked) {
+    await record({ kind: "sign_in_locked", actorId: user.id, actorEmail: user.email, ip: clientIp(req) });
+    return NextResponse.json({ ok: false, error: LOCKED_MESSAGE }, { status: 403 });
   }
 
   /* Stamped here rather than on every request: "last seen" means last SIGNED

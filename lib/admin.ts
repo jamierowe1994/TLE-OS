@@ -80,7 +80,9 @@ export async function whoIs(req: NextRequest): Promise<Who> {
   startRevokedSync();
   const actorId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
   const actor = actorId ? await findUserById(actorId) : null;
-  if (!actor) return { actor: null, subject: null, viewingAs: false };
+  /* Locked out (lib/lockout): read off the row itself here, so whoIs refuses
+     them the moment the lock is set, not at the next half-minute refresh. */
+  if (!actor || actor.locked) return { actor: null, subject: null, viewingAs: false };
 
   const va = readViewAs(req.cookies.get(VIEW_AS_COOKIE)?.value);
   /* A view-as is only honoured if the ACTOR is an owner and the token was

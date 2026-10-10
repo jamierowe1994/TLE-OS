@@ -17,14 +17,32 @@ import { hasDb, q } from "@/lib/db";
  * server instance picks a sign-out up within half a minute; the instance that
  * took the sign-out has it at once.
  */
-const G = globalThis as { __osRevokedSessions?: Set<string>; __osRevokedSync?: boolean };
+const G = globalThis as { __osRevokedSessions?: Set<string>; __osRevokedSync?: boolean; __osLockedUsers?: Set<string> };
 
 function revoked(): Set<string> {
   return (G.__osRevokedSessions ??= new Set<string>());
 }
 
+/** People an owner has locked out (lib/lockout), read by verifySessionToken. */
+export function lockedUsers(): Set<string> {
+  return (G.__osLockedUsers ??= new Set<string>());
+}
+
+/**
+ * The locked list, refreshed with the sign-outs. Unlike them it is not
+ * add-only: an Unlock must let the person back in within the half minute.
+ */
+async function refreshLocked(): Promise<void> {
+  const rows = await q<{ id: string }>(`SELECT id FROM os_users WHERE locked_at IS NOT NULL`).catch(() => null);
+  if (!rows) return; // a blip keeps the list we had, so nobody locked slips back in
+  const next = new Set(rows.map((r) => r.id));
+  for (const id of lockedUsers()) if (!next.has(id)) lockedUsers().delete(id);
+  for (const id of next) lockedUsers().add(id);
+}
+
 export async function refreshRevoked(): Promise<void> {
   if (!hasDb()) return;
+  await refreshLocked();
   const rows = await q<{ sig: string }>(`SELECT sig FROM os_session_revoked WHERE expires_at > NOW()`).catch(() => null);
   if (!rows) return; // keep what we had rather than forget every sign-out on a blip
   const next = new Set(rows.map((r) => r.sig));

@@ -80,6 +80,12 @@ CREATE TABLE IF NOT EXISTS os_users (
 );
 ALTER TABLE os_users ADD COLUMN IF NOT EXISTS rex_user_id TEXT;
 CREATE INDEX IF NOT EXISTS os_users_rex ON os_users (rex_user_id);
+-- Locked out (10 Oct 2026): set by an owner from the person's file in Admin >
+-- People. Every session the person holds is refused while it is set, and
+-- sign-in says their access is paused. Cleared by Unlock. See lib/lockout.
+ALTER TABLE os_users ADD COLUMN IF NOT EXISTS locked_at TIMESTAMPTZ;
+ALTER TABLE os_users ADD COLUMN IF NOT EXISTS locked_by TEXT;
+ALTER TABLE os_users ADD COLUMN IF NOT EXISTS locked_reason TEXT NOT NULL DEFAULT '';
 
 -- Pending email verifications. The token is NEVER stored — only its SHA-256,
 -- so a read of this table cannot be turned into a sign-in. One live row per
@@ -115,6 +121,23 @@ CREATE TABLE IF NOT EXISTS os_session_revoked (
   expires_at     TIMESTAMPTZ NOT NULL,
   revoked_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- What each person opened (10 Oct 2026): every signed-in request, so "who
+-- has been reading what, and how much" has an answer. Kept a year, then swept.
+-- user_id is the ACTOR; viewing_as is whose screen an owner was looking at.
+-- See lib/read-log.
+CREATE TABLE IF NOT EXISTS os_read_log (
+  id             BIGSERIAL PRIMARY KEY,
+  at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  user_id        TEXT NOT NULL,
+  method         TEXT NOT NULL DEFAULT 'GET',
+  path           TEXT NOT NULL,
+  query          TEXT NOT NULL DEFAULT '',
+  ip             TEXT NOT NULL DEFAULT '',
+  viewing_as     TEXT
+);
+CREATE INDEX IF NOT EXISTS os_read_log_user_at ON os_read_log (user_id, at DESC);
+CREATE INDEX IF NOT EXISTS os_read_log_at ON os_read_log (at DESC);
 
 CREATE TABLE IF NOT EXISTS os_audit (
   id             TEXT PRIMARY KEY,

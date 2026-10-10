@@ -157,8 +157,13 @@ export function openPayload<T>(sealed: string | undefined): T | null {
   }
 }
 
-/** The userId behind a valid, unexpired token; null otherwise. */
-export function verifySessionToken(token: string | undefined): string | null {
+/**
+ * The userId a token was genuinely signed for and has not yet expired,
+ * WITHOUT asking whether it was signed out or its holder locked out. Only
+ * for saying WHY a session is refused (/api/auth/lock-state); everything that
+ * lets somebody in uses verifySessionToken.
+ */
+export function signedTokenUserId(token: string | undefined): string | null {
   if (!token) return null;
   const parts = token.split(".");
   if (parts.length !== 3) return null;
@@ -169,10 +174,22 @@ export function verifySessionToken(token: string | undefined): string | null {
   const b = Buffer.from(expected);
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
   if (Number(exp) < Date.now()) return null;
+  return userId;
+}
+
+/** The userId behind a valid, unexpired token; null otherwise. */
+export function verifySessionToken(token: string | undefined): string | null {
+  const userId = signedTokenUserId(token);
+  if (!userId) return null;
+  const sig = (token ?? "").split(".")[2];
   /* Signed out (Rig run 2, P-009): the set lib/session-revoke keeps in this
      process, refreshed from the database every 30 seconds. Read off
      globalThis so this file stays free of the database. */
-  if ((globalThis as { __osRevokedSessions?: Set<string> }).__osRevokedSessions?.has(sig)) return null;
+  const g = globalThis as { __osRevokedSessions?: Set<string>; __osLockedUsers?: Set<string> };
+  if (g.__osRevokedSessions?.has(sig)) return null;
+  /* Locked out by an owner (10 Oct 2026, lib/lockout): every session the
+     person holds, on every device, from the same in-memory list. */
+  if (g.__osLockedUsers?.has(userId)) return null;
   return userId;
 }
 

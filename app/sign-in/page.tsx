@@ -53,14 +53,18 @@ function safeNext(raw: string | null): string {
 }
 
 function SignIn() {
-  const next = safeNext(useSearchParams().get("next"));
+  const params = useSearchParams();
+  const next = safeNext(params.get("next"));
+  /* Sent here because an owner locked their access (lib/lockout). Same
+     words as the sign-in refusal, so it reads the same either way in. */
+  const locked = params.get("locked") === "1";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(locked ? "Your access to TLE OS has been paused. Speak to James." : null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

@@ -38,6 +38,9 @@ export const AUDIT_KIND: Record<string, string> = {
   password_reset: "reset sent",
   view_as_start: "started viewing as",
   view_as_end: "stopped viewing as",
+  user_locked: "locked out",
+  user_unlocked: "let back in",
+  sign_in_locked: "tried to sign in while locked",
 };
 
 /**
