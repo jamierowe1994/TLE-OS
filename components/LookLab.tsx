@@ -57,7 +57,7 @@ export default function LookLab() {
       </div>
 
       <p className="mt-5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted">Sidebar</p>
-      <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mt-2 grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
         {LAB_LAYOUTS.map((l) => (
           <button key={l.id} type="button" onClick={() => pick({ ...c, layout: l.id })} className={chip(layout === l.id)}>
             <span className="block text-[13px] font-semibold">{l.label}</span>

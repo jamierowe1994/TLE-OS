@@ -9,6 +9,7 @@ import NotificationBell from "@/components/NotificationBell";
 import DoodleIcon from "@/components/DoodleIcon";
 import SignedOutWatch from "@/components/SignedOutWatch";
 import GlobalSearch from "@/components/GlobalSearch";
+import LaunchNav from "@/components/LaunchNav";
 import { readLab, type LabChoice, type LabLayout } from "@/lib/style-lab";
 import { readTheme, type ThemeChoice } from "@/lib/theme";
 import { FRONT, BACK, railFor, type NavItem } from "@/lib/nav";
@@ -259,7 +260,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   }, []);
   const layout: LabLayout = lab.layout ?? "original";
   /* Wrapped in the frame, or standing on one surface (the card and the bleed). */
-  const framed = layout === "original" || layout === "search" || layout === "inverse";
+  const framed = layout === "original" || layout === "launch" || layout === "search" || layout === "inverse";
   const [frameLeft, setFrameLeft] = useState(8);
   useEffect(() => {
     const el = sideRef.current;
@@ -613,7 +614,21 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     </div>
   );
   const sideBody =
-    layout === "inverse" ? (
+    layout === "launch" ? (
+      /* Launch Day (components/LaunchNav): Linear-clean, its own pieces. */
+      <LaunchNav
+        front={[...FRONT, ...(practising ? [PRACTICE_ITEM] : [])].filter(visible)}
+        back={BACK.filter(visible).map(trimmed)}
+        mine={mine}
+        pathname={pathname}
+        currentHref={currentHref}
+        go={goTo}
+        collapsed={collapsed}
+        onToggleCollapse={toggleCollapsed}
+        me={me}
+        onSignOut={signOut}
+      />
+    ) : layout === "inverse" ? (
       <>
         {/* You at the top, set apart by a short line; TLE OS last. */}
         <div className="relative">
@@ -673,7 +688,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         ref={sideRef}
         data-os-sidebar
         className={`sticky z-[50] hidden shrink-0 flex-col overflow-hidden transition-[width,padding] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] lg:flex ${
-          collapsed ? "w-[72px] px-2.5" : "w-60 px-4"
+          collapsed ? "w-[72px] px-2.5" : layout === "launch" ? "w-60 px-2.5" : "w-60 px-4"
         } ${
           layout === "card"
             ? "top-3 mb-3 ml-3 mt-3 h-[calc(100vh-24px)] rounded-[22px] border border-[var(--shell-rim)] bg-[var(--shell-nav-card)] py-4 shadow-[0_8px_30px_-18px_rgba(0,0,0,0.35)]"

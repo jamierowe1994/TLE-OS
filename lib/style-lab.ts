@@ -5,7 +5,7 @@
  * able to mix and match these: the navigation bar style with the colours.
  * I don't want to ever have to change this again."
  *
- * Six palettes x five sidebar layouts, chosen on the Dashboard by an owner
+ * Six palettes x six sidebar layouts, chosen on the Dashboard by an owner
  * and kept in this browser only (localStorage), so nobody else's screen moves
  * while he decides. Nothing chosen = the live look: mist (#FBFBFB) round a white
  * page, live from 11 Oct (the warm wrap of 10 Oct is gone).
@@ -16,7 +16,7 @@
  */
 
 export type LabPalette = "mist" | "soft" | "pale" | "reverse" | "dark-lift" | "dark-deep";
-export type LabLayout = "original" | "search" | "card" | "inverse" | "bleed";
+export type LabLayout = "original" | "launch" | "search" | "card" | "inverse" | "bleed";
 
 export const LAB_PALETTES: { id: LabPalette; label: string; blurb: string; swatch: [string, string, string] }[] = [
   /* James, 11 Oct: "make the grey a little bit more subtle ... get rid of
@@ -32,6 +32,7 @@ export const LAB_PALETTES: { id: LabPalette; label: string; blurb: string; swatc
 
 export const LAB_LAYOUTS: { id: LabLayout; label: string; blurb: string }[] = [
   { id: "original", label: "Original", blurb: "The sidebar as it is: TLE OS, the tabs, your profile at the foot." },
+  { id: "launch", label: "Launch Day", blurb: "Clean, Linear-style: thin line icons, one size of type, quiet groups, no Showroom." },
   { id: "search", label: "Search at the top", blurb: "TLE OS with a small search under it, then the tabs." },
   { id: "card", label: "Floating card", blurb: "The sidebar as a rounded card standing on the page." },
   { id: "inverse", label: "Profile on top", blurb: "You at the top, Help and Settings at the foot, TLE OS last." },

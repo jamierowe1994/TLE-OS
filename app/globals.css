@@ -1577,3 +1577,19 @@ html[data-os-toast="up"] .os-toast-lift {
 @media (min-width: 1024px) {
   :root[data-lab-layout="bleed"] [data-page-toprow] { display: none; }
 }
+/* The Launch Day sidebar's quiet greys (components/LaunchNav): row text, the
+   line icons, the hover and the page-you-are-on fill, the guide rules. */
+:root {
+  --launch-text: #5d5e63;
+  --launch-icon: #8b8c92;
+  --launch-hover: rgba(0, 0, 0, 0.04);
+  --launch-active: rgba(0, 0, 0, 0.065);
+  --launch-guide: rgba(0, 0, 0, 0.09);
+}
+:root[data-lab-palette^="dark"] {
+  --launch-text: #b6b6bc;
+  --launch-icon: #85868d;
+  --launch-hover: rgba(255, 255, 255, 0.05);
+  --launch-active: rgba(255, 255, 255, 0.085);
+  --launch-guide: rgba(255, 255, 255, 0.09);
+}
