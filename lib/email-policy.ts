@@ -107,7 +107,7 @@ export function wrongDomainMessage(email: string): string {
   const d = domainOf(email);
   const list = internalDomains().map((x) => `@${x}`).join(" or ");
   return (
-    `That's ${d ? `an @${d}` : "not a work"} address — TLE OS only lets you in on a Letting Experts one. ` +
+    `That's ${d ? `an @${d}` : "not a work"} address - TLE OS only lets you in on a Letting Experts one. ` +
     `Try your ${list} address instead. ` +
     `If you don't have one yet, that's a question for James rather than for this box.`
   );

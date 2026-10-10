@@ -37,7 +37,7 @@ export default function FeedbackEmailPreview() {
           color: "#6b6b72",
         }}
       >
-        Preview — this is the email, as it arrives. Subject:{" "}
+        Preview - this is the email, as it arrives. Subject:{" "}
         <strong>How was {VIEWING.property}?</strong>
       </p>
 
@@ -75,7 +75,7 @@ export default function FeedbackEmailPreview() {
               </p>
               <p style={{ margin: "10px 0 0", fontSize: 14.5, lineHeight: 1.6, color: "#43434a" }}>
                 Thanks for coming to see {VIEWING.property} on {VIEWING.viewedOn}. Whatever you
-                thought — good or not — it genuinely helps. It tells me what to send you next,
+                thought - good or not - it genuinely helps. It tells me what to send you next,
                 and it tells the landlord how the property is landing.
               </p>
               <p style={{ margin: "10px 0 0", fontSize: 14.5, lineHeight: 1.6, color: "#43434a" }}>
@@ -129,7 +129,7 @@ export default function FeedbackEmailPreview() {
                 Give feedback or make an offer
               </a>
               <p style={{ margin: "10px 0 0", fontSize: 12, lineHeight: 1.5, color: "#8a8a92", textAlign: "center" }}>
-                The link signs you straight in — no password to remember.
+                The link signs you straight in - no password to remember.
               </p>
             </td>
           </tr>
@@ -140,7 +140,7 @@ export default function FeedbackEmailPreview() {
                 <tbody>
                   <tr>
                     <td style={{ borderTop: "1px solid #e6e6e9", paddingTop: 18, fontSize: 13.5, lineHeight: 1.6, color: "#43434a" }}>
-                      Any questions at all, just reply to this — it comes straight to me.
+                      Any questions at all, just reply to this - it comes straight to me.
                       <br />
                       <br />
                       <strong style={{ color: "#1f1f24" }}>{VIEWING.agent}</strong>

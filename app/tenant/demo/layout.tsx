@@ -7,7 +7,7 @@ import { demoStage } from "@/lib/tenant-demo";
  * sign-in. Reached from the admin's Portals page and from the preview. The
  * harness along the foot moves her from stage to stage.
  */
-export const metadata = { title: "The Letting Experts — Your tenant area (sample)" };
+export const metadata = { title: "The Letting Experts - Your tenant area (sample)" };
 export const dynamic = "force-dynamic";
 
 export default async function TenantDemoLayout({ children }: { children: React.ReactNode }) {

@@ -14,7 +14,7 @@ import PreviewReturnBar from "@/components/PreviewReturnBar";
  */
 
 export const metadata: Metadata = {
-  title: "Your market appraisal — The Letting Experts",
+  title: "Your market appraisal - The Letting Experts",
   // A private link sent to one person. Nothing about it belongs in an index,
   // and the token is in the URL, which is exactly the thing not to publish.
   robots: { index: false, follow: false, nocache: true },

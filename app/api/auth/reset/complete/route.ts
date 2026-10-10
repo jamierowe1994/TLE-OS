@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
   }
   if (password.length < 10) {
     return NextResponse.json(
-      { ok: false, error: "Passwords need at least 10 characters — this one guards the whole company's data." },
+      { ok: false, error: "Passwords need at least 10 characters - this one guards the whole company's data." },
       { status: 400 }
     );
   }

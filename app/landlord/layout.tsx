@@ -22,7 +22,7 @@ import { currentLandlord, landlordPlaces, landlordProperties } from "@/lib/landl
  * palette in globals.css, so an agent's OS accent never reaches this page.
  */
 
-export const metadata = { title: "The Letting Experts — Your property file" };
+export const metadata = { title: "The Letting Experts - Your property file" };
 
 function Logo({ className = "" }: { className?: string }) {
   return (

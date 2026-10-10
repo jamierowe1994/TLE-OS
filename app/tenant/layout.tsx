@@ -6,7 +6,7 @@ import PreviewReturnBar from "@/components/PreviewReturnBar";
  * reaches a customer. The two shells - the masthead for the public pages,
  * the sidebar for the portal - are the route groups beneath.
  */
-export const metadata = { title: "The Letting Experts — Your tenant area" };
+export const metadata = { title: "The Letting Experts - Your tenant area" };
 
 export default function TenantLayout({ children }: { children: React.ReactNode }) {
   return (

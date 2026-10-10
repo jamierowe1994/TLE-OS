@@ -74,7 +74,7 @@ function AskForEmail() {
         </p>
         <p className="mt-3 text-[11.5px] leading-relaxed text-muted">
           Nothing arrives? Check junk first. If it&apos;s still not there, the address may
-          not be set up for an account yet — ask James.
+          not be set up for an account yet - ask James.
         </p>
         <button
           type="button"
@@ -219,7 +219,7 @@ function ChoosePassword({ token }: { token: string }) {
           </button>
         </div>
         <p className={`mt-1.5 text-[11px] ${tooShort ? "text-accent-dark" : "text-muted"}`}>
-          At least 10 characters — this one guards the whole company&apos;s data.
+          At least 10 characters - this one guards the whole company&apos;s data.
           {tooShort ? ` ${10 - password.length} to go.` : ""}
         </p>
 

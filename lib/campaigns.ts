@@ -76,7 +76,7 @@ export const CAMPAIGNS: Campaign[] = [
   },
   {
     id: "win-back-agent",
-    name: "Win-back — went to another agent",
+    name: "Win-back - went to another agent",
     audience: "lost",
     reasons: ["Went with another agent"],
     aim: "Stay in sight for the six months until they're disappointed, without ever saying so.",
@@ -89,7 +89,7 @@ export const CAMPAIGNS: Campaign[] = [
         gist: "Gracious note, no pitch. Offer the market report anyway.",
         body: [
           "Hi {{firstName}},",
-          "Thanks for having us round to look at {{address}} — and genuinely, good luck with the let. I hope it goes quickly.",
+          "Thanks for having us round to look at {{address}} - and genuinely, good luck with the let. I hope it goes quickly.",
           "One thing before I leave you alone: we put together a short report each quarter on what's actually letting around you, and at what rent. It's useful whether or not you ever use us, so I'll send it over unless you'd rather I didn't.",
           "If anything changes, you have my number.",
         ],
@@ -101,7 +101,7 @@ export const CAMPAIGNS: Campaign[] = [
         gist: "One question: is it let? If not, we're still here.",
         body: [
           "Hi {{firstName}},",
-          "A month on — is {{address}} let?",
+          "A month on - is {{address}} let?",
           "If it is, that's the last you'll hear from me on it. If it isn't, that's worth a conversation: a property that's been on for four weeks usually needs a change to the price, the photos or the audience, and it's easier to fix now than at week ten.",
           "Either way, a one-line reply and I'll know which.",
         ],
@@ -110,10 +110,10 @@ export const CAMPAIGNS: Campaign[] = [
         day: 90,
         channel: "email",
         subject: "What rents did in your postcode",
-        gist: "The area report — useful whether or not they use us.",
+        gist: "The area report - useful whether or not they use us.",
         body: [
           "Hi {{firstName}},",
-          "The quarterly figures for your area are in. This is what actually let near {{address}} and what it achieved — not asking prices, which is the number most reports quietly use.",
+          "The quarterly figures for your area are in. This is what actually let near {{address}} and what it achieved - not asking prices, which is the number most reports quietly use.",
           "No action needed. It's the sort of thing worth knowing before a renewal comes round.",
         ],
       },
@@ -122,13 +122,13 @@ export const CAMPAIGNS: Campaign[] = [
   },
   {
     id: "win-back-fee",
-    name: "Win-back — fee too high",
+    name: "Win-back - fee too high",
     audience: "lost",
     reasons: ["Fee too high"],
     aim: "Answer the objection with what the fee buys, over time, rather than discounting.",
     status: "live",
     steps: [
-      { day: 2, channel: "email", subject: "What our fee actually covers", gist: "Void days, arrears, compliance — the cost of the cheap option." },
+      { day: 2, channel: "email", subject: "What our fee actually covers", gist: "Void days, arrears, compliance - the cost of the cheap option." },
       { day: 45, channel: "email", subject: "A landlord who switched to us", gist: "One case study, same postcode, numbers not adjectives." },
       { day: 120, channel: "call", subject: "Still happy?", gist: "Ask about arrears and voids. That is where cheap agents lose them." },
     ],
@@ -143,7 +143,7 @@ export const CAMPAIGNS: Campaign[] = [
     steps: [
       { day: 1, channel: "email", subject: "Everything we talked about", gist: "The valuation in writing, so it exists when they look again." },
       { day: 60, channel: "email", subject: "What's let near you", gist: "Local comparables. Quietly proves the valuation was right." },
-      { day: 150, channel: "email", subject: "Getting ready to let?", gist: "The pre-let checklist — compliance, works, timing." },
+      { day: 150, channel: "email", subject: "Getting ready to let?", gist: "The pre-let checklist - compliance, works, timing." },
     ],
   },
   {
@@ -162,7 +162,7 @@ export const CAMPAIGNS: Campaign[] = [
 
   {
     id: "valuation-low",
-    name: "Win-back — valuation too low",
+    name: "Win-back - valuation too low",
     audience: "lost",
     reasons: ["Valuation too low"],
     aim: "Be the honest number they remember when the optimistic one doesn't let.",
@@ -176,10 +176,10 @@ export const CAMPAIGNS: Campaign[] = [
   },
   {
     id: "went-direct",
-    name: "Win-back — self-managing",
+    name: "Win-back - self-managing",
     audience: "lost",
     reasons: ["Went direct / self-managing"],
-    aim: "Let the admin do the persuading — most self-managers quit at the first hard thing.",
+    aim: "Let the admin do the persuading - most self-managers quit at the first hard thing.",
     status: "live",
     steps: [
       { day: 2, channel: "email", subject: "The bits people forget", gist: "Deposit deadlines, right to rent, gas and EICR dates. Genuinely useful, no pitch." },
@@ -219,7 +219,7 @@ export const CAMPAIGNS: Campaign[] = [
     name: "Gone quiet",
     audience: "lost",
     reasons: ["Lost touch", "Other"],
-    aim: "Two more tries, spaced, then stop — a list nobody prunes is a list nobody trusts.",
+    aim: "Two more tries, spaced, then stop - a list nobody prunes is a list nobody trusts.",
     status: "live",
     steps: [
       { day: 7, channel: "email", subject: "Did I miss you?", gist: "Short, human, one question. No attachments." },
