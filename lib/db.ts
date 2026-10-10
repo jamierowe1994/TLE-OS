@@ -3779,6 +3779,174 @@ CREATE TABLE IF NOT EXISTS os_section_notice_files (
 );
 CREATE INDEX IF NOT EXISTS os_section_notice_files_notice
   ON os_section_notice_files (notice_id, at);
+
+-- ── Tables the TLE portal made, which the OS reads (Rig run 2, P-004) ──────
+-- Until 10 Oct 2026 the OS used these without ever creating them: they came
+-- with the database it shares with the portal. On a fresh database - a test
+-- copy, or the OS's own database once it is split from the portal - the
+-- pre-tenancy board, Knowledge, Company Figures and the PayProp connection all
+-- failed with "relation does not exist". Shapes copied from production on
+-- 10 Oct 2026; IF NOT EXISTS, so on the shared database this is a no-op.
+-- (os_payprop_session and os_rent_reads create themselves where they are used.)
+
+CREATE TABLE IF NOT EXISTS forecasts (
+  user_id text NOT NULL,
+  month text NOT NULL,
+  gci_target numeric,
+  portfolio_target numeric,
+  move_ins_target numeric,
+  ma_target numeric,
+  notes text,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, month)
+);
+
+CREATE TABLE IF NOT EXISTS actual_overrides (
+  id text NOT NULL,
+  scope text NOT NULL,
+  agent_key text,
+  month text NOT NULL,
+  metric text NOT NULL,
+  value numeric NOT NULL,
+  note text,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS arrears_snapshots (
+  as_at date NOT NULL,
+  source text NOT NULL,
+  data text NOT NULL,
+  captured_at timestamp with time zone NOT NULL DEFAULT now(),
+  PRIMARY KEY (as_at)
+);
+
+CREATE TABLE IF NOT EXISTS assistant_knowledge (
+  id text NOT NULL,
+  title text NOT NULL,
+  content text NOT NULL,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS deal_meta (
+  deal_id text NOT NULL,
+  stage_override text,
+  stage_based_on text,
+  stage_by text,
+  stage_at timestamp with time zone,
+  checklist jsonb NOT NULL DEFAULT '{}'::jsonb,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  unarchived_at timestamp with time zone,
+  deposit_scheme text,
+  PRIMARY KEY (deal_id)
+);
+
+CREATE TABLE IF NOT EXISTS deal_notes (
+  id text NOT NULL,
+  deal_id text NOT NULL,
+  author_id text NOT NULL,
+  author_name text NOT NULL DEFAULT ''::text,
+  author_role text NOT NULL DEFAULT 'agent'::text,
+  text text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  kind text NOT NULL DEFAULT 'note'::text,
+  PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS deal_notes_deal_idx ON deal_notes USING btree (deal_id);
+
+CREATE TABLE IF NOT EXISTS deal_tasks (
+  id text NOT NULL,
+  deal_id text NOT NULL,
+  deal_label text NOT NULL DEFAULT ''::text,
+  user_id text NOT NULL,
+  title text NOT NULL,
+  due_date text,
+  done boolean NOT NULL DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  completed_at timestamp with time zone,
+  PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS deal_tasks_user_idx ON deal_tasks USING btree (user_id, due_date);
+CREATE INDEX IF NOT EXISTS deal_tasks_deal_idx ON deal_tasks USING btree (deal_id);
+
+CREATE TABLE IF NOT EXISTS gci_months (
+  month text NOT NULL,
+  data text NOT NULL,
+  computed_at timestamp with time zone NOT NULL DEFAULT now(),
+  PRIMARY KEY (month)
+);
+
+CREATE TABLE IF NOT EXISTS history_funnels (
+  month text NOT NULL,
+  data text NOT NULL,
+  computed_at timestamp with time zone NOT NULL DEFAULT now(),
+  PRIMARY KEY (month)
+);
+
+CREATE TABLE IF NOT EXISTS integration_cache (
+  key text NOT NULL,
+  payload jsonb NOT NULL,
+  computed_at timestamp with time zone NOT NULL DEFAULT now(),
+  PRIMARY KEY (key)
+);
+
+CREATE TABLE IF NOT EXISTS payprop_tokens (
+  account text NOT NULL,
+  refresh_token text NOT NULL,
+  connected_by text NOT NULL DEFAULT ''::text,
+  connected_at timestamp with time zone NOT NULL DEFAULT now(),
+  scopes text,
+  PRIMARY KEY (account)
+);
+
+CREATE TABLE IF NOT EXISTS property_notes (
+  id text NOT NULL,
+  listing_id text NOT NULL,
+  author_id text NOT NULL,
+  author_name text NOT NULL DEFAULT ''::text,
+  author_role text NOT NULL DEFAULT 'agent'::text,
+  text text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  PRIMARY KEY (id)
+);
+CREATE INDEX IF NOT EXISTS property_notes_listing_idx ON property_notes USING btree (listing_id);
+
+CREATE TABLE IF NOT EXISTS propoly_cache (
+  key text NOT NULL,
+  data text NOT NULL,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  PRIMARY KEY (key)
+);
+
+CREATE TABLE IF NOT EXISTS user_mailboxes (
+  user_id text NOT NULL,
+  email text NOT NULL,
+  imap_host text NOT NULL,
+  imap_port integer NOT NULL DEFAULT 993,
+  secret text NOT NULL,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id)
+);
+
+CREATE TABLE IF NOT EXISTS users (
+  id text NOT NULL,
+  name text NOT NULL DEFAULT ''::text,
+  email text NOT NULL,
+  mobile text NOT NULL DEFAULT ''::text,
+  photo text,
+  agent_key text,
+  rex_user_id text,
+  meta_campaign_id text,
+  location text,
+  admin_notes jsonb NOT NULL DEFAULT '[]'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  password_hash text NOT NULL,
+  ads_connected boolean NOT NULL DEFAULT false,
+  UNIQUE (email),
+  PRIMARY KEY (id)
+);
+
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a
