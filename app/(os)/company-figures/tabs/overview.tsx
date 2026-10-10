@@ -12,6 +12,7 @@
 // MAs by Partner Type → Monthly GCI vs Budget → Year on Year Growth.
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { londonToday } from "@/lib/london-clock";
 import Bars from "@/components/business/charts/Bars";
 import type { SeedData, PeriodKpis } from "@/lib/business/seed-data";
 import type { StatValue } from "@/lib/business/types";
@@ -966,7 +967,7 @@ export default function Overview({ month }: { month: string }) {
           display: gbp(selMonthGciNet / effMoveIns.value),
           source: "live-payprop",
           note: `${gbp(selMonthGciNet)} commission exc VAT ÷ ${effMoveIns.value} move-ins in ${selLabel} - both from the figures shown above, so they agree by construction.`,
-          asOf: new Date().toISOString().slice(0, 10),
+          asOf: londonToday(),
         }
       : null;
 
@@ -1122,7 +1123,7 @@ export default function Overview({ month }: { month: string }) {
       };
     }
     return {
-      stat: { value: v, source, note, asOf: new Date().toISOString().slice(0, 10) },
+      stat: { value: v, source, note, asOf: londonToday() },
       flag: flagIf(v, susan),
     };
   };
@@ -1295,7 +1296,7 @@ export default function Overview({ month }: { month: string }) {
     value,
     source: "live-teg",
     note,
-    asOf: new Date().toISOString().slice(0, 10),
+    asOf: londonToday(),
   });
   const periodWord = rampKey === "ytd" ? "this year" : `in ${stripMtd(emptyPeriod(rampKey).label)}`;
   const rampNewStarters = liveCohort
@@ -1373,7 +1374,7 @@ export default function Overview({ month }: { month: string }) {
                         ? ` £${Math.round(d.gciByMonth.ytdGross).toLocaleString("en-GB")} including VAT.`
                         : ""
                     }`,
-                    asOf: new Date().toISOString().slice(0, 10),
+                    asOf: londonToday(),
                   }
                 : d.gciByMonth.live
                   ? {
@@ -1547,7 +1548,7 @@ export default function Overview({ month }: { month: string }) {
                 display: String(live.totals.managed),
                 source: "live-rex",
                 note: `Live from REX - ${live.totals.managed} managed (let) properties across every lettings agent, as at today. No baseline: REX keeps no history of the book, and the old one was typed.`,
-                asOf: new Date().toISOString().slice(0, 10),
+                asOf: londonToday(),
               };
               return <Tile key={g.label} label={g.label} stat={stat} />;
             }
@@ -1567,7 +1568,7 @@ export default function Overview({ month }: { month: string }) {
                 display: `£${per.toLocaleString("en-GB")}`,
                 source: "live-payprop",
                 note: `£${Math.round(d.gciByMonth.ytdNet).toLocaleString("en-GB")} commission exc VAT across ${ytdWindowLabel} ÷ ${hist.yoy.moveIns.currYtd} move-ins year to date. No baseline yet: PayProp commission is held from August 2025, so a like-for-like year arrives in 2027.`,
-                asOf: new Date().toISOString().slice(0, 10),
+                asOf: londonToday(),
               };
               return <Tile key={g.label} label={g.label} stat={stat} />;
             }

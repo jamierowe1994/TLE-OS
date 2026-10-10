@@ -5,6 +5,7 @@
 // the sister ads platform's partner API.
 
 import { useEffect, useState } from "react";
+import { londonToday } from "@/lib/london-clock";
 import StatCard from "@/components/business/StatCard";
 import FunnelBar from "@/components/business/charts/FunnelBar";
 import TimescaleSelect from "@/components/business/TimescaleSelect";
@@ -234,7 +235,7 @@ export default function PaidLeadsTab({ month, seed }: { month: string; seed: See
             liveLeads.source === "account"
               ? `Live from Meta - TLE ad account, ${periodWords}.`
               : `Live from Meta - summed across every agent's tagged campaigns, ${periodWords}.`,
-          asOf: new Date().toISOString().slice(0, 10),
+          asOf: londonToday(),
         }
       : pl.leadsGenerated;
   const leadsSub =
@@ -246,7 +247,7 @@ export default function PaidLeadsTab({ month, seed }: { month: string; seed: See
 
   // GHL funnel - live when connected, Susan's 11 Jul snapshot otherwise.
   const ghl = liveLeads?.ghl ?? null;
-  const asOf = new Date().toISOString().slice(0, 10);
+  const asOf = londonToday();
   const ghlNote = ghl
     ? `Live from Go High Level - ${ghl.pipelines.join(" + ")}, ${periodWords}.`
     : "";
