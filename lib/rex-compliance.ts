@@ -1,4 +1,5 @@
 import "server-only";
+import { hasDb } from "@/lib/db";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import { sittingTenantsByProperty } from "@/lib/rex-tenants";
 import { fetchListingBook } from "@/lib/rex-listings";
@@ -173,6 +174,15 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
      so its REX certificates are read like any other. */
   /* Not caught: see activeOsProperties - an empty set is not an answer. */
   const osProps = await activeOsProperties();
+  /* And an empty answer is not one either (Rig run 2, P-011, 10 Oct 2026).
+     If os_properties is ever empty - never imported, or wiped - every home
+     reads as not ours, every count filters to nothing, and the screen says
+     "0 homes we manage... Nothing expires" while REX holds expired gas and
+     electrics. Fail the read instead, so the screen says nothing was checked.
+     (On a laptop with no database the list is empty by design.) */
+  if (hasDb() && osProps.length === 0) {
+    throw new Error("We don't know which homes are ours yet: the managed-homes list is empty. Nothing has been checked.");
+  }
   /* One row per property.
      A home REX has listed twice - re-let, or advertised by two branches -
      arrived twice, and the book carried 664 rows for 520 homes. The screen
