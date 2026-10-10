@@ -35,7 +35,13 @@ export async function GET(req: NextRequest) {
   const month = asked && /^\d{4}-\d{2}$/.test(asked) ? asked : liveMonth();
 
   // Merge admin manual overrides into the sales funnel (manual beats snapshot).
-  const overrides = await getOverrides(month);
+  /* Manual figures are an extra, not the page (Rig run 2, P-013): a failed
+     read of them took the whole overview down with "Couldn't load the
+     business overview". Without them, the figures they would have filled
+     show their dash and the source they need, like any other gap. The
+     Move-ins entry screen still fails loudly - there, an empty answer would
+     look like nothing had been keyed in. */
+  const overrides = await getOverrides(month).catch(() => []);
   const manualFor = (metric: string) => {
     const o = overrides.find(
       (row) => row.scope === "business" && row.metric === metric
