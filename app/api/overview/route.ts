@@ -3,7 +3,8 @@ import { whoIs } from "@/lib/admin";
 import { can } from "@/lib/roles";
 import { getComplianceBook } from "@/lib/compliance-cache";
 import { dueWithin, type CompProperty } from "@/lib/compliance";
-import { getArrears } from "@/lib/business/payprop-income";
+import { getArrears, payPropProblem } from "@/lib/business/payprop-income";
+import { payPropConfigured } from "@/lib/business/payprop";
 import { GET as portfolioGET } from "@/app/api/portfolio/route";
 import { GET as worksGET } from "@/app/api/works-orders/route";
 import { GET as inspectionsGET } from "@/app/api/inspections/route";
@@ -175,7 +176,15 @@ export async function GET(req: NextRequest) {
        tile say so rather than a number they are not meant to have. */
     money
       ? settle(getArrears().then((a) => {
-          if (!a) throw new Error("PayProp isn't connected here.");
+          /* Null is "not read yet" or "PayProp failed", not only "not set up"
+             (Rig run 3, P-022): say which. */
+          if (!a) {
+            throw new Error(
+              !payPropConfigured()
+                ? "PayProp isn't connected here."
+                : (payPropProblem() ?? "Still reading arrears from PayProp. Try again in a minute.")
+            );
+          }
           const owing = a.tenants.filter((t) => !t.tenancyStart || t.tenancyStart <= today);
           return { tenants: owing.length, owed: owing.reduce((n, t) => n + t.owed, 0), largest: a.largest };
         }))

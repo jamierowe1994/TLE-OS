@@ -149,6 +149,10 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
   // PayProp gathers in the background, so poll until it lands rather than
   // sitting on the snapshot for the whole session.
   const [live, setLive] = useState<LiveArrears | null>(null);
+  /* Why the live read is not here, once PayProp has failed or stalled (Rig
+     run 3, P-022). There was no error state: "Fetching live arrears from
+     PayProp..." stayed up for twenty minutes. */
+  const [liveError, setLiveError] = useState<string | null>(null);
   /** Rent collection per month - the honest month-scoped figure on this tab. */
   const [collection, setCollection] = useState<
     Array<{ month: string; rentCollected: number; propertiesPaying: number; tenantsPaying: number; avgPerProperty: number | null; incomplete: boolean }>
@@ -194,14 +198,23 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
           (d: {
             arrears?: LiveArrears | null;
             portfolio?: { totalRentRoll: number } | null;
+            problem?: string | null;
           }) => {
             if (cancelled) return;
-            if (d.arrears) setLive(d.arrears);
+            if (d.arrears) {
+              setLive(d.arrears);
+              setLiveError(null);
+            } else if (d.problem) setLiveError(d.problem);
             if (d.portfolio) setRentRoll(d.portfolio.totalRentRoll);
             if ((!d.arrears || !d.portfolio) && tries++ < 40) setTimeout(ask, 5000);
+            else if (!d.arrears) setLiveError(d.problem || "PayProp has not answered.");
           }
         )
-        .catch(() => {});
+        .catch(() => {
+          if (cancelled) return;
+          if (tries++ < 40) setTimeout(ask, 5000);
+          else setLiveError("We couldn't reach the server for PayProp's arrears. Refresh to try again.");
+        });
     };
     ask();
     return () => {
@@ -289,6 +302,14 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
               and a wrong answer means chasing someone who doesn&rsquo;t owe.
             </span>
           ) : null}{" "}
+          <span className="font-semibold">
+            This view is admin-only - it contains tenant personal data.
+          </span>
+        </div>
+      ) : liveError ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+          <span className="font-semibold">{liveError}</span>{" "}
+          Nothing is shown until PayProp answers - an old arrears figure is worse than a gap.{" "}
           <span className="font-semibold">
             This view is admin-only - it contains tenant personal data.
           </span>
@@ -397,6 +418,8 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
               );
             })}
           </div>
+        ) : isLiveMonth && !live && liveError ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">{liveError}</div>
         ) : isLiveMonth && !live ? (
           <div className="flex items-center gap-2 rounded-2xl border border-line bg-card px-4 py-3 text-[13px] text-muted" aria-busy="true">
             <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-transparent" aria-hidden />

@@ -8,6 +8,7 @@ import {
   getArrears,
   getMoveIns,
   payPropRefreshing,
+  payPropProblem,
   exVat,
 } from "@/lib/business/payprop-income";
 import { getPortfolioBook, portfolioError } from "@/lib/business/payprop-portfolio";
@@ -18,8 +19,9 @@ import { currentMonth } from "@/lib/business/format";
 //
 // GET /api/admin/payprop-live?month=YYYY-MM → { income, arrears }
 //
-// Both halves are best-effort: if PayProp is unreachable the field comes back
-// null and the tab falls back to the snapshot rather than showing nothing.
+// Best-effort: if PayProp is unreachable a field comes back null, with
+// `problem` saying why, and the tab shows that - never an old figure (there is
+// no snapshot to fall back to any more, and nothing here reads one).
 export async function GET(req: NextRequest) {
   if (!(await requireCapability(req, "see:business"))) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
@@ -112,5 +114,8 @@ export async function GET(req: NextRequest) {
     portfolio,
     portfolioError: portfolioError(),
     refreshing: payPropRefreshing(),
+    /* Why a null field is null, once PayProp has failed or stalled (Rig run
+       3, P-022): the tabs said "Loading" for twenty minutes otherwise. */
+    problem: payPropProblem(),
   });
 }

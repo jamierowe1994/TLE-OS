@@ -206,15 +206,29 @@ export default function PortfolioTab({ month }: { month: string; seed: SeedData 
             portfolio?: LiveBook | null;
             portfolioError?: string | null;
             arrears?: { tenants: unknown[] } | null;
+            problem?: string | null;
           }) => {
             if (cancelled) return;
-            if (d.portfolio) setLive(d.portfolio);
+            if (d.portfolio) {
+              setLive(d.portfolio);
+              setLiveError(null);
+            } else if (d.problem || d.portfolioError) {
+              /* Say why now, and keep asking behind it (Rig run 3, P-022):
+                 the tiles said "Loading" for twenty minutes otherwise. */
+              setLiveError(d.problem || d.portfolioError || null);
+            }
             if (d.arrears) setArrearsCount(d.arrears.tenants.length);
             if ((!d.portfolio || !d.arrears) && tries++ < 40) setTimeout(ask, 5000);
-            else if (!d.portfolio) setLiveError(d.portfolioError || "PayProp has not answered.");
+            else if (!d.portfolio) setLiveError(d.problem || d.portfolioError || "PayProp has not answered.");
           }
         )
-        .catch(() => {});
+        /* A failed request used to end the polling in silence, leaving the
+           tiles on "Loading" for good. */
+        .catch(() => {
+          if (cancelled) return;
+          if (tries++ < 40) setTimeout(ask, 5000);
+          else setLiveError("We couldn't reach the server for PayProp's figures. Refresh to try again.");
+        });
     };
     ask();
     return () => {

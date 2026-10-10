@@ -245,6 +245,11 @@ const cache = new Map<string, { at: number; data: unknown }>();
  * or guessing zero — see the `wait` option on cachedAsync.
  */
 const running = new Map<string, Promise<unknown>>();
+/** When each running walk started, and when a walk last failed - so a screen
+ *  can say PayProp has stopped answering rather than "Loading" for ever
+ *  (Rig run 3, P-022). */
+const startedAt = new Map<string, number>();
+let lastFailureAt = 0;
 
 /**
  * Serve what we have and refresh behind the scenes. A month of payments is
@@ -335,6 +340,7 @@ async function cachedAsyncInner<T>(
         // Remember the failure briefly so a poll can't turn one bad walk into
         // forty, but never store it: a cached failure is served as fact.
         failedAt.set(key, Date.now());
+        lastFailureAt = Date.now();
         return null;
       }
       failedAt.delete(key);
@@ -346,11 +352,16 @@ async function cachedAsyncInner<T>(
     })()
       .catch(() => {
         failedAt.set(key, Date.now());
+        lastFailureAt = Date.now();
         return null;
       })
-      .finally(() => running.delete(key));
+      .finally(() => {
+        running.delete(key);
+        startedAt.delete(key);
+      });
 
     running.set(key, walk);
+    startedAt.set(key, Date.now());
   }
 
   // Join the walk rather than start a second one. Every simultaneous caller
@@ -372,6 +383,28 @@ async function cachedAsyncInner<T>(
 /** True when a background walk is in progress, so the UI can say "updating". */
 export function payPropRefreshing(): boolean {
   return running.size > 0;
+}
+
+/** How long a walk may run before the screens say PayProp is not answering.
+ *  A cold year-to-date walk is minutes, not tens of them. */
+const STUCK_MS = 10 * 60 * 1000;
+
+/**
+ * Why figures that should be here are not, in a sentence for the screen - or
+ * null when nothing has gone wrong (Rig run 3, P-022). Read by
+ * /api/business/payprop-live beside the null fields, so a tab can stop
+ * saying "Loading" and say this instead.
+ */
+export function payPropProblem(): string | null {
+  const hhmm = (ms: number) => new Date(ms).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
+  const oldest = Math.min(...[...startedAt.values()], Infinity);
+  if (Number.isFinite(oldest) && Date.now() - oldest > STUCK_MS) {
+    return `PayProp has been reading since ${hhmm(oldest)} and has not answered.`;
+  }
+  if (lastFailureAt && Date.now() - lastFailureAt < 15 * 60 * 1000) {
+    return `PayProp did not answer at ${hhmm(lastFailureAt)}. Trying again.`;
+  }
+  return null;
 }
 
 /**
