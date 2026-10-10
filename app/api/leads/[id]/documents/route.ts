@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
-import { whoIs } from "@/lib/admin";
+import { leadAccess } from "@/lib/lead-access";
 import { hasDb } from "@/lib/db";
 import { addDoc, docsFor, docToRex, updateDoc, type DocRexResult } from "@/lib/lead-documents";
 import { R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
@@ -25,9 +25,10 @@ const TAGS = [
 ];
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const { actor } = await whoIs(req);
-  if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const { id } = await ctx.params;
+  /* Only a lead on your own board (Rig P-006): see lib/lead-access. */
+  const { denied } = await leadAccess(req, id);
+  if (denied) return denied;
   if (!hasDb()) return NextResponse.json({ ok: true, stored: false, docs: [] });
   return NextResponse.json({ ok: true, stored: true, docs: await docsFor(id) });
 }
@@ -42,9 +43,11 @@ async function toRex(
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const { actor, subject } = await whoIs(req);
-  if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const { id } = await ctx.params;
+  /* Only a lead on your own board (Rig P-006): see lib/lead-access. */
+  const { who: access, denied } = await leadAccess(req, id);
+  if (denied) return denied;
+  const { actor, subject } = access;
   if (!hasDb()) {
     return NextResponse.json({ ok: false, error: "No database on this environment, so nothing can be kept." }, { status: 503 });
   }
@@ -105,9 +108,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 }
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const { actor, subject } = await whoIs(req);
-  if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const { id } = await ctx.params;
+  /* Only a lead on your own board (Rig P-006): see lib/lead-access. */
+  const { who: access, denied } = await leadAccess(req, id);
+  if (denied) return denied;
+  const { actor, subject } = access;
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
   const body = (await req.json().catch(() => ({}))) as {
     docId?: string; name?: string; tag?: string; sendToRex?: boolean; contactId?: string | null;

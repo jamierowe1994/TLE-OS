@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { whoIs } from "@/lib/admin";
+import { leadAccess } from "@/lib/lead-access";
 import { hasDb, q } from "@/lib/db";
 import { createTask } from "@/lib/tasks";
 import { londonParts, londonTime } from "@/lib/london-time";
@@ -39,18 +39,21 @@ export const runtime = "nodejs";
 const KINDS: TouchKind[] = ["call", "text", "whatsapp", "email", "visit", "note", "nurture", "rejoin", "lost"];
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const { actor } = await whoIs(req);
-  if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const { id } = await ctx.params;
+  /* Only a lead on your own board (Rig P-006): see lib/lead-access. */
+  const { denied } = await leadAccess(req, id);
+  if (denied) return denied;
   if (!hasDb()) return NextResponse.json({ ok: true, stored: false, touches: [], spine: null, campaign: null });
   const [{ touches, spine }, campaign] = await Promise.all([spineFor(id), campaignOn(id)]);
   return NextResponse.json({ ok: true, stored: true, touches, spine, campaign });
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const { actor, subject } = await whoIs(req);
-  if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const { id } = await ctx.params;
+  /* Only a lead on your own board (Rig P-006): see lib/lead-access. */
+  const { who: access, denied } = await leadAccess(req, id);
+  if (denied) return denied;
+  const { actor, subject } = access;
   if (!hasDb()) {
     return NextResponse.json({ ok: false, error: "No database on this environment, so nothing can be logged." }, { status: 503 });
   }

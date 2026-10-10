@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { whoIs } from "@/lib/admin";
+import { leadAccess } from "@/lib/lead-access";
 import { hasDb, q } from "@/lib/db";
 import { ENQUIRY_VERSION, readEnquiry } from "@/lib/rex-enquiry";
 
@@ -16,9 +16,10 @@ export const dynamic = "force-dynamic";
 type Stored = { enquiryV?: number; enquiryFull?: string; enquiryFields?: Array<[string, string]>; enquirySource?: string | null; receivedAt?: string };
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const { actor } = await whoIs(req);
-  if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const { id } = await ctx.params;
+  /* Only a lead on your own board (Rig P-006): see lib/lead-access. */
+  const { denied } = await leadAccess(req, id);
+  if (denied) return denied;
   if (!id.startsWith("rex-")) return NextResponse.json({ ok: true, enquiry: null });
 
   let stored: Stored | null = null;

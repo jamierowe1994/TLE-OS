@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { whoIs } from "@/lib/admin";
+import { leadAccess } from "@/lib/lead-access";
 import { hasDb, q } from "@/lib/db";
 
 /**
@@ -27,19 +27,22 @@ async function list(leadId: string): Promise<Home[]> {
 }
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const { actor } = await whoIs(req);
-  if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const { id } = await ctx.params;
+  /* Only a lead on your own board (Rig P-006): see lib/lead-access. */
+  const { denied } = await leadAccess(req, id);
+  if (denied) return denied;
   if (!hasDb()) return NextResponse.json({ ok: true, homes: [] });
   return NextResponse.json({ ok: true, homes: await list(id) });
 }
 
 /** Add one or more homes. Adding one already on the list changes nothing. */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const { actor, subject } = await whoIs(req);
-  if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
-  if (!hasDb()) return NextResponse.json({ ok: false, error: "No database here, so this cannot be saved." }, { status: 503 });
   const { id } = await ctx.params;
+  /* Only a lead on your own board (Rig P-006): see lib/lead-access. */
+  const { who: access, denied } = await leadAccess(req, id);
+  if (denied) return denied;
+  const { actor, subject } = access;
+  if (!hasDb()) return NextResponse.json({ ok: false, error: "No database here, so this cannot be saved." }, { status: 503 });
   const body = (await req.json().catch(() => ({}))) as { homes?: Partial<Home>[] };
   const homes = (body.homes ?? []).filter((h) => h && typeof h.id === "string" && h.id.trim()).slice(0, 50);
   if (!homes.length) return NextResponse.json({ ok: false, error: "No home to add." }, { status: 400 });
@@ -57,10 +60,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 }
 
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const { actor } = await whoIs(req);
-  if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
-  if (!hasDb()) return NextResponse.json({ ok: false, error: "No database here." }, { status: 503 });
   const { id } = await ctx.params;
+  /* Only a lead on your own board (Rig P-006): see lib/lead-access. */
+  const { denied } = await leadAccess(req, id);
+  if (denied) return denied;
+  if (!hasDb()) return NextResponse.json({ ok: false, error: "No database here." }, { status: 503 });
   const listing = req.nextUrl.searchParams.get("listing") ?? "";
   await q(`DELETE FROM os_lead_shortlist WHERE lead_id = $1 AND listing_id = $2`, [id, listing]);
   return NextResponse.json({ ok: true, homes: await list(id) });

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { whoIs } from "@/lib/admin";
+import { leadAccess } from "@/lib/lead-access";
 import { uid } from "@/lib/auth";
 import { hasDb, q } from "@/lib/db";
 
@@ -23,18 +23,21 @@ async function list(leadId: string) {
 }
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const { actor } = await whoIs(req);
-  if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const { id } = await ctx.params;
+  /* Only a lead on your own board (Rig P-006): see lib/lead-access. */
+  const { denied } = await leadAccess(req, id);
+  if (denied) return denied;
   if (!hasDb()) return NextResponse.json({ ok: true, homes: [] });
   return NextResponse.json({ ok: true, homes: await list(id) });
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const { actor, subject } = await whoIs(req);
-  if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
-  if (!hasDb()) return NextResponse.json({ ok: false, error: "No database here, so this cannot be saved." }, { status: 503 });
   const { id } = await ctx.params;
+  /* Only a lead on your own board (Rig P-006): see lib/lead-access. */
+  const { who: access, denied } = await leadAccess(req, id);
+  if (denied) return denied;
+  const { actor, subject } = access;
+  if (!hasDb()) return NextResponse.json({ ok: false, error: "No database here, so this cannot be saved." }, { status: 503 });
   const body = (await req.json().catch(() => ({}))) as { address?: string; postcode?: string };
   const address = (body.address ?? "").trim().slice(0, 300);
   if (address.length < 6) return NextResponse.json({ ok: false, error: "Type the address of the home first." }, { status: 400 });
@@ -54,10 +57,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 }
 
 export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const { actor } = await whoIs(req);
-  if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
-  if (!hasDb()) return NextResponse.json({ ok: false, error: "No database here." }, { status: 503 });
   const { id } = await ctx.params;
+  /* Only a lead on your own board (Rig P-006): see lib/lead-access. */
+  const { denied } = await leadAccess(req, id);
+  if (denied) return denied;
+  if (!hasDb()) return NextResponse.json({ ok: false, error: "No database here." }, { status: 503 });
   const home = req.nextUrl.searchParams.get("home") ?? "";
   await q(`DELETE FROM os_lead_properties WHERE lead_id = $1 AND id = $2`, [id, home]);
   return NextResponse.json({ ok: true, homes: await list(id) });
