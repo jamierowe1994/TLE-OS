@@ -40,19 +40,8 @@ export function smsNumber(phone: string | null | undefined): string | null {
   return null;
 }
 
-/**
- * How many texts Twilio will bill this as. Plain characters fit 160 in one,
- * or 153 a part once split. One character outside that set (a curly quote,
- * an emoji, an em dash) turns the whole message into 70 a part - which is why
- * the copy is kept to plain characters.
- */
-const GSM = /^[A-Za-z0-9 \r\n@£$¥èéùìòÇØøÅå_ÆæßÉ!"#%&'()*+,\-./:;<=>?¡ÄÖÑÜ§¿äöñüà]*$/;
-export function smsParts(body: string): { parts: number; plain: boolean } {
-  const plain = GSM.test(body);
-  const one = plain ? 160 : 70;
-  const each = plain ? 153 : 67;
-  return { parts: body.length <= one ? 1 : Math.ceil(body.length / each), plain };
-}
+/** How many texts Twilio will bill this as - one rule, shared with the editor. */
+export { smsParts } from "@/lib/viewing-text-template";
 
 export interface SmsResult {
   sent: boolean;

@@ -6,6 +6,7 @@ import { sendSms, smsConfigured, smsNumber, smsParts } from "@/lib/sms";
 import { firstName, london, userByName } from "@/lib/tenant-email-send";
 import { OFFICE_PHONE, agentPhone } from "@/lib/agent-phone";
 import { allAgents } from "@/lib/rex-agents";
+import { VIEWING_TEXT_PREF, checkTemplate, fillTemplate, tidyTemplate } from "@/lib/viewing-text-template";
 
 /**
  * The viewing reminder text (10 Oct 2026).
@@ -103,7 +104,7 @@ export function viewingText(p: {
 }
 
 /** A tidy address for a text: REX's label without a trailing postcode once it runs long. */
-function addressForText(label: string | null): string {
+export function addressForText(label: string | null): string {
   const a = (label ?? "").replace(/\s+/g, " ").trim();
   if (!a) return "the property";
   if (a.length <= 45) return a;
@@ -140,21 +141,43 @@ async function done(key: string): Promise<boolean> {
  * their profile - 10 Oct 2026), else the office line. REX's diary names the
  * agent, so REX's user list is matched by name when the OS has no account.
  */
-async function agentFor(name: string | null, cache: Map<string, string>): Promise<string> {
+export async function phoneForAgent(name: string, user: { id: string; email: string } | null): Promise<string> {
+  const own = user ? await agentPhone(user.id).catch(() => "") : "";
+  if (own) return own;
+  const agents = await allAgents().catch(() => []);
+  const hit = agents.find((a) => (user && a.email && a.email.toLowerCase() === user.email.toLowerCase()) || a.name.trim().toLowerCase() === name.trim().toLowerCase());
+  return hit?.phone || OFFICE_PHONE;
+}
+
+/**
+ * The agent's own wording from Profile > Custom, or null for the standard
+ * text. Checked again here, not only on save: anything that fails a rule goes
+ * out as the standard text rather than as typed.
+ */
+export async function ownTemplate(userId: string): Promise<string | null> {
+  const rows = await q<{ value: { template?: string } | null }>(`SELECT value FROM os_user_prefs WHERE user_id = $1 AND key = $2`, [userId, VIEWING_TEXT_PREF]).catch(() => []);
+  const t = tidyTemplate(rows[0]?.value?.template ?? "");
+  return t && checkTemplate(t).ok ? t : null;
+}
+
+type AgentInfo = { name: string; phone: string; template: string | null };
+
+async function agentFor(name: string | null, cache: Map<string, AgentInfo>): Promise<AgentInfo> {
   const n = (name ?? "").trim();
-  if (!n) return OFFICE_PHONE;
+  if (!n) return { name: "", phone: OFFICE_PHONE, template: null };
   if (!cache.has(n)) {
     const user = await userByName(n).catch(() => null);
-    const own = user ? await agentPhone(user.id).catch(() => "") : "";
-    let rex = "";
-    if (!own) {
-      const agents = await allAgents().catch(() => []);
-      const hit = agents.find((a) => (user && a.email && a.email.toLowerCase() === user.email.toLowerCase()) || a.name.trim().toLowerCase() === n.toLowerCase());
-      rex = hit?.phone ?? "";
-    }
-    cache.set(n, own || rex || OFFICE_PHONE);
+    cache.set(n, { name: n, phone: await phoneForAgent(n, user), template: user ? await ownTemplate(user.id) : null });
   }
   return cache.get(n)!;
+}
+
+/** The agent's own words when they have some and the viewing is accompanied; the standard text otherwise. */
+export function composeText(p: { firstName: string; time: string; address: string; agent: AgentInfo; unaccompanied: boolean }): string {
+  if (p.agent.template && p.agent.name && !p.unaccompanied) {
+    return fillTemplate(p.agent.template, { firstName: p.firstName, time: p.time, address: p.address, myName: p.agent.name, myPhone: p.agent.phone });
+  }
+  return viewingText({ firstName: p.firstName, time: p.time, address: p.address, agentName: p.agent.name || null, agentPhone: p.agent.phone, unaccompanied: p.unaccompanied });
 }
 
 /**
@@ -184,7 +207,7 @@ export async function runViewingTexts(opts: { dry?: boolean; now?: Date } = {}):
     [now.toISOString(), String(EARLIEST_MIN), String(LATEST_MIN)]
   );
 
-  const phones = new Map<string, string>();
+  const phones = new Map<string, AgentInfo>();
   for (const row of rows) {
     /* Cheap first: if every viewer on it has been texted already, REX need
        not be asked. Keys use the ledger's start time; a moved viewing is
@@ -217,7 +240,7 @@ export async function runViewingTexts(opts: { dry?: boolean; now?: Date } = {}):
       continue;
     }
 
-    const agentPhone = await agentFor(fresh.agent, phones);
+    const agent = await agentFor(fresh.agent, phones);
     const address = addressForText(fresh.listingLabel ?? row.label);
     const unaccompanied = /unaccompanied/i.test(fresh.type ?? row.type ?? "");
     const freshStart = new Date(fresh.startsAt).toISOString();
@@ -226,7 +249,7 @@ export async function runViewingTexts(opts: { dry?: boolean; now?: Date } = {}):
     for (const c of fresh.contacts) {
       const name = c.name && c.name !== "(no name)" ? c.name : "";
       const to = smsNumber(c.phone);
-      const body = viewingText({ firstName: firstName(name), time: timeForText(fresh.startsAt), address, agentName: fresh.agent, agentPhone, unaccompanied });
+      const body = composeText({ firstName: firstName(name), time: timeForText(fresh.startsAt), address, agent, unaccompanied });
       const { parts } = smsParts(body);
       if (!to) {
         run.results.push({ key: `viewing-1h:${row.id}:${c.id}`, viewingId: row.id, to: c.phone ?? "", name, body, parts, state: "skipped", detail: c.phone ? `${c.phone} isn't a mobile number.` : "No phone number on REX." });
@@ -274,12 +297,11 @@ export async function sendTestText(toRaw: string): Promise<{ ok: boolean; to: st
     const v = next[0];
     if (v) {
       const c = (v.contacts ?? [])[0];
-      body = viewingText({
+      body = composeText({
         firstName: firstName(c?.name && c.name !== "(no name)" ? c.name : ""),
         time: timeForText(new Date(v.starts_at).toISOString()),
         address: addressForText(v.label),
-        agentName: v.agent,
-        agentPhone: await agentFor(v.agent, new Map()),
+        agent: await agentFor(v.agent, new Map()),
         unaccompanied: /unaccompanied/i.test(v.type ?? ""),
       });
       from = `the next TLE viewing in the diary (${v.id})`;

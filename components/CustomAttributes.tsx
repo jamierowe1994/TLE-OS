@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Pill } from "@/components/Wire";
 import Segmented from "@/components/Segmented";
+import ViewingTextEditor from "@/components/ViewingTextEditor";
 
 /**
  * Custom attributes — a TAB on the profile, not a page of its own.
@@ -46,7 +47,7 @@ export default function CustomAttributes() {
      overwhelming"). They were always two different jobs - a column you fill in
      yourself, and a question a tenant answers - so they are two views of this
      tab rather than two cards down one page. */
-  const [view, setView] = useState<"attributes" | "passport">("attributes");
+  const [view, setView] = useState<"attributes" | "passport" | "text">("attributes");
   const [entity, setEntity] = useState<string>("leads");
   const [label, setLabel] = useState("");
   const [kind, setKind] = useState<string>("text");
@@ -142,7 +143,7 @@ export default function CustomAttributes() {
   return (
     <div className="max-w-3xl">
       <Segmented
-        className="w-full max-w-md"
+        className="w-full max-w-2xl"
         options={[
           { id: "attributes", label: `Custom attributes${attributeCount ? ` (${attributeCount})` : ""}` },
           {
@@ -158,10 +159,14 @@ export default function CustomAttributes() {
               </>
             ),
           },
+          /* Your own viewing reminder text (10 Oct 2026). */
+          { id: "text", label: "Viewing text" },
         ]}
         value={view}
         onChange={setView}
       />
+
+      {view === "text" && <ViewingTextEditor />}
 
       {view === "attributes" && (
       <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
