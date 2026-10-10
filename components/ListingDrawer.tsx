@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { londonToday } from "@/lib/london-clock";
 import { useSlideOver } from "@/lib/use-slide-over";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -65,6 +65,7 @@ import ListingOffers, { type ListingOffer } from "@/components/listing/ListingOf
 import ListingEnquiries from "@/components/listing/ListingEnquiries";
 import AddToBlock, { type BlockAnchor } from "@/components/viewings/AddToBlock";
 import BookSlot from "@/components/viewings/BookSlot";
+import RecordSidePanel, { type NoteRow, type PanelTab } from "@/components/RecordSidePanel";
 import { apptStartIso } from "@/components/viewings/ChangeViewing";
 
 /**
@@ -167,6 +168,13 @@ const BLANK_TENANT: TenantIn = { name: "", number: "", mobile: "", situation: ""
 
 type Offer = { rent: string; tenants: TenantIn[] };
 
+/** A stored listing note as the side panel shows it. */
+function noteRow(n: { id: string; body: string; author: string; at: string }): NoteRow {
+  const d = new Date(n.at);
+  const when = d.toLocaleString("en-GB", { day: "numeric", month: "short", year: d.getFullYear() === new Date().getFullYear() ? undefined : "numeric", hour: "2-digit", minute: "2-digit" });
+  return { id: n.id, author: n.author || "Somebody", when, text: n.body };
+}
+
 function Card({
   title,
   icon,
@@ -236,6 +244,50 @@ function ListingDrawerBody({
   /* Every way out plays the drawer out first (lib/use-slide-over). */
   const { shown, close: onClose } = useSlideOver(Boolean(listing), closeNow, listing?.id);
   const [tab, setTab] = useState<TabKey>("home");
+  /* The side panel: the landlord's messages, or the listing's notes (10 Oct 2026). */
+  const [panelTab, setPanelTab] = useState<PanelTab | null>(null);
+  const [listingNotes, setListingNotes] = useState<NoteRow[] | null>(null);
+  /* Are some tabs scrolled out of sight? Then the row fades at its right edge
+     so nobody thinks Documents has gone (10 Oct 2026). */
+  const tabRow = useRef<HTMLDivElement>(null);
+  const [tabsHidden, setTabsHidden] = useState(false);
+  const measureTabs = useCallback(() => {
+    const el = tabRow.current;
+    if (el) setTabsHidden(el.scrollWidth - el.scrollLeft - el.clientWidth > 4);
+  }, []);
+  useEffect(() => {
+    const el = tabRow.current;
+    if (!el) return;
+    measureTabs();
+    const ro = new ResizeObserver(measureTabs);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [measureTabs, panelTab, listing?.id]);
+  const notesFor = listing ? String(listing.id) : null;
+  useEffect(() => {
+    if (!notesFor) return;
+    let gone = false;
+    setListingNotes(null);
+    fetch(`/api/listings/${encodeURIComponent(notesFor)}/notes`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; notes?: { id: string; body: string; author: string; at: string }[] }) => {
+        if (!gone) setListingNotes(j.ok ? (j.notes ?? []).map(noteRow) : []);
+      })
+      .catch(() => !gone && setListingNotes([]));
+    return () => { gone = true; };
+  }, [notesFor]);
+  async function addListingNote(body: string): Promise<boolean> {
+    if (!notesFor) return false;
+    const r = await fetch(`/api/listings/${encodeURIComponent(notesFor)}/notes`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ body }),
+    }).catch(() => null);
+    const j = r ? await r.json().catch(() => ({})) : {};
+    if (!r?.ok || !j.ok) return false;
+    setListingNotes((cur) => [noteRow(j.note), ...(cur ?? [])]);
+    return true;
+  }
   const [emailing, setEmailing] = useState(false);
   /* Asked once, read by the header pill and by the Documents tab. */
   const terms = useListingTerms(listing?.id ?? null);
@@ -1013,17 +1065,22 @@ function ListingDrawerBody({
 
       <aside
         data-shown={shown}
-        className="so-panel absolute inset-y-0 right-0 flex overflow-hidden rounded-l-lg w-full flex-col bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] lg:w-[calc(100%-17rem)]"
+        className={`so-panel absolute inset-y-0 right-0 flex overflow-hidden rounded-l-lg w-full flex-col bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] ${panelTab ? "lg:w-[calc(100%-3rem)]" : "lg:w-[calc(100%-17rem)]"}`}
       >
         {/* The whole record scrolls, tabs included (James, 11 Sep): the row
             of buttons is only there at the top, not pinned over the page. The
             street at the foot is pinned instead, and the content keeps room
             above it so nothing is ever hidden behind the houses. */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-10 pt-5">
+        {/* The record and, beside it, the side panel (10 Oct 2026): Notes and
+            the landlord's messages push the record over rather than cover it. */}
+        <div className="relative flex min-h-0 flex-1">
+        <div className="@container min-h-0 min-w-0 flex-1 overflow-y-auto px-6 pb-10 pt-5">
         {/* Close, and the tabs. Previous / Next went (James, 11 Sep): nobody
             steps through the book from inside a record, they close and pick
             the next one. */}
-        <div className="flex shrink-0 flex-wrap items-center gap-2 mb-4">
+        {/* On a phone the tabs take a line of their own under the buttons. */}
+        <div className="mb-4 flex shrink-0 flex-wrap items-center gap-2 sm:flex-nowrap">
+          <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
             onClick={onClose}
@@ -1033,9 +1090,18 @@ function ListingDrawerBody({
             ✕
           </button>
           <SaveChip scope={saves} />
+          </div>
           {/* Swipeable on a phone, but no scrollbar: with Marketing picked the row
-              overflowed by a pixel and drew one under the tabs (6 Oct 2026). */}
-          <div className="ml-auto flex min-w-0 max-w-full gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              overflowed by a pixel and drew one under the tabs (6 Oct 2026).
+              Centred, like the tenant and landlord files (James, 10 Oct 2026). */}
+          <div
+            ref={tabRow}
+            onScroll={measureTabs}
+            className={`order-last min-w-0 basis-full overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:order-none sm:flex-1 sm:basis-auto ${
+              tabsHidden ? "[mask-image:linear-gradient(to_right,black_calc(100%-48px),transparent)]" : ""
+            }`}
+          >
+          <div className="mx-auto flex w-max gap-1.5">
             {TABS.map((t) => {
               const count =
                 t.key === "enquiries"
@@ -1069,7 +1135,7 @@ function ListingDrawerBody({
                   data-steve={`listing.tab.${t.key}`}
                   type="button"
                   onClick={() => setTab(t.key)}
-                  className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-[12.5px] font-semibold transition-colors ${
+                  className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-[12.5px] font-semibold transition-colors ${
                     on ? "bg-[var(--brown)] text-white" : "border border-line/60 bg-white text-muted hover:border-ink/40 hover:text-ink"
                   }`}
                 >
@@ -1080,6 +1146,38 @@ function ListingDrawerBody({
                   )}
                   {needs && !on && (
                     <span aria-label="Needs attention" className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-accent" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          </div>
+          {/* The side panel (10 Oct 2026): the landlord's messages and the
+              listing's notes, pinned right so a long row of tabs never hides
+              them. Pressing the open one closes it. */}
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:ml-0 sm:gap-2 sm:border-l sm:border-line/70 sm:pl-2">
+            {([
+              { key: "messages", label: "View activity", short: "Activity", icon: "message" },
+              { key: "notes", label: "Notes", short: "Notes", icon: "note" },
+            ] as const).map((b) => {
+              const on = panelTab === b.key;
+              return (
+                <button
+                  key={b.key}
+                  type="button"
+                  data-steve={`listing.panel.${b.key}`}
+                  onClick={() => setPanelTab(on ? null : b.key)}
+                  title={b.label}
+                  className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-2 text-[12.5px] font-semibold transition-colors sm:px-4 ${
+                    on ? "bg-[var(--brown)] text-white" : "border border-line/60 bg-white text-muted hover:border-ink/40 hover:text-ink"
+                  }`}
+                >
+                  <DoodleIcon name={b.icon} size={13} className={on ? "text-white" : "text-accent-dark"} />
+                  <span className="hidden 2xl:inline">{b.label}</span>
+                  <span className="hidden sm:inline 2xl:hidden">{b.short}</span>
+                  <span className="sr-only sm:hidden">{b.label}</span>
+                  {b.key === "notes" && (listingNotes?.length ?? 0) > 0 && (
+                    <span className={`figures rounded-full px-1.5 text-[10.5px] ${on ? "bg-white/20 text-white" : "bg-page text-muted"}`}>{listingNotes!.length}</span>
                   )}
                 </button>
               );
@@ -1097,7 +1195,9 @@ function ListingDrawerBody({
           <div className="relative overflow-hidden rounded-[22px] border border-line/50" style={{ background: SAGE_WASH }}>
             <Doodles tone="sage" />
             <div className="relative p-5">
-            <div className="grid grid-cols-[minmax(0,1fr)] gap-5 md:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)_320px]">
+            {/* Columns by the record's own width, not the window's: with the
+                side panel open the record is narrower than the screen says. */}
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-5 @[44rem]:grid-cols-[280px_minmax(0,1fr)] @[56rem]:grid-cols-[300px_minmax(0,1fr)_320px]">
               {/* The photograph: from the address line down to the foot of the
                   card, the exact height of what is beside it, cropped to fit. */}
               <div className="flex min-w-0 flex-col">
@@ -2007,6 +2107,29 @@ function ListingDrawerBody({
 
           </div>
 
+        </div>
+        <div
+          className={`absolute inset-0 z-10 overflow-hidden border-l border-line/70 bg-card transition-[width,opacity] duration-300 ease-out lg:static lg:z-auto lg:shrink-0 ${
+            panelTab ? "opacity-100 lg:w-[420px] xl:w-[460px]" : "pointer-events-none opacity-0 lg:w-0"
+          }`}
+          aria-hidden={!panelTab}
+        >
+          {panelTab && (
+            <div className="h-full lg:w-[420px] xl:w-[460px]">
+              <RecordSidePanel
+                name={landlord.status === "known" && landlord.landlord.name ? landlord.landlord.name.split(" ")[0] : listing.name}
+                tab={panelTab}
+                onTab={setPanelTab}
+                onClose={() => setPanelTab(null)}
+                conversationUrl={`/api/listings/${encodeURIComponent(String(listing.id))}/conversation`}
+                notes={listingNotes}
+                onAddNote={addListingNote}
+                notePlaceholder="Add a note about this listing - the landlord, the keys, anything to remember…"
+                noteSaid={{ ok: true, text: "Notes stay in the OS, for the whole team." }}
+              />
+            </div>
+          )}
+        </div>
         </div>
 
         {/* The street, pinned to the foot of the drawer whatever is scrolled.

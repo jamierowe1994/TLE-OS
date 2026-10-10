@@ -24,7 +24,6 @@ import SignaturePanel, { type Signer } from "@/components/SignaturePanel";
 import ViewingBooker from "@/components/ViewingBooker";
 import AddToBlock, { type BlockAnchor } from "@/components/viewings/AddToBlock";
 import PassportAnswers from "@/components/passport/PassportAnswers";
-import MailThread from "@/components/MailThread";
 import TenantPropertySearch from "@/components/TenantPropertySearch";
 import LogTouch, { type LogMode } from "@/components/LogTouch";
 import type { PersonViewing } from "@/lib/person-viewings";
@@ -54,6 +53,7 @@ import { saveLabel, useCaseState } from "@/lib/case-state";
 import { isStalled, NURTURE_BRANCH, startingStep, TENANT_TRACK, trackFor } from "@/lib/journey";
 import { fetchMe } from "@/lib/me";
 import { WhatsAppButton } from "@/components/WhatsAppQr";
+import RecordSidePanel, { type NoteRow, type PanelTab } from "@/components/RecordSidePanel";
 import type { PreOnBooking } from "@/lib/pre-send-time";
 
 /**
@@ -887,7 +887,8 @@ function LeadDrawerBody({
   }, [enquiryLeadId]);
 
   /* The pop-outs: activity, the property finder, the more menu, removal. */
-  const [activityOpen, setActivityOpen] = useState(false);
+  /* The side panel: Messages, Notes or Activity, or shut (10 Oct 2026). */
+  const [panelTab, setPanelTab] = useState<PanelTab | null>(null);
   const [enquiryOpen, setEnquiryOpen] = useState(false);
   /* How tall the notes box is: whatever they last dragged it to, on this
      machine, for every lead. */
@@ -918,7 +919,7 @@ function LeadDrawerBody({
   const [finderBusy, setFinderBusy] = useState(false);
   const [finderMsg, setFinderMsg] = useState<string | null>(null);
   useEffect(() => {
-    setActivityOpen(false); setRemoving(false); setFinderOpen(false); setEnquiryOpen(false); setPassportFlow(null);
+    setRemoving(false); setFinderOpen(false); setEnquiryOpen(false); setPassportFlow(null);
     setFinderOrigin(null); setFinderLabel(""); setFinderMsg(null);
   }, [enquiryLeadId]);
 
@@ -1612,6 +1613,29 @@ function LeadDrawerBody({
       .map((t) => ({ id: `touch-${t.id}`, author: t.byName, when: whenAgo(t.at), text: t.body, inRex: Boolean(t.rexNoteId) })),
     ...notes,
   ];
+
+  /* ── The side panel's three parts (10 Oct 2026). ── */
+  const panelNotes: NoteRow[] = noteRows.map((n) => ({ id: n.id, author: n.author, when: n.when, text: n.text, badge: n.inRex ? "In REX" : null }));
+  async function addNoteText(text: string): Promise<boolean> {
+    setNoteRex(null);
+    const j = (await logTouch({
+      kind: "note",
+      body: text,
+      lead: { name: lead?.name ?? "", email: contact.email || lead?.email || "", contactId: lead?.contactId ?? null },
+    }).catch(() => null)) as { ok?: boolean; rex?: { ok: boolean; why?: string } | null } | null;
+    if (!j?.ok) return false;
+    if (j.rex) setNoteRex(j.rex.ok ? { ok: true, text: "Saved, and in REX on their contact too." } : { ok: false, text: j.rex.why ?? "Saved here, but not in REX." });
+    return true;
+  }
+  const convEmail = (contact.email || lead?.email || "").trim();
+  const convPhone = (contact.phone || lead?.phone || "").trim();
+  const conversationUrl =
+    lead && (convEmail || convPhone)
+      ? `/api/leads/${encodeURIComponent(lead.id)}/conversation?${new URLSearchParams([
+          ...(convEmail ? [["email", convEmail]] : []),
+          ...(convPhone ? [["phone", convPhone]] : []),
+        ]).toString()}`
+      : null;
 
   /* The tags, shared by the tenant and landlord layouts. */
   const tagsRow = (
@@ -2547,10 +2571,30 @@ function LeadDrawerBody({
                         </li>
                       ))}
                     </ul>
-                    {/* Emails in and out, read live from the agent's own Outlook
-                        (15 Sep 2026) - the reply to a confirmation belongs on the lead. */}
-                    <MailThread email={contact.email || lead.email} firstName={(lead.name || "them").split(" ")[0]} />
                   </>
+  );
+
+  /* The Activity tab: the log, and what the old pop-out's foot held. */
+  const activityTab = (
+    <>
+      {activityPanel}
+      <div className="mt-5 flex items-center justify-between gap-3 border-t border-line/70 pt-3 text-[11.5px]">
+        <button
+          type="button"
+          onClick={() => void navigator.clipboard?.writeText(`${window.location.origin}/leads?open=${encodeURIComponent(lead.id)}`)}
+          className="text-muted transition-colors hover:text-ink"
+        >
+          Copy a link to this lead
+        </button>
+        <button
+          type="button"
+          onClick={() => { setPanelTab(null); setRemoveMsg(null); setRemoving(true); }}
+          className="font-semibold text-accent-dark transition-colors hover:underline"
+        >
+          Remove this lead…
+        </button>
+      </div>
+    </>
   );
 
   async function removeLead() {
@@ -2603,7 +2647,7 @@ function LeadDrawerBody({
       <aside
         data-shown={shown}
         className={`so-panel absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden rounded-l-2xl bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] ${
-          wide ? "lg:w-[calc(100%-9rem)]" : "lg:w-[calc(100%-17rem)]"
+          panelTab ? "lg:w-[calc(100%-3rem)]" : wide ? "lg:w-[calc(100%-9rem)]" : "lg:w-[calc(100%-17rem)]"
         }`}
       >
         {/* ── Sheet chrome ── */}
@@ -2651,16 +2695,41 @@ function LeadDrawerBody({
                 </button>
               );
             })}
+            {/* The side panel (10 Oct 2026): what has been said with them, and
+                the notes on the file. Pressing the open one closes it. */}
+            <span aria-hidden className="mx-1 h-6 w-px bg-line" />
+            {([
+              { key: "messages", label: "View activity", icon: "message" },
+              { key: "notes", label: "Notes", icon: "note" },
+            ] as const).map((b) => {
+              const active = panelTab === b.key || (b.key === "messages" && panelTab === "activity");
+              return (
+                <button
+                  key={b.key}
+                  type="button"
+                  data-steve={`lead.panel.${b.key}`}
+                  onClick={() => setPanelTab(active ? null : b.key)}
+                  className={`flex items-center gap-2 rounded-full border px-4 py-2 text-[12px] font-semibold transition-colors ${
+                    active ? "border-accent-dark bg-accent-dark text-white" : "border-accent-dark/50 bg-white text-accent-dark hover:bg-accent-soft"
+                  }`}
+                >
+                  <DoodleIcon name={b.icon} size={13} />
+                  {b.label}
+                  {b.key === "notes" && noteRows.length > 0 && <span className="figures ml-0.5 text-[10.5px] opacity-70">{noteRows.length}</span>}
+                </button>
+              );
+            })}
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Phones: the two side-panel buttons live here, the centre row is hidden. */}
             <button
               type="button"
-              onClick={() => setActivityOpen(true)}
-              className="hidden items-center gap-2 rounded-full border border-line/80 px-4 py-2 text-[12px] text-muted transition-colors hover:text-ink md:flex"
+              onClick={() => setPanelTab(panelTab ? null : "messages")}
+              className="flex items-center gap-2 rounded-full border border-accent-dark/50 bg-white px-3.5 py-2 text-[12px] font-semibold text-accent-dark sm:hidden"
             >
-              <DoodleIcon name="list" size={13} />
-              View activity
+              <DoodleIcon name="message" size={13} />
+              Activity
             </button>
             {isTenant && (
               <button
@@ -2690,7 +2759,11 @@ function LeadDrawerBody({
         {/* Scrolls itself, and the scroll stops here (11 Sep 2026): it was
             overflow-hidden, so a tenant enquiry taller than the window could
             not be read to the bottom and the wheel scrolled the page behind. */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-6 pb-4 pt-4">
+        {/* The record and, beside it, the side panel (10 Oct 2026): opening
+            Messages or Notes widens the sheet and squeezes the record over to
+            make room, rather than covering it. On a phone it covers. */}
+        <div className="relative flex min-h-0 flex-1">
+        <div className="@container flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-contain px-6 pb-4 pt-4">
           {/* ── The person. One box: who they are, how to reach them, the
               property they rang about, and its photo — with tags at the foot,
               because tags describe the person, not the process. No avatar:
@@ -2712,9 +2785,11 @@ function LeadDrawerBody({
                     src="/brand/art/lead-house.webp"
                     alt=""
                     aria-hidden
-                    className="pointer-events-none absolute bottom-[-64px] right-[300px] hidden w-[620px] max-w-none opacity-[0.6] xl:block"
+                    className="pointer-events-none absolute bottom-[-64px] right-[300px] hidden w-[620px] max-w-none opacity-[0.6] @[58rem]:block"
                   />
-                  <div className="relative grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_200px_300px]">
+                  {/* Columns by the record's own width (10 Oct 2026): with the side
+                      panel open the record is narrower than the window says. */}
+                  <div className="relative grid gap-6 p-6 @[44rem]:grid-cols-[minmax(0,1fr)_300px] @[58rem]:grid-cols-[minmax(0,1fr)_200px_300px]">
                     <div className="min-w-0 pb-1">
                       <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">
                         Tenant enquiry · step {Math.min(step, track.length - 1) + 1} of {track.length}
@@ -3455,38 +3530,31 @@ function LeadDrawerBody({
             </div>
           </div>
         </div>
-      </aside>
-
-      {/* ── Activity: everything that has happened with this person. ── */}
-      {activityOpen && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
-          <button type="button" aria-label="Close" onClick={() => setActivityOpen(false)} className="absolute inset-0 cursor-default bg-ink/45" />
-          <div className="fade-up relative flex max-h-[84vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
-            <div className="flex items-center justify-between gap-3 border-b border-line/70 px-6 py-4">
-              <h2 className="text-[19px]">Activity with {lead.name.split(" ")[0]}</h2>
-              <button type="button" onClick={() => setActivityOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-full border border-line/80 text-[12px] text-muted hover:text-ink">✕</button>
+        <div
+          className={`absolute inset-0 z-10 overflow-hidden border-l border-line/70 bg-card transition-[width,opacity] duration-300 ease-out lg:static lg:z-auto lg:shrink-0 ${
+            panelTab ? "opacity-100 lg:w-[440px] xl:w-[480px]" : "pointer-events-none opacity-0 lg:w-0"
+          }`}
+          aria-hidden={!panelTab}
+        >
+          {panelTab && (
+            <div className="h-full lg:w-[440px] xl:w-[480px]">
+              <RecordSidePanel
+                name={(lead.name || "them").split(" ")[0]}
+                tab={panelTab}
+                onTab={setPanelTab}
+                onClose={() => setPanelTab(null)}
+                conversationUrl={conversationUrl}
+                noConversation={`No email or mobile on ${(lead.name || "their").split(" ")[0]}'s record yet, so there's nothing to show.`}
+                notes={panelNotes}
+                onAddNote={addNoteText}
+                noteSaid={noteRex}
+                activity={activityTab}
+              />
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">{activityPanel}</div>
-            {/* What the ⋯ menu used to hold (gone, 11 Sep 2026). */}
-            <div className="flex items-center justify-between gap-3 border-t border-line/70 px-6 py-3 text-[11.5px]">
-              <button
-                type="button"
-                onClick={() => void navigator.clipboard?.writeText(`${window.location.origin}/leads?open=${encodeURIComponent(lead.id)}`)}
-                className="text-muted transition-colors hover:text-ink"
-              >
-                Copy a link to this lead
-              </button>
-              <button
-                type="button"
-                onClick={() => { setActivityOpen(false); setRemoveMsg(null); setRemoving(true); }}
-                className="font-semibold text-accent-dark transition-colors hover:underline"
-              >
-                Remove this lead…
-              </button>
-            </div>
-          </div>
+          )}
         </div>
-      )}
+        </div>
+      </aside>
 
       {/* ── Their enquiry in full. ── */}
       {enquiryOpen && (
