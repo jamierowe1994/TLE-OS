@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { OPEN_SEARCH } from "@/components/SearchPalette";
 import LineIcon from "@/components/LineIcon";
 import Wordmark from "@/components/Wordmark";
 import { warmRoute } from "@/lib/route-warm";
@@ -171,14 +172,9 @@ export default function LaunchNav({
   const home = front.filter((i) => i.href === "/dashboard");
   const lettings = front.filter((i) => i.href !== "/dashboard" && i.href !== "/showroom");
 
-  /* ⌘K / Ctrl+K: the page's own search, the one search in the OS. */
-  const focusSearch = () => {
-    const input = document.querySelector<HTMLInputElement>("[data-page-global-search] input, [data-page-toprow] input");
-    if (input) {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      input.focus();
-    }
-  };
+  /* Search, or ⌘K / Ctrl+K: Search for anything (components/SearchPalette,
+     10 Oct 2026) - the one search in the OS, from every screen. */
+  const focusSearch = () => window.dispatchEvent(new Event(OPEN_SEARCH));
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {

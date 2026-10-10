@@ -74,6 +74,9 @@ export default function Dashboard() {
   return (
     <>
       <PageHeader
+        /* No search bar here (James, 10 Oct 2026): Search in the sidebar opens
+           Search for anything, from every screen. */
+        search={false}
         title={greeting(name)}
         blurb="Here's what's happening with your lettings business today."
         /* Nothing sits below the line - which is what the fall needs. Anything
