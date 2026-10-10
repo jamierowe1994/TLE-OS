@@ -50,11 +50,16 @@ export async function GET(req: NextRequest) {
   // Without REX the sample book still exercises every code path, which is what
   // makes this developable. Flagged as not live so nobody quotes the numbers.
   if (!rexConfigured()) {
+    /* Live: never a stand-in (Rig run 2, P-018). The sample is for a laptop
+       with no REX; on the real site a missing connection is an error. */
+    if (process.env.NODE_ENV === "production") {
+      return NextResponse.json({ ok: false, live: false, error: "REX isn't connected here, so there is no compliance book to track.", reason: "REX isn't connected here, so there is no compliance book to track." }, { status: 503 });
+    }
     const tracker = buildTracker(COMP_BOOK);
     return NextResponse.json({
       ok: true,
       live: false,
-      reason: "REX isn't connected here — the sample book is standing in.",
+      reason: "REX isn't connected here - the sample book is standing in.",
       ...tracker,
       queue: buildQueue(tracker),
     });

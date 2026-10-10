@@ -178,6 +178,11 @@ async function ledgerBook(rexUserId: string | null): Promise<LeadBook | null> {
 
 export async function GET(req: NextRequest) {
   if (!rexConfigured()) {
+    /* Live: never a stand-in (Rig run 2, P-018). The sample is for a laptop
+       with no REX; on the real site a missing connection is an error. */
+    if (process.env.NODE_ENV === "production") {
+      return NextResponse.json({ ok: false, live: false, error: "REX isn't connected here, so there are no leads to show.", reason: "REX isn't connected here, so there are no leads to show." }, { status: 503 });
+    }
     return NextResponse.json({
       ok: true,
       live: false,

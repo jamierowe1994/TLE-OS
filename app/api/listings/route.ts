@@ -42,6 +42,11 @@ export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   if (!rexConfigured()) {
+    /* Live: never a stand-in (Rig run 2, P-018). The sample is for a laptop
+       with no REX; on the real site a missing connection is an error. */
+    if (process.env.NODE_ENV === "production") {
+      return NextResponse.json({ ok: false, live: false, error: "The listings system isn't connected here, so there are no listings to show.", reason: "The listings system isn't connected here, so there are no listings to show." }, { status: 503 });
+    }
     return NextResponse.json({
       ok: true,
       live: false,
