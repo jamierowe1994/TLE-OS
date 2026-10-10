@@ -71,6 +71,7 @@ const all = (ids: string[], level: AreaLevel) => Object.fromEntries(ids.map((id)
 const OUTWARD_OFF_IN_1 = [
   "customer_email", "tenant_reminders", "campaign_sending", "certificate_share",
   "handover_live", "propoly_documents", "rex_contact_create", "rex_property_create",
+  "viewing_texts",
 ];
 
 export interface PhaseDef {

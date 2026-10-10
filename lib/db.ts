@@ -1397,6 +1397,36 @@ CREATE TABLE IF NOT EXISTS os_tenant_email_log (
 ALTER TABLE os_tenant_email_log ADD COLUMN IF NOT EXISTS meta JSONB;
 CREATE INDEX IF NOT EXISTS os_tenant_email_log_email_idx ON os_tenant_email_log (email_id, sent_at);
 
+-- Every text the OS sends (lib/sms, lib/viewing-texts, 10 Oct 2026). The key
+-- is what makes a send happen once: "viewing-1h:<viewing id>:<starts at>:<number>",
+-- so a viewing moved to another time is reminded about afresh. Outcome
+-- 'claimed' is a send in flight; anything else is settled.
+CREATE TABLE IF NOT EXISTS os_sms_log (
+  key         TEXT PRIMARY KEY,
+  kind        TEXT NOT NULL,
+  viewing_id  TEXT,
+  to_number   TEXT NOT NULL,
+  to_name     TEXT,
+  agent       TEXT,
+  body        TEXT NOT NULL,
+  outcome     TEXT NOT NULL,
+  detail      TEXT,
+  twilio_sid  TEXT,
+  sent_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_sms_log_number_idx ON os_sms_log (to_number, sent_at DESC);
+-- Texts back to our number (app/api/sms/inbound), with the text of ours they
+-- most likely answer and who was told.
+CREATE TABLE IF NOT EXISTS os_sms_inbound (
+  sid          TEXT PRIMARY KEY,
+  from_number  TEXT NOT NULL,
+  body         TEXT NOT NULL,
+  reply_to     TEXT,
+  viewing_id   TEXT,
+  told         TEXT,
+  received_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- A tenant's own feedback on a viewing (16 Sep 2026). One row per applicant
 -- per viewing, minted when How Was It? is sent; the token in the email IS the
 -- sign-in, the way the passport works. Kept apart from os_viewing_feedback,

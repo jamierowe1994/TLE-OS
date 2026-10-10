@@ -214,6 +214,18 @@ export const SWITCHES: Switch[] = [
     legacyOn: "on",
   },
   {
+    /* Viewing reminder texts (10 Oct 2026): lib/viewing-texts, through
+       Twilio. Its own switch rather than riding on the tenant emails - a
+       text lands on somebody's phone, and it costs money per message. */
+    key: "viewing_texts",
+    label: "Viewing reminder texts",
+    what: "Texts each viewer about an hour before a TLE viewing, from the TLE mobile number: the time, the address, who will meet them and the agent's phone. Checked with REX just before it goes, so a cancelled or moved viewing is never texted. Each viewing is texted once; replies are emailed to the agent.",
+    who: "TENANTS who have booked a viewing and have a mobile number on REX. About 4p a text (8p if the address is long).",
+    confirm: "TEXT VIEWERS",
+    legacyEnv: "VIEWING_TEXTS",
+    legacyOn: "on",
+  },
+  {
     /**
      * Creating a PROPERTY in REX — the first time this OS would bring a record
      * into existence in the live system six businesses share, rather than

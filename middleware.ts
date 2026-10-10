@@ -470,6 +470,11 @@ const MACHINE_ROUTES = [
   "/api/bugs/bot",                    // the bug bot: takes bugs, records its fixes (cron key)
   "/api/landlord/property-answers/chase", // signed but questions unfinished: 2, 5, 9 days
   "/api/viewings/sweep",              // the viewings ledger, nightly
+  "/api/viewings/texts/run",          // the hour-before viewing text, every five minutes (cron key)
+  "/api/viewings/texts/test",         // one test text to a typed number (owner or cron key)
+  /* Twilio POSTs a text back to the TLE number here. 503 with no
+     TWILIO_AUTH_TOKEN, 401 on a signature that does not check out. */
+  "/api/sms/inbound",
   "/api/maintenance/snapshot",        // the maintenance board's figures, daily
   "/api/radar/run",                   // Landlord Radar: sweep the patch, rescore, digest
   "/api/bond/company-sync",           // Bond: read the Land Registry company files, monthly

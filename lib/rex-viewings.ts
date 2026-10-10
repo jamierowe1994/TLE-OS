@@ -186,6 +186,22 @@ export async function fetchViewingsFor(listingId: string, propertyId: string | n
   return [...seen.values()].sort((a, b) => b.startsAt.localeCompare(a.startsAt));
 }
 
+/**
+ * One viewing as REX has it right now (10 Oct 2026), for the reminder text:
+ * os_viewings only hears of a cancellation or a new time on the four-hourly
+ * sweep, and a text about a viewing that is off is worse than no text. The
+ * fresh copy is written back, so the ledger learns what we learned. Null when
+ * REX did not answer - the caller waits for the next run rather than guess.
+ */
+export async function readViewing(rexEventId: string): Promise<Viewing | null> {
+  if (!rexConfigured()) return null;
+  const res = await rexCall("CalendarEvents", "read", { id: rexEventId }).catch(() => null);
+  if (!res?.ok || !res.result) return null;
+  const v = toViewing(res.result as RexEvent);
+  if (v) await recordViewings([v]).catch(() => undefined);
+  return v;
+}
+
 /** Kept for good, then the viewers who are not yet leads become leads. */
 export async function recordViewings(incoming: Viewing[]): Promise<void> {
   if (!hasDb() || !incoming.length) return;
