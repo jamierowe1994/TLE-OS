@@ -1,4 +1,5 @@
 import "server-only";
+import { londonToday } from "@/lib/london-clock";
 import { hasDb } from "@/lib/db";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import { sittingTenantsByProperty } from "@/lib/rex-tenants";
@@ -108,9 +109,16 @@ function daysUntil(date: string | null | undefined): number | null {
      window the intake refuses, so nothing can be filed the tracker then
      cannot read. It counts as no valid date. */
   if (then < MIN_DATE || then > MAX_DATE) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return Math.round((then - today.getTime()) / 86400000);
+  /* Whole UK calendar days (Rig run 4, P-035): it counted from the server's
+     midnight, which on Railway is UTC, so a book built between midnight and
+     1am in summer called yesterday's expiry "0 days". */
+  return ukDayNumber(date) - ukDayNumber(londonToday());
+}
+
+/** A "YYYY-MM-DD" as a whole day count, for subtracting one calendar date from another. */
+export function ukDayNumber(day: string): number {
+  const [y, m, d] = day.slice(0, 10).split("-").map(Number);
+  return Math.round(Date.UTC(y, m - 1, d) / 86400000);
 }
 
 async function inBatches<T, R>(items: T[], size: number, fn: (item: T) => Promise<R>): Promise<R[]> {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
+import { ukDaysFromToday } from "@/lib/london-clock";
 import { useEffect, useState } from "react";
 import MatchFlow, { type MatchItem, type MatchSubject } from "../flow";
 
@@ -28,7 +29,7 @@ const PER_PRESS = 50;
 
 function ago(iso: string | null): string {
   if (!iso) return "";
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 864e5);
+  const days = -ukDaysFromToday(iso); // UK calendar days (P-084)
   return days <= 0 ? "today" : days === 1 ? "yesterday" : days < 14 ? `${days} days ago` : `${Math.round(days / 7)} weeks ago`;
 }
 

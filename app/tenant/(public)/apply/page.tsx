@@ -39,7 +39,9 @@ type Home = { id: number; property: string; locality: string; askingPcm: number;
  *  /tenant/apply?listing=<id>, copied or sent from the listing (1 Oct 2026) -
  *  reads the real home, and the application is filed against it. */
 const SAMPLE: Home = {
-  id: 828057,
+  /* Not a REX id (Rig run 4, P-086): 828057 was a real published home in
+     Teignmouth, and the sample posted its application against it. */
+  id: 0,
   property: "Flat 2, Mercer Street",
   locality: "Manchester M4",
   askingPcm: 995,
@@ -225,12 +227,21 @@ export default function Apply() {
 
   async function submit() {
     setProblems([]);
+    /* The sample never files anything (Rig run 4, P-086, 10 Oct 2026). It
+       posted to the staff applications route, which creates a real REX
+       application - against a real home, under whoever was signed in - and a
+       visitor who was not signed in filled the whole form only to be told
+       to sign in. */
+    if (!live) {
+      setProblems(["This is the sample form, so nothing was sent. To apply for a home, use the link from that home's listing."]);
+      return;
+    }
     setSending(true);
     try {
       /* A listing's own link files through the public route (no staff
          sign-in, and no term: tenancies are rolling). The sample keeps the
          staff route it always had. */
-      const res = await fetch(live ? "/api/tenant/apply" : "/api/applications", {
+      const res = await fetch("/api/tenant/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -239,7 +250,6 @@ export default function Apply() {
           offerAmount: offerNum,
           startDate,
           ...(asOffer ? { via: "offer-link" } : {}),
-          ...(live ? {} : { agreementMonths: months }),
           occupants,
           dependents,
           hasPets: pets === true,

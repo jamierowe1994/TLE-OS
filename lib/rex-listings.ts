@@ -1,4 +1,5 @@
 import "server-only";
+import { ukDaysFromToday } from "@/lib/london-clock";
 import { rexCall, rexConfigured, RexError, rexRows } from "@/lib/rex";
 import { unitLine } from "@/lib/address-parse";
 
@@ -335,7 +336,9 @@ export function toListing(l: RexListing): OsListing {
     availableFrom: l.available_from_date ?? null,
     epcExpiry: l.epc_expiry_date ?? null,
     epcRating: l.epc_rating ?? null,
-    daysOnMarket: published ? Math.floor((Date.now() / 1000 - published) / 86400) : null,
+    /* UK calendar days since it went live, so two homes published the same
+       day agree (Rig run 4, P-084: 29 and 28 for the same day). */
+    daysOnMarket: published ? -ukDaysFromToday(new Date(published * 1000).toISOString()) : null,
     publishedAt: published ? new Date(published * 1000).toISOString().slice(0, 10) : null,
     createdAt: isoDay(num(l.system_ctime)),
     listingState: l.system_listing_state ?? null,

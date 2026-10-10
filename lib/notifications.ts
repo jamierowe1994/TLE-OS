@@ -1,4 +1,5 @@
 import "server-only";
+import { ukDaysFromToday } from "@/lib/london-clock";
 import { hasDb, q } from "@/lib/db";
 import { can } from "@/lib/roles";
 import type { OsUser } from "@/lib/users";
@@ -204,7 +205,9 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
     });
   }
   for (const c of rtrDue) {
-    const days = Math.round((new Date(`${c.followUpOn}T00:00:00`).getTime() - Date.now()) / 86_400_000);
+    /* UK calendar days (Rig run 4, P-066): rounding milliseconds said "was due
+       1 day ago" every afternoon of the day it was due. */
+    const days = ukDaysFromToday(String(c.followUpOn).slice(0, 10));
     out.push({
       id: `rtr:${c.id}`,
       kind: "reminder",
@@ -216,8 +219,9 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
     });
   }
   for (const x of prepDue) {
-    const due = new Date(x.due_on as string);
-    const days = Math.round((due.getTime() - Date.now()) / 86_400_000);
+    /* A DATE column: pg hands back midnight on that day, so its ISO date is the day itself. */
+    const dueDay = typeof x.due_on === "string" ? x.due_on.slice(0, 10) : new Date(x.due_on as unknown as string).toISOString().slice(0, 10);
+    const days = ukDaysFromToday(dueDay);
     out.push({
       id: `prep:${x.id}`,
       kind: "reminder",

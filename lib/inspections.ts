@@ -1,4 +1,5 @@
 import { currentLets } from "@/lib/current-lets";
+import { londonDay } from "@/lib/london-clock";
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
@@ -735,9 +736,16 @@ export interface DueVisit {
   osPropertyId?: string | null;
 }
 
+/* Clamped to the target month's last day (Rig run 4, P-042, 10 Oct 2026):
+   setMonth overflowed, so a visit on 31 Jan plus one month came due on
+   3 March, and 31 Aug plus six months on 3 March - a month late. */
 const addMonths = (from: Date, months: number) => {
   const d = new Date(from.getTime());
+  const day = d.getDate();
+  d.setDate(1);
   d.setMonth(d.getMonth() + months);
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, last));
   return d;
 };
 
@@ -932,11 +940,12 @@ export function dueFromTasks(
 export function summarise(list: Inspection[], due: DueVisit[], now: Date = new Date()): {
   due: number; overdue: number; awaitingTenant: number; booked: number; toWriteUp: number; openActions: number;
 } {
-  const t = now.getTime();
   return {
     due: due.length,
-    overdue: due.filter((d) => new Date(d.dueAt).getTime() < t).length
-      + list.filter((i) => OPEN_STATUSES.includes(i.status) && i.dueAt && new Date(i.dueAt).getTime() < t && !i.visitedAt).length,
+    /* Overdue once the due DAY is over, on the UK calendar (P-042/P-076): a
+       visit due today, or one just booked "for today", is not late at 08:00. */
+    overdue: due.filter((d) => londonDay(d.dueAt) < londonDay(now.toISOString())).length
+      + list.filter((i) => OPEN_STATUSES.includes(i.status) && i.dueAt && londonDay(i.dueAt) < londonDay(now.toISOString()) && !i.visitedAt).length,
     awaitingTenant: list.filter((i) => i.step === "await_access" || i.step === "rearrange").length,
     booked: list.filter((i) => i.status === "booked").length,
     toWriteUp: list.filter((i) => i.step === "report" || i.step === "send_report").length,

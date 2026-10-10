@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { pastDueDay } from "@/lib/london-clock";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import WalkthroughLink from "@/components/showroom/WalkthroughLink";
@@ -73,7 +74,7 @@ const todayInput = () => forInput(new Date()).slice(0, 10);
 
 /** What the row says to do next. The visit's next thing, not its status. */
 function nextFor(i: Inspection): { text: string; hot: boolean } {
-  const late = i.dueAt ? new Date(i.dueAt).getTime() < Date.now() : false;
+  const late = pastDueDay(i.dueAt); // once the due day is over (P-042)
   switch (i.step ?? stepOf({ ...i, openActions: i.openActions ?? 0 })) {
     case "ask_access": return { text: `Book it in · due ${day(i.dueAt)}`, hot: late };
     case "await_access": return { text: `Asked ${day(i.accessAskedAt)} · waiting on the tenant`, hot: late };
@@ -612,7 +613,7 @@ function DueLine({ inspection: i, busy, onMove }: { inspection: Inspection; busy
   const [editing, setEditing] = useState(false);
   const movable = !i.visitedAt && ["due", "arranging", "booked", "no_access"].includes(i.status);
   if (!i.dueAt && !movable) return null;
-  const late = i.dueAt ? new Date(i.dueAt).getTime() < Date.now() : false;
+  const late = pastDueDay(i.dueAt); // once the due day is over (P-042)
   return (
     <div className="mt-1">
       <p className="text-[11.5px]">

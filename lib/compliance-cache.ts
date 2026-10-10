@@ -1,5 +1,6 @@
 import "server-only";
-import { fetchComplianceBook, type ComplianceBook } from "@/lib/rex-compliance";
+import { fetchComplianceBook, ukDayNumber, type ComplianceBook } from "@/lib/rex-compliance";
+import { londonDay, londonToday } from "@/lib/london-clock";
 import { hasDb, q } from "@/lib/db";
 import { RULES } from "./staleness";
 
@@ -127,6 +128,28 @@ export function refreshComplianceBook(): Promise<CachedBook> {
 }
 
 /**
+ * A held book's day counts, moved on to today (Rig run 4, P-035, 10 Oct 2026).
+ * `expires` is "days from the day the book was BUILT", and a book can be held
+ * for up to a day: built at 22:30, read at 09:00 the next morning, yesterday's
+ * expiry said "0 days" instead of one day over. Every count drops by the UK
+ * calendar days since it was built, so every screen and the 30/14/7 chase
+ * read today's figure.
+ */
+function asOfToday(book: ComplianceBook, builtAt: number): ComplianceBook {
+  const shift = ukDayNumber(londonToday()) - ukDayNumber(londonDay(new Date(builtAt).toISOString()));
+  if (shift <= 0) return book;
+  return {
+    ...book,
+    properties: book.properties.map((p) => ({
+      ...p,
+      certs: Object.fromEntries(
+        Object.entries(p.certs).map(([k, c]) => [k, c && typeof c.expires === "number" ? { ...c, expires: c.expires - shift } : c])
+      ) as typeof p.certs,
+    })),
+  };
+}
+
+/**
  * The book, however we can get it fastest.
  *
  * `stale` tells the caller the answer is being refreshed behind them; it is
@@ -140,12 +163,12 @@ export async function getComplianceBook(): Promise<{
   const held = memory ?? (await readStored());
   const age = held ? Date.now() - held.at : Infinity;
 
-  if (held && age < FRESH_MS) return { book: held.book, ageMs: age, stale: false };
+  if (held && age < FRESH_MS) return { book: asOfToday(held.book, held.at), ageMs: age, stale: false };
   if (held && age < STALE_MS) {
     /* Caught (1 Oct 2026): a background refresh that failed was an
        unhandled rejection. The held copy stands, and says how old it is. */
     void refreshComplianceBook().catch((e) => console.error("[compliance-cache] background refresh failed", e instanceof Error ? e.message : e));
-    return { book: held.book, ageMs: age, stale: true };
+    return { book: asOfToday(held.book, held.at), ageMs: age, stale: true };
   }
   try {
     const fresh = await refreshComplianceBook();

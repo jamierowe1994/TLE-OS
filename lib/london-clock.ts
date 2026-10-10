@@ -44,3 +44,25 @@ export function lengthWords(n: number): string {
  */
 export const londonToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
 export const londonMonth = () => londonToday().slice(0, 7);
+
+/**
+ * Past a due DATE: only once that UK day is over (Rig run 4, P-041/P-042/P-076).
+ * A date typed into a form is stored as midnight, so comparing it with the
+ * moment made a job, a visit or a check "overdue" from the first minute of the
+ * day it was due.
+ */
+export const pastDueDay = (iso: string | null | undefined): boolean => Boolean(iso) && londonDay(iso!) < londonToday();
+
+/** Whole UK calendar days from today to a date or instant: 0 today, 1 tomorrow, -1 yesterday. */
+export function ukDaysFromToday(dateOrIso: string): number {
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(dateOrIso) ? dateOrIso : londonDay(dateOrIso);
+  const n = (d: string) => {
+    const [y, m, dd] = d.split("-").map(Number);
+    return Math.round(Date.UTC(y, m - 1, dd) / 86400000);
+  };
+  return n(day) - n(londonToday());
+}
+
+/** A works order is late: a repair at its deadline moment, a planned job once its day is over. */
+export const worksLate = (o: { kind?: string | null; dueAt?: string | null }): boolean =>
+  !o.dueAt ? false : o.kind === "planned" ? pastDueDay(o.dueAt) : Date.parse(o.dueAt) < Date.now();

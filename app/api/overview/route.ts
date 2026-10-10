@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { worksLate } from "@/lib/london-clock";
 import { publicError } from "@/lib/public-error";
 import { activity } from "@/lib/activity";
 import { stageCounts, type StageListing } from "@/lib/listing-stages";
@@ -102,11 +103,10 @@ export async function GET(req: NextRequest) {
       const s = (j.summary ?? {}) as Json;
       const ours = (id: string | null) => !homes || (!!id && homes.has(id));
       const carried = ((Array.isArray(j.carried) ? j.carried : []) as { propertyId: string | null; followUpOn: string | null; overdue: boolean; title: string; propertyName: string; dueOn: string | null }[]).filter((c) => ours(c.propertyId));
-      const orders = ((Array.isArray(j.orders) ? j.orders : []) as { propertyId: string | null; dueAt: string | null; urgency: string | null; rehearsal?: boolean }[]).filter((o) => !o.rehearsal && ours(o.propertyId));
-      const now = Date.now();
+      const orders = ((Array.isArray(j.orders) ? j.orders : []) as { propertyId: string | null; kind?: string | null; dueAt: string | null; urgency: string | null; rehearsal?: boolean }[]).filter((o) => !o.rehearsal && ours(o.propertyId));
       return {
         open: homes ? orders.length + carried.length : Number(s.open ?? 0),
-        overdue: homes ? orders.filter((o) => o.dueAt && Date.parse(o.dueAt) < now).length + carried.filter((c) => c.overdue).length : Number(s.overdue ?? 0),
+        overdue: homes ? orders.filter((o) => worksLate(o)).length + carried.filter((c) => c.overdue).length : Number(s.overdue ?? 0),
         emergencies: homes ? orders.filter((o) => o.urgency === "emergency").length : Number(s.emergencies ?? 0),
         followUp: carried.filter((c) => c.followUpOn && c.followUpOn <= today).length,
         late: carried.filter((c) => c.overdue).slice(0, 3).map((c) => ({ title: c.title, where: c.propertyName, dueOn: c.dueOn })),

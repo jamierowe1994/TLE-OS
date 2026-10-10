@@ -513,7 +513,11 @@ export async function worksSummary(): Promise<WorksSummary> {
   if (!hasDb()) return empty;
   const [r] = await q<Row>(
     `SELECT count(*) FILTER (WHERE status IN ('reported','approval','approved','scheduled')) AS open,
-            count(*) FILTER (WHERE status IN ('reported','approval','approved','scheduled') AND due_at < NOW()) AS overdue,
+            count(*) FILTER (WHERE status IN ('reported','approval','approved','scheduled') AND (
+              CASE WHEN kind = 'planned'
+                /* A planned job's due DATE is late once that UK day is over (Rig run 4, P-041). */
+                THEN (due_at AT TIME ZONE 'Europe/London')::date < (NOW() AT TIME ZONE 'Europe/London')::date
+                ELSE due_at < NOW() END)) AS overdue,
             count(*) FILTER (WHERE status IN ('reported','approval','approved','scheduled') AND urgency = 'emergency') AS emergencies,
             count(*) FILTER (WHERE status = 'approval') AS awaiting,
             count(*) FILTER (WHERE status = 'scheduled' AND scheduled_at >= date_trunc('week', NOW()) AND scheduled_at < date_trunc('week', NOW()) + interval '7 days') AS booked_week,

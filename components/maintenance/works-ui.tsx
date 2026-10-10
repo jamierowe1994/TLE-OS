@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { worksLate } from "@/lib/london-clock";
 import type { Contractor, WorksOrder, Status, PaidHow } from "@/lib/works-orders";
 import { stepOf } from "@/lib/works-steps";
 import { ContractorForm } from "@/components/WorksNow";
@@ -32,7 +33,7 @@ export const toPence = (s: string) => Math.round(Number(String(s).replace(/[£,\
 
 /** What the row says to do next. The job's next thing, not its status. */
 export function nextFor(o: WorksOrder, ringForApproval = false): { text: string; hot: boolean } {
-  const late = o.dueAt ? new Date(o.dueAt).getTime() < Date.now() : false;
+  const late = worksLate(o);
   const clock = o.kind === "repair" ? ` · attend by ${stamp(o.dueAt)}` : ` · due ${day(o.dueAt)}`;
   /* A landlord who asked not to be emailed was not sent the approval
      request, so nobody is "waiting" - somebody has to ring (6 Oct 2026). */

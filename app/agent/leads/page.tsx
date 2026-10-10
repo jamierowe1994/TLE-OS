@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ukDaysFromToday } from "@/lib/london-clock";
 import DoodleIcon from "@/components/DoodleIcon";
 import type { Lead } from "@/lib/leads-sample";
 import { ErrorLine, Sheet, Spinner, TopBar, WhatsAppIcon, dialable, mapsHref, whatsappHref } from "../bits";
@@ -43,9 +44,9 @@ function ago(iso?: string): string {
   if (!iso) return "";
   const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
   if (mins < 60) return `${mins} min ago`;
-  const h = Math.round(mins / 60);
-  if (h < 24) return `${h} hr ago`;
-  const d = Math.round(h / 24);
+  /* Calendar days, not hours passed (P-084). */
+  const d = -ukDaysFromToday(iso);
+  if (d <= 0) return `${Math.round(mins / 60)} hr ago`;
   return d === 1 ? "Yesterday" : d < 7 ? `${d} days ago` : new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 

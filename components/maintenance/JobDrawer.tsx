@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { worksLate } from "@/lib/london-clock";
 import DoodleIcon from "@/components/DoodleIcon";
 import { openDocument } from "@/lib/doc-sheet";
 import type { Contractor, WorksOrder, WorksEvent, Move, Urgency, PaidHow } from "@/lib/works-orders";
@@ -148,7 +149,8 @@ export default function JobDrawer({ order, contractors, canCorporate, onClose, o
     note: "Add a note",
     edit: "Edit the details",
   };
-  const late = open && o.dueAt ? new Date(o.dueAt).getTime() < Date.now() : false;
+  /* A planned job is late once its day is over, a repair at its deadline (Rig run 4, P-041). */
+  const late = open && worksLate(o);
   const urgency = o.kind === "repair" ? URGENCIES.find((u) => u.id === o.urgency)?.label ?? null : null;
   const tenants = o.tenants.length ? o.tenants : o.tenant || o.tenantPhone || o.tenantEmail ? [{ name: o.tenant, phone: o.tenantPhone, email: o.tenantEmail, room: "" }] : [];
 

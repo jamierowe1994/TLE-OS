@@ -13,6 +13,8 @@
  */
 
 /** What an agent can log against a lead. */
+import { ukDaysFromToday } from "@/lib/london-clock";
+
 export type TouchKind = "call" | "text" | "whatsapp" | "email" | "visit" | "note" | "nurture" | "rejoin" | "lost";
 
 /** How a contact attempt went. Only the contact kinds carry one. */
@@ -298,9 +300,11 @@ export function whenAgo(iso: string, now = Date.now()): string {
   const mins = Math.max(0, Math.round((now - then) / 60000));
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
+  /* Days by the UK calendar, not hours passed (Rig run 4, P-084): Friday 09:00
+     seen on Saturday 22:00 was "2 days ago", Friday 23:00 seen on Saturday
+     08:00 was "today". Within today, the hours. */
+  const days = ukDaysFromToday(new Date(now).toISOString()) - ukDaysFromToday(new Date(then).toISOString());
+  if (days <= 0) return `${Math.round(mins / 60)}h ago`;
   if (days === 1) return "yesterday";
   if (days < 7) return `${days} days ago`;
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
