@@ -14,7 +14,9 @@ import MatchFlow, { type MatchItem, type MatchSubject } from "../flow";
  */
 
 type Person = {
+  /** Shortened for an agent (lib/contact-mask); the send goes by leadId. */
   email: string;
+  leadId: string;
   name: string;
   askedAbout: string;
   askedRent: number | null;
@@ -51,7 +53,7 @@ export default function EmailTheDatabase() {
         setSubject({ title: j.home.name, line: j.home.locality, lat: j.home.lat, lng: j.home.lng, image: j.home.image });
         setItems(
           (j.people ?? []).map((p) => ({
-            id: p.email,
+            id: p.leadId,
             title: p.name || p.email,
             line: `Asked about ${p.askedAbout}`,
             meta: [p.askedRent ? `£${Math.round(p.askedRent).toLocaleString("en-GB")} ${p.askedPer}` : "", p.miles != null ? `${p.miles} mi away` : "", ago(p.askedAt)].filter(Boolean).join(" · "),
@@ -64,11 +66,11 @@ export default function EmailTheDatabase() {
       .catch((e: Error) => setError(e.message));
   }, [id]);
 
-  const post = (emails: string[], preview: boolean) =>
+  const post = (leadIds: string[], preview: boolean) =>
     fetch("/api/listings/email-out", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id, emails, preview }),
+      body: JSON.stringify({ id, leadIds, preview }),
     })
       .then((r) => r.json())
       .catch(() => ({ ok: false, said: "No connection. Nothing was sent." })) as Promise<{ ok?: boolean; said?: string; subject?: string; html?: string }>;

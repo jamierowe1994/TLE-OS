@@ -11,12 +11,18 @@ import { publicOrigin } from "@/lib/origin";
 import { record } from "@/lib/audit";
 import { isOwner } from "@/lib/agent-words";
 import type { OsListing } from "@/lib/rex-listings";
+import { maskEmail, seesContactLists } from "@/lib/contact-mask";
 
 /**
  * MAIL THE DATABASE, for real (17 Sep 2026).
  *
  *   GET  ?id=843312                        who this home suits, and why
- *   POST { id, emails, preview? }          Homes That Fit to each of them
+ *   POST { id, leadIds, preview? }         Homes That Fit to each of them
+ *
+ * An agent's list carries each person's email shortened (lib/contact-mask,
+ * 10 Oct 2026): picking and sending go by lead id, and the server finds the
+ * address. The office still sees the full list. { emails } is still taken
+ * for a screen that has not reloaded since.
  *
  * The button used to list the demo book (olivia.clark@btinternet.com and
  * friends) and say "Sent to 3 applicants" with nothing sent. Now the people
@@ -68,7 +74,9 @@ export async function GET(req: NextRequest) {
     if (!home) {
       return NextResponse.json({ ok: false, notLive: true, said: "Put it live on the portals first. Only a home people can apply for is sent out." }, { status: 409 });
     }
-    return NextResponse.json({ ok: true, days: DAYS, alreadySent, total: people.length, people: people.slice(0, SHOW), perPress: PER_PRESS });
+    const full = seesContactLists(actor.role);
+    const shown = people.slice(0, SHOW).map((p) => (full ? p : { ...p, email: maskEmail(p.email) }));
+    return NextResponse.json({ ok: true, days: DAYS, alreadySent, total: people.length, people: shown, perPress: PER_PRESS });
   } catch {
     return NextResponse.json({ ok: false, said: "The matches did not load. Try again in a minute." }, { status: 502 });
   }
@@ -80,15 +88,16 @@ export async function POST(req: NextRequest) {
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, said: "Sign in first." }, { status: 401 });
 
-  const b = (await req.json().catch(() => ({}))) as { id?: unknown; emails?: unknown; preview?: unknown };
+  const b = (await req.json().catch(() => ({}))) as { id?: unknown; emails?: unknown; leadIds?: unknown; preview?: unknown };
   const id = typeof b.id === "string" || typeof b.id === "number" ? String(b.id) : "";
   if (isTestId(id)) return NextResponse.json({ ok: false, said: TEST_REFUSAL, test: true }, { status: 409 });
   const wanted = new Set((Array.isArray(b.emails) ? b.emails : []).map((e) => String(e).trim().toLowerCase()).filter(Boolean));
-  if (!id || !wanted.size) return NextResponse.json({ ok: false, said: "Pick at least one person." }, { status: 400 });
+  const wantedLeads = new Set((Array.isArray(b.leadIds) ? b.leadIds : []).map((e) => String(e).trim()).filter(Boolean));
+  if (!id || (!wanted.size && !wantedLeads.size)) return NextResponse.json({ ok: false, said: "Pick at least one person." }, { status: 400 });
 
   const { home, people } = await matchFor(id);
   if (!home) return NextResponse.json({ ok: false, said: "Put it live on the portals first. Only a home people can apply for is sent out." }, { status: 409 });
-  const to = people.filter((p) => wanted.has(p.email));
+  const to = people.filter((p) => wantedLeads.has(p.leadId) || wanted.has(p.email));
 
   if (b.preview === true) {
     const { subject, html } = await renderHomesThatFit({

@@ -6,6 +6,8 @@ import { createAppraisal, getAppraisal, recordValuation, setOutcome, adoptLeadPr
 import { stagedAppraisals, withLiveStages } from "@/lib/appraisal-stage";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
+import { whoIs } from "@/lib/admin";
+import { maskContactFields, sameName, seesContactLists } from "@/lib/contact-mask";
 import { SERVICE_LEVELS, type ServiceLevel } from "@/lib/market-appraisal";
 import type { NextRequest } from "next/server";
 import { scheduleOnBooking } from "@/lib/pre-send";
@@ -40,15 +42,26 @@ import { putInOutlook, type OutlookOutcome, removeFromOutlook } from "@/lib/outl
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    /* Other agents' appraisals come with the landlord's number and email
+       shortened (lib/contact-mask, 10 Oct 2026); one appraisal opened in
+       full (/api/appraisals/<id>) has them whole. */
+    const { actor, subject } = await whoIs(req);
+    const full = !actor || seesContactLists(actor.role);
+    const myName = (subject ?? actor)?.name ?? "";
     /* The staged list is held for 30 s and rebuilt behind the reader up to
        two minutes (lib/appraisal-stage, stagedAppraisals); the unread counts
        are one cheap query and stay live on every call. One record is
        /api/appraisals/<id>, which the file page reads instead of this. */
     const [rows, unread] = await Promise.all([stagedAppraisals(), unreadByAppraisal()]);
     /* New landlord messages, for the "new message" pill on the list and the file. */
-    return NextResponse.json({ appraisals: rows.map((a: { id: string }) => ({ ...a, unreadMessages: unread.get(a.id) ?? 0 })) });
+    return NextResponse.json({
+      appraisals: rows.map((a: { id: string; agent?: string | null }) => ({
+        ...(full || sameName(a.agent, myName) ? a : maskContactFields(a)),
+        unreadMessages: unread.get(a.id) ?? 0,
+      })),
+    });
   } catch (e) {
     /* An empty list with a reason, not a 500. The screen renders the error
        rather than a stale or invented row, which is the honest state. */

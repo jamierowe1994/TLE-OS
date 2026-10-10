@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { maskContactFields, seesContactLists } from "@/lib/contact-mask";
 import { publicError } from "@/lib/public-error";
 import { hasDb, q } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
@@ -67,6 +68,9 @@ export async function GET(req: NextRequest) {
      list built from nothing - an empty board reads as "nothing is due". */
   let due: ReturnType<typeof dueList> = [];
   let bookError: string | null = null;
+  /* The homes in this person's own book, for which inspections keep their
+     contacts whole (null: the whole business). */
+  let ownHomes: Set<string> | null = new Set();
   /* Where the due list came from, and when REX PM was last read, for the
      line under the figures. See lib/rexpm-tasks. */
   const read = rules.source === "rex-pm" ? await lastImport("inspection").catch(() => null) : null;
@@ -80,6 +84,9 @@ export async function GET(req: NextRequest) {
     } else {
       try {
         const [{ book }, facts, comp] = await Promise.all([managedBookFor(scope.rexUserId), factsByRexId(), getComplianceBook()]);
+        ownHomes = scope.rexUserId
+          ? new Set(book.properties.flatMap((p) => [String(p.propertyId ?? ""), String(p.listingId ?? "")]).filter(Boolean))
+          : null;
         const hmoIds = new Set([...facts.entries()].filter(([, f]) => f.hmo).map(([id]) => id));
         /* Only the homes we actually look after (James, 18 Sep 2026): the
            board said 257 when the real job was 150. REX's leased listings
@@ -116,8 +123,15 @@ export async function GET(req: NextRequest) {
   const me = subject ?? actor;
   const team = await q<{ id: string; name: string }>(`SELECT id, name FROM os_users WHERE name <> '' ORDER BY name`).catch(() => []);
 
+  /* Every inspection in the business is listed, so an agent's copy carries
+     the contacts shortened on homes outside their own book (lib/contact-mask,
+     10 Oct 2026). The due list is their own book already. */
+  const full = seesContactLists(actor.role) || ownHomes === null;
+  const shownInspections = full
+    ? inspections
+    : inspections.map((i) => (ownHomes!.has(String(i.propertyId ?? "")) || ownHomes!.has(String(i.listingId ?? "")) ? i : maskContactFields(i)));
   return NextResponse.json({
-    ok: true, live: true, inspections, due, actions, rules,
+    ok: true, live: true, inspections: shownInspections, due, actions, rules,
     me: { id: me.id, name: me.name || me.email },
     team: team.map((t) => ({ id: t.id, name: t.name })),
     summary: summarise(inspections, due),

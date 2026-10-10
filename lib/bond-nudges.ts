@@ -705,6 +705,13 @@ export async function listNudges(opts: { districts?: string[]; status?: NudgeSta
   };
 }
 
+/** One nudge, whole - for "Show number" on the call list (10 Oct 2026). */
+export async function getNudge(id: number): Promise<Nudge | null> {
+  if (!hasDb() || !Number.isFinite(id)) return null;
+  const rows = await q<Record<string, unknown>>(`SELECT * FROM os_bond_nudges WHERE id = $1`, [id]);
+  return rows[0] ? toNudge(rows[0]) : null;
+}
+
 export async function updateNudge(
   id: number,
   actor: string,

@@ -4,6 +4,8 @@ import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
+import { whoIs } from "@/lib/admin";
+import { can } from "@/lib/roles";
 import { appraisalIdForLead, getAppraisal } from "@/lib/appraisal-store";
 import { queueVideoChase } from "@/lib/video-chase";
 import { publicOrigin } from "@/lib/origin";
@@ -154,6 +156,12 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   if (!hasDb()) return NextResponse.json({ ok: true, rows: [] });
   const ref = req.nextUrl.searchParams.get("ref");
+  /* The whole queue - every address with an email waiting - is the office's
+     (10 Oct 2026); one record's queue is anybody's. Nothing on screen reads
+     the whole queue. */
+  const { actor } = await whoIs(req);
+  if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
+  if (!ref && !can(actor.role, "see:everything")) return NextResponse.json({ ok: true, rows: [] });
   const rows = await q<Row>(
     ref
       ? `SELECT id, kind, ref, to_email, subject, send_at, state, queued_by, sent_at, error

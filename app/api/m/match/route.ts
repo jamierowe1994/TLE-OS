@@ -6,6 +6,7 @@ import { TEST_REFUSAL } from "@/lib/test-listing-answers";
 import { DAYS, matchFor } from "@/lib/mail-database";
 import { pointsFor } from "@/lib/postcode-geo";
 import { milesBetween } from "@/lib/m-match";
+import { maskEmail, seesContactLists } from "@/lib/contact-mask";
 
 /**
  * GET /api/m/match?listing=843312 - Email the Database on the phone (3 Oct
@@ -42,6 +43,9 @@ export async function GET(req: NextRequest) {
     const pointOf = (lat: number | null, lng: number | null, postcode: string | null) =>
       lat != null && lng != null ? { lat, lng } : postcode ? (points.get(postcode.toUpperCase().replace(/\s+/g, " ").trim()) ?? null) : null;
     const at = pointOf(home.lat, home.lng, home.postcode);
+    /* An agent's list carries emails shortened (lib/contact-mask); the send
+       goes by lead id. */
+    const full = seesContactLists(actor.role);
 
     return NextResponse.json({
       ok: true,
@@ -59,6 +63,7 @@ export async function GET(req: NextRequest) {
       },
       people: people.slice(0, SHOW).map((p) => ({
         ...p,
+        email: full ? p.email : maskEmail(p.email),
         miles: at && p.lat != null && p.lng != null ? Math.round(milesBetween(at, { lat: p.lat, lng: p.lng }) * 10) / 10 : null,
       })),
       total: people.length,

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
-import { listNudges, updateNudge, type NudgeStatus } from "@/lib/bond-nudges";
+import { getNudge, listNudges, updateNudge, type NudgeStatus } from "@/lib/bond-nudges";
+import { maskContactFields, seesContactLists } from "@/lib/contact-mask";
 
 /**
  * The call list.
@@ -20,12 +21,25 @@ const STATUSES: Array<NudgeStatus | "all"> = ["open", "snoozed", "done", "dismis
 
 export async function GET(req: NextRequest) {
   if (!hasDb()) return NextResponse.json({ ok: false, reason: "Bond needs the database and this environment has none." }, { status: 503 });
+  const { actor } = await whoIs(req);
+  if (!actor) return NextResponse.json({ ok: false, reason: "Sign in first." }, { status: 401 });
   const p = req.nextUrl.searchParams;
+  /* One landlord's number, for "Show number" (10 Oct 2026). The call list
+     itself carries numbers shortened for an agent (lib/contact-mask), so the
+     whole list of landlords is never one call; each one shown is a read the
+     log records and the pace cap counts. */
+  const one = Number(p.get("id"));
+  if (one) {
+    const nudge = await getNudge(one).catch(() => null);
+    return nudge ? NextResponse.json({ ok: true, nudge }) : NextResponse.json({ ok: false, reason: "No such nudge." }, { status: 404 });
+  }
   const districts = (p.get("districts") ?? "").split(",").map((d) => d.trim().toUpperCase()).filter(Boolean);
   const raw = p.get("status") ?? "open";
   const status = STATUSES.includes(raw as NudgeStatus) ? (raw as NudgeStatus | "all") : "open";
   try {
-    return NextResponse.json({ ok: true, ...(await listNudges({ districts, status })) });
+    const list = await listNudges({ districts, status });
+    const full = seesContactLists(actor.role);
+    return NextResponse.json({ ok: true, ...list, nudges: full ? list.nudges : list.nudges.map((n) => maskContactFields(n)) });
   } catch (e) {
     return NextResponse.json({ ok: false, reason: publicError(e) }, { status: 502 });
   }

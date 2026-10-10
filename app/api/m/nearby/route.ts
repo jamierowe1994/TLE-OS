@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sameName, seesContactLists } from "@/lib/contact-mask";
 import { whoIs } from "@/lib/admin";
 import { scopeFor, searchScope } from "@/lib/scope";
 import { hasDb, q } from "@/lib/db";
@@ -68,13 +69,21 @@ export async function GET(req: NextRequest) {
   const scope = await scopeFor(req);
   const rexUserId = await searchScope(req, scope);
   if (rexUserId === false) return NextResponse.json({ ok: false, error: "Your account isn't linked to your agent record yet. Ask James to link it." }, { status: 403 });
-  const [managed, leads, listings, contacts, appraisals] = await Promise.all([
+  const [managed, leads, listings, allContacts, allAppraisals] = await Promise.all([
     managedBookFor(rexUserId).then((m) => m.book).catch(() => null),
     cachedLeads(rexUserId),
     who === "tenant" ? bookFor(rexUserId).then((b) => b?.listings ?? []).catch(() => []) : Promise.resolve([]),
     listContacts({ limit: 500 }).catch(() => []),
     who === "landlord" ? listAppraisals().catch(() => []) : Promise.resolve([]),
   ]);
+  /* The book and the leads above are the person's own; the contacts typed in
+     here and the appraisals are the whole business's, so an agent near a
+     place sees only their own of those (10 Oct 2026) - not every landlord
+     anybody has met within 25 miles, with their number. */
+  const full = seesContactLists(actor.role);
+  const meEmail = actor.email.trim().toLowerCase();
+  const contacts = full ? allContacts : allContacts.filter((c) => (c.createdBy ?? "").trim().toLowerCase() === meEmail);
+  const appraisals = full ? allAppraisals : allAppraisals.filter((a) => sameName(a.agent, actor.name));
   const pcOf = (pc: string | null | undefined, address?: string | null) => (pc && pc.trim()) || (address ? postcodeOf(address) : null) || "";
   const points = await pointsFor([
     ...(managed?.properties ?? []).map((h) => pcOf(h.postcode, h.address)),

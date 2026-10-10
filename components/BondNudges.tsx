@@ -191,6 +191,23 @@ function Card({
 }) {
   const [notes, setNotes] = useState(n.notes);
   const [open, setOpen] = useState(false);
+  /* An agent's call list carries numbers shortened (lib/contact-mask, 10 Oct
+     2026); "Show number" reads this one landlord whole. */
+  const [whole, setWhole] = useState<Nudge | null>(null);
+  const [revealing, setRevealing] = useState(false);
+  const c = whole ?? n;
+  const shortened = !whole && [n.contact_phone, n.contact_email].some((v) => (v ?? "").includes("•••"));
+  async function reveal() {
+    setRevealing(true);
+    try {
+      const j = await fetch(`/api/bond/nudges?id=${n.id}`, { cache: "no-store" }).then((r) => r.json());
+      if (j.ok && j.nudge) setWhole(j.nudge as Nudge);
+    } catch {
+      /* Stays shortened; the button can be pressed again. */
+    } finally {
+      setRevealing(false);
+    }
+  }
   const k = KIND[n.kind] ?? { label: n.kind, tone: "bg-box text-muted" };
   const first = (n.contact_name ?? "").split(/\s+/)[0];
 
@@ -213,17 +230,27 @@ function Card({
           </button>
         </div>
         <div className="flex flex-col items-end gap-1 text-[12.5px]">
-          {n.contact_phone ? (
-            <a href={`tel:${n.contact_phone.replace(/\s+/g, "")}`} className="flex items-center gap-1.5 rounded-full bg-ink px-3.5 py-1.5 text-page">
+          {shortened ? (
+            <button
+              type="button"
+              onClick={() => void reveal()}
+              disabled={revealing}
+              className="flex items-center gap-1.5 rounded-full bg-ink px-3.5 py-1.5 text-page disabled:opacity-60"
+            >
               <DoodleIcon name="call" size={13} className="invert" />
-              {n.contact_phone}
+              {revealing ? "Showing…" : n.contact_phone ? `Show number ${n.contact_phone}` : "Show email"}
+            </button>
+          ) : c.contact_phone ? (
+            <a href={`tel:${c.contact_phone.replace(/\s+/g, "")}`} className="flex items-center gap-1.5 rounded-full bg-ink px-3.5 py-1.5 text-page">
+              <DoodleIcon name="call" size={13} className="invert" />
+              {c.contact_phone}
             </a>
           ) : (
             <span className="text-[11px] text-muted">No number on the record</span>
           )}
-          {n.contact_email && (
-            <a href={`mailto:${n.contact_email}`} className="text-[11.5px] text-muted underline-offset-2 hover:underline">
-              {n.contact_email}
+          {c.contact_email && !shortened && (
+            <a href={`mailto:${c.contact_email}`} className="text-[11.5px] text-muted underline-offset-2 hover:underline">
+              {c.contact_email}
             </a>
           )}
           {n.our_agent && <span className="text-[10.5px] text-muted">was with {n.our_agent}</span>}

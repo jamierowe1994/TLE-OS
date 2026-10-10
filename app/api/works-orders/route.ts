@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { maskContactFields, seesContactLists } from "@/lib/contact-mask";
 import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { worksSnapshotAround } from "@/lib/works-trend";
@@ -46,8 +47,12 @@ export async function GET(req: NextRequest) {
   const awaiting = orders.filter((o) => o.status === "approval");
   const prefs = awaiting.length ? await landlordPrefsFor(awaiting.map((o) => o.landlordEmail)).catch(() => new Map()) : new Map();
   const ringForApproval = awaiting.filter((o) => ringsForApproval(o, prefs.get(landlordKey(o.landlordEmail)))).map((o) => o.id);
+  /* The board lists names; a job's numbers and emails come when it is opened
+     (/api/works-orders/<id>). An agent's list carries them shortened (lib/
+     contact-mask, 10 Oct 2026) so the whole book's tenants are not one call. */
+  const shown = seesContactLists(actor.role) ? orders : orders.map((o) => maskContactFields(o));
   return NextResponse.json({
-    ok: true, live: true, orders, contractors, summary, ringForApproval,
+    ok: true, live: true, orders: shown, contractors, summary, ringForApproval,
     carried: carried?.jobs ?? [],
     /* Planned jobs a certificate on file has since finished (5 Oct 2026). */
     carriedDone: carried?.done ?? [],

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { maskContactFields, seesContactLists } from "@/lib/contact-mask";
 import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
@@ -57,8 +58,16 @@ export async function GET(req: NextRequest) {
     ? (stateParam as RexState)
     : undefined;
 
+  /* Somebody else's contacts come with their email and mobile shortened for
+     an agent (lib/contact-mask, 10 Oct 2026); their own come whole, and
+     opening one contact gives its full details. */
+  const full = seesContactLists(actor.role);
+  const me = actor.email.trim().toLowerCase();
+  const contacts = (await listContacts({ state })).map((c) =>
+    full || (c.createdBy ?? "").trim().toLowerCase() === me ? c : maskContactFields(c)
+  );
   return NextResponse.json({
-    contacts: await listContacts({ state }),
+    contacts,
     /* So a list of "held" rows can say WHY they are held, without the reader
        having to go and find the switches page to guess. */
     rexBlocked: await pushBlockedBecause(),

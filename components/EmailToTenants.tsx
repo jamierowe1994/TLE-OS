@@ -29,7 +29,9 @@ type Listing = {
 };
 
 type Person = {
+  /** Shortened for an agent (lib/contact-mask); picking goes by leadId. */
   email: string;
+  leadId: string;
   name: string;
   askedAbout: string;
   askedRent: number | null;
@@ -88,7 +90,7 @@ export default function EmailToTenants({
         const perPress = j.perPress ?? 50;
         setFound({ state: "ready", people: j.people, total: j.total ?? j.people.length, alreadySent: j.alreadySent ?? 0, days: j.days ?? 90, perPress });
         /* Everybody matched is ticked, up to what one press may send. */
-        setChosen(j.people.slice(0, perPress).map((p) => p.email));
+        setChosen(j.people.slice(0, perPress).map((p) => p.leadId));
       })
       .catch(() => live && setFound({ state: "failed", said: "The matches did not load. Try again in a minute." }));
     return () => {
@@ -107,7 +109,7 @@ export default function EmailToTenants({
 
   const people = found.state === "ready" ? found.people : [];
   const perPress = found.state === "ready" ? found.perPress : 50;
-  const picked = people.filter((p) => chosen.includes(p.email));
+  const picked = people.filter((p) => chosen.includes(p.leadId));
   const tooMany = picked.length > perPress;
   const needle = find.trim();
   const visible = people.filter((p) => !needle || searchMatches(needle, p.name, p.email, p.askedAbout));
@@ -121,7 +123,7 @@ export default function EmailToTenants({
       const r = await fetch("/api/listings/email-out", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: listing!.id, emails: picked.map((p) => p.email), preview: true }),
+        body: JSON.stringify({ id: listing!.id, leadIds: picked.map((p) => p.leadId), preview: true }),
       });
       const j = (await r.json()) as { ok?: boolean; subject?: string; html?: string; said?: string };
       if (j.ok && j.html) setPreview({ subject: j.subject ?? "", html: j.html });
@@ -139,7 +141,7 @@ export default function EmailToTenants({
       const r = await fetch("/api/listings/email-out", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: listing!.id, emails: picked.map((p) => p.email) }),
+        body: JSON.stringify({ id: listing!.id, leadIds: picked.map((p) => p.leadId) }),
       });
       const j = (await r.json()) as { ok?: boolean; said?: string; sent?: number };
       if (j.ok) {
@@ -218,12 +220,12 @@ export default function EmailToTenants({
               )}
               <ul className="space-y-2.5">
                 {visible.map((p) => {
-                  const on = chosen.includes(p.email);
+                  const on = chosen.includes(p.leadId);
                   return (
-                    <li key={p.email}>
+                    <li key={p.leadId}>
                       <button
                         type="button"
-                        onClick={() => setChosen((c) => (on ? c.filter((x) => x !== p.email) : [...c, p.email]))}
+                        onClick={() => setChosen((c) => (on ? c.filter((x) => x !== p.leadId) : [...c, p.leadId]))}
                         className={`flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-colors ${
                           on ? "border-accent-dark bg-accent-soft/40" : "border-line/60"
                         }`}

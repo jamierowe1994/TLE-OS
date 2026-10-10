@@ -1,4 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { whoIs } from "@/lib/admin";
+import { can } from "@/lib/roles";
+import { maskContactFields, seesContactLists } from "@/lib/contact-mask";
 import { publicError } from "@/lib/public-error";
 import { hasDb, q } from "@/lib/db";
 import { campaignResults, campaignsById } from "@/lib/campaign-store";
@@ -39,12 +42,17 @@ export async function GET(req: Request) {
       return NextResponse.json({ stored: true, enrolments: rows });
     }
     if (campaignId) {
+      /* The people on a campaign are marketing's and the office's; anybody
+         else gets them with their emails shortened (10 Oct 2026). Nothing on
+         screen reads this list outside marketing. */
+      const { actor } = await whoIs(req as NextRequest);
+      const full = Boolean(actor && (can(actor.role, "see:marketing") || seesContactLists(actor.role)));
       const rows = await q(
         `SELECT id, record_id, name, email, reason, status, stopped_reason, source, enrolled_at, last_step_sent
            FROM os_campaign_enrolments WHERE campaign_id = $1 ORDER BY enrolled_at DESC LIMIT 200`,
         [campaignId]
       );
-      return NextResponse.json({ stored: true, enrolments: rows });
+      return NextResponse.json({ stored: true, enrolments: full ? rows : rows.map((r) => maskContactFields(r)) });
     }
     // The overview marketing actually wants: how many live on each campaign,
     // and what happened to the rest - replied, booked, ran to the end.

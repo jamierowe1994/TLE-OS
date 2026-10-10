@@ -31,7 +31,9 @@ export async function GET(req: NextRequest) {
     return u ? NextResponse.json({ ok: true, updates: [u] }) : NextResponse.json({ ok: false, error: "That update isn't here." }, { status: 404 });
   }
   const everyone = can(actor.role, "see:everything") || can(actor.role, "see:pretenancy");
-  const mine = sp.get("mine") === "1" || (sp.get("all") === "1" && !everyone);
+  /* Without a record to read updates for, an agent gets their own: the
+     list carries every landlord's and tenant's email (10 Oct 2026). */
+  const mine = sp.get("mine") === "1" || (!everyone && !sp.get("application") && !sp.get("deal"));
   const updates = await listUpdates({
     applicationId: sp.get("application"),
     dealId: sp.get("deal"),
