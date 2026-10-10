@@ -141,6 +141,8 @@ export interface WorksOrder {
   quietTenants: boolean;
   /** Planned jobs: when the tenants were sent the booking, by hand. */
   tenantsToldBookedAt: string | null;
+  /** Planned jobs: the tenants are told who will be in touch to arrange access (a tick, off by default). */
+  accessNotice: boolean;
   /* ── the workflow's facts (James and Michael, 7 Sep 2026) ── */
   landlordToldAt: string | null;
   /** Who is arranging it: the landlord with their own people, or us. */
@@ -243,6 +245,7 @@ function toOrder(r: Row): WorksOrder {
     landlordSkipped: r.landlord_skipped === true,
     quietTenants: r.quiet_tenants === true,
     tenantsToldBookedAt: iso(r.tenants_told_booked_at),
+    accessNotice: r.tenants_access_notice === true,
     landlordToldAt: iso(r.landlord_told_at),
     arranging: r.arranging === "landlord" || r.arranging === "us" ? r.arranging : null,
     landlordFollowUpAt: iso(r.landlord_follow_up_at),
@@ -297,7 +300,7 @@ const COLS = `id, ref, kind, status, property_id, property_name, locality, landl
   title, description, category, urgency,
   due_at, reported_by, reported_at, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence, quote_pence,
   approved_by, approved_at, completed_at, completion_note, invoice_pence, invoice_ref, invoiced_at, paid_at, paid_how,
-  cancelled_reason, files, rehearsal, tenants, landlord_skipped, quiet_tenants, tenants_told_booked_at, created_at, updated_at`;
+  cancelled_reason, files, rehearsal, tenants, landlord_skipped, quiet_tenants, tenants_told_booked_at, tenants_access_notice, created_at, updated_at`;
 
 /* ── contractors ────────────────────────────────────────────────────────── */
 
@@ -391,7 +394,8 @@ export interface NewOrder {
   landlordSkipped?: boolean;
   /** With a contractor: the works order goes to them as the job is raised. */
   send?: boolean;
-  /** A repair: false keeps every automatic tenant email off (a discreet job). */
+  /** A repair: false keeps every automatic tenant email off (a discreet job).
+   *  A planned job: true tells the tenants who will be in touch about access. */
   tellTenants?: boolean;
 }
 
@@ -422,6 +426,7 @@ export async function createOrder(input: NewOrder, by: string): Promise<WorksOrd
   const sent = !!input.contractorId && input.send === true;
   const skipped = input.landlordSkipped === true;
   const quiet = kind === "repair" && input.tellTenants === false;
+  const accessNotice = planned && input.tellTenants === true;
   /* Already booked with them is already confirmed. */
   const confirmed = sent || (planned && !!input.contractorId && !!input.scheduledAt);
   /* A job with a contractor and a date already has its booking; one without
@@ -434,9 +439,9 @@ export async function createOrder(input: NewOrder, by: string): Promise<WorksOrd
        (id, kind, status, property_id, property_name, locality, landlord, tenant, tenant_email, landlord_email, title, description, category, urgency, due_at,
         reported_by, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence,
         landlord_mobile, contractor_token, tenant_token, property_lat, property_lng, rehearsal, tenant_phone,
-        arranging, contractor_contacted_at, contractor_confirmed_at, tenants, landlord_skipped, quiet_tenants)
+        arranging, contractor_contacted_at, contractor_confirmed_at, tenants, landlord_skipped, quiet_tenants, tenants_access_notice)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29,
-        $30, $31, $32, $33::jsonb, $34, $35)
+        $30, $31, $32, $33::jsonb, $34, $35, $36)
      RETURNING ${COLS}`,
     [
       id, kind, status, input.propertyId ?? null, input.propertyName.trim(), (input.locality ?? "").trim(), (input.landlord ?? "").trim(),
@@ -446,7 +451,7 @@ export async function createOrder(input: NewOrder, by: string): Promise<WorksOrd
       (input.access ?? "").trim(), Number.isFinite(input.authorityPence) ? Number(input.authorityPence) : DEFAULT_AUTHORITY_PENCE,
       skipped ? "" : (input.landlordMobile ?? "").trim(), randomBytes(16).toString("base64url"), randomBytes(16).toString("base64url"),
       input.propertyLat ?? null, input.propertyLng ?? null, input.rehearsal === true, (input.tenantPhone ?? "").trim(),
-      planned || sent ? "us" : null, sent ? now : null, confirmed ? now : null, JSON.stringify(tenants), skipped, quiet,
+      planned || sent ? "us" : null, sent ? now : null, confirmed ? now : null, JSON.stringify(tenants), skipped, quiet, accessNotice,
     ]
   );
   const order = toOrder(r);

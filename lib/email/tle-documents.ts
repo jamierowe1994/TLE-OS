@@ -983,6 +983,25 @@ export const WORKS_TENANT_NOTICE = {
   branding: { showSignoff: false },
 } as const;
 
+/* Planned work - a gas safety, an EICR - with the tick on Plan a
+   certificate (James, 10 Oct 2026): the tenants hear who will ring them to
+   arrange access, and that it is a check the law asks for. */
+export const WORKS_TENANT_PLANNED_NOTICE = {
+  subject: "{{contractorName}} will be in touch to arrange access for {{title}}",
+  preheader: "A routine check at {{address}}. It's genuinely us.",
+  mode: "blocks",
+  blocks: [
+    H("wtp1", "Someone will be in touch about access"),
+    T("wtp2", "Hi {{tenantName}},<br><br>The <strong>{{title}}</strong> at {{address}} is due, and we've asked <strong>{{contractorName}}</strong> to carry it out (job #{{ref}})."),
+    T("wtp3", "They'll contact you directly to arrange a time to get access. It's a routine check that keeps the home safe, so please help them find a time that works for you."),
+    T("wtp4", "If you're ever unsure whether a call is genuine, ring us on {{agentPhone}} and we'll confirm."),
+    SP("wtp5", 8),
+    T("wtp6", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    FOOT("wtp7", "You're getting this because you live at a property managed by The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
 export const WORKS_TENANT_FOUND = {
   subject: "We've found someone for {{title}}",
   preheader: "{{contractorName}} will be in touch to arrange access.",

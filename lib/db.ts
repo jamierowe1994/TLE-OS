@@ -505,6 +505,10 @@ ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_skipped        BOO
 -- so no automatic email goes to any tenant on the job, then or later.
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS quiet_tenants           BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenants_told_booked_at  TIMESTAMPTZ;
+-- A planned job whose tenants are told who will ring about access (James,
+-- 10 Oct 2026: optional, a tick on Plan a certificate). Its own column, off
+-- by default, so no planned job raised before it starts emailing tenants.
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenants_access_notice   BOOLEAN NOT NULL DEFAULT false;
 /* The tenant's number on its own (James, 7 Sep 2026: "name, then number
    after"). The tenant column was one string with both in it, which every
    email then had to pick apart with a regex. */

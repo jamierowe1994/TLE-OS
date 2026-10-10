@@ -67,6 +67,8 @@ async function keep(orderId: string, role: SendOutcome["to"], address: string, s
   return { to: role, sent: true, address, via: "the rehearsal" };
 }
 
+const OFFICE_PHONE = "0161 883 2525";
+
 const ORIGIN = (process.env.OS_ORIGIN ?? "https://tle-os.co.uk").replace(/\/+$/, "");
 
 const PROFILE_KEY = "tle-profile-v1";
@@ -119,7 +121,10 @@ async function varsFor(o: WorksOrder, me: OsUser): Promise<Record<string, string
     authority: pounds(o.authorityPence),
     agentName: me.name || "The Letting Experts",
     agentEmail: me.email,
-    agentPhone: phone || me.email,
+    /* The office line when the sender has no phone on their profile (10 Oct
+       2026: 9 of 14 staff had none, so tenants read "ring us on
+       rhiannon.dodge@..."). The same number the handover and pre-send use. */
+    agentPhone: phone || OFFICE_PHONE,
     completionNote: o.completionNote || "the work is complete.",
     contractorLink: `${ORIGIN}/contractor/${o.contractorToken ?? ""}`,
     /* The planned works order's own four (works-contractor-planned). */
@@ -277,6 +282,15 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
       out.push(await send(o, "works-tenant-notice", t.email, { ...vars, tenantName: first(t.name) }, me, "tenant"));
     }
   };
+  /* A planned job with the tick on (James, 10 Oct 2026): every tenant with an
+     email hears who will be in touch to arrange access. Only before there is
+     a date - once booked, the booking itself is the agent's button. */
+  const accessNotice = async () => {
+    if (!planned || !o.accessNotice || !contractor || o.scheduledAt) return;
+    for (const t of tenantsOf(o).filter((x) => x.email.includes("@"))) {
+      out.push(await send(o, "works-tenant-planned-notice", t.email, { ...vars, tenantName: first(t.name) }, me, "tenant"));
+    }
+  };
   /* The landlord's choice, read once and only when a landlord email is due.
      A failed read is the old behaviour - every job - rather than a lost
      approval request. */
@@ -291,7 +305,10 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
       /* The works order goes when the agent pressed Send, which is what
          stamped contractorContactedAt - a repair too, since 9 Oct 2026. */
       if (planned) {
-        if (contractor && o.contractorContactedAt) await contractorOrder();
+        if (contractor && o.contractorContactedAt) {
+          await contractorOrder();
+          await accessNotice();
+        }
       } else if (contractor && (o.contractorContactedAt || o.scheduledAt)) {
         await contractorOrder();
         if (o.scheduledAt) await tenantBooked();
@@ -314,6 +331,7 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
          "we've found someone" to the tenant, in the same breath. */
       await contractorOrder();
       await tenantNotice();
+      await accessNotice();
       break;
     case "tell_tenants_booked":
       /* Every tenant on the job with an address, each greeted by name. */
@@ -323,6 +341,7 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
       break;
     case "assign":
       await contractorOrder();
+      await accessNotice();
       if (o.scheduledAt) await tenantBooked();
       else await tenantNotice();
       break;

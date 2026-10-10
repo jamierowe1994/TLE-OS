@@ -72,7 +72,10 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
   /* A repair tells the tenants a contractor is coming - never the works order,
      which can carry notes they shouldn't read (Lianna, 9 Oct 2026). Off for
      a discreet job, and then nothing automatic goes to them at all. */
-  const [tellTenants, setTellTenants] = useState(draft?.tellTenants ?? true);
+  /* Plan a certificate has the same tick, OFF to start (James, 10 Oct 2026:
+     "it should be optional, they just click the box"): who will be in touch
+     to arrange access, and nothing else. */
+  const [tellTenants, setTellTenants] = useState(draft?.tellTenants ?? kind === "repair");
   /* Every tenant in the house, all on the works order unless unticked
      (James, 8 Oct 2026: "especially if it's an HMO, we need to pull through
      every tenant under that property"). A repair too, since 9 Oct. */
@@ -227,7 +230,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
         title, description, category, urgency: kind === "repair" ? urgency : null, dueAt: planned ? new Date(dueAt).toISOString() : null,
         reportedBy, access, contractorId: contractorId || null, scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
         tenants: onJob, landlordSkipped, send,
-        ...(planned ? {} : { tellTenants }),
+        tellTenants,
       }),
     }).then((x) => x.json()).catch(() => null);
     setBusy(false);
@@ -275,7 +278,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
     const t = setTimeout(() => draftRef.current?.({
       title, description, category, urgency, dueAt, reportedBy,
       landlordName, landlordEmail, landlordMobile, access, contractorId, scheduledAt, step: moving ? Math.max(0, step - 1) : step,
-      tenants: rows, landlordSkipped, ...(planned ? {} : { tellTenants, reporter }),
+      tenants: rows, landlordSkipped, tellTenants, ...(planned ? {} : { reporter }),
     }), 700);
     return () => clearTimeout(t);
   }, [title, description, category, urgency, dueAt, reportedBy, landlordName, landlordEmail, landlordMobile, access, contractorId, scheduledAt, step, sent, rows, landlordSkipped, planned, tellTenants, reporter, moving]);
@@ -354,7 +357,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
               {kind === "repair"
                 ? `${sent.to ? "They'll arrange a time with the tenants. " : ""}${tellTenants && onJob.some((t) => t.email) ? "The tenants have been told. " : ""}${landlordSkipped ? "" : "Now the landlord."}`
                 : sent.to
-                  ? "They'll arrange a time with the tenants and tell us the date."
+                  ? `They'll arrange a time with the tenants and tell us the date.${tellTenants && !scheduledAt && onJob.some((t) => t.email) ? " The tenants have been told to expect them." : ""}`
                   : "Pick a contractor on the job when you're ready."}
             </p>
           </div>
@@ -564,7 +567,7 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
               ) : (
                 <button type="button" onClick={() => setAdding({ name: "", phone: "", email: "" })} className="mt-2 rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12px] hover:border-ink/40">+ Add someone</button>
               )}
-              {planned && <p className={hint}>On a planned job the tenants aren&apos;t emailed by us. The contractor rings them, and you can send them the booking once it&apos;s made.</p>}
+              {planned && <p className={hint}>The contractor rings them. Tick below to tell them first who&apos;ll be in touch, and you can send them the booking once it&apos;s made.</p>}
             </div>
           )}
           {at("tenant") && !planned && reportedBy === "Tenant" && onJobCount > 1 && (
@@ -574,15 +577,19 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
               <p className={hint}>They&apos;re the job&apos;s lead tenant: the booking and the follow-up go to them.</p>
             </div>
           )}
-          {at("tenant") && !planned && (
+          {at("tenant") && (
             <label className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 sm:col-span-2 ${tellTenants ? "border-accent-dark/50 bg-accent-soft/30" : "border-line/70 bg-white"}`}>
               <input type="checkbox" checked={tellTenants} onChange={(e) => setTellTenants(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--accent-dark)]" />
               <span className="min-w-0">
-                <span className="block text-[13px] font-semibold">Let the tenants know</span>
+                <span className="block text-[13px] font-semibold">{planned ? "Let the tenants know who'll be in touch" : "Let the tenants know"}</span>
                 <span className="mt-0.5 block text-[11.5px] leading-snug text-muted">
-                  {tellTenants
-                    ? `Everyone ticked with an email gets a short note: we've had the report${contractor ? ` and ${contractor.name} will be in touch to arrange a time` : ""}. They never see the works order or its notes.`
-                    : "A discreet job: nothing automatic goes to the tenants about it, now or later."}
+                  {planned
+                    ? tellTenants
+                      ? `Everyone ticked with an email gets a short note when the job goes to ${contractor ? contractor.name : "the contractor"}: they'll be in touch to arrange access. Not sent once a date is already set. They never see the works order.`
+                      : "Optional. Tick it to tell the tenants who will be in touch to arrange access. Otherwise the contractor just rings them."
+                    : tellTenants
+                      ? `Everyone ticked with an email gets a short note: we've had the report${contractor ? ` and ${contractor.name} will be in touch to arrange a time` : ""}. They never see the works order or its notes.`
+                      : "A discreet job: nothing automatic goes to the tenants about it, now or later."}
                 </span>
               </span>
             </label>
@@ -641,7 +648,9 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
                   : ["Expiry and contractor", "when", [dueAt ? `expires ${sayDate(dueAt)}` : "—", contractor?.name ?? "no contractor yet", scheduledAt ? `booked ${sayDate(scheduledAt, true)}` : null].filter(Boolean).join(" · ")],
                 ["Tenants", "tenant", [
                   onJob.length ? onJob.map((t) => `${t.name}${t.room ? ` (${t.room})` : ""}`).join(", ") : "none on the works order",
-                  planned ? null : tellTenants ? (onJob.some((t) => t.email) ? "told a contractor is coming" : "no emails to tell them") : "not told - discreet",
+                  planned
+                    ? tellTenants ? (onJob.some((t) => t.email) ? "told who will be in touch about access" : "no emails to tell them") : null
+                    : tellTenants ? (onJob.some((t) => t.email) ? "told a contractor is coming" : "no emails to tell them") : "not told - discreet",
                   access ? `access: ${access}` : null,
                 ].filter(Boolean).join(" · ")],
                 ["Landlord", "landlord", landlordSkipped ? "Skipped - not involved, not emailed" : [landlordName || "—", landlordEmail ? `emailed at ${landlordEmail}` : "not emailed", landlordMobile || null].filter(Boolean).join(" · ")],
