@@ -790,7 +790,9 @@ export interface PropolyBusinessStats {
   month: string;
   pipelineTotal: number; // every deal in progression, whole business
   pipelineByStage: { key: string; label: string; count: number }[];
-  moveInsThisMonth: number; // completed deals whose move-in falls in `month`
+  /** Completed deals whose move-in falls in `month`; null when the completed
+   *  list could not be read - never 0 for "unknown" (Rig run 4, P-079). */
+  moveInsThisMonth: number | null;
   generatedAt: string;
 }
 
@@ -1024,9 +1026,7 @@ export async function getPropolyBusinessStats(
         label: STATUS_INFO[key].label,
         count: active.filter((d) => d.statusKey === key).length,
       })),
-      moveInsThisMonth: (completes ?? []).filter((c) =>
-        c.date?.startsWith(month)
-      ).length,
+      moveInsThisMonth: completes ? completes.filter((c) => c.date?.startsWith(month)).length : null,
       generatedAt: new Date().toISOString(),
     };
   })();
@@ -1067,7 +1067,9 @@ export async function getPropolyMoveInForecast(): Promise<PropolyMoveInForecast 
 
   const work = (async (): Promise<PropolyMoveInForecast | null> => {
     const [completes, deals] = await Promise.all([ensureCompletes(), fetchAllDeals()]);
-    if (!completes && !deals) return null;
+    /* Both halves or nothing (Rig run 4, P-079): one failed read made its half
+       0 - completed this month 0, pipeline 0 - and showed it as live. */
+    if (!completes || !deals) return null;
 
     /* London's date, not UTC's: between midnight and 1am BST on the 1st the
        UTC date is still last month. And last month from the year and month

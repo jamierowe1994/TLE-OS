@@ -29,7 +29,7 @@ interface LiveBusiness {
     month: string;
     pipelineTotal: number;
     pipelineByStage: { key: string; label: string; count: number }[];
-    moveInsThisMonth: number;
+    moveInsThisMonth: number | null;
     generatedAt: string;
   } | null;
   monthCounts?: {
@@ -815,7 +815,7 @@ export default function Overview({ month }: { month: string }) {
       )
     : kpiPeriod.funnel.pipeline;
   const funnelMoveIns: StatValue =
-    live?.propoly
+    live?.propoly && live.propoly.moveInsThisMonth != null
       ? {
           value: live.propoly.moveInsThisMonth,
           source: "live-propoly",

@@ -46,16 +46,27 @@ export default function BuildPage({ params }: { params: Promise<{ id: string }> 
      record is a round-trip away, which is the worst possible first frame on
      the screen they open in a landlord's hallway. */
   const [ma, setMa] = useState<MarketAppraisal | null | undefined>(undefined);
+  /* A failed read is not "No such appraisal" (Rig run 4, P-075). */
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
     let gone = false;
     fetch("/api/appraisals", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
         if (gone) return;
-        const list: MarketAppraisal[] = Array.isArray(j?.appraisals) ? j.appraisals : [];
+        if (!j || j.error || !Array.isArray(j.appraisals)) {
+          setFailed(true);
+          setMa(null);
+          return;
+        }
+        const list: MarketAppraisal[] = j.appraisals;
         setMa(list.find((m) => m.id === id) ?? null);
       })
-      .catch(() => !gone && setMa(null));
+      .catch(() => {
+        if (gone) return;
+        setFailed(true);
+        setMa(null);
+      });
     return () => {
       gone = true;
     };
@@ -72,9 +83,9 @@ export default function BuildPage({ params }: { params: Promise<{ id: string }> 
   if (!ma) {
     return (
       <div className="mx-auto max-w-2xl py-16 text-center">
-        <p className="hand text-[20px]">No such appraisal</p>
+        <p className="hand text-[20px]">{failed ? "We couldn't load the appraisal" : "No such appraisal"}</p>
         <p className="mt-2 text-[12.5px] text-muted">
-          It may have been removed, or the link is wrong.
+          {failed ? "Nothing is lost. Refresh in a minute." : "It may have been removed, or the link is wrong."}
         </p>
         <Link href="/market-appraisals" className="mt-4 inline-block text-[12.5px] underline">
           Back to Market Appraisals

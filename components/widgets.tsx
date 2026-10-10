@@ -1191,11 +1191,14 @@ function ComplianceDueWidget({ w, h }: { w: number; h: number }) {
 /** Live since 7 Sep 2026, off the works orders. It was "7 · 2 urgent", typed in. */
 const worksSlot: Slot = { p: null };
 function MaintenanceWidget({ w, h }: { w: number; h: number }) {
-  const { data, loading, error } = useShared<{ summary: { open: number; overdue: number; emergencies: number; awaitingLandlord: number; byKind: { repair: number; planned: number } }; orders: { id: string; ref: number; title: string; propertyName: string; status: string; urgency: string | null; dueAt: string | null }[] }>(
+  const { data, loading, error } = useShared<{ summary: { open: number; overdue: number; emergencies: number; awaitingLandlord: number; byKind: { repair: number; planned: number } }; orders: { id: string; ref: number; title: string; propertyName: string; status: string; urgency: string | null; dueAt: string | null }[]; carriedError?: string }>(
     worksSlot, "/api/works-orders?open=1",
-    (j) => (j.ok && j.summary ? { summary: j.summary as never, orders: (j.orders as never[]) ?? [] } : null)
+    (j) => (j.ok && j.summary ? { summary: j.summary as never, orders: (j.orders as never[]) ?? [], carriedError: typeof j.carriedError === "string" ? j.carriedError : undefined } : null)
   );
   const s = data?.summary;
+  /* The old system's jobs could not be read, so the counts are short (Rig
+     run 4, P-077): said on the tile, as the Maintenance page says it. */
+  const partial = data?.carriedError ? "not counting the old system's jobs" : null;
   return (
     <>
       <Head icon="setting" label="Maintenance jobs" />
@@ -1204,10 +1207,10 @@ function MaintenanceWidget({ w, h }: { w: number; h: number }) {
       ) : error || !s ? (
         <BigCount value="—" hint={error ?? "couldn't read the jobs"} />
       ) : w === 1 && h === 1 ? (
-        <BigCount value={String(s.open)} hint={s.emergencies ? `${s.emergencies} emergenc${s.emergencies === 1 ? "y" : "ies"}` : s.overdue ? `${s.overdue} overdue` : `${s.byKind.repair} repairs · ${s.byKind.planned} planned`} />
+        <BigCount value={String(s.open)} hint={partial ?? (s.emergencies ? `${s.emergencies} emergenc${s.emergencies === 1 ? "y" : "ies"}` : s.overdue ? `${s.overdue} overdue` : `${s.byKind.repair} repairs · ${s.byKind.planned} planned`)} />
       ) : (
         <>
-          <BigCount value={String(s.open)} hint={`${s.overdue} overdue · ${s.awaitingLandlord} awaiting the landlord`} />
+          <BigCount value={String(s.open)} hint={`${s.overdue} overdue · ${s.awaitingLandlord} awaiting the landlord${partial ? ` · ${partial}` : ""}`} />
           <RowList
             rows={(data?.orders ?? []).slice(0, h >= 2 ? 5 : 3).map((o) => ({
               a: `#${o.ref}`,

@@ -75,6 +75,17 @@ export async function GET(req: NextRequest) {
   const viewAsCookie = actor.role === "owner" && !!readViewAs(req.cookies.get(VIEW_AS_COOKIE)?.value);
   const whole = viewingAs ? !!subject && (await seesWholeOverview(subject)) : !viewAsCookie && (await seesWholeOverview(actor));
   const get = (h: (r: NextRequest) => Promise<Response>, path: string) => read(h, req, path, whole);
+  /* An answer that could not be read is an error on its tile, never zeros
+     (Rig run 4, P-065, 10 Oct 2026): an agent the OS cannot place got "0 to
+     review", "0 applications" and "0 on the market" beside the tiles that
+     correctly said "we can't tell which REX user you are". */
+  const honest = (j: Json): Json => {
+    const why = (k: string) => (typeof j[k] === "string" ? (j[k] as string) : null);
+    if (j.unlinked) throw new Error(why("reason") ?? why("error") ?? "We can't tell which REX user you are. Ask James to link your account.");
+    if (typeof j.bookError === "string") throw new Error(j.bookError);
+    if (j.ok === false || why("error")) throw new Error(why("error") ?? why("reason") ?? "That couldn't be read just now.");
+    return j;
+  };
 
   /* The person's own homes, for cutting the company-wide tiles down. */
   const portfolio = get(portfolioGET, "/api/portfolio");
@@ -120,7 +131,7 @@ export async function GET(req: NextRequest) {
       return { due: Number(s.due ?? 0), overdue: Number(s.overdue ?? 0), booked: Number(s.booked ?? 0), awaitingTenant: Number(s.awaitingTenant ?? 0) };
     })),
 
-    settle(get(reviewsGET, "/api/tenancy-reviews").then((j) => {
+    settle(get(reviewsGET, "/api/tenancy-reviews").then(honest).then((j) => {
       const s = (j.summary ?? {}) as Json;
       const due = (Array.isArray(j.due) ? j.due : []) as { why: string; propertyName: string; agreement: string }[];
       const notice = due.filter((d) => /notice/i.test(d.why));
@@ -132,7 +143,7 @@ export async function GET(req: NextRequest) {
     })),
 
     /* Upcoming vacancies is the Move-outs screen's own list (2 Oct 2026). */
-    settle(get(moveOutsGET, "/api/move-outs").then((j) => {
+    settle(get(moveOutsGET, "/api/move-outs").then(honest).then((j) => {
       const s = (j.summary ?? {}) as Json;
       const open = (Array.isArray(j.open) ? j.open : []) as { propertyName: string; moveOutOn: string | null; daysAway: number | null }[];
       return {
@@ -156,7 +167,7 @@ export async function GET(req: NextRequest) {
       };
     })),
 
-    settle(get(applicationsGET, "/api/applications").then((j) => {
+    settle(get(applicationsGET, "/api/applications").then(honest).then((j) => {
       const apps = (Array.isArray(j.applications) ? j.applications : []) as { status: string; closed: unknown; startDate: string | null }[];
       const open = apps.filter((a) => !a.closed && /^(received|communicated)$/i.test(a.status));
       const movingIn = apps.filter((a) => !a.closed && /^accepted$/i.test(a.status) && (a.startDate ?? "") >= today);
@@ -166,7 +177,7 @@ export async function GET(req: NextRequest) {
     /* On the market, let agreed and drafts by the one rule every screen uses
        (lib/listing-stages, Rig run 3, P-026). Let agreed counted only the
        published ones here, and drafts counted the 140-odd filed away. */
-    settle(Promise.all([get(listingsGET, "/api/listings?tests=0"), activity().catch(() => null)]).then(([j, act]) => {
+    settle(Promise.all([get(listingsGET, "/api/listings?tests=0").then(honest), activity().catch(() => null)]).then(([j, act]) => {
       const ls = (Array.isArray(j.listings) ? j.listings : []) as StageListing[];
       return stageCounts(ls, new Set(act?.accepted ?? []));
     })),

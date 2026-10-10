@@ -105,6 +105,8 @@ export default function MarketAppraisals() {
      asking, so the screen can say "loading" rather than flashing "none yet" at
      somebody who has just booked one. */
   const [live, setLive] = useState<MarketAppraisal[] | null>(() => peekJson<{ appraisals?: MarketAppraisal[] }>("/api/appraisals")?.appraisals ?? null);
+  /* A failed read is said, never shown as "Nothing at this stage" (Rig run 4, P-075). */
+  const [loadError, setLoadError] = useState<string | null>(null);
   /* Booking one from here: a three-screen wizard that makes the landlord a
      lead first (components/appraisal/BookAppraisalWizard). */
   const [booking, setBooking] = useState(false);
@@ -117,10 +119,19 @@ export default function MarketAppraisals() {
     /* The last good read paints at once (lib/page-cache); this corrects it. */
     readJson<{ appraisals?: MarketAppraisal[]; error?: string }>("/api/appraisals", (j) => Array.isArray(j?.appraisals) && !j.error)
       .then((j) => {
-        if (!gone) setLive(Array.isArray(j?.appraisals) ? j.appraisals : []);
+        if (gone) return;
+        if (!Array.isArray(j?.appraisals) || j.error) {
+          setLoadError("We couldn't read the appraisals just now. Nothing is lost - refresh in a minute.");
+          setLive((cur) => cur ?? []);
+          return;
+        }
+        setLoadError(null);
+        setLive(j.appraisals);
       })
       .catch(() => {
-        if (!gone) setLive([]);
+        if (gone) return;
+        setLoadError("We couldn't read the appraisals just now. Nothing is lost - refresh in a minute.");
+        setLive((cur) => cur ?? []);
       });
     return () => {
       gone = true;
@@ -319,9 +330,10 @@ export default function MarketAppraisals() {
           )}
         </div>
 
+        {loadError && <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-[12.5px] text-red-700">{loadError}</p>}
         {live === null ? (
           <BoardSkeleton kind={view === "tiles" ? "cards" : "rows"} label="Fetching the appraisals…" count={view === "tiles" ? 6 : 5} />
-        ) : rows.length === 0 ? (
+        ) : rows.length === 0 && loadError ? null : rows.length === 0 ? (
           <p className="py-6 text-[12.5px] text-muted">
             Nothing at this stage{period === "any" ? "" : " in that date range"}.
           </p>

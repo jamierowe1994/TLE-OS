@@ -159,6 +159,9 @@ export default function PlcQueuePage() {
   if (queue === null && !error) return <WorkspaceLoading />;
 
   const list = queue ?? [];
+  /* Not read is not empty (Rig run 4, P-075): with the queue unread the tiles
+     said 0 and "The queue is clear" under the error. */
+  const unread = queue === null && Boolean(error);
   const overdue = list.filter((c) => ageOf(c.submittedAt).over);
   const soon = list.filter((c) => {
     const d = daysUntil(c.moveInDate);
@@ -185,13 +188,13 @@ export default function PlcQueuePage() {
 
       {/* ── the three numbers ── */}
       <div className="fade-up grid gap-3 sm:grid-cols-3">
-        <Tile icon="shield" tone={list.length ? "green" : "green"} value={list.length} label="Waiting on you" note={list.length ? "Longest wait first" : "The queue is clear"} />
-        <Tile icon="clock" tone="red" value={overdue.length} label={`Past ${TARGET_HOURS} hours`} note={overdue.length ? "The agent has been told 48" : "Everything inside the target"} />
-        <Tile icon="key" tone={soon.length ? "red" : "green"} value={soon.length} label="Moving in this week" note={soon.length ? "Decide these first" : "Nothing this close"} />
+        <Tile icon="shield" tone={list.length ? "green" : "green"} value={unread ? "—" : list.length} label="Waiting on you" note={unread ? "Couldn't read the queue" : list.length ? "Longest wait first" : "The queue is clear"} />
+        <Tile icon="clock" tone="red" value={unread ? "—" : overdue.length} label={`Past ${TARGET_HOURS} hours`} note={unread ? "Couldn't read the queue" : overdue.length ? "The agent has been told 48" : "Everything inside the target"} />
+        <Tile icon="key" tone={soon.length ? "red" : "green"} value={unread ? "—" : soon.length} label="Moving in this week" note={unread ? "Couldn't read the queue" : soon.length ? "Decide these first" : "Nothing this close"} />
       </div>
 
       {/* ── the queue ── */}
-      {list.length === 0 ? (
+      {unread ? null : list.length === 0 ? (
         <section className="fade-up flex items-center gap-4 rounded-[22px] border border-line/70 bg-card p-6">
           <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${PLC_GREEN}`}>✓</span>
           <div>

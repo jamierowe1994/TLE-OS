@@ -32,7 +32,10 @@ export async function GET(req: NextRequest) {
 
   const [status, queue, moveIns] = await Promise.all([
     watchStatus(),
-    reviewQueue().catch(() => []),
+    /* A failed read is null, never an empty list (Rig run 4, P-040): Kirstie's
+       screen said "Nothing needs you" and "Every pack has been decided" when
+       the queue or the move-ins simply could not be read. */
+    reviewQueue().catch(() => null),
     q<{ deal_id: string; property: string; agent_name: string | null; move_in: Date | string; status_key: string }>(
       `SELECT deal_id, property, agent_name, move_in, status_key
          FROM os_deal_states
@@ -41,7 +44,7 @@ export async function GET(req: NextRequest) {
           AND move_in < CURRENT_DATE + INTERVAL '14 days'
           AND status_key NOT IN ('cancelled')
         ORDER BY move_in, property`
-    ).catch(() => []),
+    ).catch(() => null),
   ]);
 
   return NextResponse.json({
@@ -51,7 +54,9 @@ export async function GET(req: NextRequest) {
     byStatus: status.byStatus,
     deals: status.deals,
     lastSeenAt: status.lastSeenAt,
-    queue: queue.map((c) => ({
+    queueFailed: queue === null,
+    moveInsFailed: moveIns === null,
+    queue: (queue ?? []).map((c) => ({
       id: c.id,
       address: c.address,
       agentName: c.agentName,
@@ -59,7 +64,7 @@ export async function GET(req: NextRequest) {
       state: c.state,
       moveInDate: c.moveInDate ?? null,
     })),
-    moveIns: moveIns.map((m) => ({
+    moveIns: (moveIns ?? []).map((m) => ({
       dealId: m.deal_id,
       property: m.property,
       agentName: m.agent_name,

@@ -197,7 +197,7 @@ interface PropolyBiz {
   month: string;
   pipelineTotal: number;
   pipelineByStage: { key: string; label: string; count: number }[];
-  moveInsThisMonth: number;
+  moveInsThisMonth: number | null;
   generatedAt: string;
 }
 
@@ -481,12 +481,16 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
             <StatCard
               size="sm"
               label="Move-ins"
-              stat={{
-                value: livePropoly.moveInsThisMonth,
-                source: "live-propoly",
-                note: "Completed Propoly deals with a move-in date this month.",
-                asOf: livePropoly.generatedAt.slice(0, 10),
-              }}
+              stat={
+                livePropoly.moveInsThisMonth == null
+                  ? { value: null, source: "unavailable", note: "Propoly's completed deals couldn't be read just now." }
+                  : {
+                      value: livePropoly.moveInsThisMonth,
+                      source: "live-propoly",
+                      note: "Completed Propoly deals with a move-in date this month.",
+                      asOf: livePropoly.generatedAt.slice(0, 10),
+                    }
+              }
               sub={`${monthLabel(livePropoly.month).split(" ")[0]} · completed`}
             />
             <StatCard

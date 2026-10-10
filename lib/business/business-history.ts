@@ -267,9 +267,17 @@ export async function getYoYLive(): Promise<YoYLive> {
     await writeCache(YOY_CACHE_KEY, fresh).catch(() => undefined);
     return fresh;
   }
-  // Couldn't compute. A previously stored answer, even an old one, is a far
-  // better tile than falling through to a 2025 snapshot.
-  return stored?.data ?? fresh;
+  /* Couldn't compute. A stored answer stands in only if it is from the last
+     day and the same year (Rig run 4, P-080, 10 Oct 2026): "even an old one"
+     put a months-old count on screen as today's. Its own window end ("1 Jan
+     to 9 Oct") is on the tile, so a day-old answer says how old it is. Older
+     than that, the tile shows the failure. */
+  const year = londonToday().slice(0, 4);
+  const usable =
+    stored?.data?.moveIns &&
+    Date.now() - stored.at < 24 * 60 * 60 * 1000 &&
+    String(stored.data.moveIns.to ?? "").startsWith(year);
+  return usable ? stored!.data : fresh;
 }
 
 async function computeYoYLive(): Promise<YoYLive> {

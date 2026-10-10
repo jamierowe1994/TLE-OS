@@ -32,6 +32,9 @@ interface Data {
   lastSeenAt: string | null;
   queue: { id: string; address: string; agentName: string; submittedAt: string | null; state: string; moveInDate: string | null }[];
   moveIns: { dealId: string; property: string; agentName: string | null; moveIn: string; status: string }[];
+  /** The queue or the move-ins could not be read: never shown as all clear (P-040). */
+  queueFailed?: boolean;
+  moveInsFailed?: boolean;
 }
 
 const STAGE_ORDER = ["Deal started", "Holding fee", "Referencing", "References back", "Out for signing", "Complete"];
@@ -167,6 +170,8 @@ export default function PreTenancyDashboard() {
   if (!data && !error) return <WorkspaceLoading />;
 
   const queue = data?.queue ?? [];
+  /** Said instead of "all clear" when a part could not be read (P-040). */
+  const unread = data?.queueFailed && data?.moveInsFailed ? "We couldn't read the pack queue or the move-ins." : data?.queueFailed ? "We couldn't read the pack queue." : data?.moveInsFailed ? "We couldn't read the move-ins." : null;
   const moveIns = data?.moveIns ?? [];
   const week = moveIns.filter((m) => daysFromToday(m.moveIn) <= 7);
 
@@ -211,13 +216,15 @@ export default function PreTenancyDashboard() {
       {/* ── today, this week, what moved ── */}
       <div className="grid gap-4 lg:grid-cols-3">
         <section className="fade-up flex flex-col rounded-[22px] bg-accent-soft p-5" data-search>
-          <Head icon="info" title={focus.length ? `${focus.length} ${focus.length === 1 ? "item needs" : "items need"} your attention` : "Nothing needs you right now"} sub={focus.length ? "Late packs, and move-ins that are not ready." : "Every pack is inside 48 hours and this week's move-ins are ready."} tone="pink" />
+          <Head icon="info" title={focus.length ? `${focus.length} ${focus.length === 1 ? "item needs" : "items need"} your attention` : unread ? "We couldn't check everything" : "Nothing needs you right now"} sub={focus.length ? "Late packs, and move-ins that are not ready." : unread ? "Part of this screen didn't load, so it isn't an all clear." : "Every pack is inside 48 hours and this week's move-ins are ready."} tone="pink" />
           {focus.length > 0 ? (
             <ul className="mt-4 divide-y divide-[#9d4340]/10">
               {focus.slice(0, 5).map((f) => (
                 <Row key={f.href} href={f.href} dot="red" title={f.title} sub={f.sub} right={<Pill tone="red">{f.pill}</Pill>} />
               ))}
             </ul>
+          ) : unread ? (
+            <p className="mt-4 rounded-xl bg-white/70 px-4 py-3 text-[13px] text-[#9d4340]">{unread} Refresh in a minute.</p>
           ) : (
             <div className="mt-4 flex items-center gap-3 rounded-xl bg-white/70 px-4 py-3">
               <span className={`flex h-8 w-8 items-center justify-center rounded-full ${GREEN}`}>✓</span>
@@ -231,7 +238,9 @@ export default function PreTenancyDashboard() {
 
         <section className={`${card} fade-up p-5`} data-search>
           <Head icon="key" title="Move-ins" sub="Today and the next seven days." href="/pre-tenancy" />
-          {week.length === 0 ? (
+          {data?.moveInsFailed ? (
+            <p className="mt-5 text-[13px] text-[#9d4340]">We couldn&apos;t read the move-ins just now.</p>
+          ) : week.length === 0 ? (
             <p className="mt-5 text-[13px] text-muted">No move-in dates inside the next seven days.</p>
           ) : (
             <ul className="mt-3 divide-y divide-line/50">
@@ -261,7 +270,9 @@ export default function PreTenancyDashboard() {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <section className={`${card} fade-up p-5`} data-search>
           <Head icon="shield" title="Packs with compliance" sub="Handed over by agents, longest wait first." href="/pre-tenancy/plc" />
-          {queue.length === 0 ? (
+          {data?.queueFailed ? (
+            <p className="mt-4 text-[13px] text-[#9d4340]">We couldn&apos;t read the queue just now.</p>
+          ) : queue.length === 0 ? (
             <div className="mt-4 flex items-center gap-3">
               <span className={`flex h-8 w-8 items-center justify-center rounded-full ${GREEN}`}>✓</span>
               <p className="text-[13px] text-muted">Nothing waiting. Every pack handed over has been decided.</p>
