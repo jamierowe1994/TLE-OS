@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auditEmails } from "@/lib/email-audit";
+import { requireAnyCapability } from "@/lib/admin";
 import { rexConfigured } from "@/lib/rex";
 
 /**
@@ -13,6 +14,11 @@ import { rexConfigured } from "@/lib/rex";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+  /* The whole company's send log (Rig run 2, P-008): Susan's and Francesca's,
+     not every agent's. It answered anybody signed in. */
+  if (!(await requireAnyCapability(req, ["see:business", "see:marketing"]))) {
+    return NextResponse.json({ error: "This is the company's whole email log, so it is for the owners and marketing." }, { status: 403 });
+  }
   if (!rexConfigured()) {
     return NextResponse.json({ error: "REX isn't connected here." }, { status: 503 });
   }

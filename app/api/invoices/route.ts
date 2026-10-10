@@ -21,7 +21,16 @@ export async function GET(req: NextRequest) {
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!hasDb()) return NextResponse.json({ ok: true, live: false, invoices: [], settings: null });
-  const [invoices, settings] = await Promise.all([listInvoices(), invoiceSettings()]);
+  const [all, settings] = await Promise.all([listInvoices(), invoiceSettings()]);
+  /* Every invoice in the business went to anybody signed in (Rig run 2,
+     P-008). Owners and the office see them all; anybody else the ones they
+     drafted, which is all the Invoices tab is for on their side. The settings
+     still go to everyone: they are the company details printed on every
+     invoice, bank details included, so a landlord can pay it. */
+  const me = [actor.name, actor.email].map((s) => (s ?? "").trim().toLowerCase()).filter(Boolean);
+  const invoices = can(actor.role, "see:everything")
+    ? all
+    : all.filter((i) => me.includes((i.createdBy ?? "").trim().toLowerCase()));
   return NextResponse.json({ ok: true, live: true, invoices, settings });
 }
 

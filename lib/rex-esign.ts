@@ -68,6 +68,8 @@ export type EsignRequest = {
   templateName: string;
   /** Who sent it, from REX — so the log shows a person, not "the office". */
   sentBy: string;
+  /** Their REX user id, so an agent's list can be their own sends only. */
+  sentById: string | null;
   sentAt: string | null;
   completedAt: string | null;
   /** DocuSign's own envelope id, for anyone who needs to look it up there. */
@@ -84,7 +86,7 @@ type Raw = {
   status_id?: string;
   esign_template?: { id?: number; name?: string };
   esign_template_id?: number;
-  system_sent_user?: { name?: string };
+  system_sent_user?: { id?: string | number; name?: string };
   system_sent_time?: number;
   system_completed_time?: number;
   provider_request_id?: string;
@@ -112,6 +114,7 @@ function toRequest(r: Raw): EsignRequest {
     templateId: r.esign_template?.id ?? r.esign_template_id ?? null,
     templateName: r.esign_template?.name ?? "",
     sentBy: r.system_sent_user?.name ?? "",
+    sentById: r.system_sent_user?.id != null ? String(r.system_sent_user.id) : null,
     sentAt: at(r.system_sent_time),
     completedAt: at(r.system_completed_time),
     envelopeId: r.provider_request_id ?? null,

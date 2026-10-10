@@ -3,6 +3,8 @@ import { createCase, listCases, PlcRefused, reviewQueue } from "@/lib/plc-store"
 import { PLC_CHECKS } from "@/lib/plc";
 import { scanConfigured } from "@/lib/plc-scan";
 import { currentUser } from "@/lib/plc-actor";
+import { whoIs } from "@/lib/admin";
+import { can } from "@/lib/roles";
 import { moveInToRex } from "@/lib/plc-move-in-rex";
 
 /**
@@ -20,8 +22,19 @@ export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   const queue = req.nextUrl.searchParams.get("queue") === "1";
+  /* Every handover pack in the business went to anybody signed in (Rig run 2,
+     P-008). The review queue is the PLC checkers' (work:plc); the list is the
+     business for owners and the office, and an agent's own packs otherwise. */
+  const { actor } = await whoIs(req);
+  if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
+  if (queue && !can(actor.role, "work:plc")) {
+    return NextResponse.json({ ok: false, error: "The PLC queue is the checkers'." }, { status: 403 });
+  }
+  const everything = can(actor.role, "see:everything") || can(actor.role, "work:plc");
   try {
-    const cases = queue ? await reviewQueue() : await listCases();
+    const listed = queue ? await reviewQueue() : await listCases();
+    const me = (actor.email ?? "").trim().toLowerCase();
+    const cases = everything ? listed : listed.filter((c) => (c.agentEmail ?? "").trim().toLowerCase() === me);
     return NextResponse.json({
       ok: true,
       cases,

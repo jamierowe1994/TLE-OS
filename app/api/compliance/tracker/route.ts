@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { requireCapability } from "@/lib/admin";
 import { getComplianceBook } from "@/lib/compliance-cache";
 import { buildQueue, buildTracker } from "@/lib/compliance-tracker";
 import { COMP_BOOK } from "@/lib/compliance";
@@ -39,7 +40,13 @@ async function chaseLog(): Promise<{ key: string; to: string; at: string }[] | n
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  /* Michael's back-office tracker across the whole book, and the chase log of
+     who was emailed when (Rig run 2, P-008). The office and owners; an agent's
+     own homes are on /compliance. It answered anybody signed in. */
+  if (!(await requireCapability(req, "see:agent-compliance"))) {
+    return NextResponse.json({ ok: false, error: "The tracker is the compliance desk's. Your homes are on Compliance." }, { status: 403 });
+  }
   // Without REX the sample book still exercises every code path, which is what
   // makes this developable. Flagged as not live so nobody quotes the numbers.
   if (!rexConfigured()) {

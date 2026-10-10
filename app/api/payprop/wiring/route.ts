@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { requireCapability } from "@/lib/admin";
 import {
   PAYPROP_ACCOUNTS,
   payPropConfigured,
@@ -138,9 +139,15 @@ async function checkAccount(id: PayPropAccountId, label: string): Promise<{
   return { id, label, hasKey: true, checks };
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const blocked = diagnosticsBlocked();
   if (blocked) return blocked;
+  /* Connections and their health are the wiring sheet's (Rig run 2, P-008):
+     owners and developers, see:wiring. diagnosticsBlocked only switches
+     diagnostics off on an environment; it never asked who was looking. */
+  if (!(await requireCapability(req, "see:wiring"))) {
+    return NextResponse.json({ ok: false, error: "This is the wiring sheet's." }, { status: 403 });
+  }
 
   if (!payPropConfigured()) {
     return NextResponse.json({

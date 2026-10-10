@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { requireCapability } from "@/lib/admin";
 import { diagnosticsBlocked } from "@/lib/diagnostics";
 import { flatfairBase, flatfairConfigured, flatfairEnv, flatfairGet, listBranches } from "@/lib/flatfair";
 import { syncState } from "@/lib/flatfair-sync";
@@ -12,9 +13,15 @@ import { syncState } from "@/lib/flatfair-sync";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const blocked = diagnosticsBlocked();
   if (blocked) return blocked;
+  /* Connections and their health are the wiring sheet's (Rig run 2, P-008):
+     owners and developers, see:wiring. diagnosticsBlocked only switches
+     diagnostics off on an environment; it never asked who was looking. */
+  if (!(await requireCapability(req, "see:wiring"))) {
+    return NextResponse.json({ ok: false, error: "This is the wiring sheet's." }, { status: 403 });
+  }
   if (!flatfairConfigured()) {
     return NextResponse.json({ configured: false, note: "No FLATFAIR_API_TOKEN on this service yet." });
   }
