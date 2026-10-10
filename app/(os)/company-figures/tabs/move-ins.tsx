@@ -18,7 +18,6 @@ import type { PipelineRow, MoveInRow } from "@/lib/business/seed-types";
 import { resolveStat, type ManualOverride } from "@/lib/business/stats";
 import { currentMonth, formatDate, formatGBP, monthLabel, recentMonths } from "@/lib/business/format";
 import type { ActualOverride, StatValue } from "@/lib/business/types";
-const SNAPSHOT_MONTH = "2026-07"; // the one month the seed answers for
 
 /* ------------------------------ status chips ------------------------------ */
 

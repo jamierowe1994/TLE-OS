@@ -4,6 +4,7 @@ import { SEED, PERIOD_KPIS } from "@/lib/business/seed-data";
 import { getGciSeries } from "@/lib/business/gci-history";
 import { getOverrides } from "@/lib/business/actuals-store";
 import { resolveStat } from "@/lib/business/stats";
+import { liveMonth } from "@/lib/business/roster";
 import type { StatValue } from "@/lib/business/types";
 
 // Assembled business-overview payload for the admin Overview tab. Snapshot
@@ -27,7 +28,11 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const month = req.nextUrl.searchParams.get("month") ?? "2026-07";
+  /* Defaulted to a typed "2026-07" until 10 Oct 2026 (Rig P-003), so a call
+     without ?month= read July's manual overrides. Now the month we are in,
+     the same clock the page's own pills use. */
+  const asked = req.nextUrl.searchParams.get("month");
+  const month = asked && /^\d{4}-\d{2}$/.test(asked) ? asked : liveMonth();
 
   // Merge admin manual overrides into the sales funnel (manual beats snapshot).
   const overrides = await getOverrides(month);

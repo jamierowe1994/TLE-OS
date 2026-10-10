@@ -10,7 +10,6 @@ import FunnelBar from "@/components/business/charts/FunnelBar";
 import TimescaleSelect from "@/components/business/TimescaleSelect";
 import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
 import { monthLabel } from "@/lib/business/format";
-const SNAPSHOT_MONTH = "2026-07"; // the one month the seed answers for
 
 /* ------------------------------- socials ------------------------------- */
 

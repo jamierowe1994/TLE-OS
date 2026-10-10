@@ -12,7 +12,6 @@ import Bars from "@/components/business/charts/Bars";
 import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
 import type { IncomeMonthlyRow, LicenceFeeRow } from "@/lib/business/seed-types";
 import { formatGBP, formatNum, monthLabel, monthsThisYearToDate } from "@/lib/business/format";
-const SNAPSHOT_MONTH = "2026-07"; // the one month the seed answers for
 
 
 /* ------------------------------ table columns ------------------------------ */
