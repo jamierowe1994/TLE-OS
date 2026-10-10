@@ -411,7 +411,6 @@ function Dock() {
   const [voice, setVoice] = useState(false);
   const [sending, setSending] = useState("");
   const [lost, setLost] = useState("");
-  const [owner, setOwner] = useState(false);
   /* What this person has reported before, and where each has got to - see
      myReports in lib/pilot. Null until read; read each time the tab opens, so
      a report just sent is in it and a state the bot has changed is current. */
@@ -461,7 +460,6 @@ function Dock() {
            could not be looked at before they shipped. */
         {
           setSignedIn(Boolean(j?.user) || j?.hasDb === false);
-          setOwner(Boolean(j?.isOwner));
         }
       )
       .catch(() => {});
@@ -1251,23 +1249,10 @@ function Dock() {
           Recording {clockFace(rec.seconds)} · Stop
         </button>
       )}
-      {/* One press to the report form, for the people whose job is finding
-          faults (James, 21 Sep 2026: Howard tests everything). Owners only:
-          for everybody else the form is the third tab, where it has been. */}
-      {owner && !open && !rec.recording && (
-        <button
-          type="button"
-          data-hide-from-shot
-          onClick={() => {
-            setTab("feedback");
-            if (!open) void toggle();
-          }}
-          className="os-toast-lift fixed bottom-6 right-[96px] z-[189] hidden items-center gap-1.5 rounded-full border border-line/80 bg-panel px-3.5 py-2 text-[11.5px] font-semibold text-ink shadow-[0_10px_30px_-14px_rgba(0,0,0,0.45)] transition-colors hover:border-ink sm:flex"
-        >
-          <span aria-hidden className="h-2 w-2 rounded-full bg-[#C4412F]" />
-          Report a problem
-        </button>
-      )}
+      {/* The floating "Report a problem" pill that sat beside Steve for owners
+          (21 Sep 2026) is gone (James, 10 Oct 2026, Rig run 3, P-024): it
+          covered the bottom of cards on every screen. Reporting is Steve's
+          Report tab, for everybody - press him, then Report. */}
       <button
         type="button"
         onClick={toggle}
