@@ -8,6 +8,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import NotificationBell from "@/components/NotificationBell";
 import DoodleIcon from "@/components/DoodleIcon";
 import SignedOutWatch from "@/components/SignedOutWatch";
+import GlobalSearch from "@/components/GlobalSearch";
+import { readLab, type LabChoice, type LabLayout } from "@/lib/style-lab";
 import { readTheme, type ThemeChoice } from "@/lib/theme";
 import { FRONT, BACK, railFor, type NavItem } from "@/lib/nav";
 import { AREA_DEFS, areaForPage, canAct, canSee, levelOf, lockedSentence, type AreaAccess } from "@/lib/area-map";
@@ -94,7 +96,7 @@ function NavLink({
         // the label folds away, which is what makes the animation read as one
         // smooth motion instead of everything re-arranging at once.
         className={`hand flex w-full items-center rounded-xl px-3 py-2.5 text-left text-[13.5px] transition-colors ${
-          active ? "bg-card font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.04)]" : "text-muted hover:bg-card/70 hover:text-ink"
+          active ? "bg-[var(--shell-pill)] font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06),0_0_0_1px_var(--shell-rim)]" : "text-muted hover:bg-[var(--shell-pill)] hover:text-ink"
         }`}
       >
         <DoodleIcon
@@ -246,6 +248,18 @@ export default function Shell({ children }: { children: React.ReactNode }) {
      frame's left edge follows the sidebar - as it collapses, and to the
      window's edge where a workspace (Kirstie's, Michael's, admin) hides it. */
   const sideRef = useRef<HTMLElement>(null);
+  /* The look lab's layout (lib/style-lab): read from this browser, and kept in
+     step when the Dashboard picker changes it. */
+  const [lab, setLab] = useState<LabChoice>({ palette: null, layout: null });
+  useEffect(() => {
+    setLab(readLab());
+    const on = (e: Event) => setLab((e as CustomEvent<LabChoice>).detail);
+    window.addEventListener("os-look-lab", on);
+    return () => window.removeEventListener("os-look-lab", on);
+  }, []);
+  const layout: LabLayout = lab.layout ?? "original";
+  /* Wrapped in the frame, or standing on one surface (the card and the bleed). */
+  const framed = layout === "original" || layout === "search" || layout === "inverse";
   const [frameLeft, setFrameLeft] = useState(8);
   useEffect(() => {
     const el = sideRef.current;
@@ -265,7 +279,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     if (rail) ro.observe(rail);
     window.addEventListener("resize", place);
     return () => { ro.disconnect(); window.removeEventListener("resize", place); };
-  }, [pathname]);
+  }, [pathname, layout]);
   useLayoutEffect(() => {
     const root = flowRef.current;
     if (!root) return;
@@ -387,51 +401,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     window.location.assign("/sign-in");
   }
 
-  return (
-    /* os-type: the agents' own title face, Bricolage Grotesque (11 Sep) - see globals.css. */
-    <div className="os-type flex min-h-screen lg:bg-[#f3f2ef]">
-      {/* The grey round the page: a clear rounded window over the content,
-          grey everywhere outside it. The window still scrolls as before, so
-          nothing that scrolls the page or sticks to it changes; content just
-          passes under the 8px margin, as it would inside a scrolling panel. */}
-      <div
-        data-os-frame
-        aria-hidden
-        className="pointer-events-none fixed z-[45] hidden rounded-[18px] lg:block"
-        style={{ top: 8, right: 8, bottom: 8, left: frameLeft, boxShadow: "0 0 0 100vmax #f3f2ef, inset 0 0 0 1px rgba(0,0,0,0.07)" }}
-      />
-      {/* Tagged so /admin can hide it — an owner in the admin centre is not
-          doing an agent's job, and the rail invites them to wander into the
-          business-wide book by accident. See app/(os)/admin/layout.tsx. */}
-      <aside
-        ref={sideRef}
-        data-os-sidebar
-        className={`sticky top-3 z-[50] mb-3 ml-2 mt-3 hidden h-[calc(100vh-24px)] shrink-0 flex-col overflow-hidden py-3 transition-[width,padding] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] lg:flex ${
-          collapsed ? "w-[72px] px-2.5" : "w-60 px-4"
-        }`}
-      >
-        {/* Wordmark + the collapse toggle. The logo's pin follows the accent. */}
-        {/* The wordmark (James, 2 Oct 2026): no house, just TLE OS in Bricolage
-            Grotesque - TLE at 800, OS at 200 (loaded for this in app/layout),
-            as the type file draws it. Live text rather than the
-            picture, so collapsing can do what he asked: OS slides over and
-            hides TLE, and the narrow rail just says OS. The collapse toggle
-            sits beside it on the same row. */}
-        <div className={`relative flex items-center px-1 ${collapsed ? "flex-col gap-3" : "justify-between"}`}>
-          <Wordmark collapsed={collapsed} />
-          <button
-            type="button"
-            onClick={toggleCollapsed}
-            title={collapsed ? "Expand" : "Collapse"}
-            className="flex h-6 w-6 items-center justify-center rounded-full border border-line/80 text-[11px] text-muted transition-colors hover:text-ink"
-          >
-            {collapsed ? "»" : "«"}
-          </button>
-        </div>
+  const rule = layout === "original" ? "" : "mx-auto w-4/5";
+  const navItems = (
+    <>
 
-        {/* The break bar, then the nav sits a touch lower. */}
-        <div className="mt-4 border-t border-line/70" />
-        <nav className="os-rail mt-4 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden pb-2">
           {[...FRONT, ...(practising ? [PRACTICE_ITEM] : [])].filter(visible).map((item) => (
             <NavLink
               key={item.href}
@@ -447,7 +420,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           ))}
 
           {/* The fold between making tenancies and running the book. */}
-          <div className="mb-1 mt-3 border-t border-line/70 pt-3">
+          <div className={`mb-1 mt-3 border-t border-line/70 pt-3 ${rule}`}>
             <p
               className={`overflow-hidden whitespace-nowrap px-3 text-[9px] font-bold uppercase tracking-[0.14em] text-muted/70 transition-[max-height,opacity] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
                 collapsed ? "max-h-0 pb-0 opacity-0" : "max-h-5 pb-1 opacity-100"
@@ -475,7 +448,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               Admin link at every agent. */}
           {mine.length > 0 && (
             <>
-              <div className="mb-1 mt-3 border-t border-line/70 pt-3">
+              <div className={`mb-1 mt-3 border-t border-line/70 pt-3 ${rule}`}>
                 <p
                   className={`overflow-hidden whitespace-nowrap px-3 text-[9px] font-bold uppercase tracking-[0.14em] text-muted/70 transition-[max-height,opacity] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
                     collapsed ? "max-h-0 pb-0 opacity-0" : "max-h-5 pb-1 opacity-100"
@@ -499,10 +472,41 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               ))}
             </>
           )}
+            </>
+  );
+  /* ── The look lab (James, 10 Oct 2026; lib/style-lab) ─────────────────────
+     Five sidebar layouts to mix with five palettes, chosen on the Dashboard by
+     an owner and kept in that browser only. "original" is the live sidebar.
+     Every divider in a lab layout stops at 80% of the bar: "the line should
+     never go full width on nav bars". */
+  const brandRow = (
+    <>
+        <div className={`relative flex items-center px-1 ${collapsed ? "flex-col gap-3" : "justify-between"}`}>
+          <Wordmark collapsed={collapsed} />
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            title={collapsed ? "Expand" : "Collapse"}
+            className="flex h-6 w-6 items-center justify-center rounded-full border border-line/80 text-[11px] text-muted transition-colors hover:text-ink"
+          >
+            {collapsed ? "»" : "«"}
+          </button>
+        </div>
+
+    </>
+  );
+  const navBlock = (
+    <>
+        {/* The break bar, then the nav sits a touch lower. */}
+        <div className={`mt-4 border-t border-line/70 ${rule}`} />
+        <nav className="os-rail mt-4 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden pb-2">
+          {navItems}
         </nav>
 
-        {/* ── Profile, at the foot ── */}
-        <div className="mt-auto">
+    </>
+  );
+  const profileMenu = (
+    <>
           {profileOpen && !collapsed && (
             <div className="fade-up mb-2 rounded-2xl border border-line/80 bg-panel p-3">
               {/* ONE door, not three.
@@ -531,12 +535,16 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               </button>
             </div>
           )}
+    </>
+  );
+  const profileButton = (
+    <>
           <button
             type="button"
             data-os-profile
             // Collapsed, there's no room for the panel — the tap reopens the rail.
             onClick={() => (collapsed ? toggleCollapsed() : setProfileOpen((o) => !o))}
-            className={`flex w-full items-center gap-3 rounded-xl py-2.5 text-left transition-colors hover:bg-page ${
+            className={`flex w-full items-center gap-3 rounded-xl py-2.5 text-left transition-colors hover:bg-[var(--shell-pill)] ${
               collapsed ? "justify-center px-0" : "px-3"
             }`}
           >
@@ -583,11 +591,125 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               </>
             )}
           </button>
+    </>
+  );
+  /* Help and Settings, for the layouts that keep them at the foot. */
+  const helpLinks = (
+    <div className={`flex flex-col gap-0.5 ${collapsed ? "items-center" : ""}`}>
+      {[
+        { href: "/guides", label: "Help", icon: "info" },
+        { href: "/profile", label: "Settings", icon: "setting" },
+      ].map((l) => (
+        <Link
+          key={l.href}
+          href={l.href}
+          title={collapsed ? l.label : undefined}
+          className={`flex items-center rounded-xl py-2 text-[13px] text-muted transition-colors hover:bg-[var(--shell-pill)] hover:text-ink ${collapsed ? "justify-center px-0" : "gap-3 px-3"}`}
+        >
+          <DoodleIcon name={l.icon} size={15} />
+          {!collapsed && l.label}
+        </Link>
+      ))}
+    </div>
+  );
+  const sideBody =
+    layout === "inverse" ? (
+      <>
+        {/* You at the top, set apart by a short line; TLE OS last. */}
+        <div className="relative">
+          {profileButton}
+          {profileMenu}
         </div>
+        <div className={`mt-3 border-t border-line/70 ${rule}`} />
+        <nav className="os-rail mt-3 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden pb-2">
+          {navItems}
+        </nav>
+        {helpLinks}
+        <div className={`my-3 border-t border-line/70 ${rule}`} />
+        {brandRow}
+      </>
+    ) : layout === "bleed" ? (
+      <>
+        {brandRow}
+        {navBlock}
+        <div className={`mb-2 border-t border-line/70 ${rule}`} />
+        {helpLinks}
+      </>
+    ) : (
+      <>
+        {brandRow}
+        {layout === "search" && !collapsed ? (
+          <div className="mt-3 [&_input]:text-[12.5px]">
+            <GlobalSearch placeholder="Search" />
+          </div>
+        ) : null}
+        {navBlock}
+        <div className="mt-auto">
+          {profileMenu}
+          {profileButton}
+        </div>
+      </>
+    );
+
+  return (
+    /* os-type: the agents' own title face, Bricolage Grotesque (11 Sep) - see globals.css. */
+    <div className={`os-type flex min-h-screen ${framed ? "lg:bg-[var(--shell-bg)]" : "lg:bg-[var(--shell-panel)]"}`}>
+      {/* The grey round the page: a clear rounded window over the content,
+          grey everywhere outside it. The window still scrolls as before, so
+          nothing that scrolls the page or sticks to it changes; content just
+          passes under the 8px margin, as it would inside a scrolling panel. */}
+      {framed && (
+        <div
+          data-os-frame
+          aria-hidden
+          className="pointer-events-none fixed z-[45] hidden rounded-[18px] lg:block"
+          style={{ top: 8, right: 8, bottom: 8, left: frameLeft, boxShadow: "0 0 0 100vmax var(--shell-bg), inset 0 0 0 1px var(--shell-rim)" }}
+        />
+      )}
+      {/* Tagged so /admin can hide it — an owner in the admin centre is not
+          doing an agent's job, and the rail invites them to wander into the
+          business-wide book by accident. See app/(os)/admin/layout.tsx. */}
+      <aside
+        ref={sideRef}
+        data-os-sidebar
+        className={`sticky z-[50] hidden shrink-0 flex-col overflow-hidden transition-[width,padding] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] lg:flex ${
+          collapsed ? "w-[72px] px-2.5" : "w-60 px-4"
+        } ${
+          layout === "card"
+            ? "top-3 mb-3 ml-3 mt-3 h-[calc(100vh-24px)] rounded-[22px] border border-[var(--shell-rim)] bg-[var(--shell-nav-card)] py-4 shadow-[0_8px_30px_-18px_rgba(0,0,0,0.35)]"
+            : layout === "bleed"
+              ? "top-0 h-screen border-r border-line/60 bg-[var(--shell-panel)] py-4"
+              : "top-3 mb-3 ml-2 mt-3 h-[calc(100vh-24px)] bg-[var(--shell-nav-bg)] py-3"
+        }`}
+      >
+        {/* Wordmark + the collapse toggle. The logo's pin follows the accent. */}
+        {/* The wordmark (James, 2 Oct 2026): no house, just TLE OS in Bricolage
+            Grotesque - TLE at 800, OS at 200 (loaded for this in app/layout),
+            as the type file draws it. Live text rather than the
+            picture, so collapsing can do what he asked: OS slides over and
+            hides TLE, and the narrow rail just says OS. The collapse toggle
+            sits beside it on the same row. */}
+        {sideBody}
       </aside>
 
       {/* Mobile: a simple top bar; the wireframe is a desktop pitch first. */}
-      <div className="flex min-w-0 flex-1 flex-col bg-card lg:ml-2">
+      <div className={`flex min-w-0 flex-1 flex-col bg-card lg:bg-[var(--shell-panel)] ${layout === "card" ? "lg:ml-3" : framed ? "lg:ml-2" : ""}`}>
+        {/* One surface (the bleed): search and you across the top, split from
+            the page by a fine line, as the sidebar is split from it. */}
+        {layout === "bleed" && (
+          <div className="sticky top-0 z-40 hidden h-[60px] items-center gap-4 border-b border-line/60 bg-[var(--shell-panel)] px-10 lg:flex">
+            <div className="w-full max-w-sm">
+              <GlobalSearch placeholder="Search properties, tenants…" />
+            </div>
+            <span className="ml-auto flex items-center gap-3">
+              <NotificationBell compact />
+              <div className="relative w-56">
+                {profileButton}
+                <div className="absolute right-0 top-full z-50 mt-1 w-56">{profileMenu}</div>
+              </div>
+            </span>
+          </div>
+        )}
         <header className="flex items-center justify-between border-b border-line/70 px-5 py-4 lg:hidden">
           <span className="hand text-2xl">TLE OS</span>
           <span className="flex items-center gap-2">

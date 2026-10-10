@@ -484,7 +484,7 @@ export default function PageHeader({
           z-30 because the illustration deliberately overflows the masthead
           upwards and would otherwise paint straight over both of them. */}
       {(search || true) && (
-        <div className="relative z-30 mb-1 flex items-center justify-between gap-3">
+        <div data-page-toprow className="relative z-30 mb-1 flex items-center justify-between gap-3">
           {search ? (
             onSearch ? (
               /* A page that filters its own list (Listings, Leads) passes
@@ -502,7 +502,10 @@ export default function PageHeader({
                 />
               </label>
             ) : (
-              <GlobalSearch placeholder={searchPlaceholder} />
+              /* Tagged so a look-lab layout that carries its own search can hide this one (lib/style-lab). */
+              <div data-page-global-search className="min-w-0 flex-1">
+                <GlobalSearch placeholder={searchPlaceholder} />
+              </div>
             )
           ) : (
             <span />

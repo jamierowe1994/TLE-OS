@@ -158,8 +158,8 @@ export default function WorkspaceRail({
                         collapsed ? "justify-center px-0" : "gap-3 px-3"
                       } ${
                         isOn(t)
-                          ? "bg-accent-soft font-semibold text-accent-dark lg:bg-card lg:text-ink lg:shadow-[0_1px_2px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.04)]"
-                          : "text-muted hover:text-ink lg:hover:bg-card/70"
+                          ? "bg-accent-soft font-semibold text-accent-dark lg:bg-[var(--shell-pill)] lg:text-ink lg:shadow-[0_1px_2px_rgba(0,0,0,0.06),0_0_0_1px_var(--shell-rim)]"
+                          : "text-muted hover:text-ink lg:hover:bg-[var(--shell-pill)]"
                       }`}
                     >
                       {t.icon && <DoodleIcon name={t.icon} size={16} className={isOn(t) ? "text-accent-dark" : ""} />}

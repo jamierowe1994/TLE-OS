@@ -12,10 +12,13 @@ import GuideLayer from "@/components/GuideLayer";
 import Watchdog from "@/components/Watchdog";
 import Toaster from "@/components/Toaster";
 import MailLinksNewTab from "@/components/MailLinksNewTab";
+import { LAB_BOOT } from "@/lib/style-lab";
 
 export default function OsLayout({ children }: { children: React.ReactNode }) {
   return (
     <ThemeGate>
+      {/* The look lab's choice, on before the first paint (lib/style-lab). */}
+      <script dangerouslySetInnerHTML={{ __html: LAB_BOOT }} />
       <IntroGate>
         {/* Shell reads the query string (?side=tenant) to light the right nav
             child, and Leads reads it to filter. useSearchParams opts a subtree

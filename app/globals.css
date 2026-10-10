@@ -1495,3 +1495,82 @@ html[data-os-toast="up"] .os-toast-lift {
 @media (prefers-reduced-motion: reduce) {
   .step-in-next, .step-in-back { animation: none; }
 }
+
+/* ---------------------------------------------------------------------------
+   THE LOOK LAB (James, 10 Oct 2026; lib/style-lab). Five palettes for the
+   shell, chosen on the Dashboard by an owner and kept in that browser only.
+   No attribute = the live look (warm). components/Shell reads the --shell-*
+   values; the two dark palettes also restate the page tokens, the way
+   [data-theme="dark"] did when the OS had a dark mode.
+--------------------------------------------------------------------------- */
+:root {
+  --shell-bg: #f3f2ef;          /* the window the page sits in */
+  --shell-nav-bg: transparent;  /* the sidebar, where it is flat on the window */
+  --shell-nav-card: #ffffff;    /* the sidebar, where it is a card */
+  --shell-pill: #ffffff;        /* the page you are on, in the sidebar */
+  --shell-panel: #ffffff;       /* the page's own surface */
+  --shell-rim: rgba(0, 0, 0, 0.07);
+}
+:root[data-lab-palette="cool"] {
+  --shell-bg: #eceef1;
+}
+:root[data-lab-palette="reverse"] {
+  --shell-bg: #ffffff;
+  --shell-nav-bg: #ffffff;
+  --shell-pill: #f2f3f5;
+  --shell-panel: #f2f3f5;
+  --shell-rim: rgba(0, 0, 0, 0.05);
+}
+:root[data-lab-palette="dark-lift"],
+:root[data-lab-palette="dark-deep"] {
+  color-scheme: dark;
+  --ink: #f2f2f3;
+  --muted: #a3a3aa;
+  --line: #3a3b40;
+  --accent-soft: color-mix(in srgb, var(--accent) 22%, var(--page));
+  --accent-dark: color-mix(in srgb, var(--accent) 72%, white);
+  --art-wash: #2a2b2e;
+  --shell-rim: rgba(255, 255, 255, 0.06);
+}
+/* A lighter sidebar beside a near-black page. */
+:root[data-lab-palette="dark-lift"] {
+  --page: #141517;
+  --card: #1d1e21;
+  --panel: #1d1e21;
+  --box: #1d1e21;
+  --shell-bg: #232427;
+  --shell-nav-bg: #232427;
+  --shell-nav-card: #2a2b2f;
+  --shell-pill: #34353a;
+  --shell-panel: #141517;
+}
+/* A near-black sidebar beside a lighter page. */
+:root[data-lab-palette="dark-deep"] {
+  --page: #1c1d20;
+  --card: #26272b;
+  --panel: #26272b;
+  --box: #26272b;
+  --shell-bg: #0e0f11;
+  --shell-nav-bg: #0e0f11;
+  --shell-nav-card: #17181b;
+  --shell-pill: #1f2023;
+  --shell-panel: #1c1d20;
+}
+/* The dark preview, made honest: the illustrations invert as they did in the
+   old dark mode, and the white surfaces typed straight into screens take the
+   card colour, so a dark page is not dotted with white boxes. */
+:root[data-lab-palette^="dark"] .art { filter: invert(1) hue-rotate(180deg); }
+:root[data-lab-palette^="dark"] .art-figure { filter: none; }
+:root[data-lab-palette^="dark"] .bg-white { background-color: var(--card); }
+:root[data-lab-palette^="dark"] .bg-white\/70,
+:root[data-lab-palette^="dark"] .bg-white\/80,
+:root[data-lab-palette^="dark"] .bg-white\/90 { background-color: color-mix(in srgb, var(--card) 85%, transparent); }
+:root[data-lab-palette^="dark"] .hover\:bg-white:hover { background-color: var(--card); }
+/* The layouts that carry their own search hide the page's copy of it. */
+:root[data-lab-layout="search"] [data-page-global-search],
+:root[data-lab-layout="bleed"] [data-page-global-search] { visibility: hidden; }
+:root[data-lab-palette^="dark"] .art-video { mix-blend-mode: screen; filter: invert(1); }
+/* One surface carries search and the bell in its own top bar: the page's row goes. */
+@media (min-width: 1024px) {
+  :root[data-lab-layout="bleed"] [data-page-toprow] { display: none; }
+}
