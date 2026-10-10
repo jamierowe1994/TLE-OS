@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { stageCounts, stageOf, type StageListing } from "@/lib/listing-stages";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import DiaryCalendar from "@/components/DiaryCalendar";
@@ -888,6 +889,7 @@ function PipelineWidget({ w, h }: { w: number; h: number }) {
         (j) => (Array.isArray(j.applications) && !j.error ? { applications: j.applications as Application[] } : null)
       );
       const managedFeed = useManagedBook();
+      const accepted = useAccepted();
       const thisMonth = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" }).slice(0, 7);
       const leadRows = leadsFeed.data?.rows;
       const STAGES = [
@@ -902,7 +904,7 @@ function PipelineWidget({ w, h }: { w: number; h: number }) {
         {
           label: "On market",
           short: "On market",
-          value: listingsFeed.data ? onMarketOf(listingsFeed.data.listings).length : null,
+          value: listingsFeed.data ? onMarketOf(listingsFeed.data.listings, accepted).length : null,
           href: "/listings",
           loading: listingsFeed.loading,
         },
@@ -1298,9 +1300,22 @@ function LeadsTodayWidget({ w, h }: { w: number; h: number }) {
  * The slow movers are the available ones by days live, with the reason a
  * listing tends to sit - no photographs, no write-up - read off the record.
  */
-/** On the market: published on the portals, let agreed or not. Shared with
- *  the Pipeline snapshot so the two can never count it differently. */
-const onMarketOf = (listings: OsListing[]) => listings.filter((l) => l.publicationStatus === "published");
+/** On the market: Available by lib/listing-stages - published and not let
+ *  agreed, archived drafts aside. The same rule as Listings and the Overview
+ *  (Rig run 3, P-026); shared with the Pipeline snapshot. */
+const onMarketOf = (listings: OsListing[], accepted?: ReadonlySet<string>) =>
+  listings.filter((l) => !(l as { archived?: boolean }).archived && stageOf(l, accepted) === "Available");
+
+/** Offers accepted in the OS that REX has not marked let agreed yet - the same
+ *  list Listings reads, so those homes are let agreed here too. */
+const activitySlot: Slot = { p: null };
+function useAccepted(): ReadonlySet<string> | undefined {
+  const { data } = useShared<{ accepted: string[] }>(
+    activitySlot, "/api/activity",
+    (j) => (j.ok && Array.isArray(j.accepted) ? { accepted: j.accepted as string[] } : null)
+  );
+  return data ? new Set(data.accepted) : undefined;
+}
 
 function OnMarketWidget({ w, h }: { w: number; h: number }) {
   const { data, loading, unlinked, error } = useShared<{ listings: OsListing[]; draft: number }>(
@@ -1309,12 +1324,12 @@ function OnMarketWidget({ w, h }: { w: number; h: number }) {
       ? { listings: j.listings as OsListing[], draft: Number((j.counts as { draft?: number } | undefined)?.draft ?? 0) }
       : null)
   );
-  const live = onMarketOf(data?.listings ?? []);
-  const available = live.filter((l) => !l.letAgreed);
-  const agreed = live.filter((l) => l.letAgreed);
+  const accepted = useAccepted();
+  const available = onMarketOf(data?.listings ?? [], accepted);
+  const stages = stageCounts((data?.listings ?? []) as StageListing[], accepted);
   const slow = [...available].sort((a, b) => (b.daysOnMarket ?? -1) - (a.daysOnMarket ?? -1));
-  const count = loading ? "·" : data ? String(live.length) : "—";
-  const hint = loading ? "asking REX" : data ? `${agreed.length} let agreed` : unlinked ? "link your REX account" : (error ?? "couldn't read REX");
+  const count = loading ? "·" : data ? String(available.length) : "—";
+  const hint = loading ? "asking REX" : data ? `${stages.letAgreed} let agreed` : unlinked ? "link your REX account" : (error ?? "couldn't read REX");
   const why = (l: OsListing) => (l.imageCount === 0 ? "no photos" : !l.advertBody ? "no write-up" : undefined);
 
   return (
@@ -1330,9 +1345,9 @@ function OnMarketWidget({ w, h }: { w: number; h: number }) {
             <p className="figures text-[34px] leading-none">{count}</p>
             {data ? (
               <div className="mb-0.5 flex flex-wrap gap-4 text-[11px]">
-                <span><span className="figures text-[15px]">{available.length}</span> <span className="text-muted">available</span></span>
-                <span><span className="figures text-[15px]">{agreed.length}</span> <span className="text-muted">let agreed</span></span>
-                <span><span className="figures text-[15px]">{data.draft}</span> <span className="text-muted">still drafts</span></span>
+                <span><span className="figures text-[15px]">{stages.available}</span> <span className="text-muted">available</span></span>
+                <span><span className="figures text-[15px]">{stages.letAgreed}</span> <span className="text-muted">let agreed</span></span>
+                <span><span className="figures text-[15px]">{stages.drafts}</span> <span className="text-muted">still drafts</span></span>
               </div>
             ) : (
               <p className="mb-1 text-[11px] text-muted">{hint}</p>

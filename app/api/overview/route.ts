@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { activity } from "@/lib/activity";
+import { stageCounts, type StageListing } from "@/lib/listing-stages";
 import { whoIs } from "@/lib/admin";
 import { can } from "@/lib/roles";
 import { getComplianceBook } from "@/lib/compliance-cache";
@@ -160,16 +162,12 @@ export async function GET(req: NextRequest) {
       return { open: open.length, movingIn: movingIn.length };
     })),
 
-    /* On the market = published to the portals, the dashboard tile's own rule;
-       the book's "available" counts drafts too. */
-    settle(get(listingsGET, "/api/listings?tests=0").then((j) => {
-      const ls = (Array.isArray(j.listings) ? j.listings : []) as { publicationStatus: string | null; letAgreed: boolean }[];
-      const published = ls.filter((l) => l.publicationStatus === "published");
-      return {
-        available: published.filter((l) => !l.letAgreed).length,
-        letAgreed: published.filter((l) => l.letAgreed).length,
-        drafts: ls.filter((l) => l.publicationStatus === "draft").length,
-      };
+    /* On the market, let agreed and drafts by the one rule every screen uses
+       (lib/listing-stages, Rig run 3, P-026). Let agreed counted only the
+       published ones here, and drafts counted the 140-odd filed away. */
+    settle(Promise.all([get(listingsGET, "/api/listings?tests=0"), activity().catch(() => null)]).then(([j, act]) => {
+      const ls = (Array.isArray(j.listings) ? j.listings : []) as StageListing[];
+      return stageCounts(ls, new Set(act?.accepted ?? []));
     })),
 
     /* Money is Susan's and the owners' (see:business). Anyone else sees the

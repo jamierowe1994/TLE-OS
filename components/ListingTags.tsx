@@ -1,6 +1,7 @@
 "use client";
 
 import DoodleIcon from "@/components/DoodleIcon";
+import { stageOf } from "@/lib/listing-stages";
 import { REQUIREMENTS } from "@/lib/listing-requirements";
 
 /**
@@ -38,11 +39,11 @@ export function Tag({ tone, children }: { tone: Tone; children: React.ReactNode 
   );
 }
 
-/** What the state pill says for a listing. Defined once so no two screens disagree. */
+/** What the state pill says for a listing. The rule itself is lib/listing-stages,
+ *  shared with the dashboard and the Overview so no two screens disagree. */
 export function statusOf(l: { letAgreed: boolean; publicationStatus: string | null }): { label: string; tone: Tone } {
-  if (l.letAgreed) return { label: "Let agreed", tone: "neutral" };
-  if (l.publicationStatus === "published") return { label: "Available", tone: "good" };
-  return { label: "Draft", tone: "accent" };
+  const stage = stageOf(l);
+  return { label: stage, tone: stage === "Let agreed" ? "neutral" : stage === "Available" ? "good" : "accent" };
 }
 
 export interface ReadinessState {
