@@ -27,7 +27,14 @@ export async function POST(req: NextRequest) {
 
   let body: { token?: string; password?: string };
   try {
-    body = await req.json();
+    const raw = (await req.json()) as Record<string, unknown> | null;
+    /* Only text gets past here (Rig run 3, P-027): a list or an object
+       reached .trim() and the route crashed with an empty 500. */
+    const o = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+    body = {
+      token: typeof o.token === "string" ? o.token : "",
+      password: typeof o.password === "string" ? o.password : "",
+    };
   } catch {
     return NextResponse.json({ ok: false, error: "Expected a token and a password." }, { status: 400 });
   }

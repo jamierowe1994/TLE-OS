@@ -15,7 +15,15 @@ export async function POST(req: NextRequest) {
   }
   let body: { email?: string; password?: string; remember?: boolean };
   try {
-    body = await req.json();
+    const raw = (await req.json()) as Record<string, unknown> | null;
+    /* Only text gets past here (Rig run 3, P-027): a list or an object in a
+       field reached .trim() and the route crashed with an empty 500. */
+    const o = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+    body = {
+      email: typeof o.email === "string" ? o.email : "",
+      password: typeof o.password === "string" ? o.password : "",
+      remember: typeof o.remember === "boolean" ? o.remember : undefined,
+    };
   } catch {
     return NextResponse.json({ ok: false, error: "Expected an email and a password." }, { status: 400 });
   }
