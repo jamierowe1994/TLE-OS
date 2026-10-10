@@ -57,6 +57,10 @@ export default function KnowledgeHub() {
   const [sections, setSections] = useState<string[]>([]);
   const [asked, setAsked] = useState<Asked[]>([]);
   const [denied, setDenied] = useState(false);
+  /* A read that failed is not an empty shelf (Rig run 2, P-005): it said
+     "Nothing written yet" and invited a fresh start over entries that were
+     there all along. */
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [fSection, setFSection] = useState<string | null>(null);
 
@@ -74,16 +78,18 @@ export default function KnowledgeHub() {
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(() => {
+    setLoadError(null);
     fetch("/api/knowledge", { cache: "no-store" })
-      .then((r) => (r.status === 403 ? Promise.reject(new Error("denied")) : r.json()))
+      .then((r) => (r.status === 403 ? Promise.reject(new Error("denied")) : r.ok ? r.json() : Promise.reject(new Error("failed"))))
       .then((j: { entries?: Entry[]; sections?: string[]; unanswered?: Asked[] }) => {
-        setEntries(j.entries ?? []);
+        if (!Array.isArray(j.entries)) throw new Error("failed");
+        setEntries(j.entries);
         setSections(j.sections ?? []);
         setAsked(j.unanswered ?? []);
       })
       .catch((e: Error) => {
         if (e.message === "denied") setDenied(true);
-        else setEntries([]);
+        else setLoadError("We couldn't read the knowledge just now. Nothing has been lost - try again in a minute.");
       });
   }, []);
   useEffect(load, [load]);
@@ -306,7 +312,14 @@ export default function KnowledgeHub() {
             ))}
           </div>
 
-          {entries === null ? (
+          {loadError ? (
+            <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5 text-[12.5px] text-red-700">
+              <p>{loadError}</p>
+              <button type="button" onClick={load} className="mt-3 rounded-full border border-red-300 px-3.5 py-1.5 font-semibold transition-colors hover:bg-red-100">
+                Try again
+              </button>
+            </div>
+          ) : entries === null ? (
             <p className="mt-8 text-[12.5px] text-muted">Reading…</p>
           ) : !entries.length ? (
             <div className="fade-up mt-6 rounded-2xl border border-dashed border-line/80 p-8 text-center">

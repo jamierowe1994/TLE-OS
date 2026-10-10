@@ -391,7 +391,8 @@ export default function PaidLeadsTab({ month, seed }: { month: string; seed: See
           <StatCard
             label="YTD joining fees"
             stat={pl.ytdJoiningFees}
-            sub="Joining fees received Jan–Jun 2026"
+            /* Was "Jan–Jun 2026", typed (Rig run 2, P-021). The year off the clock. */
+            sub={`Joining fees received so far in ${new Date().toLocaleDateString("en-GB", { timeZone: "Europe/London", year: "numeric" })}`}
           />
         </div>
         <p className="mt-4 text-xs text-muted">{pl.note}</p>
