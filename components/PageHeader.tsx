@@ -513,7 +513,10 @@ export default function PageHeader({
               do. They live in the masthead now, on the page they belong to.
               Desktop only (Rig run 3, P-025): below lg the Shell's own top bar
               carries the bell, and a phone showed two with the same count. */}
-          <span className="hidden lg:contents">
+          {/* pr-1: the count badge sits -1 past the button, and flush against the
+              right edge it pushed the page 3px wide on the Marketing Hub (Rig
+              run 4, P-049). */}
+          <span className="hidden lg:block lg:pr-1">
             <NotificationBell compact />
           </span>
         </div>

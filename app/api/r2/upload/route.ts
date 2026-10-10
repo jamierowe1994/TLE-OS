@@ -4,6 +4,7 @@ import {
   isScope,
   R2_BUCKET,
   r2Configured,
+  r2Problem,
   safeName,
   SCOPES,
   withR2,
@@ -109,11 +110,9 @@ export async function POST(req: NextRequest) {
       )
     );
   } catch (e) {
-    const err = e as { name?: string; message?: string };
     // The reason goes to the server log; the browser gets a sentence.
-    console.error("R2 upload failed", err.name, err.message);
     return NextResponse.json(
-      { ok: false, error: "Upload failed. The file wasn't stored." },
+      { ok: false, error: r2Problem(e, "Upload failed. The file wasn't stored.") },
       { status: 502 }
     );
   }

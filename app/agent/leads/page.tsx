@@ -57,7 +57,22 @@ const TONE: Record<string, { bg: string; ink: string }> = {
 };
 const toneOf = (stage: string) => TONE[stage] ?? { bg: "var(--m-fill)", ink: "var(--m-muted)" };
 
+/** Each lead's follow-up date, from the same spine the desktop board reads
+ *  (Rig run 4, P-074): /api/leads never carries it, so Chasing ignored every
+ *  follow-up date and the Follow Up line was always blank. Fails to nothing. */
+async function followUps(): Promise<Record<string, string | null>> {
+  const r = await fetch("/api/leads/spine", { cache: "no-store" }).catch(() => null);
+  const j = r?.ok ? ((await r.json().catch(() => null)) as { ok?: boolean; spines?: Record<string, { followUpAt?: string | null }> } | null) : null;
+  return j?.ok && j.spines ? Object.fromEntries(Object.entries(j.spines).map(([id, sp]) => [id, sp.followUpAt ?? null])) : {};
+}
+
 async function readLeads(again = true): Promise<{ leads: Lead[] } | { error: string }> {
+  const [got, follow] = await Promise.all([readLeadsOnly(again), followUps()]);
+  if (!("leads" in got)) return got;
+  return { leads: got.leads.map((l) => (follow[String(l.id)] ? { ...l, followUpAt: follow[String(l.id)] ?? undefined } : l)) };
+}
+
+async function readLeadsOnly(again = true): Promise<{ leads: Lead[] } | { error: string }> {
   const r = await fetch("/api/leads", { cache: "no-store" }).catch(() => null);
   const j = r ? ((await r.json().catch(() => null)) as { ok?: boolean; leads?: Lead[]; demo?: boolean; unlinked?: boolean; stale?: boolean; error?: string } | null) : null;
   if (!r?.ok || !j || !Array.isArray(j.leads)) return { error: j?.error ?? "Your leads did not load." };
@@ -65,7 +80,7 @@ async function readLeads(again = true): Promise<{ leads: Lead[] } | { error: str
   if (j.demo) return { error: "The leads book is not connected here." };
   if (j.stale && again) {
     await new Promise((res) => setTimeout(res, 4000));
-    const fresh = await readLeads(false);
+    const fresh = await readLeadsOnly(false);
     return "leads" in fresh ? fresh : { leads: j.leads };
   }
   return { leads: j.leads };

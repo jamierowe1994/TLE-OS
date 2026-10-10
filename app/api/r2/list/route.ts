@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { publicError } from "@/lib/public-error";
 import { ListObjectsV2Command } from "@aws-sdk/client-s3";
-import { isScope, R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
+import { isScope, R2_BUCKET, r2Configured, r2Problem, safeName, SCOPES, withR2 } from "@/lib/r2";
 import { whoIs } from "@/lib/admin";
 import { refusal } from "@/lib/r2-access";
 
@@ -85,7 +84,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, configured: true, files });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: publicError(e, "Could not read the vault.") },
+      { ok: false, error: r2Problem(e, "Could not read the vault.") },
       { status: 502 }
     );
   }

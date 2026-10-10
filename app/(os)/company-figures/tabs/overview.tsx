@@ -12,6 +12,7 @@
 // MAs by Partner Type → Monthly GCI vs Budget → Year on Year Growth.
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import DoodleIcon from "@/components/DoodleIcon";
 import { londonToday } from "@/lib/london-clock";
 import Bars from "@/components/business/charts/Bars";
 import type { SeedData, PeriodKpis } from "@/lib/business/seed-data";
@@ -356,10 +357,10 @@ function RampBreakdown({
                     {s.name}
                     {s.rexId == null ? (
                       <span
-                        className="ml-1.5 cursor-help text-[10px] text-amber-600"
+                        className="ml-1.5 inline-flex cursor-help align-middle text-amber-600"
                         title="No REX match by email - MAs/listings can't be counted for this starter"
                       >
-                        ⚠
+                        <DoodleIcon name="info" size={11} />
                       </span>
                     ) : null}
                   </td>
@@ -462,6 +463,28 @@ export default function Overview({ month }: { month: string }) {
   const [live, setLive] = useState<LiveBusiness | null>(null);
   const [liveLoading, setLiveLoading] = useState(false);
   const [hist, setHist] = useState<HistoryPayload | null>(null);
+  /* The managed book, counted where Overview and the Dashboard count it
+     (Rig run 4, P-052, 10 Oct 2026). This tile read live.totals.managed - a
+     sum over the current lettings agents - so every home whose agent has
+     left dropped out, and Susan saw 283 here against 412 everywhere else. */
+  const [book, setBook] = useState<{ homes: number } | { error: string } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/portfolio", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; error?: string; counts?: { homes?: number | null; properties?: number } }) => {
+        if (cancelled) return;
+        const n = j.counts?.homes ?? j.counts?.properties;
+        if (j.ok === false || typeof n !== "number") throw new Error(j.error ?? "The book couldn't be read just now.");
+        setBook({ homes: n });
+      })
+      .catch((e) => {
+        if (!cancelled) setBook({ error: e instanceof Error ? e.message : "The book couldn't be read just now." });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [ramp, setRamp] = useState<RampPayload | null>(null);
   // The ramp cohort keeps its own pill row - it selects a COHORT of starters
   // by launch month, which is a different question from "what happened in
@@ -1540,16 +1563,24 @@ export default function Overview({ month }: { month: string }) {
       <Section title="Year on Year Growth" source={d.sources.yoyGrowth}>
         <div className={TILE_GRID}>
           {d.yoyGrowth.map((g) => {
-            // Total portfolio: live.totals.managed is already in the payload and
-            // was simply never wired to this tile, so it sat on a snapshot.
-            if (g.label === "Total portfolio" && live?.totals) {
-              const stat: StatValue = {
-                value: live.totals.managed,
-                display: String(live.totals.managed),
-                source: "live-rex",
-                note: `Live from REX - ${live.totals.managed} managed (let) properties across every lettings agent, as at today. No baseline: REX keeps no history of the book, and the old one was typed.`,
-                asOf: londonToday(),
-              };
+            // Total portfolio: the managed book, the same count as Overview
+            // and the Dashboard (see `book` above). Never the snapshot.
+            if (g.label === "Total portfolio") {
+              const stat: StatValue =
+                book && "homes" in book
+                  ? {
+                      value: book.homes,
+                      display: String(book.homes),
+                      source: "live-rex",
+                      note: `Live - ${book.homes} homes we manage, the same count as Overview and the Dashboard, as at today. No baseline: REX keeps no history of the book, and the old one was typed.`,
+                      asOf: londonToday(),
+                    }
+                  : {
+                      value: null,
+                      display: book ? "-" : "…",
+                      source: "unavailable",
+                      note: book && "error" in book ? book.error : "Counting the book…",
+                    };
               return <Tile key={g.label} label={g.label} stat={stat} />;
             }
             // GCI per move-in, year on year: the live side is now reachable —

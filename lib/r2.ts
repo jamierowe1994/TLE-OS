@@ -80,6 +80,27 @@ export async function withR2<T>(fn: (client: S3Client) => Promise<T>): Promise<T
   throw last;
 }
 
+/**
+ * What to tell the screen when R2 says no (Rig run 4, P-046, 10 Oct 2026).
+ *
+ * The list route passed Cloudflare's own word through, so a refused key showed
+ * staff a bare "Unauthorized" with no hint what was wrong or who could fix it.
+ * A refused key is a setup problem, said as one; anything else gets the
+ * route's own sentence. The detail always goes to the server log.
+ */
+export function r2Problem(e: unknown, fallback: string): string {
+  const err = e as { name?: string; message?: string; $metadata?: { httpStatusCode?: number } };
+  console.error("[r2]", err?.name, err?.message);
+  const status = err?.$metadata?.httpStatusCode;
+  const refused =
+    status === 401 ||
+    status === 403 ||
+    /^(Unauthorized|AccessDenied|InvalidAccessKeyId|SignatureDoesNotMatch|InvalidToken)$/.test(err?.name ?? "");
+  return refused
+    ? "File storage isn't connected - it refused our keys. Ask James to check the File Storage keys."
+    : fallback;
+}
+
 /* --------------------------------------------------------------------------
    What may be stored, and where.
 

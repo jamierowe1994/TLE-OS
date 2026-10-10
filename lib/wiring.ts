@@ -128,7 +128,7 @@ export const WIRING: WiringRow[] = [
   {
     system: "rex",
     area: "The safety catch",
-    item: "🔓 Eleven REX writes are open, named one at a time. Everything else is still refused",
+    item: "Eleven REX writes are open, named one at a time. Everything else is still refused",
     state: "live",
     note: "Locked 9 Aug at James's instruction, and enforced rather than promised: every REX call goes through one function, and that function will only carry a method it recognises as read-only. It's an allowlist, so anything new or unrecognised is refused by default — a button wired up by mistake cannot reach a real record. Verified against 36 of REX's actual write methods (publish, create, update, upload, archive, purge, toggle, send…): all refused; 11 reads still pass. The catch has since been lifted for eleven named calls, each after a supervised test (checked 16 Sep 2026): Listings/update, Properties/update, Contacts/create, Contacts/update, ComplianceEntries/create, ComplianceEntries/update, Upload/uploadFileFromUrl, ListingPublication/publish, ListingPublication/setActivePublicationChannels, CalendarEvents/create and CalendarEvents/update. Every other write is still refused by the same allowlist. Opening another means naming that exact method in REX_ALLOW_WRITES; there is deliberately no blanket 'on', and clearing the variable re-locks everything.",
   },
@@ -374,7 +374,7 @@ export const WIRING: WiringRow[] = [
   {
     system: "foundations",
     area: "The ground floor",
-    item: "⚠️ The OS shares the portal's live database",
+    item: "The OS shares the portal's live database",
     state: "manual",
     note: "The DATABASE_URL points at the TLE portal's production database — all fifteen of its tables are there, including real staff accounts, PayProp OAuth tokens and deal data. Nothing has been harmed: every OS table is os_-prefixed and additive. The OS now REFUSES at the query layer to write to any table it doesn't own, so a bug here can't cost the portal data. Worth a decision though: share deliberately (it's the clean route to the UK PayProp token) or split the OS onto its own database.",
   },

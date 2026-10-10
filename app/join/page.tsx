@@ -173,7 +173,9 @@ function ChoosePassword({ token }: { token: string }) {
           It is now the first of five, and a promise that turns out to be four
           screens short is worse than no promise. */}
       <p className="mt-2 text-[12.5px] leading-relaxed text-muted">
-        Address confirmed. Set a password, then we will get you set up.
+        {/* Not "Address confirmed" (Rig run 4, P-051): the link is only checked
+            when the form is sent, so a broken or used one was "confirmed" first. */}
+        Set a password, then we will get you set up.
       </p>
 
       {error && (

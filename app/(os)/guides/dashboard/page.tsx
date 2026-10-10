@@ -111,7 +111,7 @@ export default function DashboardGuide() {
           Everything in the rest of this guide happens in one mode, and there is one
           button that turns it on. It is at the right-hand end of the row with the search
           box in it, just above the tiles, and it is labelled{" "}
-          <Ui>✨ Customise</Ui>.
+          <Ui>Customise</Ui>.
         </p>
         <Shot
           src={`${IMG}/02-customise-button.webp`}

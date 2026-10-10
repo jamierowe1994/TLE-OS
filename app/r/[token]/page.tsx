@@ -52,7 +52,7 @@ export default async function RentCheckPage({ params, searchParams }: { params: 
         <section className="mx-auto max-w-xl px-5 py-16 sm:px-10">
           <h1 className="hand text-[28px] leading-tight">That code is not one of ours</h1>
           <p className="mt-3 text-[14px] leading-relaxed text-muted">
-            The link may have been typed out by hand. If you are a landlord and would like a free rent check, email us at hello@thelettingsexperts.co.uk with the address.
+            The link may have been typed out by hand. If you are a landlord and would like a free rent check, email us at <a href="mailto:hello@thelettingexperts.co.uk" className="underline">hello@thelettingexperts.co.uk</a> with the address.
           </p>
         </section>
       ) : (

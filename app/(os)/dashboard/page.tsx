@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import DoodleIcon from "@/components/DoodleIcon";
 import BentoDash from "@/components/BentoDash";
 import PageHeader from "@/components/PageHeader";
 import QuickLinks from "@/components/QuickLinks";
@@ -132,7 +133,10 @@ export default function Dashboard() {
                   "border border-line/80 bg-page text-muted hover:border-ink hover:text-ink"
             }`}
           >
-            {customising ? "Done" : "✨ Customise"}
+            {customising ? "Done" : (
+              /* An icon from our own set, not an emoji (Rig run 4, P-087). */
+              <span className="inline-flex items-center gap-1.5"><DoodleIcon name="magic-wand" size={13} />Customise</span>
+            )}
           </button>
           <QuickLinks customising={customising} />
         </>}

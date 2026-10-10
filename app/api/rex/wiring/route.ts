@@ -49,7 +49,7 @@ export async function GET() {
       ok: rexWritesLocked(),
       detail: rexWritesLocked()
         ? "LOCKED — the OS cannot change anything in REX. Reads only, enforced in the client."
-        : "⚠️ UNLOCKED for a supervised test. Re-lock by clearing REX_ALLOW_WRITES.",
+        : "UNLOCKED for a supervised test. Re-lock by clearing REX_ALLOW_WRITES.",
     },
   ];
   checks.push(...await Promise.all([

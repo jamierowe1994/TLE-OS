@@ -7,6 +7,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import NotificationBell from "@/components/NotificationBell";
 import DoodleIcon from "@/components/DoodleIcon";
+import SignedOutWatch from "@/components/SignedOutWatch";
 import { readTheme, type ThemeChoice } from "@/lib/theme";
 import { FRONT, BACK, railFor, type NavItem } from "@/lib/nav";
 import { AREA_DEFS, areaForPage, canAct, canSee, levelOf, lockedSentence, type AreaAccess } from "@/lib/area-map";
@@ -574,6 +575,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             the last column of a wide table was ending up under him, so the
             content stops 84px short and nothing collides. */}
         <main data-os-content className="w-full flex-1 px-5 pb-28 pt-8 lg:px-10 xl:pr-[84px] 2xl:pl-14">
+          <SignedOutWatch />
           {/* Keyed on the path so the screen replays when you actually change
               screen, and not when a filter changes the query string. */}
           {/* Said once, above the screen, in the same words a refused save

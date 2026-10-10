@@ -111,7 +111,7 @@ export function icsFor(i: AppraisalInvite, stampAt?: string | null): string | nu
   // Folded per RFC 5545: long lines break at 75 octets, and Outlook is fussy.
   const fold = (line: string) =>
     line.length <= 74 ? line : line.match(/.{1,74}/g)!.join("\r\n ");
-  const uid = `ma-${start.valueOf()}-${i.address.replace(/\W+/g, "")}@thelettingsexperts`;
+  const uid = `ma-${start.valueOf()}-${i.address.replace(/\W+/g, "")}@thelettingexperts`;
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",

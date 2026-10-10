@@ -30,18 +30,26 @@ type Campaign = { id: string; name?: string; title?: string };
 export default function MarketingView() {
   const [campaigns, setCampaigns] = useState<Campaign[] | null>(null);
   const [files, setFiles] = useState<number | null>(null);
+  const [filesErr, setFilesErr] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/campaigns")
       .then((r) => (r.ok ? r.json() : null))
       .then((j: { campaigns?: Campaign[] } | null) => setCampaigns(j?.campaigns ?? []))
       .catch(() => setCampaigns([]));
-    fetch("/api/r2/list")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: { objects?: unknown[]; files?: unknown[] } | null) =>
-        setFiles((j?.objects ?? j?.files ?? []).length)
-      )
-      .catch(() => setFiles(null));
+    /* The shelf the File storage page lists (Rig run 4, P-046). This asked
+       /api/r2/list with no record, which the route has always refused, so it
+       said "Couldn't reach the bucket" on every load whatever the keys did. */
+    fetch("/api/r2/list?scope=library&ref=shelf", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; files?: unknown[]; error?: string }) => {
+        if (!j.ok) throw new Error(j.error ?? "Couldn't reach the file store.");
+        setFiles((j.files ?? []).length);
+      })
+      .catch((e) => {
+        setFiles(null);
+        setFilesErr(e instanceof Error ? e.message : "Couldn't reach the file store.");
+      });
   }, []);
 
   return (
@@ -93,7 +101,9 @@ export default function MarketingView() {
           brochures and media. PDFs and assets go here.
         </p>
         <p className="mt-2 text-[12.5px]">
-          {files === null ? "Couldn't reach the bucket." : `${files} file${files === 1 ? "" : "s"} stored.`}
+          {files !== null
+            ? `${files} file${files === 1 ? "" : "s"} on the shelf.`
+            : filesErr ?? "Counting…"}
         </p>
       </section>
 

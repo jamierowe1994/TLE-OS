@@ -355,7 +355,9 @@ export default function DiaryGrid({
               {/* The sky, big, where it informs the choice. */}
               {wx && c.offset >= 0 && (
                 <span className="mt-0.5 block leading-none" title={wx.word}>
-                  <span className="text-[17px]">{wx.glyph}</span>
+                  {/* The word, not a weather emoji (Rig run 4, P-087): the icon
+                      set has no weather, and emojis are not house style. */}
+                  <span className="text-[10.5px] font-semibold">{wx.word}</span>
                   <span className="figures ml-1 text-[10.5px] text-muted">{wx.temp}°</span>
                 </span>
               )}

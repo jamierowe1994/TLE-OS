@@ -82,7 +82,7 @@ export const SITE = (process.env.OS_PUBLIC_URL || "https://tle-os.co.uk").replac
  * least likely to be volunteered: the parts they never open.
  */
 export const PILOT_INVITE: EmailDoc = {
-  subject: "You're in, {{firstName}} 🛫",
+  subject: "You're in, {{firstName}}",
   preheader: "TLE OS, and you get it before anybody else.",
   mode: "blocks",
   blocks: [

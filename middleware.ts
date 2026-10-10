@@ -582,6 +582,18 @@ async function doorAfterGate(req: NextRequest): Promise<NextResponse> {
     return NextResponse.next();
   }
 
+  /* An API call gets an answer it can read (Rig run 4, P-054, 10 Oct 2026):
+     a 307 to the sign-in PAGE made every fetch fail to parse, so a screen whose
+     session had ended said "Couldn't refresh" and went on showing its last
+     figures as live. A 401 marked x-os-signed-out, which the shell's fetch
+     watcher (components/SignedOutWatch) turns into a trip to sign in. */
+  if (req.nextUrl.pathname.startsWith("/api/")) {
+    return NextResponse.json(
+      { ok: false, error: "Your session has ended. Sign in again.", signedOut: true },
+      { status: 401, headers: { "x-os-signed-out": "1" } }
+    );
+  }
+
   /* Send them to sign in, and bring them back to whatever they were reaching
      for. /sign-in refuses any `next` that is not a path on this site — an open
      redirect on a login page is a phishing primitive. */
