@@ -676,63 +676,9 @@ export default function ProfilePage() {
               from 7pm to 7am.
             </p>
 
-            {/* The dark room's decorating kit — shown only once Dark is the
-                choice, because that's when the question exists. Ten charcoals
-                each for the background and the boxes; find the blend by eye. */}
-            {theme === "dark" && (
-              <>
-                <p className={`${label} mt-7`}>Dark background</p>
-                <div className="flex gap-1.5">
-                  {CHARCOALS.map((c) => (
-                    <button
-                      key={c.step}
-                      type="button"
-                      title={`${c.step}`}
-                      onClick={() => {
-                        setDarkBg(c.step);
-                        writeDarkStep(DARK_BG_KEY, c.step);
-                      }}
-                      className={`flex h-9 flex-1 flex-col items-center justify-end rounded-lg border pb-1 transition-transform hover:scale-105 ${
-                        darkBg === c.step ? "border-accent-dark" : "border-ink/15"
-                      }`}
-                      style={{ backgroundColor: c.hex }}
-                    >
-                      <span className={`text-[7.5px] font-semibold ${darkBg === c.step ? "text-accent" : "text-white/50"}`}>
-                        {c.step}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-
-                <p className={`${label} mt-5`}>Dark boxes</p>
-                <div className="flex gap-1.5">
-                  {CHARCOALS.map((c) => (
-                    <button
-                      key={c.step}
-                      type="button"
-                      title={`${c.step}`}
-                      onClick={() => {
-                        setDarkBox(c.step);
-                        writeDarkStep(DARK_BOX_KEY, c.step);
-                      }}
-                      className={`flex h-9 flex-1 flex-col items-center justify-end rounded-lg border pb-1 transition-transform hover:scale-105 ${
-                        darkBox === c.step ? "border-accent-dark" : "border-ink/15"
-                      }`}
-                      style={{ backgroundColor: c.hex }}
-                    >
-                      <span className={`text-[7.5px] font-semibold ${darkBox === c.step ? "text-accent" : "text-white/50"}`}>
-                        {c.step}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
-                  100 is the lightest charcoal, 1000 the deepest — never true black, the
-                  ink needs its paper. Boxes usually sit a step or two lighter than the
-                  background. Changes apply live.
-                </p>
-              </>
-            )}
+            {/* The adjustable charcoals went on 11 Oct 2026: dark is James's
+                two colours for everyone, black #111111 round a charcoal
+                #202020 page (app/globals.css). */}
 
             {/* The accent picker lived here until 11 Sep 2026. James: "it's not
                 going to be cohesive" - the OS runs the house clay for everyone

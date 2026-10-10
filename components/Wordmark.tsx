@@ -7,12 +7,12 @@
  * One component for every rail (the agents' Shell, the workspace rail, the
  * preview shell), so they cannot drift apart.
  */
-export default function Wordmark({ collapsed = false }: { collapsed?: boolean }) {
+export default function Wordmark({ collapsed = false, size = 30 }: { collapsed?: boolean; size?: number }) {
   return (
     <span
       aria-label="TLE OS"
-      className="flex select-none items-baseline whitespace-nowrap text-[30px] leading-none tracking-[-0.03em] text-ink"
-      style={{ fontFamily: "var(--font-bricolage), var(--font-heading)" }}
+      className="flex select-none items-baseline whitespace-nowrap leading-none tracking-[-0.03em] text-ink"
+      style={{ fontFamily: "var(--font-bricolage), var(--font-heading)", fontSize: size }}
     >
       <span
         aria-hidden

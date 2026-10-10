@@ -502,7 +502,7 @@ export default function PageHeader({
                 />
               </label>
             ) : (
-              /* Tagged so a look-lab layout that carries its own search can hide this one (lib/style-lab). */
+              /* Tagged so the sidebar's ⌘K can find and focus it (components/LaunchNav). */
               <div data-page-global-search className="min-w-0 flex-1">
                 <GlobalSearch placeholder={searchPlaceholder} />
               </div>

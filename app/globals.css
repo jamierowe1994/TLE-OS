@@ -112,24 +112,20 @@
    three palettes (clay, blush, red) get a correct dark treatment for free.
 --------------------------------------------------------------------------- */
 :root[data-theme="dark"] {
-  /* Lifted for contrast. The first pass was too timid: figures, nav labels
-     and subtitles all sat too close to the page. Ink goes near-white (not
-     pure — pure white on charcoal glares), muted lifts a long way so
-     subtitles and hints stay readable, and the rim lightens so boxes and
-     bubbles actually describe an edge instead of hinting at one. */
-  --ink: #f4f3f0;
-  --muted: #b6b4ae;
-  --line: #4f4f4f;   /* neutral in the dark too, for the same reason */
-  /* Charcoal is adjustable: Profile → Appearance writes --dark-page and
-     --dark-box (ten hundred-steps each); these are the fallbacks — a warm
-     charcoal, never black, and boxes a clear lift above the page. */
-  --page: var(--dark-page, #363432);
-  --card: var(--dark-box, #3b3937);
-  /* In the dark an outline alone is too severe — the boxes read as cuts in
-     the page rather than panels on it. A couple of points of lift is all it
-     takes to say "this is a container" without turning it into a slab. */
-  --panel: var(--dark-box, #3b3937);
-  --box: var(--dark-box, #3b3937);
+  /* James, 11 Oct 2026: dark mode is back, in two colours - the black
+     #111111 round the page and in the sidebar, the page a dark charcoal
+     #202020 (from the Wise reference). Boxes sit a step above the page so a
+     container still reads as one; the rim is neutral, as in the light. The
+     old adjustable charcoals (--dark-page / --dark-box) are retired. */
+  color-scheme: dark;
+  --ink: #f2f2f2;
+  --muted: #a6a6a6;
+  --line: #353535;
+  --page: #202020;
+  --card: #272727;
+  --panel: #272727;
+  --box: #272727;
+  --art-wash: #2b2b2b;
 
   /* Soft fills go dark-tinted; the "dark" accent goes LIGHTER, because on a
      charcoal page the legible variant of a colour is the paler one. */
@@ -1497,99 +1493,40 @@ html[data-os-toast="up"] .os-toast-lift {
 }
 
 /* ---------------------------------------------------------------------------
-   THE LOOK LAB (James, 10 Oct 2026; lib/style-lab). Five palettes for the
-   shell, chosen on the Dashboard by an owner and kept in that browser only.
-   No attribute = the live look (warm). components/Shell reads the --shell-*
-   values; the two dark palettes also restate the page tokens, the way
-   [data-theme="dark"] did when the OS had a dark mode.
+   THE SHELL (James, 11 Oct 2026; chosen in the look lab, which then went):
+   Mist round a white page, the Launch Day sidebar flat on the Mist. Dark mode
+   is offered again (Profile > Appearance) in his two colours: the window and
+   sidebar black #111111, the page a dark charcoal #202020.
 --------------------------------------------------------------------------- */
 :root {
-  --shell-bg: #fbfbfb;          /* the window the page sits in (James, 11 Oct: subtler, no warmth) */
-  --shell-nav-bg: transparent;  /* the sidebar, where it is flat on the window */
-  --shell-nav-card: #ffffff;    /* the sidebar, where it is a card */
-  --shell-pill: #ffffff;        /* the page you are on, in the sidebar */
+  --shell-bg: #fbfbfb;          /* the window the page sits in */
+  --shell-nav-bg: transparent;  /* the sidebar, flat on the window */
+  --shell-pill: #ffffff;        /* the workspace rails' page-you-are-on */
   --shell-panel: #ffffff;       /* the page's own surface */
   --shell-rim: rgba(0, 0, 0, 0.08);
-}
-:root[data-lab-palette="soft"] {
-  --shell-bg: #f8f8f8;
-}
-:root[data-lab-palette="pale"] {
-  --shell-bg: #f5f5f6;
-}
-:root[data-lab-palette="reverse"] {
-  --shell-bg: #ffffff;
-  --shell-nav-bg: #ffffff;
-  --shell-pill: #f6f6f7;
-  --shell-panel: #f6f6f7;
-  --shell-rim: rgba(0, 0, 0, 0.05);
-}
-:root[data-lab-palette="dark-lift"],
-:root[data-lab-palette="dark-deep"] {
-  color-scheme: dark;
-  --ink: #f2f2f3;
-  --muted: #a3a3aa;
-  --line: #3a3b40;
-  --accent-soft: color-mix(in srgb, var(--accent) 22%, var(--page));
-  --accent-dark: color-mix(in srgb, var(--accent) 72%, white);
-  --art-wash: #2a2b2e;
-  --shell-rim: rgba(255, 255, 255, 0.06);
-}
-/* A lighter sidebar beside a near-black page. */
-:root[data-lab-palette="dark-lift"] {
-  --page: #141517;
-  --card: #1d1e21;
-  --panel: #1d1e21;
-  --box: #1d1e21;
-  --shell-bg: #232427;
-  --shell-nav-bg: #232427;
-  --shell-nav-card: #2a2b2f;
-  --shell-pill: #34353a;
-  --shell-panel: #141517;
-}
-/* A near-black sidebar beside a lighter page. */
-:root[data-lab-palette="dark-deep"] {
-  --page: #1c1d20;
-  --card: #26272b;
-  --panel: #26272b;
-  --box: #26272b;
-  --shell-bg: #0e0f11;
-  --shell-nav-bg: #0e0f11;
-  --shell-nav-card: #17181b;
-  --shell-pill: #1f2023;
-  --shell-panel: #1c1d20;
-}
-/* The dark preview, made honest: the illustrations invert as they did in the
-   old dark mode, and the white surfaces typed straight into screens take the
-   card colour, so a dark page is not dotted with white boxes. */
-:root[data-lab-palette^="dark"] .art { filter: invert(1) hue-rotate(180deg); }
-:root[data-lab-palette^="dark"] .art-figure { filter: none; }
-:root[data-lab-palette^="dark"] .bg-white { background-color: var(--card); }
-:root[data-lab-palette^="dark"] .bg-white\/70,
-:root[data-lab-palette^="dark"] .bg-white\/80,
-:root[data-lab-palette^="dark"] .bg-white\/90 { background-color: color-mix(in srgb, var(--card) 85%, transparent); }
-:root[data-lab-palette^="dark"] .hover\:bg-white:hover { background-color: var(--card); }
-/* The layouts that carry their own search hide the page's copy of it. */
-:root[data-lab-layout="search"] [data-page-global-search],
-:root[data-lab-layout="bleed"] [data-page-global-search] { visibility: hidden; }
-:root[data-lab-palette^="dark"] .art-video { mix-blend-mode: screen; filter: invert(1); }
-/* One surface carries search and the bell in its own top bar: the page's row goes. */
-@media (min-width: 1024px) {
-  :root[data-lab-layout="bleed"] [data-page-toprow] { display: none; }
-}
-/* The Launch Day sidebar's quiet greys (components/LaunchNav): row text, the
-   line icons, the hover and the page-you-are-on fill, the guide rules. */
-:root {
+  /* The Launch Day sidebar's quiet greys (components/LaunchNav). */
   --launch-text: #5d5e63;
   --launch-icon: #8b8c92;
   --launch-hover: rgba(0, 0, 0, 0.04);
   --launch-active: rgba(0, 0, 0, 0.065);
   --launch-guide: rgba(0, 0, 0, 0.09);
 }
-:root[data-lab-palette^="dark"] {
-  --launch-text: #b6b6bc;
-  --launch-icon: #85868d;
+:root[data-theme="dark"] {
+  --shell-bg: #111111;
+  --shell-nav-bg: #111111;
+  --shell-pill: rgba(255, 255, 255, 0.085);
+  --shell-panel: #202020;
+  --shell-rim: rgba(255, 255, 255, 0.06);
+  --launch-text: #b4b4b4;
+  --launch-icon: #858585;
   --launch-hover: rgba(255, 255, 255, 0.05);
   --launch-active: rgba(255, 255, 255, 0.085);
   --launch-guide: rgba(255, 255, 255, 0.09);
 }
+/* White surfaces typed straight into screens take the card colour in the
+   dark, so a dark page is not dotted with white boxes. */
+:root[data-theme="dark"] .bg-white { background-color: var(--card); }
+:root[data-theme="dark"] .bg-white\/70,
+:root[data-theme="dark"] .bg-white\/80,
+:root[data-theme="dark"] .bg-white\/90 { background-color: color-mix(in srgb, var(--card) 85%, transparent); }
+:root[data-theme="dark"] .hover\:bg-white:hover { background-color: var(--card); }

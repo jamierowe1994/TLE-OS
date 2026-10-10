@@ -7,7 +7,6 @@ import PageHeader from "@/components/PageHeader";
 import QuickLinks from "@/components/QuickLinks";
 import { DASH_TRAY_GROUPS, DEFAULT_LAYOUT, WIDGETS } from "@/components/widgets";
 import { fetchMe } from "@/lib/me";
-import LookLab from "@/components/LookLab";
 
 /**
  * The dashboard is now a bento board the agent owns. The DEFAULT layout is
@@ -142,8 +141,6 @@ export default function Dashboard() {
           <QuickLinks customising={customising} />
         </>}
       />
-      {/* The look lab, owners only (lib/style-lab, 10 Oct 2026). */}
-      <LookLab />
 
       <BentoDash
         registry={WIDGETS}

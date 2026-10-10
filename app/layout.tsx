@@ -139,8 +139,8 @@ export default function RootLayout({
     // heading silently falls back to system fonts.
     <html
       lang="en"
-      /* The look lab's choice (lib/style-lab) and the theme are put on <html>
-         before React hydrates, so its attributes legitimately differ. */
+      /* The theme is put on <html> before React hydrates (ThemeGate), so its
+         attributes legitimately differ. */
       suppressHydrationWarning
       className={`${manrope.variable} ${inter.variable} ${bricolage.variable} ${montserrat.variable} ${shantell.variable} ${msMadi.variable} ${lora.variable}`}
     >

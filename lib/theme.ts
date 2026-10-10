@@ -5,7 +5,10 @@
 
 export type ThemeChoice = "light" | "dark" | "auto";
 
-export const THEME_KEY = "os-theme";
+/* A new key (11 Oct 2026): a dark or auto picked before the lock in
+   September would otherwise come back on its own the day dark returned.
+   Only a choice made from today counts. */
+export const THEME_KEY = "os-theme-v2";
 
 /**
  * LIGHT ONLY, FOR NOW (James, 21 Sep 2026).
@@ -22,7 +25,12 @@ export const THEME_KEY = "os-theme";
  *
  * To bring dark back: set this to false. Nothing else was removed.
  */
-export const THEME_LOCKED = true;
+export const THEME_LOCKED = false;
+
+/** Open the light/dark chooser on someone's first visit? No (11 Oct 2026):
+ *  dark is offered in Profile > Appearance, and light is everybody's until
+ *  they pick it there. */
+export const ASK_ON_ARRIVAL = false;
 
 /**
  * Automatic follows the clock, not the operating system.

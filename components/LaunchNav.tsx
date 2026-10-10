@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import LineIcon from "@/components/LineIcon";
+import Wordmark from "@/components/Wordmark";
 import { warmRoute } from "@/lib/route-warm";
 import type { NavItem } from "@/lib/nav";
 
@@ -142,6 +143,8 @@ export default function LaunchNav({
   onToggleCollapse,
   me,
   onSignOut,
+  menuOpen,
+  onMenu,
 }: {
   front: NavItem[];
   back: NavItem[];
@@ -153,8 +156,17 @@ export default function LaunchNav({
   onToggleCollapse: () => void;
   me: Me;
   onSignOut: () => void;
+  /* The shell holds the profile menu's state, so a guide or the tour can open it. */
+  menuOpen?: boolean;
+  onMenu?: (open: boolean) => void;
 }) {
-  const [menu, setMenu] = useState(false);
+  const [ownMenu, setOwnMenu] = useState(false);
+  const menu = menuOpen ?? ownMenu;
+  const setMenu = (v: boolean | ((m: boolean) => boolean)) => {
+    const next = typeof v === "function" ? v(menu) : v;
+    if (onMenu) onMenu(next);
+    else setOwnMenu(next);
+  };
   /* Dashboard on its own, the lettings work under a name, Showroom gone. */
   const home = front.filter((i) => i.href === "/dashboard");
   const lettings = front.filter((i) => i.href !== "/dashboard" && i.href !== "/showroom");
@@ -183,11 +195,13 @@ export default function LaunchNav({
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* The workspace, and the collapse. */}
-      <div className={`flex h-9 items-center ${collapsed ? "justify-center" : "gap-2 px-1.5"}`}>
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-ink text-[10px] font-bold tracking-tight text-[var(--shell-panel)]">TLE</span>
+      {/* Just the wordmark, no box round it (James, 11 Oct 2026). Collapsed,
+          it is the OS on its own, as the old rail did. */}
+      <div className={`flex h-9 items-center ${collapsed ? "justify-center" : "gap-2 px-2"}`}>
+        <Wordmark collapsed={collapsed} size={21} />
         {!collapsed && (
           <>
-            <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-ink">TLE OS</span>
+            <span className="flex-1" />
             <button type="button" onClick={onToggleCollapse} title="Collapse" className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--launch-icon)] hover:bg-[var(--launch-hover)] hover:text-ink">
               <LineIcon name="panel" size={15} />
             </button>
@@ -211,6 +225,8 @@ export default function LaunchNav({
         )}
       </button>
 
+      {/* A short rule under Search, and room before Dashboard (James, 11 Oct 2026). */}
+      <div className="mx-auto mt-3 w-4/5 border-t border-[var(--launch-guide)]" />
       <nav className="mt-4 min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-2">
         <Section title={null} items={home} {...common} />
         <Section title="Lettings" items={lettings} {...common} />

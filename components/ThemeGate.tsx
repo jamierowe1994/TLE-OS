@@ -7,6 +7,7 @@ import {
   isNight,
   readTheme,
   THEME_LOCKED,
+  ASK_ON_ARRIVAL,
   resolve,
   writeTheme,
   type ThemeChoice,
@@ -126,7 +127,9 @@ export default function ThemeGate({ children }: { children: React.ReactNode }) {
   const [choosing, setChoosing] = useState(false);
   const [toast, setToast] = useState(false);
   const { run, overlay } = usePaint();
-  const choice = useRef<ThemeChoice>("auto");
+  /* Light until somebody chooses otherwise (11 Oct 2026). It was "auto",
+     which with no saved choice would have turned every screen dark at 7pm. */
+  const choice = useRef<ThemeChoice>("light");
 
   // First paint: honour the saved choice, or open the chooser if there isn't one.
   useEffect(() => {
@@ -136,8 +139,9 @@ export default function ThemeGate({ children }: { children: React.ReactNode }) {
       choice.current = saved;
       applyTheme(saved);
     }
-    /* Locked to light: nobody is asked. See THEME_LOCKED in lib/theme. */
-    if (!THEME_LOCKED && !localStorage.getItem(CHOSEN_KEY)) {
+    /* Nobody is asked on arrival: dark is offered in Profile > Appearance
+       (James, 11 Oct 2026, three days before launch). See ASK_ON_ARRIVAL. */
+    if (!THEME_LOCKED && ASK_ON_ARRIVAL && !localStorage.getItem(CHOSEN_KEY)) {
       // Preview the automatic answer behind the chooser, so the split screen
       // isn't sitting on an arbitrary theme.
       applyTheme("auto");
