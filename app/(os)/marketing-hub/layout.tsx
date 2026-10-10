@@ -63,7 +63,10 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
         {/* pb-20 leaves room for the workspace's floating back pill. This is
             the one of the three screens that scrolls normally, so without it
             the last paragraph on a long page ends underneath the pill. */}
-        <div className="min-w-0 flex-1 py-3 pb-20">{children}</div>
+        {/* Inside the white panel from lg (components/Shell frame, 10 Oct
+            2026): the same inner padding as every other screen, and Steve's
+            lane on the right. */}
+        <div className="min-w-0 flex-1 py-3 pb-20 lg:px-10 lg:pt-8 xl:pr-[84px]">{children}</div>
       </div>
     </OwnWorkspace>
   );

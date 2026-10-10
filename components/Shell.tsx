@@ -250,13 +250,19 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const el = sideRef.current;
     if (!el) return;
+    /* A workspace's own rail (components/WorkspaceRail) stands in for the
+       sidebar where it hides it: the frame starts after whichever is showing. */
+    const rail = document.querySelector<HTMLElement>("[data-admin-rail]");
     const place = () => {
-      const r = el.getBoundingClientRect();
-      setFrameLeft(r.width > 0 ? Math.round(r.right) + 8 : 8);
+      const side = el.getBoundingClientRect();
+      const r = rail?.getBoundingClientRect();
+      const right = side.width > 0 ? side.right : r && r.width > 0 && getComputedStyle(rail!).position === "fixed" ? r.right : 0;
+      setFrameLeft(right > 0 ? Math.round(right) + 8 : 8);
     };
     place();
     const ro = new ResizeObserver(place);
     ro.observe(el);
+    if (rail) ro.observe(rail);
     window.addEventListener("resize", place);
     return () => { ro.disconnect(); window.removeEventListener("resize", place); };
   }, [pathname]);

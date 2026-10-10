@@ -102,7 +102,11 @@ export default function WorkspaceRail({
            and is simply absent from this workspace's, so the class applied and
            did nothing (14 Sep 2026). A number cannot go missing. */
         style={{ width: collapsed ? 72 : 240 }}
-        className={`sticky top-3 mb-3 hidden h-[calc(100vh-24px)] shrink-0 flex-col overflow-hidden rounded-3xl border border-line/80 bg-panel py-5 transition-[width,padding] duration-200 md:flex ${
+        /* From lg it sits on the shell's grey at the window's left, flat like
+           the agent sidebar, and the page's white panel starts after it
+           (components/Shell frame, 10 Oct 2026). The spacer below holds its
+           place in the row. A tablet keeps the card. */
+        className={`sticky top-3 mb-3 hidden h-[calc(100vh-24px)] shrink-0 flex-col overflow-hidden rounded-3xl border border-line/80 bg-panel py-5 transition-[width,padding] duration-200 md:flex lg:fixed lg:left-2 lg:z-[50] lg:mb-0 lg:rounded-none lg:border-0 lg:bg-transparent lg:py-3 ${
           collapsed ? "px-2.5" : "px-4"
         }`}
       >
@@ -154,8 +158,8 @@ export default function WorkspaceRail({
                         collapsed ? "justify-center px-0" : "gap-3 px-3"
                       } ${
                         isOn(t)
-                          ? "bg-accent-soft font-semibold text-accent-dark"
-                          : "text-muted hover:text-ink"
+                          ? "bg-accent-soft font-semibold text-accent-dark lg:bg-card lg:text-ink lg:shadow-[0_1px_2px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.04)]"
+                          : "text-muted hover:text-ink lg:hover:bg-card/70"
                       }`}
                     >
                       {t.icon && <DoodleIcon name={t.icon} size={16} className={isOn(t) ? "text-accent-dark" : ""} />}
@@ -179,6 +183,7 @@ export default function WorkspaceRail({
 
         {footer && !collapsed ? <div className="mt-auto pt-3">{footer}</div> : null}
       </aside>
+      <div aria-hidden className="hidden shrink-0 lg:block" style={{ width: (collapsed ? 72 : 240) - 12 }} />
 
       {/* On a phone the rail becomes a scrolling strip — a 240px column beside
           content on a 375px screen leaves neither of them usable.
