@@ -47,7 +47,12 @@ export interface PnlYear {
     grossMarginYtd: number | null;
     fullYearOutlook: number | null;
     closedMonths: number;
+    /** First and last closed month the year-to-date covers. */
+    fromMonth: string | null;
+    toMonth: string | null;
     missingMonths: string[];
+    /** Closed months before PayProp's figures begin: not held, not "waiting" (P-068). */
+    notHeld: string[];
   };
   plan: { fileName: string | null; importedAt: string; importedBy: string; accountsMonths: string[]; accountsFileName: string | null } | null;
 }
@@ -65,7 +70,9 @@ export function buildPnl(
   year: number,
   now: string,
   money: Record<string, MonthMoney | undefined>,
-  plan: YearPlan | null
+  plan: YearPlan | null,
+  /** The first month PayProp's money is held for (gci-history MONEY_FLOOR). */
+  floor: string | null = null
 ): PnlYear {
   const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, "0")}`);
   const columns: PnlColumn[] = months.map((m) => ({
@@ -83,9 +90,16 @@ export function buildPnl(
   };
 
   const rows: PnlRow[] = [];
-  const row = (r: Omit<PnlRow, "total">, totalOver: (c: PnlColumn) => boolean = () => true) => {
+  /* The total column is YEAR TO DATE: closed months only (Rig run 4, P-069,
+     10 Oct 2026). It summed every column - real months, this part-month and
+     the plan - into one figure that was none of them. With nothing closed
+     (January) it is null, not £0. */
+  /* Year to date over the closed months that are HELD (P-068): before the
+     money floor there is nothing to wait for. */
+  const heldClosed = (c: PnlColumn) => c.kind === "actual" && (!floor || c.month >= floor);
+  const row = (r: Omit<PnlRow, "total">, totalOver: (c: PnlColumn) => boolean = heldClosed) => {
     const vals = columns.filter(totalOver).map((c) => r.cells[c.month]?.value);
-    const total = r.pct || vals.some((v) => v == null) ? null : round(vals.reduce<number>((t, v) => t + (v as number), 0));
+    const total = r.pct || !vals.length || vals.some((v) => v == null) ? null : round(vals.reduce<number>((t, v) => t + (v as number), 0));
     const full = { ...r, total };
     rows.push(full);
     return full;
@@ -257,7 +271,7 @@ export function buildPnl(
         return g == null || e == null ? { value: null, source: null } : { value: round(g - e), source: "computed" };
       }),
     },
-    (c) => c.kind !== "mtd"
+    heldClosed
   );
   let running = 0;
   let broken = false;
@@ -278,19 +292,22 @@ export function buildPnl(
   });
 
   /* ------------------------------ tiles ------------------------------ */
-  const closed = columns.filter((c) => c.kind === "actual");
+  const closed = columns.filter(heldClosed);
+  const notHeld = columns.filter((c) => c.kind === "actual" && !heldClosed(c)).map((c) => c.month);
   const missingMonths = closed.filter((c) => !money[c.month]).map((c) => c.month);
+  /* Nothing closed is no figure, not £0 (P-069): in January every year-to-date
+     tile read "£0 profit" as though it were a result. */
   const sumOver = (r: PnlRow, cols: PnlColumn[]) => {
     const vals = cols.map((c) => r.cells[c.month].value);
-    return vals.some((v) => v == null) ? null : round(vals.reduce<number>((t, v) => t + (v as number), 0));
+    return !vals.length || vals.some((v) => v == null) ? null : round(vals.reduce<number>((t, v) => t + (v as number), 0));
   };
   const netYtd = sumOver(net, closed);
   const incomeYtd = sumOver(income, closed);
   const grossYtd = sumOver(gross, closed);
-  const sheetNetYtd = closed.every((c) => sheet("netProfit", c.month) != null)
+  const sheetNetYtd = closed.length && closed.every((c) => sheet("netProfit", c.month) != null)
     ? round(closed.reduce((t, c) => t + (sheet("netProfit", c.month) as number), 0))
     : null;
-  const sheetIncomeYtd = closed.every((c) => sheet("totalIncome", c.month) != null)
+  const sheetIncomeYtd = closed.length && closed.every((c) => sheet("totalIncome", c.month) != null)
     ? round(closed.reduce((t, c) => t + (sheet("totalIncome", c.month) as number), 0))
     : null;
   const rest = columns.filter((c) => c.kind !== "actual");
@@ -310,7 +327,10 @@ export function buildPnl(
       grossMarginYtd: incomeYtd && grossYtd != null ? round((grossYtd / incomeYtd) * 100) : null,
       fullYearOutlook: netYtd != null && restPlan != null ? round(netYtd + restPlan) : null,
       closedMonths: closed.length,
+      fromMonth: closed[0]?.month ?? null,
+      toMonth: closed[closed.length - 1]?.month ?? null,
       missingMonths,
+      notHeld,
     },
     plan: plan
       ? { fileName: plan.fileName, importedAt: plan.importedAt, importedBy: plan.importedBy, accountsMonths: plan.accountsMonths ?? [], accountsFileName: plan.accountsFileName ?? null }

@@ -44,6 +44,7 @@ interface ForecastSeries {
 interface LivePayProp {
   income?: {
     byCategory?: Array<{ category: string; amount: number }>;
+    byCategoryCombined?: Array<{ category: string; amount: number }>;
     /** Commission TLE kept - the TLE side of the split. Net of VAT. */
     agencyIncome?: number;
     /** Every fee charged, whoever received it. Net of VAT. */
@@ -243,7 +244,10 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
     series?.rows.find((r) => r.month === month)?.susan ?? null;
 
   const feeMonth = previousMonth();
-  const cats = live?.income?.byCategory ?? [];
+  /* The whole fee per category, agency and partners together (P-070): the
+     agency-only split put the partners' share of every management fee into
+     "one-off". Older cached answers without it fall back to the old split. */
+  const cats = live?.income?.byCategoryCombined ?? live?.income?.byCategory ?? [];
   const sumCats = (names: string[]) =>
     cats.filter((c) => names.includes(c.category)).reduce((t, c) => t + c.amount, 0);
   const liveMgmtFees = cats.length

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireCapability } from "@/lib/admin";
-import { getGciHistory } from "@/lib/business/gci-history";
+import { getGciHistory, hasEveryAgency, MONEY_FLOOR } from "@/lib/business/gci-history";
 import { currentMonth } from "@/lib/business/format";
 
 /**
@@ -46,28 +46,44 @@ export async function GET(req: NextRequest) {
   const hist = await getGciHistory(from, to).catch(
     () => ({}) as Awaited<ReturnType<typeof getGciHistory>>
   );
-  const months = Object.keys(hist)
-    .sort()
-    .map((m) => ({
+  /* EVERY month of the window, each saying what it is (Rig run 4, P-044):
+     only the months held came back, so a gap vanished from the table, and
+     this month's few days read like a full month. Now a month is held, not
+     held yet (or before PayProp's figures begin), or this month so far. */
+  const now = currentMonth();
+  const window: string[] = [];
+  for (let m = from; m <= to; ) {
+    window.push(m);
+    const [y, mo] = m.split("-").map(Number);
+    m = new Date(Date.UTC(y, mo, 1)).toISOString().slice(0, 7);
+  }
+  const months = window.map((m) => {
+    const h = hist[m];
+    if (!h) {
+      return { month: m, held: false, beforeFloor: m < MONEY_FLOOR, rentCollected: null, propertiesPaying: null, tenantsPaying: null, avgPerProperty: null, incomplete: false, partial: m === now };
+    }
+    return {
       month: m,
-      rentCollected: Math.round(hist[m].rentCollected),
-      propertiesPaying: hist[m].propertiesPaying,
-      tenantsPaying: hist[m].tenantsPaying,
+      held: true,
+      beforeFloor: false,
+      rentCollected: Math.round(h.rentCollected),
+      propertiesPaying: h.propertiesPaying,
+      tenantsPaying: h.tenantsPaying,
       // Mean rent per paying property - a stable shape that makes an odd month
       // obvious without needing a denominator we cannot honestly supply.
-      avgPerProperty:
-        hist[m].propertiesPaying > 0
-          ? Math.round(hist[m].rentCollected / hist[m].propertiesPaying)
-          : null,
+      avgPerProperty: h.propertiesPaying > 0 ? Math.round(h.rentCollected / h.propertiesPaying) : null,
       /** Short by a whole agency - the figures below understate. */
-      incomplete: hist[m].unreachable.length > 0,
-    }));
+      incomplete: h.unreachable.length > 0 || !hasEveryAgency(h),
+      /** This month so far, not a whole month. */
+      partial: m === now,
+    };
+  });
 
   return NextResponse.json({
     from,
     to,
     months,
-    /** Months in the window with no stored figures yet. */
-    missing: months.length === 0,
+    /** Months in the window (from PayProp's floor on) with no figures yet. */
+    missing: months.filter((m) => !m.held && !m.beforeFloor).map((m) => m.month),
   });
 }

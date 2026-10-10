@@ -164,6 +164,11 @@ export interface AgencyIncome {
   unclassifiedByCategory: Array<{ category: string; amount: number }>;
   /** Agency income split by fee type, biggest first. */
   byCategory: Array<{ category: string; amount: number }>;
+  /** The WHOLE fee by type - the agency's share and the partners' together
+   *  (Rig run 4, P-070). byCategory holds only the agency's share, so a
+   *  management fee split 40/60 read as 40% management and the partners' 60%
+   *  fell into "one-off" on the Forecast tab. */
+  byCategoryCombined?: Array<{ category: string; amount: number }>;
   /** What each partner earned this month, biggest first. */
   byPartner: Array<{ name: string; amount: number; payments: number }>;
   /** GCI per agency — the Income tab shows E&W and Glasgow separately. */
@@ -825,6 +830,7 @@ async function computeIncomeRange(
   let ownerPayments = 0;
   let unclassified = 0;
   const cats = new Map<string, number>();
+  const combinedCats = new Map<string, number>();
   const unclassifiedCats = new Map<string, number>();
   // Distinct partners who took a fee, for the per-agent figure.
   const earners = new Set<string>();
@@ -854,9 +860,11 @@ async function computeIncomeRange(
     } else if (type === "agency") {
       agencyIncome += amount;
       cats.set(category, (cats.get(category) ?? 0) + amount);
+      combinedCats.set(category, (combinedCats.get(category) ?? 0) + amount);
     } else if (type === "beneficiary" || type === "global_beneficiary") {
       // The partners' share of the same fees.
       paidToBeneficiaries += amount;
+      combinedCats.set(category, (combinedCats.get(category) ?? 0) + amount);
       if (r.b) earners.add(r.b);
       const who = r.n;
       if (who) {
@@ -880,6 +888,9 @@ async function computeIncomeRange(
       .map(([category, amount]) => ({ category, amount }))
       .sort((a, b) => b.amount - a.amount),
     byCategory: [...cats.entries()]
+      .map(([category, amount]) => ({ category, amount }))
+      .sort((a, b) => b.amount - a.amount),
+    byCategoryCombined: [...combinedCats.entries()]
       .map(([category, amount]) => ({ category, amount }))
       .sort((a, b) => b.amount - a.amount),
     byPartner: [...partners.entries()]

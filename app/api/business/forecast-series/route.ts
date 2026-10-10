@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireCapability } from "@/lib/admin";
 import { listForecasts } from "@/lib/business/forecast-store";
 import { getOverrides } from "@/lib/business/actuals-store";
-import { getGciSeries } from "@/lib/business/gci-history";
+import { getGciHistory, hasEveryAgency, MONEY_FLOOR } from "@/lib/business/gci-history";
 import { recentMonths } from "@/lib/business/format";
 import { getPlan } from "@/lib/business/plan-store";
 
@@ -59,11 +59,17 @@ export async function GET(req: NextRequest) {
         };
       })
     ),
-    getGciSeries().catch(() => null),
+    /* The whole window the chart draws, not this year's months (Rig run 4,
+       P-081): getGciSeries() starts in January, so Nov-Dec of last year never
+       had an actual, and in January almost none of the bars did. From the
+       money floor, and a month missing an agency is no actual, as before. */
+    getGciHistory(months[0] < MONEY_FLOOR ? MONEY_FLOOR : months[0], months[months.length - 1]).catch(() => null),
   ]);
 
   const actualBy = new Map(
-    (gci?.months ?? []).map((m) => [m.month, Math.round(m.combinedGciNet)])
+    Object.values(gci ?? {})
+      .filter((m) => m && hasEveryAgency(m))
+      .map((m) => [m.month, Math.round(m.combinedGciNet)])
   );
 
   return NextResponse.json({

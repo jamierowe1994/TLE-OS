@@ -155,16 +155,24 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
   const [liveError, setLiveError] = useState<string | null>(null);
   /** Rent collection per month - the honest month-scoped figure on this tab. */
   const [collection, setCollection] = useState<
-    Array<{ month: string; rentCollected: number; propertiesPaying: number; tenantsPaying: number; avgPerProperty: number | null; incomplete: boolean }>
+    Array<{ month: string; held?: boolean; beforeFloor?: boolean; partial?: boolean; rentCollected: number | null; propertiesPaying: number | null; tenantsPaying: number | null; avgPerProperty: number | null; incomplete: boolean }>
   >([]);
+  /* A failed read is said, not a section that quietly disappears (P-044). */
+  const [collectionError, setCollectionError] = useState(false);
   useEffect(() => {
     let cancelled = false;
     fetch(`/api/business/rent-collection?month=${encodeURIComponent(month)}`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { months?: typeof collection } | null) => {
-        if (!cancelled && d?.months) setCollection(d.months);
+        if (cancelled) return;
+        if (d?.months) {
+          setCollection(d.months);
+          setCollectionError(false);
+        } else setCollectionError(true);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setCollectionError(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -442,12 +450,15 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
           own balances and agreed on only 2 of 9 real cases while inventing 1,
           so it was rejected. These are pure flows out of the payment rows:
           nothing inferred, and no individual can be wrongly named. */}
+      {collectionError && !collection.length ? (
+        <p className="text-[12px] text-red-700">We couldn&apos;t read rent collection just now. Refresh in a minute.</p>
+      ) : null}
       {collection.length ? (
         <section className="space-y-2">
           <div className="flex flex-wrap items-baseline gap-x-3">
             <h2 className="text-sm font-semibold">Rent collection - month by month</h2>
             <span className="text-[11px] text-muted">
-              Live from PayProp · what came in, from how many properties and tenants ·
+              PayProp&rsquo;s stored month totals · what came in, from how many properties and tenants ·
               this DOES follow the month picker
             </span>
           </div>
@@ -458,10 +469,10 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
                 key: "rentCollected",
                 label: "Rent collected",
                 align: "right",
-                render: (r) => `£${Number(r.rentCollected).toLocaleString("en-GB")}`,
+                render: (r) => (r.held === false ? (r.beforeFloor ? "Not held" : "Not in yet") : `£${Number(r.rentCollected).toLocaleString("en-GB")}`),
               },
-              { key: "propertiesPaying", label: "Properties paying", align: "right" },
-              { key: "tenantsPaying", label: "Tenants paying", align: "right" },
+              { key: "propertiesPaying", label: "Properties paying", align: "right", render: (r) => (r.held === false ? "—" : String(r.propertiesPaying)) },
+              { key: "tenantsPaying", label: "Tenants paying", align: "right", render: (r) => (r.held === false ? "—" : String(r.tenantsPaying)) },
               {
                 key: "avgPerProperty",
                 label: "Avg per property",
@@ -475,7 +486,9 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
                 key: "incomplete",
                 label: "",
                 render: (r) =>
-                  r.incomplete ? (
+                  r.partial ? (
+                    <span className="text-[11px] font-semibold text-muted" title="This month so far - not a whole month.">so far</span>
+                  ) : r.incomplete ? (
                     <span
                       className="text-[11px] font-semibold text-red-600"
                       title="An agency was unreachable when this month was computed, so these figures are short by a whole agency."

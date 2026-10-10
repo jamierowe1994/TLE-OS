@@ -34,6 +34,9 @@ const GROUP_TITLE: Partial<Record<PnlRow["group"], string>> = {
   expenditure: "Expenditure",
 };
 
+/** The first month PayProp money is held for (gci-history MONEY_FLOOR, a server file). */
+const MONEY_FLOOR_LABEL = "2025-08";
+
 export default function PnlTab({ month }: { month: string; seed: SeedData }) {
   const year = Number(month.slice(0, 4));
   const [data, setData] = useState<PnlYear | null>(null);
@@ -66,7 +69,7 @@ export default function PnlTab({ month }: { month: string; seed: SeedData }) {
   }
 
   const t = data.tiles;
-  const closedLabel = t.closedMonths ? `Jan to ${SHORT(data.columns[t.closedMonths - 1].month)} ${year}` : "No closed months yet";
+  const closedLabel = t.fromMonth && t.toMonth ? `${SHORT(t.fromMonth)} to ${SHORT(t.toMonth)} ${year}` : "No closed months yet";
   const diff = (a: number | null, b: number | null) =>
     a == null || b == null ? null : `${a - b >= 0 ? "+" : "-"}${formatGBP(Math.abs(Math.round(a - b)))} against the accounts and sheet`;
 
@@ -123,6 +126,11 @@ export default function PnlTab({ month }: { month: string; seed: SeedData }) {
           sub="Actual so far plus the plan"
         />
       </div>
+      {t.notHeld?.length ? (
+        <p className="text-[12px] text-muted">
+          PayProp&rsquo;s figures start in {SHORT(MONEY_FLOOR_LABEL)} 2025, so {t.notHeld.map(SHORT).join(", ")} {t.notHeld.length === 1 ? "isn't" : "aren't"} held and the year to date starts after them.
+        </p>
+      ) : null}
       {t.missingMonths.length ? (
         <p className="text-[12px] text-red-700">
           PayProp hasn&rsquo;t answered in full for {t.missingMonths.map(SHORT).join(", ")}, so the year-to-date figures
@@ -155,7 +163,7 @@ export default function PnlTab({ month }: { month: string; seed: SeedData }) {
                     </div>
                   </th>
                 ))}
-                <th className="px-4 py-3 text-right font-semibold">Year</th>
+                <th className="px-4 py-3 text-right font-semibold">Year to date</th>
               </tr>
             </thead>
             <tbody>

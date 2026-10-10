@@ -310,8 +310,10 @@ export interface GciSeries {
 export async function getGciSeries(month = currentMonth()): Promise<GciSeries> {
   const year = month.slice(0, 4);
   // January of the selected year. Not clamped to HISTORY_FLOOR: that floor is
-  // about Rex viewings, and money has its own, much longer reach.
-  const start = `${year}-01`;
+  // about Rex viewings, and money has its own, much longer reach - but it is
+  // clamped to MONEY_FLOOR (Rig run 4, P-068): a 2025 month asked for Jan-Jul
+  // 2025, which PayProp's figures never reach, and waited on them for ever.
+  const start = `${year}-01` < MONEY_FLOOR ? MONEY_FLOOR : `${year}-01`;
   const hist = await getGciHistory(start, month);
   const asked = monthsBetween(start, month);
   const months = asked.map((m) => hist[m]).filter((m) => m && hasEveryAgency(m));

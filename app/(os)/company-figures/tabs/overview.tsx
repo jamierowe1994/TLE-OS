@@ -736,13 +736,19 @@ export default function Overview({ month }: { month: string }) {
         }
       : null);
 
+  /* ÷ the Team Hub's active partners, both agencies (Rig run 4, P-071). It
+     divided by "partners who earned a fee", which PayProp can only see in
+     England and Wales - Scotland's fees go straight to the agency - so every
+     Glasgow partner was missing from the count and the figure read too high.
+     Susan's own figure was "÷ 30 partners", the headcount. */
+  const headcount = live?.teg?.activeAgents ?? null;
   const liveGciPerAgent: StatValue | null =
-    liveForThisPeriod && liveForThisPeriod.agentsEarning
+    liveForThisPeriod && headcount
       ? {
-          value: Math.round(liveForThisPeriod.combinedGci / liveForThisPeriod.agentsEarning),
-          display: gbp(liveForThisPeriod.combinedGci / liveForThisPeriod.agentsEarning),
+          value: Math.round(liveForThisPeriod.combinedGci / headcount),
+          display: gbp(liveForThisPeriod.combinedGci / headcount),
           source: "live-payprop",
-          note: `${gbp(liveForThisPeriod.combinedGci)} commission ÷ ${liveForThisPeriod.agentsEarning} partners who earned a fee this month - live from PayProp.`,
+          note: `${gbp(liveForThisPeriod.combinedGci)} commission ÷ ${headcount} active partners (TEG Team Hub, both agencies) - live from PayProp.`,
         }
       : null;
 
@@ -898,11 +904,11 @@ export default function Overview({ month }: { month: string }) {
    * useful signal becomes noise people learn to ignore. The dot now only
    * appears where the two are answers to the same question.
    */
-  const comparableToSusan = sel === "2026-06";
-  const flagIf = (liveVal: number, susan: StatValue): string | null =>
-    comparableToSusan && susan.value != null && susan.value !== liveVal
-      ? `Differs from Susan's report - her figure: ${susan.display ?? formatNum(susan.value)}. Hover the tile for our definition, then reconcile.`
-      : null;
+  /* No month is comparable any more (Rig run 4, P-043, 10 Oct 2026): this
+     was `sel === "2026-06"`, a typed month, and the June capture it compared
+     against was emptied on 28 Aug - so it could never fire. Kept as the one
+     place a future reconciliation source would raise the dot. */
+  const flagIf = (_liveVal: number, _susan: StatValue): string | null => null;
   const histUpgrade = (
     metric: "marketAppraisals" | "combinedMas" | "listings" | "viewings" | "applications" | "moveIns",
     susan: StatValue,
@@ -1430,17 +1436,16 @@ export default function Overview({ month }: { month: string }) {
             June capture under its own label and nothing under any other.
           */}
           <Tile
-            label={sel === "2026-06" ? "Jun YTD Total Income" : "Total Income"}
-            money={sel === "2026-06" ? (d.headline.totalIncome.value ?? null) : null}
-            stat={
-              sel === "2026-06"
-                ? d.headline.totalIncome
-                : {
-                    value: null,
-                    display: "—",
-                    source: "unavailable",
-                    note: "PayProp holds COMMISSION, not total business income. Susan's captured total is about £27k above year-to-date commission over the same window, and that gap is not VAT (PayProp's VAT is a flat 20%) - so it is revenue from somewhere PayProp cannot see. Needs a definition before it can be computed live.",
-                  }
+            label="Total Income"
+            money={null}
+            stat={{
+              /* Every month alike (P-043): there is no live total-income source
+                 yet, and the June-only branch showed an emptied capture. */
+              value: null,
+              display: "—",
+              source: "unavailable",
+              note: "PayProp holds COMMISSION, not total business income. Susan's captured total was about £27k above year-to-date commission over the same window, and that gap is not VAT (PayProp's VAT is a flat 20%) - so it is revenue from somewhere PayProp cannot see. Needs a definition before it can be computed live.",
+            }
             }
             compact
           />
@@ -1588,17 +1593,22 @@ export default function Overview({ month }: { month: string }) {
             // move-ins from Propoly. Held back until E&W authenticated, because
             // Scotland-only money over whole-business move-ins would have
             // understated it by roughly five times.
+            /* Money and move-ins over the SAME months (Rig run 4, P-067): it
+               divided the selected window's commission by Propoly's move-ins
+               from January to TODAY, so picking June put six months of money
+               over ten months of move-ins. */
+            const windowMoveIns = g.label === "GCI per move-in" ? closedSum("moveIns") : null;
             if (
               g.label === "GCI per move-in" &&
               d.gciByMonth.ytdNet != null &&
-              hist?.yoy.moveIns?.currYtd
+              windowMoveIns
             ) {
-              const per = Math.round(d.gciByMonth.ytdNet / hist.yoy.moveIns.currYtd);
+              const per = Math.round(d.gciByMonth.ytdNet / windowMoveIns);
               const stat: StatValue = {
                 value: per,
                 display: `£${per.toLocaleString("en-GB")}`,
                 source: "live-payprop",
-                note: `£${Math.round(d.gciByMonth.ytdNet).toLocaleString("en-GB")} commission exc VAT across ${ytdWindowLabel} ÷ ${hist.yoy.moveIns.currYtd} move-ins year to date. No baseline yet: PayProp commission is held from August 2025, so a like-for-like year arrives in 2027.`,
+                note: `£${Math.round(d.gciByMonth.ytdNet).toLocaleString("en-GB")} commission exc VAT across ${ytdWindowLabel} ÷ ${windowMoveIns} move-ins in the same months. No baseline yet: PayProp commission is held from August 2025, so a like-for-like year arrives in 2027.`,
                 asOf: londonToday(),
               };
               return <Tile key={g.label} label={g.label} stat={stat} />;

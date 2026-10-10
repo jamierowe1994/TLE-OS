@@ -75,6 +75,7 @@ export async function GET(req: NextRequest) {
           combinedGci: i.net.combinedGci,
           paidToBeneficiaries: i.net.paidToBeneficiaries,
           byCategory: i.byCategory.map((c) => ({ ...c, amount: ex(c.amount) })),
+          byCategoryCombined: i.byCategoryCombined?.map((c) => ({ ...c, amount: ex(c.amount) })),
           byPartner: i.byPartner.map((p) => ({ ...p, amount: ex(p.amount) })),
           byAccount: i.byAccount.map((a) => ({
             ...a,

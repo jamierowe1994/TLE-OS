@@ -230,6 +230,17 @@ function monthlyFeeFor(p: ManagedProperty, basis: FeeBasis): number | null {
 
 const earnsMonthly = (p: ManagedProperty) => p.service === "Managed" || p.service === "Rent Collect";
 
+/**
+ * The set-up fees on a month's new lets (Rig run 4, P-082): a let-only home
+ * earns letOnlySetupPence, which the basis held but nothing ever read; every
+ * other new let earns setupFeePence. Null when neither fee is set.
+ */
+function setupFor(lets: number, letOnlyLets: number, basis: FeeBasis): number | null {
+  if (basis.setupFeePence == null && basis.letOnlySetupPence == null) return null;
+  const other = Math.max(0, lets - letOnlyLets);
+  return Math.round(other * (basis.setupFeePence ?? 0) + letOnlyLets * (basis.letOnlySetupPence ?? basis.setupFeePence ?? 0));
+}
+
 /* ── the answer ─────────────────────────────────────────────────────────── */
 
 export interface ForecastWho {
@@ -312,15 +323,17 @@ export async function forecastFor(rexUserId: string | null, who: ForecastWho): P
     const had = properties.filter((p) => { const t = on(p); return t != null && t <= cutoff; });
     const feeable = had.filter(earnsMonthly);
     const rent = feeable.reduce((a, p) => a + rentPence(p), 0);
-    const newLets = properties.filter((p) => {
+    const letThisMonth = properties.filter((p) => {
       const t = let_(p);
       return t != null && t >= new Date(m.getFullYear(), m.getMonth(), 1).getTime() && t <= cutoff;
-    }).length;
+    });
+    const newLets = letThisMonth.length;
+    const letOnlyLets = letThisMonth.filter((p) => p.service === "Let Only").length;
     const mgmt = feeable.reduce<number | null>((a, p) => {
       const f = monthlyFeeFor(p, basis);
       return f == null ? a : (a ?? 0) + f;
     }, basisSet ? 0 : null);
-    const setup = basis.setupFeePence == null ? null : newLets * basis.setupFeePence;
+    const setup = setupFor(newLets, letOnlyLets, basis);
     past.push({
       month: monthKey(m), label: monthLabel(m),
       properties: had.length, managed: feeable.length,
@@ -360,6 +373,21 @@ export async function forecastFor(rexUserId: string | null, who: ForecastWho): P
   const recent = properties.filter((p) => { const t = on(p); return t != null && t >= yearAgo; });
   const feeableShare = recent.length ? recent.filter(earnsMonthly).length / recent.length : 0;
   const letsPerMonth = past.reduce((a, m) => a + m.newLets, 0) / MONTHS;
+  /* The share of new lets that were let-only over the year, for their set-up fee. */
+  const letOnlyShare = (() => {
+    const lets = properties.filter((p) => { const t = let_(p); return t != null && t >= yearAgo; });
+    return lets.length ? lets.filter((p) => p.service === "Let Only").length / lets.length : 0;
+  })();
+  /* The fee the book earns per pound of feeable rent TODAY, from its real mix
+     of managed and rent-collect homes (P-082). The months ahead charged the
+     full management rate on every feeable home, rent-collect included, so the
+     line jumped the month after this one with no growth at all. Null if
+     either rate the book needs is unset. */
+  const feesNow = nowFeeable.map((p) => monthlyFeeFor(p, basis));
+  const blendedRate =
+    !growth.feeableRentNowPence || feesNow.some((f) => f == null)
+      ? null
+      : feesNow.reduce<number>((a, f) => a + (f as number), 0) / growth.feeableRentNowPence;
 
   const ahead: MonthPoint[] = [];
   let runningFeeable = nowFeeable.length;
@@ -369,8 +397,8 @@ export async function forecastFor(rexUserId: string | null, who: ForecastWho): P
     const added = growth.perMonth * feeableShare;
     runningFeeable += added;
     runningRent += added * avgRent;
-    const mgmt = basis.managementPct == null ? null : Math.round((runningRent * basis.managementPct) / 100);
-    const setup = basis.setupFeePence == null ? null : Math.round(letsPerMonth * basis.setupFeePence);
+    const mgmt = blendedRate == null ? null : Math.round(runningRent * blendedRate);
+    const setup = setupFor(letsPerMonth, letsPerMonth * letOnlyShare, basis);
     ahead.push({
       month: monthKey(m), label: monthLabel(m),
       properties: Math.round(growth.propertiesNow + growth.perMonth * i),

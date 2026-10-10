@@ -259,9 +259,13 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
   })();
   const prevLabel = monthLabel(prevMonthKey);
 
+  /** Active partners in the TEG Team Hub, read with the live figures below (P-071). */
+  const [headcount, setHeadcount] = useState<number | null>(null);
   const pv = (which: "totalGci" | "tleNet" | "gciPerAgent" | "netPerAgent" | "splitPct") => {
     if (!prev) return null;
-    const agents = prev.agentsEarning || 0;
+    /* ÷ the Team Hub's active partners, both agencies (Rig run 4, P-071):
+       PayProp's "earning partners" can only see England and Wales. */
+    const agents = headcount ?? 0;
     const note = `Live from PayProp - ${prevLabel} final, ${prev.paymentCount} payments.`;
     const src = "live-payprop" as const;
     switch (which) {
@@ -275,7 +279,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
           value: Math.round((prev.combinedGci) / agents),
           display: gbp((prev.combinedGci) / agents),
           source: src,
-          note: `${netGbp(prev.combinedGci)} exc VAT across ${agents} earning partners.`,
+          note: `${netGbp(prev.combinedGci)} exc VAT across ${agents} active partners (TEG Team Hub, both agencies).`,
         };
       case "netPerAgent":
         if (!agents) return null;
@@ -283,11 +287,14 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
           value: Math.round((prev.agencyIncome) / agents),
           display: gbp((prev.agencyIncome) / agents),
           source: src,
-          note: `${netGbp(prev.agencyIncome)} exc VAT across ${agents} earning partners.`,
+          note: `${netGbp(prev.agencyIncome)} exc VAT across ${agents} active partners (TEG Team Hub, both agencies).`,
         };
       case "splitPct": {
-        if (!prev.combinedGci) return null;
-        const pct = Math.round((prev.agencyIncome / prev.combinedGci) * 100);
+        /* England and Wales only, as the tile says (P-071): over both agencies
+           Glasgow's fees, all the agency's, pulled the split up. */
+        const uk = prev.byAccount?.find((a) => a.account === "uk");
+        if (!uk?.combinedGci) return null;
+        const pct = Math.round((uk.agencyIncome / uk.combinedGci) * 100);
         return { value: pct, display: `${pct}%`, source: src, note };
       }
     }
@@ -315,6 +322,8 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
         const mi = (j as { propoly?: { moveInsThisMonth?: number } | null }).propoly
           ?.moveInsThisMonth;
         if (!cancelled && typeof mi === "number") setLiveMoveIns(mi);
+        const hc = (j as { teg?: { activeAgents?: number } | null }).teg?.activeAgents;
+        if (!cancelled && typeof hc === "number" && hc > 0) setHeadcount(hc);
       })
       .catch(() => {});
     return () => {

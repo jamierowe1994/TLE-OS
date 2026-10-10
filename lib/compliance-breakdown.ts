@@ -4,7 +4,7 @@ import {
   QUIET_SET,
   isOurs,
   requiredCerts,
-  statusOf,
+  shownStatus,
   type CertKey,
   type CompProperty,
 } from "@/lib/compliance";
@@ -82,7 +82,10 @@ export function complianceBreakdown(properties: CompProperty[]): ComplianceBreak
       const row = byCert.get(key);
       if (!row) continue;
       row.required++;
-      const st = statusOf(p.certs[key]);
+      /* The Compliance page's own grading (Rig run 4, P-083): a certificate
+         being handled - with the compliance team, renewal held, or held to the
+         next tenancy - is "watch" there, and was counted expired here. */
+      const st = shownStatus(p.certs[key]);
       if (st === "expired") {
         row.expired++;
         anyExpired = true;

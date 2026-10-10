@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireCapability } from "@/lib/admin";
 import { currentMonth } from "@/lib/business/format";
-import { getGciHistory, hasEveryAgency } from "@/lib/business/gci-history";
+import { getGciHistory, hasEveryAgency, MONEY_FLOOR } from "@/lib/business/gci-history";
 import { getPlan } from "@/lib/business/plan-store";
 import { buildPnl, type MonthMoney } from "@/lib/business/pnl-build";
 
@@ -21,7 +21,9 @@ export async function GET(req: NextRequest) {
   const year = Number(req.nextUrl.searchParams.get("year")) || Number(now.slice(0, 4));
   const last = `${year}-12` < now ? `${year}-12` : now;
   const [history, plan] = await Promise.all([
-    `${year}-01` <= now ? getGciHistory(`${year}-01`, last).catch(() => ({})) : Promise.resolve({}),
+    /* From the money floor, not January (Rig run 4, P-068): a 2025 year asked
+       for months PayProp's figures never reach, and waited on them for ever. */
+    `${year}-01` <= now ? getGciHistory(`${year}-01` < MONEY_FLOOR ? MONEY_FLOOR : `${year}-01`, last).catch(() => ({})) : Promise.resolve({}),
     getPlan(year),
   ]);
   const money: Record<string, MonthMoney> = {};
@@ -30,5 +32,5 @@ export async function GET(req: NextRequest) {
     if (!h || h.unreachable?.length || !hasEveryAgency(h)) continue;
     money[m] = { combinedNet: h.combinedGciNet, agencyNet: h.agencyIncomeNet };
   }
-  return NextResponse.json(buildPnl(year, now, money, plan));
+  return NextResponse.json(buildPnl(year, now, money, plan, MONEY_FLOOR));
 }
