@@ -27,6 +27,14 @@ import { loadSnapshot, saveSnapshot } from "@/lib/business/propoly-snapshot";
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const CACHE_TTL_MS = 5 * 60 * 1000;
+/* The oldest saved copy that may stand in for THIS month while the sweep runs
+   (Rig run 2, P-014, 10 Oct 2026). Any age was served before, and if the
+   sweep then failed the tab left it up as current. Older than this, the
+   caller waits for the real read or gets the error. A closed month's copy is
+   still served, with its time on it: those figures do not move. */
+const MAX_STALE_CURRENT_MS = 3 * 60 * 60 * 1000;
+/** When a background re-read last failed, per month - said on the stale answer. */
+const refreshFailedAt = new Map<string, number>();
 const CONCURRENCY = 8;
 
 interface Totals {
@@ -122,18 +130,36 @@ export async function GET(req: NextRequest) {
   // and recompute in the background; the tab re-polls to pick up the fresh
   // figures. A forced refresh still waits for the real thing.
   if (!force) {
-    const lastGood =
+    const held =
       cached?.data ??
       (await loadSnapshot<Payload>(`live-business:${month}`).catch(() => null))?.data ??
       null;
+    const readAt = held?.generatedAt ? Date.parse(held.generatedAt) : NaN;
+    const tooOld = month === currentMonth() && (!Number.isFinite(readAt) || Date.now() - readAt > MAX_STALE_CURRENT_MS);
+    const lastGood = held && !tooOld ? held : null;
     if (lastGood) {
       if (!inflight.has(month)) {
         const job = compute(month, false)
-          .catch(() => null)
+          .then((d) => {
+            refreshFailedAt.delete(month);
+            return d;
+          })
+          .catch(() => {
+            refreshFailedAt.set(month, Date.now());
+            return null;
+          })
           .finally(() => inflight.delete(month));
         inflight.set(month, job);
       }
-      return NextResponse.json({ ...lastGood, cached: true, stale: true });
+      /* Says when these were read, and whether the re-read behind them has
+         failed since, so the tab can say so rather than pass them off as now. */
+      const failed = refreshFailedAt.get(month);
+      return NextResponse.json({
+        ...lastGood,
+        cached: true,
+        stale: true,
+        ...(failed && failed > readAt ? { refreshFailedAt: new Date(failed).toISOString() } : {}),
+      });
     }
   }
 

@@ -53,6 +53,10 @@ interface LiveBusiness {
     generatedAt: string;
   } | null;
   generatedAt?: string;
+  /** A saved copy, served while the live sweep runs (see staleLine). */
+  stale?: boolean;
+  /** The re-read behind a stale copy failed at this time. */
+  refreshFailedAt?: string;
 }
 
 interface OverviewPayload {
@@ -726,6 +730,27 @@ export default function Overview({ month }: { month: string }) {
   }
   const d = data;
 
+  /* A saved copy on screen says so, and when it was read (Rig run 2, P-014,
+     10 Oct 2026). The route answers at once with the last good figures while
+     REX is re-swept, and if that sweep failed the tab used to stop polling and
+     leave them up as though they were now. */
+  const staleLine: { text: string; failed: boolean } | null = (() => {
+    if (!live?.stale || !live.generatedAt) return null;
+    const at = new Date(live.generatedAt);
+    const day = (x: Date) => x.toLocaleDateString("en-GB", { timeZone: "Europe/London" });
+    const when = at.toLocaleString("en-GB", {
+      timeZone: "Europe/London",
+      ...(day(at) === day(new Date()) ? {} : { day: "numeric", month: "short" }),
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    if (live.refreshFailedAt) {
+      return { failed: true, text: `These REX figures were read at ${when}. The live read since then failed, so they may be out of date. Refresh live to try again.` };
+    }
+    if (liveLoading) return { failed: false, text: `Showing the REX figures read at ${when} while the live read runs.` };
+    return { failed: false, text: `These REX figures were read at ${when}. The live read hasn't finished. Refresh live to try again.` };
+  })();
+
   // Per-period figures (from Susan's dashboard, all the way back to January).
   // The live month has NO seed entry and must never borrow one. The old
   // `?? d.periods.jul` fallback is exactly how July's KPIs would end up under
@@ -753,7 +778,9 @@ export default function Overview({ month }: { month: string }) {
     display,
     source: "live-rex",
     note,
-    asOf: new Date().toISOString().slice(0, 10),
+    /* The day the figures were READ, not today's date: a saved copy used to
+       stamp yesterday's numbers with today (Rig run 2, P-014). */
+    asOf: (live?.generatedAt ?? new Date().toISOString()).slice(0, 10),
   });
   const funnelMas =
     live?.monthCounts?.combinedMas != null
@@ -1313,6 +1340,15 @@ export default function Overview({ month }: { month: string }) {
             {liveLoading ? "Refreshing…" : "Refresh live"}
           </button>
         </div>
+        {staleLine ? (
+          <p
+            className={`hide-when-presenting mb-2 rounded-lg border px-3 py-2 text-[12px] ${
+              staleLine.failed ? "border-red-200 bg-red-50 text-red-700" : "border-amber-200 bg-amber-50 text-amber-800"
+            }`}
+          >
+            {staleLine.text}
+          </p>
+        ) : null}
         <div className={HEADLINE_GRID}>
           <Tile label={`${ytdLabel} YTD MAs`} stat={hlMas.stat} flag={hlMas.flag} compact />
           <Tile label={`${ytdLabel} YTD Listings`} stat={hlListings.stat} flag={hlListings.flag} compact />
