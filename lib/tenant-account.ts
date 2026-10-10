@@ -75,6 +75,21 @@ export async function tenantByEmail(rawEmail: string): Promise<TenantMatch | nul
   return { email, name: me?.name || email, deals };
 }
 
+/**
+ * A tenant account for an address, made if there is none - and an existing
+ * one is left exactly as it is (Rig run 4, P-033, 10 Oct 2026). The passport's
+ * unproven path called upsertTenantAccount, which RENAMED whoever already held
+ * the address to whatever the link holder typed.
+ */
+export async function ensureTenantAccount(m: Pick<TenantMatch, "email" | "name">): Promise<void> {
+  await q(
+    `INSERT INTO os_portal_accounts (id, kind, email, name, rex_contact_id, profile)
+     VALUES ($1, 'tenant', $2, $3, NULL, '{}'::jsonb)
+     ON CONFLICT (email, kind) DO NOTHING`,
+    [uid(), m.email, m.name.slice(0, 120)]
+  );
+}
+
 export async function upsertTenantAccount(m: Pick<TenantMatch, "email" | "name">): Promise<TenantAccount> {
   const rows = await q<Row>(
     `INSERT INTO os_portal_accounts (id, kind, email, name, rex_contact_id, profile)

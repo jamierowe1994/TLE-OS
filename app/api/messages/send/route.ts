@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { hasDb, q } from "@/lib/db";
 import { proseEmail } from "@/lib/email/prose";
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
     await sendEmail({ to, subject: subjectMerged.text, html });
   } catch (e) {
     return NextResponse.json(
-      { ...preview, sent: false, reason: (e as Error).message },
+      { ...preview, sent: false, reason: publicError(e) },
       { status: 502 }
     );
   }

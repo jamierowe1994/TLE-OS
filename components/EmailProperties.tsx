@@ -324,6 +324,7 @@ export default function EmailProperties({
                   <iframe
                     title="The email"
                     srcDoc={preview.html}
+                    sandbox=""
                     className="mt-3 h-[480px] w-full rounded-2xl border border-line/70 bg-white"
                   />
                 </>

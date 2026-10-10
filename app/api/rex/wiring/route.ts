@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { rexCall, rexConfigured, rexRows, rexWritesLocked } from "@/lib/rex";
 import { diagnosticsBlocked } from "@/lib/diagnostics";
 
@@ -25,7 +26,7 @@ async function safe(fn: () => Promise<Check>, key: string, label: string): Promi
   try {
     return await fn();
   } catch (e) {
-    return { key, label, ok: false, detail: e instanceof Error ? e.message : "failed" };
+    return { key, label, ok: false, detail: publicError(e, "failed") };
   }
 }
 

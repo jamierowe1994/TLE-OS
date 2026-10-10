@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { attachDocument, moveDocument, PlcRefused, removeDocument, setCovers } from "@/lib/plc-store";
 import { checkById, COVERABLE, missingDocuments, PLC_CHECKS, type CheckId, type FileRead } from "@/lib/plc";
 import { keyIsOurs, r2Configured } from "@/lib/r2";
@@ -175,7 +176,7 @@ function fail(e: unknown) {
     return NextResponse.json({ ok: false, error: e.message }, { status: 409 });
   }
   return NextResponse.json(
-    { ok: false, error: e instanceof Error ? e.message : "That didn't work." },
+    { ok: false, error: publicError(e, "That didn't work.") },
     { status: 500 }
   );
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { forgetNotices } from "@/lib/portfolio-notice";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
@@ -55,7 +56,7 @@ export async function GET(req: NextRequest) {
     try {
       book = (await managedBookFor(scope.rexUserId)).book.properties;
     } catch (e) {
-      bookError = e instanceof Error ? e.message : "REX didn't answer, so some details are missing.";
+      bookError = publicError(e, "REX didn't answer, so some details are missing.");
     }
   } else {
     bookError = "REX isn't connected on this environment.";
@@ -121,6 +122,6 @@ export async function POST(req: NextRequest) {
     forgetNotices();
     return NextResponse.json({ ok: true, review });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not record it." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Could not record it.") }, { status: 400 });
   }
 }

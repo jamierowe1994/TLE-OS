@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { getAppraisal } from "@/lib/appraisal-store";
@@ -31,6 +32,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   } catch (e) {
     if (e instanceof NudgeRefused) return NextResponse.json({ ok: false, error: e.message }, { status: 409 });
     if (e instanceof ResendBlocked) return NextResponse.json({ ok: false, error: e.message }, { status: 503 });
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Couldn't send the nudge." }, { status: 500 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Couldn't send the nudge.") }, { status: 500 });
   }
 }

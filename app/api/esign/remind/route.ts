@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 import { sendAsAgent } from "@/lib/send-as-agent";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
@@ -126,7 +127,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, to, via: sent.via, onTimeline: sent.timeline });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "That didn't send." },
+      { ok: false, error: publicError(e, "That didn't send.") },
       { status: 500 }
     );
   }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
 import { addTenantMessage, markTenantEmailed, tenantAgentEmail, tenantThread } from "@/lib/chats";
 import { emailTenantReply } from "@/lib/chats-email";
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       await markTenantEmailed(message.id);
       emailed = true;
     } catch (e) {
-      await markTenantEmailed(message.id, e instanceof Error ? e.message : String(e));
+      await markTenantEmailed(message.id, publicError(e));
     }
   }
   return NextResponse.json({ ok: true, message, emailed });

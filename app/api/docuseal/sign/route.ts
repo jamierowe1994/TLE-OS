@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { getAppraisal, markTermsSent } from "@/lib/appraisal-store";
@@ -142,7 +143,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: e.message }, { status: 502 });
     }
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Couldn't open the terms." },
+      { error: publicError(e, "Couldn't open the terms.") },
       { status: 502 }
     );
   }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { resolveAddress } from "@/lib/bond";
@@ -23,6 +24,6 @@ export async function POST(req: NextRequest) {
     if (!r.ok) return NextResponse.json({ ok: false, error: r.reason }, { status: 422 });
     return NextResponse.json({ ok: true, prospect: r.prospect });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e) }, { status: 502 });
   }
 }

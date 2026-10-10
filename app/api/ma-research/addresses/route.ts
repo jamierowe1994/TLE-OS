@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { findAddresses } from "@/lib/ma-research";
 
 /**
@@ -24,6 +25,6 @@ export async function GET(req: NextRequest) {
   try {
     return NextResponse.json({ ok: true, addresses: await findAddresses({ postcode, query }) });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e) }, { status: 502 });
   }
 }

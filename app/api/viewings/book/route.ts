@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
 import { putViewingInRexDiary } from "@/lib/rex-diary-write";
 import { rexCopiesToOutlook } from "@/lib/rex-outlook-sync";
@@ -105,7 +106,7 @@ export async function POST(req: NextRequest) {
     const c = await getContact(osContactIdFrom(String(b.leadId))).catch(() => null);
     if (c?.rexId) contactId = c.rexId;
     else if (c && !c.isTest) {
-      const pushed = await pushContactToRex(c, actor.id).catch((e) => ({ ok: false as const, reason: "refused" as const, detail: e instanceof Error ? e.message : "REX push failed." }));
+      const pushed = await pushContactToRex(c, actor.id).catch((e) => ({ ok: false as const, reason: "refused" as const, detail: publicError(e, "REX push failed.") }));
       if (pushed.ok) {
         contactId = pushed.rexId;
         await markRex(c.id, "sent", pushed.detail, pushed.rexId, actor.name || actor.email).catch(() => null);

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { competitorAgents, competitorDoors } from "@/lib/competitors";
 
@@ -20,6 +21,6 @@ export async function GET(req: NextRequest) {
     if (p.get("doors")) return NextResponse.json({ ok: true, doors: await competitorDoors(districts, agent) });
     return NextResponse.json({ ok: true, agents: await competitorAgents(districts) });
   } catch (e) {
-    return NextResponse.json({ ok: false, reason: (e as Error).message }, { status: 502 });
+    return NextResponse.json({ ok: false, reason: publicError(e) }, { status: 502 });
   }
 }

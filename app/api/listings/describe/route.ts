@@ -1,4 +1,5 @@
 import { noDashes } from "@/lib/no-dashes";
+import { publicError } from "@/lib/public-error";
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
@@ -117,7 +118,7 @@ export async function POST(req: NextRequest) {
     const out = call.input as { heading: string; body: string };
     return NextResponse.json({ ok: true, heading: noDashes(out.heading).trim(), body: noDashes(out.body).trim(), model: res.model });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "The writer could not be reached.";
+    const msg = publicError(e, "The writer could not be reached.");
     const { actor: who } = await whoIs(req).catch(() => ({ actor: null }));
     const plain = /credit balance/i.test(msg)
       ? isOwner(who)

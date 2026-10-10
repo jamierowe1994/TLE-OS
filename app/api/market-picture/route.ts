@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { getMarketPicture } from "@/lib/market-picture";
 import { recentlyLet } from "@/lib/ma-research";
 
@@ -69,6 +70,6 @@ export async function GET(req: NextRequest) {
        confident "0 properties advertised in NN5" is the exact failure this
        codebase has shipped three times; hsLetBook throws for that reason and
        the panel renders the message. */
-    return NextResponse.json({ error: (e as Error).message }, { status: 502 });
+    return NextResponse.json({ error: publicError(e) }, { status: 502 });
   }
 }

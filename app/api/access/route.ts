@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import {
   accessFor,
   grantAccess,
@@ -91,7 +92,7 @@ export async function POST(req: NextRequest) {
     // RexWriteBlocked lands here and carries its own instructions.
     return NextResponse.json(
       {
-        error: (e as Error).message,
+        error: publicError(e),
         writesLocked: rexWritesLocked(
           "SecurityObjectPermissions",
           action === "grant" ? "grantPermission" : "requestPermission"

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { requireCapability } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
 import { overview } from "@/lib/agent-compliance";
@@ -54,7 +55,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not read the desk." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Could not read the desk.") }, { status: 502 });
   }
 }
 
@@ -92,7 +93,7 @@ export async function POST(req: NextRequest) {
       fileAs: b.fileAs?.expiry ? { type: String(b.fileAs.type ?? ""), expiry: String(b.fileAs.expiry), issue: b.fileAs.issue ? String(b.fileAs.issue) : null } : null,
     });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "That did not save." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: publicError(e, "That did not save.") }, { status: 400 });
   }
   const [verify, works] = await Promise.all([verifyQueue(), worksToCheck()]);
   return NextResponse.json({ ok: true, said, verify, works });

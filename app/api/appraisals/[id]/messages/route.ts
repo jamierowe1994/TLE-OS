@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { getAppraisal } from "@/lib/appraisal-store";
@@ -57,6 +58,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const out = await replyAsAgent({ ma, me, body, origin: publicOrigin(req) });
     return NextResponse.json({ ok: true, ...out });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Couldn't send it." }, { status: 409 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Couldn't send it.") }, { status: 409 });
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { londonToday } from "@/lib/london-clock";
 import { randomUUID } from "node:crypto";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
@@ -203,7 +204,7 @@ export async function POST(req: NextRequest) {
         lasts === "until" ? rightUntil : null, lasts === "none", lasts === "until" ? followUpFor(rightUntil) : null]
     );
   } catch (e) {
-    console.error("Right to Rent record failed", (e as Error).message);
+    console.error("Right to Rent record failed", publicError(e));
     return NextResponse.json({ ok: false, error: "The photos went up but the check was not recorded. Try sending again." }, { status: 500 });
   }
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { ALL_KINDS, clearSandbox, listSandbox, sandboxCounts, seedSandbox } from "@/lib/sandbox-store";
 import { SANDBOX_KINDS, describeSeed, type SandboxKind } from "@/lib/sandbox";
 
@@ -59,6 +60,6 @@ export async function POST(req: NextRequest) {
     const records = await seedSandbox(body.kind);
     return NextResponse.json({ ok: true, action, kind: body.kind, records });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+    return NextResponse.json({ error: publicError(e) }, { status: 500 });
   }
 }

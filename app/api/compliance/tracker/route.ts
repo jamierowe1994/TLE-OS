@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { requireCapability } from "@/lib/admin";
 import { getComplianceBook } from "@/lib/compliance-cache";
 import { buildQueue, buildTracker } from "@/lib/compliance-tracker";
@@ -79,7 +80,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Couldn't reach REX." },
+      { ok: false, error: publicError(e, "Couldn't reach REX.") },
       { status: 502 }
     );
   }

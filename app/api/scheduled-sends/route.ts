@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
@@ -142,7 +143,7 @@ export async function POST(req: NextRequest) {
         videoChase = await queueVideoChase({ ma, me, origin });
       }
     } catch (e) {
-      videoChase = { queued: false, reason: e instanceof Error ? e.message : "Couldn't queue the video nudge." };
+      videoChase = { queued: false, reason: publicError(e, "Couldn't queue the video nudge.") };
     }
   }
 

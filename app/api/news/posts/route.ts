@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { requireCapability, whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
 import { deleteNews, listNews, NEWS_KINDS, upsertNews } from "@/lib/news-store";
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, post });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "That didn't save." },
+      { ok: false, error: publicError(e, "That didn't save.") },
       { status: 400 }
     );
   }

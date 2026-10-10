@@ -404,6 +404,7 @@ export default function Marketing() {
             <iframe
               title="Email preview"
               srcDoc={preview.html}
+              sandbox=""
               className="h-[640px] w-full rounded-2xl border border-line/70 bg-white"
             />
           ) : (

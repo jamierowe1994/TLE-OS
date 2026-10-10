@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 
 /**
  * Industry news, for the dashboard.
@@ -89,7 +90,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: true, stale: true, source: src.name, site: src.site, items: cache.items });
     }
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "The feed didn't answer." },
+      { ok: false, error: publicError(e, "The feed didn't answer.") },
       { status: 502 }
     );
   }

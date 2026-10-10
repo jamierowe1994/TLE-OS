@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb, q } from "@/lib/db";
 
 /**
@@ -41,7 +42,7 @@ export async function GET(req: Request) {
     });
   } catch (e) {
     return NextResponse.json(
-      { stored: false, payload: null, error: e instanceof Error ? e.message : "read failed" },
+      { stored: false, payload: null, error: publicError(e, "read failed") },
       { status: 200 }
     );
   }
@@ -79,7 +80,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ saved: true });
   } catch (e) {
     return NextResponse.json(
-      { saved: false, error: e instanceof Error ? e.message : "write failed" },
+      { saved: false, error: publicError(e, "write failed") },
       { status: 500 }
     );
   }

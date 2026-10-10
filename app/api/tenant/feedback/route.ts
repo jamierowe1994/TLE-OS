@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { jsonObject } from "@/lib/json-body";
 import { hasDb, q } from "@/lib/db";
 import { sendEmail } from "@/lib/resend";
 import { renderPlain } from "@/lib/campaign-mail";
@@ -70,7 +71,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const b = (await req.json().catch(() => ({}))) as {
+  const b = (await jsonObject(req)) as {
     t?: string;
     answers?: Record<string, string>;
     interested?: boolean;

@@ -1,4 +1,5 @@
 import { requireCapability } from "@/lib/admin";
+import { publicError } from "@/lib/public-error";
 import { NextRequest, NextResponse } from "next/server";
 import { getProtectionBook } from "@/lib/business/payprop-tags";
 import { getRlpTakeUp } from "@/lib/business/payprop-income";
@@ -33,6 +34,6 @@ export async function GET(req: NextRequest) {
       : null;
     return NextResponse.json({ ...book, rlpPayments });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 502 });
+    return NextResponse.json({ error: publicError(e) }, { status: 502 });
   }
 }

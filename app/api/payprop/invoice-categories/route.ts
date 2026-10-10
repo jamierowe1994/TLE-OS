@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { requireCapability } from "@/lib/admin";
 import { payPropAccounts, payPropGetAll } from "@/lib/business/payprop";
 
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest) {
     try {
       rows = await payPropGetAll<Row>(account, "export/invoices");
     } catch (e) {
-      out[account] = { error: e instanceof Error ? e.message : "read failed" };
+      out[account] = { error: publicError(e, "read failed") };
       continue;
     }
     const counts = new Map<string, number>();

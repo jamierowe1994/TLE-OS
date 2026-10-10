@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { publicError } from "@/lib/public-error";
 import { NextRequest, NextResponse } from "next/server";
 import { hasDb, q } from "@/lib/db";
 import { fetchLeadBook } from "@/lib/rex-leads";
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
   try {
     book = await fetchLeadBook(null);
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "The lead read failed." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e, "The lead read failed.") }, { status: 502 });
   }
   const written = await recordLeads(book.leads);
   /* The whole message for new valuation requests, so a sale is known as one
@@ -65,13 +66,13 @@ export async function POST(req: NextRequest) {
   const replies = await import("@/lib/tenant-journey-emails")
     .then((m) => m.enquiryReplies())
     .then((r) => ({ sent: r.filter((x) => x.state === "sent").length, would: r.filter((x) => x.state === "would").length, skipped: r.filter((x) => x.state === "skipped").length }))
-    .catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    .catch((e) => ({ error: publicError(e) }));
   /* Viewings put in the diary in the last two hours, so "Viewing booked"
      reaches the bell and the phone within five minutes (lib/rex-viewings
      sweepNewBookings). Its own failure is reported, never the scan's. */
   const bookings = await import("@/lib/rex-viewings")
     .then((m) => m.sweepNewBookings())
-    .catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    .catch((e) => ({ error: publicError(e) }));
   return NextResponse.json({ ok: true, scanned: book.scanned, kept: book.leads.length, written, valuationsRead, onFile: stats.onFile, since: stats.since, newestAt: book.newestAt, replies, bookings, signInsKept, ms: Date.now() - started });
 }
 

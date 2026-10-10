@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import {
@@ -122,6 +123,6 @@ export async function POST(req: NextRequest) {
       const locked = !docusealSendUnlocked() || !docusealConfigured();
       return NextResponse.json({ ok: false, error: e.message }, { status: locked ? 423 : 502 });
     }
-    return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 500 });
+    return NextResponse.json({ ok: false, error: publicError(e) }, { status: 500 });
   }
 }

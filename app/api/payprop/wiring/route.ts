@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { requireCapability } from "@/lib/admin";
 import {
   PAYPROP_ACCOUNTS,
@@ -172,7 +173,7 @@ export async function GET(req: NextRequest) {
               key: "error",
               label: "Access",
               ok: false,
-              detail: e instanceof Error ? e.message : "Something threw while checking this agency.",
+              detail: publicError(e, "Something threw while checking this agency."),
             },
           ],
         };

@@ -774,7 +774,9 @@ export async function logEvent(orderId: string, by: string, kind: string, text: 
 /* ── the two public doors ───────────────────────────────────────────────── */
 
 export async function orderByToken(kind: "contractor" | "tenant", token: string): Promise<WorksOrder | null> {
-  if (!hasDb() || !token) return null;
+  /* A token we could never have issued is not asked of Postgres (Rig run 4,
+     P-048): a null byte in one was an empty 500 instead of "not one of ours". */
+  if (!hasDb() || !token || token.length > 200 || /[\u0000-\u001f]/.test(token)) return null;
   const [r] = await q<Row>(`SELECT ${COLS} FROM os_works_orders WHERE ${kind === "contractor" ? "contractor_token" : "tenant_token"} = $1`, [token]);
   return r ? toOrder(r) : null;
 }

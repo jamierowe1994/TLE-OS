@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { ask, askConfigured, askHistory, budget, clearAsk, logAsk, type AskContext } from "@/lib/bond-ask";
@@ -73,6 +74,6 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     const msg = "Something went wrong reaching Bond just then. Your question is saved; try again in a moment.";
     await logAsk({ userId, userEmail, role: "bond", text: msg, focus });
-    return NextResponse.json({ ok: true, reply: msg, steps: [], live: false, error: e instanceof Error ? e.message : "unknown" });
+    return NextResponse.json({ ok: true, reply: msg, steps: [], live: false, error: publicError(e, "unknown") });
   }
 }

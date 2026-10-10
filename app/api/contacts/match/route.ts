@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import {
   scoreAll,
@@ -104,7 +105,7 @@ export async function POST(req: Request) {
         if (!res.ok) return { facet, rows: [] as RexContact[], error: res.error };
         return { facet, rows: rexRows(res.result) as RexContact[], error: null };
       } catch (e) {
-        return { facet, rows: [] as RexContact[], error: e instanceof Error ? e.message : "failed" };
+        return { facet, rows: [] as RexContact[], error: publicError(e, "failed") };
       }
     })
   );

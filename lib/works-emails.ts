@@ -77,7 +77,9 @@ async function contractorOf(id: string | null): Promise<{ name: string; contact:
 }
 
 const first = (name: string) => (name || "there").trim().split(/\s+/)[0];
-const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+/* Coerced: a preview can carry a tenant with no phone or email, and
+   undefined.replace crashed the whole preview (Rig run 4, P-064). */
+const esc = (v: string | null | undefined) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const day = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long", year: "numeric" }).replace(",", "") : "not recorded";
 const when = (iso: string | null) =>

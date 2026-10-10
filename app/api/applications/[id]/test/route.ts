@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { getCase } from "@/lib/plc-store";
@@ -37,6 +38,6 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     }
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "That didn't work." }, { status: 409 });
+    return NextResponse.json({ ok: false, error: publicError(e, "That didn't work.") }, { status: 409 });
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
 import { appraisalIdForLead, getAppraisal } from "@/lib/appraisal-store";
@@ -190,6 +191,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: false, error: "Which confirmation?" }, { status: 400 });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "That didn't work." }, { status: 500 });
+    return NextResponse.json({ ok: false, error: publicError(e, "That didn't work.") }, { status: 500 });
   }
 }

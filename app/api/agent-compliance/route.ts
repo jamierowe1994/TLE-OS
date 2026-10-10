@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
 import { itemsFor, markDone } from "@/lib/agent-compliance";
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest) {
       link: body.link,
     });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "That didn't save." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: publicError(e, "That didn't save.") }, { status: 400 });
   }
   return NextResponse.json({ ok: true, items: await itemsFor(actor.id) });
 }

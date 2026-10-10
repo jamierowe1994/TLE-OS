@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { asText, jsonObject } from "@/lib/json-body";
 import { hasDb } from "@/lib/db";
 import { cleanPassportData, getPassport, INCOMPLETE, passportComplete, passportEmailedTo, savePassport, submitPassport } from "@/lib/passport";
-import { createTenantFromPassport, tenantHasPassword, upsertTenantAccount } from "@/lib/tenant-account";
+import { createTenantFromPassport, ensureTenantAccount, tenantHasPassword } from "@/lib/tenant-account";
 import { createPortalToken, TENANT_COOKIE, portalCookieOptions } from "@/lib/auth";
 import { normaliseEmail } from "@/lib/users";
 import { startVerification } from "@/lib/verification";
@@ -29,15 +30,26 @@ import { sendPassportThanks } from "@/lib/tenant-journey-emails";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+/** Unproven sign-in sends per passport link, in the last day. */
+const unproven = new Map<string, number[]>();
+function unprovenAllowed(token: string): boolean {
+  const now = Date.now();
+  const recent = (unproven.get(token) ?? []).filter((t) => now - t < 24 * 60 * 60 * 1000);
+  if (recent.length >= 3) return false;
+  recent.push(now);
+  unproven.set(token, recent);
+  return true;
+}
+
 export async function POST(req: NextRequest) {
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
   let body: { token?: string; password?: string; data?: Record<string, unknown> } = {};
   try {
-    body = (await req.json()) as typeof body;
+    body = (await jsonObject(req)) as typeof body;
   } catch {
     /* falls through */
   }
-  const token = String(body.token ?? "").trim();
+  const token = asText(body.token).trim();
   const password = String(body.password ?? "");
   if (!token) return NextResponse.json({ ok: false, error: "That passport link is missing its code." }, { status: 400 });
   if (password.length < 8) return NextResponse.json({ ok: false, error: "Your password needs at least 8 characters." }, { status: 400 });
@@ -63,7 +75,8 @@ export async function POST(req: NextRequest) {
   if (!email.includes("@")) {
     return NextResponse.json({ ok: false, error: "Add your email address on the first page - it becomes your username." }, { status: 400 });
   }
-  const name = record.data.legalName || record.name;
+  /* Capped: it goes into an email's greeting and onto an account (P-033). */
+  const name = (record.data.legalName || record.name || "").slice(0, 120);
 
   if (await tenantHasPassword(email)) {
     return NextResponse.json(
@@ -86,7 +99,13 @@ export async function POST(req: NextRequest) {
   /* Not proven. The address they typed gets a sign-in link; the account is a
      row with no password on it until they open that link. */
   const to = normaliseEmail(typed || email);
-  await upsertTenantAccount({ email: to, name: name.trim() || to });
+  /* A few unproven sends per link (P-033): a link holder typing address after
+     address made us email each one. Per process, which a deploy resets - the
+     5-per-address limit on the link itself still stands behind it. */
+  if (!unprovenAllowed(token)) {
+    return NextResponse.json({ ok: false, error: "We've already sent sign-in links for this passport. Check your inbox, or ask your agent." }, { status: 429 });
+  }
+  await ensureTenantAccount({ email: to, name: name.trim() || to });
   await submitPassport(token).catch(() => null);
   await sendPassportThanks(token).catch(() => null);
   try {

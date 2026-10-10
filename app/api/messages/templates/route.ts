@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import {
   BUILT_IN,
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
       who
     );
   } catch (e) {
-    return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 503 });
+    return NextResponse.json({ ok: false, error: publicError(e) }, { status: 503 });
   }
   return NextResponse.json({ ok: true, templates: await listTemplates() });
 }

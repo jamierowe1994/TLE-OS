@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { timingSafeEqual } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { requireCapability } from "@/lib/admin";
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
       );
       return { ...r, ...b };
     } catch (e) {
-      await q(`UPDATE os_bond_rex_sync SET status = 'failed', error = $2, finished_at = NOW() WHERE id = $1`, [runId, (e as Error).message]);
+      await q(`UPDATE os_bond_rex_sync SET status = 'failed', error = $2, finished_at = NOW() WHERE id = $1`, [runId, publicError(e)]);
       throw e;
     }
   })();
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
     try {
       return NextResponse.json({ ...(await work), ok: true, runId });
     } catch (e) {
-      return NextResponse.json({ ok: false, runId, error: (e as Error).message }, { status: 502 });
+      return NextResponse.json({ ok: false, runId, error: publicError(e) }, { status: 502 });
     }
   }
   work.catch(() => null);

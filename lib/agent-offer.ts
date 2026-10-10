@@ -7,7 +7,7 @@ import { agentEmailFor } from "@/lib/tenant-find";
 import { createPassport, findPassportByEmail, getPassport, savePassport, type PassportRecord } from "@/lib/passport";
 import { APPLICANT_TYPES, EMPTY_PASSPORT, TRADING_FOR, WORK_HOURS, workFlags, workLine, type PassportData } from "@/lib/passport-shape";
 import { diffOffer, offerSubset, type OfferPassport } from "@/lib/offer-passport";
-import { renderTleEmail } from "@/lib/email/tle-emails";
+import { escapeHtml, renderTleEmail } from "@/lib/email/tle-emails";
 import { sendAsAgent } from "@/lib/send-as-agent";
 import { sendEmail } from "@/lib/resend";
 import { proseEmail } from "@/lib/email/prose";
@@ -214,8 +214,9 @@ export async function saveAgentOffer(me: OsUser, raw: Record<string, unknown>): 
     const summary = [
       `<strong>Rent:</strong> ${gbp(amount)} a month`,
       `<strong>Moving in:</strong> ${whenWords}`,
-      `<strong>Who:</strong> ${who}`,
-      works.length ? `<strong>Works before moving day:</strong> ${works.join("; ")}` : "",
+      /* Typed text inside a markup line: escaped here (see escapeHtml). */
+      `<strong>Who:</strong> ${escapeHtml(who)}`,
+      works.length ? `<strong>Works before moving day:</strong> ${escapeHtml(works.join("; "))}` : "",
     ]
       .filter(Boolean)
       .join("<br>");

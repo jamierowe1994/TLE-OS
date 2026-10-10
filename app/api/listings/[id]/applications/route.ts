@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
 import { scopeForWho } from "@/lib/scope";
 import { hasDb } from "@/lib/db";
@@ -50,6 +51,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       ...(stale ? { stale: true } : {}),
     });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "The applications did not load.", applications: [] }, { status: 502 });
+    return NextResponse.json({ error: publicError(e, "The applications did not load."), applications: [] }, { status: 502 });
   }
 }

@@ -233,11 +233,12 @@ export function renderTleEmail(
 ): { subject: string; html: string } {
   const entry = TLE_EMAILS.find((e) => e.id === id);
   if (!entry?.doc) throw new Error(`No email document for ${id}.`);
-  const fill = (t: string) => t.replace(/\{\{(\w+)\}\}/g, (m, k: string) => vars[k] ?? m);
+  const fill = fillFor(vars, true);
+  const fillText = fillFor(vars, false);
   const doc = entry.doc;
   const filled: EmailDoc = {
     ...doc,
-    subject: fill(doc.subject),
+    subject: fillText(doc.subject),
     /* The inbox preview line, filled like everything else (see withSample). */
     ...(typeof doc.preheader === "string" ? { preheader: fill(doc.preheader) } : {}),
     blocks: doc.blocks.map((b) => {
@@ -254,6 +255,36 @@ export function renderTleEmail(
     ),
   };
   return blocks(filled, entry.audience)();
+}
+
+/**
+ * Every value filled into an email's BODY is escaped (Rig run 4, P-063 and
+ * P-064, 10 Oct 2026). They went in raw, so a lead's name from a portal
+ * enquiry - "<img src=x onerror=...>" - ran as code in the staff preview, and
+ * a tenant's repair description put a live link into the contractor's
+ * works-order email.
+ *
+ * The exceptions are values the code BUILDS as HTML and escapes inside itself
+ * (lists of homes and tenants, the <strong> lines): named ...List, ...Line or
+ * ...Html, plus findings and slots. Keep to that naming for anything new that
+ * carries markup, and escape any outside text inside it.
+ *
+ * The subject is plain text in every inbox, so it is filled unescaped - an
+ * "&" there would otherwise arrive as "&amp;".
+ */
+const HTML_VAR = /(List|Line|Html)$|^(findings|slots)$/;
+
+export function escapeHtml(v: string): string {
+  return v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function fillFor(vars: Record<string, string>, html: boolean) {
+  return (t: string) =>
+    t.replace(/\{\{(\w+)\}\}/g, (m, k: string) => {
+      const v = vars[k];
+      if (v == null) return m;
+      return html && !HTML_VAR.test(k) ? escapeHtml(String(v)) : String(v);
+    });
 }
 
 /**
@@ -279,10 +310,11 @@ export async function renderTleEmailLive(id: string, vars: Record<string, string
   } catch {
     /* the words in code, then */
   }
-  const fill = (t: string) => t.replace(/\{\{(\w+)\}\}/g, (m, k: string) => vars[k] ?? m);
+  const fill = fillFor(vars, true);
+  const fillText = fillFor(vars, false);
   const filled: EmailDoc = {
     ...doc,
-    subject: fill(doc.subject),
+    subject: fillText(doc.subject),
     ...(typeof doc.preheader === "string" ? { preheader: fill(doc.preheader) } : {}),
     blocks: doc.blocks.map((b) => {
       const anyB = b as unknown as Record<string, unknown>;
@@ -1234,11 +1266,14 @@ export function renderLandlordSignIn(input: { firstName: string; link: string })
   html: string;
   text: string;
 } {
-  const fill = (t: string) =>
+  /* The landlord's own name goes into the body escaped (see escapeHtml). */
+  const fillText = (t: string) =>
     t.replace(/\{\{firstName\}\}/g, input.firstName).replace(/\{\{link\}\}/g, input.link);
+  const fill = (t: string) =>
+    t.replace(/\{\{firstName\}\}/g, escapeHtml(input.firstName)).replace(/\{\{link\}\}/g, escapeHtml(input.link));
   const doc = {
     ...LANDLORD_SIGN_IN,
-    subject: fill(LANDLORD_SIGN_IN.subject),
+    subject: fillText(LANDLORD_SIGN_IN.subject),
     blocks: LANDLORD_SIGN_IN.blocks.map((b) => {
       const rec = b as unknown as Record<string, unknown>;
       const next: Record<string, unknown> = { ...rec };

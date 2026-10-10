@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb, q } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { scopeFor } from "@/lib/scope";
@@ -105,7 +106,7 @@ export async function GET(req: NextRequest) {
           due = dueList(book.properties.filter((p) => ours.has(String(p.propertyId ?? p.listingId))), inspections, rules, hmoIds, prior);
         }
       } catch (e) {
-        bookError = e instanceof Error ? e.message : "REX didn't answer, so the due list is missing.";
+        bookError = publicError(e, "REX didn't answer, so the due list is missing.");
       }
     }
   }
@@ -138,6 +139,6 @@ export async function POST(req: NextRequest) {
     const inspection = await createInspection({ ...b, kind, propertyName: b.propertyName, rexpmTaskId: typeof b.rexpmTaskId === "string" ? b.rexpmTaskId : null }, by);
     return NextResponse.json({ ok: true, inspection });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not raise it." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Could not raise it.") }, { status: 400 });
   }
 }

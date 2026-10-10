@@ -1,4 +1,5 @@
 import { sameSite } from "@/lib/email/preview-origin";
+import { publicError } from "@/lib/public-error";
 import { publicOrigin } from "@/lib/origin";
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest) {
          2026). */
       return NextResponse.json({ ok: true, id, subject: out.subject, html: sameSite(out.html, publicOrigin(req)) });
     } catch (e) {
-      return NextResponse.json({ ok: false, error: `That email did not render: ${e instanceof Error ? e.message : "unknown"}` }, { status: 500 });
+      return NextResponse.json({ ok: false, error: `That email did not render: ${publicError(e, "unknown")}` }, { status: 500 });
     }
   }
 

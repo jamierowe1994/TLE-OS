@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
 import { can } from "@/lib/roles";
@@ -89,6 +90,6 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     }
     return NextResponse.json({ ok: false, error: "Nothing to do." }, { status: 400 });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Not saved." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Not saved.") }, { status: 502 });
   }
 }

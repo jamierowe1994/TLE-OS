@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
+import { asText, jsonObject } from "@/lib/json-body";
 import {
   currentLandlord,
   landlordJourneys,
@@ -43,12 +45,12 @@ export async function POST(req: NextRequest) {
   if (!me) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
 
-  const body = (await req.json().catch(() => ({}))) as { appraisalId?: string; text?: string };
-  const text = (body.text ?? "").trim();
+  const body = (await jsonObject(req)) as { appraisalId?: string; text?: string };
+  const text = asText(body.text).trim();
   if (!text) return NextResponse.json({ ok: false, error: "Write something first." }, { status: 400 });
   if (text.length > 4000) return NextResponse.json({ ok: false, error: "That's a long one. Keep it under 4,000 characters." }, { status: 413 });
 
-  const appraisalId = (body.appraisalId ?? "").trim() || null;
+  const appraisalId = asText(body.appraisalId).trim() || null;
   if (appraisalId && !(await landlordOwnsAppraisal(me, appraisalId))) {
     return NextResponse.json({ ok: false, error: "That property isn't on your file." }, { status: 403 });
   }
@@ -83,7 +85,7 @@ export async function POST(req: NextRequest) {
     await markMessageEmailed(message.id, null);
     emailed = true;
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = publicError(e);
     console.warn(`[landlord/messages] stored but not emailed to ${to}: ${msg}`);
     await markMessageEmailed(message.id, msg);
   }

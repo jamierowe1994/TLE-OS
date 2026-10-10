@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { getProspect, listProspects, radarSummary, updateProspect } from "@/lib/radar";
 import { whoIs } from "@/lib/admin";
@@ -32,7 +33,7 @@ export async function GET() {
     const [prospects, summary] = await Promise.all([listProspects(), radarSummary()]);
     return NextResponse.json({ ok: true, live: true, prospects, summary });
   } catch (e) {
-    return NextResponse.json({ ok: false, live: false, reason: (e as Error).message }, { status: 502 });
+    return NextResponse.json({ ok: false, live: false, reason: publicError(e) }, { status: 502 });
   }
 }
 
@@ -78,6 +79,6 @@ export async function PATCH(req: NextRequest) {
     }
     return NextResponse.json({ ok: true, prospect });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 400 });
+    return NextResponse.json({ ok: false, error: publicError(e) }, { status: 400 });
   }
 }

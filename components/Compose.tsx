@@ -240,6 +240,7 @@ export default function Compose({
                 <iframe
                   title="Email preview"
                   srcDoc={preview.html}
+                  sandbox=""
                   className="mt-2 h-[420px] w-full rounded-xl border border-line/70 bg-white"
                 />
               )}

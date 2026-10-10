@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
+import { asText, jsonObject } from "@/lib/json-body";
 import { currentLandlord, landlordOwnsAppraisal } from "@/lib/landlord-account";
 import { loadLandlordHome } from "@/lib/landlord-home-view";
 import { currentApproval, markApprovalEmailed, recordApproval } from "@/lib/landlord-offers";
@@ -41,11 +43,11 @@ export async function POST(req: NextRequest) {
   if (!me) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
 
-  const body = (await req.json().catch(() => ({}))) as { offerId?: string; appraisalId?: string; p?: string };
-  const offerId = (body.offerId ?? "").trim();
+  const body = (await jsonObject(req)) as { offerId?: string; appraisalId?: string; p?: string };
+  const offerId = asText(body.offerId).trim();
   if (!offerId) return NextResponse.json({ ok: false, error: "No offer was named." }, { status: 400 });
 
-  const appraisalId = (body.appraisalId ?? "").trim() || null;
+  const appraisalId = asText(body.appraisalId).trim() || null;
   if (appraisalId && !(await landlordOwnsAppraisal(me, appraisalId))) {
     return NextResponse.json({ ok: false, error: "That property isn't on your file." }, { status: 403 });
   }
@@ -121,7 +123,7 @@ export async function POST(req: NextRequest) {
       text,
     });
   } catch (e) {
-    error = e instanceof Error ? e.message : "Email failed";
+    error = publicError(e, "Email failed");
   }
   await markApprovalEmailed(approval.id, error);
 

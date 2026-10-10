@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import type { OpenSurface } from "@/lib/open-record";
 import { sealPayload, SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { scopeFor } from "@/lib/scope";
@@ -201,7 +202,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       reply: msg,
       kind,
-      error: e instanceof Error ? e.message : "unknown",
+      error: publicError(e, "unknown"),
     });
   }
 

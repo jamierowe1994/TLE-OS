@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
 import { noticesForHome, startNotice } from "@/lib/section-notices";
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
   try {
     return NextResponse.json({ ok: true, stored: true, notices: await noticesForHome(listing) });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not read the notices." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Could not read the notices.") }, { status: 502 });
   }
 }
 
@@ -53,6 +54,6 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ ok: true, notice, existing });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not start it." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Could not start it.") }, { status: 502 });
   }
 }

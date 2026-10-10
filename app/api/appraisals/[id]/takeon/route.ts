@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
 import { getAppraisal } from "@/lib/appraisal-store";
 import { putInOutlook } from "@/lib/outlook-calendar";
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     minutes,
     location: [ma.address, ma.postcode].filter(Boolean).join(", "),
     body: `Photographs, floor plan and the details for the advert, with ${ma.landlord}.`,
-  }).catch((e) => ({ ok: false, detail: e instanceof Error ? e.message : "Outlook refused it." }));
+  }).catch((e) => ({ ok: false, detail: publicError(e, "Outlook refused it.") }));
 
   await recordTakeOnBooked(ma.id, { startsAt: b.startsAt, minutes, by: actor.name || actor.email, at: new Date().toISOString() });
   return NextResponse.json({ ok: true, outlook, said: outlook.ok ? "In your Outlook calendar." : (outlook.detail ?? "Booked.") });

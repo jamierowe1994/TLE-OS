@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
 import { r2Configured } from "@/lib/r2";
 import { listVault } from "@/lib/vault";
@@ -31,6 +32,6 @@ export async function GET(req: NextRequest) {
     const files = await listVault(property);
     return NextResponse.json({ ok: true, configured: true, files });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not read the vault." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Could not read the vault.") }, { status: 502 });
   }
 }

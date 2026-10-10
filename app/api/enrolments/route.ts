@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb, q } from "@/lib/db";
 import { campaignResults, campaignsById } from "@/lib/campaign-store";
 
@@ -107,6 +108,6 @@ export async function POST(req: Request) {
     );
     return NextResponse.json({ saved: true });
   } catch (e) {
-    return NextResponse.json({ saved: false, error: e instanceof Error ? e.message : "failed" }, { status: 500 });
+    return NextResponse.json({ saved: false, error: publicError(e, "failed") }, { status: 500 });
   }
 }

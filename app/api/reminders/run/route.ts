@@ -1,4 +1,5 @@
 import { warmDiary } from "@/lib/diary-cache";
+import { publicError } from "@/lib/public-error";
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { requireCapability } from "@/lib/admin";
@@ -36,6 +37,6 @@ export async function POST(req: NextRequest) {
      reminders rather than after them; it never throws. */
   const diaryWarm = warmDiary();
   const run = await runReminders();
-  const works = await worksSweep().catch((e) => ({ doneRequests: 0, failed: e instanceof Error ? e.message : "failed" }));
+  const works = await worksSweep().catch((e) => ({ doneRequests: 0, failed: publicError(e, "failed") }));
   return NextResponse.json({ ...run, works, diary: await diaryWarm }, { status: run.ok ? 200 : 503 });
 }

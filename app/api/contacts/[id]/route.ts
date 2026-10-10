@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
 import { getContact, updateContact, markRex } from "@/lib/contacts-store";
 import { pushContactUpdateToRex } from "@/lib/rex-contacts";
@@ -66,7 +67,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     contact = await updateContact(id, patch);
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Could not save that change." },
+      { error: publicError(e, "Could not save that change.") },
       { status: 500 }
     );
   }

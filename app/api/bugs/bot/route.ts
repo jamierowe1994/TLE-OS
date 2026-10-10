@@ -1,4 +1,5 @@
 import { mediaFor } from "@/lib/bug-media";
+import { publicError } from "@/lib/public-error";
 import { NextRequest, NextResponse } from "next/server";
 import { bugShot } from "@/lib/pilot";
 import { BotRefused, cronAuthorised, listToFix, record, takeQueue, type BotState } from "@/lib/bug-bot";
@@ -37,6 +38,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, ...out });
   } catch (e) {
     const status = e instanceof BotRefused ? 400 : 500;
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not record." }, { status });
+    return NextResponse.json({ ok: false, error: publicError(e, "Could not record.") }, { status });
   }
 }

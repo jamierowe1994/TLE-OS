@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { bondProcess, PROCESS_STEPS } from "@/lib/bond-process";
 
@@ -22,6 +23,6 @@ export async function GET(req: NextRequest) {
     const funnel = await bondProcess(districts);
     return NextResponse.json({ ok: true, steps: PROCESS_STEPS, ...funnel });
   } catch (e) {
-    return NextResponse.json({ ok: false, reason: (e as Error).message }, { status: 502 });
+    return NextResponse.json({ ok: false, reason: publicError(e) }, { status: 502 });
   }
 }

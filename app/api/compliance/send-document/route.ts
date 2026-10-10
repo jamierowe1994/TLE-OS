@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { whoIs } from "@/lib/admin";
 import { scopeFor } from "@/lib/scope";
@@ -91,7 +92,7 @@ export async function POST(req: NextRequest) {
       attachments: [{ filename: fileName, content }],
     });
   } catch (e) {
-    const msg = e instanceof ResendBlocked ? e.message : e instanceof Error ? e.message : "The send did not go.";
+    const msg = e instanceof ResendBlocked ? e.message : publicError(e, "The send did not go.");
     return NextResponse.json({ ok: false, error: msg }, { status: e instanceof ResendBlocked ? 200 : 502 });
   }
   return NextResponse.json({ ok: true, to });

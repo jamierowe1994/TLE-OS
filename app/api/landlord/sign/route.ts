@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
+import { asText, jsonObject } from "@/lib/json-body";
 import { currentLandlord, landlordOwnsAppraisal } from "@/lib/landlord-account";
 import { getAppraisal } from "@/lib/appraisal-store";
 import { docusealConfigured, DocusealBlocked, findLandlordSigning } from "@/lib/docuseal";
@@ -22,8 +24,8 @@ export async function POST(req: NextRequest) {
   const me = await currentLandlord();
   if (!me) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
 
-  const body = (await req.json().catch(() => ({}))) as { appraisalId?: string };
-  const id = (body.appraisalId ?? "").trim();
+  const body = (await jsonObject(req)) as { appraisalId?: string };
+  const id = asText(body.appraisalId).trim();
   if (!id || !(await landlordOwnsAppraisal(me, id))) {
     return NextResponse.json({ ok: false, error: "That property isn't on your file." }, { status: 403 });
   }
@@ -70,7 +72,7 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ ok: true, url: session.embedSrc });
   } catch (e) {
-    const msg = e instanceof DocusealBlocked ? e.message : e instanceof Error ? e.message : "Couldn't open the terms.";
+    const msg = e instanceof DocusealBlocked ? e.message : publicError(e, "Couldn't open the terms.");
     console.error("[landlord/sign] failed", msg);
     return NextResponse.json({ ok: false, error: "Couldn't open the terms just now. Try again in a moment, or ask your agent." }, { status: 502 });
   }

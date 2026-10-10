@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { listPlanning, planningStatus } from "@/lib/planning";
 
@@ -32,6 +33,6 @@ export async function GET(req: NextRequest) {
     ]);
     return NextResponse.json({ ok: true, applications, status });
   } catch (e) {
-    return NextResponse.json({ ok: false, reason: (e as Error).message }, { status: 502 });
+    return NextResponse.json({ ok: false, reason: publicError(e) }, { status: 502 });
   }
 }

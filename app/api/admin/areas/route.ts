@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { requireCapability } from "@/lib/admin";
 import { record } from "@/lib/audit";
 import { addAreaTester, areaRows, areaTesters, isLevel, removeAreaTester, setAreaLevel } from "@/lib/area-access";
@@ -36,7 +37,7 @@ export async function PATCH(req: NextRequest) {
   try {
     await setAreaLevel(area, level, me.email);
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "That did not save." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: publicError(e, "That did not save.") }, { status: 400 });
   }
   await record({ kind: "area_changed", actorId: me.id, actorEmail: me.email, detail: `${area} -> ${level}` });
   return NextResponse.json({ ok: true, areas: await areaRows() });

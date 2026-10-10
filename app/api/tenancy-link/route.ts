@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { rexTokenFor } from "@/lib/rex-user";
@@ -100,6 +101,6 @@ export async function POST(req: NextRequest) {
         { status: 423 }
       );
     }
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Failed." }, { status: 500 });
+    return NextResponse.json({ error: publicError(e, "Failed.") }, { status: 500 });
   }
 }

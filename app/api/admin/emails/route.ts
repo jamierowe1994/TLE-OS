@@ -1,4 +1,5 @@
 import { sameSite } from "@/lib/email/preview-origin";
+import { publicError } from "@/lib/public-error";
 import { publicOrigin } from "@/lib/origin";
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
@@ -111,7 +112,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(
         {
           ok: false,
-          error: `"${entry.name}" failed to render: ${e instanceof Error ? e.message : "unknown"}`,
+          error: `"${entry.name}" failed to render: ${publicError(e, "unknown")}`,
         },
         { status: 500 }
       );

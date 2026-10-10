@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { addByHand, dossier, findCandidates, removeByHand } from "@/lib/property-lookup";
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
     const r = await findCandidates(p.get("q") ?? "");
     return NextResponse.json({ ok: true, ...r });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e) }, { status: 502 });
   }
 }
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { hasDb } from "@/lib/db";
 import { orderByToken, moveOrder, logEvent, markAccountsTold, stepOf, pounds, tenantsOf, type WorksOrder } from "@/lib/works-orders";
@@ -38,11 +39,16 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 function publicView(o: WorksOrder) {
+  /* The way in and the tenants' numbers only while the work is still to do
+     (Rig run 4, P-037, 10 Oct 2026). The link never expires, so a finished,
+     invoiced, paid or cancelled job went on showing a key-safe code and the
+     tenants' phones to whoever held it. The invoice step still works. */
+  const live = !["done", "invoiced", "paid", "cancelled"].includes(o.status);
   return {
     ref: o.ref, kind: o.kind, title: o.title, category: o.category, description: o.description, status: o.status, step: stepOf(o),
-    address: [o.propertyName, o.locality].filter(Boolean).join(", "), access: o.access, contractorName: o.contractorName,
+    address: [o.propertyName, o.locality].filter(Boolean).join(", "), access: live ? o.access : null, contractorName: o.contractorName,
     /* Every tenant to arrange access with (a shared house has several). */
-    tenant: tenantsOf(o).map((t) => [`${t.name}${t.room ? ` (${t.room})` : ""}`, t.phone].filter(Boolean).join(" · ")).join("; "),
+    tenant: live ? tenantsOf(o).map((t) => [`${t.name}${t.room ? ` (${t.room})` : ""}`, t.phone].filter(Boolean).join(" · ")).join("; ") : "",
     scheduledAt: o.scheduledAt, completedAt: o.completedAt, invoicePence: o.invoicePence, invoiceRef: o.invoiceRef,
     files: o.files.map((f) => ({ name: f.name, at: f.at })),
   };
@@ -141,6 +147,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
     }
     return NextResponse.json({ ok: false, error: "Say what to do." }, { status: 400 });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "That didn't work." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: publicError(e, "That didn't work.") }, { status: 400 });
   }
 }

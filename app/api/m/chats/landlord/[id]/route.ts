@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
 import { landlordThread } from "@/lib/chats";
 import { replyAsAgent } from "@/lib/appraisal-messages";
@@ -38,6 +39,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const r = await replyAsAgent({ ma: t.ma, me: actor, body: text, origin: publicOrigin(req) });
     return NextResponse.json({ ok: true, message: { id: r.message.id, from: "agent", body: r.message.body, at: r.message.sentAt }, emailed: r.emailed });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "That did not send." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e, "That did not send.") }, { status: 502 });
   }
 }

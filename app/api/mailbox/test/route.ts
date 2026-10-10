@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { MailboxNotConnected, msConnectionFor, msSendMail } from "@/lib/microsoft";
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest) {
       );
     }
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "That send failed." },
+      { ok: false, error: publicError(e, "That send failed.") },
       { status: 502 }
     );
   }

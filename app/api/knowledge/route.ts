@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { requireCapability } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
 import {
@@ -98,7 +99,7 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ ok: true, entry });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Couldn't save that." }, { status: 400 });
+    return NextResponse.json({ error: publicError(e, "Couldn't save that.") }, { status: 400 });
   }
 }
 

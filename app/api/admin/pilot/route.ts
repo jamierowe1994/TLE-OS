@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { requireCapability, requireOwner } from "@/lib/admin";
 import { asRole } from "@/lib/roles";
 import { addInvite, invites, markInviteSent, removeInvite, tabUsage, bugs } from "@/lib/pilot";
@@ -142,7 +143,7 @@ export async function POST(req: NextRequest) {
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       });
     } catch (e) {
-      return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 400 });
+      return NextResponse.json({ ok: false, error: publicError(e) }, { status: 400 });
     }
   }
 
@@ -161,7 +162,7 @@ export async function POST(req: NextRequest) {
   try {
     ({ token } = await startVerification(email, "join", { keepOthers: true }));
   } catch (e) {
-    return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 400 });
+    return NextResponse.json({ ok: false, error: publicError(e) }, { status: 400 });
   }
   try {
     const origin = process.env.OS_ORIGIN?.replace(/\/+$/, "") || req.nextUrl.origin;
@@ -189,7 +190,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     /* Not sent, so the new link goes and the old one - untouched - still works. */
     await dropLink(token).catch(() => null);
-    return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e) }, { status: 502 });
   }
   return NextResponse.json({
     ok: true,

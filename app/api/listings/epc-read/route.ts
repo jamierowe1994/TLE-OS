@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
 import { readListingDetails } from "@/lib/listing-details";
 import { listingIsTheirs } from "@/lib/listing-gate";
@@ -29,6 +30,6 @@ export async function GET(req: NextRequest) {
     const read = await readEpcFile(details.epc.fileUrl);
     return NextResponse.json({ ok: true, ...read }, { headers: { "cache-control": "private, no-store" } });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "The EPC could not be read." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e, "The EPC could not be read.") }, { status: 502 });
   }
 }

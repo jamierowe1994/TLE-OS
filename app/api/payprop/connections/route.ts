@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb, q } from "@/lib/db";
 import { diagnosticsBlocked } from "@/lib/diagnostics";
 import { payPropKeyFor } from "@/lib/payprop";
@@ -52,7 +53,7 @@ export async function GET() {
     });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Could not read the token store." },
+      { ok: false, error: publicError(e, "Could not read the token store.") },
       { status: 502 }
     );
   }

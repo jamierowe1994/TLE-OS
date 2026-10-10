@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { requireCapability } from "@/lib/admin";
 import { NewsletterError, sendTest } from "@/lib/newsletters";
 
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await sendTest((await params).id, { email: me.email, name: me.name || "" });
     return NextResponse.json({ ok: true, message: `Test sent to ${me.email}.` });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "The test didn't send.";
+    const msg = publicError(e, "The test didn't send.");
     return NextResponse.json({ ok: false, error: e instanceof NewsletterError ? msg : `The test didn't send: ${msg}` }, { status: 400 });
   }
 }

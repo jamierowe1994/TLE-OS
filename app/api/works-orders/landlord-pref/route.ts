@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { getOrder } from "@/lib/works-orders";
@@ -50,6 +51,6 @@ export async function PATCH(req: NextRequest) {
     const pref = await setLandlordPref(who.email, { jobEmails: b.jobEmails as JobEmails, overAmount: b.overAmount, name: b.name || who.name }, by);
     return NextResponse.json({ ok: true, hasEmail: true, pref });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "That didn't save." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: publicError(e, "That didn't save.") }, { status: 400 });
   }
 }

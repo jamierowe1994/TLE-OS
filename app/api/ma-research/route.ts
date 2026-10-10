@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { getResearch } from "@/lib/ma-research";
 
 /**
@@ -45,6 +46,6 @@ export async function GET(req: NextRequest) {
       type,
     }, picked));
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 502 });
+    return NextResponse.json({ error: publicError(e) }, { status: 502 });
   }
 }

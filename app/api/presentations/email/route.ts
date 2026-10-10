@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { ResendBlocked } from "@/lib/resend";
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     const locked = e instanceof ResendBlocked;
     return NextResponse.json(
-      { ok: false, error: locked ? "Email isn't switched on here, so it couldn't send." : e instanceof Error ? e.message : "It didn't send." },
+      { ok: false, error: locked ? "Email isn't switched on here, so it couldn't send." : publicError(e, "It didn't send.") },
       { status: locked ? 503 : 500 }
     );
   }

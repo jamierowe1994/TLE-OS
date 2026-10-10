@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { requireCapability } from "@/lib/admin";
 import { plcApprovers, savePlcApprovers } from "@/lib/plc-approvers";
 
@@ -33,6 +34,6 @@ export async function POST(req: NextRequest) {
     const emails = await savePlcApprovers(Array.isArray(body.emails) ? body.emails.map(String) : [], me.name);
     return NextResponse.json({ ok: true, emails });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Couldn't save." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Couldn't save.") }, { status: 400 });
   }
 }

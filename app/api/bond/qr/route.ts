@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { createLink, ensureLinksForSends, getLink, landingPage, listLinks, qrOrigin, qrStats, qrSvg, qrUrl, type QrReason } from "@/lib/bond-qr";
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
       await sendRentCheck(page, { email: to, firstName: (who.subject?.name ?? "there").split(/\s+/)[0] }, qrOrigin());
       return NextResponse.json({ ok: true, to });
     } catch (e) {
-      return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "send failed" }, { status: 502 });
+      return NextResponse.json({ ok: false, error: publicError(e, "send failed") }, { status: 502 });
     }
   }
   const address = typeof body.address === "string" ? body.address.trim() : "";

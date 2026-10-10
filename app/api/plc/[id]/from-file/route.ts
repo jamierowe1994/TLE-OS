@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { PlcRefused } from "@/lib/plc-store";
 import { missingDocuments } from "@/lib/plc";
 import { pullFileDocs } from "@/lib/plc-from-file";
@@ -41,6 +42,6 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     });
   } catch (e) {
     const status = e instanceof PlcRefused ? 409 : 500;
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "That didn't work." }, { status });
+    return NextResponse.json({ ok: false, error: publicError(e, "That didn't work.") }, { status });
   }
 }

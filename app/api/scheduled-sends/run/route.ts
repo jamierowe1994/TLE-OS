@@ -1,4 +1,5 @@
 import { runRentNudges } from "@/lib/rent-nudges";
+import { publicError } from "@/lib/public-error";
 import { runDailyRentRead } from "@/lib/rent-status";
 import { runUpdateNudges } from "@/lib/customer-updates";
 import { runNewsletters } from "@/lib/newsletters";
@@ -210,7 +211,7 @@ export async function POST(req: NextRequest) {
         /* Back to 'queued' when sending is switched off here: that is the
            environment, not this email, and it will be true again next run. */
         const locked = e instanceof ResendBlocked;
-        const message = e instanceof Error ? e.message : "Send failed.";
+        const message = publicError(e, "Send failed.");
         await q(`UPDATE os_scheduled_sends SET state = $2, error = $3 WHERE id = $1`, [
           row.id,
           locked ? "queued" : "failed",
@@ -258,7 +259,7 @@ export async function POST(req: NextRequest) {
          true again next run. Anything else is the email's own problem and
          stays failed rather than retrying at somebody's landlord forever. */
       const locked = e instanceof SendWaiting || e instanceof RexWriteBlocked;
-      const message = e instanceof Error ? e.message : "Send failed.";
+      const message = publicError(e, "Send failed.");
       await q(`UPDATE os_scheduled_sends SET state = $2, error = $3 WHERE id = $1`, [
         row.id,
         locked ? "queued" : "failed",
@@ -271,29 +272,29 @@ export async function POST(req: NextRequest) {
   /* The agent's own presentation emails: the day-before "not built yet" and
      the on-the-day copy. Swept here rather than queued, so a visit that is
      booked late, moved, or built at midnight is still judged on the day. */
-  const decks = await runDeckReminders(publicOrigin(req)).catch((e) => ({ chased: 0, sent: 0, failed: [e instanceof Error ? e.message : "Deck reminders failed."] }));
+  const decks = await runDeckReminders(publicOrigin(req)).catch((e) => ({ chased: 0, sent: 0, failed: [publicError(e, "Deck reminders failed.")] }));
 
   /* Landlords who have not signed: nudged two, five and nine days after the
      terms went (lib/contract-nudge). */
-  const nudges = await runContractNudges(publicOrigin(req)).catch((e) => ({ sent: 0, failed: [e instanceof Error ? e.message : "Nudges failed."] }));
+  const nudges = await runContractNudges(publicOrigin(req)).catch((e) => ({ sent: 0, failed: [publicError(e, "Nudges failed.")] }));
 
   /* Signed files REX still has no property for (lib/rex-instruct). */
-  const instructions = await runInstructionSweep().catch((e) => ({ tried: 0, linked: 0, failed: [e instanceof Error ? e.message : "Sweep failed."] }));
+  const instructions = await runInstructionSweep().catch((e) => ({ tried: 0, linked: 0, failed: [publicError(e, "Sweep failed.")] }));
 
   /* Marketing's newsletters and event emails that have come due (lib/newsletters). */
-  const newsletters = await runNewsletters().catch((e) => ({ error: e instanceof Error ? e.message : "Newsletters failed." }));
+  const newsletters = await runNewsletters().catch((e) => ({ error: publicError(e, "Newsletters failed.") }));
   /* Customer updates nobody has dealt with: the agent is reminded, then
      Kirstie hears (lib/customer-updates). Never the customer. */
-  const updates = await runUpdateNudges().catch((e) => ({ error: e instanceof Error ? e.message : "Update nudges failed." }));
+  const updates = await runUpdateNudges().catch((e) => ({ error: publicError(e, "Update nudges failed.") }));
   /* Rent 48 hours behind: the home's agent hears, once (lib/rent-nudges).
      Never the tenant - PayProp reminds them. At most hourly, in working hours. */
   /* PayProp's rent read, at 10am and 4pm (lib/rent-status). Starts it and
      moves on - the screens read what it stores. */
-  const rentRead = await runDailyRentRead().catch((e) => ({ error: e instanceof Error ? e.message : "Rent read failed." }));
-  const rent = await runRentNudges(publicOrigin(req)).catch((e) => ({ error: e instanceof Error ? e.message : "Rent nudges failed." }));
+  const rentRead = await runDailyRentRead().catch((e) => ({ error: publicError(e, "Rent read failed.") }));
+  const rent = await runRentNudges(publicOrigin(req)).catch((e) => ({ error: publicError(e, "Rent nudges failed.") }));
   /* Steve's standing jobs (lib/steve-jobs, 2 Oct 2026). Last, because each is
      a model call and the sends above must never wait behind one. */
-  const steveJobs = await runDueJobs().catch((e) => ({ ran: 0, failed: [e instanceof Error ? e.message : "Steve's jobs failed."] }));
+  const steveJobs = await runDueJobs().catch((e) => ({ ran: 0, failed: [publicError(e, "Steve's jobs failed.")] }));
   return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, skipped: skipped.length, failed, decks, nudges, instructions, newsletters, updates, rentRead, rent, steveJobs });
 }
 

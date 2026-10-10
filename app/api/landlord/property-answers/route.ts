@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { asText, jsonObject } from "@/lib/json-body";
 import { currentLandlord, landlordOwnsAppraisal } from "@/lib/landlord-account";
 import { readAnswers, saveAnswers } from "@/lib/property-answers-store";
 import { PROPERTY_QUESTIONS, type Answers } from "@/lib/property-questions";
@@ -43,8 +44,8 @@ export async function POST(req: NextRequest) {
   const me = await currentLandlord();
   if (!me) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
 
-  const body = (await req.json().catch(() => ({}))) as { appraisalId?: string; answers?: Answers };
-  const id = (body.appraisalId ?? "").trim();
+  const body = (await jsonObject(req)) as { appraisalId?: string; answers?: Answers };
+  const id = asText(body.appraisalId).trim();
   if (!id || !(await landlordOwnsAppraisal(me, id))) {
     return NextResponse.json({ ok: false, error: "That property isn't on your file." }, { status: 403 });
   }

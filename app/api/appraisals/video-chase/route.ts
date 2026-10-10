@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { getAppraisal } from "@/lib/appraisal-store";
@@ -96,7 +97,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     const status = e instanceof ResendBlocked || e instanceof ExternalRecipientRefused ? 409 : 502;
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "That didn't send." },
+      { ok: false, error: publicError(e, "That didn't send.") },
       { status }
     );
   }

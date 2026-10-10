@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { getInvoice, updateInvoice, issueInvoice, markInvoice, totalsOf, money, type InvoicePatch } from "@/lib/invoices";
@@ -71,7 +72,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       try {
         await sendEmail({ to, subject, html, audience: "customer", replyTo: me.email });
       } catch (e) {
-        return NextResponse.json({ ok: false, error: e instanceof ResendBlocked ? e.message : e instanceof Error ? e.message : "The email did not send.", invoice, totals }, { status: 400 });
+        return NextResponse.json({ ok: false, error: e instanceof ResendBlocked ? e.message : publicError(e, "The email did not send."), invoice, totals }, { status: 400 });
       }
       const sent = await markInvoice(id, "sent", by, "", to);
       return NextResponse.json({ ok: true, invoice: sent, totals: totalsOf(sent.lines), sentTo: to });
@@ -82,6 +83,6 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     }
     return NextResponse.json({ ok: false, error: "Say what to do." }, { status: 400 });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "That didn't work." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: publicError(e, "That didn't work.") }, { status: 400 });
   }
 }

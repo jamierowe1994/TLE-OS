@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { getOrder, logEvent } from "@/lib/works-orders";
@@ -50,6 +51,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return NextResponse.json({ ok: true, order: after?.order ?? next, events: after?.events ?? [], certificate });
   } catch (e) {
     if (e instanceof CertificateRefused) return NextResponse.json({ ok: false, error: e.message }, { status: 400 });
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "The certificate did not file." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: publicError(e, "The certificate did not file.") }, { status: 400 });
   }
 }

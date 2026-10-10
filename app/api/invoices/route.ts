@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { can } from "@/lib/roles";
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
     const invoice = await createInvoice(b, by);
     return NextResponse.json({ ok: true, invoice });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not draft the invoice." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Could not draft the invoice.") }, { status: 400 });
   }
 }
 

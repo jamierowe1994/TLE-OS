@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { auditEmails } from "@/lib/email-audit";
 import { requireAnyCapability } from "@/lib/admin";
 import { rexConfigured } from "@/lib/rex";
@@ -28,6 +29,6 @@ export async function GET(req: NextRequest) {
   try {
     return NextResponse.json(await auditEmails(pages));
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 502 });
+    return NextResponse.json({ error: publicError(e) }, { status: 502 });
   }
 }

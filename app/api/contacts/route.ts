@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
 import { saveContact, listContacts, markRex, type NewContact, type RexState } from "@/lib/contacts-store";
@@ -98,7 +99,7 @@ export async function POST(req: NextRequest) {
     /* The one case where the whole thing fails. Said plainly rather than
        swallowed, because the alternative is the bug this replaces. */
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Could not save the contact." },
+      { error: publicError(e, "Could not save the contact.") },
       { status: 500 }
     );
   }

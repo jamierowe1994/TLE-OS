@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { putPlcWithAgent } from "@/lib/plc-updates";
 import {
   checkCase,
@@ -274,7 +275,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         try {
           await pushCaseToRex(id, by);
         } catch (e) {
-          return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "push failed" }, { status: 409 });
+          return NextResponse.json({ ok: false, error: publicError(e, "push failed") }, { status: 409 });
         }
         const pushed = await getCase(id);
         return NextResponse.json({ ok: true, ...(await payload(pushed!, req)) });
@@ -287,7 +288,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         try {
           await pushCaseToPropoly(id, by);
         } catch (e) {
-          return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "push failed" }, { status: 409 });
+          return NextResponse.json({ ok: false, error: publicError(e, "push failed") }, { status: 409 });
         }
         const pushed = await getCase(id);
         return NextResponse.json({ ok: true, ...(await payload(pushed!, req)) });
@@ -333,7 +334,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         } catch (e) {
           const fresh = await getCase(id);
           return NextResponse.json(
-            { ok: false, error: e instanceof Error ? e.message : "The send failed.", ...(await payload(fresh, req)) },
+            { ok: false, error: publicError(e, "The send failed."), ...(await payload(fresh, req)) },
             { status: 409 }
           );
         }
@@ -371,7 +372,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
               {
                 checkId: "tenancy-agreement" as const,
                 level: "query" as const,
-                message: `The scan didn't finish — ${e instanceof Error ? e.message : "unknown error"}. Nothing below has been read automatically.`,
+                message: `The scan didn't finish — ${publicError(e, "unknown error")}. Nothing below has been read automatically.`,
                 foundDate: null,
               },
             ],
@@ -475,7 +476,7 @@ function fail(e: unknown) {
     return NextResponse.json({ ok: false, error: e.message }, { status: 409 });
   }
   return NextResponse.json(
-    { ok: false, error: e instanceof Error ? e.message : "That didn't work." },
+    { ok: false, error: publicError(e, "That didn't work.") },
     { status: 500 }
   );
 }

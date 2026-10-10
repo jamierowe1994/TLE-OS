@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { getComplianceBook } from "@/lib/compliance-cache";
 import { rexConfigured } from "@/lib/rex";
 import { whoIs } from "@/lib/admin";
@@ -66,7 +67,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "The certificates didn't load. Try again in a minute." },
+      { ok: false, error: publicError(e, "The certificates didn't load. Try again in a minute.") },
       { status: 502 }
     );
   }

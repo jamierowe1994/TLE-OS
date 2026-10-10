@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { getAppraisal } from "@/lib/appraisal-store";
 import { withLiveStages } from "@/lib/appraisal-stage";
 import { hasDb, q } from "@/lib/db";
@@ -47,6 +48,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     ]);
     return NextResponse.json({ appraisal: { ...staged, unreadMessages: unread } });
   } catch (e) {
-    return NextResponse.json({ appraisal: null, error: e instanceof Error ? e.message : "read failed" }, { status: 500 });
+    return NextResponse.json({ appraisal: null, error: publicError(e, "read failed") }, { status: 500 });
   }
 }

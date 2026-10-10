@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { flatbondForDeal, loadFlatbonds } from "@/lib/business/flatfair-deal";
 import { withoutDuplicates } from "@/lib/business/deal-dupes";
 import { timingSafeEqual } from "node:crypto";
@@ -158,7 +159,7 @@ export async function POST(req: NextRequest) {
     sent = await alreadySent();
   } catch (e) {
     return NextResponse.json(
-      { sent: false, reason: e instanceof Error ? e.message : "Cannot read what was already sent." },
+      { sent: false, reason: publicError(e, "Cannot read what was already sent.") },
       { status: 200 }
     );
   }
@@ -206,7 +207,7 @@ export async function POST(req: NextRequest) {
     try {
       await sendEmail({ to: address, subject, text: mail.text, html: mail.html });
     } catch (e) {
-      failures.push(`${address}: ${e instanceof Error ? e.message : "send failed"}`);
+      failures.push(`${address}: ${publicError(e, "send failed")}`);
     }
   }
 

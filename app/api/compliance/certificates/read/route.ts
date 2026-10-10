@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import Anthropic from "@anthropic-ai/sdk";
 import { whoIs } from "@/lib/admin";
 
@@ -120,7 +121,7 @@ export async function POST(req: NextRequest) {
     /* Not 502: Cloudflare swaps an origin 502 for its own error page, and
        the reason (the backlog run, 6 Sep: "Your credit balance is too low")
        never reaches the caller. */
-    const msg = e instanceof Error ? e.message : "read failed";
+    const msg = publicError(e, "read failed");
     const plain = /credit balance/i.test(msg) ? "The reader's Anthropic account has run out of credit - top it up at console.anthropic.com." : msg;
     return NextResponse.json({ ok: false, error: plain }, { status: 500 });
   }

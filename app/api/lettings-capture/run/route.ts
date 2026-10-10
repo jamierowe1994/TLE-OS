@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { machineReadAllowed } from "@/lib/machine-read";
 import { timingSafeEqual } from "node:crypto";
 import { hasDb } from "@/lib/db";
@@ -158,7 +159,7 @@ export async function POST(req: NextRequest) {
         newlyLetAgreed: 0,
         goneNow: 0,
         events: 0,
-        skipped: (e as Error).message,
+        skipped: publicError(e),
       });
     }
   }

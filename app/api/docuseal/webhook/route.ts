@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { putInstructionInRex } from "@/lib/rex-instruct";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { fetchSigned, store, pushToRex } from "@/lib/signed-documents";
@@ -158,7 +159,7 @@ export async function POST(req: NextRequest) {
        successfully kept. */
     const rex = await pushToRex(Number(d.id)).catch((e) => ({
       pushed: false,
-      reason: e instanceof Error ? e.message : "REX copy failed.",
+      reason: publicError(e, "REX copy failed."),
     }));
 
     /* Signed terms are the instruction: the landlord and the home go into REX
@@ -166,7 +167,7 @@ export async function POST(req: NextRequest) {
        the reason the webhook fails; the cron retries anything left over. */
     const appraisalId = (d.external_id ?? "").trim();
     const instructed = appraisalId && d.completed_at
-      ? await putInstructionInRex(appraisalId).catch((e) => ({ ok: false, detail: e instanceof Error ? e.message : "REX step failed." }))
+      ? await putInstructionInRex(appraisalId).catch((e) => ({ ok: false, detail: publicError(e, "REX step failed.") }))
       : null;
 
     return NextResponse.json({
@@ -179,7 +180,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Could not store the signed document." },
+      { error: publicError(e, "Could not store the signed document.") },
       { status: 500 }
     );
   }

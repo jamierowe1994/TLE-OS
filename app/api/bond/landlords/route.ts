@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { logActivity } from "@/lib/bond";
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
     const districts = (p.get("districts") ?? "").split(",").map((d) => d.trim().toUpperCase()).filter(Boolean);
     return NextResponse.json({ ok: true, landlords: await listLandlords({ districts }) });
   } catch (e) {
-    return NextResponse.json({ ok: false, reason: (e as Error).message }, { status: 502 });
+    return NextResponse.json({ ok: false, reason: publicError(e) }, { status: 502 });
   }
 }
 
@@ -52,6 +53,6 @@ export async function PATCH(req: NextRequest) {
     }
     return NextResponse.json({ ok: true, landlord });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 400 });
+    return NextResponse.json({ ok: false, error: publicError(e) }, { status: 400 });
   }
 }

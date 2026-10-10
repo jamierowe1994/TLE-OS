@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { unreadByAppraisal } from "@/lib/appraisal-messages";
 import { stopLeadCampaigns } from "@/lib/campaign-store";
 import { createAppraisal, getAppraisal, recordValuation, setOutcome, adoptLeadProperties } from "@/lib/appraisal-store";
@@ -53,7 +54,7 @@ export async function GET() {
        rather than a stale or invented row, which is the honest state. */
     return NextResponse.json({
       appraisals: [],
-      error: e instanceof Error ? e.message : "read failed",
+      error: publicError(e, "read failed"),
     });
   }
 }
@@ -144,7 +145,7 @@ export async function POST(req: NextRequest) {
         try {
           rexDiary = await putAppraisalInRexDiary({ ma: full, userId: me.id });
         } catch (e) {
-          rexDiary = { ok: false, reason: "refused", detail: e instanceof Error ? e.message : "Couldn't reach REX." };
+          rexDiary = { ok: false, reason: "refused", detail: publicError(e, "Couldn't reach REX.") };
         }
         /* Into the agent's own Outlook calendar (lib/outlook-calendar,
            15 Sep 2026) - that is their diary. James: nobody should need REX's
@@ -168,7 +169,7 @@ export async function POST(req: NextRequest) {
             minutes: 60,
           });
         } catch (e) {
-          outlook = { ok: false, reason: "refused", detail: e instanceof Error ? e.message : "Couldn't reach Outlook." };
+          outlook = { ok: false, reason: "refused", detail: publicError(e, "Couldn't reach Outlook.") };
         }
       } else {
         confirmation = { sent: false, reason: "Not signed in, so the confirmation could not go out in anybody's name." };
@@ -181,7 +182,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ appraisal: linked, pre, confirmation, rexDiary, outlook });
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Could not save the appraisal." },
+      { error: publicError(e, "Could not save the appraisal.") },
       { status: 200 }
     );
   }
@@ -296,7 +297,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ appraisal });
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Could not save the valuation." },
+      { error: publicError(e, "Could not save the valuation.") },
       { status: 500 }
     );
   }

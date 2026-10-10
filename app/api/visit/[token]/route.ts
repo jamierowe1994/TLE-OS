@@ -55,6 +55,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
     await moveInspection(i.id, { action: "tenant_ack", note: (b.note ?? "").trim(), by: who0 }, who0);
     return NextResponse.json({ ok: true, reply: "confirm", at: i.bookedAt });
   }
+  /* Every other answer, too, only while the visit is still to happen (Rig run
+     4, P-038, 10 Oct 2026): an old email's "yes" reopened a visit that was
+     done or cancelled and booked it again. */
+  if (i.visitedAt || ["closed", "cancelled"].includes(i.status)) {
+    return NextResponse.json({ ok: false, error: "This visit has already happened or been called off. If you need us, reply to our email." }, { status: 400 });
+  }
   const reply = b.reply as AccessReply;
   if (reply !== "yes" && reply !== "no" && reply !== "other_time") {
     return NextResponse.json({ ok: false, error: "Tell us yes, another time, or no." }, { status: 400 });

@@ -1,4 +1,5 @@
 import { londonDayOffset, londonHHMM } from "@/lib/london-time";
+import { publicError } from "@/lib/public-error";
 import { FRESH_MS, STALE_MS, heldDiary, refreshDiaryBook } from "@/lib/diary-cache";
 import { NextRequest, NextResponse, after } from "next/server";
 import { fetchDiary, type DiaryBook } from "@/lib/rex-diary";
@@ -342,6 +343,6 @@ export async function GET(req: NextRequest) {
     if (held) {
       return NextResponse.json({ ok: true, live: true, ...(await shaped(held.book)), everything: false, ageMs: age, stale: true });
     }
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Couldn't reach REX." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Couldn't reach REX.") }, { status: 502 });
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb, q } from "@/lib/db";
 import { requireCapability } from "@/lib/admin";
 import { matchProperty } from "@/lib/property-match";
@@ -81,7 +82,7 @@ async function moveCertificates(pmId: string, rexId: string): Promise<{ moved: n
   let written = 0;
   const notes: string[] = [];
   for (const r of rows) {
-    const w = await writeCertificateRow(r, "REX PM record, synced 19 Sep 2026").catch((e) => ({ ...r, rex_entry_id: null, rex_note: e instanceof Error ? e.message : "failed" }));
+    const w = await writeCertificateRow(r, "REX PM record, synced 19 Sep 2026").catch((e) => ({ ...r, rex_entry_id: null, rex_note: publicError(e, "failed") }));
     if (w.rex_entry_id) written++;
     else if (w.rex_note) notes.push(`${r.type_id}: ${w.rex_note}`);
   }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { scopeFor } from "@/lib/scope";
@@ -92,6 +93,6 @@ export async function POST(req: NextRequest) {
     forgetNotices();
     return NextResponse.json({ ok: true, moveOut });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not close it." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Could not close it.") }, { status: 400 });
   }
 }

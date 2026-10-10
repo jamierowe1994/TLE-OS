@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { answersForAddress, answersForAppraisal, answersForProperties } from "@/lib/property-answers-store";
@@ -60,7 +61,7 @@ export async function GET(req: NextRequest) {
   } catch (e) {
     /* Said out loud rather than thrown. A 500 with an empty body tells the
        panel nothing and the person reading it less. */
-    const why = e instanceof Error ? e.message : "Couldn't read the answers.";
+    const why = publicError(e, "Couldn't read the answers.");
     console.error("[property-answers]", why);
     return NextResponse.json({ ok: false, error: why }, { status: 502 });
   }

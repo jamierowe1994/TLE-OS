@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { DRAFT_KINDS, draftsFor, dropDraft, saveDraft, type DraftKind } from "@/lib/property-drafts";
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
   try {
     return NextResponse.json({ ok: true, drafts: await draftsFor(listing) });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not read the drafts." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Could not read the drafts.") }, { status: 502 });
   }
 }
 
@@ -42,7 +43,7 @@ export async function PUT(req: NextRequest) {
     );
     return NextResponse.json({ ok: true, draft });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not save the draft." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Could not save the draft.") }, { status: 502 });
   }
 }
 
@@ -56,6 +57,6 @@ export async function DELETE(req: NextRequest) {
     await dropDraft(id);
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not bin the draft." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Could not bin the draft.") }, { status: 502 });
   }
 }

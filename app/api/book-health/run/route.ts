@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { timingSafeEqual } from "node:crypto";
 import { requireCapability } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest) {
     try {
       await sendEmail({ to: address, subject: mail.subject, html: mail.html, text });
     } catch (e) {
-      failures.push(`${address}: ${e instanceof Error ? e.message : "send failed"}`);
+      failures.push(`${address}: ${publicError(e, "send failed")}`);
     }
   }
   return NextResponse.json({ ok: true, sent: failures.length < to.length, told: to.length - failures.length, findings: report.findings.length, failed: report.failed, failures });

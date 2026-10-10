@@ -5,7 +5,7 @@ import { rexCall } from "@/lib/rex";
 import { changeRexEvent } from "@/lib/rex-diary-write";
 import { rexCopiesToOutlook } from "@/lib/rex-outlook-sync";
 import { putInOutlook, removeFromOutlook, icsFile } from "@/lib/outlook-calendar";
-import { renderTleEmail } from "@/lib/email/tle-emails";
+import { escapeHtml, renderTleEmail } from "@/lib/email/tle-emails";
 import { sendAsAgent } from "@/lib/send-as-agent";
 
 /**
@@ -212,7 +212,8 @@ export async function changeViewing(me: OsUser, p: ViewingChangeInput): Promise<
               firstName,
               address: p.address,
               whenPretty: pretty(p.oldStartsAt),
-              reasonLine: (p.reasonText ?? "").trim() || "Something has come up that means it can't go ahead as planned.",
+              /* Typed by the agent; a ...Line is not escaped for it (see escapeHtml). */
+              reasonLine: escapeHtml((p.reasonText ?? "").trim()) || "Something has come up that means it can't go ahead as planned.",
               agentName,
             }), attachments: undefined as { filename: string; content: string; contentType?: string }[] | undefined }
           : p.newStartsAt

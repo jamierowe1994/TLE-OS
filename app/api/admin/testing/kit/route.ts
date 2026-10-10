@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { requireCapability } from "@/lib/admin";
 import { publicOrigin } from "@/lib/origin";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
     const run = await runKit(body.kit as KitId, me, publicOrigin(req));
     return NextResponse.json({ ok: true, run, kits: await myKits(me.email).catch(() => []) });
   } catch (e) {
-    const error = e instanceof KitRefused || e instanceof Error ? e.message : "The test could not be made.";
+    const error = e instanceof KitRefused || publicError(e, "The test could not be made.");
     return NextResponse.json({ ok: false, error }, { status: e instanceof KitRefused ? 409 : 500 });
   }
 }

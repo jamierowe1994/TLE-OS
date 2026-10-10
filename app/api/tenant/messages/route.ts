@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { currentTenant } from "@/lib/tenant-account";
 import { loadTenantHome } from "@/lib/tenant-home-view";
 import { addTenantMessage, markTenantEmailed, tenantMessages } from "@/lib/chats";
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest) {
     });
     await markTenantEmailed(message.id);
   } catch (e) {
-    await markTenantEmailed(message.id, e instanceof Error ? e.message : String(e));
+    await markTenantEmailed(message.id, publicError(e));
   }
   return NextResponse.json({ ok: true, message, to: home?.agent?.name ?? null });
 }

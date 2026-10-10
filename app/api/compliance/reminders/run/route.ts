@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { timingSafeEqual } from "node:crypto";
 import { requireCapability } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
@@ -266,7 +267,7 @@ export async function POST(req: NextRequest) {
         });
       }
     } catch (e) {
-      failures.push(`${g.to}: ${e instanceof Error ? e.message : "send failed"}`);
+      failures.push(`${g.to}: ${publicError(e, "send failed")}`);
     }
   }
 

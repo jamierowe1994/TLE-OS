@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import {
@@ -138,6 +139,6 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     const after = await getInspection(id);
     return NextResponse.json({ ok: true, ...after, emails });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "That didn't work." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: publicError(e, "That didn't work.") }, { status: 400 });
   }
 }

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
+import { asText, jsonObject } from "@/lib/json-body";
 import { currentLandlord, landlordJourneys, landlordProperties, markMessageEmailed, recordLandlordMessage } from "@/lib/landlord-account";
 import { createOrder, URGENCIES, type Urgency } from "@/lib/works-orders";
 import { sendEmail } from "@/lib/resend";
@@ -33,13 +35,13 @@ export async function POST(req: NextRequest) {
   if (!me) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
 
-  const body = (await req.json().catch(() => ({}))) as { text?: string; urgency?: string; property?: string };
-  const text = (body.text ?? "").trim();
+  const body = (await jsonObject(req)) as { text?: string; urgency?: string; property?: string };
+  const text = asText(body.text).trim();
   if (!text) return NextResponse.json({ ok: false, error: "Say what the problem is first." }, { status: 400 });
   if (text.length > 4000) return NextResponse.json({ ok: false, error: "That's a long one. Keep it under 4,000 characters." }, { status: 413 });
 
   const homes = await landlordProperties(me).catch(() => []);
-  const wanted = (body.property ?? "").trim().toLowerCase();
+  const wanted = asText(body.property).trim().toLowerCase();
   const home = homes.find((p) => p.name.trim().toLowerCase() === wanted) ?? (homes.length === 1 ? homes[0] : null);
   if (!home) {
     return NextResponse.json(
@@ -95,7 +97,7 @@ export async function POST(req: NextRequest) {
       await markMessageEmailed(message.id, null);
       emailed = true;
     } catch (e) {
-      await markMessageEmailed(message.id, e instanceof Error ? e.message : String(e)).catch(() => null);
+      await markMessageEmailed(message.id, publicError(e)).catch(() => null);
     }
   } catch (e) {
     console.warn("[landlord/report] job raised, note not filed", e);

@@ -395,7 +395,8 @@ export async function getInspection(id: string): Promise<{ inspection: Inspectio
 
 /** The tenant's own link. One token, one inspection, no session. */
 export async function inspectionByToken(token: string): Promise<Inspection | null> {
-  if (!hasDb() || !token) return null;
+  /* Same as orderByToken: a token we never issued never reaches Postgres (P-048). */
+  if (!hasDb() || !token || token.length > 200 || /[\u0000-\u001f]/.test(token)) return null;
   const [r] = await q<Row>(`SELECT * FROM os_inspections WHERE access_token = $1`, [token]);
   return r ? toInspection(r) : null;
 }

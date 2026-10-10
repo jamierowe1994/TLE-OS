@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { rexTokenFor } from "@/lib/rex-user";
@@ -93,7 +94,7 @@ export async function GET(req: NextRequest) {
       writesLocked: rexWritesLocked(),
     });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message, applications: [] }, { status: 502 });
+    return NextResponse.json({ error: publicError(e), applications: [] }, { status: 502 });
   }
 }
 
@@ -160,7 +161,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     // RexWriteBlocked lands here carrying its own instructions for lifting it.
     return NextResponse.json(
-      { error: (e as Error).message, writesLocked: rexWritesLocked("TenancyApplications", "create") },
+      { error: publicError(e), writesLocked: rexWritesLocked("TenancyApplications", "create") },
       { status: 423 }
     );
   }

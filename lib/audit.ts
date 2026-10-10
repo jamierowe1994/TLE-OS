@@ -87,11 +87,13 @@ export async function record(e: {
         uid(),
         e.kind,
         e.actorId ?? null,
-        e.actorEmail ?? "",
+        /* Capped, whatever a caller passes (Rig run 4, P-062): one oversized
+           value made the activity page unusable. */
+        (e.actorEmail ?? "").slice(0, 254),
         e.subjectId ?? null,
-        e.subjectEmail ?? "",
-        e.detail ?? "",
-        e.ip ?? "",
+        (e.subjectEmail ?? "").slice(0, 254),
+        (e.detail ?? "").slice(0, 2000),
+        (e.ip ?? "").slice(0, 64),
       ]
     );
   } catch (err) {

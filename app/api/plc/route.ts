@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { createCase, listCases, PlcRefused, reviewQueue } from "@/lib/plc-store";
 import { PLC_CHECKS } from "@/lib/plc";
 import { scanConfigured } from "@/lib/plc-scan";
@@ -43,7 +44,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Couldn't read the handovers." },
+      { ok: false, error: publicError(e, "Couldn't read the handovers.") },
       { status: 500 }
     );
   }
@@ -98,7 +99,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: e.message }, { status: 409 });
     }
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Couldn't start the handover." },
+      { ok: false, error: publicError(e, "Couldn't start the handover.") },
       { status: 500 }
     );
   }

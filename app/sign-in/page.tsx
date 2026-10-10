@@ -35,7 +35,21 @@ function safeNext(raw: string | null): string {
   // Must be a single-slash-rooted path. "//evil.com" and "https://evil.com"
   // are both absolute despite looking relative, so both are refused.
   if (!raw.startsWith("/") || raw.startsWith("//")) return "/dashboard";
-  return raw;
+  /* And no backslash or control character anywhere (Rig run 4, P-088): a
+     browser reads "/\evil.example" as "//evil.example", and drops tabs and
+     newlines, so "/\t/evil.example" was another way off the site. Then the
+     belt and braces: whatever it resolves to must still be this site. */
+  if (/[\\\u0000-\u001f\u007f]/.test(raw)) return "/dashboard";
+  /* Rendered on the server too, where there is no window: the checks above
+     have already ruled out every way off the site we know of. */
+  if (typeof window === "undefined") return raw;
+  try {
+    const url = new URL(raw, window.location.origin);
+    if (url.origin !== window.location.origin) return "/dashboard";
+    return url.pathname + url.search + url.hash;
+  } catch {
+    return "/dashboard";
+  }
 }
 
 function SignIn() {

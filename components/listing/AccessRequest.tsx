@@ -408,7 +408,7 @@ export function AccessComposer({
       <div className="min-w-0">
         <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">How it lands</p>
         {preview ? (
-          <iframe title="Email preview" srcDoc={preview.html} className="h-[520px] w-full rounded-2xl border border-line/50 bg-white" />
+          <iframe title="Email preview" srcDoc={preview.html} sandbox="" className="h-[520px] w-full rounded-2xl border border-line/50 bg-white" />
         ) : (
           <div className="flex h-[520px] items-center justify-center rounded-2xl border border-dashed border-line/70 bg-page px-6 text-center text-[12.5px] text-muted">
             Press Preview it to see the email in the Letting Experts&rsquo; shell before it goes.

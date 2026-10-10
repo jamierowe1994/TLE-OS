@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
 import { scopeForWho } from "@/lib/scope";
 import { hasDb } from "@/lib/db";
@@ -66,6 +67,6 @@ export async function GET(req: NextRequest) {
     }
     return NextResponse.json({ ok: true, match, keysOk, keys });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "The listings did not answer.", match: null }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e, "The listings did not answer."), match: null }, { status: 502 });
   }
 }

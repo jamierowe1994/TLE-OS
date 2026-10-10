@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { handoffFor } from "@/lib/deal-handoff";
 import { ensureHandoverTodos, handoverMode, handoversFor, runHandover } from "@/lib/handover";
 import { dealDraftFor, DEAL_TEMPLATES, DEPOSIT_SCHEMES, PAYMENT_SCHEDULES, SERVICE_LEVELS, TENANCY_TYPES, type DealTerms } from "@/lib/handover-deal";
@@ -82,7 +83,7 @@ export async function GET(req: NextRequest) {
       deal: draft ? { ...draft, templates: DEAL_TEMPLATES, services: SERVICE_LEVELS, schedules: PAYMENT_SCHEDULES, tenancyTypes: TENANCY_TYPES, schemes: DEPOSIT_SCHEMES } : null,
     });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 502 });
+    return NextResponse.json({ error: publicError(e) }, { status: 502 });
   }
 }
 
@@ -141,6 +142,6 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ ok: run.status === "ok", run });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 409 });
+    return NextResponse.json({ error: publicError(e) }, { status: 409 });
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { randomUUID } from "node:crypto";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { requireCapability } from "@/lib/admin";
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
       client.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: `${MAIL_IMG_PREFIX}/${name}`, Body: body, ContentType: file.type }))
     );
   } catch (e) {
-    console.error("Newsletter image upload failed", (e as Error).message);
+    console.error("Newsletter image upload failed", publicError(e));
     return NextResponse.json({ ok: false, error: "Upload failed. The picture wasn't stored." }, { status: 502 });
   }
   return NextResponse.json({ ok: true, url: `${publicOrigin(req)}/mail-img/${name}` });

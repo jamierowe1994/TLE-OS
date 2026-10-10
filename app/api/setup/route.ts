@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { hasDb, q } from "@/lib/db";
 import { findUserById } from "@/lib/users";
@@ -212,7 +213,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ok: true, saved: true, db: true, state: next });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Could not save." },
+      { ok: false, error: publicError(e, "Could not save.") },
       { status: 502 }
     );
   }

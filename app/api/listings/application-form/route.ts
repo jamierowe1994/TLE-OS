@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { publicOrigin } from "@/lib/origin";
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest) {
 
   const results: { email: string; sent: boolean; detail: string }[] = [];
   for (const to of emails) {
-    const r = await sendAsAgent({ me: user, to, subject, html }).catch((e) => ({ sent: false, detail: e instanceof Error ? e.message : "It did not send." }));
+    const r = await sendAsAgent({ me: user, to, subject, html }).catch((e) => ({ sent: false, detail: publicError(e, "It did not send.") }));
     results.push({ email: to, sent: r.sent, detail: r.detail });
   }
   return NextResponse.json({ ok: results.some((r) => r.sent), results });

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { timingSafeEqual } from "node:crypto";
 import { syncOne } from "@/lib/flatfair-sync";
 
@@ -39,6 +40,6 @@ export async function POST(req: NextRequest) {
   if (body?.type !== "flatbond_update" || !Number.isInteger(id) || id <= 0) {
     return NextResponse.json({ ok: true, ignored: true });
   }
-  const out = await syncOne(id).catch((e) => ({ ok: false, error: e instanceof Error ? e.message : "failed" }));
+  const out = await syncOne(id).catch((e) => ({ ok: false, error: publicError(e, "failed") }));
   return NextResponse.json({ ok: true, refreshed: out.ok });
 }

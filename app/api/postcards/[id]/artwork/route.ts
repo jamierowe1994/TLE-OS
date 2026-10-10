@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
 import { readDesigns, sendable } from "@/lib/postcard-store";
 import { postcardPdf, postcardSidePdf } from "@/lib/postcard-pdf";
@@ -52,6 +53,6 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       },
     });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not draw the artwork." }, { status: 500 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Could not draw the artwork.") }, { status: 500 });
   }
 }

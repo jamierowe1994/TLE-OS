@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { fetchKeys } from "@/lib/rex-keys";
 import { rexConfigured } from "@/lib/rex";
 import { requireCapability } from "@/lib/admin";
@@ -25,7 +26,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, keys: await fetchKeys(ids) });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Couldn't read the key register." },
+      { ok: false, error: publicError(e, "Couldn't read the key register.") },
       { status: 502 }
     );
   }

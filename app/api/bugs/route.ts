@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { asText, jsonObject } from "@/lib/json-body";
 import { whoIs } from "@/lib/admin";
 import { requireOwner } from "@/lib/admin";
 import { logBug, bugs, setBugState, attachShot, myReports, setBugPriority } from "@/lib/pilot";
@@ -24,11 +25,18 @@ export async function POST(req: NextRequest) {
   const { actor, subject, viewingAs } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Not signed in." }, { status: 401 });
 
-  const b = (await req.json().catch(() => ({}))) as {
-    body?: string; path?: string; kind?: string; context?: Record<string, unknown>;
-    shot?: string;
+  const raw = await jsonObject(req);
+  /* Typed and capped (Rig run 4, P-072, 10 Oct 2026): a two-million
+     character report made Admin > Tickets thirteen million pixels wide, and
+     {"body":123} was an empty 500. */
+  const b = {
+    body: asText(raw.body).slice(0, 10_000),
+    path: asText(raw.path).slice(0, 500),
+    kind: asText(raw.kind).slice(0, 40),
+    context: raw.context && typeof raw.context === "object" && !Array.isArray(raw.context) && JSON.stringify(raw.context).length <= 20_000 ? (raw.context as Record<string, unknown>) : undefined,
+    shot: raw.shot,
   };
-  if (!b.body?.trim()) {
+  if (!b.body.trim()) {
     return NextResponse.json({ ok: false, error: "Tell us what happened." }, { status: 400 });
   }
 

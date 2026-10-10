@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { requireCapability } from "@/lib/admin";
 import { ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { candidateEndpoints, r2, r2Configured, R2_BUCKET, rememberEndpoint } from "@/lib/r2";
 import { diagnosticsBlocked } from "@/lib/diagnostics";
@@ -20,9 +21,15 @@ import { diagnosticsBlocked } from "@/lib/diagnostics";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const blocked = diagnosticsBlocked();
   if (blocked) return blocked;
+  /* The wiring sheet's, like the other connection checks (Rig run 4, P-055
+     and P-073): it answered any signed-in agent with the founders' sign-up
+     state, which writes are unlocked, the storage bucket and account. */
+  if (!(await requireCapability(req, "see:wiring"))) {
+    return NextResponse.json({ ok: false, error: "This is the wiring sheet's." }, { status: 403 });
+  }
 
   const present = {
     R2_ACCOUNT_ID: Boolean(process.env.R2_ACCOUNT_ID),

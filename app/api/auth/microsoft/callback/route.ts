@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { timingSafeEqual } from "node:crypto";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { record } from "@/lib/audit";
@@ -114,6 +115,6 @@ export async function GET(req: NextRequest) {
     await msStore(userId, me.email, tokens.refresh_token);
     return back(req, { mail: "connected", as: me.email });
   } catch (e) {
-    return failed("failed", e instanceof Error ? e.message : "unknown error");
+    return failed("failed", publicError(e, "unknown error"));
   }
 }

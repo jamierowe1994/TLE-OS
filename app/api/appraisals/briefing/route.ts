@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { getAppraisal } from "@/lib/appraisal-store";
@@ -159,7 +160,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: e.message }, { status: 503 });
     }
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "That didn't send." },
+      { error: publicError(e, "That didn't send.") },
       { status: 502 }
     );
   }

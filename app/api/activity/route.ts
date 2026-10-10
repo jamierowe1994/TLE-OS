@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
 import { activity } from "@/lib/activity";
 
@@ -18,6 +19,6 @@ export async function GET(req: NextRequest) {
   try {
     return NextResponse.json({ ok: true, ...(await activity()) });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Couldn't read activity." }, { status: 500 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Couldn't read activity.") }, { status: 500 });
   }
 }

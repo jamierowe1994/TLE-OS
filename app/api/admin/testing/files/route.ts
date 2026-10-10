@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { requireCapability, whoIs } from "@/lib/admin";
 import { phaseState } from "@/lib/phases";
 import type { OsUser } from "@/lib/users";
@@ -119,7 +120,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: false, error: "What should happen?" }, { status: 400 });
     }
   } catch (e) {
-    const error = e instanceof Error ? e.message : "That didn't work.";
+    const error = publicError(e, "That didn't work.");
     return NextResponse.json({ ok: false, error }, { status: e instanceof KitRefused ? 409 : 500 });
   }
 }

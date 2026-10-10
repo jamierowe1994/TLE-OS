@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { listCampaigns, listSends, queueSends, updateCampaign, updateStep } from "@/lib/bond-campaigns";
 
@@ -18,7 +19,7 @@ export async function GET() {
     const [campaigns, sends] = await Promise.all([listCampaigns(), listSends()]);
     return NextResponse.json({ ok: true, campaigns, sends });
   } catch (e) {
-    return NextResponse.json({ ok: false, reason: (e as Error).message }, { status: 502 });
+    return NextResponse.json({ ok: false, reason: publicError(e) }, { status: 502 });
   }
 }
 
@@ -31,7 +32,7 @@ export async function PATCH(req: NextRequest) {
     else return NextResponse.json({ ok: false, error: "Say which step or campaign." }, { status: 400 });
     return NextResponse.json({ ok: true, campaigns: await listCampaigns() });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 400 });
+    return NextResponse.json({ ok: false, error: publicError(e) }, { status: 400 });
   }
 }
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { asText, jsonObject } from "@/lib/json-body";
 import { clientIp } from "@/lib/client-ip";
 import { hasDb } from "@/lib/db";
 import { tenantByPassword } from "@/lib/tenant-account";
@@ -35,12 +36,12 @@ export async function POST(req: NextRequest) {
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
   let body: { email?: string; password?: string } = {};
   try {
-    body = (await req.json()) as typeof body;
+    body = (await jsonObject(req)) as typeof body;
   } catch {
     /* falls through */
   }
   const ip = clientIp(req) || "unknown";
-  const email = String(body.email ?? "").trim().toLowerCase();
+  const email = asText(body.email).trim().toLowerCase();
   if (!allowed(`ip:${ip}`) || !allowed(`email:${email}`)) {
     return NextResponse.json({ ok: false, error: "Too many tries. Wait ten minutes, or use Email me a link instead." }, { status: 429 });
   }

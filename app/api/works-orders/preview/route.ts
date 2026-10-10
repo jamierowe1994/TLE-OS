@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb, q } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { dueFor, getContractor, URGENCIES, type JobTenant, type Urgency, type WorksOrder } from "@/lib/works-orders";
@@ -43,6 +44,6 @@ export async function POST(req: NextRequest) {
     const mail = await previewJobEmail(draft, repair ? "works-contractor-order" : "works-contractor-planned", subject ?? actor, seq?.n ? {} : { ref: "(new)" });
     return NextResponse.json({ ok: true, ...mail });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "The preview could not be written." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: publicError(e, "The preview could not be written.") }, { status: 400 });
   }
 }

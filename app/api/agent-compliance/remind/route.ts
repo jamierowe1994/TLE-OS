@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { timingSafeEqual } from "node:crypto";
 import { requireCapability } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
       await recordReminded(r);
       results.push({ to: r.email, ok: true });
     } catch (e) {
-      results.push({ to: r.email, ok: false, detail: e instanceof Error ? e.message : "send failed" });
+      results.push({ to: r.email, ok: false, detail: publicError(e, "send failed") });
     }
   }
 
@@ -81,7 +82,7 @@ export async function POST(req: NextRequest) {
         await sendEmail({ to: m.email, subject: mail.subject, html: mail.html, text: mail.text });
         results.push({ to: m.email, ok: true, detail: "roll-up" });
       } catch (e) {
-        results.push({ to: m.email, ok: false, detail: e instanceof Error ? e.message : "send failed" });
+        results.push({ to: m.email, ok: false, detail: publicError(e, "send failed") });
       }
     }
   }

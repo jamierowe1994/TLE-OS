@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { geocode } from "@/lib/geocode";
 
 /**
@@ -472,7 +473,7 @@ export async function GET(req: NextRequest) {
       suggestions: [],
       problem: {
         code: "unreachable",
-        says: `Could not reach the address provider: ${e instanceof Error ? e.message : "network error"}.`,
+        says: `Could not reach the address provider: ${publicError(e, "network error")}.`,
       },
     });
   }

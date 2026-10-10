@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb, q } from "@/lib/db";
 import { requireCapability } from "@/lib/admin";
 import { importTasks, lastImport, TASK_KINDS, type ScreenTab, type TaskKind } from "@/lib/rexpm-tasks";
@@ -63,6 +64,6 @@ export async function POST(req: NextRequest) {
     const result = await importTasks(kind, { open, closed }, b.complete === true);
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not land it." }, { status: 500 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Could not land it.") }, { status: 500 });
   }
 }

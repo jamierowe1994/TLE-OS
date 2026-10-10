@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
 import { sendEmail } from "@/lib/resend";
 import { record } from "@/lib/audit";
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
   try {
     out = await renderShowroomEmail(id);
   } catch (e) {
-    return NextResponse.json({ ok: false, error: `That email did not render: ${e instanceof Error ? e.message : "unknown"}` });
+    return NextResponse.json({ ok: false, error: `That email did not render: ${publicError(e, "unknown")}` });
   }
   if (!out) return NextResponse.json({ ok: false, error: "No such email." }, { status: 404 });
 
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
        staff address is let through with customer email switched off. */
     await sendEmail({ to: actor.email, subject: `[Showroom] ${out.subject}`, html: out.html, audience: "customer" });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "That did not send." });
+    return NextResponse.json({ ok: false, error: publicError(e, "That did not send.") });
   }
   await record({ kind: "email_test_sent", actorId: actor.id, actorEmail: actor.email, subjectEmail: actor.email, detail: `Showroom: ${id}` }).catch(() => null);
   return NextResponse.json({ ok: true, to: actor.email });

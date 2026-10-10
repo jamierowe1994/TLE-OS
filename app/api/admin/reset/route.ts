@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { clientIp } from "@/lib/client-ip";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 import { requireOwner } from "@/lib/admin";
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
     const mail = resetEmailFor(`${origin}/reset?token=${encodeURIComponent(token)}`);
     await sendEmail({ to: subject.email, subject: mail.subject, html: mail.html, text: mail.text });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e) }, { status: 502 });
   }
 
   await record({

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { requireCapability } from "@/lib/admin";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { hasDb } from "@/lib/db";
@@ -14,6 +15,8 @@ import {
 } from "@/lib/passport";
 import { passportQuestions, setPassportAnswer, valuesFor } from "@/lib/attributes";
 import { sendPassportThanks } from "@/lib/tenant-journey-emails";
+import { currentTenant } from "@/lib/tenant-account";
+import { normaliseEmail } from "@/lib/users";
 
 /**
  * The tenant's own passport, reached by the link in their email.
@@ -73,7 +76,25 @@ export async function PUT(req: NextRequest) {
     /** Answers to the issuing agent's own questions, keyed by definition id. */
     answers?: Record<string, string>;
   } | null;
-  if (!body?.data) return NextResponse.json({ error: "Expected a passport." }, { status: 400 });
+  if (!body?.data || typeof body.data !== "object" || Array.isArray(body.data)) {
+    return NextResponse.json({ error: "Expected a passport." }, { status: 400 });
+  }
+
+  /* A FINISHED passport (Rig run 4, P-034, 10 Oct 2026). The link alone could
+     change one after it was finished - name, income - or wipe every answer
+     with {"data":"x"}, and it still read as finished. Now only its owner,
+     signed in to their tenant area ("Update your passport"), can change it,
+     and never into one with a required answer missing. */
+  if (existing.submittedAt) {
+    const me = await currentTenant().catch(() => null);
+    const mine = Boolean(me) && [existing.email, existing.data?.email].some((e) => e && normaliseEmail(e) === normaliseEmail(me!.email));
+    if (!mine) {
+      return NextResponse.json({ error: "This passport is finished. Sign in to your tenant area to update it." }, { status: 409 });
+    }
+    if (!passportComplete(cleanPassportData(body.data))) {
+      return NextResponse.json({ error: INCOMPLETE, incomplete: true }, { status: 409 });
+    }
+  }
 
   /* Only known fields are kept. Anything else in the payload is dropped rather
      than stored - the row is JSONB, so without this it would happily accept
@@ -101,7 +122,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ passport: saved });
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "That didn't save." },
+      { error: publicError(e, "That didn't save.") },
       { status: 500 }
     );
   }

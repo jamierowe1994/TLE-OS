@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { activity } from "@/lib/activity";
 import { stageCounts, type StageListing } from "@/lib/listing-stages";
 import { whoIs } from "@/lib/admin";
@@ -56,7 +57,7 @@ const settle = async <T,>(p: Promise<T>): Promise<Tile<T>> => {
   try {
     return { ok: true, data: await p };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Couldn't be read just now." };
+    return { ok: false, error: publicError(e, "Couldn't be read just now.") };
   }
 };
 

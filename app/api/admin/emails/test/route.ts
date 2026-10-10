@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { requireOwner } from "@/lib/admin";
 import { TLE_EMAILS } from "@/lib/email/tle-emails";
 import { hasDb, q } from "@/lib/db";
@@ -90,7 +91,7 @@ export async function POST(req: NextRequest) {
     }
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: `That template failed to render: ${e instanceof Error ? e.message : "unknown"}` },
+      { ok: false, error: `That template failed to render: ${publicError(e, "unknown")}` },
       { status: 500 }
     );
   }
@@ -112,7 +113,7 @@ export async function POST(req: NextRequest) {
        no key, sending locked, external recipient. Passed through rather than
        flattened, because "it didn't send" is not something anybody can act on. */
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "That didn't send." },
+      { ok: false, error: publicError(e, "That didn't send.") },
       { status: 200 }
     );
   }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
 import { readDesigns, writeDesigns, sendable } from "@/lib/postcard-store";
 import { faultsIn, normalise, type PostcardDesign } from "@/lib/postcard-design";
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, link });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: e instanceof ResendBlocked ? e.message : e instanceof Error ? e.message : "The email did not send." },
+      { ok: false, error: e instanceof ResendBlocked ? e.message : publicError(e, "The email did not send.") },
       { status: 400 }
     );
   }

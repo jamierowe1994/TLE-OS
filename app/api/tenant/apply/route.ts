@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { publicError } from "@/lib/public-error";
 import { NextRequest, NextResponse } from "next/server";
 import { hasDb, q } from "@/lib/db";
 import { homeOnMarket } from "@/lib/tenant-homes";
@@ -230,7 +231,7 @@ export async function POST(req: NextRequest) {
       await sendEmail({ to: home.agentEmail, subject, html: proseEmail(text.filter(Boolean).join("\n\n")), replyTo: lead.email, audience: "internal" });
       outcome = "sent";
     } catch (e) {
-      outcome = `failed: ${e instanceof Error ? e.message : "send failed"}`.slice(0, 300);
+      outcome = `failed: ${publicError(e, "send failed")}`.slice(0, 300);
     }
   }
 

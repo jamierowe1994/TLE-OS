@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { timingSafeEqual } from "node:crypto";
 import { requireCapability } from "@/lib/admin";
 import { fetchTleRoster, tegHubConfigured } from "@/lib/business/teg-hub";
@@ -126,7 +127,7 @@ export async function POST(req: NextRequest) {
        yesterday's register in place looking perfectly healthy, and the whole
        reason for pinging is to know it is current. */
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Couldn't reach the TEG Hub." },
+      { ok: false, error: publicError(e, "Couldn't reach the TEG Hub.") },
       { status: 502 }
     );
   }

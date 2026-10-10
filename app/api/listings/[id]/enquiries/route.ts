@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
 import { leadScope } from "@/lib/scope";
 import { leadsForListing, salesAmong } from "@/lib/lead-ledger";
@@ -64,6 +65,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }));
     return NextResponse.json({ ok: true, live: true, scope: scope.label, leads });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "The enquiries did not load.", leads: [] }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e, "The enquiries did not load."), leads: [] }, { status: 502 });
   }
 }

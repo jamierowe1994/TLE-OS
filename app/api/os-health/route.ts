@@ -1,4 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { requireCapability } from "@/lib/admin";
+import { publicError } from "@/lib/public-error";
 import { hasDb, q } from "@/lib/db";
 import { resendConfigured, resendSendUnlocked, fromAddress } from "@/lib/resend";
 import { docusealConfigured, docusealSendUnlocked } from "@/lib/docuseal";
@@ -64,7 +66,13 @@ async function foundingState() {
   return out;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  /* The wiring sheet's, like the other connection checks (Rig run 4, P-055
+     and P-073): it answered any signed-in agent with the founders' sign-up
+     state, which writes are unlocked, the storage bucket and account. */
+  if (!(await requireCapability(req, "see:wiring"))) {
+    return NextResponse.json({ ok: false, error: "This is the wiring sheet's." }, { status: 403 });
+  }
   let db: { connected: boolean; verificationsPending: number | null; users: number | null } = {
     connected: false,
     verificationsPending: null,
@@ -83,7 +91,7 @@ export async function GET() {
       };
     } catch (e) {
       return NextResponse.json({
-        db: { connected: false, error: (e as Error).message.slice(0, 200) },
+        db: { connected: false, error: publicError(e).slice(0, 200) },
       });
     }
   }

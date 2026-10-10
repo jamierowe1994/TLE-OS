@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { jsonObject } from "@/lib/json-body";
 import { currentTenant } from "@/lib/tenant-account";
 import { saveAlert, stopAlert } from "@/lib/tenant-find";
 
@@ -21,7 +22,7 @@ const coord = (v: unknown, lim: number) => {
 export async function POST(req: NextRequest) {
   const me = await currentTenant();
   if (!me) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
-  const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const b = (await jsonObject(req)) as Record<string, unknown>;
   if (b.consent !== true) return NextResponse.json({ ok: false, error: "Tick the box to say you're happy to get the emails." }, { status: 400 });
   await saveAlert(me.email, me.name, {
     place: typeof b.place === "string" ? b.place.slice(0, 80) : null,

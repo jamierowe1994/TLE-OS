@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { requireCapability } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
 import { deskNotices } from "@/lib/section-notices";
@@ -19,6 +20,6 @@ export async function GET(req: NextRequest) {
   try {
     return NextResponse.json({ ok: true, stored: true, notices: await deskNotices() });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not read the notices." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Could not read the notices.") }, { status: 502 });
   }
 }

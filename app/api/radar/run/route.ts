@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { machineReadAllowed } from "@/lib/machine-read";
 import { timingSafeEqual } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
@@ -142,7 +143,7 @@ export async function POST(req: NextRequest) {
       try {
         digest = await sendDigest();
       } catch (e) {
-        digest = { sent: [], skipped: `Digest failed: ${(e as Error).message}` };
+        digest = { sent: [], skipped: `Digest failed: ${publicError(e)}` };
       }
       await q(
         `UPDATE os_radar_runs
@@ -163,7 +164,7 @@ export async function POST(req: NextRequest) {
       );
       return { results, skipped, prospects, digest };
     } catch (e) {
-      await q(`UPDATE os_radar_runs SET status = 'failed', error = $2, finished_at = NOW() WHERE id = $1`, [runId, (e as Error).message]);
+      await q(`UPDATE os_radar_runs SET status = 'failed', error = $2, finished_at = NOW() WHERE id = $1`, [runId, publicError(e)]);
       throw e;
     }
   };

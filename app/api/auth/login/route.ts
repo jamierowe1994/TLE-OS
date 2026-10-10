@@ -29,6 +29,12 @@ export async function POST(req: NextRequest) {
   }
 
   const email = (body.email ?? "").trim().toLowerCase();
+  /* No address is longer than 254 characters (Rig run 4, P-062): a 500,000
+     character one went into the audit log and made Admin > Activity three
+     million pixels wide. Refused before any database work. */
+  if (email.length > 254 || (body.password ?? "").length > 1024) {
+    return NextResponse.json({ ok: false, error: "That email and password don't match." }, { status: 401 });
+  }
   const ip = clientIp(req);
   /* NO RATE LIMIT AT ALL on staff sign-in until 22 Sep 2026 (18 Sep sweep,
      item 12). The audit trail already holds every failed attempt with the

@@ -1,5 +1,5 @@
 import "server-only";
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { normaliseEmail } from "@/lib/users";
 import { assertInternalRecipient } from "@/lib/email-policy";
@@ -174,40 +174,29 @@ export async function consumeVerification(
   if (!hasDb()) throw new VerificationError("The database isn't connected on this environment.");
 
   const hash = hashToken(token.trim());
-  const rows = await q<{ email: string; token_hash: string; expires_at: Date | string; purpose: string }>(
-    `select email, token_hash, purpose, expires_at from os_email_verifications where token_hash = $1`,
-    [hash]
+  /* ONE statement that takes the token (Rig run 4, P-036, 10 Oct 2026). It was
+     a SELECT, checks, then a separate DELETE, so twenty presses of one link at
+     the same moment all read it before any deleted it: twenty sessions from a
+     single-use link. Now whoever deletes the row is the only one who gets it.
+     The purpose is in the WHERE, so a join link offered to the reset page is
+     refused and left alone, as before. */
+  const rows = await q<{ email: string; expires_at: Date | string }>(
+    `delete from os_email_verifications where token_hash = $1 and purpose = $2 returning email, expires_at`,
+    [hash, purpose]
   );
   const row = rows[0];
 
   /* One message for "no such token" and for "expired" would be friendlier and
      is exactly what we want to avoid: it tells someone probing whether a code
      ever existed. Expiry is safe to name because they already hold a real
-     token to have got here. */
+     token to have got here. A join link must not set the password on a live
+     account, and a reset link must not create one - same message either way. */
   if (!row) throw new VerificationError("That link isn't valid. Ask for a new one.");
-
-  /* A join link must not set the password on a live account, and a reset link
-     must not create one. Same message either way — the holder of a real token
-     gains nothing from knowing which kind they have. */
-  if (row.purpose !== purpose) {
-    throw new VerificationError("That link isn't valid. Ask for a new one.");
-  }
-
-  const a = Buffer.from(row.token_hash);
-  const b = Buffer.from(hash);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) {
-    throw new VerificationError("That link isn't valid. Ask for a new one.");
-  }
 
   const expiresAt = new Date(row.expires_at);
   if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() < Date.now()) {
-    await q(`delete from os_email_verifications where token_hash = $1`, [hash]);
     throw new VerificationError("That link has expired. Ask for a new one.");
   }
-
-  // Single use. Deleted before the caller does anything with the result, so a
-  // failure downstream cannot leave a live token behind.
-  await q(`delete from os_email_verifications where token_hash = $1`, [hash]);
 
   return { email: row.email, expiresAt: expiresAt.toISOString() };
 }

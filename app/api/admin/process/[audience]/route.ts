@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { requireCapability } from "@/lib/admin";
 import { loadProcess, resetProcess, saveProcess } from "@/lib/process/store";
 import type { ProcessMap } from "@/lib/process/types";
@@ -32,7 +33,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ audience: s
     const map = await saveProcess(audience, body.map, who.id);
     return NextResponse.json({ ok: true, map });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Could not save." }, { status: 500 });
+    return NextResponse.json({ error: publicError(e, "Could not save.") }, { status: 500 });
   }
 }
 

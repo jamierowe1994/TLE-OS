@@ -269,7 +269,7 @@ export default function EmailToTenants({
                 <>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Subject</p>
                   <p className="mt-1 text-[14px] font-semibold">{preview.subject}</p>
-                  <iframe title="The email" srcDoc={preview.html} className="mt-3 h-[480px] w-full rounded-2xl border border-line/70 bg-white" />
+                  <iframe title="The email" srcDoc={preview.html} sandbox="" className="mt-3 h-[480px] w-full rounded-2xl border border-line/70 bg-white" />
                   <p className="mt-3 text-[10.5px] text-muted">
                     Sent individually, not as one thread - {picked.length} separate email{picked.length === 1 ? "" : "s"}, so nobody sees
                     anybody else&apos;s address.

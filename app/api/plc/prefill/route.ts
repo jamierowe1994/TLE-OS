@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { prefillFor } from "@/lib/plc-prefill";
 import { rexConfigured } from "@/lib/rex";
 
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, prefill });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Couldn't read the application." },
+      { ok: false, error: publicError(e, "Couldn't read the application.") },
       { status: 502 }
     );
   }

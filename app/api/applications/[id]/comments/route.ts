@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { addComment, commentsFor } from "@/lib/application-comments";
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     return NextResponse.json({ ok: true, comment });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "That didn't save." },
+      { ok: false, error: publicError(e, "That didn't save.") },
       { status: 503 }
     );
   }

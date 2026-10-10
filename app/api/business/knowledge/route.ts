@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { requireCapability } from "@/lib/admin";
 import {
   listKnowledge,
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ entry });
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Couldn't save that entry." },
+      { error: publicError(e, "Couldn't save that entry.") },
       { status: 400 }
     );
   }

@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { publicError } from "@/lib/public-error";
+import { jsonObject } from "@/lib/json-body";
 import { NextRequest, NextResponse } from "next/server";
 import { hasDb, q } from "@/lib/db";
 import { currentTenant, tenantPassport } from "@/lib/tenant-account";
@@ -94,7 +96,7 @@ export async function POST(req: NextRequest) {
   const me = await currentTenant();
   if (!me) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "This can't be saved on this environment." }, { status: 503 });
-  const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const b = (await jsonObject(req)) as Record<string, unknown>;
   const kind = str(b.kind, 20) as Kind;
   if (!KINDS.includes(kind)) return NextResponse.json({ ok: false, error: "That wasn't one of the choices." }, { status: 400 });
 
@@ -198,7 +200,7 @@ export async function POST(req: NextRequest) {
       await sendEmail({ to, subject, html: proseEmail(body.filter(Boolean).join("\n\n")), replyTo: me.email, audience: "internal" });
       outcome = "sent";
     } catch (e) {
-      outcome = `failed: ${e instanceof Error ? e.message : "send failed"}`.slice(0, 300);
+      outcome = `failed: ${publicError(e, "send failed")}`.slice(0, 300);
     }
   }
 

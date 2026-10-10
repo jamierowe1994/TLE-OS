@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { scopeFor } from "@/lib/scope";
 import { managedBookFor, managedCertsFor } from "@/lib/managed-book-cache";
 import { rexConfigured } from "@/lib/rex";
@@ -45,7 +46,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, status: "pending" });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, status: "failed", error: e instanceof Error ? e.message : "REX didn't answer." },
+      { ok: false, status: "failed", error: publicError(e, "REX didn't answer.") },
       { status: 502 }
     );
   }

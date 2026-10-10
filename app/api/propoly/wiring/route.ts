@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { propolyConfigured, propolyGet, propolyOptions } from "@/lib/business/propoly";
 import { diagnosticsBlocked } from "@/lib/diagnostics";
 
@@ -98,7 +99,7 @@ export async function GET() {
     return NextResponse.json({
       configured: true,
       specRead: false,
-      note: `Propoly would not give us a token just now, so nothing could be asked: ${(e as Error).message}. Try again in a minute.`,
+      note: `Propoly would not give us a token just now, so nothing could be asked: ${publicError(e)}. Try again in a minute.`,
     });
   }
 }

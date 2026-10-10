@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { asText, jsonObject } from "@/lib/json-body";
+import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { hasDb, q } from "@/lib/db";
 
@@ -53,18 +55,15 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ ok: true, saved: false, reason: "not signed in" });
   }
 
-  let body: { key?: string; value?: unknown };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ ok: false, error: "Expected a key and a value." }, { status: 400 });
-  }
-
-  const key = (body.key ?? "").trim();
-  if (!key || key.length > 80) {
+  const body = await jsonObject(req);
+  /* A key is plain text with no control characters, and a null character is
+     taken out of the value: Postgres refuses \u0000, and its refusal used to
+     reach the screen word for word (Rig run 4, P-085). */
+  const key = asText(body.key).trim();
+  if (!key || key.length > 80 || /[\u0000-\u001f]/.test(key)) {
     return NextResponse.json({ ok: false, error: "Bad preference key." }, { status: 400 });
   }
-  const encoded = JSON.stringify(body.value ?? null);
+  const encoded = JSON.stringify(body.value ?? null).replace(/\\u0000/g, "");
   if (encoded.length > MAX_VALUE_BYTES) {
     return NextResponse.json(
       { ok: false, error: "That setting is too big to store." },
@@ -82,7 +81,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ ok: true, saved: true });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Could not save." },
+      { ok: false, error: publicError(e, "Could not save.") },
       { status: 502 }
     );
   }

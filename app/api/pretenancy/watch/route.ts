@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { timingSafeEqual } from "node:crypto";
 import { requireCapability } from "@/lib/admin";
 import { publicOrigin } from "@/lib/origin";
@@ -59,6 +60,6 @@ export async function POST(req: NextRequest) {
     const result = await watchDeals({ origin: publicOrigin(req) });
     return NextResponse.json({ ...result, read }, { status: result.ok ? 200 : 503 });
   } catch (e) {
-    return NextResponse.json({ ok: false, reason: e instanceof Error ? e.message : "watch failed" }, { status: 500 });
+    return NextResponse.json({ ok: false, reason: publicError(e, "watch failed") }, { status: 500 });
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { hasDb } from "@/lib/db";
 import { worksSnapshotAround } from "@/lib/works-trend";
 import { whoIs } from "@/lib/admin";
@@ -86,6 +87,6 @@ export async function POST(req: NextRequest) {
     for (const e of emails) await logEvent(order.id, "TLE OS", "email", outcomeLine(e));
     return NextResponse.json({ ok: true, order, emails });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not raise the job." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Could not raise the job.") }, { status: 400 });
   }
 }

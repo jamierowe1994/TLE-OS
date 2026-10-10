@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
 import { getAppraisal } from "@/lib/appraisal-store";
 import { landlordAccountByEmail, landlordByEmail, landlordDocuments, requiredDocKindsFor, upsertLandlordAccount } from "@/lib/landlord-account";
@@ -53,6 +54,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return NextResponse.json({ ok: true, message: `Sent to ${to}, naming ${what}.` });
   } catch (e) {
     if (e instanceof ResendBlocked) return NextResponse.json({ ok: false, error: e.message }, { status: 503 });
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "It didn't send." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e, "It didn't send.") }, { status: 502 });
   }
 }

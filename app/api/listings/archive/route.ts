@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { TEST_REFUSAL, testDetails, testLandlord, testListingViewings, testPortals, testPublication } from "@/lib/test-listing-answers";
 import { isTestId } from "@/lib/test-overlay";
 import { scopeFor } from "@/lib/scope";
@@ -113,7 +114,7 @@ export async function POST(req: NextRequest) {
   try {
     await setArchive(id, action, me.email || me.name || null, body.note ?? null);
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Couldn't save that." }, { status: 500 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Couldn't save that.") }, { status: 500 });
   }
 
   /* Hand back where the listing now stands, so the screen can update from the

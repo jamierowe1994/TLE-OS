@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
 import { saveViewingFeedback } from "@/lib/viewing-feedback-store";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
@@ -49,6 +50,6 @@ export async function POST(req: NextRequest) {
     );
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Couldn't save it." }, { status: 500 });
+    return NextResponse.json({ ok: false, error: publicError(e, "Couldn't save it.") }, { status: 500 });
   }
 }

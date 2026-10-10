@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { timingSafeEqual } from "node:crypto";
 import { getApplications } from "@/lib/applications";
 import { rexConfigured } from "@/lib/rex";
@@ -53,7 +54,7 @@ export async function GET(req: NextRequest) {
       const run = await runHandover(a.id, { by: "shadow scan", mode: "shadow" });
       runs.push({ applicationId: a.id, status: run.status, steps: run.steps.length });
     } catch (e) {
-      runs.push({ applicationId: a.id, status: `error: ${e instanceof Error ? e.message : String(e)}`, steps: 0 });
+      runs.push({ applicationId: a.id, status: `error: ${publicError(e)}`, steps: 0 });
     }
   }
   return NextResponse.json({ ok: true, todosAdded: todos, considered: due.length, runs });

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { scopeForWho } from "@/lib/scope";
 import { whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
@@ -61,7 +62,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, live: true, error: e instanceof Error ? e.message : "REX didn't answer." },
+      { ok: false, live: true, error: publicError(e, "REX didn't answer.") },
       { status: 502 }
     );
   }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import Anthropic from "@anthropic-ai/sdk";
 import { checkById, type CheckId } from "@/lib/plc";
 import { readDocument, scanConfigured } from "@/lib/plc-scan";
@@ -147,7 +148,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "The read failed." },
+      { ok: false, error: publicError(e, "The read failed.") },
       { status: 502 }
     );
   }

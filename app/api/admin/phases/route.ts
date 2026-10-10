@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { requireCapability, whoIs } from "@/lib/admin";
 import { applyPhase, PhaseRefused, PHASES, phaseState, previewPhase, setPilotList, type PhaseId } from "@/lib/phases";
 import { publicOrigin } from "@/lib/origin";
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     if (e instanceof PhaseRefused) return NextResponse.json({ ok: false, error: e.message }, { status: 400 });
     console.error("phase failed", e);
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "That did not finish. Check Admin, Switches to see what was set." }, { status: 500 });
+    return NextResponse.json({ ok: false, error: publicError(e, "That did not finish. Check Admin, Switches to see what was set.") }, { status: 500 });
   }
 }
 
@@ -68,6 +69,6 @@ export async function PATCH(req: NextRequest) {
     const saved = await setPilotList(b.pilot.filter((v): v is string => typeof v === "string"), me);
     return NextResponse.json({ ok: true, pilot: saved });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "That did not save." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: publicError(e, "That did not save.") }, { status: 400 });
   }
 }

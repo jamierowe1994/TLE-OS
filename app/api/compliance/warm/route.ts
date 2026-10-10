@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { requireAnyCapability } from "@/lib/admin";
 import { FRESH_MS, refreshComplianceBook } from "@/lib/compliance-cache";
 import { rexConfigured } from "@/lib/rex";
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
      Tickets) instead of nowhere. */
   const sweep = refreshComplianceBook();
   sweep.catch((e) => {
-    noteFailure({ source: "REX", what: "compliance book sweep", message: e instanceof Error ? e.message : "The compliance book sweep failed." });
+    noteFailure({ source: "REX", what: "compliance book sweep", message: publicError(e, "The compliance book sweep failed.") });
   });
   const answerBy = new Promise<"still going">((r) => setTimeout(() => r("still going"), 80_000));
   try {
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest) {
       {
         ok: false,
         tookMs: Date.now() - started,
-        error: e instanceof Error ? e.message : "Couldn't reach REX.",
+        error: publicError(e, "Couldn't reach REX."),
       },
       { status: 502 }
     );

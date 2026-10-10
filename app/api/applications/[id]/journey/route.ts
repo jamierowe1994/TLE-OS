@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { getApplicationById } from "@/lib/applications";
@@ -43,6 +44,6 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
   try {
     return NextResponse.json({ ok: true, ...(await journeyFor(app)) });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "read failed" }, { status: 502 });
+    return NextResponse.json({ ok: false, error: publicError(e, "read failed") }, { status: 502 });
   }
 }

@@ -1,4 +1,5 @@
 import { after, NextRequest, NextResponse } from "next/server";
+import { publicError } from "@/lib/public-error";
 import { fetchLeadBook, type LeadBook } from "@/lib/rex-leads";
 import { leadScope } from "@/lib/scope";
 import { ledgerBoard, ledgerSourceMonths, ledgerStats, readNewValuations, recordLeads, salesAmong, type SourceMonthRow } from "@/lib/lead-ledger";
@@ -292,7 +293,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await out(fresh.book)), onFile, ageMs: 0 });
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Couldn't reach REX." },
+      { ok: false, error: publicError(e, "Couldn't reach REX.") },
       { status: 502 }
     );
   }
