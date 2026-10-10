@@ -113,10 +113,16 @@ async function marketingFor(rexPropertyId: string | null, appraisalId?: string):
 
 /** Maintenance in one line for a managed property, from the board and the inspections book. */
 async function maintenanceFor(propertyId: string | null): Promise<ViewMaintenance> {
-  const [orders, visits] = await Promise.all([
-    propertyId ? listOrders({ propertyId, open: true }).catch(() => []) : Promise.resolve([]),
-    propertyId ? listInspections({ propertyId, open: true }).catch(() => []) : Promise.resolve([]),
+  const [readOrders, readVisits] = await Promise.all([
+    propertyId ? listOrders({ propertyId, open: true }).catch(() => null) : Promise.resolve([]),
+    propertyId ? listInspections({ propertyId, open: true }).catch(() => null) : Promise.resolve([]),
   ]);
+  /* A failed read is not "All up to date. Fantastic." (Rig run 4, P-078). */
+  if (readOrders === null || readVisits === null) {
+    return { open: 0, needsYou: 0, nextVisit: null, headline: "We couldn't check your jobs just now", sub: "Nothing is lost. Look again in a few minutes, or message us." };
+  }
+  const orders = readOrders;
+  const visits = readVisits;
   const needsYou = orders.filter((o) => o.status === "approval" || (o.arranging === "landlord" && !o.landlordResolvedAt)).length;
   const booked = visits.find((i) => i.status === "booked");
   const nextVisit = booked ? (dayTime(booked.bookedAt ?? booked.offered[0] ?? booked.dueAt) ?? null) : null;

@@ -43,6 +43,10 @@ export default function MaintenanceView({ view: v, m, sample = false }: { view: 
         <AgentCard v={v} />
       </div>
 
+      {m.unread && (
+        <p className="rounded-2xl border border-[#e6c9c2] bg-[#fbf3f1] px-4 py-3 text-[13.5px] text-[#7a3b30]">{m.unread}</p>
+      )}
+
       {/* ── report a problem, and the figures ── */}
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
         <section className="relative overflow-hidden rounded-[22px] p-7" style={{ background: SAGE_WASH }} data-search>

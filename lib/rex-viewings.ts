@@ -126,27 +126,31 @@ function toViewing(e: RexEvent): Viewing | null {
 /** Every listing REX holds on the same property: a shared house is many. */
 async function siblingListingIds(propertyId: string): Promise<string[]> {
   const res = await rexCall("Listings", "search", { limit: 100, criteria: [{ name: "property_id", type: "=", value: propertyId }] });
-  if (!res.ok) return [];
+  /* A refusal is not "no other listings" (Rig run 4, P-078). */
+  if (!res.ok) throw new Error("REX didn't answer for the property's listings.");
   return rexRows(res.result).map((r) => String((r as { id?: string | number }).id ?? "")).filter(Boolean);
 }
 
 /**
  * Every event matching one search, up to 400. The first page goes alone; if
  * it is full, the other three are asked for together rather than one after
- * another. A refused page ends the read with what it has, as before.
+ * another. A refused page fails the read (P-078).
  */
 async function searchEvents(criteria: unknown[]): Promise<RexEvent[]> {
   const page = async (offset: number): Promise<RexEvent[] | null> => {
     const res = await rexCall("CalendarEvents", "search", { limit: 100, offset, order_by: { starts_at: "desc" }, criteria });
     return res.ok ? (rexRows(res.result) as RexEvent[]) : null;
   };
+  /* A refused page is a failed read, not an empty or shorter diary (Rig run
+     4, P-078): REX refusing said "0 booked, 0 done" on a listing, and the
+     landlord's screen read the same. The callers say they couldn't read. */
   const first = await page(0);
-  if (!first) return [];
+  if (!first) throw new Error("REX didn't answer for the viewings.");
   if (first.length < 100) return first;
   const rest = await Promise.all([100, 200, 300].map((o) => page(o)));
   const out = [...first];
   for (const rows of rest) {
-    if (!rows) break;
+    if (!rows) throw new Error("REX stopped answering part-way through the viewings.");
     out.push(...rows);
     if (rows.length < 100) break;
   }

@@ -57,6 +57,9 @@ export interface MaintView {
   spent: { figure: string; jobs: number; year: number };
   /** "£150": what we spend on a repair without asking first. */
   authority: string;
+  /** Set when the jobs or visits could not be read: the screen says so rather
+   *  than showing an empty, all-clear page (Rig run 4, P-078). */
+  unread?: string;
 }
 
 const day = (iso: string | null | undefined) =>
@@ -124,16 +127,17 @@ export async function loadLandlordMaintenance(me: LandlordAccount): Promise<Main
     rows.filter((r) => (r.propertyId && ids.has(r.propertyId)) || (r.landlordEmail && r.landlordEmail.trim().toLowerCase() === email));
 
   const [orders, inspections] = await Promise.all([
-    listOrders({ limit: 500 }).then(mine).catch(() => [] as WorksOrder[]),
-    listInspections({}).then(mine).catch(() => []),
+    listOrders({ limit: 500 }).then(mine).catch(() => null),
+    listInspections({}).then(mine).catch(() => null),
   ]);
+  const unread = orders === null || inspections === null ? "We couldn't check your jobs just now, so this page may be missing some. Look again in a few minutes, or message us." : undefined;
 
-  const jobs = orders.map(jobOf);
+  const jobs = (orders ?? []).map(jobOf);
   const year = new Date().getFullYear();
-  const doneThisYear = orders.filter((o) => !["reported", "approval", "approved", "scheduled", "cancelled"].includes(o.status) && new Date(o.completedAt ?? o.updatedAt).getFullYear() === year);
+  const doneThisYear = (orders ?? []).filter((o) => !["reported", "approval", "approved", "scheduled", "cancelled"].includes(o.status) && new Date(o.completedAt ?? o.updatedAt).getFullYear() === year);
   const spentPence = doneThisYear.reduce((n, o) => n + (o.invoicePence ?? o.quotePence ?? 0), 0);
 
-  const visits: MaintVisit[] = inspections
+  const visits: MaintVisit[] = (inspections ?? [])
     .filter((i) => i.status !== "cancelled")
     .map((i) => {
       const done = i.status === "closed" || i.status === "reported";
@@ -161,6 +165,7 @@ export async function loadLandlordMaintenance(me: LandlordAccount): Promise<Main
     done: jobs.filter((j) => j.state === "done").slice(0, 8),
     visits,
     spent: { figure: pounds(spentPence), jobs: doneThisYear.length, year },
-    authority: pounds(orders[0]?.authorityPence ?? 15000),
+    authority: pounds(orders?.[0]?.authorityPence ?? 15000),
+    ...(unread ? { unread } : {}),
   };
 }
