@@ -1,4 +1,5 @@
 import "server-only";
+import { londonToday } from "@/lib/london-clock";
 import { hasDb } from "@/lib/db";
 import { listMoveOuts, openMoveOuts } from "@/lib/move-outs";
 import { openTasks } from "@/lib/rexpm-tasks";
@@ -102,7 +103,7 @@ export async function withNotice(book: ManagedBook, rexUserId: string | null): P
   }
   if (!notices.size) return book;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = londonToday();
   const current = new Set(currentLets(book.properties).map((p) => p.listingId));
   const seen = new Set<string>();
   const properties = book.properties.map((p) => {

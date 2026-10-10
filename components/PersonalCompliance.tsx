@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { londonToday } from "@/lib/london-clock";
 import DoodleIcon from "@/components/DoodleIcon";
 import { PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
@@ -21,7 +22,7 @@ import {
  * his screen. The two dates are shown as two dates.
  */
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => londonToday();
 
 /** A document or a check is a piece of paper; training and declarations are a date. */
 const wantsFile = (i: ComplianceItem) => i.requirement.kind === "document" || i.requirement.kind === "check";

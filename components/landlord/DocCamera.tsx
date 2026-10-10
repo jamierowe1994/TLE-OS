@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { londonToday } from "@/lib/london-clock";
 
 /**
  * TAKE A PHOTO OF A DOCUMENT, inside a frame.
@@ -201,7 +202,7 @@ export default function DocCamera({
     canvas.toBlob(
       (blob) => {
         if (!blob) return;
-        const stamp = new Date().toISOString().slice(0, 10);
+        const stamp = londonToday();
         onShot(new File([blob], `${slug(title)}-${stamp}.jpg`, { type: "image/jpeg" }));
       },
       "image/jpeg",

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { londonToday } from "@/lib/london-clock";
 import { requireCapability } from "@/lib/admin";
 import { getTegHeadcount } from "@/lib/business/teg-hub";
 import { getAgentRampCounts } from "@/lib/business/rex-stats";
@@ -67,7 +68,7 @@ async function compute(year: string): Promise<RampPayload | null> {
   if (!teg) return null;
   // TEG's rex_id is NOT the REX user id - resolve the real id by email.
   const rexIdByEmail = new Map(rexAgents.map((a) => [a.email.toLowerCase(), a.id]));
-  const today = new Date().toISOString().slice(0, 10);
+  const today = londonToday();
   const yearStart = `${year}-01-01`;
 
   const cohort = teg.agents.filter(

@@ -73,10 +73,10 @@ export function monthLabel(month: string): string {
   return d.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 }
 
-/** Current month as "2026-07". */
+/** Current month as "2026-07", on the London clock. The server runs on UTC,
+ *  so it said last month from midnight to 1am BST on the 1st (Rig run 2, P-020). */
 export function currentMonth(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" }).slice(0, 7);
 }
 
 /**

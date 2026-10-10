@@ -7,6 +7,7 @@
 // account ↔ agentKey / REX / Meta, reset password).
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { londonToday } from "@/lib/london-clock";
 import type { ReactNode } from "react";
 import DataTable from "@/components/business/DataTable";
 import SourceBadge from "@/components/business/SourceBadge";
@@ -890,7 +891,7 @@ function liveStat(
   source: "live-payprop" | "live-rex" | "live-propoly",
   note?: string
 ): StatValue {
-  return { value, display, source, note, asOf: new Date().toISOString().slice(0, 10) };
+  return { value, display, source, note, asOf: londonToday() };
 }
 
 /**

@@ -7,6 +7,7 @@
 // PayProp-sourced (no API access yet) - PayProp arrears report 2026-07-06.
 
 import { useCallback, useEffect, useState } from "react";
+import { londonToday } from "@/lib/london-clock";
 import SourceNote from "@/components/business/SourceNote";
 import DataTable, { type DataTableColumn } from "@/components/business/DataTable";
 import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
@@ -243,7 +244,7 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
     isLiveMonth && live
       ? {
           basis: "live" as const,
-          asAt: new Date().toISOString().slice(0, 10),
+          asAt: londonToday(),
           tenants: live.tenants.length,
           totalOwed: live.totalOwed,
           largest: live.largest,
@@ -771,7 +772,7 @@ function ArrearsImport({
               <input
                 type="date"
                 value={asAt}
-                max={new Date().toISOString().slice(0, 10)}
+                max={londonToday()}
                 onChange={(e) => setAsAt(e.target.value)}
                 className="mt-1 rounded-xl border border-line bg-card px-3 py-1.5 text-[13px]"
               />

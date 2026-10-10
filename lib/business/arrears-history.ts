@@ -1,4 +1,5 @@
 import "server-only";
+import { londonToday } from "@/lib/london-clock";
 import { hasDb, q } from "@/lib/business/db";
 import { getArrears } from "@/lib/business/payprop-income";
 
@@ -123,7 +124,7 @@ export async function snapshotForMonth(month: string): Promise<ArrearsSnapshot |
  * the live read is already cached, and a second call the same day is a no-op.
  */
 export async function captureToday(): Promise<{ stored: boolean; asAt: string; reason?: string }> {
-  const asAt = new Date().toISOString().slice(0, 10);
+  const asAt = londonToday();
   if (!hasDb()) return { stored: false, asAt, reason: "no database" };
   if (await getSnapshot(asAt)) return { stored: false, asAt, reason: "already captured today" };
 
@@ -184,7 +185,7 @@ export async function arrearsSpells(asAt?: string): Promise<{
   thin: boolean;
 } | null> {
   if (!hasDb()) return null;
-  const cutoff = asAt && DATE_RE.test(asAt) ? asAt : new Date().toISOString().slice(0, 10);
+  const cutoff = asAt && DATE_RE.test(asAt) ? asAt : londonToday();
   const rows = await q<{ as_at: string; data: string }>(
     "SELECT to_char(as_at, 'YYYY-MM-DD') AS as_at, data FROM arrears_snapshots WHERE as_at <= $1 ORDER BY as_at",
     [cutoff]

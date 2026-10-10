@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { londonToday } from "@/lib/london-clock";
 import { randomUUID } from "node:crypto";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { requireAnyCapability } from "@/lib/admin";
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
   if (!isShareCode(code)) return NextResponse.json({ ok: false, error: "A share code is nine letters and numbers, like W4X 7RT 9KP." }, { status: 400 });
   if (!likeness) return NextResponse.json({ ok: false, error: "Tick that the photo on the Home Office result is the person - seen in person or on a video call." }, { status: 400 });
   if (lasts !== "none" && lasts !== "until") return NextResponse.json({ ok: false, error: "Say how long they can rent for: no time limit, or until a date." }, { status: 400 });
-  if (lasts === "until" && (!/^\d{4}-\d{2}-\d{2}$/.test(rightUntil) || rightUntil <= new Date().toISOString().slice(0, 10))) {
+  if (lasts === "until" && (!/^\d{4}-\d{2}-\d{2}$/.test(rightUntil) || rightUntil <= londonToday())) {
     return NextResponse.json({ ok: false, error: "Put in the date their permission runs out. If it has already run out, they do not have the right to rent." }, { status: 400 });
   }
   if (!(file instanceof File) || !file.size) {
@@ -74,7 +75,7 @@ export async function POST(req: NextRequest) {
   if (!r2Configured || !hasDb()) return NextResponse.json({ ok: false, error: "Files can't be stored on this environment, so nothing was saved." }, { status: 503 });
 
   const id = randomUUID();
-  const stamp = new Date().toISOString().slice(0, 10);
+  const stamp = londonToday();
   const base = safeName(`right-to-rent share code ${name} ${stamp}`).replace(/\s+/g, "-").toLowerCase();
   const ext = file.type === "application/pdf" ? "pdf" : file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
   const key = `right-to-rent/${stamp.slice(0, 7)}/${id}/${base}.${ext}`;

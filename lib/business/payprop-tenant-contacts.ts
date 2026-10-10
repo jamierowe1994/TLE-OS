@@ -1,4 +1,5 @@
 import "server-only";
+import { londonToday } from "@/lib/london-clock";
 import { payPropAccounts, payPropGetAll, type PayPropAccountId } from "@/lib/business/payprop";
 import { readCache, writeCache } from "@/lib/business/integration-cache";
 import { rentKey } from "@/lib/business/payprop-portfolio";
@@ -53,7 +54,7 @@ function leadOf(t: Record<string, unknown>): { first: string; last: string } | n
 /** Current PayProp tenancies by rentKey, with their contact and named lead. */
 export type ContactsByKey = Map<string, Array<{ lead: { first: string; last: string } | null; display: string; email: string | null; phone: string | null }>>;
 
-export function contactsByKey(rows: Array<Record<string, unknown>>, today = new Date().toISOString().slice(0, 10)): ContactsByKey {
+export function contactsByKey(rows: Array<Record<string, unknown>>, today = londonToday()): ContactsByKey {
   const out: ContactsByKey = new Map();
   for (const t of rows) {
     if (str(t.status) && str(t.status) !== "Active") continue;

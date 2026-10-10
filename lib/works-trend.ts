@@ -1,4 +1,5 @@
 import "server-only";
+import { londonToday } from "@/lib/london-clock";
 import { hasDb, q } from "@/lib/db";
 import { worksSummary, type WorksSummary } from "@/lib/works-orders";
 
@@ -33,7 +34,7 @@ export interface WorksSnapshot {
 export async function snapshotWorks(): Promise<{ ok: boolean; day: string; summary: WorksSummary | null }> {
   if (!hasDb()) return { ok: false, day: "", summary: null };
   const summary = await worksSummary();
-  const day = new Date().toISOString().slice(0, 10);
+  const day = londonToday();
   await q(
     `INSERT INTO os_works_snapshots (day, summary) VALUES ($1, $2)
        ON CONFLICT (day) DO UPDATE SET summary = EXCLUDED.summary, taken_at = NOW()`,

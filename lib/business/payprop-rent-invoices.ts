@@ -1,4 +1,5 @@
 import "server-only";
+import { londonToday } from "@/lib/london-clock";
 import { payPropGetAll, type PayPropAccountId } from "@/lib/business/payprop";
 
 /*
@@ -51,7 +52,7 @@ export type InvoicedRent = { monthly: number; name: string | null; firstLine: st
  * property (joint tenants billed apart) add up. A frequency we don't know
  * adds nothing rather than a guess.
  */
-export function rentByProperty(invoices: Array<Record<string, unknown>>, today = new Date().toISOString().slice(0, 10)): Record<string, InvoicedRent> {
+export function rentByProperty(invoices: Array<Record<string, unknown>>, today = londonToday()): Record<string, InvoicedRent> {
   const out: Record<string, InvoicedRent> = {};
   for (const inv of invoices) {
     const cat = str((inv.category as Record<string, unknown> | undefined)?.name);

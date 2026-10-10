@@ -1,4 +1,5 @@
 import "server-only";
+import { londonToday } from "@/lib/london-clock";
 import { payPropAccounts, payPropCanAuth, payPropGetAll, type PayPropAccountId } from "@/lib/business/payprop";
 import { readCache, writeCache } from "@/lib/business/integration-cache";
 import { hasDb, q } from "@/lib/db";
@@ -121,7 +122,7 @@ async function compute(): Promise<Book | null> {
          until its day comes. Measured on the Scotland book, 8 Oct 2026. */
       const balanceOwed = Math.round(-money(r.balance) * 100) / 100;
       const invDate = text(r.last_invoice?.date).slice(0, 10);
-      const ahead = invDate && invDate > new Date().toISOString().slice(0, 10) ? money(r.last_invoice?.amount) : 0;
+      const ahead = invDate && invDate > londonToday() ? money(r.last_invoice?.amount) : 0;
       balances.push({
         account,
         propertyId,
@@ -304,7 +305,7 @@ export type RentStatus =
  * they are not this tenancy. A tenancy that has ended is out; so is one with
  * nothing owed and no payment in 75 days.
  */
-export function current(b: TenantBalance, today = new Date().toISOString().slice(0, 10)): boolean {
+export function current(b: TenantBalance, today = londonToday()): boolean {
   if (b.tenancyEnd && b.tenancyEnd.slice(0, 10) < today) return false;
   if (b.owed >= 1) return true;
   const recent = new Date(Date.now() - 75 * 86_400_000).toISOString().slice(0, 10);

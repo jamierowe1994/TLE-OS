@@ -1,4 +1,5 @@
 import "server-only";
+import { londonToday, londonMonth } from "@/lib/london-clock";
 import type { FunnelStats } from "./types";
 import { rexCall, rexRows, rexConfigured, rexLettingsAgents } from "./rex";
 import { readCache, writeCache } from "./integration-cache";
@@ -359,7 +360,7 @@ export async function getAgentFunnel(
     if (!caps.capabilities.login) return null;
 
     const out: Partial<FunnelStats> = {};
-    const asOf = new Date().toISOString().slice(0, 10);
+    const asOf = londonToday();
 
     // Market appraisals come from getAgentAppraisals, which builds the records
     // and counts them — so this tile can never say a different number from the
@@ -3211,7 +3212,7 @@ function monthBounds(month: string): { start: number; end: number } {
 export async function getComplianceAsAt(month: string): Promise<ComplianceSummary | null> {
   const census = await getComplianceCensus();
   if (!census) return null;
-  const sel = MONTH_RE_STATS.test(month) ? month : new Date().toISOString().slice(0, 7);
+  const sel = MONTH_RE_STATS.test(month) ? month : londonMonth();
 
   /*
    * SCOPING — why this is not simply "every compliance entry in REX".

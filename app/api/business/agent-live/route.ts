@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { londonMonth } from "@/lib/london-clock";
 import { requireCapability } from "@/lib/admin";
 import { getAgentEarningsForMonths } from "@/lib/business/payprop-income";
 import { getAgentBook } from "@/lib/business/payprop-portfolio";
@@ -79,7 +80,7 @@ export async function GET(req: NextRequest) {
   const agentKey = req.nextUrl.searchParams.get("agentKey");
   const param = req.nextUrl.searchParams.get("month");
   const month =
-    param && MONTH_RE.test(param) ? param : new Date().toISOString().slice(0, 7);
+    param && MONTH_RE.test(param) ? param : londonMonth();
 
   const months = monthsUpTo(month);
 

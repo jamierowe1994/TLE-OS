@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { londonToday } from "@/lib/london-clock";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import Sheet from "@/components/tenant/Sheet";
@@ -131,7 +132,7 @@ export default function ViewedSheets({
   const offerNum = Number(amount.replace(/[£,\s]/g, ""));
   const offerError =
     !amount.trim() ? null : !Number.isFinite(offerNum) || offerNum <= 0 ? "That doesn't look like an amount." : askingPcm && offerNum > askingPcm ? `The advertised rent is ${gbp(askingPcm)} a month, so an offer can't be above that.` : null;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = londonToday();
 
   async function send(kind: ViewedKind) {
     setErr("");

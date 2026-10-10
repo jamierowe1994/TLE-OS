@@ -1,4 +1,5 @@
 import "server-only";
+import { londonToday } from "@/lib/london-clock";
 import { isExpiredToken, rexCall, rexConfigured, rexWritesLocked } from "@/lib/rex";
 import { rexTokenFor } from "@/lib/rex-user";
 
@@ -57,7 +58,7 @@ export type NewListingOutcome =
 const TLE_OFFICE_ID = process.env.REX_LOCATION_ID ?? "728";
 
 export function buildListingPayload(l: NewListing, agentRexId: string): Record<string, unknown> {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = londonToday();
   return {
     listing_category: { id: "residential_rental" },
     property: { id: String(l.propertyId) },

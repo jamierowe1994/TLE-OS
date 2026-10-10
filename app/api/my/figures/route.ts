@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { atLondon, londonMonth } from "@/lib/london-clock";
 import { scopeFor } from "@/lib/scope";
 import { rexCall, rexConfigured } from "@/lib/rex";
 import { RULES } from "@/lib/staleness";
@@ -93,8 +94,10 @@ export async function GET(req: NextRequest) {
      90,791 all-time leads beside this month's viewings was the most
      misleading number on the first screen anybody sees (18 Sep sweep, item
      8). Scoped to now() and rolling over on its own, per the figures rule. */
-  const now = new Date();
-  const monthStart = String(Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000));
+  /* Midnight on the 1st in London, not on the server's UTC clock (Rig run 2,
+     P-020): an hour of the previous month's leads counted into this one. */
+  const firstIso = atLondon(`${londonMonth()}-01`, "00:00") ?? new Date().toISOString();
+  const monthStart = String(Math.floor(new Date(firstIso).getTime() / 1000));
   const thisMonth: Crit = [{ name: "system_ctime", type: ">=", value: monthStart }];
 
   const [onMarket, managed, leads, appraisals, applications] = await Promise.all([

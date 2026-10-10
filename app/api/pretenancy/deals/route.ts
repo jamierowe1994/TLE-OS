@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { londonToday } from "@/lib/london-clock";
 import { flatbondForDeal } from "@/lib/business/flatfair-deal";
 import { withoutDuplicates } from "@/lib/business/deal-dupes";
 import { propolyDealUrl } from "@/lib/business/propoly-stages";
@@ -193,7 +194,7 @@ export async function GET(req: NextRequest) {
   /* Works the landlord agreed with the offer and has not ticked off yet
      (lib/landlord-prep), by address. */
   const prepByKey = await openPrepByAddress(propertyKey).catch(() => new Map<string, { title: string; dueOn: string | null; property: string }[]>());
-  const today = new Date().toISOString().slice(0, 10);
+  const today = londonToday();
   const THIRTY_DAYS_AGO = new Date(Date.now() - 30 * 86_400_000)
     .toISOString()
     .slice(0, 10);

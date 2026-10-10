@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { londonToday } from "@/lib/london-clock";
 import DoodleIcon from "@/components/DoodleIcon";
 import { APPLICANT_TYPES, TRADING_FOR, WORK_HOURS, householdPeople, isEmployed, isTrading, workFlags, workLine, type PassportData } from "@/lib/passport-shape";
 import { DateField, MovingIn, RentField, WorksList } from "@/components/offers/OfferParts";
@@ -158,7 +159,7 @@ export default function AgentOfferRecorder({
     .split("\n")
     .map((l, k) => ({ id: `adult-${k + 2}`, income: money(l.split(" - ")[1] ?? "") }));
   const income = money(pp.annualIncome) + others.filter((o) => !people.length || ticked.has(o.id)).reduce((t, o) => t + o.income, 0);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = londonToday();
 
   /* Rent as a share of income, the figure a landlord reads first. */
   const affordability = income && offerNum ? Math.round(((offerNum * 12) / income) * 100) : null;

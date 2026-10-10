@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { londonToday } from "@/lib/london-clock";
 import { randomUUID } from "node:crypto";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { whoIs } from "@/lib/admin";
@@ -134,7 +135,7 @@ export async function POST(req: NextRequest) {
      answer that is missing is recorded as not said - the office's list shows
      it - rather than refusing the photos. */
   if (lasts && lasts !== "none" && lasts !== "until") return NextResponse.json({ ok: false, error: "Say how long they can rent for: no time limit, or until a date." }, { status: 400 });
-  if (lasts === "until" && (!/^\d{4}-\d{2}-\d{2}$/.test(rightUntil) || rightUntil <= new Date().toISOString().slice(0, 10))) {
+  if (lasts === "until" && (!/^\d{4}-\d{2}-\d{2}$/.test(rightUntil) || rightUntil <= londonToday())) {
     return NextResponse.json({ ok: false, error: "Put in the date their permission runs out. If it has already run out, they do not have the right to rent." }, { status: 400 });
   }
   if (files.length === 0) return NextResponse.json({ ok: false, error: "Take a photo of the document first." }, { status: 400 });
@@ -154,7 +155,7 @@ export async function POST(req: NextRequest) {
   }
 
   const id = randomUUID();
-  const stamp = new Date().toISOString().slice(0, 10);
+  const stamp = londonToday();
   const base = safeName(`right-to-rent ${name} ${stamp}`).replace(/\s+/g, "-").toLowerCase();
   let file: File;
   try {

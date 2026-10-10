@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { londonToday } from "@/lib/london-clock";
 import { useSlideOver } from "@/lib/use-slide-over";
 import DoodleIcon from "@/components/DoodleIcon";
 import SignInAgain from "@/components/SignInAgain";
@@ -604,7 +605,7 @@ function ListingDrawerBody({
           isPrimary: i === 0,
         })),
       offerAmount: Number(String(picked.rent).replace(/[^\d]/g, "")) || null,
-      acceptedOn: new Date().toISOString().slice(0, 10),
+      acceptedOn: londonToday(),
       startDate: null,
       endDate: null,
       endedOn: null,
@@ -837,7 +838,7 @@ function ListingDrawerBody({
     /* Or on the listing itself, which is where REX keeps an EPC entered with
        the advert and what its own pre-publish check reads (15 Sep 2026: 4
        Williams Court had rating C on the listing and no compliance entry). */
-    { id: "epc", label: "EPC filed", done: certOk("epc") || Boolean((live?.epc.expiry ?? listing.epcExpiry) && (live?.epc.expiry ?? listing.epcExpiry)! >= new Date().toISOString().slice(0, 10)) || Boolean(live?.epc.rating), fix: () => setDrop("epc") },
+    { id: "epc", label: "EPC filed", done: certOk("epc") || Boolean((live?.epc.expiry ?? listing.epcExpiry) && (live?.epc.expiry ?? listing.epcExpiry)! >= londonToday()) || Boolean(live?.epc.rating), fix: () => setDrop("epc") },
   ];
   /* Offered, never required to advertise - and the move-in will not go
      without them. */

@@ -1,4 +1,5 @@
 import "server-only";
+import { londonToday } from "@/lib/london-clock";
 import { createHash } from "node:crypto";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
@@ -107,7 +108,7 @@ async function inThrees<T, R>(items: T[], fn: (t: T) => Promise<R>): Promise<R[]
 /** Every check the pack already has a file for, counting what a file also covers. */
 const filledOn = (c: PlcCase) => new Set(c.documents.flatMap((d) => [d.checkId, ...(d.covers ?? [])]));
 
-const ymdToday = () => new Date().toISOString().slice(0, 10);
+const ymdToday = () => londonToday();
 const daysBefore = (ymd: string, days: number) =>
   new Date(Date.parse(`${ymd}T00:00:00Z`) - days * 86_400_000).toISOString().slice(0, 10);
 const shortAddress = (a: string) => a.split(",").slice(0, 2).join(",").trim();

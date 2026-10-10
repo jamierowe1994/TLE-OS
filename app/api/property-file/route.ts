@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { londonToday } from "@/lib/london-clock";
 import { whoIs } from "@/lib/admin";
 import { getComplianceItemsFor, type ComplianceItem } from "@/lib/business/rex-stats";
 import { matchProperty, pendingKeyFor, type MatchResult } from "@/lib/property-match";
@@ -146,7 +147,7 @@ export async function GET(req: NextRequest) {
   const seenVault = new Set<string>();
   /* A home REX CRM does not hold: the OS's own certificates are its rows. */
   if (osOnly && propertyId) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = londonToday();
     const latest = new Map<string, { expiry: string; issue: string | null }>();
     for (const r of await osCertRows([propertyId]).catch(() => [])) if (!latest.has(r.type_id)) latest.set(r.type_id, { expiry: r.expiry, issue: r.issue });
     for (const [type, v] of latest) {

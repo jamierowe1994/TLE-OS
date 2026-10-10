@@ -1,4 +1,5 @@
 import "server-only";
+import { londonToday } from "@/lib/london-clock";
 import { hasDb, q } from "@/lib/db";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import { listAppraisals } from "@/lib/appraisal-store";
@@ -211,7 +212,7 @@ function appraisalDoor(r: Record<string, unknown>): RexDoorRow {
     district: outward(p.postcode),
     /* REX holds a few appraisals dated in the next century. They are not
        evidence of anything and are left undated. */
-    event_on: date && date <= new Date().toISOString().slice(0, 10) ? date : null,
+    event_on: date && date <= londonToday() ? date : null,
     reason: str((r.archive_reason as Record<string, unknown> | null)?.id ?? r.archive_reason),
     lost_agency: str((r.archive_lost_agency as Record<string, unknown> | null)?.name ?? null),
     agent: str(agent),
@@ -417,7 +418,7 @@ interface Draft {
 export async function buildNudges(): Promise<{ nudges: number; matched: number }> {
   if (!hasDb()) return { nudges: 0, matched: 0 };
   const matched = await matchDoors();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = londonToday();
   const districts = (await watchedDistricts()).map((d) => d.district);
   const startedAt = new Date().toISOString();
 

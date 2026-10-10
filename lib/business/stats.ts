@@ -3,6 +3,7 @@
 // Pure, client-safe.
 
 import type { StatSource, StatValue } from "@/lib/business/types";
+import { londonToday } from "@/lib/london-clock";
 
 export interface ManualOverride {
   value: number;
@@ -24,7 +25,7 @@ export function resolveStat(
     return {
       value: live,
       source: liveSource,
-      asOf: new Date().toISOString().slice(0, 10),
+      asOf: londonToday(),
     };
   }
   if (manual != null && manual.value != null && !Number.isNaN(manual.value)) {

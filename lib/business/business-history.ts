@@ -1,4 +1,5 @@
 import "server-only";
+import { londonToday } from "@/lib/london-clock";
 import fs from "fs/promises";
 import path from "path";
 import { DATA_DIR } from "@/lib/business/data-dir";
@@ -272,7 +273,7 @@ export async function getYoYLive(): Promise<YoYLive> {
 }
 
 async function computeYoYLive(): Promise<YoYLive> {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = londonToday();
   const year = Number(today.slice(0, 4));
   const sameDayLastYear = `${year - 1}${today.slice(4)}`;
   /*

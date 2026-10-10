@@ -35,3 +35,12 @@ export function lengthWords(n: number): string {
   if (!h) return `${m} min`;
   return m ? `${h} hr ${m} min` : `${h} hr`;
 }
+
+/**
+ * Today and this month on the London clock (Rig run 2, P-020, 10 Oct 2026).
+ * `new Date().toISOString().slice(...)` is UTC: Railway runs on UTC, so
+ * between midnight and 1am in summer "today" was yesterday and, on the 1st,
+ * "this month" was last month.
+ */
+export const londonToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+export const londonMonth = () => londonToday().slice(0, 7);

@@ -1,4 +1,5 @@
 import "server-only";
+import { londonToday } from "@/lib/london-clock";
 import Anthropic from "@anthropic-ai/sdk";
 import { hasDb, q } from "@/lib/db";
 import { SIGNALS, SIGNAL_ORDER, STAGE_LABEL, type Prospect, type SignalKey } from "@/lib/radar-signals";
@@ -219,7 +220,7 @@ const patchOverview: Tool = {
     const byStage: Record<string, number> = {};
     const byAgent: Record<string, number> = {};
     let newToday = 0;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = londonToday();
     for (const p of mine) {
       for (const s of p.signals) bySignal[SIGNALS[s.key]?.label ?? s.key] = (bySignal[SIGNALS[s.key]?.label ?? s.key] ?? 0) + 1;
       byStage[STAGE_LABEL[p.stage]] = (byStage[STAGE_LABEL[p.stage]] ?? 0) + 1;

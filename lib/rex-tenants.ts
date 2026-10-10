@@ -1,4 +1,5 @@
 import "server-only";
+import { londonToday } from "@/lib/london-clock";
 import { getApplications, type Application } from "@/lib/applications";
 
 /**
@@ -105,7 +106,7 @@ async function walk(): Promise<Map<string, SittingTenants>> {
      at 5b Newton Road showed Lauren Johnstone days before her move-in. It is
      skipped, so whoever is in the home now still stands. Today is read on
      every walk, so she appears on her start date without anyone touching it. */
-  const today = new Date().toISOString().slice(0, 10);
+  const today = londonToday();
   for (const a of accepted) {
     if (a.startDate && String(a.startDate).slice(0, 10) > today) continue;
     const { pastTerm } = ended(a);

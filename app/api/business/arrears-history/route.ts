@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { londonToday, londonMonth } from "@/lib/london-clock";
 import { requireCapability } from "@/lib/admin";
 import {
   arrearsSpells,
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 403 });
   }
   const param = req.nextUrl.searchParams.get("month");
-  const month = param && MONTH_RE.test(param) ? param : new Date().toISOString().slice(0, 7);
+  const month = param && MONTH_RE.test(param) ? param : londonMonth();
 
   const [snapshot, dates] = await Promise.all([
     snapshotForMonth(month).catch(() => null),
@@ -92,7 +93,7 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-  if (asAt > new Date().toISOString().slice(0, 10)) {
+  if (asAt > londonToday()) {
     return NextResponse.json({ error: "That date is in the future." }, { status: 400 });
   }
   if (!text || !text.trim()) {

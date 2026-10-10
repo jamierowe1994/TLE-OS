@@ -1,4 +1,5 @@
 import "server-only";
+import { londonToday } from "@/lib/london-clock";
 import { hasDb, q } from "@/lib/db";
 import { rexCall, rexRows } from "@/lib/rex";
 import { houseNameFrom, parseAddress, postcodeOf, sameDoor, type Parsed } from "@/lib/address-parse";
@@ -203,7 +204,7 @@ export async function bookHealth(): Promise<HealthReport> {
         `SELECT DISTINCT ON (property_id, type_id) id, property_id, property_name, type_id, issue::text AS issue, expiry::text AS expiry
            FROM os_certificates ORDER BY property_id, type_id, expiry DESC`
       );
-      const today = new Date().toISOString().slice(0, 10);
+      const today = londonToday();
       /* A home REX holds twice has its certificates twice: say it once. */
       const certSeen = new Set<string>();
       for (const c of certs) {

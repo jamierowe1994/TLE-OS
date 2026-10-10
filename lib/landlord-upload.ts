@@ -1,4 +1,5 @@
 import "server-only";
+import { londonToday } from "@/lib/london-clock";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { recordLandlordDocument, type DocKind, type LandlordDocument } from "@/lib/landlord-account";
 import { R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
@@ -46,7 +47,7 @@ export async function storeLandlordPages(d: {
   if (files.length === 0) return { ok: false, status: 400, error: "No file was attached." };
 
   if (canBind(files)) {
-    const stamp = new Date().toISOString().slice(0, 10);
+    const stamp = londonToday();
     const name = `${(d.label || "Document").replace(/[^\w\s-]/g, "").trim() || "Document"} ${stamp}`;
     try {
       const bound = await bindPages(files, name);

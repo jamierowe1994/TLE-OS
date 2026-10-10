@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { londonMonth } from "@/lib/london-clock";
 import { requireCapability } from "@/lib/admin";
 import { isAdminEmail } from "@/lib/business/brand";
 import { getComplianceAsAt } from "@/lib/business/rex-stats";
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
   const param = req.nextUrl.searchParams.get("month");
-  const month = param && MONTH_RE.test(param) ? param : new Date().toISOString().slice(0, 7);
+  const month = param && MONTH_RE.test(param) ? param : londonMonth();
   const compliance = await getComplianceAsAt(month).catch(() => null);
   // Echoed so the tab can drop an answer that arrived for a month the user has
   // already navigated away from - the exact race that made the Overview show

@@ -1,4 +1,5 @@
 import "server-only";
+import { londonToday } from "@/lib/london-clock";
 import { rexCall, rexRows } from "@/lib/rex";
 import { unitLine } from "@/lib/address-parse";
 import { hasDb, q } from "@/lib/db";
@@ -674,7 +675,7 @@ export function buildCreatePayload(a: NewApplication): Record<string, unknown> {
     application_status_id: "received",
     offer_amount: a.offerAmount,
     offer_amount_period_id: "month",
-    date_received: new Date().toISOString().slice(0, 10),
+    date_received: londonToday(),
     start_date: a.startDate,
     agreement_length_months: a.agreementMonths,
     num_of_occupants: a.occupants,

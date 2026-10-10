@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { londonToday } from "@/lib/london-clock";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
@@ -489,7 +490,7 @@ function Accounts({ orders, loaded, onOpen, onChanged }: { orders: WorksOrder[];
     const url = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = `to-pay-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `to-pay-${londonToday()}.csv`;
     a.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }

@@ -1,4 +1,5 @@
 import "server-only";
+import { londonToday } from "@/lib/london-clock";
 import { readListingDetails, type ListingDetails } from "@/lib/listing-details";
 import { inputFromDetails, missing } from "@/lib/listing-requirements";
 
@@ -22,7 +23,7 @@ export interface PublishGap {
  * a handful of homes are genuinely exempt.
  */
 export async function hasEpc(details: ListingDetails): Promise<boolean> {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = londonToday();
   if (details.epc.rating || (details.epc.expiry && details.epc.expiry >= today)) return true;
   if (!details.propertyId) return false;
   try {

@@ -1,4 +1,5 @@
 import "server-only";
+import { londonToday } from "@/lib/london-clock";
 import { randomBytes } from "node:crypto";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { hasDb, q } from "@/lib/db";
@@ -337,7 +338,7 @@ export async function shareCertificate(cert: ShareCertificate, extra: SharePerso
   const armed = await switchOn("certificate_share").catch(() => false);
 
   /* Gate 2. */
-  const today = new Date().toISOString().slice(0, 10);
+  const today = londonToday();
   if (String(cert.expiry).slice(0, 10) < today) return stop("the certificate had already expired when it was filed");
 
   const home = await homeFor(cert.propertyId);
