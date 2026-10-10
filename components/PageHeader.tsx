@@ -510,8 +510,12 @@ export default function PageHeader({
           {/* Notifications and nothing else. The page's own actions used to
               sit here, which put a different set of controls in the same
               place on every screen - the one thing this bar exists not to
-              do. They live in the masthead now, on the page they belong to. */}
-          <NotificationBell compact />
+              do. They live in the masthead now, on the page they belong to.
+              Desktop only (Rig run 3, P-025): below lg the Shell's own top bar
+              carries the bell, and a phone showed two with the same count. */}
+          <span className="hidden lg:contents">
+            <NotificationBell compact />
+          </span>
         </div>
       )}
 

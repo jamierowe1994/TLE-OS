@@ -146,7 +146,7 @@ export default function LeadSourceChart({ rows }: { rows: SourceMonthRow[] }) {
               className="group flex min-w-0 flex-1 flex-col items-stretch text-left"
             >
               <span
-                className={`mb-1.5 block text-[10px] font-semibold tabular-nums transition-colors ${
+                className={`mb-1.5 block shrink-0 text-[10px] font-semibold tabular-nums transition-colors ${
                   strong ? "text-accent-dark" : "text-muted"
                 }`}
               >
@@ -178,10 +178,13 @@ export default function LeadSourceChart({ rows }: { rows: SourceMonthRow[] }) {
                 />
               </span>
 
-              <span className="mt-2 block truncate text-[10px] leading-tight text-muted">
+              {/* shrink-0 (Rig run 3, P-023): in a short phone tile the bar's
+                  flex-1 squeezed the name to zero height, leaving "84% 0% 5%"
+                  with nothing to say which column was which. The bar gives. */}
+              <span className="mt-2 block shrink-0 truncate text-[10px] leading-tight text-muted">
                 {b.key}
               </span>
-              <span className="figures mt-0.5 block text-[13px] leading-none">{b.pct}%</span>
+              <span className="figures mt-0.5 block shrink-0 text-[13px] leading-none">{b.pct}%</span>
             </div>
           );
         })}
