@@ -24,7 +24,7 @@ export default function LookLab() {
     setC(next);
     saveLab(next);
   };
-  const palette = c.palette ?? "warm";
+  const palette = c.palette ?? "mist";
   const layout = c.layout ?? "original";
   const chip = (on: boolean) =>
     `rounded-2xl border px-3.5 py-3 text-left transition-colors ${on ? "border-ink bg-[var(--shell-pill)]" : "border-line/70 hover:border-ink/40"}`;
@@ -42,7 +42,7 @@ export default function LookLab() {
       </div>
 
       <p className="mt-4 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted">Colours</p>
-      <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mt-2 grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
         {LAB_PALETTES.map((p) => (
           <button key={p.id} type="button" onClick={() => pick({ ...c, palette: p.id })} className={chip(palette === p.id)}>
             <span className="flex gap-1">

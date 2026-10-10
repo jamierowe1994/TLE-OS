@@ -1504,21 +1504,24 @@ html[data-os-toast="up"] .os-toast-lift {
    [data-theme="dark"] did when the OS had a dark mode.
 --------------------------------------------------------------------------- */
 :root {
-  --shell-bg: #f3f2ef;          /* the window the page sits in */
+  --shell-bg: #fbfbfb;          /* the window the page sits in (James, 11 Oct: subtler, no warmth) */
   --shell-nav-bg: transparent;  /* the sidebar, where it is flat on the window */
   --shell-nav-card: #ffffff;    /* the sidebar, where it is a card */
   --shell-pill: #ffffff;        /* the page you are on, in the sidebar */
   --shell-panel: #ffffff;       /* the page's own surface */
-  --shell-rim: rgba(0, 0, 0, 0.07);
+  --shell-rim: rgba(0, 0, 0, 0.08);
 }
-:root[data-lab-palette="cool"] {
-  --shell-bg: #eceef1;
+:root[data-lab-palette="soft"] {
+  --shell-bg: #f8f8f8;
+}
+:root[data-lab-palette="pale"] {
+  --shell-bg: #f5f5f6;
 }
 :root[data-lab-palette="reverse"] {
   --shell-bg: #ffffff;
   --shell-nav-bg: #ffffff;
-  --shell-pill: #f2f3f5;
-  --shell-panel: #f2f3f5;
+  --shell-pill: #f6f6f7;
+  --shell-panel: #f6f6f7;
   --shell-rim: rgba(0, 0, 0, 0.05);
 }
 :root[data-lab-palette="dark-lift"],

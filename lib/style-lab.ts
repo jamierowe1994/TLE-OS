@@ -5,22 +5,27 @@
  * able to mix and match these: the navigation bar style with the colours.
  * I don't want to ever have to change this again."
  *
- * Five palettes x five sidebar layouts, chosen on the Dashboard by an owner
+ * Six palettes x five sidebar layouts, chosen on the Dashboard by an owner
  * and kept in this browser only (localStorage), so nobody else's screen moves
- * while he decides. Nothing chosen = the live look: the warm wrap, as pushed
- * on 10 Oct. The colours are CSS variables keyed off data-lab-palette on
+ * while he decides. Nothing chosen = the live look: mist (#FBFBFB) round a white
+ * page, live from 11 Oct (the warm wrap of 10 Oct is gone).
+ * The colours are CSS variables keyed off data-lab-palette on
  * <html> (app/globals.css); the layout is read by components/Shell.
  *
  * Once he picks one, it becomes the default for everybody and this lab goes.
  */
 
-export type LabPalette = "warm" | "cool" | "reverse" | "dark-lift" | "dark-deep";
+export type LabPalette = "mist" | "soft" | "pale" | "reverse" | "dark-lift" | "dark-deep";
 export type LabLayout = "original" | "search" | "card" | "inverse" | "bleed";
 
 export const LAB_PALETTES: { id: LabPalette; label: string; blurb: string; swatch: [string, string, string] }[] = [
-  { id: "warm", label: "Warm wrap", blurb: "What is live now: warm grey round a white page.", swatch: ["#f3f2ef", "#ffffff", "#ffffff"] },
-  { id: "cool", label: "Cool grey", blurb: "The same wrap, a true cool grey with no beige in it.", swatch: ["#eceef1", "#ffffff", "#ffffff"] },
-  { id: "reverse", label: "Reverse", blurb: "White sidebar, a grey page, white boxes on the grey.", swatch: ["#ffffff", "#f2f3f5", "#ffffff"] },
+  /* James, 11 Oct: "make the grey a little bit more subtle ... get rid of
+     the warm wrap ... one of them should be #FBFBFB". Three neutral greys,
+     no hue in any of them, faintest first; mist is now what is live. */
+  { id: "mist", label: "Mist #FBFBFB", blurb: "What is live now: the faintest grey round a white page.", swatch: ["#fbfbfb", "#ffffff", "#ffffff"] },
+  { id: "soft", label: "Soft #F8F8F8", blurb: "A shade more grey round the page.", swatch: ["#f8f8f8", "#ffffff", "#ffffff"] },
+  { id: "pale", label: "Pale #F5F5F6", blurb: "The most defined of the three, still no tint.", swatch: ["#f5f5f6", "#ffffff", "#ffffff"] },
+  { id: "reverse", label: "Reverse", blurb: "White sidebar, a soft grey page, white boxes on the grey.", swatch: ["#ffffff", "#f6f6f7", "#ffffff"] },
   { id: "dark-lift", label: "Dark, lighter sidebar", blurb: "Dark mode: the sidebar a step lighter than a near-black page.", swatch: ["#232427", "#141517", "#1d1e21"] },
   { id: "dark-deep", label: "Dark, darker sidebar", blurb: "Dark mode the other way round: a near-black sidebar beside a lighter page.", swatch: ["#0e0f11", "#1c1d20", "#26272b"] },
 ];
@@ -52,7 +57,7 @@ export function readLab(): LabChoice {
 /** Put the choice on <html> and tell the shell. */
 export function applyLab(c: LabChoice) {
   const el = document.documentElement;
-  if (c.palette && c.palette !== "warm") el.dataset.labPalette = c.palette;
+  if (c.palette && c.palette !== "mist") el.dataset.labPalette = c.palette;
   else delete el.dataset.labPalette;
   if (c.layout && c.layout !== "original") el.dataset.labLayout = c.layout;
   else delete el.dataset.labLayout;
@@ -70,4 +75,4 @@ export function saveLab(c: LabChoice) {
 }
 
 /** Inlined in <head> so a chosen look is on before the first paint (no flash of the live one). */
-export const LAB_BOOT = `try{var c=JSON.parse(localStorage.getItem(${JSON.stringify(LAB_KEY)})||"{}");var d=document.documentElement;if(c.palette&&c.palette!=="warm")d.dataset.labPalette=c.palette;if(c.layout&&c.layout!=="original")d.dataset.labLayout=c.layout}catch(e){}`;
+export const LAB_BOOT = `try{var c=JSON.parse(localStorage.getItem(${JSON.stringify(LAB_KEY)})||"{}");var d=document.documentElement;if(c.palette&&c.palette!=="mist")d.dataset.labPalette=c.palette;if(c.layout&&c.layout!=="original")d.dataset.labLayout=c.layout}catch(e){}`;
