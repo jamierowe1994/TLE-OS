@@ -1,6 +1,5 @@
 import "server-only";
 import { getAllPropolyDeals, type BusinessDeal } from "@/lib/business/propoly-deals";
-import { propolyDealUrl } from "@/lib/business/propoly-stages";
 import { getApplications, type Application } from "@/lib/applications";
 import { postcodeOf, sameHome } from "@/lib/address-parse";
 import { hasDb, q } from "@/lib/db";
@@ -75,7 +74,7 @@ function onRex(deal: BusinessDeal, book: Application[]): boolean {
 const live = (d: BusinessDeal) => d.statusKey !== "cancelled" && d.app.stage !== "unsuccessful" && !d.app.dateUnsuccessful;
 
 /** The names and emails one REX user goes by in the OS (Kirstie is Wallington in REX, Mulholland here). */
-async function whoIsRexUser(rexUserId: string): Promise<{ names: Set<string>; emails: Set<string> }> {
+export async function whoIsRexUser(rexUserId: string): Promise<{ names: Set<string>; emails: Set<string> }> {
   const names = new Set<string>();
   const emails = new Set<string>();
   if (!hasDb()) return { names, emails };
@@ -90,6 +89,11 @@ async function whoIsRexUser(rexUserId: string): Promise<{ names: Set<string>; em
   return { names, emails };
 }
 
+/** Is this Propoly deal one of this REX user's own (its property manager is them)? */
+export function isOwnDeal(d: { managerEmail: string | null; managerName: string | null }, me: { names: Set<string>; emails: Set<string> }): boolean {
+  return me.emails.has(norm(d.managerEmail)) || me.names.has(norm(d.managerName));
+}
+
 export async function propolyOnlyLets(
   scope: { rexUserId: string | null; everything: boolean },
   opts: { canPretenancy: boolean }
@@ -101,7 +105,7 @@ export async function propolyOnlyLets(
   let mine = deals;
   if (!scope.everything && scope.rexUserId) {
     const me = await whoIsRexUser(scope.rexUserId);
-    mine = deals.filter((d) => me.emails.has(norm(d.managerEmail)) || me.names.has(norm(d.managerName)));
+    mine = deals.filter((d) => isOwnDeal(d, me));
     if (!mine.length) return [];
   }
 
@@ -121,8 +125,10 @@ export async function propolyOnlyLets(
       moveIn: d.app.startDate ?? null,
       received: d.app.dateReceived ?? null,
       agentName: d.managerName?.trim().replace(/\s+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) ?? null,
-      href: opts.canPretenancy ? `/pre-tenancy?deal=${encodeURIComponent(d.app.id)}` : propolyDealUrl(d.app.id),
-      external: !opts.canPretenancy,
+      /* Opened on Applications' own board, in place - never Kirstie's board
+         (James, 10 Oct 2026), and no longer out to Propoly either. */
+      href: `/applications?deal=${encodeURIComponent(d.app.id)}`,
+      external: false,
     }))
     .sort((a, b) => (b.received ?? "").localeCompare(a.received ?? ""));
 }

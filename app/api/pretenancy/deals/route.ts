@@ -4,7 +4,9 @@ import { flatbondForDeal } from "@/lib/business/flatfair-deal";
 import { withoutDuplicates } from "@/lib/business/deal-dupes";
 import { propolyDealUrl } from "@/lib/business/propoly-stages";
 import { CHECKLIST_ITEMS, recordTicks } from "@/lib/business/propoly-stages";
-import { requireCapability } from "@/lib/admin";
+import { requireCapability, whoIs } from "@/lib/admin";
+import { scopeFor } from "@/lib/scope";
+import { isOwnDeal, whoIsRexUser } from "@/lib/propoly-only-lets";
 import { getAllPropolyDeals, getPropolyMoveInForecast, propolyDealsSavedAt } from "@/lib/business/propoly-deals";
 import {
   getBusinessPhotoIndex,
@@ -148,9 +150,18 @@ export async function GET(req: NextRequest) {
      see:pretenancy, and an env-var email list is not a permission system.
      Susan no longer does — she could look into Kirstie's board and never had
      cause to; her move-in numbers are a tab on her own screen. */
-  if (!(await requireCapability(req, "see:pretenancy"))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  /* An agent's own board (James, 10 Oct 2026: Applications is each agent's
+     own version of Kirstie's board, never a look into hers). The office sees
+     every deal; anyone else, or the office asking with ?mine=1, sees only the
+     deals whose Propoly property manager is the person in scope - the same
+     own-book rule as the Applications page, view-as included. */
+  const office = Boolean(await requireCapability(req, "see:pretenancy"));
+  if (!office && !(await whoIs(req)).actor) {
+    return NextResponse.json({ error: "Sign in first." }, { status: 401 });
   }
+  const scope = await scopeFor(req);
+  const mineOnly = !office || req.nextUrl.searchParams.get("mine") === "1";
+  const wholeBook = scope.everything && (office || mineOnly);
 
   // The photo index starts HERE, alongside Propoly, not after it. It needs
   // nothing from the deals, and it is much the slower of the two — kicking it
@@ -187,7 +198,15 @@ export async function GET(req: NextRequest) {
   /* A deal started twice for the same tenant on the same home is shown once:
      the newer one. The older is listed apart, to cancel in Propoly
      (lib/business/deal-dupes, 2 Oct 2026). */
-  const { deals, duplicates } = withoutDuplicates(allDeals);
+  const unscoped = withoutDuplicates(allDeals);
+  let deals = unscoped.deals;
+  let duplicates = unscoped.duplicates;
+  if (mineOnly && !wholeBook) {
+    const me = scope.rexUserId ? await whoIsRexUser(scope.rexUserId) : null;
+    deals = me ? deals.filter((d) => isOwnDeal(d, me)) : [];
+    /* Cancelling a duplicate is Kirstie's job, in Propoly. */
+    duplicates = [];
+  }
   const overlays = await getOverlays(deals.map((d) => d.app.id));
   /* The records seven of the eight stages are read from. See deal-stage. */
   const stageSources = await loadStageSources(deals.map((d) => d.app.id));
@@ -458,6 +477,8 @@ export async function GET(req: NextRequest) {
   const savedAt = await propolyDealsSavedAt().catch(() => null);
   return NextResponse.json({
     configured: true,
+    /* Whose deals these are, for an agent's board: every agent's, or one person's own. */
+    wholeBook: !mineOnly || wholeBook,
     deals: out,
     summary,
     compliancePending,

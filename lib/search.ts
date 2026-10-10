@@ -4,6 +4,7 @@ import { bookFor } from "@/lib/listings-cache";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { getComplianceBook } from "@/lib/compliance-cache";
 import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
+import { isOwnDeal, whoIsRexUser } from "@/lib/propoly-only-lets";
 import { getApplications } from "@/lib/applications";
 import type { Lead } from "@/lib/leads-sample";
 import { peopleLike } from "@/lib/rex-people-store";
@@ -97,11 +98,16 @@ export async function searchEverything(needle: string, rexUserId: string | null)
       push({ kind: "application", title: names || "Application", sub: `application · ${a.property}`, href: `/applications?open=${encodeURIComponent(a.id)}` }, `${a.property}, ${a.locality}`);
     }
   }
+  /* An agent finds only their own lets, and opens them on their own board on
+     Applications - never Kirstie's (10 Oct 2026). The whole business (the
+     office, the owner) keeps the pre-tenancy board. */
+  const me = rexUserId ? await whoIsRexUser(rexUserId).catch(() => null) : null;
   for (const d of deals ?? []) {
     if (!cap(100)) break;
+    if (rexUserId && (!me || !isOwnDeal(d, me))) continue;
     const tenants = d.app.tenants.map((t) => t.name).join(", ");
     if (matches(needle, d.app.propertyName, tenants, ...d.app.tenants.map((t) => t.email ?? ""))) {
-      push({ kind: "deal", title: d.app.propertyName, sub: `deal · ${d.statusKey.replace(/_/g, " ")}${tenants ? ` · ${tenants}` : ""}`, href: `/pre-tenancy?deal=${encodeURIComponent(d.app.id)}` });
+      push({ kind: "deal", title: d.app.propertyName, sub: `deal · ${d.statusKey.replace(/_/g, " ")}${tenants ? ` · ${tenants}` : ""}`, href: rexUserId ? `/applications?deal=${encodeURIComponent(d.app.id)}` : `/pre-tenancy?deal=${encodeURIComponent(d.app.id)}` });
     }
   }
   for (const p of compliance?.book.properties ?? []) {

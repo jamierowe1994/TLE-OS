@@ -11,6 +11,7 @@ import GuideButton from "@/components/GuideButton";
 import PageHeader from "@/components/PageHeader";
 import PickOne from "@/components/PickOne";
 import StageTabs from "@/components/StageTabs";
+import LetsBoard from "@/components/applications/LetsBoard";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import type { Check } from "@/components/ApplicationDrawer";
 /* Off the first load, fetched while the board sits idle. */
@@ -216,6 +217,10 @@ export default function Applications() {
       .catch(() => null);
   }, []);
   const [openId, setOpenId] = useState<string | null>(null);
+  /* Each agent's own board of lets, like Kirstie's, is what Applications opens
+     on (James, 10 Oct 2026); the list is a press away. */
+  const [view, setView] = useState<"board" | "list">("board");
+  const [boardDeal, setBoardDeal] = useState<string | null>(null);
   /* ?open=<id>: the PLC wizard sends people back here to a named
      application, and this is what opens it. Read once, on arrival. */
   useEffect(() => {
@@ -385,6 +390,35 @@ export default function Applications() {
         }
       />
 
+      <div className="mt-2 mb-4 flex items-center gap-1.5">
+        {(["board", "list"] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setView(v)}
+            className={`rounded-full border px-3.5 py-1.5 text-[13px] transition ${view === v ? "border-ink bg-ink text-white" : "border-line bg-white text-ink hover:border-accent hover:bg-accent-soft"}`}
+          >
+            {v === "board" ? "Board" : "List"}
+          </button>
+        ))}
+      </div>
+
+      {view === "board" && (
+        <LetsBoard
+          everything={Boolean(scope?.everything)}
+          matchApplication={(d) => {
+            const lid = d.app.listingId ? Number(d.app.listingId) : null;
+            const name = d.app.propertyName.trim().toLowerCase();
+            const hit = (apps ?? []).find((a) => isLet(a) && ((lid != null && a.listingId === lid) || a.property.trim().toLowerCase() === name));
+            return hit?.id ?? null;
+          }}
+          onOpenApplication={setOpenId}
+          openDeal={boardDeal}
+          onDealClosed={() => setBoardDeal(null)}
+        />
+      )}
+
+      {view === "list" && (<>
       {/* ── The pipeline, and the filter for it. Same shape as Market
              Appraisals and Listings - see components/StageTabs. It used to be
              four numbers that looked clickable and were not. ── */}
@@ -547,10 +581,11 @@ export default function Applications() {
               <ul className="mt-2.5 divide-y divide-line/40">
                 {propolyMine.map((p) => (
                   <li key={p.id}>
-                    <Link
-                      href={p.href}
-                      {...(p.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-                      className="flex items-center gap-3 py-2.5 transition-colors hover:bg-page/60"
+                    {/* Opens on the board, in place (10 Oct 2026). */}
+                    <button
+                      type="button"
+                      onClick={() => { setBoardDeal(p.id); setView("board"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                      className="flex w-full items-center gap-3 py-2.5 text-left transition-colors hover:bg-page/60"
                     >
                       <span className="min-w-0 flex-1">
                         <span className="hand block truncate text-[13.5px]">{p.address}</span>
@@ -563,8 +598,8 @@ export default function Applications() {
                       </span>
                       {p.offer != null && <span className="figures whitespace-nowrap text-[13px]">{gbp(p.offer)} pcm</span>}
                       <span className="hidden whitespace-nowrap rounded-full border border-line/60 px-2 py-0.5 text-[10.5px] text-muted sm:inline-block">Propoly</span>
-                      <span aria-hidden className="text-[13px] text-muted/70">{p.external ? "↗" : "›"}</span>
-                    </Link>
+                      <span aria-hidden className="text-[13px] text-muted/70">›</span>
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -675,6 +710,7 @@ export default function Applications() {
         </section>
 
       </div>
+      </>)}
 
       {open && (
         <ApplicationDrawer
