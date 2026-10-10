@@ -4,7 +4,8 @@ import { switchOn } from "@/lib/switches";
 import { readViewing, type Viewing } from "@/lib/rex-viewings";
 import { sendSms, smsConfigured, smsNumber, smsParts } from "@/lib/sms";
 import { firstName, london, userByName } from "@/lib/tenant-email-send";
-import { OFFICE_PHONE, phoneForEmail } from "@/lib/agent-phone";
+import { OFFICE_PHONE, agentPhone } from "@/lib/agent-phone";
+import { allAgents } from "@/lib/rex-agents";
 
 /**
  * The viewing reminder text (10 Oct 2026).
@@ -133,13 +134,25 @@ async function done(key: string): Promise<boolean> {
   return (await q<{ key: string }>(`SELECT key FROM os_sms_log WHERE key = $1`, [key])).length > 0;
 }
 
-/** Everything a text needs, worked out from a fresh read of the viewing. */
+/**
+ * The phone a viewer is told to ring: the agent's own, from their OS profile,
+ * else the mobile REX holds for them (most agents have one there and not on
+ * their profile - 10 Oct 2026), else the office line. REX's diary names the
+ * agent, so REX's user list is matched by name when the OS has no account.
+ */
 async function agentFor(name: string | null, cache: Map<string, string>): Promise<string> {
   const n = (name ?? "").trim();
   if (!n) return OFFICE_PHONE;
   if (!cache.has(n)) {
     const user = await userByName(n).catch(() => null);
-    cache.set(n, await phoneForEmail(user?.id ?? null));
+    const own = user ? await agentPhone(user.id).catch(() => "") : "";
+    let rex = "";
+    if (!own) {
+      const agents = await allAgents().catch(() => []);
+      const hit = agents.find((a) => (user && a.email && a.email.toLowerCase() === user.email.toLowerCase()) || a.name.trim().toLowerCase() === n.toLowerCase());
+      rex = hit?.phone ?? "";
+    }
+    cache.set(n, own || rex || OFFICE_PHONE);
   }
   return cache.get(n)!;
 }
