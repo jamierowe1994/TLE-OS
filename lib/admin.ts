@@ -1,4 +1,5 @@
 import "server-only";
+import { startRevokedSync } from "@/lib/session-revoke";
 import type { NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById, type OsUser } from "@/lib/users";
@@ -76,6 +77,7 @@ export function isStandIn(user: OsUser | null | undefined): boolean {
 }
 
 export async function whoIs(req: NextRequest): Promise<Who> {
+  startRevokedSync();
   const actorId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
   const actor = actorId ? await findUserById(actorId) : null;
   if (!actor) return { actor: null, subject: null, viewingAs: false };

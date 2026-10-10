@@ -169,6 +169,10 @@ export function verifySessionToken(token: string | undefined): string | null {
   const b = Buffer.from(expected);
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
   if (Number(exp) < Date.now()) return null;
+  /* Signed out (Rig run 2, P-009): the set lib/session-revoke keeps in this
+     process, refreshed from the database every 30 seconds. Read off
+     globalThis so this file stays free of the database. */
+  if ((globalThis as { __osRevokedSessions?: Set<string> }).__osRevokedSessions?.has(sig)) return null;
   return userId;
 }
 

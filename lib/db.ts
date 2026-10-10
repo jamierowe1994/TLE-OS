@@ -105,6 +105,17 @@ CREATE INDEX IF NOT EXISTS os_email_verifications_email ON os_email_verification
 -- opens. Append-only by convention: nothing in the product updates or deletes
 -- a row, because the value of an audit trail is entirely in not being editable
 -- by the thing it audits.
+-- Staff sessions ended by signing out (Rig run 2, P-009, 10 Oct 2026). A
+-- session token is stateless, so signing out only cleared the cookie and a
+-- copied token kept working for its 30 days. Keyed by the token's signature,
+-- kept until the token would have expired anyway. See lib/session-revoke.
+CREATE TABLE IF NOT EXISTS os_session_revoked (
+  sig            TEXT PRIMARY KEY,
+  user_id        TEXT NOT NULL DEFAULT '',
+  expires_at     TIMESTAMPTZ NOT NULL,
+  revoked_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS os_audit (
   id             TEXT PRIMARY KEY,
   -- sign_in | sign_in_failed | password_reset | view_as_start | view_as_end

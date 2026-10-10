@@ -1,4 +1,5 @@
 import { warmSchema } from "@/lib/db";
+import { startRevokedSync } from "@/lib/session-revoke";
 
 /**
  * Capped, and never thrown: a database that is slow or down at boot must not
@@ -10,4 +11,6 @@ export async function warmAtBoot(): Promise<void> {
   await Promise.race([warmSchema().then(() => true), new Promise<false>((resolve) => setTimeout(() => resolve(false), 20_000))])
     .then((ready) => console.log(ready ? `[boot] schema ready in ${Date.now() - started}ms` : "[boot] schema still building after 20s, starting anyway"))
     .catch((e) => console.warn("[boot] schema warm failed, the first query will retry:", e instanceof Error ? e.message : e));
+  /* Signed-out sessions, held in memory for lib/auth (lib/session-revoke). */
+  startRevokedSync();
 }
