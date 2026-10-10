@@ -264,7 +264,11 @@ function stageLabel(key: string): string {
   return PORTAL_STAGE_BY_KEY[key]?.label ?? key.replace(/_/g, " ");
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+/* London's date, not UTC's (Rig run 2, P-017): between midnight and 1am in
+   summer UTC is still yesterday, so a deal moving in today read as overdue an
+   hour early and the day's tasks were yesterday's. */
+const londonDay = (at: Date) => at.toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+const today = () => londonDay(new Date());
 
 function isOverdue(d: BoardDeal): boolean {
   return (
@@ -619,7 +623,7 @@ function Board({ user }: { user: UserProfile }) {
   // and filtered-out deals never appear — the dock must agree with the board.
   const upcomingMoveIns = useMemo(() => {
     const from = today();
-    const to = new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10);
+    const to = londonDay(new Date(Date.now() + 14 * 86_400_000));
     return base
       .filter((d) => d.statusKey !== "cancelled")
       .filter((d) => d.app.startDate != null && d.app.startDate >= from && d.app.startDate <= to)
@@ -2487,7 +2491,7 @@ function EmailBubble({ e }: { e: DealEmail }) {
 
 /** "Add to calendar" — a one-event ICS file the browser downloads. */
 function downloadIcs(task: DealTask) {
-  const day = (task.dueDate ?? new Date().toISOString().slice(0, 10)).replace(/-/g, "");
+  const day = (task.dueDate ?? today()).replace(/-/g, "");
   const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15) + "Z";
   const esc = (s: string) => s.replace(/([,;\\])/g, "\\$1");
   const ics = [
