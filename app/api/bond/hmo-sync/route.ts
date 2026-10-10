@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { machineReadAllowed } from "@/lib/machine-read";
 import { timingSafeEqual } from "node:crypto";
 import { hasDb } from "@/lib/db";
 import { HMO_REGISTERS, hmoSyncStatus, matchHmoLicences, syncHmoRegister } from "@/lib/hmo";
@@ -24,7 +25,9 @@ function cronAuthorised(req: NextRequest): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  /* Status is for the cron key or somebody signed in (lib/machine-read, P-006). */
+  if (!(await machineReadAllowed(req))) return NextResponse.json({ ok: false, error: "Not authorised." }, { status: 401 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "no database" }, { status: 503 });
   return NextResponse.json({ ok: true, ...(await hmoSyncStatus()) });
 }
