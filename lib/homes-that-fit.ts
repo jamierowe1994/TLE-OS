@@ -89,7 +89,7 @@ export async function sendHomesThatFit(p: { me: OsUser; name: string; to: string
     name: p.name,
     homes: p.homes,
     agentName: p.me.name || "The Letting Experts",
-    link: `${p.origin}/tenant/welcome`,
+    link: `${p.origin}/tenant/sign-in`,
   });
   const r = await sendAsAgent({ me: p.me, to, toName: p.name, subject, html });
   if (r.sent) {

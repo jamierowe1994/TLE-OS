@@ -5,6 +5,7 @@ import { switchOn } from "@/lib/switches";
 import { findUserByEmail, findUserById, type OsUser } from "@/lib/users";
 import { renderTleEmailLive } from "@/lib/email/tle-emails";
 import { SITE } from "@/lib/email/tle-documents";
+import { phoneForEmail } from "@/lib/agent-phone";
 import { getApplications } from "@/lib/applications";
 import { createUpdate, type UpdateRecipient } from "@/lib/customer-updates";
 import { putAcceptedWithAgent } from "@/lib/handover";
@@ -157,7 +158,7 @@ export async function enquiryReplies(opts: { dry?: boolean } = {}): Promise<Out>
         moveInList: costs.list,
         feesLine: costs.feesLine,
         agentName: agent?.name || agentName || "The Letting Experts",
-        link: `${SITE}/tenant/welcome`,
+        link: `${SITE}/tenant/sign-in`,
       }),
     });
   }
@@ -181,8 +182,12 @@ export async function sendAddedWelcome(p: { contactId: string; name: string; ema
     vars: async (live) => ({
       firstName: firstName(p.name),
       agentName: p.by.name || "The Letting Experts",
+      /* Was never passed (10 Oct 2026), so the email printed "{{agentPhone}}"
+         under the agent's name. It had not gone to anyone: Automatic tenant
+         emails has been off. */
+      agentPhone: await phoneForEmail(p.by.id),
       onNowLine: book.length ? `We have ${book.length} homes on with us right now.` : "",
-      link: `${SITE}/tenant/welcome`,
+      link: `${SITE}/tenant/sign-in`,
     }),
   });
   return out[0] ?? null;
@@ -439,7 +444,7 @@ export async function matchesAgain(dry: Dry, out: Out) {
         firstName: firstName(name),
         homesList: homesListHtml(homes),
         agentName: agent?.name || "The Letting Experts",
-        link: `${SITE}/tenant/welcome`,
+        link: `${SITE}/tenant/sign-in`,
       }),
     });
   }

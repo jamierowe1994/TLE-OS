@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
       name: to[0]?.name ?? "",
       homes: [homeFor(home)],
       agentName: actor.name || "The Letting Experts",
-      link: `${publicOrigin(req)}/tenant/welcome`,
+      link: `${publicOrigin(req)}/tenant/sign-in`,
     });
     return NextResponse.json({ ok: true, subject, html });
   }

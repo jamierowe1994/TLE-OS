@@ -154,6 +154,23 @@ export default function NewLeadPanel({
   /** How many of the picked homes landed on their list, or "failed". */
   const [listSaved, setListSaved] = useState<number | "failed" | null>(null);
   const [emailPreview, setEmailPreview] = useState(false);
+  /* The welcome as it really goes, fetched when the preview opens. */
+  const [welcomePreview, setWelcomePreview] = useState<{ subject: string; html: string } | { error: string } | null>(null);
+  useEffect(() => {
+    if (!emailPreview) return;
+    let alive = true;
+    setWelcomePreview(null);
+    fetch(`/api/contacts/welcome-preview?name=${encodeURIComponent(d.name ?? "")}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; subject?: string; html?: string; error?: string }) => {
+        if (!alive) return;
+        setWelcomePreview(j.ok && j.html ? { subject: j.subject ?? "", html: j.html } : { error: j.error ?? "We couldn't draw the email just now." });
+      })
+      .catch(() => alive && setWelcomePreview({ error: "We couldn't draw the email just now." }));
+    return () => {
+      alive = false;
+    };
+  }, [emailPreview, d.name]);
   /** REX's own id for the contact we just pushed, so "Open in REX" can go somewhere. */
   const [rexId, setRexId] = useState<string | null>(null);
   /** Our own id for the row we just wrote, so the record can be opened. */
@@ -607,7 +624,7 @@ export default function NewLeadPanel({
                   </p>
                   <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
                     {welcome?.state === "sent"
-                      ? `${d.name.split(" ")[0] || "They"} has been sent Let's Find You a Home, with a link to their own Letting Experts account.`
+                      ? `${d.name.split(" ")[0] || "They"} has been sent Let's find you a home, asking for their budget, area, moving date and who is moving in.`
                       : welcome?.state === "would"
                         ? "Automatic tenant emails are switched off, so it was not sent. It goes by itself once they are on; until then send one from Outlook if they need it now."
                         : welcome?.detail
@@ -622,14 +639,6 @@ export default function NewLeadPanel({
                     >
                       See the email they&apos;ll get
                     </button>
-                    <a
-                      href="/tenant/welcome"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-full border border-line/80 px-4 py-2 text-[11.5px] font-semibold text-muted transition-colors hover:border-ink hover:text-ink"
-                    >
-                      Preview their portal →
-                    </a>
                   </div>
                 </div>
               )}
@@ -1326,7 +1335,7 @@ export default function NewLeadPanel({
               <div>
                 <h2 className="text-[17px] leading-tight">The email they receive</h2>
                 <p className="mt-0.5 text-[11.5px] text-muted">
-                  To: {d.email || "their email"} · From: hello@thelettingexperts.co.uk
+                  To: {d.email || "their email"} · From: your own mailbox, or the Letting Experts sender if yours isn't connected
                 </p>
               </div>
               <button
@@ -1338,53 +1347,28 @@ export default function NewLeadPanel({
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-6">
-              {/* Rendered in the CUSTOMER brand - brown, plain type - because
-                  that is what actually lands in their inbox. */}
-              <div className="overflow-hidden rounded-xl border border-line/60 bg-white text-[#16181d]">
-                <div className="px-6 pt-6">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-[#56423e] text-[12px] font-extrabold text-white">
-                    TLE
-                  </span>
-                  <p className="mt-4 text-[15px] font-bold">
-                    Welcome, {d.name.split(" ")[0] || "there"} — your account with The Letting Experts
-                  </p>
-                  <div className="mt-3 space-y-2.5 text-[12.5px] leading-relaxed text-black/70">
-                    <p>
-                      We&apos;ve registered you with The Letting Experts, which means we
-                      now hold your name and contact details so we can help you find a
-                      home. We look after them carefully, never sell them, and you can
-                      see, correct or delete them at any time — the details are at the
-                      foot of this email.
-                    </p>
-                    <p>
-                      Your account is ready. Set a password and you can see every home
-                      we have, your viewings, and manage everything in one place:
-                    </p>
-                  </div>
-                  <a
-                    href="/tenant/welcome"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-4 inline-block rounded-lg bg-[#56423e] px-6 py-3 text-[13px] font-bold text-white"
-                  >
-                    Set up my account
-                  </a>
-                  <p className="mt-3 text-[10.5px] text-black/40">
-                    This link is just for you and expires in 7 days.
-                  </p>
-                </div>
-                <div className="mt-5 border-t border-black/10 bg-[#fafafa] px-6 py-4 text-[10px] leading-relaxed text-black/45">
-                  Your data: we hold your name, contact details and search preferences to
-                  provide our lettings service (legitimate interest / contract). We share
-                  them only where a tenancy requires it. Ask for a copy, correction or
-                  deletion any time: hello@thelettingexperts.co.uk. Full policy:
-                  thelettingexperts.co.uk/privacy.
-                </div>
-              </div>
-              <p className="mt-3 text-[10.5px] text-muted">
-                Wireframe — the send goes live with the email layer; the magic-link
-                button already opens the real portal flow.
-              </p>
+              {/* The real email, drawn by the same renderer as the send (10 Oct
+                  2026, Rig run 2, P-012). This was a hand-built wireframe of
+                  an account email that never existed - "Set up my account"
+                  onto a mock page - while the one that goes asks them to reply. */}
+              {welcomePreview === null ? (
+                <p className="flex items-center gap-2 py-10 text-[12px] text-muted">
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-line border-t-ink" />
+                  Drawing the email…
+                </p>
+              ) : "error" in welcomePreview ? (
+                <p className="py-10 text-[12px] text-accent-dark">{welcomePreview.error}</p>
+              ) : (
+                <>
+                  <p className="mb-2 text-[12px] font-semibold">{welcomePreview.subject}</p>
+                  <iframe
+                    title="The welcome email"
+                    srcDoc={welcomePreview.html}
+                    sandbox=""
+                    className="h-[60vh] w-full rounded-xl border border-line/60 bg-white"
+                  />
+                </>
+              )}
             </div>
           </div>
         </div>

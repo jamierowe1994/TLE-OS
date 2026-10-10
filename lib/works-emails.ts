@@ -1,4 +1,5 @@
 import "server-only";
+import { agentPhone, OFFICE_PHONE } from "@/lib/agent-phone";
 import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { sendEmail, ResendBlocked } from "@/lib/resend";
@@ -67,17 +68,7 @@ async function keep(orderId: string, role: SendOutcome["to"], address: string, s
   return { to: role, sent: true, address, via: "the rehearsal" };
 }
 
-const OFFICE_PHONE = "0161 883 2525";
-
 const ORIGIN = (process.env.OS_ORIGIN ?? "https://tle-os.co.uk").replace(/\/+$/, "");
-
-const PROFILE_KEY = "tle-profile-v1";
-
-async function agentPhone(userId: string): Promise<string> {
-  if (!hasDb()) return "";
-  const rows = await q<{ value: { phone?: string } | null }>(`SELECT value FROM os_user_prefs WHERE user_id = $1 AND key = $2`, [userId, PROFILE_KEY]).catch(() => []);
-  return (rows[0]?.value?.phone ?? "").trim();
-}
 
 async function contractorOf(id: string | null): Promise<{ name: string; contact: string; email: string; phone: string } | null> {
   if (!hasDb() || !id) return null;

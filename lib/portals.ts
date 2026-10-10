@@ -86,11 +86,10 @@ export const PORTAL_FOLDERS: PortalFolder[] = [
       },
       {
         kind: "open",
-        id: "tenant-welcome",
-        name: "Setting up their account",
-        blurb: "Where the link in that email lands them: choose a password, and the GDPR notice.",
-        href: "/tenant/welcome?from=admin",
-        caveat: SAMPLE_TENANT,
+        id: "tenant-sign-in",
+        name: "Their sign-in",
+        blurb: "The tenant's front door: email and password, or a one-time link. The old set-up page it replaced was a mock that made no account.",
+        href: "/tenant/sign-in",
       },
       {
         kind: "open",

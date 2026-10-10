@@ -177,7 +177,7 @@ const COMPLIANCE_SAMPLE: Record<string, string> = {
   /* The two doorway emails carry a link. It has to be a real destination in
      the preview: a button reading {{link}} is the one part of a template a
      reviewer cannot check by eye, and a dead one is only found by a customer. */
-  link: `${SITE}/tenant/welcome`,
+  link: `${SITE}/tenant/sign-in`,
   rows: [
     "<strong>8 Recreation Terrace</strong> — Gas safety, expires in 12 days",
     "<strong>8 Lower Station Road</strong> — EICR, expires in 26 days",
@@ -1043,7 +1043,7 @@ The Letting Experts`
         withSample(o ?? TENANT_PASSPORT_REQUEST, {
           firstName: "Sophie",
           agentName: "Sam Whitaker",
-          link: `${SITE}/tenant/welcome`,
+          link: `${SITE}/tenant/sign-in`,
         })
       )(),
   },
@@ -1092,7 +1092,7 @@ The Letting Experts`
           whenPretty: "Thursday 4 September at 5:30pm",
           agentName: "Sam Whitaker",
           meetLine: "Sam Whitaker will meet you there.",
-          link: `${SITE}/tenant/welcome`,
+          link: `${SITE}/tenant/sign-in`,
         })
       )(),
   },
@@ -1365,7 +1365,7 @@ const TENANT_SAMPLE: Record<string, string> = {
   agentPhone: "0115 123 4567",
   agentEmail: "sam@thelettingexperts.co.uk",
   link: `${SITE}/tenant/next`,
-  passportLink: `${SITE}/tenant/welcome`,
+  passportLink: `${SITE}/tenant/sign-in`,
   whenPretty: "Thursday 4 September at 5:30pm",
   timePretty: "5:30pm",
   viewedOn: "this afternoon",
@@ -1421,7 +1421,7 @@ TLE_EMAILS.push(
     "The person who enquired",
     "Straight away: is it still there, what the rent is, the three things it costs to move in, and that the agent will be in touch to check it suits them before any viewing is booked. The move-in costs are one list the send path builds from the rent.",
     TENANT_ENQUIRY_REPLY,
-    { link: `${SITE}/tenant/welcome`, feesLine: "No admin fees and no referencing fees. The holding fee goes towards your first month's rent." }
+    { link: `${SITE}/tenant/sign-in`, feesLine: "No admin fees and no referencing fees. The holding fee goes towards your first month's rent." }
   ),
   tenantEntry(
     "tenant-added-welcome",
@@ -1431,7 +1431,7 @@ TLE_EMAILS.push(
     "The tenant who was added",
     "The search, not a property: what we need to know, to tell us by reply, and a promise to send what fits the same day.",
     TENANT_ADDED_WELCOME,
-    { link: `${SITE}/tenant/welcome` }
+    { link: `${SITE}/tenant/sign-in` }
   ),
   tenantEntry(
     "tenant-passport-thanks",
@@ -1451,7 +1451,7 @@ TLE_EMAILS.push(
     "The tenant who was invited",
     "Short on purpose: it is still waiting, ten minutes, stop and come back, nothing shared until they apply.",
     TENANT_PASSPORT_NUDGE_1,
-    { link: `${SITE}/tenant/welcome` }
+    { link: `${SITE}/tenant/sign-in` }
   ),
   tenantEntry(
     "tenant-passport-nudge-2",
@@ -1461,7 +1461,7 @@ TLE_EMAILS.push(
     "The tenant who was invited",
     "Not a louder reminder but the reason: the same details every time, and ready applications go first. Ends with a way out if they have found somewhere.",
     TENANT_PASSPORT_NUDGE_2,
-    { link: `${SITE}/tenant/welcome` }
+    { link: `${SITE}/tenant/sign-in` }
   ),
   tenantEntry(
     "tenant-matches",
@@ -1473,7 +1473,7 @@ TLE_EMAILS.push(
     TENANT_MATCHES,
     {
       introLine: "Here are the homes on with us right now that I think fit what you're after.",
-      link: `${SITE}/tenant/welcome`,
+      link: `${SITE}/tenant/sign-in`,
       /* The cards, drawn by the same function the send uses. */
       homesList: homeCardsHtml(
         [
@@ -1493,7 +1493,7 @@ TLE_EMAILS.push(
     "The tenant",
     "Asks whether the brief has changed, shows what has come on since, and lets them stop the emails by saying they have found somewhere.",
     TENANT_MATCHES_AGAIN,
-    { link: `${SITE}/tenant/welcome` }
+    { link: `${SITE}/tenant/sign-in` }
   ),
   tenantEntry(
     "tenant-home-alert",
