@@ -1055,7 +1055,7 @@ export interface PropolyMoveInForecast {
   /** Active deals with no move-in date set yet. */
   forecastUndated: number;
   pipelineTotal: number;
-  /** Completed per calendar month, current year (fuels quarter sums). */
+  /** Completed per calendar month, every year, keyed YYYY-MM (fuels quarter sums, incl. last year's Q4 in January). */
   completedByMonth: Record<string, number>;
   ytd: number;
   prevYtd: number; // same window last year
@@ -1069,23 +1069,29 @@ export async function getPropolyMoveInForecast(): Promise<PropolyMoveInForecast 
     const [completes, deals] = await Promise.all([ensureCompletes(), fetchAllDeals()]);
     if (!completes && !deals) return null;
 
-    const today = new Date().toISOString().slice(0, 10);
+    /* London's date, not UTC's: between midnight and 1am BST on the 1st the
+       UTC date is still last month. And last month from the year and month
+       NUMBERS (Rig P-019): setUTCMonth(-1) on 31 Oct asks for 31 Sep, which
+       rolls over to 1 Oct, so "same point last month" was October again and
+       the trend arrow sat flat on every 29th-31st that overflowed. */
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
     const year = today.slice(0, 4);
     const month = today.slice(0, 7);
     const day = today.slice(8, 10);
-    const prevMonthDate = new Date();
-    prevMonthDate.setUTCMonth(prevMonthDate.getUTCMonth() - 1);
-    const prevMonth = prevMonthDate.toISOString().slice(0, 7);
+    const y = Number(year);
+    const mo = Number(today.slice(5, 7));
+    const prevMonth = mo === 1 ? `${y - 1}-12` : `${year}-${String(mo - 1).padStart(2, "0")}`;
 
     const completed = (completes ?? [])
       .map((c) => c.date)
       .filter((d): d is string => d != null);
+    /* Every year, not just this one: in January-March the Move-ins tab's
+       "last quarter" is last year's Q4, and it read 0 when only this year's
+       months were kept. */
     const completedByMonth: Record<string, number> = {};
     for (const d of completed) {
-      if (d.startsWith(year)) {
-        const m = d.slice(0, 7);
-        completedByMonth[m] = (completedByMonth[m] ?? 0) + 1;
-      }
+      const m = d.slice(0, 7);
+      completedByMonth[m] = (completedByMonth[m] ?? 0) + 1;
     }
 
     // Forecast: active deals by move-in month, this month → +3.

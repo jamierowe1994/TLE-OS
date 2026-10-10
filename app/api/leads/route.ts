@@ -1,7 +1,7 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { fetchLeadBook, type LeadBook } from "@/lib/rex-leads";
 import { leadScope } from "@/lib/scope";
-import { ledgerBoard, ledgerStats, readNewValuations, recordLeads, salesAmong } from "@/lib/lead-ledger";
+import { ledgerBoard, ledgerSourceMonths, ledgerStats, readNewValuations, recordLeads, salesAmong, type SourceMonthRow } from "@/lib/lead-ledger";
 import { hiddenLeadIds } from "@/lib/hidden-leads";
 import { ago } from "@/lib/rex-leads";
 import { hasDb, q } from "@/lib/db";
@@ -229,10 +229,30 @@ export async function GET(req: NextRequest) {
        list, whose snippets never say "sales" (lib/lead-ledger salesAmong).
        Asked of these ids only, and kept off hiddenIds: the page only needs
        the hand-removed ones (its search and contacts never carry a sale). */
-    const sales = await salesAmong(b.leads.map((l) => l.id)).catch(() => new Set<string>());
+    const [sales, filed] = await Promise.all([
+      salesAmong(b.leads.map((l) => l.id)).catch(() => new Set<string>()),
+      ledgerSourceMonths(scope.rexUserId, [...hidden]),
+    ]);
     const ours = mine.filter((l) => !l.contactId || !rexContacts.has(l.contactId));
     const leads = [...ours, ...(b.leads as typeof ours)].filter((l) => l && l.id && !hidden.has(l.id) && !sales.has(l.id));
-    return { ...b, leads, hiddenIds: [...hidden] };
+    /* This month and last, counted from everything on file rather than the
+       500 the board carries (Rig P-010), plus contacts typed in by hand,
+       which the board shows but the ledger never holds. */
+    let sourceMonths: SourceMonthRow[] | null = filed;
+    if (filed) {
+      const london = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "Europe/London" }).slice(0, 7);
+      const now = london(new Date());
+      const [y, m] = now.split("-").map(Number);
+      const last = m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
+      sourceMonths = [...filed];
+      for (const l of ours) {
+        if (hidden.has(l.id) || !l.receivedAt) continue;
+        const month = london(new Date(l.receivedAt));
+        if (month !== now && month !== last) continue;
+        sourceMonths.push({ month, side: l.enquiry === "Letting" ? "tenant" : "landlord", source: l.source ?? "", n: 1 });
+      }
+    }
+    return { ...b, leads, hiddenIds: [...hidden], sourceMonths };
   };
 
   const age = held ? Date.now() - held.at : Infinity;

@@ -17,7 +17,8 @@ import { DiaryOwnerTag, FlowTag, Pill } from "@/components/Wire";
 import { minutesOf, feedbackLabel, type Appt } from "@/lib/diary";
 import { useMyDiary } from "@/lib/diary-store";
 import { dueWithin, CERT_META, type CompProperty } from "@/lib/compliance";
-import { leadSide, type Lead } from "@/lib/leads-sample";
+import type { Lead } from "@/lib/leads-sample";
+import type { SourceMonthRow } from "@/lib/lead-ledger"; // type-only - erased at build
 import type { Notice } from "@/lib/notices";
 import type { Application } from "@/lib/applications";
 import type { OsListing } from "@/lib/rex-listings";
@@ -866,14 +867,61 @@ function PipelineWidget({ w, h }: { w: number; h: number }) {
          per-agent viewings count cannot be produced, and a business-wide one
          sitting beside an agent's own everything-else is the most misleading
          number that could be on this screen. */
-      const { figures, unlinked, loading } = useMyFigures();
+      const { figures, unlinked, loading: figuresLoading } = useMyFigures();
+      /* THE SAME SOURCES AS THE TILES ABOVE (Rig P-012, 10 Oct 2026). Each
+         stage asked REX its own question, so the board disagreed with itself:
+         On market 291 here (every "current" listing, drafts and archived
+         drafts too) against 109 in the On market tile, Applications 701 here
+         (every application ever) against 55 open offers. Now each stage reads
+         the shared answer its own tile and screen read, so they cannot
+         differ. Appraisals stays on my/figures: no tile above counts them. */
+      const leadsFeed = useShared<{ rows: SourceMonthRow[] | null }>(
+        leadsSlot, "/api/leads",
+        (j) => (j.ok && Array.isArray(j.leads) ? { rows: Array.isArray(j.sourceMonths) ? (j.sourceMonths as SourceMonthRow[]) : null } : null)
+      );
+      const listingsFeed = useShared<{ listings: OsListing[] }>(
+        listingsSlot, "/api/listings?tests=0",
+        (j) => (j.ok && j.live && Array.isArray(j.listings) ? { listings: j.listings as OsListing[] } : null)
+      );
+      const offersFeed = useShared<{ applications: Application[] }>(
+        applicationsSlot, "/api/applications?limit=300&tests=0",
+        (j) => (Array.isArray(j.applications) && !j.error ? { applications: j.applications as Application[] } : null)
+      );
+      const managedFeed = useManagedBook();
+      const thisMonth = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" }).slice(0, 7);
+      const leadRows = leadsFeed.data?.rows;
       const STAGES = [
-        { label: "Leads this month", value: figures?.leads ?? null, href: "/leads" },
-        { label: "Appraisals this month", value: figures?.appraisals ?? null, href: "/market-appraisals" },
-        { label: "On market", value: figures?.onMarket ?? null, href: "/listings" },
-        { label: "Applications", value: figures?.applications ?? null, href: "/applications" },
-        { label: "Managed", value: figures?.managed ?? null, href: "/portfolio" },
+        {
+          label: "Leads this month",
+          short: "Leads",
+          value: leadRows ? leadRows.filter((r) => r.month === thisMonth).reduce((t, r) => t + r.n, 0) : null,
+          href: "/leads",
+          loading: leadsFeed.loading,
+        },
+        { label: "Appraisals this month", short: "Appraisals", value: figures?.appraisals ?? null, href: "/market-appraisals", loading: figuresLoading },
+        {
+          label: "On market",
+          short: "On market",
+          value: listingsFeed.data ? onMarketOf(listingsFeed.data.listings).length : null,
+          href: "/listings",
+          loading: listingsFeed.loading,
+        },
+        {
+          label: "Offers open",
+          short: "Offers",
+          value: offersFeed.data ? openOffersOf(offersFeed.data.applications).length : null,
+          href: "/listings?stage=offers",
+          loading: offersFeed.loading,
+        },
+        {
+          label: "Managed",
+          short: "Managed",
+          value: managedFeed.book ? managedFeed.book.counts.properties : null,
+          href: "/portfolio",
+          loading: managedFeed.loading,
+        },
       ].slice(0, w >= 4 ? 5 : w >= 2 ? 4 : 2);
+      const narrow = w === 2;
       return (
         <>
           <div className="mb-3 flex items-center justify-between gap-3">
@@ -886,22 +934,29 @@ function PipelineWidget({ w, h }: { w: number; h: number }) {
               else&apos;s numbers. Ask James to link your account.
             </p>
           )}
-          {/* Four columns needs ~65px each inside a phone-width tile, and the
-              lead count is five digits - "90,330" wants 79px at 24px and came
-              out clipped. Two wide now means two columns, which wraps four
-              stages into 2x2 and gives every figure room to be read. */}
-          <div className={`grid gap-4 ${w >= 4 ? "grid-cols-7" : w >= 3 ? "grid-cols-4" : "grid-cols-2"}`}>
+          {/* Two wide (every phone, and the small size on a desktop) is ONE row
+              of four (Rig P-011, 10 Oct 2026). It was 2x2, which a one-high
+              tile has no room for: the second row was sliced through on a
+              phone. The figures are month counts and stocks now, four digits
+              at most, so 22px fits a quarter of a 390px screen; the labels go
+              short, with the month said once in a line of its own. */}
+          {narrow && (
+            <p className="-mt-2 mb-2 text-[10px] text-muted">Leads and appraisals this month; the rest as of now.</p>
+          )}
+          {/* Narrow, the columns take their own width rather than a quarter
+              each, so "Leads" lends "Appraisals" the room it needs at 360px. */}
+          <div className={narrow ? "flex justify-between gap-3" : `grid gap-4 ${w >= 4 ? "grid-cols-7" : w >= 3 ? "grid-cols-4" : "grid-cols-2"}`}>
             {STAGES.map((p, i) => {
               const inner = (
                 <>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-accent" />
-                    <span className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted">
-                      {p.label}
+                  <span className="flex items-center gap-1.5" title={p.label}>
+                    {!narrow && <span className="h-2 w-2 shrink-0 rounded-full bg-accent" />}
+                    <span className={`truncate text-[10px] font-semibold uppercase text-muted ${narrow ? "" : "tracking-wide"}`}>
+                      {narrow ? p.short : p.label}
                     </span>
                   </span>
-                  <span className="figures mt-1.5 block text-[24px] leading-none">
-                    {loading ? <span className="text-muted">·</span> : <Figure n={p.value} />}
+                  <span className={`figures mt-1.5 block leading-none ${narrow ? "text-[22px]" : "text-[24px]"}`}>
+                    {p.loading ? <span className="text-muted">·</span> : <Figure n={p.value} />}
                   </span>
                   {/* The conversion percentages were invented too, and a made-up
                       rate under a live number is worse than under a fake one —
@@ -916,11 +971,6 @@ function PipelineWidget({ w, h }: { w: number; h: number }) {
               );
             })}
           </div>
-          {h >= 2 && (
-            <p className="mt-3 border-t border-line/50 pt-2 text-[10px] text-muted">
-              Conversion figures are placeholders until the history store lands — the shape is the point.
-            </p>
-          )}
         </>
       );
 }
@@ -1017,21 +1067,24 @@ const daysSince = (iso: string | null | undefined, ms?: number | null) => {
  * used to be typed in.
  */
 function LeadSourcesWidget({ w, h }: { w: number; h: number }) {
-  const { data, loading, error } = useShared<{ leads: Lead[] }>(
+  /* The month's counts come from `sourceMonths`, everything on file, not
+     from the 500 leads the board carries: those ran out on the 10th of
+     October with 690 in (Rig P-010). Null when the ledger couldn't be read,
+     and then the tile says so rather than counting the 500. */
+  const { data, loading, error } = useShared<{ rows: SourceMonthRow[] | null }>(
     leadsSlot, "/api/leads",
-    (j) => (j.ok && Array.isArray(j.leads) ? { leads: j.leads as Lead[] } : null)
+    (j) => (j.ok && Array.isArray(j.leads) ? { rows: Array.isArray(j.sourceMonths) ? (j.sourceMonths as SourceMonthRow[]) : null } : null)
   );
   /* TENANTS OR LANDLORDS (Howard, 24 Sep 2026: "toggle this between property
      enquiries (viewings) and potential MAs"). The same split as the Leads
      menu; the chart, the count and the top source all follow it. */
   const [side, setSide] = useState<"all" | "tenant" | "landlord">("all");
-  const all = data?.leads ?? [];
-  const leads = side === "all" ? all : all.filter((l) => leadSide(l) === side);
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-  const month = leads.filter((l) => l.receivedAt && new Date(l.receivedAt).getTime() >= start);
+  const rows = (data?.rows ?? []).filter((r) => side === "all" || r.side === side);
+  const uncounted = !loading && !error && data != null && data.rows == null;
+  const thisMonth = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" }).slice(0, 7);
   const bySource = new Map<string, number>();
-  for (const l of month) bySource.set(l.source, (bySource.get(l.source) ?? 0) + 1);
+  for (const r of rows) if (r.month === thisMonth) bySource.set(r.source, (bySource.get(r.source) ?? 0) + r.n);
+  const monthTotal = [...bySource.values()].reduce((a, b) => a + b, 0);
   const top = [...bySource.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
   return (
     <>
@@ -1041,13 +1094,13 @@ function LeadSourcesWidget({ w, h }: { w: number; h: number }) {
       <Head icon="pie" label="Lead sources" />
       {h === 1 ? (
         <BigCount
-          value={loading ? "•" : error ? "—" : top ? `${Math.round((top[1] / Math.max(1, month.length)) * 100)}%` : "0"}
-          hint={loading ? "asking REX" : error ? error : top ? `${top[0]} — biggest source this month` : "no leads this month yet"}
+          value={loading ? "•" : error || uncounted ? "—" : top ? `${Math.round((top[1] / Math.max(1, monthTotal)) * 100)}%` : "0"}
+          hint={loading ? "asking REX" : error ? error : uncounted ? "couldn't count this month just now" : top ? `${top[0]} — biggest source this month` : "no leads this month yet"}
         />
       ) : loading ? (
         <p className="mt-5 text-[11.5px] text-muted">Asking REX…</p>
-      ) : error ? (
-        <p className="mt-5 text-[11.5px] text-accent-dark">{error}</p>
+      ) : error || uncounted ? (
+        <p className="mt-5 text-[11.5px] text-accent-dark">{error ?? "We couldn't count this month's leads just now. Try again in a minute."}</p>
       ) : (
         /* The tile's own height, less the head: the chart shares what is left
            and the link keeps its line at the foot, never under the edge. */
@@ -1080,7 +1133,7 @@ function LeadSourcesWidget({ w, h }: { w: number; h: number }) {
             ))}
           </div>
           <div className="min-h-0 flex-1">
-            <LeadSourceChart leads={leads} />
+            <LeadSourceChart rows={rows} />
           </div>
           <Link
             href={side === "all" ? "/leads" : `/leads?side=${side}`}
@@ -1245,6 +1298,10 @@ function LeadsTodayWidget({ w, h }: { w: number; h: number }) {
  * The slow movers are the available ones by days live, with the reason a
  * listing tends to sit - no photographs, no write-up - read off the record.
  */
+/** On the market: published on the portals, let agreed or not. Shared with
+ *  the Pipeline snapshot so the two can never count it differently. */
+const onMarketOf = (listings: OsListing[]) => listings.filter((l) => l.publicationStatus === "published");
+
 function OnMarketWidget({ w, h }: { w: number; h: number }) {
   const { data, loading, unlinked, error } = useShared<{ listings: OsListing[]; draft: number }>(
     listingsSlot, "/api/listings?tests=0",
@@ -1252,7 +1309,7 @@ function OnMarketWidget({ w, h }: { w: number; h: number }) {
       ? { listings: j.listings as OsListing[], draft: Number((j.counts as { draft?: number } | undefined)?.draft ?? 0) }
       : null)
   );
-  const live = (data?.listings ?? []).filter((l) => l.publicationStatus === "published");
+  const live = onMarketOf(data?.listings ?? []);
   const available = live.filter((l) => !l.letAgreed);
   const agreed = live.filter((l) => l.letAgreed);
   const slow = [...available].sort((a, b) => (b.daysOnMarket ?? -1) - (a.daysOnMarket ?? -1));
@@ -1309,6 +1366,12 @@ function OnMarketWidget({ w, h }: { w: number; h: number }) {
  * Reads the same route as the Applications screen, scoped the same way:
  * an owner's business, an agent's own.
  */
+/** Open offers: received, or with the landlord, on a home not since let or
+ *  withdrawn - REX leaves those on "Communicated" for ever (see closedReasons
+ *  in lib/applications). Shared with the Pipeline snapshot. */
+const openOffersOf = (apps: Application[]) =>
+  apps.filter((a) => (a.status === "received" || a.status === "communicated") && !a.closed);
+
 function ApplicationsWidget({ w, h }: { w: number; h: number }) {
   const { data, loading, unlinked, error } = useShared<{ applications: Application[] }>(
     applicationsSlot, "/api/applications?limit=300&tests=0",
@@ -1317,7 +1380,7 @@ function ApplicationsWidget({ w, h }: { w: number; h: number }) {
   const apps = data?.applications ?? [];
   /* Not the ones on a home that has since been let or withdrawn - REX leaves
      those on "Communicated" for ever (see closedReasons in lib/applications). */
-  const open = apps.filter((a) => (a.status === "received" || a.status === "communicated") && !a.closed);
+  const open = openOffersOf(apps);
   const received = open.filter((a) => a.status === "received");
   const communicated = open.filter((a) => a.status === "communicated");
   const accepted30 = apps.filter((a) => a.status === "accepted" && (daysSince(a.dateAccepted ?? a.dateReceived, a.createdAt ? a.createdAt * 1000 : null) ?? 99) <= 30);

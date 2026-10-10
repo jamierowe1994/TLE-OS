@@ -1,6 +1,7 @@
 import "server-only";
 import crypto from "crypto";
 import type { UserProfile } from "./types";
+import { currentMonth } from "./format";
 
 // Meta Marketing API client for The Lettings Expert — ported from the TEG
 // PAID ADS repo's lib/meta.ts, trimmed to a single brand (lettings).
@@ -235,7 +236,9 @@ interface CampaignSnapshot {
 // account doesn't zero out the rest (per-account try/catch, skip).
 async function getCampaignSnapshot(
   campaignIds: string[],
-  datePreset: string
+  datePreset: string,
+  /** In place of the preset: a named window, e.g. a closed month's since/until. */
+  window?: Record<string, string>
 ): Promise<CampaignSnapshot | null> {
   if (campaignIds.length === 0) return null;
   const groups = await groupCampaignsByAccount(campaignIds);
@@ -251,7 +254,7 @@ async function getCampaignSnapshot(
         const insights = (await graph(`${acc}/insights`, {
           level: "campaign",
           fields: "impressions,clicks,spend,actions",
-          date_preset: datePreset,
+          ...(window ?? { date_preset: datePreset }),
           filtering: JSON.stringify([
             { field: "campaign.id", operator: "IN", value: ids },
           ]),
@@ -440,6 +443,19 @@ export function metaPageConfigured(): boolean {
 
 /* ----------------------- business-wide leads (MTD) ----------------------- */
 
+/**
+ * Meta's window for a "YYYY-MM". The month we are in keeps Meta's own
+ * this_month preset; a closed month asks for its first to last day. It was
+ * this_month for every month until 10 Oct 2026 (Rig P-018), so picking
+ * September on Paid Leads showed October's leads under a September heading.
+ */
+function monthWindow(month?: string): Record<string, string> {
+  if (!month || month === currentMonth()) return { date_preset: "this_month" };
+  const [y, m] = month.split("-").map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return { time_range: JSON.stringify({ since: `${month}-01`, until: `${month}-${String(last).padStart(2, "0")}` }) };
+}
+
 export interface BusinessLeadsMTD {
   leads: number;
   spend: number;
@@ -456,9 +472,11 @@ export interface BusinessLeadsMTD {
  * configured, else sums the agents' tagged campaigns. null → keep snapshot.
  */
 export async function getBusinessLeadsMTD(
-  fallbackCampaignIds: string[]
+  fallbackCampaignIds: string[],
+  month?: string
 ): Promise<BusinessLeadsMTD | null> {
   if (!metaTokenSet()) return null;
+  const window = monthWindow(month);
 
   const acc = accountId();
   if (acc) {
@@ -466,7 +484,7 @@ export async function getBusinessLeadsMTD(
       const insights = (await graph(`${acc}/insights`, {
         level: "account",
         fields: "spend,actions",
-        date_preset: "this_month",
+        ...window,
       })) as { data?: Array<Record<string, unknown>> };
       let leads = 0;
       let spend = 0;
@@ -483,7 +501,7 @@ export async function getBusinessLeadsMTD(
   }
 
   if (fallbackCampaignIds.length === 0) return null;
-  const snap = await getCampaignSnapshot(fallbackCampaignIds, "this_month").catch(
+  const snap = await getCampaignSnapshot(fallbackCampaignIds, "this_month", window).catch(
     () => null
   );
   if (!snap) return null;

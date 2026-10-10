@@ -143,6 +143,40 @@ export async function ledgerBoard(rexUserId: string | null, limit = 500): Promis
   return rows.map((r) => r.payload);
 }
 
+/** One cell of the Lead sources tile: lettings leads on file in a London month, by side and source. */
+export interface SourceMonthRow {
+  month: string;
+  side: "tenant" | "landlord";
+  source: string;
+  n: number;
+}
+
+/**
+ * Lettings leads on file per month, side and source, from the first of last
+ * month (London) to now. The dashboard's Lead sources tile counts from this
+ * (Rig P-010, 10 Oct 2026): it used to count the newest 500 the board holds,
+ * and 690 had come in by the 10th, so "leads this month" stopped wherever 500
+ * reached and last month (1,505 in September) was never in reach at all.
+ * Null when it cannot be read - the tile says so rather than counting the board.
+ */
+export async function ledgerSourceMonths(rexUserId: string | null, hidden: string[] = []): Promise<SourceMonthRow[] | null> {
+  if (!hasDb()) return null;
+  const rows = await q<{ month: string; side: "tenant" | "landlord"; source: string; n: number }>(
+    `SELECT to_char(received_at AT TIME ZONE 'Europe/London', 'YYYY-MM') AS month,
+            CASE WHEN enquiry = 'Letting' THEN 'tenant' ELSE 'landlord' END AS side,
+            COALESCE(source, '') AS source,
+            COUNT(*)::int AS n
+       FROM os_leads
+      WHERE received_at >= date_trunc('month', (NOW() AT TIME ZONE 'Europe/London') - INTERVAL '1 month') AT TIME ZONE 'Europe/London'
+        AND ${NOT_SALES}
+        AND NOT (id = ANY($1::text[]))
+        ${rexUserId ? "AND assignee_id = $2" : ""}
+      GROUP BY 1, 2, 3`,
+    rexUserId ? [hidden, rexUserId] : [hidden]
+  ).catch(() => null);
+  return rows ? rows.map((r) => ({ ...r, n: Number(r.n) })) : null;
+}
+
 /**
  * Every lead on file matching what was typed, not just the newest 500 the
  * board loads (Susan, 19 Sep 2026: "if a lead is missing, you don't want to

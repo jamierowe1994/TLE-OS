@@ -107,32 +107,31 @@ const liveIdx = Number(LIVE.slice(5, 7)) - 1;
 /** Every CLOSED month of this year, newest first - the history pills. */
 const CLOSED = Array.from({ length: liveIdx }, (_, i) => `${LIVE_YEAR}-${String(i + 1).padStart(2, "0")}`).reverse();
 
-// Period order: the live month first, then closed months newest-first, then
-// the quarters that have completed, then year to date.
-const PERIOD_ORDER = [
-  LIVE_KEY,
-  ...CLOSED.map(monthKey),
-  "q2",
-  "q1",
-  "ytd",
-] as const;
-
 // Which stored months make up each period pill. Built from the closed months
 // rather than typed out, so it can't fall behind the calendar the way the
 // hardcoded list did - a quarter only appears once all three of its months
 // have actually closed.
-const quarter = (months: string[]) => (months.every((m) => CLOSED.includes(m)) ? months : null);
+//
+// Every quarter, not just Q1 and Q2 (Rig P-020, 10 Oct 2026): only those two
+// were ever built, and the pills were filtered down to the keys the July
+// capture happened to hold, so August, September and Q3 never appeared.
+const QUARTERS = [1, 2, 3, 4]
+  .map((q) => ({
+    key: `q${q}`,
+    months: [0, 1, 2].map((i) => `${LIVE_YEAR}-${String((q - 1) * 3 + i + 1).padStart(2, "0")}`),
+  }))
+  .filter((q) => q.months.every((m) => CLOSED.includes(m)))
+  .reverse();
 const PERIOD_MONTHS: Record<string, string[]> = {
   ...Object.fromEntries(CLOSED.map((m) => [monthKey(m), [m]])),
-  ...(quarter([`${LIVE_YEAR}-04`, `${LIVE_YEAR}-05`, `${LIVE_YEAR}-06`])
-    ? { q2: [`${LIVE_YEAR}-04`, `${LIVE_YEAR}-05`, `${LIVE_YEAR}-06`] }
-    : {}),
-  ...(quarter([`${LIVE_YEAR}-01`, `${LIVE_YEAR}-02`, `${LIVE_YEAR}-03`])
-    ? { q1: [`${LIVE_YEAR}-01`, `${LIVE_YEAR}-02`, `${LIVE_YEAR}-03`] }
-    : {}),
+  ...Object.fromEntries(QUARTERS.map((q) => [q.key, q.months])),
   // Closed months only - the live month is added on top where a period needs it.
   ytd: [...CLOSED].reverse(),
 };
+
+// Period order: the live month first, then closed months newest-first, then
+// the quarters that have completed newest-first, then year to date.
+const PERIOD_ORDER = [LIVE_KEY, ...CLOSED.map(monthKey), ...QUARTERS.map((q) => q.key), "ytd"];
 
 /**
  * A period with no stored figures - every tile reads "—" until the live layer
@@ -745,7 +744,7 @@ export default function Overview({ month }: { month: string }) {
    */
   const seedKey = sel.startsWith("2026-") ? SHORT_KEYS[Number(sel.slice(5, 7)) - 1] : null;
   const kpiPeriod = (seedKey ? d.periods[seedKey] : undefined) ?? emptyPeriod(sel);
-  const rampPeriod = d.periods[rampKey] ?? emptyPeriod(rampKey);
+  const rampPeriod = emptyPeriod(rampKey);
 
   // Upgrade a snapshot stat to live when the live layer carries the same
   // figure - current month (July) only; history months are final numbers.
@@ -1237,9 +1236,9 @@ export default function Overview({ month }: { month: string }) {
   // and on the live one the pill already says which month it is. Dropped
   // everywhere, so a total is a total.
   const stripMtd = (l: string) => l.replace(/\s*MTD$/, "");
-  const pillOptions = PERIOD_ORDER.filter((k) => k === LIVE_KEY || d.periods[k]).map((k) => ({
+  const pillOptions = PERIOD_ORDER.map((k) => ({
     key: k,
-    label: stripMtd(d.periods[k]?.label ?? emptyPeriod(k).label),
+    label: stripMtd(emptyPeriod(k).label),
   }));
   // Her ramp pills say "July" rather than "July MTD".
   const rampPillOptions = pillOptions.map((p) => ({
@@ -1271,7 +1270,7 @@ export default function Overview({ month }: { month: string }) {
     note,
     asOf: new Date().toISOString().slice(0, 10),
   });
-  const periodWord = rampKey === "ytd" ? "this year" : (d.periods[rampKey]?.label ?? "").replace(" MTD", "");
+  const periodWord = rampKey === "ytd" ? "this year" : `in ${stripMtd(emptyPeriod(rampKey).label)}`;
   const rampNewStarters = liveCohort
     ? rampStat(liveCohort.length, `Live from TEG Team Hub - partners launched ${periodWord} (by date_launched).`)
     : rampPeriod.ramp.newStarters;

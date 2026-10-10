@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Lead } from "@/lib/leads-sample";
+import type { SourceMonthRow } from "@/lib/lead-ledger"; // type-only - erased at build
 
 /**
  * Where the leads actually came from — the one question on this page that
@@ -65,30 +65,33 @@ const HATCH =
 /**
  * Live since 6 Sep 2026. It counted the sample book before, so the dashboard
  * said "Portals 50%" on every laptop in the business regardless of what had
- * actually come in. The leads are the same 500 the Leads screen shows,
- * handed in by the tile; this month is counted from them, and last month
- * only if the scan reaches back to the first of it - otherwise the dashed
- * rule and the deltas are left off rather than drawn against a partial
- * month. Never a stand-in number.
+ * actually come in.
+ *
+ * Counted from every lead on file since 10 Oct 2026 (Rig P-010), as rows of
+ * month x source x count from /api/leads. It counted the 500 leads the board
+ * carries before, which by the 10th of October was already short of the 690
+ * that had come in, so "leads this month" froze where the 500 ran out and
+ * last month - 1,505 in September - was never reachable at all.
  */
-export default function LeadSourceChart({ leads }: { leads: Lead[] }) {
+export default function LeadSourceChart({ rows }: { rows: SourceMonthRow[] }) {
   const [hot, setHot] = useState<string | null>(null);
 
-  const now = new Date();
-  const thisStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-  const lastStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
-  const at = (l: Lead) => (l.receivedAt ? new Date(l.receivedAt).getTime() : NaN);
-  const thisMonth = leads.filter((l) => at(l) >= thisStart);
-  const lastMonth = leads.filter((l) => at(l) >= lastStart && at(l) < thisStart);
-  const oldest = leads.reduce((a, l) => Math.min(a, Number.isFinite(at(l)) ? at(l) : Infinity), Infinity);
-  const haveLast = oldest <= lastStart && lastMonth.length > 0;
+  // London's months, the same as the server counted them in.
+  const london = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "Europe/London" }).slice(0, 7);
+  const thisKey = london(new Date());
+  const [y, m] = thisKey.split("-").map(Number);
+  const lastKey = m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
 
-  const groupOf = (l: Lead) => GROUPS.find((g) => g.sources.some((s) => s.toLowerCase() === (l.source ?? "").toLowerCase()))?.key ?? "Other";
-  const countIn = (list: Lead[]) => GROUPS.map((g) => list.filter((l) => groupOf(l) === g.key).length);
-  const counts = countIn(thisMonth);
+  const groupOf = (source: string) =>
+    GROUPS.find((g) => g.sources.some((s) => s.toLowerCase() === source.toLowerCase()))?.key ?? "Other";
+  const countIn = (month: string) =>
+    GROUPS.map((g) => rows.filter((r) => r.month === month && groupOf(r.source) === g.key).reduce((t, r) => t + r.n, 0));
+  const counts = countIn(thisKey);
+  const lastCounts = countIn(lastKey);
+  const haveLast = lastCounts.some((n) => n > 0);
   const total = counts.reduce((a, b) => a + b, 0);
   const pcts = wholePercents(counts);
-  const prevPcts = haveLast ? wholePercents(countIn(lastMonth)) : GROUPS.map(() => 0);
+  const prevPcts = haveLast ? wholePercents(lastCounts) : GROUPS.map(() => 0);
 
   const bars = GROUPS.map((g, i) => ({
     key: g.key,
@@ -189,7 +192,7 @@ export default function LeadSourceChart({ leads }: { leads: Lead[] }) {
       <p className="mt-3.5 shrink-0 border-t border-line/60 pt-3 text-[11px] leading-relaxed text-muted">
         {!haveLast ? (
           <>
-            {total} lead{total === 1 ? "" : "s"} so far this month · last month is not in the book yet
+            {total} lead{total === 1 ? "" : "s"} so far this month · nothing on file for last month
           </>
         ) : lead ? (
           <>

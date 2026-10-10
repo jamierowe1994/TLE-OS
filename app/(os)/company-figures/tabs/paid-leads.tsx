@@ -9,7 +9,7 @@ import StatCard from "@/components/business/StatCard";
 import FunnelBar from "@/components/business/charts/FunnelBar";
 import TimescaleSelect from "@/components/business/TimescaleSelect";
 import type { SeedData } from "@/lib/business/seed-data"; // type-only - erased at build
-import { monthLabel } from "@/lib/business/format";
+import { currentMonth, monthLabel } from "@/lib/business/format";
 
 /* ------------------------------- socials ------------------------------- */
 
@@ -200,22 +200,30 @@ export default function PaidLeadsTab({ month, seed }: { month: string; seed: See
       pipelines: string[];
     } | null;
   } | null>(null);
+  /* Asked for the picked month, and asked again when it changes. It took no
+     month and ran once until 10 Oct 2026 (Rig P-018): the heading followed
+     the picker while every figure under it stayed this month's. */
   useEffect(() => {
     let cancelled = false;
+    setLiveLeads(null);
     (async () => {
       try {
-        const res = await fetch("/api/business/paid-leads-live", { cache: "no-store" });
+        const res = await fetch(`/api/business/paid-leads-live?month=${month}`, { cache: "no-store" });
         if (!res.ok) return;
         const j = await res.json();
+        if (j.month && j.month !== month) return;
         if (!cancelled && (j.leads != null || j.ghl != null)) setLiveLeads(j);
       } catch {
-        /* snapshot stays */
+        /* the dashes stay */
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [month]);
+  const isCurrent = month === currentMonth();
+  /** "this month" or "September 2026" - what the live notes are about. */
+  const periodWords = isCurrent ? "this month" : monthLabel(month);
 
   const leadsStat =
     liveLeads?.leads != null
@@ -224,8 +232,8 @@ export default function PaidLeadsTab({ month, seed }: { month: string; seed: See
           source: "live-meta" as const,
           note:
             liveLeads.source === "account"
-              ? "Live from Meta - TLE ad account, this month."
-              : "Live from Meta - summed across every agent's tagged campaigns, this month.",
+              ? `Live from Meta - TLE ad account, ${periodWords}.`
+              : `Live from Meta - summed across every agent's tagged campaigns, ${periodWords}.`,
           asOf: new Date().toISOString().slice(0, 10),
         }
       : pl.leadsGenerated;
@@ -240,7 +248,7 @@ export default function PaidLeadsTab({ month, seed }: { month: string; seed: See
   const ghl = liveLeads?.ghl ?? null;
   const asOf = new Date().toISOString().slice(0, 10);
   const ghlNote = ghl
-    ? `Live from Go High Level - ${ghl.pipelines.join(" + ")}, this month.`
+    ? `Live from Go High Level - ${ghl.pipelines.join(" + ")}, ${periodWords}.`
     : "";
   const referredStat = ghl
     ? {
@@ -320,7 +328,7 @@ export default function PaidLeadsTab({ month, seed }: { month: string; seed: See
 
       {/* Month cards - the selected month, not a fixed July */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <StatCard label="Leads generated (MTD)" stat={leadsStat} sub={leadsSub} big />
+        <StatCard label={isCurrent ? "Leads generated (MTD)" : "Leads generated"} stat={leadsStat} sub={leadsSub} big />
         <StatCard label="Referred to agents" stat={referredStat} />
         <StatCard label="MAs booked" stat={masStat} />
         <StatCard

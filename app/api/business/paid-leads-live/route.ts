@@ -17,7 +17,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const month = currentMonth();
+  /* The month the tab's picker is on. Always this month until 10 Oct 2026
+     (Rig P-018), so every month the picker offered showed this one's leads. */
+  const asked = req.nextUrl.searchParams.get("month");
+  const month = asked && /^\d{4}-\d{2}$/.test(asked) && asked <= currentMonth() ? asked : currentMonth();
 
   const metaWork = (async () => {
     if (!metaTokenSet()) return null;
@@ -26,7 +29,7 @@ export async function GET(req: NextRequest) {
     const campaignIds = [
       ...new Set(users.flatMap((u) => parseCampaignIds(u.metaCampaignId))),
     ];
-    return getBusinessLeadsMTD(campaignIds).catch(() => null);
+    return getBusinessLeadsMTD(campaignIds, month).catch(() => null);
   })();
 
   const [mtd, ghl] = await Promise.all([
@@ -36,6 +39,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     configured: metaTokenSet(),
+    month,
     ...(mtd ?? { leads: null }),
     ghl,
     generatedAt: new Date().toISOString(),
