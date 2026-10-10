@@ -716,7 +716,7 @@ export function Figure({ n }: { n: number | null | undefined }) {
  * screen does (/api/portfolio), so the tile and the screen can never disagree.
  */
 type BookForTile = {
-  counts: { properties: number; rentRoll: number; landlords: number };
+  counts: { properties: number; homes?: number | null; rentRoll: number; landlords: number };
   properties: Array<{ listingId: string; name: string; letSince: string | null; agent: { name: string } | null; service: string | null }>;
 };
 let bookPromise: Promise<{ ok?: boolean; unlinked?: boolean; error?: string; counts?: BookForTile["counts"]; properties?: BookForTile["properties"] } | null> | null = null;
@@ -790,7 +790,10 @@ function PortfolioWidget({ w, h }: { w: number; h: number }) {
     .filter((p) => p.letSince)
     .sort((a, b) => (b.letSince ?? "").localeCompare(a.letSince ?? ""));
 
-  const count = loading ? "·" : book ? book.counts.properties.toLocaleString("en-GB") : "—";
+  /* REX PM's count of the homes we manage once it is read, else the book's -
+     the same count as Overview and Company Figures (Rig run 4, P-052). This
+     read the book alone, so the Dashboard said 532 beside their 527. */
+  const count = loading ? "·" : book ? (book.counts.homes ?? book.counts.properties).toLocaleString("en-GB") : "—";
   const hint = loading
     ? "reading the book"
     : book
@@ -918,7 +921,7 @@ function PipelineWidget({ w, h }: { w: number; h: number }) {
         {
           label: "Managed",
           short: "Managed",
-          value: managedFeed.book ? managedFeed.book.counts.properties : null,
+          value: managedFeed.book ? (managedFeed.book.counts.homes ?? managedFeed.book.counts.properties) : null,
           href: "/portfolio",
           loading: managedFeed.loading,
         },
