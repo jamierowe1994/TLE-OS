@@ -124,18 +124,27 @@ export default function Dashboard() {
           <button data-steve="dash.customise"
             type="button"
             onClick={() => setCustomising((c) => !c)}
-            className={`flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-medium transition-colors ${
+            className={`group flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-medium transition-[translate,box-shadow,background-color,border-color,color] duration-200 ease-out ${
               customising
                 ? "bg-accent-dark font-semibold text-page"
                 : /* bg-page, not transparent: this now sits in the top bar,
                      over the illustration, and a see-through button on a
-                     painted window is unreadable. */
-                  "border border-line/80 bg-page text-muted hover:border-ink hover:text-ink"
+                     painted window is unreadable. On hover it lifts off the
+                     page onto white with a shadow (James, 10 Oct 2026). */
+                  "border border-line/80 bg-page text-muted hover:-translate-y-0.5 hover:border-line hover:bg-white hover:text-ink hover:shadow-[0_10px_24px_-10px_rgba(16,16,20,0.35)] active:translate-y-0 motion-reduce:hover:translate-y-0"
             }`}
           >
             {customising ? "Done" : (
-              /* An icon from our own set, not an emoji (Rig run 4, P-087). */
-              <span className="inline-flex items-center gap-1.5"><DoodleIcon name="magic-wand" size={13} />Customise</span>
+              /* An icon from our own set, not an emoji (Rig run 4, P-087).
+                 The wand turns yellow and gives a little flick on hover. */
+              <span className="inline-flex items-center gap-1.5">
+                <DoodleIcon
+                  name="magic-wand"
+                  size={13}
+                  className="transition-[color,rotate,scale] duration-200 ease-out group-hover:-rotate-12 group-hover:scale-110 group-hover:text-[#E9A800] motion-reduce:group-hover:rotate-0 motion-reduce:group-hover:scale-100"
+                />
+                Customise
+              </span>
             )}
           </button>
           <QuickLinks customising={customising} />
