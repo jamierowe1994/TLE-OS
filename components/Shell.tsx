@@ -94,7 +94,7 @@ function NavLink({
         // the label folds away, which is what makes the animation read as one
         // smooth motion instead of everything re-arranging at once.
         className={`hand flex w-full items-center rounded-xl px-3 py-2.5 text-left text-[13.5px] transition-colors ${
-          active ? "bg-accent-soft/50 font-medium" : "text-muted hover:bg-page hover:text-ink"
+          active ? "bg-card font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.04)]" : "text-muted hover:bg-card/70 hover:text-ink"
         }`}
       >
         <DoodleIcon
@@ -241,6 +241,25 @@ export default function Shell({ children }: { children: React.ReactNode }) {
      another fade-up, or in a .cascade, keep their own timing. Before paint,
      so nothing starts and then jumps. */
   const flowRef = useRef<HTMLDivElement>(null);
+  /* The wraparound frame (James, 10 Oct 2026): the page sits in a white panel
+     inset from a grey window, the sidebar flat on the grey beside it. The
+     frame's left edge follows the sidebar - as it collapses, and to the
+     window's edge where a workspace (Kirstie's, Michael's, admin) hides it. */
+  const sideRef = useRef<HTMLElement>(null);
+  const [frameLeft, setFrameLeft] = useState(8);
+  useEffect(() => {
+    const el = sideRef.current;
+    if (!el) return;
+    const place = () => {
+      const r = el.getBoundingClientRect();
+      setFrameLeft(r.width > 0 ? Math.round(r.right) + 8 : 8);
+    };
+    place();
+    const ro = new ResizeObserver(place);
+    ro.observe(el);
+    window.addEventListener("resize", place);
+    return () => { ro.disconnect(); window.removeEventListener("resize", place); };
+  }, [pathname]);
   useLayoutEffect(() => {
     const root = flowRef.current;
     if (!root) return;
@@ -364,13 +383,24 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     /* os-type: the agents' own title face, Bricolage Grotesque (11 Sep) - see globals.css. */
-    <div className="os-type flex min-h-screen">
+    <div className="os-type flex min-h-screen lg:bg-[#f3f2ef]">
+      {/* The grey round the page: a clear rounded window over the content,
+          grey everywhere outside it. The window still scrolls as before, so
+          nothing that scrolls the page or sticks to it changes; content just
+          passes under the 8px margin, as it would inside a scrolling panel. */}
+      <div
+        data-os-frame
+        aria-hidden
+        className="pointer-events-none fixed z-[45] hidden rounded-[18px] lg:block"
+        style={{ top: 8, right: 8, bottom: 8, left: frameLeft, boxShadow: "0 0 0 100vmax #f3f2ef, inset 0 0 0 1px rgba(0,0,0,0.07)" }}
+      />
       {/* Tagged so /admin can hide it — an owner in the admin centre is not
           doing an agent's job, and the rail invites them to wander into the
           business-wide book by accident. See app/(os)/admin/layout.tsx. */}
       <aside
+        ref={sideRef}
         data-os-sidebar
-        className={`sticky top-3 mb-3 ml-3 mt-3 hidden h-[calc(100vh-24px)] shrink-0 flex-col overflow-hidden rounded-3xl border border-line/80 bg-panel py-5 transition-[width,padding] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] lg:flex ${
+        className={`sticky top-3 z-[50] mb-3 ml-2 mt-3 hidden h-[calc(100vh-24px)] shrink-0 flex-col overflow-hidden py-3 transition-[width,padding] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] lg:flex ${
           collapsed ? "w-[72px] px-2.5" : "w-60 px-4"
         }`}
       >
@@ -551,7 +581,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Mobile: a simple top bar; the wireframe is a desktop pitch first. */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col bg-card lg:ml-2">
         <header className="flex items-center justify-between border-b border-line/70 px-5 py-4 lg:hidden">
           <span className="hand text-2xl">TLE OS</span>
           <span className="flex items-center gap-2">
