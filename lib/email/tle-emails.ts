@@ -1033,7 +1033,7 @@ The Letting Experts`
           address: "8 Recreation Terrace, Nottingham",
           rent: "£850 a month",
           agentName: "Sam Whitaker",
-          link: `${SITE}/tenant/apply?listing=828057`,
+          link: `${SITE}/tenant/apply`,
         })
       )(),
   },
@@ -1054,7 +1054,7 @@ The Letting Experts`
           address: "8 Recreation Terrace, Nottingham",
           rent: "£850 a month",
           agentName: "Sam Whitaker",
-          link: `${SITE}/tenant/offer?listing=828057`,
+          link: `${SITE}/tenant/offer`,
         })
       )(),
   },
