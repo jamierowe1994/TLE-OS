@@ -203,7 +203,9 @@ export default function Compliance() {
                    scoped to what we manage is how the page and Susan's sheet
                    ended up quoting different numbers for the same question. */
                 `Live${source.ageMs != null ? `, ${asOf(source.ageMs).text}` : ""}. ${BOOK.length} ${source.scope && !source.scope.whole ? "homes on your own book" : "homes we manage"}. ${noGas} have no gas supply, from the signed terms or the property's own record; ${gasUnknown} have nobody's answer either way, which is unknown rather than exempt. Let-only and rent collect homes are the landlord's to keep compliant, and homes whose agent has left are not ours, so neither is here. A certificate more than 6 months out of date reads as an old record, not an expiry.`
-              : (source.reason ?? "Every certificate on every home, and the button that fixes each one.")
+              : !source.properties.length
+                ? "The certificates didn't load just now, so nothing on this page has been checked. Try again in a minute."
+                : (source.reason ?? "Every certificate on every home, and the button that fixes each one.")
         }
         /* James's own artwork, trimmed to its ink so the drawing's own
            ground line IS the bottom edge of the file - that is what lands it
@@ -234,7 +236,8 @@ export default function Compliance() {
           <StatTile
             key={t.key}
             label={t.label}
-            value={source.loading ? <span className="text-[18px] text-muted">…</span> : t.value}
+            /* Nothing read is "—", never 0 (bug P-017): a 0 reads as all clear. */
+            value={source.loading ? <span className="text-[18px] text-muted">…</span> : !source.live && !source.properties.length ? <span className="text-muted">—</span> : t.value}
             hint={t.hint}
             icon={t.icon}
             tone={t.key === "expired" && !source.loading && source.live ? toneFor(t.value) : undefined}
@@ -304,6 +307,17 @@ export default function Compliance() {
               );
             })}
           </ul>
+        ) : source.loading ? (
+          /* Never an all-clear before anything has been read (bug P-017). */
+          <p className="flex items-center justify-center gap-2 py-6 text-[12.5px] text-muted">
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-line border-t-accent-dark" />
+            Reading every certificate…
+          </p>
+        ) : !source.live ? (
+          /* A failed read is not "nothing expires": say it didn't load. */
+          <p className="py-6 text-center text-[12.5px] text-accent-dark">
+            The certificates didn&rsquo;t load, so nothing here has been checked. Don&rsquo;t read it as all clear - try again in a minute.
+          </p>
         ) : (
           <p className="py-6 text-center text-[12.5px] text-muted">
             Nothing expires this month. It happens.
@@ -395,7 +409,7 @@ export default function Compliance() {
               {!book.length && (
                 <tr>
                   <td colSpan={6} className="py-8 text-center text-[12px] text-muted">
-                    Nothing matches — clear the filter or the search.
+                    {!source.live && !source.properties.length ? "Nothing to show - the certificates didn't load." : "Nothing matches - clear the filter or the search."}
                   </td>
                 </tr>
               )}
