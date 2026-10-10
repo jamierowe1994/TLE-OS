@@ -254,6 +254,28 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
       tone: r.ok ? "none" : "warn",
     });
   }
+  /* Somebody paused for opening too much too fast (the middleware's pace
+     cap, 10 Oct 2026): owners, for three days, linking to the person's file,
+     where what they opened is listed and Lock out is one press away. */
+  const paused =
+    me.role === "owner"
+      ? await q<{ id: string; actor_id: string | null; actor_email: string; detail: string; at: Date }>(
+          `SELECT id, actor_id, actor_email, detail, at FROM os_audit
+            WHERE kind = 'reading_paused' AND at > NOW() - INTERVAL '3 days'
+            ORDER BY at DESC LIMIT 10`
+        ).catch(() => [])
+      : [];
+  for (const p of paused) {
+    out.push({
+      id: `paused:${p.id}`,
+      kind: "compliance",
+      at: new Date(p.at).toISOString(),
+      title: `${p.actor_email || "Somebody"} was paused for reading too fast`,
+      body: `${p.detail}. See what they opened, and lock them out if it isn't their work.`,
+      href: p.actor_id ? `/admin/people/${p.actor_id}` : "/admin/activity",
+      tone: "warn",
+    });
+  }
   for (const t of tasks) {
     const overdue = t.due_at && new Date(t.due_at).getTime() < Date.now();
     out.push({

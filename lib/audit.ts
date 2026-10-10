@@ -62,7 +62,10 @@ export type AuditKind =
      2026, lib/lockout), and every sign-in a locked person tried. */
   | "user_locked"
   | "user_unlocked"
-  | "sign_in_locked";
+  | "sign_in_locked"
+  /* Somebody went well past a person's pace and the middleware paused their
+     data calls for fifteen minutes (10 Oct 2026). Read by the owners' bell. */
+  | "reading_paused";
 
 export interface AuditRow {
   id: string;

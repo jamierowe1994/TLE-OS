@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import SignedOutWatch from "@/components/SignedOutWatch";
+import Toaster from "@/components/Toaster";
 import Welcome from "@/components/app/Welcome";
 import { useAlerts } from "@/components/app/alerts";
 import { useSwipeToClose } from "@/components/app/swipe";
@@ -93,6 +95,10 @@ export default function AppFrame({ inApp, theme, nav, children }: { inApp: boole
 
   return (
     <FrameContext.Provider value={{ more, quick, bell, unread }}>
+      {/* A session that ended goes to sign in, and a pace pause is said in
+          words (components/SignedOutWatch) - here as on the desktop. */}
+      <SignedOutWatch />
+      <Toaster at="top" />
       {/* Behind the clock and battery, so a scrolled page never runs under them. */}
       <div aria-hidden className="fixed inset-x-0 top-0 z-30 h-[env(safe-area-inset-top)]" style={{ background: "var(--m-bg)" }} />
       <div className="mx-auto w-full max-w-[560px] px-4 pb-[calc(env(safe-area-inset-bottom)+100px)] pt-[calc(env(safe-area-inset-top)+10px)]">{children}</div>

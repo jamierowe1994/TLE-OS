@@ -41,6 +41,7 @@ export const AUDIT_KIND: Record<string, string> = {
   user_locked: "locked out",
   user_unlocked: "let back in",
   sign_in_locked: "tried to sign in while locked",
+  reading_paused: "paused for reading too fast",
 };
 
 /**

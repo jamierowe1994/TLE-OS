@@ -36,6 +36,8 @@ export interface Reader {
   afterHours: number;
   lastAt: string;
   flags: string[];
+  /** When the pace cap last paused them, in the last 24 hours. */
+  pausedAt: string | null;
 }
 
 const LONDON_NIGHT = `(EXTRACT(HOUR FROM r.at AT TIME ZONE 'Europe/London') >= 22 OR EXTRACT(HOUR FROM r.at AT TIME ZONE 'Europe/London') < 6)`;
@@ -54,6 +56,7 @@ export async function readersToday(): Promise<Reader[]> {
   const rows = await q<{
     user_id: string; name: string | null; email: string | null; role: string | null; locked: boolean;
     calls_hour: string; opened_hour: string; calls_day: string; opened_day: string; after_hours: string; last_at: Date | string;
+    paused_at: Date | string | null;
   }>(
     `SELECT r.user_id, u.name, u.email, u.role, (u.locked_at IS NOT NULL) AS locked,
             COUNT(*) FILTER (WHERE r.at > NOW() - INTERVAL '1 hour')::text AS calls_hour,
@@ -61,7 +64,9 @@ export async function readersToday(): Promise<Reader[]> {
             COUNT(*)::text AS calls_day,
             COUNT(DISTINCT r.path || '?' || r.query) FILTER (WHERE r.method = 'GET')::text AS opened_day,
             COUNT(DISTINCT r.path || '?' || r.query) FILTER (WHERE r.method = 'GET' AND ${LONDON_NIGHT})::text AS after_hours,
-            MAX(r.at) AS last_at
+            MAX(r.at) AS last_at,
+            (SELECT MAX(a.at) FROM os_audit a
+              WHERE a.kind = 'reading_paused' AND a.actor_id = r.user_id AND a.at > NOW() - INTERVAL '24 hours') AS paused_at
        FROM os_read_log r
        LEFT JOIN os_users u ON u.id = r.user_id
       WHERE r.at > NOW() - INTERVAL '24 hours'
@@ -86,6 +91,7 @@ export async function readersToday(): Promise<Reader[]> {
       ...n,
       lastAt: new Date(r.last_at).toISOString(),
       flags: flagsOf(n),
+      pausedAt: r.paused_at ? new Date(r.paused_at).toISOString() : null,
     };
   });
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { toast } from "@/lib/toast";
 
 /**
  * When a session ends, go and sign in (Rig run 4, P-054, 10 Oct 2026).
@@ -19,8 +20,20 @@ export default function SignedOutWatch() {
     w.__osSignedOutWatch = true;
     const original = window.fetch.bind(window);
     let leaving = false;
+    let toldAt = 0;
     window.fetch = async (...args: Parameters<typeof fetch>) => {
       const res = await original(...args);
+      /* Paused for opening too much too fast (the middleware's pace cap):
+         said once a minute, in the middleware's own words, rather than as
+         every panel's "couldn't load". */
+      if (res.status === 429 && res.headers.get("x-os-paused") === "1" && Date.now() - toldAt > 60_000) {
+        toldAt = Date.now();
+        res
+          .clone()
+          .json()
+          .then((j: { error?: string }) => toast(j.error ?? "TLE OS has paused for a few minutes.", "bad"))
+          .catch(() => toast("TLE OS has paused for a few minutes.", "bad"));
+      }
       if (!leaving && res.status === 401 && res.headers.get("x-os-signed-out") === "1") {
         leaving = true;
         const here = window.location.pathname + window.location.search;

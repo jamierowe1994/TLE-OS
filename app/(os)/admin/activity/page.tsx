@@ -24,6 +24,7 @@ type Sent = { id: string; to: string; subject: string; sentAt: string };
 type Reader = {
   userId: string; name: string; email: string; locked: boolean;
   openedHour: number; openedDay: number; callsDay: number; afterHours: number; lastAt: string; flags: string[];
+  pausedAt: string | null;
 };
 type Opened = { id: string; to: string; subject: string; html: string; sentAt: string };
 
@@ -109,12 +110,13 @@ export default function AdminActivity() {
               </thead>
               <tbody>
                 {readers.map((r) => (
-                  <tr key={r.userId} className={`border-b border-line/40 last:border-0 ${r.flags.length ? "bg-accent-soft/40" : ""}`}>
+                  <tr key={r.userId} className={`border-b border-line/40 last:border-0 ${r.flags.length || r.pausedAt ? "bg-accent-soft/40" : ""}`}>
                     <td className="py-2 pr-3">
                       <Link href={`/admin/people/${r.userId}`} className="underline decoration-line hover:decoration-ink">
                         {r.name}
                       </Link>
                       {r.locked && <span className="ml-1.5 text-accent-dark">locked out</span>}
+                      {r.pausedAt && <span className="ml-1.5 text-accent-dark">paused {when(r.pausedAt)}</span>}
                       {r.flags.length > 0 && <span className="block text-[11px] text-accent-dark">{r.flags.join(", ")}</span>}
                     </td>
                     <td className="figures py-2 pr-3 text-right">{r.openedHour.toLocaleString("en-GB")}</td>

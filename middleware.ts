@@ -595,7 +595,10 @@ const LOG_FLUSH_MS = 5_000;
 const LOG_BATCH = 1_000;
 const LOG_MAX_QUEUED = 5_000;
 type LogEntry = { at: number; userId: string; method: string; path: string; query: string; ip: string };
+type LogAlert = { at: number; userId: string; kind: "reading_paused"; detail: string };
 let logQueue: LogEntry[] = [];
+/* Things an owner should hear about (a pace pause), sent with the next batch. */
+let alertQueue: LogAlert[] = [];
 let logTimer: ReturnType<typeof setTimeout> | null = null;
 let logFlushing = false;
 /* The latest request: askSelf works out this server's own address from one. */
@@ -626,17 +629,24 @@ function noteCall(req: NextRequest, userId: string): void {
   }
 }
 
+function noteAlert(a: LogAlert): void {
+  alertQueue.push(a);
+  if (alertQueue.length > 200) alertQueue.splice(0, alertQueue.length - 200);
+  void flushLog();
+}
+
 async function flushLog(): Promise<void> {
   if (logTimer) clearTimeout(logTimer);
   logTimer = null;
   if (logFlushing) return;
   const via = logVia;
   const secret = process.env.AUTH_SECRET || (process.env.NODE_ENV !== "production" ? DEV_SECRET : undefined);
-  if (!via || !secret || !logQueue.length) return;
+  if (!via || !secret || (!logQueue.length && !alertQueue.length)) return;
   logFlushing = true;
   const batch = logQueue.splice(0, LOG_BATCH);
+  const alerts = alertQueue.splice(0);
   try {
-    const body = JSON.stringify(batch);
+    const body = JSON.stringify({ entries: batch, alerts });
     const res = await askSelf(via, "/api/internal/read-log", 5_000, {
       method: "POST",
       body,
@@ -644,43 +654,118 @@ async function flushLog(): Promise<void> {
     });
     /* Not taken: back on the front of the queue for the next go, inside the
        cap, so an outage costs the oldest calls and never the memory. */
-    if (!res) logQueue = [...batch, ...logQueue].slice(-LOG_MAX_QUEUED);
+    if (!res) {
+      logQueue = [...batch, ...logQueue].slice(-LOG_MAX_QUEUED);
+      alertQueue = [...alerts, ...alertQueue].slice(-200);
+    }
   } catch {
     logQueue = [...batch, ...logQueue].slice(-LOG_MAX_QUEUED);
+    alertQueue = [...alerts, ...alertQueue].slice(-200);
   } finally {
     logFlushing = false;
   }
-  if (logQueue.length && !logTimer) logTimer = setTimeout(() => void flushLog(), LOG_FLUSH_MS);
+  if ((logQueue.length || alertQueue.length) && !logTimer) logTimer = setTimeout(() => void flushLog(), LOG_FLUSH_MS);
 }
 
 /* The same words as lib/lockout LOCKED_MESSAGE, which this edge file cannot
    import (it reaches the database). */
 const LOCKED_MESSAGE = "Your access to TLE OS has been paused. Speak to James.";
 const LOCK_TTL_MS = 20_000;
-const lockCache = new Map<string, { at: number; locked: boolean }>();
+type DoorState = { locked: boolean; capped: boolean };
+const lockCache = new Map<string, { at: number; state: DoorState }>();
 
 /**
- * Has an owner locked this person out? Asked of /api/auth/lock-state, which
- * can read the database, and remembered for twenty seconds per person, so it
- * is one small internal call per person per twenty seconds. No answer is
- * "not locked" for five seconds: the routes still refuse a locked person from
+ * Has an owner locked this person out, and does the pace cap apply to them
+ * (everybody but an owner)? Asked of /api/auth/lock-state, which can read the
+ * database, and remembered for twenty seconds per person, so it is one small
+ * internal call per person per twenty seconds. No answer is "not locked,
+ * capped" for five seconds: the routes still refuse a locked person from
  * their own list, so a blip here costs a tidy exit, never the lock itself.
  */
-async function isLocked(req: NextRequest, userId: string): Promise<boolean> {
-  if (req.nextUrl.pathname === "/api/auth/lock-state") return false;
+async function doorState(req: NextRequest, userId: string): Promise<DoorState> {
+  if (req.nextUrl.pathname === "/api/auth/lock-state") return { locked: false, capped: false };
   const hit = lockCache.get(userId);
-  if (hit && Date.now() < hit.at) return hit.locked;
-  let locked: boolean | null = null;
+  if (hit && Date.now() < hit.at) return hit.state;
+  let state: DoorState | null = null;
   try {
     const res = await askSelf(req, "/api/auth/lock-state", 1_500);
-    const j = res ? ((await res.json()) as { ok?: boolean; locked?: boolean }) : null;
-    if (j?.ok) locked = j.locked === true;
+    const j = res ? ((await res.json()) as { ok?: boolean; locked?: boolean; capped?: boolean }) : null;
+    if (j?.ok) state = { locked: j.locked === true, capped: j.capped !== false };
   } catch {
     /* Not JSON: no answer. */
   }
   if (lockCache.size > 2_000) lockCache.clear();
-  lockCache.set(userId, { at: Date.now() + (locked === null ? 5_000 : LOCK_TTL_MS), locked: locked === true });
-  return locked === true;
+  lockCache.set(userId, { at: Date.now() + (state ? LOCK_TTL_MS : 5_000), state: state ?? { locked: false, capped: true } });
+  return state ?? { locked: false, capped: true };
+}
+
+/* ── The pace cap (10 Oct 2026) ───────────────────────────────────────────
+
+   The other half of the read log. Nobody opens four hundred different
+   records in an hour by hand: on Friday 9 Oct the busiest person peaked at
+   about 40 calls a minute and 49 different records in an hour (Railway's own
+   request log). A copy job - a script with somebody's cookie, or an AI
+   driving their browser - goes well past that, so past these lines the
+   person's data calls are refused for fifteen minutes with a plain sentence,
+   the pause goes into the audit trail and the owners' bell, and an owner can
+   lock them out from there. Pages still open; only the data behind them
+   waits. Owners are never capped.
+
+   Counted in this process's memory, per person. Railway runs one instance;
+   if that ever changes, each instance counts its own share, and a copy job
+   is still caught, only a little later. */
+const PACE = {
+  perMinute: 180,
+  perTenMinutes: 600,
+  distinctPerHour: 400,
+  pauseMs: 15 * 60_000,
+};
+const PAUSED_MESSAGE =
+  "You've opened a lot very quickly, so TLE OS has paused for a few minutes. If this is your real work, tell James.";
+type Pace = { calls: number[]; seen: Map<string, number>; pausedUntil: number; why: string };
+const paces = new Map<string, Pace>();
+
+/** Count this call; the time the person is paused until, if they are. */
+function paceCheck(req: NextRequest, userId: string): { until: number; why: string; fresh: boolean } | null {
+  const now = Date.now();
+  let p = paces.get(userId);
+  if (!p) {
+    if (paces.size > 5_000) paces.clear();
+    p = { calls: [], seen: new Map(), pausedUntil: 0, why: "" };
+    paces.set(userId, p);
+  }
+  if (p.pausedUntil > now) return { until: p.pausedUntil, why: p.why, fresh: false };
+
+  while (p.calls.length && now - p.calls[0] > 10 * 60_000) p.calls.shift();
+  p.calls.push(now);
+  if (req.method === "GET") {
+    const key = req.nextUrl.pathname + req.nextUrl.search;
+    p.seen.delete(key); // re-set moves it to the end, so the oldest stay first
+    p.seen.set(key, now);
+    for (const [k, at] of p.seen) {
+      if (now - at <= 60 * 60_000) break;
+      p.seen.delete(k);
+    }
+  }
+  let lastMinute = 0;
+  for (let i = p.calls.length - 1; i >= 0 && now - p.calls[i] <= 60_000; i--) lastMinute++;
+
+  const why =
+    lastMinute > PACE.perMinute
+      ? `${lastMinute} calls in a minute`
+      : p.calls.length > PACE.perTenMinutes
+        ? `${p.calls.length} calls in ten minutes`
+        : p.seen.size > PACE.distinctPerHour
+          ? `${p.seen.size} different records in an hour`
+          : null;
+  if (!why) return null;
+  p.pausedUntil = now + PACE.pauseMs;
+  p.why = why;
+  /* The minute and ten-minute counts start again after the pause; the
+     records opened in the hour do not, so carrying on where it stopped
+     pauses a copy job again almost at once. */
+  p.calls = [];
+  return { until: p.pausedUntil, why, fresh: true };
 }
 
 /** The sign-in half of the door, after the area switches have had their say. */
@@ -698,9 +783,22 @@ async function doorAfterGate(req: NextRequest): Promise<NextResponse> {
 
   const userId = await sessionUserId(req.cookies.get("os_session")?.value, process.env.AUTH_SECRET);
   if (userId) {
-    if (!(await isLocked(req, userId))) {
+    const door = await doorState(req, userId);
+    if (!door.locked) {
       noteCall(req, userId);
-      return NextResponse.next();
+      const paused =
+        door.capped && req.nextUrl.pathname.startsWith("/api/") && !LOG_NOISE.has(req.nextUrl.pathname)
+          ? paceCheck(req, userId)
+          : null;
+      if (!paused) return NextResponse.next();
+      if (paused.fresh) noteAlert({ at: Date.now(), userId, kind: "reading_paused", detail: `${paused.why}; paused 15 minutes` });
+      return NextResponse.json(
+        { ok: false, error: PAUSED_MESSAGE, paused: true },
+        {
+          status: 429,
+          headers: { "x-os-paused": "1", "retry-after": String(Math.max(1, Math.ceil((paused.until - Date.now()) / 1000))) },
+        }
+      );
     }
     /* Locked out by an owner (lib/lockout, 10 Oct 2026). The routes refuse
        them anyway; this ends the visit cleanly: the cookie goes, a call gets

@@ -1,6 +1,8 @@
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { cleanEntry, writeReadLog, type ReadEntry } from "@/lib/read-log";
+import { record } from "@/lib/audit";
+import { findUserById } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -32,7 +34,20 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ ok: false }, { status: 400 });
   }
-  const entries = (Array.isArray(raw) ? raw.slice(0, MAX) : []).map(cleanEntry).filter((e): e is ReadEntry => e !== null);
+  /* { entries, alerts } - or a bare list of entries, as the first version sent. */
+  const o = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as { entries?: unknown; alerts?: unknown }) : null;
+  const list = Array.isArray(raw) ? raw : Array.isArray(o?.entries) ? o.entries : [];
+  const entries = list.slice(0, MAX).map(cleanEntry).filter((e): e is ReadEntry => e !== null);
+  /* A pace pause (the middleware's PACE): into the audit trail, which is
+     where Admin > Activity, the person's file and the owners' bell read it. */
+  const alerts = Array.isArray(o?.alerts) ? o.alerts.slice(0, 50) : [];
+  for (const a of alerts) {
+    const userId = a && typeof a === "object" && typeof (a as { userId?: unknown }).userId === "string" ? (a as { userId: string }).userId.slice(0, 64) : "";
+    const detail = typeof (a as { detail?: unknown })?.detail === "string" ? (a as { detail: string }).detail.slice(0, 300) : "";
+    if (!userId || (a as { kind?: unknown }).kind !== "reading_paused") continue;
+    const who = await findUserById(userId).catch(() => null);
+    await record({ kind: "reading_paused", actorId: userId, actorEmail: who?.email ?? "", detail });
+  }
   try {
     await writeReadLog(entries);
   } catch (e) {

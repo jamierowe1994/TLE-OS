@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import SignedOutWatch from "@/components/SignedOutWatch";
+import Toaster from "@/components/Toaster";
 import { useCallback, useEffect, useState } from "react";
 
 /**
@@ -73,6 +75,10 @@ export default function PhoneFrame({ children }: { children: React.ReactNode }) 
 
   return (
     <>
+      {/* A session that ended goes to sign in, and a pace pause is said in
+          words (components/SignedOutWatch) - here as on the desktop. */}
+      <SignedOutWatch />
+      <Toaster at="top" />
       {mounted && (
         <nav
           className="fixed inset-0 z-0 flex flex-col justify-center bg-accent-soft px-7 pb-10 pt-20"
