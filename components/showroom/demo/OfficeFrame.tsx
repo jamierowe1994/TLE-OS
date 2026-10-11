@@ -3,6 +3,7 @@
 import Wordmark from "@/components/Wordmark";
 import DoodleIcon from "@/components/DoodleIcon";
 import Toaster from "@/components/Toaster";
+import LaunchNav from "@/components/LaunchNav";
 import { FRONT, BACK, type NavItem } from "@/lib/nav";
 
 /**
@@ -13,7 +14,10 @@ import { FRONT, BACK, type NavItem } from "@/lib/nav";
  *
  * The real Shell is not used because it reads the account, the switches and
  * the bell, and none of those belong to a demo somebody may open on a phone
- * without signing in.
+ * without signing in. The office side draws the real sidebar, LaunchNav, in
+ * the real Mist frame (11 Oct 2026): it had its own copy of the old rail, so
+ * the demos (and the launch tour that shows them) looked a version behind.
+ * Inert - nothing on it is pressable.
  */
 
 function Item({ item, on, sub }: { item: NavItem; on: string; sub?: string }) {
@@ -48,7 +52,33 @@ const DESK: NavItem[] = [
   { href: "/compliance-desk/works", label: "Works orders", icon: "setting" },
 ];
 
+const noop = () => {};
+const SAM = { name: "Sam Whitaker", email: "sam@thelettingexperts.co.uk", photo: null };
+
 export default function OfficeFrame({ on, sub, desk = false, children }: { on: string; sub?: string; desk?: boolean; children: React.ReactNode }) {
+  if (!desk) {
+    const current = BACK.flatMap((i) => i.children ?? []).find((c) => c.href.split("?")[0] === on && (!sub || c.label === sub))?.href ?? on;
+    return (
+      <div className="flex min-h-screen bg-card text-ink lg:bg-[var(--shell-bg)]">
+        <aside aria-hidden className="pointer-events-none sticky top-3 mb-3 ml-2 mt-3 hidden h-[calc(100vh-24px)] w-60 shrink-0 flex-col overflow-hidden bg-[var(--shell-nav-bg)] px-2.5 py-3 lg:flex">
+          <LaunchNav
+            front={FRONT.filter((i) => i.href !== "/showroom")}
+            back={BACK}
+            mine={[]}
+            pathname={on}
+            currentHref={current}
+            go={noop}
+            collapsed={false}
+            onToggleCollapse={noop}
+            me={SAM}
+            onSignOut={noop}
+          />
+        </aside>
+        <main className="w-full min-w-0 flex-1 px-5 pb-28 pt-8 lg:my-2 lg:ml-2 lg:mr-2 lg:rounded-[18px] lg:bg-[var(--shell-panel)] lg:px-10 lg:shadow-[inset_0_0_0_1px_var(--shell-rim)]">{children}</main>
+        <Toaster />
+      </div>
+    );
+  }
   return (
     <div className="flex min-h-screen bg-page text-ink">
       <aside className="hidden w-[232px] shrink-0 flex-col gap-1 border-r border-line/60 px-3 py-6 lg:flex">

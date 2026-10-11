@@ -40,8 +40,11 @@ const row = (active: boolean, collapsed: boolean) =>
   }`;
 
 function Item({ item, pathname, currentHref, collapsed, go }: { item: NavItem; pathname: string; currentHref: string; collapsed: boolean; go: (href: string) => void }) {
-  const active = pathname.startsWith(item.href);
   const kids = item.children ?? [];
+  /* A child page lights its group too: Maintenance, Compliance and the rest
+     live under Portfolio but are not under its address, so on them nothing
+     was lit and the group stayed shut (11 Oct 2026). */
+  const active = pathname.startsWith(item.href) || kids.some((c) => { const p = c.href.split("?")[0]; return p !== item.href && (pathname === p || pathname.startsWith(`${p}/`)); });
   const [open, setOpen] = useState(active);
   useEffect(() => {
     if (active) setOpen(true);
