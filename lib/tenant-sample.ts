@@ -11,8 +11,12 @@ import { DEAL, STAGE_UPDATE, atLeast, fillUpdate, findingRoad, phaseOf, type Ten
  * tenant portal" from the admin without being a tenant. Invented, and says
  * so on the shell; nothing here is read from anywhere or written anywhere.
  *
- * `sampleFor(stage)` builds the whole home view for a stage. The dates are
- * fixed around 6 to 12 September 2026 so the activity reads as a story.
+ * `sampleFor(stage)` builds the whole home view for a stage. The dates roll
+ * (11 Oct 2026): they were fixed in September, so by launch the "upcoming"
+ * viewing was a month gone. The story is laid out in days from the passport
+ * (DAY), and whichever stage is shown is today, so every snapshot reads true
+ * on the day it is opened: a booked viewing is a few days ahead, keys were
+ * handed over yesterday.
  */
 
 export const SOPHIE_PASSPORT: PassportData = {
@@ -89,34 +93,55 @@ const DEAL_WORDS: Record<string, { now: string; next: string }> = Object.fromEnt
   Object.entries(STAGE_UPDATE).map(([key, u]) => [key, { now: u.blurb, next: u.next }])
 );
 
-const ACTIVITY: { at: TenantStageKey; label: string; sub: string; when: string; tone: "done" | "live" | "quiet" }[] = [
-  { at: "passport", label: "Passport finished", sub: "6 of 6 sections", when: "6 Sep 2026", tone: "done" },
-  { at: "passport", label: "Your tenant area opened", sub: "Welcome in", when: "6 Sep 2026", tone: "quiet" },
-  { at: "enquired", label: "You enquired about 8 Recreation Terrace", sub: "Sam has it", when: "8 Sep 2026", tone: "done" },
-  { at: "matched", label: "Four homes sent to you", sub: "Matched to your budget and area", when: "8 Sep 2026", tone: "done" },
-  { at: "viewing", label: "Viewing booked", sub: "Tue 15 Sep, 2:30pm with Sam", when: "9 Sep 2026", tone: "done" },
-  { at: "viewed", label: "You viewed 8 Recreation Terrace", sub: "How was it?", when: "15 Sep 2026", tone: "done" },
-  { at: "offer", label: "Offer made: £850 a month", sub: "With the landlord", when: "15 Sep 2026", tone: "done" },
-  { at: "declined", label: "The landlord went with another application", sub: "Others sent the same day", when: "16 Sep 2026", tone: "done" },
-  { at: "deal_started", label: "Offer accepted", sub: "8 Recreation Terrace", when: "16 Sep 2026", tone: "done" },
-  { at: "holding_fee", label: "Holding fee received", sub: "£196", when: "17 Sep 2026", tone: "done" },
-  { at: "referencing", label: "Referencing started", sub: "Employer, landlord and credit", when: "17 Sep 2026", tone: "done" },
-  { at: "plc", label: "References passed", sub: "All three back", when: "22 Sep 2026", tone: "done" },
-  { at: "deposit", label: "Deposit registered", sub: "£980 with the DPS", when: "24 Sep 2026", tone: "done" },
-  { at: "tenancy_agreement", label: "Tenancy agreement sent for signing", sub: "", when: "25 Sep 2026", tone: "done" },
-  { at: "rent_payment", label: "Agreement signed by everyone", sub: "", when: "26 Sep 2026", tone: "done" },
-  { at: "move_day", label: "First month's rent received", sub: "£850", when: "29 Sep 2026", tone: "done" },
-  { at: "living", label: "Keys handed over", sub: "Inventory signed", when: "1 Oct 2026", tone: "done" },
+/* The story in days from the passport. The viewing is on day 9. */
+const VIEWING_DAY = 9;
+const KEYS_DAY = 25;
+/* Which day of the story each stage is "today". */
+const NOW_DAY: Record<TenantStageKey, number> = {
+  passport: 0, enquired: 2, matched: 2, viewing: 4, viewed: 10, offer: 10, declined: 10, deal_started: 10,
+  holding_fee: 11, referencing: 12, plc: 16, deposit: 18, tenancy_agreement: 19, rent_payment: 20, move_day: 23, living: 26,
+};
+
+const ACTIVITY: { at: TenantStageKey; label: string; sub: string; day: number; tone: "done" | "live" | "quiet" }[] = [
+  { at: "passport", label: "Passport finished", sub: "6 of 6 sections", day: 0, tone: "done" },
+  { at: "passport", label: "Your tenant area opened", sub: "Welcome in", day: 0, tone: "quiet" },
+  { at: "enquired", label: "You enquired about 8 Recreation Terrace", sub: "Sam has it", day: 2, tone: "done" },
+  { at: "matched", label: "Four homes sent to you", sub: "Matched to your budget and area", day: 2, tone: "done" },
+  { at: "viewing", label: "Viewing booked", sub: "VIEWING with Sam", day: 3, tone: "done" },
+  { at: "viewed", label: "You viewed 8 Recreation Terrace", sub: "How was it?", day: 9, tone: "done" },
+  { at: "offer", label: "Offer made: £850 a month", sub: "With the landlord", day: 9, tone: "done" },
+  { at: "declined", label: "The landlord went with another application", sub: "Others sent the same day", day: 10, tone: "done" },
+  { at: "deal_started", label: "Offer accepted", sub: "8 Recreation Terrace", day: 10, tone: "done" },
+  { at: "holding_fee", label: "Holding fee received", sub: "£196", day: 11, tone: "done" },
+  { at: "referencing", label: "Referencing started", sub: "Employer, landlord and credit", day: 11, tone: "done" },
+  { at: "plc", label: "References passed", sub: "All three back", day: 16, tone: "done" },
+  { at: "deposit", label: "Deposit registered", sub: "£980 with the DPS", day: 18, tone: "done" },
+  { at: "tenancy_agreement", label: "Tenancy agreement sent for signing", sub: "", day: 19, tone: "done" },
+  { at: "rent_payment", label: "Agreement signed by everyone", sub: "", day: 20, tone: "done" },
+  { at: "move_day", label: "First month's rent received", sub: "£850", day: 23, tone: "done" },
+  { at: "living", label: "Keys handed over", sub: "Inventory signed", day: 25, tone: "done" },
 ];
 
 export function sampleFor(stage: TenantStageKey): TenantHome {
+  /* Day 0 of the story, so that this stage's day is today. */
+  const base = new Date();
+  base.setHours(0, 0, 0, 0);
+  base.setDate(base.getDate() - (NOW_DAY[stage] ?? 0));
+  const day = (n: number, h = 0, m = 0) => { const d = new Date(base); d.setDate(d.getDate() + n); d.setHours(h, m, 0, 0); return d; };
+  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const isoTime = (d: Date) => `${iso(d)}T${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:00`;
+  const long = (d: Date) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" });
+  const short = (d: Date) => d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/London" });
+  const full = (d: Date) => d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/London" });
+  const viewingAt = day(VIEWING_DAY, 14, 30);
+
   const phase = phaseOf(stage);
   const inDeal = phase !== "finding";
 
   /* Before the deal: the home she is after, once she has asked about it. */
-  const enquiry = atLeast(stage, "enquired") ? { ...HOME, enquiredOn: "2026-09-08" } : null;
-  const viewing = atLeast(stage, "viewing") ? { when: "2026-09-15T14:30:00", withName: "Sam", status: (atLeast(stage, "viewed") ? "done" : "booked") as "done" | "booked" } : null;
-  const offer = atLeast(stage, "offer") ? { amount: 850, madeOn: "2026-09-15", status: (inDeal ? "accepted" : "with_landlord") as "accepted" | "with_landlord" } : null;
+  const enquiry = atLeast(stage, "enquired") ? { ...HOME, enquiredOn: iso(day(2)) } : null;
+  const viewing = atLeast(stage, "viewing") ? { when: isoTime(viewingAt), withName: "Sam", status: (atLeast(stage, "viewed") ? "done" : "booked") as "done" | "booked" } : null;
+  const offer = atLeast(stage, "offer") ? { amount: 850, madeOn: iso(day(VIEWING_DAY)), status: (inDeal ? "accepted" : "with_landlord") as "accepted" | "with_landlord" } : null;
 
   /* The deal, once there is one. Living is every stage done. */
   const dealIdx = stage === "living" ? STAGES.length : DEAL.indexOf(stage);
@@ -126,7 +151,7 @@ export function sampleFor(stage: TenantStageKey): TenantHome {
         property: HOME.property,
         locality: HOME.locality,
         rentPcm: HOME.rentPcm,
-        moveIn: "2026-10-01",
+        moveIn: iso(day(KEYS_DAY)),
         stageKey: stage,
         stages: STAGES.map(([key, label], i) => ({ key, label, state: i < dealIdx ? "done" : i === dealIdx ? "current" : "upcoming" })),
         now: DEAL_WORDS[stage].now,
@@ -146,7 +171,7 @@ export function sampleFor(stage: TenantStageKey): TenantHome {
     blurb: fillUpdate(u.blurb, {
       property: HOME.property,
       agent: AGENT.name,
-      when: viewing ? "Tuesday 15 September at 2:30pm" : null,
+      when: viewing ? `${full(viewingAt)} at 2:30pm` : null,
       amount: offer ? `£${offer.amount}` : null,
     }),
     cta: u.cta,
@@ -156,14 +181,15 @@ export function sampleFor(stage: TenantStageKey): TenantHome {
   /* The spine. Before a deal, the road to one (lib/tenant-journey
      findingRoad); with a deal, its eight. */
   const stops: Stop[] = inDeal
-    ? deal!.stages.map((s) => ({ id: s.key, label: s.label, sub: s.key === "move_day" ? "1 Oct 2026" : "", state: s.state }))
+    ? deal!.stages.map((s) => ({ id: s.key, label: s.label, sub: s.key === "move_day" ? long(day(KEYS_DAY)) : "", state: s.state }))
     : findingRoad(stage, {
         home: enquiry && stage !== "declined" ? HOME.property : null,
-        viewing: viewing ? "Tue 15 Sep" : null,
+        viewing: viewing ? short(viewingAt) : null,
         offer: offer ? "£850 a month" : null,
       });
 
-  const activity = ACTIVITY.filter((a) => atLeast(stage, a.at)).reverse();
+  const activity = ACTIVITY.filter((a) => atLeast(stage, a.at)).reverse()
+    .map(({ day: d, sub, ...a }) => ({ ...a, sub: sub.replace("VIEWING", `${short(viewingAt)}, 2:30pm`), when: long(day(d)) }));
   if (inDeal && stage !== "living") activity.unshift({ at: stage, label: DEAL_WORDS[stage].now, sub: HOME.property, when: "", tone: "live" });
 
   return {
