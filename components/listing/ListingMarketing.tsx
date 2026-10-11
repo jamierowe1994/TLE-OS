@@ -5,7 +5,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import LineIcon from "@/components/LineIcon";
 import DropZone from "@/components/listing/DropZone";
 import PortalPreview, { PORTAL_TABS, type Portal } from "@/components/listing/PortalPreview";
-import { CHANGE_WORDS, changesIn, draftFrom, fiveWeeks, money, orderedImages, type Draft, type FactField } from "@/components/listing/listing-draft";
+import { CHANGE_WORDS, changesIn, draftFrom, fiveWeeks, money, orderedImages, shownFloorplans, type Draft, type FactField } from "@/components/listing/listing-draft";
 import type { ListingDetails } from "@/lib/listing-details";
 import GuideButton from "@/components/GuideButton";
 import { toast } from "@/lib/toast";
@@ -55,11 +55,11 @@ const SOURCE_WORDS: Record<string, string> = {
 };
 
 /** Said once over the grid while photos wait to come off: nothing leaves the listing until Save. */
-function RemovedNote({ count, onUndo }: { count: number; onUndo: () => void }) {
+function RemovedNote({ count, onUndo, noun = "photo" }: { count: number; onUndo: () => void; noun?: string }) {
   return (
     <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[12px] text-muted">
       <span>
-        {count === 1 ? "1 photo comes" : `${count} photos come`} off the listing when you press Save.
+        {count === 1 ? `1 ${noun} comes` : `${count} ${noun}s come`} off the listing when you press Save.
       </span>
       <button type="button" onClick={onUndo} className="font-semibold text-ink underline underline-offset-2 hover:text-accent-dark">
         Put {count === 1 ? "it" : "them"} back
@@ -229,6 +229,7 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
   /* The order keeps a removed photo's place, so putting it back puts it
      back where it was; orderedImages leaves it out meanwhile. */
   const putPhotosBack = () => setDraft((d) => ({ ...d, removedImages: [] }));
+  const plans = shownFloorplans(details, draft);
   /** Take a photo off the advert. Only the draft until Save, so it can be put back. */
   const removePhoto = (id: string) => {
     setPicked(null);
@@ -766,7 +767,7 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
 
       <section className={card}>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className={eyebrow}>Floor plans · {details.floorplans.length} of 5</p>
+          <p className={eyebrow}>Floor plans · {plans.length} of 5</p>
           {canEdit && details.floorplans.length < 5 && (
             <button type="button" onClick={() => setDrop("floorplan")} className="flex items-center gap-2 rounded-full border border-line/60 px-4 py-2 text-[12.5px] font-semibold hover:border-ink/40">
               <DoodleIcon name="upload" size={13} />
@@ -774,11 +775,27 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
             </button>
           )}
         </div>
-        {details.floorplans.length ? (
+        {draft.removedFloorplans.length > 0 && (
+          <RemovedNote noun="floor plan" count={draft.removedFloorplans.length} onUndo={() => setDraft((d) => ({ ...d, removedFloorplans: [] }))} />
+        )}
+        {plans.length ? (
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {details.floorplans.map((f) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img key={f.id} src={f.thumb} alt="" className="aspect-square w-full rounded-xl border border-line/50 bg-white object-contain" />
+            {plans.map((f, i) => (
+              <div key={f.id} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={f.thumb} alt="" className="aspect-square w-full rounded-xl border border-line/50 bg-white object-contain" />
+                {canEdit && (
+                  <button
+                    type="button"
+                    title="Remove this floor plan"
+                    aria-label={`Remove floor plan ${i + 1}`}
+                    onClick={() => setDraft((d) => ({ ...d, removedFloorplans: [...d.removedFloorplans, f.id] }))}
+                    className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full border border-line/60 bg-white/95 text-ink shadow-sm transition-colors hover:border-red-600 hover:bg-red-600 hover:text-white"
+                  >
+                    <LineIcon name="trash" size={14} />
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         ) : (

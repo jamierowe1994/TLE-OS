@@ -352,6 +352,8 @@ export interface ListingEdit {
   imageOrder?: string[];
   /** Image ids to take off the listing. */
   removedImages?: string[];
+  /** Floor plan ids to take off the listing. */
+  removedFloorplans?: string[];
   beds?: number | null;
   baths?: number | null;
   receptions?: number | null;
@@ -420,6 +422,11 @@ export async function planListingWrite(id: number, edit: ListingEdit): Promise<{
     const rows: Obj[] = order.map((imgId, i) => ({ id: Number(imgId), priority: i + 1 }));
     for (const imgId of gone) rows.push({ id: Number(imgId), destroy: true });
     if (rows.length) rel.listing_images = rows;
+  }
+  if (edit.removedFloorplans?.length) {
+    const held = new Set(Array.isArray(related.listing_floorplans) ? (related.listing_floorplans as Obj[]).map((r) => String(r.id)) : []);
+    const rows = edit.removedFloorplans.filter((x) => held.has(x)).map((x) => ({ id: Number(x), destroy: true }));
+    if (rows.length) rel.listing_floorplans = rows;
   }
   if (Object.keys(rel).length) data.related = rel;
 

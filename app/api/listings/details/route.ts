@@ -130,6 +130,10 @@ export async function PATCH(req: NextRequest) {
     if (Array.isArray(b.removedImages) && b.removedImages.every((x) => typeof x === "string" || typeof x === "number")) edit.removedImages = (b.removedImages as unknown[]).map(String);
     else bad.push("removedImages");
   }
+  if (b.removedFloorplans !== undefined) {
+    if (Array.isArray(b.removedFloorplans) && b.removedFloorplans.every((x) => typeof x === "string" || typeof x === "number")) edit.removedFloorplans = (b.removedFloorplans as unknown[]).map(String);
+    else bad.push("removedFloorplans");
+  }
   /* The material information: each one must be a value off its list. All
      of them are kept by the OS; the ones the listing has a field for are
      sent on as well (planListingWrite). */

@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import type { ListingDetails } from "@/lib/listing-details";
-import { fiveWeeks, longDate, money, orderedImages, perWeek, type Draft } from "@/components/listing/listing-draft";
+import { fiveWeeks, longDate, money, orderedImages, perWeek, shownFloorplans, type Draft } from "@/components/listing/listing-draft";
 
 /**
  * THE ADVERT AS EACH PORTAL WILL SHOW IT (James, 15 Sep 2026).
@@ -213,7 +213,7 @@ export default function PortalPreview({ portal, details, draft, setDraft, canEdi
     </div>
   );
 
-  const floorplan = details.floorplans[0];
+  const floorplan = shownFloorplans(details, draft)[0];
   const epcChart = details.epc.chartUrl;
 
   /* ── Rightmove ─────────────────────────────────────────────────────── */

@@ -17,6 +17,8 @@ export interface Draft {
       photos but can't delete them"). Gone from the draft at once, gone from
       the listing on Save, like the order. */
   removedImages: string[];
+  /** Floor plans taken off the same way (James, 11 Oct 2026). */
+  removedFloorplans: string[];
   beds: number | null;
   baths: number | null;
   receptions: number | null;
@@ -54,6 +56,7 @@ export const draftFrom = (d: ListingDetails): Draft => ({
   highlights: d.highlights,
   imageOrder: d.images.map((i) => i.id),
   removedImages: [],
+  removedFloorplans: [],
   beds: d.beds,
   baths: d.baths,
   receptions: d.receptions,
@@ -101,6 +104,7 @@ export const CHANGE_WORDS: Record<keyof Draft, string> = {
   highlights: "key features",
   imageOrder: "photo order",
   removedImages: "photos removed",
+  removedFloorplans: "floor plans removed",
   beds: "bedrooms",
   baths: "bathrooms",
   receptions: "receptions",
@@ -144,4 +148,10 @@ export function orderedImages(d: ListingDetails, draft: Draft) {
   /* Anything REX has that the draft has not heard of yet goes on the end. */
   for (const i of d.images) if (!draft.imageOrder.includes(i.id) && !gone.has(i.id)) ordered.push(i);
   return ordered;
+}
+
+/** The floor plans still on the advert, less any waiting to come off on Save. */
+export function shownFloorplans(d: ListingDetails, draft: Draft) {
+  const gone = new Set(draft.removedFloorplans);
+  return d.floorplans.filter((f) => !gone.has(f.id));
 }
