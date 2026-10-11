@@ -28,6 +28,9 @@ import type { AppraisalTick, MarketAppraisal, MaStage, ServiceLevel } from "@/li
 import { SERVICE_LEVELS } from "@/lib/market-appraisal";
 import { CAST } from "@/lib/showroom/demo-world";
 import type { DemoReply } from "@/lib/showroom/demo-api";
+import { buildGuide } from "@/lib/ma-guide";
+import type { Comparable, MaResearch, MarketListing, RecentLet } from "@/lib/ma-research";
+import type { MarketPicture } from "@/lib/market-picture";
 
 export const RAJ_APPRAISAL = "demo-ma-raj";
 export const RAJ_LEAD = "os-demo-raj";
@@ -48,6 +51,8 @@ export interface DemoAppraisal {
   terms: { firstSentAt: string; lastSentAt: string; count: number } | null;
   signed: { name: string; at: string } | null;
   facts: { type: string; beds: number; baths: number };
+  /** The agent's half of the terms, signed on the stand-in (components/landlord/DocusealEmbed). */
+  agentSignedAt?: string | null;
 }
 
 export interface AppraisalBook {
@@ -178,6 +183,73 @@ function staged(f: DemoAppraisal, now = Date.now()): MarketAppraisal {
   return { ...f.ma, stage: s.stage === "lost" || s.stage === "won" ? s.stage : f.ma.stage, liveStage: s.stage, stageWhy: s.why, ...ticksOf(f, now), unreadMessages: 0 };
 }
 
+/* ─────────────────── the builder's market (lib/ma-research, lib/market-picture) ───────────────────
+   Raj's side of town as the builder reads it: what we have let ourselves (the comparables the guide is
+   worked out from), what is advertised near him now, what has let, and the area's numbers. Invented,
+   at the scale of a three-bed terrace in a Nottingham sector, and laid out from now. Photographs are
+   the handful of real house pictures the demos already use (public/rex). */
+const PHOTOS = ["295517", "295547", "299698", "300102", "325696", "334480", "339326", "367819", "415656", "480975"].map((id) => `/rex/${id}.jpg`);
+const STREETS = ["Larkfield Road", "Meadow Row", "Chapel Terrace", "Orchard Street", "Willow Grove", "Bramley Close", "Foundry Lane", "Queen's Walk", "Mill Street", "Hawthorn Avenue"];
+
+function research(f: DemoAppraisal, now: number): MaResearch {
+  const day = (n: number) => new Date(now - n * D).toISOString().slice(0, 10);
+  const comps: Comparable[] = [
+    [1, 1175, 9, true, "C"], [2, 1225, 14, true, "D"], [3, 1250, 6, true, "C"], [4, 1295, 11, false, "C"], [5, 1200, 18, true, "D"], [6, 1325, 8, true, "B"], [7, 1150, 21, true, "D"],
+  ].map(([i, rent, days, agreed, epc], k) => ({
+    id: `c-${k}`, name: `${10 + Number(i) * 7} ${STREETS[Number(i)]}`, locality: k < 5 ? "Nottingham NG2 3" : "Nottingham NG2 4", rentMonthly: Number(rent),
+    rentDisplay: `£${Number(rent).toLocaleString("en-GB")} pcm`, daysOnMarket: Number(days), letAgreed: Boolean(agreed), epcRating: String(epc), nearness: (k < 5 ? "sector" : "district") as Comparable["nearness"],
+  }));
+  const onMarketNearby: MarketListing[] = [
+    [0, 3, "Terraced house", 1250, "on market", 6, "Castle Homes"], [1, 3, "Terraced house", 1195, "let agreed", 12, "Pemberton Lettings"], [2, 2, "Terraced house", 995, "on market", 3, "Riverside Property"],
+    [3, 3, "Semi-detached house", 1350, "on market", 21, "Castle Homes"], [4, 3, "Terraced house", 1225, "let agreed", 9, "The Letting Experts"], [5, 4, "Terraced house", 1450, "on market", 15, "Pemberton Lettings"],
+    [6, 2, "Flat", 925, "on market", 30, "Riverside Property"], [7, 3, "Terraced house", 1275, "let agreed", 5, "Hollins & Co"],
+  ].map(([i, beds, type, rent, status, days, agent], k) => ({
+    address: `${3 + k * 4} ${STREETS[(Number(i) + 3) % STREETS.length]}, Nottingham`, postcode: `NG2 3${"ABDEFGHJ"[k]}${"QRSTUWXY"[k]}`, beds: Number(beds), type: String(type), rent: Number(rent),
+    image: PHOTOS[k % PHOTOS.length], status: status as MarketListing["status"], listingId: 900100 + k, listedOn: day(Number(days)), daysListed: Number(days), agent: String(agent),
+    reducedAt: k === 3 ? day(4) : null, lat: CAST.lat + (k % 3 - 1) * 0.004, lon: CAST.lng + (k % 4 - 1.5) * 0.005,
+  }));
+  const recentlyLet: RecentLet[] = [[1, 3, 1225, 7, 12], [2, 3, 1250, 11, 26], [3, 2, 1010, 5, 40], [4, 3, 1295, 9, 55], [5, 4, 1475, 14, 71]].map(([i, beds, rent, toLet, ago]) => ({
+    address: `${20 + Number(i) * 3} ${STREETS[(Number(i) + 5) % STREETS.length]}, Nottingham`, postcode: "NG2 3", beds: Number(beds), rent: Number(rent), daysToLet: Number(toLet), letOn: day(Number(ago)),
+  }));
+  return {
+    address: f.ma.address, postcode: f.ma.postcode, sector: "NG2 3", subject: { hsId: 9001, label: `${f.ma.address}, ${f.ma.postcode}` }, addressWarning: null,
+    areaAverage: { beds: 3, avgRent: 1215 },
+    marketScopes: [
+      { area: "NG2", level: "district", avgRent: 1190, toLetNow: 142, letLast12m: 1310, monthsOfSupply: 1.3 },
+      { area: "NG2 3", level: "sector", avgRent: 1215, toLetNow: 21, letLast12m: 198, monthsOfSupply: 1.27 },
+      { area: f.ma.postcode, level: "postcode", avgRent: null, toLetNow: 2, letLast12m: 9, monthsOfSupply: null },
+    ],
+    scopeBeds: 3, market: { onMarket: 21, offMarket: 177, availabilityPct: 11 }, onMarketNearby,
+    /* What the records hold about the house itself (lib/matinfo's groups), so the first screen is the property, not a blank. */
+    material: {
+      hsId: 9001, known: 18, possible: 26, bedrooms: 3, lat: CAST.lat, lon: CAST.lng, valuation: null,
+      groups: [
+        { id: "what", title: "What it is", fields: [{ label: "Property type", value: "Terraced house", headline: true }, { label: "Bedrooms", value: "3", headline: true }, { label: "Floor area", value: "86 m²", headline: true }, { label: "Built", value: "1900 to 1929" }, { label: "Garden faces", value: "South west" }] },
+        { id: "legal", title: "Tenure and tax", fields: [{ label: "Tenure", value: "Freehold", headline: true }, { label: "Council tax band", value: "B", headline: true }, { label: "Council", value: "Nottingham City" }] },
+        { id: "epc", title: "Energy", fields: [{ label: "EPC rating", value: "D (62)", headline: true }, { label: "Could be", value: "B (84)" }, { label: "Heating", value: "Boiler and radiators" }, { label: "Heating fuel", value: "Mains gas" }] },
+        { id: "utilities", title: "Utilities and connectivity", fields: [{ label: "Broadband", value: "Full fibre available" }, { label: "Water", value: "Severn Trent" }] },
+        { id: "build", title: "Construction", fields: [{ label: "Walls", value: "Solid brick, as built" }, { label: "Roof", value: "Pitched, 200 mm loft insulation" }, { label: "Windows", value: "Fully double glazed" }] },
+        { id: "risk", title: "Risks and restrictions", fields: [{ label: "Flood risk", value: "Very low" }] },
+      ],
+      compliance: { epcRating: "D", epcScore: 62, epcAssessedOn: new Date(now - 1400 * D).toISOString().slice(0, 10), potentialRating: "B", potentialScore: 84, floodRisk: "Very low", conservationArea: null, leaseYearsRemaining: null },
+    },
+    marketFilters: { appliedRadius: false }, recentlyLet, subjectPoint: { lat: CAST.lat, lon: CAST.lng }, comparables: comps, guide: buildGuide(comps), pulledAt: iso(now),
+  };
+}
+
+function marketPicture(postcode: string, now: number): MarketPicture {
+  const s = (median: number, n: number, low: number, high: number) => ({ median, n, low, high });
+  const scope = (area: string, level: "district" | "sector", k: number) => ({
+    area, level, advertised: Math.round(160 * k), letAgreed: Math.round(58 * k), daysAdvertised: s(19, Math.round(150 * k), 7, 41),
+    bands: { newIn14: Math.round(52 * k), days15to28: Math.round(41 * k), days29to84: Math.round(48 * k), over84: Math.round(15 * k), undated: Math.round(4 * k) },
+    houses: Math.round(96 * k), flats: Math.round(64 * k),
+    beds: [{ beds: 1, n: Math.round(31 * k), rent: s(795, Math.round(31 * k), 725, 875) }, { beds: 2, n: Math.round(52 * k), rent: s(975, Math.round(52 * k), 895, 1075) }, { beds: 3, n: Math.round(57 * k), rent: s(1225, Math.round(57 * k), 1150, 1325) }, { beds: 4, n: Math.round(20 * k), rent: s(1475, Math.round(20 * k), 1375, 1650) }],
+    rent: s(1095, Math.round(160 * k), 875, 1300), reduced: Math.round(17 * k),
+    agents: [{ agent: "Castle Homes", n: Math.round(34 * k), ours: false }, { agent: "Pemberton Lettings", n: Math.round(29 * k), ours: false }, { agent: "The Letting Experts", n: Math.round(24 * k), ours: true }, { agent: "Riverside Property", n: Math.round(18 * k), ours: false }],
+  });
+  return { postcode, scopes: [scope("NG2", "district", 1), scope("NG2 3", "sector", 0.14)], ourLetSpeed: { median: 11, n: 23 }, pulledAt: iso(now) };
+}
+
 /* ─────────────────────────── the network ─────────────────────────── */
 
 const ok = (json: Record<string, unknown>, sent: string[] = [], did?: string): DemoReply => ({ status: 200, json: { ok: true, ...json }, sent, did });
@@ -269,8 +341,9 @@ export function answerAppraisals(book: AppraisalBook, method: string, url: URL, 
     }
     if (what === "terms" && method === "GET") {
       const landlord = { role: "landlord", name: f.ma.landlord, email: f.ma.landlordEmail ?? "", status: f.signed ? "completed" : f.terms ? "sent" : "awaiting", sentAt: f.terms?.lastSentAt ?? null, openedAt: null, completedAt: f.signed?.at ?? null, embedSrc: null };
-      const agent = { role: "agent", name: CAST.agent.name, email: CAST.agent.email, status: "completed", sentAt: null, openedAt: null, completedAt: f.ma.valuedAt, embedSrc: null };
-      return ok({ connected: true, sendUnlocked: f.ma.valuation != null, parties: [agent, landlord], sent: f.terms, nudge: { count: 0, autoCount: 0, lastAt: null, lastBy: null }, nextNudgeAt: f.terms ? iso(new Date(f.terms.firstSentAt).getTime() + 2 * D) : null, views: { presentation: f.decks.find((d) => d.kind === "post-appraisal")?.opens ?? 0, contract: 0 } });
+      const signedAt = f.agentSignedAt ?? (f.terms ? f.terms.firstSentAt : null);
+      const agent = { role: "agent", name: CAST.agent.name, email: CAST.agent.email, status: signedAt ? "completed" : "awaiting", sentAt: null, openedAt: null, completedAt: signedAt, embedSrc: signedAt ? null : `demo:${f.ma.id}` };
+      return ok({ connected: true, sendUnlocked: f.ma.valuation != null && Boolean(f.ma.landlordEmail), parties: [agent, landlord], sent: f.terms, nudge: { count: 0, autoCount: 0, lastAt: null, lastBy: null }, nextNudgeAt: f.terms ? iso(new Date(f.terms.firstSentAt).getTime() + 2 * D) : null, views: { presentation: f.decks.find((d) => d.kind === "post-appraisal")?.opens ?? 0, contract: 0 } });
     }
     if ((what === "terms" || what === "nudge") && method === "POST") {
       if (f.ma.valuation == null) return no("Record the figure first: the terms are drawn up from it.");
@@ -367,7 +440,12 @@ export function answerAppraisals(book: AppraisalBook, method: string, url: URL, 
   if (p === "/api/dossier") return ok({ propertyType: "Terraced", beds: 3, baths: 1 });
   if (p === "/api/case-state") {
     const key = `${sp.get("kind") ?? str(b.kind)}:${sp.get("id") ?? str(b.id)}`;
-    if (method === "GET") return ok({ payload: book.cases[key] ?? null });
+    if (method === "GET") {
+      /* The facts checked with the landlord at booking (the wizard saves them), else the file's own. */
+      const f = sp.get("kind") === "appraisal-facts" ? byRef(sp.get("id") ?? "") : null;
+      const fallback = f ? { type: f.facts.type === "Terraced" ? "Terraced house" : f.facts.type, beds: f.facts.beds, baths: f.facts.baths, ignoreLookup: false } : null;
+      return ok({ payload: book.cases[key] ?? fallback });
+    }
     book.cases[key] = b.payload ?? null;
     return ok({ saved: true });
   }
@@ -385,6 +463,36 @@ export function answerAppraisals(book: AppraisalBook, method: string, url: URL, 
   }
   if (p === "/api/travel") return ok({ legs: [], precise: false, resolved: true });
   if (p === "/api/appointments" && method === "POST") return ok({ id: `appt-${++book.seq}` }, [], "diary");
+
+  /* ── the builder: the market, the area, photographs, history, the address list ── */
+  if (p === "/api/ma-research") { const f = book.files.find((x) => x.ma.address === sp.get("address")) ?? byId(RAJ_APPRAISAL) ?? book.files[0]; return { status: 200, json: research(f, now), sent: [] }; }
+  if (p === "/api/ma-research/addresses") return ok({ addresses: [{ hsId: 9001, label: `${CAST.property}, Nottingham ${CAST.postcode}` }, { hsId: 9002, label: `10 Recreation Terrace, Nottingham ${CAST.postcode}` }] });
+  if (p === "/api/market-picture") return { status: 200, json: marketPicture(sp.get("postcode") ?? CAST.postcode, now), sent: [] };
+  if (p === "/api/ma-photos") {
+    const ids = (sp.get("ids") ?? "").split(",").filter(Boolean), photos: Record<string, string[]> = {}, adverts: Record<string, string | null> = {};
+    ids.forEach((id, k) => { photos[id] = [0, 1, 2].map((j) => PHOTOS[(k + j * 3) % PHOTOS.length]); adverts[id] = null; });
+    return ok({ photos, adverts });
+  }
+  if (p === "/api/property-history") return ok({ listings: [] });
+  if (p === "/api/presentations/email" && method === "POST") {
+    const f = byId(str(b.appraisalId)) ?? byId(RAJ_APPRAISAL);
+    return ok({ to: f?.ma.landlordEmail ?? CAST.landlord.email }, ["appraisal-post"], "deck_emailed");
+  }
+
+  /* ── the terms: the agent signs their half on the stand-in, then sends ── */
+  if (p === "/api/docuseal/sign" && method === "POST") {
+    const f = byId(str(b.id));
+    if (!f) return no("No such appraisal.", 404);
+    if (f.ma.valuation == null) return no("Record the figure first: the contract is drawn up from it.");
+    if (b.replace) f.agentSignedAt = null;
+    return ok({ embedSrc: `demo:${f.ma.id}` }, [], "contract_drawn");
+  }
+  if (p === "/api/docuseal/demo-signed" && method === "POST") {
+    const f = byId(str(b.src).replace(/^demo:/, ""));
+    if (!f) return no("No such appraisal.", 404);
+    f.agentSignedAt = iso(now);
+    return ok({}, [], "agent_signed");
+  }
 
   /* ── the welcome video: none recorded; recording one is a real camera, so not in the demo ── */
   if (p === "/api/video") return method === "GET" ? ok({ video: null }) : no("Recording a video isn't part of the demo. Press Send it without a video instead.");

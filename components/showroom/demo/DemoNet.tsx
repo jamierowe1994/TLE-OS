@@ -242,8 +242,11 @@ export default function DemoNet({ label = "Showroom demo" }: { label?: string })
       const all = Array.from(scope.querySelectorAll<HTMLElement>("button, a, label, select, input:not([type=hidden]):not([type=checkbox]):not([type=radio]), textarea, [role=button], summary"));
       /* A box has no words of its own: it is found by its placeholder or its label. */
       const words = (el: HTMLElement) => (el.textContent || el.getAttribute("aria-label") || el.getAttribute("placeholder") || "").trim().toLowerCase();
-      return all.find((el) => words(el).startsWith(want) && el.offsetParent !== null)
-        ?? all.find((el) => words(el).includes(want) && el.offsetParent !== null)
+      /* A control that cannot be pressed yet is never the one rung: in a sequence, the ring stays on the
+         step still to do (Send waits, greyed, until the contract is signed). */
+      const live = (el: HTMLElement) => el.offsetParent !== null && !(el as HTMLButtonElement).disabled && el.getAttribute("aria-disabled") !== "true";
+      return all.find((el) => words(el).startsWith(want) && live(el))
+        ?? all.find((el) => words(el).includes(want) && live(el))
         ?? null;
     };
     const find = (): HTMLElement | null => {

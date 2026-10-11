@@ -137,7 +137,53 @@ const CUSTOM_CSS = `
   }
 `;
 
-export default function DocusealEmbed({
+type EmbedProps = {
+  url: string;
+  email?: string | null;
+  onCompleted?: () => void;
+  onRoot?: (root: ShadowRoot | null) => void;
+  className?: string;
+  style?: CSSProperties;
+};
+
+/**
+ * The Showroom demo's stand-in (lib/showroom/demo-appraisals answers /api/docuseal/sign with a "demo:"
+ * address). DocuSeal's form is their page and cannot run on an invented contract, so the demo shows
+ * the same moment - read, type your name, sign - and tells the demo it is done. Only a "demo:" address
+ * ever reaches this; every real signing goes to DocuSeal.
+ */
+function DemoSign({ url, onCompleted, className = "", style }: EmbedProps) {
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className={`mx-auto max-w-[560px] space-y-4 p-6 text-[14px] leading-relaxed text-ink ${className}`} style={style}>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">Terms of business · sample</p>
+      <p>The sample contract for the demo: the rent agreed, the service, the management fee and the set-up fee from the file, and the standard terms. In the real OS this is the full contract, and it is signed here in the same place.</p>
+      <label className="block">
+        <span className="text-[12px] font-semibold">Type your name to sign</span>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your full name" className="mt-1 w-full rounded-xl border border-line bg-white px-3 py-2.5 font-[cursive] text-[18px]" />
+      </label>
+      <button
+        type="button"
+        disabled={!name.trim() || busy}
+        onClick={async () => {
+          setBusy(true);
+          await fetch("/api/docuseal/demo-signed", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ src: url, name: name.trim() }) }).catch(() => null);
+          onCompleted?.();
+        }}
+        className="rounded-full bg-[#56423e] px-5 py-2.5 text-[13px] font-semibold text-white disabled:opacity-40"
+      >
+        {busy ? "Signing…" : "Sign the terms"}
+      </button>
+    </div>
+  );
+}
+
+export default function DocusealEmbed(props: EmbedProps) {
+  return props.url.startsWith("demo:") ? <DemoSign {...props} /> : <DocusealForm {...props} />;
+}
+
+function DocusealForm({
   url,
   email,
   onCompleted,

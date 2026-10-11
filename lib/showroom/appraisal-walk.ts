@@ -11,8 +11,7 @@
  *
  * Same shape as the back office walkthroughs (lib/showroom/back-office), so the
  * tour reads both the same way (scripts/extract-customers.mjs in the tour).
- * Checked against the screens on 11 Oct 2026. The builder and the terms are
- * not live yet (`notYet`): their tabs still show the guide.
+ * Checked against the screens on 11 Oct 2026.
  */
 
 import type { BackOfficeJourney } from "@/lib/showroom/back-office";
@@ -95,6 +94,57 @@ export const APPRAISAL_WALK: BackOfficeJourney[] = [
       },
     ],
     agent: { says: "After the visit, open the appraisal and record the figure in Next up.", href: "/market-appraisals" },
-    notYet: ["Building the post-appraisal deck and signing the terms are still being added to the live demo."],
+    notYet: [],
+  },
+  {
+    id: "ma-build",
+    title: "Your Best-Price Guide",
+    lead: "Before the visit, build the presentation you take with you: the home, what is on the market, what has let, the area's numbers, and your best-price guide.",
+    sees: ["The builder's five steps", "On the market, with photographs", "What has let, and what we have let", "The local market", "Review, then create"],
+    story: "appraisal",
+    who: ["office", "landlord"],
+    scenes: () => [
+      {
+        id: "build-steps", actor: "office", title: "Build the Presentation",
+        says: "Five steps along the top, visited in any order. Property is what the records hold about the house. On the market is everything advertised near it now: click a card to put it in. Recently let is what has gone let agreed, and what we have let ourselves - tick ours to work out the best-price guide. Market is the area's numbers. Review shows the deck exactly as Raj will see it.",
+        where: "Market Appraisals > the file > Build presentation",
+        screen: { kind: "office-appraisal-build", at: "booked" },
+        try: { says: "Press Next through the steps, clicking a card or two on the way, then Create presentation.", hint: ["Next", "Create presentation"], did: ["deck_appraisal"] },
+      },
+      {
+        id: "build-deck", actor: "landlord", title: "What You Show on the Day",
+        says: "The presentation you sit down with: the plan for the home, what is letting nearby, the local market, your guide and how we work. Page through it the way Raj will.",
+        screen: { kind: "deck", at: "booked", section: "appraisal" },
+      },
+    ],
+    agent: { says: "Open the appraisal and press Build presentation.", href: "/market-appraisals" },
+    notYet: [],
+  },
+  {
+    id: "ma-terms",
+    title: "Sending the Terms",
+    lead: "With the figure on the file, send Raj the presentation again with the figure, your fees and the terms to sign, in one email from you.",
+    sees: ["The post-appraisal deck", "Prepare and send: check it, sign your half", "Send it to Raj"],
+    story: "appraisal",
+    who: ["office", "landlord"],
+    scenes: () => [
+      {
+        id: "terms-post", actor: "office", title: "Build the Post-Appraisal",
+        says: "Next up offers the post-appraisal: the deck Raj saw, plus the figure, the fees and how to get started. It keeps your picks from the first deck, so Next through to Review and Create presentation.",
+        where: "Market Appraisals > the file > Next up",
+        screen: { kind: "office-appraisal", at: "valued" },
+        try: { says: "Press Build the post-appraisal, then Next through to Review and Create presentation.", hint: ["Build the post-appraisal", "Next", "Create presentation"], did: ["deck_post-appraisal"] },
+      },
+      {
+        id: "terms-send", actor: "office", title: "Prepare and Send",
+        says: "Check the booklet as Raj will read it, open the contract and sign your half, tick that the figures and dates are right, then send. Raj gets one email from you with the presentation and the contract.",
+        where: "Market Appraisals > the file > Prepare and send",
+        screen: { kind: "office-appraisal-send", at: "valued" },
+        try: { says: "Open the contract and sign your half, look through the booklet, tick that the figures are right, then Send it to Raj Chauhan.", hint: ["Open the cover", "These are right", "Open the contract", "Sign the terms", "Done", "Send it to"], did: ["terms"] },
+        sends: ["landlord-contract-pack"],
+      },
+    ],
+    agent: { says: "Open the appraisal: Next up holds the post-appraisal, then Prepare and send.", href: "/market-appraisals" },
+    notYet: [],
   },
 ];

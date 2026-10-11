@@ -45,7 +45,9 @@ export type ScreenKind =
   | "office-compliance" | "office-verify" | "office-inspections" | "visit"
   | "landlord-documents" | "tenant-documents" | "email"
   /* The valuation (lib/showroom/appraisal-walk): the board, and Raj's file. */
-  | "office-appraisals" | "office-appraisal";
+  | "office-appraisals" | "office-appraisal" | "office-appraisal-build" | "office-appraisal-send"
+  /* A deck as the landlord opens it (/present/sample; `section` is the deck kind). */
+  | "deck";
 
 export interface DemoScreen {
   kind: ScreenKind;

@@ -248,6 +248,9 @@ export function srcFor(s: DemoScene, j: BackOfficeJourney, way: WayId, token: st
     /* Each valuation scene starts clean at its moment (?fresh=1); within it, the book is kept as you click on. */
     case "office-appraisals": q.set("fresh", "1"); return `${pre}/appraisals?${q}`;
     case "office-appraisal": q.set("fresh", "1"); return `${pre}/appraisals/${RAJ_APPRAISAL}?${q}`;
+    case "office-appraisal-build": q.set("fresh", "1"); if (s.screen.section) q.set("kind", s.screen.section); return `${pre}/appraisals/${RAJ_APPRAISAL}/build?${q}`;
+    case "office-appraisal-send": q.set("fresh", "1"); return `${pre}/appraisals/${RAJ_APPRAISAL}/send?${q}`;
+    case "deck": return `/present/sample?kind=${encodeURIComponent(s.screen.section ?? "appraisal")}`;
     case "email": return null;
   }
 }
