@@ -1,5 +1,6 @@
 "use client";
 
+import { RAJ_APPRAISAL } from "@/lib/showroom/demo-appraisals";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -244,6 +245,9 @@ export function srcFor(s: DemoScene, j: BackOfficeJourney, way: WayId, token: st
     case "landlord-repairs": q.set("stage", "managed"); return `/landlord/demo/maintenance?${q}`;
     case "landlord-documents": q.set("stage", "managed"); return `/landlord/demo/documents?${q}`;
     case "tenant-documents": return `/tenant/demo/documents?stage=living`;
+    /* Each valuation scene starts clean at its moment (?fresh=1); within it, the book is kept as you click on. */
+    case "office-appraisals": q.set("fresh", "1"); return `${pre}/appraisals?${q}`;
+    case "office-appraisal": q.set("fresh", "1"); return `${pre}/appraisals/${RAJ_APPRAISAL}?${q}`;
     case "email": return null;
   }
 }

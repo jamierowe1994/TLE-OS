@@ -16,6 +16,7 @@
  * the matching case here. The rules worth keeping in step are marked.
  */
 
+import { answerAppraisals, appraisalBook } from "@/lib/showroom/demo-appraisals";
 import type { Move, WorksOrder, WorksEvent } from "@/lib/works-orders";
 import type { Finding, Inspection } from "@/lib/inspections";
 import { STEPS, stepOf } from "@/lib/works-steps";
@@ -619,6 +620,12 @@ export function answer(w: DemoWorld, method: string, url: URL, body: Body): Demo
       moveVisit(w, i, { action: "access_reply", reply, at, note: val(body, "note") });
       if (at) moveVisit(w, w.book.inspections.find((x) => x.id === i.id)!, { action: "book", at });
       return ok({ reply, at }, [], "visit_reply");
+    }
+
+    /* ── The valuation: Market Appraisals, Book an appraisal, the file (lib/showroom/demo-appraisals) ── */
+    if (w.story === "appraisal") {
+      const r = answerAppraisals((w.appraisals ??= appraisalBook(w.at)), method, url, body);
+      if (r) return r;
     }
 
     return no("That is not part of the Showroom demo, so nothing happened.", 404);

@@ -32,6 +32,41 @@ const DEMO_SCREENS: Record<string, string> = {
   "/inspections": "inspections",
   "/compliance-desk/verify": "verify",
 };
+/* Screens with pages under them, by prefix: /market-appraisals/<id> opens the
+   demo's appraisals/<id> (the valuation, lib/showroom/demo-appraisals). */
+const DEMO_TREES: Record<string, string> = { "/market-appraisals": "appraisals" };
+function demoScreenFor(path: string): string | undefined {
+  if (DEMO_SCREENS[path]) return DEMO_SCREENS[path];
+  for (const [real, demo] of Object.entries(DEMO_TREES)) if (path === real || path.startsWith(real + "/")) return demo + path.slice(real.length);
+  return undefined;
+}
+/** The demo's own address for a real OS address, carrying the story along; null when it has none. */
+function demoUrlFor(to: URL): string | null {
+  const pre = window.location.pathname.match(/^(\/preview\/[^/]+\/back-office)\//)?.[1];
+  const screen = to.origin === window.location.origin ? demoScreenFor(to.pathname) : undefined;
+  if (!pre || !screen) return null;
+  const here = new URLSearchParams(window.location.search);
+  const q = new URLSearchParams(to.search);
+  q.delete("_rsc");
+  for (const k of ["story", "at", "way"]) if (here.get(k) && !q.get(k)) q.set(k, here.get(k)!);
+  return `${pre}/${screen}?${q}`;
+}
+
+/* The tour (jamierowe1994/tle-os-demo) frames these screens from its own
+   address, so the walkthrough's hints and the presses it waits for cross
+   origins - for these addresses only. */
+const TOUR_ORIGINS = ["https://tle-os-demo-production.up.railway.app", "http://127.0.0.1:3392", "http://localhost:3392"];
+const parentOrigin = (): string | null => {
+  try {
+    const ref = document.referrer ? new URL(document.referrer).origin : null;
+    if (ref && TOUR_ORIGINS.includes(ref)) return ref;
+  } catch { /* no referrer */ }
+  return window.location.origin;
+};
+
+/* The valuation is a story you walk through, so its book is kept for the tab
+   (a booked appraisal is still there on the file you open next). ?fresh=1 starts again. */
+const KEEP = "tle-demo-book:appraisal";
 
 let world: DemoWorld | null = null;
 let realFetch: typeof fetch | null = null;
@@ -45,7 +80,19 @@ function seed(): DemoWorld {
   const sp = new URLSearchParams(window.location.search);
   const story = sp.get("story");
   const way = sp.get("way");
-  return worldFor(isStory(story) ? story : "repair", Number(sp.get("at") ?? 0) || 0, isWay(way) ? way : "portal");
+  const w = worldFor(isStory(story) ? story : "repair", Number(sp.get("at") ?? 0) || 0, isWay(way) ? way : "portal");
+  if (w.story === "appraisal") {
+    try {
+      if (sp.get("fresh") === "1") sessionStorage.removeItem(KEEP);
+      const held = JSON.parse(sessionStorage.getItem(KEEP) ?? "null") as { at: number; book: DemoWorld["appraisals"] } | null;
+      if (held && held.at === w.at && held.book) w.appraisals = held.book;
+    } catch { /* storage refused: the story starts at its moment */ }
+  }
+  return w;
+}
+function keep(w: DemoWorld) {
+  if (w.story !== "appraisal" || !w.appraisals) return;
+  try { sessionStorage.setItem(KEEP, JSON.stringify({ at: w.at, book: w.appraisals })); } catch { /* storage refused */ }
 }
 
 /**
@@ -85,7 +132,7 @@ function quietFocus() {
 
 function tell(msg: Record<string, unknown>) {
   try {
-    if (window.parent && window.parent !== window) window.parent.postMessage({ source: "tle-demo", ...msg }, window.location.origin);
+    if (window.parent && window.parent !== window) window.parent.postMessage({ source: "tle-demo", ...msg }, parentOrigin() ?? window.location.origin);
   } catch { /* not framed, or framed by someone else: nothing to tell */ }
 }
 
@@ -100,6 +147,17 @@ function install(fresh = false) {
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const raw = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     const url = new URL(raw, window.location.href);
+    /* The app's own move to another page (router.push, not a link): a page
+       with a demo opens as that demo; a prefetch of one is simply not made. */
+    if (url.origin === window.location.origin && !url.pathname.startsWith("/api/")) {
+      const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+      const demo = headers.get("rsc") ? demoUrlFor(url) : null;
+      if (demo) {
+        if (headers.get("next-router-prefetch")) return Promise.reject(new TypeError("Not prefetched in the demo."));
+        window.location.assign(demo);
+        return new Promise<Response>(() => {});
+      }
+    }
     if (window.location.pathname !== demoPath || url.origin !== window.location.origin || !url.pathname.startsWith("/api/")) return realFetch!(input, init);
     const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
     let body: unknown = init?.body ?? null;
@@ -109,6 +167,7 @@ function install(fresh = false) {
     /* A beat, so a press feels like a press and the screen's own "Saving…" shows. */
     await new Promise((r) => setTimeout(r, method === "GET" ? 120 : 380));
     const reply = answer(world ?? (world = seed()), method, url, body);
+    if (method !== "GET" && reply.status < 400) keep(world);
     if (method !== "GET" && reply.status < 400) tell({ type: "did", did: reply.did ?? method.toLowerCase(), sent: reply.sent });
     if (reply.status >= 400 && method !== "GET") tell({ type: "refused", path: url.pathname });
     if (reply.status === 404 && !String((reply.json as { error?: string }).error ?? "").includes("isn't one of ours")) console.warn(`[showroom demo] not answered: ${method} ${url.pathname}`);
@@ -130,7 +189,7 @@ export default function DemoNet({ label = "Showroom demo" }: { label?: string })
     install();
     tell({ type: "ready", path: window.location.pathname });
     const onMsg = (e: MessageEvent) => {
-      if (e.origin !== window.location.origin || e.data?.source !== "tle-showroom") return;
+      if ((e.origin !== window.location.origin && !TOUR_ORIGINS.includes(e.origin)) || e.data?.source !== "tle-showroom") return;
       if (e.data.type === "hint") setHint(e.data.hint ?? null);
     };
     window.addEventListener("message", onMsg);
@@ -145,15 +204,11 @@ export default function DemoNet({ label = "Showroom demo" }: { label?: string })
       const to = new URL(href, window.location.href);
       /* A link to another back office screen (Book it on a certificate opens
          Maintenance's raise form) opens that screen's demo, on the same story. */
-      const pre = window.location.pathname.match(/^(\/preview\/[^/]+\/back-office)\//)?.[1];
-      const screen = to.origin === window.location.origin ? DEMO_SCREENS[to.pathname] : undefined;
-      if (pre && screen) {
+      const demo = demoUrlFor(to);
+      if (demo) {
         e.preventDefault();
         e.stopPropagation();
-        const here = new URLSearchParams(window.location.search);
-        const q = new URLSearchParams(to.search);
-        for (const k of ["story", "at", "way"]) if (here.get(k) && !q.get(k)) q.set(k, here.get(k)!);
-        window.location.assign(`${pre}/${screen}?${q}`);
+        window.location.assign(demo);
         return;
       }
       if (to.origin === window.location.origin && /^\/(preview|tenant\/demo|landlord\/demo)\//.test(to.pathname) && to.pathname !== window.location.pathname) return;
@@ -184,9 +239,11 @@ export default function DemoNet({ label = "Showroom demo" }: { label?: string })
     const findOne = (text: string): HTMLElement | null => {
       const want = text.toLowerCase();
       const scope = hint.near ? Array.from(document.querySelectorAll<HTMLElement>("section, div, li, form")).find((el) => el.textContent?.toLowerCase().includes(hint.near!.toLowerCase())) ?? document.body : document.body;
-      const all = Array.from(scope.querySelectorAll<HTMLElement>("button, a, label, select, input[type=date], input[type=datetime-local], textarea, [role=button], summary"));
-      return all.find((el) => (el.textContent ?? el.getAttribute("aria-label") ?? el.getAttribute("placeholder") ?? "").trim().toLowerCase().startsWith(want) && el.offsetParent !== null)
-        ?? all.find((el) => (el.textContent ?? el.getAttribute("placeholder") ?? "").toLowerCase().includes(want) && el.offsetParent !== null)
+      const all = Array.from(scope.querySelectorAll<HTMLElement>("button, a, label, select, input:not([type=hidden]):not([type=checkbox]):not([type=radio]), textarea, [role=button], summary"));
+      /* A box has no words of its own: it is found by its placeholder or its label. */
+      const words = (el: HTMLElement) => (el.textContent || el.getAttribute("aria-label") || el.getAttribute("placeholder") || "").trim().toLowerCase();
+      return all.find((el) => words(el).startsWith(want) && el.offsetParent !== null)
+        ?? all.find((el) => words(el).includes(want) && el.offsetParent !== null)
         ?? null;
     };
     const find = (): HTMLElement | null => {

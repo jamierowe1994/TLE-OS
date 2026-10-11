@@ -729,7 +729,9 @@ export default function BookAppraisalWizard({
             else setStep("saved");
           }}
           mode="appraisal"
-          address={[address.trim(), postcode.trim()].filter((x) => x && !address.includes(x)).join(", ")}
+          /* The street, then the postcode unless the street already has it. The old filter tested the street
+             against itself and dropped it, so the booker and the landlord's confirmation said only "NG2 3AB". */
+          address={[address.trim(), postcode.trim()].filter((x, i) => x && (i === 0 || !address.toUpperCase().includes(x.toUpperCase()))).join(", ")}
           origin={resolved?.lat != null && resolved?.lng != null ? { lat: resolved.lat, lng: resolved.lng } : null}
           lead={{ name: name.trim(), email: email.trim(), phone: mobile.trim() }}
           properties={[]}

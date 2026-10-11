@@ -43,7 +43,9 @@ export const ACTORS: Record<Actor, { label: string; who: string; icon: string; t
 export type ScreenKind =
   | "tenant-repairs" | "landlord-repairs" | "office-maintenance" | "contractor" | "repair"
   | "office-compliance" | "office-verify" | "office-inspections" | "visit"
-  | "landlord-documents" | "tenant-documents" | "email";
+  | "landlord-documents" | "tenant-documents" | "email"
+  /* The valuation (lib/showroom/appraisal-walk): the board, and Raj's file. */
+  | "office-appraisals" | "office-appraisal";
 
 export interface DemoScreen {
   kind: ScreenKind;

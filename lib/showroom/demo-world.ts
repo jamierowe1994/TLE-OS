@@ -37,8 +37,10 @@ import type { VerifyItem } from "@/lib/compliance-desk";
 import type { DueVisit, Finding, Inspection, InspectionEvent } from "@/lib/inspections";
 import { stepOf as visitStepOf } from "@/lib/inspection-steps";
 import { categoriesOf } from "@/lib/works-catalogue";
+import type { AppraisalBook } from "@/lib/showroom/demo-appraisals";
 
-export type StoryId = "repair" | "gas" | "compliance" | "visits";
+/** "appraisal" is the valuation, board to terms (lib/showroom/demo-appraisals keeps its book). */
+export type StoryId = "repair" | "gas" | "compliance" | "visits" | "appraisal";
 /** How a repair reaches us. */
 export type WayId = "portal" | "phone" | "landlord" | "visit";
 
@@ -539,6 +541,8 @@ export interface DemoWorld {
   verify: VerifyItem[];
   /** Inspections, their findings and timelines, and the due list (/api/inspections, /api/visit). */
   book: VisitBook;
+  /** The valuation story's appraisals, made on first use (lib/showroom/demo-appraisals). */
+  appraisals?: AppraisalBook;
 }
 
 /** The moments of each story, by name, in order. */
@@ -547,6 +551,8 @@ export const MOMENTS: Record<StoryId, readonly string[]> = {
   gas: GAS_MOMENTS.map((m) => m.id),
   compliance: ["book", "uploaded", "verified"],
   visits: [...VISIT_MOMENTS],
+  /* Kept in step with APPRAISAL_MOMENTS in lib/showroom/demo-appraisals (not imported: that file imports this one). */
+  appraisal: ["board", "booked", "visit", "valued", "terms"],
 };
 export const momentIndex = (story: StoryId, id: string) => Math.max(0, MOMENTS[story].indexOf(id));
 
@@ -641,7 +647,7 @@ export function worldFor(story: StoryId, at: number, way: WayId = "portal", now 
 }
 
 export function isStory(v: string | null | undefined): v is StoryId {
-  return v === "repair" || v === "gas" || v === "compliance" || v === "visits";
+  return v === "repair" || v === "gas" || v === "compliance" || v === "visits" || v === "appraisal";
 }
 export function isWay(v: string | null | undefined): v is WayId {
   return v === "portal" || v === "phone" || v === "landlord" || v === "visit";
