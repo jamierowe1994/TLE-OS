@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import LineIcon from "@/components/LineIcon";
 import DropZone from "@/components/listing/DropZone";
 import PortalPreview, { PORTAL_TABS, type Portal } from "@/components/listing/PortalPreview";
 import { CHANGE_WORDS, changesIn, draftFrom, fiveWeeks, money, orderedImages, type Draft, type FactField } from "@/components/listing/listing-draft";
@@ -52,6 +53,20 @@ const SOURCE_WORDS: Record<string, string> = {
   market: "the local market",
   photos: "the photos",
 };
+
+/** Said once over the grid while photos wait to come off: nothing leaves the listing until Save. */
+function RemovedNote({ count, onUndo }: { count: number; onUndo: () => void }) {
+  return (
+    <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[12px] text-muted">
+      <span>
+        {count === 1 ? "1 photo comes" : `${count} photos come`} off the listing when you press Save.
+      </span>
+      <button type="button" onClick={onUndo} className="font-semibold text-ink underline underline-offset-2 hover:text-accent-dark">
+        Put {count === 1 ? "it" : "them"} back
+      </button>
+    </p>
+  );
+}
 
 export default function ListingMarketing({ listingId, initial, canEdit, lockedNote, onSaved }: Props) {
   const [details, setDetails] = useState<ListingDetails | null>(null);
@@ -210,6 +225,14 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
     order.splice(from, 1);
     order.splice(at, 0, id);
     setDraft((d) => ({ ...d, imageOrder: order }));
+  };
+  /* The order keeps a removed photo's place, so putting it back puts it
+     back where it was; orderedImages leaves it out meanwhile. */
+  const putPhotosBack = () => setDraft((d) => ({ ...d, removedImages: [] }));
+  /** Take a photo off the advert. Only the draft until Save, so it can be put back. */
+  const removePhoto = (id: string) => {
+    setPicked(null);
+    setDraft((d) => ({ ...d, removedImages: [...d.removedImages, id] }));
   };
   const input: RequirementInput = {
     rent: draft.rent, deposit: draft.deposit, availableFrom: draft.availableFrom, beds: draft.beds, baths: draft.baths,
@@ -639,6 +662,7 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
                   : "Drag a photo to move it, or tap one and then tap where it should go. The first is the main photo on every portal."}
               </p>
             )}
+            {draft.removedImages.length > 0 && <RemovedNote count={draft.removedImages.length} onUndo={putPhotosBack} />}
             <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4 xl:grid-cols-6">
               {images.map((img, i) => {
                 const isPicked = picked === img.id;
@@ -707,6 +731,20 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
                         Make main photo
                       </button>
                     )}
+                    {canEdit && !picked && (
+                      <button
+                        type="button"
+                        title="Remove this photo"
+                        aria-label={`Remove photo ${i + 1}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removePhoto(img.id);
+                        }}
+                        className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-ink shadow-sm transition-colors hover:bg-red-600 hover:text-white"
+                      >
+                        <LineIcon name="trash" size={14} />
+                      </button>
+                    )}
                     {isPicked && (
                       <span className="absolute inset-x-1.5 bottom-1.5 rounded-full bg-accent py-1 text-center text-[10.5px] font-semibold text-white">Moving</span>
                     )}
@@ -716,10 +754,13 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
             </div>
           </>
         ) : (
+          <>
+          {draft.removedImages.length > 0 && <RemovedNote count={draft.removedImages.length} onUndo={putPhotosBack} />}
           <button type="button" disabled={!canEdit} onClick={() => setDrop("photos")} className="mt-4 flex w-full flex-col items-center rounded-2xl border-2 border-dashed border-line/70 bg-page px-6 py-8 text-center hover:border-accent-dark/60">
             <span className="hand text-[16px]">Drop the photos here</span>
             <span className="mt-1 text-[12px] text-muted">The first one is the main photo on every portal.</span>
           </button>
+          </>
         )}
       </section>
 

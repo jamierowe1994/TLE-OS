@@ -141,6 +141,7 @@ const PATHS: Record<string, React.ReactNode> = {
     </>
   ),
   bank: <path d="M3.5 9.5 12 4l8.5 5.5M5 20.5h14M6.5 10.5v7M10 10.5v7M14 10.5v7M17.5 10.5v7M4 20.5h16" />,
+  trash: <path d="M4.5 6.5h15M9.5 6.5V4.5h5v2M6.5 6.5l.8 12.6a1.5 1.5 0 0 0 1.5 1.4h6.4a1.5 1.5 0 0 0 1.5-1.4l.8-12.6M10 10.5v6M14 10.5v6" />,
   dot: <circle cx="12" cy="12" r="3" />,
 };
 

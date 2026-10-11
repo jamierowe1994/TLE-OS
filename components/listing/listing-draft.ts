@@ -13,6 +13,10 @@ export interface Draft {
   body: string;
   highlights: string[];
   imageOrder: string[];
+  /** Photos taken off the advert (James, 11 Oct 2026: "we can arrange the
+      photos but can't delete them"). Gone from the draft at once, gone from
+      the listing on Save, like the order. */
+  removedImages: string[];
   beds: number | null;
   baths: number | null;
   receptions: number | null;
@@ -49,6 +53,7 @@ export const draftFrom = (d: ListingDetails): Draft => ({
   body: d.body,
   highlights: d.highlights,
   imageOrder: d.images.map((i) => i.id),
+  removedImages: [],
   beds: d.beds,
   baths: d.baths,
   receptions: d.receptions,
@@ -95,6 +100,7 @@ export const CHANGE_WORDS: Record<keyof Draft, string> = {
   body: "description",
   highlights: "key features",
   imageOrder: "photo order",
+  removedImages: "photos removed",
   beds: "bedrooms",
   baths: "bathrooms",
   receptions: "receptions",
@@ -133,8 +139,9 @@ export function longDate(iso: string | null): string | null {
 
 export function orderedImages(d: ListingDetails, draft: Draft) {
   const byId = new Map(d.images.map((i) => [i.id, i]));
-  const ordered = draft.imageOrder.map((id) => byId.get(id)).filter((i): i is ListingDetails["images"][number] => Boolean(i));
+  const gone = new Set(draft.removedImages);
+  const ordered = draft.imageOrder.map((id) => byId.get(id)).filter((i): i is ListingDetails["images"][number] => Boolean(i) && !gone.has(i!.id));
   /* Anything REX has that the draft has not heard of yet goes on the end. */
-  for (const i of d.images) if (!draft.imageOrder.includes(i.id)) ordered.push(i);
+  for (const i of d.images) if (!draft.imageOrder.includes(i.id) && !gone.has(i.id)) ordered.push(i);
   return ordered;
 }

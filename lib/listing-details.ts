@@ -350,6 +350,8 @@ export interface ListingEdit {
   highlights?: string[];
   /** Image ids in the order they should show; the first is the main photo. */
   imageOrder?: string[];
+  /** Image ids to take off the listing. */
+  removedImages?: string[];
   beds?: number | null;
   baths?: number | null;
   receptions?: number | null;
@@ -409,10 +411,15 @@ export async function planListingWrite(id: number, edit: ListingEdit): Promise<{
     for (const extra of held.slice(wanted.length)) if (extra.id != null) rows.push({ id: extra.id, destroy: true });
     rel.listing_highlights = rows;
   }
-  if (edit.imageOrder?.length) {
+  if (edit.imageOrder?.length || edit.removedImages?.length) {
     const held = new Set(Array.isArray(related.listing_images) ? (related.listing_images as Obj[]).map((r) => String(r.id)) : []);
-    const order = edit.imageOrder.filter((x) => held.has(x));
-    if (order.length) rel.listing_images = order.map((imgId, i) => ({ id: Number(imgId), priority: i + 1 }));
+    const gone = new Set((edit.removedImages ?? []).filter((x) => held.has(x)));
+    const order = (edit.imageOrder ?? []).filter((x) => held.has(x) && !gone.has(x));
+    /* A removed photo is destroyed by its id, the same rule as the key
+       features above; the rest keep their places, closed up. */
+    const rows: Obj[] = order.map((imgId, i) => ({ id: Number(imgId), priority: i + 1 }));
+    for (const imgId of gone) rows.push({ id: Number(imgId), destroy: true });
+    if (rows.length) rel.listing_images = rows;
   }
   if (Object.keys(rel).length) data.related = rel;
 
