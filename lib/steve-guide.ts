@@ -79,7 +79,7 @@ const toLeads = (side?: "tenant" | "landlord"): GuideStep[] => [
 
 /** Admin's own sidebar, once inside Admin. */
 const toAdmin = (href: string, label: string): GuideStep[] => [
-  { point: ['[data-nav="/admin"]'], say: "Click Admin, near the foot of the menu.", done: { path: "/admin" } },
+  { point: ['[data-nav="/admin"]'], say: "Click Admin, under Your workspaces in the menu on the left.", done: { path: "/admin" } },
   ...(href === "/admin" ? [] : [{ point: [`[data-admin-nav="${href}"]`], say: `Now ${label} in the Admin menu.`, done: { path: href } } as GuideStep]),
 ];
 

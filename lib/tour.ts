@@ -8,7 +8,8 @@
  * is how to tell us something is wrong. If they take nothing else in, that
  * one screen has already paid for itself.
  *
- * FULL walks the rail top to bottom and ends in the same place. It is the
+ * FULL walks the sidebar top to bottom (Search, the screens, Help and
+ * Settings; components/LaunchNav since 11 Oct 2026) and ends in the same place. It is the
  * same last step by design: whichever door somebody comes through, they leave
  * knowing where the feedback button is.
  *
@@ -74,7 +75,7 @@ const STEVE: TourStep[] = [
     target: ["[data-os-steve]", "[data-os-steve-bubble]"],
     union: true,
     title: "And His Guides",
-    body: "Guides will hold the how-to for each part of the system. It is an empty shelf today, honestly, because the systems it describes are still being built. It fills up as they land.",
+    body: "Every how-to in the system, on his Guides tab. Each one walks a job step by step, with pictures of the real screens, and pops up over whatever you were doing so you do not lose your place.",
     dock: { open: true, tab: "guides" },
   },
   {
@@ -103,11 +104,18 @@ export const FAST: TourStep[] = [
 
 export const FULL: TourStep[] = [
   {
+    id: "search",
+    target: ["[data-os-search]"],
+    title: "Search",
+    body: "The top of the menu, or ⌘K (Ctrl+K on Windows) from any screen. Type a name, an address or a postcode and it finds the tenant, the landlord, the home or the job, wherever it lives in the system.",
+    reveal: { expand: true, profile: false },
+  },
+  {
     id: "dashboard",
     target: ['[data-nav="/dashboard"]'],
     title: "Your Dashboard",
     body: "The first thing you see, and it is yours to arrange. Use Customise to add, remove and move the tiles so it shows what you actually want to look at first thing.",
-    reveal: { expand: true },
+    reveal: { expand: true, profile: false },
   },
   {
     id: "leads",
@@ -117,11 +125,13 @@ export const FULL: TourStep[] = [
   },
   {
     id: "profile",
-    target: ["[data-os-profile]"],
+    /* The name at the foot and the menu it opens, ringed together. */
+    target: ["[data-os-profile]", "[data-os-profile-menu]"],
+    union: true,
     title: "Your Profile",
-    body: "Your name, your photo, your contact details, and where you connect REX and your email if you ever need to change them.",
+    body: "Your name, your photo, your contact details, and where you connect your email if you ever need to change it. Press your name at the foot of the menu, then Your profile.",
     caveat:
-      "Worth knowing now: by the time this goes live, editing your details here will change them in REX too. So it is real, and it is worth being a little careful with.",
+      "Worth knowing now: your details here are copied to the rest of our systems, so changing them is real, and worth being a little careful with.",
     reveal: { expand: true, profile: true },
   },
   {
@@ -177,6 +187,14 @@ export const FULL: TourStep[] = [
     title: "Tools",
     body: "Prospecting, and the doors nobody has knocked on yet. This is the one you go to deliberately rather than the one waiting for you, which is why it sits down here.",
     caveat: "Mostly a shell today. It is the newest part of the system and it is being built out.",
+  },
+  {
+    id: "help-settings",
+    target: ["[data-os-help]", "[data-os-settings]"],
+    union: true,
+    title: "Help and Settings",
+    body: "Help holds every guide in one place, so you can read how a job works before you do it. Settings is your profile, and how the system looks for you, including dark mode.",
+    reveal: { expand: true },
   },
   ...STEVE,
 ];

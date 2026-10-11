@@ -84,23 +84,22 @@ export default function DashboardGuide() {
           whole journey from a new lead to a managed property.
         </p>
         <Shot
-          src={`${IMG}/01-board.webp`}
+          src={`${IMG}/01-board-oct.webp`}
           alt="The TLE OS dashboard as it appears on first sign-in, showing eight tiles."
           width={1800}
-          height={1299}
+          height={1389}
           caption="The board everyone starts with. Yours will show your own numbers, not these."
         />
         <p className="mt-4">
           Most tiles are also a door. Clicking one takes you to the full screen behind it
-          - the count of applications opens Applications, the diary opens your calendar.
+          - the count of offers opens your offers, the diary opens your calendar.
         </p>
         <Aside title="If a tile says it cannot tell who you are">
           <p>
-            One or two tiles read your figures out of REX, our estate agency system. Until
-            your OS account has been linked to your REX login they cannot tell which
-            agent&apos;s numbers to show, so rather than showing you somebody else&apos;s
-            they say so and show nothing. That is a one-off bit of setup - tell James and
-            it is done in a minute.
+            One or two tiles need your account linked to your own figures. Until it is,
+            they cannot tell which agent&apos;s numbers to show, so rather than showing you
+            somebody else&apos;s they say so and show nothing. That is a one-off bit of
+            setup - tell James and it is done in a minute.
           </p>
         </Aside>
       </Step>
@@ -109,23 +108,22 @@ export default function DashboardGuide() {
       <Step n={2} title="Turning On Customise">
         <p>
           Everything in the rest of this guide happens in one mode, and there is one
-          button that turns it on. It is at the right-hand end of the row with the search
-          box in it, just above the tiles, and it is labelled{" "}
-          <Ui>Customise</Ui>.
+          button that turns it on. It sits just under the greeting at the top of the page,
+          on the left, above the tiles, and it is labelled <Ui>Customise</Ui>.
         </p>
         <Shot
-          src={`${IMG}/02-customise-button.webp`}
-          alt="The row above the dashboard tiles, with the Customise button at the far right."
-          width={1800}
-          height={143}
-          caption="Top right, on the same line as the search box. Nothing changes until you press it."
+          src={`${IMG}/02-customise-button-oct.webp`}
+          alt="The Customise button, under the greeting and above the tiles."
+          width={840}
+          height={180}
+          caption="Under the greeting, on the left. Nothing changes until you press it."
         />
         <p className="mt-4">
           Press it and the board changes appearance. That is how you know you are in
           customise mode:
         </p>
         <ul className="mt-2.5 flex list-disc flex-col gap-1.5 pl-4">
-          <li>Every tile gets a dashed outline and starts to jiggle gently.</li>
+          <li>Every tile gets a dashed outline and starts to wiggle gently.</li>
           <li>A small ✕ appears in the top-left corner of each tile.</li>
           <li>A curved bracket appears in the bottom-right corner of each tile.</li>
           <li>
@@ -136,20 +134,26 @@ export default function DashboardGuide() {
           </li>
           <li>A tray of drawers slides up along the bottom of the screen.</li>
           <li>
-            The button you pressed turns into a solid <Ui>Done</Ui>.
+            The button you pressed turns into a solid <Ui>Done</Ui>, with{" "}
+            <Ui>Add quick links</Ui> beside it.
           </li>
         </ul>
         <Shot
-          src={`${IMG}/03-customise-on.webp`}
+          src={`${IMG}/03-customise-on-oct.webp`}
           alt="The dashboard in customise mode: dashed tile outlines, remove badges, resize corners and size labels."
           width={1800}
-          height={1080}
+          height={1389}
           caption="Customise mode. The dashed outlines and the ✕ badges are the giveaway."
         />
         <p className="mt-4">
           The tiles stop showing their normal hover behaviour while you are in here, and
           clicking one no longer takes you anywhere. That is deliberate - in customise
           mode a tile is a thing you are arranging, not a link.
+        </p>
+        <p className="mt-3">
+          <Ui>Add quick links</Ui> is for the jobs you do ten times a day. Pick the ones
+          you want - add a lead, add a tenant, add a landlord, book a viewing - and each
+          becomes a button beside Customise, there every time you land on the dashboard.
         </p>
       </Step>
 
@@ -165,10 +169,10 @@ export default function DashboardGuide() {
           will get. Pick one and the tile changes immediately.
         </p>
         <Shot
-          src={`${IMG}/04-sizes.webp`}
+          src={`${IMG}/04-sizes-oct.webp`}
           alt="A tile tapped in customise mode, showing the Small, Medium and Large options."
           width={1800}
-          height={461}
+          height={311}
           caption="Tap a tile - do not drag it - and the three sizes appear. The highlighted one is its current size."
         />
         <p className="mt-4">
@@ -179,10 +183,10 @@ export default function DashboardGuide() {
           wide and three rows tall.
         </p>
         <Shot
-          src={`${IMG}/05-resize.webp`}
+          src={`${IMG}/05-resize-oct.webp`}
           alt="A tile being resized by its corner, with a dashed outline tracking the pull."
           width={1800}
-          height={868}
+          height={890}
           caption="Pull the corner. The dashed outline is where you are; the tile behind it has already snapped to 2×2."
         />
         <Aside title="Bigger tiles show more, not the same thing larger">
@@ -205,23 +209,22 @@ export default function DashboardGuide() {
           what will happen when you let go.
         </p>
         <p className="mt-3">
-          Move over the spot you want it and the tile already there lights up with a
-          coloured outline. That outline is the system telling you where your tile is
-          about to land.
+          Pause over the spot you want it and the other tiles part to leave a grey space.
+          That grey space is the system telling you where your tile is about to land.
         </p>
         <Shot
-          src={`${IMG}/06-drag.webp`}
-          alt="A tile lifted and following the pointer, with the target tile outlined in accent colour."
+          src={`${IMG}/06-drag-oct.webp`}
+          alt="A tile lifted and following the pointer, with a grey space on the board where it will land."
           width={1800}
-          height={1080}
-          caption="Leads Today, in hand. The outlined Applications tile is where it will go. The faded tile is where it came from."
+          height={1389}
+          caption="Leads Today, in hand. The grey space is where it will land when you let go."
         />
-        <Aside title="Hold still for about a second">
+        <Aside title="Pause for a moment">
           <p>
-            The board does not rearrange the instant you pass over a spot. You have to
-            settle there and hold for roughly a second before the other tiles shuffle
-            aside to make room. It is very easy to read this as the drag not working -
-            it is not, it is waiting for you.
+            The board does not rearrange while your hand is still sweeping across it. Stop
+            over a spot, even for a fraction of a second, and the other tiles shuffle aside
+            to make room. If nothing moves, you are probably still moving - it is waiting
+            for you to settle.
           </p>
           <p className="mt-2">
             It works this way on purpose. Without the pause, dragging a tile from one end
@@ -231,7 +234,7 @@ export default function DashboardGuide() {
           </p>
           <p className="mt-2">
             So: pick it up, move to where you want it, and stop. Do not drag harder or
-            wiggle - just wait a moment, watch the tiles move apart, then let go.
+            wiggle - just pause, watch the grey space open, then let go.
           </p>
         </Aside>
         <p className="mt-4">
@@ -255,10 +258,10 @@ export default function DashboardGuide() {
           tilts to show it is on its way out. Let go and it is gone.
         </p>
         <Shot
-          src={`${IMG}/07-remove.webp`}
+          src={`${IMG}/07-remove-oct.webp`}
           alt="A tile dragged off the board over the sidebar, with the banner reading Let go to remove it from your view."
           width={1800}
-          height={1080}
+          height={1389}
           caption="Dragged clear of the board. The message at the top changes to tell you what letting go will do."
         />
         <Aside title="Removed is not deleted">
@@ -291,10 +294,10 @@ export default function DashboardGuide() {
           to drop it where you want it.
         </p>
         <Shot
-          src={`${IMG}/08-tray.webp`}
+          src={`${IMG}/08-tray-oct.webp`}
           alt="The tray at the bottom of the screen with the Management drawer open, showing four tiles."
-          width={1800}
-          height={563}
+          width={1760}
+          height={450}
           caption="The Management drawer, open. Press a tile and drag it up onto the board."
         />
       </Step>
@@ -308,10 +311,10 @@ export default function DashboardGuide() {
           you can experiment freely.
         </p>
         <Shot
-          src={`${IMG}/09-reset.webp`}
+          src={`${IMG}/09-reset-oct.webp`}
           alt="The Reset to default button at the right-hand end of the customise tray."
-          width={1144}
-          height={548}
+          width={664}
+          height={220}
           caption="Far right of the tray. One press and the board is back to how it started."
         />
         <p className="mt-4">
@@ -320,10 +323,10 @@ export default function DashboardGuide() {
           the tiles go back to being links.
         </p>
         <Shot
-          src={`${IMG}/10-done.webp`}
+          src={`${IMG}/10-done-oct.webp`}
           alt="The Done button in the row above the tiles."
-          width={1380}
-          height={344}
+          width={900}
+          height={156}
           caption="Done sits exactly where Customise was."
         />
         <Aside title="There is no Save button, and that is not an oversight">
@@ -374,9 +377,8 @@ export default function DashboardGuide() {
         <p>
           <strong className="font-semibold text-ink">The board is built for a laptop
           screen.</strong>{" "}
-          On a phone it is cramped and the tiles get clipped. That is a known problem and
-          it is on the list to fix - if you are arranging your dashboard, do it at a
-          desk.
+          On a phone it folds down to two columns, so the bigger tiles get cramped. If you
+          are arranging your dashboard, do it at a desk.
         </p>
         <p className="mt-3">
           <strong className="font-semibold text-ink">A tile that looks wrong probably

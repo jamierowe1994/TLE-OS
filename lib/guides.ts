@@ -80,7 +80,8 @@ export const DASHBOARD_TILES: Array<{ group: string; icon: string; tiles: GuideT
       { label: "Lead sources", what: "Where this month's leads actually came from - portals, paid social, the website, word of mouth - against last month." },
       { label: "Pipeline snapshot", what: "The whole journey as five numbers, from lead through to managed. Taller, it adds what converts to what." },
       { label: "Earnings this month", what: "The fees that have landed, net of VAT, split by where they came from." },
-      { label: "Applications", what: "How many you have going through, and how many have stopped moving." },
+      { label: "Offers", what: "The offers open on your homes, and how many have waited more than a week for an answer." },
+      { label: "What moved", what: "Your deals as they move along: references back, out for signing, complete." },
     ],
   },
   {
@@ -109,6 +110,7 @@ export const DASHBOARD_TILES: Array<{ group: string; icon: string; tiles: GuideT
       { label: "Today", what: "Your appointments for today, in order, with a way through to the full calendar." },
       { label: "Diary", what: "The same diary with room to breathe - the day, then the week, then the whole grid as you make it bigger." },
       { label: "Viewings", what: "What is coming up, and what the last ones said. Feedback is the bit landlords wait on." },
+      { label: "Passports Done", what: "Tenants who have finished their passport and are ready to book, the home they want, and how long ago." },
       { label: "Needs attention", what: "The worry list. Uncontacted leads, a certificate about to expire, referencing that has stalled. You can tick things off." },
     ],
   },

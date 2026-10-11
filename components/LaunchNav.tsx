@@ -211,7 +211,7 @@ export default function LaunchNav({
       )}
 
       {/* Search, as a row: it opens the page's own search. */}
-      <button type="button" onClick={focusSearch} title={collapsed ? "Search (⌘K)" : undefined} className={`mt-3 ${row(false, collapsed)}`}>
+      <button type="button" data-os-search onClick={focusSearch} title={collapsed ? "Search (⌘K)" : undefined} className={`mt-3 ${row(false, collapsed)}`}>
         <LineIcon name="search" className="text-[var(--launch-icon)] group-hover:text-ink" />
         {!collapsed && (
           <>
@@ -232,13 +232,13 @@ export default function LaunchNav({
 
       <ul className="space-y-px pt-2">
         <li>
-          <Link href="/guides" title={collapsed ? "Help" : undefined} className={row(pathname.startsWith("/guides"), collapsed)}>
+          <Link href="/guides" data-os-help title={collapsed ? "Help" : undefined} className={row(pathname.startsWith("/guides"), collapsed)}>
             <LineIcon name="help" className="text-[var(--launch-icon)] group-hover:text-ink" />
             {!collapsed && <span>Help</span>}
           </Link>
         </li>
         <li>
-          <Link href="/profile" title={collapsed ? "Settings" : undefined} className={row(pathname.startsWith("/profile"), collapsed)}>
+          <Link href="/profile" data-os-settings title={collapsed ? "Settings" : undefined} className={row(pathname.startsWith("/profile"), collapsed)}>
             <LineIcon name="setting" className="text-[var(--launch-icon)] group-hover:text-ink" />
             {!collapsed && <span>Settings</span>}
           </Link>
@@ -249,7 +249,7 @@ export default function LaunchNav({
       <div className="mx-auto my-2 w-4/5 border-t border-[var(--launch-guide)]" />
       <div className="relative">
         {menu && !collapsed && (
-          <div className="absolute bottom-full left-0 right-0 mb-1 rounded-lg border border-[var(--launch-guide)] bg-[var(--shell-panel)] p-1 shadow-[0_12px_30px_-12px_rgba(0,0,0,0.3)]">
+          <div data-os-profile-menu className="absolute bottom-full left-0 right-0 mb-1 rounded-lg border border-[var(--launch-guide)] bg-[var(--shell-panel)] p-1 shadow-[0_12px_30px_-12px_rgba(0,0,0,0.3)]">
             <Link href="/profile" onClick={() => setMenu(false)} className={row(false, false)}>
               <LineIcon name="user" className="text-[var(--launch-icon)]" />
               Your profile

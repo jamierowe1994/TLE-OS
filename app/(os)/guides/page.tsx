@@ -1,4 +1,5 @@
 import Link from "next/link";
+import BackOfficeGuideCards from "@/components/BackOfficeGuideCards";
 import PageHeader from "@/components/PageHeader";
 import DoodleIcon from "@/components/DoodleIcon";
 import { GUIDES, GUIDE_SECTIONS } from "@/lib/guides";
@@ -7,13 +8,10 @@ import GuideButton from "@/components/GuideButton";
 import { BACK_OFFICE } from "@/lib/showroom/back-office";
 
 /**
- * The shelf.
- *
- * Filed under Admin > System because that is where James asked for it to sit
- * while the guides are being written. It is a staging area and not the final
- * home: these are written for agents, and agents cannot open Admin at all
- * (`admin:open` is owner-only). The destination is Steve's Guides tab, which
- * currently holds an honest empty shelf and one link to re-run the tour.
+ * Help: the guide shelf, reached from Help at the foot of the sidebar
+ * (components/LaunchNav, 11 Oct 2026). Every agent can open it, so nothing on
+ * it is written to James: the "where these are going" notes that sat at the
+ * foot of the page came off when it became the agents' Help.
  */
 
 export const dynamic = "force-dynamic";
@@ -27,8 +25,8 @@ export default function GuidesPage() {
   return (
     <>
       <PageHeader
-        title="Guides"
-        blurb="Written walkthroughs for somebody on their first morning. Read them the way an agent would, then tell me what is missing."
+        title="Help"
+        blurb="How each part of the system works, step by step, with pictures of the real screens."
         /* Nothing on this page is searchable, and a bar offering to find
            properties and tenants on a shelf of documents is a promise the page
            cannot keep. */
@@ -62,27 +60,11 @@ export default function GuidesPage() {
       </section>
 
       {/* The back office's walkthroughs live in the Showroom, where each one
-          is a guide to read and a live demo on the real screens (7 Oct 2026). */}
-      <section className="fade-up mt-8">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">The back office, step by step</p>
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          {BACK_OFFICE.map((j) => (
-            <Link
-              key={j.id}
-              href={`/showroom?side=backoffice&step=${j.id}`}
-              className="block-pop block rounded-2xl border border-line/80 bg-panel p-5"
-            >
-              <span className="flex flex-wrap items-baseline gap-2.5">
-                <DoodleIcon name="magic-wand" size={18} className="self-center text-accent-dark" />
-                <span className="hand text-[17px]">{j.title}</span>
-                <span className="text-[10.5px] text-muted">Guide and live demo · {j.scenes(j.ways?.[0]?.id ?? "portal").length} scenes</span>
-                <span className="ml-auto text-muted">→</span>
-              </span>
-              <span className="mt-1.5 block text-[12px] leading-relaxed text-muted">{j.lead}</span>
-            </Link>
-          ))}
-        </div>
-      </section>
+          is a guide to read and a live demo on the real screens (7 Oct 2026).
+          Shown only to people the Showroom is switched on for. */}
+      <BackOfficeGuideCards
+        cards={BACK_OFFICE.map((j) => ({ id: j.id, title: j.title, lead: j.lead, scenes: j.scenes(j.ways?.[0]?.id ?? "portal").length }))}
+      />
 
       {sections.map((section) => (
         <section key={section.name} className="fade-up mt-8">
@@ -131,28 +113,6 @@ export default function GuidesPage() {
           </div>
         </section>
       ))}
-
-      <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[15px]">Where these are going</h2>
-        <ul className="mt-2.5 flex max-w-2xl list-disc flex-col gap-1.5 pl-4 text-[12px] leading-relaxed text-muted">
-          <li>
-            They live here while they are being written and checked. Agents cannot
-            reach the admin area, so nobody sees one by accident.
-          </li>
-          <li>
-            The home for them is Steve&apos;s <span className="text-ink">Guides</span> tab,
-            which still says &quot;Guides are on their way&quot; and lists nothing. It is not
-            wired to this list yet. When it is, the guide pages also have to move out
-            from under <span className="text-ink">/admin</span>, because an agent
-            following a link into the admin area gets bounced back to their own screen.
-          </li>
-          <li>
-            Screenshots are taken from the real screen rather than drawn, so they go
-            stale when the screen changes. Anything that has moved is worth re-shooting
-            before it goes in front of an agent.
-          </li>
-        </ul>
-      </section>
     </>
   );
 }
