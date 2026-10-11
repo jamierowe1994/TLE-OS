@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { publicOrigin } from "@/lib/origin";
-import { cookies } from "next/headers";
-import { DEMO_STAGE_COOKIE, isStage, nextHarnessStage } from "@/lib/tenant-journey";
+import { nextHarnessStage } from "@/lib/tenant-journey";
+import { demoStage, setDemoStage } from "@/lib/tenant-demo";
 
 /**
  * The sample's own "next step" button lands here: it moves Sophie one stop
@@ -9,10 +9,9 @@ import { DEMO_STAGE_COOKIE, isStage, nextHarnessStage } from "@/lib/tenant-journ
  * never links here - its buttons open the booking, the feedback, the offer.
  */
 export async function GET(req: NextRequest) {
-  const c = (await cookies()).get(DEMO_STAGE_COOKIE)?.value;
-  const now = isStage(c) ? c : "referencing";
+  const now = await demoStage();
   const to = nextHarnessStage(now) ?? now;
   const res = NextResponse.redirect(new URL("/tenant/demo", publicOrigin(req)), 303);
-  res.cookies.set(DEMO_STAGE_COOKIE, to, { path: "/tenant/demo", sameSite: "lax", maxAge: 60 * 60 * 24 * 30 });
+  setDemoStage(res, req, to);
   return res;
 }
