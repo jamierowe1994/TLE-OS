@@ -536,7 +536,31 @@ const MACHINE_ROUTES = [
   "/api/book-health/run",
 ];
 
+/**
+ * The valuation demo's own appraisals (lib/showroom/demo-appraisals: ids "demo-ma-..."), reached as a
+ * real address. Next falls back to a full page load when the demo declines a prefetch, so a press
+ * inside the Showroom demo can land on /market-appraisals/demo-ma-raj itself. Coming from a demo
+ * page, it goes back into the demo at the same story; anything else carries on as normal (sign in,
+ * or "No such appraisal" - there is no real record by that id).
+ */
+function backIntoDemo(req: NextRequest): NextResponse | null {
+  const m = req.nextUrl.pathname.match(/^\/market-appraisals(\/demo-ma-[a-z0-9-]+)?(\/[a-z-]+)?$/);
+  if (!m) return null;
+  let from: URL;
+  try { from = new URL(req.headers.get("referer") ?? ""); } catch { return null; }
+  /* Same site only, judged by the host the browser asked for (behind Railway's proxy nextUrl can be internal). */
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? req.nextUrl.host;
+  const pre = from.host === host || from.origin === req.nextUrl.origin ? from.pathname.match(/^(\/preview\/[^/]+\/back-office)\//)?.[1] : null;
+  if (!pre || from.searchParams.get("story") !== "appraisal" || (!m[1] && req.nextUrl.pathname !== "/market-appraisals")) return null;
+  const to = new URL(`${pre}/appraisals${m[1] ?? ""}${m[2] ?? ""}`, from.origin);
+  for (const k of ["story", "at", "way"]) { const v = from.searchParams.get(k); if (v) to.searchParams.set(k, v); }
+  req.nextUrl.searchParams.forEach((v, k) => { if (k !== "_rsc") to.searchParams.set(k, v); });
+  return NextResponse.redirect(to);
+}
+
 export async function middleware(req: NextRequest) {
+  const demo = backIntoDemo(req);
+  if (demo) return demo;
   /* Straight through to the route, which does its own authentication. Exact
      match, not startsWith — a prefix test would exempt
      /api/teg/sync-everything too, and that is how an allowlist quietly
