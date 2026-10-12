@@ -3,6 +3,7 @@ import "server-only";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import { activeOsProperties, pmManagedHomes, type OsProperty, type PmHome } from "@/lib/os-properties";
 import { getPortfolioBook, rentKey } from "@/lib/business/payprop-portfolio";
+import { matchHome, rentBook } from "@/lib/rent-status";
 import { getTenancyRegister } from "@/lib/business/payprop-tenancy";
 import { attach, payPropContacts } from "@/lib/business/payprop-tenant-contacts";
 import { nameKey, tenantContacts } from "@/lib/tenant-contacts";
@@ -474,6 +475,27 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
       p.rentPeriod = "month";
       p.rentMonthly = rent;
       p.rentSource = "payprop";
+    }
+  }
+  /* PAYPROP'S AGENT WHERE NOTHING ELSE NAMES ONE (James, 12 Oct 2026). 23
+     homes had no agent in REX or REX PM; PayProp's responsible agent named
+     one for 11 of them (Dan Richards' let-only homes, Lorna Fieldson's in
+     Hull). Joined only on a sure address match (lib/rent-status matchHome);
+     PayProp's office buckets ("TLE", "Admin property") are not people and
+     leave it blank. The REX user id is the one that agent's REX homes carry,
+     so the filter by agent finds both. */
+  const book = pp?.agentById ? await rentBook().catch(() => null) : null;
+  if (book && pp?.agentById) {
+    const plain = (n: string) => { const w = n.replace(/\(.*?\)/g, " ").toLowerCase().replace(/[^a-z\s]/g, " ").trim().split(/\s+/); return `${w[0] ?? ""} ${w[w.length - 1] ?? ""}`; };
+    const known = new Map<string, { id: string; name: string }>();
+    for (const p of properties) if (p.agent && !p.agent.id.startsWith("name:")) known.set(plain(p.agent.name), p.agent);
+    for (const p of properties) {
+      if (p.agent || p.test) continue;
+      const hit = matchHome(book, { name: p.name, address: p.address, postcode: p.postcode });
+      if (typeof hit !== "object") continue;
+      const who = pp.agentById[hit.id]?.agent?.trim();
+      if (!who || /^(tle|admin property|fully managed|howard|\(none\))$/i.test(who)) continue;
+      p.agent = known.get(plain(who)) ?? { id: `name:${who}`, name: who };
     }
   }
   /* Landlords' homes and rent from each home's latest let only, or a landlord
