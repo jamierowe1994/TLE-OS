@@ -149,7 +149,8 @@ export const GUIDE_TARGETS: GuideTarget[] = [
     steps: [
       nav("/listings", "Listings"),
       openRow("listing.drawer", "Click the home you want - its file opens."),
-      press(`listing.tab.${tab}`, `The ${tab.charAt(0).toUpperCase() + tab.slice(1)} tab.`),
+      /* Documents is inside Compliance, and Marketing is the Edit the advert tile (12 Oct 2026). */
+      press(`listing.tab.${tab === "documents" ? "compliance" : tab}`, tab === "marketing" ? "Edit the advert." : tab === "documents" ? "Compliance - the documents are in there." : tab === "applications" ? "Offers." : `${tab.charAt(0).toUpperCase() + tab.slice(1)}.`),
     ],
   })),
   {

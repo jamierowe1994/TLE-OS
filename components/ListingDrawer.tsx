@@ -128,16 +128,13 @@ type LandlordState =
   | { status: "none" }
   | { status: "problem"; says: string };
 
-type TabKey = "enquiries" | "applications" | "viewings" | "marketing" | "compliance" | "documents";
+type TabKey = "viewings" | "enquiries" | "applications" | "marketing" | "compliance" | "portals";
 
-/* SIX VIEWS, ONE RECORD (James, 11 Sep 2026). Home is the record itself -
-   the hero, the landlord, at a glance, next up and the spine. The rest each
-   take the whole drawer, in the order they get clicked: applications,
-   viewings, marketing (the property's facts, the write-up and the photos in
-   one place), compliance, documents. Home brings you back. */
-/* A PAGE NOW, NOT A DRAWER (James, 12 Oct 2026): "the same layout as
-   properties". Home became the page itself - photos, actions, the facts,
-   next up - and the other views are its sections, in a box under it. */
+/* SIX VIEWS, ONE RECORD (James, 11 Sep 2026), then a page with its sections
+   under it (12 Oct), then ONE PAGE (James, 12 Oct 2026: "far too much
+   scroll"): every section is a pop-out from a tile beside the photos, so
+   nothing bolts onto the foot of the page. Documents went into Compliance
+   ("pretty much the same thing"); Marketing is Edit the advert. */
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: "viewings", label: "Viewings", icon: "calendar" },
   /* Enquiries apart from Offers (James, 8 Oct 2026): people asking from the
@@ -146,28 +143,27 @@ const TABS: { key: TabKey; label: string; icon: string }[] = [
   /* "Offers" since 7 Oct 2026: an offer is not an application until it is
      accepted (James). The key stays, for ?tab= links and Steve. */
   { key: "applications", label: "Offers", icon: "coin" },
-  { key: "marketing", label: "Marketing", icon: "megaphone" },
+  { key: "marketing", label: "Edit the advert", icon: "pack/photo" },
   { key: "compliance", label: "Compliance", icon: "shield" },
-  { key: "documents", label: "Documents", icon: "file-contract" },
+  /* Live only: where the advert is, on and off, and how it is doing. */
+  { key: "portals", label: "On the portals", icon: "megaphone" },
 ];
 
-/* One line under the section tabs, saying what the section is for. */
+/* One line under each pop-out's title, saying what it is for. */
 const TAB_LEAD: Record<TabKey, string> = {
   viewings: "Everything in the diary for this home. Open a viewing for its details and whether we can get in.",
   enquiries: "Everyone who has asked about this home, from the portals and the rest. Send them the tenant passport in one go, and see whose is done.",
   applications: "Only the people who have offered. Put each one to the landlord, then accept or decline it. The accepted one moves to Applications; the rest are held until its holding fee is paid.",
   marketing: "The facts, the advert the portals show, and the photographs. What a tenant sees, all in one place.",
-  compliance: "Every certificate the home needs, where it stands, and the files on hand. Drop a certificate and it is read and filed.",
-  documents: "How we get in, the terms of business, and everything signed or filed against this listing.",
+  compliance: "Every certificate the home needs and where it stands, then the documents: how we get in, the terms of business, and everything signed or filed against this listing.",
+  portals: "Where the advert is live, taking it off or putting it back, and how it is doing.",
 };
 
-/** Where a listing opens when nothing asks for a section: its draft is
- *  written up, its live advert is shown round, a let one is offered on. */
-export function firstTab(l: { letAgreed: boolean; publicationStatus: string | null }, asked?: string | null): TabKey {
-  const hit = TABS.find((t) => t.key === asked)?.key;
-  if (hit) return hit;
-  if (l.letAgreed) return "applications";
-  return l.publicationStatus === "published" ? "viewings" : "marketing";
+/** The pop-out a link asks for (?tab=), if any. Documents lives in
+ *  Compliance now, and Home is the page itself. */
+export function askedTab(asked?: string | null): TabKey | null {
+  if (asked === "documents") return "compliance";
+  return TABS.find((t) => t.key === asked)?.key ?? null;
 }
 
 const SAGE_INK = "#56634a";
@@ -265,41 +261,27 @@ function ListingDrawerBody({
    *  file's "Write the description" (Howard, 1 Oct 2026). */
   initialTab?: string | null;
 }) {
-  const [tab, setTab] = useState<TabKey>(() => (listing ? firstTab(listing, initialTab) : "viewings"));
-  /* A section picked is kept in the address (?tab=), so a link or a reload
-     lands on it, as on a Portfolio home. */
-  const pickTab = useCallback((t: TabKey) => {
+  /* The pop-out open over the page, if any. Kept in the address (?tab=), so
+     a link or a reload opens it again. */
+  const [tab, setTab] = useState<TabKey | null>(() => askedTab(initialTab));
+  const pickTab = useCallback((t: TabKey | null) => {
     setTab(t);
     try {
       const u = new URL(window.location.href);
-      u.searchParams.set("tab", t);
+      if (t) u.searchParams.set("tab", t);
+      else u.searchParams.delete("tab");
       window.history.replaceState(window.history.state, "", u.toString());
     } catch { /* fine */ }
   }, []);
-  /* From anywhere on the page: open the section and bring it into view. */
-  const goTab = useCallback((t: TabKey) => {
-    pickTab(t);
-    setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
-  }, [pickTab]);
+  const goTab = pickTab;
+  const closeTab = useCallback(() => pickTab(null), [pickTab]);
+  /* Book a viewing asks which: one viewing, or a slot (James, 12 Oct 2026). */
+  const [choosingBook, setChoosingBook] = useState(false);
+  /* How we get in, changed from the access details. */
+  const [editingAccess, setEditingAccess] = useState(false);
   /* The side panel: the landlord's messages, or the listing's notes (10 Oct 2026). */
   const [panelTab, setPanelTab] = useState<PanelTab | null>(null);
   const [listingNotes, setListingNotes] = useState<NoteRow[] | null>(null);
-  /* Are some tabs scrolled out of sight? Then the row fades at its right edge
-     so nobody thinks Documents has gone (10 Oct 2026). */
-  const tabRow = useRef<HTMLElement>(null);
-  const [tabsHidden, setTabsHidden] = useState(false);
-  const measureTabs = useCallback(() => {
-    const el = tabRow.current;
-    if (el) setTabsHidden(el.scrollWidth - el.scrollLeft - el.clientWidth > 4);
-  }, []);
-  useEffect(() => {
-    const el = tabRow.current;
-    if (!el) return;
-    measureTabs();
-    const ro = new ResizeObserver(measureTabs);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [measureTabs, listing?.id]);
   const notesFor = listing ? String(listing.id) : null;
   useEffect(() => {
     if (!notesFor) return;
@@ -874,7 +856,7 @@ function ListingDrawerBody({
     }
     if (tabFor.current !== String(listing.id)) {
       tabFor.current = String(listing.id);
-      setTab(firstTab(listing, initialTab));
+      setTab(askedTab(initialTab));
     }
     setBooked([]);
     setHandingOver(false);
@@ -1147,15 +1129,17 @@ function ListingDrawerBody({
   const box = `${pop} rounded-2xl border border-line/70 bg-white`;
   const eyebrow = "text-[10.5px] font-semibold uppercase tracking-wide text-muted";
   const chip = "inline-flex items-center gap-1.5 rounded-full border border-line/60 bg-white px-3 py-1.5 text-[12px] transition-colors hover:border-ink/40";
-  const tile = "flex h-full min-h-[72px] w-full flex-col items-start justify-between gap-2 rounded-xl border border-line/60 bg-white p-3.5 text-left text-[12.5px] font-semibold leading-tight transition-[transform,box-shadow,border-color] duration-200 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:border-ink/60 hover:shadow-[3px_3px_0_0_color-mix(in_srgb,var(--ink)_72%,var(--page))] disabled:pointer-events-none disabled:opacity-40";
+  /* One row each - the icon beside the words - so eight fit level with the
+     photo (James, 12 Oct 2026: one page). */
+  const tile = "flex h-full min-h-[54px] w-full items-center gap-3 rounded-xl border border-line/60 bg-white px-3 py-2.5 text-left text-[12.5px] font-semibold leading-tight transition-[transform,box-shadow,border-color] duration-200 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:border-ink/60 hover:shadow-[3px_3px_0_0_color-mix(in_srgb,var(--ink)_72%,var(--page))] disabled:pointer-events-none disabled:opacity-40";
   const tileText = (label: string, what: string) => (
-    <span className="block">
+    <span className="block min-w-0 flex-1">
       <span className="block">{label}</span>
-      <span className="mt-0.5 block text-[11.5px] font-normal leading-snug text-muted">{what}</span>
+      <span className="mt-0.5 block truncate text-[11.5px] font-normal leading-snug text-muted">{what}</span>
     </span>
   );
   const tileIcon = (name: string, dark = false) => (
-    <span className={`flex h-8 w-8 items-center justify-center rounded-full ${dark ? "bg-[var(--brown)] text-white" : "bg-accent-soft text-accent-dark"}`}><DoodleIcon name={name} size={14} /></span>
+    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${dark ? "bg-[var(--brown)] text-white" : "bg-accent-soft text-accent-dark"}`}><DoodleIcon name={name} size={14} /></span>
   );
   const shots = photos;
   const dayOf = (iso: string) => new Date(iso.length === 10 ? `${iso}T00:00:00` : iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
@@ -1188,6 +1172,46 @@ function ListingDrawerBody({
     ];
   })();
 
+  const highlights = facts.filter((f) => ["Type", "Bedrooms", "Bathrooms", "Deposit", "Available from", "Photos"].includes(f.label));
+  const quietFact = (t: string) => ["Not set", "Not recorded", "Reading…", "Did not load"].includes(t);
+  /* What each pop-out holds, said on its tile. */
+  const tileSub: Record<TabKey, string> = {
+    viewings: viewings === null ? "Reading…" : `${viewings.upcoming.length + booked.length} booked · ${viewings.past.length} done`,
+    enquiries: enquiries === null ? "Reading…" : `${enquirers} ${enquirers === 1 ? "person" : "people"}`,
+    applications: savedOffers === null ? "Reading…" : openOffers ? `${openOffers} to decide` : `${savedOffers.length} so far`,
+    marketing: marketingToGo == null ? "Facts, write-up, photos" : marketingToGo === 0 ? "Complete" : `${marketingToGo} to fill in`,
+    compliance: certs === null ? "Reading…" : certOk("epc") && certOk("gas_safety") && certOk("eicr") ? "And the documents" : "Certificates to add",
+    portals: pub && !pub.onPortals ? "Off for now" : "Live adverts, how they do",
+  };
+  const needsOf: Record<TabKey, boolean> = {
+    viewings:
+      (viewings?.upcoming ?? []).some((v) => !v.cancelled && access.kind && access.kind !== "vacant" && !(access.requests ?? {})[v.id]?.grantedAt) ||
+      (viewings?.past ?? []).some((v) => !v.cancelled && !v.feedbackId),
+    enquiries: (enquiries?.length ?? 0) > 0,
+    applications: openOffers > 0,
+    marketing: photos.length === 0 || !shownBody,
+    compliance: (certs != null && !(certOk("epc") && certOk("gas_safety") && certOk("eicr"))) || (terms.status === "ready" && !terms.signed),
+    portals: false,
+  };
+  const countOf: Partial<Record<TabKey, number>> = {
+    viewings: booked.length + (viewings?.upcoming.length ?? 0),
+    enquiries: enquirers,
+    applications: openOffers,
+  };
+  const sectionTile = (k: TabKey) => {
+    const t = TABS.find((x) => x.key === k)!;
+    const n = countOf[k] ?? 0;
+    return (
+      <button key={k} type="button" data-steve={`listing.tab.${k}`} onClick={() => pickTab(k)} className={`${tile} relative`}>
+        {tileIcon(t.icon)}
+        {tileText(t.label, tileSub[k])}
+        {n > 0 && <span className="figures shrink-0 self-start rounded-full bg-accent-soft px-2 py-0.5 text-[10.5px] text-accent-dark">{n}</span>}
+        {needsOf[k] && <span aria-label="Needs attention" className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full border-2 border-white bg-accent" />}
+      </button>
+    );
+  };
+  const openTab = tab ? TABS.find((x) => x.key === tab) ?? null : null;
+
   return (
     <div data-steve="listing.drawer" className="space-y-5">
       {/* ── back, the save chip, notes and activity, and ‹ › ─────────── */}
@@ -1198,7 +1222,7 @@ function ListingDrawerBody({
           </Link>
           <SaveChip scope={saves} className="bg-white" />
         </div>
-        {/* The side panel (10 Oct 2026), a pull-out over the page now: the
+        {/* The side panel (10 Oct 2026), a pull-out over the page: the
             landlord's messages and the listing's notes. */}
         {([
           { key: "messages", label: "Activity", icon: "message" },
@@ -1225,207 +1249,189 @@ function ListingDrawerBody({
         )}
       </div>
 
-      {/* Portfolio's three rows (James, 12 Oct 2026): the photos and the name
-          beside the actions; the facts and the people beside Next up; the
-          sections beside where it's up to. On a phone they stack, actions
-          straight after the photos. */}
+      {/* ONE PAGE (James, 12 Oct 2026): "there's far too much scroll". Two
+          rows and the spine. The home beside eight tiles - every section is a
+          pop-out now, so nothing bolts onto the foot of the page; the landlord
+          and how we get in beside Next up; where it's up to across the bottom. */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_460px]">
-        {/* ── 1. the photos and the name ──────────────────────────────── */}
-        <section className={`${box} min-w-0 p-3 lg:col-start-1 lg:row-start-1`}>
-          <div className={`grid grid-cols-1 gap-2 ${shots.length > 1 ? "sm:grid-cols-[minmax(0,1fr)_140px] 2xl:grid-cols-[minmax(0,1fr)_170px]" : ""}`}>
-            <button
-              type="button"
-              onClick={() => (shots.length ? setLightbox(0) : setDrop("photos"))}
-              aria-label={shots.length ? "See the photos" : "Add photos"}
-              className={`group relative aspect-[16/10] overflow-hidden rounded-xl bg-box ${shots.length > 1 ? "sm:aspect-auto" : ""}`}
-            >
-              <PropertyPhoto src={shots[0] ?? null} alt="" width={1400} height={875} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.015]" />
-              <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-[11.5px] font-semibold backdrop-blur">
-                <DoodleIcon name="pack/photo" size={12} /> {shots.length ? `${shots.length} ${shots.length === 1 ? "photo" : "photos"}` : "No photos yet - add them"}
-              </span>
-            </button>
-            {shots.length > 1 && (
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-1">
-                {[0, 1, 2].map((i) => {
-                  const src = shots[i + 1];
-                  if (!src) return <span key={i} aria-hidden className="aspect-square rounded-xl bg-box" />;
-                  const more = i === 2 && shots.length > 4 ? shots.length - 4 : 0;
-                  return (
-                    <button key={src + i} type="button" onClick={() => setLightbox(i + 1)} aria-label={more ? `${more} more photos` : `Photo ${i + 2}`} className="group relative aspect-square overflow-hidden rounded-xl bg-box">
-                      <PropertyPhoto src={src} alt="" className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
-                      {more > 0 && <span className="absolute inset-0 flex items-center justify-center bg-ink/45 text-[18px] font-semibold text-white">+{more}</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-          <div className="px-2 pb-1.5 pt-4">
-            <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
-              <h1 className="hand min-w-0 text-[28px] leading-[1.1] sm:text-[32px]">{listing.name}</h1>
-              <span className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-semibold text-accent-dark">
-                <span className="h-1.5 w-1.5 rounded-full bg-accent-dark" />
-                {status.label}
-              </span>
-            </div>
-            <p className="figures mt-1.5 text-[20px] font-semibold">
-              {listing.rent == null ? <span className="text-[14px] font-normal text-muted">Rent not set</span> : <>£{listing.rent.toLocaleString("en-GB")} <span className="text-[13px] font-normal text-muted">{per}</span></>}
-            </p>
-            <p className="mt-1 text-[13px] text-muted">
-              {[listing.locality, listing.publishedAt ? `live since ${dayOf(listing.publishedAt)}` : null].filter(Boolean).join(" · ")}
-            </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              {listing.tenant && <Tag tone="neutral">Tenanted</Tag>}
-              {/* Whose it is, and moving it - James and Susan only (6 Oct 2026). */}
-              <ListingOwner listingId={listing.id} />
-              {/* A test file's listing (lib/test-overlay): negative id, never in REX. */}
-              {Number(listing.id) < 0 && <Tag tone="neutral">Test listing - only you can see it</Tag>}
-              {terms.status === "ready" && (
-                <button
-                  type="button"
-                  onClick={() => goTab("documents")}
-                  title="Open Documents"
-                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-                    terms.signed ? "bg-[#f1f4ec] text-[#56634a]" : "border border-accent-dark/50 bg-white text-accent-dark hover:border-accent-dark"
-                  }`}
-                >
-                  <DoodleIcon name="file-contract" size={11} />
-                  {terms.signed ? "Terms signed" : "No terms on file"}
-                </button>
+        {/* ── 1. the home ──────────────────────────────────────────────── */}
+        <section className={`${box} @container min-w-0 p-3 lg:col-start-1`}>
+          <div className="grid grid-cols-1 gap-4 @[34rem]:grid-cols-[minmax(0,300px)_minmax(0,1fr)] @[48rem]:grid-cols-[minmax(0,360px)_minmax(0,1fr)] @[60rem]:grid-cols-[420px_minmax(0,1fr)]">
+            {/* The photo held to a sensible size (James: "it's blowing out the
+                images"), three more beneath it. */}
+            <div className="min-w-0">
+              <button
+                type="button"
+                onClick={() => (shots.length ? setLightbox(0) : setDrop("photos"))}
+                aria-label={shots.length ? "See the photos" : "Add photos"}
+                className="group relative block aspect-[4/3] w-full overflow-hidden rounded-xl bg-box"
+              >
+                <PropertyPhoto src={shots[0] ?? null} alt="" width={800} height={600} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.015]" />
+                <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-[11.5px] font-semibold backdrop-blur">
+                  <DoodleIcon name="pack/photo" size={12} /> {shots.length ? `${shots.length} ${shots.length === 1 ? "photo" : "photos"}` : "No photos yet - add them"}
+                </span>
+              </button>
+              {shots.length > 1 && (
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {[0, 1, 2].map((i) => {
+                    const src = shots[i + 1];
+                    if (!src) return <span key={i} aria-hidden className="aspect-[4/3] rounded-lg bg-box" />;
+                    const more = i === 2 && shots.length > 4 ? shots.length - 4 : 0;
+                    return (
+                      <button key={src + i} type="button" onClick={() => setLightbox(i + 1)} aria-label={more ? `${more} more photos` : `Photo ${i + 2}`} className="group relative aspect-[4/3] overflow-hidden rounded-lg bg-box">
+                        <PropertyPhoto src={src} alt="" className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
+                        {more > 0 && <span className="absolute inset-0 flex items-center justify-center bg-ink/45 text-[15px] font-semibold text-white">+{more}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
-            {/* Filed away: why, said once. The way back is the action tile. */}
-            {listing.archived && (
-              <p className="mt-3 rounded-xl border border-line/60 bg-box px-3.5 py-2.5 text-[11.5px] leading-snug text-muted">
-                <span className="font-semibold text-ink">{archiveLabel(listing.archiveReason ?? null)}.</span>{" "}
-                {archiveWhy({ archived: true, reason: listing.archiveReason ?? null, since: listing.archivedSince ?? null, ageDays: listing.archiveAgeDays ?? null })}{" "}
-                It is out of the Draft tab, still searchable, and the listing itself is unchanged.
+
+            <div className="flex min-w-0 flex-col px-1 pb-1 @[34rem]:pt-1">
+              <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+                <h1 className="hand min-w-0 text-[26px] leading-[1.1] sm:text-[30px]">{listing.name}</h1>
+                <span className="mt-1.5 inline-flex items-center gap-1.5 text-[12px] font-semibold text-accent-dark">
+                  <span className="h-1.5 w-1.5 rounded-full bg-accent-dark" />
+                  {status.label}
+                </span>
+              </div>
+              <p className="figures mt-1.5 text-[20px] font-semibold">
+                {listing.rent == null ? <span className="text-[14px] font-normal text-muted">Rent not set</span> : <>£{listing.rent.toLocaleString("en-GB")} <span className="text-[13px] font-normal text-muted">{per}</span></>}
               </p>
-            )}
+              <p className="mt-1 text-[13px] text-muted">
+                {[listing.locality, listing.publishedAt ? `live since ${dayOf(listing.publishedAt)}` : null].filter(Boolean).join(" · ")}
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {listing.tenant && <Tag tone="neutral">Tenanted</Tag>}
+                {/* Whose it is, and moving it - James and Susan only (6 Oct 2026). */}
+                <ListingOwner listingId={listing.id} />
+                {/* A test file's listing (lib/test-overlay): negative id, never in REX. */}
+                {Number(listing.id) < 0 && <Tag tone="neutral">Test listing - only you can see it</Tag>}
+                {terms.status === "ready" && (
+                  <button
+                    type="button"
+                    onClick={() => pickTab("compliance")}
+                    title="Open Compliance"
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                      terms.signed ? "bg-[#f1f4ec] text-[#56634a]" : "border border-accent-dark/50 bg-white text-accent-dark hover:border-accent-dark"
+                    }`}
+                  >
+                    <DoodleIcon name="file-contract" size={11} />
+                    {terms.signed ? "Terms signed" : "No terms on file"}
+                  </button>
+                )}
+              </div>
+              {/* Filed away: why, said once. */}
+              {listing.archived && (
+                <p className="mt-3 rounded-xl border border-line/60 bg-box px-3.5 py-2.5 text-[11.5px] leading-snug text-muted">
+                  <span className="font-semibold text-ink">{archiveLabel(listing.archiveReason ?? null)}.</span>{" "}
+                  {archiveWhy({ archived: true, reason: listing.archiveReason ?? null, since: listing.archivedSince ?? null, ageDays: listing.archiveAgeDays ?? null })}{" "}
+                  It is out of the Draft tab, still searchable, and the listing itself is unchanged.
+                </p>
+              )}
+              {canFileAway && (
+                <button
+                  type="button"
+                  disabled={archiveBusy}
+                  onClick={() => onArchive?.(String(listing.id), listing.archived ? "restore" : "archive")}
+                  className="mt-2.5 self-start text-[11.5px] text-muted underline underline-offset-2 transition-colors hover:text-ink disabled:opacity-50"
+                  title={listing.archived ? "Back on the Draft tab" : `Drafts file themselves after ${Math.round(ARCHIVE_AFTER_DAYS / 30)} months`}
+                >
+                  {archiveBusy ? "Saving…" : listing.archived ? "Bring back to drafts" : "File this draft away"}
+                </button>
+              )}
+
+              {/* Getting INTO the property and getting it OUT to the database,
+                  at the foot of the home, on the right (James, 12 Oct 2026). */}
+              <div className="mt-auto grid grid-cols-1 gap-2 pt-4">
+                <AccessRequest
+                  value={access}
+                  onChange={setAccess}
+                  loading={accessStatus === "loading"}
+                  address={listing.name}
+                  agent={me}
+                  tenant={listing.tenant ?? null}
+                  landlord={landlord.status === "known" ? landlord.landlord : null}
+                  viewings={upcomingOptions}
+                  onBook={LISTING_BOOKER_LIVE ? () => setBooking(true) : undefined}
+                  renderButton={(b) => (
+                    <button type="button" onClick={b.press} className={tile} title={access.kind ? "Change how we get in from the access details" : "Record how we get into the property"}>
+                      {tileIcon(b.icon, true)}
+                      {tileText(b.label, access.kind ? "For the viewings" : "Vacant, tenant or landlord")}
+                    </button>
+                  )}
+                />
+                <button type="button" data-steve="listing.mail-db" onClick={() => setEmailing(true)} className={tile}>
+                  {tileIcon("megaphone", true)}
+                  {tileText("Mail the database", "Every tenant it suits")}
+                </button>
+              </div>
+            </div>
           </div>
         </section>
 
-        {/* ── the actions, level with the photos ─────────────────────── */}
-        <section className={`${box} flex flex-col p-4 lg:col-start-2 lg:row-start-1`}>
+        {/* ── the eight tiles, level with the home. Each opens a pop-out. ── */}
+        <section className={`${box} flex flex-col p-4 lg:col-start-2`}>
           <p className={`${eyebrow} mb-3 px-1`}>Actions</p>
           <div className="grid flex-1 auto-rows-fr grid-cols-2 gap-2">
-            {/* Getting INTO the property, and getting it OUT to the database,
-                in the dark chocolate (11 Sep 2026). */}
-            <AccessRequest
-              value={access}
-              onChange={setAccess}
-              loading={accessStatus === "loading"}
-              address={listing.name}
-              agent={me}
-              tenant={listing.tenant ?? null}
-              landlord={landlord.status === "known" ? landlord.landlord : null}
-              viewings={upcomingOptions}
-              onBook={LISTING_BOOKER_LIVE ? () => setBooking(true) : undefined}
-              renderButton={(b) => (
-                <button type="button" onClick={b.press} className={tile} title={access.kind ? "Change how we get in under Documents" : "Record how we get into the property"}>
-                  {tileIcon(b.icon, true)}
-                  {tileText(b.label, access.kind ? "How we get in for viewings" : "Vacant, the tenant or the landlord")}
-                </button>
-              )}
-            />
-            <button type="button" data-steve="listing.mail-db" onClick={() => setEmailing(true)} className={tile}>
-              {tileIcon("megaphone", true)}
-              {tileText("Mail the database", "Every tenant it suits, one email")}
+            {/* Book a viewing and Book a slot, one tile (James, 12 Oct 2026):
+                it asks which. */}
+            {LISTING_BOOKER_LIVE && (
+              <button type="button" data-steve="listing.book-slot" onClick={() => setChoosingBook(true)} className={tile}>
+                {tileIcon("calendar", true)}
+                {tileText("Book a viewing", "One, or a slot to fill")}
+              </button>
+            )}
+            <button
+              type="button"
+              data-steve="listing.make-offer"
+              disabled={!canOffer}
+              onClick={() => setPickingOfferer(true)}
+              className={tile}
+              title={canOffer ? undefined : "Once it is live with a rent, and not let agreed"}
+            >
+              {tileIcon("coin", true)}
+              {tileText("Make an offer", canOffer ? "Viewed or asked" : "Once it is live")}
             </button>
-            {LISTING_BOOKER_LIVE && (
-              <button type="button" onClick={() => setBooking(true)} className={tile}>
-                {tileIcon("calendar")}
-                {tileText("Book a viewing", "Into the diary, access asked")}
-              </button>
-            )}
-            {LISTING_BOOKER_LIVE && (
-              <button type="button" data-steve="listing.book-slot" onClick={() => setSlotting(true)} className={tile}>
-                {tileIcon("clock")}
-                {tileText("Book a slot", "Hold time at the home, book within it")}
-              </button>
-            )}
-            {canOffer && (
-              <button type="button" data-steve="listing.make-offer" onClick={() => setPickingOfferer(true)} className={tile}>
-                {tileIcon("coin")}
-                {tileText("Make an offer", "From someone who viewed or asked")}
-              </button>
-            )}
-            {!isLive && !listing.letAgreed && !publishHidden && (
+            {sectionTile("marketing")}
+            {sectionTile("viewings")}
+            {sectionTile("enquiries")}
+            {sectionTile("applications")}
+            {sectionTile("compliance")}
+            {!isLive && !listing.letAgreed && !publishHidden ? (
               <button type="button" data-steve-never onClick={pushLive} className={tile} title={readyToGoLive ? undefined : `Can't push it live until ${missingWords}.`}>
                 {tileIcon("megaphone")}
-                {tileText("Push to the portals", readyToGoLive ? "Rightmove, OnTheMarket and Zoopla" : (() => { const n = requirements.filter((r) => !r.done).length || 1; return `${n} ${n === 1 ? "thing" : "things"} to finish first`; })())}
+                {tileText("Push to the portals", readyToGoLive ? "Rightmove, Zoopla, OTM" : (() => { const n = requirements.filter((r) => !r.done).length || 1; return `${n} ${n === 1 ? "thing" : "things"} to finish`; })())}
               </button>
-            )}
-            <button type="button" onClick={() => goTab("marketing")} className={tile}>
-              {tileIcon("pack/photo")}
-              {tileText("Edit the advert", "The facts, the write-up and the photos")}
-            </button>
-            <button type="button" onClick={() => (requirements.find((r) => r.id === "epc")?.done ? goTab("compliance") : setDrop("epc"))} className={tile}>
-              {tileIcon("shield")}
-              {tileText("Add a certificate", "Read and filed on the home")}
-            </button>
-            {canFileAway && (
-              <button
-                type="button"
-                disabled={archiveBusy}
-                onClick={() => onArchive?.(String(listing.id), listing.archived ? "restore" : "archive")}
-                className={tile}
-              >
-                {tileIcon("folder")}
-                {tileText(
-                  archiveBusy ? "Saving…" : listing.archived ? "Bring back to drafts" : "File it away",
-                  listing.archived ? "Back on the Draft tab" : `Drafts file themselves after ${Math.round(ARCHIVE_AFTER_DAYS / 30)} months`
-                )}
+            ) : isLive ? (
+              sectionTile("portals")
+            ) : (
+              <button type="button" onClick={() => setPanelTab("notes")} className={tile}>
+                {tileIcon("note")}
+                {tileText("Notes", "For the whole team")}
               </button>
             )}
           </div>
           {portalNote && !publishCanPress && <p className="mt-3 px-1 text-[11.5px] leading-snug text-muted">{portalNote}</p>}
         </section>
 
-        {/* ── 2. the facts and the people ────────────────────────────── */}
-        <section className={`${box} flex min-w-0 flex-col p-4 sm:p-5 lg:col-start-1 lg:row-start-2`}>
-          <div className="flex items-baseline justify-between gap-3">
-            <p className={eyebrow}>General info</p>
-            <button type="button" onClick={() => goTab("marketing")} className="text-[11.5px] font-semibold text-accent-dark hover:underline">Edit in Marketing</button>
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
-            {facts.map((f) => (
-              <div key={f.label} className="flex min-w-0 items-start gap-2.5">
-                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
-                  <DoodleIcon name={f.icon} size={13} />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-[10.5px] font-semibold uppercase tracking-wide text-muted">{f.label}</span>
-                  <span className={`block truncate text-[13px] ${["Not set", "Not recorded", "Reading…", "Did not load"].includes(f.text) ? "text-muted" : ""}`}>{f.text}</span>
-                </span>
+        {/* ── 2. the landlord and how we get in ─────────────────────────── */}
+        <section className={`${box} @container flex min-w-0 flex-col p-4 sm:p-5 lg:col-start-1`}>
+          {/* A line of the home's facts. The rest live in Edit the advert. */}
+          <div className="grid grid-cols-3 gap-x-4 gap-y-3 @[34rem]:grid-cols-6">
+            {highlights.map((f) => (
+              <div key={f.label} className="min-w-0">
+                <p className="truncate text-[10.5px] font-semibold uppercase tracking-wide text-muted">{f.label}</p>
+                <p className={`truncate text-[13px] ${quietFact(f.text) ? "text-muted" : "font-semibold"}`}>{f.text}</p>
               </div>
             ))}
           </div>
 
-          {/* How it stands: one chip per section, each opens it. */}
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button type="button" className={chip} onClick={() => goTab("enquiries")}>
-              <DoodleIcon name="target" size={12} className="text-accent-dark" />
-              {enquiries === null ? "Reading the enquiries…" : `${enquirers} ${enquirers === 1 ? "enquiry" : "enquiries"}`}
-            </button>
-            <button type="button" className={chip} onClick={() => goTab("viewings")}>
-              <DoodleIcon name="calendar" size={12} className="text-accent-dark" />
-              {viewings === null ? "Reading the diary…" : `${viewings.upcoming.length + booked.length} booked · ${viewings.past.length} done`}
-            </button>
-            <button type="button" className={chip} onClick={() => goTab("applications")}>
-              <DoodleIcon name="coin" size={12} className="text-accent-dark" />
-              {savedOffers === null ? "Reading the offers…" : openOffers ? <b className="font-semibold text-accent-dark">{openOffers} {openOffers === 1 ? "offer" : "offers"} to decide</b> : `${savedOffers.length} ${savedOffers.length === 1 ? "offer" : "offers"}`}
-            </button>
-            <button type="button" className={chip} onClick={() => goTab("compliance")}>
-              <DoodleIcon name="shield" size={12} className="text-accent-dark" />
-              {certs === null ? "Reading the certificates…" : certOk("epc") && certOk("gas_safety") && certOk("eicr") ? "EPC, gas and EICR in" : <b className="font-semibold text-accent-dark">Certificates to add</b>}
-            </button>
-          </div>
-
-          <div className={`mt-5 grid grid-cols-1 gap-4 ${listing.tenant ? "2xl:grid-cols-2" : ""}`}>
+          <div className="mt-4 grid flex-1 grid-cols-1 content-start gap-4 border-t border-line/50 pt-4 @[34rem]:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
             {/* The REAL landlord, off the listing's owner relationship in REX. */}
-            <section className="rounded-xl border border-line/50 bg-white p-3.5 sm:p-5">
-              <p className={`${eyebrow} mb-3`}>Landlord</p>
+            <div className="min-w-0">
+              <p className={`${eyebrow} mb-2.5`}>Landlord</p>
               {landlord.status === "loading" || landlord.status === "idle" ? (
                 <p className="flex items-center gap-2 text-[12px] text-muted">
                   <span className="block h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
@@ -1441,9 +1447,8 @@ function ListingDrawerBody({
                     person={{ name: landlord.landlord.name, email: landlord.landlord.email, phone: landlord.landlord.phone }}
                     personRef={landlord.landlord.contactId && landlord.landlord.from !== "record" ? `rex:${landlord.landlord.contactId}` : null}
                   />
-                  {/* REX's listing names nobody; this is the managed record's landlord (6 Oct 2026). */}
                   {landlord.landlord.from === "record" && (
-                    <p className="mt-2.5 text-[11.5px] leading-relaxed text-muted">From the managed property record. They are not on this listing yet, so nothing is sent to them from here.</p>
+                    <p className="mt-2 text-[11.5px] leading-relaxed text-muted">From the managed property record. They are not on this listing yet, so nothing is sent to them from here.</p>
                   )}
                 </div>
               ) : landlord.status === "none" ? (
@@ -1451,23 +1456,156 @@ function ListingDrawerBody({
               ) : (
                 <p className="text-[12px] leading-relaxed text-accent-dark">{landlord.says}</p>
               )}
-            </section>
-            {listing.tenant && (
-              <section className="rounded-xl border border-line/50 bg-white p-3.5 sm:p-5">
-                <p className={`${eyebrow} mb-3`}>Current tenant</p>
-                <ContactBlock
-                  role="tenant"
-                  person={{ name: listing.tenant.name, email: listing.tenant.email || null, phone: listing.tenant.phone || null }}
-                  personRef={null}
-                />
-              </section>
-            )}
+            </div>
+
+            {/* How we get in - and, when it is through the tenant, the tenant. */}
+            <div className="min-w-0 @[34rem]:border-l @[34rem]:border-line/50 @[34rem]:pl-4">
+              <div className="mb-2.5 flex items-baseline justify-between gap-2">
+                <p className={eyebrow}>Access</p>
+                {access.kind && (
+                  <button type="button" onClick={() => setEditingAccess(true)} className="text-[11.5px] font-semibold text-accent-dark hover:underline">Change</button>
+                )}
+              </div>
+              {accessStatus === "loading" ? (
+                <p className="text-[12px] text-muted">Reading…</p>
+              ) : !access.kind ? (
+                <div>
+                  <p className="text-[12.5px] text-muted">Not recorded yet: vacant, through the tenant, or through the landlord.</p>
+                  <button type="button" onClick={() => setEditingAccess(true)} className="mt-2.5 rounded-full border border-line/80 bg-white px-3.5 py-1.5 text-[12px] font-semibold transition-colors hover:border-ink/40">
+                    Choose how we get in
+                  </button>
+                </div>
+              ) : access.kind === "vacant" ? (
+                <div className="text-[13px]">
+                  <p className="font-semibold">Vacant</p>
+                  <p className="mt-0.5 text-[12px] text-muted">{access.keysCollected ? "The keys are in the office." : "The keys still need collecting."}</p>
+                </div>
+              ) : access.kind === "tenant" ? (
+                <div className="text-[13px]">
+                  <p className="mb-1.5 font-semibold">Through the tenant</p>
+                  {listing.tenant ? (
+                    <ContactBlock
+                      role="tenant"
+                      person={{ name: listing.tenant.name, email: listing.tenant.email || null, phone: listing.tenant.phone || null }}
+                      personRef={null}
+                    />
+                  ) : (
+                    <p className="text-[12px] text-muted">No tenant is on the record for this home.</p>
+                  )}
+                </div>
+              ) : (
+                <div className="text-[13px]">
+                  <p className="font-semibold">Through the landlord</p>
+                  <p className="mt-0.5 text-[12px] text-muted">Their details are on the left.</p>
+                </div>
+              )}
+              {listing.tenant && access.kind !== "tenant" && (
+                <div className="mt-3 border-t border-line/40 pt-3 text-[13px]">
+                  <p className={`${eyebrow} mb-1.5`}>Current tenant</p>
+                  <ContactBlock
+                    role="tenant"
+                    person={{ name: listing.tenant.name, email: listing.tenant.email || null, phone: listing.tenant.phone || null }}
+                    personRef={null}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+          {/* Where it's up to, underneath, across the box (James, 12 Oct 2026:
+              "bundling two sections into one"). Click a step to move it. */}
+          <div className="mt-4 border-t border-line/50 pt-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="flex flex-wrap items-baseline gap-x-3">
+              <span className="hand text-[16px]">Where it&apos;s up to</span>
+              <span className="text-[11.5px] text-muted">Click a step to move the record.</span>
+            </p>
+            <span className="flex items-center gap-2.5">
+              {saveLabel(stepSave) && <span className="text-[11px] text-muted">{saveLabel(stepSave)}</span>}
+              <span className="rounded-full px-3 py-1 text-[10.5px] font-semibold uppercase tracking-[0.12em]" style={{ background: SAGE_WASH, color: SAGE_INK }}>
+                Step {Math.min(step, LISTING_TRACK.length - 1) + 1} of {LISTING_TRACK.length}
+              </span>
+            </span>
+          </div>
+          {(() => {
+            const at = Math.min(step, LISTING_TRACK.length - 1);
+            const n = (viewings?.upcoming.length ?? 0) + (viewings?.past.length ?? 0) + booked.length;
+            const apps = (savedOffers?.length ?? 0) + offers.length;
+            const accepted = liveApps?.some((a) => /accept/i.test(a.statusLabel)) || here.id === "accepted" || here.id === "handover";
+            const ticks: Record<string, { label: string; done: boolean; detail?: string }[]> = {
+              live: [
+                ...requirements.map((r) => ({ label: r.label, done: r.done })),
+                { label: "Published to the portals", done: isLive, detail: listing.publishedAt ? new Date(listing.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : undefined },
+              ],
+              viewings: [
+                { label: "Enquiries in", done: (enquiries?.length ?? 0) > 0, detail: enquiries?.length ? String(enquiries.length) : undefined },
+                { label: "Viewings booked", done: n > 0, detail: n ? String(n) : undefined },
+                { label: "Offers in", done: apps > 0, detail: apps ? String(apps) : undefined },
+              ],
+              offers: [{ label: "Sent to the landlord", done: at > 2 }],
+              accepted: [{ label: "Offer accepted", done: Boolean(accepted) }],
+              handover: [{ label: "Handed over to Kirstie", done: at > 4 }],
+            };
+            const cols = { gridTemplateColumns: `repeat(${LISTING_TRACK.length}, minmax(0, 1fr))` };
+            /* One short line under each step: done, how far, or what is next. */
+            const noteOf = (id: string, i: number) => {
+              const list = ticks[id] ?? [];
+              if (!list.length) return i === at ? LISTING_TRACK[i].title : "";
+              const got = list.filter((t) => t.done);
+              if (i < at) return got.map((t) => (t.detail ? `${t.label} ${t.detail}` : t.label)).join(" · ") || "Done";
+              if (i > at) return "";
+              const next = list.find((t) => !t.done);
+              return [got.map((t) => (t.detail ? `${t.label} ${t.detail}` : t.label)).join(" · "), next ? `next: ${next.label.toLowerCase()}` : ""].filter(Boolean).join(" · ");
+            };
+            return (
+              <div className="-mx-2 mt-3 overflow-x-auto px-2 pb-1">
+                <ol className="grid min-w-[540px]" style={cols}>
+                  {LISTING_TRACK.map((st, i) => {
+                    const done = i < at;
+                    const cur = i === at;
+                    return (
+                      <li key={st.id} className="relative flex min-w-0 flex-col items-center px-1.5 text-center">
+                        {i > 0 && (
+                          <span
+                            aria-hidden
+                            className={`absolute left-[-50%] right-[50%] top-[13px] ${i <= at ? "h-0.5" : "h-0 border-t-2 border-dashed border-line/80"}`}
+                            style={i <= at ? { background: SAGE_INK } : undefined}
+                          />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setStep(i)}
+                          disabled={i < floor}
+                          title={i < floor ? `${listing.letAgreed ? "Already let agreed" : "Already on the portals"}, so it cannot go back to ${st.label}` : `Move the record to ${st.label}`}
+                          className={`relative z-[1] flex h-[26px] w-[26px] items-center justify-center rounded-full text-[11px] font-semibold transition-transform enabled:hover:scale-110 disabled:cursor-default ${
+                            done ? "text-white" : cur ? "bg-accent-dark text-white" : "border-[1.5px] border-line/80 bg-white text-muted"
+                          }`}
+                          style={done ? { background: SAGE_INK } : undefined}
+                        >
+                          {done ? "✓" : i + 1}
+                        </button>
+                        <p className={`mt-1.5 text-[12px] leading-tight ${cur ? "font-semibold" : "text-muted"}`}>{st.label}</p>
+                        <p className={`mt-0.5 w-full min-w-0 truncate text-[10.5px] leading-snug ${cur ? "text-accent-dark" : "text-muted"}`} title={noteOf(st.id, i) || undefined}>{noteOf(st.id, i) || "\u00a0"}</p>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            );
+          })()}
+          {/* From "offer accepted" onward, the landlord, the property and the
+              tenant are one thing; the panel is the record of that. */}
+          {(here.id === "accepted" || here.id === "handover") && link && (
+            <div className="mt-4">
+              <TenancyLinkPanel value={link} onChange={setLinkState} />
+              {saveLabel(linkSave) && <p className="mt-1.5 pl-1 text-[10.5px] text-muted">{saveLabel(linkSave)}</p>}
+            </div>
+          )}
           </div>
         </section>
 
         {/* ── Next up, level with the facts. It stays (James, 12 Oct 2026):
             what the process says to do, then the latest on this home. ── */}
-        <section className={`${pop} flex flex-col rounded-2xl border border-accent-dark/15 bg-accent-soft/60 p-5 lg:col-start-2 lg:row-start-2`}>
+        <section className={`${pop} flex flex-col rounded-2xl border border-accent-dark/15 bg-accent-soft/60 p-5 lg:col-start-2`}>
           <p className={`${eyebrow} text-accent-dark`}>Next up · step {Math.min(step, LISTING_TRACK.length - 1) + 1} of {LISTING_TRACK.length}</p>
           <h2 className="hand mt-1.5 text-[19px] leading-tight">{here.title}</h2>
           <p className="mt-1 text-[12px] leading-relaxed text-muted">{here.detail}</p>
@@ -1570,7 +1708,7 @@ function ListingDrawerBody({
             <p className={eyebrow}>Latest</p>
             {latest.length > 0 ? (
               <ul className="mt-2.5 space-y-2">
-                {latest.slice(0, 4).map((a) => (
+                {latest.slice(0, 3).map((a) => (
                   <li key={a.key}>
                     <button type="button" onClick={() => goTab(a.to)} className="flex w-full min-w-0 items-start gap-3 rounded-xl bg-white px-3.5 py-2.5 text-left transition-colors hover:bg-box/60">
                       <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${a.hot ? "bg-accent-dark text-white" : "bg-accent-soft text-accent-dark"}`}>
@@ -1595,54 +1733,12 @@ function ListingDrawerBody({
           </div>
         </section>
 
-        {/* ── 3. the sections ────────────────────────────────────────── */}
-        <section id="sections" className={`${box} @container min-w-0 scroll-mt-5 p-4 sm:p-5 lg:col-start-1 lg:row-start-3`}>
-          <nav
-            ref={tabRow}
-            onScroll={measureTabs}
-            aria-label="Sections"
-            className={`-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 pt-1 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible [&::-webkit-scrollbar]:hidden ${tabsHidden ? "[mask-image:linear-gradient(to_right,black_calc(100%-48px),transparent)] sm:[mask-image:none]" : ""}`}
-          >
-            {TABS.map((t) => {
-              const count =
-                t.key === "enquiries" ? enquirers : t.key === "applications" ? openOffers : t.key === "viewings" ? booked.length + (viewings?.upcoming.length ?? 0) : 0;
-              const on = tab === t.key;
-              /* A pink dot where something needs doing (James, 11 Sep). */
-              const needs =
-                t.key === "enquiries"
-                  ? (enquiries?.length ?? 0) > 0
-                  : t.key === "applications"
-                    ? openOffers > 0
-                    : t.key === "viewings"
-                      ? (viewings?.upcoming ?? []).some((v) => !v.cancelled && access.kind && access.kind !== "vacant" && !(access.requests ?? {})[v.id]?.grantedAt) ||
-                        (viewings?.past ?? []).some((v) => !v.cancelled && !v.feedbackId)
-                      : t.key === "marketing"
-                        ? photos.length === 0 || !shownBody
-                        : t.key === "compliance"
-                          ? certs != null && !(certOk("epc") && certOk("gas_safety") && certOk("eicr"))
-                          : t.key === "documents"
-                            ? (terms.status === "ready" && !terms.signed) || !access.kind
-                            : false;
-              return (
-                <button
-                  key={t.key}
-                  data-steve={`listing.tab.${t.key}`}
-                  type="button"
-                  onClick={() => pickTab(t.key)}
-                  aria-current={on ? "page" : undefined}
-                  className={`relative inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-[12.5px] font-semibold transition-colors ${on ? "border-ink bg-ink text-page" : "border-line/70 bg-white hover:border-ink/40"}`}
-                >
-                  <DoodleIcon name={t.icon} size={13} />
-                  {t.label}
-                  {count > 0 && <span className={`rounded-full px-1.5 text-[10.5px] ${on ? "bg-page/20" : "bg-accent-soft text-accent-dark"}`}>{count}</span>}
-                  {needs && !on && <span aria-label="Needs attention" className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-accent" />}
-                </button>
-              );
-            })}
-          </nav>
+      </div>
 
-          <div key={`view-${tab}`} className="fade-up mt-4">
-            <p className="mb-4 max-w-2xl text-[12.5px] leading-relaxed text-muted">{TAB_LEAD[tab]}</p>
+      {/* ── the pop-outs: each section slides out over the page ────────── */}
+      <SectionPanel open={Boolean(openTab)} icon={openTab?.icon ?? "home"} title={openTab?.label ?? ""} lead={tab ? TAB_LEAD[tab] : ""} onClose={closeTab}>
+        {tab && (
+          <div key={`view-${tab}`} className="fade-up">
             {tab === "applications" && (LISTING_OFFERS_LIVE || canOffer) && (
               <div className="mb-4">
                 <PressButton
@@ -1656,7 +1752,7 @@ function ListingDrawerBody({
             )}
                                                 {/* Where the advert is, once it is live (James, 8 Oct 2026: off the
                 home screen, under Marketing's top). */}
-            {tab === "marketing" && (listing.publishedAt || isLive) && (
+            {tab === "portals" && (listing.publishedAt || isLive) && (
               <section className="mb-5 rounded-xl border border-line/50 bg-white p-4">
                 <div className="flex flex-wrap items-center gap-2">
                   {listing.publishedAt && (
@@ -1899,7 +1995,7 @@ function ListingDrawerBody({
               />
             )}
             {/* How the advert is doing, only where there IS an advert. */}
-            {tab === "marketing" && isLive && (
+            {tab === "portals" && isLive && (
               <section className="mt-5 rounded-xl border border-line/50 bg-white p-5">
                 <PortalStatsPanel listingId={listing.id} embedded />
               </section>
@@ -1927,7 +2023,7 @@ function ListingDrawerBody({
               </div>
             )}
 
-            {tab === "documents" && (
+            {tab === "compliance" && (
               /* The home's documents, shared with Kirstie's deal and the
                  application for the same address (James, 5 Oct 2026). */
               <div className="mb-5 rounded-xl border border-line/50 bg-white p-5">
@@ -1940,8 +2036,8 @@ function ListingDrawerBody({
               </div>
             )}
             {/* The home's papers from the property record (6 Oct 2026). */}
-            {tab === "documents" && <RecordPapers listingId={listing.id} />}
-            {tab === "documents" && (
+            {tab === "compliance" && <RecordPapers listingId={listing.id} />}
+            {tab === "compliance" && (
               <div className="mb-5 rounded-xl border border-line/50 bg-white p-5">
                 <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">How we get in</p>
                 <p className="mt-1 mb-4 text-[12.5px] text-muted">Vacant, through the tenant, or through the landlord. The access button on the record follows this.</p>
@@ -1953,7 +2049,7 @@ function ListingDrawerBody({
                 />
               </div>
             )}
-            {tab === "documents" && (
+            {tab === "compliance" && (
               <ListingDocuments
                 terms={terms}
                 listingId={listing.id}
@@ -1969,106 +2065,39 @@ function ListingDrawerBody({
                 address={listing.name}
               />
             )}
-
           </div>
-        </section>
+        )}
+      </SectionPanel>
 
-        {/* ── where it's up to, level with the sections: the five steps
-            down the side, the small ticks under each. Click to move. ── */}
-        <div className="space-y-5 lg:col-start-2 lg:row-start-3 lg:self-start">
-          <section className={`${box} p-5`}>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="hand text-[17px]">Where it&apos;s up to</h3>
-                <p className="mt-0.5 text-[11.5px] text-muted">Click a step to move the record.</p>
-              </div>
-              {saveLabel(stepSave) && <span className="shrink-0 text-[11px] text-muted">{saveLabel(stepSave)}</span>}
-            </div>
-            {(() => {
-              const at = Math.min(step, LISTING_TRACK.length - 1);
-              const n = (viewings?.upcoming.length ?? 0) + (viewings?.past.length ?? 0) + booked.length;
-              const apps = (savedOffers?.length ?? 0) + offers.length;
-              const accepted = liveApps?.some((a) => /accept/i.test(a.statusLabel)) || here.id === "accepted" || here.id === "handover";
-              const ticks: Record<string, { label: string; done: boolean; detail?: string }[]> = {
-                live: [
-                  ...requirements.map((r) => ({ label: r.label, done: r.done })),
-                  { label: "Published to the portals", done: isLive, detail: listing.publishedAt ? new Date(listing.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : undefined },
-                ],
-                viewings: [
-                  { label: "Enquiries in", done: (enquiries?.length ?? 0) > 0, detail: enquiries?.length ? String(enquiries.length) : undefined },
-                  { label: "Viewings booked", done: n > 0, detail: n ? String(n) : undefined },
-                  { label: "Offers in", done: apps > 0, detail: apps ? String(apps) : undefined },
-                ],
-                offers: [{ label: "Sent to the landlord", done: at > 2 }],
-                accepted: [{ label: "Offer accepted", done: Boolean(accepted) }],
-                handover: [{ label: "Handed over to Kirstie", done: at > 4 }],
-              };
-              return (
-                <ol className="mt-4">
-                  {LISTING_TRACK.map((st, i) => {
-                    const done = i < at;
-                    const cur = i === at;
-                    const list = ticks[st.id] ?? [];
-                    return (
-                      <li key={st.id} className="relative flex gap-3 pb-4 last:pb-0">
-                        {i < LISTING_TRACK.length - 1 && (
-                          <span
-                            aria-hidden
-                            className={`absolute bottom-0 left-[12px] top-[28px] ${done ? "w-0.5" : "w-0 border-l-2 border-dashed border-line/80"}`}
-                            style={done ? { background: SAGE_INK } : undefined}
-                          />
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => setStep(i)}
-                          disabled={i < floor}
-                          title={i < floor ? `${listing.letAgreed ? "Already let agreed" : "Already on the portals"}, so it cannot go back to ${st.label}` : `Move the record to ${st.label}`}
-                          className={`relative z-[1] flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[11px] font-semibold transition-transform enabled:hover:scale-110 disabled:cursor-default ${
-                            done ? "text-white" : cur ? "bg-accent-dark text-white" : "border-[1.5px] border-line/80 bg-white text-muted"
-                          }`}
-                          style={done ? { background: SAGE_INK } : undefined}
-                        >
-                          {done ? "✓" : i + 1}
-                        </button>
-                        <div className={`min-w-0 flex-1 rounded-xl px-3 py-2 ${cur ? "bg-accent-soft/50" : ""}`}>
-                          <p className={`text-[12.5px] leading-tight ${cur ? "font-semibold" : done ? "" : "text-muted"}`}>{st.label}</p>
-                          {(cur || done) && list.length > 0 && (
-                            <ul className="mt-1.5 space-y-1">
-                              {list.map((t) => (
-                                <li key={t.label} className="flex items-start gap-1.5 text-[11px] leading-snug">
-                                  <span
-                                    className={`mt-[1px] flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-[8px] ${t.done ? "text-white" : "border border-line/80 bg-white text-transparent"}`}
-                                    style={t.done ? { background: done ? SAGE_INK : "var(--accent-dark)" } : undefined}
-                                  >
-                                    ✓
-                                  </span>
-                                  <span className={t.done ? "text-ink" : "text-muted"}>
-                                    {t.label}
-                                    {t.detail && <span className="text-muted"> · {t.detail}</span>}
-                                  </span>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ol>
-              );
-            })()}
-          </section>
+      {/* Book a viewing: one viewing, or a slot to book viewings into. */}
+      {choosingBook && (
+        <SmallModal title="Book a viewing" onClose={() => setChoosingBook(false)}>
+          <div className="grid gap-2.5 sm:grid-cols-2">
+            <button type="button" onClick={() => { setChoosingBook(false); setBooking(true); }} className={`${tile} min-h-[84px]`}>
+              {tileIcon("calendar", true)}
+              {tileText("Book a viewing", "One viewing, straight into the diary, with access asked.")}
+            </button>
+            <button type="button" onClick={() => { setChoosingBook(false); setSlotting(true); }} className={`${tile} min-h-[84px]`}>
+              {tileIcon("clock", true)}
+              {tileText("Hold a viewing slot", "Hold time at the home, then book viewings within it.")}
+            </button>
+          </div>
+        </SmallModal>
+      )}
 
-          {/* From "offer accepted" onward, the landlord, the property and the
-              tenant are one thing; the panel is the record of that. */}
-          {(here.id === "accepted" || here.id === "handover") && link && (
-            <div>
-              <TenancyLinkPanel value={link} onChange={setLinkState} />
-              {saveLabel(linkSave) && <p className="mt-1.5 pl-1 text-[10.5px] text-muted">{saveLabel(linkSave)}</p>}
-            </div>
-          )}
-        </div>
-      </div>
+      {/* How we get in, changed from the access details. */}
+      {editingAccess && (
+        <SmallModal title="How do we get in?" onClose={() => setEditingAccess(false)}>
+          <AccessSettings
+            value={access}
+            onChange={setAccess}
+            tenant={listing.tenant ?? null}
+            landlord={landlord.status === "known" ? landlord.landlord : null}
+            onDone={() => setEditingAccess(false)}
+          />
+        </SmallModal>
+      )}
+
 
       {/* Notes and the landlord's messages, pulled out over the page. */}
       <div className={`fixed inset-0 z-[130] ${panelTab ? "" : "pointer-events-none"}`} aria-hidden={!panelTab}>
@@ -2679,6 +2708,75 @@ function PushCeremony({ at, address, error, signIn = false, onStart, onCancel, o
             </p>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+
+/* ── a section, popped out over the page ──────────────────────────────── */
+
+/**
+ * Every section of the listing slides out from the right over the page
+ * (James, 12 Oct 2026: "all of these should be popouts ... rather than it
+ * bolting onto the page"). Wide enough for the advert editor; Escape or the
+ * scrim closes it, unless a pop-up opened from inside it is still up.
+ */
+function SectionPanel({ open, icon, title, lead, onClose, children }: { open: boolean; icon: string; title: string; lead: string; onClose: () => void; children: React.ReactNode }) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (!open) { setShown(false); return; }
+    const t = requestAnimationFrame(() => setShown(true));
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (document.querySelectorAll('[role="dialog"]').length > 1) return;
+      onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => { cancelAnimationFrame(t); window.removeEventListener("keydown", onKey); };
+  }, [open, onClose]);
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[125]">
+      <button type="button" aria-label="Close" onClick={onClose} className={`absolute inset-0 cursor-default bg-ink/35 transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0"}`} />
+      <aside
+        role="dialog"
+        aria-label={title}
+        className={`@container absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[380ms] sm:rounded-l-2xl lg:w-[min(1040px,calc(100%-5rem))] ${shown ? "translate-x-0" : "translate-x-full"}`}
+        style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
+      >
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-line/70 px-5 pb-4 pt-5 sm:px-6">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-dark"><DoodleIcon name={icon} size={15} /></span>
+            <div className="min-w-0">
+              <h2 className="hand text-[22px] leading-tight">{title}</h2>
+              <p className="mt-0.5 max-w-2xl text-[12.5px] leading-relaxed text-muted">{lead}</p>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" title="Close (Esc)" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 bg-white text-[13px] text-muted hover:text-ink">✕</button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">{children}</div>
+      </aside>
+    </div>
+  );
+}
+
+/** A small centred pop-up: Book a viewing's choice, and how we get in. */
+function SmallModal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-[140] flex items-start justify-center overflow-y-auto p-4 sm:items-center">
+      <button type="button" aria-label="Close" onClick={onClose} className="fixed inset-0 cursor-default bg-ink/55 backdrop-blur-[3px]" />
+      <div className="fade-up relative w-full max-w-[560px] rounded-2xl border border-line/70 bg-page p-6 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.45)]">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <h2 className="text-[20px] leading-tight">{title}</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted hover:text-ink">✕</button>
+        </div>
+        {children}
       </div>
     </div>
   );
