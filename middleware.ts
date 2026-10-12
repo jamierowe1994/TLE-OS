@@ -563,7 +563,27 @@ function backIntoDemo(req: NextRequest): NextResponse | null {
   return NextResponse.redirect(to);
 }
 
+/* A listing and a let open as pages of their own now (12 Oct 2026):
+   /listings/<id> and /applications/<id>. Every older link - search, the bell,
+   Steve, emails - says /listings?open=<id> or /applications?open=<id> (or
+   ?deal=<Propoly id>), and the board's own redirect waited behind the whole
+   board loading. Sent on here instead, ?tab= kept; the page it lands on is
+   behind every check below like any other. */
+function movedToOwnPage(req: NextRequest): NextResponse | null {
+  const { pathname, searchParams } = req.nextUrl;
+  if (pathname !== "/listings" && pathname !== "/applications") return null;
+  const id = searchParams.get("open") ?? (pathname === "/applications" ? searchParams.get("deal") : null);
+  if (!id) return null;
+  const url = req.nextUrl.clone();
+  url.pathname = `${pathname}/${encodeURIComponent(id)}`;
+  const tab = searchParams.get("tab");
+  url.search = tab ? `?tab=${encodeURIComponent(tab)}` : "";
+  return NextResponse.redirect(url);
+}
+
 export async function middleware(req: NextRequest) {
+  const moved = movedToOwnPage(req);
+  if (moved) return moved;
   const demo = backIntoDemo(req);
   if (demo) return demo;
   /* Straight through to the route, which does its own authentication. Exact

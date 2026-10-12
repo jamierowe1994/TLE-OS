@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { BoardSkeleton } from "@/components/Skeleton";
-import dynamic from "next/dynamic";
-import { whenIdle } from "@/lib/when-idle";
+import { useRouter } from "next/navigation";
 import { dropJson, peekJson, readJson } from "@/lib/page-cache";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -14,11 +13,8 @@ import ListSearch from "@/components/ListSearch";
 import { searchMatches } from "@/lib/search-match";
 import LetsBoard from "@/components/applications/LetsBoard";
 import PropertyPhoto from "@/components/PropertyPhoto";
-import type { Check } from "@/components/ApplicationDrawer";
-/* Off the first load, fetched while the board sits idle. */
-const loadApplicationDrawer = () => import("@/components/ApplicationDrawer");
-const ApplicationDrawer = dynamic(loadApplicationDrawer, { ssr: false });
-import HandoffPanel from "@/components/HandoffPanel";
+import { isLet } from "@/lib/application-record";
+import { rememberApplicationOrder } from "@/lib/application-order";
 import { SAGE_INK, SAGE_WASH } from "@/components/appraisal/NextUp";
 import type { Application } from "@/lib/applications";
 
@@ -50,7 +46,7 @@ function nextAction(a: Application): { label: string; strong: boolean } {
  * Open offers live on their listing (Listings > Offers in), and ?open=<id>
  * still opens any application by name, accepted or not.
  */
-const isLet = (a: Application) => a.status === "accepted" || (a.status !== "unsuccessful" && a.osDecision?.decision === "accepted");
+/* isLet lives in lib/application-record, shared with the let's own page. */
 
 /** Accepted here, and REX still to be told by hand. */
 const rexToMark = (a: Application) => a.status !== "accepted" && a.osDecision?.decision === "accepted";
@@ -159,44 +155,9 @@ function book() {
   return readJson<AppsAnswer>(APPS_URL, (j) => !j.error && Array.isArray(j.applications));
 }
 
-/** The four checks, read off the live record rather than counted. */
-function checksFor(a: Application): Check[] {
-  const lead = a.applicants.find((p) => p.isPrimary) ?? a.applicants[0];
-  const k = lead?.keyInfo;
-  const everyone = a.applicants.length;
-  const answered = a.applicants.filter((p) => p.keyInfo?.rightToRent === true).length;
-  return [
-    {
-      label: `Right to rent - ${answered} of ${everyone} applicant${everyone === 1 ? "" : "s"}`,
-      done: everyone > 0 && answered === everyone,
-      note:
-        answered < everyone
-          ? "The form only ever asks the lead applicant. The others were never asked."
-          : undefined,
-    },
-    {
-      label: "Landlord reference, last 2 years",
-      done: k?.landlordRef === true,
-      note: k?.landlordRef === false ? "None available. Worth a guarantor conversation." : undefined,
-    },
-    {
-      label: "Guarantor available if needed",
-      done: k?.guarantor === true,
-      note:
-        k?.guarantor === true && lead?.guarantorCount === 0
-          ? "Offered, but the form doesn't ask who, so nobody is named yet."
-          : undefined,
-    },
-    {
-      label: "No adverse credit",
-      done: k?.adverseCredit === false,
-      note: k?.adverseCredit === true ? k.adverseCreditNote?.slice(0, 180) ?? "Disclosed." : undefined,
-    },
-  ];
-}
 
 export default function Applications() {
-  useEffect(() => whenIdle(() => { void loadApplicationDrawer(); }), []);
+  const router = useRouter();
   const [apps, setApps] = useState<Application[] | null>(() => peekJson<AppsAnswer>(APPS_URL)?.applications ?? null);
   const [osAccepted, setOsAccepted] = useState<OsAccepted[]>(() => peekJson<AppsAnswer>(APPS_URL)?.osAccepted ?? []);
   const [propolyOnly, setPropolyOnly] = useState<PropolyOnly[]>(() => peekJson<AppsAnswer>(APPS_URL)?.propolyOnly ?? []);
@@ -217,30 +178,28 @@ export default function Applications() {
       .then((j: { ok?: boolean; updates?: unknown[] }) => setUpdatesOpen(j.ok ? (j.updates ?? []).length : 0))
       .catch(() => null);
   }, []);
-  const [openId, setOpenId] = useState<string | null>(null);
+  /* A let opens as its own page now, /applications/<id> (James, 12 Oct 2026:
+     "rather than a small pop-out telling them where they're at, I want a
+     full thing"). The order on screen goes with it, for ‹ › on the page. */
+  const openApp = (id: string, order: string[] = []) => {
+    rememberApplicationOrder(order.includes(id) ? order : [id]);
+    router.push(`/applications/${encodeURIComponent(id)}`);
+  };
   /* Each agent's own board of lets, like Kirstie's, is what Applications opens
      on (James, 10 Oct 2026); the list is a press away. */
   const [view, setView] = useState<"board" | "list">("board");
-  const [boardDeal, setBoardDeal] = useState<string | null>(null);
   /* The board's and the list's own search (components/ListSearch, 11 Oct 2026). */
   const [q, setQ] = useState("");
   /* The board's agent picker, drawn on the same row as the search. */
   const [boardAgents, setBoardAgents] = useState<string[]>([]);
   const [boardAgent, setBoardAgent] = useState<string | null>(null);
-  /* ?open=<id>: the PLC wizard sends people back here to a named
-     application, and this is what opens it. Read once, on arrival. */
+  /* ?open=<id> (the PLC wizard, the bell, search) and ?deal=<Propoly id>:
+     straight to the let's own page. */
   useEffect(() => {
-    const wanted = new URLSearchParams(window.location.search).get("open");
-    if (wanted) {
-      setOpenId(wanted);
-      /* Once, not every visit (James, 12 Oct 2026: Applications kept opening
-         6 Ruskin Place by itself). The address it came in on is put back
-         without it, so back, refresh and the history land on the board. */
-      const u = new URL(window.location.href);
-      u.searchParams.delete("open");
-      window.history.replaceState(window.history.state, "", u.pathname + (u.search || "") + u.hash);
-    }
-  }, []);
+    const params = new URLSearchParams(window.location.search);
+    const wanted = params.get("open") ?? params.get("deal");
+    if (wanted) router.replace(`/applications/${encodeURIComponent(wanted)}`);
+  }, [router]);
   /* "open" is every application still in play. Unsuccessful is a stage like
      any other now, reached by clicking it, so the old show/hide toggle went
      with it - two ways to say the same thing, one of which was a link. */
@@ -339,24 +298,7 @@ export default function Applications() {
     closed: mine.filter((a) => a.closed).length,
     by: (k: string) => (k === "rex" ? mine.filter((a) => rexToMark(a) && !a.closed).length : 0),
   }), [mine, osAccepted, propolyMine]);
-  const open = all.find((a) => a.id === openId) ?? null;
-  /* Asked for by name but not on the board (an accepted let whose move-in has
-     passed is cut from it): fetch that one and add it, rather than opening
-     nothing. */
-  useEffect(() => {
-    if (!openId || !apps || open) return;
-    let live = true;
-    fetch(`${APPS_URL}&include=${encodeURIComponent(openId)}&tests=0`, { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d: AppsAnswer) => {
-        const hit = d.applications?.find((a) => a.id === openId);
-        if (live && hit) setApps((cur) => (cur && !cur.some((a) => a.id === hit.id) ? [...cur, hit] : cur));
-      })
-      .catch(() => undefined);
-    return () => {
-      live = false;
-    };
-  }, [openId, apps, open]);
+
 
   /* The right-to-rent banner that used to sit here - "34 of 120 people on
      the 92 open applications have no recorded right-to-rent answer" - was
@@ -434,12 +376,10 @@ export default function Applications() {
             const hit = (apps ?? []).find((a) => isLet(a) && ((lid != null && a.listingId === lid) || a.property.trim().toLowerCase() === name));
             return hit?.id ?? null;
           }}
-          onOpenApplication={setOpenId}
+          onOpenApplication={(id, order) => openApp(id, order)}
           q={q}
           agent={boardAgent}
           onAgents={setBoardAgents}
-          openDeal={boardDeal}
-          onDealClosed={() => setBoardDeal(null)}
           waiting={(apps ?? [])
             .filter((a) => isLet(a) && !a.closed && (a.stageLabel === "Handover due" || a.stageLabel === "Accepted"))
             .map((a) => ({
@@ -595,10 +535,10 @@ export default function Applications() {
               <ul className="mt-2.5 divide-y divide-line/40">
                 {propolyMine.map((p) => (
                   <li key={p.id}>
-                    {/* Opens on the board, in place (10 Oct 2026). */}
+                    {/* Opens the let's own page (12 Oct 2026). */}
                     <button
                       type="button"
-                      onClick={() => { setBoardDeal(p.id); setView("board"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                      onClick={() => openApp(p.id, propolyMine.map((x) => x.id))}
                       className="flex w-full items-center gap-3 py-2.5 text-left transition-colors hover:bg-page/60"
                     >
                       <span className="min-w-0 flex-1">
@@ -639,7 +579,6 @@ export default function Applications() {
                 const others = a.applicants.length - 1;
                 const flag = needsAttention(a);
                 const act = nextAction(a);
-                const on = a.id === openId;
                 return (
                   <li key={a.id}>
                     {/* A row opens the file. The button at its end says what
@@ -648,11 +587,9 @@ export default function Applications() {
                     <div data-steve-row=""
                       role="button"
                       tabIndex={0}
-                      onClick={() => setOpenId(on ? null : a.id)}
-                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpenId(on ? null : a.id); } }}
-                      className={`grid cursor-pointer items-center gap-x-4 gap-y-3 rounded-[22px] border p-3.5 pr-4 transition-colors sm:grid-cols-[auto_minmax(0,1fr)] xl:grid-cols-[auto_minmax(150px,1fr)_minmax(0,1.7fr)_118px_auto_auto] ${
-                        on ? "border-accent/70 bg-accent-soft/40" : "border-line/50 bg-white hover:border-ink/40"
-                      }`}
+                      onClick={() => openApp(a.id, rows.map((r) => r.id))}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openApp(a.id, rows.map((r) => r.id)); } }}
+                      className="grid cursor-pointer items-center gap-x-4 gap-y-3 rounded-[22px] border border-line/50 bg-white p-3.5 pr-4 transition-colors hover:border-ink/40 sm:grid-cols-[auto_minmax(0,1fr)] xl:grid-cols-[auto_minmax(150px,1fr)_minmax(0,1.7fr)_118px_auto_auto]"
                     >
                       <Initials name={lead?.name ?? "?"} />
                       <div className="min-w-0">
@@ -694,7 +631,7 @@ export default function Applications() {
                       <div className="sm:col-span-2 xl:col-span-1">
                         <button
                           type="button"
-                          onClick={(e) => { e.stopPropagation(); setOpenId(a.id); }}
+                          onClick={(e) => { e.stopPropagation(); openApp(a.id, rows.map((r) => r.id)); }}
                           className={`${act.strong ? primary : secondary} w-full xl:w-auto xl:px-3.5`}
                         >
                           {act.label}
@@ -725,63 +662,6 @@ export default function Applications() {
 
       </div>
       </>)}
-
-      {open && (
-        <ApplicationDrawer
-          app={{
-            id: open.id,
-            tenant: (open.applicants.find((p) => p.isPrimary) ?? open.applicants[0])?.name ?? "—",
-            applicants: open.applicants.map((p) => ({
-              name: p.name,
-              contactId: p.contactId,
-              email: p.email,
-              phone: p.phone,
-              isPrimary: p.isPrimary,
-              income: p.incomePerYear,
-              employment: p.keyInfo?.employment ?? p.employmentRex,
-              job: p.keyInfo?.job ?? null,
-              company: p.keyInfo?.company ?? null,
-              rightToRent: p.keyInfo?.rightToRent ?? null,
-              landlordRef: p.keyInfo?.landlordRef ?? null,
-              guarantor: p.keyInfo?.guarantor ?? null,
-              adverseCredit: p.keyInfo?.adverseCredit ?? null,
-            })),
-            property: open.property,
-            propertyId: open.propertyId,
-            locality: open.locality,
-            image: open.image,
-            rent: open.offerAmount ? `${gbp(open.offerAmount)} pcm` : "—",
-            moveIn: open.startDate ?? "—",
-            stageKey: open.status,
-            ticked: 0,
-            agent: open.agent ?? "—",
-            flag:
-              open.affordabilityPct != null && open.affordabilityPct > 40
-                ? `Rent is ${open.affordabilityPct.toFixed(0)}% of income`
-                : undefined,
-            activity: [
-              open.dateReceived
-                ? { when: open.dateReceived, what: "Application received.", by: open.createdBy ?? "—" }
-                : null,
-              open.dateAccepted
-                ? { when: open.dateAccepted, what: "Landlord accepted.", by: open.agent ?? "—" }
-                : null,
-              /* "N/A" is what the form writes when nothing was said - not a comment. */
-              open.conditions && !/^\s*(n\/?a|none|-)\s*\.?$/i.test(open.conditions)
-                ? { when: "with the application", what: open.conditions, by: "Applicant", note: true }
-                : null,
-            ].filter((x): x is NonNullable<typeof x> => x !== null),
-          }}
-          stages={[...STAGES]}
-          checklist={checksFor(open)}
-          // Only once the offer is accepted - in REX or here (9 Oct 2026: an
-          // accept in the OS never showed it, and the file stalled). Before
-          // that there is nothing to push, and offering it invites somebody
-          // to jump the gun.
-          aside={isLet(open) ? <HandoffPanel applicationId={open.id} /> : undefined}
-          onClose={() => setOpenId(null)}
-        />
-      )}
 
       {/* The caveats about what the record does and does not hold. Still true,
           still worth reading; folded so the board stays clean (James, 12 Sep

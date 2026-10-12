@@ -5,8 +5,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PickOne from "@/components/PickOne";
 import { searchMatches } from "@/lib/search-match";
 import BoardLoading from "@/components/business/BoardLoading";
-import { useSlideOver } from "@/lib/use-slide-over";
-import { PORTAL_STAGES, PORTAL_STAGE_BY_KEY, propolyDealUrl } from "@/lib/business/propoly-stages";
+import { PORTAL_STAGES, PORTAL_STAGE_BY_KEY } from "@/lib/business/propoly-stages";
 import type { PreTenancyDeal } from "@/app/api/pretenancy/deals/route";
 
 /**
@@ -51,7 +50,7 @@ const STAGE_MARK: Record<string, string> = {
   move_day: "#4f9a62",
 };
 
-const STAGE_DOODLE: Record<string, string> = {
+export const STAGE_DOODLE: Record<string, string> = {
   deal_started: "rocket",
   holding_fee: "coin",
   referencing: "search",
@@ -91,7 +90,7 @@ const isStale = (d: Deal) => {
 };
 
 /** Where one stage stands, in Kirstie's three words and her colours. */
-function stageStatus(d: Deal, stageKey: string): { text: string; tone: string } {
+export function stageStatus(d: Deal, stageKey: string): { text: string; tone: string } {
   const start = d.app.startDate;
   switch (stageKey) {
     case "deal_started": return { text: "Application received", tone: QUIET_PILL };
@@ -117,7 +116,7 @@ function stageStatus(d: Deal, stageKey: string): { text: string; tone: string } 
 }
 
 /** The card's one line: slipped first, then where its stage stands. */
-function cardStatus(d: Deal, stageKey: string): { text: string; tone: string } {
+export function cardStatus(d: Deal, stageKey: string): { text: string; tone: string } {
   if (isOverdue(d) && stageKey !== "move_day") return { text: "Move-in slipped", tone: RED_PILL };
   return stageStatus(d, stageKey);
 }
@@ -147,102 +146,6 @@ function DealCard({ d, stageKey, onOpen }: { d: Deal; stageKey: string; onOpen: 
         </div>
       </div>
     </button>
-  );
-}
-
-/** One let, opened in place: every stage, where it is, and what is next. */
-function LetPanel({ d, applicationId, onOpenApplication, onClose: closeNow }: { d: Deal; applicationId: string | null; onOpenApplication: (id: string) => void; onClose: () => void }) {
-  const { shown, close } = useSlideOver(true, closeNow, d.app.id);
-  const at = Math.max(0, PORTAL_STAGES.findIndex((s) => s.key === d.effectiveStatusKey));
-  const current = PORTAL_STAGES[at];
-  const st = cardStatus(d, current.key);
-  const lead = d.app.tenants.find((t) => t.isPrimary) ?? d.app.tenants[0];
-  const facts: { label: string; value: string }[] = [
-    { label: "Move-in", value: fmtDate(d.app.startDate, true) ?? "Not set yet" },
-    { label: "Rent", value: d.app.offer != null ? `£${Math.round(d.app.offer).toLocaleString("en-GB")}${d.app.offerPeriod === "week" ? " pw" : " pcm"}` : "-" },
-    { label: "Tenants", value: d.app.tenants.length ? d.app.tenants.map((t) => t.name).join(", ") : "Not recorded" },
-    { label: "Service", value: d.serviceLevel ?? d.app.propoly?.service ?? "-" },
-  ];
-  return (
-    <div className="so-root fixed inset-0 z-[130]" data-shown={shown}>
-      <button aria-label="Close" onClick={close} data-shown={shown} className="so-scrim absolute inset-0 cursor-default bg-ink/35" />
-      <aside
-        role="dialog"
-        aria-label={`Let: ${d.app.propertyName}`}
-        data-shown={shown}
-        className="so-panel absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden rounded-l-lg bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] lg:w-[min(760px,calc(100%-17rem))]"
-      >
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-10 pt-5">
-          <div className="mb-4 flex items-center gap-2">
-            <button type="button" onClick={close} title="Close (Esc)" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/60 bg-white text-[13px] text-muted transition-colors hover:border-ink/40 hover:text-ink">✕</button>
-            <span className="ml-auto flex flex-wrap justify-end gap-2">
-              {applicationId && (
-                <button type="button" onClick={() => onOpenApplication(applicationId)} className="press-ring inline-flex items-center gap-2 rounded-full border border-line/60 bg-white px-4 py-2 text-[12.5px] font-semibold transition-colors hover:border-ink/40">
-                  <DoodleIcon name="checklist" size={13} /> Open the application
-                </button>
-              )}
-              <a href={propolyDealUrl(d.app.id)} target="_blank" rel="noreferrer" className="press-ring inline-flex items-center gap-2 rounded-full border border-line/60 bg-white px-4 py-2 text-[12.5px] font-semibold transition-colors hover:border-ink/40">
-                Open in Propoly <span aria-hidden>↗</span>
-              </a>
-            </span>
-          </div>
-
-          <div className="flex flex-col gap-4 sm:flex-row">
-            <Photo src={d.app.image} className="aspect-[16/10] w-full shrink-0 rounded-2xl sm:w-[220px]" />
-            <div className="min-w-0">
-              <h2 className="text-[22px] leading-tight">{d.app.propertyName}</h2>
-              <p className="mt-0.5 text-[13px] text-muted">{d.app.locality}</p>
-              <p className="mt-2 text-[13px]">{lead ? lead.name : "No tenant recorded"}{d.app.tenants.length > 1 ? ` and ${d.app.tenants.length - 1} more` : ""}</p>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-white px-3 py-1 text-[12px] font-semibold">Stage {at + 1} of {PORTAL_STAGES.length}: {current.label}</span>
-                <span className={`rounded-full px-3 py-1 text-[12px] font-semibold ${st.tone}`}>{st.text}</span>
-              </div>
-            </div>
-          </div>
-
-          {d.flags.length > 0 && (
-            <div className="mt-4 rounded-2xl bg-[#fdefec] px-4 py-3 text-[12.5px] text-[#9d4340]">
-              <p className="font-semibold">Needs a look</p>
-              <ul className="mt-1 list-disc pl-4">{d.flags.map((f) => <li key={f.kind}>{f.label}</li>)}</ul>
-            </div>
-          )}
-
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {facts.map((f) => (
-              <div key={f.label} className="rounded-2xl border border-line/60 bg-white px-3.5 py-3">
-                <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted">{f.label}</p>
-                <p className="mt-1 text-[13px] leading-snug">{f.value}</p>
-              </div>
-            ))}
-          </div>
-
-          <section className="mt-6 rounded-[22px] border border-line/60 bg-white p-5">
-            <h3 className="text-[15px]">Where it&rsquo;s up to</h3>
-            <ol className="mt-3 space-y-1.5">
-              {PORTAL_STAGES.map((s, i) => {
-                const done = i < at;
-                const here = i === at;
-                const line = done || here ? stageStatus(d, s.key) : null;
-                return (
-                  <li key={s.key} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${here ? "bg-accent-soft/40" : ""}`}>
-                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${done ? "bg-[#f1f4ec] text-[#56634a]" : here ? "bg-accent-soft text-accent-dark" : "bg-page text-muted/60"}`}>
-                      {done ? (
-                        <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden><path d="M3.5 8.4 L6.6 11.4 L12.5 4.8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                      ) : (
-                        <DoodleIcon name={STAGE_DOODLE[s.key] ?? "rocket"} size={14} />
-                      )}
-                    </span>
-                    <span className={`min-w-0 flex-1 text-[13px] ${done || here ? "font-semibold" : "text-muted"}`}>{s.label}</span>
-                    {line ? <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${line.tone}`}>{line.text}</span> : <span className="shrink-0 text-[11px] text-muted">{i === at + 1 ? "Next" : ""}</span>}
-                  </li>
-                );
-              })}
-            </ol>
-            <p className="mt-3 text-[11.5px] leading-snug text-muted">Kirstie moves each let through these stages. Ask her in the application&rsquo;s comments if something looks stuck.</p>
-          </section>
-        </div>
-      </aside>
-    </div>
   );
 }
 
@@ -304,8 +207,6 @@ export default function LetsBoard({
   everything,
   matchApplication,
   onOpenApplication,
-  openDeal = null,
-  onDealClosed,
   q = "",
   agent: agentIn,
   onAgents,
@@ -319,26 +220,21 @@ export default function LetsBoard({
   onAgents?: (names: string[]) => void;
   /** The page's search: a let shows when every word is in its address, tenants or agent. */
   q?: string;
-  /** A let the page wants opened (the Propoly box under List). */
-  openDeal?: string | null;
-  onDealClosed?: () => void;
   /** The owner sees the whole business, with a filter by agent; an agent only ever their own. */
   everything: boolean;
   /** The REX application for this let, if there is one, to open its file. */
   matchApplication: (d: Deal) => string | null;
-  onOpenApplication: (id: string) => void;
+  /** Open a let's own page - its application, or the deal when it has none -
+   *  with the board's order for ‹ › there. */
+  onOpenApplication: (id: string, order?: string[]) => void;
 }) {
   const [deals, setDeals] = useState<Deal[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
   const [ownAgent, setAgent] = useState<string | null>(null);
   const agent = agentIn !== undefined ? agentIn : ownAgent;
   /* The route says whose deals it sent; the page's own scope is the fallback. */
   const [wholeBook, setWholeBook] = useState<boolean | null>(null);
   const all = wholeBook ?? everything;
-  useEffect(() => {
-    if (openDeal) setOpenId(openDeal);
-  }, [openDeal]);
 
   useEffect(() => {
     let gone = false;
@@ -355,9 +251,6 @@ export default function LetsBoard({
         })
         .catch(() => { if (!gone) setError("Your lets didn't load. Try again in a minute."); });
     load(0);
-    /* ?deal=<id>: open one let straight away (links from search and the Propoly box). */
-    const wanted = new URLSearchParams(window.location.search).get("deal");
-    if (wanted) setOpenId(wanted);
     return () => { gone = true; };
   }, []);
 
@@ -369,7 +262,10 @@ export default function LetsBoard({
     () => waiting.filter((w) => (!all || !agent || w.agent === agent) && (!q.trim() || searchMatches(q, w.property, w.locality, w.agent ?? "", w.tenant))),
     [waiting, all, agent, q]
   );
-  const open = (deals ?? []).find((d) => d.app.id === openId) ?? null;
+  /* A card opens the let's own page (James, 12 Oct 2026): its application
+     when it has one, else the deal itself. Column by column, for ‹ ›. */
+  const pageId = (d: Deal) => matchApplication(d) ?? d.app.id;
+  const boardOrder = () => PORTAL_STAGES.flatMap((s) => live.filter((d) => d.effectiveStatusKey === s.key).map(pageId));
   const agents = useMemo(() => [...new Set((deals ?? []).map((d) => d.agentName).filter((n): n is string => Boolean(n)))].sort(), [deals]);
   useEffect(() => {
     if (onAgents) onAgents(all ? agents : []);
@@ -405,7 +301,7 @@ export default function LetsBoard({
                     <span className="ml-auto rounded-md bg-[var(--shell-panel)] px-1.5 py-0.5 text-[11px] font-medium text-muted">{dealsIn.length}</span>
                   </div>
                   <div className="space-y-2">
-                    {dealsIn.map((d) => <DealCard key={d.app.id} d={d} stageKey={s.key} onOpen={() => setOpenId(d.app.id)} />)}
+                    {dealsIn.map((d) => <DealCard key={d.app.id} d={d} stageKey={s.key} onOpen={() => onOpenApplication(pageId(d), boardOrder())} />)}
                     {dealsIn.length === 0 ? <p className="rounded-xl border border-dashed border-black/10 px-2 py-6 text-center text-[11px] text-muted">Nothing here</p> : null}
                   </div>
                 </div>
@@ -422,14 +318,7 @@ export default function LetsBoard({
           opens the list upwards. Sticky, not fixed: the page body animates
           with a transform, which would pin a fixed tab to the body instead. */}
       {waitingShown.length > 0 && <HandoverTab waiting={waitingShown} all={all} onOpenApplication={onOpenApplication} />}
-      {open && (
-        <LetPanel
-          d={open}
-          applicationId={matchApplication(open)}
-          onOpenApplication={(id) => { setOpenId(null); onOpenApplication(id); }}
-          onClose={() => { setOpenId(null); onDealClosed?.(); }}
-        />
-      )}
+
     </>
   );
 }
