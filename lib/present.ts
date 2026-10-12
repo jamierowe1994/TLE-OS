@@ -1171,10 +1171,10 @@ export const SAMPLE_DECK: PresentDeck = {
      the live state until DocuSeal is connected, and the no-button branch is
      the one worth looking at. */
   valuation: {
-    rent: 1300,
+    rent: 1250,
     serviceLevel: "Fully managed",
-    feePct: 10,
-    setupFee: 600,
+    feePct: 12,
+    setupFee: 750,
     note: "Subject to all compliance being up to date before it goes live.",
   },
   terms: { signUrl: null, summary: null },

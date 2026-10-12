@@ -193,7 +193,7 @@ export function rajAt(stage: Stage): { view: LandlordView; docs: DocsView; maint
       postcode: "NG2 3AB",
       state: managed ? "Tenanted" : let_ ? "Let agreed" : marketing ? "On the market" : "Being let",
       facts: ["Terraced house", "2 bed", "1 bath"],
-      rent: { figure: "£850", unit: "per month", caption: managed ? "Rent" : "Asking rent" },
+      rent: { figure: "£1,250", unit: "per month", caption: managed ? "Rent" : "Asking rent" },
       valuedOn: "12 May 2026",
       reference: "NCL 3AB",
       image: marketing ? img("Recreation Terrace") : null,
@@ -241,8 +241,8 @@ export function rajAt(stage: Stage): { view: LandlordView; docs: DocsView; maint
     offers:
       at >= rank("viewings")
         ? [
-            { id: "o1", amount: "£850 per month", status: let_ ? "accepted" : "with-you", statusLabel: let_ ? "Accepted" : "With you", who: "2 adults, no children, a small dog", applicants: "Sophie and Jordan", moveIn: "2026-10-01", received: "2026-06-14", conditions: "Would like to bring a small, older dog", term: "Rolling, no fixed term", income: "£60,000 a year", affordabilityPct: 17, employment: "Employed, full-time, past probation", guarantor: false, landlordRef: true, works: ["Fix the shower over the bath", "New carpet in the second bedroom"] },
-            { id: "o2", amount: "£825 per month", status: let_ ? "unsuccessful" : "received", statusLabel: let_ ? "Unsuccessful" : "Received", who: "2 adults, no children, no pets", applicants: "Daniel and Priya", moveIn: "2026-09-01", received: "2026-06-08", conditions: null, term: "12 months", income: "£52,000 a year", affordabilityPct: 19, employment: "Employed, permanent", guarantor: true, landlordRef: null },
+            { id: "o1", amount: "£1,250 per month", status: let_ ? "accepted" : "with-you", statusLabel: let_ ? "Accepted" : "With you", who: "2 adults, no children, a small dog", applicants: "Sophie and Jordan", moveIn: "2026-10-01", received: "2026-06-14", conditions: "Would like to bring a small, older dog", term: "Rolling, no fixed term", income: "£60,000 a year", affordabilityPct: 25, employment: "Employed, full-time, past probation", guarantor: false, landlordRef: true, works: ["Fix the shower over the bath", "New carpet in the second bedroom"] },
+            { id: "o2", amount: "£1,225 per month", status: let_ ? "unsuccessful" : "received", statusLabel: let_ ? "Unsuccessful" : "Received", who: "2 adults, no children, no pets", applicants: "Daniel and Priya", moveIn: "2026-09-01", received: "2026-06-08", conditions: null, term: "12 months", income: "£52,000 a year", affordabilityPct: 28, employment: "Employed, permanent", guarantor: true, landlordRef: null },
           ]
         : undefined,
     /* The works agreed with Sophie's offer, once it is accepted (1 Oct 2026). */
@@ -259,7 +259,7 @@ export function rajAt(stage: Stage): { view: LandlordView; docs: DocsView; maint
             property: "8 Recreation Terrace",
             tenants: "Sophie Turner",
             moveIn: "2026-10-01",
-            rentPcm: 850,
+            rentPcm: 1250,
             stageKey: "referencing",
             stages: [
               { key: "holding", label: "Holding fee", state: "done" },
@@ -281,9 +281,9 @@ export function rajAt(stage: Stage): { view: LandlordView; docs: DocsView; maint
           ends: "30 September 2026",
           renewal: "Renewal due 30 September 2026. We'll talk you through the options in July.",
           renewalDue: "2026-09-30",
-          rent: "£850 per month",
+          rent: "£1,250 per month",
           rentStatus: "Paid on time, every month",
-          deposit: "£980, protected with the DPS",
+          deposit: "£1,442, protected with the DPS",
           agreementHref: "#",
           agreementSigned: "24 September 2025",
           service: "Fully managed",
@@ -297,14 +297,14 @@ export function rajAt(stage: Stage): { view: LandlordView; docs: DocsView; maint
       note: managed ? "Nothing waiting on you, bar the fence quote." : readiness >= 100 ? "Everything we need is in." : "You're making great progress.",
       lines: managed
         ? [
-            ["Rent", "£850 / month"],
+            ["Rent", "£1,250 / month"],
             ["Service", "Fully managed"],
             ["Tenant since", "1 Oct 2025"],
             ["Management fee", "16.8% of rent, including VAT"],
             ["Next visit", "24 Sep 2026"],
           ]
         : [
-            ["Asking rent", "£850 / month"],
+            ["Asking rent", "£1,250 / month"],
             ["Service", "Rent collection"],
             ["Management fee", "14.4% of rent, including VAT"],
             ["Set-up fee", "£510, including VAT"],

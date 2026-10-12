@@ -61,7 +61,7 @@ const AGENT = { name: "Sam Whitaker", email: "sam@thelettingexperts.co.uk", phon
 const HOME: TenantProperty = {
   property: "8 Recreation Terrace",
   locality: "Nottingham NG2",
-  rentPcm: 850,
+  rentPcm: 1250,
   beds: 2,
   photo: "/brand/photo/property.jpg",
   images: ["/brand/photo/property.jpg", "/brand/living-room.jpg"],
@@ -109,16 +109,16 @@ const ACTIVITY: { at: TenantStageKey; label: string; sub: string; day: number; t
   { at: "matched", label: "Four homes sent to you", sub: "Matched to your budget and area", day: 2, tone: "done" },
   { at: "viewing", label: "Viewing booked", sub: "VIEWING with Sam", day: 3, tone: "done" },
   { at: "viewed", label: "You viewed 8 Recreation Terrace", sub: "How was it?", day: 9, tone: "done" },
-  { at: "offer", label: "Offer made: £850 a month", sub: "With the landlord", day: 9, tone: "done" },
+  { at: "offer", label: "Offer made: £1,250 a month", sub: "With the landlord", day: 9, tone: "done" },
   { at: "declined", label: "The landlord went with another application", sub: "Others sent the same day", day: 10, tone: "done" },
   { at: "deal_started", label: "Offer accepted", sub: "8 Recreation Terrace", day: 10, tone: "done" },
-  { at: "holding_fee", label: "Holding fee received", sub: "£196", day: 11, tone: "done" },
+  { at: "holding_fee", label: "Holding fee received", sub: "£288", day: 11, tone: "done" },
   { at: "referencing", label: "Referencing started", sub: "Employer, landlord and credit", day: 11, tone: "done" },
   { at: "plc", label: "References passed", sub: "All three back", day: 16, tone: "done" },
-  { at: "deposit", label: "Deposit registered", sub: "£980 with the DPS", day: 18, tone: "done" },
+  { at: "deposit", label: "Deposit registered", sub: "£1,442 with the DPS", day: 18, tone: "done" },
   { at: "tenancy_agreement", label: "Tenancy agreement sent for signing", sub: "", day: 19, tone: "done" },
   { at: "rent_payment", label: "Agreement signed by everyone", sub: "", day: 20, tone: "done" },
-  { at: "move_day", label: "First month's rent received", sub: "£850", day: 23, tone: "done" },
+  { at: "move_day", label: "First month's rent received", sub: "£1,250", day: 23, tone: "done" },
   { at: "living", label: "Keys handed over", sub: "Inventory signed", day: 25, tone: "done" },
 ];
 
@@ -141,7 +141,7 @@ export function sampleFor(stage: TenantStageKey): TenantHome {
   /* Before the deal: the home she is after, once she has asked about it. */
   const enquiry = atLeast(stage, "enquired") ? { ...HOME, enquiredOn: iso(day(2)) } : null;
   const viewing = atLeast(stage, "viewing") ? { when: isoTime(viewingAt), withName: "Sam", status: (atLeast(stage, "viewed") ? "done" : "booked") as "done" | "booked" } : null;
-  const offer = atLeast(stage, "offer") ? { amount: 850, madeOn: iso(day(VIEWING_DAY)), status: (inDeal ? "accepted" : "with_landlord") as "accepted" | "with_landlord" } : null;
+  const offer = atLeast(stage, "offer") ? { amount: 1250, madeOn: iso(day(VIEWING_DAY)), status: (inDeal ? "accepted" : "with_landlord") as "accepted" | "with_landlord" } : null;
 
   /* The deal, once there is one. Living is every stage done. */
   const dealIdx = stage === "living" ? STAGES.length : DEAL.indexOf(stage);
@@ -185,7 +185,7 @@ export function sampleFor(stage: TenantStageKey): TenantHome {
     : findingRoad(stage, {
         home: enquiry && stage !== "declined" ? HOME.property : null,
         viewing: viewing ? short(viewingAt) : null,
-        offer: offer ? "£850 a month" : null,
+        offer: offer ? "£1,250 a month" : null,
       });
 
   const activity = ACTIVITY.filter((a) => atLeast(stage, a.at)).reverse()

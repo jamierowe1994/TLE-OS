@@ -655,7 +655,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
     render: () =>
       renderPlain(postSubjectFor(SAMPLE_INVITE), postBodyFor(SAMPLE_INVITE, {
         valuation: 1250,
-        askingRent: 1300,
+        askingRent: 1250,
         feePercent: 10,
         availableFrom: null,
         summary: "Wants it on the market before Christmas. Weighing us against one other agent.",
@@ -679,7 +679,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
         withSample(o ?? LANDLORD_CONTRACT_PACK, {
           firstName: "Raj",
           address: "8 Recreation Terrace",
-          rent: "£1,300",
+          rent: "£1,250",
           serviceLevel: "Fully managed",
           serviceLine: "a fully managed service",
           agentName: "Sam Whitaker",
@@ -826,7 +826,7 @@ The Letting Experts`
           landlordName: "Mr Raj Patel",
           address: "8 Recreation Terrace, Nottingham NG2 3AB",
           detailsList:
-            "Offer amount: £850 pcm<br>Start date: 01/10/2026<br>Length of tenancy: 12 months<br>Conditions: none<br>Date received: 16/09/2026<br>Has pets: No<br>Number of occupants: 2<br>Tenant names: Sophie Turner, Daniel Turner",
+            "Offer amount: £1,250 pcm<br>Start date: 01/10/2026<br>Length of tenancy: 12 months<br>Conditions: none<br>Date received: 16/09/2026<br>Has pets: No<br>Number of occupants: 2<br>Tenant names: Sophie Turner, Daniel Turner",
           agentName: "Sam Whitaker",
           agentPhone: "0115 123 4567",
           agentEmail: "sam@thelettingexperts.co.uk",
@@ -850,7 +850,7 @@ The Letting Experts`
           tenantName: "Sophie Turner",
           address: "8 Recreation Terrace, Nottingham NG2 3AB",
           detailsList:
-            "Offer amount: £850 pcm<br>Start date: 01/10/2026<br>Length of tenancy: 12 months<br>Conditions: none<br>Date received: 16/09/2026<br>Has pets: No<br>Number of occupants: 2<br>Tenant names: Sophie Turner, Daniel Turner",
+            "Offer amount: £1,250 pcm<br>Start date: 01/10/2026<br>Length of tenancy: 12 months<br>Conditions: none<br>Date received: 16/09/2026<br>Has pets: No<br>Number of occupants: 2<br>Tenant names: Sophie Turner, Daniel Turner",
           payLine:
             "You will now receive an invite from Propoly to pay the holding fee, if applicable, and to complete your referencing information.",
           agentName: "Sam Whitaker",
@@ -962,7 +962,7 @@ The Letting Experts`
           firstName: "Sophie",
           address: "8 Recreation Terrace",
           agentName: "Sam Whitaker",
-          summaryList: "<strong>Rent:</strong> £850 a month<br><strong>Moving in:</strong> Saturday 24 October 2026<br><strong>Who:</strong> Sophie Turner and Jordan Reid, with a small, older dog<br><strong>Works before moving day:</strong> fix the shower over the bath",
+          summaryList: "<strong>Rent:</strong> £1,250 a month<br><strong>Moving in:</strong> Saturday 24 October 2026<br><strong>Who:</strong> Sophie Turner and Jordan Reid, with a small, older dog<br><strong>Works before moving day:</strong> fix the shower over the bath",
         })
       )(),
   },
@@ -1031,7 +1031,7 @@ The Letting Experts`
       blocksAs("tenant")(
         withSample(o ?? APPLICATION_FORM_INVITE, {
           address: "8 Recreation Terrace, Nottingham",
-          rent: "£850 a month",
+          rent: "£1,250 a month",
           agentName: "Sam Whitaker",
           link: `${SITE}/tenant/apply`,
         })
@@ -1052,7 +1052,7 @@ The Letting Experts`
       blocksAs("tenant")(
         withSample(o ?? OFFER_LINK_INVITE, {
           address: "8 Recreation Terrace, Nottingham",
-          rent: "£850 a month",
+          rent: "£1,250 a month",
           agentName: "Sam Whitaker",
           link: `${SITE}/tenant/offer`,
         })
@@ -1395,7 +1395,7 @@ const TENANT_SAMPLE: Record<string, string> = {
   firstName: "Sophie",
   tenantName: "Sophie Turner",
   address: "8 Recreation Terrace, Nottingham NG2 3AB",
-  rent: "£850 pcm",
+  rent: "£1,250 pcm",
   agentName: "Sam Whitaker",
   agentPhone: "0115 123 4567",
   agentEmail: "sam@thelettingexperts.co.uk",
@@ -1410,14 +1410,14 @@ const TENANT_SAMPLE: Record<string, string> = {
   count: "3",
   availableLine: "Good news: it's still available, from 1 October.",
   moveInList:
-    "Holding fee (one week's rent): <strong>£196</strong><br>Deposit (five weeks' rent): <strong>£980</strong><br>First month's rent: <strong>£850</strong>",
+    "Holding fee (one week's rent): <strong>£288</strong><br>Deposit (five weeks' rent): <strong>£1,442</strong><br>First month's rent: <strong>£1,250</strong>",
   slotsList: "<strong>Thursday 4 September</strong>, 5:30pm<br><strong>Friday 5 September</strong>, 12:30pm<br><strong>Saturday 6 September</strong>, 10:00am",
   onNowLine: "We have 14 homes on in Nottingham right now.",
   homesList:
     "<strong>£825 pcm</strong> · 2 bed terraced house, Sneinton NG2<br><strong>£875 pcm</strong> · 2 bed apartment, West Bridgford NG2<br><strong>£795 pcm</strong> · 1 bed apartment with parking, Lace Market NG1",
   reasonLine: "You said the second bedroom was too small for a desk.",
-  offerLine: "You offered <strong>£850 pcm</strong>, from <strong>1 October</strong>, for 12 months.",
-  holdingFee: "£196",
+  offerLine: "You offered <strong>£1,250 pcm</strong>, from <strong>1 October</strong>, for 12 months.",
+  holdingFee: "£288",
   adultsLine: "Everyone over 18 who is moving in gets their own link and fills in their own form.",
   termLine: "The tenancy is for 12 months from 1 October.",
   missingList: "<strong>Your employer's contact email</strong><br><strong>Your address history</strong> for 2023 and 2024<br><strong>Daniel Turner</strong> hasn't started his form yet",
@@ -1512,7 +1512,7 @@ TLE_EMAILS.push(
       /* The cards, drawn by the same function the send uses. */
       homesList: homeCardsHtml(
         [
-          { name: "8 Recreation Terrace", locality: "Nottingham NG9", rent: 850, image: "/rex/295547.jpg", beds: "2 bedrooms", propertyType: "Terraced house", blurb: "A bright two bedroom terrace with a south-facing garden, ten minutes from the tram." },
+          { name: "8 Recreation Terrace", locality: "Nottingham NG9", rent: 1250, image: "/rex/295547.jpg", beds: "2 bedrooms", propertyType: "Terraced house", blurb: "A bright two bedroom terrace with a south-facing garden, ten minutes from the tram." },
           { name: "183 Walesby Lane", locality: "Newark NG22", rent: 750, image: "/rex/295517.jpg", beds: "2 bedrooms", propertyType: "Semi-detached house", blurb: "Village semi with off-road parking and a new kitchen, close to the A1." },
           { name: "57 Brindley Court", locality: "Derby DE24", rent: 400, image: "/rex/299698.jpg", beds: "Room in a shared house", blurb: "An ensuite room in a modern house share, bills included." },
         ],
@@ -1594,7 +1594,7 @@ TLE_EMAILS.push(
     "The tenant who applied",
     "What we do with it, when they will hear (the moment the landlord answers, either way), the holding fee if it is a yes, and the four things to have ready for referencing.",
     APPLICATION_RECEIVED,
-    { holdingFeeLine: HOLDING_FEE_WORDING.england.ifYes("£196.15") }
+    { holdingFeeLine: HOLDING_FEE_WORDING.england.ifYes("£288.46") }
   ),
   tenantEntry(
     "application-declined",
@@ -1614,7 +1614,7 @@ TLE_EMAILS.push(
     "Each tenant on the application",
     "Our rewrite of the acceptance email: the yes, the holding fee (what it is, where it goes, when it comes back and when it can be kept), then every step to the keys in order, with the tenancy page as the place to watch it happen.",
     APPLICATION_ITS_YOURS,
-    { holdingFeeLine: HOLDING_FEE_WORDING.england.accepted("£196"), weekAheadList: WEEK_AHEAD_LINES, link: `${SITE}/tenant/tenancy` }
+    { holdingFeeLine: HOLDING_FEE_WORDING.england.accepted("£288"), weekAheadList: WEEK_AHEAD_LINES, link: `${SITE}/tenant/tenancy` }
   ),
   tenantEntry(
     "referencing-invite",
