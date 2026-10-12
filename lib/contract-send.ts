@@ -47,6 +47,20 @@ export interface ContractSendRecord {
 
 const KIND = "contract-send";
 
+/** Made by New listing rather than booked as an appraisal (app/api/listings/new). */
+export async function isDirectListing(appraisalId: string): Promise<boolean> {
+  if (!hasDb()) return false;
+  const rows = await q<{ n: number }>(`SELECT 1 AS n FROM os_case_state WHERE kind = 'direct-listing' AND record_id = $1`, [appraisalId]).catch(() => []);
+  return rows.length > 0;
+}
+
+/** The landlord's own address, when New listing asked for it - for the contract. */
+export async function directListingLandlordAddress(appraisalId: string): Promise<string | null> {
+  if (!hasDb()) return null;
+  const rows = await q<{ payload: { landlordAddress?: string | null } }>(`SELECT payload FROM os_case_state WHERE kind = 'direct-listing' AND record_id = $1`, [appraisalId]).catch(() => []);
+  return rows[0]?.payload?.landlordAddress?.trim() || null;
+}
+
 export async function contractSendRecord(appraisalId: string): Promise<ContractSendRecord | null> {
   if (!hasDb()) return null;
   const rows = await q<{ payload: ContractSendRecord }>(
@@ -82,7 +96,11 @@ export async function sendContractPack(p: {
   const refs = [...new Set([ma.leadId, ma.id].filter((r): r is string => Boolean(r)))];
   const decks = (await Promise.all(refs.map((r) => presentationsFor(r)))).flat();
   const post = decks.filter((d) => d.kind === "post-appraisal").sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0];
-  if (!post) throw new ContractSendRefused("There is no post-appraisal presentation on this file yet. Build it first - it goes in the same email.");
+  /* A file made by New listing (12 Oct 2026) skipped the appraisal, so there
+     is no presentation to send: the terms go on their own, in their own
+     words. Any other file still needs its deck. */
+  const direct = !post && (await isDirectListing(ma.id));
+  if (!post && !direct) throw new ContractSendRefused("There is no post-appraisal presentation on this file yet. Build it first - it goes in the same email.");
 
   /* Their way in. The portal recognises a landlord by an appraisal carrying
      their email, so this appraisal is enough. */
@@ -93,7 +111,17 @@ export async function sendContractPack(p: {
 
   const level = SERVICE_LEVELS.find((s) => s.id === ma.serviceLevel)?.label;
   const agentName = me.name || ma.agent || "Your agent";
-  const { subject, html } = renderTleEmail("landlord-contract-pack", {
+  const { subject, html } = direct
+    ? renderTleEmail("landlord-terms-only", {
+        firstName: ma.landlord.trim().split(/\s+/)[0] || "there",
+        address: ma.address.split(",")[0].trim() || ma.address,
+        rent: money(ma.valuation),
+        serviceLine: level ? `a ${level.toLowerCase()} service` : "the service we discussed",
+        agentName,
+        agentFirst: agentName.split(/\s+/)[0] || agentName,
+        link: `${origin}/landlord/enter?token=${encodeURIComponent(token)}`,
+      })
+    : renderTleEmail("landlord-contract-pack", {
     firstName: ma.landlord.trim().split(/\s+/)[0] || "there",
     /* The first line only (James, 17 Sep 2026). The old join dropped the
        address itself and left the postcode: "for EX226LE". */
@@ -103,7 +131,7 @@ export async function sendContractPack(p: {
     serviceLine: level ? `a ${level.toLowerCase()} service` : "the service we discussed",
     agentName,
     agentFirst: agentName.split(/\s+/)[0] || agentName,
-    deckLink: `${origin}/present/${post.token}`,
+    deckLink: `${origin}/present/${post!.token}`,
     link: `${origin}/landlord/enter?token=${encodeURIComponent(token)}`,
   });
 

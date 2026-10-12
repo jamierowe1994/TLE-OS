@@ -17,7 +17,7 @@ import { searchMatches } from "@/lib/search-match";
 /* 2,400 lines: off the first load, fetched while the board sits idle. */
 const loadListingDrawer = () => import("@/components/ListingDrawer");
 const ListingDrawer = dynamic(loadListingDrawer, { ssr: false });
-import NewListingPanel from "@/components/listing/NewListingPanel";
+import NewListingWizard from "@/components/listing/NewListingWizard";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { DIARY } from "@/lib/diary";
 import { Readiness, Tag, boardGaps, readiness, statusOf, type PublishCheck } from "@/components/ListingTags";
@@ -1185,12 +1185,19 @@ export default function Listings() {
       />
 
       {adding && (
-        <NewListingPanel
+        /* New listing in five screens, landlord and terms included (12 Oct
+           2026) - the appraisal and Portfolio routes keep NewListingPanel,
+           since their landlord and terms are already on the file. */
+        <NewListingWizard
           onClose={() => setAdding(false)}
           onCreated={(id) => {
             setAdding(false);
-            /* Straight onto the new record, where Marketing fills it in. */
-            void loadBook().then(() => setOpenId(id));
+            /* Straight onto the new record's Marketing tab, where the photos
+               and the description are filled in. */
+            void loadBook().then(() => {
+              setOpenTab("marketing");
+              setOpenId(id);
+            });
           }}
         />
       )}

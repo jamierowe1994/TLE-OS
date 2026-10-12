@@ -7,6 +7,7 @@ import { createListing, findAddresses, listingSubcategories, type NewListing, cu
 import { createProperty, propertySubcategories } from "@/lib/rex-properties";
 import { rexConfigured } from "@/lib/rex";
 import { isOwner } from "@/lib/agent-words";
+import { putOwnerOnListing } from "@/lib/rex-listing-owner";
 
 /**
  * "+ Add new listing".
@@ -60,6 +61,8 @@ interface Body {
   availableFrom?: unknown;
   letType?: unknown;
   serviceLevel?: unknown;
+  /** The landlord's REX contact, to go on the listing as its owner. */
+  ownerContactId?: unknown;
   dryRun?: unknown;
 }
 
@@ -128,7 +131,9 @@ export async function POST(req: NextRequest) {
     rent,
     deposit: money(b.deposit),
     availableFrom,
-    letType: str(b.letType) || "long_term",
+    /* Always long term (James, 12 Oct 2026): with Section 21 gone there is
+       no choice to make, so the question came off the panel. */
+    letType: "long_term",
     serviceLevel: str(b.serviceLevel) || "managed",
   };
   const made = await createListing(listing, actor.id, dryRun);
@@ -150,6 +155,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  /* The landlord on the listing, so the push to Propoly can find them: the
+     one the caller names, else the property's owners (lib/rex-listing-owner,
+     behind its own switch). Never holds the listing up. */
+  const owner = await putOwnerOnListing(made.listingId, { contactId: str(b.address?.ownerContactId) || str(b.ownerContactId) || null, propertyId });
+
   await invalidateListingBook();
   /* The signed terms from the appraisal that won this home go onto the new
      listing (they wait in R2 until there is one - lib/signed-documents). */
@@ -160,7 +170,7 @@ export async function POST(req: NextRequest) {
     actorEmail: actor.email,
     detail: `created listing ${made.listingId} on property ${propertyId}${madeProperty ? " (new address)" : ""}, £${rent} pcm`,
   });
-  return NextResponse.json({ ok: true, listingId: made.listingId, propertyId, madeProperty, contracts });
+  return NextResponse.json({ ok: true, listingId: made.listingId, propertyId, madeProperty, contracts, owner });
 }
 
 /** Signed terms on any appraisal linked to this property, copied to the listing. */

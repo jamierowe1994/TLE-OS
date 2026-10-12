@@ -79,6 +79,7 @@ import {
   INSPECTION_LANDLORD_REPORT,
   INVOICE_SENT,
   LANDLORD_CONTRACT_PACK,
+  LANDLORD_TERMS_ONLY,
   LANDLORD_QUESTIONS_CHASE,
   LANDLORD_CONTRACT_NUDGE,
   LANDLORD_MESSAGE_REPLY,
@@ -685,6 +686,30 @@ export const TLE_EMAILS: CatalogEntry[] = [
           agentName: "Sam Whitaker",
           agentFirst: "Sam",
           deckLink: `${SITE}/present/example`,
+          link: `${SITE}/landlord/enter?token=example`,
+        })
+      )(),
+  },
+  {
+    id: "landlord-terms-only",
+    group: "Market appraisals",
+    name: "Your Terms of Business",
+    audience: "landlord",
+    trigger: "The agent presses Send on the last screen of New listing, after signing their half. Send a reminder on the file sends it again",
+    fires: "Wired 12 Oct 2026. components/listing/NewListingWizard.tsx → POST /api/appraisals/[id]/terms → lib/contract-send.ts, only for a file New listing made (no presentation), on the public sender, reply-to the agent.",
+    to: "The landlord on the new listing",
+    summary:
+      "The contract on its own, for a listing made without an appraisal (James, 12 Oct 2026: they still sign the terms of business as an absolute minimum). Signed inside their property file, which the button signs them straight into.",
+    doc: LANDLORD_TERMS_ONLY,
+    render: (o) =>
+      blocksAs("landlord")(
+        withSample(o ?? LANDLORD_TERMS_ONLY, {
+          firstName: "Raj",
+          address: "8 Recreation Terrace",
+          rent: "£1,250",
+          serviceLine: "a fully managed service",
+          agentName: "Sam Whitaker",
+          agentFirst: "Sam",
           link: `${SITE}/landlord/enter?token=example`,
         })
       )(),
