@@ -264,7 +264,8 @@ export default function BondApp() {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--shell-panel)] lg:my-2 lg:ml-2 lg:mr-2 lg:rounded-[18px] lg:shadow-[inset_0_0_0_1px_var(--shell-rim)]">
-          <header className="flex shrink-0 items-center justify-between gap-3 px-4 pt-4 sm:px-6 lg:pt-6">
+          {/* Today carries the OS masthead itself from lg, so the bar steps aside there. */}
+          <header className={`flex shrink-0 items-center justify-between gap-3 px-4 pt-4 sm:px-6 lg:pt-6 ${room === "today" ? "lg:hidden" : ""}`}>
             <div className="flex items-center gap-3">
               <span className="hand text-[22px] leading-none lg:hidden">Bond</span>
               <div className="hidden lg:block">
@@ -285,7 +286,7 @@ export default function BondApp() {
               </PressButton>
               <PressButton
                 onClick={() => askAbout(null)}
-                className="flex items-center rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] text-muted hover:text-ink"
+                className={`items-center rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] text-muted hover:text-ink ${room === "today" ? "hidden" : "flex"}`}
                 title="Ask Bond about the patch"
               >
                 <DoodleIcon name="magic-wand" size={13} className="mr-1.5" />
@@ -331,7 +332,7 @@ export default function BondApp() {
             ))}
           </nav>
 
-          <main className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+          <main className={`min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5 ${room === "today" ? "lg:px-10 lg:pt-8" : ""}`}>
             {room === "today" && (
               <BondToday
                 data={today}
@@ -340,6 +341,8 @@ export default function BondApp() {
                 setQuick={setQuick}
                 search={runSearch}
                 go={setRoom}
+                onAdd={() => setRoom("lookup")}
+                onAsk={() => askAbout(null)}
                 districts={patch ?? []}
                 onStep={(s) => {
                   pickStep(s);

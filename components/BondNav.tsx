@@ -61,11 +61,6 @@ export default function BondNav({
   const [collapsed, setCollapsed] = useState(false);
   const [me, setMe] = useState<Me>(null);
   const [menu, setMenu] = useState(false);
-  const inMore = rooms.some((r) => r.more && r.key === room);
-  const [moreOpen, setMoreOpen] = useState(inMore);
-  useEffect(() => {
-    if (inMore) setMoreOpen(true);
-  }, [inMore]);
 
   useEffect(() => {
     let c = false;
@@ -167,29 +162,17 @@ export default function BondNav({
             <RoomRow key={r.key} r={r} />
           ))}
         </ul>
+        {/* The rest of Bond, always shown, under a short rule (James, 12 Oct
+            2026: "a line rather than the More button"). */}
         {more.length > 0 && (
-          <div className="mt-4">
-            {collapsed ? (
-              <div className="mx-auto mb-2 w-5 border-t border-[var(--launch-guide)]" />
-            ) : (
-              <button
-                type="button"
-                onClick={() => setMoreOpen((o) => !o)}
-                aria-expanded={moreOpen}
-                className="group mb-0.5 flex h-6 w-full items-center gap-1 rounded-md px-2 text-left text-[11.5px] font-medium text-[var(--launch-icon)] hover:text-ink"
-              >
-                More
-                <LineIcon name={moreOpen ? "chevron-down" : "chevron-right"} size={12} />
-              </button>
-            )}
-            {(moreOpen || collapsed) && (
-              <ul className="space-y-px">
-                {more.map((r) => (
-                  <RoomRow key={r.key} r={r} />
-                ))}
-              </ul>
-            )}
-          </div>
+          <>
+            <div className={`mx-auto my-3 border-t border-[var(--launch-guide)] ${collapsed ? "w-5" : "w-4/5"}`} />
+            <ul className="space-y-px">
+              {more.map((r) => (
+                <RoomRow key={r.key} r={r} />
+              ))}
+            </ul>
+          </>
         )}
       </nav>
 

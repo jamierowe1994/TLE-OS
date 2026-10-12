@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
-import BondProcess from "@/components/BondProcess";
+import PageHeader from "@/components/PageHeader";
+import { PressButton } from "@/components/Bits";
 
 /**
  * Today - Bond's front page, after James's sketch of 3 Sep 2026.
@@ -63,6 +64,7 @@ export interface TodayData {
 
 type Room = "today" | "doors" | "nudges" | "landlords" | "competitors" | "lookup" | "campaigns" | "owners" | "postcards";
 
+
 const RECENT_KEY = "bond.recent";
 export function rememberSearch(term: string) {
   try {
@@ -122,6 +124,8 @@ export default function BondToday({
   go,
   districts = [],
   onStep,
+  onAdd,
+  onAsk,
 }: {
   data: TodayData | null;
   error: string | null;
@@ -133,8 +137,12 @@ export default function BondToday({
   /** Pressing a step on the bar: open Doors at that step. */
   onStep?: (step: number) => void;
   go: (r: Room) => void;
+  /** The masthead's Add prospect and Ask Bond. */
+  onAdd?: () => void;
+  onAsk?: () => void;
 }) {
   const [recent, setRecent] = useState<string[]>([]);
+  const [detail, setDetail] = useState(false);
   useEffect(() => {
     try {
       setRecent(JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]") as string[]);
@@ -154,9 +162,46 @@ export default function BondToday({
 
   const s = data?.summary;
   const pic = data?.picture;
+  const printing = data?.providers.postcard.connected ?? false;
+  const n = (v: number | undefined) => (v == null ? null : v);
 
   return (
     <div className="w-full pb-6">
+      {/* The masthead, as every OS screen has it (James, 12 Oct 2026: "bring
+          this in line with what we're trying to do on everything else"). */}
+      <PageHeader
+        search={false}
+        title={`${greeting()}${data?.name ? `, ${data.name}` : ""}`}
+        blurb="Find the landlords who are ready to move, and get in front of them first."
+        /* The dog and the house, trimmed to the drawing so they stand on the
+           line. A new name for a new picture: /public is cached for hours. */
+        illustration="/bond/dog-and-house-trim-r01.png"
+        illustrationHeight={150}
+        illustrationAspect={3.08}
+        lineBreak="none"
+        hideArtOnPhone
+        artFromXl
+        actions={
+          <>
+            <PressButton onClick={() => go("doors")} className="flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-page">
+              <DoodleIcon name="target" size={14} />
+              Find opportunities
+            </PressButton>
+            {onAdd && (
+              <PressButton onClick={onAdd} className="rounded-full border border-line/80 px-4 py-2 text-[12.5px] text-ink hover:border-ink">
+                Add prospect
+              </PressButton>
+            )}
+            {onAsk && (
+              <PressButton onClick={onAsk} className="flex items-center gap-1.5 rounded-full border border-line/80 px-4 py-2 text-[12.5px] text-ink hover:border-ink">
+                <DoodleIcon name="magic-wand" size={13} />
+                Ask Bond
+              </PressButton>
+            )}
+          </>
+        }
+      />
+
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -164,13 +209,13 @@ export default function BondToday({
         }}
         className="fade-up"
       >
-        <label className="flex items-center gap-3 rounded-2xl border border-line bg-panel px-4 py-3 shadow-[0_1px_0_rgba(0,0,0,0.02)] focus-within:border-ink">
+        <label className="flex items-center gap-3 rounded-2xl border border-line bg-panel px-4 py-3 focus-within:border-ink">
           <DoodleIcon name="search" size={16} className="shrink-0 text-muted" />
           <input
             value={quick}
             onChange={(e) => setQuick(e.target.value)}
             placeholder="Where are you prospecting today? A postcode or an address..."
-            className="w-full bg-transparent text-[13.5px] outline-none placeholder:text-muted/70"
+            className="w-full min-w-0 bg-transparent text-[13.5px] outline-none placeholder:text-muted/70"
           />
           <button type="submit" className="press-wobble shrink-0 rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page">
             Show me
@@ -187,46 +232,45 @@ export default function BondToday({
         )}
       </form>
 
-      {/* The process first: the trial's question, answered from the record. */}
-      <div className="mt-5">
-        <BondProcess districts={districts} onPick={(s) => s != null && onStep?.(s)} />
+      {/* Three things to do, in the order they are done. One figure, one
+          sentence, one button each - the rest of the picture is a press away
+          below, not in front of the agent on arrival. */}
+      <div className="mt-5 grid gap-4 md:grid-cols-3">
+        <Step
+          n={1}
+          tone="peach"
+          icon="target"
+          title="Find Opportunities"
+          value={n(s?.flagged)}
+          says="landlords in your patch look ready to move"
+          action="Show me the best"
+          onClick={() => go("doors")}
+        />
+        <Step
+          n={2}
+          tone="mint"
+          icon="call"
+          title="Call the Warm Ones"
+          value={n(s?.nudgesOpen)}
+          says={s?.nudgesOpen === 1 ? "landlord who knows us to ring today" : "landlords who know us to ring today"}
+          action="Start calling"
+          onClick={() => go("nudges")}
+        />
+        <Step
+          n={3}
+          tone="lilac"
+          icon="mail"
+          title="Write to Landlords"
+          value={n(s?.anniversariesSoon)}
+          says="tenancies come round in the next 60 days"
+          action="Send cards"
+          onClick={() => go("campaigns")}
+          note={data && !printing ? "Cards queue up ready. Printing starts once the print house is connected." : undefined}
+        />
       </div>
 
-      {/* The tiles. */}
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-6">
-        <Tile tone="peach" icon="call" label="Nudges" value={s ? s.nudgesOpen : null} hint="to call today" onClick={() => go("nudges")} />
-        <Tile tone="rose" icon="target" label="Flagged" value={s ? s.flagged : null} hint={s ? `across ${s.districts} districts` : ""} onClick={() => go("doors")} />
-        <Tile tone="butter" icon="star" label="New today" value={s ? s.newToday : null} hint={s?.lastSweep ? `swept ${when(s.lastSweep)}` : "not swept yet"} onClick={() => go("doors")} />
-        <Tile tone="lilac" icon="calendar" label="Anniversaries" value={s ? s.anniversariesSoon : null} hint="in the next 60 days" onClick={() => go("doors")} />
-        <Tile tone="mint" icon="home" label="Worked this week" value={s ? s.workedThisWeek : null} hint="properties touched" />
-        <Tile tone="sky" icon="checklist" label="Appraisals booked" value={s ? s.appraisalsBooked : null} hint="from Bond" />
-      </div>
-
-      {/* The picture. */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-[1.08fr_0.9fr_1.22fr]">
-        <Card title="Opportunity" icon="magic-wand" delay="0.3s">
-          {pic ? <Gauge o={pic.opportunity} /> : <Loading />}
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Mini
-              tone="lilac"
-              label={pic?.opportunity.landlordsEstimate != null ? "Landlords (est.)" : "Landlords"}
-              value={pic ? (pic.opportunity.landlordsEstimate ?? pic.opportunity.landlords).toLocaleString("en-GB") : "…"}
-              hint={
-                pic?.opportunity.landlordsEstimate != null
-                  ? `estimate: ${pic.opportunity.doorsSeen.toLocaleString("en-GB")} doors seen to let in two years, about three each${pic.opportunity.landlords ? `; ${pic.opportunity.landlords.toLocaleString("en-GB")} known by name` : ""}`
-                  : "known by name in the patch"
-              }
-            />
-            <Mini tone="mint" label="Advertised rent" value={pic ? short(pic.opportunity.rentRoll) : "…"} hint={pic ? `pcm across ${pic.opportunity.rentDoors.toLocaleString("en-GB")} lets` : ""} />
-            <Mini tone="butter" label="Doors flagged" value={pic ? pic.opportunity.flagged.toLocaleString("en-GB") : "…"} hint="in the patch" />
-          </div>
-        </Card>
-
-        <Card title="Portfolio condition" icon="link" delay="0.38s">
-          {pic ? <Condition c={pic.condition} /> : <Loading />}
-        </Card>
-
-        <Card title="Top opportunities" icon="star" delay="0.46s">
+      <div className="mt-4 grid gap-4 lg:grid-cols-[1.25fr_1fr]">
+        <Card title="Top Opportunities" icon="star" delay="0.3s">
           {!pic ? (
             <Loading />
           ) : pic.top.length === 0 ? (
@@ -258,49 +302,112 @@ export default function BondToday({
             View all opportunities
           </button>
         </Card>
+
+        <Card title="What Has Happened" icon="magic-wand" delay="0.38s">
+          {!data ? (
+            <Loading />
+          ) : data.activity.length === 0 ? (
+            <p className="max-w-md text-[12.5px] leading-relaxed text-muted">
+              Nothing yet. Open a property from Find Opportunities, set its stage or write a note, and it shows here for everyone.
+            </p>
+          ) : (
+            <ul className="divide-y divide-line/70">
+              {data.activity.slice(0, 7).map((a) => (
+                <li key={a.id} className="flex items-start gap-3 py-2.5 text-[12.5px]">
+                  <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full" style={{ background: TONES.sky.wash, color: TONES.sky.ink }}>
+                    <DoodleIcon name={KIND_ICON[a.kind] ?? "note"} size={13} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate">
+                      <span className="font-semibold">{a.actor}</span>
+                      <span className="text-muted"> · {a.address}</span>
+                    </p>
+                    <p className="truncate text-muted">{a.detail}</p>
+                  </div>
+                  <span className="shrink-0 text-[11px] text-muted">{ago(a.at)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
       </div>
 
-      {/* The feed, with company. */}
-      <section className="fade-up mt-4 min-w-0 overflow-hidden rounded-2xl border border-line bg-panel" style={{ animationDelay: "0.55s" }}>
-        <div className="grid lg:grid-cols-[1fr_260px]">
-          <div className="p-6">
-            <h2 className="hand flex items-center gap-2 text-[17px]">
-              <DoodleIcon name="magic-wand" size={16} />
-              What has happened
-            </h2>
-            {!data ? (
-              <Loading />
-            ) : data.activity.length === 0 ? (
-              <p className="mt-3 max-w-md text-[12.5px] leading-relaxed text-muted">
-                Nothing yet. Open a property from the map or the list, set its stage or write a note, and it shows here for everyone.
-              </p>
-            ) : (
-              <ul className="mt-3 divide-y divide-line/70">
-                {data.activity.slice(0, 12).map((a) => (
-                  <li key={a.id} className="flex items-start gap-3 py-2.5 text-[12.5px]">
-                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full" style={{ background: TONES.sky.wash, color: TONES.sky.ink }}>
-                      <DoodleIcon name={KIND_ICON[a.kind] ?? "note"} size={13} />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p>
-                        <span className="font-semibold">{a.actor}</span>
-                        <span className="text-muted"> · {a.address}</span>
-                      </p>
-                      <p className="text-muted">{a.detail}</p>
-                    </div>
-                    <span className="shrink-0 text-[11px] text-muted">{ago(a.at)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+      {/* The rest of the picture, for whoever wants it. */}
+      <div className="mt-6 flex justify-center">
+        <button
+          type="button"
+          onClick={() => setDetail((d) => !d)}
+          aria-expanded={detail}
+          className="rounded-full border border-line/80 px-4 py-1.5 text-[12px] text-muted transition-colors hover:border-ink hover:text-ink"
+        >
+          {detail ? "Hide the detail" : "See the patch in detail"}
+        </button>
+      </div>
+      {detail && (
+        <div className="mt-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+            <Tile tone="butter" icon="star" label="New today" value={s ? s.newToday : null} hint={s?.lastSweep ? `swept ${when(s.lastSweep)}` : "not swept yet"} onClick={() => go("doors")} />
+            <Tile tone="rose" icon="target" label="Flagged" value={s ? s.flagged : null} hint={s ? `across ${s.districts} districts` : ""} onClick={() => go("doors")} />
+            <Tile tone="mint" icon="home" label="Worked this week" value={s ? s.workedThisWeek : null} hint="properties touched" />
+            <Tile tone="sky" icon="checklist" label="Appraisals booked" value={s ? s.appraisalsBooked : null} hint="from Bond" />
           </div>
-          <div className="relative hidden min-h-[180px] items-end justify-center lg:flex">
-            <img src="/bond/dog-and-house.png" alt="" className="bond-float mb-1 h-[230px] w-[230px] object-contain" />
+          <div className="mt-4 grid gap-4 lg:grid-cols-[1.15fr_1fr]">
+            <Card title="Opportunity" icon="magic-wand" delay="0s">
+              {pic ? <Gauge o={pic.opportunity} /> : <Loading />}
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <Mini
+                  tone="lilac"
+                  label={pic?.opportunity.landlordsEstimate != null ? "Landlords (est.)" : "Landlords"}
+                  value={pic ? (pic.opportunity.landlordsEstimate ?? pic.opportunity.landlords).toLocaleString("en-GB") : "…"}
+                  hint={
+                    pic?.opportunity.landlordsEstimate != null
+                      ? `estimate: ${pic.opportunity.doorsSeen.toLocaleString("en-GB")} doors seen to let in two years, about three each${pic.opportunity.landlords ? `; ${pic.opportunity.landlords.toLocaleString("en-GB")} known by name` : ""}`
+                      : "known by name in the patch"
+                  }
+                />
+                <Mini tone="mint" label="Advertised rent" value={pic ? short(pic.opportunity.rentRoll) : "…"} hint={pic ? `pcm across ${pic.opportunity.rentDoors.toLocaleString("en-GB")} lets` : ""} />
+                <Mini tone="butter" label="Doors flagged" value={pic ? pic.opportunity.flagged.toLocaleString("en-GB") : "…"} hint="in the patch" />
+              </div>
+            </Card>
+            <Card title="Portfolio Condition" icon="link" delay="0s">
+              {pic ? <Condition c={pic.condition} /> : <Loading />}
+            </Card>
           </div>
         </div>
-      </section>
+      )}
     </div>
   );
+}
+
+/** One of the three things to do: a figure, a sentence, a button. */
+function Step({ n, tone, icon, title, value, says, action, onClick, note }: { n: number; tone: Tone; icon: string; title: string; value: number | null; says: string; action: string; onClick: () => void; note?: string }) {
+  return (
+    <section className="bond-tile fade-up flex min-w-0 flex-col rounded-2xl border border-line bg-panel p-5">
+      <div className="flex items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: TONES[tone].wash, color: TONES[tone].ink }}>
+          <DoodleIcon name={icon} size={16} />
+        </span>
+        <h2 className="min-w-0 flex-1 truncate text-[15px] font-normal tracking-normal">{title}</h2>
+        <span className="text-[11px] text-muted">Step {n}</span>
+      </div>
+      <p className="figures mt-4 text-[38px] leading-none">
+        {value == null ? <span className="inline-block h-8 w-14 animate-pulse rounded bg-box" /> : value.toLocaleString("en-GB")}
+      </p>
+      <p className="mt-2 text-[12.5px] leading-snug text-muted">{says}</p>
+      {note && <p className="mt-2 text-[11px] leading-snug text-muted">{note}</p>}
+      <div className="mt-auto pt-5">
+        <PressButton onClick={onClick} className="flex w-full items-center justify-between rounded-xl border border-line/80 px-4 py-2.5 text-[12.5px] font-medium text-ink transition-colors hover:border-ink">
+          {action}
+          <span aria-hidden>→</span>
+        </PressButton>
+      </div>
+    </section>
+  );
+}
+
+function greeting(): string {
+  const h = new Date().getHours();
+  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
 }
 
 function Loading() {
