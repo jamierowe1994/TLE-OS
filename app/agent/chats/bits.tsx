@@ -51,14 +51,32 @@ export interface Bubble {
   /** Extra line under it: "Question · 3 answers". */
   foot?: React.ReactNode;
   onTap?: () => void;
+  /** My message in a chat of two: sent, or seen by them (WhatsApp's ticks, as in the OS's Huddles). */
+  tick?: "sent" | "seen";
 }
+
+/** One grey tick sent, two blue ticks seen - WhatsApp's shapes and blue. */
+export function Ticks({ seen }: { seen: boolean }) {
+  return (
+    <svg viewBox="0 0 16 11" aria-label={seen ? "Seen" : "Sent"} role="img" className="ml-1 inline-block h-[11px] w-[16px] align-[-1px]" style={{ color: seen ? "#53bdeb" : "var(--m-muted, #8b8c92)" }}>
+      {seen ? (
+        <path fill="currentColor" d="M11.07.65 10.4.1a.37.37 0 0 0-.52.06L4.94 6.39 2.3 3.93a.37.37 0 0 0-.52.02l-.5.53a.37.37 0 0 0 .02.52l3.32 3.08c.15.14.39.13.53-.03L11.13 1.17a.37.37 0 0 0-.06-.52Zm3.9 0-.67-.55a.37.37 0 0 0-.52.06l-5.9 7.33-.83-.77-.88 1.08 1.4 1.3c.16.15.4.13.54-.03l6.92-7.9a.37.37 0 0 0-.06-.52Z" />
+      ) : (
+        <path fill="currentColor" d="M11.07.65 10.4.1a.37.37 0 0 0-.52.06L4.94 6.39 2.3 3.93a.37.37 0 0 0-.52.02l-.5.53a.37.37 0 0 0 .02.52l3.32 3.08c.15.14.39.13.53-.03L11.13 1.17a.37.37 0 0 0-.06-.52Z" />
+      )}
+    </svg>
+  );
+}
+
+/** Who is writing back: names, and in a chat of two the other person's face. */
+export type TypingNow = { names: string[]; pair: boolean; face: { name: string; photo?: string | null } | null };
 
 /**
  * The conversation, oldest at the top, scrolled to the newest. A message that
  * arrives while it is open - yours or theirs - "bloops" in, swelling out of
  * its own corner (James, 3 Oct 2026), rather than appearing.
  */
-export function Bubbles({ items, empty }: { items: Bubble[]; empty: string }) {
+export function Bubbles({ items, empty, typing = null }: { items: Bubble[]; empty: string; typing?: TypingNow | null }) {
   const end = useRef<HTMLDivElement | null>(null);
   const seen = useRef<Set<string> | null>(null);
   if (seen.current === null && items.length) seen.current = new Set(items.map((b) => b.id));
@@ -67,7 +85,12 @@ export function Bubbles({ items, empty }: { items: Bubble[]; empty: string }) {
     const t = window.setTimeout(() => items.forEach((b) => seen.current?.add(b.id)), 700);
     return () => window.clearTimeout(t);
   }, [items.length, items]);
-  if (!items.length) return <p className="py-10 text-center text-[14.5px] text-muted">{empty}</p>;
+  /* Someone starts typing: the "• • •" rises at the foot, so keep the foot in view. */
+  const isTyping = Boolean(typing?.names.length);
+  useEffect(() => {
+    if (isTyping) end.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+  }, [isTyping]);
+  if (!items.length && !isTyping) return <p className="py-10 text-center text-[14.5px] text-muted">{empty}</p>;
   return (
     <ol className="flex flex-col gap-2 pb-3 pt-2">
       {items.map((b, i) => {
@@ -97,17 +120,40 @@ export function Bubbles({ items, empty }: { items: Bubble[]; empty: string }) {
               {b.foot && <span className={`mt-1.5 block text-[12.5px] font-semibold ${b.mine ? "text-white/85" : ""}`} style={b.mine ? undefined : { color: "var(--m-coral)" }}>{b.foot}</span>}
             </button>
             )}
-            <span className={`mt-1 text-[11.5px] text-muted ${b.mine ? "mr-2" : "ml-3"}`}>{when(b.at)}</span>
+            <span className={`mt-1 flex items-center text-[11.5px] text-muted ${b.mine ? "mr-2" : "ml-3"}`}>
+              {when(b.at)}
+              {b.mine && b.tick && <Ticks seen={b.tick === "seen"} />}
+            </span>
           </li>
         );
       })}
+      {isTyping && <TypingRow typing={typing!} />}
       <div ref={end} />
     </ol>
   );
 }
 
+/** "• • •" rising from the foot of the chat while someone writes back (the OS's Huddles has the same). */
+function TypingRow({ typing }: { typing: TypingNow }) {
+  const who = typing.names.map((n) => n.split(" ")[0] || n);
+  const label = typing.pair ? "" : who.length === 1 ? `${who[0]} is typing` : who.length === 2 ? `${who[0]} and ${who[1]} are typing` : `${who.length} people are typing`;
+  return (
+    <li className="m-typing flex flex-col items-start" aria-live="polite">
+      {label && <span className="mb-1 ml-3 mt-2 text-[12.5px] font-semibold text-muted">{label}</span>}
+      <span className="mt-1 flex items-end gap-2">
+        {typing.face && <Face name={typing.face.name} photo={typing.face.photo} size={30} />}
+        <span className="flex h-[42px] items-center gap-1.5 rounded-[22px] px-4" style={{ background: "var(--m-card)", borderBottomLeftRadius: 8 }} aria-label={label || "Typing"}>
+          <i className="m-dot" />
+          <i className="m-dot" style={{ animationDelay: "0.16s" }} />
+          <i className="m-dot" style={{ animationDelay: "0.32s" }} />
+        </span>
+      </span>
+    </li>
+  );
+}
+
 /** The box above the tab bar, as Steve's. Enter sends; shift-enter is a new line. */
-export function Composer({ placeholder, onSend, extra }: { placeholder: string; onSend: (text: string) => Promise<boolean>; extra?: React.ReactNode }) {
+export function Composer({ placeholder, onSend, extra, onTyping }: { placeholder: string; onSend: (text: string) => Promise<boolean>; extra?: React.ReactNode; onTyping?: (hasText: boolean) => void }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const send = async () => {
@@ -131,7 +177,10 @@ export function Composer({ placeholder, onSend, extra }: { placeholder: string; 
       <div className="mx-auto flex max-w-[560px] items-end gap-2 rounded-[26px] border p-1.5 pl-4" style={{ background: "var(--m-card)", borderColor: "var(--m-line)" }}>
         <textarea
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            onTyping?.(e.target.value.trim().length > 0);
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
