@@ -401,6 +401,21 @@ CREATE TABLE IF NOT EXISTS os_user_prefs (
   PRIMARY KEY (user_id, key)
 );
 
+-- Seen and typing in Huddles (12 Oct 2026). seen_at is when the customer
+-- had an agent's message in front of them: the landlord's Messages page, the
+-- tenant's messages (their read_at is set on sending, so cannot say). Typing
+-- is a ping every few seconds while someone writes in a team chat; a row
+-- older than a few seconds means they have stopped.
+ALTER TABLE os_landlord_messages ADD COLUMN IF NOT EXISTS seen_at TIMESTAMPTZ;
+ALTER TABLE os_tenant_messages ADD COLUMN IF NOT EXISTS seen_at TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS os_chat_typing (
+  chat_key       TEXT NOT NULL,
+  user_id        TEXT NOT NULL,
+  name           TEXT NOT NULL DEFAULT '',
+  at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (chat_key, user_id)
+);
+
 -- Archive and delete in Huddles and the phone's Chats, per person (12 Oct
 -- 2026, lib/chats setChatState). chat_key: room:<id>, landlord:<appraisal>,
 -- tenant:<portal account>. Nothing here removes a message for anybody.

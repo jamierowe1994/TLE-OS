@@ -29,16 +29,18 @@ export interface ThreadMessage {
   body: string;
   sentAt: string;
   readAt: string | null;
+  /** An agent's message: when the landlord had it in front of them (their Messages page). */
+  seenAt?: string | null;
 }
 
-type Row = { id: string; account_id: string; direction: string; body: string; sent_at: Date | string; read_at: Date | string | null };
+type Row = { id: string; account_id: string; direction: string; body: string; sent_at: Date | string; read_at: Date | string | null; seen_at?: Date | string | null };
 
 const iso = (v: Date | string | null) => (v ? new Date(v).toISOString() : null);
 
 export async function threadFor(appraisalId: string): Promise<ThreadMessage[]> {
   if (!hasDb()) return [];
   const rows = await q<Row>(
-    `SELECT id, account_id, direction, body, sent_at, read_at
+    `SELECT id, account_id, direction, body, sent_at, read_at, seen_at
        FROM os_landlord_messages WHERE appraisal_id = $1 ORDER BY sent_at ASC LIMIT 300`,
     [appraisalId]
   ).catch(() => [] as Row[]);
@@ -48,7 +50,13 @@ export async function threadFor(appraisalId: string): Promise<ThreadMessage[]> {
     body: r.body,
     sentAt: iso(r.sent_at)!,
     readAt: iso(r.read_at),
+    seenAt: iso(r.seen_at ?? null),
   }));
+}
+
+/** The landlord has their messages in front of them: every agent message so far is seen (the ticks in Huddles). */
+export async function markLandlordSeen(accountId: string): Promise<void> {
+  await q(`UPDATE os_landlord_messages SET seen_at = NOW() WHERE account_id = $1 AND direction = 'agent' AND seen_at IS NULL`, [accountId]).catch(() => null);
 }
 
 /** Unread landlord messages, per appraisal. */
