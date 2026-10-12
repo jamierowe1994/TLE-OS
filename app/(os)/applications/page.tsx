@@ -329,7 +329,7 @@ export default function Applications() {
     open: mine.filter(isOpen).length + propolyMine.length,
     attention: mine.filter((a) => needsAttention(a) !== null).length,
     closed: mine.filter((a) => a.closed).length,
-    by: (k: string) => (k === "rex" ? mine.filter((a) => rexToMark(a) && !a.closed).length + osAccepted.length : 0),
+    by: (k: string) => (k === "rex" ? mine.filter((a) => rexToMark(a) && !a.closed).length : 0),
   }), [mine, osAccepted, propolyMine]);
   const open = all.find((a) => a.id === openId) ?? null;
   /* Asked for by name but not on the board (an accepted let whose move-in has
@@ -560,32 +560,9 @@ export default function Applications() {
             </div>
           </div>
 
-          {/* Accepted in the OS, with no application in REX behind them yet
-              (7 Oct 2026). Each opens its offer; the handover needs the REX
-              application, which is still made by hand. */}
-          {(stage === "open" || stage === "rex") && osAccepted.length > 0 && (
-            <div className="mb-4 rounded-[18px] border border-accent/40 bg-accent-soft/30 p-4">
-              <p className="text-[12.5px] font-semibold">Accepted here, not in REX yet</p>
-              <p className="mt-0.5 text-[11.5px] leading-snug text-muted">Create the application in REX and accept it there, so the handover can start.</p>
-              <ul className="mt-2.5 divide-y divide-line/40">
-                {osAccepted.map((o) => (
-                  <li key={o.id}>
-                    <Link href={`/offers/${encodeURIComponent(o.id)}`} className="flex items-center gap-3 py-2.5 transition-colors hover:bg-white/60">
-                      <span className="min-w-0 flex-1">
-                        <span className="hand block truncate text-[13.5px]">{o.name}</span>
-                        <span className="block truncate text-[11px] text-muted">
-                          {o.address} · accepted by {o.by} {new Date(o.at).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" })}
-                        </span>
-                      </span>
-                      {o.amount != null && <span className="figures whitespace-nowrap text-[13px]">{gbp(o.amount)} pcm</span>}
-                      <span aria-hidden className="text-[13px] text-muted/70">›</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
+          {/* Offers accepted in the OS used to wait here in a box of their own
+              until somebody made the REX application by hand. They are
+              applications on the board now (12 Oct 2026, lib/applications). */}
           {/* Let through Propoly alone (9 Oct 2026): found a tenant without
               marketing it, so there is no application on the book. Shown from
               Propoly, under the agent Propoly names, and opened there. */}
@@ -627,7 +604,7 @@ export default function Applications() {
             <BoardSkeleton label="Loading applications…" count={6} />
           ) : error ? (
             <p className="py-10 text-center text-[12.5px] text-muted">{error}</p>
-          ) : rows.length === 0 && !(stage === "rex" && osAccepted.length) && !(stage === "open" && propolyMine.length) ? (
+          ) : rows.length === 0 && !(stage === "open" && propolyMine.length) ? (
             <p className="py-10 text-center text-[12.5px] text-muted">
               {stage === "attention"
                 ? "Nothing needs a hand. Rare, and good."

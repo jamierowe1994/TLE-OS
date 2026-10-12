@@ -505,8 +505,119 @@ export async function getApplications(limit = 100, rexUserId?: string | null): P
     }
     out.sort((x, y) => (y.createdAt ?? 0) - (x.createdAt ?? 0));
   }
+  /* Offers accepted in the OS are applications too (12 Oct 2026, below). */
+  if (limit >= 100) {
+    for (const a of await osAcceptedApplications(rexUserId ?? null, out).catch(() => [] as Application[])) {
+      if (seen.has(a.id)) continue;
+      seen.add(a.id);
+      out.push(a);
+    }
+    out.sort((x, y) => (y.createdAt ?? 0) - (x.createdAt ?? 0));
+  }
   appsCache.set(key, { at: Date.now(), apps: out });
   return out;
+}
+
+/* ── OFFERS ACCEPTED IN THE OS ARE APPLICATIONS (James, 12 Oct 2026) ────────
+
+   Lianna accepted Annie Macmillan-Klyne's offer on 6 Ruskin Place, made in the
+   OS on the phone, and the home fell into a hole: let agreed, so off Listings;
+   no REX application behind it, so not on Applications either, and nothing to
+   push to Propoly. "As soon as we click accept, it should then launch us onto
+   the page that we need to see, and we will then have the ability to push this
+   through."
+
+   So an offer accepted here becomes an application here: id "os:<offer id>",
+   accepted on the day it was accepted, the agreed rent and move-in off the
+   offer, the home, agent and photo off its REX listing, the lead tenant as the
+   applicant. The board, the file, the push to Propoly and the held-offers rule
+   read it like any other. One whose tenant later shows up on a REX application
+   for the same home gives way to that one. Undo the accept and it goes. */
+
+type OsOfferRow = {
+  id: string;
+  email: string | null;
+  name: string | null;
+  listing_id: string | null;
+  address: string | null;
+  payload: { amount?: number; moveIn?: string; adults?: number; children?: number; pets?: boolean; movingIn?: string[]; recordedBy?: { name?: string } } | null;
+  created_at: Date;
+  by_name: string | null;
+  decided_at: Date;
+};
+
+const listingRead = new Map<string, { at: number; row: Row | null }>();
+async function listingRow(id: string): Promise<Row | null> {
+  const hit = listingRead.get(id);
+  if (hit && Date.now() - hit.at < 5 * 60_000) return hit.row;
+  const res = await rexCall("Listings", "read", { id: Number(id) }).catch(() => null);
+  const row = res?.ok ? ((res.result ?? null) as Row | null) : null;
+  if (row || !hit) listingRead.set(id, { at: Date.now(), row });
+  return row ?? hit?.row ?? null;
+}
+
+async function osAcceptedApplications(rexUserId: string | null, rexApps: Application[]): Promise<Application[]> {
+  if (!hasDb()) return [];
+  const rows = await q<OsOfferRow>(
+    `SELECT r.id, r.email, r.name, r.listing_id, r.address, r.payload, r.created_at, d.by_name, d.decided_at
+       FROM os_offer_decisions d JOIN os_tenant_viewing_responses r ON d.ref = 'os:' || r.id
+      WHERE d.decision = 'accepted' AND r.listing_id IS NOT NULL AND d.decided_at > NOW() - INTERVAL '120 days'
+      ORDER BY d.decided_at DESC LIMIT 100`
+  );
+  const out: Application[] = [];
+  for (const r of rows) {
+    const email = (r.email ?? "").trim().toLowerCase();
+    /* Somebody made the REX application by hand: that one is the file. */
+    const twin = rexApps.some(
+      (a) => String(a.listingId ?? "") === String(r.listing_id) && a.status !== "unsuccessful" && a.applicants.some((p) => email && (p.email ?? "").toLowerCase() === email)
+    );
+    if (twin) continue;
+    const listing = await listingRow(String(r.listing_id));
+    const agents = [listing?.listing_agent_1, listing?.listing_agent_2].map((x) => {
+      const v = (x as Row | null)?.id;
+      return v == null ? null : String(v);
+    });
+    if (rexUserId && !agents.includes(String(rexUserId))) continue;
+    const p = r.payload ?? {};
+    const images = (((listing?.related as Row | null)?.listing_images ?? []) as Row[]).map((i) => str(i.url)).filter(Boolean);
+    const shaped = shapeApplication({
+      id: `os:${r.id}`,
+      application_status: { id: "accepted", text: "Accepted" },
+      listing: { ...(listing ?? {}), id: Number(r.listing_id), listing_primary_image: (listing?.listing_primary_image as Row | null) ?? (images[0] ? { url: images[0] } : null) },
+      agent: (listing?.listing_agent_1 as Row | null) ?? null,
+      offer_amount: typeof p.amount === "number" ? p.amount : null,
+      start_date: p.moveIn ?? null,
+      num_of_occupants: (p.adults ?? 0) + (p.children ?? 0) || null,
+      num_of_dependents: p.children ?? null,
+      has_pets: typeof p.pets === "boolean" ? p.pets : null,
+      date_received: new Date(r.created_at).toISOString().slice(0, 10),
+      date_accepted: new Date(r.decided_at).toISOString().slice(0, 10),
+      system_ctime: Math.floor(new Date(r.decided_at).getTime() / 1000),
+      system_modtime: Math.floor(new Date(r.decided_at).getTime() / 1000),
+      system_created_user: { name: p.recordedBy?.name ?? r.by_name ?? null },
+    });
+    /* The lead tenant, from the offer itself. Others moving in are named on
+       the offer and added to the deal in Propoly. */
+    const others = (p.movingIn ?? []).filter((n) => n && n !== r.name && !/^child/i.test(n));
+    out.push({
+      ...shaped,
+      /* No address on a listing REX would not read: the offer's own. */
+      property: listing ? shaped.property : (r.address ?? "").split(",")[0] || shaped.property,
+      locality: listing ? shaped.locality : (r.address ?? "").split(",").slice(1).join(",").trim() || shaped.locality,
+      conditions: others.length ? `Also moving in: ${others.join(", ")}.` : null,
+      osDecision: null,
+      applicants: [
+        { id: null, contactId: null, name: r.name || r.email || "Tenant", email: r.email, phone: null, isPrimary: true, dob: null, incomePerYear: null, employmentRex: null, guarantorCount: 0, keyInfo: null },
+      ],
+      rightToRentIncomplete: true,
+    });
+  }
+  return out;
+}
+
+/** An application made from an offer accepted in the OS (see above). */
+export function isOsApplication(id: string): boolean {
+  return id.startsWith("os:");
 }
 
 /** Every application matching some criteria: the first page says how many,
@@ -550,6 +661,7 @@ async function allApplications(criteria: Record<string, unknown>[]): Promise<App
  * an empty screen.
  */
 export async function getApplicationById(id: string): Promise<Application | null> {
+  if (isOsApplication(id)) return (await getApplications(300)).find((a) => a.id === id) ?? null;
   const fresh = Date.now() - APPS_TTL_MS;
   for (const [, v] of appsCache) {
     if (v.at > fresh) {

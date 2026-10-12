@@ -396,6 +396,20 @@ export default function Listings() {
   /* Listings whose offer has been accepted: handed to Applications, so they
      read as let agreed here and leave All listings (6 Oct 2026). */
   const [accepted, setAccepted] = useState<Set<string>>(() => new Set());
+  /* Homes with an accepted offer whose holding fee isn't paid (James, 12 Oct
+     2026): they stay on All listings - and on Applications - until it is and
+     the other applicants are let go, so a home is never in neither place. */
+  const [held, setHeld] = useState<Record<string, { tenant: string; words: string }>>({});
+  useEffect(() => {
+    let live = true;
+    fetch("/api/listings/held", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => live && d.held && setHeld(d.held))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
   useEffect(() => {
     let live = true;
     fetch("/api/activity", { cache: "no-store" })
@@ -647,8 +661,10 @@ export default function Listings() {
       } else if (stage === "archived") {
         /* The source IS the archive - there is no status left to test. */
       } else if (stage === "all") {
-        /* Let agreed is Applications' work now; it keeps its own tab. */
-        if (statusOf(l).label === "Let agreed") return false;
+        /* Let agreed is Applications' work now; it keeps its own tab - except
+           while its holding fee is still to come, and whenever it is searched
+           for by name (12 Oct 2026: 6 Ruskin Place couldn't be found at all). */
+        if (statusOf(l).label === "Let agreed" && !held[String(l.id)] && !needle) return false;
       } else if (statusOf(l).label !== stage) return false;
       if (!listedIn(l.publishedAt, period)) return false;
       return true;
@@ -670,7 +686,7 @@ export default function Listings() {
        Most-recently-cold first is the order somebody scanning it wants. */
     else if (stage === "archived") rows.sort((a, b) => (b.archivedSince ?? "").localeCompare(a.archivedSince ?? ""));
     return rows;
-  }, [WORKING, archive.listings, q, sort, rentBand, loc, stage, period, activityAt, openOffers]);
+  }, [WORKING, archive.listings, q, sort, rentBand, loc, stage, period, activityAt, openOffers, held]);
 
   /* ── READY TO PUBLISH, ON THE PUSH ROUTE'S OWN WORD (17 Sep 2026) ───────
      The book cannot see council tax, bills, furnishing or key features, so a

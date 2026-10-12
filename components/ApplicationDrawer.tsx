@@ -370,7 +370,7 @@ export default function ApplicationDrawer({
         ? await fetch("/api/offers/decide", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ ref: `rex:${app.id}`, decision: a.decide }),
+            body: JSON.stringify({ ref: app.id.startsWith("os:") ? app.id : `rex:${app.id}`, decision: a.decide }),
           })
         : await fetch(`/api/applications/${encodeURIComponent(app.id)}/test`, {
             method: "POST",

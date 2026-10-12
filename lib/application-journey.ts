@@ -169,7 +169,7 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
      Cliff Road in the OS and the file stopped dead on "Mark it accepted in
      REX": the handover only ever started from REX's own accepted. Now the
      OS's accept moves it on to the push; REX is a reminder, not a gate. */
-  const ref = `rex:${app.id}`;
+  const ref = app.id.startsWith("os:") ? app.id : `rex:${app.id}`;
   const mine =
     !rexAccepted && !unsuccessful && !app.closed
       ? app.osDecision !== undefined
@@ -331,8 +331,9 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
     });
   }
   actions.push(...decisionActions);
-  /* Undo an accept only while nothing has gone to Propoly for it. */
-  if (osAccepted && run?.mode !== "live" && !deal) {
+  /* Undo an accept only while nothing has gone to Propoly for it. An offer
+     accepted in the OS is an application of its own (lib/applications). */
+  if ((osAccepted || app.id.startsWith("os:")) && run?.mode !== "live" && !deal) {
     actions.push({ id: "decide-undo", label: "Undo the accept", detail: "Puts it back to an open offer on the listing.", href: null, who: "you", decide: "undo", minor: true });
   }
 

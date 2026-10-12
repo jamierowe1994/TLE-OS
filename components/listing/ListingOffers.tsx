@@ -57,6 +57,12 @@ export default function ListingOffers({
       setConfirming(o.ref);
       return;
     }
+    /* Accepting is for the landlord (James, 12 Oct 2026: most landlords aren't
+       on the portal yet, so it's agreed with them on a call), so it asks once. */
+    if (what === "accepted" && confirming !== `acc:${o.ref}`) {
+      setConfirming(`acc:${o.ref}`);
+      return;
+    }
     setConfirming(null);
     setBusy(o.ref);
     setErr(null);
@@ -75,6 +81,9 @@ export default function ListingOffers({
             });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!j.ok) setErr({ ref: o.ref, text: j.error ?? "That didn't save. Try again." });
+      /* Accepted: straight onto its application, where it is pushed to
+         Propoly (12 Oct 2026). A test offer stays put. */
+      else if (what === "accepted" && o.kind !== "test") window.location.assign(appHref(o.ref));
       else onChanged();
     } catch {
       setErr({ ref: o.ref, text: "That didn't go through. Try again." });
@@ -132,9 +141,10 @@ export default function ListingOffers({
                       type="button"
                       disabled={busy !== null}
                       onClick={() => void act(o, "accepted")}
+                      onBlur={() => confirming === `acc:${o.ref}` && setConfirming(null)}
                       className="rounded-full bg-[var(--brown)] px-3 py-1.5 text-[11.5px] font-semibold text-white disabled:opacity-50"
                     >
-                      {busy === o.ref ? "Saving…" : "Accept"}
+                      {busy === o.ref ? "Saving…" : confirming === `acc:${o.ref}` ? "Yes, the landlord accepts" : "Accept for the landlord"}
                     </button>
                   )}
                   <button
@@ -160,14 +170,17 @@ export default function ListingOffers({
                 </button>
               ) : null}
             </div>
-            {o.status === "accepted" && o.kind === "rex" && (
+            {o.status === "accepted" && o.kind !== "test" && (
               <p className="mt-1.5 text-[11px] leading-snug text-muted">
-                On Applications now. Open it and Push to Propoly from Next Step.
+                On Applications now.{" "}
+                <a href={appHref(o.ref)} className="font-semibold text-ink underline-offset-2 hover:underline">
+                  Open the application and Push to Propoly →
+                </a>
               </p>
             )}
-            {o.status === "accepted" && o.kind === "os" && o.undoable && (
+            {confirming === `acc:${o.ref}` && (
               <p className="mt-1.5 text-[11px] leading-snug text-muted">
-                On Applications now. It needs an application on the system before it can go to Propoly - ask the office to add one.
+                Accept {o.name}&apos;s offer on the landlord&apos;s behalf? It goes onto Applications, ready to push to Propoly. The other offers are held until the holding fee is paid.
               </p>
             )}
             {o.status === "open" && taken && (
@@ -181,4 +194,9 @@ export default function ListingOffers({
       })}
     </ul>
   );
+}
+
+/** The application an accepted offer became: a REX one by its own id, an OS one as "os:<offer id>". */
+function appHref(ref: string): string {
+  return `/applications?open=${encodeURIComponent(ref.startsWith("rex:") ? ref.slice(4) : ref)}`;
 }

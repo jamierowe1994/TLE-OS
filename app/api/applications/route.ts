@@ -61,7 +61,9 @@ export async function GET(req: NextRequest) {
       /* The agent's Accept or Decline in the OS (7 Oct 2026): the board shows
          an offer once it is accepted, here or in REX. */
       acceptedRexRefs().catch(() => new Map()),
-      osAcceptedOffers(scope.everything ? null : actor?.email ?? null).catch(() => []),
+      /* Offers accepted in the OS are applications on the board now (lib/applications,
+         12 Oct 2026); this separate list stays empty so nothing shows twice. */
+      Promise.resolve([] as Awaited<ReturnType<typeof osAcceptedOffers>>),
       /* Lets that only Propoly knows about (9 Oct 2026, 54 Maple Avenue). */
       propolyOnlyLets(scope, { canPretenancy: Boolean(actor && can(actor.role as never, "see:pretenancy")) }).catch(() => []),
     ]);
