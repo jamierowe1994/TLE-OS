@@ -1,11 +1,11 @@
-import { sameHome } from "@/lib/address-parse";
+import { houseKeyOf, parseAddress, sameHome } from "@/lib/address-parse";
 import type { Application } from "@/lib/applications";
 import { decisionsFor } from "@/lib/offer-decisions";
 import { buildHandoff } from "@/lib/deal-handoff";
 import { handoverMode, latestHandover } from "@/lib/handover";
 import { getCase } from "@/lib/plc-store";
 import { PLC_STATES } from "@/lib/plc";
-import { dealStatusLabel, getAllPropolyDeals, type BusinessDeal } from "@/lib/business/propoly-deals";
+import { dealStatusLabel, getAllPropolyDeals, getPropolyCompletes, type BusinessDeal, type CompletedDeal } from "@/lib/business/propoly-deals";
 import { getOverlays, getMeta } from "@/lib/business/deal-store";
 import { derivePortalStage } from "@/lib/business/deal-stage";
 import { eventsForDeal } from "@/lib/business/deal-watch";
@@ -123,6 +123,82 @@ function findDeal(app: Application, all: BusinessDeal[]): BusinessDeal | null {
   if (sameStart) return sameStart;
   /* Failing that, the one that is not finished. */
   return hits.find((d) => !["complete", "cancelled", "archived"].includes(d.statusKey)) ?? hits[0];
+}
+
+/* ── Already in Propoly, whoever put it there ─────────────────────────────
+   James, 12 Oct 2026: "we should do a sweep to check whether they are
+   properly already on ... if they're accepted and they are in Propoly, it
+   should shift it over ... What I don't want to do is get properties stuck."
+
+   The match above runs on every read against Propoly's own deals, re-read
+   every few minutes - so it already IS the sweep, for a deal still open.
+   Two kinds were never found, and sat under "to hand over" for good:
+     - a deal Propoly has FINISHED. Its open list drops it, so 26 Garland
+       Road (moved in 8 Oct) and Room 2, 5b Newton Road (9 Oct) still asked
+       to be pushed. Finished deals are their own hourly copy, read here.
+     - a tenant swap keyed into Propoly by hand. Only our own push counted,
+       because the home's old deal is the tenancy being changed. A deal on the
+       home with a joiner on it is the new one.
+   Both match only on what can't be someone else's let, so a let still being
+   keyed in is never moved on early: nothing found, it stays to hand over. */
+
+let completesCache: { at: number; rows: CompletedDeal[] | null } | null = null;
+async function completes(): Promise<CompletedDeal[] | null> {
+  if (completesCache && Date.now() - completesCache.at < KEEP_MS) return completesCache.rows;
+  const rows = await getPropolyCompletes().catch(() => null);
+  if (rows) completesCache = { at: Date.now(), rows };
+  return rows;
+}
+
+const DAY_MS = 86_400_000;
+const dayNum = (iso: string | null | undefined) => {
+  const t = iso ? Date.parse(iso.slice(0, 10)) : NaN;
+  return Number.isNaN(t) ? null : t / DAY_MS;
+};
+
+/**
+ * A deal Propoly has finished for this let. The same home - the flat itself
+ * when Propoly names it, else the same house (postcode, door, street) at the
+ * same rent, which tells rooms in one house apart - moving in within three
+ * weeks of the agreed date, and not before the offer was accepted (the last
+ * tenant's move-in is not this one's).
+ */
+export function findCompleted(app: Application, rows: CompletedDeal[]): CompletedDeal | null {
+  const address = [app.property, app.locality].filter(Boolean).join(", ");
+  const house = houseKeyOf(address);
+  const start = dayNum(app.startDate);
+  const acceptedOn = dayNum(app.dateAccepted ?? app.osDecision?.at ?? app.dateReceived);
+  const rent = app.offerAmount && /month/i.test(app.offerPeriod ?? "month") ? app.offerAmount : null;
+  const fits = rows.filter((c) => {
+    const on = dayNum(c.date);
+    if (!c.address || on == null) return false;
+    if (acceptedOn != null && on < acceptedOn - 3) return false;
+    if (start != null && Math.abs(on - start) > 21) return false;
+    if (start == null && acceptedOn == null) return false;
+    if (sameHome(address, c.address)) return true;
+    /* Propoly gave the house only ("26 Garland Road"): the house must agree
+       and so must the rent. */
+    if (parseAddress(c.address).unit != null || !house || houseKeyOf(c.address) !== house) return false;
+    return rent != null && c.rentPcm != null && Math.abs(c.rentPcm - rent) <= Math.max(1, rent * 0.02);
+  });
+  if (!fits.length) return null;
+  return fits.sort((a, b) => Math.abs((dayNum(a.date) ?? 0) - (start ?? 0)) - Math.abs((dayNum(b.date) ?? 0) - (start ?? 0)))[0];
+}
+
+/** A tenant swap's new deal, keyed into Propoly by hand: an open deal on the home with someone joining on it. */
+export function findSwapDeal(app: Application, all: BusinessDeal[]): BusinessDeal | null {
+  if (!app.swap || !app.property?.trim()) return null;
+  const joiners = app.applicants.slice(0, app.swap.joining.length);
+  const emails = new Set(joiners.map((p) => (p.email ?? "").trim().toLowerCase()).filter(Boolean));
+  const names = new Set(joiners.map((p) => p.name.trim().toLowerCase()).filter(Boolean));
+  return (
+    all.find(
+      (d) =>
+        !["complete", "cancelled", "archived"].includes(d.statusKey) &&
+        sameHome(app.property, d.app.propertyName ?? "") &&
+        d.app.tenants.some((t) => emails.has((t.email ?? "").trim().toLowerCase()) || names.has(t.name.trim().toLowerCase()))
+    ) ?? null
+  );
 }
 
 /**
@@ -245,8 +321,11 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
   ]);
 
   /* A tenant swap's home already has a deal - the tenancy being changed - so
-     only the deal its own push started counts (lib/tenant-swaps). */
-  const deal = accepted && allDeals && !app.swap ? findDeal(app, allDeals) : null;
+     only the new one counts: the deal its own push started, or one keyed in
+     by hand with a joiner on it (lib/tenant-swaps). */
+  const deal = accepted && allDeals ? (app.swap ? findSwapDeal(app, allDeals) : findDeal(app, allDeals)) : null;
+  /* Not open in Propoly: finished there, perhaps (12 Oct 2026). */
+  const finished = accepted && !deal && !app.swap ? findCompleted(app, (await completes()) ?? []) : null;
 
   /* THE OTHER OFFERS, HELD (9 Oct 2026). Accepting one leaves the rest open
      until the accepted tenant's holding fee is paid, so the home is not left
@@ -269,6 +348,8 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
     handoverStop = { id: "handover", label: "Handover", sub: null, tone: "none", state: unsuccessful ? "off" : "upcoming" };
   } else if (deal) {
     handoverStop = { id: "handover", label: "Handover", sub: "In Propoly", tone: "ok", state: "done" };
+  } else if (finished) {
+    handoverStop = { id: "handover", label: "Handover", sub: `Moved in ${dayWords(finished.date) ?? ""} in Propoly`.replace("  ", " "), tone: "ok", state: "done" };
   } else if (run?.mode === "live" && run.status === "ok") {
     handoverStop = { id: "handover", label: "Handover", sub: `In Propoly ${dayWords(run.finishedAt ?? run.startedAt)}`, tone: "ok", state: "done" };
     /* Since 9 Oct 2026 the push can start the deal too (lib/handover-deal,
@@ -468,7 +549,7 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
         who: "you",
       });
     }
-  } else if (accepted) {
+  } else if (accepted && !finished) {
     actions.push({ id: "plc-start", label: "Start the PLC check", detail: "The pre-let compliance pack has not been started for this let.", href: `/plc/start?application=${encodeURIComponent(app.id)}`, who: "you" });
   }
 
@@ -502,7 +583,7 @@ export async function stageLabels(apps: Application[]): Promise<Map<string, stri
   /* Accepted here counts as accepted (9 Oct 2026), as on the file itself. */
   const isAccepted = (a: Application) => a.status === "accepted" || a.osDecision?.decision === "accepted";
   const accepted = apps.filter(isAccepted);
-  const all = accepted.length ? await deals().catch(() => null) : null;
+  const [all, done] = accepted.length ? await Promise.all([deals().catch(() => null), completes()]) : [null, null];
   /* Only a live push that finished counts: a blocked one leaves it waiting. */
   const swapsPushed = apps.some((a) => a.swap)
     ? new Set((await q<{ application_id: string }>(`SELECT DISTINCT application_id FROM os_handovers WHERE mode = 'live' AND status = 'ok' AND application_id LIKE 'swap:%'`).catch(() => [])).map((r) => r.application_id))
@@ -513,9 +594,16 @@ export async function stageLabels(apps: Application[]): Promise<Map<string, stri
     if (!isAccepted(a) && a.status === "received") { out.set(a.id, "Not put to landlord"); continue; }
     if (!isAccepted(a) && a.status === "communicated") { out.set(a.id, "Landlord decision"); continue; }
     /* A swap's home has the old tenancy's deal: its own shows up once pushed. */
-    if (a.swap) { out.set(a.id, swapsPushed.has(a.id) ? "In Propoly" : "Handover due"); continue; }
+    if (a.swap) {
+      const keyed = all ? findSwapDeal(a, all) : null;
+      out.set(a.id, keyed ? dealStatusLabel(keyed.statusKey) : swapsPushed.has(a.id) ? "In Propoly" : all ? "Handover due" : "Accepted");
+      continue;
+    }
     const deal = all ? findDeal(a, all) : null;
-    out.set(a.id, deal ? dealStatusLabel(deal.statusKey) : all ? "Handover due" : "Accepted");
+    if (deal) { out.set(a.id, dealStatusLabel(deal.statusKey)); continue; }
+    /* Not open in Propoly: finished there, perhaps. */
+    if (done && findCompleted(a, done)) { out.set(a.id, "Moved in"); continue; }
+    out.set(a.id, all ? "Handover due" : "Accepted");
   }
   return out;
 }

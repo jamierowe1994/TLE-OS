@@ -799,7 +799,7 @@ export interface PropolyBusinessStats {
 // Completed deals are the big list (500+) — cached separately and longer.
 // propertyUuid lets us resolve the managing agent (via propertyManagers)
 // for per-agent move-in reporting (ramp time).
-interface CompletedDeal {
+export interface CompletedDeal {
   date: string | null; // move_in_date
   service: string | null; // full_managed | tenant_find | rent_collect
   propertyUuid: string | null;
@@ -816,6 +816,12 @@ interface CompletedDeal {
 // null date and null agent on every row — the silent-zero shape.
 async function ensureCompletes(): Promise<CompletedDeal[] | null> {
   return readBook<CompletedDeal[]>("completes");
+}
+
+/** Every deal Propoly has finished, from the hourly copy. Null = Propoly unconfigured or unreadable. */
+export async function getPropolyCompletes(): Promise<CompletedDeal[] | null> {
+  if (!propolyConfigured()) return null;
+  return ensureCompletes();
 }
 
 async function refreshCompletes(): Promise<CompletedDeal[] | null> {
