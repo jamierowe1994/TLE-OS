@@ -618,6 +618,13 @@ const LOG_NOISE = new Set([
   "/api/clean-sweep/summary",
   "/api/pretenancy/refresh",
 ]);
+/* The same, for addresses that carry an id (12 Oct 2026): an open chat asks
+   for new messages every few seconds, and each face in it is one image call.
+   Huddles left open in a tab would otherwise fill the read log and walk
+   towards the pace pause on their own. Customer conversations are not here:
+   opening one is a choice the log should keep. */
+const LOG_NOISE_PREFIX = ["/api/m/rooms", "/api/m/face/", "/api/gifs"];
+const isLogNoise = (path: string) => LOG_NOISE.has(path) || LOG_NOISE_PREFIX.some((p) => path === p || path.startsWith(p.endsWith("/") ? p : `${p}/`));
 /* Query values never written down, whatever route carries them. */
 const LOG_SECRET_PARAM = /^(token|sig|signature|code|password|secret|state|apikey|api_key)$/i;
 const LOG_FLUSH_MS = 5_000;
@@ -636,7 +643,7 @@ let logVia: NextRequest | null = null;
 function noteCall(req: NextRequest, userId: string): void {
   try {
     const path = req.nextUrl.pathname;
-    if (!path.startsWith("/api/") || LOG_NOISE.has(path)) return;
+    if (!path.startsWith("/api/") || isLogNoise(path)) return;
     const query: string[] = [];
     for (const [k, v] of req.nextUrl.searchParams) query.push(LOG_SECRET_PARAM.test(k) ? `${k}=…` : `${k}=${v}`);
     logQueue.push({
@@ -816,7 +823,7 @@ async function doorAfterGate(req: NextRequest): Promise<NextResponse> {
     if (!door.locked) {
       noteCall(req, userId);
       const paused =
-        door.capped && req.nextUrl.pathname.startsWith("/api/") && !LOG_NOISE.has(req.nextUrl.pathname)
+        door.capped && req.nextUrl.pathname.startsWith("/api/") && !isLogNoise(req.nextUrl.pathname)
           ? paceCheck(req, userId)
           : null;
       if (!paused) return NextResponse.next();

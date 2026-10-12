@@ -171,6 +171,21 @@ export async function tenantAgentEmail(accountId: string): Promise<string> {
 
 export const GENERAL = "general";
 
+/**
+ * A person's display photo as an address the browser can cache
+ * (/api/m/face/<id>?v=<hash of the photo>), or null with none. The photo
+ * itself is a data: URL in os_users of up to a megabyte or so; sent inline it
+ * would ride along with every message and every list read. The hash changes
+ * when they change their photo, so a cached copy is never the old face.
+ */
+const FACE_SQL = (u: string) => `CASE WHEN COALESCE(${u}.photo, '') = '' THEN NULL ELSE '/api/m/face/' || ${u}.id || '?v=' || left(md5(${u}.photo), 10) END`;
+
+export type FaceRef = {
+  id: string;
+  name: string;
+  photo: string | null;
+};
+
 export interface Room {
   id: string;
   kind: "general" | "huddle";
@@ -178,6 +193,8 @@ export interface Room {
   members: number;
   last: { body: string; who: string; at: string } | null;
   unread: number;
+  /** Up to four of a huddle's people, others first and you last, for its picture (none for General). */
+  faces: FaceRef[];
 }
 
 async function ensureGeneral(): Promise<void> {
@@ -187,9 +204,17 @@ async function ensureGeneral(): Promise<void> {
 export async function roomsFor(me: OsUser): Promise<Room[]> {
   if (!hasDb()) return [];
   await ensureGeneral();
-  const rows = await q<{ id: string; kind: string; name: string; members: number; body: string | null; who: string | null; at: Date | null; unread: number }>(
+  const rows = await q<{ id: string; kind: string; name: string; members: number; body: string | null; who: string | null; at: Date | null; unread: number; faces: FaceRef[] | null }>(
     `SELECT r.id, r.kind, r.name,
             (SELECT count(*)::int FROM os_team_members m WHERE m.room_id = r.id) AS members,
+            CASE WHEN r.kind = 'general' THEN NULL ELSE
+              (SELECT json_agg(json_build_object('id', f.id, 'name', f.name, 'photo', f.photo))
+                 FROM (SELECT u.id, u.name, ${FACE_SQL("u")} AS photo
+                         FROM os_team_members m JOIN os_users u ON u.id = m.user_id
+                        WHERE m.room_id = r.id
+                        ORDER BY (u.id = $1), (u.photo IS NULL), u.name
+                        LIMIT 4) f)
+            END AS faces,
             l.body, l.author_name AS who, l.created_at AS at,
             (SELECT count(*)::int FROM os_team_messages x
               WHERE x.room_id = r.id AND x.author_id <> $1 AND x.reply_to IS NULL
@@ -207,6 +232,7 @@ export async function roomsFor(me: OsUser): Promise<Room[]> {
     members: r.members,
     last: r.body ? { body: r.body, who: r.who ?? "", at: iso(r.at)! } : null,
     unread: r.unread,
+    faces: r.faces ?? [],
   }));
 }
 
@@ -214,6 +240,8 @@ export interface TeamMessage {
   id: string;
   authorId: string;
   author: string;
+  /** Their display photo (see FACE_SQL), or null. */
+  photo: string | null;
   body: string;
   question: boolean;
   at: string;
@@ -235,10 +263,11 @@ export async function canSee(me: OsUser, roomId: string): Promise<{ kind: "gener
 }
 
 export async function roomMessages(me: OsUser, roomId: string, replyTo: string | null): Promise<TeamMessage[]> {
-  const rows = await q<{ id: string; author_id: string; author_name: string; body: string; question: boolean; created_at: Date; replies: number }>(
-    `SELECT m.id, m.author_id, m.author_name, m.body, m.question, m.created_at,
+  const rows = await q<{ id: string; author_id: string; author_name: string; photo: string | null; body: string; question: boolean; created_at: Date; replies: number }>(
+    `SELECT m.id, m.author_id, m.author_name, ${FACE_SQL("u")} AS photo, m.body, m.question, m.created_at,
             (SELECT count(*)::int FROM os_team_messages r WHERE r.reply_to = m.id) AS replies
        FROM os_team_messages m
+       LEFT JOIN os_users u ON u.id = m.author_id
       WHERE m.room_id = $1 AND ${replyTo ? "(m.reply_to = $2 OR m.id = $2)" : "m.reply_to IS NULL"}
       ORDER BY m.created_at DESC
       LIMIT 200`,
@@ -250,7 +279,7 @@ export async function roomMessages(me: OsUser, roomId: string, replyTo: string |
      ON CONFLICT (room_id, user_id) DO UPDATE SET read_at = NOW()`,
     [roomId, me.id]
   ).catch(() => null);
-  return rows.reverse().map((r) => ({ id: r.id, authorId: r.author_id, author: r.author_name, body: r.body, question: r.question, at: iso(r.created_at)!, replies: r.replies }));
+  return rows.reverse().map((r) => ({ id: r.id, authorId: r.author_id, author: r.author_name, photo: r.photo, body: r.body, question: r.question, at: iso(r.created_at)!, replies: r.replies }));
 }
 
 export async function postMessage(me: OsUser, roomId: string, body: string, question: boolean, replyTo: string | null): Promise<TeamMessage> {
@@ -260,7 +289,8 @@ export async function postMessage(me: OsUser, roomId: string, body: string, ques
     [uid(), roomId, me.id, me.name, body, question && !replyTo, replyTo]
   );
   await q(`UPDATE os_team_rooms SET last_at = NOW() WHERE id = $1`, [roomId]).catch(() => null);
-  return { id: rows[0]!.id, authorId: me.id, author: me.name, body, question: question && !replyTo, at: iso(rows[0]!.created_at)!, replies: 0 };
+  const face = await q<{ photo: string | null }>(`SELECT ${FACE_SQL("u")} AS photo FROM os_users u WHERE u.id = $1`, [me.id]).catch(() => []);
+  return { id: rows[0]!.id, authorId: me.id, author: me.name, photo: face[0]?.photo ?? null, body, question: question && !replyTo, at: iso(rows[0]!.created_at)!, replies: 0 };
 }
 
 export async function createHuddle(me: OsUser, name: string, userIds: string[]): Promise<string> {
@@ -282,9 +312,9 @@ export async function leaveRoom(me: OsUser, roomId: string): Promise<void> {
   await q(`DELETE FROM os_team_members WHERE room_id = $1 AND user_id = $2`, [roomId, me.id]).catch(() => null);
 }
 
-export async function roomMembers(roomId: string): Promise<Array<{ id: string; name: string }>> {
-  return q<{ id: string; name: string }>(
-    `SELECT u.id, u.name FROM os_team_members m JOIN os_users u ON u.id = m.user_id WHERE m.room_id = $1 ORDER BY u.name`,
+export async function roomMembers(roomId: string): Promise<FaceRef[]> {
+  return q<FaceRef>(
+    `SELECT u.id, u.name, ${FACE_SQL("u")} AS photo FROM os_team_members m JOIN os_users u ON u.id = m.user_id WHERE m.room_id = $1 ORDER BY u.name`,
     [roomId]
   ).catch(() => []);
 }
@@ -348,7 +378,7 @@ export async function colleagues(me: OsUser): Promise<{ mine: Patch | null; peop
   const [mine, rows] = await Promise.all([
     patchOf(me.id),
     q<{ id: string; name: string; photo: string | null; patch: Patch | null }>(
-      `SELECT u.id, u.name, u.photo, p.value AS patch
+      `SELECT u.id, u.name, ${FACE_SQL("u")} AS photo, p.value AS patch
          FROM os_users u
          LEFT JOIN os_user_prefs p ON p.user_id = u.id AND p.key = $2
         WHERE u.id <> $1 AND u.name <> ''

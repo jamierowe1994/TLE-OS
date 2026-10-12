@@ -4,29 +4,42 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import LineIcon from "@/components/LineIcon";
 import { searchMatches } from "@/lib/search-match";
+import { isGif, previewOf } from "@/lib/chat-gif";
 
 /**
- * HUDDLES in the OS (Susan via James, 12 Oct 2026): the team chat from the
- * phone app's Chats > Play, on the desktop, under Dashboard on the sidebar.
- * The same rooms and the same messages - lib/chats and /api/m/rooms - so a
- * post on the phone is here on the next read, and the other way round.
+ * HUDDLES in the OS (Susan via James, 12 Oct 2026): the chats from the phone
+ * app's Chats screen, on the desktop, under Dashboard on the sidebar. The same
+ * conversations as the phone - lib/chats, /api/m/chats, /api/m/rooms - so a
+ * message on either shows on the other. Two tabs, as the phone's two halves:
  *
- *   General   everybody's. Tick "Ask as a Question" and the post becomes a
- *             question others answer in its own thread.
- *   Huddles   small groups you start with the colleagues you pick (nearest
- *             first by the patch each set on the phone); invite more, or leave.
+ *   Team                  General (everybody's; "Ask as a Question" starts a
+ *                         thread others answer) and the huddles you are in.
+ *   Landlords & Tenants   what customers wrote through their portals, your own
+ *                         (an owner sees everyone's). A reply is stored and
+ *                         emailed to them, as on the phone.
  *
- * Wide, the rooms are a column on the left and the open one fills the rest;
- * on a phone-width window it is one or the other, with a back arrow.
- * ?room=<id> and ?thread=<id> keep your place on a refresh.
+ * Faces are each person's display photo (initials without one); a huddle's
+ * picture is its two people side by side, or a few of them stacked. Emojis in
+ * both tabs; GIFs (GIPHY, rated G) in the team's chats only, since a reply to
+ * a customer goes out as an email.
+ *
+ * Wide, the list is a column on the left and the open chat fills the rest; on
+ * a phone-width window it is one or the other, with a back arrow. The address
+ * keeps your place: ?tab=customers&with=landlord:<id>, or ?room=<id>&thread=<id>.
  */
 
-type Room = { id: string; kind: "general" | "huddle"; name: string; members: number; last: { body: string; who: string; at: string } | null; unread: number };
-type Msg = { id: string; authorId: string; author: string; body: string; question: boolean; at: string; replies: number };
-type Open = { room: { id: string; kind: "general" | "huddle"; name: string }; me: string; messages: Msg[]; members: Array<{ id: string; name: string }> };
+type Face = { id: string; name: string; photo: string | null };
+type Room = { id: string; kind: "general" | "huddle"; name: string; members: number; last: { body: string; who: string; at: string } | null; unread: number; faces: Face[] };
+type Thread = { key: string; kind: "landlord" | "tenant"; name: string; about: string; last: { body: string; from: "customer" | "agent"; at: string }; unread: number };
+type TeamMsg = { id: string; authorId: string; author: string; photo: string | null; body: string; question: boolean; at: string; replies: number };
+type CustomerMsg = { id: string; from: "customer" | "agent"; body: string; at: string };
 type Person = { id: string; name: string; photo: string | null; town: string | null; miles: number | null };
+type Tab = "team" | "customers";
+type Pick = { kind: "room"; id: string; thread: string | null } | { kind: "landlord" | "tenant"; id: string };
 
 const GENERAL = "general";
+/* The shell's sidebar count listens for this, so reading here clears it at once. */
+const READ_EVENT = "os:chats-read";
 
 function ago(iso: string): string {
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -57,14 +70,65 @@ const initials = (s: string) =>
     .map((w) => w[0]!.toUpperCase())
     .join("") || "?";
 
-function Face({ name, size = 36, tone = "pink", photo }: { name: string; size?: number; tone?: "pink" | "sage"; photo?: string | null }) {
+/* ── Faces ──────────────────────────────────────────────────────────────── */
+
+type Tone = "pink" | "sage" | "clay";
+const TONES: Record<Tone, string> = {
+  pink: "bg-accent-soft text-accent-dark",
+  sage: "bg-sage/35 text-brown",
+  clay: "bg-[#efe3dc] text-brown",
+};
+/* A person keeps one tone wherever they appear, so a face reads as them. */
+const toneOf = (id: string): Tone => (["pink", "sage", "clay"] as const)[[...id].reduce((n, c) => n + c.charCodeAt(0), 0) % 3]!;
+
+function Avatar({ name, photo, size = 36, tone = "pink", ring = false }: { name: string; photo?: string | null; size?: number; tone?: Tone; ring?: boolean }) {
   return (
     <span
-      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold ${tone === "sage" ? "bg-sage/35 text-brown" : "bg-accent-soft text-accent-dark"}`}
-      style={{ width: size, height: size, fontSize: Math.round(size * 0.34) }}
+      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold ${TONES[tone]} ${ring ? "ring-2 ring-card" : ""}`}
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.36) }}
+      title={name}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      {photo ? <img src={photo} alt="" className="h-full w-full object-cover" /> : initials(name)}
+      {photo ? <img src={photo} alt="" loading="lazy" className="h-full w-full object-cover" /> : initials(name)}
+    </span>
+  );
+}
+
+/**
+ * A huddle's picture (James, 12 Oct 2026): two people side by side; three or
+ * more stacked one over the next, the third circle saying "+N" when there are
+ * more than three. Fills a fixed slot so names line up down the list.
+ */
+const SLOT = 66;
+function GroupFace({ faces, members, name, size = 28 }: { faces: Face[]; members: number; name: string; size?: number }) {
+  if (!faces.length) return <span className="flex shrink-0 items-center" style={{ width: SLOT }}><Avatar name={name} size={38} tone="sage" /></span>;
+  if (members <= 2 || faces.length < 3) {
+    return (
+      <span className="flex shrink-0 items-center gap-0.5" style={{ width: SLOT }}>
+        {faces.slice(0, 2).map((f) => (
+          <Avatar key={f.id} name={f.name} photo={f.photo} size={size + 2} tone={toneOf(f.id)} />
+        ))}
+      </span>
+    );
+  }
+  const more = members > 3;
+  const shown = faces.slice(0, more ? 2 : 3);
+  return (
+    <span className="flex shrink-0 items-center" style={{ width: SLOT }}>
+      {shown.map((f, i) => (
+        <span key={f.id} className="relative rounded-full" style={{ marginLeft: i ? -9 : 0, zIndex: 3 - i }}>
+          <Avatar name={f.name} photo={f.photo} size={size} tone={toneOf(f.id)} ring />
+        </span>
+      ))}
+      {more && (
+        <span
+          className="relative flex shrink-0 items-center justify-center rounded-full bg-[#e6e1dc] text-[10.5px] font-semibold text-brown ring-2 ring-card"
+          style={{ width: size, height: size, marginLeft: -9 }}
+          title={`${members} people`}
+        >
+          +{members - 2}
+        </span>
+      )}
     </span>
   );
 }
@@ -83,19 +147,99 @@ function Count({ n }: { n: number }) {
   return <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent-dark px-1.5 text-[11px] font-semibold text-white">{n > 99 ? "99+" : n}</span>;
 }
 
-const readUrl = () => {
+function ErrorBox({ text, onRetry }: { text: string; onRetry?: () => void }) {
+  return (
+    <div className="m-2 rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-3 text-[12.5px]">
+      {text}{" "}
+      {onRetry && (
+        <button type="button" onClick={onRetry} className="font-semibold underline">
+          Try again
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ── The address ───────────────────────────────────────────────────────── */
+
+function readUrl(): { tab: Tab; pick: Pick | null } {
   const sp = new URLSearchParams(window.location.search);
-  return { room: sp.get("room"), thread: sp.get("thread") };
-};
+  const w = sp.get("with");
+  if (w) {
+    const [kind, ...rest] = w.split(":");
+    const id = rest.join(":");
+    if ((kind === "landlord" || kind === "tenant") && id) return { tab: "customers", pick: { kind, id } };
+  }
+  if (sp.get("tab") === "customers") return { tab: "customers", pick: null };
+  const room = sp.get("room");
+  return { tab: "team", pick: room ? { kind: "room", id: room, thread: sp.get("thread") } : null };
+}
+
+function urlFor(tab: Tab, pick: Pick | null): string {
+  const sp = new URLSearchParams();
+  if (pick && pick.kind !== "room") sp.set("with", `${pick.kind}:${pick.id}`);
+  else if (tab === "customers") sp.set("tab", "customers");
+  else if (pick && pick.kind === "room" && (pick.id !== GENERAL || pick.thread)) {
+    sp.set("room", pick.id);
+    if (pick.thread) sp.set("thread", pick.thread);
+  }
+  const qs = sp.toString();
+  return qs ? `/huddles?${qs}` : "/huddles";
+}
+
+/* ── The page ──────────────────────────────────────────────────────────── */
 
 export default function Huddles() {
-  const [rooms, setRooms] = useState<Room[] | null>(null);
+  const [data, setData] = useState<{ work: Thread[]; rooms: Room[]; unread: { work: number; play: number } } | null>(null);
   const [listError, setListError] = useState<string | null>(null);
-  const [roomId, setRoomId] = useState<string>(GENERAL);
-  const [thread, setThread] = useState<string | null>(null);
-  /* On a narrow window: the list, or the open room. */
-  const [showRoom, setShowRoom] = useState(false);
+  const [tab, setTab] = useState<Tab>("team");
+  const [pick, setPick] = useState<Pick | null>(null);
+  /* On a narrow window: the list, or the open chat. */
+  const [showChat, setShowChat] = useState(false);
   const [picker, setPicker] = useState<null | { invite: string | null }>(null);
+
+  const load = useCallback(() => {
+    fetch("/api/m/chats", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; error?: string; work?: Thread[]; rooms?: Room[]; unread?: { work: number; play: number } }) => {
+        if (!j.ok) throw new Error(j.error ?? "Your chats did not load.");
+        setData({ work: j.work ?? [], rooms: j.rooms ?? [], unread: j.unread ?? { work: 0, play: 0 } });
+        setListError(null);
+        window.dispatchEvent(new Event(READ_EVENT));
+      })
+      .catch((e: Error) => setListError(e.message));
+  }, []);
+
+  useEffect(() => {
+    const u = readUrl();
+    setTab(u.tab);
+    setPick(u.pick);
+    setShowChat(Boolean(u.pick));
+    load();
+    const t = window.setInterval(load, 30_000);
+    const onPop = () => {
+      const p = readUrl();
+      setTab(p.tab);
+      setPick(p.pick);
+      setShowChat(Boolean(p.pick));
+    };
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.clearInterval(t);
+      window.removeEventListener("popstate", onPop);
+    };
+  }, [load]);
+
+  const go = (nextTab: Tab, next: Pick | null) => {
+    setTab(nextTab);
+    setPick(next);
+    setShowChat(Boolean(next));
+    window.history.pushState(null, "", urlFor(nextTab, next));
+  };
+
+  /* The chat that is open: on the Team tab, General unless you picked one;
+     on the other, the conversation you picked, or none. */
+  const open: Pick | null = pick ?? (tab === "team" ? { kind: "room", id: GENERAL, thread: null } : null);
 
   /* The chat fills the window below the header, so the box you type in is
      always on screen; measured, because the header's height varies by width. */
@@ -117,111 +261,86 @@ export default function Huddles() {
     };
   }, []);
 
-  const loadRooms = useCallback(() => {
-    fetch("/api/m/rooms", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j: { ok?: boolean; error?: string; rooms?: Room[] }) => {
-        if (!j.ok) throw new Error(j.error ?? "Your huddles did not load.");
-        setRooms(j.rooms ?? []);
-        setListError(null);
-      })
-      .catch((e: Error) => setListError(e.message));
-  }, []);
-
-  useEffect(() => {
-    const u = readUrl();
-    if (u.room) {
-      setRoomId(u.room);
-      setShowRoom(true);
-    }
-    setThread(u.thread);
-    loadRooms();
-    const t = window.setInterval(loadRooms, 30_000);
-    const onPop = () => {
-      const p = readUrl();
-      setRoomId(p.room ?? GENERAL);
-      setThread(p.thread);
-      setShowRoom(Boolean(p.room));
-    };
-    window.addEventListener("popstate", onPop);
-    return () => {
-      window.clearInterval(t);
-      window.removeEventListener("popstate", onPop);
-    };
-  }, [loadRooms]);
-
-  const go = (room: string, q: string | null = null) => {
-    setRoomId(room);
-    setThread(q);
-    setShowRoom(true);
-    const sp = new URLSearchParams();
-    if (room !== GENERAL || q) sp.set("room", room);
-    if (q) sp.set("thread", q);
-    const qs = sp.toString();
-    window.history.pushState(null, "", qs ? `/huddles?${qs}` : "/huddles");
-  };
-
-  const general = rooms?.find((r) => r.kind === "general") ?? null;
-  const huddles = rooms?.filter((r) => r.kind === "huddle") ?? [];
+  const general = data?.rooms.find((r) => r.kind === "general") ?? null;
+  const huddles = data?.rooms.filter((r) => r.kind === "huddle") ?? [];
+  const openRoom = open?.kind === "room" ? data?.rooms.find((r) => r.id === open.id) ?? null : null;
 
   return (
     <>
-      <PageHeader
-        title="Huddles"
-        blurb="Talk to the team. General is open to everyone; a huddle is the people you pick. The same chats as Chats on the TLE OS app."
-        illustration="/illustrations/app/crescent.webp"
-        hideArtOnPhone
-        illustrationHeight={150}
-      />
+      <PageHeader title="Huddles" blurb="Your team, your landlords and your tenants in one place. The same chats as Chats on the TLE OS app." />
 
       <div ref={frame} style={{ height: frameH ?? 560 }} className="fade-up mt-5 flex overflow-hidden rounded-[var(--radius-card)] border border-line/70 bg-card">
-        {/* The rooms. */}
-        <aside className={`${showRoom ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-line/70 md:w-[300px] md:border-r`}>
-          <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-4">
-            <h2 className="font-heading text-[15px] text-ink">Your Chats</h2>
-            <button
-              type="button"
-              onClick={() => setPicker({ invite: null })}
-              className="flex h-8 items-center gap-1.5 rounded-full bg-ink px-3 text-[12px] font-semibold text-page transition-opacity hover:opacity-85"
-            >
-              <span className="text-[15px] leading-none">+</span> Start a Huddle
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-            {listError && !rooms ? (
-              <div className="m-2 rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-3 text-[12.5px]">
-                {listError}{" "}
-                <button type="button" onClick={loadRooms} className="font-semibold underline">
-                  Try again
+        {/* The list. */}
+        <aside className={`${showChat ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-line/70 md:w-[320px] md:border-r`}>
+          <div className="px-3 pt-3">
+            <div role="tablist" className="flex gap-1 rounded-full bg-panel p-1">
+              {(
+                [
+                  ["team", "Team", data?.unread.play ?? 0],
+                  ["customers", "Landlords & Tenants", data?.unread.work ?? 0],
+                ] as const
+              ).map(([id, label, n]) => (
+                <button
+                  key={id}
+                  role="tab"
+                  type="button"
+                  aria-selected={tab === id}
+                  onClick={() => tab !== id && go(id, null)}
+                  className={`flex h-8 flex-1 items-center justify-center gap-1.5 rounded-full px-2 text-[12.5px] font-medium transition-colors ${tab === id ? "bg-card text-ink shadow-[0_1px_3px_rgba(0,0,0,0.12)]" : "text-muted hover:text-ink"}`}
+                >
+                  <span className="truncate">{label}</span>
+                  <Count n={n} />
                 </button>
-              </div>
-            ) : !rooms ? (
-              <Spinner label="Loading your huddles" />
-            ) : (
+              ))}
+            </div>
+          </div>
+
+          {tab === "team" && (
+            <div className="flex items-center justify-between gap-2 px-4 pb-1 pt-3">
+              <p className="text-[11.5px] font-medium text-muted">General and your huddles</p>
+              <button
+                type="button"
+                onClick={() => setPicker({ invite: null })}
+                className="flex h-8 items-center gap-1.5 rounded-full bg-ink px-3 text-[12px] font-semibold text-page transition-opacity hover:opacity-85"
+              >
+                <span className="text-[15px] leading-none">+</span> Start a Huddle
+              </button>
+            </div>
+          )}
+          {tab === "customers" && <p className="px-4 pb-1 pt-3 text-[11.5px] font-medium text-muted">What they wrote through their portals</p>}
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 pt-1">
+            {listError && !data ? (
+              <ErrorBox text={listError} onRetry={load} />
+            ) : !data ? (
+              <Spinner label="Loading your chats" />
+            ) : tab === "team" ? (
               <>
-                <RoomRow
-                  active={roomId === GENERAL}
-                  onClick={() => go(GENERAL)}
+                <Row
+                  active={open?.kind === "room" && open.id === GENERAL}
+                  onClick={() => go("team", { kind: "room", id: GENERAL, thread: null })}
                   face={
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-dark text-white">
-                      <LineIcon name="message" size={18} />
+                    <span className="flex shrink-0 items-center" style={{ width: SLOT }}>
+                      <span className="flex h-[38px] w-[38px] items-center justify-center rounded-full bg-accent-dark text-white">
+                        <LineIcon name="message" size={17} />
+                      </span>
                     </span>
                   }
                   name="General"
-                  line={general?.last ? `${first(general.last.who)}: ${general.last.body}` : "Open to everyone"}
+                  line={general?.last ? `${first(general.last.who)}: ${previewOf(general.last.body)}` : "Open to everyone"}
                   at={general?.last?.at ?? null}
                   unread={general?.unread ?? 0}
                 />
                 <p className="mb-1 mt-4 px-2 text-[11.5px] font-medium text-muted">Huddles</p>
                 {huddles.length ? (
                   huddles.map((r) => (
-                    <RoomRow
+                    <Row
                       key={r.id}
-                      active={roomId === r.id}
-                      onClick={() => go(r.id)}
-                      face={<Face name={r.name} size={40} tone="sage" />}
+                      active={open?.kind === "room" && open.id === r.id}
+                      onClick={() => go("team", { kind: "room", id: r.id, thread: null })}
+                      face={<GroupFace faces={r.faces} members={r.members} name={r.name} />}
                       name={r.name}
-                      line={r.last ? `${first(r.last.who)}: ${r.last.body}` : `${r.members} people · say hello`}
+                      line={r.last ? `${first(r.last.who)}: ${previewOf(r.last.body)}` : `${r.members} people · say hello`}
                       at={r.last?.at ?? null}
                       unread={r.unread}
                     />
@@ -230,26 +349,64 @@ export default function Huddles() {
                   <p className="mx-2 rounded-xl bg-panel px-3 py-3 text-[12.5px] leading-snug text-muted">No huddles yet. Start one with the agents near you.</p>
                 )}
               </>
+            ) : data.work.length ? (
+              data.work.map((t) => {
+                const [kind, ...rest] = t.key.split(":");
+                const id = rest.join(":");
+                const landlord = kind === "landlord";
+                return (
+                  <Row
+                    key={t.key}
+                    active={open?.kind === kind && open.id === id}
+                    onClick={() => go("customers", { kind: landlord ? "landlord" : "tenant", id })}
+                    face={
+                      <span className="flex shrink-0 items-center" style={{ width: SLOT }}>
+                        <Avatar name={t.name} size={38} tone={landlord ? "pink" : "sage"} />
+                      </span>
+                    }
+                    name={t.name}
+                    tag={landlord ? "Landlord" : "Tenant"}
+                    about={landlord ? t.about : ""}
+                    line={`${t.last.from === "agent" ? "You: " : ""}${t.last.body}`}
+                    at={t.last.at}
+                    unread={t.unread}
+                  />
+                );
+              })
+            ) : (
+              <p className="mx-2 mt-2 rounded-xl bg-panel px-3 py-3 text-[12.5px] leading-snug text-muted">No messages yet. When a landlord or tenant writes through their portal, it lands here.</p>
             )}
           </div>
         </aside>
 
-        {/* The open room. */}
-        <section className={`${showRoom ? "flex" : "hidden md:flex"} min-w-0 flex-1 flex-col`}>
-          <RoomPane
-            key={`${roomId}|${thread ?? ""}`}
-            id={roomId}
-            thread={thread}
-            onBack={() => (thread ? go(roomId) : (setShowRoom(false), window.history.pushState(null, "", "/huddles")))}
-            onOpenThread={(q) => go(roomId, q)}
-            onSent={loadRooms}
-            onInvite={() => setPicker({ invite: roomId })}
-            onLeft={() => {
-              loadRooms();
-              go(GENERAL);
-              setShowRoom(false);
-            }}
-          />
+        {/* The open chat. */}
+        <section className={`${showChat ? "flex" : "hidden md:flex"} min-w-0 flex-1 flex-col`}>
+          {open?.kind === "room" ? (
+            <RoomPane
+              key={`${open.id}|${open.thread ?? ""}`}
+              id={open.id}
+              thread={open.thread}
+              groupFaces={openRoom ? { faces: openRoom.faces, members: openRoom.members } : null}
+              onBack={() => (open.thread ? go("team", { kind: "room", id: open.id, thread: null }) : go("team", null))}
+              onOpenThread={(q) => go("team", { kind: "room", id: open.id, thread: q })}
+              onRead={load}
+              onInvite={() => setPicker({ invite: open.id })}
+              onLeft={() => {
+                load();
+                go("team", null);
+              }}
+            />
+          ) : open ? (
+            <CustomerPane key={`${open.kind}:${open.id}`} kind={open.kind} id={open.id} onBack={() => go("customers", null)} onRead={load} />
+          ) : (
+            <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-panel text-muted">
+                <LineIcon name="message" size={20} />
+              </span>
+              <p className="mt-3 text-[13.5px] font-medium text-ink">Pick a Conversation</p>
+              <p className="mt-1 max-w-[300px] text-[12.5px] text-muted">Choose a landlord or tenant on the left to read what they wrote and reply.</p>
+            </div>
+          )}
         </section>
       </div>
 
@@ -259,8 +416,8 @@ export default function Huddles() {
           onClose={() => setPicker(null)}
           onDone={(id) => {
             setPicker(null);
-            loadRooms();
-            go(id);
+            load();
+            go("team", { kind: "room", id, thread: null });
           }}
         />
       )}
@@ -268,19 +425,19 @@ export default function Huddles() {
   );
 }
 
-function RoomRow({ active, onClick, face, name, line, at, unread }: { active: boolean; onClick: () => void; face: React.ReactNode; name: string; line: string; at: string | null; unread: number }) {
+function Row({ active, onClick, face, name, tag, about, line, at, unread }: { active: boolean; onClick: () => void; face: React.ReactNode; name: string; tag?: string; about?: string; line: string; at: string | null; unread: number }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors ${active ? "bg-[var(--launch-active,#f1f1f0)]" : "hover:bg-panel"}`}
-    >
+    <button type="button" onClick={onClick} className={`flex w-full items-center gap-1 rounded-xl px-2.5 py-2.5 text-left transition-colors ${active ? "bg-[var(--launch-active,#f1f1f0)]" : "hover:bg-panel"}`}>
       {face}
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
           <span className={`truncate text-[13.5px] text-ink ${unread ? "font-semibold" : "font-medium"}`}>{name}</span>
+          {tag && (
+            <span className={`shrink-0 rounded-full px-1.5 py-px text-[10.5px] font-medium ${tag === "Landlord" ? "bg-accent-soft text-accent-dark" : "bg-sage/35 text-brown"}`}>{tag}</span>
+          )}
           {at && <span className="ml-auto shrink-0 text-[11px] text-muted">{ago(at)}</span>}
         </span>
+        {about && <span className="block truncate text-[11.5px] text-muted">{about}</span>}
         <span className="mt-0.5 flex items-center gap-2">
           <span className={`min-w-0 flex-1 truncate text-[12.5px] ${unread ? "text-ink" : "text-muted"}`}>{line}</span>
           <Count n={unread} />
@@ -290,24 +447,49 @@ function RoomRow({ active, onClick, face, name, line, at, unread }: { active: bo
   );
 }
 
+/* ── Panes ─────────────────────────────────────────────────────────────── */
+
+function PaneHead({ back, backAlways, face, title, line, right }: { back: () => void; backAlways?: boolean; face?: React.ReactNode; title: string; line?: string; right?: React.ReactNode }) {
+  return (
+    <header className="relative flex shrink-0 items-center gap-3 border-b border-line/70 px-4 py-3">
+      <button
+        type="button"
+        onClick={back}
+        aria-label="Back"
+        className={`${backAlways ? "flex" : "flex md:hidden"} h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line/80 text-muted transition-colors hover:text-ink`}
+      >
+        <LineIcon name="arrow-left" size={15} />
+      </button>
+      {face}
+      <div className="min-w-0 flex-1">
+        <h2 className="truncate font-heading text-[16px] text-ink">{title}</h2>
+        {line && <p className="truncate text-[12px] text-muted">{line}</p>}
+      </div>
+      {right}
+    </header>
+  );
+}
+
 function RoomPane({
   id,
   thread,
+  groupFaces,
   onBack,
   onOpenThread,
-  onSent,
+  onRead,
   onInvite,
   onLeft,
 }: {
   id: string;
   thread: string | null;
+  groupFaces: { faces: Face[]; members: number } | null;
   onBack: () => void;
   onOpenThread: (q: string) => void;
-  onSent: () => void;
+  onRead: () => void;
   onInvite: () => void;
   onLeft: () => void;
 }) {
-  const [data, setData] = useState<Open | null>(null);
+  const [data, setData] = useState<{ room: { id: string; kind: "general" | "huddle"; name: string }; me: string; messages: TeamMsg[]; members: Face[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [people, setPeople] = useState(false);
 
@@ -316,7 +498,7 @@ function RoomPane({
     () =>
       fetch(url, { cache: "no-store" })
         .then((r) => r.json())
-        .then((j: { ok?: boolean; error?: string } & Partial<Open>) => {
+        .then((j: { ok?: boolean; error?: string; room?: { id: string; kind: "general" | "huddle"; name: string }; me?: string; messages?: TeamMsg[]; members?: Face[] }) => {
           if (!j.ok || !j.room) throw new Error(j.error ?? "The chat did not load.");
           setData({ room: j.room, me: j.me ?? "", messages: j.messages ?? [], members: j.members ?? [] });
           setError(null);
@@ -326,7 +508,7 @@ function RoomPane({
   );
 
   useEffect(() => {
-    void load().then(onSent);
+    void load().then(onRead);
     const t = window.setInterval(() => void load(), 10_000);
     return () => window.clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -335,17 +517,17 @@ function RoomPane({
   const general = data?.room.kind === "general";
   const question = thread ? data?.messages.find((m) => m.id === thread) ?? null : null;
 
-  const send = async (text: string, asQuestion: boolean): Promise<string | null> => {
+  const send = async (text: string, asQuestion = false): Promise<string | null> => {
     const j = (await fetch(`/api/m/rooms/${encodeURIComponent(id)}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ text, question: !thread && asQuestion, replyTo: thread }),
     })
       .then((r) => r.json())
-      .catch(() => ({ ok: false, error: "No connection. Your message was not sent." }))) as { ok?: boolean; error?: string; message?: Msg };
+      .catch(() => ({ ok: false, error: "No connection. Your message was not sent." }))) as { ok?: boolean; error?: string; message?: TeamMsg };
     if (!j.ok || !j.message) return j.error ?? "Your message was not sent.";
     setData((d) => (d ? { ...d, messages: [...d.messages, j.message!] } : d));
-    onSent();
+    onRead();
     return null;
   };
 
@@ -357,41 +539,40 @@ function RoomPane({
 
   const title = thread ? "Question" : (data?.room.name ?? (id === GENERAL ? "General" : "Huddle"));
   const line = thread ? (question ? `Asked by ${question.author}` : "") : general ? "Open to everyone" : data ? `${data.members.length} people` : "";
+  const faces = data && !general && !thread ? (groupFaces?.faces.length ? groupFaces : { faces: data.members.slice(0, 4), members: data.members.length }) : null;
 
   return (
     <>
-      <header className="relative flex shrink-0 items-center gap-3 border-b border-line/70 px-4 py-3">
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Back"
-          className={`${thread ? "flex" : "flex md:hidden"} h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line/80 text-muted transition-colors hover:text-ink`}
-        >
-          <LineIcon name="arrow-left" size={15} />
-        </button>
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate font-heading text-[16px] text-ink">{title}</h2>
-          {line && <p className="truncate text-[12px] text-muted">{line}</p>}
-        </div>
-        {data && !general && !thread && (
-          <button
-            type="button"
-            onClick={() => setPeople((p) => !p)}
-            aria-expanded={people}
-            className="flex h-8 items-center gap-1.5 rounded-full border border-line/80 px-3 text-[12px] font-medium text-ink transition-colors hover:bg-panel"
-          >
-            <LineIcon name="user" size={14} />
-            People
-          </button>
-        )}
-        {people && data && (
-          <div className="absolute right-4 top-[calc(100%+6px)] z-20 w-[260px] rounded-xl border border-line/70 bg-card p-2 shadow-[0_16px_36px_-16px_rgba(0,0,0,0.35)]">
+      <PaneHead
+        back={onBack}
+        backAlways={Boolean(thread)}
+        face={faces ? <GroupFace faces={faces.faces} members={faces.members} name={data!.room.name} /> : undefined}
+        title={title}
+        line={line}
+        right={
+          data && !general && !thread ? (
+            <button
+              type="button"
+              onClick={() => setPeople((p) => !p)}
+              aria-expanded={people}
+              className="flex h-8 items-center gap-1.5 rounded-full border border-line/80 px-3 text-[12px] font-medium text-ink transition-colors hover:bg-panel"
+            >
+              <LineIcon name="user" size={14} />
+              People
+            </button>
+          ) : undefined
+        }
+      />
+      {people && data && (
+        <div className="relative">
+          <div className="absolute right-4 top-1.5 z-20 w-[260px] rounded-xl border border-line/70 bg-card p-2 shadow-[0_16px_36px_-16px_rgba(0,0,0,0.35)]">
             <p className="px-2 pb-1 pt-1 text-[11.5px] font-medium text-muted">In this huddle</p>
             <ul className="max-h-[240px] overflow-y-auto">
               {data.members.map((m) => (
                 <li key={m.id} className="flex items-center gap-2.5 px-2 py-1.5">
-                  <Face name={m.name} size={26} />
+                  <Avatar name={m.name} photo={m.photo} size={28} tone={toneOf(m.id)} />
                   <span className="truncate text-[13px] text-ink">{m.name}</span>
+                  {m.id === data.me && <span className="ml-auto text-[11px] text-muted">You</span>}
                 </li>
               ))}
             </ul>
@@ -411,38 +592,158 @@ function RoomPane({
               </button>
             </div>
           </div>
-        )}
-      </header>
+        </div>
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-panel/50 px-4" onClick={() => people && setPeople(false)}>
         {error && !data ? (
-          <div className="mx-auto mt-6 max-w-md rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-3 text-[12.5px]">
-            {error}{" "}
-            <button type="button" onClick={() => void load()} className="font-semibold underline">
-              Try again
-            </button>
-          </div>
+          <ErrorBox text={error} onRetry={() => void load()} />
         ) : !data ? (
           <Spinner label="Opening the chat" />
         ) : (
           <Bubbles
-            messages={data.messages}
-            me={data.me}
-            inThread={Boolean(thread)}
-            onOpenThread={onOpenThread}
+            items={data.messages.map((m) => ({
+              id: m.id,
+              mine: m.authorId === data.me,
+              who: m.author,
+              whoId: m.authorId,
+              photo: m.photo,
+              body: m.body,
+              at: m.at,
+              question: m.question && !thread ? { replies: m.replies, open: () => onOpenThread(m.id) } : undefined,
+            }))}
             empty={thread ? "No answers yet. Be the first." : general ? "Nobody has said anything yet. Start it off." : "Say hello to your huddle."}
           />
         )}
       </div>
 
-      {data && <Composer key={`${id}|${thread ?? ""}`} placeholder={thread ? "Write an answer..." : general ? "Say something to everyone..." : `Message ${data.room.name}...`} canAsk={general && !thread} onSend={send} />}
+      {data && (
+        <Composer
+          key={`${id}|${thread ?? ""}`}
+          placeholder={thread ? "Write an answer..." : general ? "Say something to everyone..." : `Message ${data.room.name}...`}
+          canAsk={general && !thread}
+          gifs
+          onSend={send}
+        />
+      )}
     </>
   );
 }
 
-function Bubbles({ messages, me, inThread, onOpenThread, empty }: { messages: Msg[]; me: string; inThread: boolean; onOpenThread: (id: string) => void; empty: string }) {
+function CustomerPane({ kind, id, onBack, onRead }: { kind: "landlord" | "tenant"; id: string; onBack: () => void; onRead: () => void }) {
+  const [t, setT] = useState<{ title: string; about: string; phone: string | null; email: string | null; messages: CustomerMsg[] } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const url = `/api/m/chats/${kind}/${encodeURIComponent(id)}`;
+
+  const load = useCallback(
+    () =>
+      fetch(url, { cache: "no-store" })
+        .then((r) => r.json())
+        .then((j: { ok?: boolean; error?: string; title?: string; about?: string; phone?: string | null; email?: string | null; messages?: CustomerMsg[] }) => {
+          if (!j.ok) throw new Error(j.error ?? "The conversation did not load.");
+          setT({ title: j.title ?? "", about: j.about ?? "", phone: j.phone ?? null, email: j.email ?? null, messages: j.messages ?? [] });
+          setError(null);
+        })
+        .catch((e: Error) => setError(e.message)),
+    [url]
+  );
+
+  useEffect(() => {
+    void load().then(onRead);
+    const timer = window.setInterval(() => void load(), 20_000);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load]);
+
+  const send = async (text: string): Promise<string | null> => {
+    setNote(null);
+    const j = (await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) })
+      .then((r) => r.json())
+      .catch(() => ({ ok: false, error: "No connection. Nothing was sent." }))) as { ok?: boolean; error?: string; message?: CustomerMsg; emailed?: boolean };
+    if (!j.ok || !j.message) return j.error ?? "That did not send.";
+    setT((x) => (x ? { ...x, messages: [...x.messages, j.message!] } : x));
+    if (!j.emailed) setNote("Saved here. The email to them did not go - they will see it when they next open their portal.");
+    onRead();
+    return null;
+  };
+
+  const name = t?.title || (kind === "landlord" ? "Landlord" : "Tenant");
+  const tone: Tone = kind === "landlord" ? "pink" : "sage";
+
+  return (
+    <>
+      <PaneHead
+        back={onBack}
+        face={<Avatar name={name} size={38} tone={tone} />}
+        title={name}
+        line={t ? (kind === "landlord" ? t.about || "Landlord" : "Tenant · from their portal") : undefined}
+        right={
+          t && (
+            <span className="flex shrink-0 gap-1.5">
+              {t.phone && (
+                <a href={`tel:${t.phone.replace(/[^\d+]/g, "")}`} title={`Call ${t.phone}`} className="flex h-8 w-8 items-center justify-center rounded-full border border-line/80 text-muted transition-colors hover:text-ink">
+                  <svg viewBox="0 0 24 24" aria-hidden className="h-[15px] w-[15px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2" />
+                  </svg>
+                </a>
+              )}
+              {t.email && (
+                <a href={`mailto:${t.email}`} title={t.email} className="flex h-8 w-8 items-center justify-center rounded-full border border-line/80 text-muted transition-colors hover:text-ink">
+                  <LineIcon name="mail" size={15} />
+                </a>
+              )}
+            </span>
+          )
+        }
+      />
+      <div className="min-h-0 flex-1 overflow-y-auto bg-panel/50 px-4">
+        {error && !t ? (
+          <ErrorBox text={error} onRetry={() => void load()} />
+        ) : !t ? (
+          <Spinner label="Opening the conversation" />
+        ) : (
+          <Bubbles
+            items={t.messages.map((m) => ({ id: m.id, mine: m.from === "agent", who: name, whoId: `${kind}:${id}`, tone, body: m.body, at: m.at }))}
+            empty={`Nothing yet. Say hello to ${first(name)}.`}
+          />
+        )}
+      </div>
+      {t && (
+        <Composer
+          key={`${kind}:${id}`}
+          placeholder={`Reply to ${first(name)}...`}
+          foot={note ?? "Your reply is emailed to them, with a link back into this conversation."}
+          footWarn={Boolean(note)}
+          onSend={(text) => send(text)}
+        />
+      )}
+    </>
+  );
+}
+
+/* ── Messages ──────────────────────────────────────────────────────────── */
+
+type Item = {
+  id: string;
+  mine: boolean;
+  who: string;
+  whoId: string;
+  photo?: string | null;
+  tone?: Tone;
+  body: string;
+  at: string;
+  question?: { replies: number; open: () => void };
+};
+
+/**
+ * Oldest at the top, scrolled to the newest. Someone else's run of messages
+ * carries their name at the top and their face beside the last one, as a
+ * phone does. A GIF is drawn as the picture, without a bubble.
+ */
+function Bubbles({ items, empty }: { items: Item[]; empty: string }) {
   const end = useRef<HTMLDivElement | null>(null);
-  const count = messages.length;
+  const count = items.length;
   const firstPaint = useRef(true);
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end", behavior: firstPaint.current ? "auto" : "smooth" });
@@ -450,24 +751,26 @@ function Bubbles({ messages, me, inThread, onOpenThread, empty }: { messages: Ms
   }, [count]);
 
   const rows = useMemo(() => {
-    const out: Array<{ day: string } | { msg: Msg; showWho: boolean }> = [];
+    const out: Array<{ day: string } | { m: Item; head: boolean; tail: boolean }> = [];
     let lastDay = "";
-    messages.forEach((m, i) => {
+    items.forEach((m, i) => {
       const day = dayOf(m.at);
       if (day !== lastDay) {
         out.push({ day });
         lastDay = day;
       }
-      const prev = messages[i - 1];
-      const mine = m.authorId === me;
-      out.push({ msg: m, showWho: !mine && (!prev || prev.authorId !== m.authorId || dayOf(prev.at) !== day) });
+      const prev = items[i - 1];
+      const next = items[i + 1];
+      const sameAsPrev = prev && prev.mine === m.mine && prev.whoId === m.whoId && dayOf(prev.at) === day;
+      const sameAsNext = next && next.mine === m.mine && next.whoId === m.whoId && dayOf(next.at) === day;
+      out.push({ m, head: !sameAsPrev, tail: !sameAsNext });
     });
     return out;
-  }, [messages, me]);
+  }, [items]);
 
-  if (!messages.length) return <p className="py-16 text-center text-[13px] text-muted">{empty}</p>;
+  if (!items.length) return <p className="py-16 text-center text-[13px] text-muted">{empty}</p>;
   return (
-    <ol className="mx-auto flex max-w-[760px] flex-col gap-1.5 py-4">
+    <ol className="mx-auto flex max-w-[780px] flex-col gap-1 py-4">
       {rows.map((r) => {
         if ("day" in r)
           return (
@@ -475,29 +778,39 @@ function Bubbles({ messages, me, inThread, onOpenThread, empty }: { messages: Ms
               {r.day}
             </li>
           );
-        const m = r.msg;
-        const mine = m.authorId === me;
-        const isQuestion = m.question && !inThread;
-        const bubble = `max-w-[78%] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2.5 text-left text-[13.5px] leading-snug ${
-          mine ? "rounded-br-md bg-accent-dark text-white" : "rounded-bl-md bg-card text-ink shadow-[0_1px_0_rgba(0,0,0,0.04)] ring-1 ring-line/50"
+        const { m, head, tail } = r;
+        const gif = isGif(m.body);
+        const bubble = `max-w-[min(78%,520px)] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2.5 text-left text-[13.5px] leading-snug ${
+          m.mine ? "rounded-br-md bg-accent-dark text-white" : "rounded-bl-md bg-card text-ink shadow-[0_1px_0_rgba(0,0,0,0.04)] ring-1 ring-line/50"
         }`;
-        const foot = isQuestion ? (
-          <span className={`mt-1.5 block text-[11.5px] font-semibold ${mine ? "text-white/85" : "text-accent-dark"}`}>
-            Question · {m.replies ? `${m.replies} ${m.replies === 1 ? "answer" : "answers"}` : "Answer it"}
-          </span>
-        ) : null;
+        const content = gif ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={m.body.trim()}
+            alt="GIF"
+            className="block max-h-[220px] max-w-[260px] rounded-2xl bg-panel object-contain"
+            /* A picture arriving after the scroll to the newest pushes it out of
+               view; one of the last few keeps the bottom in view as it lands. */
+            onLoad={() => items.slice(-3).some((x) => x.id === m.id) && end.current?.scrollIntoView({ block: "end" })}
+          />
+        ) : m.question ? (
+          <button type="button" onClick={m.question.open} className={`${bubble} transition-opacity hover:opacity-90`}>
+            {m.body}
+            <span className={`mt-1.5 block text-[11.5px] font-semibold ${m.mine ? "text-white/85" : "text-accent-dark"}`}>
+              Question · {m.question.replies ? `${m.question.replies} ${m.question.replies === 1 ? "answer" : "answers"}` : "Answer it"}
+            </span>
+          </button>
+        ) : (
+          <div className={bubble}>{m.body}</div>
+        );
         return (
-          <li key={m.id} className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
-            {r.showWho && <span className="mb-1 ml-3 mt-2 text-[11.5px] font-medium text-muted">{m.author}</span>}
-            {isQuestion ? (
-              <button type="button" onClick={() => onOpenThread(m.id)} className={`${bubble} transition-opacity hover:opacity-90`}>
-                {m.body}
-                {foot}
-              </button>
-            ) : (
-              <div className={bubble}>{m.body}</div>
-            )}
-            <span className={`mt-0.5 text-[10.5px] text-muted ${mine ? "mr-2" : "ml-3"}`}>{timeOf(m.at)}</span>
+          <li key={m.id} className={`flex flex-col ${m.mine ? "items-end" : "items-start"} ${head ? "mt-2" : ""}`}>
+            {!m.mine && head && <span className="mb-1 ml-11 text-[11.5px] font-medium text-muted">{m.who}</span>}
+            <div className={`flex max-w-full items-end gap-2 ${m.mine ? "flex-row-reverse" : ""}`}>
+              {!m.mine && (tail ? <Avatar name={m.who} photo={m.photo} size={28} tone={m.tone ?? toneOf(m.whoId)} /> : <span className="w-7 shrink-0" />)}
+              {content}
+            </div>
+            {tail && <span className={`mt-0.5 text-[10.5px] text-muted ${m.mine ? "mr-2" : "ml-11"}`}>{timeOf(m.at)}</span>}
           </li>
         );
       })}
@@ -506,38 +819,125 @@ function Bubbles({ messages, me, inThread, onOpenThread, empty }: { messages: Ms
   );
 }
 
+/* ── The box you type in ───────────────────────────────────────────────── */
+
+/* The ones people reach for at work, a few rows of each. */
+const EMOJI: Array<[string, string[]]> = [
+  ["Smileys", ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "🙂", "😉", "😍", "🥰", "😘", "😋", "😎", "🤩", "🥳", "🤔", "🤨", "😐", "😶", "🙄", "😏", "😬", "😮", "😯", "😲", "🥺", "😢", "😭", "😤", "😡", "🤯", "😳", "🥵", "🥶", "😴", "🤒", "🤗", "🤫", "🤭", "😇", "🙃"]],
+  ["Hands", ["👍", "👎", "👌", "✌️", "🤞", "🤝", "👏", "🙌", "🙏", "💪", "👋", "🤙", "👉", "👈", "👆", "👇", "✋", "🫶", "✍️", "🤷"]],
+  ["Work and Home", ["🏠", "🏡", "🏘️", "🏢", "🔑", "🗝️", "🚪", "🛋️", "🛏️", "🛁", "🧹", "🔧", "🔨", "🪛", "💡", "🔥", "💧", "📋", "📝", "📅", "📞", "📱", "💻", "📧", "📸", "🚗", "☕", "🍰", "🍕", "🍻"]],
+  ["Symbols", ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "💯", "✅", "❌", "⚠️", "❗", "❓", "⭐", "🌟", "✨", "🎉", "🎊", "🏆", "🥇", "🎯", "🚀", "📈", "💰", "💷", "⏰", "👀", "🙈", "🤦", "💤"]],
+];
+
+function insertAt(el: HTMLTextAreaElement | null, text: string, value: string): { value: string; caret: number } {
+  const start = el?.selectionStart ?? value.length;
+  const end = el?.selectionEnd ?? value.length;
+  return { value: value.slice(0, start) + text + value.slice(end), caret: start + text.length };
+}
+
 /** Enter sends; Shift+Enter is a new line. */
-function Composer({ placeholder, canAsk, onSend }: { placeholder: string; canAsk: boolean; onSend: (text: string, asQuestion: boolean) => Promise<string | null> }) {
+function Composer({
+  placeholder,
+  canAsk = false,
+  gifs = false,
+  foot,
+  footWarn = false,
+  onSend,
+}: {
+  placeholder: string;
+  canAsk?: boolean;
+  gifs?: boolean;
+  foot?: string;
+  footWarn?: boolean;
+  onSend: (text: string, asQuestion?: boolean) => Promise<string | null>;
+}) {
   const [text, setText] = useState("");
   const [asQuestion, setAsQuestion] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [pop, setPop] = useState<null | "emoji" | "gif">(null);
   const box = useRef<HTMLTextAreaElement | null>(null);
+  const wrap = useRef<HTMLFormElement | null>(null);
   useEffect(() => box.current?.focus(), []);
-  const send = async () => {
-    const t = text.trim();
+
+  /* A click anywhere else closes the emoji or GIF tray. */
+  useEffect(() => {
+    if (!pop) return;
+    const off = (e: MouseEvent) => {
+      if (wrap.current && !wrap.current.contains(e.target as Node)) setPop(null);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setPop(null);
+    document.addEventListener("mousedown", off);
+    window.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", off);
+      window.removeEventListener("keydown", esc);
+    };
+  }, [pop]);
+
+  const send = async (body?: string) => {
+    const t = (body ?? text).trim();
     if (!t || busy) return;
     setBusy(true);
     setErr(null);
-    const problem = await onSend(t, asQuestion);
+    const problem = await onSend(t, body ? false : asQuestion);
     setBusy(false);
     if (problem) setErr(problem);
-    else {
+    else if (!body) {
       setText("");
       setAsQuestion(false);
     }
+    if (!problem) setPop(null);
   };
+
+  const addEmoji = (e: string) => {
+    const r = insertAt(box.current, e, text);
+    setText(r.value);
+    window.requestAnimationFrame(() => {
+      box.current?.focus();
+      box.current?.setSelectionRange(r.caret, r.caret);
+    });
+  };
+
   return (
     <form
+      ref={wrap}
       onSubmit={(e) => {
         e.preventDefault();
         void send();
       }}
       /* Room on the right for Steve's button in the corner, so the two never touch. */
-      className="shrink-0 border-t border-line/70 py-3 pl-4 pr-16"
+      className="relative shrink-0 border-t border-line/70 py-3 pl-4 pr-16"
     >
-      {err && <p className="mb-2 text-[12px] text-accent-dark">{err}</p>}
-      <div className="mx-auto flex max-w-[760px] items-end gap-2 rounded-2xl border border-line/80 bg-page p-1.5 pl-3.5 focus-within:border-ink/40">
+      {pop === "emoji" && <EmojiTray onPick={addEmoji} />}
+      {pop === "gif" && <GifTray busy={busy} onPick={(url) => void send(url)} />}
+      {err && <p className="mx-auto mb-2 max-w-[780px] text-[12px] text-accent-dark">{err}</p>}
+      <div className="mx-auto flex max-w-[780px] items-end gap-1.5 rounded-2xl border border-line/80 bg-page p-1.5 pl-2 focus-within:border-ink/40">
+        <button
+          type="button"
+          onClick={() => setPop((p) => (p === "emoji" ? null : "emoji"))}
+          aria-label="Emoji"
+          aria-expanded={pop === "emoji"}
+          title="Emoji"
+          className={`mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors ${pop === "emoji" ? "bg-panel text-ink" : "text-muted hover:bg-panel hover:text-ink"}`}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="8.5" />
+            <path d="M8.5 14.2c.9 1.2 2.1 1.8 3.5 1.8s2.6-.6 3.5-1.8M9.2 9.7h.01M14.8 9.7h.01" />
+          </svg>
+        </button>
+        {gifs && (
+          <button
+            type="button"
+            onClick={() => setPop((p) => (p === "gif" ? null : "gif"))}
+            aria-label="GIF"
+            aria-expanded={pop === "gif"}
+            title="GIF"
+            className={`mb-0.5 flex h-8 shrink-0 items-center justify-center rounded-full px-1.5 transition-colors ${pop === "gif" ? "bg-panel text-ink" : "text-muted hover:bg-panel hover:text-ink"}`}
+          >
+            <span className="rounded-[5px] border-[1.6px] border-current px-1 text-[9.5px] font-bold leading-[13px] tracking-wide">GIF</span>
+          </button>
+        )}
         <textarea
           ref={box}
           value={text}
@@ -550,7 +950,7 @@ function Composer({ placeholder, canAsk, onSend }: { placeholder: string; canAsk
           }}
           rows={1}
           placeholder={placeholder}
-          className="max-h-40 min-h-[36px] flex-1 resize-none bg-transparent py-2 text-[13.5px] leading-snug text-ink outline-none placeholder:text-muted"
+          className="max-h-40 min-h-[36px] flex-1 resize-none bg-transparent px-1 py-2 text-[13.5px] leading-snug text-ink outline-none placeholder:text-muted"
         />
         {canAsk && (
           <button
@@ -563,12 +963,7 @@ function Composer({ placeholder, canAsk, onSend }: { placeholder: string; canAsk
             <span className="text-[13px] leading-none">?</span> Ask as a Question
           </button>
         )}
-        <button
-          type="submit"
-          disabled={!text.trim() || busy}
-          aria-label="Send"
-          className="mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-dark text-white transition-opacity disabled:opacity-30"
-        >
+        <button type="submit" disabled={!text.trim() || busy} aria-label="Send" className="mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-dark text-white transition-opacity disabled:opacity-30">
           {busy ? (
             <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
           ) : (
@@ -578,9 +973,103 @@ function Composer({ placeholder, canAsk, onSend }: { placeholder: string; canAsk
           )}
         </button>
       </div>
+      {foot && <p className={`mx-auto mt-1.5 max-w-[780px] px-1 text-[11.5px] ${footWarn ? "text-accent-dark" : "text-muted"}`}>{foot}</p>}
     </form>
   );
 }
+
+function Tray({ children, wide = false }: { children: React.ReactNode; wide?: boolean }) {
+  return (
+    <div className={`absolute bottom-[calc(100%-6px)] left-4 z-30 flex max-h-[360px] flex-col rounded-2xl border border-line/70 bg-card shadow-[0_18px_40px_-18px_rgba(0,0,0,0.4)] ${wide ? "w-[min(380px,calc(100%-32px))]" : "w-[min(340px,calc(100%-32px))]"}`}>
+      {children}
+    </div>
+  );
+}
+
+function EmojiTray({ onPick }: { onPick: (e: string) => void }) {
+  return (
+    <Tray>
+      <div className="overflow-y-auto p-2">
+        {EMOJI.map(([group, list]) => (
+          <div key={group}>
+            <p className="px-1.5 pb-1 pt-1.5 text-[11px] font-medium text-muted">{group}</p>
+            <div className="grid grid-cols-8 gap-0.5">
+              {list.map((e) => (
+                <button key={e} type="button" onClick={() => onPick(e)} className="flex h-9 items-center justify-center rounded-lg text-[20px] leading-none transition-colors hover:bg-panel">
+                  {e}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Tray>
+  );
+}
+
+type Gif = { id: string; title: string; preview: string; url: string; width: number; height: number };
+
+function GifTray({ busy, onPick }: { busy: boolean; onPick: (url: string) => void }) {
+  const [q, setQ] = useState("");
+  const [gifs, setGifs] = useState<Gif[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  /* Searched a moment after you stop typing, not on every key. */
+  useEffect(() => {
+    let gone = false;
+    const t = window.setTimeout(
+      () => {
+        setGifs(null);
+        setError(null);
+        fetch(`/api/gifs${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ""}`, { cache: "no-store" })
+          .then((r) => r.json())
+          .then((j: { ok?: boolean; error?: string; gifs?: Gif[] }) => {
+            if (gone) return;
+            if (!j.ok) throw new Error(j.error ?? "GIFs could not be fetched just now.");
+            setGifs(j.gifs ?? []);
+          })
+          .catch((e: Error) => !gone && setError(e.message));
+      },
+      q ? 400 : 0
+    );
+    return () => {
+      gone = true;
+      window.clearTimeout(t);
+    };
+  }, [q]);
+
+  return (
+    <Tray wide>
+      <div className="p-2 pb-1">
+        <label className="flex h-9 items-center gap-2 rounded-full border border-line/80 bg-page px-3">
+          <LineIcon name="search" size={14} className="text-muted" />
+          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} type="search" placeholder="Search GIFs..." className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-muted" />
+        </label>
+      </div>
+      <div className="min-h-[160px] flex-1 overflow-y-auto px-2 pb-1">
+        {error ? (
+          <p className="m-1 mt-3 rounded-xl bg-panel p-3 text-center text-[12.5px] text-muted">{error}</p>
+        ) : !gifs ? (
+          <Spinner label={q ? "Searching" : "Loading GIFs"} />
+        ) : !gifs.length ? (
+          <p className="py-10 text-center text-[12.5px] text-muted">No GIFs for that. Try another word.</p>
+        ) : (
+          <div className="columns-2 gap-1.5 [&>*]:mb-1.5">
+            {gifs.map((g) => (
+              <button key={g.id} type="button" disabled={busy} onClick={() => onPick(g.url)} title={g.title} className="block w-full overflow-hidden rounded-lg bg-panel transition-opacity hover:opacity-85 disabled:opacity-50">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={g.preview} alt={g.title} loading="lazy" className="block w-full" style={{ aspectRatio: `${g.width} / ${g.height}` }} />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <p className="border-t border-line/60 px-3 py-1.5 text-right text-[10px] font-semibold tracking-wide text-muted">Powered by GIPHY</p>
+    </Tray>
+  );
+}
+
+/* ── Picking people ────────────────────────────────────────────────────── */
 
 /**
  * Pick colleagues: to start a huddle (then name it), or to add to one you are
@@ -622,6 +1111,7 @@ function PeoplePicker({ invite, onClose, onDone }: { invite: string | null; onCl
   const shown = (people ?? []).filter((p) => !n || searchMatches(n, p.name, p.town));
   const near = shown.filter((p) => p.miles != null);
   const rest = shown.filter((p) => p.miles == null);
+  const chosen = (people ?? []).filter((p) => picked.has(p.id));
 
   const save = async () => {
     setBusy(true);
@@ -648,7 +1138,7 @@ function PeoplePicker({ invite, onClose, onDone }: { invite: string | null; onCl
             return (
               <li key={p.id}>
                 <button type="button" onClick={() => toggle(p.id)} className={`flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors ${on ? "bg-accent-soft/50" : "hover:bg-panel"}`}>
-                  <Face name={p.name} photo={p.photo} size={32} tone={p.miles != null ? "sage" : "pink"} />
+                  <Avatar name={p.name} photo={p.photo} size={32} tone={toneOf(p.id)} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13.5px] text-ink">{p.name}</span>
                     <span className="block truncate text-[11.5px] text-muted">{p.town ? (p.miles != null ? `${p.town} · ${p.miles} mi` : p.town) : "No patch set"}</span>
@@ -707,6 +1197,15 @@ function PeoplePicker({ invite, onClose, onDone }: { invite: string | null; onCl
           </>
         ) : (
           <div className="px-5 pb-2">
+            {/* Who it will be: their faces, then the name. */}
+            <div className="mb-3 flex flex-wrap items-center gap-1.5">
+              {chosen.map((p) => (
+                <span key={p.id} className="flex items-center gap-1.5 rounded-full bg-panel py-0.5 pl-0.5 pr-2.5 text-[12px] text-ink">
+                  <Avatar name={p.name} photo={p.photo} size={22} tone={toneOf(p.id)} />
+                  {first(p.name)}
+                </span>
+              ))}
+            </div>
             <input
               autoFocus
               value={name}

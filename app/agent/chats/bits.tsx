@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { isGif } from "@/lib/chat-gif";
 
 /** Shared by every Chats screen: the time words, a face, the bubbles and the box. */
 
@@ -76,6 +77,11 @@ export function Bubbles({ items, empty }: { items: Bubble[]; empty: string }) {
         return (
           <li key={b.id} className={`flex flex-col ${b.mine ? "items-end" : "items-start"} ${fresh ? "m-bloop" : ""}`} style={fresh ? { transformOrigin: b.mine ? "100% 100%" : "0% 100%" } : undefined}>
             {showWho && <span className="mb-1 ml-3 mt-2 text-[12.5px] font-semibold text-muted">{b.who}</span>}
+            {/* A GIF sent from the OS's Huddles (12 Oct 2026) is the picture, no bubble. */}
+            {isGif(b.body) ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={b.body.trim()} alt="GIF" loading="lazy" className="block max-h-[240px] max-w-[72%] rounded-[22px] object-contain" style={{ background: "var(--m-card)" }} />
+            ) : (
             <button
               type="button"
               onClick={b.onTap}
@@ -90,6 +96,7 @@ export function Bubbles({ items, empty }: { items: Bubble[]; empty: string }) {
               {b.body}
               {b.foot && <span className={`mt-1.5 block text-[12.5px] font-semibold ${b.mine ? "text-white/85" : ""}`} style={b.mine ? undefined : { color: "var(--m-coral)" }}>{b.foot}</span>}
             </button>
+            )}
             <span className={`mt-1 text-[11.5px] text-muted ${b.mine ? "mr-2" : "ml-3"}`}>{when(b.at)}</span>
           </li>
         );

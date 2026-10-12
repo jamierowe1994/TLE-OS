@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { ErrorLine, HomeHero, Spinner, TopBar } from "../bits";
 import { Face, ago } from "./bits";
 import SlideTabs from "@/components/app/SlideTabs";
+import { previewOf } from "@/lib/chat-gif";
 
 /**
  * CHATS (James, 3 Oct 2026): "half social media, half social app, half TLE
@@ -24,7 +25,7 @@ type Thread = {
   last: { body: string; from: "customer" | "agent"; at: string };
   unread: number;
 };
-type Room = { id: string; kind: "general" | "huddle"; name: string; members: number; last: { body: string; who: string; at: string } | null; unread: number };
+type Room = { id: string; kind: "general" | "huddle"; name: string; members: number; last: { body: string; who: string; at: string } | null; unread: number; faces?: Array<{ id: string; name: string; photo: string | null }> };
 
 type Half = "work" | "play";
 
@@ -175,7 +176,7 @@ function Play({ general, huddles }: { general: Room | null; huddles: Room[] }) {
         </span>
         <span className="m-title relative mt-1 block text-[28px]">General</span>
         <span className="relative mt-1 block text-[14.5px] text-white/90">
-          {general?.last ? `${general.last.who.split(" ")[0]}: ${general.last.body}` : "Ask a question, share a win, help each other out."}
+          {general?.last ? `${general.last.who.split(" ")[0]}: ${previewOf(general.last.body)}` : "Ask a question, share a win, help each other out."}
         </span>
       </Link>
 
@@ -197,7 +198,7 @@ function Play({ general, huddles }: { general: Room | null; huddles: Room[] }) {
                     {r.last && <span className="ml-auto shrink-0 text-[12px] text-muted">{ago(r.last.at)}</span>}
                   </span>
                   <span className={`mt-0.5 flex items-center gap-2 text-[14px] ${r.unread ? "font-medium" : "text-muted"}`}>
-                    <span className="min-w-0 flex-1 truncate">{r.last ? `${r.last.who.split(" ")[0]}: ${r.last.body}` : `${r.members} people · say hello`}</span>
+                    <span className="min-w-0 flex-1 truncate">{r.last ? `${r.last.who.split(" ")[0]}: ${previewOf(r.last.body)}` : `${r.members} people · say hello`}</span>
                     {r.unread > 0 && (
                       <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[11.5px] font-bold text-white" style={{ background: "var(--m-coral)" }}>
                         {r.unread}

@@ -16,14 +16,14 @@ import { Bubbles, ChatHead, ChatShell, Composer, Face, type Bubble } from "../..
  *             Invite more (from Find Your Local Agents) and Leave.
  */
 
-type Msg = { id: string; authorId: string; author: string; body: string; question: boolean; at: string; replies: number };
+type Msg = { id: string; authorId: string; author: string; photo?: string | null; body: string; question: boolean; at: string; replies: number };
 
 export default function PhoneRoom() {
   const params = useParams<{ id: string }>();
   const id = decodeURIComponent(String(params?.id ?? ""));
   const router = useRouter();
   const [thread, setThread] = useState<string | null>(null);
-  const [data, setData] = useState<{ room: { id: string; kind: "general" | "huddle"; name: string }; me: string; messages: Msg[]; members: Array<{ id: string; name: string }> } | null>(null);
+  const [data, setData] = useState<{ room: { id: string; kind: "general" | "huddle"; name: string }; me: string; messages: Msg[]; members: Array<{ id: string; name: string; photo?: string | null }> } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [asQuestion, setAsQuestion] = useState(false);
   const [people, setPeople] = useState(false);
@@ -36,7 +36,7 @@ export default function PhoneRoom() {
   const load = () =>
     fetch(url, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j: { ok?: boolean; error?: string; room?: { id: string; kind: "general" | "huddle"; name: string }; me?: string; messages?: Msg[]; members?: Array<{ id: string; name: string }> }) => {
+      .then((j: { ok?: boolean; error?: string; room?: { id: string; kind: "general" | "huddle"; name: string }; me?: string; messages?: Msg[]; members?: Array<{ id: string; name: string; photo?: string | null }> }) => {
         if (!j.ok || !j.room) throw new Error(j.error ?? "The chat did not load.");
         setData({ room: j.room, me: j.me ?? "", messages: j.messages ?? [], members: j.members ?? [] });
       })
@@ -147,7 +147,7 @@ export default function PhoneRoom() {
           <ul className="m-group">
             {data.members.map((m) => (
               <li key={m.id} className="m-row flex items-center gap-3 px-4 py-3">
-                <Face name={m.name} size={38} />
+                <Face name={m.name} size={38} photo={m.photo} />
                 <span className="text-[15.5px] font-medium">{m.name}</span>
               </li>
             ))}

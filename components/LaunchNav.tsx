@@ -184,8 +184,10 @@ export default function LaunchNav({
   const home = front.filter((i) => TOP.includes(i.href));
   const lettings = front.filter((i) => !TOP.includes(i.href) && i.href !== "/showroom");
 
-  /* What is unread in General and your huddles, beside Huddles (12 Oct 2026).
-     Asked on each screen change and every minute; a failed read shows nothing
+  /* What is unread beside Huddles (12 Oct 2026): the team's chats and the
+     landlords and tenants who wrote, the same two counts as its tabs. Read
+     every minute and a half, and at once when the Huddles screen has read
+     something (it says so with "os:chats-read"); a failed read shows nothing
      rather than a stale number. */
   const [huddleUnread, setHuddleUnread] = useState(0);
   const hasHuddles = home.some((i) => i.href === "/huddles");
@@ -193,14 +195,17 @@ export default function LaunchNav({
     if (!hasHuddles) return;
     let gone = false;
     const read = () =>
-      fetch("/api/m/rooms", { cache: "no-store" })
+      fetch("/api/m/chats", { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : null))
-        .then((j: { ok?: boolean; unread?: number } | null) => { if (!gone) setHuddleUnread(j?.ok ? Number(j.unread) || 0 : 0); })
+        .then((j: { ok?: boolean; unread?: { work?: number; play?: number } } | null) => {
+          if (!gone) setHuddleUnread(j?.ok ? (Number(j.unread?.work) || 0) + (Number(j.unread?.play) || 0) : 0);
+        })
         .catch(() => { if (!gone) setHuddleUnread(0); });
     read();
-    const t = window.setInterval(read, 60_000);
-    return () => { gone = true; window.clearInterval(t); };
-  }, [hasHuddles, pathname]);
+    const t = window.setInterval(read, 90_000);
+    window.addEventListener("os:chats-read", read);
+    return () => { gone = true; window.clearInterval(t); window.removeEventListener("os:chats-read", read); };
+  }, [hasHuddles]);
 
   /* Search, or ⌘K / Ctrl+K: Search for anything (components/SearchPalette,
      10 Oct 2026) - the one search in the OS, from every screen. */
