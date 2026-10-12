@@ -10,7 +10,9 @@ import {
   payPropRefreshing,
   payPropProblem,
   exVat,
+  getPortfolioIncome,
 } from "@/lib/business/payprop-income";
+import { isMargoHome } from "@/lib/business/margo-portfolio";
 import { getPortfolioBook, portfolioError } from "@/lib/business/payprop-portfolio";
 import { currentMonth } from "@/lib/business/format";
 
@@ -43,13 +45,23 @@ export async function GET(req: NextRequest) {
   // `income` belongs IN here. Left outside and unawaited it serialised as {},
   // which the Income tab reads as a live answer - green banner, then a throw on
   // the first field it touches.
-  const [income, prevIncome, ytd, arrears, moveIns, portfolio] = await Promise.all([
+  /* Margo's portfolio, on its own (Susan, 12 Oct 2026). Rides the same cached
+     payments as the income walk; given a few seconds, and on a cold month it
+     says it is still loading rather than holding the whole tab up. */
+  const margoFor = (mm: string) =>
+    Promise.race([
+      getPortfolioIncome(mm, isMargoHome).catch(() => null),
+      new Promise<null>((r) => setTimeout(() => r(null), 4000)),
+    ]);
+  const [income, prevIncome, ytd, arrears, moveIns, portfolio, margo, prevMargo] = await Promise.all([
     getAgencyIncome(month),
     getAgencyIncome(prev),
     getYtdIncome(month),
     getArrears(),
     getMoveIns(month),
     getPortfolioBook(),
+    margoFor(month),
+    margoFor(prev),
   ]);
 
   // Report the FEE figures net of VAT.
@@ -113,6 +125,9 @@ export async function GET(req: NextRequest) {
     arrears,
     moveIns,
     portfolio,
+    /** Margo's portfolio, this month and last (lib/business/margo-portfolio). */
+    margo,
+    prevMargo,
     portfolioError: portfolioError(),
     refreshing: payPropRefreshing(),
     /* Why a null field is null, once PayProp has failed or stalled (Rig run

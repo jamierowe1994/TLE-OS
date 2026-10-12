@@ -180,6 +180,10 @@ export interface PortfolioBook {
   byAccount: AccountSlice[];
   /** Keyed by normalised name. */
   byAgent: Record<string, AgentBook>;
+  /** Each property's agency and responsible agent as PayProp spells it, by
+   *  PayProp id (12 Oct 2026, for Margo's portfolio - byAgent folds "Sean
+   *  Mcmahon (Glasgow)" into "sean mcmahon"). Absent on books cached before. */
+  agentById?: Record<string, { account: PayPropAccountId; agent: string }>;
   /** Properties on buckets that aren't a person (TLE, Admin Property, blank). */
   unattributed: number;
   accounts: PayPropAccountId[];
@@ -324,6 +328,7 @@ async function computePortfolioBook(): Promise<PortfolioBook | null> {
   if (perAccount.every((p) => p.rows.length === 0)) return null;
 
   const byAgent: Record<string, AgentBook> = {};
+  const agentById: Record<string, { account: PayPropAccountId; agent: string }> = {};
   let totalProperties = 0;
   let totalRentRoll = 0;
   let unattributed = 0;
@@ -395,6 +400,7 @@ async function computePortfolioBook(): Promise<PortfolioBook | null> {
       }
 
       const raw = text(r.responsible_agent);
+      if (text(r.id)) agentById[text(r.id)] = { account, agent: raw };
       const key = normaliseAgentName(raw);
       if (!key || NON_AGENT.has(key)) {
         unattributed++;
@@ -456,6 +462,7 @@ async function computePortfolioBook(): Promise<PortfolioBook | null> {
       .map(([k]) => k),
     byAccount: slices,
     byAgent,
+    agentById,
     unattributed,
     accounts,
   };

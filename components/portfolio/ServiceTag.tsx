@@ -25,6 +25,7 @@ type Service =
       service: { kind: "rlp" | "no-rlp" | "lec"; tag: string } | null;
       fee: { monthly: number | null; percent: number | null; fixed: boolean; rent: number | null } | null;
       feeWhy: string | null;
+      portfolio?: string | null;
     };
 
 const LABEL = { rlp: "With RLP", "no-rlp": "No RLP", lec: "Legal cover only" } as const;
@@ -82,6 +83,11 @@ export default function ServiceTag({ listingId }: { listingId: string }) {
           </span>
         ) : (
           <span className="text-[11.5px] text-muted">{s.tagsWhy}</span>
+        )}
+        {s.portfolio && (
+          <span title="Sean McMahon (Glasgow): counted on its own each month" className="rounded-full border border-accent-dark/30 bg-accent-soft px-2.5 py-0.5 text-[11.5px] font-semibold text-accent-dark">
+            {s.portfolio}
+          </span>
         )}
         {others.map((t) => (
           <span key={t} className="rounded-full border border-line/80 bg-white px-2.5 py-0.5 text-[11.5px] text-muted">

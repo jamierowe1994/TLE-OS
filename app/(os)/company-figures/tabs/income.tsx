@@ -155,6 +155,17 @@ function YoyChips({ label, data }: { label: string; data: Record<string, number>
 // with actuals when connected.
 const AVG_GCI_PER_MOVE_IN = 1200;
 
+/** Margo's portfolio for a month (lib/business/margo-portfolio). Fees gross and net of VAT. */
+interface PortfolioMoney {
+  month: string;
+  homes: number;
+  paying: number;
+  tenancies: number;
+  gciGross: number;
+  gciNet: number;
+  rent: number;
+}
+
 interface LiveIncome {
   agencyIncome: number;
   combinedGci: number;
@@ -192,12 +203,14 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
   const [live, setLive] = useState<LiveIncome | null>(null);
   const [prev, setPrev] = useState<LiveIncome | null>(null);
   const [moveIns, setMoveIns] = useState<LiveMoveIns | null>(null);
+  const [margo, setMargo] = useState<{ now: PortfolioMoney | null; prev: PortfolioMoney | null } | null>(null);
   useEffect(() => {
     let cancelled = false;
     let tries = 0;
     setLive(null);
     setPrev(null);
     setMoveIns(null);
+    setMargo(null);
     const ask = () => {
       fetch(`/api/business/payprop-live?month=${month}`, { cache: "no-store" })
         .then((r) => r.json())
@@ -205,15 +218,18 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
           income?: LiveIncome | null;
           prevIncome?: LiveIncome | null;
           moveIns?: LiveMoveIns | null;
+          margo?: PortfolioMoney | null;
+          prevMargo?: PortfolioMoney | null;
           refreshing?: boolean;
         }) => {
           if (cancelled) return;
           if (d.income) setLive(d.income);
           if (d.prevIncome) setPrev(d.prevIncome);
           if (d.moveIns) setMoveIns(d.moveIns);
+          setMargo((m) => ({ now: d.margo ?? m?.now ?? null, prev: d.prevMargo ?? m?.prev ?? null }));
           // The previous month is a second walk and lands later than this
           // month's, so keep asking until both are in.
-          if ((!d.income || !d.prevIncome) && tries++ < 40) setTimeout(ask, 5000);
+          if ((!d.income || !d.prevIncome || !d.margo || !d.prevMargo) && tries++ < 40) setTimeout(ask, 5000);
         })
         .catch(() => {});
     };
@@ -617,6 +633,27 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
           </div>
         </section>
       ) : null}
+
+      {/* Margo's portfolio on its own (Susan, 12 Oct 2026): Sean is buying
+          it over three years, so each month its income less his loan payment
+          is what he is paid. The loan payment is Susan's to take off. */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold">Margo's portfolio - Sean McMahon (Glasgow)</h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {([[margo?.now, monthLabel(month)], [margo?.prev, `${prevLabel} - final`]] as const).map(([m, label]) => (
+            <StatCard
+              key={label}
+              label={`Fees, ${label}`}
+              stat={m ? { value: Math.round(m.gciNet), display: gbp(m.gciNet), source: "live-payprop", note: `Fees on the ${m.homes} homes in the portfolio, exc VAT (${gbp(m.gciGross)} inc VAT), before Sean's loan payment.` } : { value: null, source: "live-payprop" }}
+              big
+              sub={m ? `${m.paying} of ${m.homes} homes paying · ${gbp(m.rent)} rent to landlords` : "Loading from PayProp"}
+            />
+          ))}
+        </div>
+        <p className="text-[11.5px] text-muted">
+          The homes PayProp Glasgow has under Margaret Wilson or Sean McMahon (Glasgow). Sean's other homes, under plain Sean McMahon, are not in it.
+        </p>
+      </section>
 
       {/* A FLOW tab: the month selector genuinely re-queries the source, so
           most figures below really are {monthLabel(month)}. The warning is

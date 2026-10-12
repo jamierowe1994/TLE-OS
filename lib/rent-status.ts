@@ -5,6 +5,7 @@ import { readCache, writeCache } from "@/lib/business/integration-cache";
 import { hasDb, q } from "@/lib/db";
 import { getRentReceived } from "@/lib/business/payprop-income";
 import { rentKey } from "@/lib/business/payprop-portfolio";
+import { isMargoHome, MARGO_PORTFOLIO } from "@/lib/business/margo-portfolio";
 
 /**
  * IS THIS HOME UP TO DATE ON RENT? (James, 8 Oct 2026)
@@ -79,6 +80,8 @@ type PpProperty = {
   commission?: { amount: number; percentage: number } | null;
   /** monthly_payment_required - stale on some homes, so only a fallback. */
   mpr?: number | null;
+  /** PayProp's responsible agent, as spelt there (Margo's portfolio). */
+  agent?: string;
 };
 
 type MonthRents = { month: string; byProperty: Record<string, { in: string; amount: number; paidOut: boolean }> | null };
@@ -127,6 +130,7 @@ type PropertyRow = {
   address?: { first_line?: string; postal_code?: string };
   commission?: { amount?: string; percentage?: string };
   monthly_payment_required?: number | string;
+  responsible_agent?: unknown;
 };
 
 async function compute(): Promise<Book | null> {
@@ -188,6 +192,7 @@ async function compute(): Promise<Book | null> {
         postcode: text(r.address?.postal_code),
         commission: amount > 0 || percentage > 0 ? { amount, percentage } : null,
         mpr: money(r.monthly_payment_required) || null,
+        agent: typeof r.responsible_agent === "string" ? r.responsible_agent.trim() : "",
       });
     }
     if (!(await readTags(account, tags))) tagsUnread.push(account);
@@ -470,6 +475,8 @@ export type ServiceInfo =
       /** Null: no commission set on the property in PayProp. */
       fee: { monthly: number | null; percent: number | null; fixed: boolean; rent: number | null } | null;
       feeWhy: string | null;
+      /** A portfolio counted on its own, e.g. Margo's (lib/business/margo-portfolio). */
+      portfolio: string | null;
     };
 
 const AGENCY: Record<PayPropAccountId, string> = { uk: "England and Wales", scotland: "Scotland" };
@@ -513,6 +520,7 @@ export async function serviceFor(home: { name: string; address?: string | null; 
         : null,
     service: tagged?.kind ? { kind: tagged.kind, tag: tagged.tag } : null,
     fee,
+    portfolio: pp && isMargoHome(pp.account, pp.agent) ? MARGO_PORTFOLIO : null,
     feeWhy: pp?.commission === undefined ? "The fee arrives with the next PayProp check, at 10am or 4pm." : c ? null : "No management fee set on this property in PayProp.",
   };
 }

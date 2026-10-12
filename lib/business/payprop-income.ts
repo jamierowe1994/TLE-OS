@@ -1762,3 +1762,63 @@ export async function getAgentFeeLines(
   // Biggest first: the line someone is looking for is usually the big one.
   return out.sort((a, b) => b.gross - a.gross);
 }
+
+/* ------------------------- Margo's portfolio (12 Oct 2026) ------------------ */
+
+export interface PortfolioIncome {
+  month: string;
+  /** Homes in the portfolio on PayProp now. */
+  homes: number;
+  /** Homes with money through them this month. */
+  paying: number;
+  tenancies: number;
+  /** Fees on these homes: the same rows and rules as AgencyIncome.byAgentProperty. */
+  gciGross: number;
+  gciNet: number;
+  /** Rent passed on to the landlords - volume, not income. */
+  rent: number;
+}
+
+/**
+ * The money through one set of homes for a month (lib/business/margo-portfolio).
+ * Same basis as the per-agent split above - batch transfer date, fee
+ * categories, VAT-inclusive gross and exVat net - so it reconciles with the
+ * Agents page. Null when the book or the month isn't in yet.
+ */
+export async function getPortfolioIncome(
+  month: string,
+  inPortfolio: (account: PayPropAccountId, agent: string) => boolean
+): Promise<PortfolioIncome | null> {
+  if (payPropAccounts().length === 0) return null;
+  const book = await getPortfolioBook().catch(() => null);
+  if (!book?.agentById) return null;
+  const ids = new Set(Object.entries(book.agentById).filter(([, v]) => inPortfolio(v.account, v.agent)).map(([id]) => id));
+  const [y, m] = month.split("-").map(Number);
+  if (!y || !m) return null;
+  const from = `${y}-${String(m).padStart(2, "0")}-01`;
+  const to = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  const perAccount = await paymentsSettledInRange(from, to);
+  let gci = 0;
+  let rent = 0;
+  const props = new Set<string>();
+  const tenants = new Set<string>();
+  for (const { rows } of perAccount) {
+    for (const r of rows) {
+      if (!r.p || !ids.has(r.p)) continue;
+      props.add(r.p);
+      if (r.tn) tenants.add(r.tn);
+      const cat = r.c || "Other";
+      if (FEE_CATEGORIES.has(cat) || (AGENCY_ONLY_FEE_CATEGORIES.has(cat) && r.t === "agency")) gci += r.a;
+      else if (cat === "Owner") rent += r.a;
+    }
+  }
+  return {
+    month,
+    homes: ids.size,
+    paying: props.size,
+    tenancies: tenants.size,
+    gciGross: Math.round(gci * 100) / 100,
+    gciNet: exVat(gci),
+    rent: Math.round(rent * 100) / 100,
+  };
+}
