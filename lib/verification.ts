@@ -110,6 +110,13 @@ export async function startVerification(
      * "the most recent link is the one that works" is the whole point.
      */
     keepOthers?: boolean;
+    /**
+     * A longer life than the purpose's own. Only the launch invite asks
+     * (Admin > Launch, 12 Oct 2026): thirty-odd people emailed at once will
+     * not all open it the same day, and a link that dies overnight is the
+     * launch-week meltdown James asked to avoid. Join links only.
+     */
+    ttlMs?: number;
   } = {}
 ): Promise<{ token: string; email: string }> {
   const email = normaliseEmail(rawEmail);
@@ -143,7 +150,8 @@ export async function startVerification(
   }
 
   const token = mintToken();
-  const expires = new Date(Date.now() + TTL_BY_PURPOSE[purpose]).toISOString();
+  const ttl = purpose === "join" && opts.ttlMs ? opts.ttlMs : TTL_BY_PURPOSE[purpose];
+  const expires = new Date(Date.now() + ttl).toISOString();
 
   if (!opts.keepOthers) {
     await q(`update os_email_verifications set expires_at = now() where email = $1 and purpose = $2 and expires_at > now()`, [email, purpose]);

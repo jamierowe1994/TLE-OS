@@ -10,7 +10,7 @@ import { Bubbles, ChatHead, ChatShell, Composer, type Bubble } from "./bits";
  * and emails it to them with a link back into the conversation.
  */
 
-type Msg = { id: string; from: "customer" | "agent"; body: string; at: string };
+type Msg = { id: string; from: "customer" | "agent"; body: string; at: string; seen?: boolean };
 
 export default function CustomerThread({ kind, id }: { kind: "landlord" | "tenant"; id: string }) {
   const [t, setT] = useState<{ title: string; about: string; phone: string | null; email: string | null; messages: Msg[] } | null>(null);
@@ -50,7 +50,8 @@ export default function CustomerThread({ kind, id }: { kind: "landlord" | "tenan
 
   const first = (t?.title ?? "").split(/\s+/)[0] || "them";
   const tel = dialable(t?.phone ?? "");
-  const items: Bubble[] = (t?.messages ?? []).map((m) => ({ id: m.id, mine: m.from === "agent", body: m.body, at: m.at }));
+  /* Your messages tick blue once they have had them in front of them (their portal's messages). */
+  const items: Bubble[] = (t?.messages ?? []).map((m) => ({ id: m.id, mine: m.from === "agent", body: m.body, at: m.at, tick: m.from === "agent" ? (m.seen ? "seen" : "sent") : undefined }));
 
   return (
     <ChatShell

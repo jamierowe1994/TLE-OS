@@ -349,3 +349,11 @@ html:has(.m-app[data-mtheme="dark"]) body {
   background: #161312;
   color-scheme: dark;
 }
+
+/* Someone typing (12 Oct 2026, as in the OS's Huddles): the bubble rises from
+   the foot of the chat and its three dots lift in turn. */
+@keyframes m-typing-in { from { opacity: 0; transform: translateY(10px) scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes m-dot { 0%, 60%, 100% { transform: translateY(0); opacity: 0.45; } 30% { transform: translateY(-3px); opacity: 1; } }
+.m-app .m-typing { animation: m-typing-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; transform-origin: 0 100%; }
+.m-app .m-dot { display: block; width: 7px; height: 7px; border-radius: 9999px; background: var(--m-muted, #8b8c92); animation: m-dot 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .m-app .m-typing, .m-app .m-dot { animation: none; } }
