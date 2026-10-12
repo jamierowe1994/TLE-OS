@@ -563,21 +563,27 @@ function backIntoDemo(req: NextRequest): NextResponse | null {
   return NextResponse.redirect(to);
 }
 
-/* A listing and a let open as pages of their own now (12 Oct 2026):
-   /listings/<id> and /applications/<id>. Every older link - search, the bell,
-   Steve, emails - says /listings?open=<id> or /applications?open=<id> (or
-   ?deal=<Propoly id>), and the board's own redirect waited behind the whole
-   board loading. Sent on here instead, ?tab= kept; the page it lands on is
-   behind every check below like any other. */
+/* A Portfolio home, a listing and a let open as pages of their own
+   (/portfolio/<id> 7 Oct, /listings/<id> and /applications/<id> 12 Oct 2026).
+   Every older link - search, the bell, Steve, emails, the book health check -
+   says /portfolio?open=<id>, /listings?open=<id> or /applications?open=<id>
+   (or ?deal=<Propoly id>), and the board's own redirect waited behind the
+   whole board loading. Sent on here instead, ?tab= kept, and a notice from
+   the bell (&notice=) landing on the home's Tenancy section as the board did.
+   The page it lands on is behind every check below like any other. */
 function movedToOwnPage(req: NextRequest): NextResponse | null {
   const { pathname, searchParams } = req.nextUrl;
-  if (pathname !== "/listings" && pathname !== "/applications") return null;
+  if (pathname !== "/listings" && pathname !== "/applications" && pathname !== "/portfolio") return null;
   const id = searchParams.get("open") ?? (pathname === "/applications" ? searchParams.get("deal") : null);
   if (!id) return null;
   const url = req.nextUrl.clone();
   url.pathname = `${pathname}/${encodeURIComponent(id)}`;
-  const tab = searchParams.get("tab");
-  url.search = tab ? `?tab=${encodeURIComponent(tab)}` : "";
+  const notice = pathname === "/portfolio" ? searchParams.get("notice") : null;
+  const tab = notice ? "tenancy" : searchParams.get("tab");
+  const keep = new URLSearchParams();
+  if (tab) keep.set("tab", tab);
+  if (notice) keep.set("notice", notice);
+  url.search = keep.size ? `?${keep.toString()}` : "";
   return NextResponse.redirect(url);
 }
 
