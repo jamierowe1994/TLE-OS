@@ -323,11 +323,11 @@ export default function Huddles() {
     <>
       <PageHeader title="Huddles" blurb="Your team, your landlords and your tenants in one place. The same chats as Chats on the TLE OS app." />
 
-      <div ref={frame} style={{ height: frameH ?? 560 }} className="fade-up mt-5 flex overflow-hidden rounded-[var(--radius-card)] border border-line/70 bg-card">
+      <div ref={frame} style={{ height: frameH ?? 560 }} className="hud fade-up mt-5 flex overflow-hidden rounded-[var(--radius-card)] border border-line/70 bg-[var(--hud-list)]">
         {/* The list. */}
-        <aside className={`${showChat ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-line/70 md:w-[320px] md:border-r`}>
+        <aside className={`${showChat ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-line/70 bg-[var(--hud-list)] md:w-[320px] md:border-r`}>
           <div className="px-3 pt-3">
-            <div role="tablist" className="flex gap-1 rounded-full bg-panel p-1">
+            <div role="tablist" className="flex gap-1 rounded-full bg-[var(--hud-tabs)] p-1">
               {(
                 [
                   ["team", "Team", data?.unread.play ?? 0],
@@ -343,7 +343,7 @@ export default function Huddles() {
                     setShowArchived(false);
                     if (tab !== id) go(id, null);
                   }}
-                  className={`flex h-8 flex-1 items-center justify-center gap-1.5 rounded-full px-2 text-[12.5px] font-medium transition-colors ${tab === id ? "bg-card text-ink shadow-[0_1px_3px_rgba(0,0,0,0.12)]" : "text-muted hover:text-ink"}`}
+                  className={`flex h-8 flex-1 items-center justify-center gap-1.5 rounded-full px-2 text-[12.5px] font-medium transition-colors ${tab === id ? "bg-[var(--hud-tab-on)] text-ink shadow-[0_1px_3px_rgba(0,0,0,0.12)]" : "text-muted hover:text-ink"}`}
                 >
                   <span className="truncate">{label}</span>
                   <Count n={n} />
@@ -416,9 +416,9 @@ export default function Huddles() {
                     </SwipeRow>
                   ))
                 ) : showArchived ? (
-                  !generalHere && <p className="mx-2 mt-2 rounded-xl bg-panel px-3 py-3 text-[12.5px] leading-snug text-muted">Nothing archived.</p>
+                  !generalHere && <p className="mx-2 mt-2 rounded-xl bg-[var(--hud-row-hover)] px-3 py-3 text-[12.5px] leading-snug text-muted">Nothing archived.</p>
                 ) : (
-                  <p className="mx-2 rounded-xl bg-panel px-3 py-3 text-[12.5px] leading-snug text-muted">No huddles yet. Start one with the agents near you.</p>
+                  <p className="mx-2 rounded-xl bg-[var(--hud-row-hover)] px-3 py-3 text-[12.5px] leading-snug text-muted">No huddles yet. Start one with the agents near you.</p>
                 )}
               </>
             ) : workHere.length ? (
@@ -447,7 +447,7 @@ export default function Huddles() {
                 );
               })
             ) : (
-              <p className="mx-2 mt-2 rounded-xl bg-panel px-3 py-3 text-[12.5px] leading-snug text-muted">
+              <p className="mx-2 mt-2 rounded-xl bg-[var(--hud-row-hover)] px-3 py-3 text-[12.5px] leading-snug text-muted">
                 {showArchived ? "Nothing archived." : "No messages yet. When one of your landlords or tenants writes through their portal, it lands here."}
               </p>
             )}
@@ -474,7 +474,7 @@ export default function Huddles() {
         </aside>
 
         {/* The open chat. */}
-        <section className={`${showChat ? "flex" : "hidden md:flex"} min-w-0 flex-1 flex-col`}>
+        <section className={`${showChat ? "flex" : "hidden md:flex"} min-w-0 flex-1 flex-col bg-[var(--hud-chat)]`}>
           {open?.kind === "room" ? (
             <RoomPane
               key={`${open.id}|${open.thread ?? ""}`}
@@ -584,7 +584,7 @@ function SwipeRow({ open, onOpen, onClose, actions, children }: { open: boolean;
         ))}
       </div>
       <div
-        className="relative bg-card transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+        className="relative bg-[var(--hud-list)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
         style={{ transform: open ? `translateX(-${W}px)` : "translateX(0)" }}
         onClickCapture={(e) => {
           if (open) {
@@ -602,7 +602,7 @@ function SwipeRow({ open, onOpen, onClose, actions, children }: { open: boolean;
 
 function Row({ active, onClick, face, name, tag, about, line, at, unread }: { active: boolean; onClick: () => void; face: React.ReactNode; name: string; tag?: string; about?: string; line: string; at: string | null; unread: number }) {
   return (
-    <button type="button" onClick={onClick} className={`flex w-full items-center gap-1 rounded-xl px-2.5 py-2.5 text-left transition-colors ${active ? "bg-[var(--launch-active,#f1f1f0)]" : "hover:bg-panel"}`}>
+    <button type="button" onClick={onClick} className={`flex w-full items-center gap-1 rounded-xl px-2.5 py-2.5 text-left transition-colors ${active ? "bg-[var(--hud-row-active)]" : "hover:bg-[var(--hud-row-hover)]"}`}>
       {face}
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
@@ -626,7 +626,7 @@ function Row({ active, onClick, face, name, tag, about, line, at, unread }: { ac
 
 function PaneHead({ back, backAlways, face, title, line, right }: { back: () => void; backAlways?: boolean; face?: React.ReactNode; title: string; line?: string; right?: React.ReactNode }) {
   return (
-    <header className="relative flex shrink-0 items-center gap-3 border-b border-line/70 px-4 py-3">
+    <header className="relative flex shrink-0 items-center gap-3 border-b border-line/70 bg-[var(--hud-bar)] px-4 py-3">
       <button
         type="button"
         onClick={back}
@@ -770,7 +770,7 @@ function RoomPane({
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto bg-panel/50 px-4" onClick={() => people && setPeople(false)}>
+      <div className="min-h-0 flex-1 overflow-y-auto bg-[var(--hud-chat)] px-4" onClick={() => people && setPeople(false)}>
         {error && !data ? (
           <ErrorBox text={error} onRetry={() => void load()} />
         ) : !data ? (
@@ -872,7 +872,7 @@ function CustomerPane({ kind, id, onBack, onRead }: { kind: "landlord" | "tenant
           )
         }
       />
-      <div className="min-h-0 flex-1 overflow-y-auto bg-panel/50 px-4">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-[var(--hud-chat)] px-4">
         {error && !t ? (
           <ErrorBox text={error} onRetry={() => void load()} />
         ) : !t ? (
@@ -956,7 +956,7 @@ function Bubbles({ items, empty }: { items: Item[]; empty: string }) {
         const { m, head, tail } = r;
         const gif = isGif(m.body);
         const bubble = `max-w-[min(78%,520px)] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2.5 text-left text-[13.5px] leading-snug ${
-          m.mine ? "rounded-br-md bg-accent-dark text-white" : "rounded-bl-md bg-card text-ink shadow-[0_1px_0_rgba(0,0,0,0.04)] ring-1 ring-line/50"
+          m.mine ? "rounded-br-md bg-accent-dark text-white" : "rounded-bl-md bg-[var(--hud-them)] text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
         }`;
         const content = gif ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -1082,12 +1082,12 @@ function Composer({
         void send();
       }}
       /* Room on the right for Steve's button in the corner, so the two never touch. */
-      className="relative shrink-0 border-t border-line/70 py-3 pl-4 pr-16"
+      className="relative shrink-0 border-t border-line/70 bg-[var(--hud-bar)] py-3 pl-4 pr-16"
     >
       {pop === "emoji" && <EmojiTray onPick={addEmoji} />}
       {pop === "gif" && <GifTray busy={busy} onPick={(url) => void send(url)} />}
       {err && <p className="mx-auto mb-2 max-w-[780px] text-[12px] text-accent-dark">{err}</p>}
-      <div className="mx-auto flex max-w-[780px] items-end gap-1.5 rounded-2xl border border-line/80 bg-page p-1.5 pl-2 focus-within:border-ink/40">
+      <div className="mx-auto flex max-w-[780px] items-end gap-1.5 rounded-2xl border border-line/80 bg-[var(--hud-input)] p-1.5 pl-2 focus-within:border-ink/40">
         <button
           type="button"
           onClick={() => setPop((p) => (p === "emoji" ? null : "emoji"))}

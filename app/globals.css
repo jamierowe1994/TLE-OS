@@ -1551,3 +1551,36 @@ html[data-os-toast="up"] .os-toast-lift {
 :root[data-theme="dark"] .bg-white\/80,
 :root[data-theme="dark"] .bg-white\/90 { background-color: color-mix(in srgb, var(--card) 85%, transparent); }
 :root[data-theme="dark"] .hover\:bg-white:hover { background-color: var(--card); }
+
+/* ── Huddles surfaces (James, 12 Oct 2026: "it's a very white screen ... we
+   should implement some grey across it, probably a lot more grey. Maybe even
+   some colour"). The chat card's own colours, so the list, the chat, its
+   bars and the bubbles are not all white. A warm grey, chosen over grey with
+   sage and grey with blush. */
+/* The page itself on Huddles: the panel the shell draws goes grey, from the
+   title down, so the card sits on grey rather than in a white page. */
+.hud-page { --shell-panel: #eeebe7; background-color: var(--shell-panel); }
+:root[data-theme="dark"] .hud-page { --shell-panel: #1a1a1a; }
+
+.hud {
+  --hud-list: #f7f5f2;
+  --hud-chat: #e8e5e0;
+  --hud-bar: #faf9f7;
+  --hud-row-active: #e5e1dc;
+  --hud-row-hover: #ebe8e4;
+  --hud-input: #ffffff;
+  --hud-them: #ffffff;
+  --hud-tabs: #e8e5e1;
+  --hud-tab-on: #ffffff;
+}
+:root[data-theme="dark"] .hud {
+  --hud-list: #1c1c1c;
+  --hud-chat: #161616;
+  --hud-bar: #202020;
+  --hud-row-active: rgba(255, 255, 255, 0.085);
+  --hud-row-hover: rgba(255, 255, 255, 0.05);
+  --hud-input: #272727;
+  --hud-them: #2b2b2b;
+  --hud-tabs: #151515;
+  --hud-tab-on: #2b2b2b;
+}
