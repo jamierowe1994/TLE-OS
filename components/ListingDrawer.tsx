@@ -1131,11 +1131,13 @@ function ListingDrawerBody({
   const chip = "inline-flex items-center gap-1.5 rounded-full border border-line/60 bg-white px-3 py-1.5 text-[12px] transition-colors hover:border-ink/40";
   /* One row each - the icon beside the words - so eight fit level with the
      photo (James, 12 Oct 2026: one page). */
-  const tile = "flex h-full min-h-[54px] w-full items-center gap-3 rounded-xl border border-line/60 bg-white px-3 py-2.5 text-left text-[12.5px] font-semibold leading-tight transition-[transform,box-shadow,border-color] duration-200 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:border-ink/60 hover:shadow-[3px_3px_0_0_color-mix(in_srgb,var(--ink)_72%,var(--page))] disabled:pointer-events-none disabled:opacity-40";
+  /* Portfolio's tile (James, 12 Oct 2026: consistent across the tabs): the
+     icon top left, the words at the foot, so a tall tile still reads. */
+  const tile = "relative flex h-full min-h-[72px] w-full flex-col items-start justify-between gap-2 rounded-xl border border-line/60 bg-white p-3.5 text-left text-[12.5px] font-semibold leading-tight transition-[transform,box-shadow,border-color] duration-200 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:border-ink/60 hover:shadow-[3px_3px_0_0_color-mix(in_srgb,var(--ink)_72%,var(--page))] disabled:pointer-events-none disabled:opacity-40";
   const tileText = (label: string, what: string) => (
-    <span className="block min-w-0 flex-1">
+    <span className="block w-full min-w-0">
       <span className="block">{label}</span>
-      <span className="mt-0.5 block truncate text-[11.5px] font-normal leading-snug text-muted">{what}</span>
+      <span className="mt-0.5 line-clamp-2 block text-[11.5px] font-normal leading-snug text-muted">{what}</span>
     </span>
   );
   /* A button as wide as its words: the dark icon, then the label. */
@@ -1207,10 +1209,10 @@ function ListingDrawerBody({
     const t = TABS.find((x) => x.key === k)!;
     const n = countOf[k] ?? 0;
     return (
-      <button key={k} type="button" data-steve={`listing.tab.${k}`} onClick={() => pickTab(k)} className={`${tile} relative`}>
+      <button key={k} type="button" data-steve={`listing.tab.${k}`} onClick={() => pickTab(k)} className={tile}>
         {tileIcon(t.icon)}
         {tileText(t.label, tileSub[k])}
-        {n > 0 && <span className="figures shrink-0 self-start rounded-full bg-accent-soft px-2 py-0.5 text-[10.5px] text-accent-dark">{n}</span>}
+        {n > 0 && <span className="figures absolute right-3 top-3.5 rounded-full bg-accent-soft px-2 py-0.5 text-[10.5px] text-accent-dark">{n}</span>}
         {needsOf[k] && <span aria-label="Needs attention" className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full border-2 border-white bg-accent" />}
       </button>
     );
@@ -1261,59 +1263,60 @@ function ListingDrawerBody({
           pop-out now, so nothing bolts onto the foot of the page; the landlord
           and how we get in beside Next up; where it's up to across the bottom. */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_460px]">
-        {/* ── 1. the home ──────────────────────────────────────────────── */}
-        <section className={`${box} @container min-w-0 p-3 lg:col-start-1`}>
-          {/* SCALES WITH THE SCREEN (James, 12 Oct 2026: "as I scale the screen
-              up the image isn't getting bigger, the white space is"). On a
-              laptop the photo sits at a sensible size with three beneath it;
-              on a wider screen it takes the room, the others run down its
-              right-hand side, and the name and buttons hold a column of their
-              own. */}
-          <div className="grid grid-cols-1 gap-4 @[34rem]:grid-cols-[minmax(0,300px)_minmax(0,1fr)] @[46rem]:grid-cols-[minmax(0,360px)_minmax(0,1fr)] @[52rem]:grid-cols-[minmax(0,1fr)_300px] @[80rem]:grid-cols-[minmax(0,1fr)_340px]">
-            <div className={`min-w-0 ${shots.length > 1 ? "@[52rem]:grid @[52rem]:grid-cols-[minmax(0,1fr)_minmax(0,24%)] @[52rem]:gap-2" : ""}`}>
-              <button
-                type="button"
-                onClick={() => (shots.length ? setLightbox(0) : setDrop("photos"))}
-                aria-label={shots.length ? "See the photos" : "Add photos"}
-                className="group relative block aspect-[4/3] w-full overflow-hidden rounded-xl bg-box @[52rem]:max-h-[600px]"
-              >
-                <PropertyPhoto src={shots[0] ?? null} alt="" width={800} height={600} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.015]" />
-                <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-[11.5px] font-semibold backdrop-blur">
-                  <DoodleIcon name="pack/photo" size={12} /> {shots.length ? `${shots.length} ${shots.length === 1 ? "photo" : "photos"}` : "No photos yet - add them"}
-                </span>
-              </button>
-              {shots.length > 1 && (
-                <div className="mt-2 grid grid-cols-3 gap-2 @[52rem]:mt-0 @[52rem]:grid-cols-1 @[52rem]:grid-rows-3">
-                  {[0, 1, 2].map((i) => {
-                    const src = shots[i + 1];
-                    if (!src) return <span key={i} aria-hidden className="aspect-[4/3] rounded-lg bg-box @[52rem]:aspect-auto" />;
-                    const more = i === 2 && shots.length > 4 ? shots.length - 4 : 0;
-                    return (
-                      <button key={src + i} type="button" onClick={() => setLightbox(i + 1)} aria-label={more ? `${more} more photos` : `Photo ${i + 2}`} className="group relative aspect-[4/3] min-h-0 overflow-hidden rounded-lg bg-box @[52rem]:aspect-auto">
-                        <PropertyPhoto src={src} alt="" className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
-                        {more > 0 && <span className="absolute inset-0 flex items-center justify-center bg-ink/45 text-[15px] font-semibold text-white">+{more}</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div className="flex min-w-0 flex-col px-1 pb-1 @[34rem]:pt-1">
-              <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
-                <h1 className="hand min-w-0 text-[26px] leading-[1.1] sm:text-[30px]">{listing.name}</h1>
-                <span className="mt-1.5 inline-flex items-center gap-1.5 text-[12px] font-semibold text-accent-dark">
-                  <span className="h-1.5 w-1.5 rounded-full bg-accent-dark" />
-                  {status.label}
-                </span>
+        {/* ── 1. the home: Portfolio's box exactly (James, 12 Oct 2026: "the
+            whole point is that we're trying to keep this consistent across
+            the different tabs") - the big photo, three square ones down its
+            right-hand side, and the home underneath. ── */}
+        <section className={`${box} min-w-0 p-3 lg:col-start-1`}>
+          <div className={`grid grid-cols-1 gap-2 ${shots.length > 1 ? "sm:grid-cols-[minmax(0,1fr)_140px] 2xl:grid-cols-[minmax(0,1fr)_170px]" : ""}`}>
+            {/* The three down the side are square; the big one takes their
+                height, so it never sets the box's height itself. */}
+            <button
+              type="button"
+              onClick={() => (shots.length ? setLightbox(0) : setDrop("photos"))}
+              aria-label={shots.length ? "See the photos" : "Add photos"}
+              className={`group relative aspect-[16/10] overflow-hidden rounded-xl bg-box ${shots.length > 1 ? "sm:aspect-auto" : ""}`}
+            >
+              <PropertyPhoto src={shots[0] ?? null} alt="" width={1400} height={875} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.015]" />
+              <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-[11.5px] font-semibold backdrop-blur">
+                <DoodleIcon name="pack/photo" size={12} /> {shots.length ? `${shots.length} ${shots.length === 1 ? "photo" : "photos"}` : "No photos yet - add them"}
+              </span>
+            </button>
+            {shots.length > 1 && (
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-1">
+                {[0, 1, 2].map((i) => {
+                  const src = shots[i + 1];
+                  if (!src) return <span key={i} aria-hidden className="aspect-square rounded-xl bg-box" />;
+                  const more = i === 2 && shots.length > 4 ? shots.length - 4 : 0;
+                  return (
+                    <button key={src + i} type="button" onClick={() => setLightbox(i + 1)} aria-label={more ? `${more} more photos` : `Photo ${i + 2}`} className="group relative aspect-square overflow-hidden rounded-xl bg-box">
+                      <PropertyPhoto src={src} alt="" className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
+                      {more > 0 && <span className="absolute inset-0 flex items-center justify-center bg-ink/45 text-[18px] font-semibold text-white">+{more}</span>}
+                    </button>
+                  );
+                })}
               </div>
-              <p className="figures mt-1.5 text-[20px] font-semibold">
-                {listing.rent == null ? <span className="text-[14px] font-normal text-muted">Rent not set</span> : <>£{listing.rent.toLocaleString("en-GB")} <span className="text-[13px] font-normal text-muted">{per}</span></>}
-              </p>
-              <p className="mt-1 text-[13px] text-muted">
-                {[listing.locality, listing.publishedAt ? `live since ${dayOf(listing.publishedAt)}` : null].filter(Boolean).join(" · ")}
-              </p>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
+            )}
+          </div>
+          <div className="px-2 pb-1.5 pt-4">
+            <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+              <h1 className="hand min-w-0 text-[28px] leading-[1.1] sm:text-[32px]">{listing.name}</h1>
+              <span className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-semibold text-accent-dark">
+                <span className="h-1.5 w-1.5 rounded-full bg-accent-dark" />
+                {status.label}
+              </span>
+            </div>
+            <p className="figures mt-1.5 text-[20px] font-semibold">
+              {listing.rent == null ? <span className="text-[14px] font-normal text-muted">Rent not set</span> : <>£{listing.rent.toLocaleString("en-GB")} <span className="text-[13px] font-normal text-muted">{per}</span></>}
+            </p>
+            <p className="mt-1 text-[13px] text-muted">
+              {[listing.locality, listing.publishedAt ? `live since ${dayOf(listing.publishedAt)}` : null].filter(Boolean).join(" · ")}
+            </p>
+            {/* Whose it is and the terms on the left; getting INTO the
+                property and getting it OUT to the database on the right, as
+                wide as their words. */}
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
                 {listing.tenant && <Tag tone="neutral">Tenanted</Tag>}
                 {/* Whose it is, and moving it - James and Susan only (6 Oct 2026). */}
                 <ListingOwner listingId={listing.id} />
@@ -1333,30 +1336,7 @@ function ListingDrawerBody({
                   </button>
                 )}
               </div>
-              {/* Filed away: why, said once. */}
-              {listing.archived && (
-                <p className="mt-3 rounded-xl border border-line/60 bg-box px-3.5 py-2.5 text-[11.5px] leading-snug text-muted">
-                  <span className="font-semibold text-ink">{archiveLabel(listing.archiveReason ?? null)}.</span>{" "}
-                  {archiveWhy({ archived: true, reason: listing.archiveReason ?? null, since: listing.archivedSince ?? null, ageDays: listing.archiveAgeDays ?? null })}{" "}
-                  It is out of the Draft tab, still searchable, and the listing itself is unchanged.
-                </p>
-              )}
-              {canFileAway && (
-                <button
-                  type="button"
-                  disabled={archiveBusy}
-                  onClick={() => onArchive?.(String(listing.id), listing.archived ? "restore" : "archive")}
-                  className="mt-2.5 self-start text-[11.5px] text-muted underline underline-offset-2 transition-colors hover:text-ink disabled:opacity-50"
-                  title={listing.archived ? "Back on the Draft tab" : `Drafts file themselves after ${Math.round(ARCHIVE_AFTER_DAYS / 30)} months`}
-                >
-                  {archiveBusy ? "Saving…" : listing.archived ? "Bring back to drafts" : "File this draft away"}
-                </button>
-              )}
-
-              {/* Getting INTO the property and getting it OUT to the database:
-                  as wide as their words, under the name (James, 12 Oct 2026:
-                  "they only need to be the width of the words"). */}
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2">
                 <AccessRequest
                   value={access}
                   onChange={setAccess}
@@ -1380,6 +1360,25 @@ function ListingDrawerBody({
                 </button>
               </div>
             </div>
+              {/* Filed away: why, said once. */}
+              {listing.archived && (
+                <p className="mt-3 rounded-xl border border-line/60 bg-box px-3.5 py-2.5 text-[11.5px] leading-snug text-muted">
+                  <span className="font-semibold text-ink">{archiveLabel(listing.archiveReason ?? null)}.</span>{" "}
+                  {archiveWhy({ archived: true, reason: listing.archiveReason ?? null, since: listing.archivedSince ?? null, ageDays: listing.archiveAgeDays ?? null })}{" "}
+                  It is out of the Draft tab, still searchable, and the listing itself is unchanged.
+                </p>
+              )}
+              {canFileAway && (
+                <button
+                  type="button"
+                  disabled={archiveBusy}
+                  onClick={() => onArchive?.(String(listing.id), listing.archived ? "restore" : "archive")}
+                  className="mt-2.5 self-start text-[11.5px] text-muted underline underline-offset-2 transition-colors hover:text-ink disabled:opacity-50"
+                  title={listing.archived ? "Back on the Draft tab" : `Drafts file themselves after ${Math.round(ARCHIVE_AFTER_DAYS / 30)} months`}
+                >
+                  {archiveBusy ? "Saving…" : listing.archived ? "Bring back to drafts" : "File this draft away"}
+                </button>
+              )}
           </div>
         </section>
 
