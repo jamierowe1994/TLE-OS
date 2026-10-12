@@ -9,8 +9,9 @@ import { READY_PREF, TOUR_URL, readinessFor } from "@/lib/launch";
  * reads the same answers for everybody (lib/launch readinessFor).
  *
  * POST { tour: true } when they open the tour from the card - the only tick
- * that is a press rather than a connection - and { dismiss: true } to put
- * the card away.
+ * that is a press rather than a connection - { dismiss: true } to put the
+ * card away, and { app: "ios" | "homescreen" | "browser" } from the phone
+ * app once a visit (components/app/AppSeen).
  */
 
 export const dynamic = "force-dynamic";
@@ -36,6 +37,7 @@ export async function GET(req: NextRequest) {
       rex: r?.rex ?? "none",
       email: r?.email ?? false,
       tour: r?.tour ?? false,
+      app: Boolean(r?.app),
       dismissed: typeof mine[0]?.value?.dismissedAt === "string",
       tourUrl: TOUR_URL,
     }, { headers: { "cache-control": "no-store" } });
@@ -47,8 +49,12 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
   if (!userId || !hasDb()) return NextResponse.json({ ok: false }, { status: 401 });
-  const body = (await req.json().catch(() => ({}))) as { tour?: boolean; dismiss?: boolean };
+  const body = (await req.json().catch(() => ({}))) as { tour?: boolean; dismiss?: boolean; app?: string };
   const patch: Record<string, string> = {};
+  if (body.app) {
+    patch.appAt = new Date().toISOString();
+    patch.appKind = body.app === "ios" || body.app === "homescreen" ? body.app : "browser";
+  }
   if (body.tour) patch.tourAt = new Date().toISOString();
   if (body.dismiss) patch.dismissedAt = new Date().toISOString();
   if (!Object.keys(patch).length) return NextResponse.json({ ok: true });

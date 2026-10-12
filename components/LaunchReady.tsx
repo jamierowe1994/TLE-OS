@@ -10,9 +10,10 @@ import LineIcon from "@/components/LineIcon";
  * system".
  *
  * Every tick is read live (/api/launch/ready): a photo on their account, a
- * REX session, a connected mailbox, and the tour opened from here. It goes
- * away by itself once all four are done, and can be put away sooner.
- * Admin > Launch shows the same four for everybody.
+ * REX session, a connected mailbox, the tour opened from here, and the
+ * phone app opened (components/app/AppSeen). It goes away by itself once
+ * all five are done, and can be put away sooner. Admin > Launch shows the
+ * same for everybody, with setup as a sixth.
  */
 
 type Ready = {
@@ -21,6 +22,7 @@ type Ready = {
   rex: "live" | "lapsed" | "none";
   email: boolean;
   tour: boolean;
+  app: boolean;
   dismissed: boolean;
   tourUrl: string;
 };
@@ -52,6 +54,7 @@ export default function LaunchReady() {
     },
     { key: "email", icon: "mail", label: "Connect Your Email", done: r.email, href: "/profile?tab=connections", note: "Emails go out in your name" },
     { key: "tour", icon: "rocket", label: "Take the Tour", done: r.tour, href: r.tourUrl, note: "See how it all fits together" },
+    { key: "app", icon: "bell", label: "Get the Phone App", done: r.app, href: "/download", note: "Your day and your alerts, on your phone" },
   ];
   const done = items.filter((i) => i.done).length;
   if (done === items.length) return null;
@@ -70,7 +73,7 @@ export default function LaunchReady() {
         <div>
           <h2 className="hand text-[17px] leading-tight">Get Set for Launch</h2>
           <p className="mt-1 text-[11.5px] text-muted">
-            {done} of {items.length} done. Four quick things so you&rsquo;re live on TLE OS.
+            {done} of {items.length} done. A few quick things so you&rsquo;re live on TLE OS.
           </p>
         </div>
         <button
@@ -86,7 +89,7 @@ export default function LaunchReady() {
         <div className="h-full rounded-full bg-accent-dark transition-[width] duration-500" style={{ width: `${(done / items.length) * 100}%` }} />
       </div>
 
-      <div className="mt-3.5 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-3.5 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
         {items.map((i) => {
           const external = i.key === "tour";
           return (

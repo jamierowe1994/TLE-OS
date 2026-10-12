@@ -37,7 +37,15 @@ type Ready = {
   email: boolean;
   setup: boolean;
   tour: boolean;
+  app: { kind: "ios" | "homescreen" | "browser" | "alerts"; at: string } | null;
   lastSeenAt: string | null;
+};
+
+const APP_KIND: Record<string, string> = {
+  ios: "the iPhone app",
+  homescreen: "the app on their home screen",
+  browser: "the app in a phone browser",
+  alerts: "phone alerts on",
 };
 type On = { userId: string; name: string; email: string; role: string; createdAt: string | null; ready: Ready };
 type Board = {
@@ -78,8 +86,11 @@ function at(iso: string): string {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Photo, REX, email, setup, tour, phone app. */
+const CHECKS = 6;
+
 function readyCount(r: Ready): number {
-  return [r.photo, r.rex === "live", r.email, r.setup, r.tour].filter(Boolean).length;
+  return [r.photo, r.rex === "live", r.email, r.setup, r.tour, Boolean(r.app)].filter(Boolean).length;
 }
 
 export default function LaunchPage() {
@@ -254,8 +265,8 @@ export default function LaunchPage() {
 
   const sending = progress !== null && progress.done < progress.total;
   const invited = d ? d.toInvite.filter((p) => p.sentAt) : [];
-  const fullyReady = d ? d.on.filter((o) => readyCount(o.ready) === 5) : [];
-  const onShown = d ? (onlyNotReady ? d.on.filter((o) => readyCount(o.ready) < 5) : d.on) : [];
+  const fullyReady = d ? d.on.filter((o) => readyCount(o.ready) === CHECKS) : [];
+  const onShown = d ? (onlyNotReady ? d.on.filter((o) => readyCount(o.ready) < CHECKS) : d.on) : [];
 
   return (
     <>
@@ -278,13 +289,14 @@ export default function LaunchPage() {
         </div>
       ) : (
         <>
-          <div className="fade-up mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="fade-up mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {(
               [
                 ["Ready to invite", queue.length],
                 ["Invited, not in yet", invited.length],
                 ["On the OS", d.on.length],
                 ["Fully set up", fullyReady.length],
+                ["Using the phone app", d.on.filter((o) => o.ready.app).length],
               ] as const
             ).map(([k, v]) => (
               <div key={k} className="rounded-[22px] border border-line/50 bg-white p-4">
@@ -564,8 +576,9 @@ export default function LaunchPage() {
               <div>
                 <h2 className="hand text-[17px] leading-tight">Signed Up and Getting Set</h2>
                 <p className="mt-1 text-[11.5px] text-muted">
-                  Everybody with an account, and the five things that make them live: photo, REX,
-                  email, setup and the tour. Each one is also on their own dashboard until it&apos;s done.
+                  Everybody with an account, and the six things that make them live: photo, REX,
+                  email, setup, the tour and the phone app. Each one is also on their own dashboard
+                  until it&apos;s done.
                 </p>
               </div>
               <label className="flex items-center gap-2 text-[11.5px] text-muted">
@@ -577,12 +590,14 @@ export default function LaunchPage() {
             <ul className="mt-3.5 divide-y divide-line/40">
               {onShown.map((o) => {
                 const n = readyCount(o.ready);
-                const ticks: Array<[string, boolean, string?]> = [
+                const app = o.ready.app;
+                const ticks: Array<[string, boolean, string?, string?]> = [
                   ["Photo", o.ready.photo],
                   ["REX", o.ready.rex === "live", o.ready.rex === "lapsed" ? "REX sign-in has lapsed" : undefined],
                   ["Email", o.ready.email],
                   ["Setup", o.ready.setup],
                   ["Tour", o.ready.tour],
+                  ["App", Boolean(app), undefined, app ? `Phone app: ${APP_KIND[app.kind]}, last ${at(app.at)}` : "Phone app: not opened yet"],
                 ];
                 return (
                   <li key={o.userId} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2.5">
@@ -592,13 +607,14 @@ export default function LaunchPage() {
                         {ROLE_LABEL[o.role as keyof typeof ROLE_LABEL] ?? o.role}
                         {o.createdAt && ` · joined ${at(o.createdAt)}`}
                         {` · ${o.ready.lastSeenAt ? `last in ${at(o.ready.lastSeenAt)}` : "not been in yet"}`}
+                        {app && app.kind !== "alerts" && ` · app ${at(app.at)}`}
                       </span>
                     </span>
                     <span className="flex flex-wrap items-center gap-1.5">
-                      {ticks.map(([label, ok, why]) => (
+                      {ticks.map(([label, ok, why, hover]) => (
                         <span
                           key={label}
-                          title={why ?? (ok ? `${label}: done` : `${label}: not yet`)}
+                          title={why ?? hover ?? (ok ? `${label}: done` : `${label}: not yet`)}
                           className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold ${
                             ok ? "bg-[#e8f5ec] text-[#1e7a3c]" : why ? "bg-accent-soft text-accent-dark" : "bg-page text-muted"
                           }`}
@@ -613,7 +629,7 @@ export default function LaunchPage() {
                           {label}
                         </span>
                       ))}
-                      <span className={`ml-1 w-9 text-right text-[11.5px] tabular-nums ${n === 5 ? "text-[#1e7a3c]" : "text-muted"}`}>{n}/5</span>
+                      <span className={`ml-1 w-9 text-right text-[11.5px] tabular-nums ${n === CHECKS ? "text-[#1e7a3c]" : "text-muted"}`}>{n}/{CHECKS}</span>
                     </span>
                   </li>
                 );

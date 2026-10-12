@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { cookies, headers } from "next/headers";
 import AppFrame from "@/components/app/AppFrame";
+import AppSeen from "@/components/app/AppSeen";
 import { M_THEME_COLOUR, M_THEME_COOKIE, type MTheme } from "@/lib/m-theme";
 import { M_NAV_COOKIE, parseNav } from "@/lib/m-nav";
 import "./m.css";
@@ -78,6 +79,8 @@ export default async function PhoneLayout({ children }: { children: React.ReactN
           loaded or failed, then, if the app never said it was ready, loads
           the page afresh - and only once per visit, so it can never loop. */}
       <script dangerouslySetInnerHTML={{ __html: STALE_GUARD }} />
+      {/* Who uses the phone app - Admin > Launch's Phone app tick. */}
+      <AppSeen />
       <AppFrame inApp={inApp} theme={theme} nav={nav}>
         {children}
       </AppFrame>
