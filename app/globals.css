@@ -1551,3 +1551,47 @@ html[data-os-toast="up"] .os-toast-lift {
 :root[data-theme="dark"] .bg-white\/80,
 :root[data-theme="dark"] .bg-white\/90 { background-color: color-mix(in srgb, var(--card) 85%, transparent); }
 :root[data-theme="dark"] .hover\:bg-white:hover { background-color: var(--card); }
+
+/* ── Huddles surfaces (James, 12 Oct 2026: "it's a very white screen ... we
+   should implement some grey across it, probably a lot more grey. Maybe even
+   some colour"). The chat card's own colours, so the list, the chat, its
+   bars and the bubbles are not all white. Three looks to choose from on the
+   page's data-hud-look: a warm grey, b grey with sage, c grey with blush. */
+.hud {
+  --hud-list: #f4f2ef;
+  --hud-chat: #ebe8e4;
+  --hud-bar: #f8f7f5;
+  --hud-row-active: #e5e1dc;
+  --hud-row-hover: #ebe8e4;
+  --hud-input: #ffffff;
+  --hud-them: #ffffff;
+  --hud-tabs: #e8e5e1;
+  --hud-tab-on: #ffffff;
+}
+.hud[data-hud-look="b"] {
+  --hud-list: #eef1ea;
+  --hud-row-active: #dde4d5;
+  --hud-row-hover: #e5eadf;
+  --hud-tabs: #e0e6da;
+  --hud-bar: #f6f7f3;
+}
+.hud[data-hud-look="c"] {
+  --hud-list: #f2f0ed;
+  --hud-chat: #f8ebe7;
+  --hud-row-active: #ebe4df;
+  --hud-row-hover: #efebe7;
+  --hud-tabs: #e8e4e0;
+}
+:root[data-theme="dark"] .hud {
+  --hud-list: #1c1c1c;
+  --hud-chat: #161616;
+  --hud-bar: #202020;
+  --hud-row-active: rgba(255, 255, 255, 0.085);
+  --hud-row-hover: rgba(255, 255, 255, 0.05);
+  --hud-input: #272727;
+  --hud-them: #2b2b2b;
+  --hud-tabs: #151515;
+  --hud-tab-on: #2b2b2b;
+}
+:root[data-theme="dark"] .hud[data-hud-look="b"] { --hud-list: #1b1d19; --hud-tabs: #141612; }
+:root[data-theme="dark"] .hud[data-hud-look="c"] { --hud-chat: #1d1716; }
