@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ErrorLine, Sheet, Spinner } from "../../../bits";
 import { Bubbles, ChatHead, ChatShell, Composer, Face, type Bubble } from "../../bits";
 
@@ -27,6 +27,10 @@ export default function PhoneRoom() {
   const [error, setError] = useState<string | null>(null);
   const [asQuestion, setAsQuestion] = useState(false);
   const [people, setPeople] = useState(false);
+  /* In a huddle of two: how far the other person has read (the ticks). */
+  const [otherRead, setOtherRead] = useState<string | null>(null);
+  /* Who else is writing right now. */
+  const [typing, setTyping] = useState<string[]>([]);
 
   useEffect(() => {
     setThread(new URLSearchParams(window.location.search).get("thread"));
@@ -34,11 +38,14 @@ export default function PhoneRoom() {
 
   const url = `/api/m/rooms/${encodeURIComponent(id)}${thread ? `?thread=${encodeURIComponent(thread)}` : ""}`;
   const load = () =>
-    fetch(url, { cache: "no-store" })
+    /* Not marked read while the app is in the background: two blue ticks
+       must mean they saw it. */
+    fetch(`${url}${document.hidden ? `${url.includes("?") ? "&" : "?"}peek=1` : ""}`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j: { ok?: boolean; error?: string; room?: { id: string; kind: "general" | "huddle"; name: string }; me?: string; messages?: Msg[]; members?: Array<{ id: string; name: string; photo?: string | null }> }) => {
+      .then((j: { ok?: boolean; error?: string; room?: { id: string; kind: "general" | "huddle"; name: string }; me?: string; messages?: Msg[]; members?: Array<{ id: string; name: string; photo?: string | null }>; otherRead?: string | null }) => {
         if (!j.ok || !j.room) throw new Error(j.error ?? "The chat did not load.");
         setData({ room: j.room, me: j.me ?? "", messages: j.messages ?? [], members: j.members ?? [] });
+        setOtherRead(j.otherRead ?? null);
       })
       .catch((e: Error) => setError(e.message));
 
@@ -46,9 +53,49 @@ export default function PhoneRoom() {
     setData(null);
     void load();
     const t = window.setInterval(() => void load(), 15_000);
-    return () => window.clearInterval(t);
+    /* Back in the app: read now, so ticks and unread catch up at once. */
+    const back = () => !document.hidden && void load();
+    document.addEventListener("visibilitychange", back);
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", back);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
+
+  /* Typing and seen, every couple of seconds while the chat is on screen. */
+  useEffect(() => {
+    if (thread) return;
+    let gone = false;
+    const tick = () => {
+      if (document.hidden) return;
+      fetch(`/api/m/rooms/${encodeURIComponent(id)}/typing`, { cache: "no-store" })
+        .then((r) => r.json())
+        .then((j: { ok?: boolean; typing?: string[]; otherRead?: string | null }) => {
+          if (gone || !j.ok) return;
+          setTyping(j.typing ?? []);
+          if (j.otherRead !== undefined) setOtherRead(j.otherRead ?? null);
+        })
+        .catch(() => {});
+    };
+    tick();
+    const t = window.setInterval(tick, 2500);
+    return () => {
+      gone = true;
+      window.clearInterval(t);
+    };
+  }, [id, thread]);
+
+  /* Saying that I am typing: at most every three seconds, and stopped when the box empties. */
+  const lastPing = useRef(0);
+  const onTyping = (hasText: boolean) => {
+    if (thread) return;
+    const now = Date.now();
+    if (hasText && now - lastPing.current < 3000) return;
+    if (!hasText && lastPing.current === 0) return;
+    lastPing.current = hasText ? now : 0;
+    void fetch(`/api/m/rooms/${encodeURIComponent(id)}/typing`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ on: hasText }) }).catch(() => {});
+  };
 
   const open = (q: string | null) => {
     setThread(q);
@@ -89,7 +136,10 @@ export default function PhoneRoom() {
     at: m.at,
     foot: m.question && !thread ? `Question · ${m.replies ? `${m.replies} ${m.replies === 1 ? "answer" : "answers"}` : "Answer it"}` : undefined,
     onTap: m.question && !thread ? () => open(m.id) : undefined,
+    /* Ticks only between two people. */
+    tick: otherRead && m.authorId === data?.me ? (m.at <= otherRead ? "seen" : "sent") : undefined,
   }));
+  const other = otherRead ? data?.members.find((x) => x.id !== data.me) ?? null : null;
 
   return (
     <>
@@ -114,7 +164,11 @@ export default function PhoneRoom() {
         data && !error ? (
           <Composer
             placeholder={thread ? "Write an answer..." : general ? "Say something to everyone..." : "Message the huddle..."}
-            onSend={send}
+            onSend={(text) => {
+              lastPing.current = 0;
+              return send(text);
+            }}
+            onTyping={onTyping}
             extra={
               general && !thread ? (
                 <button
@@ -137,7 +191,11 @@ export default function PhoneRoom() {
       ) : !data ? (
         <Spinner label="Opening the chat" className="py-8" />
       ) : (
-        <Bubbles items={items} empty={general ? "Nobody has said anything yet. Start it off." : "Say hello to your huddle."} />
+        <Bubbles
+          items={items}
+          typing={typing.length ? { names: typing, pair: Boolean(otherRead), face: other } : null}
+          empty={general ? "Nobody has said anything yet. Start it off." : "Say hello to your huddle."}
+        />
       )}
     </ChatShell>
 
