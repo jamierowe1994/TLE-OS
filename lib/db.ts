@@ -401,6 +401,20 @@ CREATE TABLE IF NOT EXISTS os_user_prefs (
   PRIMARY KEY (user_id, key)
 );
 
+-- Staff headshots waiting for their account (12 Oct 2026, lib/staff-photos):
+-- taken from the TEG Team Hub and thelettingexperts.co.uk/staff, cropped to
+-- head and shoulders. A new account takes its photo from here, matched on any
+-- of the person's emails or on their first and last name. Never overwrites a
+-- photo someone set themselves.
+CREATE TABLE IF NOT EXISTS os_staff_photos (
+  name_key       TEXT PRIMARY KEY,
+  name           TEXT NOT NULL,
+  emails         TEXT[] NOT NULL DEFAULT '{}',
+  photo          TEXT NOT NULL,
+  source         TEXT NOT NULL,
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Smart reminders: one row per person per thing that needs doing, DERIVED
 -- from the records by lib/reminders on a schedule (a lead nobody has rung, a
 -- deck not sent before the visit, a valuation not recorded, an accepted

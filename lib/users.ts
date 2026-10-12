@@ -2,6 +2,7 @@ import "server-only";
 import { hashPassword, uid, verifyPassword } from "@/lib/auth";
 import { hasDb, q } from "@/lib/db";
 import { asRole, type Role } from "@/lib/roles";
+import { staffPhotoFor } from "@/lib/staff-photos";
 
 /**
  * The people who work here — stored in `os_users`, which the OS owns
@@ -133,6 +134,13 @@ export async function createUser(params: {
      RETURNING id, email, name, role, photo, created_at`,
     [uid(), email, params.name.trim(), role, hashPassword(params.password)]
   );
+  /* Their headshot, if the Team Hub or the website already had one
+     (lib/staff-photos). A miss or a failure leaves them with initials. */
+  const photo = await staffPhotoFor(email, params.name).catch(() => null);
+  if (photo) {
+    await q(`UPDATE os_users SET photo = $1 WHERE id = $2 AND photo IS NULL`, [photo, rows[0]!.id]).catch(() => null);
+    return toUser({ ...rows[0]!, photo });
+  }
   return toUser(rows[0]);
 }
 
