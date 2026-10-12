@@ -92,6 +92,14 @@ export interface Tool {
    * than worked out from the licence tier.
    */
   gate?: "launchpad";
+  /**
+   * A locked tool that admins (owner, super_admin: James and Susan) can still
+   * open, so it can be shown to people before it is ready for agents (James,
+   * 12 Oct 2026: "for anyone that's an admin, release Bond so we can click
+   * into it ... demo some of the features of it on the day"). Agents keep the
+   * locked card, and the page itself sends them back to Tools.
+   */
+  adminPreview?: boolean;
 }
 
 export const TOOLS: Tool[] = [
@@ -145,6 +153,7 @@ export const TOOLS: Tool[] = [
        something to hand an agent. */
     status: "locked",
     note: "Locked for now. Finding the owner behind an address needs the Land Registry route, and that is a build of its own.",
+    adminPreview: true,
     /* Ours, built on data we already pay for. Whether it is ever sold
        separately is James's call; until then it comes with the package. */
     access: "included",

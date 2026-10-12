@@ -61,12 +61,15 @@ function accessLine(a: Access): { text: string; strong: boolean } | null {
   }
 }
 
-function ToolCard({ tool, access }: { tool: Tool; access: Access | null }) {
+function ToolCard({ tool, access, admin }: { tool: Tool; access: Access | null; admin: boolean }) {
   /* Gated AND known to be barred means the tool cannot open, whatever its build
      state. Unknown access never opens the door either — a paid product must
      fail shut on the click and merely explain itself on the card. */
   const barred = Boolean(tool.gate) && (!access || !access.entitled);
-  const live = tool.status === "live" && tool.href && !barred;
+  /* A locked tool with adminPreview opens for an admin, and the card says it
+     is a preview so nobody mistakes it for released. */
+  const preview = tool.status === "locked" && Boolean(tool.adminPreview) && admin && Boolean(tool.href);
+  const live = (tool.status === "live" || preview) && tool.href && !barred;
   const line = tool.gate && access ? accessLine(access) : null;
 
   const inner = (
@@ -78,7 +81,7 @@ function ToolCard({ tool, access }: { tool: Tool; access: Access | null }) {
           }`}
         >
           <DoodleIcon name={tool.icon} size={20} />
-          {tool.status === "locked" && (
+          {tool.status === "locked" && !preview && (
             <span className="absolute -bottom-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-line/80 bg-page text-muted">
               <DoodleIcon name="lock" size={10} />
             </span>
@@ -90,7 +93,12 @@ function ToolCard({ tool, access }: { tool: Tool; access: Access | null }) {
               Paid
             </span>
           )}
-          {tool.status === "locked" ? (
+          {preview ? (
+            <span className="flex items-center gap-1.5 rounded-full border border-ink/70 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-ink">
+              <DoodleIcon name="key" size={10} />
+              Admin Preview
+            </span>
+          ) : tool.status === "locked" ? (
             <span className="flex items-center gap-1.5 rounded-full border border-line/70 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-muted">
               <DoodleIcon name="lock" size={10} />
               Locked
@@ -122,7 +130,11 @@ function ToolCard({ tool, access }: { tool: Tool; access: Access | null }) {
           Checked against {access.triedAddresses.join(", ")}
         </p>
       ) : null}
-      {tool.status !== "live" && tool.note ? (
+      {preview ? (
+        <p className="mt-2.5 border-t border-line/40 pt-2.5 text-[11.5px] leading-relaxed text-muted">
+          Open to admins for demos. Agents still see it locked.
+        </p>
+      ) : tool.status !== "live" && tool.note ? (
         <p className="mt-2.5 border-t border-line/40 pt-2.5 text-[11.5px] leading-relaxed text-muted">
           {tool.note}
         </p>
@@ -144,6 +156,22 @@ function ToolCard({ tool, access }: { tool: Tool; access: Access | null }) {
 
 export default function ToolsGrid() {
   const [access, setAccess] = useState<Access | null>(null);
+  const [admin, setAdmin] = useState(false);
+
+  /* Admin is decided on the actor (/api/auth/me canAdmin), so an owner viewing
+     as an agent keeps the preview. Until it answers the card stays locked. */
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { canAdmin?: boolean } | null) => {
+        if (alive) setAdmin(Boolean(j?.canAdmin));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -177,7 +205,7 @@ export default function ToolsGrid() {
             <p className="mt-1 max-w-xl text-[12.5px] leading-relaxed text-muted">{group.blurb}</p>
             <div className="mt-3.5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {tools.map((t) => (
-                <ToolCard key={t.key} tool={t} access={t.gate ? access : null} />
+                <ToolCard key={t.key} tool={t} access={t.gate ? access : null} admin={admin} />
               ))}
             </div>
           </section>
