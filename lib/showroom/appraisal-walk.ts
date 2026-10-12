@@ -140,7 +140,7 @@ export const APPRAISAL_WALK: BackOfficeJourney[] = [
         says: "Check the booklet as Raj will read it, open the contract and sign your half, tick that the figures and dates are right, then send. Raj gets one email from you with the presentation and the contract.",
         where: "Market Appraisals > the file > Prepare and send",
         screen: { kind: "office-appraisal-send", at: "valued" },
-        try: { says: "Open the contract and sign your half, look through the booklet, tick that the figures are right, then Send it to Raj Chauhan.", hint: ["Open the cover", "These are right", "Open the contract", "Sign the terms", "Done", "Send it to"], did: ["terms"] },
+        try: { says: "Open the contract and sign your half, look through the booklet, tick that the figures are right, then Send it to Raj Chauhan.", hint: ["Open the cover", "These are right", "Open the contract", "Your full name", "Sign the terms", "Done", "Send it to"], did: ["terms"] },
         sends: ["landlord-contract-pack"],
       },
     ],
@@ -190,7 +190,7 @@ export const APPRAISAL_WALK: BackOfficeJourney[] = [
         says: "Hand Raj the tablet on his own portal. Sign your contract opens the terms on our signing sheet: he reads them, types his name and signs. Nothing else to install, nothing to print.",
         where: "Raj's portal > Sign your contract",
         screen: { kind: "landlord-sign", at: "terms" },
-        try: { says: "Press Sign your contract, type Raj's name, press Sign the terms, then Done.", hint: ["Sign your contract", "Sign the terms", "Done"], did: ["signed"] },
+        try: { says: "Press Sign your contract, type Raj's name, press Sign the terms, then Done.", hint: ["Sign your contract", "Your full name", "Sign the terms", "Done"], did: ["signed"] },
       },
       {
         id: "sign-after", actor: "office", title: "The Moment It Is Signed",

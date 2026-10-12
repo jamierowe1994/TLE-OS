@@ -4,6 +4,7 @@ import Wordmark from "@/components/Wordmark";
 import DoodleIcon from "@/components/DoodleIcon";
 import Toaster from "@/components/Toaster";
 import LaunchNav from "@/components/LaunchNav";
+import WorkspaceRail, { type RailGroup } from "@/components/WorkspaceRail";
 import { FRONT, BACK, type NavItem } from "@/lib/nav";
 
 /**
@@ -52,10 +53,45 @@ const DESK: NavItem[] = [
   { href: "/compliance-desk/works", label: "Works orders", icon: "setting" },
 ];
 
+/** Kirstie's workspace rail (app/(os)/pre-tenancy/layout), for the pre-tenancy screens. Keep in step. */
+const PRETENANCY: RailGroup[] = [
+  {
+    title: null,
+    items: [
+      { href: "/pre-tenancy/dashboard", label: "Dashboard", icon: "home" },
+      { href: "/pre-tenancy", label: "Board", exact: true, icon: "grid" },
+      { href: "/pre-tenancy/plc", label: "PLC queue", icon: "list" },
+      { href: "/pre-tenancy/id-checks", label: "ID checks", icon: "user" },
+    ],
+  },
+  { title: null, rule: true, items: [{ href: "/pre-tenancy/knowledge", label: "Knowledge", icon: "note" }] },
+  { title: "Elsewhere", items: [{ href: "/compliance-desk", label: "Compliance desk", icon: "shield" }] },
+];
+
 const noop = () => {};
 const SAM = { name: "Sam Whitaker", email: "sam@thelettingexperts.co.uk", photo: null };
 
-export default function OfficeFrame({ on, sub, desk = false, children }: { on: string; sub?: string; desk?: boolean; children: React.ReactNode }) {
+export default function OfficeFrame({ on, sub, desk = false, rail, children }: { on: string; sub?: string; desk?: boolean; rail?: "pretenancy"; children: React.ReactNode }) {
+  /* A workspace with its own rail (components/OwnWorkspace): the rail on the grey, the page in the white panel beside it. */
+  if (rail) {
+    return (
+      <div className="flex min-h-screen bg-card text-ink lg:bg-[var(--shell-bg)]">
+        <div className="flex min-w-0 flex-1 flex-col bg-card lg:ml-2 lg:bg-[var(--shell-panel)]">
+          <main className="w-full flex-1 px-5 pb-28 pt-8 lg:px-10">
+            <div className="admin-scope">
+              <div className="flex flex-col gap-5 md:flex-row">
+                <div aria-hidden className="pointer-events-none contents">
+                  <WorkspaceRail label="Pre-tenancy" groups={PRETENANCY} at={on} />
+                </div>
+                <div className="min-w-0 flex-1 py-3">{children}</div>
+              </div>
+            </div>
+          </main>
+        </div>
+        <Toaster />
+      </div>
+    );
+  }
   if (!desk) {
     const current = BACK.flatMap((i) => i.children ?? []).find((c) => c.href.split("?")[0] === on && (!sub || c.label === sub))?.href ?? on;
     return (

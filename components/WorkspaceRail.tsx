@@ -60,14 +60,18 @@ export default function WorkspaceRail({
   label,
   groups,
   footer,
+  at,
 }: {
   /** The small caps line under the wordmark — "Admin", "Marketing". */
   label: string;
   groups: RailGroup[];
   /** Optional action pinned to the bottom, e.g. "Leave admin". */
   footer?: React.ReactNode;
+  /** The page to light, when it is not the address: the Showroom's demo draws this rail around a real screen at /preview/... */
+  at?: string;
 }) {
-  const path = usePathname();
+  const live = usePathname();
+  const path = at ?? live;
   const isOn = (t: RailItem) => (t.exact ? path === t.href : path.startsWith(t.href)) || Boolean(t.also?.some((a) => path.startsWith(a)));
 
   /* Per workspace, so folding Kirstie's does not fold Francesca's. Read after

@@ -1,6 +1,7 @@
 "use client";
 
 import { RAJ_APPRAISAL } from "@/lib/showroom/demo-appraisals";
+import { SOPHIE_DEAL } from "@/lib/showroom/demo-pretenancy";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -252,6 +253,9 @@ export function srcFor(s: DemoScene, j: BackOfficeJourney, way: WayId, token: st
     case "office-appraisal-send": q.set("fresh", "1"); return `${pre}/appraisals/${RAJ_APPRAISAL}/send?${q}`;
     case "deck": return `/present/sample?kind=${encodeURIComponent(s.screen.section ?? "appraisal")}`;
     case "landlord-sign": q.set("fresh", "1"); return `/landlord/demo?stage=instruction&standin=1&${q}`;
+    /* Pre-tenancy: each scene starts clean at its moment too. */
+    case "office-pretenancy": q.set("fresh", "1"); if (s.screen.open) q.set("deal", SOPHIE_DEAL); return `${pre}/pre-tenancy?${q}`;
+    case "office-plc": q.set("fresh", "1"); if (s.screen.section) q.set("case", s.screen.section); return `${pre}/pre-tenancy/plc?${q}`;
     case "email": return null;
   }
 }

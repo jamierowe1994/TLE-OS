@@ -31,6 +31,9 @@ const DEMO_SCREENS: Record<string, string> = {
   "/compliance": "compliance",
   "/inspections": "inspections",
   "/compliance-desk/verify": "verify",
+  "/pre-tenancy": "pre-tenancy",
+  "/pre-tenancy/plc": "pre-tenancy/plc",
+  "/compliance-desk/plc": "pre-tenancy/plc",
 };
 /* Screens with pages under them, by prefix: /market-appraisals/<id> opens the
    demo's appraisals/<id> (the valuation, lib/showroom/demo-appraisals). */
@@ -64,9 +67,11 @@ const parentOrigin = (): string | null => {
   return window.location.origin;
 };
 
-/* The valuation is a story you walk through, so its book is kept for the tab
-   (a booked appraisal is still there on the file you open next). ?fresh=1 starts again. */
-const KEEP = "tle-demo-book:appraisal";
+/* The valuation and pre-tenancy are stories you walk through, so their book is
+   kept for the tab (a booked appraisal is still there on the file you open
+   next; a pack checked in the queue is still checked on the board). ?fresh=1 starts again. */
+const KEPT = { appraisal: "appraisals", pretenancy: "pretenancy" } as const;
+const keyFor = (story: string) => `tle-demo-book:${story}`;
 
 let world: DemoWorld | null = null;
 let realFetch: typeof fetch | null = null;
@@ -81,18 +86,21 @@ function seed(): DemoWorld {
   const story = sp.get("story");
   const way = sp.get("way");
   const w = worldFor(isStory(story) ? story : "repair", Number(sp.get("at") ?? 0) || 0, isWay(way) ? way : "portal");
-  if (w.story === "appraisal") {
+  if (w.story === "appraisal" || w.story === "pretenancy") {
+    const field = KEPT[w.story];
     try {
-      if (sp.get("fresh") === "1") sessionStorage.removeItem(KEEP);
-      const held = JSON.parse(sessionStorage.getItem(KEEP) ?? "null") as { at: number; book: DemoWorld["appraisals"] } | null;
-      if (held && held.at === w.at && held.book) w.appraisals = held.book;
+      if (sp.get("fresh") === "1") sessionStorage.removeItem(keyFor(w.story));
+      const held = JSON.parse(sessionStorage.getItem(keyFor(w.story)) ?? "null") as { at: number; book: unknown } | null;
+      if (held && held.at === w.at && held.book) (w as unknown as Record<string, unknown>)[field] = held.book;
     } catch { /* storage refused: the story starts at its moment */ }
   }
   return w;
 }
 function keep(w: DemoWorld) {
-  if (w.story !== "appraisal" || !w.appraisals) return;
-  try { sessionStorage.setItem(KEEP, JSON.stringify({ at: w.at, book: w.appraisals })); } catch { /* storage refused */ }
+  if (w.story !== "appraisal" && w.story !== "pretenancy") return;
+  const book = (w as unknown as Record<string, unknown>)[KEPT[w.story]];
+  if (!book) return;
+  try { sessionStorage.setItem(keyFor(w.story), JSON.stringify({ at: w.at, book })); } catch { /* storage refused */ }
 }
 
 /**
@@ -241,21 +249,45 @@ export default function DemoNet({ label = "Showroom demo" }: { label?: string })
     const findOne = (text: string): HTMLElement | null => {
       const want = text.toLowerCase();
       const scope = hint.near ? Array.from(document.querySelectorAll<HTMLElement>("section, div, li, form")).find((el) => el.textContent?.toLowerCase().includes(hint.near!.toLowerCase())) ?? document.body : document.body;
-      const all = Array.from(scope.querySelectorAll<HTMLElement>("button, a, label, select, input:not([type=hidden]):not([type=checkbox]):not([type=radio]), textarea, [role=button], summary"));
+      const SEL = "button, a, label, select, input:not([type=hidden]):not([type=checkbox]):not([type=radio]), textarea, [role=button], summary";
+      /* An open drawer or pop-up is the only place looked in: the layer fixed over the page where a drawer opens.
+         Behind it, "+ Add deal" on the board is not the Add to press. */
+      let layer: HTMLElement | null = document.elementFromPoint(window.innerWidth * 0.75, window.innerHeight / 2) as HTMLElement | null;
+      while (layer && layer !== document.body && getComputedStyle(layer).position !== "fixed") layer = layer.parentElement;
+      const inLayer = layer && layer !== document.body && scope.contains(layer) ? Array.from(layer.querySelectorAll<HTMLElement>(SEL)) : [];
+      const all = inLayer.length ? inLayer : Array.from(scope.querySelectorAll<HTMLElement>(SEL));
       /* A box has no words of its own: it is found by its placeholder or its label. */
       const words = (el: HTMLElement) => (el.textContent || el.getAttribute("aria-label") || el.getAttribute("placeholder") || "").trim().toLowerCase();
       /* A control that cannot be pressed yet is never the one rung: in a sequence, the ring stays on the
          step still to do (Send waits, greyed, until the contract is signed). */
-      const live = (el: HTMLElement) => el.offsetParent !== null && !(el as HTMLButtonElement).disabled && el.getAttribute("aria-disabled") !== "true";
-      return all.find((el) => words(el).startsWith(want) && live(el))
-        ?? all.find((el) => words(el).includes(want) && live(el))
-        ?? null;
+      /* Nor one something else is drawn over. */
+      const covered = (el: HTMLElement) => {
+        const r = el.getBoundingClientRect();
+        /* Tested where it shows: a control partly off the screen is tested on its visible part, one wholly off it is scrolled to. */
+        const x = (Math.max(r.left, 0) + Math.min(r.right, window.innerWidth)) / 2, y = (Math.max(r.top, 0) + Math.min(r.bottom, window.innerHeight)) / 2;
+        if (r.right <= 0 || r.bottom <= 0 || r.left >= window.innerWidth || r.top >= window.innerHeight) return false;
+        const top = document.elementFromPoint(x, y);
+        return !!top && !el.contains(top) && !top.contains(el);
+      };
+      const live = (el: HTMLElement) => el.offsetParent !== null && !(el as HTMLButtonElement).disabled && el.getAttribute("aria-disabled") !== "true" && !covered(el);
+      /* Its own words first ("Add" before "Add to calendar"), then words that start so, then any that hold them. */
+      const pick = (list: HTMLElement[]) => list.find((el) => words(el) === want && live(el))
+        ?? list.find((el) => words(el).startsWith(want) && live(el))
+        ?? list.find((el) => words(el).includes(want) && live(el));
+      return pick(all) ?? null;
     };
+    /* A box still empty is a step still to do: the note before Send back, even though Send back can be pressed. */
+    const empty = (el: HTMLElement) => (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) && !el.value.trim();
     const find = (): HTMLElement | null => {
       const list = Array.isArray(hint.text) ? hint.text : [hint.text];
       for (let i = list.length - 1; i >= 0; i--) {
         const el = findOne(list[i]);
-        if (el) return el;
+        if (!el) continue;
+        for (let j = i - 1; j >= 0; j--) {
+          const box = findOne(list[j]);
+          if (box && empty(box)) return box;
+        }
+        return el;
       }
       return null;
     };

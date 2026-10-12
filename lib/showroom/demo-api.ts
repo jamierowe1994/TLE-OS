@@ -17,6 +17,7 @@
  */
 
 import { answerAppraisals, appraisalBook } from "@/lib/showroom/demo-appraisals";
+import { answerPretenancy, pretenancyBook } from "@/lib/showroom/demo-pretenancy";
 import type { Move, WorksOrder, WorksEvent } from "@/lib/works-orders";
 import type { Finding, Inspection } from "@/lib/inspections";
 import { STEPS, stepOf } from "@/lib/works-steps";
@@ -625,6 +626,11 @@ export function answer(w: DemoWorld, method: string, url: URL, body: Body): Demo
     /* ── The valuation: Market Appraisals, Book an appraisal, the file (lib/showroom/demo-appraisals) ── */
     if (w.story === "appraisal") {
       const r = answerAppraisals((w.appraisals ??= appraisalBook(w.at)), method, url, body);
+      if (r) return r;
+    }
+    /* ── Pre-tenancy: the board and the PLC queue (lib/showroom/demo-pretenancy) ── */
+    if (w.story === "pretenancy") {
+      const r = answerPretenancy((w.pretenancy ??= pretenancyBook(w.at)), method, url, body);
       if (r) return r;
     }
 

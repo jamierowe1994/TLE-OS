@@ -30,7 +30,7 @@
 
 import type { StoryId, WayId } from "@/lib/showroom/demo-world";
 
-export type Actor = "tenant" | "office" | "landlord" | "contractor" | "compliance";
+export type Actor = "tenant" | "office" | "landlord" | "contractor" | "compliance" | "pretenancy";
 
 export const ACTORS: Record<Actor, { label: string; who: string; icon: string; tone: string }> = {
   tenant: { label: "Tenant", who: "Sophie, the tenant", icon: "user", tone: "bg-[#fdefec] text-[#a85a51]" },
@@ -38,6 +38,7 @@ export const ACTORS: Record<Actor, { label: string; who: string; icon: string; t
   landlord: { label: "Landlord", who: "Raj, the landlord", icon: "home", tone: "bg-[#eef1e6] text-[#4d5a33]" },
   contractor: { label: "Contractor", who: "Dan, Mercer Heating & Gas", icon: "setting", tone: "bg-[#f2f0eb] text-[#5b5346]" },
   compliance: { label: "Compliance", who: "The compliance team", icon: "shield", tone: "bg-[#e9eef5] text-[#3c5675]" },
+  pretenancy: { label: "Pre-tenancy", who: "The pre-tenancy team", icon: "checklist", tone: "bg-[#f4eee6] text-[#7a5a35]" },
 };
 
 export type ScreenKind =
@@ -49,7 +50,9 @@ export type ScreenKind =
   /* A deck as the landlord opens it (/present/sample; `section` is the deck kind). */
   | "deck"
   /* Raj's portal at "Sign your contract", signing on the demo's stand-in (app/landlord/demo ?standin=1). */
-  | "landlord-sign";
+  | "landlord-sign"
+  /* Pre-tenancy (lib/showroom/office-walk): the board (`open` opens Sophie's deal) and the PLC queue (`section` is the pack to open). */
+  | "office-pretenancy" | "office-plc";
 
 export interface DemoScreen {
   kind: ScreenKind;

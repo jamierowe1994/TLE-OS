@@ -38,9 +38,11 @@ import type { DueVisit, Finding, Inspection, InspectionEvent } from "@/lib/inspe
 import { stepOf as visitStepOf } from "@/lib/inspection-steps";
 import { categoriesOf } from "@/lib/works-catalogue";
 import type { AppraisalBook } from "@/lib/showroom/demo-appraisals";
+import type { PretenancyBook } from "@/lib/showroom/demo-pretenancy";
 
 /** "appraisal" is the valuation, board to terms (lib/showroom/demo-appraisals keeps its book). */
-export type StoryId = "repair" | "gas" | "compliance" | "visits" | "appraisal";
+/** "pretenancy" is Sophie's let from referencing to move-in, and its PLC pack (lib/showroom/demo-pretenancy). */
+export type StoryId = "repair" | "gas" | "compliance" | "visits" | "appraisal" | "pretenancy";
 /** How a repair reaches us. */
 export type WayId = "portal" | "phone" | "landlord" | "visit";
 
@@ -543,6 +545,8 @@ export interface DemoWorld {
   book: VisitBook;
   /** The valuation story's appraisals, made on first use (lib/showroom/demo-appraisals). */
   appraisals?: AppraisalBook;
+  /** The pre-tenancy story's board and PLC packs, made on first use (lib/showroom/demo-pretenancy). */
+  pretenancy?: PretenancyBook;
 }
 
 /** The moments of each story, by name, in order. */
@@ -553,6 +557,8 @@ export const MOMENTS: Record<StoryId, readonly string[]> = {
   visits: [...VISIT_MOMENTS],
   /* Kept in step with APPRAISAL_MOMENTS in lib/showroom/demo-appraisals (not imported: that file imports this one). */
   appraisal: ["board", "booked", "visit", "valued", "terms", "signed"],
+  /* Kept in step with PRETENANCY_MOMENTS in lib/showroom/demo-pretenancy. */
+  pretenancy: ["board", "plc", "checked", "ready", "moved"],
 };
 export const momentIndex = (story: StoryId, id: string) => Math.max(0, MOMENTS[story].indexOf(id));
 
@@ -647,7 +653,7 @@ export function worldFor(story: StoryId, at: number, way: WayId = "portal", now 
 }
 
 export function isStory(v: string | null | undefined): v is StoryId {
-  return v === "repair" || v === "gas" || v === "compliance" || v === "visits" || v === "appraisal";
+  return v === "repair" || v === "gas" || v === "compliance" || v === "visits" || v === "appraisal" || v === "pretenancy";
 }
 export function isWay(v: string | null | undefined): v is WayId {
   return v === "portal" || v === "phone" || v === "landlord" || v === "visit";
