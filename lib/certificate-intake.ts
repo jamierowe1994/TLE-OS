@@ -255,10 +255,13 @@ export async function fileCertificate(input: FileCertificate): Promise<{ row: Ce
      for their check before it goes live (lib/cert-hold): not into REX, not
      counted, until releaseHeldCertificate. */
   const held = !input.checkedBy && HELD_FOR_CHECK.has(input.type);
+  /* rex_note is NOT NULL: a certificate that is not held starts with an empty
+     note, never null (12 Oct: null here failed every filing that was not held
+     - Michael's gas records, the agents' EPCs - from 9 Oct to 12 Oct). */
   const rows = await q<CertRow>(
     `INSERT INTO os_certificates (id, property_id, property_name, type_id, expiry, issue, r2_key, name, source, added_by, share_people, awaiting_check, rex_note, rex_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, CASE WHEN $12 THEN NOW() END) RETURNING *`,
-    [id, input.propertyId, input.propertyName, input.type, input.expiry, input.issue || null, key, input.fileName, input.source, input.by, JSON.stringify(input.people ?? []), held, held ? "Waiting for compliance to verify it before it goes into REX." : null]
+    [id, input.propertyId, input.propertyName, input.type, input.expiry, input.issue || null, key, input.fileName, input.source, input.by, JSON.stringify(input.people ?? []), held, held ? "Waiting for compliance to verify it before it goes into REX." : ""]
   );
   if (held) return { row: rows[0], duplicate: false, share: waitingForCheck(true) };
   const row = await writeCertificateRow(rows[0], `Written by TLE OS from ${input.source} (${input.fileName}).`, input.refreshBook === true);
