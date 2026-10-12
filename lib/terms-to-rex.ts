@@ -67,7 +67,13 @@ export async function fileTermsToRex(p: { propertyId: string; r2Key: string; fil
   }
 }
 
-/** The latest terms of business uploaded in the OS for this home, if any. */
+/**
+ * The latest terms of business the OS holds for this home, if any: one
+ * uploaded and marked as terms, else the contract the landlord signed in
+ * DocuSeal on an appraisal or a New listing file for this property (James,
+ * 12 Oct 2026: "DocuSeal-signed terms count"). Either is filed into REX
+ * before a push by ensureTermsInRex, because REX will not publish without it.
+ */
 export async function osTermsFor(propertyId: string): Promise<{ r2_key: string; file_name: string; at: Date | null; by_name: string | null } | null> {
   if (!hasDb()) return null;
   const rows = await q<{ r2_key: string; file_name: string; at: Date | null; by_name: string | null }>(
@@ -76,7 +82,17 @@ export async function osTermsFor(propertyId: string): Promise<{ r2_key: string; 
       ORDER BY at DESC NULLS LAST LIMIT 1`,
     [propertyId]
   ).catch(() => []);
-  return rows[0] ?? null;
+  if (rows[0]) return rows[0];
+  const signed = await q<{ r2_key: string; file_name: string; at: Date | null; by_name: string | null }>(
+    `SELECT d.r2_key, COALESCE(NULLIF(d.template_name, ''), 'Terms of business') || '.pdf' AS file_name,
+            d.completed_at AS at, NULLIF(d.signer_name, '') AS by_name
+       FROM os_signed_documents d
+       JOIN os_market_appraisals a ON a.id = d.appraisal_id
+      WHERE a.rex_property_id = $1 AND d.completed_at IS NOT NULL AND d.r2_key <> ''
+      ORDER BY d.completed_at DESC LIMIT 1`,
+    [propertyId]
+  ).catch(() => []);
+  return signed[0] ?? null;
 }
 
 /**

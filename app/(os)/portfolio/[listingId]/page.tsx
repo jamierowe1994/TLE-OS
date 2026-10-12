@@ -20,6 +20,7 @@ import { OPEN, STATUS_LABEL, day as shortDay, nextFor } from "@/components/maint
 import BookForm, { type Person } from "@/components/inspections/BookForm";
 import RentBox from "@/components/portfolio/RentBox";
 import ServiceTag from "@/components/portfolio/ServiceTag";
+import ContactBlock from "@/components/ContactBlock";
 import { SPECS, STATUS_LABEL as NOTICE_STATUS, type Notice, type NoticeKind } from "@/lib/section-notices-spec";
 import type { PropertyDraft } from "@/lib/property-drafts";
 import { readJson } from "@/lib/page-cache";
@@ -775,7 +776,7 @@ export default function PropertyPage() {
                     ))}
                   </ul>
                 ) : tenants.length ? (
-                  <ul className="space-y-2">{tenants.map((t) => <PartyCard key={t.contactId} p={t} />)}</ul>
+                  <ul className="space-y-2">{tenants.map((t) => <PartyCard key={t.contactId} p={t} role="tenant" />)}</ul>
                 ) : (
                   <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">No tenant on record. It is empty, or the let has not been recorded.</p>
                 )}
@@ -793,7 +794,7 @@ export default function PropertyPage() {
                 <p className={`${eyebrow} mb-3`}>Landlord</p>
                 {landlord ? (
                   <div className="text-[13px]">
-                    <PartyCard p={landlord} plain />
+                    <PartyCard p={landlord} plain role="landlord" />
                     {landlord.email && landlord.email.includes("@") && (
                       <LandlordJobEmails key={landlord.email} compact landlord={landlord.email} name={landlord.name} className="mt-3 border-t border-line/40 pt-3" />
                     )}
@@ -1077,13 +1078,16 @@ function TenancyLine({ t, long = false }: { t: { startDate: string | null; endDa
   );
 }
 
-function PartyCard({ p, plain = false }: { p: Party; plain?: boolean }) {
+/** A tenant or the landlord: the same block as every person in the OS, changeable
+ *  where REX knows them (James, 12 Oct 2026). REX PM's own tenants carry no REX
+ *  contact, so theirs is read only. */
+function PartyCard({ p, plain = false, role }: { p: Party; plain?: boolean; role?: string }) {
   const body = (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <span className="font-semibold">{p.name}</span>
-      {p.phone && <a href={`tel:${p.phone.replace(/\s+/g, "")}`} className="text-[12px] text-muted hover:text-ink">{p.phone}</a>}
-      {p.email && <a href={`mailto:${p.email}`} className="truncate text-[12px] text-muted hover:text-ink">{p.email}</a>}
-    </div>
+    <ContactBlock
+      role={role}
+      person={{ name: p.name, email: p.email, phone: p.phone }}
+      personRef={/^\d+$/.test(String(p.contactId ?? "")) ? `rex:${p.contactId}` : null}
+    />
   );
   if (plain) return body;
   return <li className="rounded-xl border border-line/50 px-4 py-3 text-[13px]">{body}</li>;

@@ -225,17 +225,17 @@ async function withLiveAddress(rows: MarketAppraisal[]): Promise<MarketAppraisal
      an OS contact. Until 22 Sep 2026 an appraisal booked from one never had a
      landlord email, so its confirmation, deck, contract and nudges all
      refused. Read from the ledger for those, the contact for OS leads. */
-  const fromLedger = new Map<string, { email: string; mobile: string }>();
+  const fromLedger = new Map<string, { email: string; mobile: string; contactId: string | null }>();
   const ledgerIds = [...new Set(rows.filter((r) => r.leadId && !isOsLead(r.leadId)).map((r) => r.leadId!))];
   if (ledgerIds.length && hasDb()) {
-    const found = await q<{ id: string; email: string | null; phone: string | null }>(
-      `SELECT id, email, phone FROM os_leads WHERE id = ANY($1)`,
+    const found = await q<{ id: string; email: string | null; phone: string | null; contact_id: string | null }>(
+      `SELECT id, email, phone, contact_id FROM os_leads WHERE id = ANY($1)`,
       [ledgerIds]
     ).catch(() => []);
-    for (const l of found) fromLedger.set(l.id, { email: (l.email ?? "").trim(), mobile: (l.phone ?? "").trim() });
+    for (const l of found) fromLedger.set(l.id, { email: (l.email ?? "").trim(), mobile: (l.phone ?? "").trim(), contactId: l.contact_id ? String(l.contact_id) : null });
   }
   const linked = rows.filter((r) => r.leadId && isOsLead(r.leadId));
-  if (!linked.length && !fromLedger.size) return rows;
+  if (!linked.length && !fromLedger.size) return rows.map((r) => ({ ...r, landlordRef: null }));
 
   /* One query for every linked contact, not one per appraisal (2 Oct 2026):
      sixty getContact calls were queuing for a pool of five connections on
@@ -277,6 +277,7 @@ async function withLiveAddress(rows: MarketAppraisal[]): Promise<MarketAppraisal
       ...mergeAddress(r, c),
       landlordEmail: c ? c.email || null : (r.leadId && fromLedger.get(r.leadId)?.email) || r.landlordEmail || null,
       landlordMobile: c ? c.mobile || null : (r.leadId && fromLedger.get(r.leadId)?.mobile) || r.landlordMobile || null,
+      landlordRef: r.leadId && isOsLead(r.leadId) ? `os:${osContactIdFrom(r.leadId)}` : r.leadId && fromLedger.get(r.leadId)?.contactId ? `rex:${fromLedger.get(r.leadId)!.contactId}` : null,
     };
   });
 }

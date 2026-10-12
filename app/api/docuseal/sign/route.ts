@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { directListingLandlordAddress } from "@/lib/contract-send";
 import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
@@ -109,7 +110,8 @@ export async function POST(req: NextRequest) {
          today. Sending the property address for both is wrong on a contract,
          so the landlord address is left BLANK rather than guessed — an empty
          box an agent can fill beats a confident wrong one. */
-      landlordAddress: "",
+      /* New listing asks for it (12 Oct 2026), so a file made there carries it. */
+      landlordAddress: (await directListingLandlordAddress(ma.id).catch(() => null)) ?? "",
       contactNumber: (ma.landlordMobile ?? "").trim(),
       propertyAddress: [ma.address, ma.postcode].filter(Boolean).join(", "),
       serviceLevel: service?.label ?? "",

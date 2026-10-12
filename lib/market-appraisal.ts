@@ -71,6 +71,9 @@ export interface MarketAppraisal {
    */
   landlordEmail?: string | null;
   landlordMobile?: string | null;
+  /** Who the landlord is, to change their details from the appraisal (components/ContactBlock):
+   *  "os:<contact id>" or "rex:<REX contact id>"; null when nothing names them. */
+  landlordRef?: string | null;
   /** ISO. Null means booked-but-undated, which is a defect worth showing. */
   appointmentAt: string | null;
   stage: MaStage;

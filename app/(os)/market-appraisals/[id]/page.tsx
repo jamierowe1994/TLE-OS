@@ -24,6 +24,7 @@ import {
   type MarketAppraisal,
 } from "@/lib/market-appraisal";
 import { WhatsAppButton } from "@/components/WhatsAppQr";
+import ContactBlock from "@/components/ContactBlock";
 import FileDocuments from "@/components/FileDocuments";
 
 /**
@@ -272,7 +273,10 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
           </Link>
           <SaveChip scope={saves} className="bg-white" />
         </div>
-        {pre && (
+        {/* Only what still has a moment (James, 12 Oct 2026): the pre-appraisal
+            deck, the builder and the welcome video go once the appraisal day
+            has passed, and the welcome once the pre-appraisal has gone out. */}
+        {pre && !past && (
           <a href={pre.url} target="_blank" rel="noreferrer" className={pill}>
             <DoodleIcon name="mail" size={13} className="text-accent-dark" /> Pre-appraisal deck
           </a>
@@ -288,22 +292,24 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
             <a href={`${deck.url.split("?")[0]}/print`} target="_blank" rel="noreferrer" className={pill}>
               <DoodleIcon name="upload" size={13} className="rotate-180 text-accent-dark" /> Download PDF
             </a>
-            <Link href={`/market-appraisals/${ma.id}/build`} className={pill} data-steve="appraisal.build">
-              <DoodleIcon name="pencil" size={13} className="text-accent-dark" /> Update presentation
-            </Link>
+            {!past && (
+              <Link href={`/market-appraisals/${ma.id}/build`} className={pill} data-steve="appraisal.build">
+                <DoodleIcon name="pencil" size={13} className="text-accent-dark" /> Update presentation
+              </Link>
+            )}
           </>
-        ) : (
+        ) : !past ? (
           <Link href={`/market-appraisals/${ma.id}/build`} className={pill} data-steve="appraisal.build">
             <DoodleIcon name="magic-wand" size={13} className="text-accent-dark" /> Build presentation
           </Link>
-        )}
+        ) : null}
         {post && (
           <a href={post.url} target="_blank" rel="noreferrer" className={pill}>
             <DoodleIcon name="file-contract" size={13} className="text-accent-dark" /> Post-appraisal deck
           </a>
         )}
         {/* The welcome video, recorded against the pre-appraisal deck. */}
-        {pre && (
+        {pre && !past && ma.preSend?.state !== "sent" && (
           <span className="[&>button]:!border-line/70 [&>button]:!bg-white [&>button]:!px-3.5 [&>button]:!py-2 [&>button]:!text-[12px] [&>button]:!font-semibold">
             <WelcomeVideoRecorder compact token={pre.token} address={ma.address} />
           </span>
@@ -380,62 +386,39 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
         {/* The landlord */}
         <section className={`fade-up flex flex-col ${card} p-5`}>
           <CardTitle icon="user">The landlord</CardTitle>
-          <dl className="mt-4 space-y-2.5 pb-4 text-[13px]">
-            <Row k="Name">{ma.landlord}</Row>
-            <Row k="Email">
-              {ma.landlordEmail ? (
-                <a href={`mailto:${ma.landlordEmail}`} className="block truncate hover:underline">
-                  {ma.landlordEmail}
-                </a>
-              ) : (
-                <span className="text-muted">Not recorded</span>
-              )}
-            </Row>
-            <Row k="Mobile">
-              {ma.landlordMobile ? (
-                <span className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-                  <a href={`tel:${ma.landlordMobile}`} className="whitespace-nowrap hover:underline">
-                    {ma.landlordMobile}
-                  </a>
-                  <WhatsAppButton
-                    phone={ma.landlordMobile}
-                    name={ma.landlord}
-                    /* The appraisal came from a lead, and the lead keeps the log. */
-                    onSent={
-                      ma.leadId
-                        ? async (message) => {
-                            /* The page makes the scope, so it reports to it directly. No
-                               Try again: a log that landed before the connection dropped
-                               would go down twice. */
-                            const settle = saves.reporter.begin("WhatsApp log");
-                            let problem: string | null;
-                            try {
-                              const r = await fetch(`/api/leads/${encodeURIComponent(ma.leadId as string)}/touches`, {
-                                method: "POST",
-                                headers: { "content-type": "application/json" },
-                                body: JSON.stringify({ kind: "whatsapp", outcome: "sent", body: message }),
-                              });
-                              const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
-                              problem = j?.ok ? null : (j?.error ?? "That didn't save.");
-                            } catch {
-                              problem = "That didn't save - the connection dropped.";
-                            }
-                            settle(problem ? { ok: false, problem } : { ok: true });
-                            return problem;
-                          }
-                        : undefined
+          {/* Changeable here, and back to REX (James, 12 Oct 2026): the same
+              block as every other person in the OS (components/ContactBlock). */}
+          <ContactBlock
+            className="mt-3 pb-4"
+            role="landlord"
+            person={{ name: ma.landlord, email: ma.landlordEmail ?? null, phone: ma.landlordMobile ?? null }}
+            personRef={ma.landlordRef ?? null}
+            onSaved={() => reload()}
+            onWhatsAppSent={
+              ma.leadId
+                ? async (message) => {
+                    /* The appraisal came from a lead, and the lead keeps the log. No
+                       Try again: a log that landed before the connection dropped
+                       would go down twice. */
+                    const settle = saves.reporter.begin("WhatsApp log");
+                    let problem: string | null;
+                    try {
+                      const r = await fetch(`/api/leads/${encodeURIComponent(ma.leadId as string)}/touches`, {
+                        method: "POST",
+                        headers: { "content-type": "application/json" },
+                        body: JSON.stringify({ kind: "whatsapp", outcome: "sent", body: message }),
+                      });
+                      const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+                      problem = j?.ok ? null : (j?.error ?? "That didn't save.");
+                    } catch {
+                      problem = "That didn't save - the connection dropped.";
                     }
-                    className="flex shrink-0 items-center gap-1.5 rounded-full border border-line/70 px-2.5 py-1 text-[11.5px] font-semibold transition-colors hover:border-ink/40"
-                  >
-                    <DoodleIcon name="message-2" size={12} className="text-accent-dark" />
-                    WhatsApp
-                  </WhatsAppButton>
-                </span>
-              ) : (
-                <span className="text-muted">Not recorded</span>
-              )}
-            </Row>
-          </dl>
+                    settle(problem ? { ok: false, problem } : { ok: true });
+                    return problem;
+                  }
+                : undefined
+            }
+          />
           {/* Which REX property this is, captured at the booking stage — long
               before terms are signed, and by a person rather than by matching
               an address. See RexPropertyPicker for why that distinction matters. */}

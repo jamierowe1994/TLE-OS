@@ -1188,6 +1188,35 @@ export const LANDLORD_CONTRACT_PACK = {
 } as const;
 
 /**
+ * Landlord: terms of business on their own (12 Oct 2026). A listing made
+ * with New listing skipped the appraisal, so there is no presentation to send
+ * with the contract: the same send, without the deck, and nothing that says
+ * "thank you for having us round" to someone we never visited.
+ */
+export const LANDLORD_TERMS_ONLY = {
+  subject: "Your terms of business for {{address}}",
+  preheader: "One thing to sign before {{address}} goes on the market.",
+  mode: "blocks",
+  blocks: [
+    H("lto1", "Your Terms of Business"),
+    T(
+      "lto2",
+      "Hi {{firstName}},<br><br>Thank you for choosing The Letting Experts to let <strong>{{address}}</strong> at <strong>{{rent}} a month</strong> on {{serviceLine}}."
+    ),
+    T(
+      "lto3",
+      "Before we can put it on the market, we need your signature on our terms of business. They are waiting in your property file, along with everything else we hold for the home."
+    ),
+    BTN("lto4", "Open your property file", "{{link}}"),
+    SP("lto5", 8),
+    T("lto6", "If anything in them doesn't look right, just reply to this email and {{agentFirst}} will sort it."),
+    T("lto7", "The Letting Experts"),
+    FOOT("lto8", "You're getting this because you're letting your property with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/**
  * Landlord: their agent has replied to a message (17 Sep 2026). The words
  * themselves are in the email, so a short answer needs no click; the button
  * opens the thread on their file to carry on.

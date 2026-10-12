@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BoardSkeleton } from "@/components/Skeleton";
-import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { dropJson, peekJson, readJson } from "@/lib/page-cache";
 import { createPortal } from "react-dom";
@@ -15,7 +14,7 @@ import ListSearch from "@/components/ListSearch";
 import CornerSwell from "@/components/CornerSwell";
 import { searchMatches } from "@/lib/search-match";
 import { rememberListingOrder } from "@/lib/listing-order";
-import NewListingPanel from "@/components/listing/NewListingPanel";
+import NewListingWizard from "@/components/listing/NewListingWizard";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { DIARY } from "@/lib/diary";
 import { Readiness, Tag, boardGaps, readiness, statusOf, type PublishCheck } from "@/components/ListingTags";
@@ -1154,7 +1153,10 @@ export default function Listings() {
       </p>
 
       {adding && (
-        <NewListingPanel
+        /* New listing in five screens, landlord and terms included (12 Oct
+           2026) - the appraisal and Portfolio routes keep NewListingPanel,
+           since their landlord and terms are already on the file. */
+        <NewListingWizard
           onClose={() => setAdding(false)}
           onCreated={(id) => {
             setAdding(false);

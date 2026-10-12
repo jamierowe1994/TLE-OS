@@ -53,12 +53,12 @@ import type { ListingDetails } from "@/lib/listing-details";
 import { inputFromDetails, missing as missingForPortals } from "@/lib/listing-requirements";
 import { useListingTerms } from "@/lib/use-listing-terms";
 import { fetchMe } from "@/lib/me";
-import { WhatsAppButton } from "@/components/WhatsAppQr";
 import SaveChip, { SaveScopeProvider, useSaveScope, type SaveScope } from "@/components/SaveChip";
 import FileDocuments from "@/components/FileDocuments";
 import ListingOwner from "@/components/listing/ListingOwner";
 import RecordPapers from "@/components/listing/RecordPapers";
 import OfferWhoPicker, { type OfferPerson } from "@/components/offers/OfferWhoPicker";
+import ContactBlock from "@/components/ContactBlock";
 import ListingOffers, { type ListingOffer } from "@/components/listing/ListingOffers";
 import ListingEnquiries from "@/components/listing/ListingEnquiries";
 import AddToBlock, { type BlockAnchor } from "@/components/viewings/AddToBlock";
@@ -1433,29 +1433,14 @@ function ListingDrawerBody({
                 </p>
               ) : landlord.status === "known" ? (
                 <div className="text-[13px]">
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                    <span className="font-semibold">{landlord.landlord.name}</span>
-                    {landlord.landlord.phone ? (
-                      <a href={`tel:${landlord.landlord.phone.replace(/\s+/g, "")}`} className="text-[12px] text-muted hover:text-ink">{landlord.landlord.phone}</a>
-                    ) : (
-                      <span className="text-[12px] text-muted">No number on file</span>
-                    )}
-                    {landlord.landlord.email ? (
-                      <a href={`mailto:${landlord.landlord.email}`} className="truncate text-[12px] text-muted hover:text-ink">{landlord.landlord.email}</a>
-                    ) : (
-                      <span className="text-[12px] text-muted">No email on file</span>
-                    )}
-                    {landlord.landlord.phone && (
-                      <WhatsAppButton
-                        phone={landlord.landlord.phone}
-                        name={landlord.landlord.name}
-                        className="flex shrink-0 items-center gap-1.5 rounded-full border border-line/70 px-2.5 py-1 text-[11.5px] font-semibold transition-colors hover:border-ink/40"
-                      >
-                        <DoodleIcon name="message-2" size={12} className="text-accent-dark" />
-                        WhatsApp
-                      </WhatsAppButton>
-                    )}
-                  </div>
+                  {/* The same block as every person in the OS: change the name, number
+                      or email here and REX follows (James, 12 Oct 2026). A landlord off
+                      the managed record has no REX contact here, so it is read only. */}
+                  <ContactBlock
+                    role="landlord"
+                    person={{ name: landlord.landlord.name, email: landlord.landlord.email, phone: landlord.landlord.phone }}
+                    personRef={landlord.landlord.contactId && landlord.landlord.from !== "record" ? `rex:${landlord.landlord.contactId}` : null}
+                  />
                   {/* REX's listing names nobody; this is the managed record's landlord (6 Oct 2026). */}
                   {landlord.landlord.from === "record" && (
                     <p className="mt-2.5 text-[11.5px] leading-relaxed text-muted">From the managed property record. They are not on this listing yet, so nothing is sent to them from here.</p>
@@ -1470,11 +1455,11 @@ function ListingDrawerBody({
             {listing.tenant && (
               <section className="rounded-xl border border-line/50 bg-white p-3.5 sm:p-5">
                 <p className={`${eyebrow} mb-3`}>Current tenant</p>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
-                  <span className="font-semibold">{listing.tenant.name}</span>
-                  {listing.tenant.phone && <a href={`tel:${listing.tenant.phone.replace(/\s+/g, "")}`} className="text-[12px] text-muted hover:text-ink">{listing.tenant.phone}</a>}
-                  {listing.tenant.email && <a href={`mailto:${listing.tenant.email}`} className="truncate text-[12px] text-muted hover:text-ink">{listing.tenant.email}</a>}
-                </div>
+                <ContactBlock
+                  role="tenant"
+                  person={{ name: listing.tenant.name, email: listing.tenant.email || null, phone: listing.tenant.phone || null }}
+                  personRef={null}
+                />
               </section>
             )}
           </div>

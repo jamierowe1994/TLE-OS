@@ -247,6 +247,27 @@ export const SWITCHES: Switch[] = [
   },
   {
     /**
+     * The landlord on the REX LISTING (12 Oct 2026, James said yes).
+     *
+     * Nothing in the OS ever put the owner on a listing it made, and Push to
+     * Propoly reads the landlord from the listing - so every OS-made listing
+     * stopped there on "No owner is attached to the listing". On, a listing
+     * the OS creates gets its landlord added as Listing Owner, the same
+     * nested Listings/update the push already uses for tenants. Additive:
+     * it never takes anyone off. Off, nothing is written and the listing is
+     * made exactly as before.
+     */
+    key: "rex_listing_owner",
+    label: "Put the landlord on new REX listings",
+    what: "When the OS creates a listing, the landlord is added to it in REX as Listing Owner, so the push to Propoly can find them.",
+    who: "Nobody is emailed. This adds a relationship to a REX listing - the live system six businesses share. Listings/update must also be on REX_ALLOW_WRITES.",
+    confirm: "WRITE TO REX",
+    /* No old variable: this never existed before. Unset means off. */
+    legacyEnv: "REX_LISTING_OWNER",
+    legacyOn: "on",
+  },
+  {
+    /**
      * The offer-accepted handover, for real.
      *
      * Off (the default) is SHADOW: every accepted application is worked

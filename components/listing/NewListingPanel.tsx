@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import SignInAgain from "@/components/SignInAgain";
 import { fiveWeeks, money } from "@/components/listing/listing-draft";
-import { LET_TYPES, SERVICE_LEVELS } from "@/lib/listing-requirements";
+import { SERVICE_LEVELS } from "@/lib/listing-requirements";
 
 /**
  * ADD A NEW LISTING (16 Sep 2026). The button used to open REX in a new tab.
@@ -62,7 +62,6 @@ export default function NewListingPanel({ onClose, onCreated, prefill, heading =
   /* Typed over? Then the rent stops filling it in. */
   const [depositByHand, setDepositByHand] = useState(false);
   const [availableFrom, setAvailableFrom] = useState("");
-  const [letType, setLetType] = useState("long_term");
   const [serviceLevel, setServiceLevel] = useState(
     SERVICE_LEVELS.some((s) => s.id === prefill?.serviceLevel) ? (prefill?.serviceLevel as string) : "managed"
   );
@@ -139,7 +138,6 @@ export default function NewListingPanel({ onClose, onCreated, prefill, heading =
           rent: Number(rent),
           deposit: deposit === "" ? null : Number(deposit),
           availableFrom: availableFrom || null,
-          letType,
           serviceLevel,
         }),
       });
@@ -282,12 +280,6 @@ export default function NewListingPanel({ onClose, onCreated, prefill, heading =
                 Service
                 <select value={serviceLevel} onChange={(e) => setServiceLevel(e.target.value)} className={`${field} mt-1`}>
                   {SERVICE_LEVELS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-                </select>
-              </label>
-              <label className={`${label} col-span-2`}>
-                Let type
-                <select value={letType} onChange={(e) => setLetType(e.target.value)} className={`${field} mt-1`}>
-                  {LET_TYPES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                 </select>
               </label>
             </div>
