@@ -467,6 +467,7 @@ const MACHINE_ROUTES = [
   "/api/agent-compliance/remind",     // the agent's own 30/14/7, and Michael's list
   "/api/lettings-capture/run",        // the daily market sweep
   "/api/leads/scan",                  // the lead ledger, every five minutes
+  "/api/listings/stats/sweep",        // the day's portal figures for every live home
   /* Lead counts for marketing's Base44 app. The route asks for its own key
      (MARKETING_FEED_KEY) or a signed-in owner/marketing person, and gives
      counts only - no names, emails or phones. */

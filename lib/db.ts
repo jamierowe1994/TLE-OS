@@ -3623,6 +3623,27 @@ CREATE INDEX IF NOT EXISTS os_customer_updates_deal ON os_customer_updates (deal
 -- on the page's id - the application's, or the Propoly deal's for a let with
 -- no application. Closes the let on Applications; nothing is written to REX
 -- or Propoly, Kirstie is told on her feed to cancel it there.
+-- What the portals did with each live listing, read once a day and kept
+-- (James, 12 Oct 2026: "we all store that ... build up historical records",
+-- and show a home against every other one on the market). One row per
+-- listing, portal and day; portal 'all' is the listing's totals. REX only
+-- gives the campaign to date, so the daily rows are what make a trend.
+CREATE TABLE IF NOT EXISTS os_portal_stats_daily (
+  listing_id     TEXT NOT NULL,
+  portal         TEXT NOT NULL,
+  read_on        DATE NOT NULL,
+  detail         INTEGER,
+  summary        INTEGER,
+  mobile_detail  INTEGER,
+  days_live      INTEGER,
+  rent_monthly   INTEGER,
+  name           TEXT NOT NULL DEFAULT '',
+  locality       TEXT NOT NULL DEFAULT '',
+  read_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (listing_id, portal, read_on)
+);
+CREATE INDEX IF NOT EXISTS os_portal_stats_daily_day ON os_portal_stats_daily (read_on, portal);
+
 CREATE TABLE IF NOT EXISTS os_let_cancellations (
   ref            TEXT PRIMARY KEY,
   deal_id        TEXT,

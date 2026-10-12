@@ -9,7 +9,7 @@ import PhotoLightbox from "@/components/PhotoLightbox";
 import Link from "next/link";
 import EmailToTenants from "@/components/EmailToTenants";
 import ProcessTimeline from "@/components/ProcessTimeline";
-import PortalStatsPanel from "@/components/PortalStatsPanel";
+import PortalMarket from "@/components/listing/PortalMarket";
 import TenancyLinkPanel from "@/components/TenancyLinkPanel";
 import ListingDocuments from "@/components/ListingDocuments";
 import PropertyFile from "@/components/PropertyFile";
@@ -156,7 +156,7 @@ const TAB_LEAD: Record<TabKey, string> = {
   applications: "Only the people who have offered. Put each one to the landlord, then accept or decline it. The accepted one moves to Applications; the rest are held until its holding fee is paid.",
   marketing: "The facts, the advert the portals show, and the photographs. What a tenant sees, all in one place.",
   compliance: "Every certificate the home needs and where it stands, then the documents: how we get in, the terms of business, and everything signed or filed against this listing.",
-  portals: "Where the advert is live, taking it off or putting it back, and how it is doing.",
+  portals: "Where the advert is live, taking it off or putting it back, and how it is doing against every other home we have on the portals.",
 };
 
 /** The pop-out a link asks for (?tab=), if any. Documents lives in
@@ -1142,11 +1142,18 @@ function ListingDrawerBody({
   );
   /* A button as wide as its words: the dark icon, then the label. */
   const pill = "inline-flex items-center gap-2.5 rounded-full border border-line/60 bg-white py-1.5 pl-1.5 pr-4 text-[12.5px] font-semibold transition-[transform,box-shadow,border-color] duration-200 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:border-ink/60 hover:shadow-[3px_3px_0_0_color-mix(in_srgb,var(--ink)_72%,var(--page))]";
-  const pillIcon = (name: string) => (
-    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--brown)] text-white"><DoodleIcon name={name} size={13} /></span>
+  /* Green for getting people in - Book a viewing, Make an offer, Request
+     access - and brown for the rest (James, 12 Oct 2026: "to liven this up"). */
+  const pillIcon = (name: string, green = false) => (
+    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white" style={{ background: green ? SAGE_INK : "var(--brown)" }}><DoodleIcon name={name} size={13} /></span>
   );
-  const tileIcon = (name: string, dark = false) => (
-    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${dark ? "bg-[var(--brown)] text-white" : "bg-accent-soft text-accent-dark"}`}><DoodleIcon name={name} size={14} /></span>
+  const tileIcon = (name: string, dark: boolean | "green" = false) => (
+    <span
+      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${dark ? "text-white" : "bg-accent-soft text-accent-dark"}`}
+      style={dark ? { background: dark === "green" ? SAGE_INK : "var(--brown)" } : undefined}
+    >
+      <DoodleIcon name={name} size={14} />
+    </span>
   );
   const shots = photos;
   const dayOf = (iso: string) => new Date(iso.length === 10 ? `${iso}T00:00:00` : iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
@@ -1262,12 +1269,12 @@ function ListingDrawerBody({
           rows and the spine. The home beside eight tiles - every section is a
           pop-out now, so nothing bolts onto the foot of the page; the landlord
           and how we get in beside Next up; where it's up to across the bottom. */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_460px]">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_460px]">
         {/* ── 1. the home: Portfolio's box exactly (James, 12 Oct 2026: "the
             whole point is that we're trying to keep this consistent across
             the different tabs") - the big photo, three square ones down its
             right-hand side, and the home underneath. ── */}
-        <section className={`${box} min-w-0 p-3 lg:col-start-1`}>
+        <section className={`${box} min-w-0 p-3 xl:col-start-1`}>
           <div className={`grid grid-cols-1 gap-2 ${shots.length > 1 ? "sm:grid-cols-[minmax(0,1fr)_140px] 2xl:grid-cols-[minmax(0,1fr)_170px]" : ""}`}>
             {/* The three down the side are square; the big one takes their
                 height, so it never sets the box's height itself. */}
@@ -1337,10 +1344,11 @@ function ListingDrawerBody({
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
-                <AccessRequest
+                {/* Until access is recorded; after that the Access details
+                    below carry it (James, 12 Oct 2026). */}
+                {accessStatus !== "loading" && !access.kind && <AccessRequest
                   value={access}
                   onChange={setAccess}
-                  loading={accessStatus === "loading"}
                   address={listing.name}
                   agent={me}
                   tenant={listing.tenant ?? null}
@@ -1348,12 +1356,12 @@ function ListingDrawerBody({
                   viewings={upcomingOptions}
                   onBook={LISTING_BOOKER_LIVE ? () => setBooking(true) : undefined}
                   renderButton={(b) => (
-                    <button type="button" onClick={b.press} className={pill} title={access.kind ? "Change how we get in from the access details" : "Record how we get into the property"}>
-                      {pillIcon(b.icon)}
+                    <button type="button" onClick={b.press} className={pill} title="Record how we get into the property">
+                      {pillIcon(b.icon, true)}
                       {b.label}
                     </button>
                   )}
-                />
+                />}
                 <button type="button" data-steve="listing.mail-db" onClick={() => setEmailing(true)} className={pill}>
                   {pillIcon("megaphone")}
                   Mail the database
@@ -1383,14 +1391,14 @@ function ListingDrawerBody({
         </section>
 
         {/* ── the eight tiles, level with the home. Each opens a pop-out. ── */}
-        <section className={`${box} flex flex-col p-4 lg:col-start-2`}>
+        <section className={`${box} @container flex flex-col p-4 xl:col-start-2`}>
           <p className={`${eyebrow} mb-3 px-1`}>Actions</p>
-          <div className="grid flex-1 auto-rows-fr grid-cols-2 gap-2">
+          <div className="grid flex-1 auto-rows-fr grid-cols-2 gap-2 @[40rem]:grid-cols-4">
             {/* Book a viewing and Book a slot, one tile (James, 12 Oct 2026):
                 it asks which. */}
             {LISTING_BOOKER_LIVE && (
               <button type="button" data-steve="listing.book-slot" onClick={() => setChoosingBook(true)} className={tile}>
-                {tileIcon("calendar", true)}
+                {tileIcon("calendar", "green")}
                 {tileText("Book a viewing", "One, or a slot to fill")}
               </button>
             )}
@@ -1402,7 +1410,7 @@ function ListingDrawerBody({
               className={tile}
               title={canOffer ? undefined : "Once it is live with a rent, and not let agreed"}
             >
-              {tileIcon("coin", true)}
+              {tileIcon("coin", "green")}
               {tileText("Make an offer", canOffer ? "Viewed or asked" : "Once it is live")}
             </button>
             {sectionTile("marketing")}
@@ -1428,7 +1436,7 @@ function ListingDrawerBody({
         </section>
 
         {/* ── 2. the landlord and how we get in ─────────────────────────── */}
-        <section className={`${box} @container flex min-w-0 flex-col p-4 sm:p-5 lg:col-start-1`}>
+        <section className={`${box} @container flex min-w-0 flex-col p-4 sm:p-5 xl:col-start-1`}>
           {/* A line of the home's facts. The rest live in Edit the advert. */}
           <div className="grid grid-cols-3 gap-x-4 gap-y-3 @[34rem]:grid-cols-6">
             {highlights.map((f) => (
@@ -1454,6 +1462,7 @@ function ListingDrawerBody({
                       or email here and REX follows (James, 12 Oct 2026). A landlord off
                       the managed record has no REX contact here, so it is read only. */}
                   <ContactBlock
+                    className="max-w-[440px]"
                     role="landlord"
                     person={{ name: landlord.landlord.name, email: landlord.landlord.email, phone: landlord.landlord.phone }}
                     personRef={landlord.landlord.contactId && landlord.landlord.from !== "record" ? `rex:${landlord.landlord.contactId}` : null}
@@ -1496,6 +1505,7 @@ function ListingDrawerBody({
                   <p className="mb-1.5 font-semibold">Through the tenant</p>
                   {listing.tenant ? (
                     <ContactBlock
+                      className="max-w-[440px]"
                       role="tenant"
                       person={{ name: listing.tenant.name, email: listing.tenant.email || null, phone: listing.tenant.phone || null }}
                       personRef={null}
@@ -1510,10 +1520,32 @@ function ListingDrawerBody({
                   <p className="mt-0.5 text-[12px] text-muted">Their details are on the left.</p>
                 </div>
               )}
+              {/* Asking them, or the keys, once we know how we get in. */}
+              {accessStatus !== "loading" && access.kind && (
+                <div className="mt-3">
+                  <AccessRequest
+                    value={access}
+                    onChange={setAccess}
+                    address={listing.name}
+                    agent={me}
+                    tenant={listing.tenant ?? null}
+                    landlord={landlord.status === "known" ? landlord.landlord : null}
+                    viewings={upcomingOptions}
+                    onBook={LISTING_BOOKER_LIVE ? () => setBooking(true) : undefined}
+                    renderButton={(b) => (
+                      <button type="button" onClick={b.press} className={pill}>
+                        {pillIcon(b.icon, true)}
+                        {access.kind === "vacant" ? (b.keysIn ? "Keys in the office" : "Mark the keys collected") : b.label}
+                      </button>
+                    )}
+                  />
+                </div>
+              )}
               {listing.tenant && access.kind !== "tenant" && (
                 <div className="mt-3 border-t border-line/40 pt-3 text-[13px]">
                   <p className={`${eyebrow} mb-1.5`}>Current tenant</p>
                   <ContactBlock
+                    className="max-w-[440px]"
                     role="tenant"
                     person={{ name: listing.tenant.name, email: listing.tenant.email || null, phone: listing.tenant.phone || null }}
                     personRef={null}
@@ -1629,7 +1661,7 @@ function ListingDrawerBody({
 
         {/* ── Next up, level with the facts. It stays (James, 12 Oct 2026):
             what the process says to do, then the latest on this home. ── */}
-        <section className={`${pop} flex flex-col rounded-2xl border border-accent-dark/15 bg-accent-soft/60 p-5 lg:col-start-2`}>
+        <section className={`${pop} flex flex-col rounded-2xl border border-accent-dark/15 bg-accent-soft/60 p-5 xl:col-start-2`}>
           <p className={`${eyebrow} text-accent-dark`}>Next up · step {Math.min(step, LISTING_TRACK.length - 1) + 1} of {LISTING_TRACK.length}</p>
           <h2 className="hand mt-1.5 text-[19px] leading-tight">{here.title}</h2>
           <p className="mt-1 text-[12px] leading-relaxed text-muted">{here.detail}</p>
@@ -2019,10 +2051,11 @@ function ListingDrawerBody({
               />
             )}
             {/* How the advert is doing, only where there IS an advert. */}
+            {/* How it is doing against every other live home (12 Oct 2026). */}
             {tab === "portals" && isLive && (
-              <section className="mt-5 rounded-xl border border-line/50 bg-white p-5">
-                <PortalStatsPanel listingId={listing.id} embedded />
-              </section>
+              <div className="mt-5">
+                <PortalMarket listingId={String(listing.id)} />
+              </div>
             )}
 
             {tab === "compliance" && (

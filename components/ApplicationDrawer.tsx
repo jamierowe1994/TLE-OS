@@ -8,6 +8,7 @@ import RecordSidePanel, { type NoteRow, type PanelTab } from "@/components/Recor
 import CustomerUpdates from "@/components/CustomerUpdates";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
+import PhotoLightbox from "@/components/PhotoLightbox";
 import PropertyFile from "@/components/PropertyFile";
 import SaveChip, { SaveScopeProvider, useSaveScope } from "@/components/SaveChip";
 import { Pill } from "@/components/Wire";
@@ -828,6 +829,24 @@ export default function ApplicationDrawer({
     return () => window.removeEventListener("keydown", onKey);
   }, [onStep]);
 
+  /* The home's photos, from its listing. */
+  const photoListing = app?.listingId ?? deal?.app.listingId ?? info?.listingId ?? null;
+  const [gallery, setGallery] = useState<string[] | null>(null);
+  const [lightbox, setLightbox] = useState<number | null>(null);
+  useEffect(() => {
+    if (!photoListing) return;
+    let live = true;
+    fetch(`/api/listings/details?id=${encodeURIComponent(photoListing)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; details?: { images?: { url: string; priority: number }[] } }) => {
+        if (!live || !j.ok) return;
+        const urls = [...(j.details?.images ?? [])].sort((a, b) => a.priority - b.priority).map((m) => m.url).filter(Boolean);
+        if (urls.length) setGallery(urls);
+      })
+      .catch(() => { /* the record's own photo stays */ });
+    return () => { live = false; };
+  }, [photoListing]);
+
   /* ── what is open over the page ───────────────────────────────────── */
   const [panel, setPanel] = useState<PanelTab | null>(null);
   const [person, setPerson] = useState<{ role: "tenant" | "landlord"; index: number } | null>(null);
@@ -860,6 +879,10 @@ export default function ApplicationDrawer({
   const name = app?.property ?? deal?.app.propertyName ?? "This let";
   const locality = app?.locality ?? deal?.app.locality ?? "";
   const image = app?.image ?? deal?.app.image ?? null;
+  /* Every photo of the home, off its listing (James, 12 Oct 2026: "on
+     Applications we only seem to show the one photo"), the one the record
+     carries until they land. */
+  const shots = gallery?.length ? gallery : (deal?.app.images?.length ? deal.app.images : image ? [image] : []);
   const moveIn = app ? (app.moveIn !== "—" ? app.moveIn : deal?.app.startDate ?? null) : deal?.app.startDate ?? null;
   const agent = app?.agent ?? deal?.agentName ?? "—";
   const dealStatus = deal ? cardStatus(deal, deal.effectiveStatusKey) : null;
@@ -966,13 +989,41 @@ export default function ApplicationDrawer({
           </p>
         )}
 
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_460px]">
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_460px]">
           {/* ── 1. the home and who it is for ─────────────────────────── */}
-          <section className={`${box} flex min-w-0 flex-col p-3 lg:col-start-1`}>
-            {/* As tall as the eight tiles beside it - the same on every let,
-                so the picture is never squeezed thin. */}
-            <div className="relative aspect-[2/1] overflow-hidden rounded-xl bg-box lg:aspect-auto lg:min-h-[260px] lg:flex-1">
-              <PropertyPhoto src={image} alt="" width={1400} height={700} className="absolute inset-0 h-full w-full object-cover" />
+          {/* Portfolio's box, as on a listing (James, 12 Oct 2026): the big
+              photo, three square ones down its right-hand side, the let
+              underneath. */}
+          <section className={`${box} min-w-0 p-3 xl:col-start-1`}>
+            <div className={`grid grid-cols-1 gap-2 ${shots.length > 1 ? "sm:grid-cols-[minmax(0,1fr)_140px] 2xl:grid-cols-[minmax(0,1fr)_170px]" : ""}`}>
+              <button
+                type="button"
+                onClick={() => shots.length && setLightbox(0)}
+                aria-label={shots.length ? "See the photos" : "No photos"}
+                className={`group relative aspect-[16/10] overflow-hidden rounded-xl bg-box ${shots.length > 1 ? "sm:aspect-auto" : ""}`}
+              >
+                <PropertyPhoto src={shots[0] ?? null} alt="" width={1400} height={875} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.015]" />
+                {shots.length > 0 && (
+                  <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-[11.5px] font-semibold backdrop-blur">
+                    <DoodleIcon name="pack/photo" size={12} /> {shots.length} {shots.length === 1 ? "photo" : "photos"}
+                  </span>
+                )}
+              </button>
+              {shots.length > 1 && (
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-1">
+                  {[0, 1, 2].map((i) => {
+                    const src = shots[i + 1];
+                    if (!src) return <span key={i} aria-hidden className="aspect-square rounded-xl bg-box" />;
+                    const more = i === 2 && shots.length > 4 ? shots.length - 4 : 0;
+                    return (
+                      <button key={src + i} type="button" onClick={() => setLightbox(i + 1)} aria-label={more ? `${more} more photos` : `Photo ${i + 2}`} className="group relative aspect-square overflow-hidden rounded-xl bg-box">
+                        <PropertyPhoto src={src} alt="" className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
+                        {more > 0 && <span className="absolute inset-0 flex items-center justify-center bg-ink/45 text-[18px] font-semibold text-white">+{more}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             <div className="px-2 pb-1.5 pt-4">
               <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
@@ -998,9 +1049,9 @@ export default function ApplicationDrawer({
           </section>
 
           {/* ── the eight, always, in the same places ─────────────────── */}
-          <section className={`${box} flex flex-col p-4 lg:col-start-2`}>
+          <section className={`${box} @container flex flex-col p-4 xl:col-start-2`}>
             <p className={`${eyebrow} mb-3 px-1`}>Actions</p>
-            <div className="grid flex-1 auto-rows-fr grid-cols-2 gap-2">
+            <div className="grid flex-1 auto-rows-fr grid-cols-2 gap-2 @[40rem]:grid-cols-4">
               {/* The PLC check: from the record once the landlord has the
                   offer, done once it is approved. */}
               <Tile
@@ -1040,10 +1091,10 @@ export default function ApplicationDrawer({
           </section>
 
           {/* Once the offer is accepted the handover IS the next action. */}
-          {aside && !cancelled && <div className="min-w-0 lg:col-span-2">{aside}</div>}
+          {aside && !cancelled && <div className="min-w-0 xl:col-span-2">{aside}</div>}
 
           {/* ── 2. the facts and the people, the spine underneath ────────── */}
-          <section className={`${box} flex min-w-0 flex-col p-4 sm:p-5 lg:col-start-1`}>
+          <section className={`${box} flex min-w-0 flex-col p-4 sm:p-5 xl:col-start-1`}>
             <p className={eyebrow}>General info</p>
             <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 2xl:grid-cols-4">
               {facts.map((f) => <Info key={f.label} {...f} />)}
@@ -1113,7 +1164,7 @@ export default function ApplicationDrawer({
           </section>
 
           {/* ── the next step, level with the facts ───────────────────── */}
-          <section className={`${pop} min-w-0 rounded-2xl border border-accent-dark/15 bg-accent-soft/60 p-5 lg:col-start-2`}>
+          <section className={`${pop} min-w-0 rounded-2xl border border-accent-dark/15 bg-accent-soft/60 p-5 xl:col-start-2`}>
             {cancelled ? (
               /* Nothing to do next on a cancelled let but tell people. */
               <>
@@ -1361,6 +1412,8 @@ export default function ApplicationDrawer({
       <Drawer open={Boolean(builder)} label={builder?.mode === "reminder" ? "Send a reminder" : "Customer update"} onClose={closeBuilder}>
         {builder && <EmailBuilder key={`${builder.mode}-${builder.start?.kind ?? ""}-${builder.start?.to ?? ""}`} letId={letId} mode={builder.mode} people={info} start={builder.start} onClose={closeBuilder} />}
       </Drawer>
+
+      {lightbox != null && <PhotoLightbox photos={shots} start={lightbox} name={name} onClose={() => setLightbox(null)} />}
 
       {cancelOpen && (
         <CancelDeal
