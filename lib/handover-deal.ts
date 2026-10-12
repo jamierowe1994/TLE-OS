@@ -85,13 +85,19 @@ export const TENANCY_TYPES = {
 } as const;
 export type TenancyType = keyof typeof TENANCY_TYPES;
 
-/* Propoly also takes dps_custodial, dps_insured, my_deposits_custodial and
-   my_deposits_insured; TLE uses TDS only. */
+/* Propoly also takes dps_custodial, dps_insured and my_deposits_insured.
+   England uses TDS. Scotland is always MyDeposits Scotland (James, 12 Oct
+   2026: "any Scottish property has to go through that"), held custodially as
+   Scottish law requires - so it is set, not picked. */
 export const DEPOSIT_SCHEMES = {
   tds_custodial: "TDS Custodial",
   tds_insured: "TDS Insured",
+  my_deposits_custodial: "MyDeposits Scotland",
 } as const;
 export type DepositScheme = keyof typeof DEPOSIT_SCHEMES;
+export const SCOTTISH_SCHEME: DepositScheme = "my_deposits_custodial";
+/** The schemes an agent may pick from, for a home in England. */
+export const ENGLISH_SCHEMES = { tds_custodial: DEPOSIT_SCHEMES.tds_custodial, tds_insured: DEPOSIT_SCHEMES.tds_insured } as const;
 
 export const PAYMENT_SCHEDULES = {
   monthly: "Monthly",
@@ -157,7 +163,7 @@ export function dealDefaults(packet: Handoff, listing: Row): DealTerms {
     serviceLevel: serviceOf(listing),
     paymentSchedule: "monthly",
     tenancyType: scotland ? "scottish_tenancy" : "assured_periodic_tenancy",
-    depositScheme: officeScheme(),
+    depositScheme: scotland ? SCOTTISH_SCHEME : officeScheme(),
     zeroDeposit: false,
     depositPounds: Number.isFinite(bond) && bond > 0 ? bond : null,
     holdingFeePounds: holdingFeeFor(packet.rentPcm, scotland),
@@ -178,7 +184,8 @@ export function withChanges(base: DealTerms, change: Partial<DealTerms> | null |
   if (typeof change.serviceLevel === "string" && change.serviceLevel in SERVICE_LEVELS) out.serviceLevel = change.serviceLevel;
   if (typeof change.paymentSchedule === "string" && change.paymentSchedule in PAYMENT_SCHEDULES) out.paymentSchedule = change.paymentSchedule;
   if (typeof change.tenancyType === "string" && change.tenancyType in TENANCY_TYPES) out.tenancyType = change.tenancyType;
-  if (typeof change.depositScheme === "string" && change.depositScheme in DEPOSIT_SCHEMES) out.depositScheme = change.depositScheme;
+  if (out.scotland) out.depositScheme = SCOTTISH_SCHEME;
+  else if (typeof change.depositScheme === "string" && change.depositScheme in ENGLISH_SCHEMES) out.depositScheme = change.depositScheme;
   if (typeof change.zeroDeposit === "boolean") out.zeroDeposit = change.zeroDeposit;
   const dep = money(change.depositPounds);
   if (dep !== undefined) out.depositPounds = dep;
@@ -228,11 +235,35 @@ export function dealPayload(t: DealTerms, propertyUuid: string, managedBy: strin
   };
 }
 
-/** The listing, read for the deal's defaults (the agent's confirm panel). */
+/**
+ * What stands in for a listing on a tenant swap: a REX PM home has none, so
+ * its address, agent and service do (lib/tenant-swaps). The push and the
+ * agent's confirm panel both read it, so they agree.
+ */
+export function swapStandIn(packet: Handoff): Row {
+  const home = packet.swapHome ?? null;
+  return {
+    property: { adr_street_name: home?.line1 ?? packet.property, adr_postcode: home?.postcode ?? null },
+    agreement_type: isScottish(home?.postcode ?? null, packet.locality, packet.property) ? { id: "153279" } : null,
+    lettings_service_type: home?.managed ? { id: "managed" } : null,
+    listing_agent_1: { email_address: home?.agentEmail ?? null },
+  };
+}
+
+/**
+ * The listing, read for the deal's defaults (the agent's confirm panel).
+ * Before 12 Oct 2026 a tenant swap (no listing) got no panel at all, so 6
+ * Ruskin was stopped on "No deposit scheme picked" with nowhere to pick one.
+ */
 export async function dealDraftFor(packet: Handoff): Promise<{ terms: DealTerms; problems: string[] } | null> {
-  if (!packet.listingId) return null;
-  const res = await rexCall("Listings", "read", { id: packet.listingId });
-  if (!res.ok) return null;
-  const terms = dealDefaults(packet, (res.result ?? {}) as Row);
+  let listing: Row;
+  if (packet.listingId) {
+    const res = await rexCall("Listings", "read", { id: packet.listingId });
+    if (!res.ok) return null;
+    listing = (res.result ?? {}) as Row;
+  } else if (packet.swap) {
+    listing = swapStandIn(packet);
+  } else return null;
+  const terms = dealDefaults(packet, listing);
   return { terms, problems: dealProblems(terms) };
 }

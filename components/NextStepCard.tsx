@@ -266,7 +266,7 @@ export default function NextStepCard({
                           <span>
                             Landlord opted into zero deposit
                             <span className="block text-[11px] text-muted">
-                              {terms.zeroDeposit ? "Flatfair instead of a deposit. Propoly's Flatfair clause stays on the deal." : "A deposit held with TDS. Propoly adds its Flatfair clause to every deal - you'll be told to take it off."}
+                              {terms.zeroDeposit ? "Flatfair instead of a deposit. Propoly's Flatfair clause stays on the deal." : `A deposit held with ${terms.scotland ? "MyDeposits Scotland" : "TDS"}. Propoly adds its Flatfair clause to every deal - you'll be told to take it off.`}
                             </span>
                           </span>
                         </label>
@@ -280,12 +280,16 @@ export default function NextStepCard({
                         </label>
                         <label className="flex flex-col gap-1">
                           <span className="text-muted">Deposit scheme</span>
-                          <select value={terms.depositScheme ?? ""} onChange={(e) => set("depositScheme", e.target.value || null)} className="rounded-lg border border-line/70 bg-white px-2.5 py-1.5">
-                            <option value="">Pick one</option>
-                            {Object.entries(draft?.schemes ?? {}).map(([k, v]) => (
-                              <option key={k} value={k}>{v}</option>
-                            ))}
-                          </select>
+                          {terms.scotland ? (
+                            <span className="rounded-lg border border-line/70 bg-line/10 px-2.5 py-1.5" title="Every Scottish home uses MyDeposits Scotland">MyDeposits Scotland</span>
+                          ) : (
+                            <select value={terms.depositScheme ?? ""} onChange={(e) => set("depositScheme", e.target.value || null)} className="rounded-lg border border-line/70 bg-white px-2.5 py-1.5">
+                              <option value="">Pick one</option>
+                              {Object.entries(draft?.schemes ?? {}).map(([k, v]) => (
+                                <option key={k} value={k}>{v}</option>
+                              ))}
+                            </select>
+                          )}
                         </label>
                         <label className="flex flex-col gap-1">
                           <span className="text-muted">Service</span>

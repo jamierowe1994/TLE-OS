@@ -12,7 +12,7 @@ import { createUpdate, type UpdateRecipient } from "@/lib/customer-updates";
 import { userByName } from "@/lib/tenant-email-send";
 import { isScottish } from "@/lib/property-flags";
 import { parseAddress, postcodeOf, sameHome } from "@/lib/address-parse";
-import { DEPOSIT_SCHEMES, TENANCY_TYPES, dealDefaults, dealPayload, dealProblems, withChanges, type DealTerms } from "@/lib/handover-deal";
+import { DEPOSIT_SCHEMES, TENANCY_TYPES, dealDefaults, dealPayload, dealProblems, swapStandIn, withChanges, type DealTerms } from "@/lib/handover-deal";
 import { refreshPropolyDealsNow } from "@/lib/business/propoly-deals";
 
 /**
@@ -248,16 +248,7 @@ export async function runHandover(
     const swapHome = packet.swap ? packet.swapHome ?? null : null;
     const listingRes = packet.listingId
       ? await rexCall("Listings", "read", { id: packet.listingId })
-      : {
-          ok: true as const,
-          error: null,
-          result: {
-            property: { adr_street_name: swapHome?.line1 ?? packet.property, adr_postcode: swapHome?.postcode ?? null },
-            agreement_type: isScottish(swapHome?.postcode ?? null, packet.locality, packet.property) ? { id: "153279" } : null,
-            lettings_service_type: swapHome?.managed ? { id: "managed" } : null,
-            listing_agent_1: { email_address: swapHome?.agentEmail ?? null },
-          } as Row,
-        };
+      : { ok: true as const, error: null, result: swapStandIn(packet) };
     if (!listingRes.ok) {
       await rec.add({ id: "listing", label: "The listing", state: "failed", detail: `REX would not read listing ${packet.listingId}.`, response: listingRes.error ?? null });
       status = "failed";
