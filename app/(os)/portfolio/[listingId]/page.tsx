@@ -610,9 +610,9 @@ export default function PropertyPage() {
             the name beside the actions; the facts and the people beside the
             latest activity; the sections beside the map. On a phone they
             simply stack, actions straight after the photos. */}
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_460px]">
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_460px]">
           {/* ── 1. the photos and the name ──────────────────────────────── */}
-          <section className={`${box} min-w-0 p-3 lg:col-start-1 lg:row-start-1`}>
+          <section className={`${box} min-w-0 p-3 xl:col-start-1 xl:row-start-1`}>
               <div className={`grid grid-cols-1 gap-2 ${shots.length > 1 ? "sm:grid-cols-[minmax(0,1fr)_140px] 2xl:grid-cols-[minmax(0,1fr)_170px]" : ""}`}>
                 {/* The three down the side are square; the big one takes their
                     height, so it never sets the box's height itself. */}
@@ -683,9 +683,11 @@ export default function PropertyPage() {
           </section>
 
           {/* ── the actions, level with the photos ─────────────────────── */}
-            <section className={`${box} flex flex-col p-4 lg:col-start-2 lg:row-start-1`}>
+            <section className={`${box} @container flex flex-col p-4 xl:col-start-2 xl:row-start-1`}>
               <p className={`${eyebrow} mb-3 px-1`}>Actions</p>
-              <div className="grid flex-1 auto-rows-fr grid-cols-2 gap-2">
+              {/* Two columns beside the photos; four across once the page stacks
+                  below 1280px, so the photo is never squeezed (12 Oct 2026). */}
+              <div className="grid flex-1 auto-rows-fr grid-cols-2 gap-2 @[40rem]:grid-cols-4">
                 <button type="button" disabled={!canAct} onClick={() => act({ kind: "repair" })} className={tile}>{tileIcon("setting")}{tileText("Report a repair", "Tenant and landlord told at each step")}</button>
                 <button type="button" disabled={!canAct} onClick={() => act({ kind: "planned" })} className={tile}>{tileIcon("calendar")}{tileText("Plan a certificate", "A gas safety, EICR or service, by a date")}</button>
                 <button type="button" disabled={!canAct || visits.state !== "ready"} onClick={() => void bookVisit()} className={tile}>{tileIcon("checklist")}{tileText("Book a property visit", "Every 6 months: the home and the tenant")}</button>
@@ -713,7 +715,7 @@ export default function PropertyPage() {
             </section>
 
           {/* ── 2. the facts and the people ────────────────────────────── */}
-          <section className={`${box} flex min-w-0 flex-col p-4 sm:p-5 lg:col-start-1 lg:row-start-2`}>
+          <section className={`${box} flex min-w-0 flex-col p-4 sm:p-5 xl:col-start-1 xl:row-start-2`}>
               <p className={eyebrow}>General info</p>
               {/* Spread across the box, four even columns, each a label over its value. */}
               <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
@@ -807,7 +809,7 @@ export default function PropertyPage() {
           </section>
 
           {/* ── on this home, level with the facts ─────────────────────── */}
-            <section id="action-box" className={`${pop} scroll-mt-5 rounded-2xl border border-accent-dark/15 bg-accent-soft/60 p-5 lg:col-start-2 lg:row-start-2`}>
+            <section id="action-box" className={`${pop} scroll-mt-5 rounded-2xl border border-accent-dark/15 bg-accent-soft/60 p-5 xl:col-start-2 xl:row-start-2`}>
               {(
                 <>
                   <p className={eyebrow}>On this home{drafts.state === "ready" && drafts.data.length > 0 ? ` · ${drafts.data.length} not finished` : ""}</p>
@@ -835,7 +837,7 @@ export default function PropertyPage() {
             </section>
 
           {/* ── 3. the sections ────────────────────────────────────────── */}
-          <section id="sections" className={`${box} min-w-0 scroll-mt-5 p-5 lg:col-start-1 lg:row-start-3`}>
+          <section id="sections" className={`${box} min-w-0 scroll-mt-5 p-5 xl:col-start-1 xl:row-start-3`}>
             <nav className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1" aria-label="Sections">
               {TABS.map((t) => (
                 <button
@@ -951,7 +953,7 @@ export default function PropertyPage() {
           {!p.test && (
             <RentBox
               listingId={String(p.listingId)}
-              className={`${box} lg:col-start-2 lg:row-start-3 lg:self-start`}
+              className={`${box} xl:col-start-2 xl:row-start-3 xl:self-start`}
               shape={houseView && house && !lets
                 ? { kind: "rooms", rooms: house.rooms.map((r) => ({ id: String(r.listingId), label: roomLabel(r), tenant: r.tenants[0]?.name ?? null, rent: r.rent, period: r.rentPeriod, monthly: r.rentMonthly })) }
                 : { kind: "home", rent: p.rentMonthly, tenants: tenants.map((t) => t.name) }}
@@ -959,7 +961,7 @@ export default function PropertyPage() {
           )}
 
             {everything && !p.test && p.onRex !== false && (
-              <p className="text-[11.5px] text-muted lg:col-start-1 lg:row-start-4">
+              <p className="text-[11.5px] text-muted xl:col-start-1 xl:row-start-4">
                 <a href={rexListingUrl(p.listingId, "leased")} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">Open the record behind this home</a>
               </p>
             )}
