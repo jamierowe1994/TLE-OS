@@ -34,7 +34,7 @@ import type { MarketPicture } from "@/lib/market-picture";
 
 export const RAJ_APPRAISAL = "demo-ma-raj";
 export const RAJ_LEAD = "os-demo-raj";
-export const APPRAISAL_MOMENTS = ["board", "booked", "visit", "valued", "terms"] as const;
+export const APPRAISAL_MOMENTS = ["board", "booked", "visit", "valued", "terms", "signed"] as const;
 
 const H = 3_600_000;
 const D = 24 * H;
@@ -117,7 +117,7 @@ export function appraisalBook(at: number, now = Date.now()): AppraisalBook {
       decks: [], sends: [], confirmedAt: at >= 2 ? iso(now - 2 * D) : null, terms: null, signed: null, facts: { type: "Terraced", beds: 3, baths: 1 },
     };
     if (at >= 2) {
-      raj.decks.push(deck("pre-appraisal", now - 2 * D + H, 2));
+      raj.decks.push(deck("pre-appraisal", now - 2 * D + H, 2), deck("appraisal", now - D, 1));
       raj.sends.push({ kind: "pre-appraisal", state: "sent", sendAt: iso(now - 2 * D + 3 * H), sentAt: iso(now - 2 * D + 3 * H), createdAt: iso(now - 2 * D + H) });
     }
     if (at >= 3) Object.assign(raj.ma, { valuation: 1250, serviceLevel: "full_managed", feePct: 12, setupFee: 750, valuedAt: iso(now - 10 * 60_000), valuedBy: CAST.agent.name });
@@ -125,7 +125,9 @@ export function appraisalBook(at: number, now = Date.now()): AppraisalBook {
       raj.decks.push(deck("post-appraisal", now - 8 * 60_000, 0));
       raj.ma.termsSentAt = iso(now - 5 * 60_000);
       raj.terms = { firstSentAt: raj.ma.termsSentAt, lastSentAt: raj.ma.termsSentAt, count: 1 };
+      raj.agentSignedAt = iso(now - 12 * 60_000);
     }
+    if (at >= 5) raj.signed = { name: CAST.landlord.name, at: iso(now - 2 * 60_000) };
     files.unshift(raj);
   }
   return { files, cases: {}, contacts: [], seq: 100 };
@@ -488,10 +490,13 @@ export function answerAppraisals(book: AppraisalBook, method: string, url: URL, 
     return ok({ embedSrc: `demo:${f.ma.id}` }, [], "contract_drawn");
   }
   if (p === "/api/docuseal/demo-signed" && method === "POST") {
-    const f = byId(str(b.src).replace(/^demo:/, ""));
+    /* demo:<id> is the agent's half (Prepare and send); demo:landlord:<id> is the landlord's, from his portal. */
+    const landlord = str(b.src).startsWith("demo:landlord:");
+    const f = byId(str(b.src).replace(/^demo:(landlord:)?/, ""));
     if (!f) return no("No such appraisal.", 404);
-    f.agentSignedAt = iso(now);
-    return ok({}, [], "agent_signed");
+    if (!landlord) { f.agentSignedAt = iso(now); return ok({}, [], "agent_signed"); }
+    f.signed = { name: str(b.name) || f.ma.landlord, at: iso(now) };
+    return ok({}, [], "signed");
   }
 
   /* ── the welcome video: none recorded; recording one is a real camera, so not in the demo ── */

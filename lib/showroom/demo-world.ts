@@ -552,7 +552,7 @@ export const MOMENTS: Record<StoryId, readonly string[]> = {
   compliance: ["book", "uploaded", "verified"],
   visits: [...VISIT_MOMENTS],
   /* Kept in step with APPRAISAL_MOMENTS in lib/showroom/demo-appraisals (not imported: that file imports this one). */
-  appraisal: ["board", "booked", "visit", "valued", "terms"],
+  appraisal: ["board", "booked", "visit", "valued", "terms", "signed"],
 };
 export const momentIndex = (story: StoryId, id: string) => Math.max(0, MOMENTS[story].indexOf(id));
 

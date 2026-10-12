@@ -4,16 +4,25 @@ import PropertyPhoto from "@/components/PropertyPhoto";
 import StageHarness from "@/components/landlord/StageHarness";
 import { stageFrom } from "@/lib/landlord-harness";
 import { rajAt, img } from "@/lib/landlord-sample";
+import DemoNet from "@/components/showroom/demo/DemoNet";
+import { RAJ_APPRAISAL } from "@/lib/showroom/demo-appraisals";
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
 /* The sample landlord lives in lib/landlord-sample; ?stage= moves him along the journey. */
 export default async function LandlordDemo({ searchParams }: Props) {
   const stage = await stageFrom(searchParams);
-  const { view } = rajAt(stage);
+  /* ?standin=1 (the tour's "Signing on the Sofa"): the contract opens on the demo's stand-in signing sheet
+     and the valuation story notices the signature (lib/showroom/demo-appraisals), instead of the shared
+     DocuSeal demo form. */
+  const standIn = (await searchParams).standin === "1";
+  const raw = rajAt(stage).view;
+  const signAt = `demo:landlord:${RAJ_APPRAISAL}`;
+  const view = standIn ? { ...raw, contractUrl: signAt, steps: raw.steps.map((s) => (s.action === "sign" ? { ...s, href: signAt } : s)) } : raw;
   const managed = stage === "managed";
   return (
     <>
+      {standIn && <DemoNet label="Sample landlord" />}
       <StageHarness stage={stage} />
       <LandlordDashboard
         view={view}

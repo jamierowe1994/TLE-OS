@@ -212,6 +212,8 @@ export default function DemoNet({ label = "Showroom demo" }: { label?: string })
         return;
       }
       if (to.origin === window.location.origin && /^\/(preview|tenant\/demo|landlord\/demo)\//.test(to.pathname) && to.pathname !== window.location.pathname) return;
+      /* The sample deck and its PDF are public pages with nothing real on them: open them as the OS does. */
+      if (to.origin === window.location.origin && /^\/present\/sample(\/|$)/.test(to.pathname)) { tell({ type: "did", did: to.pathname.endsWith("/print") ? "downloaded" : "deck_opened", sent: [] }); return; }
       if (to.origin === window.location.origin && to.pathname === window.location.pathname) return;
       e.preventDefault();
       e.stopPropagation();

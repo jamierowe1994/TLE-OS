@@ -251,6 +251,7 @@ export function srcFor(s: DemoScene, j: BackOfficeJourney, way: WayId, token: st
     case "office-appraisal-build": q.set("fresh", "1"); if (s.screen.section) q.set("kind", s.screen.section); return `${pre}/appraisals/${RAJ_APPRAISAL}/build?${q}`;
     case "office-appraisal-send": q.set("fresh", "1"); return `${pre}/appraisals/${RAJ_APPRAISAL}/send?${q}`;
     case "deck": return `/present/sample?kind=${encodeURIComponent(s.screen.section ?? "appraisal")}`;
+    case "landlord-sign": q.set("fresh", "1"); return `/landlord/demo?stage=instruction&standin=1&${q}`;
     case "email": return null;
   }
 }
