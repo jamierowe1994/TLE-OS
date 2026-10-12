@@ -437,7 +437,7 @@ export default function Listings() {
      the tabs now, which answers the same question and three others beside it,
      and two controls for one filter is how a screen starts to disagree with
      itself. */
-  const [stage, setStage] = useState<"all" | "Available" | "offers" | "Let agreed" | "Draft" | "photos" | "compliance" | "archived">("all");
+  const [stage, setStage] = useState<"all" | "Available" | "offers" | "Let agreed" | "Draft" | "photos" | "compliance" | "archived">("Available");
   /* Offers still waiting on a decision, per listing (7 Oct 2026). An offer
      stays on its listing until it is accepted, so this is where they are
      found across the book; ?stage=offers is the Applications page's link. */
@@ -685,6 +685,9 @@ export default function Listings() {
         if (!(openOffers?.[String(l.id)] ?? 0)) return false;
       } else if (stage === "archived") {
         /* The source IS the archive - there is no status left to test. */
+      } else if (needle) {
+        /* A name typed in finds the home on any status tab: the page opens on
+           Available now, and a let-agreed home searched for must still turn up. */
       } else if (stage === "all") {
         /* Let agreed is Applications' work now; it keeps its own tab - except
            while its holding fee is still to come, and whenever it is searched
@@ -815,13 +818,17 @@ export default function Listings() {
       <StageTabs
         wrap
         label="Listing statuses"
-        allId="all"
+        allId="Available"
         value={stage}
         onChange={setStage}
         flow={false}
         stages={[
-          { id: "all" as const, label: "All listings", icon: "analytics", count: WORKING.filter((l) => !l.test).length - (byStage["Let agreed"] ?? 0), blurb: "Everything still being marketed. Let agreed has its own tab" },
+          /* Available first, and where the page opens (James, 12 Oct 2026):
+             "it should always start on available ... a draft section next,
+             and then offers after that". Pressing the open tab again comes
+             back here, not to everything. */
           { id: "Available" as const, label: "Available", icon: "home", count: byStage.Available, blurb: "Published, and not let agreed - what you can put somebody in now" },
+          { id: "Draft" as const, label: "Draft", icon: "doc", count: byStage.Draft, blurb: `Not on the portals yet - drafted in the last ${Math.round(ARCHIVE_AFTER_DAYS / 30)} months` },
           {
             id: "offers" as const,
             label: "Offers in",
@@ -829,8 +836,8 @@ export default function Listings() {
             count: openOffers === null ? null : WORKING.filter((l) => (openOffers[String(l.id)] ?? 0) > 0).length,
             blurb: "An offer waiting on a decision. Still taking viewings until one is accepted",
           },
+          { id: "all" as const, label: "All listings", icon: "analytics", count: WORKING.filter((l) => !l.test).length - (byStage["Let agreed"] ?? 0), blurb: "Everything still being marketed. Let agreed has its own tab" },
           { id: "Let agreed" as const, label: "Let agreed", icon: "key", count: byStage["Let agreed"], blurb: "Taken, and working through to a tenancy" },
-          { id: "Draft" as const, label: "Draft", icon: "doc", count: byStage.Draft, blurb: `Not on the portals yet - drafted in the last ${Math.round(ARCHIVE_AFTER_DAYS / 30)} months` },
           /* Two jobs rather than two states: what is holding a listing back. */
           { id: "photos" as const, label: "Missing photos", icon: "folder", count: WORKING.filter((l) => l.imageCount === 0).length, blurb: "No photographs on the listing" },
           { id: "compliance" as const, label: "Needs compliance", icon: "shield", count: WORKING.filter((l) => l.epcExpiry == null).length, blurb: "No EPC filed" },
@@ -873,7 +880,7 @@ export default function Listings() {
             (components/ListSearch, 11 Oct 2026). */}
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="hand text-[17px]">
-            {stage === "all" ? "All listings" : stage === "offers" ? "Offers in" : stage === "photos" ? "Missing photos" : stage === "compliance" ? "Needs compliance" : stage === "archived" ? "Archived" : stage}
+            {q.trim() && !["offers", "photos", "compliance", "archived"].includes(stage) ? "Search" : stage === "all" ? "All listings" : stage === "offers" ? "Offers in" : stage === "photos" ? "Missing photos" : stage === "compliance" ? "Needs compliance" : stage === "archived" ? "Archived" : stage}
             <span className="figures ml-2 text-[14px] text-muted">{board.length}</span>
           </h2>
           <span className="flex items-center gap-3">
