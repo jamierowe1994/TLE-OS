@@ -1557,11 +1557,8 @@ html[data-os-toast="up"] .os-toast-lift {
    some colour"). The chat card's own colours, so the list, the chat, its
    bars and the bubbles are not all white. A warm grey, chosen over grey with
    sage and grey with blush. */
-/* The page itself on Huddles: the panel the shell draws goes grey, from the
-   title down, so the card sits on grey rather than in a white page. */
-.hud-page { --shell-panel: #eeebe7; background-color: var(--shell-panel); }
-:root[data-theme="dark"] .hud-page { --shell-panel: #1a1a1a; }
-
+/* The page round it stays white (James, 12 Oct 2026: "make the background
+   ... go back to white, and just keep the chat box in the same colour"). */
 .hud {
   --hud-list: #f7f5f2;
   --hud-chat: #e8e5e0;
