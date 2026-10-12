@@ -18,6 +18,9 @@ import { applyDarkPalette, applyTheme, isNight, readTheme } from "@/lib/theme";
 export default function PreviewTheme() {
   useEffect(() => {
     applyDarkPalette();
+    /* The back office demos (the Showroom's and the tour's walkthroughs) are always the light OS: they sit
+       inside a light frame, and the OS itself is only dark when somebody chooses it in their Profile. */
+    if (window.location.pathname.includes("/back-office/")) { applyTheme("light"); return; }
     applyTheme(readTheme() ?? (isNight() ? "dark" : "light"));
 
     const onSet = (e: Event) => {
