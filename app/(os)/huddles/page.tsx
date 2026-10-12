@@ -201,12 +201,6 @@ export default function Huddles() {
      whether the list is showing the archived chats. */
   const [swiped, setSwiped] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
-  /* Which of the three looks (globals.css .hud): ?look=a|b|c while choosing. */
-  const [look, setLook] = useState("a");
-  useEffect(() => {
-    const l = new URLSearchParams(window.location.search).get("look");
-    if (l === "a" || l === "b" || l === "c") setLook(l);
-  }, []);
   useEffect(() => {
     if (!swiped) return;
     const off = (e: MouseEvent) => {
@@ -329,7 +323,7 @@ export default function Huddles() {
     <>
       <PageHeader title="Huddles" blurb="Your team, your landlords and your tenants in one place. The same chats as Chats on the TLE OS app." />
 
-      <div ref={frame} style={{ height: frameH ?? 560 }} data-hud-look={look} className="hud fade-up mt-5 flex overflow-hidden rounded-[var(--radius-card)] border border-line/70 bg-[var(--hud-list)]">
+      <div ref={frame} style={{ height: frameH ?? 560 }} className="hud fade-up mt-5 flex overflow-hidden rounded-[var(--radius-card)] border border-line/70 bg-[var(--hud-list)]">
         {/* The list. */}
         <aside className={`${showChat ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-line/70 bg-[var(--hud-list)] md:w-[320px] md:border-r`}>
           <div className="px-3 pt-3">
