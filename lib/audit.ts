@@ -65,7 +65,10 @@ export type AuditKind =
   | "sign_in_locked"
   /* Somebody went well past a person's pace and the middleware paused their
      data calls for fifteen minutes (10 Oct 2026). Read by the owners' bell. */
-  | "reading_paused";
+  | "reading_paused"
+  /* Marketing's Base44 app read the lead figures with its key (12 Oct 2026,
+     /api/marketing/leads-feed). Counts only; at most one line an hour. */
+  | "marketing_feed_read";
 
 export interface AuditRow {
   id: string;
