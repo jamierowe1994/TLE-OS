@@ -1885,7 +1885,7 @@ function ListingDrawerBody({
                 {/* Every offer on this listing, with Accept and Decline (7 Oct 2026). */}
                 <Card title="Offers" icon="coin">
                   {!LISTING_OFFERS_LIVE ? (
-                    <ListingOffers offers={savedOffers} canOffer={canOffer} onChanged={() => setOffersTick((n) => n + 1)} />
+                    <ListingOffers offers={savedOffers} canOffer={canOffer} onChanged={() => setOffersTick((n) => n + 1)} asking={per === "pcm" ? listing.rent ?? null : null} home={listing.name} />
                   ) : offers.length ? (
                     <ul className="space-y-3">
                       {offers.map((o, i) => (

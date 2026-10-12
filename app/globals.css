@@ -195,6 +195,14 @@ body {
 }
 .fade-up { animation: fade-up 0.58s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
+/* An offer accepted (12 Oct 2026, components/listing/ListingOffers): confetti falling once. */
+@keyframes offer-confetti {
+  0% { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 1; }
+  100% { transform: translate3d(0, 105vh, 0) rotate(var(--turn, 360deg)); opacity: 0.9; }
+}
+.offer-confetti { animation: offer-confetti 2.4s cubic-bezier(0.25, 0.6, 0.45, 1) forwards; }
+@media (prefers-reduced-motion: reduce) { .offer-confetti { animation: none; display: none; } }
+
 /* ── Landing one piece at a time ──────────────────────────────────────────
    James, 11 Sep 2026: "the bits on the page should flow up individually...
    the button should flow up, and then the calendar, and then the right-hand

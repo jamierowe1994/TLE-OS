@@ -48,13 +48,40 @@ export type ListingOffer = {
   undoable: boolean;
   /** Where it opens. */
   href: string;
+  /** What the offer says, for opening it on the listing (12 Oct 2026). */
+  detail: OfferDetail;
 };
+
+export type OfferDetail = {
+  email: string | null;
+  phone: string | null;
+  /** Everyone named on it, the lead first. */
+  people: string[];
+  adults: number | null;
+  children: number | null;
+  pets: boolean | null;
+  petsNote: string | null;
+  work: string | null;
+  guarantor: boolean | null;
+  /** A year, the household's. */
+  income: number | null;
+  /** REX's affordability, rent against income. */
+  affordability: number | null;
+  works: string[];
+  note: string | null;
+};
+
+const NO_DETAIL: OfferDetail = { email: null, phone: null, people: [], adults: null, children: null, pets: null, petsNote: null, work: null, guarantor: null, income: null, affordability: null, works: [], note: null };
 
 type OsRow = {
   id: string;
   name: string;
   email: string;
-  payload: { amount?: number; moveIn?: string; recordedBy?: { name?: string }; source?: string; via?: string };
+  payload: {
+    amount?: number; moveIn?: string; recordedBy?: { name?: string }; source?: string; via?: string;
+    movingIn?: string[]; adults?: number; children?: number; pets?: boolean; petsNote?: string; works?: unknown[]; note?: string; householdIncome?: number;
+    passport?: { guarantor?: boolean; applicantType?: string; workHours?: string; phone?: string; mobile?: string };
+  };
   created_at: Date;
 };
 
@@ -91,6 +118,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           decided: o.status === "accepted" ? `Accepted${o.accepted ? ` ${day(o.accepted)}` : ""}` : o.status === "unsuccessful" ? "Declined" : null,
           undoable: false,
           href: `/applications?open=${encodeURIComponent(o.appId)}`,
+          detail: { ...NO_DETAIL, people: [o.applicantName] },
         });
       }
       return NextResponse.json({ ok: true, offers: offers.sort(newestFirst) });
@@ -139,6 +167,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         decided: d ? `${d.decision === "accepted" ? "Accepted" : "Declined"} by ${d.by} ${day(d.at)}` : null,
         undoable: Boolean(d),
         href: `/offers/${encodeURIComponent(r.id)}`,
+        detail: {
+          email: r.email || null,
+          phone: p.passport?.mobile || p.passport?.phone || null,
+          people: (p.movingIn?.length ? p.movingIn : [r.name || r.email]).filter(Boolean),
+          adults: typeof p.adults === "number" ? p.adults : null,
+          children: typeof p.children === "number" ? p.children : null,
+          pets: typeof p.pets === "boolean" ? p.pets : null,
+          petsNote: p.petsNote?.trim() || null,
+          work: [p.passport?.applicantType, p.passport?.workHours].filter(Boolean).join(", ") || null,
+          guarantor: typeof p.passport?.guarantor === "boolean" ? p.passport.guarantor : null,
+          income: typeof p.householdIncome === "number" && p.householdIncome > 0 ? p.householdIncome : null,
+          affordability: null,
+          works: (p.works ?? []).map((w) => (typeof w === "string" ? w : String((w as { text?: string; label?: string })?.text ?? (w as { label?: string })?.label ?? ""))).filter(Boolean),
+          note: p.note?.trim() || null,
+        },
       });
     }
 
@@ -170,6 +213,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
                   : null,
         undoable: Boolean(d) && a.status !== "accepted" && a.status !== "unsuccessful" && !a.closed,
         href: `/applications?open=${encodeURIComponent(a.id)}`,
+        detail: {
+          email: a.applicants.find((x) => x.isPrimary)?.email ?? a.applicants[0]?.email ?? null,
+          phone: a.applicants.find((x) => x.isPrimary)?.phone ?? a.applicants[0]?.phone ?? null,
+          people: a.applicants.map((x) => x.name).filter(Boolean),
+          adults: a.occupants != null && a.dependents != null ? Math.max(0, a.occupants - a.dependents) : a.applicants.length || null,
+          children: a.dependents,
+          pets: a.hasPets,
+          petsNote: null,
+          work: a.applicants.find((x) => x.isPrimary)?.employmentRex ?? null,
+          guarantor: a.applicants.some((x) => x.guarantorCount > 0) ? true : null,
+          income: a.totalIncome,
+          affordability: a.affordabilityPct,
+          works: [],
+          note: a.conditions,
+        },
       });
     }
 
