@@ -231,7 +231,15 @@ export default function Applications() {
      application, and this is what opens it. Read once, on arrival. */
   useEffect(() => {
     const wanted = new URLSearchParams(window.location.search).get("open");
-    if (wanted) setOpenId(wanted);
+    if (wanted) {
+      setOpenId(wanted);
+      /* Once, not every visit (James, 12 Oct 2026: Applications kept opening
+         6 Ruskin Place by itself). The address it came in on is put back
+         without it, so back, refresh and the history land on the board. */
+      const u = new URL(window.location.href);
+      u.searchParams.delete("open");
+      window.history.replaceState(window.history.state, "", u.pathname + (u.search || "") + u.hash);
+    }
   }, []);
   /* "open" is every application still in play. Unsuccessful is a stage like
      any other now, reached by clicking it, so the old show/hide toggle went
