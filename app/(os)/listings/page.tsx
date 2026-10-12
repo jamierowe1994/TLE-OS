@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BoardSkeleton } from "@/components/Skeleton";
 import dynamic from "next/dynamic";
-import { whenIdle } from "@/lib/when-idle";
+import { useRouter } from "next/navigation";
 import { dropJson, peekJson, readJson } from "@/lib/page-cache";
 import { createPortal } from "react-dom";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -14,9 +14,7 @@ import StageTabs from "@/components/StageTabs";
 import ListSearch from "@/components/ListSearch";
 import CornerSwell from "@/components/CornerSwell";
 import { searchMatches } from "@/lib/search-match";
-/* 2,400 lines: off the first load, fetched while the board sits idle. */
-const loadListingDrawer = () => import("@/components/ListingDrawer");
-const ListingDrawer = dynamic(loadListingDrawer, { ssr: false });
+import { rememberListingOrder } from "@/lib/listing-order";
 import NewListingPanel from "@/components/listing/NewListingPanel";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { DIARY } from "@/lib/diary";
@@ -385,12 +383,29 @@ function FilterPanel({
 }
 
 export default function Listings() {
-  useEffect(() => whenIdle(() => { void loadListingDrawer(); }), []);
-  /* Open BY ID, not by index. The book is re-read behind the page and its
-     order changes as REX updates records, so an index taken at open time
-     pointed at a different house a minute later (?open=228a Chapter Road
-     opened 166 Gloucester Road North, 7 Sep). */
-  const [openId, setOpenId] = useState<string | null>(null);
+  const router = useRouter();
+  /* A listing opens as its own page now, /listings/<id> (James, 12 Oct 2026:
+     "the same as properties - rather than a pop-out, a full thing"). By id,
+     never by index: the book is re-read behind the board and its order
+     changes as REX updates records. The board as shown - filtered and
+     sorted - goes with it, for ‹ › on the page. */
+  const boardIds = useRef<string[]>([]);
+  const openListing = useCallback(
+    (id: string, tab?: string | null) => {
+      rememberListingOrder(boardIds.current.includes(id) ? boardIds.current : [id]);
+      router.push(`/listings/${encodeURIComponent(id)}${tab ? `?tab=${encodeURIComponent(tab)}` : ""}`);
+    },
+    [router]
+  );
+  /* ?open=<listing id>, from the search bar, the bell and every older link:
+     straight to the listing's own page, ?tab= and all. */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const wanted = params.get("open");
+    if (!wanted) return;
+    const tab = params.get("tab");
+    router.replace(`/listings/${encodeURIComponent(wanted)}${tab ? `?tab=${encodeURIComponent(tab)}` : ""}`);
+  }, [router]);
   /* The Add new listing panel, and the listing it just made. */
   const [adding, setAdding] = useState(false);
   const [q, setQ] = useState("");
@@ -612,23 +627,6 @@ export default function Listings() {
      every tab but Archived reads from it - so a cold draft cannot reappear in
      All listings, Missing photos or Needs compliance by the back door. */
   const WORKING = useMemo(() => LISTINGS.filter((l) => !l.archived), [LISTINGS]);
-  /* ?open=<listing id> from the search bar or the bell: open that card once
-     the book is here. Once, so closing it does not reopen it. */
-  const openedFromUrl = useRef(false);
-  /* ?tab=marketing as well: the appraisal file sends an agent to write the
-     description, so it opens on the write-up, not the record's front page. */
-  const [openTab, setOpenTab] = useState<string | null>(null);
-  useEffect(() => {
-    if (openedFromUrl.current || !LISTINGS.length) return;
-    const params = new URLSearchParams(window.location.search);
-    const wanted = params.get("open");
-    if (!wanted) return;
-    if (LISTINGS.some((l) => String(l.id) === wanted)) {
-      setOpenTab(params.get("tab"));
-      setOpenId(wanted);
-      openedFromUrl.current = true;
-    }
-  }, [LISTINGS]);
   const C = book.counts;
 
   const localities = useMemo(
@@ -715,6 +713,7 @@ export default function Listings() {
     else if (stage === "archived") rows.sort((a, b) => (b.archivedSince ?? "").localeCompare(a.archivedSince ?? ""));
     return rows;
   }, [WORKING, archive.listings, q, sort, rentBand, loc, stage, period, activityAt, openOffers, held]);
+  boardIds.current = board.map((l) => String(l.id));
 
   /* ── READY TO PUBLISH, ON THE PUSH ROUTE'S OWN WORD (17 Sep 2026) ───────
      The book cannot see council tax, bills, furnishing or key features, so a
@@ -962,7 +961,7 @@ export default function Listings() {
             <div key={l.id} className="fade-up relative">
             <button data-steve-row=""
               type="button"
-              onClick={() => setOpenId(String(l.id))}
+              onClick={() => openListing(String(l.id))}
               // Thinner rule and less padding, so the photograph can grow
               // into the space rather than floating in a frame. p-2 with an
               // inner radius of 14 against the card's 16 keeps the two curves
@@ -1154,43 +1153,13 @@ export default function Listings() {
         )}
       </p>
 
-      <ListingDrawer
-        /* Looked up across the archive as well as the book: on the Archived
-           tab the row that was clicked is not in LISTINGS at all (a withdrawn
-           listing was never in the book), and the drawer opened empty. */
-        listing={
-          openId == null
-            ? null
-            : LISTINGS.find((l) => String(l.id) === openId) ??
-              archive.listings.find((l) => String(l.id) === openId) ??
-              null
-        }
-        onArchive={(id, action) => void move(id, action)}
-        archiveBusy={busyId != null && busyId === openId}
-        initialTab={openTab}
-        onClose={() => {
-          setOpenId(null);
-          setOpenTab(null);
-        }}
-        onStep={(d) => {
-          setOpenTab(null);
-          setOpenId((id) => {
-            /* Step through the board as shown - filtered and sorted - not the raw book. */
-            const list = board.length ? board : LISTINGS;
-            const i = list.findIndex((l) => String(l.id) === id);
-            if (i < 0) return id;
-            return String(list[(i + d + list.length) % list.length].id);
-          });
-        }}
-      />
-
       {adding && (
         <NewListingPanel
           onClose={() => setAdding(false)}
           onCreated={(id) => {
             setAdding(false);
             /* Straight onto the new record, where Marketing fills it in. */
-            void loadBook().then(() => setOpenId(id));
+            void loadBook().then(() => openListing(id, "marketing"));
           }}
         />
       )}

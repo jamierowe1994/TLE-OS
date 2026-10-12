@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { londonToday } from "@/lib/london-clock";
-import { useSlideOver } from "@/lib/use-slide-over";
 import DoodleIcon from "@/components/DoodleIcon";
 import SignInAgain from "@/components/SignInAgain";
 import PropertyPhoto from "@/components/PropertyPhoto";
@@ -23,7 +22,6 @@ import { accessKeyFor } from "@/lib/access-key";
 import ViewingSheet from "@/components/listing/ViewingSheet";
 import AccessRequest, { AccessSettings, NO_ACCESS, type Access } from "@/components/listing/AccessRequest";
 import DropZone, { type DropKind } from "@/components/listing/DropZone";
-import Doodles from "@/components/Doodles";
 import { LISTING_BOOKER_LIVE } from "@/lib/viewing-sends";
 import { LISTING_TRACK, listingStartingStep } from "@/lib/journey";
 import { searchMatches } from "@/lib/search-match";
@@ -130,26 +128,47 @@ type LandlordState =
   | { status: "none" }
   | { status: "problem"; says: string };
 
-type TabKey = "home" | "enquiries" | "applications" | "viewings" | "marketing" | "compliance" | "documents";
+type TabKey = "enquiries" | "applications" | "viewings" | "marketing" | "compliance" | "documents";
 
 /* SIX VIEWS, ONE RECORD (James, 11 Sep 2026). Home is the record itself -
    the hero, the landlord, at a glance, next up and the spine. The rest each
    take the whole drawer, in the order they get clicked: applications,
    viewings, marketing (the property's facts, the write-up and the photos in
    one place), compliance, documents. Home brings you back. */
+/* A PAGE NOW, NOT A DRAWER (James, 12 Oct 2026): "the same layout as
+   properties". Home became the page itself - photos, actions, the facts,
+   next up - and the other views are its sections, in a box under it. */
 const TABS: { key: TabKey; label: string; icon: string }[] = [
-  { key: "home", label: "Home", icon: "home" },
+  { key: "viewings", label: "Viewings", icon: "calendar" },
   /* Enquiries apart from Offers (James, 8 Oct 2026): people asking from the
      portals have not offered - "it's not an offer". */
   { key: "enquiries", label: "Enquiries", icon: "target" },
   /* "Offers" since 7 Oct 2026: an offer is not an application until it is
      accepted (James). The key stays, for ?tab= links and Steve. */
   { key: "applications", label: "Offers", icon: "coin" },
-  { key: "viewings", label: "Viewings", icon: "calendar" },
   { key: "marketing", label: "Marketing", icon: "megaphone" },
   { key: "compliance", label: "Compliance", icon: "shield" },
   { key: "documents", label: "Documents", icon: "file-contract" },
 ];
+
+/* One line under the section tabs, saying what the section is for. */
+const TAB_LEAD: Record<TabKey, string> = {
+  viewings: "Everything in the diary for this home. Open a viewing for its details and whether we can get in.",
+  enquiries: "Everyone who has asked about this home, from the portals and the rest. Send them the tenant passport in one go, and see whose is done.",
+  applications: "Only the people who have offered. Put each one to the landlord, then accept or decline it. The accepted one moves to Applications; the rest are held until its holding fee is paid.",
+  marketing: "The facts, the advert the portals show, and the photographs. What a tenant sees, all in one place.",
+  compliance: "Every certificate the home needs, where it stands, and the files on hand. Drop a certificate and it is read and filed.",
+  documents: "How we get in, the terms of business, and everything signed or filed against this listing.",
+};
+
+/** Where a listing opens when nothing asks for a section: its draft is
+ *  written up, its live advert is shown round, a let one is offered on. */
+export function firstTab(l: { letAgreed: boolean; publicationStatus: string | null }, asked?: string | null): TabKey {
+  const hit = TABS.find((t) => t.key === asked)?.key;
+  if (hit) return hit;
+  if (l.letAgreed) return "applications";
+  return l.publicationStatus === "published" ? "viewings" : "marketing";
+}
 
 const SAGE_INK = "#56634a";
 const SAGE_WASH = "#f1f4ec";
@@ -187,8 +206,8 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-[22px] border border-line/50 bg-white p-5">
-      <div className="mb-4 flex items-center justify-between gap-3">
+    <section className="min-w-0 rounded-xl border border-line/50 bg-white p-4 sm:p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h3 className="hand flex items-center gap-2.5 text-[15px]">
           <DoodleIcon name={icon} size={15} className="text-accent-dark" />
           {title}
@@ -220,18 +239,23 @@ export default function ListingDrawer(props: Omit<Parameters<typeof ListingDrawe
 
 function ListingDrawerBody({
   listing,
-  onClose: closeNow,
+  backHref = "/listings",
   onStep,
+  stepLabel,
   onArchive,
   archiveBusy,
   saves,
   initialTab,
 }: {
-  /** Every save on this listing, for the chip by the close button. */
+  /** Every save on this listing, for the chip by the back link. */
   saves: SaveScope;
   listing: Listing | null;
-  onClose: () => void;
-  onStep: (delta: number) => void;
+  /** Where "← Listings" goes. */
+  backHref?: string;
+  /** ‹ › through the board as it was shown, when the page knows it. */
+  onStep?: (delta: number) => void;
+  /** "3 of 40", beside the arrows. */
+  stepLabel?: string | null;
   /** File this draft away early, or bring it back. Owned by the board, which
    *  already holds the book this listing came out of - the drawer would
    *  otherwise be updating a copy the board never hears about. */
@@ -241,15 +265,28 @@ function ListingDrawerBody({
    *  file's "Write the description" (Howard, 1 Oct 2026). */
   initialTab?: string | null;
 }) {
-  /* Every way out plays the drawer out first (lib/use-slide-over). */
-  const { shown, close: onClose } = useSlideOver(Boolean(listing), closeNow, listing?.id);
-  const [tab, setTab] = useState<TabKey>("home");
+  const [tab, setTab] = useState<TabKey>(() => (listing ? firstTab(listing, initialTab) : "viewings"));
+  /* A section picked is kept in the address (?tab=), so a link or a reload
+     lands on it, as on a Portfolio home. */
+  const pickTab = useCallback((t: TabKey) => {
+    setTab(t);
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.set("tab", t);
+      window.history.replaceState(window.history.state, "", u.toString());
+    } catch { /* fine */ }
+  }, []);
+  /* From anywhere on the page: open the section and bring it into view. */
+  const goTab = useCallback((t: TabKey) => {
+    pickTab(t);
+    setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+  }, [pickTab]);
   /* The side panel: the landlord's messages, or the listing's notes (10 Oct 2026). */
   const [panelTab, setPanelTab] = useState<PanelTab | null>(null);
   const [listingNotes, setListingNotes] = useState<NoteRow[] | null>(null);
   /* Are some tabs scrolled out of sight? Then the row fades at its right edge
      so nobody thinks Documents has gone (10 Oct 2026). */
-  const tabRow = useRef<HTMLDivElement>(null);
+  const tabRow = useRef<HTMLElement>(null);
   const [tabsHidden, setTabsHidden] = useState(false);
   const measureTabs = useCallback(() => {
     const el = tabRow.current;
@@ -262,7 +299,7 @@ function ListingDrawerBody({
     const ro = new ResizeObserver(measureTabs);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [measureTabs, panelTab, listing?.id]);
+  }, [measureTabs, listing?.id]);
   const notesFor = listing ? String(listing.id) : null;
   useEffect(() => {
     if (!notesFor) return;
@@ -837,7 +874,7 @@ function ListingDrawerBody({
     }
     if (tabFor.current !== String(listing.id)) {
       tabFor.current = String(listing.id);
-      setTab(TABS.find((x) => x.key === initialTab)?.key ?? "home");
+      setTab(firstTab(listing, initialTab));
     }
     setBooked([]);
     setHandingOver(false);
@@ -845,16 +882,20 @@ function ListingDrawerBody({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listing]);
 
+  /* ‹ › on the keyboard, as on a Portfolio home - never while typing, or
+     while a pop-up is open over the page. */
   useEffect(() => {
-    if (!listing) return;
+    if (!listing || !onStep) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      if (document.querySelector('[role="dialog"], [aria-modal="true"]')) return;
       if (e.key === "ArrowRight") onStep(1);
       if (e.key === "ArrowLeft") onStep(-1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [listing, onClose, onStep]);
+  }, [listing, onStep]);
 
   if (!listing) return null;
 
@@ -885,7 +926,7 @@ function ListingDrawerBody({
       id: "marketing",
       label: marketingToGo == null ? "Marketing" : marketingToGo === 0 ? "Marketing complete" : `Marketing · ${marketingToGo} to go`,
       done: marketingToGo === 0,
-      fix: () => setTab("marketing"),
+      fix: () => goTab("marketing"),
     },
     /* Or on the listing itself, which is where REX keeps an EPC entered with
        the advert and what its own pre-publish check reads (15 Sep 2026: 4
@@ -895,8 +936,8 @@ function ListingDrawerBody({
   /* Offered, never required to advertise - and the move-in will not go
      without them. */
   const beforeMoveIn: { id: string; label: string; done: boolean; fix: () => void }[] = [
-    { id: "gas", label: "Gas safety", done: certOk("gas_safety"), fix: () => setTab("compliance") },
-    { id: "eicr", label: "Electrical certificate (EICR)", done: certOk("eicr"), fix: () => setTab("compliance") },
+    { id: "gas", label: "Gas safety", done: certOk("gas_safety"), fix: () => goTab("compliance") },
+    { id: "eicr", label: "Electrical certificate (EICR)", done: certOk("eicr"), fix: () => goTab("compliance") },
   ];
   const readyToGoLive = certs != null && requirements.every((r) => r.done) && !(pub?.blockers.length);
   const isLive = pub ? pub.status === "published" : listing.publicationStatus === "published";
@@ -1074,739 +1115,564 @@ function ListingDrawerBody({
       ? { label: "Available", tone: "good" as const }
       : { label: "Draft", tone: "accent" as const };
 
+  /* ── THE LATEST, for the Next up box: the newest enquiries, viewings and
+     offers on this home in one short list, each opening its section. ── */
+  const latest: { key: string; at: string; icon: string; title: string; sub: string; to: TabKey; hot?: boolean }[] = [];
+  for (const e of enquiries ?? []) {
+    if (e.receivedAt) latest.push({ key: `enq-${e.id}`, at: e.receivedAt, icon: "target", title: `Enquiry · ${e.name || "Somebody"}`, sub: e.source || "From the portals", to: "enquiries" });
+  }
+  for (const v of [...(viewings?.upcoming ?? []), ...(viewings?.past ?? [])]) {
+    if (v.cancelled) continue;
+    const future = new Date(v.startsAt).getTime() > Date.now();
+    latest.push({
+      key: `view-${v.id}`,
+      at: v.startsAt,
+      icon: "calendar",
+      title: `${future ? "Viewing booked" : "Viewed"} · ${v.contacts.map((c) => c.name).join(", ") || v.title || "Viewing"}`,
+      sub: new Date(v.startsAt).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" }),
+      to: "viewings",
+      hot: !future && !v.feedbackId,
+    });
+  }
+  for (const o of savedOffers ?? []) {
+    if (o.at) latest.push({ key: `offer-${o.ref}`, at: o.at, icon: "coin", title: `Offer · ${o.name}`, sub: `${o.amount ? `£${o.amount.toLocaleString("en-GB")} · ` : ""}${o.status === "open" ? "Waiting on a decision" : o.status === "accepted" ? "Accepted" : "Declined"}`, to: "applications", hot: o.status === "open" });
+  }
+  latest.sort((a, b) => b.at.localeCompare(a.at));
+  const reading = enquiries === null || viewings === null || savedOffers === null;
+
+  /* The page's boxes, Portfolio's (James, 12 Oct 2026: "the same layout as
+     properties"). White, a fine line, the dashboard's hard-slab hover. */
+  const pop =
+    "transition-[translate,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] [&:hover:not(:has(.fixed))]:-translate-x-[3px] [&:hover:not(:has(.fixed))]:-translate-y-[3px] [&:hover:not(:has(.fixed))]:shadow-[6px_6px_0_0_color-mix(in_srgb,var(--ink)_72%,var(--page))]";
+  const box = `${pop} rounded-2xl border border-line/70 bg-white`;
+  const eyebrow = "text-[10.5px] font-semibold uppercase tracking-wide text-muted";
+  const chip = "inline-flex items-center gap-1.5 rounded-full border border-line/60 bg-white px-3 py-1.5 text-[12px] transition-colors hover:border-ink/40";
+  const tile = "flex h-full min-h-[72px] w-full flex-col items-start justify-between gap-2 rounded-xl border border-line/60 bg-white p-3.5 text-left text-[12.5px] font-semibold leading-tight transition-[transform,box-shadow,border-color] duration-200 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:border-ink/60 hover:shadow-[3px_3px_0_0_color-mix(in_srgb,var(--ink)_72%,var(--page))] disabled:pointer-events-none disabled:opacity-40";
+  const tileText = (label: string, what: string) => (
+    <span className="block">
+      <span className="block">{label}</span>
+      <span className="mt-0.5 block text-[11.5px] font-normal leading-snug text-muted">{what}</span>
+    </span>
+  );
+  const tileIcon = (name: string, dark = false) => (
+    <span className={`flex h-8 w-8 items-center justify-center rounded-full ${dark ? "bg-[var(--brown)] text-white" : "bg-accent-soft text-accent-dark"}`}><DoodleIcon name={name} size={14} /></span>
+  );
+  const shots = photos;
+  const dayOf = (iso: string) => new Date(iso.length === 10 ? `${iso}T00:00:00` : iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  const missingWords = (() => {
+    const words: Record<string, string> = { marketing: "the Marketing section is complete", epc: "the EPC is filed" };
+    const m = [...requirements.filter((r) => !r.done).map((r) => words[r.id] ?? r.label), ...(pub?.blockers.length && requirements.every((r) => r.done) ? ["the portals' own checks pass"] : [])];
+    return m.length > 1 ? `${m.slice(0, -1).join(", ")} and ${m[m.length - 1]}` : m[0] ?? "the certificates are read";
+  })();
+  const pushLive = () => {
+    if (!readyToGoLive) return goTab(requirements.find((r) => !r.done)?.id === "epc" ? "compliance" : "marketing");
+    if (!publishCanPress) return setPortalNote(lockedSentence(publishArea, publishLevel));
+    setPushError(null);
+    setPushing(-1);
+  };
+  const canFileAway = Boolean(onArchive) && (listing.archived || (!listing.letAgreed && listing.publicationStatus !== "published")) && listing.archiveReason !== "withdrawn";
+  const facts = (() => {
+    const wait = live ? null : liveFailed ? "Did not load" : "Reading…";
+    const set = (v: string | number | null | undefined) => wait ?? (v == null || v === "" ? "Not set" : String(v));
+    const availableFrom = live ? live.availableFrom : listing.availableFrom;
+    const epc = live?.epc.expiry ?? listing.epcExpiry;
+    return [
+      { icon: "home", label: "Type", text: set(live?.propertyType) },
+      { icon: "bed.png", label: "Bedrooms", text: set(live?.beds) },
+      { icon: "pack/house", label: "Bathrooms", text: set(live?.baths) },
+      { icon: "coin", label: "Deposit", text: set(live?.deposit != null ? `£${live.deposit.toLocaleString("en-GB")}` : null) },
+      { icon: "calendar", label: "Available from", text: availableFrom ? dayOf(availableFrom) : "Now" },
+      { icon: "shield", label: "EPC expires", text: epc ? dayOf(epc) : "Not recorded" },
+      { icon: "clock", label: "On the market", text: listing.daysOnMarket != null ? `${listing.daysOnMarket} day${listing.daysOnMarket === 1 ? "" : "s"}` : "Not yet" },
+      { icon: "pack/photo", label: "Photos", text: `${photos.length} on file` },
+    ];
+  })();
+
   return (
-    <div className="so-root fixed inset-0 z-[120]" data-shown={shown} data-steve="listing.drawer">
-      <button
-        aria-label="Close"
-        onClick={onClose}
-        data-shown={shown}
-        className="so-scrim absolute inset-0 cursor-default bg-ink/35"
-      />
-
-      <aside
-        data-shown={shown}
-        className={`so-panel absolute inset-y-0 right-0 flex overflow-hidden rounded-l-lg w-full flex-col bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] ${panelTab ? "lg:w-[calc(100%-3rem)]" : "lg:w-[calc(100%-17rem)]"}`}
-      >
-        {/* The whole record scrolls, tabs included (James, 11 Sep): the row
-            of buttons is only there at the top, not pinned over the page. The
-            street at the foot is pinned instead, and the content keeps room
-            above it so nothing is ever hidden behind the houses. */}
-        {/* The record and, beside it, the side panel (10 Oct 2026): Notes and
-            the landlord's messages push the record over rather than cover it. */}
-        <div className="relative flex min-h-0 flex-1">
-        <div className="@container min-h-0 min-w-0 flex-1 overflow-y-auto px-6 pb-10 pt-5">
-        {/* Close, and the tabs. Previous / Next went (James, 11 Sep): nobody
-            steps through the book from inside a record, they close and pick
-            the next one. */}
-        {/* On a phone the tabs take a line of their own under the buttons. */}
-        <div className="mb-4 flex shrink-0 flex-wrap items-center gap-2 sm:flex-nowrap">
-          <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/60 bg-white text-[13px] text-muted transition-colors hover:border-ink/40 hover:text-ink"
-            title="Close (Esc)"
-          >
-            ✕
-          </button>
-          <SaveChip scope={saves} />
-          </div>
-          {/* Swipeable on a phone, but no scrollbar: with Marketing picked the row
-              overflowed by a pixel and drew one under the tabs (6 Oct 2026).
-              Centred, like the tenant and landlord files (James, 10 Oct 2026). */}
-          <div
-            ref={tabRow}
-            onScroll={measureTabs}
-            className={`order-last min-w-0 basis-full overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:order-none sm:flex-1 sm:basis-auto ${
-              tabsHidden ? "[mask-image:linear-gradient(to_right,black_calc(100%-48px),transparent)]" : ""
-            }`}
-          >
-          <div className="mx-auto flex w-max gap-1.5">
-            {TABS.map((t) => {
-              const count =
-                t.key === "enquiries"
-                  ? enquirers
-                  : t.key === "applications"
-                  ? openOffers
-                  : t.key === "viewings"
-                    ? booked.length + (viewings?.upcoming.length ?? 0)
-                    : 0;
-              const on = tab === t.key;
-              /* A pink dot where something needs doing on that tab, so nobody
-                 has to guess which one to open (James, 11 Sep). */
-              const needs =
-                t.key === "enquiries"
-                  ? (enquiries?.length ?? 0) > 0
-                  : t.key === "applications"
-                  ? openOffers > 0
-                  : t.key === "viewings"
-                    ? (viewings?.upcoming ?? []).some((v) => !v.cancelled && access.kind && access.kind !== "vacant" && !(access.requests ?? {})[v.id]?.grantedAt) ||
-                      (viewings?.past ?? []).some((v) => !v.cancelled && !v.feedbackId)
-                    : t.key === "marketing"
-                      ? photos.length === 0 || !shownBody
-                      : t.key === "compliance"
-                        ? certs != null && !(certOk("epc") && certOk("gas_safety") && certOk("eicr"))
-                        : t.key === "documents"
-                          ? (terms.status === "ready" && !terms.signed) || !access.kind
-                          : false;
-              return (
-                <button
-                  key={t.key}
-                  data-steve={`listing.tab.${t.key}`}
-                  type="button"
-                  onClick={() => setTab(t.key)}
-                  className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-[12.5px] font-semibold transition-colors ${
-                    on ? "bg-[var(--brown)] text-white" : "border border-line/60 bg-white text-muted hover:border-ink/40 hover:text-ink"
-                  }`}
-                >
-                  <DoodleIcon name={t.icon} size={13} className={on ? "text-white" : "text-accent-dark"} />
-                  {t.label}
-                  {count > 0 && (
-                    <span className={`figures rounded-full px-1.5 text-[10.5px] ${on ? "bg-white/20 text-white" : "bg-page text-muted"}`}>{count}</span>
-                  )}
-                  {needs && !on && (
-                    <span aria-label="Needs attention" className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-accent" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-          </div>
-          {/* The side panel (10 Oct 2026): the landlord's messages and the
-              listing's notes, pinned right so a long row of tabs never hides
-              them. Pressing the open one closes it. */}
-          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:ml-0 sm:gap-2 sm:border-l sm:border-line/70 sm:pl-2">
-            {([
-              { key: "messages", label: "View activity", short: "Activity", icon: "message" },
-              { key: "notes", label: "Notes", short: "Notes", icon: "note" },
-            ] as const).map((b) => {
-              const on = panelTab === b.key;
-              return (
-                <button
-                  key={b.key}
-                  type="button"
-                  data-steve={`listing.panel.${b.key}`}
-                  onClick={() => setPanelTab(on ? null : b.key)}
-                  title={b.label}
-                  className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-2 text-[12.5px] font-semibold transition-colors sm:px-4 ${
-                    on ? "bg-[var(--brown)] text-white" : "border border-line/60 bg-white text-muted hover:border-ink/40 hover:text-ink"
-                  }`}
-                >
-                  <DoodleIcon name={b.icon} size={13} className={on ? "text-white" : "text-accent-dark"} />
-                  <span className="hidden 2xl:inline">{b.label}</span>
-                  <span className="hidden sm:inline 2xl:hidden">{b.short}</span>
-                  <span className="sr-only sm:hidden">{b.label}</span>
-                  {b.key === "notes" && (listingNotes?.length ?? 0) > 0 && (
-                    <span className={`figures rounded-full px-1.5 text-[10.5px] ${on ? "bg-white/20 text-white" : "bg-page text-muted"}`}>{listingNotes!.length}</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+    <div data-steve="listing.drawer" className="space-y-5">
+      {/* ── back, the save chip, notes and activity, and ‹ › ─────────── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="mr-auto flex min-w-0 items-center gap-3">
+          <Link href={backHref} className="inline-flex shrink-0 items-center gap-1.5 text-[12.5px] text-muted hover:text-ink">
+            <span aria-hidden>←</span> Listings
+          </Link>
+          <SaveChip scope={saves} className="bg-white" />
         </div>
+        {/* The side panel (10 Oct 2026), a pull-out over the page now: the
+            landlord's messages and the listing's notes. */}
+        {([
+          { key: "messages", label: "Activity", icon: "message" },
+          { key: "notes", label: "Notes", icon: "note" },
+        ] as const).map((b) => (
+          <button
+            key={b.key}
+            type="button"
+            data-steve={`listing.panel.${b.key}`}
+            onClick={() => setPanelTab(panelTab === b.key ? null : b.key)}
+            className="inline-flex h-9 items-center gap-1.5 rounded-full border border-line/80 bg-white px-3.5 text-[12.5px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink"
+          >
+            <DoodleIcon name={b.icon} size={13} className="text-accent-dark" />
+            {b.label}
+            {b.key === "notes" && (listingNotes?.length ?? 0) > 0 && <span className="figures rounded-full bg-page px-1.5 text-[10.5px]">{listingNotes!.length}</span>}
+          </button>
+        ))}
+        {stepLabel && onStep && (
+          <div className="flex items-center gap-1.5 sm:ml-2">
+            <span className="mr-1 text-[11.5px] text-muted">{stepLabel}</span>
+            <button type="button" aria-label="Previous listing" onClick={() => onStep(-1)} className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 bg-white text-[13px] text-muted transition-colors hover:text-ink">‹</button>
+            <button type="button" aria-label="Next listing" onClick={() => onStep(1)} className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 bg-white text-[13px] text-muted transition-colors hover:text-ink">›</button>
+          </div>
+        )}
+      </div>
 
-
-          {tab === "home" && (
-          <div key="record" className="fade-up">
-          {/* ── THE HERO (James, 11 Sep 2026): the appraisal file's hero,
-              in sage this time so the two alternate. The photograph small,
-              top left, the quick actions under it; the address in the
-              middle; the property's details in a white box on the right. ── */}
-          <div className="relative overflow-hidden rounded-[22px] border border-line/50" style={{ background: SAGE_WASH }}>
-            <Doodles tone="sage" />
-            <div className="relative p-5">
-            {/* Columns by the record's own width, not the window's: with the
-                side panel open the record is narrower than the screen says. */}
-            <div className="grid grid-cols-[minmax(0,1fr)] gap-5 @[44rem]:grid-cols-[280px_minmax(0,1fr)] @[56rem]:grid-cols-[300px_minmax(0,1fr)_320px]">
-              {/* The photograph: from the address line down to the foot of the
-                  card, the exact height of what is beside it, cropped to fit. */}
-              <div className="flex min-w-0 flex-col">
+      {/* Portfolio's three rows (James, 12 Oct 2026): the photos and the name
+          beside the actions; the facts and the people beside Next up; the
+          sections beside where it's up to. On a phone they stack, actions
+          straight after the photos. */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_460px]">
+        {/* ── 1. the photos and the name ──────────────────────────────── */}
+        <section className={`${box} min-w-0 p-3 lg:col-start-1 lg:row-start-1`}>
+          <div className={`grid grid-cols-1 gap-2 ${shots.length > 1 ? "sm:grid-cols-[minmax(0,1fr)_140px] 2xl:grid-cols-[minmax(0,1fr)_170px]" : ""}`}>
+            <button
+              type="button"
+              onClick={() => (shots.length ? setLightbox(0) : setDrop("photos"))}
+              aria-label={shots.length ? "See the photos" : "Add photos"}
+              className={`group relative aspect-[16/10] overflow-hidden rounded-xl bg-box ${shots.length > 1 ? "sm:aspect-auto" : ""}`}
+            >
+              <PropertyPhoto src={shots[0] ?? null} alt="" width={1400} height={875} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.015]" />
+              <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-[11.5px] font-semibold backdrop-blur">
+                <DoodleIcon name="pack/photo" size={12} /> {shots.length ? `${shots.length} ${shots.length === 1 ? "photo" : "photos"}` : "No photos yet - add them"}
+              </span>
+            </button>
+            {shots.length > 1 && (
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-1">
+                {[0, 1, 2].map((i) => {
+                  const src = shots[i + 1];
+                  if (!src) return <span key={i} aria-hidden className="aspect-square rounded-xl bg-box" />;
+                  const more = i === 2 && shots.length > 4 ? shots.length - 4 : 0;
+                  return (
+                    <button key={src + i} type="button" onClick={() => setLightbox(i + 1)} aria-label={more ? `${more} more photos` : `Photo ${i + 2}`} className="group relative aspect-square overflow-hidden rounded-xl bg-box">
+                      <PropertyPhoto src={src} alt="" className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
+                      {more > 0 && <span className="absolute inset-0 flex items-center justify-center bg-ink/45 text-[18px] font-semibold text-white">+{more}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <div className="px-2 pb-1.5 pt-4">
+            <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+              <h1 className="hand min-w-0 text-[28px] leading-[1.1] sm:text-[32px]">{listing.name}</h1>
+              <span className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-semibold text-accent-dark">
+                <span className="h-1.5 w-1.5 rounded-full bg-accent-dark" />
+                {status.label}
+              </span>
+            </div>
+            <p className="figures mt-1.5 text-[20px] font-semibold">
+              {listing.rent == null ? <span className="text-[14px] font-normal text-muted">Rent not set</span> : <>£{listing.rent.toLocaleString("en-GB")} <span className="text-[13px] font-normal text-muted">{per}</span></>}
+            </p>
+            <p className="mt-1 text-[13px] text-muted">
+              {[listing.locality, listing.publishedAt ? `live since ${dayOf(listing.publishedAt)}` : null].filter(Boolean).join(" · ")}
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {listing.tenant && <Tag tone="neutral">Tenanted</Tag>}
+              {/* Whose it is, and moving it - James and Susan only (6 Oct 2026). */}
+              <ListingOwner listingId={listing.id} />
+              {/* A test file's listing (lib/test-overlay): negative id, never in REX. */}
+              {Number(listing.id) < 0 && <Tag tone="neutral">Test listing - only you can see it</Tag>}
+              {terms.status === "ready" && (
                 <button
                   type="button"
-                  onClick={() => photos.length && setLightbox(0)}
-                  className={`group relative block h-[220px] w-full flex-1 overflow-hidden rounded-2xl border border-white/70 bg-white md:h-auto md:min-h-[240px] ${photos.length ? "cursor-zoom-in" : "cursor-default"}`}
-                  aria-label={photos.length ? "Open the photos" : "No photographs yet"}
+                  onClick={() => goTab("documents")}
+                  title="Open Documents"
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                    terms.signed ? "bg-[#f1f4ec] text-[#56634a]" : "border border-accent-dark/50 bg-white text-accent-dark hover:border-accent-dark"
+                  }`}
                 >
-                  <PropertyPhoto src={photos[0] ?? null} className="absolute inset-0 h-full w-full transition-transform duration-300 group-hover:scale-[1.03]" />
-                  {photos.length > 1 && (
-                    <span className="absolute bottom-2 right-2 rounded-full bg-black/45 px-2 py-0.5 text-[10.5px] font-semibold text-white">{photos.length} photos</span>
-                  )}
+                  <DoodleIcon name="file-contract" size={11} />
+                  {terms.signed ? "Terms signed" : "No terms on file"}
                 </button>
-              </div>
+              )}
+            </div>
+            {/* Filed away: why, said once. The way back is the action tile. */}
+            {listing.archived && (
+              <p className="mt-3 rounded-xl border border-line/60 bg-box px-3.5 py-2.5 text-[11.5px] leading-snug text-muted">
+                <span className="font-semibold text-ink">{archiveLabel(listing.archiveReason ?? null)}.</span>{" "}
+                {archiveWhy({ archived: true, reason: listing.archiveReason ?? null, since: listing.archivedSince ?? null, ageDays: listing.archiveAgeDays ?? null })}{" "}
+                It is out of the Draft tab, still searchable, and the listing itself is unchanged.
+              </p>
+            )}
+          </div>
+        </section>
 
-              {/* The listing itself. */}
-              <div className="min-w-0 md:pr-2">
-                <h2 className="hand text-[28px] leading-[1.1]">{listing.name}</h2>
-                <p className="mt-1.5 text-[13px] text-muted">{listing.locality}</p>
-                <p className="mt-3 flex items-baseline gap-1.5">
-                  <span className="figures text-[28px] leading-none">
-                    {listing.rent == null ? "—" : `£${listing.rent.toLocaleString("en-GB")}`}
-                  </span>
-                  <span className="text-[12px] text-muted">{listing.rent == null ? "rent not set" : per}</span>
-                </p>
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <Tag tone={status.tone}>{status.label}</Tag>
-                  {listing.tenant && <Tag tone="neutral">Tenanted</Tag>}
-                  {/* Whose it is, and moving it - James and Susan only (6 Oct 2026). */}
-                  <ListingOwner listingId={listing.id} />
-                  {/* A test file's listing (lib/test-overlay): negative id, never in REX. */}
-                  {Number(listing.id) < 0 && <Tag tone="neutral">Test listing - only you can see it</Tag>}
-                  {/* Terms, as one word rather than a panel. The copy lives in Documents. */}
-                  {terms.status === "ready" && (
-                    <button
-                      type="button"
-                      onClick={() => setTab("documents")}
-                      title="Open Documents"
-                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-                        terms.signed ? "bg-white text-[#56634a]" : "border border-accent-dark/50 bg-white text-accent-dark hover:border-accent-dark"
-                      }`}
-                    >
-                      <DoodleIcon name="file-contract" size={11} />
-                      {terms.signed ? "Terms signed" : "No terms on file"}
-                    </button>
-                  )}
-                </div>
-                {/* When it went live, a line of its own (James, 8 Oct 2026). The
-                    portals themselves are on the Marketing tab. */}
-                {listing.publishedAt && (
-                  <p className="mt-2 text-[11.5px] text-muted">
-                    Live since {new Date(listing.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                  </p>
-                )}
-
-                {/* ── THE TWO-MONTH DRAFT CAP, on the record itself ──────
-                    Filing a draft away is a decision about THIS property, so
-                    the button is here rather than on every card on the board.
-                    It says what it does in full, because "Archive" next to a
-                    property is a word people reasonably read as "delete". */}
-                {onArchive && (listing.archived || (!listing.letAgreed && listing.publicationStatus !== "published")) && (
-                  <div className="mt-3 flex flex-wrap items-center gap-2.5 rounded-2xl border border-white/70 bg-white/70 px-3.5 py-2.5">
-                    <span className="min-w-0 flex-1 text-[11.5px] leading-snug text-muted">
-                      {listing.archived ? (
-                        <>
-                          <span className="font-semibold text-ink">{archiveLabel(listing.archiveReason ?? null)}.</span>{" "}
-                          {archiveWhy({
-                            archived: true,
-                            reason: listing.archiveReason ?? null,
-                            since: listing.archivedSince ?? null,
-                            ageDays: listing.archiveAgeDays ?? null,
-                          })}{" "}
-                          It is out of the Draft tab, still searchable, and the listing itself is unchanged.
-                        </>
-                      ) : (
-                        <>
-                          A draft. It files itself away {Math.round(ARCHIVE_AFTER_DAYS / 30)} months after it was
-                          created unless it goes live - or you can put it away now.
-                        </>
-                      )}
-                    </span>
-                    {/* Withdrawn is REX's state, not ours, so there is nothing
-                        here to undo — the way back is in REX. */}
-                    {listing.archiveReason !== "withdrawn" && (
-                      <button
-                        type="button"
-                        disabled={archiveBusy}
-                        onClick={() => onArchive(String(listing.id), listing.archived ? "restore" : "archive")}
-                        className={`shrink-0 rounded-full px-3.5 py-2 text-[11.5px] font-semibold transition-colors disabled:opacity-50 ${
-                          listing.archived
-                            ? "bg-accent-dark text-white hover:opacity-90"
-                            : "border border-line/60 bg-white text-muted hover:border-ink/40 hover:text-ink"
-                        }`}
-                      >
-                        {archiveBusy ? "Saving…" : listing.archived ? "Bring back to drafts" : "File it away"}
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {/* The quick actions, two by two (James, 8 Oct 2026). The first two in
-                    the dark chocolate (11 Sep): getting INTO the property, and
-                    getting it OUT to the database. Make an offer lives on the
-                    Offers tab now. */}
-                <div className="mt-4 grid w-full max-w-[440px] grid-cols-2 gap-2">
-                  <AccessRequest
-                    value={access}
-                    onChange={setAccess}
-                    loading={accessStatus === "loading"}
-                    address={listing.name}
-                    agent={me}
-                    tenant={listing.tenant ?? null}
-                    landlord={landlord.status === "known" ? landlord.landlord : null}
-                    viewings={upcomingOptions}
-                    onBook={LISTING_BOOKER_LIVE ? () => setBooking(true) : undefined}
-                    className="w-full"
-                  />
-                  <PressButton
-                    data-steve="listing.mail-db"
-                    onClick={() => setEmailing(true)}
-                    className="press-ring flex w-full items-center justify-center gap-2 rounded-full bg-[var(--brown)] px-4 py-2.5 text-[12.5px] font-semibold text-white"
-                  >
-                    <DoodleIcon name="megaphone" size={14} />
-                    Mail the database
-                  </PressButton>
-                  {LISTING_BOOKER_LIVE && (
-                    <PressButton
-                      onClick={() => setBooking(true)}
-                      className="press-ring flex w-full items-center justify-center gap-2 rounded-full border border-line/60 bg-white px-4 py-2.5 text-[12.5px] font-semibold"
-                    >
-                      <DoodleIcon name="calendar" size={14} />
-                      Book a viewing
-                    </PressButton>
-                  )}
-                  {LISTING_BOOKER_LIVE && (
-                    <PressButton
-                      data-steve="listing.book-slot"
-                      onClick={() => setSlotting(true)}
-                      className="press-ring flex w-full items-center justify-center gap-2 rounded-full border border-line/60 bg-white px-4 py-2.5 text-[12.5px] font-semibold"
-                    >
-                      <DoodleIcon name="clock" size={14} />
-                      Book a slot
-                    </PressButton>
-                  )}
-                </div>
-              </div>
-
-              {/* Property details: the facts, small, in a white box, live
-                  from REX and changed on the Marketing tab. */}
-              <aside className="rounded-2xl border border-line/40 bg-white p-4 md:col-span-2 xl:col-span-1">
-                <p className="hand flex items-center gap-2 text-[14px]">
-                  <DoodleIcon name="home" size={14} className="text-accent-dark" />
-                  Property details
-                </p>
-                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[12px] md:grid-cols-4 xl:grid-cols-2">
-                  {(() => {
-                    const wait = live ? null : liveFailed ? "Did not load" : "Reading…";
-                    const set = (v: string | number | null | undefined) => wait ?? (v == null || v === "" ? "Not set" : String(v));
-                    const availableFrom = live ? live.availableFrom : listing.availableFrom;
-                    return [
-                    ["Type", set(live?.propertyType)],
-                    ["Bedrooms", set(live?.beds)],
-                    ["Bathrooms", set(live?.baths)],
-                    ["Deposit", set(live?.deposit != null ? `£${live.deposit.toLocaleString("en-GB")}` : null)],
-                    ["Available from", availableFrom ? new Date(`${availableFrom}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "Now"],
-                    ["EPC expires", (live?.epc.expiry ?? listing.epcExpiry) ? new Date(`${live?.epc.expiry ?? listing.epcExpiry}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "Not recorded"],
-                    ];
-                  })().map(([k, v]) => (
-                    <div key={k} className="min-w-0">
-                      <dt className="text-[10.5px] text-muted">{k}</dt>
-                      <dd className={`truncate font-semibold ${v === "Not set" || v === "Not recorded" || v === "Reading…" || v === "Did not load" ? "font-normal text-muted" : ""}`}>{v}</dd>
-                    </div>
-                  ))}
-                </dl>
-                <button type="button" onClick={() => setTab("marketing")} className="mt-3 text-[11.5px] font-semibold text-accent-dark hover:underline">
-                  Edit in Marketing →
+        {/* ── the actions, level with the photos ─────────────────────── */}
+        <section className={`${box} flex flex-col p-4 lg:col-start-2 lg:row-start-1`}>
+          <p className={`${eyebrow} mb-3 px-1`}>Actions</p>
+          <div className="grid flex-1 auto-rows-fr grid-cols-2 gap-2">
+            {/* Getting INTO the property, and getting it OUT to the database,
+                in the dark chocolate (11 Sep 2026). */}
+            <AccessRequest
+              value={access}
+              onChange={setAccess}
+              loading={accessStatus === "loading"}
+              address={listing.name}
+              agent={me}
+              tenant={listing.tenant ?? null}
+              landlord={landlord.status === "known" ? landlord.landlord : null}
+              viewings={upcomingOptions}
+              onBook={LISTING_BOOKER_LIVE ? () => setBooking(true) : undefined}
+              renderButton={(b) => (
+                <button type="button" onClick={b.press} className={tile} title={access.kind ? "Change how we get in under Documents" : "Record how we get into the property"}>
+                  {tileIcon(b.icon, true)}
+                  {tileText(b.label, access.kind ? "How we get in for viewings" : "Vacant, the tenant or the landlord")}
                 </button>
-              </aside>
-            </div>
-            </div>
+              )}
+            />
+            <button type="button" data-steve="listing.mail-db" onClick={() => setEmailing(true)} className={tile}>
+              {tileIcon("megaphone", true)}
+              {tileText("Mail the database", "Every tenant it suits, one email")}
+            </button>
+            {LISTING_BOOKER_LIVE && (
+              <button type="button" onClick={() => setBooking(true)} className={tile}>
+                {tileIcon("calendar")}
+                {tileText("Book a viewing", "Into the diary, access asked")}
+              </button>
+            )}
+            {LISTING_BOOKER_LIVE && (
+              <button type="button" data-steve="listing.book-slot" onClick={() => setSlotting(true)} className={tile}>
+                {tileIcon("clock")}
+                {tileText("Book a slot", "Hold time at the home, book within it")}
+              </button>
+            )}
+            {canOffer && (
+              <button type="button" data-steve="listing.make-offer" onClick={() => setPickingOfferer(true)} className={tile}>
+                {tileIcon("coin")}
+                {tileText("Make an offer", "From someone who viewed or asked")}
+              </button>
+            )}
+            {!isLive && !listing.letAgreed && !publishHidden && (
+              <button type="button" data-steve-never onClick={pushLive} className={tile} title={readyToGoLive ? undefined : `Can't push it live until ${missingWords}.`}>
+                {tileIcon("megaphone")}
+                {tileText("Push to the portals", readyToGoLive ? "Rightmove, OnTheMarket and Zoopla" : (() => { const n = requirements.filter((r) => !r.done).length || 1; return `${n} ${n === 1 ? "thing" : "things"} to finish first`; })())}
+              </button>
+            )}
+            <button type="button" onClick={() => goTab("marketing")} className={tile}>
+              {tileIcon("pack/photo")}
+              {tileText("Edit the advert", "The facts, the write-up and the photos")}
+            </button>
+            <button type="button" onClick={() => (requirements.find((r) => r.id === "epc")?.done ? goTab("compliance") : setDrop("epc"))} className={tile}>
+              {tileIcon("shield")}
+              {tileText("Add a certificate", "Read and filed on the home")}
+            </button>
+            {canFileAway && (
+              <button
+                type="button"
+                disabled={archiveBusy}
+                onClick={() => onArchive?.(String(listing.id), listing.archived ? "restore" : "archive")}
+                className={tile}
+              >
+                {tileIcon("folder")}
+                {tileText(
+                  archiveBusy ? "Saving…" : listing.archived ? "Bring back to drafts" : "File it away",
+                  listing.archived ? "Back on the Draft tab" : `Drafts file themselves after ${Math.round(ARCHIVE_AFTER_DAYS / 30)} months`
+                )}
+              </button>
+            )}
+          </div>
+          {portalNote && !publishCanPress && <p className="mt-3 px-1 text-[11.5px] leading-snug text-muted">{portalNote}</p>}
+        </section>
+
+        {/* ── 2. the facts and the people ────────────────────────────── */}
+        <section className={`${box} flex min-w-0 flex-col p-4 sm:p-5 lg:col-start-1 lg:row-start-2`}>
+          <div className="flex items-baseline justify-between gap-3">
+            <p className={eyebrow}>General info</p>
+            <button type="button" onClick={() => goTab("marketing")} className="text-[11.5px] font-semibold text-accent-dark hover:underline">Edit in Marketing</button>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+            {facts.map((f) => (
+              <div key={f.label} className="flex min-w-0 items-start gap-2.5">
+                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
+                  <DoodleIcon name={f.icon} size={13} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[10.5px] font-semibold uppercase tracking-wide text-muted">{f.label}</span>
+                  <span className={`block truncate text-[13px] ${["Not set", "Not recorded", "Reading…", "Did not load"].includes(f.text) ? "text-muted" : ""}`}>{f.text}</span>
+                </span>
+              </div>
+            ))}
           </div>
 
-          {/* ── THREE CARDS: the landlord, at a glance, and next up. ── */}
-          <div className="mt-5 grid gap-5 lg:grid-cols-3">
-            {/* The landlord, because the first question on any property is
-                "whose is it and can I ring them". The REAL landlord, off the
-                listing's owner relationship in REX. */}
-            <section className="flex flex-col rounded-[22px] border border-line/50 bg-white p-5">
-              <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">The landlord</p>
-              {landlord.status === "loading" && (
-                <p className="mt-4 flex items-center gap-2 text-[12px] text-muted">
+          {/* How it stands: one chip per section, each opens it. */}
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button type="button" className={chip} onClick={() => goTab("enquiries")}>
+              <DoodleIcon name="target" size={12} className="text-accent-dark" />
+              {enquiries === null ? "Reading the enquiries…" : `${enquirers} ${enquirers === 1 ? "enquiry" : "enquiries"}`}
+            </button>
+            <button type="button" className={chip} onClick={() => goTab("viewings")}>
+              <DoodleIcon name="calendar" size={12} className="text-accent-dark" />
+              {viewings === null ? "Reading the diary…" : `${viewings.upcoming.length + booked.length} booked · ${viewings.past.length} done`}
+            </button>
+            <button type="button" className={chip} onClick={() => goTab("applications")}>
+              <DoodleIcon name="coin" size={12} className="text-accent-dark" />
+              {savedOffers === null ? "Reading the offers…" : openOffers ? <b className="font-semibold text-accent-dark">{openOffers} {openOffers === 1 ? "offer" : "offers"} to decide</b> : `${savedOffers.length} ${savedOffers.length === 1 ? "offer" : "offers"}`}
+            </button>
+            <button type="button" className={chip} onClick={() => goTab("compliance")}>
+              <DoodleIcon name="shield" size={12} className="text-accent-dark" />
+              {certs === null ? "Reading the certificates…" : certOk("epc") && certOk("gas_safety") && certOk("eicr") ? "EPC, gas and EICR in" : <b className="font-semibold text-accent-dark">Certificates to add</b>}
+            </button>
+          </div>
+
+          <div className={`mt-5 grid grid-cols-1 gap-4 ${listing.tenant ? "2xl:grid-cols-2" : ""}`}>
+            {/* The REAL landlord, off the listing's owner relationship in REX. */}
+            <section className="rounded-xl border border-line/50 bg-white p-3.5 sm:p-5">
+              <p className={`${eyebrow} mb-3`}>Landlord</p>
+              {landlord.status === "loading" || landlord.status === "idle" ? (
+                <p className="flex items-center gap-2 text-[12px] text-muted">
                   <span className="block h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
                   Looking them up…
                 </p>
-              )}
-              {landlord.status === "known" && (
-                <>
-                  <p className="hand mt-2 text-[22px] leading-tight">{landlord.landlord.name}</p>
-                  <div className="mt-3 space-y-1.5 border-t border-line/50 pt-3 text-[13px]">
+              ) : landlord.status === "known" ? (
+                <div className="text-[13px]">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                    <span className="font-semibold">{landlord.landlord.name}</span>
                     {landlord.landlord.phone ? (
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                        <a href={`tel:${landlord.landlord.phone.replace(/\s+/g, "")}`} className="flex items-center gap-2.5 whitespace-nowrap hover:underline"><DoodleIcon name="call" size={13} className="text-accent-dark" />{landlord.landlord.phone}</a>
-                        <WhatsAppButton
-                          phone={landlord.landlord.phone}
-                          name={landlord.landlord.name}
-                          className="flex shrink-0 items-center gap-1.5 rounded-full border border-line/70 px-2.5 py-1 text-[11.5px] font-semibold transition-colors hover:border-ink/40"
-                        >
-                          <DoodleIcon name="message-2" size={12} className="text-accent-dark" />
-                          WhatsApp
-                        </WhatsAppButton>
-                      </div>
+                      <a href={`tel:${landlord.landlord.phone.replace(/\s+/g, "")}`} className="text-[12px] text-muted hover:text-ink">{landlord.landlord.phone}</a>
                     ) : (
-                      <p className="flex items-center gap-2.5 text-muted"><DoodleIcon name="call" size={13} />No number on file</p>
+                      <span className="text-[12px] text-muted">No number on file</span>
                     )}
                     {landlord.landlord.email ? (
-                      <a href={`mailto:${landlord.landlord.email}`} className="flex min-w-0 items-center gap-2.5 hover:underline"><DoodleIcon name="mail" size={13} className="shrink-0 text-accent-dark" /><span className="truncate">{landlord.landlord.email}</span></a>
+                      <a href={`mailto:${landlord.landlord.email}`} className="truncate text-[12px] text-muted hover:text-ink">{landlord.landlord.email}</a>
                     ) : (
-                      <p className="flex items-center gap-2.5 text-muted"><DoodleIcon name="mail" size={13} />No email on file</p>
+                      <span className="text-[12px] text-muted">No email on file</span>
+                    )}
+                    {landlord.landlord.phone && (
+                      <WhatsAppButton
+                        phone={landlord.landlord.phone}
+                        name={landlord.landlord.name}
+                        className="flex shrink-0 items-center gap-1.5 rounded-full border border-line/70 px-2.5 py-1 text-[11.5px] font-semibold transition-colors hover:border-ink/40"
+                      >
+                        <DoodleIcon name="message-2" size={12} className="text-accent-dark" />
+                        WhatsApp
+                      </WhatsAppButton>
                     )}
                   </div>
                   {/* REX's listing names nobody; this is the managed record's landlord (6 Oct 2026). */}
                   {landlord.landlord.from === "record" && (
-                    <p className="mt-3 text-[11.5px] leading-relaxed text-muted">From the managed property record. They are not on this listing yet, so nothing is sent to them from here.</p>
+                    <p className="mt-2.5 text-[11.5px] leading-relaxed text-muted">From the managed property record. They are not on this listing yet, so nothing is sent to them from here.</p>
                   )}
-                </>
-              )}
-              {landlord.status === "none" && (
-                <p className="mt-4 text-[12.5px] leading-relaxed text-muted">
-                  No landlord is held against this property, so there is nobody to ring or email from here. Ask the office to add them to the listing and they will come through.
-                </p>
-              )}
-              {landlord.status === "problem" && (
-                <p className="mt-4 text-[12px] leading-relaxed text-accent-dark">{landlord.says}</p>
-              )}
-              {listing.tenant && (
-                <div className="mt-auto border-t border-line/50 pt-3.5">
-                  <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">Current tenant</p>
-                  <p className="mt-1.5 text-[13px] font-semibold">{listing.tenant.name}</p>
-                  <p className="mt-0.5 flex flex-wrap gap-x-3 text-[12px] text-muted">
-                    <span>{listing.tenant.phone}</span>
-                    <span className="truncate">{listing.tenant.email}</span>
-                  </p>
                 </div>
+              ) : landlord.status === "none" ? (
+                <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">No landlord is held against this property. Ask the office to add them to the listing and they will come through.</p>
+              ) : (
+                <p className="text-[12px] leading-relaxed text-accent-dark">{landlord.says}</p>
               )}
             </section>
+            {listing.tenant && (
+              <section className="rounded-xl border border-line/50 bg-white p-3.5 sm:p-5">
+                <p className={`${eyebrow} mb-3`}>Current tenant</p>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
+                  <span className="font-semibold">{listing.tenant.name}</span>
+                  {listing.tenant.phone && <a href={`tel:${listing.tenant.phone.replace(/\s+/g, "")}`} className="text-[12px] text-muted hover:text-ink">{listing.tenant.phone}</a>}
+                  {listing.tenant.email && <a href={`mailto:${listing.tenant.email}`} className="truncate text-[12px] text-muted hover:text-ink">{listing.tenant.email}</a>}
+                </div>
+              </section>
+            )}
+          </div>
+        </section>
 
-            {/* At a glance: what is happening on the listing - the numbers
-                the tabs hold, so the record answers before anyone clicks. */}
-            <section className="rounded-[22px] border border-line/50 bg-white p-5">
-              <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">At a glance</p>
-              <ul className="mt-3 space-y-3">
-                {[
-                  { icon: "target", title: enquiries === null ? "Reading the enquiries…" : `${enquirers} enquir${enquirers === 1 ? "y" : "ies"}`, sub: "From the portals, on this listing", to: "enquiries" as TabKey },
-                  { icon: "calendar", title: viewings === null ? "Reading the diary…" : `${viewings.upcoming.length + booked.length} booked · ${viewings.past.length} done`, sub: "Viewings", to: "viewings" as TabKey },
-                  {
-                    icon: "coin",
-                    title: savedOffers === null ? "Reading the offers…" : `${savedOffers.length} offer${savedOffers.length === 1 ? "" : "s"}`,
-                    sub: savedOffers?.some((o) => o.status === "accepted") ? "One accepted" : openOffers ? `${openOffers} waiting on a decision` : "None accepted yet",
-                    to: "applications" as TabKey,
-                  },
-                  { icon: "folder", title: `${listing.imageCount} photo${listing.imageCount === 1 ? "" : "s"} on file`, sub: listing.daysOnMarket != null ? `${listing.daysOnMarket} day${listing.daysOnMarket === 1 ? "" : "s"} on the market` : "Not published yet", to: "marketing" as TabKey },
-                ].map((g) => (
-                  <li key={g.sub + g.title}>
-                    <button type="button" onClick={() => setTab(g.to)} className="flex w-full items-start gap-3 text-left">
-                      <DoodleIcon name={g.icon} size={15} className="mt-0.5 shrink-0 text-accent-dark" />
-                      <span className="min-w-0">
-                        <span className="block text-[13px] font-semibold leading-snug">{g.title}</span>
-                        <span className="block text-[11.5px] text-muted">{g.sub}</span>
+        {/* ── Next up, level with the facts. It stays (James, 12 Oct 2026):
+            what the process says to do, then the latest on this home. ── */}
+        <section className={`${pop} flex flex-col rounded-2xl border border-accent-dark/15 bg-accent-soft/60 p-5 lg:col-start-2 lg:row-start-2`}>
+          <p className={`${eyebrow} text-accent-dark`}>Next up · step {Math.min(step, LISTING_TRACK.length - 1) + 1} of {LISTING_TRACK.length}</p>
+          <h2 className="hand mt-1.5 text-[19px] leading-tight">{here.title}</h2>
+          <p className="mt-1 text-[12px] leading-relaxed text-muted">{here.detail}</p>
+          {/* Before it goes live: the legal minimum, each one a click to fix. */}
+          {here.id === "live" && !isLive && (
+            <ul className="mt-3.5 space-y-1.5">
+              {requirements.map((r) => (
+                <li key={r.id} className="flex items-center gap-2 text-[12px]">
+                  <span
+                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${r.done ? "text-white" : "border border-accent/60 bg-white text-transparent"}`}
+                    style={r.done ? { background: SAGE_INK } : undefined}
+                  >
+                    ✓
+                  </span>
+                  {r.done ? (
+                    <span>{r.label}</span>
+                  ) : (
+                    <button type="button" onClick={r.fix} className="text-left font-semibold hover:underline">{r.id === "marketing" ? r.label : `${r.label.replace(/ on file$| on$| filed$| written$/, "")} · add it`}</button>
+                  )}
+                </li>
+              ))}
+              {certs === null && <li className="text-[11px] text-muted">Reading the certificates…</li>}
+              {/* Not needed to advertise; needed before anyone moves in. */}
+              <li className="pt-1.5 text-[11px] leading-snug text-muted">
+                {beforeMoveIn.every((r) => r.done)
+                  ? "Gas safety and the EICR are both on file."
+                  : `Before anyone moves in: ${beforeMoveIn.filter((r) => !r.done).map((r) => r.label).join(" and ")}.`}
+                {beforeMoveIn.some((r) => !r.done) && (
+                  <button type="button" onClick={() => goTab("compliance")} className="ml-1.5 font-semibold text-accent-dark hover:underline">
+                    Add {beforeMoveIn.filter((r) => !r.done).length > 1 ? "them" : "it"} now
+                  </button>
+                )}
+              </li>
+            </ul>
+          )}
+          <div className="mt-4 flex flex-wrap items-center gap-2.5">
+            {here.id === "live" ? (
+              isLive ? (
+                <p className="text-[12px] leading-relaxed" style={{ color: SAGE_INK }}>
+                  {pub && !pub.onPortals
+                    ? "Published, and off the portals for now."
+                    : `On the portals${listing.publishedAt ? ` since ${new Date(listing.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}.`}
+                </p>
+              ) : publishHidden ? (
+                <p className="text-[11.5px] leading-snug text-muted">Pushing to the portals is not switched on for you yet.</p>
+              ) : (
+                <>
+                  <PressButton
+                    onClick={pushLive}
+                    className={`press-ring flex items-center gap-2 rounded-full bg-[var(--brown)] px-5 py-2.5 text-[12.5px] font-semibold text-white ${readyToGoLive ? "" : "opacity-90"}`}
+                  >
+                    <DoodleIcon name="megaphone" size={14} />
+                    Push to the portals
+                  </PressButton>
+                  <span className="text-[11px] leading-snug text-muted">
+                    {!readyToGoLive ? `Not until ${missingWords}.` : publishCanPress ? "Goes to Rightmove, OnTheMarket and Zoopla." : portalNote}
+                  </span>
+                </>
+              )
+            ) : here.action === "viewing" && !LISTING_BOOKER_LIVE ? (
+              <p className="text-[11.5px] leading-snug text-muted">Book viewings from the applicant&apos;s lead for now.</p>
+            ) : !LISTING_OFFERS_LIVE && (here.id === "offers-in" || here.action === "review" || here.action === "handoff") ? (
+              (() => {
+                /* The handover opens the accepted application itself, where
+                   the handover panel is; the rest open this listing's offers. */
+                const acceptedApp = here.action === "handoff" ? liveApps?.find((a) => /accept/i.test(a.statusLabel)) : undefined;
+                return acceptedApp ? (
+                  <Link
+                    href={`/applications?open=${encodeURIComponent(acceptedApp.id)}`}
+                    className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white"
+                  >
+                    <DoodleIcon name={here.icon} size={14} />
+                    Open the accepted application
+                  </Link>
+                ) : (
+                  <PressButton
+                    onClick={() => goTab("applications")}
+                    className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white"
+                  >
+                    <DoodleIcon name={here.icon} size={14} />
+                    See the offers
+                  </PressButton>
+                );
+              })()
+            ) : (
+              <PressButton
+                onClick={fire}
+                className={`press-ring flex items-center gap-2 rounded-full px-5 py-2.5 text-[12.5px] font-semibold ${
+                  here.action === "review" && !offers.length ? "cursor-not-allowed bg-ink/30 text-white/60" : "bg-accent-dark text-white"
+                }`}
+              >
+                <DoodleIcon name={here.icon} size={14} />
+                {here.cta}
+              </PressButton>
+            )}
+          </div>
+
+          {/* The latest on this home, newest first. */}
+          <div className="mt-5 border-t border-accent-dark/15 pt-4">
+            <p className={eyebrow}>Latest</p>
+            {latest.length > 0 ? (
+              <ul className="mt-2.5 space-y-2">
+                {latest.slice(0, 4).map((a) => (
+                  <li key={a.key}>
+                    <button type="button" onClick={() => goTab(a.to)} className="flex w-full min-w-0 items-start gap-3 rounded-xl bg-white px-3.5 py-2.5 text-left transition-colors hover:bg-box/60">
+                      <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${a.hot ? "bg-accent-dark text-white" : "bg-accent-soft text-accent-dark"}`}>
+                        <DoodleIcon name={a.icon} size={12} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[12.5px] font-semibold">{a.title}</span>
+                        <span className={`block truncate text-[11.5px] ${a.hot ? "text-accent-dark" : "text-muted"}`}>{a.sub}</span>
                       </span>
                     </button>
                   </li>
                 ))}
               </ul>
-            </section>
-
-            {/* Next up: what the process says to do, and what the record says
-                is missing. Blush here, because the hero is sage. */}
-            <section className="relative flex flex-col overflow-hidden rounded-[22px] bg-accent-soft/70 p-5">
-              <span
-                aria-hidden
-                className="pointer-events-none absolute -bottom-6 -right-8 h-[200px] w-[260px] rotate-[-8deg] rounded-[30px]"
-                style={{
-                  backgroundImage: "repeating-linear-gradient(135deg, color-mix(in srgb, var(--accent-dark) 22%, transparent) 0 1px, transparent 1px 10px)",
-                  maskImage: "radial-gradient(closest-side at 80% 90%, black 10%, transparent 100%)",
-                  WebkitMaskImage: "radial-gradient(closest-side at 80% 90%, black 10%, transparent 100%)",
-                }}
-              />
-              <div className="relative">
-                <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-accent-dark">Next up</p>
-                <h3 className="hand mt-1.5 text-[18px] leading-tight">{here.title}</h3>
-                <p className="mt-1 text-[12px] leading-relaxed text-muted">{here.detail}</p>
-              </div>
-              {/* Before it goes live: the legal minimum, each one a click to
-                  fix. Nothing else on the card until they are all in. */}
-              {here.id === "live" && !isLive && (
-                <ul className="relative mt-3.5 space-y-1.5">
-                  {requirements.map((r) => (
-                    <li key={r.id} className="flex items-center gap-2 text-[12px]">
-                      <span
-                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${r.done ? "text-white" : "border border-accent/60 bg-white text-transparent"}`}
-                        style={r.done ? { background: SAGE_INK } : undefined}
-                      >
-                        ✓
-                      </span>
-                      {r.done ? (
-                        <span>{r.label}</span>
-                      ) : (
-                        <button type="button" onClick={r.fix} className="text-left font-semibold hover:underline">{r.id === "marketing" ? r.label : `${r.label.replace(/ on file$| on$| filed$| written$/, "")} · add it`}</button>
-                      )}
-                    </li>
-                  ))}
-                  {certs === null && <li className="text-[11px] text-muted">Reading the certificates…</li>}
-                  {/* Not needed to advertise; needed before anyone moves in. */}
-                  <li className="pt-1.5 text-[11px] leading-snug text-muted">
-                    {beforeMoveIn.every((r) => r.done)
-                      ? "Gas safety and the EICR are both on file."
-                      : `Before anyone moves in: ${beforeMoveIn.filter((r) => !r.done).map((r) => r.label).join(" and ")}.`}
-                    {beforeMoveIn.some((r) => !r.done) && (
-                      <button type="button" onClick={() => setTab("compliance")} className="ml-1.5 font-semibold text-accent-dark hover:underline">
-                        Add {beforeMoveIn.filter((r) => !r.done).length > 1 ? "them" : "it"} now
-                      </button>
-                    )}
-                  </li>
-                </ul>
-              )}
-              <div className="relative mt-auto flex flex-wrap items-center gap-2.5 pt-4">
-                {here.id === "live" ? (
-                  isLive ? (
-                    <p className="text-[12px] leading-relaxed" style={{ color: SAGE_INK }}>
-                      {pub && !pub.onPortals
-                        ? "Published, and off the portals for now."
-                        : `On the portals${listing.publishedAt ? ` since ${new Date(listing.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}.`}
-                    </p>
-                  ) : publishHidden ? (
-                    <p className="text-[11.5px] leading-snug text-muted">Pushing to the portals is not switched on for you yet.</p>
-                  ) : (
-                    <>
-                      {/* Full colour, never greyed. Hover it and it says what
-                          is still missing (James, 11 Sep). */}
-                      <span className="group relative" data-steve-never>
-                        <PressButton
-                          onClick={() => {
-                            if (!readyToGoLive) return;
-                            if (!publishCanPress) return setPortalNote(lockedSentence(publishArea, publishLevel));
-                            setPushError(null);
-                            setPushing(-1);
-                          }}
-                          className={`press-ring flex items-center gap-2 rounded-full bg-[var(--brown)] px-5 py-2.5 text-[12.5px] font-semibold text-white ${readyToGoLive ? "" : "cursor-not-allowed"}`}
-                        >
-                          <DoodleIcon name="megaphone" size={14} />
-                          Push to the portals
-                        </PressButton>
-                        {!readyToGoLive && (
-                          <span
-                            role="tooltip"
-                            className="pointer-events-none absolute bottom-full left-0 z-10 mb-2 w-64 rounded-xl bg-ink px-3.5 py-2.5 text-[11.5px] leading-snug text-white opacity-0 shadow-lg transition-opacity duration-200 group-hover:opacity-100"
-                          >
-                            Can&apos;t push it live until{" "}
-                            {(() => {
-                              const words: Record<string, string> = { marketing: "the Marketing tab is complete", epc: "the EPC is filed" };
-                              const m = [...requirements.filter((r) => !r.done).map((r) => words[r.id] ?? r.label), ...(pub?.blockers.length && requirements.every((r) => r.done) ? ["the portals' own checks pass"] : [])];
-                              return m.length > 1 ? `${m.slice(0, -1).join(", ")} and ${m[m.length - 1]}` : m[0] ?? "the certificates are read";
-                            })()}.
-                            <span aria-hidden className="absolute left-5 top-full h-0 w-0 border-x-[6px] border-t-[6px] border-x-transparent border-t-ink" />
-                          </span>
-                        )}
-                      </span>
-                      {readyToGoLive && publishCanPress && (
-                        <span className="text-[11px] leading-snug text-muted">Goes to Rightmove, OnTheMarket and Zoopla.</span>
-                      )}
-                      {!publishCanPress && portalNote && (
-                        <span className="text-[11px] leading-snug text-muted">{portalNote}</span>
-                      )}
-                    </>
-                  )
-                ) : here.action === "viewing" && !LISTING_BOOKER_LIVE ? (
-                  <p className="text-[11.5px] leading-snug text-muted">Book viewings from the applicant&apos;s lead for now.</p>
-                ) : !LISTING_OFFERS_LIVE && (here.id === "offers-in" || here.action === "review" || here.action === "handoff") ? (
-                  (() => {
-                    /* The handover opens the accepted application itself, where
-                       the handover panel is; the rest open this listing's
-                       applications. */
-                    const acceptedApp = here.action === "handoff" ? liveApps?.find((a) => /accept/i.test(a.statusLabel)) : undefined;
-                    return acceptedApp ? (
-                      <Link
-                        href={`/applications?open=${encodeURIComponent(acceptedApp.id)}`}
-                        className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white"
-                      >
-                        <DoodleIcon name={here.icon} size={14} />
-                        Open the accepted application
-                      </Link>
-                    ) : (
-                      <PressButton
-                        onClick={() => setTab("applications")}
-                        className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white"
-                      >
-                        <DoodleIcon name={here.icon} size={14} />
-                        See the applications
-                      </PressButton>
-                    );
-                  })()
-                ) : (
-                  <PressButton
-                    onClick={fire}
-                    className={`press-ring flex items-center gap-2 rounded-full px-5 py-2.5 text-[12.5px] font-semibold ${
-                      here.action === "review" && !offers.length ? "cursor-not-allowed bg-ink/30 text-white/60" : "bg-accent-dark text-white"
-                    }`}
-                  >
-                    <DoodleIcon name={here.icon} size={14} />
-                    {here.cta}
-                  </PressButton>
-                )}
-                {here.id === "viewings" && LISTING_OFFERS_LIVE && (
-                  <PressButton
-                    onClick={() => setOffering(true)}
-                    className="press-ring flex items-center gap-2 rounded-full border border-line/60 bg-white px-4 py-2.5 text-[12.5px] font-semibold"
-                  >
-                    <DoodleIcon name="coin" size={14} />
-                    Make an offer
-                  </PressButton>
-                )}
-              </div>
-              {here.id === "viewings" && LISTING_OFFERS_LIVE && (
-                <button
-                  type="button"
-                  onClick={() => offers.length && advance()}
-                  className={`relative mt-2.5 text-left text-[11px] font-semibold transition-colors ${offers.length ? "text-muted hover:text-ink" : "cursor-not-allowed text-muted/50"}`}
-                  title={offers.length ? undefined : "No offers yet — nothing for the landlord to review"}
-                >
-                  Viewings have stopped → landlord review
-                </button>
-              )}
-              {here.action === "review" && !offers.length && LISTING_OFFERS_LIVE && (
-                <p className="relative mt-2 text-[10.5px] text-muted">No applications logged yet.</p>
-              )}
-            </section>
+            ) : reading ? (
+              <p className="mt-2.5 flex items-center gap-2 text-[12px] text-muted">
+                <span className="block h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+                Reading what has happened here…
+              </p>
+            ) : (
+              <p className="mt-2.5 rounded-xl bg-white px-4 py-4 text-center text-[12px] text-muted">No enquiries, viewings or offers on this home yet.</p>
+            )}
           </div>
+        </section>
 
-          {/* ── WHERE IT'S UP TO: the appraisal file's spine, with the small
-              ticks under each step - what the record can say has happened. ── */}
-          <section className="mt-5 rounded-[22px] border border-line/50 bg-white p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h3 className="hand text-[17px]">Where it&apos;s up to</h3>
-                <p className="mt-0.5 text-[12px] text-muted">Track progress through the {LISTING_TRACK.length} steps of a listing. Click a step to move the record.</p>
-              </div>
-              <span className="flex items-center gap-2.5">
-                {saveLabel(stepSave) && <span className="text-[11px] text-muted">{saveLabel(stepSave)}</span>}
-                <span className="rounded-full px-3 py-1 text-[10.5px] font-semibold uppercase tracking-[0.12em]" style={{ background: SAGE_WASH, color: SAGE_INK }}>
-                  Step {Math.min(step, LISTING_TRACK.length - 1) + 1} of {LISTING_TRACK.length}
-                </span>
-              </span>
-            </div>
-            {(() => {
-              const at = Math.min(step, LISTING_TRACK.length - 1);
-              const n = (viewings?.upcoming.length ?? 0) + (viewings?.past.length ?? 0) + booked.length;
-              const apps = (savedOffers?.length ?? 0) + offers.length;
-              const accepted = liveApps?.some((a) => /accept/i.test(a.statusLabel)) || (here.id === "accepted" || here.id === "handover");
-              const ticks: Record<string, { label: string; done: boolean; detail?: string }[]> = {
-                live: [
-                  ...requirements.map((r) => ({ label: r.label, done: r.done, detail: r.id === "photos" && photos.length ? String(photos.length) : undefined })),
-                  { label: "Published to the portals", done: isLive, detail: listing.publishedAt ? new Date(listing.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : undefined },
-                ],
-                viewings: [
-                  { label: "Enquiries in", done: (enquiries?.length ?? 0) > 0, detail: enquiries?.length ? String(enquiries.length) : undefined },
-                  { label: "Viewings booked", done: n > 0, detail: n ? String(n) : undefined },
-                  { label: "Offers in", done: apps > 0, detail: apps ? String(apps) : undefined },
-                ],
-                offers: [{ label: "Sent to the landlord", done: at > 2 }],
-                accepted: [{ label: "Offer accepted", done: Boolean(accepted) }],
-                handover: [{ label: "Handed over to Kirstie", done: at > 4 }],
-              };
+        {/* ── 3. the sections ────────────────────────────────────────── */}
+        <section id="sections" className={`${box} @container min-w-0 scroll-mt-5 p-4 sm:p-5 lg:col-start-1 lg:row-start-3`}>
+          <nav
+            ref={tabRow}
+            onScroll={measureTabs}
+            aria-label="Sections"
+            className={`-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 pt-1 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible [&::-webkit-scrollbar]:hidden ${tabsHidden ? "[mask-image:linear-gradient(to_right,black_calc(100%-48px),transparent)] sm:[mask-image:none]" : ""}`}
+          >
+            {TABS.map((t) => {
+              const count =
+                t.key === "enquiries" ? enquirers : t.key === "applications" ? openOffers : t.key === "viewings" ? booked.length + (viewings?.upcoming.length ?? 0) : 0;
+              const on = tab === t.key;
+              /* A pink dot where something needs doing (James, 11 Sep). */
+              const needs =
+                t.key === "enquiries"
+                  ? (enquiries?.length ?? 0) > 0
+                  : t.key === "applications"
+                    ? openOffers > 0
+                    : t.key === "viewings"
+                      ? (viewings?.upcoming ?? []).some((v) => !v.cancelled && access.kind && access.kind !== "vacant" && !(access.requests ?? {})[v.id]?.grantedAt) ||
+                        (viewings?.past ?? []).some((v) => !v.cancelled && !v.feedbackId)
+                      : t.key === "marketing"
+                        ? photos.length === 0 || !shownBody
+                        : t.key === "compliance"
+                          ? certs != null && !(certOk("epc") && certOk("gas_safety") && certOk("eicr"))
+                          : t.key === "documents"
+                            ? (terms.status === "ready" && !terms.signed) || !access.kind
+                            : false;
               return (
-                <div className="-mx-2 mt-5 overflow-x-auto px-2 pb-1">
-                  <ol className="grid min-w-[640px]" style={{ gridTemplateColumns: `repeat(${LISTING_TRACK.length}, minmax(0, 1fr))` }}>
-                    {LISTING_TRACK.map((st, i) => {
-                      const done = i < at;
-                      const cur = i === at;
-                      return (
-                        <li key={st.id} className="relative flex flex-col items-center px-1 text-center">
-                          {i > 0 && (
-                            <span
-                              aria-hidden
-                              className={`absolute left-[-50%] right-[50%] top-[13px] ${i <= at ? "h-0.5" : "h-0 border-t-2 border-dashed border-line/80"}`}
-                              style={i <= at ? { background: SAGE_INK } : undefined}
-                            />
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setStep(i)}
-                            disabled={i < floor}
-                            title={i < floor ? `${listing.letAgreed ? "Already let agreed" : "Already on the portals"}, so it cannot go back to ${st.label}` : `Move the record to ${st.label}`}
-                            className={`relative z-[1] flex h-[26px] w-[26px] items-center justify-center rounded-full text-[11px] font-semibold transition-transform enabled:hover:scale-110 disabled:cursor-default ${
-                              done ? "text-white" : cur ? "bg-accent-dark text-white" : "border-[1.5px] border-line/80 bg-white text-muted"
-                            }`}
-                            style={done ? { background: SAGE_INK } : undefined}
-                          >
-                            {done ? "✓" : i + 1}
-                          </button>
-                          <p className={`mt-2.5 text-[12px] leading-tight ${cur ? "font-semibold" : "text-muted"}`}>{st.label}</p>
-                        </li>
-                      );
-                    })}
-                  </ol>
-                  <ol className="mt-4 grid min-w-[640px] gap-2" style={{ gridTemplateColumns: `repeat(${LISTING_TRACK.length}, minmax(0, 1fr))` }}>
-                    {LISTING_TRACK.map((st, i) => {
-                      const done = i < at;
-                      const cur = i === at;
-                      const list = ticks[st.id] ?? [];
-                      return (
-                        <li
-                          key={st.id}
-                          className={`rounded-2xl border p-3 ${cur ? "border-accent/60 bg-accent-soft/40" : "border-line/50"}`}
-                          style={done ? { background: SAGE_WASH, borderColor: "transparent" } : undefined}
-                        >
-                          <p className={`text-[11.5px] ${cur ? "font-semibold" : "text-muted"}`}>{st.label}</p>
-                          {cur && <p className="mt-1 text-[10.5px] leading-snug text-muted">{st.title}</p>}
-                          {list.length > 0 && (
-                            <ul className="mt-2.5 space-y-1.5">
-                              {list.map((t) => (
-                                <li key={t.label} className="flex items-start gap-1.5 text-[10.5px] leading-snug">
-                                  <span
-                                    className={`mt-[1px] flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-[8px] ${t.done ? "text-white" : "border border-line/80 bg-white text-transparent"}`}
-                                    style={t.done ? { background: done ? SAGE_INK : "var(--accent-dark)" } : undefined}
-                                  >
-                                    ✓
-                                  </span>
-                                  <span className={t.done ? "text-ink" : "text-muted"}>
-                                    {t.label}
-                                    {t.detail && <span className="text-muted"> · {t.detail}</span>}
-                                  </span>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ol>
-                </div>
+                <button
+                  key={t.key}
+                  data-steve={`listing.tab.${t.key}`}
+                  type="button"
+                  onClick={() => pickTab(t.key)}
+                  aria-current={on ? "page" : undefined}
+                  className={`relative inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-[12.5px] font-semibold transition-colors ${on ? "border-ink bg-ink text-page" : "border-line/70 bg-white hover:border-ink/40"}`}
+                >
+                  <DoodleIcon name={t.icon} size={13} />
+                  {t.label}
+                  {count > 0 && <span className={`rounded-full px-1.5 text-[10.5px] ${on ? "bg-page/20" : "bg-accent-soft text-accent-dark"}`}>{count}</span>}
+                  {needs && !on && <span aria-label="Needs attention" className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-accent" />}
+                </button>
               );
-            })()}
-          </section>
+            })}
+          </nav>
 
-          {/* ── From "offer accepted" onward, the landlord, the property and
-              the tenant are one thing. The panel is the record of that, and
-              the only place it can be undone. ── */}
-          {(here.id === "accepted" || here.id === "handover") && link && (
-            <div className="mt-3">
-              <TenancyLinkPanel value={link} onChange={setLinkState} />
-              {saveLabel(linkSave) && (
-                <p className="mt-1.5 pl-1 text-[10.5px] text-muted">{saveLabel(linkSave)}</p>
-              )}
-            </div>
-          )}
-          </div>
-          )}
-
-          <div key={`view-${tab}`} className={tab === "home" ? "" : "fade-up"}>
-            {tab === "applications" && (
-              <ViewTitle title="Offers" sub={LISTING_OFFERS_LIVE ? "Who has enquired and who has offered. Start an application from anybody here, and put the offers to the landlord when the viewings stop." : "Only the people who have offered. Put each offer to the landlord, then accept one or decline it. The accepted one moves to Applications. The rest are held, and the home keeps taking viewings, until its holding fee is paid."} wash="blush" art="/brand/art/keys-handover.png">
-                {/* Off the home screen and up here (James, 8 Oct 2026): who it
-                    is from, then the offer form. */}
-                {(LISTING_OFFERS_LIVE || canOffer) && (
-                  <PressButton
-                    data-steve="listing.make-offer"
-                    onClick={() => (LISTING_OFFERS_LIVE ? setOffering(true) : setPickingOfferer(true))}
-                    className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-4 py-2.5 text-[12.5px] font-semibold text-page"
-                  >
-                    <DoodleIcon name="coin" size={14} />
-                    Make New Offer
-                  </PressButton>
-                )}
-              </ViewTitle>
+          <div key={`view-${tab}`} className="fade-up mt-4">
+            <p className="mb-4 max-w-2xl text-[12.5px] leading-relaxed text-muted">{TAB_LEAD[tab]}</p>
+            {tab === "applications" && (LISTING_OFFERS_LIVE || canOffer) && (
+              <div className="mb-4">
+                <PressButton
+                  onClick={() => (LISTING_OFFERS_LIVE ? setOffering(true) : setPickingOfferer(true))}
+                  className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-4 py-2.5 text-[12.5px] font-semibold text-page"
+                >
+                  <DoodleIcon name="coin" size={14} />
+                  Make New Offer
+                </PressButton>
+              </div>
             )}
-            {tab === "enquiries" && (
-              <ViewTitle title="Enquiries" sub="Everyone who has asked about this home, from the portals and the rest. Send them the tenant passport in one go, and see whose is done." wash="sage" art="/brand/art/viewing.png" />
-            )}
-            {tab === "viewings" && (
-              <ViewTitle title="Viewings" sub="Everything in the diary for this property. Ask for access against a viewing, and mark it granted when they say yes." wash="sage" art="/brand/art/viewing.png" />
-            )}
-            {tab === "marketing" && (
-              <ViewTitle title="Marketing" sub="The property's facts, the advert the portals show, and the photographs. What a tenant sees, all in one place." wash="blush" art="/brand/art/marketing-desk.png" />
-            )}
-            {/* Where the advert is, once it is live (James, 8 Oct 2026: off the
+                                                {/* Where the advert is, once it is live (James, 8 Oct 2026: off the
                 home screen, under Marketing's top). */}
             {tab === "marketing" && (listing.publishedAt || isLive) && (
-              <section className="mb-5 rounded-[22px] border border-line/50 bg-white p-4">
+              <section className="mb-5 rounded-xl border border-line/50 bg-white p-4">
                 <div className="flex flex-wrap items-center gap-2">
                   {listing.publishedAt && (
                     <span className="mr-1 text-[12px] font-semibold">
@@ -1863,13 +1729,7 @@ function ListingDrawerBody({
                 {portalNote && <p className="mt-2 text-[11.5px] leading-snug text-muted">{portalNote}</p>}
               </section>
             )}
-            {tab === "compliance" && (
-              <ViewTitle title="Compliance" sub="Every certificate the property needs, where it stands, and the files on hand. Drop a certificate and it is read and filed." />
-            )}
-            {tab === "documents" && (
-              <ViewTitle title="Documents" sub="How we get into the property, the terms of business, and everything signed or filed against this listing." />
-            )}
-            {tab === "enquiries" &&
+                                    {tab === "enquiries" &&
               (enquiries === null ? (
                 <p className="flex items-center justify-center gap-2 py-8 text-[12px] text-muted">
                   <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
@@ -1929,7 +1789,7 @@ function ListingDrawerBody({
             )}
 
             {tab === "viewings" && (
-              <div className="grid gap-4">
+              <div className="grid grid-cols-[minmax(0,1fr)] gap-4">
                 <div className="space-y-4">
                   <Card
                     title="Upcoming viewings"
@@ -2055,7 +1915,7 @@ function ListingDrawerBody({
             )}
             {/* How the advert is doing, only where there IS an advert. */}
             {tab === "marketing" && isLive && (
-              <section className="mt-5 rounded-[22px] border border-line/50 bg-white p-5">
+              <section className="mt-5 rounded-xl border border-line/50 bg-white p-5">
                 <PortalStatsPanel listingId={listing.id} embedded />
               </section>
             )}
@@ -2066,7 +1926,7 @@ function ListingDrawerBody({
                   <button
                     type="button"
                     onClick={() => setDrop("epc")}
-                    className="flex w-full items-center gap-4 rounded-[22px] border border-accent/60 bg-accent-soft/50 p-5 text-left transition-colors hover:bg-accent-soft/80"
+                    className="flex w-full items-center gap-4 rounded-xl border border-accent/60 bg-accent-soft/50 p-5 text-left transition-colors hover:bg-accent-soft/80"
                   >
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-accent-dark"><DoodleIcon name="shield" size={18} /></span>
                     <span className="min-w-0 flex-1">
@@ -2076,7 +1936,7 @@ function ListingDrawerBody({
                     <span className="shrink-0 rounded-full bg-[var(--brown)] px-4 py-2.5 text-[12.5px] font-semibold text-white">Drop it here</span>
                   </button>
                 )}
-                <div className="[&>section]:rounded-[22px] [&>section]:border-line/50 [&>section]:bg-white">
+                <div className="[&>section]:rounded-none [&>section]:border-0 [&>section]:p-0">
                   <PropertyFile key={`file-${drop ?? "x"}`} propertyId={listing.propertyId ?? null} address={listing.propertyId ? null : listing.name} screen="the listing" />
                 </div>
               </div>
@@ -2085,7 +1945,7 @@ function ListingDrawerBody({
             {tab === "documents" && (
               /* The home's documents, shared with Kirstie's deal and the
                  application for the same address (James, 5 Oct 2026). */
-              <div className="mb-5 rounded-[22px] border border-line/50 bg-white p-5">
+              <div className="mb-5 rounded-xl border border-line/50 bg-white p-5">
                 <p className="mb-3 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">Uploaded documents</p>
                 <FileDocuments
                   address={[listing.name, listing.locality].filter(Boolean).join(", ")}
@@ -2097,7 +1957,7 @@ function ListingDrawerBody({
             {/* The home's papers from the property record (6 Oct 2026). */}
             {tab === "documents" && <RecordPapers listingId={listing.id} />}
             {tab === "documents" && (
-              <div className="mb-5 rounded-[22px] border border-line/50 bg-white p-5">
+              <div className="mb-5 rounded-xl border border-line/50 bg-white p-5">
                 <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">How we get in</p>
                 <p className="mt-1 mb-4 text-[12.5px] text-muted">Vacant, through the tenant, or through the landlord. The access button on the record follows this.</p>
                 <AccessSettings
@@ -2126,36 +1986,127 @@ function ListingDrawerBody({
             )}
 
           </div>
+        </section>
 
-        </div>
-        <div
-          className={`absolute inset-0 z-10 overflow-hidden border-l border-line/70 bg-card transition-[width,opacity] duration-300 ease-out lg:static lg:z-auto lg:shrink-0 ${
-            panelTab ? "opacity-100 lg:w-[420px] xl:w-[460px]" : "pointer-events-none opacity-0 lg:w-0"
-          }`}
-          aria-hidden={!panelTab}
-        >
-          {panelTab && (
-            <div className="h-full lg:w-[420px] xl:w-[460px]">
-              <RecordSidePanel
-                name={landlord.status === "known" && landlord.landlord.name ? landlord.landlord.name.split(" ")[0] : listing.name}
-                tab={panelTab}
-                onTab={setPanelTab}
-                onClose={() => setPanelTab(null)}
-                conversationUrl={`/api/listings/${encodeURIComponent(String(listing.id))}/conversation`}
-                notes={listingNotes}
-                onAddNote={addListingNote}
-                notePlaceholder="Add a note about this listing - the landlord, the keys, anything to remember…"
-                noteSaid={{ ok: true, text: "Notes stay in the OS, for the whole team." }}
-              />
+        {/* ── where it's up to, level with the sections: the five steps
+            down the side, the small ticks under each. Click to move. ── */}
+        <div className="space-y-5 lg:col-start-2 lg:row-start-3 lg:self-start">
+          <section className={`${box} p-5`}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="hand text-[17px]">Where it&apos;s up to</h3>
+                <p className="mt-0.5 text-[11.5px] text-muted">Click a step to move the record.</p>
+              </div>
+              {saveLabel(stepSave) && <span className="shrink-0 text-[11px] text-muted">{saveLabel(stepSave)}</span>}
+            </div>
+            {(() => {
+              const at = Math.min(step, LISTING_TRACK.length - 1);
+              const n = (viewings?.upcoming.length ?? 0) + (viewings?.past.length ?? 0) + booked.length;
+              const apps = (savedOffers?.length ?? 0) + offers.length;
+              const accepted = liveApps?.some((a) => /accept/i.test(a.statusLabel)) || here.id === "accepted" || here.id === "handover";
+              const ticks: Record<string, { label: string; done: boolean; detail?: string }[]> = {
+                live: [
+                  ...requirements.map((r) => ({ label: r.label, done: r.done })),
+                  { label: "Published to the portals", done: isLive, detail: listing.publishedAt ? new Date(listing.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : undefined },
+                ],
+                viewings: [
+                  { label: "Enquiries in", done: (enquiries?.length ?? 0) > 0, detail: enquiries?.length ? String(enquiries.length) : undefined },
+                  { label: "Viewings booked", done: n > 0, detail: n ? String(n) : undefined },
+                  { label: "Offers in", done: apps > 0, detail: apps ? String(apps) : undefined },
+                ],
+                offers: [{ label: "Sent to the landlord", done: at > 2 }],
+                accepted: [{ label: "Offer accepted", done: Boolean(accepted) }],
+                handover: [{ label: "Handed over to Kirstie", done: at > 4 }],
+              };
+              return (
+                <ol className="mt-4">
+                  {LISTING_TRACK.map((st, i) => {
+                    const done = i < at;
+                    const cur = i === at;
+                    const list = ticks[st.id] ?? [];
+                    return (
+                      <li key={st.id} className="relative flex gap-3 pb-4 last:pb-0">
+                        {i < LISTING_TRACK.length - 1 && (
+                          <span
+                            aria-hidden
+                            className={`absolute bottom-0 left-[12px] top-[28px] ${done ? "w-0.5" : "w-0 border-l-2 border-dashed border-line/80"}`}
+                            style={done ? { background: SAGE_INK } : undefined}
+                          />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setStep(i)}
+                          disabled={i < floor}
+                          title={i < floor ? `${listing.letAgreed ? "Already let agreed" : "Already on the portals"}, so it cannot go back to ${st.label}` : `Move the record to ${st.label}`}
+                          className={`relative z-[1] flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[11px] font-semibold transition-transform enabled:hover:scale-110 disabled:cursor-default ${
+                            done ? "text-white" : cur ? "bg-accent-dark text-white" : "border-[1.5px] border-line/80 bg-white text-muted"
+                          }`}
+                          style={done ? { background: SAGE_INK } : undefined}
+                        >
+                          {done ? "✓" : i + 1}
+                        </button>
+                        <div className={`min-w-0 flex-1 rounded-xl px-3 py-2 ${cur ? "bg-accent-soft/50" : ""}`}>
+                          <p className={`text-[12.5px] leading-tight ${cur ? "font-semibold" : done ? "" : "text-muted"}`}>{st.label}</p>
+                          {(cur || done) && list.length > 0 && (
+                            <ul className="mt-1.5 space-y-1">
+                              {list.map((t) => (
+                                <li key={t.label} className="flex items-start gap-1.5 text-[11px] leading-snug">
+                                  <span
+                                    className={`mt-[1px] flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-[8px] ${t.done ? "text-white" : "border border-line/80 bg-white text-transparent"}`}
+                                    style={t.done ? { background: done ? SAGE_INK : "var(--accent-dark)" } : undefined}
+                                  >
+                                    ✓
+                                  </span>
+                                  <span className={t.done ? "text-ink" : "text-muted"}>
+                                    {t.label}
+                                    {t.detail && <span className="text-muted"> · {t.detail}</span>}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              );
+            })()}
+          </section>
+
+          {/* From "offer accepted" onward, the landlord, the property and the
+              tenant are one thing; the panel is the record of that. */}
+          {(here.id === "accepted" || here.id === "handover") && link && (
+            <div>
+              <TenancyLinkPanel value={link} onChange={setLinkState} />
+              {saveLabel(linkSave) && <p className="mt-1.5 pl-1 text-[10.5px] text-muted">{saveLabel(linkSave)}</p>}
             </div>
           )}
         </div>
-        </div>
+      </div>
 
-        {/* The street, pinned to the foot of the drawer whatever is scrolled.
-            The scroll area above keeps 210px clear for it, so it never sits
-            over anything. */}
-      </aside>
+      {/* Notes and the landlord's messages, pulled out over the page. */}
+      <div className={`fixed inset-0 z-[130] ${panelTab ? "" : "pointer-events-none"}`} aria-hidden={!panelTab}>
+        <button type="button" aria-label="Close" tabIndex={panelTab ? 0 : -1} onClick={() => setPanelTab(null)} className={`absolute inset-0 cursor-default bg-ink/35 transition-opacity duration-300 ${panelTab ? "opacity-100" : "opacity-0"}`} />
+        <aside
+          className={`absolute inset-y-0 right-0 w-full max-w-[460px] overflow-hidden bg-card shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[380ms] sm:rounded-l-2xl ${panelTab ? "translate-x-0" : "translate-x-full"}`}
+          style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
+        >
+          {panelTab && (
+            <RecordSidePanel
+              name={landlord.status === "known" && landlord.landlord.name ? landlord.landlord.name.split(" ")[0] : listing.name}
+              tab={panelTab}
+              onTab={setPanelTab}
+              onClose={() => setPanelTab(null)}
+              conversationUrl={`/api/listings/${encodeURIComponent(String(listing.id))}/conversation`}
+              notes={listingNotes}
+              onAddNote={addListingNote}
+              notePlaceholder="Add a note about this listing - the landlord, the keys, anything to remember…"
+              noteSaid={{ ok: true, text: "Notes stay in the OS, for the whole team." }}
+            />
+          )}
+        </aside>
+      </div>
 
       {/* The handover. A confirmation that SHOWS what's being compiled —
           Kirstie should receive a package, not a link and a shrug. */}
@@ -2554,41 +2505,6 @@ function ListingDrawerBody({
   );
 }
 
-
-/* ── a view's title ───────────────────────────────────────────────────── */
-
-/**
- * Plain for Compliance and Documents; a washed band with one of the brand
- * drawings for the working tabs (James, 11 Sep: "very bland and a little
- * bit depressing"). The drawing stands on the band's bottom edge, clipped.
- */
-function ViewTitle({ title, sub, wash, art, children }: { title: string; sub: string; wash?: "blush" | "sage"; art?: string; children?: React.ReactNode }) {
-  if (!wash) {
-    return (
-      <div className="mb-5">
-        <h2 className="hand text-[26px] leading-tight">{title}</h2>
-        <p className="mt-1.5 max-w-2xl text-[13px] leading-relaxed text-muted">{sub}</p>
-      </div>
-    );
-  }
-  return (
-    <div
-      className={`relative mb-5 overflow-hidden rounded-[22px] border border-line/50 ${children ? "min-h-[190px]" : "min-h-[150px]"}`}
-      style={{ background: wash === "sage" ? SAGE_WASH : "color-mix(in srgb, var(--accent-soft) 70%, white)" }}
-    >
-      <Doodles tone={wash} />
-      <div className="relative max-w-[60%] p-6 sm:max-w-[62%]">
-        <h2 className="hand text-[26px] leading-tight">{title}</h2>
-        <p className="mt-1.5 text-[13px] leading-relaxed text-muted">{sub}</p>
-        {children && <div className="mt-4 flex flex-wrap items-center gap-2">{children}</div>}
-      </div>
-      {art && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={art} alt="" aria-hidden className={`pointer-events-none absolute -bottom-6 right-4 hidden w-auto sm:block ${children ? "h-[225px]" : "h-[190px]"}`} />
-      )}
-    </div>
-  );
-}
 
 /* ── pushing it to the portals: the moment ────────────────────────────── */
 

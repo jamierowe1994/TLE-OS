@@ -106,6 +106,7 @@ export default function AccessRequest({
   viewings = [],
   onBook,
   className = "",
+  renderButton,
 }: {
   /** The arrangement, owned by the record so the Documents tab and this button agree. */
   value: Access;
@@ -121,6 +122,8 @@ export default function AccessRequest({
   tenant?: { name: string; email: string; phone: string } | null;
   landlord?: { name: string; email: string | null; phone: string | null } | null;
   className?: string;
+  /** Draw the button yourself - the listing page's action tiles (12 Oct 2026). */
+  renderButton?: (b: { label: string; icon: string; press: () => void; keysIn: boolean }) => React.ReactNode;
 }) {
   const [choosing, setChoosing] = useState(false);
   const [composing, setComposing] = useState(false);
@@ -146,7 +149,7 @@ export default function AccessRequest({
 
   return (
     <>
-      <button
+      {renderButton ? renderButton({ label, icon, press, keysIn: access.kind === "vacant" && Boolean(access.keysCollected) }) : <button
         type="button"
         onClick={press}
         title={access.kind ? "Change how we get in from the Documents tab" : "Record how we get into the property"}
@@ -155,7 +158,7 @@ export default function AccessRequest({
       >
         <DoodleIcon name={icon} size={14} />
         {label}
-      </button>
+      </button>}
 
       {choosing && (
         <AccessSheet title="How do we get in?" onClose={() => setChoosing(false)}>
