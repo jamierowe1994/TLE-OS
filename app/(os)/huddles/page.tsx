@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import LineIcon from "@/components/LineIcon";
 import { searchMatches } from "@/lib/search-match";
-import { isGif, previewOf } from "@/lib/chat-gif";
+import { isGif, previewOf, TEAM_GIFS } from "@/lib/chat-gif";
 
 /**
  * HUDDLES in the OS (Susan via James, 12 Oct 2026): the chats from the phone
@@ -1013,6 +1013,8 @@ function GifTray({ busy, onPick }: { busy: boolean; onPick: (url: string) => voi
   const [q, setQ] = useState("");
   const [gifs, setGifs] = useState<Gif[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const ours = TEAM_GIFS.filter((g) => !words.length || words.some((w) => g.words.some((x) => x.startsWith(w))));
 
   /* Searched a moment after you stop typing, not on every key. */
   useEffect(() => {
@@ -1047,6 +1049,21 @@ function GifTray({ busy, onPick }: { busy: boolean; onPick: (url: string) => voi
         </label>
       </div>
       <div className="min-h-[160px] flex-1 overflow-y-auto px-2 pb-1">
+        {/* The team's own first; there whether or not GIPHY answers. */}
+        {ours.length > 0 && (
+          <div className="mb-2">
+            <p className="px-1 pb-1 text-[11px] font-medium text-muted">From the Team</p>
+            <div className="flex gap-1.5">
+              {ours.map((g) => (
+                <button key={g.id} type="button" disabled={busy} onClick={() => onPick(g.url)} title={g.title} className="block w-[calc(50%-3px)] overflow-hidden rounded-lg bg-panel transition-opacity hover:opacity-85 disabled:opacity-50">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={g.url} alt={g.title} className="block w-full" style={{ aspectRatio: `${g.width} / ${g.height}` }} />
+                </button>
+              ))}
+            </div>
+            <p className="px-1 pb-1 pt-2.5 text-[11px] font-medium text-muted">{q.trim() ? "From GIPHY" : "Trending on GIPHY"}</p>
+          </div>
+        )}
         {error ? (
           <p className="m-1 mt-3 rounded-xl bg-panel p-3 text-center text-[12.5px] text-muted">{error}</p>
         ) : !gifs ? (
