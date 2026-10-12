@@ -143,6 +143,21 @@ const PATHS: Record<string, React.ReactNode> = {
   bank: <path d="M3.5 9.5 12 4l8.5 5.5M5 20.5h14M6.5 10.5v7M10 10.5v7M14 10.5v7M17.5 10.5v7M4 20.5h16" />,
   trash: <path d="M4.5 6.5h15M9.5 6.5V4.5h5v2M6.5 6.5l.8 12.6a1.5 1.5 0 0 0 1.5 1.4h6.4a1.5 1.5 0 0 0 1.5-1.4l.8-12.6M10 10.5v6M14 10.5v6" />,
   dot: <circle cx="12" cy="12" r="3" />,
+  /* Bond's rail (12 Oct 2026), in the same hand. */
+  "arrow-left": <path d="M19.5 12h-15M10 6.5 4.5 12l5.5 5.5" />,
+  "map-pin": (
+    <>
+      <path d="M12 20.5s-6.5-5.6-6.5-10.5a6.5 6.5 0 0 1 13 0c0 4.9-6.5 10.5-6.5 10.5z" />
+      <circle cx="12" cy="10" r="2.3" />
+    </>
+  ),
+  mail: (
+    <>
+      <rect x="3.5" y="5.5" width="17" height="13" rx="1.5" />
+      <path d="m4 6.5 8 6 8-6" />
+    </>
+  ),
+  pencil: <path d="M4.5 19.5 5.5 15 15.5 5a2.1 2.1 0 0 1 3 3l-10 10zM13.5 7l3 3" />,
 };
 
 export default function LineIcon({ name, size = 16, className = "" }: { name: string; size?: number; className?: string }) {

@@ -1217,6 +1217,16 @@ body {
   --bond-rose: #f9d8e2;
   --bond-rose-ink: #bf5a80;
   --bond-coral: #f5a48e;
+  /* The OS's light chrome, held here so Bond's sidebar and frame stay light
+     in dark mode with the rest of Bond (components/BondNav, 12 Oct 2026). */
+  --shell-bg: #fbfbfb;
+  --shell-panel: #ffffff;
+  --shell-rim: rgba(0, 0, 0, 0.08);
+  --launch-text: #5d5e63;
+  --launch-icon: #8b8c92;
+  --launch-hover: rgba(0, 0, 0, 0.04);
+  --launch-active: rgba(0, 0, 0, 0.065);
+  --launch-guide: rgba(0, 0, 0, 0.09);
   color: var(--ink);
   background: var(--page);
 }

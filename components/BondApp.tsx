@@ -6,6 +6,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import RadarBoard from "@/components/RadarBoard";
 import { PressButton } from "@/components/Bits";
 import BondAsk, { type AskFocus } from "@/components/BondAsk";
+import BondNav from "@/components/BondNav";
 import BondNudges from "@/components/BondNudges";
 import BondPlanning from "@/components/BondPlanning";
 import BondToday, { rememberSearch, type TodayData } from "@/components/BondToday";
@@ -46,17 +47,17 @@ type Room = "today" | "doors" | "nudges" | "landlords" | "planning" | "competito
  */
 const ROOMS: { key: Room; label: string; icon: string; blurb: string; more?: boolean }[] = [
   { key: "today", label: "Today", icon: "dashboard", blurb: "" },
-  { key: "doors", label: "Doors", icon: "search", blurb: "Every flagged door in the patch, on the map and in the list, with where each stands on the process." },
-  { key: "nudges", label: "Nudges", icon: "call", blurb: "Landlords who have dealt with us, whose door has just moved. Ring them." },
+  { key: "doors", label: "Doors", icon: "map-pin", blurb: "Every flagged door in the patch, on the map and in the list, with where each stands on the process." },
+  { key: "nudges", label: "Nudges", icon: "bell", blurb: "Landlords who have dealt with us, whose door has just moved. Ring them." },
   { key: "landlords", more: true, label: "Landlords", icon: "user", blurb: "The people and companies behind the doors, scored by opportunity." },
   {
     key: "planning",
     more: true,
     label: "Planning",
-    icon: "home",
+    icon: "file-contract",
     blurb: "Landlords before they are landlords: who has asked the council to make homes here. None of these are advertised anywhere yet.",
   },
-  { key: "competitors", more: true, label: "Competitors", icon: "target", blurb: "Who holds the stock in your patch, and when their tenancies come round." },
+  { key: "competitors", more: true, label: "Competitors", icon: "trend-up", blurb: "Who holds the stock in your patch, and when their tenancies come round." },
   { key: "lookup", more: true, label: "Look up", icon: "home", blurb: "Any address on the register, and add a door by hand." },
   { key: "campaigns", more: true, label: "Campaigns", icon: "megaphone", blurb: "The sequences that write to landlords, and their copy." },
   { key: "owners", more: true, label: "Owners", icon: "key", blurb: "Who owns what, from the Land Registry." },
@@ -118,7 +119,8 @@ export default function BondApp() {
      doors standing at it. */
   const [step, setStep] = useState<number | null>(null);
   const [stepKeys, setStepKeys] = useState<Set<string> | null>(null);
-  const [more, setMore] = useState(false);
+  /* The rail folded to icons, as the OS's (components/BondNav keeps it). */
+  const [railShut, setRailShut] = useState(false);
   /* Pick a step: the Doors room shows the doors standing exactly there. */
   function pickStep(s: number | null) {
     setStep(s);
@@ -232,7 +234,7 @@ export default function BondApp() {
   }
 
   return (
-    <div className="bond-skin fixed inset-0 z-[105] overflow-hidden bg-page text-ink">
+    <div className="bond-skin fixed inset-0 z-[105] overflow-hidden bg-[var(--shell-panel)] text-ink lg:bg-[var(--shell-bg)]">
       {/* The word. */}
       <div
         className={`pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-700 ${
@@ -247,73 +249,22 @@ export default function BondApp() {
       <div
         className={`flex h-full transition-opacity duration-700 ${phase === "in" ? "opacity-100" : "pointer-events-none opacity-0"}`}
       >
-        <aside className="sticky top-3 mb-3 ml-3 mt-3 hidden h-[calc(100vh-24px)] w-60 shrink-0 flex-col overflow-hidden rounded-3xl border border-line/80 bg-box px-4 py-5 lg:flex">
-          <div className="flex items-center gap-2 px-1">
-            <span className="hand text-[26px] leading-none">Bond</span>
-          </div>
-          <p className="mt-1 px-1 text-[10.5px] text-muted">Prospecting for The Letting Experts</p>
-          <div className="mt-4 border-t border-line/70" />
-          <nav className="mt-4 flex flex-col gap-1">
-            {ROOMS.filter((r) => !r.more).map((r) => (
-              <button
-                key={r.key}
-                type="button"
-                onClick={() => setRoom(r.key)}
-                className={`hand flex items-center rounded-xl px-3 py-2.5 text-left text-[13.5px] transition-colors ${
-                  room === r.key ? "bg-accent-soft font-medium text-ink" : "text-muted hover:bg-box hover:text-ink"
-                }`}
-              >
-                <DoodleIcon name={r.icon} size={16} className="mr-2.5 shrink-0" />
-                {r.label}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setMore((m) => !m)}
-              className="mt-1 flex items-center justify-between rounded-xl px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-muted/70 hover:text-ink"
-            >
-              More
-              <span className="text-[9px]">{more || ROOMS.some((r) => r.more && r.key === room) ? "▴" : "▾"}</span>
-            </button>
-            {(more || ROOMS.some((r) => r.more && r.key === room)) &&
-              ROOMS.filter((r) => r.more).map((r) => (
-                <button
-                  key={r.key}
-                  type="button"
-                  onClick={() => setRoom(r.key)}
-                  className={`hand flex items-center rounded-xl px-3 py-2 text-left text-[12.5px] transition-colors ${
-                    room === r.key ? "bg-accent-soft font-medium text-ink" : "text-muted hover:bg-box hover:text-ink"
-                  }`}
-                >
-                  <DoodleIcon name={r.icon} size={14} className="mr-2.5 shrink-0" />
-                  {r.label}
-                </button>
-              ))}
-          </nav>
-          <button
-            type="button"
-            onClick={() => askAbout(null)}
-            className="hand mt-3 flex items-center rounded-xl border border-dashed border-line/80 px-3 py-2.5 text-left text-[13.5px] text-muted transition-colors hover:border-ink hover:text-ink"
-          >
-            <DoodleIcon name="magic-wand" size={16} className="mr-2.5 shrink-0" />
-            Ask Bond
-          </button>
-          <div className="mt-4 rounded-xl border border-line/70 px-3 py-2.5">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Your patch</p>
-            <p className="mt-1 text-[12px]">
-              {patch == null ? "Not chosen" : patch.length === 0 ? "The whole patch" : `${patch.length} district${patch.length === 1 ? "" : "s"}`}
-            </p>
-            {patch && patch.length > 0 && <p className="truncate text-[10.5px] text-muted">{patch.join(", ")}</p>}
-            <button type="button" onClick={() => setChoosing(true)} className="mt-1.5 text-[11px] text-accent-dark underline-offset-2 hover:underline">
-              Change
-            </button>
-          </div>
-          {/* The dog and the house keep the rail company. */}
-          <img src="/bond/dog-and-house.png" alt="" className="bond-float mt-auto mb-6 h-40 w-40 self-center object-contain" />
+        {/* The OS's own sidebar, flat on the grey (components/BondNav). */}
+        <aside className={`mb-3 ml-2 mt-3 hidden shrink-0 flex-col overflow-hidden px-2.5 py-3 transition-[width] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] lg:flex ${railShut ? "w-[72px]" : "w-60"}`}>
+          <BondNav
+            rooms={ROOMS}
+            room={room}
+            onRoom={(k) => setRoom(k as Room)}
+            onAsk={() => askAbout(null)}
+            patch={patch}
+            onPatch={() => setChoosing(true)}
+            onBack={() => router.push("/tools")}
+            onCollapse={setRailShut}
+          />
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex shrink-0 items-center justify-between gap-3 px-4 pt-4 sm:px-6">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--shell-panel)] lg:my-2 lg:ml-2 lg:mr-2 lg:rounded-[18px] lg:shadow-[inset_0_0_0_1px_var(--shell-rim)]">
+          <header className="flex shrink-0 items-center justify-between gap-3 px-4 pt-4 sm:px-6 lg:pt-6">
             <div className="flex items-center gap-3">
               <span className="hand text-[22px] leading-none lg:hidden">Bond</span>
               <div className="hidden lg:block">
@@ -340,9 +291,10 @@ export default function BondApp() {
                 <DoodleIcon name="magic-wand" size={13} className="mr-1.5" />
                 Ask Bond
               </PressButton>
+              {/* On the rail from lg; here only where the rail is not. */}
               <PressButton
                 onClick={() => router.push("/tools")}
-                className="rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] text-muted hover:text-ink"
+                className="rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] text-muted hover:text-ink lg:hidden"
                 title="Back to the OS"
               >
                 Back to OS

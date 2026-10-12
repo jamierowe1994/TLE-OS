@@ -34,7 +34,8 @@ function initials(me: Me): string {
     .join("");
 }
 
-const row = (active: boolean, collapsed: boolean) =>
+/** One row of the sidebar. Exported so Bond's rail (components/BondNav) is drawn in the same hand. */
+export const row = (active: boolean, collapsed: boolean) =>
   `group flex h-8 w-full items-center rounded-md text-[13px] transition-colors ${collapsed ? "justify-center px-0" : "gap-2.5 px-2"} ${
     active ? "bg-[var(--launch-active)] text-ink" : "text-[var(--launch-text)] hover:bg-[var(--launch-hover)] hover:text-ink"
   }`;
