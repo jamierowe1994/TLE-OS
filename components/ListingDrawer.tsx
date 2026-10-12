@@ -1138,6 +1138,11 @@ function ListingDrawerBody({
       <span className="mt-0.5 block truncate text-[11.5px] font-normal leading-snug text-muted">{what}</span>
     </span>
   );
+  /* A button as wide as its words: the dark icon, then the label. */
+  const pill = "inline-flex items-center gap-2.5 rounded-full border border-line/60 bg-white py-1.5 pl-1.5 pr-4 text-[12.5px] font-semibold transition-[transform,box-shadow,border-color] duration-200 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:border-ink/60 hover:shadow-[3px_3px_0_0_color-mix(in_srgb,var(--ink)_72%,var(--page))]";
+  const pillIcon = (name: string) => (
+    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--brown)] text-white"><DoodleIcon name={name} size={13} /></span>
+  );
   const tileIcon = (name: string, dark = false) => (
     <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${dark ? "bg-[var(--brown)] text-white" : "bg-accent-soft text-accent-dark"}`}><DoodleIcon name={name} size={14} /></span>
   );
@@ -1213,7 +1218,9 @@ function ListingDrawerBody({
   const openTab = tab ? TABS.find((x) => x.key === tab) ?? null : null;
 
   return (
-    <div data-steve="listing.drawer" className="space-y-5">
+    /* Out toward the window's edges a little (James, 12 Oct 2026): the shell
+       keeps 56px left and 84px right on a wide screen; this page uses 40. */
+    <div data-steve="listing.drawer" className="space-y-5 xl:-mr-[44px] 2xl:-ml-4">
       {/* ── back, the save chip, notes and activity, and ‹ › ─────────── */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="mr-auto flex min-w-0 items-center gap-3">
@@ -1256,15 +1263,19 @@ function ListingDrawerBody({
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_460px]">
         {/* ── 1. the home ──────────────────────────────────────────────── */}
         <section className={`${box} @container min-w-0 p-3 lg:col-start-1`}>
-          <div className="grid grid-cols-1 gap-4 @[34rem]:grid-cols-[minmax(0,300px)_minmax(0,1fr)] @[48rem]:grid-cols-[minmax(0,360px)_minmax(0,1fr)] @[60rem]:grid-cols-[420px_minmax(0,1fr)]">
-            {/* The photo held to a sensible size (James: "it's blowing out the
-                images"), three more beneath it. */}
-            <div className="min-w-0">
+          {/* SCALES WITH THE SCREEN (James, 12 Oct 2026: "as I scale the screen
+              up the image isn't getting bigger, the white space is"). On a
+              laptop the photo sits at a sensible size with three beneath it;
+              on a wider screen it takes the room, the others run down its
+              right-hand side, and the name and buttons hold a column of their
+              own. */}
+          <div className="grid grid-cols-1 gap-4 @[34rem]:grid-cols-[minmax(0,300px)_minmax(0,1fr)] @[46rem]:grid-cols-[minmax(0,360px)_minmax(0,1fr)] @[52rem]:grid-cols-[minmax(0,1fr)_300px] @[80rem]:grid-cols-[minmax(0,1fr)_340px]">
+            <div className={`min-w-0 ${shots.length > 1 ? "@[52rem]:grid @[52rem]:grid-cols-[minmax(0,1fr)_minmax(0,24%)] @[52rem]:gap-2" : ""}`}>
               <button
                 type="button"
                 onClick={() => (shots.length ? setLightbox(0) : setDrop("photos"))}
                 aria-label={shots.length ? "See the photos" : "Add photos"}
-                className="group relative block aspect-[4/3] w-full overflow-hidden rounded-xl bg-box"
+                className="group relative block aspect-[4/3] w-full overflow-hidden rounded-xl bg-box @[52rem]:max-h-[600px]"
               >
                 <PropertyPhoto src={shots[0] ?? null} alt="" width={800} height={600} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.015]" />
                 <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-[11.5px] font-semibold backdrop-blur">
@@ -1272,13 +1283,13 @@ function ListingDrawerBody({
                 </span>
               </button>
               {shots.length > 1 && (
-                <div className="mt-2 grid grid-cols-3 gap-2">
+                <div className="mt-2 grid grid-cols-3 gap-2 @[52rem]:mt-0 @[52rem]:grid-cols-1 @[52rem]:grid-rows-3">
                   {[0, 1, 2].map((i) => {
                     const src = shots[i + 1];
-                    if (!src) return <span key={i} aria-hidden className="aspect-[4/3] rounded-lg bg-box" />;
+                    if (!src) return <span key={i} aria-hidden className="aspect-[4/3] rounded-lg bg-box @[52rem]:aspect-auto" />;
                     const more = i === 2 && shots.length > 4 ? shots.length - 4 : 0;
                     return (
-                      <button key={src + i} type="button" onClick={() => setLightbox(i + 1)} aria-label={more ? `${more} more photos` : `Photo ${i + 2}`} className="group relative aspect-[4/3] overflow-hidden rounded-lg bg-box">
+                      <button key={src + i} type="button" onClick={() => setLightbox(i + 1)} aria-label={more ? `${more} more photos` : `Photo ${i + 2}`} className="group relative aspect-[4/3] min-h-0 overflow-hidden rounded-lg bg-box @[52rem]:aspect-auto">
                         <PropertyPhoto src={src} alt="" className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
                         {more > 0 && <span className="absolute inset-0 flex items-center justify-center bg-ink/45 text-[15px] font-semibold text-white">+{more}</span>}
                       </button>
@@ -1342,9 +1353,10 @@ function ListingDrawerBody({
                 </button>
               )}
 
-              {/* Getting INTO the property and getting it OUT to the database,
-                  at the foot of the home, on the right (James, 12 Oct 2026). */}
-              <div className="mt-auto grid grid-cols-1 gap-2 pt-4">
+              {/* Getting INTO the property and getting it OUT to the database:
+                  as wide as their words, under the name (James, 12 Oct 2026:
+                  "they only need to be the width of the words"). */}
+              <div className="mt-4 flex flex-wrap gap-2">
                 <AccessRequest
                   value={access}
                   onChange={setAccess}
@@ -1356,15 +1368,15 @@ function ListingDrawerBody({
                   viewings={upcomingOptions}
                   onBook={LISTING_BOOKER_LIVE ? () => setBooking(true) : undefined}
                   renderButton={(b) => (
-                    <button type="button" onClick={b.press} className={tile} title={access.kind ? "Change how we get in from the access details" : "Record how we get into the property"}>
-                      {tileIcon(b.icon, true)}
-                      {tileText(b.label, access.kind ? "For the viewings" : "Vacant, tenant or landlord")}
+                    <button type="button" onClick={b.press} className={pill} title={access.kind ? "Change how we get in from the access details" : "Record how we get into the property"}>
+                      {pillIcon(b.icon)}
+                      {b.label}
                     </button>
                   )}
                 />
-                <button type="button" data-steve="listing.mail-db" onClick={() => setEmailing(true)} className={tile}>
-                  {tileIcon("megaphone", true)}
-                  {tileText("Mail the database", "Every tenant it suits")}
+                <button type="button" data-steve="listing.mail-db" onClick={() => setEmailing(true)} className={pill}>
+                  {pillIcon("megaphone")}
+                  Mail the database
                 </button>
               </div>
             </div>
@@ -1428,7 +1440,7 @@ function ListingDrawerBody({
             ))}
           </div>
 
-          <div className="mt-4 grid flex-1 grid-cols-1 content-start gap-4 border-t border-line/50 pt-4 @[34rem]:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+          <div className="my-4 grid grid-cols-1 content-start gap-4 border-t border-line/50 pt-4 @[34rem]:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
             {/* The REAL landlord, off the listing's owner relationship in REX. */}
             <div className="min-w-0">
               <p className={`${eyebrow} mb-2.5`}>Landlord</p>
@@ -1513,7 +1525,7 @@ function ListingDrawerBody({
           </div>
           {/* Where it's up to, underneath, across the box (James, 12 Oct 2026:
               "bundling two sections into one"). Click a step to move it. */}
-          <div className="mt-4 border-t border-line/50 pt-3.5">
+          <div className="mt-auto border-t border-line/50 pt-3.5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="flex flex-wrap items-baseline gap-x-3">
               <span className="hand text-[16px]">Where it&apos;s up to</span>
@@ -1584,7 +1596,20 @@ function ListingDrawerBody({
                           {done ? "✓" : i + 1}
                         </button>
                         <p className={`mt-1.5 text-[12px] leading-tight ${cur ? "font-semibold" : "text-muted"}`}>{st.label}</p>
-                        <p className={`mt-0.5 w-full min-w-0 truncate text-[10.5px] leading-snug ${cur ? "text-accent-dark" : "text-muted"}`} title={noteOf(st.id, i) || undefined}>{noteOf(st.id, i) || "\u00a0"}</p>
+                        {/* The breakdown under each step done or in hand: each
+                            thing it needs, ticked or not (James, 12 Oct 2026). */}
+                        {(done || cur) && (ticks[st.id] ?? []).length > 0 ? (
+                          <ul className="mt-1.5 w-full min-w-0 space-y-0.5">
+                            {(ticks[st.id] ?? []).map((t) => (
+                              <li key={t.label} className={`flex min-w-0 items-center justify-center gap-1 text-[10.5px] leading-snug ${t.done ? "text-ink" : cur ? "text-accent-dark" : "text-muted"}`} title={t.detail ? `${t.label} · ${t.detail}` : t.label}>
+                                <span aria-hidden className={t.done ? "text-[#56634a]" : "text-muted"}>{t.done ? "✓" : "○"}</span>
+                                <span className="truncate">{t.label}{t.detail ? ` · ${t.detail}` : ""}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className={`mt-0.5 w-full min-w-0 truncate text-[10.5px] leading-snug ${cur ? "text-accent-dark" : "text-muted"}`} title={noteOf(st.id, i) || undefined}>{noteOf(st.id, i) || "\u00a0"}</p>
+                        )}
                       </li>
                     );
                   })}
