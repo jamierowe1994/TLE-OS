@@ -48,6 +48,7 @@ export function launchInviteEmail(
       link,
       secondary: { label: "Take the TLE OS tour", link: opts.tourUrl },
       footnote,
+      typeOnly: true,
     }),
   };
 }

@@ -62,6 +62,9 @@ export interface SkyOpts {
    * launch invite uses it for the TLE OS tour (12 Oct 2026).
    */
   secondary?: { label: string; link: string };
+  /** The type-only "TLE OS" wordmark instead of the house and name. Susan
+   *  dislikes the house (4 Oct 2026); new emails use this. */
+  typeOnly?: boolean;
 }
 
 
@@ -104,7 +107,11 @@ function head(): string {
 
 /** The house and the wordmark in one drawing, as everywhere else in the OS.
  *  The alt text carries it for the many people who read with images off. */
-function logo(bg: string): string {
+function logo(bg: string, typeOnly = false): string {
+  if (typeOnly) {
+    return `<img src="${ORIGIN}/brand/tle-os-type.png?v=${ASSET_V}" width="112" alt="TLE OS"
+                 style="display:block;margin:0 auto;width:112px;max-width:40%;height:auto;border:0;outline:none;text-decoration:none;font-family:Manrope,Helvetica,Arial,sans-serif;font-size:20px;font-weight:800;color:#1c1917;background-color:${bg}">`;
+  }
   return `<img src="${ORIGIN}/brand/tle-os-logo.png?v=${ASSET_V}" width="138" alt="TLE OS"
                  style="display:block;margin:0 auto;width:138px;max-width:46%;height:auto;border:0;outline:none;text-decoration:none;font-family:Manrope,Helvetica,Arial,sans-serif;font-size:20px;font-weight:800;color:#1c1917;background-color:${bg}">`;
 }
@@ -154,7 +161,7 @@ export function skyShell(o: SkyOpts): string {
 
         <tr>
           <td align="center" class="sky-pad" style="padding:54px 40px 0;background-color:${PAPER}">
-            ${logo(PAPER)}
+            ${logo(PAPER, o.typeOnly)}
           </td>
         </tr>
 
