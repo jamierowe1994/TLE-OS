@@ -231,6 +231,15 @@ export default function LetsBoard({
   const [deals, setDeals] = useState<Deal[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ownAgent, setAgent] = useState<string | null>(null);
+  /* Lets cancelled from their own page (lib/let-cancel): off the board at
+     once, while Kirstie cancels them in Propoly. */
+  const [cancelled, setCancelled] = useState<{ refs: Set<string>; deals: Set<string> }>({ refs: new Set(), deals: new Set() });
+  useEffect(() => {
+    fetch("/api/lets/cancelled", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; refs?: string[]; deals?: string[] }) => j.ok && setCancelled({ refs: new Set(j.refs ?? []), deals: new Set(j.deals ?? []) }))
+      .catch(() => undefined);
+  }, []);
   const agent = agentIn !== undefined ? agentIn : ownAgent;
   /* The route says whose deals it sent; the page's own scope is the fallback. */
   const [wholeBook, setWholeBook] = useState<boolean | null>(null);
@@ -255,8 +264,8 @@ export default function LetsBoard({
   }, []);
 
   const live = useMemo(
-    () => (deals ?? []).filter((d) => !d.archived && d.statusKey !== "cancelled" && !isStale(d) && (!all || !agent || d.agentName === agent) && (!q.trim() || searchMatches(q, d.app.propertyName, d.app.locality, d.agentName, ...d.app.tenants.map((t) => t.name)))),
-    [deals, all, agent, q]
+    () => (deals ?? []).filter((d) => !d.archived && d.statusKey !== "cancelled" && !isStale(d) && !cancelled.deals.has(d.app.id) && !cancelled.refs.has(d.app.id) && !cancelled.refs.has(matchApplication(d) ?? "") && (!all || !agent || d.agentName === agent) && (!q.trim() || searchMatches(q, d.app.propertyName, d.app.locality, d.agentName, ...d.app.tenants.map((t) => t.name)))),
+    [deals, all, agent, q, cancelled, matchApplication]
   );
   const waitingShown = useMemo(
     () => waiting.filter((w) => (!all || !agent || w.agent === agent) && (!q.trim() || searchMatches(q, w.property, w.locality, w.agent ?? "", w.tenant))),

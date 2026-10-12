@@ -21,7 +21,16 @@ export type UpdateKind =
   | "cancelled"
   | "plc_deferred"
   | "plc_declined"
-  | "plc_approved";
+  | "plc_approved"
+  /* Written by the agent from the let's page (12 Oct 2026): a free update,
+     and the reminders James listed - "we're sending you a reminder that you
+     need to sign your agreement", and the rest. */
+  | "general"
+  | "nudge_holding_fee"
+  | "nudge_referencing"
+  | "nudge_sign_agreement"
+  | "nudge_move_in_money"
+  | "nudge_documents";
 
 export interface CopyContext {
   address: string;
@@ -59,6 +68,12 @@ export const HEADLINE: Record<UpdateKind, string> = {
   plc_deferred: "The PLC check needs more before it can pass",
   plc_declined: "The PLC check was declined",
   plc_approved: "The PLC check has passed",
+  general: "An update from the agent",
+  nudge_holding_fee: "Reminder: the holding deposit",
+  nudge_referencing: "Reminder: the references",
+  nudge_sign_agreement: "Reminder: sign the tenancy agreement",
+  nudge_move_in_money: "Reminder: the move-in money",
+  nudge_documents: "Reminder: documents we still need",
 };
 
 /** Who should hear about each kind, by default. */
@@ -74,15 +89,25 @@ export const AUDIENCE: Record<UpdateKind, Array<"tenant" | "landlord">> = {
   plc_deferred: ["landlord"],
   plc_declined: ["landlord"],
   plc_approved: ["landlord"],
+  general: ["tenant", "landlord"],
+  nudge_holding_fee: ["tenant"],
+  nudge_referencing: ["tenant"],
+  nudge_sign_agreement: ["tenant", "landlord"],
+  nudge_move_in_money: ["tenant"],
+  nudge_documents: ["tenant", "landlord"],
 };
 
-const b = (s: string) => `<strong>${s}</strong>`;
+/* The body goes into the email as HTML (bodyHtml below), so anything from
+   outside - the address, the PLC's needs - is escaped here, and the only
+   markup is the code's own <strong> and line breaks. */
+const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+const b = (s: string) => `<strong>${esc(s)}</strong>`;
 
 export function updateCopy(kind: UpdateKind, role: "tenant" | "landlord", c: CopyContext): UpdateCopy & { footLine: string } {
   const at = b(c.address);
   const moving = c.moveIn ? ` on ${c.moveIn}` : "";
   const needs = (c.needs ?? []).filter(Boolean);
-  const list = needs.length ? `<br><br>${needs.map((n) => `&bull; ${n}`).join("<br>")}` : "";
+  const list = needs.length ? `<br><br>${needs.map((n) => `&bull; ${esc(n)}`).join("<br>")}` : "";
   const t = role === "tenant";
   let o: UpdateCopy;
   switch (kind) {
@@ -214,6 +239,77 @@ export function updateCopy(kind: UpdateKind, role: "tenant" | "landlord", c: Cop
             nextLine: "I'll talk you through what happens next and get the home back in front of tenants.",
           };
       break;
+    /* A blank page with the greeting and the sign-off: the agent writes it. */
+    case "general":
+      o = {
+        subject: `An update - ${c.address}`,
+        preheader: `An update on ${c.address}.`,
+        heading: "A Quick Update",
+        body: `I wanted to give you an update on ${at}.`,
+        nextLine: "Reply to this email or give me a call if you have any questions.",
+      };
+      break;
+    case "nudge_holding_fee":
+      o = {
+        subject: `A reminder about the holding deposit - ${c.address}`,
+        preheader: "Paying it takes the home off the market for you.",
+        heading: "A Reminder About Your Holding Deposit",
+        body: `We're sending you a reminder that the holding deposit for ${at} is still to be paid.`,
+        nextLine: "Until it is, the home stays on the market and others can still offer on it. The payment details are in our earlier email; reply or call me if you can't find them.",
+      };
+      break;
+    case "nudge_referencing":
+      o = {
+        subject: `A reminder about your references - ${c.address}`,
+        preheader: "Your references are the next step to moving in.",
+        heading: "A Reminder About Your References",
+        body: `We're sending you a reminder that your references for ${at} still need finishing.`,
+        nextLine: "Look out for the email from the referencing company and fill it in as soon as you can: it's the quickest way to your move-in date. Tell me if anything is holding you up.",
+      };
+      break;
+    case "nudge_sign_agreement":
+      o = t
+        ? {
+            subject: `A reminder to sign your tenancy agreement - ${c.address}`,
+            preheader: "Your agreement is waiting for your signature.",
+            heading: "Your Agreement Is Waiting",
+            body: `We're sending you a reminder that your tenancy agreement for ${at} is still waiting for your signature.`,
+            nextLine: `Please sign it as soon as you can so everything is ready for your move${moving}. Reply if the email with the agreement has gone missing and I'll send it again.`,
+          }
+        : {
+            subject: `A reminder to sign the tenancy agreement - ${c.address}`,
+            preheader: "The agreement is waiting for your signature.",
+            heading: "The Agreement Is Waiting",
+            body: `We're sending you a reminder that the tenancy agreement for ${at} is still waiting for your signature.`,
+            nextLine: "Please sign it when you can so the move-in can go ahead as planned. Reply if you'd like me to send it again.",
+          };
+      break;
+    case "nudge_move_in_money":
+      o = {
+        subject: `A reminder about your move-in money - ${c.address}`,
+        preheader: "The deposit and first month's rent are due before the keys.",
+        heading: "A Reminder About Your Move-in Money",
+        body: `We're sending you a reminder that the deposit and the first month's rent for ${at} need to reach us before your move${moving}.`,
+        nextLine: "The amounts and the payment details are in the email we sent with your agreement. The keys are handed over once both have arrived.",
+      };
+      break;
+    case "nudge_documents":
+      o = t
+        ? {
+            subject: `Documents we still need - ${c.address}`,
+            preheader: "A few things before your move can go ahead.",
+            heading: "Documents We Still Need",
+            body: `We're sending you a reminder that we still need some documents from you for ${at}.${list}`,
+            nextLine: "Reply to this email with them attached, or upload them in your portal.",
+          }
+        : {
+            subject: `Documents we still need - ${c.address}`,
+            preheader: "A few things before the let can go ahead.",
+            heading: "Documents We Still Need",
+            body: `We're sending you a reminder that we still need some documents from you for ${at}.${list}`,
+            nextLine: "Reply to this email with them attached, or upload them in your portal.",
+          };
+      break;
     case "plc_deferred":
       o = {
         subject: `A few things we need - ${c.address}`,
@@ -254,8 +350,27 @@ export function updateVars(kind: UpdateKind, role: "tenant" | "landlord", c: Cop
     heading: o.heading,
     firstName: c.firstName || "there",
     body: o.body,
+    /* What the template reads (12 Oct 2026). Vars are escaped into an email
+       since 10 Oct unless named ...Html, so {{body}} showed its <strong> tags
+       as text; this one is built safe above. */
+    bodyHtml: o.body,
     nextLine: o.nextLine,
     agentName: c.agentName,
     footLine: o.footLine,
   };
+}
+
+/**
+ * Updates written before 12 Oct 2026 carry `body` and no `bodyHtml`. Their
+ * body was built by this file - the address in <strong>, line breaks - but
+ * with the address unescaped, so it is escaped whole here and only those two
+ * tags let back in.
+ */
+export function withBodyHtml(vars: Record<string, string>): Record<string, string> {
+  if (vars.bodyHtml) return vars;
+  const safe = esc(vars.body ?? "")
+    .replace(/&lt;(\/?)strong&gt;/gi, "<$1strong>")
+    .replace(/&lt;br\s*\/?&gt;/gi, "<br>")
+    .replace(/&amp;bull;/g, "&bull;");
+  return { ...vars, bodyHtml: safe };
 }

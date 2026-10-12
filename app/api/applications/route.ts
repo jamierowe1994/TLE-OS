@@ -11,6 +11,7 @@ import {
 import { rexConfigured, rexWritesLocked } from "@/lib/rex";
 import { scopeFor } from "@/lib/scope";
 import { testApplicationsFor } from "@/lib/test-overlay";
+import { allCancellations } from "@/lib/let-cancel";
 import { whoIs } from "@/lib/admin";
 import { ASSEMBLE_AT, assembled, cut, markApplicationsFiled } from "@/lib/applications-board";
 import { acceptedRexRefs } from "@/lib/offer-decisions";
@@ -55,7 +56,7 @@ export async function GET(req: NextRequest) {
   try {
     /* The tester's own test offers (lib/test-overlay), on top - never anyone
        else's. Read alongside the book rather than after it. */
-    const [{ held, stale }, testRows, decided, osAccepted, propolyOnly] = await Promise.all([
+    const [{ held, stale }, testRows, decided, osAccepted, propolyOnlyAll, cancelledLets] = await Promise.all([
       assembled(scope.rexUserId),
       req.nextUrl.searchParams.get("tests") === "0" ? Promise.resolve([]) : testApplicationsFor(actor?.email).catch(() => []),
       /* The agent's Accept or Decline in the OS (7 Oct 2026): the board shows
@@ -66,9 +67,13 @@ export async function GET(req: NextRequest) {
       Promise.resolve([] as Awaited<ReturnType<typeof osAcceptedOffers>>),
       /* Lets that only Propoly knows about (9 Oct 2026, 54 Maple Avenue). */
       propolyOnlyLets(scope, { canPretenancy: Boolean(actor && can(actor.role as never, "see:pretenancy")) }).catch(() => []),
+      /* Lets cancelled from their own page (lib/let-cancel, 12 Oct 2026). */
+      allCancellations().catch(() => []),
     ]);
+    const cancelledRefs = new Set(cancelledLets.flatMap((c) => [c.ref, c.dealId ?? ""]).filter(Boolean));
+    const propolyOnly = propolyOnlyAll.filter((p) => !cancelledRefs.has(String(p.id)));
     const { applications, stages, closed } = held.value;
-    const tests = testRows.map((a) => ({ ...a, stageLabel: a.stageLabel ?? a.statusLabel, test: true }));
+    const tests = testRows.map((a) => ({ ...a, stageLabel: a.stageLabel ?? a.statusLabel, test: true, ...(cancelledRefs.has(String(a.id)) ? { closed: "Deal cancelled" } : {}) }));
     /* ?include=<id>: one application asked for by name - the PLC wizard's
        "Open the application" (6 Oct 2026). The board's cut drops accepted
        lets whose move-in has passed, so a pack could point at an application

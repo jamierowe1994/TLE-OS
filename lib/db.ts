@@ -3585,6 +3585,20 @@ CREATE TABLE IF NOT EXISTS os_customer_updates (
 CREATE INDEX IF NOT EXISTS os_customer_updates_open ON os_customer_updates (state, created_at);
 CREATE INDEX IF NOT EXISTS os_customer_updates_app ON os_customer_updates (application_id);
 CREATE INDEX IF NOT EXISTS os_customer_updates_deal ON os_customer_updates (deal_id);
+-- A let the agent cancelled from its page (12 Oct 2026): why, and who. Keyed
+-- on the page's id - the application's, or the Propoly deal's for a let with
+-- no application. Closes the let on Applications; nothing is written to REX
+-- or Propoly, Kirstie is told on her feed to cancel it there.
+CREATE TABLE IF NOT EXISTS os_let_cancellations (
+  ref            TEXT PRIMARY KEY,
+  deal_id        TEXT,
+  property       TEXT NOT NULL DEFAULT '',
+  reason         TEXT NOT NULL,
+  note           TEXT NOT NULL DEFAULT '',
+  by_name        TEXT NOT NULL DEFAULT '',
+  by_email       TEXT,
+  cancelled_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 -- Money seen in PayProp for the deal, stamped the first time the watcher saw
 -- it. money_checked_at NULL means the money pass has never looked at this
 -- row, so the first look records silently rather than announcing old money.

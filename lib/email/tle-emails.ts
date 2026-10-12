@@ -209,6 +209,7 @@ const withSample = (doc: EmailDoc, extra?: Record<string, string>): EmailDoc => 
          "{{link}}" - which renders as a button that looks right and goes
          nowhere, the one defect a reviewer cannot see by reading. */
       if (typeof anyB.url === "string") next.url = fill(anyB.url);
+      if (typeof anyB.note === "string") next.note = fill(anyB.note);
       /* A raw-HTML block's placeholder (Homes That Fit's cards). */
       if (anyB.type === "code" && typeof anyB.html === "string") next.html = fill(anyB.html);
       return next as unknown as (typeof doc.blocks)[number];
@@ -245,7 +246,9 @@ export function renderTleEmail(
     blocks: doc.blocks.map((b) => {
       const anyB = b as unknown as Record<string, unknown>;
       const next: Record<string, unknown> = { ...anyB };
-      for (const key of ["text", "label", "href", "url", "html"]) {
+      /* "note" is a footer's own line - {{footLine}} on the customer updates
+         arrived as the placeholder until 12 Oct 2026. */
+      for (const key of ["text", "label", "href", "url", "html", "note"]) {
         if (typeof anyB[key] === "string") next[key] = fill(anyB[key] as string);
       }
       return next as unknown as EmailDoc["blocks"][number];
@@ -1009,7 +1012,7 @@ The Letting Experts`
           preheader: "Good news on 8 Recreation Terrace, and what happens next.",
           heading: "Your References Are Back",
           firstName: "Sophie",
-          body: "Good news: your references for <strong>8 Recreation Terrace</strong> have come back and they're fine.",
+          bodyHtml: "Good news: your references for <strong>8 Recreation Terrace</strong> have come back and they're fine.",
           nextLine: "Next, we finish the safety checks on the home and then send you the tenancy agreement to sign.",
           agentName: "Sam Whitaker",
           footLine: "You're getting this because you're renting a home through The Letting Experts.",
@@ -1034,7 +1037,7 @@ The Letting Experts`
           preheader: "One thing to sort before your tenant can move in.",
           heading: "One Thing Before Move-In",
           firstName: "Raj",
-          body: "We've been through the safety paperwork for <strong>8 Recreation Terrace</strong> and we need a current gas safety certificate before your tenant can move in.",
+          bodyHtml: "We've been through the safety paperwork for <strong>8 Recreation Terrace</strong> and we need a current gas safety certificate before your tenant can move in.",
           nextLine: "If you have one, reply with a copy. If not, we can book an engineer for you.",
           agentName: "Sam Whitaker",
           footLine: "You're getting this because The Letting Experts are letting your home.",

@@ -14,6 +14,8 @@ import { getUpdate, settleRecipient } from "@/lib/customer-updates";
 import { renderTleEmail } from "@/lib/email/tle-emails";
 import { sendAsAgent } from "@/lib/send-as-agent";
 import { logSystemEvent } from "@/lib/business/deal-store";
+import { logToPortal, portalText } from "@/lib/portal-log";
+import { withBodyHtml } from "@/lib/customer-update-copy";
 
 /**
  * POST → a booking confirmation, seen before it goes (17 Sep 2026).
@@ -35,6 +37,8 @@ type Body = {
   kind?: "appraisal" | "viewing" | "viewing-landlord" | "takeon" | "update";
   /** A customer update: which person on it (lib/customer-updates). */
   index?: number;
+  /** A customer update: also put it in their portal's Messages once sent. */
+  portal?: boolean;
   id?: string;
   /** Take-on: the time being booked, which is not on the appraisal record. */
   startsAt?: string;
@@ -143,10 +147,21 @@ export async function POST(req: NextRequest) {
           if (u.dealId) {
             await logSystemEvent(u.dealId, { id: actor.id, name: actor.name || actor.email, role: "agent" }, `Emailed ${who.name} (${who.role}): "${subject}"`).catch(() => null);
           }
+          /* Send to portal (12 Oct 2026): the copy in their portal's Messages. */
+          if (body.portal) {
+            const put = await logToPortal({
+              role: who.role,
+              email: who.email,
+              text: portalText(html, subject, { heading: who.vars.heading, footLine: who.vars.footLine }),
+              agentEmail: actor.email,
+            }).catch(() => ({ logged: false, why: "It couldn't be put in their portal." }));
+            const detail = put.logged ? `${r.detail ?? "Sent."} It's in their portal too.` : `${r.detail ?? "Sent."} ${put.why ?? ""}`.trim();
+            return NextResponse.json({ ok: r.sent, sent: r.sent, detail });
+          }
         }
         return NextResponse.json({ ok: r.sent, sent: r.sent, detail: r.detail });
       }
-      const { subject, html } = renderTleEmail(who.emailId, who.vars);
+      const { subject, html } = renderTleEmail(who.emailId, withBodyHtml(who.vars));
       return NextResponse.json({
         ok: true,
         to: who.email,
