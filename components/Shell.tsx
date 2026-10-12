@@ -306,7 +306,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Mobile: a simple top bar; the wireframe is a desktop pitch first. */}
-      <div className="flex min-w-0 flex-1 flex-col bg-card lg:ml-2 lg:bg-[var(--shell-panel)]">
+      {/* hud-page: Huddles is grey from the top down (James, 12 Oct 2026), not a white page with a grey card in it. */}
+      <div className={`flex min-w-0 flex-1 flex-col bg-card lg:ml-2 lg:bg-[var(--shell-panel)] ${pathname.startsWith("/huddles") ? "hud-page" : ""}`}>
         <header className="flex items-center justify-between border-b border-line/70 px-5 py-4 lg:hidden">
           <span className="hand text-2xl">TLE OS</span>
           <span className="flex items-center gap-2">
