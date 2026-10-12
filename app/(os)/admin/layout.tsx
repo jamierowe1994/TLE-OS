@@ -65,6 +65,8 @@ const GROUPS: Array<{
          /admin/permissions still needs see:roles, and the tab only shows to
          those who hold it - see components/admin/PeopleTabs. */
       { href: "/admin/people", label: "People", also: ["/admin/permissions"], needs: "see:people" },
+      /* Above Pre-launch (James, 12 Oct 2026): the one-press invite for 14 Oct. */
+      { href: "/admin/launch", label: "Launch", needs: "see:prelaunch" },
       { href: "/admin/pre-launch", label: "Pre-launch", needs: "see:prelaunch" },
       /* ONE entry, not four.
          Onboarding, Tenant passport and PLC handover each had their own line

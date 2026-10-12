@@ -198,6 +198,25 @@ CREATE TABLE IF NOT EXISTS os_invites (
 -- this column existed behaving exactly as it did.
 ALTER TABLE os_invites ADD COLUMN IF NOT EXISTS role TEXT;
 
+-- THE LAUNCH LIST (James, 12 Oct 2026): everybody at The Letting Experts who
+-- has no account, invited in one press from Admin > Launch. The roster itself
+-- is worked out live (REX, the Team Hub, the website headshots - lib/launch);
+-- this only keeps what James decided about it: who he unticked, who he added
+-- by hand, the role each one joins as, and when their invite went.
+CREATE TABLE IF NOT EXISTS os_launch_list (
+  email          TEXT PRIMARY KEY,
+  name           TEXT NOT NULL DEFAULT '',
+  role           TEXT,
+  -- Unticked: stays on the screen, never emailed by the Launch button.
+  excluded       BOOLEAN NOT NULL DEFAULT FALSE,
+  -- Added by hand rather than found on a roster.
+  custom         BOOLEAN NOT NULL DEFAULT FALSE,
+  added_by       TEXT NOT NULL DEFAULT '',
+  added_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  sent_at        TIMESTAMPTZ,
+  last_error     TEXT
+);
+
 -- WHAT THE PILOT ACTUALLY USES.
 --
 -- One row per person per page per day, counted. Not one row per view: five

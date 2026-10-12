@@ -56,6 +56,12 @@ export interface SkyOpts {
   link: string;
   /** The quiet line under the button. Omitted entirely when absent. */
   footnote?: string;
+  /**
+   * A second place to go, as a plain underlined link under the button - never
+   * a second button, so there is still only one thing to press first. The
+   * launch invite uses it for the TLE OS tour (12 Oct 2026).
+   */
+  secondary?: { label: string; link: string };
 }
 
 
@@ -172,6 +178,12 @@ export function skyShell(o: SkyOpts): string {
 
                   <div style="height:32px;line-height:32px;font-size:0">&nbsp;</div>
 ${pressable(o.button, safe, CLAY)}
+${
+  o.secondary
+    ? `
+                  <p style="margin:18px 0 0;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;color:${CLAY};background-color:${PAPER}"><a href="${esc(o.secondary.link)}" target="_blank" style="color:${CLAY};font-weight:600;text-decoration:underline">${esc(o.secondary.label)}</a></p>`
+    : ""
+}
 ${
   o.footnote
     ? `

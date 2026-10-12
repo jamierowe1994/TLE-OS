@@ -233,6 +233,12 @@ function ConnectionTile({
 
 export default function ProfilePage() {
   const [tab, setTab] = useState<TabKey>("info");
+  /* ?tab=connections lands on that tab - the launch checklist's REX and
+     email links (12 Oct 2026). */
+  useEffect(() => {
+    const want = new URLSearchParams(window.location.search).get("tab");
+    if (want && TABS.some((t) => t.key === want)) setTab(want as TabKey);
+  }, []);
   /* Their package, from the TEG Hub via the local copy. null while it loads
      and null if the Hub has none for them — the pill simply doesn't render,
      rather than inventing a tier. */

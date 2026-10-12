@@ -5,6 +5,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import BentoDash from "@/components/BentoDash";
 import PageHeader from "@/components/PageHeader";
 import QuickLinks from "@/components/QuickLinks";
+import LaunchReady from "@/components/LaunchReady";
 import { DASH_TRAY_GROUPS, DEFAULT_LAYOUT, WIDGETS } from "@/components/widgets";
 import { fetchMe } from "@/lib/me";
 
@@ -153,6 +154,9 @@ export default function Dashboard() {
           <QuickLinks customising={customising} />
         </>}
       />
+
+      {/* The pre-start checklist (12 Oct 2026). Gone once all four are done. */}
+      <LaunchReady />
 
       <BentoDash
         registry={WIDGETS}
