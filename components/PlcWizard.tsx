@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import { DoneTick } from "@/components/Bits";
 import {
@@ -503,9 +504,22 @@ export default function PlcWizard({
 
   const panel = `mx-auto w-full max-w-2xl ${leaving ? "plc-panel-out" : "plc-panel-in"}`;
 
+  /* Back to the let it came from (James, 12 Oct 2026): "there should be a
+     button in the top left-hand corner to say Go back to application".
+     Coming back to the check picks up the pack already started. */
+  const backTo = !demo ? prefill?.applicationId ?? applicationId ?? null : null;
+
   return (
     <div className="relative mx-auto flex min-h-[70vh] max-w-3xl flex-col justify-center px-4 py-10 sm:px-6">
       <WizardStyles />
+      {backTo && (
+        <Link
+          href={`/applications/${encodeURIComponent(backTo)}`}
+          className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full border border-line/80 bg-white px-3.5 py-2 text-[12.5px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink sm:left-6"
+        >
+          <span aria-hidden>←</span> Back to the application
+        </Link>
+      )}
 
       {/* Where you are, once there is somewhere to be. Hidden during the
           opening and the ending, which are moments rather than steps. */}
@@ -654,7 +668,7 @@ export default function PlcWizard({
                       pack in progress is not lost. */}
                   {!demo && (
                     <a
-                      href={`/applications?open=${encodeURIComponent(prefill.applicationId)}`}
+                      href={`/applications/${encodeURIComponent(prefill.applicationId)}`}
                       target="_blank"
                       rel="noreferrer"
                       className={SECONDARY}
@@ -1119,7 +1133,7 @@ export default function PlcWizard({
                   {kase.state === "approved" && prefill && (
                     <button
                       type="button"
-                      onClick={() => router.push(`/applications?open=${prefill.applicationId}`)}
+                      onClick={() => router.push(`/applications/${encodeURIComponent(prefill.applicationId)}`)}
                       className="rounded-lg border border-ink bg-ink px-4 py-2.5 text-sm text-white"
                     >
                       Open the application

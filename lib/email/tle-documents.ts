@@ -548,7 +548,7 @@ export const CUSTOMER_UPDATE = {
   mode: "blocks",
   blocks: [
     H("cu1", "{{heading}}"),
-    T("cu2", "Hi {{firstName}},<br><br>{{body}}"),
+    T("cu2", "Hi {{firstName}},<br><br>{{bodyHtml}}"),
     T("cu3", "{{nextLine}}"),
     SP("cu4", 8),
     T("cu5", "Any questions, just reply to this email.<br><br>{{agentName}}<br>The Letting Experts"),

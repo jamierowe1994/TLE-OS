@@ -1560,24 +1560,36 @@ html[data-os-toast="up"] .os-toast-lift {
 /* The page round it stays white (James, 12 Oct 2026: "make the background
    ... go back to white, and just keep the chat box in the same colour"). */
 .hud {
-  --hud-list: #f7f5f2;
-  --hud-chat: #e8e5e0;
-  --hud-bar: #faf9f7;
-  --hud-row-active: #e5e1dc;
-  --hud-row-hover: #ebe8e4;
+  /* White, with the sidebar's own neutral greys for lines, tabs and the
+     chat you are on (James, 12 Oct 2026: "the background of the chat white
+     ... the same grey as the navigation bar", replacing the beige-grey). */
+  --hud-list: #ffffff;
+  --hud-chat: #ffffff;
+  --hud-bar: #ffffff;
+  --hud-row-active: var(--launch-active);
+  --hud-row-hover: var(--launch-hover);
   --hud-input: #ffffff;
-  --hud-them: #ffffff;
-  --hud-tabs: #e8e5e1;
+  --hud-them: #f1f1f2;
+  --hud-tabs: #f1f1f2;
   --hud-tab-on: #ffffff;
+  --hud-line: var(--launch-guide);
+  --hud-line-strong: rgba(0, 0, 0, 0.14);
 }
 :root[data-theme="dark"] .hud {
-  --hud-list: #1c1c1c;
-  --hud-chat: #161616;
+  --hud-list: #202020;
+  --hud-chat: #202020;
   --hud-bar: #202020;
-  --hud-row-active: rgba(255, 255, 255, 0.085);
-  --hud-row-hover: rgba(255, 255, 255, 0.05);
   --hud-input: #272727;
-  --hud-them: #2b2b2b;
-  --hud-tabs: #151515;
-  --hud-tab-on: #2b2b2b;
+  --hud-them: #2c2c2c;
+  --hud-tabs: #161616;
+  --hud-tab-on: #2c2c2c;
+  --hud-line-strong: rgba(255, 255, 255, 0.14);
 }
+
+/* Someone typing: the bubble rises from the foot of the chat, its three dots
+   lifting in turn, as WhatsApp's do. */
+@keyframes hud-typing-in { from { opacity: 0; transform: translateY(10px) scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes hud-dot { 0%, 60%, 100% { transform: translateY(0); opacity: 0.45; } 30% { transform: translateY(-3px); opacity: 1; } }
+.hud-typing { animation: hud-typing-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; transform-origin: 0 100%; }
+.hud-dot { display: block; width: 6px; height: 6px; border-radius: 9999px; background: var(--muted); animation: hud-dot 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .hud-typing, .hud-dot { animation: none; } }

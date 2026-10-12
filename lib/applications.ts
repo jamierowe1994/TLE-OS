@@ -1020,16 +1020,28 @@ async function openPlcPacks(): Promise<Set<string>> {
   return new Set(rows.map((r) => String(r.application_ref)));
 }
 
+/** Lets the agent cancelled from their page (lib/let-cancel, 12 Oct 2026). */
+async function cancelledRefs(): Promise<Set<string>> {
+  if (!hasDb()) return new Set();
+  const rows = await q<{ ref: string }>(`SELECT ref FROM os_let_cancellations`).catch(() => []);
+  return new Set(rows.map((r) => String(r.ref)));
+}
+
 export async function closedReasons(apps: Application[]): Promise<Map<string, string>> {
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
   /* A pack left half-done long after the move-in is abandoned, not live. */
   const monthAgo = new Date(Date.now() - 30 * 86400000).toLocaleDateString("en-CA", { timeZone: "Europe/London" });
   const ids = [...new Set(apps.map((a) => a.listingId).filter((x): x is number => x != null))];
-  const [state, packOpen] = await Promise.all([listingStates(ids), openPlcPacks()]);
+  const [state, packOpen, cancelled] = await Promise.all([listingStates(ids), openPlcPacks(), cancelledRefs()]);
 
   const out = new Map<string, string>();
   for (const a of apps) {
     if (a.status === "unsuccessful") continue;
+    /* Cancelled by the agent from the let's page (lib/let-cancel). */
+    if (cancelled.has(String(a.id))) {
+      out.set(a.id, "Deal cancelled");
+      continue;
+    }
     const s = a.listingId != null ? state.get(a.listingId) : undefined;
     if (a.status === "accepted") {
       /* Not while its PLC check is still going (6 Oct 2026): REX's start

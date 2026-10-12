@@ -46,7 +46,7 @@ export type ConfirmTarget =
   /** The take-on visit: photographs and the floor plan, on an appraisal. */
   | { kind: "takeon"; id: string; startsAt: string; minutes: number }
   /** One person on a customer update (lib/customer-updates). */
-  | { kind: "update"; id: number; index: number };
+  | { kind: "update"; id: number; index: number; portal?: boolean };
 
 export type ConfirmDraft = {
   ok: boolean;
@@ -75,7 +75,7 @@ export function payloadOf(t: ConfirmTarget): Record<string, unknown> {
       : t.kind === "takeon"
         ? { kind: "takeon", id: t.id, startsAt: t.startsAt, minutes: t.minutes }
         : t.kind === "update"
-          ? { kind: "update", id: t.id, index: t.index }
+          ? { kind: "update", id: t.id, index: t.index, ...(t.portal ? { portal: true } : {}) }
           : t.kind === "viewing-landlord"
             ? { kind: "viewing-landlord", booking: t.booking }
             : { kind: "viewing", booking: t.booking };

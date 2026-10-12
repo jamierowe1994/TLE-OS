@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import ConfirmSheet from "@/components/ConfirmSheet";
+import { dropJson } from "@/lib/page-cache";
+import RecordSidePanel, { type NoteRow, type PanelTab } from "@/components/RecordSidePanel";
 import CustomerUpdates from "@/components/CustomerUpdates";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
@@ -9,13 +12,13 @@ import PropertyFile from "@/components/PropertyFile";
 import SaveChip, { SaveScopeProvider, useSaveScope } from "@/components/SaveChip";
 import { Pill } from "@/components/Wire";
 import { type SpineStop } from "@/components/StageSpine";
-import GuideButton from "@/components/GuideButton";
 import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-events";
 import ContactBlock from "@/components/ContactBlock";
 import FileDocuments from "@/components/FileDocuments";
 import NextStepCard, { type NextAction } from "@/components/NextStepCard";
-import { STAGE_DOODLE, cardStatus, stageStatus } from "@/components/applications/LetsBoard";
+import { cardStatus, stageStatus } from "@/components/applications/LetsBoard";
 import { PORTAL_STAGES, propolyDealUrl } from "@/lib/business/propoly-stages";
+import { CANCEL_REASONS, CANCEL_WORDS } from "@/lib/let-cancel-words";
 import type { PreTenancyDeal } from "@/app/api/pretenancy/deals/route";
 
 type JourneyAction = NextAction;
@@ -151,19 +154,6 @@ const NEXT_ACTION: Record<string, { label: string; do: string; who: string }> = 
   unsuccessful: { label: "Unsuccessful", do: "Nothing outstanding. Tell them why if they haven't been told.", who: "—" },
 };
 
-type TabKey = "activity" | "people" | "documents" | "file";
-const TABS: { key: TabKey; label: string; icon: string }[] = [
-  { key: "activity", label: "Activity & comments", icon: "message" },
-  { key: "people", label: "Applicants", icon: "user" },
-  { key: "documents", label: "Documents", icon: "upload" },
-  { key: "file", label: "Property file", icon: "shield" },
-];
-const TAB_LEAD: Record<TabKey, string> = {
-  activity: "Everything that has happened on this let, and the comments. A comment is kept on the application and shows for everyone who opens it.",
-  people: "Everyone on the application, and the ways through to each of them. Only the lead applicant is asked the four questions - the form stops after them.",
-  documents: "References, right to rent, the landlord's papers and anything else for this home. The office and the agent both see them.",
-  file: "What the tenancy has to be compliant about, and the certificates already held. A certificate filed here is on the property from then on.",
-};
 
 /* ── The page's boxes, Portfolio's ────────────────────────────────────── */
 const pop =
@@ -171,89 +161,100 @@ const pop =
 const box = `${pop} rounded-2xl border border-line/70 bg-white`;
 const eyebrow = "text-[10.5px] font-semibold uppercase tracking-wide text-muted";
 const chip = "inline-flex items-center gap-1.5 rounded-full border border-line/60 bg-white px-3 py-1.5 text-[12px] transition-colors hover:border-ink/40";
-const tile =
-  "flex h-full min-h-[72px] w-full flex-col items-start justify-between gap-2 rounded-xl border border-line/60 bg-white p-3.5 text-left text-[12.5px] font-semibold leading-tight transition-[transform,box-shadow,border-color] duration-200 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:border-ink/60 hover:shadow-[3px_3px_0_0_color-mix(in_srgb,var(--ink)_72%,var(--page))] disabled:pointer-events-none disabled:opacity-40";
-const tileText = (label: string, what: string) => (
-  <span className="block">
-    <span className="block">{label}</span>
-    <span className="mt-0.5 block text-[11.5px] font-normal leading-snug text-muted">{what}</span>
-  </span>
-);
+const tileBase =
+  "relative flex h-full min-h-[64px] w-full items-center gap-3 rounded-xl border border-line/60 bg-white px-3 py-2.5 text-left text-[12.5px] font-semibold leading-tight";
+const tileLive = `${tileBase} transition-[transform,box-shadow,border-color] duration-200 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:border-ink/60 hover:shadow-[3px_3px_0_0_color-mix(in_srgb,var(--ink)_72%,var(--page))]`;
 const tileIcon = (name: string, dark = false) => (
-  <span className={`flex h-8 w-8 items-center justify-center rounded-full ${dark ? "bg-[var(--brown)] text-white" : "bg-accent-soft text-accent-dark"}`}><DoodleIcon name={name} size={14} /></span>
+  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${dark ? "bg-[var(--brown)] text-white" : "bg-accent-soft text-accent-dark"}`}><DoodleIcon name={name} size={14} /></span>
 );
 
-/** One fact in General info: an icon in a circle, a label over its value. */
-function Info({ icon, label, text }: { icon: string; label: string; text: string }) {
-  const quiet = /^(Not |No |—|-$|Reading)/.test(text);
-  return (
-    <div className="flex min-w-0 items-start gap-2.5">
-      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
-        <DoodleIcon name={icon} size={13} />
+/**
+ * One action tile. Every let shows the same eight, always in the same place
+ * (James, 12 Oct 2026: "these should always show ... the ones that are done
+ * will blank out, or if they're not relevant at this stage", with a footnote
+ * saying why - "PLC check done", and a tick).
+ */
+function Tile({ icon, label, sub, dark, off, done, onClick, href, steve }: {
+  icon: string;
+  label: string;
+  sub: string;
+  dark?: boolean;
+  /** Not available now: greyed, with `sub` saying why. */
+  off?: boolean;
+  /** Done: greyed, with a tick by `sub`. */
+  done?: boolean;
+  onClick?: () => void;
+  href?: string;
+  steve?: string;
+}) {
+  const inner = (
+    <>
+      {tileIcon(icon, dark && !off && !done)}
+      <span className="block min-w-0 flex-1">
+        <span className="block">{label}</span>
+        <span className={`mt-0.5 flex items-start gap-1 text-[11.5px] font-normal leading-snug ${done ? "text-[#56634a]" : "text-muted"}`}>
+          {done && <span aria-hidden>✓</span>}
+          <span className="line-clamp-2 min-w-0">{sub}</span>
+        </span>
       </span>
-      <span className="min-w-0">
-        <span className="block text-[10.5px] font-semibold uppercase tracking-wide text-muted">{label}</span>
-        <span className={`block truncate text-[13px] ${quiet ? "text-muted" : ""}`}>{text}</span>
-      </span>
-    </div>
+    </>
   );
-}
-
-/** The photo, wide: a let carries one picture of the home. */
-function Hero({ image, children }: { image: string | null; children: React.ReactNode }) {
-  return (
-    <section className={`${box} flex min-w-0 flex-col p-3 lg:col-start-1`}>
-      {/* As tall as the actions beside it: the picture takes what is left. */}
-      <div className="relative aspect-[2/1] overflow-hidden rounded-xl bg-box lg:aspect-auto lg:min-h-[260px] lg:flex-1">
-        <PropertyPhoto src={image} alt="" width={1400} height={700} className="absolute inset-0 h-full w-full object-cover" />
+  if (off || done) {
+    return (
+      <div aria-disabled="true" title={sub} data-steve={steve} className={`${tileBase} cursor-default border-dashed bg-page/60 text-ink/60 [&>span:first-child]:opacity-60`}>
+        {inner}
       </div>
-      <div className="px-2 pb-1.5 pt-4">{children}</div>
-    </section>
+    );
+  }
+  if (href) {
+    return (
+      <Link href={href} data-steve={steve} className={tileLive}>
+        {inner}
+      </Link>
+    );
+  }
+  return (
+    <button type="button" data-steve={steve} onClick={onClick} className={tileLive}>
+      {inner}
+    </button>
   );
 }
 
 /** A dot in the stop's tone: done, needs a look, or quiet. */
 const toneDot = (tone?: string) => (tone === "ok" ? "bg-emerald-600" : tone === "warn" ? "bg-amber-500" : "bg-line");
 
-/**
- * Where it's up to, down the side: REX's stops then Kirstie's eight, each
- * with its one line of evidence. The vertical form of the old track, so it
- * sits in the right-hand column beside the sections.
- */
-function UpTo({ stops }: { stops: SpineStop[] }) {
+/** Where it's up to, across the box: the stops in a line, a short note under each. */
+function Spine({ stops }: { stops: SpineStop[] }) {
+  const cols = { gridTemplateColumns: `repeat(${stops.length}, minmax(0, 1fr))` };
   return (
-    <ol className="mt-4">
-      {stops.map((s, i) => {
-        const done = s.state === "done";
-        const cur = s.state === "current";
-        const off = s.state === "off";
-        return (
-          <li key={s.id} className="relative flex gap-3 pb-3 last:pb-0">
-            {i < stops.length - 1 && (
-              <span aria-hidden className={`absolute bottom-0 left-[12px] top-[28px] ${done ? "w-0.5 bg-accent-dark/60" : "w-0 border-l-2 border-dashed border-line/80"}`} />
-            )}
-            <span
-              className={`relative z-[1] flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
-                done ? "bg-accent-dark/70 text-white" : cur ? "bg-accent-dark text-white" : off ? "border-[1.5px] border-line/60 bg-line/30 text-muted" : "border-[1.5px] border-line/80 bg-white text-muted"
-              }`}
-            >
-              {done ? "✓" : off ? "–" : i + 1}
-            </span>
-            <div className={`min-w-0 flex-1 rounded-xl px-3 py-1.5 ${cur ? "bg-accent-soft/50" : ""}`}>
-              <p className={`text-[12.5px] leading-tight ${cur ? "font-semibold" : done ? "" : "text-muted"}`}>{s.label}</p>
-              {s.sub ? (
-                <p className="mt-1 flex items-start gap-1.5 text-[11px] leading-snug">
-                  <span aria-hidden className={`mt-[4px] h-1.5 w-1.5 shrink-0 rounded-full ${toneDot(s.tone)}`} />
-                  <span className={done || cur ? "text-ink" : "text-muted"}>{s.sub}</span>
-                </p>
-              ) : cur ? (
-                <p className="mt-1 text-[11px] text-muted">Here now</p>
-              ) : null}
-            </div>
-          </li>
-        );
-      })}
-    </ol>
+    <div className="-mx-2 overflow-x-auto px-2 pb-1">
+      <ol className="grid" style={{ ...cols, minWidth: `${Math.max(560, stops.length * 78)}px` }}>
+        {stops.map((s, i) => {
+          const done = s.state === "done";
+          const cur = s.state === "current";
+          const off = s.state === "off";
+          return (
+            <li key={s.id} className="relative flex min-w-0 flex-col items-center px-1 text-center">
+              {i > 0 && (
+                <span aria-hidden className={`absolute left-[-50%] right-[50%] top-[13px] ${done || cur ? "h-0.5 bg-accent-dark/60" : "h-0 border-t-2 border-dashed border-line/80"}`} />
+              )}
+              <span
+                className={`relative z-[1] flex h-[26px] w-[26px] items-center justify-center rounded-full text-[11px] font-semibold ${
+                  done ? "bg-accent-dark/70 text-white" : cur ? "bg-accent-dark text-white" : off ? "border-[1.5px] border-line/60 bg-line/30 text-muted" : "border-[1.5px] border-line/80 bg-white text-muted"
+                }`}
+              >
+                {done ? "✓" : off ? "–" : i + 1}
+              </span>
+              <p className={`mt-1.5 text-[11.5px] leading-tight ${cur ? "font-semibold" : "text-muted"}`}>{s.label}</p>
+              <p className={`mt-0.5 flex w-full min-w-0 items-center justify-center gap-1 text-[10.5px] leading-snug ${cur ? "text-accent-dark" : "text-muted"}`} title={s.sub ?? undefined}>
+                {s.sub && (done || cur) ? <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${toneDot(s.tone)}`} /> : null}
+                <span className="truncate">{done || cur ? s.sub || (cur ? "Here now" : " ") : " "}</span>
+              </p>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
   );
 }
 
@@ -272,6 +273,380 @@ function dealStops(d: PreTenancyDeal): SpineStop[] {
   });
 }
 
+/* ── the drawers ──────────────────────────────────────────────────────── */
+
+/** Slides in from the right over the page; Escape or the scrim closes it. */
+function Drawer({ open, width = "max-w-[560px]", label, onClose, children }: { open: boolean; width?: string; label: string; onClose: () => void; children: React.ReactNode }) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (!open) { setShown(false); return; }
+    const t = requestAnimationFrame(() => setShown(true));
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (document.querySelectorAll('[role="dialog"]').length > 1) return;
+      onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => { cancelAnimationFrame(t); window.removeEventListener("keydown", onKey); };
+  }, [open, onClose]);
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[130]">
+      <button type="button" aria-label="Close" onClick={onClose} className={`absolute inset-0 cursor-default bg-ink/35 transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0"}`} />
+      <aside
+        role="dialog"
+        aria-label={label}
+        className={`absolute inset-y-0 right-0 flex w-full ${width} flex-col overflow-hidden bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[380ms] sm:rounded-l-2xl ${shown ? "translate-x-0" : "translate-x-full"}`}
+        style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
+      >
+        {children}
+      </aside>
+    </div>
+  );
+}
+
+function DrawerHead({ icon, title, sub, onClose, children }: { icon: string; title: string; sub?: string; onClose: () => void; children?: React.ReactNode }) {
+  return (
+    <div className="shrink-0 border-b border-line/70 px-5 pb-4 pt-5 sm:px-6">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-dark"><DoodleIcon name={icon} size={15} /></span>
+          <div className="min-w-0">
+            <h2 className="hand truncate text-[21px] leading-tight">{title}</h2>
+            {sub && <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted">{sub}</p>}
+          </div>
+        </div>
+        <button type="button" onClick={onClose} aria-label="Close" title="Close (Esc)" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 bg-white text-[13px] text-muted hover:text-ink">✕</button>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** Documents rise from the bottom (James, 12 Oct 2026): a big drop space, click off to close. */
+function BottomSheet({ open, title, onClose, children }: { open: boolean; title: string; onClose: () => void; children: React.ReactNode }) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (!open) { setShown(false); return; }
+    const t = requestAnimationFrame(() => setShown(true));
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => { cancelAnimationFrame(t); window.removeEventListener("keydown", onKey); };
+  }, [open, onClose]);
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[130]">
+      <button type="button" aria-label="Close" onClick={onClose} className={`absolute inset-0 cursor-default bg-ink/35 transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0"}`} />
+      <section
+        role="dialog"
+        aria-label={title}
+        className={`absolute inset-x-0 bottom-0 mx-auto flex max-h-[86vh] w-full max-w-[980px] flex-col overflow-hidden rounded-t-[26px] bg-page shadow-[0_-24px_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[380ms] ${shown ? "translate-y-0" : "translate-y-full"}`}
+        style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
+      >
+        <span aria-hidden className="mx-auto mt-2.5 h-1.5 w-12 shrink-0 rounded-full bg-line" />
+        <div className="flex shrink-0 items-center justify-between gap-3 px-6 pb-3 pt-3">
+          <h2 className="hand text-[21px] leading-tight">{title}</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 bg-white text-[13px] text-muted hover:text-ink">✕</button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-8">{children}</div>
+      </section>
+    </div>
+  );
+}
+
+/* ── the email builder: customer updates and reminders ────────────────── */
+
+type Template = { kind: string; label: string; what: string; to: Array<"tenant" | "landlord"> };
+/* The written emails (lib/customer-update-copy), each read and changed before
+   it goes. Failed referencing asks about a guarantor, as James put it. */
+const UPDATES: Template[] = [
+  { kind: "general", label: "A quick update", what: "A short note in your own words", to: ["tenant", "landlord"] },
+  { kind: "reference_failed", label: "References not accepted", what: "Sorry, and do they have a guarantor? If not the let may not go ahead", to: ["tenant", "landlord"] },
+  { kind: "guarantor_needed", label: "A guarantor is needed", what: "References passed, but a guarantor is needed", to: ["tenant"] },
+  { kind: "agreement_out", label: "Agreement on its way", what: "The tenancy agreement is out for signing", to: ["tenant", "landlord"] },
+  { kind: "cancelled", label: "The let won't go ahead", what: "Sorry it isn't going ahead, and what happens next", to: ["tenant", "landlord"] },
+];
+const REMINDERS: Template[] = [
+  { kind: "nudge_holding_fee", label: "Pay the holding deposit", what: "The home stays on the market until it's paid", to: ["tenant"] },
+  { kind: "nudge_referencing", label: "Finish the references", what: "Fill in the referencing form", to: ["tenant"] },
+  { kind: "nudge_sign_agreement", label: "Sign the agreement", what: "The tenancy agreement is waiting for a signature", to: ["tenant", "landlord"] },
+  { kind: "nudge_move_in_money", label: "Send the move-in money", what: "Deposit and first month's rent before the keys", to: ["tenant"] },
+  { kind: "nudge_documents", label: "Documents we still need", what: "Send them over or upload them in the portal", to: ["tenant", "landlord"] },
+];
+
+type LetPerson = { name: string; email: string | null; phone: string | null; contactId: string | null; isPrimary: boolean };
+type LetLandlord = { name: string; email: string | null; phone: string | null; contactId: string | null; from?: "rex" | "record" };
+type LetInfo = { tenants: LetPerson[]; landlord: LetLandlord | null; landlordProblem: string | null; listingId: string | null };
+type Cancellation = { reason: string; note: string; by: string; at: string };
+
+function EmailBuilder({ letId, mode, people, start, onClose }: {
+  letId: string;
+  mode: "update" | "reminder";
+  people: LetInfo | null;
+  /** Arriving with a message and a person already picked (after a cancel). */
+  start?: { kind: string; to: string } | null;
+  onClose: () => void;
+}) {
+  const list = mode === "update" ? UPDATES : REMINDERS;
+  const parties = [
+    ...(people?.tenants ?? []).map((t, i) => ({ key: `tenant:${i}`, role: "tenant" as const, index: i, name: t.name, email: t.email, tag: t.isPrimary ? "Lead tenant" : "Tenant" })),
+    ...(people?.landlord ? [{ key: "landlord", role: "landlord" as const, index: 0, name: people.landlord.name, email: people.landlord.email, tag: "Landlord" }] : []),
+  ];
+  const [to, setTo] = useState<string>(start?.to ?? parties[0]?.key ?? "");
+  const [kind, setKind] = useState<string>(start?.kind ?? list[0].kind);
+  const [portal, setPortal] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [sheet, setSheet] = useState<{ id: number; index: number; portal: boolean } | null>(null);
+  const sent = useRef(false);
+  const [done, setDone] = useState<{ to: string; what: string; detail: string }[]>([]);
+  useEffect(() => { if (!to && parties[0]) setTo(parties[0].key); }, [parties, to]);
+
+  const party = parties.find((p) => p.key === to) ?? null;
+  const tpl = list.find((t) => t.kind === kind) ?? list[0];
+  const fits = party ? tpl.to.includes(party.role) : false;
+
+  async function write() {
+    if (!party || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await fetch(`/api/applications/${encodeURIComponent(letId)}/message`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ kind: tpl.kind, role: party.role, index: party.index }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; update?: { id: number }; index?: number };
+      if (!j.ok || !j.update) throw new Error(j.error ?? "The email couldn't be written.");
+      sent.current = false;
+      setSheet({ id: j.update.id, index: j.index ?? 0, portal });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "The email couldn't be written.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /* Closed without sending: the update is settled as not sent, so it never
+     sits open nagging the agent and then Kirstie about an email nobody meant
+     to send. */
+  function sheetClosed() {
+    const s = sheet;
+    setSheet(null);
+    if (s && !sent.current) {
+      void fetch("/api/customer-updates", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: s.id, index: s.index, action: "skip", note: "Written on the let's page and not sent." }),
+      }).catch(() => null);
+    }
+  }
+
+  return (
+    <>
+      <DrawerHead
+        icon={mode === "update" ? "mail" : "clock"}
+        title={mode === "update" ? "Customer update" : "Send a reminder"}
+        sub="Pick who and what. The email is written for you to read and change before it goes, from your own address. Nothing is sent until you press Send."
+        onClose={onClose}
+      />
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
+        <section>
+          <p className={`${eyebrow} mb-2`}>Who to</p>
+          {people === null ? (
+            <p className="text-[12.5px] text-muted">Reading who is on the let…</p>
+          ) : parties.length ? (
+            <div className="flex flex-wrap gap-2">
+              {parties.map((p) => (
+                <button
+                  key={p.key}
+                  type="button"
+                  onClick={() => setTo(p.key)}
+                  aria-pressed={to === p.key}
+                  className={`rounded-xl border px-3.5 py-2 text-left text-[12.5px] transition-colors ${to === p.key ? "border-accent-dark bg-accent-soft/60" : "border-line/70 bg-white hover:border-ink/40"}`}
+                >
+                  <span className="block font-semibold">{p.name}</span>
+                  <span className="block text-[11px] text-muted">{p.tag}{p.email ? "" : " · no email"}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[12.5px] text-muted">Nobody with contact details is held on this let.</p>
+          )}
+          {people?.landlordProblem && <p className="mt-2 text-[11.5px] text-muted">{people.landlordProblem}</p>}
+        </section>
+
+        <section>
+          <p className={`${eyebrow} mb-2`}>{mode === "update" ? "What it's about" : "The reminder"}</p>
+          <div className="grid gap-2">
+            {list.map((t) => {
+              const ok = party ? t.to.includes(party.role) : true;
+              return (
+                <button
+                  key={t.kind}
+                  type="button"
+                  disabled={!ok}
+                  onClick={() => setKind(t.kind)}
+                  aria-pressed={kind === t.kind}
+                  className={`rounded-xl border px-4 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${kind === t.kind ? "border-accent-dark bg-accent-soft/60" : "border-line/70 bg-white hover:border-ink/40"}`}
+                >
+                  <span className="block text-[13px] font-semibold">{t.label}</span>
+                  <span className="block text-[11.5px] text-muted">{ok ? t.what : `For the ${t.to.join(" or ")} only`}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Send to portal (James, 12 Oct 2026): the copy under Messages in
+            their portal, where they have one. */}
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line/70 bg-white px-4 py-3">
+          <input type="checkbox" checked={portal} onChange={(e) => setPortal(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--accent-dark)]" />
+          <span>
+            <span className="block text-[13px] font-semibold">Also put it in their portal</span>
+            <span className="block text-[11.5px] text-muted">A copy under Messages, if they have a portal account. It is in their email either way.</span>
+          </span>
+        </label>
+
+        {err && <p className="text-[12px] text-accent-dark">{err}</p>}
+        {done.length > 0 && (
+          <ul className="space-y-1.5 rounded-xl bg-[#f1f4ec] px-4 py-3 text-[12px] text-[#56634a]">
+            {done.map((d, i) => (
+              <li key={i}>✓ {d.what} to {d.to}. {d.detail}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-line/70 px-5 py-4 sm:px-6">
+        <p className="text-[11.5px] text-muted">{party && !party.email ? `There's no email for ${party.name}. Ring them instead.` : "You'll see it before it goes."}</p>
+        <button
+          type="button"
+          onClick={() => void write()}
+          disabled={!party || !fits || busy || !party.email}
+          className="press-ring inline-flex shrink-0 items-center gap-2 rounded-full bg-[var(--brown)] px-5 py-2.5 text-[12.5px] font-semibold text-white disabled:opacity-40"
+        >
+          <DoodleIcon name="mail" size={13} />
+          {busy ? "Writing it…" : "Write the email"}
+        </button>
+      </div>
+      {sheet && (
+        <ConfirmSheet
+          target={{ kind: "update", id: sheet.id, index: sheet.index, portal: sheet.portal }}
+          title={tpl.label}
+          onSent={(detail) => {
+            sent.current = true;
+            setDone((cur) => [...cur, { to: party?.name ?? "them", what: tpl.label, detail }]);
+          }}
+          onClose={sheetClosed}
+        />
+      )}
+    </>
+  );
+}
+
+/* ── cancel the deal ──────────────────────────────────────────────────── */
+
+function CancelDeal({ letId, property, cancelled, onCancelled, onTell, onClose }: {
+  letId: string;
+  property: string;
+  cancelled: Cancellation | null;
+  onCancelled: (c: Cancellation) => void;
+  /** After it's cancelled: write to the tenant or the landlord. */
+  onTell: (role: "tenant" | "landlord") => void;
+  onClose: () => void;
+}) {
+  const [reason, setReason] = useState<string | null>(null);
+  const [note, setNote] = useState("");
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const ready = Boolean(reason) && (reason !== "Something else" || note.trim().length > 0) && typed.trim().toLowerCase() === CANCEL_WORDS.toLowerCase();
+
+  async function go() {
+    if (!ready || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await fetch(`/api/applications/${encodeURIComponent(letId)}/cancel`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reason, note, confirm: typed }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; cancelled?: Cancellation };
+      if (!j.ok || !j.cancelled) throw new Error(j.error ?? "That didn't save. Nothing has been cancelled.");
+      onCancelled(j.cancelled);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "That didn't save. Nothing has been cancelled.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-[140] flex items-start justify-center overflow-y-auto p-4 sm:items-center">
+      <button type="button" aria-label="Close" onClick={onClose} className="fixed inset-0 cursor-default bg-ink/55 backdrop-blur-[3px]" />
+      <div className="fade-up relative w-full max-w-[560px] rounded-2xl border border-line/70 bg-page p-6 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.45)]">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-[20px] leading-tight">{cancelled ? "Deal cancelled" : "Cancel the deal"}</h2>
+            <p className="mt-0.5 text-[12.5px] text-muted">{property}</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted hover:text-ink">✕</button>
+        </div>
+        {cancelled ? (
+          <>
+            <p className="rounded-xl bg-[#f1f4ec] px-4 py-3 text-[12.5px] text-[#56634a]">
+              ✓ Cancelled by {cancelled.by}: {cancelled.reason.toLowerCase()}{cancelled.note ? `. ${cancelled.note}` : ""}. Kirstie has it on her feed to cancel in Propoly.
+            </p>
+            <p className="mt-4 text-[12.5px] font-semibold">Tell them now?</p>
+            <p className="mt-0.5 text-[12px] text-muted">The email is written for you to change before it goes.</p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => onTell("tenant")} className={tileLive}>{tileIcon("user")}<span>Update the tenant</span></button>
+              <button type="button" onClick={() => onTell("landlord")} className={tileLive}>{tileIcon("home")}<span>Update the landlord</span></button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className={`${eyebrow} mb-2`}>Why</p>
+            <div className="flex flex-wrap gap-2">
+              {CANCEL_REASONS.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setReason(r)}
+                  aria-pressed={reason === r}
+                  className={`rounded-full border px-3.5 py-1.5 text-[12.5px] transition-colors ${reason === r ? "border-accent-dark bg-accent-soft/70 font-semibold" : "border-line/70 bg-white hover:border-ink/40"}`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+            <label className="mt-4 block">
+              <span className={eyebrow}>{reason === "Something else" ? "What happened" : "Anything to add (optional)"}</span>
+              <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className="mt-1.5 w-full resize-y rounded-xl border border-line/70 bg-white px-3 py-2.5 text-[13px] outline-none focus:border-ink" />
+            </label>
+            <label className="mt-4 block">
+              <span className="text-[12.5px]">
+                Type <b className="font-semibold">{CANCEL_WORDS}</b> to cancel it. It comes off Applications and Kirstie is told to cancel it in Propoly.
+              </span>
+              <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={CANCEL_WORDS} className="mt-1.5 w-full rounded-xl border border-line/70 bg-white px-3 py-2.5 text-[13px] outline-none focus:border-ink" />
+            </label>
+            {err && <p className="mt-3 text-[12px] text-accent-dark">{err}</p>}
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button type="button" onClick={onClose} className="rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-medium hover:border-ink/40">Keep the deal</button>
+              <button type="button" disabled={!ready || busy} onClick={() => void go()} className="rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white disabled:opacity-40">
+                {busy ? "Cancelling…" : "Cancel the deal"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── the page ─────────────────────────────────────────────────────────── */
+
 export default function ApplicationDrawer({
   app,
   deal = null,
@@ -280,7 +655,6 @@ export default function ApplicationDrawer({
   backHref = "/applications",
   onStep,
   stepLabel,
-  initialTab,
 }: {
   /** The application. Null for a home let through Propoly alone. */
   app: AppRecord | null;
@@ -295,29 +669,11 @@ export default function ApplicationDrawer({
   stepLabel?: string | null;
   initialTab?: string | null;
 }) {
-  const [tab, setTab] = useState<TabKey>(() => TABS.find((t) => t.key === initialTab)?.key ?? (app ? "activity" : "file"));
-  const pickTab = useCallback((t: TabKey) => {
-    setTab(t);
-    try {
-      const u = new URL(window.location.href);
-      u.searchParams.set("tab", t);
-      window.history.replaceState(window.history.state, "", u.toString());
-    } catch { /* fine */ }
-  }, []);
-  const goTab = useCallback((t: TabKey) => {
-    pickTab(t);
-    setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
-  }, [pickTab]);
-  const commentBox = useRef<HTMLTextAreaElement>(null);
-  /* The Auto save chip by the back link (23 Sep 2026): the comment, the
-     property file and whatever the stage adds report to it. */
-  const saves = useSaveScope(app?.id ?? deal?.app.id ?? null);
-  /* The people on this application, and which of them the OS already has a
-     lead for. Asked once when the page opens. */
+  /* The page's own id: the application's, or the deal's for a Propoly-only let. */
+  const letId = app?.id ?? deal?.app.id ?? "";
+  /* The Auto save chip by the back link (23 Sep 2026). */
+  const saves = useSaveScope(letId || null);
   const [leadIds, setLeadIds] = useState<Record<string, string>>({});
-  /* Everyone on the application; falls back to the single name the record
-     carries, so an application with no applicant rows still shows somebody.
-     A let with no application shows the deal's tenants. */
   const people: AppPerson[] = app?.applicants?.length
     ? app.applicants
     : app
@@ -335,14 +691,30 @@ export default function ApplicationDrawer({
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [app?.id]);
+
+  /* Who is on the let, as the server holds it (lib/let-people), and whether
+     it was cancelled - for the drawers, the email builder and Cancel deal. */
+  const [info, setInfo] = useState<LetInfo | null>(null);
+  const [cancelled, setCancelled] = useState<Cancellation | null>(null);
+  useEffect(() => {
+    if (!letId) return;
+    let live = true;
+    fetch(`/api/applications/${encodeURIComponent(letId)}/people`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; let?: LetInfo; cancelled?: Cancellation | null }) => {
+        if (!live) return;
+        if (j.ok && j.let) setInfo(j.let);
+        else setInfo({ tenants: [], landlord: null, landlordProblem: "Who is on this let couldn't be read just now.", listingId: null });
+        setCancelled(j.cancelled ?? null);
+      })
+      .catch(() => live && setInfo({ tenants: [], landlord: null, landlordProblem: "Who is on this let couldn't be read just now.", listingId: null }));
+    return () => { live = false; };
+  }, [letId]);
+
   const [draft, setDraft] = useState("");
-  /* The thread, from the OS. REX gives the milestones; this is what people
-     typed, and it comes back on every open. */
   const [comments, setComments] = useState<AppActivity[] | null>(null);
-  /* The journey: REX's three stops then Kirstie's eight, read from where her
-     board reads them, with what the agent should do about it. */
+  const [commentRows, setCommentRows] = useState<NoteRow[] | null>(null);
   const [journey, setJourney] = useState<Journey | null>(null);
-  /* Bumped after a test application's own button, so the spine reads again. */
   const [journeyTick, setJourneyTick] = useState(0);
   const [playing, setPlaying] = useState<string | null>(null);
   const [playError, setPlayError] = useState<string | null>(null);
@@ -360,7 +732,6 @@ export default function ApplicationDrawer({
     };
   }, [app?.id, journeyTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* Declining asks twice: the first press turns the button into "Yes, decline it". */
   const [confirming, setConfirming] = useState<string | null>(null);
   /* A test application's step that a real one takes elsewhere (lib/test-overlay),
      or the agent's Accept / Decline on a real offer (lib/offer-decisions). */
@@ -395,24 +766,53 @@ export default function ApplicationDrawer({
       setPlaying(null);
     }
   };
-  const [posting, setPosting] = useState(false);
-  const [postError, setPostError] = useState<string | null>(null);
 
+  /* Comments - on the application, or the deal for a Propoly-only let. */
   useEffect(() => {
-    if (!app) return;
+    if (!letId) return;
     let live = true;
     setComments(null);
-    fetch(`/api/applications/${encodeURIComponent(app.id)}/comments`)
+    setCommentRows(null);
+    fetch(`/api/applications/${encodeURIComponent(letId)}/comments`)
       .then((r) => r.json())
-      .then((j: { ok?: boolean; comments?: { body: string; authorName: string; createdAt: string }[] }) => {
+      .then((j: { ok?: boolean; comments?: { id?: string; body: string; authorName: string; createdAt: string }[] }) => {
         if (!live) return;
-        setComments((j.comments ?? []).map((c) => ({ when: whenWords(c.createdAt), what: c.body, by: c.authorName, note: true })));
+        const list = j.comments ?? [];
+        setComments(list.map((c) => ({ when: whenWords(c.createdAt), what: c.body, by: c.authorName, note: true })));
+        setCommentRows(list.map((c, i) => ({ id: c.id ?? `${c.createdAt}-${i}`, author: c.authorName, when: whenWords(c.createdAt), text: c.body })).reverse());
       })
-      .catch(() => live && setComments([]));
+      .catch(() => { if (live) { setComments([]); setCommentRows([]); } });
     return () => {
       live = false;
     };
-  }, [app?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [letId]);
+
+  async function addComment(text: string): Promise<boolean> {
+    const t = text.trim();
+    if (!letId || !t) return false;
+    const settle = saves.reporter.begin("Comment");
+    try {
+      const r = await fetch(`/api/applications/${encodeURIComponent(letId)}/comments`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: t }),
+      });
+      const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string; comment?: { id?: string; body: string; authorName: string; createdAt: string } } | null;
+      if (!r.ok || !j?.ok || !j.comment) {
+        settle({ ok: false, problem: j?.error ?? "That didn't save." });
+        return false;
+      }
+      const c = j.comment;
+      setComments((cs) => [...(cs ?? []), { when: whenWords(c.createdAt), what: c.body, by: c.authorName, note: true }]);
+      setCommentRows((cs) => [{ id: c.id ?? c.createdAt, author: c.authorName, when: whenWords(c.createdAt), text: c.body }, ...(cs ?? [])]);
+      setDraft("");
+      settle({ ok: true });
+      return true;
+    } catch {
+      settle({ ok: false, problem: "the connection dropped." });
+      return false;
+    }
+  }
 
   /* ‹ › on the keyboard, never while typing or with a pop-up open. */
   useEffect(() => {
@@ -428,70 +828,45 @@ export default function ApplicationDrawer({
     return () => window.removeEventListener("keydown", onKey);
   }, [onStep]);
 
-  async function post() {
-    const text = draft.trim();
-    if (!app || !text || posting) return;
-    setPosting(true);
-    setPostError(null);
-    /* The draft stays in the box until the comment has landed. Try again on
-       the chip only where the OS said no, so nothing was posted; after a
-       dropped connection it may have landed, and a resend would post it
-       twice - the words are still in the box to post again. */
-    const settle = saves.reporter.begin("Comment");
-    try {
-      const r = await fetch(`/api/applications/${encodeURIComponent(app.id)}/comments`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string; comment?: { body: string; authorName: string; createdAt: string } } | null;
-      if (!r.ok || !j?.ok || !j.comment) {
-        const problem = j?.error ?? "That didn't save.";
-        setPostError(problem);
-        settle({ ok: false, problem, retry: () => void post() });
-        return;
-      }
-      const c = j.comment;
-      setComments((cs) => [...(cs ?? []), { when: whenWords(c.createdAt), what: c.body, by: c.authorName, note: true }]);
-      setDraft("");
-      settle({ ok: true });
-    } catch {
-      setPostError("That didn't save. Try again in a moment.");
-      settle({ ok: false, problem: "the connection dropped." });
-    } finally {
-      setPosting(false);
-    }
-  }
+  /* ── what is open over the page ───────────────────────────────────── */
+  const [panel, setPanel] = useState<PanelTab | null>(null);
+  const [person, setPerson] = useState<{ role: "tenant" | "landlord"; index: number } | null>(null);
+  const [personTab, setPersonTab] = useState<PanelTab>("messages");
+  const [docsOpen, setDocsOpen] = useState(false);
+  const [builder, setBuilder] = useState<{ mode: "update" | "reminder"; start?: { kind: string; to: string } | null } | null>(null);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const closePanel = useCallback(() => setPanel(null), []);
+  const closePerson = useCallback(() => { setPerson(null); setPersonTab("messages"); }, []);
+  const closeDocs = useCallback(() => setDocsOpen(false), []);
+  const closeBuilder = useCallback(() => setBuilder(null), []);
 
   /* ── what the page says ─────────────────────────────────────────────── */
   const action = app ? NEXT_ACTION[app.stageKey] : undefined;
-  const thread = [...(app?.activity ?? []), ...(comments ?? [])];
   const ticked = checklist.filter((c) => c.done).length;
   const others = Math.max(0, people.length - 1);
   const stops: SpineStop[] | null = journey?.ok ? journey.stops ?? null : !app && deal ? dealStops(deal) : null;
   const hereIdx = stops ? stops.findIndex((s) => s.state === "current") : -1;
   const here = stops ? (hereIdx >= 0 ? stops[hereIdx] : stops[stops.length - 1]) : null;
   const dealHere = deal ? PORTAL_STAGES.find((s) => s.key === deal.effectiveStatusKey) ?? null : null;
-  const stageLabel = here?.label ?? dealHere?.label ?? action?.label ?? "In progress";
+  const stageLabel = cancelled ? "Cancelled" : here?.label ?? dealHere?.label ?? action?.label ?? "In progress";
   const forYou = journey?.ok ? (journey.actions ?? []).filter((a) => a.who === "you") : [];
   const waitingOn = forYou.length ? "you" : journey?.ok && journey.actions?.[0] ? { kirstie: "Kirstie", landlord: "the landlord", tenant: "the tenant", you: "you" }[journey.actions[0].who] : action?.who === "Us" ? "you" : action?.who === "Landlord" ? "the landlord" : null;
   const received = app?.activity?.find((a) => /received/i.test(a.what));
   const rent = app ? (/^£/.test(app.rent) ? app.rent.replace(/\s*pcm$/, "") : null) : deal?.app.offer != null ? `£${Math.round(deal.app.offer).toLocaleString("en-GB")}` : null;
   const per = !app && deal?.app.offerPeriod === "week" ? "pw" : "pcm";
   const answered = people.filter((p) => p.rightToRent === true).length;
-  const plc = app ? app.stageKey === "accepted" || app.stageKey === "communicated" : false;
+  const offerIn = app ? app.stageKey === "accepted" || app.stageKey === "communicated" : false;
   const lead = people.find((p) => p.isPrimary) ?? people[0];
-  const leadFile = lead?.contactId ? leadIds[lead.contactId] : null;
   const name = app?.property ?? deal?.app.propertyName ?? "This let";
   const locality = app?.locality ?? deal?.app.locality ?? "";
   const image = app?.image ?? deal?.app.image ?? null;
   const moveIn = app ? (app.moveIn !== "—" ? app.moveIn : deal?.app.startDate ?? null) : deal?.app.startDate ?? null;
-  const listingId = app?.listingId ?? deal?.app.listingId ?? null;
-  const dealUrl = journey?.ok && journey.deal?.url ? journey.deal.url : deal ? propolyDealUrl(deal.app.id) : null;
   const agent = app?.agent ?? deal?.agentName ?? "—";
   const dealStatus = deal ? cardStatus(deal, deal.effectiveStatusKey) : null;
   const flags = [...(journey?.ok ? journey.flags ?? [] : []), ...(deal?.flags ?? []).map((f) => f.label)].filter((f, i, all) => all.indexOf(f) === i);
-  const tabs = app ? TABS : TABS.filter((t) => t.key === "file");
+  const plcState = journey?.ok ? journey.plc?.state ?? null : deal?.plc?.state ?? null;
+  const plcDone = plcState === "approved";
+  const firstName = (n: string | null | undefined) => (n ?? "").trim().split(/\s+/)[0] || "";
 
   const facts = [
     { icon: "calendar", label: "Move-in", text: moveIn ? niceDate(moveIn) : "Not set yet" },
@@ -508,10 +883,51 @@ export default function ApplicationDrawer({
     { icon: "wallet", label: "Holding fee", text: deal ? stageStatus(deal, "holding_fee").text : "No deal yet" },
   ];
 
+  /* The activity log, for the panel at the top: what the record holds, then
+     what moved on the deal. */
+  const activityLog = (
+    <div className="space-y-5 px-1">
+      <ul className="space-y-3">
+        {[...(app?.activity ?? []).filter((a) => !a.note)].map((a, i) => (
+          <li key={i} className="flex gap-3 text-[12.5px]">
+            <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-line" />
+            <span>
+              {a.what}
+              <span className="block text-[10.5px] text-muted">{a.by} · {/^\d{4}-\d{2}-\d{2}/.test(a.when) ? niceDate(a.when.slice(0, 10)) : a.when}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      {journey?.ok && journey.history && journey.history.length > 0 ? (
+        <div>
+          <p className={eyebrow}>What moved · {journey.history.length}</p>
+          <ol className="mt-2 space-y-1.5">
+            {journey.history.map((e) => (
+              <li key={e.id} className="flex items-start gap-2 text-[12px] leading-snug">
+                <span aria-hidden className={`mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full ${toneDot(eventTone(e.event))}`} />
+                <span className="min-w-0 flex-1">{eventSentence(e)}</span>
+                <span className="shrink-0 text-[10.5px] tabular-nums text-muted">{whenWords(e.at)}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : (
+        <p className="text-[12px] text-muted">{app && journey === null ? "Reading what moved…" : "Nothing has moved on the deal yet."}</p>
+      )}
+    </div>
+  );
+
+  /* The tenant and the landlord, each in a drawer: their details on the
+     left, and everything said with them - emails, texts, portal messages -
+     on the right, with the let's notes. */
+  const tenantShown = person?.role === "tenant" ? people[person.index] ?? people[0] ?? null : null;
+  const tenantFile = tenantShown?.contactId ? leadIds[tenantShown.contactId] : null;
+  const landlordShown = info?.landlord ?? null;
+
   return (
     <SaveScopeProvider scope={saves}>
       <div data-steve="application.drawer" className="space-y-5">
-        {/* ── back, the save chip, and ‹ › ─────────────────────────────── */}
+        {/* ── back, the save chip, activity and notes, and ‹ › ──────────── */}
         <div className="flex flex-wrap items-center gap-2">
           <div className="mr-auto flex min-w-0 items-center gap-3">
             <Link href={backHref} className="inline-flex shrink-0 items-center gap-1.5 text-[12.5px] text-muted hover:text-ink">
@@ -519,8 +935,24 @@ export default function ApplicationDrawer({
             </Link>
             <SaveChip scope={saves} className="bg-white" />
           </div>
+          {/* Activity and notes at the top, as on a listing (James, 12 Oct 2026). */}
+          {([
+            { key: "activity", label: "Activity", icon: "list" },
+            { key: "notes", label: "Notes", icon: "note" },
+          ] as const).map((b) => (
+            <button
+              key={b.key}
+              type="button"
+              onClick={() => setPanel(panel === b.key ? null : b.key)}
+              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-line/80 bg-white px-3.5 text-[12.5px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink"
+            >
+              <DoodleIcon name={b.icon} size={13} className="text-accent-dark" />
+              {b.label}
+              {b.key === "notes" && (commentRows?.length ?? 0) > 0 && <span className="figures rounded-full bg-page px-1.5 text-[10.5px]">{commentRows!.length}</span>}
+            </button>
+          ))}
           {stepLabel && onStep && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 sm:ml-2">
               <span className="mr-1 text-[11.5px] text-muted">{stepLabel}</span>
               <button type="button" aria-label="Previous let" onClick={() => onStep(-1)} className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 bg-white text-[13px] text-muted transition-colors hover:text-ink">‹</button>
               <button type="button" aria-label="Next let" onClick={() => onStep(1)} className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 bg-white text-[13px] text-muted transition-colors hover:text-ink">›</button>
@@ -528,135 +960,105 @@ export default function ApplicationDrawer({
           )}
         </div>
 
-        {/* Portfolio's rows: each box on the left beside its partner on the
-            right. Placed by column only, so a row that is not there (the
-            handover, before the offer is accepted) leaves no gap. */}
+        {cancelled && (
+          <p className="rounded-2xl border border-accent-dark/30 bg-accent-soft/50 px-5 py-3 text-[13px]">
+            <b className="font-semibold">Deal cancelled</b> by {cancelled.by}, {whenWords(cancelled.at)}: {cancelled.reason.toLowerCase()}{cancelled.note ? `. ${cancelled.note}` : ""}. Kirstie has it on her feed to cancel in Propoly.
+          </p>
+        )}
+
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px] 2xl:grid-cols-[minmax(0,1fr)_460px]">
           {/* ── 1. the home and who it is for ─────────────────────────── */}
-          <Hero image={image}>
-            <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
-              <h1 className="hand min-w-0 text-[28px] leading-[1.1] sm:text-[32px]">{name}</h1>
-              <span className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-semibold text-accent-dark">
-                <span className="h-1.5 w-1.5 rounded-full bg-accent-dark" />
-                {stageLabel}
-              </span>
+          <section className={`${box} flex min-w-0 flex-col p-3 lg:col-start-1`}>
+            {/* As tall as the eight tiles beside it - the same on every let,
+                so the picture is never squeezed thin. */}
+            <div className="relative aspect-[2/1] overflow-hidden rounded-xl bg-box lg:aspect-auto lg:min-h-[260px] lg:flex-1">
+              <PropertyPhoto src={image} alt="" width={1400} height={700} className="absolute inset-0 h-full w-full object-cover" />
             </div>
-            <p className="figures mt-1.5 text-[20px] font-semibold">
-              {rent ? <>{rent} <span className="text-[13px] font-normal text-muted">{per}{moveIn ? ` · moves in ${niceDate(moveIn)}` : ""}</span></> : <span className="text-[14px] font-normal text-muted">No offer recorded</span>}
-            </p>
-            <p className="mt-1 text-[13px] text-muted">
-              {[locality, lead ? `${lead.name}${others ? ` + ${others} other${others === 1 ? "" : "s"}` : ""}` : null, `with ${agent}`].filter(Boolean).join(" · ")}
-            </p>
-            {(app?.flag || dealStatus) && (
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                {dealStatus && <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${dealStatus.tone}`}>{dealStatus.text}</span>}
-                {app?.flag && <Pill tone="accent">{app.flag}</Pill>}
+            <div className="px-2 pb-1.5 pt-4">
+              <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+                <h1 className="hand min-w-0 text-[28px] leading-[1.1] sm:text-[32px]">{name}</h1>
+                <span className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-semibold text-accent-dark">
+                  <span className="h-1.5 w-1.5 rounded-full bg-accent-dark" />
+                  {stageLabel}
+                </span>
               </div>
-            )}
-          </Hero>
+              <p className="figures mt-1.5 text-[20px] font-semibold">
+                {rent ? <>{rent} <span className="text-[13px] font-normal text-muted">{per}{moveIn ? ` · moves in ${niceDate(moveIn)}` : ""}</span></> : <span className="text-[14px] font-normal text-muted">No offer recorded</span>}
+              </p>
+              <p className="mt-1 text-[13px] text-muted">
+                {[locality, lead ? `${lead.name}${others ? ` + ${others} other${others === 1 ? "" : "s"}` : ""}` : null, `with ${agent}`].filter(Boolean).join(" · ")}
+              </p>
+              {(app?.flag || dealStatus) && (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {dealStatus && <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${dealStatus.tone}`}>{dealStatus.text}</span>}
+                  {app?.flag && <Pill tone="accent">{app.flag}</Pill>}
+                </div>
+              )}
+            </div>
+          </section>
 
-          {/* ── the actions, level with the home ──────────────────────── */}
+          {/* ── the eight, always, in the same places ─────────────────── */}
           <section className={`${box} flex flex-col p-4 lg:col-start-2`}>
             <p className={`${eyebrow} mb-3 px-1`}>Actions</p>
             <div className="grid flex-1 auto-rows-fr grid-cols-2 gap-2">
-              {/* The handover starts HERE. Offered once the landlord has the
-                  application: before that there is no tenancy to be
-                  compliant about. */}
-              {plc && app && (
-                <a href={`/plc/start?application=${encodeURIComponent(app.id)}`} className={tile}>
-                  {tileIcon("shield", true)}
-                  {tileText("Start the PLC check", "Checked before the tenancy starts")}
-                </a>
-              )}
-              {!plc && forYou[0]?.href && (
-                <a href={forYou[0].href} className={tile}>
-                  {tileIcon("rocket", true)}
-                  {tileText(forYou[0].label, "Your next step")}
-                </a>
-              )}
-              {app && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    goTab("activity");
-                    setTimeout(() => commentBox.current?.focus({ preventScroll: true }), 400);
-                  }}
-                  className={tile}
-                >
-                  {tileIcon("message")}
-                  {tileText("Add a comment", "Chased, rang, agreed - for everyone")}
-                </button>
-              )}
-              {app && (
-                <button type="button" onClick={() => goTab("documents")} className={tile}>
-                  {tileIcon("upload")}
-                  {tileText("Add a document", "References, right to rent, the rest")}
-                </button>
-              )}
-              {leadFile && (
-                <a href={`/leads?open=${encodeURIComponent(leadFile)}`} className={tile}>
-                  {tileIcon("user")}
-                  {tileText("Open the tenant's file", lead?.name ?? "The lead applicant")}
-                </a>
-              )}
-              {listingId && (
-                <Link href={`/listings/${encodeURIComponent(listingId)}`} className={tile}>
-                  {tileIcon("home")}
-                  {tileText("Open the listing", "The home, its offers and viewings")}
-                </Link>
-              )}
-              {dealUrl && (
-                /* Propoly opens in its own tab, so the let stays where it was. */
-                <a href={dealUrl} target="_blank" rel="noreferrer" className={tile}>
-                  {tileIcon("rocket")}
-                  {tileText("Kirstie's deal in Propoly", "Opens in a new tab")}
-                </a>
-              )}
-              <Link href="/applications/updates" className={tile}>
-                {tileIcon("mail")}
-                {tileText("Customer updates", "Who should hear what, on every let")}
-              </Link>
-              {plc && (
-                <a href="/plc/practice" className={tile}>
-                  {tileIcon("checklist")}
-                  {tileText("Practise a PLC check", "Invented paperwork, nothing saved")}
-                </a>
-              )}
+              {/* The PLC check: from the record once the landlord has the
+                  offer, done once it is approved. */}
+              <Tile
+                icon="shield"
+                dark
+                label={plcState && !plcDone ? "Carry on the PLC check" : "Start the PLC check"}
+                sub={cancelled ? "The deal is cancelled" : !app ? "Needs an application in the OS" : plcDone ? "PLC check done" : offerIn ? "Before the tenancy starts" : "Once the offer is accepted"}
+                done={plcDone}
+                off={!plcDone && (Boolean(cancelled) || !app || !offerIn)}
+                href={app ? `/plc/start?application=${encodeURIComponent(app.id)}` : undefined}
+              />
+              <Tile icon="message" label="Add a comment" sub="For the whole team" onClick={() => setPanel("notes")} steve="application.add-comment" />
+              <Tile icon="upload" label="Add a document" sub="Drop it in" onClick={() => setDocsOpen(true)} />
+              <Tile
+                icon="user"
+                label={people.length > 1 ? "The tenants" : "The tenant"}
+                sub={lead ? `${lead.name}${others ? ` + ${others}` : ""}` : "Nobody recorded yet"}
+                off={!people.length}
+                onClick={() => setPerson({ role: "tenant", index: 0 })}
+              />
+              <Tile
+                icon="home"
+                label="The landlord"
+                sub={info === null ? "Reading…" : info.landlord ? info.landlord.name : "Not held on the listing"}
+                onClick={() => setPerson({ role: "landlord", index: 0 })}
+              />
+              <Tile icon="mail" label="Customer update" sub="Email tenant or landlord" onClick={() => setBuilder({ mode: "update" })} />
+              <Tile icon="clock" label="Send a reminder" sub="Sign, pay, references" off={Boolean(cancelled)} onClick={() => setBuilder({ mode: "reminder" })} />
+              <Tile
+                icon="logout"
+                label={cancelled ? "Deal cancelled" : "Cancel the deal"}
+                sub={cancelled ? cancelled.reason : "Give a reason first"}
+                done={Boolean(cancelled)}
+                onClick={() => setCancelOpen(true)}
+              />
             </div>
-            {plc && (
-              <GuideButton id="agent-plc" icon={false} className="mt-3 self-start px-1 text-[12px] text-muted underline transition-colors hover:text-ink">
-                How the PLC check works
-              </GuideButton>
-            )}
           </section>
 
-          {/* Above the facts, deliberately: once the offer is accepted the
-              handover IS the next action. */}
-          {aside && <div className="min-w-0 lg:col-span-2">{aside}</div>}
+          {/* Once the offer is accepted the handover IS the next action. */}
+          {aside && !cancelled && <div className="min-w-0 lg:col-span-2">{aside}</div>}
 
-          {/* ── 2. the facts and the people ────────────────────────────── */}
+          {/* ── 2. the facts and the people, the spine underneath ────────── */}
           <section className={`${box} flex min-w-0 flex-col p-4 sm:p-5 lg:col-start-1`}>
             <p className={eyebrow}>General info</p>
             <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 2xl:grid-cols-4">
               {facts.map((f) => <Info key={f.label} {...f} />)}
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              <span className={chip}>
-                <DoodleIcon name="list" size={12} className="text-accent-dark" />
-                {stops && here ? `Step ${(hereIdx >= 0 ? hereIdx : stops.length - 1) + 1} of ${stops.length} · ${here.label}` : app && journey === null ? "Reading where it is…" : stageLabel}
-              </span>
-              {waitingOn && (
+              {waitingOn && !cancelled && (
                 <span className={chip}>
                   <DoodleIcon name="clock" size={12} className="text-accent-dark" />
                   {waitingOn === "you" ? <b className="font-semibold text-accent-dark">Waiting on you</b> : `Waiting on ${waitingOn}`}
                 </span>
               )}
-              {app && (
-                <button type="button" className={chip} onClick={() => goTab("activity")}>
-                  <DoodleIcon name="message" size={12} className="text-accent-dark" />
-                  {comments === null ? "Reading the comments…" : `${thread.length} ${thread.length === 1 ? "entry" : "entries"}`}
-                </button>
-              )}
+              <button type="button" className={chip} onClick={() => setPanel("notes")}>
+                <DoodleIcon name="note" size={12} className="text-accent-dark" />
+                {comments === null ? "Reading the notes…" : `${comments.length} ${comments.length === 1 ? "note" : "notes"}`}
+              </button>
             </div>
             {flags.length > 0 && (
               <div className="mt-4 rounded-xl bg-[#fdefec] px-4 py-3 text-[12.5px] text-[#9d4340]">
@@ -670,11 +1072,11 @@ export default function ApplicationDrawer({
                 {people.map((p, i) => (
                   <li key={(p.contactId ?? "") + i} className="rounded-xl border border-line/50 bg-white p-3.5">
                     <div className="mb-2 flex items-center justify-between gap-2">
-                      <span className="truncate text-[13px] font-semibold">{p.name}</span>
+                      <button type="button" onClick={() => setPerson({ role: "tenant", index: i })} className="truncate text-left text-[13px] font-semibold underline-offset-2 hover:underline">
+                        {p.name}
+                      </button>
                       {p.isPrimary && <Pill tone="accent">Lead</Pill>}
                     </div>
-                    {/* The same block as every person in the OS (James, 12 Oct 2026):
-                        Call, WhatsApp, Email and copy, changeable where REX knows them. */}
                     <ContactBlock
                       showName={false}
                       role={p.isPrimary ? "lead applicant" : "applicant"}
@@ -687,15 +1089,50 @@ export default function ApplicationDrawer({
             ) : (
               <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">No tenant recorded on this let yet.</p>
             )}
+
+            {/* Where it's up to, across the box underneath (as on a listing). */}
+            <div className="mt-5 border-t border-line/50 pt-4">
+              <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+                <p className="flex flex-wrap items-baseline gap-x-3">
+                  <span className="hand text-[16px]">Where it&apos;s up to</span>
+                  <span className="text-[11.5px] text-muted">The offer, then Kirstie&apos;s stages.</span>
+                </p>
+                {stops && here && <span className="text-[11.5px] text-muted">Step {(hereIdx >= 0 ? hereIdx : stops.length - 1) + 1} of {stops.length}</span>}
+              </div>
+              {stops ? (
+                <Spine stops={stops} />
+              ) : journey && !journey.ok ? (
+                <p className="text-[12px] text-muted">{journey.error ?? "Couldn't read where this is up to."}</p>
+              ) : (
+                <p className="flex items-center gap-2 text-[12px] text-muted">
+                  <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+                  Checking where this is up to&hellip;
+                </p>
+              )}
+            </div>
           </section>
 
           {/* ── the next step, level with the facts ───────────────────── */}
           <section className={`${pop} min-w-0 rounded-2xl border border-accent-dark/15 bg-accent-soft/60 p-5 lg:col-start-2`}>
-            {app ? (
+            {cancelled ? (
+              /* Nothing to do next on a cancelled let but tell people. */
               <>
-                {/* NEXT STEP (9 Oct 2026, James): the one thing to do now, with
-                    its button. Drawn on the pink here, as Next up is on a
-                    listing. */}
+                <p className={`${eyebrow} text-accent-dark`}>Next up</p>
+                <h2 className="hand mt-1.5 text-[19px] leading-tight">Let the tenant and landlord know</h2>
+                <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
+                  The deal is cancelled: {cancelled.reason.toLowerCase()}. Kirstie has it on her feed to cancel in Propoly.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setBuilder({ mode: "update", start: { kind: "cancelled", to: "tenant:0" } })} className="press-ring inline-flex items-center gap-2 rounded-full bg-accent-dark px-4 py-2.5 text-[12.5px] font-semibold text-white">
+                    <DoodleIcon name="mail" size={13} /> Update the tenant
+                  </button>
+                  <button type="button" onClick={() => setBuilder({ mode: "update", start: { kind: "cancelled", to: "landlord" } })} className="press-ring inline-flex items-center gap-2 rounded-full border border-line/70 bg-white px-4 py-2.5 text-[12.5px] font-semibold">
+                    <DoodleIcon name="home" size={13} /> Update the landlord
+                  </button>
+                </div>
+              </>
+            ) : app ? (
+              <>
                 <div className="[&>section]:rounded-none [&>section]:border-0 [&>section]:bg-transparent [&>section]:p-0">
                   <NextStepCard
                     applicationId={app.id}
@@ -708,8 +1145,6 @@ export default function ApplicationDrawer({
                     onChanged={() => setJourneyTick((n) => n + 1)}
                   />
                 </div>
-                {/* Who is doing what, for the rest of it - and Accept / Decline
-                    on an offer, or a test application's own steps. */}
                 {journey?.ok && (journey.actions ?? []).some((a) => a.test || a.decide) && (
                   <ul className="mt-4 space-y-2.5 border-t border-accent-dark/15 pt-4">
                     {(journey.actions ?? []).filter((a) => a.test || a.decide).map((a) => (
@@ -735,9 +1170,6 @@ export default function ApplicationDrawer({
                   </ul>
                 )}
                 {playError && <p className="mt-2.5 text-[12px] text-accent-dark">{playError}</p>}
-                {/* Who should hear what (2 Oct 2026): nothing reaches the
-                    landlord or tenant on its own. Draws nothing when nobody is
-                    waiting. */}
                 <div className="mt-4 empty:hidden">
                   <CustomerUpdates
                     key={`${app.id}:${journey?.ok ? journey.deal?.id ?? "" : ""}:${journeyTick}`}
@@ -756,216 +1188,214 @@ export default function ApplicationDrawer({
                 <p className="mt-3 text-[12px] leading-relaxed text-muted">
                   Let through Propoly, with no application in the OS. Kirstie moves it through the stages; ask her if something looks stuck.
                 </p>
-                {dealUrl && (
-                  <a href={dealUrl} target="_blank" rel="noreferrer" className="press-ring mt-4 inline-flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white">
-                    Open in Propoly <span aria-hidden>↗</span>
-                  </a>
-                )}
+                <a href={propolyDealUrl(deal?.app.id)} target="_blank" rel="noreferrer" className="press-ring mt-4 inline-flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white">
+                  Open in Propoly <span aria-hidden>↗</span>
+                </a>
               </>
             )}
           </section>
+        </div>
+      </div>
 
-          {/* ── 3. the sections ────────────────────────────────────────── */}
-          <section id="sections" className={`${box} min-w-0 scroll-mt-5 p-4 sm:p-5 lg:col-start-1`}>
-            <nav className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 pt-1 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible [&::-webkit-scrollbar]:hidden" aria-label="Sections">
-              {tabs.map((t) => {
-                const on = tab === t.key;
-                const count = t.key === "people" ? people.length : t.key === "activity" ? thread.length : 0;
-                const needs = t.key === "people" ? answered < people.length : false;
-                return (
-                  <button
-                    key={t.key}
-                    type="button"
-                    onClick={() => pickTab(t.key)}
-                    aria-current={on ? "page" : undefined}
-                    className={`relative inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-[12.5px] font-semibold transition-colors ${on ? "border-ink bg-ink text-page" : "border-line/70 bg-white hover:border-ink/40"}`}
-                  >
-                    <DoodleIcon name={t.icon} size={13} />
-                    {t.label}
-                    {count > 0 && <span className={`rounded-full px-1.5 text-[10.5px] ${on ? "bg-page/20" : "bg-accent-soft text-accent-dark"}`}>{count}</span>}
-                    {needs && !on && <span aria-label="Needs attention" className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-accent" />}
-                  </button>
-                );
-              })}
-            </nav>
+      {/* ── over the page ────────────────────────────────────────────────── */}
 
-            <div key={`view-${tab}`} className="fade-up mt-4">
-              <p className="mb-4 max-w-2xl text-[12.5px] leading-relaxed text-muted">{TAB_LEAD[tab]}</p>
+      {/* Activity and notes: a big pull-out from the right (James, 12 Oct
+          2026: "a nice big pull-out drawer where they can put in all the
+          comments"). Messages is the conversation with the lead tenant. */}
+      <Drawer open={Boolean(panel)} label="Activity and notes" onClose={closePanel}>
+        {panel && (
+          <RecordSidePanel
+            name={name}
+            tab={panel}
+            onTab={setPanel}
+            onClose={closePanel}
+            conversationUrl={letId && lead ? `/api/applications/${encodeURIComponent(letId)}/conversation?with=tenant&i=${Math.max(0, people.indexOf(lead))}` : null}
+            noConversation="Nobody is held on this let yet."
+            notes={commentRows}
+            onAddNote={addComment}
+            notePlaceholder="Add a note - chased the tenant, spoke to the landlord…"
+            noteSaid={{ ok: true, text: "Kept on the let, for everyone who opens it." }}
+            activity={activityLog}
+          />
+        )}
+      </Drawer>
 
-              {tab === "activity" && app && (
-                <div>
-                  {thread.length === 0 ? (
-                    <p className="rounded-xl border border-dashed border-line/80 px-4 py-4 text-[12.5px] text-muted">
-                      {comments === null ? "Reading the comments…" : "Nothing recorded yet."}
-                    </p>
-                  ) : (
-                    <ul className="space-y-3.5">
-                      {thread.map((a, i) => (
-                        <li key={i} className="flex gap-3">
-                          <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${a.note ? "bg-accent-dark" : "bg-line"}`} />
-                          <span className="min-w-0 flex-1">
-                            <span className={`block text-[12.5px] leading-snug ${a.note ? "" : "text-muted"}`}>{a.what}</span>
-                            <span className="mt-0.5 block text-[10.5px] text-muted">
-                              {a.by} · {/^\d{4}-\d{2}-\d{2}/.test(a.when) ? niceDate(a.when.slice(0, 10)) : a.when}
-                            </span>
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {/* The composer. A comment is the fastest thing anyone does on
-                      a stalled deal, so it is always in reach. */}
-                  <div className="mt-4 border-t border-line/50 pt-4">
-                    <textarea
-                      ref={commentBox}
-                      data-steve="application.comment"
-                      value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void post();
-                      }}
-                      placeholder="Add a comment - chased the tenant, spoke to the landlord…"
-                      rows={2}
-                      className="w-full resize-y rounded-xl border border-line/70 bg-page px-3 py-2.5 text-[12.5px] text-ink placeholder:text-muted focus:border-accent-dark focus:outline-none"
-                    />
-                    <div className="mt-2.5 flex items-center justify-between gap-3">
-                      <p className="text-[10.5px] text-muted">{postError ? <span className="font-semibold text-accent-dark">{postError}</span> : "⌘↵ to post"}</p>
+      {/* The tenant, or the landlord: details left, everything said right. */}
+      <Drawer open={Boolean(person)} width="lg:max-w-[min(1040px,calc(100%-4rem))]" label={person?.role === "landlord" ? "The landlord" : "The tenant"} onClose={closePerson}>
+        {person && (
+          <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+            <div className="min-h-0 shrink-0 overflow-y-auto border-line/70 lg:w-[400px] lg:border-r">
+              <DrawerHead
+                icon={person.role === "landlord" ? "home" : "user"}
+                title={person.role === "landlord" ? landlordShown?.name ?? "The landlord" : tenantShown?.name ?? "The tenant"}
+                sub={person.role === "landlord" ? `Landlord of ${name}` : `${tenantShown?.isPrimary ? "Lead tenant" : "Tenant"} on ${name}`}
+                onClose={closePerson}
+              >
+                {person.role === "tenant" && people.length > 1 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {people.map((p, i) => (
                       <button
-                        data-steve="application.post"
+                        key={i}
                         type="button"
-                        onClick={() => void post()}
-                        disabled={!draft.trim() || posting}
-                        className="press-ring rounded-full bg-[var(--brown)] px-4 py-2 text-[12px] font-semibold text-white transition-opacity disabled:opacity-40"
+                        onClick={() => setPerson({ role: "tenant", index: i })}
+                        className={`rounded-full border px-3 py-1 text-[11.5px] font-semibold transition-colors ${i === person.index ? "border-ink bg-ink text-page" : "border-line/70 bg-white hover:border-ink/40"}`}
                       >
-                        {posting ? "Posting…" : "Post comment"}
+                        {firstName(p.name) || `Tenant ${i + 1}`}
                       </button>
-                    </div>
+                    ))}
                   </div>
-                  {/* What moved, on this deal alone. Newest first. */}
-                  {journey?.ok && journey.history && journey.history.length > 0 && (
-                    <div className="mt-5 border-t border-line/50 pt-4">
-                      <p className={eyebrow}>What moved · {journey.history.length}</p>
-                      <ol className="mt-2 space-y-1.5">
-                        {journey.history.slice(0, 12).map((e) => {
-                          const tone = eventTone(e.event);
-                          return (
-                            <li key={e.id} className="flex items-start gap-2 text-[12px] leading-snug">
-                              <span aria-hidden className={`mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full ${toneDot(tone)}`} />
-                              <span className="min-w-0 flex-1">{eventSentence(e)}</span>
-                              <span className="shrink-0 text-[10.5px] tabular-nums text-muted">{whenWords(e.at)}</span>
-                            </li>
-                          );
-                        })}
-                      </ol>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {tab === "people" && app && (
-                <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
-                  {people.map((p, i) => {
-                    const leadId = p.contactId ? leadIds[p.contactId] : null;
-                    const rows: Array<[string, React.ReactNode]> = [
-                      ["Income", p.income != null ? `${gbp(p.income)} a year` : "Not recorded"],
-                      ["Works", [p.employment, p.job].filter(Boolean).join(" · ") || "Not recorded"],
-                      ["Employer", p.company || "Not recorded"],
-                      ["Right to rent", <Answer key="rtr" v={p.rightToRent} yes="Recorded" no="Not recorded" />],
-                      ["Landlord reference", <Answer key="ref" v={p.landlordRef} />],
-                      ["Guarantor", <Answer key="g" v={p.guarantor} yes="Available" no="None" />],
-                      ["Adverse credit", <Answer key="ac" v={p.adverseCredit == null ? null : !p.adverseCredit} yes="None" no="Disclosed" />],
-                    ];
-                    return (
-                      <section key={(p.contactId ?? "") + i} className="min-w-0 rounded-xl border border-line/50 bg-white p-4">
-                        <div className="mb-3 flex items-center justify-between gap-3">
-                          <h3 className="hand truncate text-[15px]">{p.name}</h3>
-                          {p.isPrimary && <Pill tone="accent">Lead applicant</Pill>}
-                        </div>
-                        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-[12px]">
-                          {rows.map(([k, v]) => (
+                )}
+              </DrawerHead>
+              <div className="space-y-4 px-5 py-5 sm:px-6">
+                {person.role === "tenant" && tenantShown ? (
+                  <>
+                    <section className="rounded-xl border border-line/50 bg-white p-4">
+                      <ContactBlock
+                        showName={false}
+                        role={tenantShown.isPrimary ? "lead applicant" : "applicant"}
+                        person={{ name: tenantShown.name, email: tenantShown.email ?? null, phone: tenantShown.phone ?? null }}
+                        personRef={/^\d+$/.test(String(tenantShown.contactId ?? "")) ? `rex:${tenantShown.contactId}` : null}
+                      />
+                    </section>
+                    {app && (
+                      <section className="rounded-xl border border-line/50 bg-white p-4">
+                        <p className={`${eyebrow} mb-3`}>Their application</p>
+                        <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[12px]">
+                          {([
+                            ["Income", tenantShown.income != null ? `${gbp(tenantShown.income)} a year` : "Not recorded"],
+                            ["Works", [tenantShown.employment, tenantShown.job].filter(Boolean).join(" · ") || "Not recorded"],
+                            ["Employer", tenantShown.company || "Not recorded"],
+                            ["Right to rent", <Answer key="rtr" v={tenantShown.rightToRent} yes="Recorded" no="Not recorded" />],
+                            ["Landlord reference", <Answer key="ref" v={tenantShown.landlordRef} />],
+                            ["Guarantor", <Answer key="g" v={tenantShown.guarantor} yes="Available" no="None" />],
+                            ["Adverse credit", <Answer key="ac" v={tenantShown.adverseCredit == null ? null : !tenantShown.adverseCredit} yes="None" no="Disclosed" />],
+                            ["Moving in", moveIn ? niceDate(moveIn) : "Not set"],
+                          ] as Array<[string, React.ReactNode]>).map(([k, v]) => (
                             <div key={k} className="min-w-0">
                               <dt className="text-[10.5px] text-muted">{k}</dt>
                               <dd className={`truncate font-semibold ${v === "Not recorded" ? "font-normal text-muted" : ""}`}>{v}</dd>
                             </div>
                           ))}
                         </dl>
-                        <div className="mt-3 border-t border-line/50 pt-3">
-                          {leadId ? (
-                            <a href={`/leads?open=${encodeURIComponent(leadId)}`} className="text-[12px] font-semibold text-accent-dark hover:underline">
-                              Open their file
-                            </a>
-                          ) : (
-                            <span className="text-[11.5px] text-muted">No file for them in the OS yet.</span>
-                          )}
-                        </div>
+                        {!tenantShown.isPrimary && <p className="mt-3 text-[11px] text-muted">Only the lead applicant is asked the four questions - the form stops after them.</p>}
                       </section>
-                    );
-                  })}
-                  {people.length > 1 && answered < people.length && (
-                    <p className="text-[12px] leading-relaxed text-muted 2xl:col-span-2">
-                      Right to rent is a statutory check on every adult who will live in the property. Record it for the others before the tenancy starts.
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {tab === "documents" && app && (
-                /* The home's documents, shared with Kirstie's deal and the
-                   listing for the same address (James, 5 Oct 2026). */
-                <FileDocuments
-                  address={[app.property, app.locality].filter(Boolean).join(", ")}
-                  propertyId={app.propertyId ?? null}
-                  from={{ kind: "application", id: app.id }}
-                />
-              )}
-
-              {tab === "file" && (
-                <div className="[&>section]:rounded-none [&>section]:border-0 [&>section]:p-0">
-                  <PropertyFile
-                    propertyId={app?.propertyId ?? null}
-                    address={app?.propertyId ? null : [name, locality].filter(Boolean).join(", ")}
-                    screen="the application"
-                  />
-                </div>
-              )}
-            </div>
-          </section>
-
-          {/* ── where it's up to, level with the sections ─────────────── */}
-          <section className={`${box} min-w-0 p-5 lg:col-start-2 lg:self-start`}>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="hand text-[17px]">Where it&apos;s up to</h3>
-                <p className="mt-0.5 text-[11.5px] text-muted">
-                  {stops && here ? `Step ${(hereIdx >= 0 ? hereIdx : stops.length - 1) + 1} of ${stops.length}` : "The offer, then Kirstie's eight stages."}
-                </p>
+                    )}
+                    {tenantFile ? (
+                      <Link href={`/leads?open=${encodeURIComponent(tenantFile)}`} className="inline-flex text-[12.5px] font-semibold text-accent-dark hover:underline">
+                        Open their full file →
+                      </Link>
+                    ) : (
+                      <p className="text-[11.5px] text-muted">No file for them in the OS yet.</p>
+                    )}
+                  </>
+                ) : person.role === "landlord" ? (
+                  info === null ? (
+                    <p className="text-[12.5px] text-muted">Looking them up…</p>
+                  ) : landlordShown ? (
+                    <>
+                      <section className="rounded-xl border border-line/50 bg-white p-4">
+                        <ContactBlock
+                          showName={false}
+                          role="landlord"
+                          person={{ name: landlordShown.name, email: landlordShown.email, phone: landlordShown.phone }}
+                          personRef={landlordShown.contactId && landlordShown.from !== "record" ? `rex:${landlordShown.contactId}` : null}
+                        />
+                        {landlordShown.from === "record" && (
+                          <p className="mt-2.5 text-[11.5px] leading-relaxed text-muted">From the managed property record. They are not on the listing yet.</p>
+                        )}
+                      </section>
+                      {info.listingId && (
+                        <Link href={`/listings/${encodeURIComponent(info.listingId)}`} className="inline-flex text-[12.5px] font-semibold text-accent-dark hover:underline">
+                          Open the listing →
+                        </Link>
+                      )}
+                    </>
+                  ) : (
+                    <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">{info.landlordProblem ?? "No landlord is held on the listing for this let."}</p>
+                  )
+                ) : null}
               </div>
-              {dealUrl && (
-                <a href={dealUrl} target="_blank" rel="noreferrer" className="shrink-0 text-[11.5px] font-semibold text-accent-dark hover:underline">
-                  In Propoly ↗
-                </a>
-              )}
             </div>
-            {stops ? (
-              <UpTo stops={stops} />
-            ) : journey && !journey.ok ? (
-              <p className="mt-3 text-[12px] text-muted">{journey.error ?? "Couldn't read where this is up to."}</p>
-            ) : (
-              <p className="mt-3 flex items-center gap-2 text-[12px] text-muted">
-                <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
-                Checking where this is up to&hellip;
-              </p>
-            )}
-            {!app && deal && (
-              <p className="mt-3 text-[11.5px] leading-snug text-muted">
-                <DoodleIcon name={STAGE_DOODLE[deal.effectiveStatusKey] ?? "rocket"} size={11} className="mr-1 align-[-1px] text-accent-dark" />
-                Kirstie moves each let through these stages.
-              </p>
-            )}
-          </section>
+            <div className="min-h-[420px] min-w-0 flex-1">
+              <RecordSidePanel
+                name={person.role === "landlord" ? firstName(landlordShown?.name) || "the landlord" : firstName(tenantShown?.name) || "the tenant"}
+                tab={personTab === "activity" ? "messages" : personTab}
+                onTab={setPersonTab}
+                onClose={closePerson}
+                conversationUrl={
+                  !letId
+                    ? null
+                    : person.role === "landlord"
+                      ? landlordShown ? `/api/applications/${encodeURIComponent(letId)}/conversation?with=landlord` : null
+                      : `/api/applications/${encodeURIComponent(letId)}/conversation?with=tenant&i=${person.index}`
+                }
+                noConversation={person.role === "landlord" ? "No landlord is held on the listing, so there's no conversation to show." : "Nobody is held for them on this let."}
+                notes={commentRows}
+                onAddNote={addComment}
+                notePlaceholder="Add a note to the let…"
+              />
+            </div>
+          </div>
+        )}
+      </Drawer>
+
+      {/* Add a document: up from the bottom, a big drop space. */}
+      <BottomSheet open={docsOpen} title="Documents" onClose={closeDocs}>
+        <FileDocuments
+          dropZone
+          address={[name, locality].filter(Boolean).join(", ")}
+          propertyId={app?.propertyId ?? null}
+          from={{ kind: "application", id: letId }}
+        />
+        <div className="mt-6 border-t border-line/60 pt-5 [&>section]:rounded-none [&>section]:border-0 [&>section]:p-0">
+          <p className={`${eyebrow} mb-3`}>The property file</p>
+          <PropertyFile
+            propertyId={app?.propertyId ?? null}
+            address={app?.propertyId ? null : [name, locality].filter(Boolean).join(", ")}
+            screen="the application"
+          />
         </div>
-      </div>
+      </BottomSheet>
+
+      {/* Customer update and Send a reminder: the email builder. */}
+      <Drawer open={Boolean(builder)} label={builder?.mode === "reminder" ? "Send a reminder" : "Customer update"} onClose={closeBuilder}>
+        {builder && <EmailBuilder key={`${builder.mode}-${builder.start?.kind ?? ""}-${builder.start?.to ?? ""}`} letId={letId} mode={builder.mode} people={info} start={builder.start} onClose={closeBuilder} />}
+      </Drawer>
+
+      {cancelOpen && (
+        <CancelDeal
+          letId={letId}
+          property={name}
+          cancelled={cancelled}
+          onCancelled={(c) => {
+            setCancelled(c);
+            /* The board's held read is out of date the moment this lands. */
+            dropJson("/api/applications?limit=200");
+          }}
+          onTell={(role) => {
+            setCancelOpen(false);
+            setBuilder({ mode: "update", start: { kind: "cancelled", to: role === "landlord" ? "landlord" : "tenant:0" } });
+          }}
+          onClose={() => setCancelOpen(false)}
+        />
+      )}
     </SaveScopeProvider>
+  );
+}
+
+/** One fact in General info: an icon in a circle, a label over its value. */
+function Info({ icon, label, text }: { icon: string; label: string; text: string }) {
+  const quiet = /^(Not |No |—|-$|Reading)/.test(text);
+  return (
+    <div className="flex min-w-0 items-start gap-2.5">
+      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
+        <DoodleIcon name={icon} size={13} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[10.5px] font-semibold uppercase tracking-wide text-muted">{label}</span>
+        <span className={`block truncate text-[13px] ${quiet ? "text-muted" : ""}`}>{text}</span>
+      </span>
+    </div>
   );
 }
 

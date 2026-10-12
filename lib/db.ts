@@ -420,6 +420,21 @@ CREATE TABLE IF NOT EXISTS os_user_prefs (
   PRIMARY KEY (user_id, key)
 );
 
+-- Seen and typing in Huddles (12 Oct 2026). seen_at is when the customer
+-- had an agent's message in front of them: the landlord's Messages page, the
+-- tenant's messages (their read_at is set on sending, so cannot say). Typing
+-- is a ping every few seconds while someone writes in a team chat; a row
+-- older than a few seconds means they have stopped.
+ALTER TABLE os_landlord_messages ADD COLUMN IF NOT EXISTS seen_at TIMESTAMPTZ;
+ALTER TABLE os_tenant_messages ADD COLUMN IF NOT EXISTS seen_at TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS os_chat_typing (
+  chat_key       TEXT NOT NULL,
+  user_id        TEXT NOT NULL,
+  name           TEXT NOT NULL DEFAULT '',
+  at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (chat_key, user_id)
+);
+
 -- Archive and delete in Huddles and the phone's Chats, per person (12 Oct
 -- 2026, lib/chats setChatState). chat_key: room:<id>, landlord:<appraisal>,
 -- tenant:<portal account>. Nothing here removes a message for anybody.
@@ -3604,6 +3619,20 @@ CREATE TABLE IF NOT EXISTS os_customer_updates (
 CREATE INDEX IF NOT EXISTS os_customer_updates_open ON os_customer_updates (state, created_at);
 CREATE INDEX IF NOT EXISTS os_customer_updates_app ON os_customer_updates (application_id);
 CREATE INDEX IF NOT EXISTS os_customer_updates_deal ON os_customer_updates (deal_id);
+-- A let the agent cancelled from its page (12 Oct 2026): why, and who. Keyed
+-- on the page's id - the application's, or the Propoly deal's for a let with
+-- no application. Closes the let on Applications; nothing is written to REX
+-- or Propoly, Kirstie is told on her feed to cancel it there.
+CREATE TABLE IF NOT EXISTS os_let_cancellations (
+  ref            TEXT PRIMARY KEY,
+  deal_id        TEXT,
+  property       TEXT NOT NULL DEFAULT '',
+  reason         TEXT NOT NULL,
+  note           TEXT NOT NULL DEFAULT '',
+  by_name        TEXT NOT NULL DEFAULT '',
+  by_email       TEXT,
+  cancelled_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 -- Money seen in PayProp for the deal, stamped the first time the watcher saw
 -- it. money_checked_at NULL means the money pass has never looked at this
 -- row, so the first look records silently rather than announcing old money.

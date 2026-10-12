@@ -44,6 +44,7 @@ export default function FileDocuments({
   from,
   sides = SIDES,
   showMissing = true,
+  dropZone = false,
 }: {
   address: string;
   propertyId?: string | number | null;
@@ -52,12 +53,26 @@ export default function FileDocuments({
   sides?: DocSide[];
   /** The dashed "not on file yet" boxes. */
   showMissing?: boolean;
+  /** A big drop space at the top: drop files or click to pick them, then say
+   *  what each is (the let's page, James 12 Oct 2026). */
+  dropZone?: boolean;
 }) {
   const [docs, setDocs] = useState<Doc[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [uploading, setUploading] = useState<string | null | false>(false);
   const [said, setSaid] = useState<{ ok: boolean; text: string } | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+  /* Files dropped on the drop space, waiting to be named one at a time. */
+  const [queue, setQueue] = useState<File[]>([]);
+  const [over, setOver] = useState(false);
+  const picker = useRef<HTMLInputElement | null>(null);
+  const take = (files: FileList | null) => {
+    const list = files ? [...files] : [];
+    if (!list.length) return;
+    setSaid(null);
+    setQueue((q) => [...q, ...list]);
+    setUploading(null);
+  };
 
   const prop = propertyId != null && String(propertyId).trim() ? String(propertyId) : "";
   const query = `address=${encodeURIComponent(address)}&property=${encodeURIComponent(prop)}`;
@@ -143,12 +158,43 @@ export default function FileDocuments({
         ) : null}
       </div>
 
+      {dropZone && uploading === false ? (
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => picker.current?.click()}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); picker.current?.click(); } }}
+          onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+          onDragLeave={() => setOver(false)}
+          onDrop={(e) => { e.preventDefault(); setOver(false); take(e.dataTransfer.files); }}
+          className={`mb-4 flex min-h-[180px] cursor-pointer flex-col items-center justify-center gap-2 rounded-[22px] border-2 border-dashed px-6 py-8 text-center transition-colors ${
+            over ? "border-accent-dark bg-accent-soft/60" : "border-line bg-white hover:border-ink/40 hover:bg-page"
+          }`}
+        >
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft text-accent-dark"><DoodleIcon name="upload" size={20} /></span>
+          <span className="text-[14px] font-semibold">{over ? "Let go to add them" : "Drop documents here"}</span>
+          <span className="text-[12px] text-muted">or click to choose them. You say what each one is next.</span>
+          <input ref={picker} type="file" multiple accept={DOC_ACCEPT} className="hidden" onChange={(e) => { take(e.target.files); e.target.value = ""; }} />
+        </div>
+      ) : null}
+
       {uploading !== false ? (
         <UploadForm
+          key={queue[0] ? `${queue[0].name}-${queue.length}` : "pick"}
           sides={sides}
           initialType={uploading}
-          onUpload={upload}
-          onCancel={() => setUploading(false)}
+          initialFile={queue[0] ?? null}
+          waiting={Math.max(0, queue.length - 1)}
+          onUpload={async (file, type, name) => {
+            const err = await upload(file, type, name);
+            /* Landed: the next dropped file, if there is one. */
+            if (!err && queue.length > 1) {
+              setQueue((q) => q.slice(1));
+              setUploading(null);
+            } else if (!err) setQueue([]);
+            return err;
+          }}
+          onCancel={() => { setUploading(false); setQueue([]); }}
         />
       ) : null}
 
@@ -244,17 +290,23 @@ export default function FileDocuments({
 export function UploadForm({
   sides = SIDES,
   initialType = null,
+  initialFile = null,
+  waiting = 0,
   onUpload,
   onCancel,
 }: {
   sides?: DocSide[];
   initialType?: string | null;
+  /** A file already dropped or picked: only what it is is left to say. */
+  initialFile?: File | null;
+  /** More dropped files after this one. */
+  waiting?: number;
   onUpload: (file: File, type: string, name: string) => Promise<string | null>;
   onCancel: () => void;
 }) {
   const [type, setType] = useState<string | null>(initialType);
   const [name, setName] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [file, setFile] = useState<File | null>(initialFile);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const input = useRef<HTMLInputElement | null>(null);
@@ -288,7 +340,9 @@ export function UploadForm({
 
   return (
     <div className="mb-4 rounded-[18px] border border-line/70 bg-white p-4">
-      <p className="text-[12.5px] font-semibold">What is it?</p>
+      <p className="text-[12.5px] font-semibold">
+        What is it?{initialFile ? <span className="font-normal text-muted"> {initialFile.name}{waiting ? ` · ${waiting} more after this` : ""}</span> : null}
+      </p>
       <div className="mt-2 space-y-2.5">
         {sides.map((s) => {
           const list = DOC_TYPES.filter((t) => t.side === s);

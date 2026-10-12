@@ -1,6 +1,7 @@
 import MessagesView from "@/components/landlord/MessagesView";
 import { currentLandlord } from "@/lib/landlord-account";
 import { loadLandlordHome } from "@/lib/landlord-home-view";
+import { markLandlordSeen } from "@/lib/appraisal-messages";
 
 export const metadata = { title: "Messages · The Letting Experts" };
 
@@ -10,6 +11,8 @@ export default async function LandlordMessagesPage({ searchParams }: { searchPar
   /* Which property, from the address bar. See PlacePicker. */
   const { p } = await searchParams;
   const { view, first } = await loadLandlordHome(me, p);
+  /* Their agent's messages are in front of them now: the agent sees two blue ticks. */
+  await markLandlordSeen(me.id);
   if (!view) {
     return (
       <div className="pt-4">

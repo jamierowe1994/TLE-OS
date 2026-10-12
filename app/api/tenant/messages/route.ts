@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
 import { currentTenant } from "@/lib/tenant-account";
 import { loadTenantHome } from "@/lib/tenant-home-view";
-import { addTenantMessage, markTenantEmailed, OFFICE_INBOX, tenantMessages } from "@/lib/chats";
+import { addTenantMessage, markTenantEmailed, markTenantSeen, OFFICE_INBOX, tenantMessages } from "@/lib/chats";
 import { agentEmailFor, latestEnquiry } from "@/lib/tenant-find";
 import { emailAgentAboutTenant } from "@/lib/chats-email";
 import { publicOrigin } from "@/lib/origin";
@@ -31,7 +31,10 @@ const OFFICE = OFFICE_INBOX;
 export async function GET() {
   const me = await currentTenant();
   if (!me) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
-  return NextResponse.json({ ok: true, messages: await tenantMessages(me.id) });
+  const messages = await tenantMessages(me.id);
+  /* In front of them now: the agent's messages show as seen in Huddles. */
+  await markTenantSeen(me.id);
+  return NextResponse.json({ ok: true, messages });
 }
 
 export async function POST(req: NextRequest) {
