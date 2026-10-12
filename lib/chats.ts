@@ -186,6 +186,8 @@ export interface WorkMessage {
   from: "customer" | "agent";
   body: string;
   at: string;
+  /** An agent's message the customer has had in front of them. */
+  seen?: boolean;
 }
 
 /** A landlord thread, if it is this agent's to see. */
@@ -205,16 +207,21 @@ export async function landlordThread(me: OsUser, appraisalId: string, markRead: 
     about: ma.address,
     phone: ma.landlordMobile ?? null,
     email: ma.landlordEmail ?? null,
-    messages: messages.map((m): WorkMessage => ({ id: m.id, from: m.from === "agent" ? "agent" : "customer", body: m.body, at: m.sentAt })),
+    messages: messages.map((m): WorkMessage => ({ id: m.id, from: m.from === "agent" ? "agent" : "customer", body: m.body, at: m.sentAt, seen: Boolean(m.seenAt) })),
   };
 }
 
-type TenantRow = { id: string; direction: string; body: string; sent_at: Date };
+type TenantRow = { id: string; direction: string; body: string; sent_at: Date; seen_at?: Date | null };
 
 export async function tenantMessages(accountId: string): Promise<WorkMessage[]> {
   if (!hasDb()) return [];
-  const rows = await q<TenantRow>(`SELECT id, direction, body, sent_at FROM os_tenant_messages WHERE account_id = $1 ORDER BY sent_at ASC LIMIT 300`, [accountId]).catch(() => []);
-  return rows.map((r) => ({ id: r.id, from: r.direction === "agent" ? "agent" : "customer", body: r.body, at: iso(r.sent_at)! }));
+  const rows = await q<TenantRow>(`SELECT id, direction, body, sent_at, seen_at FROM os_tenant_messages WHERE account_id = $1 ORDER BY sent_at ASC LIMIT 300`, [accountId]).catch(() => []);
+  return rows.map((r) => ({ id: r.id, from: r.direction === "agent" ? "agent" : "customer", body: r.body, at: iso(r.sent_at)!, seen: Boolean(r.seen_at) }));
+}
+
+/** The tenant has their messages in front of them: the agent's so far are seen. */
+export async function markTenantSeen(accountId: string): Promise<void> {
+  await q(`UPDATE os_tenant_messages SET seen_at = NOW() WHERE account_id = $1 AND direction = 'agent' AND seen_at IS NULL`, [accountId]).catch(() => null);
 }
 
 /** A tenant thread, if it is this agent's to see. */
@@ -362,7 +369,7 @@ export async function canSee(me: OsUser, roomId: string): Promise<{ kind: "gener
   return { kind: r.kind === "general" ? "general" : "huddle", name: r.name };
 }
 
-export async function roomMessages(me: OsUser, roomId: string, replyTo: string | null): Promise<TeamMessage[]> {
+export async function roomMessages(me: OsUser, roomId: string, replyTo: string | null, peek = false): Promise<TeamMessage[]> {
   const rows = await q<{ id: string; author_id: string; author_name: string; photo: string | null; body: string; question: boolean; created_at: Date; replies: number }>(
     `SELECT m.id, m.author_id, m.author_name, ${FACE_SQL("u")} AS photo, m.body, m.question, m.created_at,
             (SELECT count(*)::int FROM os_team_messages r WHERE r.reply_to = m.id) AS replies
@@ -374,8 +381,10 @@ export async function roomMessages(me: OsUser, roomId: string, replyTo: string |
       LIMIT 200`,
     replyTo ? [roomId, replyTo, me.id] : [roomId, me.id]
   ).catch(() => []);
-  /* How far they have read: a member row, made for General on first open. */
-  await q(
+  /* How far they have read: a member row, made for General on first open.
+     Not while the chat is open in a tab nobody is looking at (peek), or two
+     blue ticks would say a person saw what they never did. */
+  if (!peek) await q(
     `INSERT INTO os_team_members (room_id, user_id, read_at) VALUES ($1, $2, NOW())
      ON CONFLICT (room_id, user_id) DO UPDATE SET read_at = NOW()`,
     [roomId, me.id]
@@ -418,6 +427,48 @@ export async function roomMembers(roomId: string): Promise<FaceRef[]> {
     `SELECT u.id, u.name, ${FACE_SQL("u")} AS photo FROM os_team_members m JOIN os_users u ON u.id = m.user_id WHERE m.room_id = $1 ORDER BY u.name`,
     [roomId]
   ).catch(() => []);
+}
+
+/* ─────────────────────────── SEEN AND TYPING ─────────────────────────── */
+
+/**
+ * In a huddle of two (James, 12 Oct 2026: "when it's just a conversation
+ * between two people, can we have a seen"), how far the other person has
+ * read - their member row's read_at, moved on whenever their screen shows
+ * the chat. Null for General and for groups.
+ */
+export async function pairReadAt(me: OsUser, roomId: string): Promise<string | null> {
+  const rows = await q<{ user_id: string; read_at: Date | null; n: number }>(
+    `SELECT m.user_id, m.read_at, (SELECT count(*)::int FROM os_team_members x WHERE x.room_id = m.room_id) AS n
+       FROM os_team_members m JOIN os_team_rooms r ON r.id = m.room_id
+      WHERE m.room_id = $1 AND r.kind = 'huddle' AND m.user_id <> $2`,
+    [roomId, me.id]
+  ).catch(() => []);
+  if (rows.length !== 1 || rows[0]!.n !== 2) return null;
+  return iso(rows[0]!.read_at) ?? "1970-01-01T00:00:00.000Z";
+}
+
+/** "Someone is typing": a ping every few seconds while they write; stop clears it. */
+const TYPING_FRESH_SECONDS = 7;
+
+export async function setTyping(me: OsUser, key: string, on: boolean): Promise<void> {
+  if (!on) {
+    await q(`DELETE FROM os_chat_typing WHERE chat_key = $1 AND user_id = $2`, [key, me.id]).catch(() => null);
+    return;
+  }
+  await q(
+    `INSERT INTO os_chat_typing (chat_key, user_id, name, at) VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (chat_key, user_id) DO UPDATE SET at = NOW(), name = EXCLUDED.name`,
+    [key, me.id, me.name]
+  ).catch(() => null);
+}
+
+export async function typingIn(me: OsUser, key: string): Promise<string[]> {
+  const rows = await q<{ name: string }>(
+    `SELECT name FROM os_chat_typing WHERE chat_key = $1 AND user_id <> $2 AND at > NOW() - make_interval(secs => $3) ORDER BY at`,
+    [key, me.id, TYPING_FRESH_SECONDS]
+  ).catch(() => []);
+  return rows.map((r) => r.name).filter(Boolean);
 }
 
 /* ─────────────────────────────── PATCH ─────────────────────────────── */

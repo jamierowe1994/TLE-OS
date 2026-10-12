@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
-import { canSee, leaveRoom, postMessage, roomMembers, roomMessages } from "@/lib/chats";
+import { canSee, leaveRoom, pairReadAt, postMessage, roomMembers, roomMessages, setTyping } from "@/lib/chats";
 
 /**
  * One room of the team's chat (3 Oct 2026): General or a huddle.
@@ -20,8 +20,14 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const room = await canSee(actor, id);
   if (!room) return NextResponse.json({ ok: false, error: "That chat is not one you are in." }, { status: 404 });
   const thread = req.nextUrl.searchParams.get("thread");
-  const [messages, members] = await Promise.all([roomMessages(actor, id, thread), room.kind === "huddle" ? roomMembers(id) : Promise.resolve([])]);
-  return NextResponse.json({ ok: true, room: { id, ...room }, me: actor.id, messages, members });
+  /* ?peek=1: the chat is open in a tab nobody is looking at - read it, but do not mark it read. */
+  const peek = req.nextUrl.searchParams.get("peek") === "1";
+  const [messages, members, otherRead] = await Promise.all([
+    roomMessages(actor, id, thread, peek),
+    room.kind === "huddle" ? roomMembers(id) : Promise.resolve([]),
+    room.kind === "huddle" ? pairReadAt(actor, id) : Promise.resolve(null),
+  ]);
+  return NextResponse.json({ ok: true, room: { id, ...room }, me: actor.id, messages, members, otherRead });
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -35,6 +41,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const text = String(b.text ?? "").trim().slice(0, 4000);
   if (!text) return NextResponse.json({ ok: false, error: "Write something first." }, { status: 400 });
   const message = await postMessage(actor, id, text, Boolean(b.question), b.replyTo ? String(b.replyTo) : null);
+  await setTyping(actor, `room:${id}`, false);
   return NextResponse.json({ ok: true, message });
 }
 

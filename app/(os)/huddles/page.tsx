@@ -32,7 +32,7 @@ type Face = { id: string; name: string; photo: string | null };
 type Room = { id: string; kind: "general" | "huddle"; name: string; members: number; last: { body: string; who: string; at: string } | null; unread: number; faces: Face[]; archived: boolean };
 type Thread = { key: string; kind: "landlord" | "tenant"; name: string; about: string; last: { body: string; from: "customer" | "agent"; at: string }; unread: number; archived: boolean };
 type TeamMsg = { id: string; authorId: string; author: string; photo: string | null; body: string; question: boolean; at: string; replies: number };
-type CustomerMsg = { id: string; from: "customer" | "agent"; body: string; at: string };
+type CustomerMsg = { id: string; from: "customer" | "agent"; body: string; at: string; seen?: boolean };
 type Person = { id: string; name: string; photo: string | null; town: string | null; miles: number | null };
 type Tab = "team" | "customers";
 type Pick = { kind: "room"; id: string; thread: string | null } | { kind: "landlord" | "tenant"; id: string };
@@ -323,9 +323,9 @@ export default function Huddles() {
     <>
       <PageHeader title="Huddles" blurb="Your team, your landlords and your tenants in one place. The same chats as Chats on the TLE OS app." />
 
-      <div ref={frame} style={{ height: frameH ?? 560 }} className="hud fade-up mt-5 flex overflow-hidden rounded-[var(--radius-card)] border border-line/70 bg-[var(--hud-list)]">
+      <div ref={frame} style={{ height: frameH ?? 560 }} className="hud fade-up mt-5 flex overflow-hidden rounded-[var(--radius-card)] border border-[var(--hud-line)] bg-[var(--hud-list)]">
         {/* The list. */}
-        <aside className={`${showChat ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-line/70 bg-[var(--hud-list)] md:w-[320px] md:border-r`}>
+        <aside className={`${showChat ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-[var(--hud-line)] bg-[var(--hud-list)] md:w-[320px] md:border-r`}>
           <div className="px-3 pt-3">
             <div role="tablist" className="flex gap-1 rounded-full bg-[var(--hud-tabs)] p-1">
               {(
@@ -354,7 +354,7 @@ export default function Huddles() {
 
           {showArchived ? (
             <div className="flex items-center gap-2 px-3 pb-1 pt-3">
-              <button type="button" onClick={() => setShowArchived(false)} aria-label="Back to your chats" className="flex h-7 w-7 items-center justify-center rounded-full border border-line/80 text-muted hover:text-ink">
+              <button type="button" onClick={() => setShowArchived(false)} aria-label="Back to your chats" className="flex h-7 w-7 items-center justify-center rounded-full border border-[var(--hud-line-strong)] text-muted hover:text-ink">
                 <LineIcon name="arrow-left" size={13} />
               </button>
               <p className="text-[12.5px] font-medium text-ink">Archived</p>
@@ -455,7 +455,7 @@ export default function Huddles() {
 
           {/* Archived, at the foot, and how to put a chat there. */}
           {data && !showArchived && (
-            <div className="shrink-0 border-t border-line/60 px-3 py-2">
+            <div className="shrink-0 border-t border-[var(--hud-line)] px-3 py-2">
               <button
                 type="button"
                 onClick={() => {
@@ -626,12 +626,12 @@ function Row({ active, onClick, face, name, tag, about, line, at, unread }: { ac
 
 function PaneHead({ back, backAlways, face, title, line, right }: { back: () => void; backAlways?: boolean; face?: React.ReactNode; title: string; line?: string; right?: React.ReactNode }) {
   return (
-    <header className="relative flex shrink-0 items-center gap-3 border-b border-line/70 bg-[var(--hud-bar)] px-4 py-3">
+    <header className="relative flex shrink-0 items-center gap-3 border-b border-[var(--hud-line)] bg-[var(--hud-bar)] px-4 py-3">
       <button
         type="button"
         onClick={back}
         aria-label="Back"
-        className={`${backAlways ? "flex" : "flex md:hidden"} h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line/80 text-muted transition-colors hover:text-ink`}
+        className={`${backAlways ? "flex" : "flex md:hidden"} h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--hud-line-strong)] text-muted transition-colors hover:text-ink`}
       >
         <LineIcon name="arrow-left" size={15} />
       </button>
@@ -667,15 +667,22 @@ function RoomPane({
   const [data, setData] = useState<{ room: { id: string; kind: "general" | "huddle"; name: string }; me: string; messages: TeamMsg[]; members: Face[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [people, setPeople] = useState(false);
+  /* In a huddle of two: how far the other person has read (the ticks). */
+  const [otherRead, setOtherRead] = useState<string | null>(null);
+  /* Who else is writing right now (the bubble that rises from the bottom). */
+  const [typing, setTyping] = useState<string[]>([]);
 
   const url = `/api/m/rooms/${encodeURIComponent(id)}${thread ? `?thread=${encodeURIComponent(thread)}` : ""}`;
   const load = useCallback(
     () =>
-      fetch(url, { cache: "no-store" })
+      /* Read but not marked read while the tab is in the background, or the
+         other person would see two blue ticks for something not seen. */
+      fetch(`${url}${document.hidden ? `${url.includes("?") ? "&" : "?"}peek=1` : ""}`, { cache: "no-store" })
         .then((r) => r.json())
-        .then((j: { ok?: boolean; error?: string; room?: { id: string; kind: "general" | "huddle"; name: string }; me?: string; messages?: TeamMsg[]; members?: Face[] }) => {
+        .then((j: { ok?: boolean; error?: string; room?: { id: string; kind: "general" | "huddle"; name: string }; me?: string; messages?: TeamMsg[]; members?: Face[]; otherRead?: string | null }) => {
           if (!j.ok || !j.room) throw new Error(j.error ?? "The chat did not load.");
           setData({ room: j.room, me: j.me ?? "", messages: j.messages ?? [], members: j.members ?? [] });
+          setOtherRead(j.otherRead ?? null);
           setError(null);
         })
         .catch((e: Error) => setError(e.message)),
@@ -685,9 +692,49 @@ function RoomPane({
   useEffect(() => {
     void load().then(onRead);
     const t = window.setInterval(() => void load(), 10_000);
-    return () => window.clearInterval(t);
+    /* Back to the tab: read now, so ticks and unread catch up at once. */
+    const back = () => !document.hidden && void load();
+    document.addEventListener("visibilitychange", back);
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", back);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load]);
+
+  /* Typing and seen, every couple of seconds while the chat is on screen. */
+  useEffect(() => {
+    if (thread) return;
+    let gone = false;
+    const tick = () => {
+      if (document.hidden) return;
+      fetch(`/api/m/rooms/${encodeURIComponent(id)}/typing`, { cache: "no-store" })
+        .then((r) => r.json())
+        .then((j: { ok?: boolean; typing?: string[]; otherRead?: string | null }) => {
+          if (gone || !j.ok) return;
+          setTyping(j.typing ?? []);
+          if (j.otherRead !== undefined) setOtherRead(j.otherRead ?? null);
+        })
+        .catch(() => {});
+    };
+    tick();
+    const t = window.setInterval(tick, 2500);
+    return () => {
+      gone = true;
+      window.clearInterval(t);
+    };
+  }, [id, thread]);
+
+  /* Saying that I am typing: at most every three seconds, and stopped when the box empties. */
+  const lastPing = useRef(0);
+  const onTyping = (hasText: boolean) => {
+    if (thread) return;
+    const now = Date.now();
+    if (hasText && now - lastPing.current < 3000) return;
+    if (!hasText && lastPing.current === 0) return;
+    lastPing.current = hasText ? now : 0;
+    void fetch(`/api/m/rooms/${encodeURIComponent(id)}/typing`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ on: hasText }) }).catch(() => {});
+  };
 
   const general = data?.room.kind === "general";
   const question = thread ? data?.messages.find((m) => m.id === thread) ?? null : null;
@@ -730,7 +777,7 @@ function RoomPane({
               type="button"
               onClick={() => setPeople((p) => !p)}
               aria-expanded={people}
-              className="flex h-8 items-center gap-1.5 rounded-full border border-line/80 px-3 text-[12px] font-medium text-ink transition-colors hover:bg-panel"
+              className="flex h-8 items-center gap-1.5 rounded-full border border-[var(--hud-line-strong)] px-3 text-[12px] font-medium text-ink transition-colors hover:bg-panel"
             >
               <LineIcon name="user" size={14} />
               People
@@ -740,7 +787,7 @@ function RoomPane({
       />
       {people && data && (
         <div className="relative">
-          <div className="absolute right-4 top-1.5 z-20 w-[260px] rounded-xl border border-line/70 bg-card p-2 shadow-[0_16px_36px_-16px_rgba(0,0,0,0.35)]">
+          <div className="absolute right-4 top-1.5 z-20 w-[260px] rounded-xl border border-[var(--hud-line)] bg-card p-2 shadow-[0_16px_36px_-16px_rgba(0,0,0,0.35)]">
             <p className="px-2 pb-1 pt-1 text-[11.5px] font-medium text-muted">In this huddle</p>
             <ul className="max-h-[240px] overflow-y-auto">
               {data.members.map((m) => (
@@ -751,7 +798,7 @@ function RoomPane({
                 </li>
               ))}
             </ul>
-            <div className="mt-1 border-t border-line/60 pt-1.5">
+            <div className="mt-1 border-t border-[var(--hud-line)] pt-1.5">
               <button
                 type="button"
                 onClick={() => {
@@ -786,7 +833,10 @@ function RoomPane({
               body: m.body,
               at: m.at,
               question: m.question && !thread ? { replies: m.replies, open: () => onOpenThread(m.id) } : undefined,
+              /* Ticks only between two people. */
+              tick: otherRead && m.authorId === data.me ? (m.at <= otherRead ? "seen" : "sent") : undefined,
             }))}
+            typing={typing.length ? { names: typing, pair: Boolean(otherRead), face: otherRead ? data.members.find((x) => x.id !== data.me) ?? null : null } : null}
             empty={thread ? "No answers yet. Be the first." : general ? "Nobody has said anything yet. Start it off." : "Say hello to your huddle."}
           />
         )}
@@ -798,7 +848,11 @@ function RoomPane({
           placeholder={thread ? "Write an answer..." : general ? "Say something to everyone..." : `Message ${data.room.name}...`}
           canAsk={general && !thread}
           gifs
-          onSend={send}
+          onSend={(text, q) => {
+            lastPing.current = 0;
+            return send(text, q);
+          }}
+          onTyping={onTyping}
         />
       )}
     </>
@@ -857,14 +911,14 @@ function CustomerPane({ kind, id, onBack, onRead }: { kind: "landlord" | "tenant
           t && (
             <span className="flex shrink-0 gap-1.5">
               {t.phone && (
-                <a href={`tel:${t.phone.replace(/[^\d+]/g, "")}`} title={`Call ${t.phone}`} className="flex h-8 w-8 items-center justify-center rounded-full border border-line/80 text-muted transition-colors hover:text-ink">
+                <a href={`tel:${t.phone.replace(/[^\d+]/g, "")}`} title={`Call ${t.phone}`} className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--hud-line-strong)] text-muted transition-colors hover:text-ink">
                   <svg viewBox="0 0 24 24" aria-hidden className="h-[15px] w-[15px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2" />
                   </svg>
                 </a>
               )}
               {t.email && (
-                <a href={`mailto:${t.email}`} title={t.email} className="flex h-8 w-8 items-center justify-center rounded-full border border-line/80 text-muted transition-colors hover:text-ink">
+                <a href={`mailto:${t.email}`} title={t.email} className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--hud-line-strong)] text-muted transition-colors hover:text-ink">
                   <LineIcon name="mail" size={15} />
                 </a>
               )}
@@ -879,7 +933,7 @@ function CustomerPane({ kind, id, onBack, onRead }: { kind: "landlord" | "tenant
           <Spinner label="Opening the conversation" />
         ) : (
           <Bubbles
-            items={t.messages.map((m) => ({ id: m.id, mine: m.from === "agent", who: name, whoId: `${kind}:${id}`, tone, body: m.body, at: m.at }))}
+            items={t.messages.map((m) => ({ id: m.id, mine: m.from === "agent", who: name, whoId: `${kind}:${id}`, tone, body: m.body, at: m.at, tick: m.from === "agent" ? (m.seen ? "seen" : "sent") : undefined }))}
             empty={`Nothing yet. Say hello to ${first(name)}.`}
           />
         )}
@@ -909,14 +963,50 @@ type Item = {
   body: string;
   at: string;
   question?: { replies: number; open: () => void };
+  /** My message in a chat of two: sent, or seen by them (WhatsApp's ticks). */
+  tick?: "sent" | "seen";
 };
+
+/** One grey tick sent, two blue ticks seen - WhatsApp's own shapes and blue. */
+function Ticks({ seen }: { seen: boolean }) {
+  return (
+    <svg viewBox="0 0 16 11" aria-label={seen ? "Seen" : "Sent"} role="img" className="ml-1 inline-block h-[11px] w-[16px] align-[-1px]" style={{ color: seen ? "#53bdeb" : "#8b8c92" }}>
+      {seen ? (
+        <path fill="currentColor" d="M11.07.65 10.4.1a.37.37 0 0 0-.52.06L4.94 6.39 2.3 3.93a.37.37 0 0 0-.52.02l-.5.53a.37.37 0 0 0 .02.52l3.32 3.08c.15.14.39.13.53-.03L11.13 1.17a.37.37 0 0 0-.06-.52Zm3.9 0-.67-.55a.37.37 0 0 0-.52.06l-5.9 7.33-.83-.77-.88 1.08 1.4 1.3c.16.15.4.13.54-.03l6.92-7.9a.37.37 0 0 0-.06-.52Z" />
+      ) : (
+        <path fill="currentColor" d="M11.07.65 10.4.1a.37.37 0 0 0-.52.06L4.94 6.39 2.3 3.93a.37.37 0 0 0-.52.02l-.5.53a.37.37 0 0 0 .02.52l3.32 3.08c.15.14.39.13.53-.03L11.13 1.17a.37.37 0 0 0-.06-.52Z" />
+      )}
+    </svg>
+  );
+}
+
+type Typing = { names: string[]; pair: boolean; face: Face | null };
+
+/** "• • •" rising from the foot of the chat while someone writes back. */
+function TypingBubble({ typing }: { typing: Typing }) {
+  const who = typing.names.map(first);
+  const label = typing.pair ? "" : who.length === 1 ? `${who[0]} is typing` : who.length === 2 ? `${who[0]} and ${who[1]} are typing` : `${who.length} people are typing`;
+  return (
+    <li className="hud-typing mt-2 flex flex-col items-start" aria-live="polite">
+      {label && <span className="mb-1 ml-11 text-[11.5px] font-medium text-muted">{label}</span>}
+      <div className="flex items-end gap-2">
+        {typing.face ? <Avatar name={typing.face.name} photo={typing.face.photo} size={28} tone={toneOf(typing.face.id)} /> : <span className="w-7 shrink-0" />}
+        <span className="flex h-[38px] items-center gap-1 rounded-2xl rounded-bl-md bg-[var(--hud-them)] px-4" aria-label={label || "Typing"}>
+          <i className="hud-dot" />
+          <i className="hud-dot" style={{ animationDelay: "0.16s" }} />
+          <i className="hud-dot" style={{ animationDelay: "0.32s" }} />
+        </span>
+      </div>
+    </li>
+  );
+}
 
 /**
  * Oldest at the top, scrolled to the newest. Someone else's run of messages
  * carries their name at the top and their face beside the last one, as a
  * phone does. A GIF is drawn as the picture, without a bubble.
  */
-function Bubbles({ items, empty }: { items: Item[]; empty: string }) {
+function Bubbles({ items, empty, typing = null }: { items: Item[]; empty: string; typing?: Typing | null }) {
   const end = useRef<HTMLDivElement | null>(null);
   const count = items.length;
   const firstPaint = useRef(true);
@@ -924,6 +1014,13 @@ function Bubbles({ items, empty }: { items: Item[]; empty: string }) {
     end.current?.scrollIntoView({ block: "end", behavior: firstPaint.current ? "auto" : "smooth" });
     firstPaint.current = false;
   }, [count]);
+  /* Someone starts typing: bring the bottom into view if you were near it. */
+  const isTyping = Boolean(typing?.names.length);
+  useEffect(() => {
+    const el = end.current;
+    const box = el?.parentElement?.parentElement;
+    if (el && isTyping && box && box.scrollHeight - box.scrollTop - box.clientHeight < 160) el.scrollIntoView({ block: "end", behavior: "smooth" });
+  }, [isTyping]);
 
   const rows = useMemo(() => {
     const out: Array<{ day: string } | { m: Item; head: boolean; tail: boolean }> = [];
@@ -943,7 +1040,7 @@ function Bubbles({ items, empty }: { items: Item[]; empty: string }) {
     return out;
   }, [items]);
 
-  if (!items.length) return <p className="py-16 text-center text-[13px] text-muted">{empty}</p>;
+  if (!items.length && !typing) return <p className="py-16 text-center text-[13px] text-muted">{empty}</p>;
   return (
     <ol className="mx-auto flex max-w-[780px] flex-col gap-1 py-4">
       {rows.map((r) => {
@@ -985,10 +1082,16 @@ function Bubbles({ items, empty }: { items: Item[]; empty: string }) {
               {!m.mine && (tail ? <Avatar name={m.who} photo={m.photo} size={28} tone={m.tone ?? toneOf(m.whoId)} /> : <span className="w-7 shrink-0" />)}
               {content}
             </div>
-            {tail && <span className={`mt-0.5 text-[10.5px] text-muted ${m.mine ? "mr-2" : "ml-11"}`}>{timeOf(m.at)}</span>}
+            {tail && (
+              <span className={`mt-0.5 flex items-center text-[10.5px] text-muted ${m.mine ? "mr-2" : "ml-11"}`}>
+                {timeOf(m.at)}
+                {m.mine && m.tick && <Ticks seen={m.tick === "seen"} />}
+              </span>
+            )}
           </li>
         );
       })}
+      {typing && typing.names.length > 0 && <TypingBubble typing={typing} />}
       <div ref={end} />
     </ol>
   );
@@ -1018,6 +1121,7 @@ function Composer({
   foot,
   footWarn = false,
   onSend,
+  onTyping,
 }: {
   placeholder: string;
   canAsk?: boolean;
@@ -1025,6 +1129,8 @@ function Composer({
   foot?: string;
   footWarn?: boolean;
   onSend: (text: string, asQuestion?: boolean) => Promise<string | null>;
+  /** Told when the box goes from empty to written in, and back. */
+  onTyping?: (hasText: boolean) => void;
 }) {
   const [text, setText] = useState("");
   const [asQuestion, setAsQuestion] = useState(false);
@@ -1082,12 +1188,12 @@ function Composer({
         void send();
       }}
       /* Room on the right for Steve's button in the corner, so the two never touch. */
-      className="relative shrink-0 border-t border-line/70 bg-[var(--hud-bar)] py-3 pl-4 pr-16"
+      className="relative shrink-0 border-t border-[var(--hud-line)] bg-[var(--hud-bar)] py-3 pl-4 pr-16"
     >
       {pop === "emoji" && <EmojiTray onPick={addEmoji} />}
       {pop === "gif" && <GifTray busy={busy} onPick={(url) => void send(url)} />}
       {err && <p className="mx-auto mb-2 max-w-[780px] text-[12px] text-accent-dark">{err}</p>}
-      <div className="mx-auto flex max-w-[780px] items-end gap-1.5 rounded-2xl border border-line/80 bg-[var(--hud-input)] p-1.5 pl-2 focus-within:border-ink/40">
+      <div className="mx-auto flex max-w-[780px] items-end gap-1.5 rounded-2xl border border-[var(--hud-line-strong)] bg-[var(--hud-input)] p-1.5 pl-2 focus-within:border-ink/40">
         <button
           type="button"
           onClick={() => setPop((p) => (p === "emoji" ? null : "emoji"))}
@@ -1116,7 +1222,10 @@ function Composer({
         <textarea
           ref={box}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            onTyping?.(e.target.value.trim().length > 0);
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -1133,7 +1242,7 @@ function Composer({
             onClick={() => setAsQuestion((x) => !x)}
             aria-pressed={asQuestion}
             title="Others answer it in its own thread"
-            className={`mb-0.5 flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-colors ${asQuestion ? "bg-accent-dark text-white" : "border border-line/80 text-ink hover:bg-panel"}`}
+            className={`mb-0.5 flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-colors ${asQuestion ? "bg-accent-dark text-white" : "border border-[var(--hud-line-strong)] text-ink hover:bg-panel"}`}
           >
             <span className="text-[13px] leading-none">?</span> Ask as a Question
           </button>
@@ -1155,7 +1264,7 @@ function Composer({
 
 function Tray({ children, wide = false }: { children: React.ReactNode; wide?: boolean }) {
   return (
-    <div className={`absolute bottom-[calc(100%-6px)] left-4 z-30 flex max-h-[360px] flex-col rounded-2xl border border-line/70 bg-card shadow-[0_18px_40px_-18px_rgba(0,0,0,0.4)] ${wide ? "w-[min(380px,calc(100%-32px))]" : "w-[min(340px,calc(100%-32px))]"}`}>
+    <div className={`absolute bottom-[calc(100%-6px)] left-4 z-30 flex max-h-[360px] flex-col rounded-2xl border border-[var(--hud-line)] bg-card shadow-[0_18px_40px_-18px_rgba(0,0,0,0.4)] ${wide ? "w-[min(380px,calc(100%-32px))]" : "w-[min(340px,calc(100%-32px))]"}`}>
       {children}
     </div>
   );
@@ -1218,7 +1327,7 @@ function GifTray({ busy, onPick }: { busy: boolean; onPick: (url: string) => voi
   return (
     <Tray wide>
       <div className="p-2 pb-1">
-        <label className="flex h-9 items-center gap-2 rounded-full border border-line/80 bg-page px-3">
+        <label className="flex h-9 items-center gap-2 rounded-full border border-[var(--hud-line-strong)] bg-page px-3">
           <LineIcon name="search" size={14} className="text-muted" />
           <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} type="search" placeholder="Search GIFs..." className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-muted" />
         </label>
@@ -1256,7 +1365,7 @@ function GifTray({ busy, onPick }: { busy: boolean; onPick: (url: string) => voi
           </div>
         )}
       </div>
-      <p className="border-t border-line/60 px-3 py-1.5 text-right text-[10px] font-semibold tracking-wide text-muted">Powered by GIPHY</p>
+      <p className="border-t border-[var(--hud-line)] px-3 py-1.5 text-right text-[10px] font-semibold tracking-wide text-muted">Powered by GIPHY</p>
     </Tray>
   );
 }
@@ -1351,7 +1460,7 @@ function PeoplePicker({ invite, onClose, onDone }: { invite: string | null; onCl
     );
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+    <div className="hud fixed inset-0 z-[80] flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
       <div role="dialog" aria-label={invite ? "Invite people" : "Start a huddle"} className="flex max-h-[min(640px,90dvh)] w-full max-w-[440px] flex-col rounded-2xl bg-card shadow-[0_30px_60px_-20px_rgba(0,0,0,0.45)]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start gap-3 px-5 pb-3 pt-5">
           <div className="min-w-0 flex-1">
@@ -1360,7 +1469,7 @@ function PeoplePicker({ invite, onClose, onDone }: { invite: string | null; onCl
               {step === "name" ? `You and ${picked.size} ${picked.size === 1 ? "other" : "others"}. Something like "Northampton Crew".` : "Tick the people you want. Nearest first, by the patch each set on the app."}
             </p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line/80 text-muted hover:text-ink">
+          <button type="button" onClick={onClose} aria-label="Close" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--hud-line-strong)] text-muted hover:text-ink">
             ×
           </button>
         </div>
@@ -1368,7 +1477,7 @@ function PeoplePicker({ invite, onClose, onDone }: { invite: string | null; onCl
         {step === "pick" ? (
           <>
             <div className="px-5">
-              <label className="flex h-9 items-center gap-2 rounded-full border border-line/80 bg-page px-3">
+              <label className="flex h-9 items-center gap-2 rounded-full border border-[var(--hud-line-strong)] bg-page px-3">
                 <LineIcon name="search" size={14} className="text-muted" />
                 <input autoFocus value={needle} onChange={(e) => setNeedle(e.target.value)} type="search" placeholder="Name or town..." className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-muted" />
               </label>
@@ -1405,16 +1514,16 @@ function PeoplePicker({ invite, onClose, onDone }: { invite: string | null; onCl
               onKeyDown={(e) => e.key === "Enter" && name.trim() && !busy && void save()}
               maxLength={60}
               placeholder="Huddle name"
-              className="h-10 w-full rounded-xl border border-line/80 bg-page px-3 text-[14px] text-ink outline-none focus:border-ink/40"
+              className="h-10 w-full rounded-xl border border-[var(--hud-line-strong)] bg-page px-3 text-[14px] text-ink outline-none focus:border-ink/40"
             />
           </div>
         )}
 
-        <div className="border-t border-line/60 px-5 py-3">
+        <div className="border-t border-[var(--hud-line)] px-5 py-3">
           {saveErr && <p className="mb-2 text-[12px] text-accent-dark">{saveErr}</p>}
           <div className="flex items-center gap-2">
             {step === "name" && (
-              <button type="button" onClick={() => setStep("pick")} className="h-10 rounded-full border border-line/80 px-4 text-[13px] font-medium text-ink hover:bg-panel">
+              <button type="button" onClick={() => setStep("pick")} className="h-10 rounded-full border border-[var(--hud-line-strong)] px-4 text-[13px] font-medium text-ink hover:bg-panel">
                 Back
               </button>
             )}
