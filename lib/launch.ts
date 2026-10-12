@@ -14,7 +14,7 @@ import { latestJoinLinks } from "@/lib/verification";
  * Letting Experts who has no account yet, all at once. Before he presses it he
  * can untick anybody, add anybody, and pick the role each joins as; after it,
  * the same screen shows who has signed up and how far each person is through
- * the pre-start checklist (photo, REX, email, setup, the tour).
+ * the pre-start checklist (photo, REX, email, setup, the tour, the phone app).
  *
  * ── Where "everybody" comes from ──────────────────────────────────────────
  *
@@ -52,6 +52,13 @@ export type Readiness = {
   setup: boolean;
   /** Opened the tour from their checklist. */
   tour: boolean;
+  /**
+   * The phone app (James, 12 Oct 2026: "I'll be interested to see who's using
+   * the mobile app"): the latest time they opened the /agent screens, and how -
+   * the iPhone app, added to the home screen, or a phone browser. Null: never.
+   * Phone alerts switched on count too, from os_push_devices.
+   */
+  app: { kind: "ios" | "homescreen" | "browser" | "alerts"; at: string } | null;
   lastSeenAt: string | null;
 };
 
@@ -307,7 +314,7 @@ export async function launchBoard(): Promise<{ toInvite: LaunchPerson[]; on: OnP
       role: u.role,
       createdAt: u.created_at ? new Date(u.created_at).toISOString() : null,
       ready: {
-        ...(ready.get(u.id) ?? { rex: "none" as const, email: false, setup: false, tour: false }),
+        ...(ready.get(u.id) ?? { rex: "none" as const, email: false, setup: false, tour: false, app: null }),
         photo: u.has_photo,
         lastSeenAt: u.last_seen_at ? new Date(u.last_seen_at).toISOString() : null,
       },
@@ -327,7 +334,7 @@ export async function readinessFor(
 ): Promise<Map<string, Omit<Readiness, "photo" | "lastSeenAt">>> {
   const out = new Map<string, Omit<Readiness, "photo" | "lastSeenAt">>();
   if (!hasDb() || !userIds.length) return out;
-  const [rex, ms, prefs] = await Promise.all([
+  const [rex, ms, prefs, devices] = await Promise.all([
     q<{ user_id: string; live: boolean }>(
       `select user_id, expires_at > now() as live from os_rex_tokens where user_id = any($1)`,
       [userIds]
@@ -337,7 +344,12 @@ export async function readinessFor(
       `select user_id, key, value from os_user_prefs where user_id = any($1) and key = any($2)`,
       [userIds, ["os-setup", READY_PREF]]
     ).catch(() => []),
+    q<{ user_id: string; seen_at: Date | string }>(
+      `select user_id, max(seen_at) as seen_at from os_push_devices where user_id = any($1) group by user_id`,
+      [userIds]
+    ).catch(() => []),
   ]);
+  const deviceBy = new Map(devices.map((d) => [d.user_id, new Date(d.seen_at).toISOString()]));
   const rexBy = new Map(rex.map((r) => [r.user_id, r.live]));
   const msBy = new Set(ms.map((r) => r.user_id));
   for (const id of userIds) {
@@ -348,9 +360,18 @@ export async function readinessFor(
       email: msBy.has(id),
       setup: typeof setup?.finishedAt === "string",
       tour: typeof mine?.tourAt === "string",
+      app: typeof mine?.appAt === "string"
+        ? { kind: appKind(mine.appKind), at: mine.appAt }
+        : deviceBy.has(id)
+          ? { kind: "alerts", at: deviceBy.get(id)! }
+          : null,
     });
   }
   return out;
+}
+
+function appKind(v: unknown): "ios" | "homescreen" | "browser" {
+  return v === "ios" || v === "homescreen" ? v : "browser";
 }
 
 /* ── What James decides ─────────────────────────────────────────────────── */
