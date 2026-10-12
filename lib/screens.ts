@@ -76,6 +76,17 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     caveats: ["The board layout is saved in your own browser, so it does not follow you to another device."],
   },
 
+  "/huddles": {
+    purpose: "The team's own chat - the same General and huddles as Chats on the TLE OS phone app.",
+    does: [
+      "Post in General, which everyone on the team can read. Tick Ask as a Question and others answer it in its own thread.",
+      "Start a huddle: tick the colleagues you want (nearest first, by the patch each set on the app), name it, and talk to just them.",
+      "In a huddle, People shows who is in it, Invite More People adds others, and Leave the Huddle takes you out.",
+    ],
+    wiring: "live",
+    caveats: ["Messages from landlords and tenants are not here; they are on the lead, appraisal and tenancy files, and on the app's Chats > Work."],
+  },
+
   "/maintenance": {
     purpose: "Every job on the managed book, reported through paid: repairs on an urgency, planned jobs like a gas safety on a date.",
     does: [

@@ -40,7 +40,8 @@ export const row = (active: boolean, collapsed: boolean) =>
     active ? "bg-[var(--launch-active)] text-ink" : "text-[var(--launch-text)] hover:bg-[var(--launch-hover)] hover:text-ink"
   }`;
 
-function Item({ item, pathname, currentHref, collapsed, go }: { item: NavItem; pathname: string; currentHref: string; collapsed: boolean; go: (href: string) => void }) {
+function Item({ item, pathname, currentHref, collapsed, go, counts }: { item: NavItem; pathname: string; currentHref: string; collapsed: boolean; go: (href: string) => void; counts?: Record<string, number> }) {
+  const count = counts?.[item.href] ?? 0;
   const kids = item.children ?? [];
   /* A child page lights its group too: Maintenance, Compliance and the rest
      live under Portfolio but are not under its address, so on them nothing
@@ -68,8 +69,14 @@ function Item({ item, pathname, currentHref, collapsed, go }: { item: NavItem; p
           }}
           className={`${row(active && !childOn, collapsed)} ${childOn ? "text-ink" : ""}`}
         >
-          <LineIcon name={item.icon} className={active ? "text-ink" : "text-[var(--launch-icon)] group-hover:text-ink"} />
+          <span className="relative flex">
+            <LineIcon name={item.icon} className={active ? "text-ink" : "text-[var(--launch-icon)] group-hover:text-ink"} />
+            {collapsed && count > 0 && <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-accent-dark" />}
+          </span>
           {!collapsed && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
+          {!collapsed && count > 0 && (
+            <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent-dark px-1 text-[10.5px] font-semibold text-white">{count > 99 ? "99+" : count}</span>
+          )}
         </a>
         {kids.length > 0 && !collapsed && (
           <button
@@ -110,7 +117,7 @@ function Item({ item, pathname, currentHref, collapsed, go }: { item: NavItem; p
   );
 }
 
-function Section({ title, items, collapsed, ...rest }: { title: string | null; items: NavItem[]; pathname: string; currentHref: string; collapsed: boolean; go: (href: string) => void }) {
+function Section({ title, items, collapsed, ...rest }: { title: string | null; items: NavItem[]; pathname: string; currentHref: string; collapsed: boolean; go: (href: string) => void; counts?: Record<string, number> }) {
   const [shut, setShut] = useState(false);
   if (!items.length) return null;
   return (
@@ -172,9 +179,28 @@ export default function LaunchNav({
     if (onMenu) onMenu(next);
     else setOwnMenu(next);
   };
-  /* Dashboard on its own, the lettings work under a name, Showroom gone. */
-  const home = front.filter((i) => i.href === "/dashboard");
-  const lettings = front.filter((i) => i.href !== "/dashboard" && i.href !== "/showroom");
+  /* Dashboard and Huddles on their own, the lettings work under a name, Showroom gone. */
+  const TOP = ["/dashboard", "/huddles"];
+  const home = front.filter((i) => TOP.includes(i.href));
+  const lettings = front.filter((i) => !TOP.includes(i.href) && i.href !== "/showroom");
+
+  /* What is unread in General and your huddles, beside Huddles (12 Oct 2026).
+     Asked on each screen change and every minute; a failed read shows nothing
+     rather than a stale number. */
+  const [huddleUnread, setHuddleUnread] = useState(0);
+  const hasHuddles = home.some((i) => i.href === "/huddles");
+  useEffect(() => {
+    if (!hasHuddles) return;
+    let gone = false;
+    const read = () =>
+      fetch("/api/m/rooms", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j: { ok?: boolean; unread?: number } | null) => { if (!gone) setHuddleUnread(j?.ok ? Number(j.unread) || 0 : 0); })
+        .catch(() => { if (!gone) setHuddleUnread(0); });
+    read();
+    const t = window.setInterval(read, 60_000);
+    return () => { gone = true; window.clearInterval(t); };
+  }, [hasHuddles, pathname]);
 
   /* Search, or ⌘K / Ctrl+K: Search for anything (components/SearchPalette,
      10 Oct 2026) - the one search in the OS, from every screen. */
@@ -190,7 +216,7 @@ export default function LaunchNav({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const common = { pathname, currentHref, collapsed, go };
+  const common = { pathname, currentHref, collapsed, go, counts: { "/huddles": huddleUnread } as Record<string, number> };
 
   return (
     <div className="flex h-full min-h-0 flex-col">

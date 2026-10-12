@@ -29,6 +29,9 @@ export type NavItem = {
 /** FRONT OF HOUSE — the tenancy being made. */
 export const FRONT: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
+  /* The team chat from the phone app, under Dashboard (Susan via James,
+     12 Oct 2026): the same General and huddles, lib/chats. */
+  { href: "/huddles", label: "Huddles", icon: "message" },
   // Tenant-side and landlord-side are different jobs — same inbox, different
   // questions — so Leads opens rather than just navigating.
   {
@@ -290,6 +293,7 @@ export const AGENT_NAV: NavItem[] = [...FRONT, ...BACK];
  */
 export const AGENT_ROUTES = [
   "/dashboard",
+  "/huddles",
   "/leads",
   "/market-appraisals",
   "/listings",
