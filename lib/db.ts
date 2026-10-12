@@ -401,6 +401,17 @@ CREATE TABLE IF NOT EXISTS os_user_prefs (
   PRIMARY KEY (user_id, key)
 );
 
+-- Archive and delete in Huddles and the phone's Chats, per person (12 Oct
+-- 2026, lib/chats setChatState). chat_key: room:<id>, landlord:<appraisal>,
+-- tenant:<portal account>. Nothing here removes a message for anybody.
+CREATE TABLE IF NOT EXISTS os_chat_state (
+  user_id        TEXT NOT NULL,
+  chat_key       TEXT NOT NULL,
+  archived_at    TIMESTAMPTZ,
+  cleared_at     TIMESTAMPTZ,
+  PRIMARY KEY (user_id, chat_key)
+);
+
 -- Staff headshots waiting for their account (12 Oct 2026, lib/staff-photos):
 -- taken from the TEG Team Hub and thelettingexperts.co.uk/staff, cropped to
 -- head and shoulders. A new account takes its photo from here, matched on any

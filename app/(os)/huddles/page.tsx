@@ -29,8 +29,8 @@ import { isGif, previewOf, TEAM_GIFS } from "@/lib/chat-gif";
  */
 
 type Face = { id: string; name: string; photo: string | null };
-type Room = { id: string; kind: "general" | "huddle"; name: string; members: number; last: { body: string; who: string; at: string } | null; unread: number; faces: Face[] };
-type Thread = { key: string; kind: "landlord" | "tenant"; name: string; about: string; last: { body: string; from: "customer" | "agent"; at: string }; unread: number };
+type Room = { id: string; kind: "general" | "huddle"; name: string; members: number; last: { body: string; who: string; at: string } | null; unread: number; faces: Face[]; archived: boolean };
+type Thread = { key: string; kind: "landlord" | "tenant"; name: string; about: string; last: { body: string; from: "customer" | "agent"; at: string }; unread: number; archived: boolean };
 type TeamMsg = { id: string; authorId: string; author: string; photo: string | null; body: string; question: boolean; at: string; replies: number };
 type CustomerMsg = { id: string; from: "customer" | "agent"; body: string; at: string };
 type Person = { id: string; name: string; photo: string | null; town: string | null; miles: number | null };
@@ -197,6 +197,23 @@ export default function Huddles() {
   /* On a narrow window: the list, or the open chat. */
   const [showChat, setShowChat] = useState(false);
   const [picker, setPicker] = useState<null | { invite: string | null }>(null);
+  /* The row slid open to show Archive and Delete (one at a time), and
+     whether the list is showing the archived chats. */
+  const [swiped, setSwiped] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+  useEffect(() => {
+    if (!swiped) return;
+    const off = (e: MouseEvent) => {
+      if (!(e.target as Element).closest?.("[data-swipe-open]")) setSwiped(null);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setSwiped(null);
+    document.addEventListener("mousedown", off);
+    window.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", off);
+      window.removeEventListener("keydown", esc);
+    };
+  }, [swiped]);
 
   const load = useCallback(() => {
     fetch("/api/m/chats", { cache: "no-store" })
@@ -261,9 +278,46 @@ export default function Huddles() {
     };
   }, []);
 
-  const general = data?.rooms.find((r) => r.kind === "general") ?? null;
-  const huddles = data?.rooms.filter((r) => r.kind === "huddle") ?? [];
   const openRoom = open?.kind === "room" ? data?.rooms.find((r) => r.id === open.id) ?? null : null;
+
+  /* What this tab lists: the chats in play, or the archived ones. */
+  const roomsHere = (data?.rooms ?? []).filter((r) => r.archived === showArchived);
+  const workHere = (data?.work ?? []).filter((t) => t.archived === showArchived);
+  const archivedHere = tab === "team" ? (data?.rooms ?? []).filter((r) => r.archived) : (data?.work ?? []).filter((t) => t.archived);
+  const archivedUnread = archivedHere.reduce((s, c) => s + c.unread, 0);
+  const generalHere = roomsHere.find((r) => r.kind === "general") ?? null;
+  const huddlesHere = roomsHere.filter((r) => r.kind === "huddle");
+
+  /* Archive, bring back or delete, for you alone. */
+  const act = async (key: string, action: "archive" | "unarchive" | "delete", what: { name: string; kind: "general" | "huddle" | "landlord" | "tenant" }) => {
+    if (action === "delete") {
+      const ask =
+        what.kind === "huddle"
+          ? `Leave and delete ${what.name}? It goes from your chats. Anyone in it can invite you back.`
+          : what.kind === "general"
+            ? "Delete General from your chats? What has been said so far is cleared for you. It comes back when someone next posts."
+            : `Delete your chat with ${what.name}? It goes from your chats and comes back if they write again. Their messages stay on their file.`;
+      if (!window.confirm(ask)) return;
+    }
+    setSwiped(null);
+    const r = (await fetch("/api/m/chat-state", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ key, action }) })
+      .then((x) => x.json())
+      .catch(() => ({ ok: false, error: "No connection. Nothing changed." }))) as { ok?: boolean; error?: string };
+    if (!r.ok) {
+      window.alert(r.error ?? "That did not work.");
+      return;
+    }
+    const isOpen = open && (open.kind === "room" ? `room:${open.id}` : `${open.kind}:${open.id}`) === key;
+    if (isOpen && action !== "unarchive") go(tab, null);
+    load();
+  };
+
+  const actionsFor = (key: string, archived: boolean, what: { name: string; kind: "general" | "huddle" | "landlord" | "tenant" }): SwipeAction[] => [
+    archived
+      ? { label: "Unarchive", icon: "unarchive", tone: "quiet", run: () => void act(key, "unarchive", what) }
+      : { label: "Archive", icon: "archive", tone: "quiet", run: () => void act(key, "archive", what) },
+    { label: what.kind === "huddle" ? "Leave" : "Delete", icon: "trash", tone: "loud", run: () => void act(key, "delete", what) },
+  ];
 
   return (
     <>
@@ -285,7 +339,10 @@ export default function Huddles() {
                   role="tab"
                   type="button"
                   aria-selected={tab === id}
-                  onClick={() => tab !== id && go(id, null)}
+                  onClick={() => {
+                    setShowArchived(false);
+                    if (tab !== id) go(id, null);
+                  }}
                   className={`flex h-8 flex-1 items-center justify-center gap-1.5 rounded-full px-2 text-[12.5px] font-medium transition-colors ${tab === id ? "bg-card text-ink shadow-[0_1px_3px_rgba(0,0,0,0.12)]" : "text-muted hover:text-ink"}`}
                 >
                   <span className="truncate">{label}</span>
@@ -295,7 +352,14 @@ export default function Huddles() {
             </div>
           </div>
 
-          {tab === "team" && (
+          {showArchived ? (
+            <div className="flex items-center gap-2 px-3 pb-1 pt-3">
+              <button type="button" onClick={() => setShowArchived(false)} aria-label="Back to your chats" className="flex h-7 w-7 items-center justify-center rounded-full border border-line/80 text-muted hover:text-ink">
+                <LineIcon name="arrow-left" size={13} />
+              </button>
+              <p className="text-[12.5px] font-medium text-ink">Archived</p>
+            </div>
+          ) : tab === "team" ? (
             <div className="flex items-center justify-between gap-2 px-4 pb-1 pt-3">
               <p className="text-[11.5px] font-medium text-muted">General and your huddles</p>
               <button
@@ -306,77 +370,107 @@ export default function Huddles() {
                 <span className="text-[15px] leading-none">+</span> Start a Huddle
               </button>
             </div>
+          ) : (
+            <p className="px-4 pb-1 pt-3 text-[11.5px] font-medium text-muted">Your landlords and tenants, from their portals</p>
           )}
-          {tab === "customers" && <p className="px-4 pb-1 pt-3 text-[11.5px] font-medium text-muted">What they wrote through their portals</p>}
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 pt-1">
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 pt-1">
             {listError && !data ? (
               <ErrorBox text={listError} onRetry={load} />
             ) : !data ? (
               <Spinner label="Loading your chats" />
             ) : tab === "team" ? (
               <>
-                <Row
-                  active={open?.kind === "room" && open.id === GENERAL}
-                  onClick={() => go("team", { kind: "room", id: GENERAL, thread: null })}
-                  face={
-                    <span className="flex shrink-0 items-center" style={{ width: SLOT }}>
-                      <span className="flex h-[38px] w-[38px] items-center justify-center rounded-full bg-accent-dark text-white">
-                        <LineIcon name="message" size={17} />
-                      </span>
-                    </span>
-                  }
-                  name="General"
-                  line={general?.last ? `${first(general.last.who)}: ${previewOf(general.last.body)}` : "Open to everyone"}
-                  at={general?.last?.at ?? null}
-                  unread={general?.unread ?? 0}
-                />
-                <p className="mb-1 mt-4 px-2 text-[11.5px] font-medium text-muted">Huddles</p>
-                {huddles.length ? (
-                  huddles.map((r) => (
+                {generalHere && (
+                  <SwipeRow open={swiped === `room:${GENERAL}`} onOpen={() => setSwiped(`room:${GENERAL}`)} onClose={() => setSwiped(null)} actions={actionsFor(`room:${GENERAL}`, showArchived, { name: "General", kind: "general" })}>
                     <Row
-                      key={r.id}
-                      active={open?.kind === "room" && open.id === r.id}
-                      onClick={() => go("team", { kind: "room", id: r.id, thread: null })}
-                      face={<GroupFace faces={r.faces} members={r.members} name={r.name} />}
-                      name={r.name}
-                      line={r.last ? `${first(r.last.who)}: ${previewOf(r.last.body)}` : `${r.members} people · say hello`}
-                      at={r.last?.at ?? null}
-                      unread={r.unread}
+                      active={open?.kind === "room" && open.id === GENERAL}
+                      onClick={() => go("team", { kind: "room", id: GENERAL, thread: null })}
+                      face={
+                        <span className="flex shrink-0 items-center" style={{ width: SLOT }}>
+                          <span className="flex h-[38px] w-[38px] items-center justify-center rounded-full bg-accent-dark text-white">
+                            <LineIcon name="message" size={17} />
+                          </span>
+                        </span>
+                      }
+                      name="General"
+                      line={generalHere.last ? `${first(generalHere.last.who)}: ${previewOf(generalHere.last.body)}` : "Open to everyone"}
+                      at={generalHere.last?.at ?? null}
+                      unread={generalHere.unread}
                     />
+                  </SwipeRow>
+                )}
+                {!showArchived && <p className="mb-1 mt-4 px-2 text-[11.5px] font-medium text-muted">Huddles</p>}
+                {huddlesHere.length ? (
+                  huddlesHere.map((r) => (
+                    <SwipeRow key={r.id} open={swiped === `room:${r.id}`} onOpen={() => setSwiped(`room:${r.id}`)} onClose={() => setSwiped(null)} actions={actionsFor(`room:${r.id}`, showArchived, { name: r.name, kind: "huddle" })}>
+                      <Row
+                        active={open?.kind === "room" && open.id === r.id}
+                        onClick={() => go("team", { kind: "room", id: r.id, thread: null })}
+                        face={<GroupFace faces={r.faces} members={r.members} name={r.name} />}
+                        name={r.name}
+                        line={r.last ? `${first(r.last.who)}: ${previewOf(r.last.body)}` : `${r.members} people · say hello`}
+                        at={r.last?.at ?? null}
+                        unread={r.unread}
+                      />
+                    </SwipeRow>
                   ))
+                ) : showArchived ? (
+                  !generalHere && <p className="mx-2 mt-2 rounded-xl bg-panel px-3 py-3 text-[12.5px] leading-snug text-muted">Nothing archived.</p>
                 ) : (
                   <p className="mx-2 rounded-xl bg-panel px-3 py-3 text-[12.5px] leading-snug text-muted">No huddles yet. Start one with the agents near you.</p>
                 )}
               </>
-            ) : data.work.length ? (
-              data.work.map((t) => {
+            ) : workHere.length ? (
+              workHere.map((t) => {
                 const [kind, ...rest] = t.key.split(":");
                 const id = rest.join(":");
                 const landlord = kind === "landlord";
                 return (
-                  <Row
-                    key={t.key}
-                    active={open?.kind === kind && open.id === id}
-                    onClick={() => go("customers", { kind: landlord ? "landlord" : "tenant", id })}
-                    face={
-                      <span className="flex shrink-0 items-center" style={{ width: SLOT }}>
-                        <Avatar name={t.name} size={38} tone={landlord ? "pink" : "sage"} />
-                      </span>
-                    }
-                    name={t.name}
-                    tag={landlord ? "Landlord" : "Tenant"}
-                    about={landlord ? t.about : ""}
-                    line={`${t.last.from === "agent" ? "You: " : ""}${t.last.body}`}
-                    at={t.last.at}
-                    unread={t.unread}
-                  />
+                  <SwipeRow key={t.key} open={swiped === t.key} onOpen={() => setSwiped(t.key)} onClose={() => setSwiped(null)} actions={actionsFor(t.key, showArchived, { name: t.name, kind: landlord ? "landlord" : "tenant" })}>
+                    <Row
+                      active={open?.kind === kind && open.id === id}
+                      onClick={() => go("customers", { kind: landlord ? "landlord" : "tenant", id })}
+                      face={
+                        <span className="flex shrink-0 items-center" style={{ width: SLOT }}>
+                          <Avatar name={t.name} size={38} tone={landlord ? "pink" : "sage"} />
+                        </span>
+                      }
+                      name={t.name}
+                      tag={landlord ? "Landlord" : "Tenant"}
+                      about={landlord ? t.about : ""}
+                      line={`${t.last.from === "agent" ? "You: " : ""}${t.last.body}`}
+                      at={t.last.at}
+                      unread={t.unread}
+                    />
+                  </SwipeRow>
                 );
               })
             ) : (
-              <p className="mx-2 mt-2 rounded-xl bg-panel px-3 py-3 text-[12.5px] leading-snug text-muted">No messages yet. When a landlord or tenant writes through their portal, it lands here.</p>
+              <p className="mx-2 mt-2 rounded-xl bg-panel px-3 py-3 text-[12.5px] leading-snug text-muted">
+                {showArchived ? "Nothing archived." : "No messages yet. When one of your landlords or tenants writes through their portal, it lands here."}
+              </p>
             )}
           </div>
+
+          {/* Archived, at the foot, and how to put a chat there. */}
+          {data && !showArchived && (
+            <div className="shrink-0 border-t border-line/60 px-3 py-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSwiped(null);
+                  setShowArchived(true);
+                }}
+                className="flex h-8 w-full items-center gap-2 rounded-lg px-2 text-[12.5px] text-muted transition-colors hover:bg-panel hover:text-ink"
+              >
+                <ArchiveIcon />
+                <span className="flex-1 text-left">Archived{archivedHere.length ? ` (${archivedHere.length})` : ""}</span>
+                <Count n={archivedUnread} />
+              </button>
+              <p className="px-2 pt-0.5 text-[10.5px] text-muted">Double-click a chat to archive or delete it.</p>
+            </div>
+          )}
         </aside>
 
         {/* The open chat. */}
@@ -422,6 +516,87 @@ export default function Huddles() {
         />
       )}
     </>
+  );
+}
+
+/* ── Archive and delete ────────────────────────────────────────────────── */
+
+type SwipeAction = { label: string; icon: "archive" | "unarchive" | "trash"; tone: "quiet" | "loud"; run: () => void };
+
+function ArchiveIcon({ up = false }: { up?: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className="h-[15px] w-[15px]" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3.5 5.5h17v4h-17zM5 9.5v9a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 18.5v-9" />
+      <path d={up ? "M12 17.5v-5.5M9.5 14.5 12 12l2.5 2.5" : "M12 12v5.5M9.5 15 12 17.5l2.5-2.5"} />
+    </svg>
+  );
+}
+
+/**
+ * A chat in the list that slides left to show what can be done with it
+ * (James, 12 Oct 2026: "when we double-click a chat, it should move to the
+ * left slightly, a bit like what you get with an iPhone"). Double-click, or
+ * swipe left on a touch screen; double-click again, swipe right, a click
+ * anywhere else or Escape puts it back. A click on the row while it is open
+ * closes it rather than opening the chat.
+ */
+function SwipeRow({ open, onOpen, onClose, actions, children }: { open: boolean; onOpen: () => void; onClose: () => void; actions: SwipeAction[]; children: React.ReactNode }) {
+  const W = actions.length * 74;
+  const touch = useRef<{ x: number; y: number } | null>(null);
+  return (
+    <div
+      data-swipe-open={open ? "" : undefined}
+      className="relative select-none overflow-hidden rounded-xl"
+      onDoubleClick={(e) => {
+        e.preventDefault();
+        if (open) onClose();
+        else onOpen();
+      }}
+      onTouchStart={(e) => {
+        touch.current = { x: e.touches[0]!.clientX, y: e.touches[0]!.clientY };
+      }}
+      onTouchEnd={(e) => {
+        const t = touch.current;
+        touch.current = null;
+        if (!t) return;
+        const dx = e.changedTouches[0]!.clientX - t.x;
+        const dy = e.changedTouches[0]!.clientY - t.y;
+        if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+          if (dx < 0) onOpen();
+          else onClose();
+        }
+      }}
+    >
+      {/* Hidden while shut, or its colour shows round the row's rounded edge. */}
+      <div className={`absolute inset-y-0 right-0 flex transition-opacity duration-200 ${open ? "opacity-100" : "pointer-events-none opacity-0"}`} style={{ width: W }} aria-hidden={!open}>
+        {actions.map((a) => (
+          <button
+            key={a.label}
+            type="button"
+            tabIndex={open ? 0 : -1}
+            onClick={a.run}
+            className={`flex h-full flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-opacity hover:opacity-90 ${a.tone === "loud" ? "bg-accent-dark text-white" : "bg-[#e6e1dc] text-brown"}`}
+            style={{ width: 74 }}
+          >
+            {a.icon === "trash" ? <LineIcon name="trash" size={16} /> : <ArchiveIcon up={a.icon === "unarchive"} />}
+            {a.label}
+          </button>
+        ))}
+      </div>
+      <div
+        className="relative bg-card transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+        style={{ transform: open ? `translateX(-${W}px)` : "translateX(0)" }}
+        onClickCapture={(e) => {
+          if (open) {
+            e.stopPropagation();
+            e.preventDefault();
+            onClose();
+          }
+        }}
+      >
+        {children}
+      </div>
+    </div>
   );
 }
 

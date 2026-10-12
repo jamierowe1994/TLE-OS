@@ -38,11 +38,76 @@ export interface WorkThread {
   about: string;
   last: { body: string; from: "customer" | "agent"; at: string };
   unread: number;
+  /** Put away by this person (os_chat_state); listed under Archived. */
+  archived: boolean;
 }
 
+/* ─────────────────────── ARCHIVE AND DELETE ─────────────────────── */
+
+/**
+ * Archive and delete, per person (James, 12 Oct 2026: "double-click a chat,
+ * it moves to the left ... delete or archive"). Nothing is removed for
+ * anybody else, and a customer's messages stay on their file.
+ *
+ *   archived_at  the chat sits under Archived until it is brought back, and
+ *                its unread is not in the counts
+ *   cleared_at   "Delete": the chat leaves your list and what was said before
+ *                it is gone for you; a new message brings it back, from there
+ *
+ * A huddle is deleted by leaving it (leaveRoom). Keys: room:<id>,
+ * landlord:<appraisal id>, tenant:<portal account id>.
+ */
+export type ChatState = { archived: boolean; clearedAt: string | null };
+
+export async function chatStates(userId: string): Promise<Map<string, ChatState>> {
+  const rows = await q<{ chat_key: string; archived_at: Date | null; cleared_at: Date | null }>(
+    `SELECT chat_key, archived_at, cleared_at FROM os_chat_state WHERE user_id = $1`,
+    [userId]
+  ).catch(() => []);
+  return new Map(rows.map((r) => [r.chat_key, { archived: Boolean(r.archived_at), clearedAt: iso(r.cleared_at) }]));
+}
+
+async function clearedAt(userId: string, key: string): Promise<string | null> {
+  const rows = await q<{ cleared_at: Date | null }>(`SELECT cleared_at FROM os_chat_state WHERE user_id = $1 AND chat_key = $2`, [userId, key]).catch(() => []);
+  return iso(rows[0]?.cleared_at);
+}
+
+export async function setChatState(userId: string, key: string, action: "archive" | "unarchive" | "delete"): Promise<void> {
+  const sql =
+    action === "archive"
+      ? `INSERT INTO os_chat_state (user_id, chat_key, archived_at) VALUES ($1, $2, NOW())
+         ON CONFLICT (user_id, chat_key) DO UPDATE SET archived_at = NOW()`
+      : action === "unarchive"
+        ? `UPDATE os_chat_state SET archived_at = NULL WHERE user_id = $1 AND chat_key = $2`
+        : `INSERT INTO os_chat_state (user_id, chat_key, cleared_at) VALUES ($1, $2, NOW())
+           ON CONFLICT (user_id, chat_key) DO UPDATE SET cleared_at = NOW(), archived_at = NULL`;
+  await q(sql, [userId, key]);
+}
+
+/** Deleted with nothing said since: off the list. */
+const gone = (st: ChatState | undefined, lastAt: string | null) => Boolean(st?.clearedAt && (!lastAt || lastAt <= st.clearedAt));
+
+/* Where a tenant's message goes when no agent can be found for them (the
+   office's own inbox, app/api/tenant/messages). Owners see those threads. */
+export const OFFICE_INBOX = "hello@thelettingexperts.co.uk";
+
+/**
+ * The conversations that are this person's (James, 12 Oct 2026: "only show
+ * the messages from your landlords ... no one else will be able to"):
+ *
+ *   a landlord   the appraisal is theirs, or the landlord wrote to them
+ *   a tenant     their messages go to this agent - the agent on their deal,
+ *                else who sent their passport, else the agent of the home
+ *                they asked about (app/api/tenant/messages)
+ *
+ * Owners are no exception, except for what belongs to nobody: a landlord
+ * whose appraisal has no agent, a tenant whose messages went to the office.
+ * Viewing as someone shows theirs.
+ */
 export async function workThreads(me: OsUser): Promise<WorkThread[]> {
   if (!hasDb()) return [];
-  const all = isOwner(me);
+  const owner = isOwner(me);
+  const states = await chatStates(me.id);
   const out: WorkThread[] = [];
 
   /* Landlords: one thread per appraisal. */
@@ -60,36 +125,56 @@ export async function workThreads(me: OsUser): Promise<WorkThread[]> {
   const appraisals = await Promise.all(landlord.map((r) => getAppraisal(r.appraisal_id).catch(() => null)));
   landlord.forEach((r, i) => {
     const ma = appraisals[i];
-    if (!all && !r.to_me && !same(ma?.agent, me.name)) return;
+    const nobodys = !ma?.agent?.trim();
+    if (!r.to_me && !same(ma?.agent, me.name) && !(owner && nobodys)) return;
+    const key = `landlord:${r.appraisal_id}`;
+    const at = iso(r.sent_at)!;
+    const st = states.get(key);
+    if (gone(st, at)) return;
     out.push({
-      key: `landlord:${r.appraisal_id}`,
+      key,
       kind: "landlord",
       name: r.name || ma?.landlord || "A landlord",
       about: ma?.address ?? "",
-      last: { body: r.body, from: r.direction === "agent" ? "agent" : "customer", at: iso(r.sent_at)! },
+      last: { body: r.body, from: r.direction === "agent" ? "agent" : "customer", at },
       unread: r.unread,
+      archived: Boolean(st?.archived),
     });
   });
 
   /* Tenants: one thread per portal account. */
   const tenant = await q<{ account_id: string; name: string; email: string; body: string; direction: string; sent_at: Date; unread: number; agent_email: string }>(
-    `SELECT DISTINCT ON (m.account_id) m.account_id, COALESCE(a.name, '') AS name, COALESCE(a.email, '') AS email, m.body, m.direction, m.sent_at, m.agent_email,
-            (SELECT count(*)::int FROM os_tenant_messages u WHERE u.account_id = m.account_id AND u.direction = 'tenant' AND u.read_at IS NULL) AS unread
-       FROM os_tenant_messages m
-       LEFT JOIN os_portal_accounts a ON a.id = m.account_id
-      WHERE ($2::boolean OR EXISTS (SELECT 1 FROM os_tenant_messages t WHERE t.account_id = m.account_id AND lower(t.agent_email) = lower($1)))
-      ORDER BY m.account_id, m.sent_at DESC
-      LIMIT 300`,
-    [me.email, all]
+    `SELECT * FROM (
+       SELECT DISTINCT ON (m.account_id) m.account_id, COALESCE(a.name, '') AS name, COALESCE(a.email, '') AS email, m.body, m.direction, m.sent_at, m.agent_email,
+              (SELECT count(*)::int FROM os_tenant_messages u WHERE u.account_id = m.account_id AND u.direction = 'tenant' AND u.read_at IS NULL) AS unread
+         FROM os_tenant_messages m
+         LEFT JOIN os_portal_accounts a ON a.id = m.account_id
+        ORDER BY m.account_id, m.sent_at DESC
+     ) x
+     WHERE lower(COALESCE(x.agent_email, '')) = lower($1)
+        OR ($2::boolean AND lower(COALESCE(x.agent_email, '')) IN ('', $3))
+     ORDER BY x.sent_at DESC
+     LIMIT 300`,
+    [me.email, owner, OFFICE_INBOX]
   ).catch(() => []);
   for (const r of tenant) {
+    /* The thread is whoever its latest message went to (a reply keeps it
+       there, tenantAgentEmail). */
+    const to = (r.agent_email ?? "").trim().toLowerCase();
+    const mine = to === me.email.trim().toLowerCase();
+    if (!mine && !(owner && (!to || to === OFFICE_INBOX))) continue;
+    const key = `tenant:${r.account_id}`;
+    const at = iso(r.sent_at)!;
+    const st = states.get(key);
+    if (gone(st, at)) continue;
     out.push({
-      key: `tenant:${r.account_id}`,
+      key,
       kind: "tenant",
       name: r.name || r.email || "A tenant",
       about: "Tenant portal",
-      last: { body: r.body, from: r.direction === "agent" ? "agent" : "customer", at: iso(r.sent_at)! },
+      last: { body: r.body, from: r.direction === "agent" ? "agent" : "customer", at },
       unread: r.unread,
+      archived: Boolean(st?.archived),
     });
   }
 
@@ -111,7 +196,8 @@ export async function landlordThread(me: OsUser, appraisalId: string, markRead: 
     const toMe = await q<{ n: number }>(`SELECT count(*)::int AS n FROM os_landlord_messages WHERE appraisal_id = $1 AND lower(to_email) = lower($2)`, [appraisalId, me.email]).catch(() => []);
     if (!toMe[0]?.n) return null;
   }
-  const messages: ThreadMessage[] = await threadFor(appraisalId);
+  const cleared = await clearedAt(me.id, `landlord:${appraisalId}`);
+  const messages: ThreadMessage[] = (await threadFor(appraisalId)).filter((m) => !cleared || m.sentAt > cleared);
   if (markRead) await markThreadRead(appraisalId);
   return {
     ma,
@@ -140,7 +226,8 @@ export async function tenantThread(me: OsUser, accountId: string, markRead: bool
     const mine = await q<{ n: number }>(`SELECT count(*)::int AS n FROM os_tenant_messages WHERE account_id = $1 AND lower(agent_email) = lower($2)`, [accountId, me.email]).catch(() => []);
     if (!mine[0]?.n) return null;
   }
-  const messages = await tenantMessages(accountId);
+  const cleared = await clearedAt(me.id, `tenant:${accountId}`);
+  const messages = (await tenantMessages(accountId)).filter((m) => !cleared || m.at > cleared);
   if (markRead) await q(`UPDATE os_tenant_messages SET read_at = NOW() WHERE account_id = $1 AND direction = 'tenant' AND read_at IS NULL`, [accountId]).catch(() => null);
   return { title: acc[0].name || acc[0].email, email: acc[0].email, messages };
 }
@@ -195,6 +282,8 @@ export interface Room {
   unread: number;
   /** Up to four of a huddle's people, others first and you last, for its picture (none for General). */
   faces: FaceRef[];
+  /** Put away by this person (os_chat_state). */
+  archived: boolean;
 }
 
 async function ensureGeneral(): Promise<void> {
@@ -218,22 +307,33 @@ export async function roomsFor(me: OsUser): Promise<Room[]> {
             l.body, l.author_name AS who, l.created_at AS at,
             (SELECT count(*)::int FROM os_team_messages x
               WHERE x.room_id = r.id AND x.author_id <> $1 AND x.reply_to IS NULL
-                AND x.created_at > COALESCE((SELECT read_at FROM os_team_members y WHERE y.room_id = r.id AND y.user_id = $1), 'epoch')) AS unread
+                AND x.created_at > GREATEST(
+                      COALESCE((SELECT read_at FROM os_team_members y WHERE y.room_id = r.id AND y.user_id = $1), 'epoch'),
+                      COALESCE((SELECT cleared_at FROM os_chat_state c WHERE c.user_id = $1 AND c.chat_key = 'room:' || r.id), 'epoch'))) AS unread
        FROM os_team_rooms r
        LEFT JOIN LATERAL (SELECT body, author_name, created_at FROM os_team_messages WHERE room_id = r.id ORDER BY created_at DESC LIMIT 1) l ON TRUE
       WHERE r.kind = 'general' OR EXISTS (SELECT 1 FROM os_team_members m WHERE m.room_id = r.id AND m.user_id = $1)
       ORDER BY (r.kind = 'general') DESC, COALESCE(l.created_at, r.created_at) DESC`,
     [me.id]
   ).catch(() => []);
-  return rows.map((r) => ({
-    id: r.id,
-    kind: r.kind === "general" ? "general" : "huddle",
-    name: r.name,
-    members: r.members,
-    last: r.body ? { body: r.body, who: r.who ?? "", at: iso(r.at)! } : null,
-    unread: r.unread,
-    faces: r.faces ?? [],
-  }));
+  const states = await chatStates(me.id);
+  return rows
+    .filter((r) => !gone(states.get(`room:${r.id}`), r.at ? iso(r.at) : null))
+    .map((r) => {
+      const st = states.get(`room:${r.id}`);
+      /* What was said before a delete is not the last message any more. */
+      const shown = r.body && !(st?.clearedAt && iso(r.at)! <= st.clearedAt);
+      return {
+        id: r.id,
+        kind: r.kind === "general" ? ("general" as const) : ("huddle" as const),
+        name: r.name,
+        members: r.members,
+        last: shown ? { body: r.body!, who: r.who ?? "", at: iso(r.at)! } : null,
+        unread: r.unread,
+        faces: r.faces ?? [],
+        archived: Boolean(st?.archived),
+      };
+    });
 }
 
 export interface TeamMessage {
@@ -269,9 +369,10 @@ export async function roomMessages(me: OsUser, roomId: string, replyTo: string |
        FROM os_team_messages m
        LEFT JOIN os_users u ON u.id = m.author_id
       WHERE m.room_id = $1 AND ${replyTo ? "(m.reply_to = $2 OR m.id = $2)" : "m.reply_to IS NULL"}
+        AND m.created_at > COALESCE((SELECT cleared_at FROM os_chat_state c WHERE c.user_id = $${replyTo ? 3 : 2} AND c.chat_key = 'room:' || m.room_id), 'epoch')
       ORDER BY m.created_at DESC
       LIMIT 200`,
-    replyTo ? [roomId, replyTo] : [roomId]
+    replyTo ? [roomId, replyTo, me.id] : [roomId, me.id]
   ).catch(() => []);
   /* How far they have read: a member row, made for General on first open. */
   await q(

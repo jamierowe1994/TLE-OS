@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
 import { currentTenant } from "@/lib/tenant-account";
 import { loadTenantHome } from "@/lib/tenant-home-view";
-import { addTenantMessage, markTenantEmailed, tenantMessages } from "@/lib/chats";
+import { addTenantMessage, markTenantEmailed, OFFICE_INBOX, tenantMessages } from "@/lib/chats";
+import { agentEmailFor, latestEnquiry } from "@/lib/tenant-find";
 import { emailAgentAboutTenant } from "@/lib/chats-email";
 import { publicOrigin } from "@/lib/origin";
 
@@ -15,14 +16,17 @@ import { publicOrigin } from "@/lib/origin";
  *                    is emailed, and it shows in the agent's Chats
  *
  * Their agent is the one the portal already names (loadTenantHome): the
- * agent on their deal, else the one who issued their passport. With no agent
- * yet it goes to the office's own inbox, so nothing is lost.
+ * agent on their deal, else the one who issued their passport. Else the agent
+ * of the home they last asked about (James, 12 Oct 2026: "if they've inquired
+ * on 7 Dover Close, and that's under Rhiannon's name ... it would then file
+ * into hers"). With none of those it goes to the office's own inbox, so
+ * nothing is lost. The thread is then that agent's alone in Chats.
  */
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const OFFICE = "hello@thelettingexperts.co.uk";
+const OFFICE = OFFICE_INBOX;
 
 export async function GET() {
   const me = await currentTenant();
@@ -38,7 +42,12 @@ export async function POST(req: NextRequest) {
   if (!text) return NextResponse.json({ ok: false, error: "Write your message first." }, { status: 400 });
 
   const home = await loadTenantHome(me).catch(() => null);
-  const agentEmail = home?.agent?.email?.trim().toLowerCase() || OFFICE;
+  let agentEmail = home?.agent?.email?.trim().toLowerCase() || "";
+  if (!agentEmail) {
+    const asked = await latestEnquiry(me.email).catch(() => null);
+    if (asked) agentEmail = ((await agentEmailFor(asked.listingId, null).catch(() => null)) ?? "").trim().toLowerCase();
+  }
+  agentEmail ||= OFFICE;
   const message = await addTenantMessage({ accountId: me.id, direction: "tenant", body: text, agentEmail });
   try {
     await emailAgentAboutTenant({

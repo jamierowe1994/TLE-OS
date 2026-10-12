@@ -24,7 +24,8 @@ export async function GET(req: NextRequest) {
       ok: true,
       work,
       rooms,
-      unread: { work: work.reduce((s, t) => s + t.unread, 0), play: rooms.reduce((s, r) => s + r.unread, 0) },
+      /* Archived chats keep their own count, under Archived, not in the tabs'. */
+      unread: { work: work.reduce((s, t) => s + (t.archived ? 0 : t.unread), 0), play: rooms.reduce((s, r) => s + (r.archived ? 0 : r.unread), 0) },
     });
   } catch {
     return NextResponse.json({ ok: false, error: "Your chats did not load." }, { status: 502 });

@@ -24,8 +24,9 @@ type Thread = {
   about: string;
   last: { body: string; from: "customer" | "agent"; at: string };
   unread: number;
+  archived?: boolean;
 };
-type Room = { id: string; kind: "general" | "huddle"; name: string; members: number; last: { body: string; who: string; at: string } | null; unread: number; faces?: Array<{ id: string; name: string; photo: string | null }> };
+type Room = { id: string; kind: "general" | "huddle"; name: string; members: number; last: { body: string; who: string; at: string } | null; unread: number; faces?: Array<{ id: string; name: string; photo: string | null }>; archived?: boolean };
 
 type Half = "work" | "play";
 
@@ -40,7 +41,9 @@ export default function PhoneChats() {
       .then((r) => r.json())
       .then((j: { ok?: boolean; error?: string; work?: Thread[]; rooms?: Room[]; unread?: { work: number; play: number } }) => {
         if (!j.ok) throw new Error(j.error ?? "Your chats did not load.");
-        setData({ work: j.work ?? [], rooms: j.rooms ?? [], unread: j.unread ?? { work: 0, play: 0 } });
+        /* Archived in Huddles on the desktop stays out of the way here too. */
+        const live = <T extends { archived?: boolean }>(xs: T[]) => xs.filter((x) => !x.archived);
+        setData({ work: live(j.work ?? []), rooms: live(j.rooms ?? []), unread: j.unread ?? { work: 0, play: 0 } });
       })
       .catch((e: Error) => setError(e.message));
   };
