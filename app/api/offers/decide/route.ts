@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { mayDecideRexApp, mayOfferOn } from "@/lib/offer-access";
-import { getApplicationById } from "@/lib/applications";
+import { forgetApplications, getApplicationById } from "@/lib/applications";
+import { markApplicationsFiled } from "@/lib/applications-board";
 import { hasDb, q } from "@/lib/db";
 import { clearDecision, isDecisionRef, recordDecision } from "@/lib/offer-decisions";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
@@ -57,6 +58,12 @@ export async function POST(req: NextRequest) {
     const app = await getApplicationById(ref.slice(4)).catch(() => null);
     if (app?.listingId != null) listingId = String(app.listingId);
   }
+  /* An OS offer undone from its application's file (12 Oct 2026) arrives
+     without its listing: the offer itself knows it. */
+  if (ref.startsWith("os:") && !listingId && hasDb()) {
+    const rows = await q<{ listing_id: string | null }>(`SELECT listing_id FROM os_tenant_viewing_responses WHERE id = $1`, [ref.slice(3)]).catch(() => []);
+    if (rows[0]?.listing_id) listingId = String(rows[0].listing_id);
+  }
   /* The office on any offer; an agent on the offers on their own listings,
      and a REX application only when it is in their own scope. */
   const mine = ref.startsWith("os:") ? await mayOfferOn(req, who, listingId) : await mayDecideRexApp(req, who, ref.slice(4)).catch(() => false);
@@ -65,6 +72,10 @@ export async function POST(req: NextRequest) {
   try {
     if (decision === "undo") await clearDecision(ref);
     else await recordDecision({ ref, listingId, decision, by: { name: actor.name || actor.email, email: actor.email } });
+    /* An accept makes an application (lib/applications); the page the agent
+       lands on next must have it, not a minute-old pull without it. */
+    forgetApplications();
+    markApplicationsFiled();
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("offer decision failed", e);

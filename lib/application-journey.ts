@@ -16,6 +16,7 @@ import { withoutDuplicates } from "@/lib/business/deal-dupes";
 import { flatbondForDeal, loadFlatbonds } from "@/lib/business/flatfair-deal";
 import { PORTAL_STAGES, propolyDealUrl } from "@/lib/business/propoly-stages";
 import { switchOn } from "@/lib/switches";
+import { q } from "@/lib/db";
 import { closedReasons, getApplications } from "@/lib/applications";
 import { feeOf, otherOpenOffers } from "@/lib/offer-hold";
 
@@ -243,7 +244,9 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
     switchOn("handover_deal").catch(() => false),
   ]);
 
-  const deal = accepted && allDeals ? findDeal(app, allDeals) : null;
+  /* A tenant swap's home already has a deal - the tenancy being changed - so
+     only the deal its own push started counts (lib/tenant-swaps). */
+  const deal = accepted && allDeals && !app.swap ? findDeal(app, allDeals) : null;
 
   /* THE OTHER OFFERS, HELD (9 Oct 2026). Accepting one leaves the rest open
      until the accepted tenant's holding fee is paid, so the home is not left
@@ -251,7 +254,7 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
      others know is the first thing on the file (lib/offer-hold). */
   const fee = feeOf(deal);
   let held: Awaited<ReturnType<typeof otherOpenOffers>> = [];
-  if (accepted && app.listingId != null) {
+  if (accepted && app.listingId != null && !app.swap) {
     const listingId = String(app.listingId);
     const here = (await getApplications(300).catch(() => [] as Application[])).filter((a) => String(a.listingId ?? "") === listingId);
     const closed = await closedReasons(here).catch(() => new Map<string, string>());
@@ -338,7 +341,7 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
   }
 
   /* What the packet says is short - these are the agent's jobs whatever stage it is at. */
-  if (handoff) {
+  if (handoff && !app.swap) {
     if (!handoff.landlord) {
       actions.push({ id: "landlord", label: "Add the landlord to the listing", detail: "No landlord is on the listing, so there is nobody to set up in Propoly or email.", href: null, who: "you" });
     }
@@ -500,11 +503,17 @@ export async function stageLabels(apps: Application[]): Promise<Map<string, stri
   const isAccepted = (a: Application) => a.status === "accepted" || a.osDecision?.decision === "accepted";
   const accepted = apps.filter(isAccepted);
   const all = accepted.length ? await deals().catch(() => null) : null;
+  /* Only a live push that finished counts: a blocked one leaves it waiting. */
+  const swapsPushed = apps.some((a) => a.swap)
+    ? new Set((await q<{ application_id: string }>(`SELECT DISTINCT application_id FROM os_handovers WHERE mode = 'live' AND status = 'ok' AND application_id LIKE 'swap:%'`).catch(() => [])).map((r) => r.application_id))
+    : new Set<string>();
 
   for (const a of apps) {
     if (a.status === "unsuccessful") { out.set(a.id, "Unsuccessful"); continue; }
     if (!isAccepted(a) && a.status === "received") { out.set(a.id, "Not put to landlord"); continue; }
     if (!isAccepted(a) && a.status === "communicated") { out.set(a.id, "Landlord decision"); continue; }
+    /* A swap's home has the old tenancy's deal: its own shows up once pushed. */
+    if (a.swap) { out.set(a.id, swapsPushed.has(a.id) ? "In Propoly" : "Handover due"); continue; }
     const deal = all ? findDeal(a, all) : null;
     out.set(a.id, deal ? dealStatusLabel(deal.statusKey) : all ? "Handover due" : "Accepted");
   }

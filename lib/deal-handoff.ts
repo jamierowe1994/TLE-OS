@@ -169,7 +169,14 @@ export interface Handoff {
   property: string;
   locality: string;
   landlord: HandoffParty | null;
-  tenants: (HandoffParty & { isPrimary: boolean })[];
+  /** `reference: false` - already a tenant, on the deal but not referenced (a tenant swap). */
+  tenants: (HandoffParty & { isPrimary: boolean; reference?: boolean })[];
+  /** A tenant swap (lib/tenant-swaps): the push starts a NEW deal rather than
+   *  joining the one the home already has, on a home Propoly already holds
+   *  with its landlord. */
+  swap?: boolean;
+  /** The swap's home when it has no REX listing (see Application.swap.home). */
+  swapHome?: { line1: string; postcode: string; agentEmail: string | null; managed: boolean } | null;
   rentPcm: number | null;
   startDate: string | null;
   agreementMonths: number | null;
@@ -267,17 +274,25 @@ export async function buildHandoff(application: Application): Promise<Handoff> {
 
   const unrecognised = docs.filter((d) => !d.kind).map((d) => d.name);
 
+  const joining = new Set(application.swap?.joining ?? []);
   const tenants = application.applicants.map((a) => ({
     contactId: a.contactId,
     name: a.name,
     email: a.email,
     phone: a.phone,
     isPrimary: a.isPrimary,
+    ...(application.swap ? { reference: joining.has(a.name) } : {}),
   }));
 
   const blockers: string[] = [];
-  if (!listingId) blockers.push("No listing on the application.");
-  if (!landlord) {
+  /* A swap is on a home Propoly already has, landlord and all; a REX PM home
+     has no REX listing to read one from. */
+  const swap = Boolean(application.swap);
+  if (!listingId && !swap) blockers.push("No listing on the application.");
+  if (swap && !listingId && !application.swap?.home.postcode) blockers.push("No postcode for this home, so it can't be found in Propoly.");
+  if (swap) {
+    /* nothing about the landlord: Propoly holds them on the home */
+  } else if (!landlord) {
     blockers.push(
       "No landlord on the listing, so there is nobody to set up in Propoly."
     );
@@ -292,9 +307,12 @@ export async function buildHandoff(application: Application): Promise<Handoff> {
     );
   }
   if (!tenants.length) blockers.push("No applicants on the application.");
-  if (tenants.some((t) => !t.email)) {
+  /* A swap's staying tenants are already tenants: one with no email is added
+     to the deal in Propoly by hand, it doesn't stop the newcomer's push. */
+  const mustHaveEmail = tenants.filter((t) => t.reference !== false);
+  if (mustHaveEmail.some((t) => !t.email)) {
     blockers.push(
-      `${tenants.filter((t) => !t.email).map((t) => t.name).join(", ")} has no email address.`
+      `${mustHaveEmail.filter((t) => !t.email).map((t) => t.name).join(", ")} has no email address.`
     );
   }
   if (!application.startDate) blockers.push("No move-in date agreed.");
@@ -322,6 +340,7 @@ export async function buildHandoff(application: Application): Promise<Handoff> {
     agreementMonths: application.agreementMonths,
     acceptedOn: application.dateAccepted,
     agent: application.agent,
+    ...(application.swap ? { swap: true, swapHome: application.swap.home } : {}),
     documents: docs,
     certificates,
     missing,

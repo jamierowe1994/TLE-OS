@@ -187,6 +187,17 @@ export interface Application {
   updatedAt: number | null;
   /** True when nobody has recorded Right to Rent for every adult applicant. */
   rightToRentIncomplete: boolean;
+  /** A tenant swap (lib/tenant-swaps): who leaves, who stays, who joins. Only
+   *  the joiners are referenced, and the push starts a new deal. */
+  swap?: {
+    leaving: string[];
+    staying: string[];
+    joining: string[];
+    /** The home as the push needs it when it has no REX listing (a REX PM
+     *  home, "pm-link-<property>"): its first line and postcode to find it in
+     *  Propoly, who manages the deal, and the service. */
+    home: { line1: string; postcode: string; agentEmail: string | null; managed: boolean };
+  } | null;
 }
 
 /* ── reading the prose back out ───────────────────────────────────────────── */
@@ -507,7 +518,11 @@ export async function getApplications(limit = 100, rexUserId?: string | null): P
   }
   /* Offers accepted in the OS are applications too (12 Oct 2026, below). */
   if (limit >= 100) {
-    for (const a of await osAcceptedApplications(rexUserId ?? null, out).catch(() => [] as Application[])) {
+    const extra = await Promise.all([
+      osAcceptedApplications(rexUserId ?? null, out).catch(() => [] as Application[]),
+      swapApplications(rexUserId ?? null).catch(() => [] as Application[]),
+    ]);
+    for (const a of extra.flat()) {
       if (seen.has(a.id)) continue;
       seen.add(a.id);
       out.push(a);
@@ -615,9 +630,85 @@ async function osAcceptedApplications(rexUserId: string | null, rexApps: Applica
   return out;
 }
 
-/** An application made from an offer accepted in the OS (see above). */
+/** The book changed in the OS (an offer decided, a swap made): the minute's
+ *  held pull is out of date, so the next read is fresh. */
+export function forgetApplications(): void {
+  appsCache.clear();
+}
+
+/** An application made in the OS - an offer accepted here, or a tenant swap. */
 export function isOsApplication(id: string): boolean {
-  return id.startsWith("os:");
+  return id.startsWith("os:") || id.startsWith("swap:");
+}
+
+/* ── TENANT SWAPS ARE APPLICATIONS TOO (12 Oct 2026, lib/tenant-swaps) ───── */
+const surnameKey = (n: string) => { const w = n.toLowerCase().replace(/[^a-z\s]/g, " ").trim().split(/\s+/); return `${w[0] ?? ""} ${w[w.length - 1] ?? ""}`; };
+async function nameOfRexUser(rexUserId: string): Promise<string | null> {
+  const rows = await q<{ name: string | null }>(`SELECT name FROM os_users WHERE rex_user_id = $1 LIMIT 1`, [rexUserId]).catch(() => []);
+  return rows[0]?.name ?? null;
+}
+async function swapApplications(rexUserId: string | null): Promise<Application[]> {
+  if (!hasDb()) return [];
+  const { openSwaps } = await import("@/lib/tenant-swaps");
+  const out: Application[] = [];
+  for (const sw of await openSwaps()) {
+    /* A REX PM home has no REX listing ("pm-link-<property id>"). */
+    const listing = /^\d+$/.test(sw.listingId) ? await listingRow(sw.listingId) : null;
+    const rexPropertyId = sw.listingId.startsWith("pm-link-") ? sw.listingId.slice(8) : null;
+    const osHome = rexPropertyId
+      ? (await q<{ name: string; postcode: string | null; service_level: string | null; agent_name: string | null }>(`SELECT name, postcode, service_level, agent_name FROM os_properties WHERE rex_property_id = $1 ORDER BY active DESC LIMIT 1`, [rexPropertyId]).catch(() => []))[0] ?? null
+      : null;
+    const agents = [listing?.listing_agent_1, listing?.listing_agent_2].map((x) => {
+      const v = (x as Row | null)?.id;
+      return v == null ? null : String(v);
+    });
+    /* A REX PM home has no listing agent to scope by: the agent named on it
+       or whoever made the swap sees it, and the office. */
+    if (rexUserId && listing && !agents.includes(String(rexUserId))) continue;
+    if (rexUserId && !listing) {
+      const me = await nameOfRexUser(rexUserId);
+      const same = (a: string | null | undefined) => Boolean(me && a && surnameKey(a) === surnameKey(me));
+      if (!same(osHome?.agent_name) && !same(sw.by)) continue;
+    }
+    const at = Math.floor(new Date(sw.at).getTime() / 1000);
+    const postcode = (sw.property.match(/[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\s*$/i)?.[0] ?? osHome?.postcode ?? "").trim().toUpperCase();
+    const line1 = osHome?.name ?? sw.property.split(",")[0];
+    const shaped = shapeApplication({
+      id: `swap:${sw.id}`,
+      application_status: { id: "accepted", text: "Tenant swap" },
+      listing: listing ? { ...listing, id: Number(sw.listingId) } : {},
+      agent: (listing?.listing_agent_1 as Row | null) ?? null,
+      offer_amount: sw.rentPcm,
+      start_date: sw.moveIn,
+      num_of_occupants: sw.staying.length + sw.joining.length,
+      date_received: sw.at.slice(0, 10),
+      date_accepted: sw.at.slice(0, 10),
+      system_ctime: at,
+      system_modtime: at,
+      system_created_user: { name: sw.by },
+    });
+    const person = (x: { name: string; email: string | null; phone: string | null; contactId?: string | null }, isPrimary: boolean): Applicant => ({
+      id: null, contactId: x.contactId ?? null, name: x.name, email: x.email, phone: x.phone, isPrimary, dob: null, incomePerYear: null, employmentRex: null, guarantorCount: 0, keyInfo: null,
+    });
+    out.push({
+      ...shaped,
+      property: listing ? shaped.property : sw.property.split(",")[0],
+      agent: listing ? shaped.agent : sw.by,
+      statusLabel: "Tenant swap",
+      conditions: [`Tenant swap: ${sw.leaving.map((x) => x.name).join(", ")} out, ${sw.joining.map((x) => x.name).join(", ")} in.`, sw.note].filter(Boolean).join(" "),
+      osDecision: null,
+      applicants: [...sw.joining.map((x, i) => person(x, i === 0)), ...sw.staying.map((x) => person(x, false))],
+      rightToRentIncomplete: true,
+      locality: listing ? shaped.locality : sw.property.split(",").slice(1).join(",").trim() || shaped.locality,
+      swap: {
+        leaving: sw.leaving.map((x) => x.name),
+        staying: sw.staying.map((x) => x.name),
+        joining: sw.joining.map((x) => x.name),
+        home: { line1, postcode, agentEmail: sw.byEmail, managed: listing ? true : (osHome?.service_level ?? "managed") === "managed" },
+      },
+    });
+  }
+  return out;
 }
 
 /** Every application matching some criteria: the first page says how many,

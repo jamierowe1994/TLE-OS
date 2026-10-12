@@ -62,7 +62,8 @@ type Action =
   | { kind: "repair" | "planned"; draft?: PropertyDraft }
   | { kind: "inspection"; inspection: Inspection }
   | { kind: "notices"; start: NoticeKind }
-  | { kind: "tenant-notice"; draft?: PropertyDraft };
+  | { kind: "tenant-notice"; draft?: PropertyDraft }
+  | { kind: "swap" };
 const DRAFT_TITLE: Record<string, string> = { repair: "Report a repair", planned: "Plan a certificate", "tenant-notice": "Tenant gave notice" };
 
 /** One line on the latest activity list. */
@@ -690,6 +691,12 @@ export default function PropertyPage() {
                 <button type="button" onClick={() => act({ kind: "notices", start: "s8" })} disabled={roomsOnly} className={tile}>{tileIcon("file-contract")}{tileText("Serve notice", "Section 8, checked by compliance")}</button>
                 <button type="button" onClick={() => act({ kind: "notices", start: "s13" })} disabled={roomsOnly} className={tile}>{tileIcon("coin")}{tileText("Rent review", "Section 13 rent increase")}</button>
                 <button type="button" disabled={!canAct || !tenants.length} onClick={() => act({ kind: "tenant-notice" })} className={tile}>{tileIcon("logout")}{tileText("Tenant gave notice", "Starts the move-out")}</button>
+                {/* Lianna, 12 Oct 2026: one sharer out, their replacement in, no
+                    viewing or offer. Any home with more than one tenant, or let
+                    by the room (44 South Bridge isn't recorded as an HMO). */}
+                {(tenants.length > 1 || Boolean(house)) && (
+                  <button type="button" disabled={!canAct || !tenants.length} onClick={() => act({ kind: "swap" })} className={tile}>{tileIcon("User")}{tileText("Tenant swap", "One leaves, their replacement moves in")}</button>
+                )}
                 <button type="button" disabled={!propertyId} onClick={() => { pickTab("compliance"); setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }} className={tile}>{tileIcon("shield")}{tileText("Add a certificate", "Read and filed on the home")}</button>
                 {canAct && noticeIn ? (
                   <button type="button" disabled={visits.state !== "ready"} onClick={() => void bookCheckout()} className={tile}>{tileIcon("key")}{tileText("Book the check-out", leaving?.moveOutOn ? `They leave ${day(leaving.moveOutOn)}` : "Notice is in")}</button>
@@ -1009,6 +1016,11 @@ export default function PropertyPage() {
           />
         </Modal>
       )}
+      {action?.kind === "swap" && (
+        <Modal onClose={closeAction} title="Tenant swap">
+          <SwapSheet listingId={String(p.listingId)} tenants={tenants} rent={p.rentMonthly ?? null} onClose={closeAction} />
+        </Modal>
+      )}
       {/* Michael's Section 8 / 13 checklist is its own pop-up already. */}
       {action?.kind === "notices" && !roomsOnly && (
         <HomeNotices key={`start-${action.start}-${p.listingId}`} home={noticeHome} start={action.start} bare onDone={() => { setAction(null); loadNotices(); }} />
@@ -1317,6 +1329,105 @@ function NoticeSheet({
         <button type="button" onClick={onClose} className="rounded-full border border-line/80 px-4 py-2 text-[12.5px] text-muted hover:text-ink">Cancel</button>
         <PressButton onClick={() => void save()} className={`rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page ${busy ? "opacity-50" : ""}`}>
           {busy ? "Recording…" : "Record notice"}
+        </PressButton>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * TENANT SWAP (Lianna, 12 Oct 2026; lib/tenant-swaps). Who is leaving, who is
+ * coming in, and when. It becomes an application with Push to Propoly on its
+ * file: a new deal with everyone on it, and only the newcomer referenced.
+ */
+function SwapSheet({ listingId, tenants, rent, onClose }: { listingId: string; tenants: Party[]; rent: number | null; onClose: () => void }) {
+  const [leaving, setLeaving] = useState<Set<string>>(() => new Set());
+  const [joining, setJoining] = useState([{ name: "", email: "", phone: "" }]);
+  const [moveIn, setMoveIn] = useState("");
+  const [rentPcm, setRentPcm] = useState(rent ? String(rent) : "");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const field = "mt-1 w-full rounded-lg border border-line/80 bg-box px-3 py-2.5 text-[13px] outline-none focus:border-ink";
+  const label = "block text-[10px] font-bold uppercase tracking-wider text-muted";
+  const setJoiner = (i: number, k: "name" | "email" | "phone", v: string) => setJoining((js) => js.map((j, n) => (n === i ? { ...j, [k]: v } : j)));
+
+  async function save() {
+    if (!leaving.size) return setErr("Tick who is leaving.");
+    const people = joining.filter((j) => j.name.trim());
+    if (!people.length) return setErr("Add who is moving in.");
+    const noEmail = people.find((j) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(j.email.trim()));
+    if (noEmail) return setErr(`${noEmail.name.trim()} needs an email address - their referencing is sent to it.`);
+    if (!moveIn) return setErr("When are they moving in?");
+    setBusy(true);
+    setErr(null);
+    const r = await fetch("/api/tenant-swaps", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ listingId, leaving: [...leaving], joining: people, moveIn, rentPcm: Number(rentPcm) || undefined, note }),
+    }).then((x) => x.json()).catch(() => null);
+    if (!r?.ok) {
+      setBusy(false);
+      return setErr(r?.error ?? "The swap could not be saved.");
+    }
+    window.location.assign(`/applications?open=${encodeURIComponent(r.application)}`);
+  }
+
+  return (
+    <div>
+      <p className="text-[12.5px] leading-relaxed text-muted">
+        One tenant leaving and their replacement moving in, with no viewing or offer. It goes onto Applications, where Push to Propoly starts a new deal with everyone on it and sends only the new tenant for referencing.
+      </p>
+      <div className="mt-4 grid gap-4">
+        <div>
+          <span className={label}>Who is leaving</span>
+          <div className="mt-1.5 grid gap-1.5">
+            {tenants.map((t) => (
+              <label key={t.contactId} className="flex items-center gap-2.5 rounded-lg border border-line/70 bg-white px-3 py-2 text-[13px]">
+                <input
+                  type="checkbox"
+                  checked={leaving.has(t.contactId)}
+                  onChange={(e) => setLeaving((s) => { const n = new Set(s); if (e.target.checked) n.add(t.contactId); else n.delete(t.contactId); return n; })}
+                />
+                <span className="min-w-0 flex-1 truncate">{t.name}</span>
+                {!t.email && <span className="text-[11px] text-muted">no email</span>}
+              </label>
+            ))}
+          </div>
+        </div>
+        <div>
+          <span className={label}>Who is moving in</span>
+          {joining.map((j, i) => (
+            <div key={i} className="mt-1.5 grid gap-2 sm:grid-cols-3">
+              <input value={j.name} onChange={(e) => setJoiner(i, "name", e.target.value)} placeholder="Full name" className={field} />
+              <input type="email" value={j.email} onChange={(e) => setJoiner(i, "email", e.target.value)} placeholder="Email" className={field} />
+              <input type="tel" value={j.phone} onChange={(e) => setJoiner(i, "phone", e.target.value)} placeholder="Mobile" className={field} />
+            </div>
+          ))}
+          <button type="button" onClick={() => setJoining((js) => [...js, { name: "", email: "", phone: "" }])} className="mt-2 text-[12px] font-semibold text-accent-dark underline-offset-2 hover:underline">
+            + Another person moving in
+          </button>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label>
+            <span className={label}>Moving in on</span>
+            <input type="date" value={moveIn} onChange={(e) => setMoveIn(e.target.value)} className={field} />
+          </label>
+          <label>
+            <span className={label}>Rent for the home, a month</span>
+            <input inputMode="decimal" value={rentPcm} onChange={(e) => setRentPcm(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="£" className={field} />
+          </label>
+        </div>
+        <label>
+          <span className={label}>Note</span>
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Found through SpareRoom, documents sent, anything agreed." className={field} />
+        </label>
+      </div>
+      {err && <p className="mt-4 text-[12.5px] text-accent-dark">{err}</p>}
+      <div className="mt-5 flex items-center justify-end gap-2">
+        <button type="button" onClick={onClose} className="rounded-full border border-line/80 px-4 py-2 text-[12.5px] text-muted hover:text-ink">Cancel</button>
+        <PressButton onClick={() => void save()} className={`rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page ${busy ? "opacity-50" : ""}`}>
+          {busy ? "Saving…" : "Make the swap"}
         </PressButton>
       </div>
     </div>

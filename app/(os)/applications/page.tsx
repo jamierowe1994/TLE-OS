@@ -432,6 +432,18 @@ export default function Applications() {
           onAgents={setBoardAgents}
           openDeal={boardDeal}
           onDealClosed={() => setBoardDeal(null)}
+          waiting={(apps ?? [])
+            .filter((a) => isLet(a) && !a.closed && (a.stageLabel === "Handover due" || a.stageLabel === "Accepted"))
+            .map((a) => ({
+              id: a.id,
+              property: a.property,
+              locality: a.locality,
+              image: a.image,
+              tenant: a.applicants.find((p) => p.isPrimary)?.name ?? a.applicants[0]?.name ?? "No tenant recorded",
+              agent: a.agent,
+              moveIn: a.startDate,
+              swap: Boolean(a.swap),
+            }))}
         />
       )}
 

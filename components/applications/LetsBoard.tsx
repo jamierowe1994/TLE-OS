@@ -27,6 +27,11 @@ import type { PreTenancyDeal } from "@/app/api/pretenancy/deals/route";
 
 type Deal = PreTenancyDeal;
 
+/** An accepted let with no deal in Propoly yet (James, 12 Oct 2026: "most
+ *  people are just going to look at the board"). Its own first column, so a
+ *  let is on the board from the moment the offer is accepted. */
+export type WaitingLet = { id: string; property: string; locality: string; image: string | null; tenant: string; agent: string | null; moveIn: string | null; swap: boolean };
+
 const GREEN_PILL = "bg-[#f1f4ec] text-[#56634a]";
 const RED_PILL = "bg-[#fdefec] text-[#9d4340]";
 const AMBER_PILL = "bg-amber-50 text-amber-700";
@@ -250,7 +255,10 @@ export default function LetsBoard({
   q = "",
   agent: agentIn,
   onAgents,
+  waiting = [],
 }: {
+  /** Accepted, not in Propoly yet: the Push to Propoly column. */
+  waiting?: WaitingLet[];
   /** When the page draws the agent picker on its own toolbar row, it holds the
    *  choice and is told the names; otherwise the board draws its own. */
   agent?: string | null;
@@ -303,6 +311,10 @@ export default function LetsBoard({
     () => (deals ?? []).filter((d) => !d.archived && d.statusKey !== "cancelled" && !isStale(d) && (!all || !agent || d.agentName === agent) && (!q.trim() || searchMatches(q, d.app.propertyName, d.app.locality, d.agentName, ...d.app.tenants.map((t) => t.name)))),
     [deals, all, agent, q]
   );
+  const waitingShown = useMemo(
+    () => waiting.filter((w) => (!all || !agent || w.agent === agent) && (!q.trim() || searchMatches(q, w.property, w.locality, w.agent ?? "", w.tenant))),
+    [waiting, all, agent, q]
+  );
   const open = (deals ?? []).find((d) => d.app.id === openId) ?? null;
   const agents = useMemo(() => [...new Set((deals ?? []).map((d) => d.agentName).filter((n): n is string => Boolean(n)))].sort(), [deals]);
   useEffect(() => {
@@ -320,7 +332,7 @@ export default function LetsBoard({
           <PickOne tone="pink" label="All agents" icon="user" options={agents.map((a) => ({ id: a, label: a }))} value={agent} onChange={setAgent} />
         </div>
       )}
-      {live.length === 0 ? (
+      {live.length === 0 && waitingShown.length === 0 ? (
         <p className="rounded-[22px] border border-line/50 bg-white p-8 text-center text-[13px] text-muted">
           {q.trim()
             ? "No let matches that search."
@@ -329,6 +341,28 @@ export default function LetsBoard({
       ) : (
         <section className="fade-up -mx-1 overflow-x-auto px-1 pb-4">
           <div className="flex items-start gap-3">
+            {/* Accepted, and not in Propoly yet: the first job on every let. */}
+            <div style={{ width: "clamp(200px, 14.4vw, 260px)" }} className="flex shrink-0 flex-col rounded-[16px] bg-[var(--board-col)] p-2">
+              <div className="flex items-center gap-2 px-1.5 pb-2.5 pt-1.5">
+                <span aria-hidden className="h-3.5 w-[3px] rounded-full" style={{ background: "#b9a7a2" }} />
+                <span className="truncate text-[13px] font-medium text-ink">Accepted</span>
+                <span className="ml-auto rounded-md bg-[var(--shell-panel)] px-1.5 py-0.5 text-[11px] font-medium text-muted">{waitingShown.length}</span>
+              </div>
+              <div className="space-y-2">
+                {waitingShown.map((w) => (
+                  <button key={w.id} type="button" onClick={() => onOpenApplication(w.id)} className="btn-press group flex w-full flex-col overflow-hidden rounded-xl border border-black/[0.06] bg-card p-2 text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition hover:border-black/20">
+                    <Photo src={w.image} className="aspect-[16/10] w-full rounded-xl" />
+                    <div className="px-1 pb-1 pt-2.5">
+                      <p className="truncate text-[13px] font-semibold leading-tight">{w.property}</p>
+                      <p className="mt-0.5 truncate text-[11.5px] text-muted">{w.tenant}</p>
+                      <span className={`mt-2 inline-block max-w-full truncate rounded-full px-2.5 py-1 text-[11px] font-semibold ${AMBER_PILL}`}>{w.swap ? "Tenant swap - push to Propoly" : "Push to Propoly"}</span>
+                      {w.moveIn && <p className="mt-2 text-[11px] text-muted">Moving in {fmtDate(w.moveIn)}</p>}
+                    </div>
+                  </button>
+                ))}
+                {waitingShown.length === 0 ? <p className="rounded-xl border border-dashed border-black/10 px-2 py-6 text-center text-[11px] text-muted">Nothing waiting</p> : null}
+              </div>
+            </div>
             {PORTAL_STAGES.map((s) => {
               const dealsIn = live.filter((d) => d.effectiveStatusKey === s.key);
               return (

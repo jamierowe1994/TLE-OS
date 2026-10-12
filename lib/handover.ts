@@ -236,14 +236,28 @@ export async function runHandover(
       await rec.add({ id: "blockers", label: "Before this goes", state: "ok", detail: "Nothing missing." });
     }
 
-    if (!packet.listingId) {
+    if (!packet.listingId && !packet.swapHome) {
       await rec.add({ id: "listing", label: "The listing", state: "failed", detail: "The application has no listing, so there is nothing to hand over." });
       status = "failed";
       throw new Stop();
     }
 
-    /* 1. The listing, raw, for the owners' contact fields and the address parts. */
-    const listingRes = await rexCall("Listings", "read", { id: packet.listingId });
+    /* 1. The listing, raw, for the owners' contact fields and the address parts.
+       A tenant swap on a REX PM home has none: its address, agent and
+       service stand in for one (lib/tenant-swaps). */
+    const swapHome = packet.swap ? packet.swapHome ?? null : null;
+    const listingRes = packet.listingId
+      ? await rexCall("Listings", "read", { id: packet.listingId })
+      : {
+          ok: true as const,
+          error: null,
+          result: {
+            property: { adr_street_name: swapHome?.line1 ?? packet.property, adr_postcode: swapHome?.postcode ?? null },
+            agreement_type: isScottish(swapHome?.postcode ?? null, packet.locality, packet.property) ? { id: "153279" } : null,
+            lettings_service_type: swapHome?.managed ? { id: "managed" } : null,
+            listing_agent_1: { email_address: swapHome?.agentEmail ?? null },
+          } as Row,
+        };
     if (!listingRes.ok) {
       await rec.add({ id: "listing", label: "The listing", state: "failed", detail: `REX would not read listing ${packet.listingId}.`, response: listingRes.error ?? null });
       status = "failed";
@@ -271,12 +285,14 @@ export async function runHandover(
     await rec.add({
       id: "listing",
       label: "The listing",
-      state: uniqueOwners.length ? "ok" : "failed",
-      detail: uniqueOwners.length
-        ? `${uniqueOwners.length} owner${uniqueOwners.length === 1 ? "" : "s"} on the listing: ${uniqueOwners.map((c) => str(c.name) ?? "unnamed").join(", ")}.`
-        : "No owner is attached to the listing, so there is no landlord to create.",
+      state: uniqueOwners.length || packet.swap ? "ok" : "failed",
+      detail: packet.swap
+        ? "A tenant swap: the home and its landlord are already in Propoly, so only the new deal and its tenants go over."
+        : uniqueOwners.length
+          ? `${uniqueOwners.length} owner${uniqueOwners.length === 1 ? "" : "s"} on the listing: ${uniqueOwners.map((c) => str(c.name) ?? "unnamed").join(", ")}.`
+          : "No owner is attached to the listing, so there is no landlord to create.",
     });
-    if (!uniqueOwners.length) {
+    if (!uniqueOwners.length && !packet.swap) {
       status = "failed";
       throw new Stop();
     }
@@ -298,10 +314,12 @@ export async function runHandover(
        and "Flat 2, 76 Fore Street" is never "76 Fore Street"). Short of a sure
        match a live run stops here, before any landlord is written, and asks:
        the close matches to pick from, or a yes that it is new. */
-    const cf = await rexCall("CustomFields", "getValuesKeyedByFieldName", {
-      service_name: "Listings",
-      service_object_id: packet.listingId,
-    });
+    const cf = packet.listingId
+      ? await rexCall("CustomFields", "getValuesKeyedByFieldName", {
+          service_name: "Listings",
+          service_object_id: packet.listingId,
+        })
+      : { ok: false as const, result: null };
     const cfValues = ((cf.ok ? cf.result : null) ?? {}) as Row;
     let propertyUuid = str(cfValues[PROPERTY_UUID_FIELD]);
     let propertyFrom = "";
@@ -375,7 +393,7 @@ export async function runHandover(
 
     if (propertyUuid) {
       await rec.add({ id: "property-match", label: "Property in Propoly", state: "ok", detail: `${propertyFrom} Reusing it, so nothing is duplicated.`, response: { uuid: propertyUuid } });
-    } else if (!opts.newProperty) {
+    } else if (!opts.newProperty || packet.swap) {
       await rec.add({
         id: "property-match",
         label: "Property in Propoly",
@@ -477,8 +495,9 @@ export async function runHandover(
       }
     }
 
-    /* 5. The uuid back onto the REX listing. */
-    if (propertyUuid && !str(cfValues[PROPERTY_UUID_FIELD])) {
+    /* 5. The uuid back onto the REX listing - when there is one (a swap on a
+       REX PM home has none). */
+    if (propertyUuid && packet.listingId && !str(cfValues[PROPERTY_UUID_FIELD])) {
       const payload = { service_name: "Listings", service_object_id: packet.listingId, value_map: { [PROPERTY_UUID_FIELD]: propertyUuid } };
       if (!live) {
         await rec.add({ id: "rex-uuid", label: "Propoly uuid on the REX listing", state: "would", detail: "Would write the uuid to the listing's custom field.", request: payload });
@@ -493,7 +512,7 @@ export async function runHandover(
         }
       }
     } else if (propertyUuid) {
-      await rec.add({ id: "rex-uuid", label: "Propoly uuid on the REX listing", state: "ok", detail: "Already on the listing." });
+      await rec.add(packet.listingId ? { id: "rex-uuid", label: "Propoly uuid on the REX listing", state: "ok", detail: "Already on the listing." } : { id: "rex-uuid", label: "Propoly uuid on the REX listing", state: "skipped", detail: "No REX listing for this home." });
     }
 
     /* 6. Each landlord related to the property.
@@ -551,61 +570,68 @@ export async function runHandover(
       else if (outcome === "blocked" && status === "ok") status = "blocked";
     }
 
-    /* 7. The tenants on the REX listing - once. A push that stopped part-way
-       is pushed again (12b Cliff Road, 9 Oct 2026: property in, landlord
-       refused), and Listings/update would add the same tenants a second
-       time. A step an earlier live push finished is not done again. */
-    const tenantIds = packet.tenants.map((t) => t.contactId).filter((x): x is string => Boolean(x));
-    const tenantsDone = live
-      ? (await handoversFor(applicationId, 10).catch(() => [])).find((r) => r.id !== id && r.mode === "live" && r.steps.some((s) => s.id === "rex-tenants" && s.state === "ok"))
-      : null;
-    if (tenantsDone) {
-      await rec.add({ id: "rex-tenants", label: "Tenants on the REX listing", state: "ok", detail: `Already on the listing from the push on ${new Date(tenantsDone.startedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" })}.` });
-    } else if (tenantIds.length) {
-      const payload = { data: { id: packet.listingId, related: { contact_reln_listing: tenantIds.map((contact_id) => ({ contact_id, reln_type_id: "purchtenant" })) } } };
-      if (!live) {
-        await rec.add({ id: "rex-tenants", label: "Tenants on the REX listing", state: "would", detail: `Would put ${tenantIds.length} tenant${tenantIds.length === 1 ? "" : "s"} on the listing as purchtenant.`, request: payload });
-      } else {
-        try {
-          const res = await rexCall("Listings", "update", payload);
-          await rec.add({ id: "rex-tenants", label: "Tenants on the REX listing", state: res.ok ? "ok" : "failed", detail: res.ok ? "Written." : "REX refused.", request: payload, response: res.ok ? null : res.error });
-          if (!res.ok) status = "failed";
-        } catch (e) {
-          status = "failed";
-          await rec.add({ id: "rex-tenants", label: "Tenants on the REX listing", state: "failed", detail: (e as Error).message, request: payload });
+    /* A tenant swap stops at the deal: REX's tenancy is changed by hand, and
+       nothing is written to the landlord or tenants (lib/tenant-swaps). */
+    if (packet.swap) {
+      await rec.add({ id: "rex-tenants", label: "Tenants on the REX listing", state: "skipped", detail: "A tenant swap: the tenancy in REX is changed by hand." });
+      await rec.add({ id: "tell-customers", label: "Tell the landlord and tenants", state: "skipped", detail: "A tenant swap: nothing is written for them. Tell them as you usually would." });
+    } else {
+      /* 7. The tenants on the REX listing - once. A push that stopped part-way
+         is pushed again (12b Cliff Road, 9 Oct 2026: property in, landlord
+         refused), and Listings/update would add the same tenants a second
+         time. A step an earlier live push finished is not done again. */
+      const tenantIds = packet.tenants.map((t) => t.contactId).filter((x): x is string => Boolean(x));
+      const tenantsDone = live
+        ? (await handoversFor(applicationId, 10).catch(() => [])).find((r) => r.id !== id && r.mode === "live" && r.steps.some((s) => s.id === "rex-tenants" && s.state === "ok"))
+        : null;
+      if (tenantsDone) {
+        await rec.add({ id: "rex-tenants", label: "Tenants on the REX listing", state: "ok", detail: `Already on the listing from the push on ${new Date(tenantsDone.startedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" })}.` });
+      } else if (tenantIds.length) {
+        const payload = { data: { id: packet.listingId, related: { contact_reln_listing: tenantIds.map((contact_id) => ({ contact_id, reln_type_id: "purchtenant" })) } } };
+        if (!live) {
+          await rec.add({ id: "rex-tenants", label: "Tenants on the REX listing", state: "would", detail: `Would put ${tenantIds.length} tenant${tenantIds.length === 1 ? "" : "s"} on the listing as purchtenant.`, request: payload });
+        } else {
+          try {
+            const res = await rexCall("Listings", "update", payload);
+            await rec.add({ id: "rex-tenants", label: "Tenants on the REX listing", state: res.ok ? "ok" : "failed", detail: res.ok ? "Written." : "REX refused.", request: payload, response: res.ok ? null : res.error });
+            if (!res.ok) status = "failed";
+          } catch (e) {
+            status = "failed";
+            await rec.add({ id: "rex-tenants", label: "Tenants on the REX listing", state: "failed", detail: (e as Error).message, request: payload });
+          }
         }
+      } else {
+        await rec.add({ id: "rex-tenants", label: "Tenants on the REX listing", state: "failed", detail: "No tenant on the application has a REX contact id." });
+        status = "failed";
       }
-    } else {
-      await rec.add({ id: "rex-tenants", label: "Tenants on the REX listing", state: "failed", detail: "No tenant on the application has a REX contact id." });
-      status = "failed";
-    }
 
-    /* 8 and 9. The accepted emails - written here, SENT BY THE AGENT.
+      /* 8 and 9. The accepted emails - written here, SENT BY THE AGENT.
 
-       They were REX merge templates 10978 and 10979 (Howard's words, then our
-       own from 16 Sep). Since 2 Oct 2026 (James: "allow the agent to push all
-       of them notifications") the handover sends neither: it puts them with
-       the agent as a customer update (lib/customer-updates), already written,
-       to send from their own address after reading, or to ring instead. */
-    const scotland = str((listing.agreement_type as Row | null)?.id) === "153279";
-    const sender = opts.byId ? await findUserById(opts.byId).catch(() => null) : null;
-    const recipients = acceptedRecipients(packet, { scotland, senderName: sender?.name ?? null, senderEmail: sender?.email ?? null });
-    const address = [packet.property, packet.locality].filter(Boolean).join(", ");
-    if (!live) {
-      for (const r of recipients) {
-        const { subject } = renderTleEmail(r.emailId, r.vars);
-        await rec.add({ id: `tell-${r.role}:${r.contactId ?? r.name}`, label: `Tell ${r.role} ${r.name}`, state: "would", detail: `Would put "${subject}" with the agent to send or ring about. Nothing goes to them by itself.`, request: { to: r.email, subject, email: r.emailId } });
+         They were REX merge templates 10978 and 10979 (Howard's words, then our
+         own from 16 Sep). Since 2 Oct 2026 (James: "allow the agent to push all
+         of them notifications") the handover sends neither: it puts them with
+         the agent as a customer update (lib/customer-updates), already written,
+         to send from their own address after reading, or to ring instead. */
+      const scotland = str((listing.agreement_type as Row | null)?.id) === "153279";
+      const sender = opts.byId ? await findUserById(opts.byId).catch(() => null) : null;
+      const recipients = acceptedRecipients(packet, { scotland, senderName: sender?.name ?? null, senderEmail: sender?.email ?? null });
+      const address = [packet.property, packet.locality].filter(Boolean).join(", ");
+      if (!live) {
+        for (const r of recipients) {
+          const { subject } = renderTleEmail(r.emailId, r.vars);
+          await rec.add({ id: `tell-${r.role}:${r.contactId ?? r.name}`, label: `Tell ${r.role} ${r.name}`, state: "would", detail: `Would put "${subject}" with the agent to send or ring about. Nothing goes to them by itself.`, request: { to: r.email, subject, email: r.emailId } });
+        }
+      } else {
+        const made = await putAcceptedWithAgent(applicationId, { packet, scotland, sender }).catch(() => null);
+        await rec.add({
+          id: "tell-customers",
+          label: "Tell the landlord and tenants",
+          state: "ok",
+          detail: made
+            ? `Put with ${made.agentName ?? "the agent"} to tell them (update ${made.id}): ${recipients.map((r) => r.name).join(", ")}. Nothing went to them by itself.`
+            : `Already with the agent to tell them about ${address}.`,
+        });
       }
-    } else {
-      const made = await putAcceptedWithAgent(applicationId, { packet, scotland, sender }).catch(() => null);
-      await rec.add({
-        id: "tell-customers",
-        label: "Tell the landlord and tenants",
-        state: "ok",
-        detail: made
-          ? `Put with ${made.agentName ?? "the agent"} to tell them (update ${made.id}): ${recipients.map((r) => r.name).join(", ")}. Nothing went to them by itself.`
-          : `Already with the agent to tell them about ${address}.`,
-      });
     }
   } catch (e) {
     if (!(e instanceof Stop)) {
@@ -712,7 +738,9 @@ async function pushDeal(
 
   /* 2. A live deal already on this home. Read fresh in a live run: the agent
      may have keyed it in a minute ago. */
-  if (!dealUuid && realProperty) {
+  /* A tenant swap is a new deal by definition: the one the home has is the
+     tenancy being changed (lib/tenant-swaps). */
+  if (!dealUuid && realProperty && !o.packet.swap) {
     if (o.live) await refreshPropolyDealsNow().catch(() => null);
     const deals = await getAllPropolyDeals().catch(() => null);
     if (!deals) {
@@ -787,8 +815,9 @@ async function pushDeal(
     }
     const contact = t.contactId ? await rexCall("Contacts", "read", { id: t.contactId }).catch(() => null) : null;
     const cc = ((contact?.ok ? contact.result : null) ?? {}) as Row;
-    /* reference_required: every deal keyed by hand has it on (9 Oct 2026). */
-    const payload = { deal_id: dealUuid, deal_uuid: dealUuid, tenant: { user_attributes: tenantAttributes(cc, t), reference_required: true } };
+    /* reference_required: every deal keyed by hand has it on (9 Oct 2026) -
+       except a swap's staying tenants, who were referenced when they moved in. */
+    const payload = { deal_id: dealUuid, deal_uuid: dealUuid, tenant: { user_attributes: tenantAttributes(cc, t), reference_required: t.reference !== false } };
     const res = await propolyPost("/api/v1/tenants", payload);
     if (res.status >= 200 && res.status < 300) {
       await rec.add({ id: sid, label: tlabel, state: "ok", detail: "Added to the deal.", request: payload, response: res.body });
