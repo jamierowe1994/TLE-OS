@@ -24,10 +24,14 @@ export interface StageListing {
   letAgreed: boolean;
   publicationStatus: string | null;
   archived?: boolean;
+  /** Let in fact, though REX still has it published (lib/listings-taken, 12 Oct 2026). */
+  taken?: { why: string; at: string | null } | null;
+  /** Its deal was cancelled in Propoly: not on the market again until somebody presses Relist. */
+  fellThrough?: { why: string; at: string | null } | null;
 }
 
 export function stageOf(l: StageListing, accepted?: ReadonlySet<string>): ListingStage {
-  if (l.letAgreed || (accepted && l.id != null && accepted.has(String(l.id)))) return "Let agreed";
+  if (l.letAgreed || l.taken || l.fellThrough || (accepted && l.id != null && accepted.has(String(l.id)))) return "Let agreed";
   if (l.publicationStatus === "published") return "Available";
   return "Draft";
 }

@@ -4,6 +4,7 @@ import { hasDb } from "@/lib/db";
 import type { ListingBook, OsListing } from "@/lib/rex-listings";
 import { cacheKeyFor, heldFor, refresh, FRESH_MS, STALE_MS } from "@/lib/listings-cache";
 import { withArchiveState } from "@/lib/listings-archive-view";
+import { withTakenState } from "@/lib/listings-taken";
 import { rexConfigured } from "@/lib/rex";
 import { whoIs } from "@/lib/admin";
 import { forAgent } from "@/lib/agent-words";
@@ -84,7 +85,10 @@ export async function GET(req: NextRequest) {
      instant somebody presses Archive, and a listing that stayed put for ten
      minutes after being archived would read as a button that does nothing. */
   const serve = async (book: ListingBook) => {
-    const [archived, mine] = await Promise.all([withArchiveState(book), tests]);
+    /* Taken (12 Oct 2026, lib/listings-taken): let in fact though REX still
+       has it published. Stamped here with the archive state, for the same
+       reason - a Relist has to show the moment it is pressed. */
+    const [archived, mine] = await Promise.all([withArchiveState(book).then(withTakenState), tests]);
     return withTests(archived, mine);
   };
   if (held && age < FRESH_MS) {

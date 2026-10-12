@@ -74,6 +74,12 @@ type SampleListing = {
   image: string | null;
   serviceType?: string | null;
   tenant?: { name: string; email: string; phone: string } | null;
+  /** Let in fact though still advertised, or its deal fell through: stamped
+   *  by the server (lib/listings-taken, 12 Oct 2026). Both count as let agreed. */
+  taken?: { why: string; at: string | null } | null;
+  fellThrough?: { why: string; at: string | null } | null;
+  /** The tester's own test listing - never in the counts. */
+  test?: boolean;
 };
 
 type Counts = {
@@ -581,6 +587,23 @@ export default function Listings() {
     }
   }, []);
 
+  /* Back on the market after its deal fell through (lib/listings-taken).
+     Only the OS's own count changes; the advert itself is untouched. */
+  const relistOne = useCallback(async (id: string) => {
+    setBusyId(id);
+    setArchiveNote(null);
+    try {
+      const r = await fetch("/api/listings/relist", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id }) });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!j.ok) throw new Error(j.error ?? "That didn't save.");
+      setBook((b) => ({ ...b, listings: b.listings.map((l) => (String(l.id) === id ? { ...l, fellThrough: null } : l)) }));
+    } catch (e) {
+      setArchiveNote(e instanceof Error ? e.message : "That didn't save.");
+    } finally {
+      setBusyId(null);
+    }
+  }, []);
+
   const LISTINGS = useMemo(
     () => (accepted.size ? book.listings.map((l) => (!l.letAgreed && accepted.has(String(l.id)) ? { ...l, letAgreed: true } : l)) : book.listings),
     [book.listings, accepted]
@@ -622,7 +645,9 @@ export default function Listings() {
      loud in the blurb; it is just no longer the tab's number. */
   const byStage = useMemo(() => {
     const out = { Available: 0, "Let agreed": 0, Draft: 0 } as Record<string, number>;
-    for (const l of WORKING) out[statusOf(l).label] = (out[statusOf(l).label] ?? 0) + 1;
+    /* Test listings are on the board for the person testing, never in the
+       business's figures (12 Oct 2026: two of the "65 available" were tests). */
+    for (const l of WORKING) if (!l.test) out[statusOf(l).label] = (out[statusOf(l).label] ?? 0) + 1;
     return out;
   }, [WORKING]);
 
@@ -795,7 +820,7 @@ export default function Listings() {
         onChange={setStage}
         flow={false}
         stages={[
-          { id: "all" as const, label: "All listings", icon: "analytics", count: WORKING.length - (byStage["Let agreed"] ?? 0), blurb: "Everything still being marketed. Let agreed has its own tab" },
+          { id: "all" as const, label: "All listings", icon: "analytics", count: WORKING.filter((l) => !l.test).length - (byStage["Let agreed"] ?? 0), blurb: "Everything still being marketed. Let agreed has its own tab" },
           { id: "Available" as const, label: "Available", icon: "home", count: byStage.Available, blurb: "Published, and not let agreed - what you can put somebody in now" },
           {
             id: "offers" as const,
@@ -915,6 +940,7 @@ export default function Listings() {
              the only listings offered a way back are the ones the OS filed:
              a cold draft, or one put away by hand. */
           const canRestore = l.archived === true && l.archiveReason !== "withdrawn";
+          const canRelist = !l.archived && !l.letAgreed && !l.taken && Boolean(l.fellThrough);
           /* Filing a draft away EARLY is a decision about one property, so it
              lives inside the record (the drawer) rather than as a button on
              every card. Put here it would either sit permanently over the
@@ -937,7 +963,7 @@ export default function Listings() {
               // when the gap between the arcs is uneven.
               className={`block w-full rounded-[22px] border bg-white p-2.5 text-left transition-colors hover:border-ink/40 ${
                 l.archived ? "border-line/40" : "border-line/50"
-              } ${canRestore ? "pb-[52px]" : ""}`}
+              } ${canRestore || canRelist ? "pb-[52px]" : ""}`}
             >
               {/* The list card STACKS on a phone.
 
@@ -1001,6 +1027,8 @@ export default function Listings() {
                       <Tag tone={l.archived ? "neutral" : st.tone}>
                         {l.archived ? archiveLabel(l.archiveReason ?? null) : st.label}
                       </Tag>
+                      {!l.archived && !l.letAgreed && l.taken && <Tag tone="accent">Still advertised</Tag>}
+                      {!l.archived && !l.letAgreed && !l.taken && l.fellThrough && <Tag tone="accent">Fell through</Tag>}
                       {l.tenant && <Tag tone="neutral">Tenanted</Tag>}
                       {/* The jobs-to-do chips are about getting a listing OUT.
                           On something already filed away they are noise. */}
@@ -1015,6 +1043,12 @@ export default function Listings() {
                       <DoodleIcon name="home-1" size={12} className="shrink-0" />
                       <span className="truncate">{l.locality}</span>
                     </span>
+                    {/* Why it is let agreed though the advert is still up. */}
+                    {!l.archived && !l.letAgreed && (l.taken ?? l.fellThrough) && (
+                      <span className="mt-1 block text-[11px] leading-snug text-accent-dark">
+                        {(l.taken ?? l.fellThrough)!.why}{l.taken ? " - take the advert down" : " - relist it if it's back on the market"}
+                      </span>
+                    )}
                   </span>
 
                   {/* The facts, each its own column. Same four as before and
@@ -1066,6 +1100,17 @@ export default function Listings() {
 
             {/* The one move on an archived row, and the quiet way to file a
                 draft early. Over the card rather than in it - see above. */}
+            {canRelist && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void relistOne(String(l.id))}
+                title="The deal fell through: count it as available again"
+                className="absolute bottom-3.5 right-3.5 z-10 rounded-full bg-accent-dark px-3.5 py-2 text-[11.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {busy ? "Relisting…" : "Relist"}
+              </button>
+            )}
             {canRestore && (
               <button
                 type="button"
