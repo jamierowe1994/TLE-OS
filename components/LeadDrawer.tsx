@@ -1360,7 +1360,13 @@ function LeadDrawerBody({
   const ours = lead ? isOsLead(lead.id) : false;
 
   async function saveField(patch: Record<string, string>) {
-    if (!lead || !ours) return;
+    if (!lead) return;
+    /* A lead from REX is changed on its REX contact (James, 12 Oct 2026: its
+       edits were only ever on screen, and gone when the file closed). */
+    if (!ours) {
+      if (lead.contactId) await saveRexPerson(patch);
+      return;
+    }
     editedRef.current = true;
     setSync({ busy: true, text: "Saving…" });
     const settle = reporter.begin(`${lead.name ? `${lead.name}'s details` : "Contact details"}`);
@@ -1385,6 +1391,37 @@ function LeadDrawerBody({
           ? { busy: false, text: "Saved" }
           : { busy: false, text: `Saved here. ${j.sync?.detail ?? "Not backed up."}`, bad: true }
       );
+    } catch {
+      setSync({ busy: false, text: "That didn't save - the connection dropped.", bad: true });
+      settle({ ok: false, problem: "That didn't save - the connection dropped." });
+    }
+  }
+
+  /* Name, email and mobile of a REX lead, through /api/people/contact. Its
+     address is REX's own enquiry, and is changed there. */
+  async function saveRexPerson(patch: Record<string, string>) {
+    if (!lead?.contactId) return;
+    const body: Record<string, string> = { ref: `rex:${lead.contactId}` };
+    if (patch.name !== undefined) body.name = patch.name;
+    if (patch.email !== undefined) body.email = patch.email;
+    if (patch.mobile !== undefined) body.phone = patch.mobile;
+    if (Object.keys(body).length === 1) {
+      setSync({ busy: false, text: "This lead's address comes from REX - change it there.", bad: true });
+      return;
+    }
+    editedRef.current = true;
+    setSync({ busy: true, text: "Saving…" });
+    const settle = reporter.begin(`${lead.name ? `${lead.name}'s details` : "Contact details"}`);
+    try {
+      const r = await fetch("/api/people/contact", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!j.ok) {
+        setSync({ busy: false, text: j.error ?? "That didn't save.", bad: true });
+        settle({ ok: false, problem: j.error ?? "That didn't save." });
+        return;
+      }
+      settle({ ok: true });
+      setSync({ busy: false, text: "Saved, and changed in REX" });
     } catch {
       setSync({ busy: false, text: "That didn't save - the connection dropped.", bad: true });
       settle({ ok: false, problem: "That didn't save - the connection dropped." });
@@ -1925,6 +1962,18 @@ function LeadDrawerBody({
       <DoodleIcon name="message-2" size={12} className="text-accent-dark" />
       WhatsApp
     </WhatsAppButton>
+  ) : null;
+  /* Email beside the address, as WhatsApp is beside the number (James, 12 Oct
+     2026): it opens the OS's own compose window, so it is sent and logged here. */
+  const emailEl = contact.email ? (
+    <button
+      type="button"
+      onClick={() => setComposing(true)}
+      className="flex shrink-0 items-center gap-1.5 rounded-full border border-line/70 px-2.5 py-1 text-[11.5px] font-semibold transition-colors hover:border-ink/40"
+    >
+      <DoodleIcon name="mail" size={12} className="text-accent-dark" />
+      Email
+    </button>
   ) : null;
   const nextActionEl = (
     <>
@@ -2795,7 +2844,7 @@ function LeadDrawerBody({
                         Tenant enquiry · step {Math.min(step, track.length - 1) + 1} of {track.length}
                       </p>
                       <div className="mt-2 flex flex-wrap items-center gap-3">
-                        {ours ? (
+                        {ours || lead.contactId ? (
                           <h2 className="min-w-0 hand text-[32px] leading-[1.1]">
                             <InlineField
                               value={personName}
@@ -2939,7 +2988,7 @@ function LeadDrawerBody({
                     </div>
                     <div className="mt-2 divide-y divide-line/50">
                       <DetailRow icon="call" label="mobile" value={contact.phone} copyable onChange={(v) => { setContact((c) => ({ ...c, phone: v })); void saveField({ mobile: v }); }} after={whatsAppEl} />
-                      <DetailRow icon="mail" label="email" value={contact.email} copyable onChange={(v) => { setContact((c) => ({ ...c, email: v })); void saveField({ email: v }); }} />
+                      <DetailRow icon="mail" label="email" value={contact.email} copyable onChange={(v) => { setContact((c) => ({ ...c, email: v })); void saveField({ email: v }); }} after={emailEl} />
                       <DetailRow
                         icon="home"
                         label="area"
@@ -3110,7 +3159,7 @@ function LeadDrawerBody({
                         Landlord enquiry · step {Math.min(step, track.length - 1) + 1} of {track.length}
                       </p>
                       <div className="mt-2 flex flex-wrap items-center gap-3">
-                        {ours ? (
+                        {ours || lead.contactId ? (
                           <h2 className="hand min-w-0 text-[32px] leading-[1.1]">
                             <InlineField
                               value={personName}
@@ -3132,8 +3181,11 @@ function LeadDrawerBody({
                           <Pill tone={STAGE_TONE[lead.stage]}>{lead.stage}</Pill>
                         )}
                       </div>
+                      {/* The address is in the details below, where it is changed;
+                          a second copy up here only went stale as it was typed
+                          (James, 12 Oct 2026). */}
                       <p className="mt-1.5 text-[13px] text-muted">
-                        {propAddress || "No property address yet"} · via {enquiry?.source || lead.source}
+                        Via {enquiry?.source || lead.source}
                         {receivedIso ? ` · ${whenAgo(receivedIso)}` : ""}
                       </p>
                       <p className="mt-4 max-w-xl text-[13px] leading-relaxed">
@@ -3208,7 +3260,7 @@ function LeadDrawerBody({
                     <CardTitle icon="user">The landlord</CardTitle>
                     <div className="mt-3 divide-y divide-line/50">
                       <DetailRow icon="call" label="mobile" value={contact.phone} copyable onChange={(v) => { setContact((c) => ({ ...c, phone: v })); void saveField({ mobile: v }); }} after={whatsAppEl} />
-                      <DetailRow icon="mail" label="email" value={contact.email} copyable onChange={(v) => { setContact((c) => ({ ...c, email: v })); void saveField({ email: v }); }} />
+                      <DetailRow icon="mail" label="email" value={contact.email} copyable onChange={(v) => { setContact((c) => ({ ...c, email: v })); void saveField({ email: v }); }} after={emailEl} />
                       <DetailRow
                         icon="home"
                         label="address"

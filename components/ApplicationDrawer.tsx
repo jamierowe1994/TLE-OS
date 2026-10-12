@@ -13,6 +13,7 @@ import { type SpineStop } from "@/components/StageSpine";
 import GuideButton from "@/components/GuideButton";
 import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-events";
 import { WhatsAppButton } from "@/components/WhatsAppQr";
+import ContactBlock from "@/components/ContactBlock";
 import FileDocuments from "@/components/FileDocuments";
 import NextStepCard, { type NextAction } from "@/components/NextStepCard";
 
@@ -864,30 +865,14 @@ export default function ApplicationDrawer({
                   ];
                   return (
                     <Card key={(p.contactId ?? "") + i} title={p.name} icon="user" action={p.isPrimary ? <Pill tone="accent">Lead applicant</Pill> : undefined}>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px]">
-                        {p.phone ? (
-                          <a href={`tel:${p.phone.replace(/\s+/g, "")}`} className="flex items-center gap-1.5 hover:underline">
-                            <DoodleIcon name="call" size={12} className="text-accent-dark" />
-                            {p.phone}
-                          </a>
-                        ) : (
-                          <span className="text-muted">No phone</span>
-                        )}
-                        {p.phone && (
-                          <WhatsAppButton phone={p.phone} name={p.name} className="flex items-center gap-1.5 hover:underline">
-                            <DoodleIcon name="message-2" size={12} className="text-accent-dark" />
-                            WhatsApp
-                          </WhatsAppButton>
-                        )}
-                        {p.email ? (
-                          <a href={`mailto:${p.email}`} className="flex min-w-0 items-center gap-1.5 hover:underline">
-                            <DoodleIcon name="mail" size={12} className="text-accent-dark" />
-                            <span className="truncate">{p.email}</span>
-                          </a>
-                        ) : (
-                          <span className="text-muted">No email</span>
-                        )}
-                      </div>
+                      {/* The same block as every person in the OS (James, 12 Oct 2026):
+                          Call, WhatsApp, Email and copy, changeable where REX knows them. */}
+                      <ContactBlock
+                        showName={false}
+                        role={p.isPrimary ? "lead applicant" : "applicant"}
+                        person={{ name: p.name, email: p.email ?? null, phone: p.phone ?? null }}
+                        personRef={/^\d+$/.test(String(p.contactId ?? "")) ? `rex:${p.contactId}` : null}
+                      />
                       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-line/50 pt-3 text-[12px]">
                         {facts.map(([k, v]) => (
                           <div key={k} className="min-w-0">
