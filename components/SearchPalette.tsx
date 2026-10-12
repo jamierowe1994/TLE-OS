@@ -18,7 +18,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 export const OPEN_SEARCH = "os-search-open";
 
 type Group = "tenant" | "landlord" | "backoffice" | "portfolio" | "works";
-type Item = { id: string; group: Group; label: string; title: string; sub: string; href: string; image?: string | null; snippet?: string | null };
+type Item = { id: string; group: Group; label: string; title: string; sub: string; href: string; image?: string | null; snippet?: string | null; also?: Array<{ label: string; href: string }> };
 type Answer = { groups: { group: Group; items: Item[]; more: number }[]; reason?: string };
 
 const GROUPS: Record<Group, { title: string; icon: string }> = {
@@ -260,6 +260,21 @@ export default function SearchPalette() {
                           </span>
                           {on && <span className="hidden shrink-0 text-[10.5px] text-muted sm:block">Enter</span>}
                         </button>
+                        {/* The same home's other records (12 Oct 2026): one row, small links. */}
+                        {it.also && it.also.length > 0 && (
+                          <span className="flex flex-wrap gap-1.5 pb-1.5 pl-[68px] pr-3">
+                            {it.also.map((a) => (
+                              <button
+                                key={a.href}
+                                type="button"
+                                onClick={() => go({ ...it, href: a.href })}
+                                className="rounded-full border border-line/70 bg-white px-2.5 py-0.5 text-[11px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink"
+                              >
+                                {a.label} →
+                              </button>
+                            ))}
+                          </span>
+                        )}
                       </li>
                     );
                   })}

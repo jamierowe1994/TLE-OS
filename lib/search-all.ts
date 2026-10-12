@@ -11,6 +11,7 @@ import { getApplications } from "@/lib/applications";
 import { peopleLike } from "@/lib/rex-people-store";
 import { leadSide, type Lead } from "@/lib/leads-sample";
 import { searchLikes, searchMatches, searchRank, searchTokens } from "@/lib/search-match";
+import { sameHome } from "@/lib/address-parse";
 
 /**
  * Search for anything (10 Oct 2026) - the pop-up behind Search in the sidebar.
@@ -56,6 +57,10 @@ export interface FoundItem {
   snippet?: string | null;
   /** Sort key inside a group: higher first. */
   score: number;
+  /** The address it was found by, so one home's rows can be told apart. */
+  place?: string | null;
+  /** The same home's other records, as small links on its row (12 Oct 2026). */
+  also?: Array<{ label: string; href: string }>;
 }
 
 const PER_GROUP = 8;
@@ -119,7 +124,7 @@ export async function searchAll(
 
   const out: FoundItem[] = [];
   const add = (it: Omit<FoundItem, "score"> & { score?: number }, address?: string | null) =>
-    out.push({ ...it, score: (it.score ?? 0) + (address ? searchRank(needle, address) : 0) });
+    out.push({ ...it, place: address ?? null, score: (it.score ?? 0) + (address ? searchRank(needle, address) : 0) });
 
   /* ── Tenant and landlord enquiries ───────────────────────────────────── */
   for (const l of leads) {
@@ -269,7 +274,7 @@ export async function searchAll(
       sub: [d.statusKey.replace(/_/g, " "), tenants].filter(Boolean).join(" · "),
       href: rexUserId ? `/applications?deal=${encodeURIComponent(d.app.id)}` : `/pre-tenancy?deal=${encodeURIComponent(d.app.id)}`,
       score: 2,
-    });
+    }, [d.app.propertyName, d.app.locality].filter(Boolean).join(", "));
   }
   for (const p of compliance?.book.properties ?? []) {
     if (!whole && !myPropertyIds.has(String(p.id))) continue;
@@ -348,6 +353,17 @@ export async function searchAll(
   );
 
   await Promise.all(jobs);
+
+  /* ONE HOME, ONE ROW (James, 12 Oct 2026: "44 south" showed three - the
+     Propoly deal as "3f1, 44 South Bridge", the certificates and the home as
+     "South Bridge 44 (3f1)"). The home's page is the row; its certificates
+     and a let in progress become small links on it. */
+  for (const home of out.filter((x) => x.id.startsWith("home:") && x.place)) {
+    const same = out.filter((x) => (x.id.startsWith("cert:") || x.id.startsWith("deal:")) && x.place && sameHome(home.place!, x.place));
+    if (!same.length) continue;
+    home.also = [...(home.also ?? []), ...same.map((x) => ({ label: x.id.startsWith("cert:") ? "Certificates" : `Let in progress · ${x.sub.split(" · ")[0]}`, href: x.href }))];
+    for (const x of same) out.splice(out.indexOf(x), 1);
+  }
 
   /* One row per thing: a hand-typed lead the cache also holds shows once. */
   const seen = new Set<string>();
