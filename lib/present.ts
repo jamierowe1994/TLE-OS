@@ -1092,6 +1092,19 @@ export const money = (n: number) => `\u00a3${Math.round(n).toLocaleString("en-GB
  * the common case, not at a version dressed up with data most records don't
  * have.
  */
+/** The sample's visit: tomorrow at 11:30 in London (10:30 UTC in summer time). */
+function sampleVisitAt(): Date {
+  const d = new Date(Date.now() + 24 * 3_600_000);
+  d.setUTCHours(10, 30, 0, 0);
+  return d;
+}
+function sampleVisitWords(): string {
+  const d = sampleVisitAt();
+  const day = d.toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long" });
+  const time = d.toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "numeric", minute: "2-digit", hour12: true }).replace(" ", "");
+  return `${day} at ${time}`;
+}
+
 export const SAMPLE_DECK: PresentDeck = {
   kind: "pre-appraisal",
   /* Raj and his home, the same sample as the landlord's portal and the emails
@@ -1263,8 +1276,10 @@ export const SAMPLE_DECK: PresentDeck = {
     propertyType: "Terraced house",
     epc: "C",
   },
-  whenPretty: "Tuesday 19 August at 2:00pm",
-  startsAt: "2026-08-19T13:00:00.000Z",
+  /* The visit is always tomorrow morning, worked out when the deck is read (a getter, so every spread of
+     SAMPLE_DECK takes the day it is spread). It said "Tuesday 19 August" long after 19 August had gone. */
+  get whenPretty() { return sampleVisitWords(); },
+  get startsAt() { return sampleVisitAt().toISOString(); },
   minutes: 45,
   agent: {
     // A plainly fictional person rather than "Your Name": half the copy on

@@ -84,7 +84,7 @@ export default function ValuationSteps({
 
       <div className="mt-2.5">
         {step.id === "rent" && (
-          <Money value={rent} onChange={setRent} placeholder="1,300" suffix="pcm" autoFocus />
+          <Money value={rent} onChange={setRent} placeholder="1,250" suffix="pcm" autoFocus />
         )}
         {step.id === "level" && (
           <div className="flex flex-wrap gap-2">
