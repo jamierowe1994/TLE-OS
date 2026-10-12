@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PickOne from "@/components/PickOne";
 import { searchMatches } from "@/lib/search-match";
@@ -28,8 +28,8 @@ import type { PreTenancyDeal } from "@/app/api/pretenancy/deals/route";
 type Deal = PreTenancyDeal;
 
 /** An accepted let with no deal in Propoly yet (James, 12 Oct 2026). Not a
- *  deal, so not a column: a note under the board says how many are waiting
- *  to be handed over, and each opens its file to push. */
+ *  deal, so not a column: a tab in the bottom-left corner says how many are
+ *  waiting to be handed over, and each opens its file to push. */
 export type WaitingLet = { id: string; property: string; locality: string; image: string | null; tenant: string; agent: string | null; moveIn: string | null; swap: boolean };
 
 const GREEN_PILL = "bg-[#f1f4ec] text-[#56634a]";
@@ -246,6 +246,60 @@ function LetPanel({ d, applicationId, onOpenApplication, onClose: closeNow }: { 
   );
 }
 
+/** The bottom-left tab: how many lets are waiting to go to Propoly, and the list on a click. */
+function HandoverTab({ waiting, all, onOpenApplication }: { waiting: WaitingLet[]; all: boolean; onOpenApplication: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("pointerdown", away); document.removeEventListener("keydown", esc); };
+  }, [open]);
+  const n = waiting.length;
+  return (
+    <div ref={ref} className="pointer-events-none sticky bottom-5 z-[40] mt-4 flex" data-steve="applications.handover-tab">
+      <div className="pointer-events-auto relative">
+        {open && (
+          <div className="fade-up absolute bottom-full left-0 mb-2 w-[min(400px,calc(100vw-2.5rem))] overflow-hidden rounded-[18px] border border-line/60 bg-white shadow-[0_18px_40px_-16px_rgba(0,0,0,0.35)]">
+            <div className="border-b border-line/50 px-4 pb-2.5 pt-3.5">
+              <p className="text-[13.5px] font-semibold">{n} {n === 1 ? "Let" : "Lets"} to Hand Over</p>
+              <p className="mt-0.5 text-[11.5px] leading-snug text-muted">Accepted, but not in Propoly yet. Open one and press Push to Propoly.</p>
+            </div>
+            <ul className="max-h-[min(420px,60vh)] divide-y divide-line/40 overflow-y-auto px-1.5 py-1">
+              {waiting.map((w) => (
+                <li key={w.id}>
+                  <button type="button" onClick={() => { setOpen(false); onOpenApplication(w.id); }} className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-accent-soft/40">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-semibold">{w.property}</span>
+                      <span className="block truncate text-[11px] text-muted">
+                        {w.swap ? "Tenant swap · " : ""}{w.tenant}{w.moveIn ? ` · moving in ${fmtDate(w.moveIn)}` : ""}{all && w.agent ? ` · ${w.agent}` : ""}
+                      </span>
+                    </span>
+                    <span className="whitespace-nowrap text-[12px] font-semibold text-accent-dark">Hand over</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className="press-ring flex items-center gap-2 rounded-full bg-[var(--brown)] py-2 pl-2 pr-4 text-[12.5px] font-semibold text-white shadow-[0_10px_28px_-10px_rgba(0,0,0,0.45)] transition-opacity hover:opacity-90"
+        >
+          <span className="figures flex h-6 min-w-6 items-center justify-center rounded-full bg-white px-1.5 text-[12px] text-[var(--brown)]">{n}</span>
+          To Hand Over
+          <DoodleIcon name="rocket" size={13} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function LetsBoard({
   everything,
   matchApplication,
@@ -257,7 +311,7 @@ export default function LetsBoard({
   onAgents,
   waiting = [],
 }: {
-  /** Accepted, not in Propoly yet: listed under the board to hand over. */
+  /** Accepted, not in Propoly yet: the bottom-left To Hand Over tab. */
   waiting?: WaitingLet[];
   /** When the page draws the agent picker on its own toolbar row, it holds the
    *  choice and is told the names; otherwise the board draws its own. */
@@ -361,32 +415,13 @@ export default function LetsBoard({
         </section>
       )}
       {/* Accepted, not handed over (James, 12 Oct 2026): not a deal yet, so not
-          on the board - a note under it, each opening its file to push. */}
-      {waitingShown.length > 0 && (
-        <div className="mt-4 rounded-[18px] border border-accent/40 bg-accent-soft/30 p-4">
-          <p className="text-[13px] font-semibold">
-            You&apos;ve got {waitingShown.length} {waitingShown.length === 1 ? "let" : "lets"} to hand over
-          </p>
-          <p className="mt-0.5 text-[11.5px] leading-snug text-muted">
-            Accepted, but not in Propoly yet, so not on the board. Open one and press Push to Propoly.
-          </p>
-          <ul className="mt-2.5 divide-y divide-line/40">
-            {waitingShown.map((w) => (
-              <li key={w.id}>
-                <button type="button" onClick={() => onOpenApplication(w.id)} className="flex w-full items-center gap-3 py-2.5 text-left transition-colors hover:bg-white/60">
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-semibold">{w.property}</span>
-                    <span className="block truncate text-[11px] text-muted">
-                      {w.swap ? "Tenant swap · " : ""}{w.tenant}{w.moveIn ? ` · moving in ${fmtDate(w.moveIn)}` : ""}{all && w.agent ? ` · ${w.agent}` : ""}
-                    </span>
-                  </span>
-                  <span className="whitespace-nowrap text-[12px] font-semibold text-accent-dark">Hand over →</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+          on the board. It was a note under the board, and with a long
+          Referencing column nobody saw it without scrolling to the bottom
+          ("it should always be on the entrance screen"), so it is a tab that
+          stays in the bottom-left corner of the page, with the count, and
+          opens the list upwards. Sticky, not fixed: the page body animates
+          with a transform, which would pin a fixed tab to the body instead. */}
+      {waitingShown.length > 0 && <HandoverTab waiting={waitingShown} all={all} onOpenApplication={onOpenApplication} />}
       {open && (
         <LetPanel
           d={open}
