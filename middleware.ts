@@ -471,6 +471,7 @@ const MACHINE_ROUTES = [
      (MARKETING_FEED_KEY) or a signed-in owner/marketing person, and gives
      counts only - no names, emails or phones. */
   "/api/marketing/leads-feed",
+  "/api/marketing/leads-webhook",     // the new-lead ping: status, test, send (owner or cron key)
   "/api/push/scan",                   // the bell to the iPhone app, every five minutes (cron key)
   "/api/bugs/bot",                    // the bug bot: takes bugs, records its fixes (cron key)
   "/api/landlord/property-answers/chase", // signed but questions unfinished: 2, 5, 9 days

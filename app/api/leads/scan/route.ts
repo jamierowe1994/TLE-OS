@@ -73,7 +73,12 @@ export async function POST(req: NextRequest) {
   const bookings = await import("@/lib/rex-viewings")
     .then((m) => m.sweepNewBookings())
     .catch((e) => ({ error: publicError(e) }));
-  return NextResponse.json({ ok: true, scanned: book.scanned, kept: book.leads.length, written, valuationsRead, onFile: stats.onFile, since: stats.since, newestAt: book.newestAt, replies, bookings, signInsKept, ms: Date.now() - started });
+  /* New leads to marketing's app (lib/marketing-webhook), counts-only, within
+     five minutes. Its own failure is reported, never the scan's. */
+  const marketing = await import("@/lib/marketing-webhook")
+    .then((m) => m.sendNewLeadWebhooks())
+    .catch((e) => ({ error: publicError(e) }));
+  return NextResponse.json({ ok: true, scanned: book.scanned, kept: book.leads.length, written, valuationsRead, onFile: stats.onFile, since: stats.since, newestAt: book.newestAt, replies, bookings, marketing, signInsKept, ms: Date.now() - started });
 }
 
 export const GET = POST;
