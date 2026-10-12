@@ -19,6 +19,7 @@ import JobDrawer from "@/components/maintenance/JobDrawer";
 import { OPEN, STATUS_LABEL, day as shortDay, nextFor } from "@/components/maintenance/works-ui";
 import BookForm, { type Person } from "@/components/inspections/BookForm";
 import RentBox from "@/components/portfolio/RentBox";
+import ServiceTag from "@/components/portfolio/ServiceTag";
 import { SPECS, STATUS_LABEL as NOTICE_STATUS, type Notice, type NoticeKind } from "@/lib/section-notices-spec";
 import type { PropertyDraft } from "@/lib/property-drafts";
 import { readJson } from "@/lib/page-cache";
@@ -645,10 +646,14 @@ export default function PropertyPage() {
             <div className="px-2 pb-1.5 pt-4">
               <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
                 <h1 className="hand min-w-0 text-[28px] leading-[1.1] sm:text-[32px]">{title}</h1>
-                <span className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-semibold text-accent-dark">
-                  <span className="h-1.5 w-1.5 rounded-full bg-accent-dark" />
-                  {p.test ? "Test home" : p.service ?? "Service not set"}
-                </span>
+                <div className="mt-2 flex flex-col items-start gap-1.5 sm:items-end">
+                  <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-accent-dark">
+                    <span className="h-1.5 w-1.5 rounded-full bg-accent-dark" />
+                    {p.test ? "Test home" : p.service ?? "Service not set"}
+                  </span>
+                  {/* Susan, 12 Oct 2026: the PayProp service tag (RLP or not) and the management fee. */}
+                  {!p.test && <ServiceTag listingId={String(p.listingId)} />}
+                </div>
               </div>
               {(houseView && house && !lets ? houseLine : rentLine) && (
                 <p className="figures mt-1.5 text-[20px] font-semibold">{houseView && house && !lets ? houseLine : rentLine}</p>

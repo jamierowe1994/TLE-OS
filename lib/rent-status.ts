@@ -1,6 +1,6 @@
 import "server-only";
 import { londonToday } from "@/lib/london-clock";
-import { payPropAccounts, payPropCanAuth, payPropGetAll, type PayPropAccountId } from "@/lib/business/payprop";
+import { payPropAccounts, payPropCanAuth, payPropGet, payPropGetAll, type PayPropAccountId } from "@/lib/business/payprop";
 import { readCache, writeCache } from "@/lib/business/integration-cache";
 import { hasDb, q } from "@/lib/db";
 import { getRentReceived } from "@/lib/business/payprop-income";
@@ -39,6 +39,12 @@ import { rentKey } from "@/lib/business/payprop-portfolio";
  *
  * AND AGAIN AT 4PM (James, 8 Oct 2026: "add a 4 pm read as well"), so rent
  * paid during the day shows that afternoon, not the next morning.
+ *
+ * THE SERVICE TAG AND THE FEE (Susan, 12 Oct 2026): the same read carries
+ * each property's PayProp tags ("Experts Managed Service with RLP", "... No
+ * RLP", legal cover only) and its commission, so the property page can show
+ * which service the landlord is on and what the management fee is - she
+ * cross-checks RLP every month. See serviceFor.
  */
 
 export type TenantBalance = {
@@ -61,11 +67,35 @@ export type TenantBalance = {
   tenancyEnd: string | null;
 };
 
-type PpProperty = { account: PayPropAccountId; id: string; name: string; firstLine: string; postcode: string };
+type PpProperty = {
+  account: PayPropAccountId;
+  id: string;
+  name: string;
+  firstLine: string;
+  postcode: string;
+  /** PayProp's commission on the property: E&W hold a fixed amount a month,
+   *  Scotland a percentage (measured 12 Oct 2026). Absent on a copy read
+   *  before the fee was carried. */
+  commission?: { amount: number; percentage: number } | null;
+  /** monthly_payment_required - stale on some homes, so only a fallback. */
+  mpr?: number | null;
+};
 
 type MonthRents = { month: string; byProperty: Record<string, { in: string; amount: number; paidOut: boolean }> | null };
 
-type Book = { at: number; balances: TenantBalance[]; properties: PpProperty[]; unreachable: PayPropAccountId[]; rents: MonthRents[] };
+type Book = {
+  at: number;
+  balances: TenantBalance[];
+  properties: PpProperty[];
+  unreachable: PayPropAccountId[];
+  rents: MonthRents[];
+  /** Tag names by "account|PayProp property id". Absent on a copy read before
+   *  tags were carried. */
+  tags?: Record<string, string[]>;
+  /** Agencies whose tags PayProp would not show us. E&W's connection lacks
+   *  read:entity:tags (403, measured 12 Oct 2026). */
+  tagsUnread?: PayPropAccountId[];
+};
 
 const KEY = "rent-status:v4";
 /** The reads, London time: 10am and 4pm. */
@@ -91,7 +121,13 @@ type BalanceRow = {
   last_invoice?: { amount?: string; date?: string };
   invoice?: { start_date?: string; end_date?: string | null; payment_day?: number | string; amount?: string };
 };
-type PropertyRow = { id?: string; property_name?: string; address?: { first_line?: string; postal_code?: string } };
+type PropertyRow = {
+  id?: string;
+  property_name?: string;
+  address?: { first_line?: string; postal_code?: string };
+  commission?: { amount?: string; percentage?: string };
+  monthly_payment_required?: number | string;
+};
 
 async function compute(): Promise<Book | null> {
   const accounts = payPropAccounts();
@@ -99,6 +135,8 @@ async function compute(): Promise<Book | null> {
   const balances: TenantBalance[] = [];
   const properties: PpProperty[] = [];
   const unreachable: PayPropAccountId[] = [];
+  const tags: Record<string, string[]> = {};
+  const tagsUnread: PayPropAccountId[] = [];
   for (const account of accounts) {
     if (!(await payPropCanAuth(account).catch(() => false))) {
       unreachable.push(account);
@@ -106,7 +144,7 @@ async function compute(): Promise<Book | null> {
     }
     const [b, p] = await Promise.all([
       payPropGetAll<BalanceRow>(account, "report/tenant/balances").catch(() => null),
-      payPropGetAll<PropertyRow>(account, "export/properties").catch(() => null),
+      payPropGetAll<PropertyRow>(account, "export/properties", { include_commission: true }).catch(() => null),
     ]);
     if (!b || !p) {
       unreachable.push(account);
@@ -141,8 +179,18 @@ async function compute(): Promise<Book | null> {
     for (const r of p) {
       const id = text(r.id);
       if (!id) continue;
-      properties.push({ account, id, name: text(r.property_name), firstLine: text(r.address?.first_line), postcode: text(r.address?.postal_code) });
+      const amount = money(r.commission?.amount), percentage = money(r.commission?.percentage);
+      properties.push({
+        account,
+        id,
+        name: text(r.property_name),
+        firstLine: text(r.address?.first_line),
+        postcode: text(r.address?.postal_code),
+        commission: amount > 0 || percentage > 0 ? { amount, percentage } : null,
+        mpr: money(r.monthly_payment_required) || null,
+      });
     }
+    if (!(await readTags(account, tags))) tagsUnread.push(account);
   }
 
   /* The last three months of rent in and out, per PayProp property. */
@@ -166,7 +214,33 @@ async function compute(): Promise<Book | null> {
     }
     rents.push({ month, byProperty });
   }
-  return { at: Date.now(), balances, properties, unreachable, rents };
+  return { at: Date.now(), balances, properties, unreachable, rents, tags, tagsUnread };
+}
+
+/**
+ * Every property tag on one agency into `into`, keyed "account|property id".
+ * False when PayProp would not show them (or a tag's list came back short),
+ * so the page says the tag can't be read rather than "no tag". Tags carry no
+ * dates: this is what is tagged now (lib/business/payprop-tags).
+ */
+async function readTags(account: PayPropAccountId, into: Record<string, string[]>): Promise<boolean> {
+  const first = await payPropGet<{ id?: string; name?: string }>(account, "tags", { entity_type: "property", rows: 25 });
+  if (!first) return false;
+  const list = (first.pagination?.total_pages ?? 1) > 1
+    ? await payPropGetAll<{ id?: string; name?: string }>(account, "tags", { entity_type: "property" }).catch(() => null)
+    : first.items;
+  if (!list) return false;
+  for (const t of list) {
+    const name = text(t.name);
+    if (!t.id || !name) continue;
+    const rows = await payPropGetAll<{ id?: string; type?: string }>(account, `tags/${t.id}/entities`).catch(() => null);
+    if (!rows) return false;
+    for (const r of rows) {
+      if ((r.type ?? "property") !== "property" || !r.id) continue;
+      (into[`${account}|${text(r.id)}`] ??= []).push(name);
+    }
+  }
+  return true;
 }
 
 /** The stored read, from 10am or 4pm. Never calls PayProp. */
@@ -365,5 +439,80 @@ export function owedFromBook(book: Book | null, home: { name: string; address?: 
     owed: Math.round(tenants.reduce((s, t) => s + Math.max(0, t.owed), 0) * 100) / 100,
     tenants: tenants.map((t) => ({ name: t.tenant, owed: Math.max(0, t.owed), lastPayment: t.lastPayment })),
     checkedAt: new Date(book.at).toISOString(),
+  };
+}
+
+/* ── The service tag and the management fee (Susan, 12 Oct 2026) ─────────── */
+
+export type ServiceKind = "rlp" | "no-rlp" | "lec";
+
+/**
+ * Which service a PayProp tag names. "No RLP" contains "RLP", so the negative
+ * is tested first (lib/business/payprop-tags); legal cover only is LEC.
+ */
+export function serviceKind(tag: string): ServiceKind | null {
+  if (/\bno\s*rlp\b|without\s*rlp/i.test(tag)) return "no-rlp";
+  if (/\blec\b|legal\s*(cover|expenses?)\s*only/i.test(tag)) return "lec";
+  if (/\brlp\b|rent\s*(and|&)\s*legal/i.test(tag)) return "rlp";
+  return null;
+}
+
+export type ServiceInfo =
+  | { state: "unreachable" | "unmatched"; detail: string }
+  | {
+      state: "ok";
+      checkedAt: string;
+      agency: string;
+      /** Null: PayProp would not show this agency's tags, or the copy predates them. */
+      tags: string[] | null;
+      tagsWhy: string | null;
+      service: { kind: ServiceKind; tag: string } | null;
+      /** Null: no commission set on the property in PayProp. */
+      fee: { monthly: number | null; percent: number | null; fixed: boolean; rent: number | null } | null;
+      feeWhy: string | null;
+    };
+
+const AGENCY: Record<PayPropAccountId, string> = { uk: "England and Wales", scotland: "Scotland" };
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
+export async function serviceFor(home: { name: string; address?: string | null; postcode: string | null }): Promise<ServiceInfo> {
+  const book = await rentBook();
+  if (!book) return { state: "unreachable", detail: "PayProp is checked at 10am and 4pm each day, and the first check hasn't finished yet." };
+  if (Date.now() - book.at > TOO_OLD_MS) return { state: "unreachable", detail: "PayProp couldn't be read at the last check." };
+  const hit = matchHome(book, home);
+  if (hit === "unsure") return { state: "unmatched", detail: "More than one PayProp property has this address." };
+  if (hit === "none") return { state: "unmatched", detail: book.unreachable.length ? "PayProp can't be reached just now." : "Not in PayProp." };
+
+  const agency = AGENCY[hit.account] ?? hit.account;
+  const pp = book.properties.find((p) => p.account === hit.account && p.id === hit.id);
+  const read = book.tags !== undefined;
+  const unread = !read || (book.tagsUnread ?? []).includes(hit.account);
+  const tags = unread ? null : book.tags?.[`${hit.account}|${hit.id}`] ?? [];
+  const tagged = tags?.map((t) => ({ kind: serviceKind(t), tag: t })).find((t) => t.kind) ?? null;
+
+  /* The fee against the rent PayProp bills now: the current tenants' rent
+     invoices, else the property's monthly figure. */
+  const rentNow = book.balances.filter((b) => b.account === hit.account && b.propertyId === hit.id && current(b)).reduce((a, b) => a + (b.rent ?? 0), 0);
+  const rent = rentNow > 0 ? Math.round(rentNow * 100) / 100 : pp?.mpr ?? null;
+  const c = pp?.commission;
+  const fee = !c
+    ? null
+    : c.amount > 0
+      ? { monthly: c.amount, percent: rent ? round1((c.amount / rent) * 100) : null, fixed: true, rent }
+      : { monthly: rent ? Math.round(rent * c.percentage) / 100 : null, percent: round1(c.percentage), fixed: false, rent };
+
+  return {
+    state: "ok",
+    checkedAt: new Date(book.at).toISOString(),
+    agency,
+    tags,
+    tagsWhy: !read
+      ? "Service tag arrives with the next PayProp check, at 10am or 4pm."
+      : unread
+        ? `Service tag not available for ${agency} yet.`
+        : null,
+    service: tagged?.kind ? { kind: tagged.kind, tag: tagged.tag } : null,
+    fee,
+    feeWhy: pp?.commission === undefined ? "The fee arrives with the next PayProp check, at 10am or 4pm." : c ? null : "No management fee set on this property in PayProp.",
   };
 }
