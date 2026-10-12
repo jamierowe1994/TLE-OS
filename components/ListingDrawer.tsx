@@ -966,12 +966,14 @@ function ListingDrawerBody({
       <li key={v.id} className="flex items-center gap-2 border-b border-line/40 last:border-0">
         {/* The whole row opens the viewing (James, 20 Sep 2026): its details
             and, above all, whether we can get in. */}
-        <button type="button" onClick={() => setOpenViewing(v.id)} className="flex min-w-0 flex-1 items-center gap-3 py-2.5 text-left transition-colors hover:bg-page">
+        {/* It has to look like it opens (James, 12 Oct 2026: no hover on the
+            upcoming viewings, so nobody knew they could be clicked). */}
+        <button type="button" onClick={() => setOpenViewing(v.id)} title="Open the viewing" className="group -mx-2 flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-accent-soft/50 focus-visible:bg-accent-soft/50">
           {/* In a slot the day is on the slot, so the time alone. */}
           <span className={`${inSlot ? "figures w-12" : "w-28"} shrink-0 text-[11px] text-muted`}>
             {inSlot ? hhmm(start) : `${start.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} · ${hhmm(start)}`}
           </span>
-          <span className="min-w-0 flex-1 truncate text-[12.5px]">{who || v.title || "Viewing"}</span>
+          <span className="min-w-0 flex-1 truncate text-[12.5px] transition-colors group-hover:text-accent-dark group-hover:underline group-hover:underline-offset-2">{who || v.title || "Viewing"}</span>
           <Tag tone={v.cancelled ? "neutral" : past ? (v.feedbackId ? "good" : "accent") : "good"}>
             {v.cancelled ? "Cancelled" : past ? (v.feedbackId ? "Feedback in" : "Viewed") : v.status ?? "Booked"}
           </Tag>
@@ -984,7 +986,25 @@ function ListingDrawerBody({
             if (r?.grantedAt) return <Tag tone="good">Access confirmed</Tag>;
             return <Tag tone="accent">{r ? "Access asked" : "Access to ask"}</Tag>;
           })()}
+          <span aria-hidden className="shrink-0 text-[14px] text-muted/60 transition-transform group-hover:translate-x-0.5 group-hover:text-accent-dark">›</span>
         </button>
+        {/* Straight to an offer from someone who has been round (James, 12 Oct
+            2026): the offer form, with them already named. Somebody who hasn't
+            viewed is offered for from Make an offer instead. */}
+        {past && !v.cancelled && canOffer && (
+          <button
+            type="button"
+            title={`Make an offer for ${v.contacts[0]?.name ?? "this viewer"}`}
+            onClick={() => {
+              const lead = v.contacts.find((c) => c.email) ?? v.contacts[0];
+              if (lead?.email) window.location.href = `/offers/new?${new URLSearchParams({ listing: String(listing.id), name: lead.name, email: lead.email })}`;
+              else setPickingOfferer(true);
+            }}
+            className="shrink-0 rounded-full bg-[var(--brown)] px-3 py-1 text-[10.5px] font-semibold text-white transition-opacity hover:opacity-85"
+          >
+            Offer
+          </button>
+        )}
         {/* Book more people in straight after this one, with its access.
             Inside a slot, Book within slot on the slot does that. */}
         {!past && !v.cancelled && !inSlot && listing && (
