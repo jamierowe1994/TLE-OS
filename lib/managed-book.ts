@@ -340,6 +340,14 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
     a.unitWord === "room" && b.unitWord === "room" && a.unit != null && b.unit != null && a.unit !== b.unit && (a.building == null || b.building == null || a.building === b.building);
   /* propertyId → the REX PM home that IS that row, for the tenant fallback below. */
   const pmFor = new Map<string, OsProperty>();
+  /* The agent REX PM names on the home (James, 12 Oct 2026: Lianna's
+     Portfolio filter showed 4 of her 35 - the REX PM homes carried no agent).
+     Their REX user id where a REX row in the book has the same name, so the
+     filter by agent finds both kinds; otherwise the name stands on its own. */
+  const nameKey = (n: string) => { const w = n.toLowerCase().replace(/[^a-z\s]/g, " ").trim().split(/\s+/); return `${w[0] ?? ""} ${w[w.length - 1] ?? ""}`; };
+  const agentIds = new Map<string, { id: string; name: string }>();
+  for (const p of properties) if (p.agent) agentIds.set(nameKey(p.agent.name), p.agent);
+  const agentOf = (o: OsProperty) => (o.agentName ? agentIds.get(nameKey(o.agentName)) ?? { id: `name:${o.agentName}`, name: o.agentName } : null);
   const pmRow = (o: OsProperty, propertyId: string, listingId: string, onRex: boolean): ManagedProperty => ({
     listingId,
     propertyId,
@@ -361,7 +369,7 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
     letType: null,
     letSince: null,
     onBooksSince: null,
-    agent: null,
+    agent: agentOf(o),
     landlord: null,
     tenants: [],
     image: null,
