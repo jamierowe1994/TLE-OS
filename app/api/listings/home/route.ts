@@ -56,7 +56,7 @@ async function answer(id: number) {
   let terms: { rex: boolean | null; held: { how: string; name: string; at: string | null } | null } = { rex: null, held: null };
   if (d.propertyId) {
     const { osTermsFor, rexHasTerms } = await import("@/lib/terms-to-rex");
-    const [rex, mine] = await Promise.all([rexHasTerms(d.propertyId).catch(() => null), osTermsFor(d.propertyId).catch(() => null)]);
+    const [rex, mine] = await Promise.all([rexHasTerms(d.propertyId).catch(() => null), osTermsFor(d.propertyId, { record: true }).catch(() => null)]);
     terms = {
       rex,
       held: mine

@@ -76,7 +76,7 @@ export async function fileTermsToRex(p: { propertyId: string; r2Key: string; fil
  */
 export type OsTerms = { r2_key: string; file_name: string; at: Date | null; by_name: string | null; source: "upload" | "signed" | "record" };
 
-export async function osTermsFor(propertyId: string): Promise<OsTerms | null> {
+export async function osTermsFor(propertyId: string, opts: { record?: boolean } = {}): Promise<OsTerms | null> {
   if (!hasDb()) return null;
   const rows = await q<{ r2_key: string; file_name: string; at: Date | null; by_name: string | null }>(
     `SELECT r2_key, file_name, at, by_name FROM os_file_documents
@@ -95,7 +95,10 @@ export async function osTermsFor(propertyId: string): Promise<OsTerms | null> {
     [propertyId]
   ).catch(() => []);
   if (signed[0]) return { ...signed[0], source: "signed" };
-  return recordTermsFor(propertyId);
+  /* The property record's copy is shown on screen, but is not filed into
+     REX until James says yes to that write (hands off REX, 13 Oct 2026), so
+     the go-live gate and the push leave it out. */
+  return opts.record ? recordTermsFor(propertyId) : null;
 }
 
 /**
