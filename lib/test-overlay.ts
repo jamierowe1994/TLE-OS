@@ -52,6 +52,29 @@ export type TestListing = {
   publishedAt: string;
   portals: { portal: string; url: string }[];
   landlord: { name: string; email: string };
+  /**
+   * Draft or live (James, 13 Oct 2026: a tester walks a listing from New
+   * listing to Push to the portals, so a test listing has to be able to be a
+   * draft first). Missing means published: every row written before this,
+   * by a reset's marketStages, is on the market and stays there.
+   */
+  status?: "draft" | "published";
+  /** When it was made, for a draft's age. Older rows use publishedAt. */
+  createdAt?: string;
+  availableFrom?: string | null;
+  deposit?: number | null;
+};
+
+/** An enquiry on a test listing, as the listing's Enquiries tab draws one. */
+export type TestEnquiry = {
+  id: string;
+  listingId: number;
+  name: string;
+  email: string;
+  phone: string;
+  message: string;
+  source: string;
+  receivedAt: string;
 };
 
 export type TestOffer = {
@@ -95,7 +118,7 @@ export type TestViewing = {
   done: boolean;
 };
 
-type Kind = "listing" | "offer" | "deal" | "viewing";
+type Kind = "listing" | "offer" | "deal" | "viewing" | "enquiry";
 type Row<T> = { id: string; kit_id: string; owner_email: string; payload: T };
 
 export const isTestId = (id: unknown): boolean => {
@@ -133,7 +156,10 @@ async function rows<T>(kind: Kind, where: string, params: unknown[]): Promise<Ro
 
 /* ── listings ────────────────────────────────────────────────────────── */
 
+export const isDraftTest = (l: Pick<TestListing, "status">): boolean => l.status === "draft";
+
 function toOsListing(l: TestListing): OsListing {
+  const draft = isDraftTest(l);
   return {
     id: String(l.listingId),
     propertyId: null,
@@ -143,13 +169,15 @@ function toOsListing(l: TestListing): OsListing {
     rentPeriod: "month",
     rentMonthly: l.rent,
     letAgreed: false,
-    publicationStatus: "published",
-    availableFrom: null,
+    /* A draft reads as one everywhere the book is read (the board's live
+       views, the Push to the portals button) until it is pushed. */
+    publicationStatus: draft ? "draft" : "published",
+    availableFrom: l.availableFrom ?? null,
     epcExpiry: null,
     epcRating: "C",
-    daysOnMarket: Math.max(0, Math.floor((Date.now() - new Date(l.publishedAt).getTime()) / 86400000)),
-    publishedAt: l.publishedAt.slice(0, 10),
-    createdAt: l.publishedAt.slice(0, 10),
+    daysOnMarket: draft ? null : Math.max(0, Math.floor((Date.now() - new Date(l.publishedAt).getTime()) / 86400000)),
+    publishedAt: draft ? null : l.publishedAt.slice(0, 10),
+    createdAt: (l.createdAt ?? l.publishedAt).slice(0, 10),
     listingState: "current",
     stateDate: null,
     lastUpdated: l.publishedAt,
@@ -736,4 +764,200 @@ export async function addTestViewing(p: {
     [row.kit_id, id]
   ).catch(() => null);
   return { appointmentId: id, listing: row.payload };
+}
+
+/* ── a test file's own listing: made as a draft, pushed, enquired on ───── */
+
+/**
+ * THE WALK FROM NEW LISTING TO THE PORTALS (James, 13 Oct 2026: a tester
+ * walks the real screens end to end - "terms signed -> new listing -> Push
+ * to the portals ... listing live on Listings -> viewings / enquiries /
+ * offers" - without anything refusing or slowing them).
+ *
+ * New listing and Create the listing used to refuse a test file at REX's
+ * door. Now they make the listing HERE, as a draft on the file's own kit;
+ * Push to the portals turns it live here, with the real ceremony; and the
+ * first enquiry lands on it, from the file's tenant when it has one. None of
+ * it is REX's, a portal's or anybody's inbox.
+ */
+
+export type TestKitRef = { kitId: string; owner: string; refs: { contacts?: string[]; leadIds?: string[]; appraisals?: string[] } };
+
+/**
+ * The test file (os_test_kits) that holds this appraisal, lead or contact.
+ * An appraisal booked from a lead is lead-<lead id>; a test lead is
+ * os-<contact id>, so any one of the three finds the file.
+ */
+export async function kitFor(p: { appraisalId?: string | null; leadId?: string | null; contactId?: string | null }): Promise<TestKitRef | null> {
+  if (!hasDb()) return null;
+  const appraisalId = (p.appraisalId ?? "").trim();
+  let leadId = (p.leadId ?? "").trim();
+  if (!leadId && appraisalId.startsWith("lead-")) leadId = appraisalId.slice(5);
+  let contactId = (p.contactId ?? "").trim();
+  if (!contactId && leadId.startsWith("os-")) contactId = leadId.slice(3);
+  if (!appraisalId && !leadId && !contactId) return null;
+  const r = await q<{ id: string; created_by: string; refs: TestKitRef["refs"] | null }>(
+    `SELECT id, created_by, refs FROM os_test_kits
+      WHERE cleared_at IS NULL
+        AND (($1 <> '' AND refs->'appraisals' ? $1) OR ($2 <> '' AND refs->'leadIds' ? $2) OR ($3 <> '' AND refs->'contacts' ? $3))
+      ORDER BY created_at DESC LIMIT 1`,
+    [appraisalId, leadId, contactId]
+  ).catch(() => []);
+  return r[0] ? { kitId: r[0].id, owner: r[0].created_by, refs: r[0].refs ?? {} } : null;
+}
+
+/**
+ * A test file for a test landlord nobody made from Admin -> Testing: one
+ * saved at the test address (POST /api/contacts flags them is_test and files
+ * them here), or a test appraisal with no file. Written down as an ordinary
+ * landlord file, so it shows
+ * on the tester's Test files tab and Delete there takes all of it away.
+ * Only ever ids that are themselves test: a contact still flagged is_test,
+ * its os-<id> lead, and the appraisal the caller has already found is one.
+ */
+export async function adoptTestKit(p: { by: { email: string; name?: string | null }; contactId?: string | null; appraisalId?: string | null }): Promise<TestKitRef> {
+  const email = p.by.email.trim().toLowerCase();
+  const refs: TestKitRef["refs"] & { stage: string } = { stage: p.appraisalId ? "valued" : "new" };
+  if (p.contactId) {
+    const c = await q<{ id: string }>(`SELECT id FROM os_contacts WHERE id = $1 AND is_test`, [p.contactId]).catch(() => []);
+    if (c[0]) {
+      refs.contacts = [c[0].id];
+      refs.leadIds = [`os-${c[0].id}`];
+    }
+  }
+  if (p.appraisalId) refs.appraisals = [p.appraisalId];
+  const id = randomUUID();
+  await q(
+    `INSERT INTO os_test_kits (id, kit, created_by, by_name, refs, links, said) VALUES ($1, $2, $3, $4, $5::jsonb, '[]'::jsonb, $6)`,
+    [id, p.appraisalId ? "booked-appraisal" : "landlord-lead", email, p.by.name || email, JSON.stringify(refs), "A landlord saved at the test address, so a test file of its own. Kept out of REX; delete it here to clear everything on it."]
+  );
+  return { kitId: id, owner: email, refs };
+}
+
+/** Our own photographs, so a test advert passes the Photos check. */
+const TEST_PHOTOS = ["/brand/photo/property.jpg", "/brand/photo/cover-terrace.webp", "/brand/photo/marketing.jpg", "/brand/photo/property-sample.webp"];
+
+/**
+ * A test listing, as a DRAFT, on the kit that owns the file. Filled in enough
+ * to pass the portals' minimum (lib/listing-requirements) - photographs, a
+ * headline, a description, an available date - because those are typed on
+ * the Marketing tab, which a test listing shows but never saves.
+ */
+export async function makeTestListing(p: {
+  kit: TestKitRef;
+  appraisalId: string | null;
+  home: string;
+  postcode: string;
+  rent: number;
+  deposit?: number | null;
+  availableFrom?: string | null;
+  propertyType?: string | null;
+  landlord: { name: string; email: string };
+}): Promise<TestListing> {
+  const listingId = newTestId();
+  const postcode = p.postcode.trim().toUpperCase();
+  const [first, ...rest] = p.home.split(",").map((x) => x.trim()).filter((x) => x && x.toUpperCase() !== postcode);
+  const name = first || "Test home";
+  const locality = rest.join(", ") || "Manchester";
+  const now = new Date().toISOString();
+  const available = p.availableFrom && /^\d{4}-\d{2}-\d{2}$/.test(p.availableFrom)
+    ? p.availableFrom
+    : new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+  const type = (p.propertyType ?? "").trim() || "Terraced house";
+  const listing: TestListing = {
+    listingId,
+    appraisalId: p.appraisalId,
+    name,
+    locality,
+    postcode,
+    rent: Math.round(p.rent),
+    beds: 2,
+    baths: 1,
+    propertyType: type,
+    images: TEST_PHOTOS,
+    heading: `${type}, ${name.replace(/^\d+[a-z]?\s+/i, "")}`,
+    body: `A test advert for ${name}: two bedrooms, a newly fitted kitchen, a garden and gas central heating, close to the shops and the tram. Unfurnished. (A test listing - it never really goes on the portals.)`,
+    publishedAt: now,
+    portals: [
+      { portal: "Rightmove", url: "https://www.rightmove.co.uk/" },
+      { portal: "Zoopla", url: "https://www.zoopla.co.uk/" },
+      { portal: "OnTheMarket", url: "https://www.onthemarket.com/" },
+    ],
+    landlord: p.landlord,
+    status: "draft",
+    createdAt: now,
+    availableFrom: available,
+    deposit: p.deposit ?? Math.round((p.rent * 12 * 5) / 52),
+  };
+  await putTestRecord(p.kit.kitId, p.kit.owner, "listing", listing);
+  return listing;
+}
+
+/**
+ * Push to the portals, on a test listing: it goes live here and nowhere else,
+ * and the first enquiry lands on it so the Enquiries tab has something to
+ * work. Its tester, anybody the file names, or an owner may press it.
+ */
+export async function publishTestListing(
+  listingId: number,
+  by: { email: string; role: string }
+): Promise<{ ok: true; listing: TestListing } | { ok: false; status: number; error: string }> {
+  if (!hasDb()) return { ok: false, status: 503, error: "There is no database here." };
+  const found = await q<{ id: string; kit_id: string; owner_email: string; payload: TestListing; created_by: string | null; viewers: boolean | null }>(
+    `SELECT t.id, t.kit_id, t.owner_email, t.payload, k.created_by, (k.refs->'viewers' ? LOWER($2)) AS viewers
+       FROM os_test_records t LEFT JOIN os_test_kits k ON k.id = t.kit_id AND k.cleared_at IS NULL
+      WHERE t.kind = 'listing' AND (t.payload->>'listingId')::bigint = $1
+      LIMIT 1`,
+    [listingId, by.email]
+  ).catch(() => []);
+  const row = found[0];
+  if (!row || !row.created_by) return { ok: false, status: 404, error: "That test listing isn't there any more." };
+  const me = by.email.trim().toLowerCase();
+  const mine = row.owner_email === me || row.created_by === me || Boolean(row.viewers) || ["owner", "super_admin"].includes(by.role);
+  if (!mine) return { ok: false, status: 403, error: "That test listing isn't one of yours." };
+  if (!isDraftTest(row.payload)) return { ok: false, status: 409, error: "It is already published. Use Put back on the portals if it has been taken off." };
+
+  const at = new Date().toISOString();
+  await q(`UPDATE os_test_records SET payload = payload || jsonb_build_object('status', 'published', 'publishedAt', $2::text) WHERE id = $1`, [row.id, at]);
+  await seedTestEnquiry(row.kit_id, row.owner_email, listingId).catch((e) => {
+    console.error("[test-overlay] could not seed the test enquiry", (e as Error).message);
+  });
+  return { ok: true, listing: { ...row.payload, status: "published", publishedAt: at } };
+}
+
+/**
+ * The first enquiry on a test listing, once it is live: from the file's own
+ * test tenant when it has one (so their name opens their lead), else "Test
+ * tenant", on the tester's own email - nothing is ever sent to it from here.
+ */
+async function seedTestEnquiry(kitId: string, owner: string, listingId: number): Promise<void> {
+  const already = await rows<TestEnquiry>("enquiry", "(payload->>'listingId')::bigint = $2", [listingId]);
+  if (already.length) return;
+  const tenant = await q<{ id: string; name: string; mobile: string | null }>(
+    `SELECT c.id, c.name, c.mobile
+       FROM os_test_kits k
+       JOIN os_contacts c ON k.refs->'contacts' ? c.id::text
+      WHERE k.id = $1 AND c.is_test AND c.kind = 'tenant'
+      ORDER BY c.created_at ASC LIMIT 1`,
+    [kitId]
+  ).catch(() => []);
+  const t = tenant[0];
+  const enquiry: TestEnquiry = {
+    id: t ? `os-${t.id}` : `test-enquiry-${randomUUID()}`,
+    listingId,
+    name: t?.name ?? "Test tenant",
+    email: owner,
+    phone: t?.mobile?.trim() || "07700 900000",
+    message: "Hello, is this still available? I'd like to book a viewing. (A test enquiry - it came from no portal.)",
+    source: "Rightmove (test)",
+    receivedAt: new Date().toISOString(),
+  };
+  await putTestRecord(kitId, owner, "enquiry", enquiry);
+}
+
+/** The enquiries on one test listing, for its tester (or anyone the file names), newest first. */
+export async function testEnquiriesForListing(listingId: number, email: string | null | undefined): Promise<TestEnquiry[]> {
+  if (!email) return [];
+  const r = await rows<TestEnquiry>("enquiry", `${MINE} AND (payload->>'listingId')::bigint = $3`, [email, listingId]);
+  return r.map((x) => x.payload);
 }

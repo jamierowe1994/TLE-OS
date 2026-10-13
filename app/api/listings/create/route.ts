@@ -8,6 +8,9 @@ import { createProperty, propertySubcategories } from "@/lib/rex-properties";
 import { rexConfigured } from "@/lib/rex";
 import { isOwner } from "@/lib/agent-words";
 import { putOwnerOnListing } from "@/lib/rex-listing-owner";
+import { isTestFile } from "@/lib/test-guard";
+import { adoptTestKit, kitFor, makeTestListing, testListingForAppraisal } from "@/lib/test-overlay";
+import { getAppraisal } from "@/lib/appraisal-store";
 
 /**
  * "+ Add new listing".
@@ -33,6 +36,14 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
+  /* ?testFile=<appraisal id>: is this a test file? The panel asks, so it can
+     make a test file's listing on the file's own address (13 Oct 2026). */
+  const testFile = req.nextUrl.searchParams.get("testFile");
+  if (testFile) {
+    const { actor } = await whoIs(req);
+    if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
+    return NextResponse.json({ ok: true, test: await isTestFile({ appraisalId: testFile }).catch(() => false) });
+  }
   if (!rexConfigured()) return NextResponse.json({ ok: false, error: "The listings system is not connected here." }, { status: 503 });
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
@@ -53,6 +64,10 @@ export async function GET(req: NextRequest) {
 }
 
 interface Body {
+  /** The appraisal file it is made from, when it is (components/appraisal/ListingAction). */
+  appraisalId?: unknown;
+  /** The type as it reads, for a test listing, which never asks REX for it. */
+  typeLabel?: unknown;
   propertyId?: unknown;
   address?: { streetNumber?: unknown; streetName?: unknown; town?: unknown; postcode?: unknown; propertyTypeId?: unknown; ownerContactId?: unknown };
   typeId?: unknown;
@@ -73,17 +88,65 @@ const money = (v: unknown): number | null => {
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
 export async function POST(req: NextRequest) {
-  if (!rexConfigured()) return NextResponse.json({ ok: false, error: "The listings system is not connected here." }, { status: 503 });
-  const gate = await gateListingWrite(req, "listing-edit");
+  const b = (await req.json().catch(() => ({}))) as Body;
+
+  /* A TEST FILE'S LISTING IS MADE HERE, NOT IN REX (James, 13 Oct 2026: a
+     tester walks terms signed -> new listing -> Push to the portals without
+     anything refusing them). Recognised by its appraisal, the test address or
+     a test owner, before REX is looked for - lib/rex-properties would refuse
+     it anyway, and that refusal was the dead end. */
+  const a0 = b.address ?? {};
+  const appraisalId = str(b.appraisalId);
+  const test = await isTestFile({
+    appraisalId: appraisalId || null,
+    address: `${str(a0.streetNumber)} ${str(a0.streetName)}`.trim() || null,
+    contactId: str(a0.ownerContactId) || str(b.ownerContactId) || null,
+  }).catch(() => false);
+  /* The sign-in and the role, as for any listing; the switch is not asked,
+     because nothing here reaches the records system it guards. */
+  const gate = await gateListingWrite(req, "listing-edit", { testFile: test });
   if ("refuse" in gate) return gate.refuse;
   const { actor } = gate;
 
-  const b = (await req.json().catch(() => ({}))) as Body;
   const rent = money(b.rent);
   if (rent == null || rent === 0) return NextResponse.json({ ok: false, error: "A rent is needed before a listing can exist." }, { status: 400 });
   const typeId = str(b.typeId);
   if (!typeId) return NextResponse.json({ ok: false, error: "Choose what kind of property it is." }, { status: 400 });
   const availableFrom = /^\d{4}-\d{2}-\d{2}$/.test(str(b.availableFrom)) ? str(b.availableFrom) : null;
+
+  if (test) {
+    if (!appraisalId) {
+      return NextResponse.json({ ok: false, step: "address", error: "This is a test address. Make its listing from the test file's appraisal (Create the listing), so it stays in the OS." }, { status: 409 });
+    }
+    const ma = await getAppraisal(appraisalId).catch(() => null);
+    if (!ma) return NextResponse.json({ ok: false, error: "No such appraisal." }, { status: 404 });
+    /* One listing per file, as one current listing per home in REX. */
+    const had = await testListingForAppraisal(ma.id).catch(() => null);
+    if (had) {
+      return NextResponse.json({ ok: false, step: "listing", error: "This home is already on Listings, so a second one was not made.", existingListingId: String(had.listingId) }, { status: 409 });
+    }
+    const kit = (await kitFor({ appraisalId: ma.id, leadId: ma.leadId })) ?? (await adoptTestKit({ by: actor, appraisalId: ma.id }));
+    const made = await makeTestListing({
+      kit,
+      appraisalId: ma.id,
+      home: ma.address,
+      postcode: ma.postcode ?? "",
+      rent,
+      deposit: money(b.deposit),
+      availableFrom,
+      propertyType: str(b.typeLabel) || null,
+      landlord: { name: ma.landlord, email: (ma.landlordEmail ?? "").trim() || kit.owner },
+    });
+    await record({
+      kind: "listing_edited",
+      actorId: actor.id,
+      actorEmail: actor.email,
+      detail: `created test listing ${made.listingId} for test file ${ma.id}, £${rent} pcm (nothing sent to REX)`,
+    }).catch(() => {});
+    return NextResponse.json({ ok: true, listingId: String(made.listingId), madeProperty: false, contracts: 0, owner: null, test: true });
+  }
+
+  if (!rexConfigured()) return NextResponse.json({ ok: false, error: "The listings system is not connected here." }, { status: 503 });
   const dryRun = b.dryRun === true && actor.role === "owner";
 
   /* The address: one already on file, or a new one. A new one is a record in
@@ -104,6 +167,7 @@ export async function POST(req: NextRequest) {
         postcode: str(a.postcode),
         subcategoryId: str(a.propertyTypeId) || null,
         ownerContactId: str(a.ownerContactId) || null,
+        appraisalId: appraisalId || null,
       },
       actor.id
     );
@@ -135,6 +199,9 @@ export async function POST(req: NextRequest) {
        no choice to make, so the question came off the panel. */
     letType: "long_term",
     serviceLevel: str(b.serviceLevel) || "managed",
+    /* For the test-file check only (lib/rex-listing-create); never sent. */
+    appraisalId: appraisalId || null,
+    contactId: str(b.address?.ownerContactId) || str(b.ownerContactId) || null,
   };
   const made = await createListing(listing, actor.id, dryRun);
   if (!made.ok) {

@@ -440,7 +440,13 @@ function ListingDrawerBody({
   const publishArea = AREA_DEFS.find((a) => a.id === "listing-publish")!;
   const publishLevel = levelOf(areaAccess, publishArea.id);
   const publishHidden = Boolean(areaAccess?.gated) && publishLevel === "hidden";
-  const publishCanPress = canAct(areaAccess, publishArea);
+  /* A test listing (negative id, lib/test-overlay) goes live in the OS alone
+     (James, 13 Oct 2026: a tester walks to the portals without anything
+     refusing them). In practice mode a tester's own test file works in full -
+     the middleware lets it through and the route answers it before the
+     switch - so the button does too. */
+  const testListing = /^-\d+$/.test(String(listing?.id ?? ""));
+  const publishCanPress = canAct(areaAccess, publishArea) || (testListing && publishLevel === "practice");
   const editArea = AREA_DEFS.find((a) => a.id === "listing-edit")!;
   const editLevel = levelOf(areaAccess, editArea.id);
   const editCanPress = canAct(areaAccess, editArea);

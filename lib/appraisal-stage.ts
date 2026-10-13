@@ -465,7 +465,25 @@ export async function withLiveStages(list: MarketAppraisal[], now = new Date(), 
     /* no book: nothing reads as won on that evidence; nothing else changes */
   }
   const staged = await stageAll(list, listedIds, now, opts);
-  return staged.map((ma) => ({ ...ma, listingId: ma.rexPropertyId ? listingOf.get(String(ma.rexPropertyId))?.id ?? null : null }));
+  /* A test file's listing is never in REX's book, so it has no property to
+     be found by: it is the test overlay's own (lib/test-overlay), filed under
+     the appraisal (James, 13 Oct 2026). One read for the whole list, and only
+     for the files nothing else answered. */
+  const unlisted = staged.filter((ma) => !(ma.rexPropertyId && listingOf.has(String(ma.rexPropertyId)))).map((ma) => ma.id);
+  const testListingOf = new Map<string, string>();
+  if (unlisted.length && hasDb()) {
+    const rows = await q<{ appraisal_id: string; listing_id: string }>(
+      `SELECT payload->>'appraisalId' AS appraisal_id, payload->>'listingId' AS listing_id
+         FROM os_test_records WHERE kind = 'listing' AND payload->>'appraisalId' = ANY($1)
+        ORDER BY created_at ASC`,
+      [unlisted]
+    ).catch(() => []);
+    for (const r of rows) testListingOf.set(r.appraisal_id, r.listing_id);
+  }
+  return staged.map((ma) => ({
+    ...ma,
+    listingId: (ma.rexPropertyId ? listingOf.get(String(ma.rexPropertyId))?.id : null) ?? testListingOf.get(ma.id) ?? null,
+  }));
 }
 
 /**

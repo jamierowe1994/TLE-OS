@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { TEST_REFUSAL, testDetails, testLandlord, testListingViewings, testPortals, testPublication } from "@/lib/test-listing-answers";
-import { isTestId } from "@/lib/test-overlay";
+import { isTestId, publishTestListing } from "@/lib/test-overlay";
 import { whoIs } from "@/lib/admin";
 import { accessFor } from "@/lib/area-access";
 import { AREA_DEFS, canAct, levelOf, lockedSentence } from "@/lib/area-map";
@@ -152,8 +152,6 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!rexConfigured()) return NextResponse.json({ ok: false, error: "The listings system isn't connected here." }, { status: 503 });
-
   const { actor, viewingAs } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (viewingAs) {
@@ -162,6 +160,31 @@ export async function POST(req: NextRequest) {
   if (!["owner", "super_admin", "agent"].includes(actor.role)) {
     return NextResponse.json({ ok: false, error: "Pushing to the portals is for the listing's agent." }, { status: 403 });
   }
+
+  const b = (await req.json().catch(() => ({}))) as { id?: unknown; action?: unknown };
+
+  /* A TEST LISTING GOES LIVE HERE AND NOWHERE ELSE (James, 13 Oct 2026: a
+     tester walks New listing to Push to the portals "without anything
+     refusing or slowing them"). Asked before REX is even looked for, and
+     before the switch: nothing reaches REX or a portal, so neither lock has
+     anything to guard. The answer is the shape a real push gives, so the
+     same ceremony plays - three portals, the tick, the confetti - and the
+     listing then reads as live on Listings, for its tester alone. Off and on
+     stay refused: a test listing has no portal feed to take it off. */
+  if (isTestId(b.id)) {
+    if (b.action !== "publish") return NextResponse.json({ ok: false, error: TEST_REFUSAL, test: true }, { status: 409 });
+    const done = await publishTestListing(Number(b.id), { email: actor.email, role: actor.role });
+    if (!done.ok) return NextResponse.json({ ok: false, error: done.error, test: true }, { status: done.status });
+    await record({
+      kind: "listing_publication",
+      actorId: actor.id,
+      actorEmail: actor.email,
+      detail: `${b.id}: publish (test listing, nothing sent to REX or the portals)`,
+    }).catch(() => {});
+    return NextResponse.json({ ok: true, id: Number(b.id), action: "publish", status: "published", channels: ALL_CHANNELS, onPortals: true, test: true });
+  }
+
+  if (!rexConfigured()) return NextResponse.json({ ok: false, error: "The listings system isn't connected here." }, { status: 503 });
   const access = await accessFor(actor).catch(() => null);
   /* Fail CLOSED here, unlike the middleware: a switch that cannot be read
      must not become a listing on Rightmove. Owners and Susan are not gated. */
@@ -172,8 +195,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const b = (await req.json().catch(() => ({}))) as { id?: unknown; action?: unknown };
-  if (isTestId(b.id)) return NextResponse.json({ ok: false, error: TEST_REFUSAL, test: true }, { status: 409 });
   const id = listingId(b.id);
   const action = b.action === "publish" || b.action === "off" || b.action === "on" ? b.action : null;
   if (!id || !action) return NextResponse.json({ ok: false, error: "Which listing, and publish, off or on?" }, { status: 400 });

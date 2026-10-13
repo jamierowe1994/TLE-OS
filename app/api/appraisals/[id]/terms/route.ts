@@ -9,6 +9,7 @@ import { publicOrigin } from "@/lib/origin";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 import { nextAutoNudge, nudgeRecord, viewCounts } from "@/lib/contract-nudge";
 import { presentationsFor } from "@/lib/present-store";
+import { recordTestSend, testTermsParties } from "@/lib/test-terms";
 
 /**
  * One appraisal's contract: where it has got to, and the way to chase it.
@@ -51,6 +52,25 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const { id } = await ctx.params;
   const got = await whoAndWhat(req, id);
   if (got.error) return got.error;
+
+  /* A test file's contract is signed in the OS alone (lib/test-terms, 13 Oct
+     2026), so it is read from there whatever DocuSeal is doing, and Send is
+     always open on it - it emails nobody. */
+  const testParties = await testTermsParties(id).catch(() => null);
+  if (testParties) {
+    const sent = await contractSendRecord(id);
+    return NextResponse.json({
+      ok: true,
+      connected: true,
+      sendUnlocked: true,
+      test: true,
+      parties: testParties.map((p) => (p.role === "landlord" && sent ? { ...p, sentAt: sent.lastSentAt } : p)),
+      sent,
+      nudge: null,
+      nextNudgeAt: null,
+      views: { presentation: 0, contract: 0 },
+    });
+  }
 
   if (!docusealConfigured()) {
     return NextResponse.json({ ok: true, connected: false, sendUnlocked: false, parties: [] });
@@ -99,6 +119,24 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const { id } = await ctx.params;
   const got = await whoAndWhat(req, id);
   if (got.error) return got.error;
+
+  /* Send on a test file: written down as sent, emailing nobody (13 Oct 2026).
+     Nothing to send until it is signed, as on a real one. */
+  const testParties = await testTermsParties(id).catch(() => null);
+  if (testParties) {
+    if (!testParties.length) {
+      return NextResponse.json({ ok: false, error: "Sign your half first. Until you do, the landlord opens a contract they can't act on." }, { status: 409 });
+    }
+    const to = (got.ma.landlordEmail ?? "").trim().toLowerCase() || got.me.email;
+    await recordTestSend(got.ma.id, to, got.me.email);
+    return NextResponse.json({
+      ok: true,
+      again: false,
+      to,
+      test: true,
+      message: `A test file, so nothing was emailed. It reads as sent to ${to}, and as signed by ${got.ma.landlord} too.`,
+    });
+  }
 
   try {
     const parties = await termsParties(id);

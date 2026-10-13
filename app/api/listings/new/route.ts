@@ -12,6 +12,8 @@ import { createAppraisal, recordValuation } from "@/lib/appraisal-store";
 import { hasDb, q } from "@/lib/db";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 import type { ServiceLevel } from "@/lib/market-appraisal";
+import { isTestFile } from "@/lib/test-guard";
+import { adoptTestKit, kitFor, makeTestListing } from "@/lib/test-overlay";
 
 /**
  * NEW LISTING, THE WHOLE WAY (James, 12 Oct 2026).
@@ -50,6 +52,8 @@ interface Body {
   homeLabel?: unknown;
   postcode?: unknown;
   typeId?: unknown;
+  /** The type as it reads, for a test listing, which never asks REX for it. */
+  typeLabel?: unknown;
   rent?: unknown;
   deposit?: unknown;
   availableFrom?: unknown;
@@ -101,17 +105,26 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!rexConfigured()) return NextResponse.json({ ok: false, error: "The listings system is not connected here." }, { status: 503 });
   try {
     assertNotViewingAs(req.cookies.get(VIEW_AS_COOKIE)?.value);
   } catch (e) {
     if (e instanceof ViewingAsRefused) return NextResponse.json({ ok: false, error: e.message }, { status: 423 });
     throw e;
   }
-  const gate = await gateListingWrite(req, "listing-edit");
+  const b = (await req.json().catch(() => ({}))) as Body;
+  /* A TEST LANDLORD'S LISTING STAYS IN THE OS (James, 13 Oct 2026). Asked
+     before REX is looked for: a landlord flagged is_test (POST /api/contacts
+     flags one saved at the test address), their lead, or the test address
+     itself. The sign-in and the role still count; the switch guarding REX
+     does not, because nothing here reaches it. */
+  const test = await isTestFile({
+    contactId: str(b.contactId) || null,
+    leadId: str(b.contactId) ? `os-${str(b.contactId)}` : null,
+    address: str(b.homeLabel) || `${str(b.address?.streetNumber)} ${str(b.address?.streetName)}`.trim() || null,
+  }).catch(() => false);
+  const gate = await gateListingWrite(req, "listing-edit", { testFile: test });
   if ("refuse" in gate) return gate.refuse;
   const { actor } = gate;
-  const b = (await req.json().catch(() => ({}))) as Body;
 
   /* Everything checked before anything is written. */
   const contact = str(b.contactId) ? await getContact(str(b.contactId)).catch(() => null) : null;
@@ -131,6 +144,60 @@ export async function POST(req: NextRequest) {
   if (!homeLabel) return NextResponse.json({ ok: false, step: "home", error: "Which home is it?" }, { status: 400 });
   const availableFrom = /^\d{4}-\d{2}-\d{2}$/.test(str(b.availableFrom)) ? str(b.availableFrom) : null;
 
+  /* The test file's way: no home or listing in REX - the listing is a draft
+     on the test overlay (lib/test-overlay) - and the same file behind it, so
+     the terms are drawn up, signed and sent by the same screens (a test
+     file's are signed in the OS alone, app/api/docuseal/sign). */
+  if (test) {
+    const leadId = `os-${contact.id}`;
+    const postcode = (str(b.postcode) || str(b.address?.postcode)).toUpperCase();
+    let appraisalId: string | null = null;
+    let fileNote: string | null = null;
+    try {
+      const ma = await createAppraisal({ leadId, landlord: contact.name, address: homeLabel, postcode, agent: actor.name || null, appointmentAt: null });
+      appraisalId = ma.id;
+      await recordValuation(ma.id, { valuation: rent, serviceLevel: service, feePct, setupFee }, actor.email);
+      if (hasDb()) {
+        await q(
+          `INSERT INTO os_case_state (kind, record_id, payload, updated_at, updated_by)
+           VALUES ('direct-listing', $1, $2::jsonb, NOW(), $3)
+           ON CONFLICT (kind, record_id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW(), updated_by = EXCLUDED.updated_by`,
+          [ma.id, JSON.stringify({ listingId: null, propertyId: null, landlordAddress: str(b.landlordAddress) || null, by: actor.email, at: new Date().toISOString(), test: true }), actor.email]
+        );
+      }
+    } catch (e) {
+      fileNote = e instanceof Error ? e.message : "The file behind the listing did not save.";
+    }
+    const kit = (await kitFor({ appraisalId, leadId, contactId: contact.id })) ?? (await adoptTestKit({ by: actor, contactId: contact.id, appraisalId }));
+    const made = await makeTestListing({
+      kit,
+      appraisalId,
+      home: homeLabel,
+      postcode,
+      rent,
+      deposit: money(b.deposit),
+      availableFrom,
+      propertyType: str(b.typeLabel) || null,
+      landlord: { name: contact.name, email: contact.email || kit.owner },
+    });
+    if (appraisalId && hasDb()) {
+      await q(
+        `UPDATE os_case_state SET payload = payload || jsonb_build_object('listingId', $2::text) WHERE kind = 'direct-listing' AND record_id = $1`,
+        [appraisalId, String(made.listingId)]
+      ).catch(() => null);
+    }
+    await record({
+      kind: "listing_edited",
+      actorId: actor.id,
+      actorEmail: actor.email,
+      detail: `new test listing ${made.listingId} for test landlord ${contact.name}, £${rent} pcm (nothing sent to REX)`,
+    }).catch(() => {});
+    /* The landlord IS on it: the test listing carries them itself. */
+    return NextResponse.json({ ok: true, listingId: String(made.listingId), propertyId: "", appraisalId, owner: { state: "added" }, fileNote, test: true });
+  }
+
+  if (!rexConfigured()) return NextResponse.json({ ok: false, error: "The listings system is not connected here." }, { status: 503 });
+
   /* 1. The home: one already in REX, or a new one with the landlord as owner. */
   let propertyId = str(b.propertyId);
   let madeProperty = false;
@@ -144,6 +211,7 @@ export async function POST(req: NextRequest) {
         postcode: str(a.postcode),
         subcategoryId: str(a.propertyTypeId) || null,
         ownerContactId: contact.rexId ?? null,
+        osContactId: contact.id,
       },
       actor.id
     );
@@ -164,6 +232,7 @@ export async function POST(req: NextRequest) {
     availableFrom,
     letType: "long_term",
     serviceLevel: LISTING_SERVICE[service],
+    contactId: contact.id,
   };
   const made = await createListing(listing, actor.id);
   if (!made.ok) {

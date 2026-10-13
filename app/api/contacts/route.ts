@@ -5,6 +5,7 @@ import { whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
 import { saveContact, listContacts, markRex, type NewContact, type RexState } from "@/lib/contacts-store";
 import { pushContactToRex, pushBlockedBecause } from "@/lib/rex-contacts";
+import { TEST_STREET } from "@/lib/test-guard";
 import { record } from "@/lib/audit";
 
 /**
@@ -101,9 +102,17 @@ export async function POST(req: NextRequest) {
     notes: body.notes,
   };
 
+  /* A landlord saved at the test address is a TEST landlord (James, 13 Oct
+     2026): New listing at 14 Test Street saves them here first, and without
+     the flag they went to REX like anybody else. Flagged, they never do
+     (lib/rex-contacts refuses is_test), and the listing made for them stays
+     in the OS (app/api/listings/new). The address alone decides it - the
+     test street, never the postcode (lib/test-guard). */
+  const isTest = TEST_STREET.test(String(draft.address ?? ""));
+
   let saved;
   try {
-    saved = await saveContact(draft, actor.email);
+    saved = await saveContact(draft, actor.email, { isTest });
   } catch (e) {
     /* The one case where the whole thing fails. Said plainly rather than
        swallowed, because the alternative is the bug this replaces. */
@@ -119,7 +128,7 @@ export async function POST(req: NextRequest) {
   /* What it did comes back to the panel (4 Oct 2026), which used to say "the
      welcome email has NOT gone" whatever had happened. */
   let welcome: { state: string; detail: string } | null = null;
-  if (draft.kind === "tenant" && (draft.email ?? "").trim()) {
+  if (draft.kind === "tenant" && !isTest && (draft.email ?? "").trim()) {
     const r = await import("@/lib/tenant-journey-emails")
       .then((m) => m.sendAddedWelcome({ contactId: saved.id, name: saved.name ?? draft.name, email: String(draft.email), by: actor }))
       .catch(() => null);
@@ -130,6 +139,25 @@ export async function POST(req: NextRequest) {
      it matched and the agent chose to carry on with them - and the route then
      created a second REX contact anyway, because the choice never reached it.
      A chosen record is linked, and REX is not written to. */
+  /* A test contact is never joined to a REX record, nor pushed to one. */
+  if (isTest) {
+    const detail = "A test contact (the test address) - kept in the OS, never sent to REX.";
+    await markRex(saved.id, "held", detail, null, actor.email);
+    /* A test landlord belongs to a test file from the start, so it shows on
+       the tester's Test files tab and Delete there clears it and all that
+       follows (lib/test-overlay adoptTestKit). */
+    if (draft.kind === "landlord") {
+      await import("@/lib/test-overlay")
+        .then((m) => m.adoptTestKit({ by: actor, contactId: saved.id }))
+        .catch((e) => console.error("[contacts] could not file the test landlord", (e as Error).message));
+    }
+    return NextResponse.json({
+      welcome,
+      contact: { ...saved, rexState: "held", rexDetail: detail },
+      rex: { ok: false, reason: "test_file", detail },
+    });
+  }
+
   const rexId = typeof body.rexId === "string" && /^\d+$/.test(body.rexId.trim()) ? body.rexId.trim() : null;
   if (rexId) {
     const detail = `Carried on REX contact ${rexId} - nothing new was created in REX.`;

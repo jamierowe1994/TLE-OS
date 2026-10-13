@@ -15,7 +15,13 @@ import { readListingDetails } from "@/lib/listing-details";
  * as well as in the middleware because the middleware fails open, and a
  * failure here must not become a change on Rightmove.
  */
-export async function gateListingWrite(req: NextRequest, areaId: string): Promise<{ actor: OsUser } | { refuse: NextResponse }> {
+export async function gateListingWrite(
+  req: NextRequest,
+  areaId: string,
+  /** A test file's listing, made in the OS alone (13 Oct 2026): signed in and
+   *  the role still count, the switch that guards REX does not. */
+  opts: { testFile?: boolean } = {}
+): Promise<{ actor: OsUser } | { refuse: NextResponse }> {
   const { actor, viewingAs } = await whoIs(req);
   if (!actor) return { refuse: NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 }) };
   if (viewingAs) {
@@ -26,7 +32,7 @@ export async function gateListingWrite(req: NextRequest, areaId: string): Promis
   }
   const area = AREA_DEFS.find((a) => a.id === areaId);
   if (!area) return { refuse: NextResponse.json({ ok: false, error: "No such switch." }, { status: 500 }) };
-  if (actor.role === "agent") {
+  if (actor.role === "agent" && !opts.testFile) {
     const access = await accessFor(actor).catch(() => null);
     if (!access || !canAct(access, area)) {
       return {
