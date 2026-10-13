@@ -431,7 +431,8 @@ const findFile: AssistantTool = {
     const keyOf = (href: string) => decodeURIComponent(href.split("key=")[1]?.split("&")[0] ?? "");
     const byKey = new Map(files.map((f) => [keyOf(f.href), f]));
     const fromRead = read.map((e) => (e.key ? byKey.get(e.key) : null) ?? files.find((f) => f.name === e.file) ?? null).filter((f): f is NonNullable<typeof f> => Boolean(f));
-    const hits = [...new Map([...fromRead, ...byName].map((f) => [f.href, f])).values()];
+    /* One button a file: the same guide uploaded twice is still one guide. */
+    const hits = [...new Map([...fromRead, ...byName].map((f) => [f.name, f])).values()];
     const top = hits.slice(0, 6);
     const writeUp = (f: { href: string; name: string }) => library.find((e) => (e.key && e.key === keyOf(f.href)) || e.file === f.name) ?? null;
     return {
