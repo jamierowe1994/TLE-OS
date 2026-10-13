@@ -50,6 +50,7 @@ const SIDE_TONE: Record<TestFileSide, string> = {
   tenant: "border-sky-200 bg-sky-50 text-sky-900",
   plc: "border-violet-200 bg-violet-50 text-violet-900",
   tenancy: "border-emerald-200 bg-emerald-50 text-emerald-900",
+  e2e: "border-rose-200 bg-rose-50 text-rose-900",
 };
 
 const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -121,16 +122,15 @@ export default function TestFilesTab() {
         </section>
       )}
 
-      {/* ── Add ── */}
-      {!closed && (
-        <section className="rounded-2xl border border-line/70 bg-card p-4">
+      {/* ── Add ── (after launch, only the E2E pair, which is kept for showing the process) */}
+      <section className="rounded-2xl border border-line/70 bg-card p-4">
           <h2 className="text-[15px]">Add a Test File</h2>
           <p className="mt-0.5 max-w-[75ch] text-[12px] text-muted">
             Each one uses your own email as the customer&apos;s, so every email in the flow comes to you. It is kept out of REX. Add as many as you
             like and walk them in different ways.
           </p>
           <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
-            {(Object.keys(TEST_FILE_SIDES) as TestFileSide[]).map((side) => (
+            {(Object.keys(TEST_FILE_SIDES) as TestFileSide[]).filter((side) => !closed || side === "e2e").map((side) => (
               <button
                 key={side}
                 type="button"
@@ -144,7 +144,6 @@ export default function TestFilesTab() {
             ))}
           </div>
         </section>
-      )}
 
       {/* ── The files ── */}
       <section>
@@ -245,7 +244,7 @@ export default function TestFilesTab() {
                         </a>
                       ))}
                       {/* A live tenancy is both people, so it gets both doors. */}
-                      {f.canRelink && mine && (f.side === "tenancy" ? (["landlord", "tenant"] as const) : [f.side === "tenant" ? ("tenant" as const) : ("landlord" as const)]).map((as) => (
+                      {f.canRelink && mine && (f.side === "tenancy" || f.side === "e2e" ? (["landlord", "tenant"] as const) : [f.side === "tenant" ? ("tenant" as const) : ("landlord" as const)]).map((as) => (
                         <button
                           key={as}
                           type="button"
@@ -277,10 +276,24 @@ export default function TestFilesTab() {
         <section className="rounded-2xl border border-line/70 bg-card p-4">
           <h2 className="text-[15px]">Launch</h2>
           <p className="mt-0.5 max-w-[75ch] text-[12px] text-muted">
-            For every tester at once. Test files are deleted with everything done on them. What was tested, and what failed, stays on the Core for
-            launch list.
+            For every tester at once. Test files are deleted with everything done on them, except the Landlord E2E and Tenant E2E pairs, which
+            stay for showing the process. What was tested, and what failed, stays on the Core for launch list.
           </p>
           <div className="mt-3 flex flex-wrap gap-2.5">
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() => {
+                if (!window.confirm("Give everyone with an account a Landlord E2E and Tenant E2E pair on their own email?\n\nAnyone who already has one is left as they are.")) return;
+                void act("e2e-everyone", { action: "e2e-everyone" }, (j) => {
+                  const made = Number(j.made ?? 0);
+                  setDone((d) => ({ ...d, everyone: `${made} ${made === 1 ? "pair" : "pairs"} made.${j.skipped ? ` ${String(j.skipped)}` : ""}` }));
+                });
+              }}
+              className={`${pill} bg-white`}
+            >
+              {busy === "e2e-everyone" ? "Making…" : "Give everyone an E2E pair"}
+            </button>
             <button
               type="button"
               disabled={busy !== null}
@@ -306,6 +319,7 @@ export default function TestFilesTab() {
               </button>
             )}
           </div>
+          {done.everyone && <p className="mt-2 text-[12px] text-muted">{done.everyone}</p>}
         </section>
       )}
     </div>

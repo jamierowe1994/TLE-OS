@@ -10,6 +10,7 @@ import { KitRefused, relinkKit } from "@/lib/test-kits";
 import {
   addTestFile,
   deleteTestFile,
+  e2eForEveryone,
   listTestFiles,
   readyForLaunch,
   removeAllTesting,
@@ -29,6 +30,7 @@ import {
  * POST { action: "remove-all" }          owners: every tester's files
  * POST { action: "ready" }               owners: remove all, and close testing
  * POST { action: "reopen" }              owners
+ * POST { action: "e2e-everyone" }        owners: a Landlord E2E and Tenant E2E pair for everyone
  *
  * Same door as the Testing page, and never while viewing as somebody: test
  * files carry the signed-in person's own email.
@@ -113,6 +115,10 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true, removed: await removeAllTesting(me) });
       case "ready":
         return NextResponse.json({ ok: true, removed: await readyForLaunch(me) });
+      case "e2e-everyone": {
+        const r = await e2eForEveryone(me, origin);
+        return NextResponse.json({ ok: true, made: r.made, skipped: r.skipped.length ? `Not made for ${r.skipped.join("; ")}.` : "" });
+      }
       case "reopen":
         await reopenTesting(me);
         return NextResponse.json({ ok: true });

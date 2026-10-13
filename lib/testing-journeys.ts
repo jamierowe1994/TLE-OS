@@ -1018,7 +1018,7 @@ export const WHO_WORDS: Record<TestWho, string> = {
   office: "Office",
 };
 
-export type KitId = "tenant-enquiry" | "landlord-lead" | "booked-appraisal" | "tenant-passport" | "plc-pack" | "live-tenancy";
+export type KitId = "tenant-enquiry" | "landlord-lead" | "booked-appraisal" | "tenant-passport" | "plc-pack" | "live-tenancy" | "e2e";
 
 export interface KitDef {
   id: KitId;
@@ -1062,6 +1062,16 @@ export const KITS: Record<KitId, KitDef> = {
       "One home with BOTH sides on your email: you as the landlord and you as the tenant, moved in a month ago. The property joins the managed book, so the maintenance screen can raise a repair or a planned job on it, the tenant area can report one, and both portals show it.",
     emails: false,
   },
+  /* The whole road on one file (James, 13 Oct 2026): "one test file that I
+     can take ... all the way through from leads all the way through to
+     portfolio, so I don't want to get stuck". */
+  e2e: {
+    id: "e2e",
+    label: "Create Landlord E2E and Tenant E2E",
+    makes:
+      "Landlord E2E, a new landlord lead at 14 Test Street, and Tenant E2E, a new tenant enquiry for it, both on your email. Take the landlord from appraisal to a live listing (the portal push is pretend, with the real animation), then book Tenant E2E a viewing on it, make the offer, accept it and walk the let through to Portfolio. Nothing reaches REX, Propoly or the portals.",
+    emails: false,
+  },
   "plc-pack": {
     id: "plc-pack",
     label: "Create a PLC pack",
@@ -1075,7 +1085,7 @@ export const KITS: Record<KitId, KitDef> = {
  * each of which can be put back to a stage and walked again, as many times as
  * it takes to find what breaks. lib/test-files does the work.
  */
-export type TestFileSide = "landlord" | "tenant" | "plc" | "tenancy";
+export type TestFileSide = "landlord" | "tenant" | "plc" | "tenancy" | "e2e";
 
 export interface TestFileStage {
   id: string;
@@ -1136,6 +1146,20 @@ export const TEST_FILE_SIDES: Record<TestFileSide, { label: string; add: string;
       { id: "planned", label: "Planned job due", says: "Moved in, with a planned job (the gas safety check) on the board for next week." },
     ],
   },
+  /* Landlord E2E and Tenant E2E on one file (James, 13 Oct 2026), walked by
+     hand on the real screens. Kept through Ready for launch, for showing the
+     whole process; Start puts both back to new leads. */
+  e2e: {
+    label: "End to end",
+    add: "Add Landlord E2E and Tenant E2E",
+    stages: [
+      {
+        id: "start",
+        label: "Start",
+        says: "Landlord E2E is a new landlord lead at 14 Test Street and Tenant E2E a new tenant enquiry. Book the appraisal, send the decks, sign the terms, make the listing and push it to the portals; then book Tenant E2E a viewing, make and accept the offer, push it to Propoly and take the let through the PLC check to move-in and Portfolio.",
+      },
+    ],
+  },
   plc: {
     label: "PLC pack",
     add: "Add a test PLC pack",
@@ -1147,6 +1171,7 @@ export function sideOfKit(kit: KitId): TestFileSide {
   if (kit === "tenant-enquiry" || kit === "tenant-passport") return "tenant";
   if (kit === "plc-pack") return "plc";
   if (kit === "live-tenancy") return "tenancy";
+  if (kit === "e2e") return "e2e";
   return "landlord";
 }
 

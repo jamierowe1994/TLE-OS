@@ -131,7 +131,8 @@ export async function tenantLink(email: string, name: string, origin: string): P
 export async function runKit(kit: KitId, me: OsUser, origin: string): Promise<KitRun> {
   if (!hasDb()) throw new KitRefused("There is no database here, so a test has nowhere to live.");
   if (!KITS[kit]) throw new KitRefused("That is not a test we can create.");
-  if ((await testingClosed()).closed) throw new KitRefused("Testing is closed for launch. An owner can reopen it on the Test files tab.");
+  /* The E2E pair outlives Ready for launch: it is how the process is shown. */
+  if (kit !== "e2e" && (await testingClosed()).closed) throw new KitRefused("Testing is closed for launch. An owner can reopen it on the Test files tab.");
   const email = me.email.trim().toLowerCase();
   if (!isInternalAddress(email)) {
     throw new KitRefused("Tests are made with your own email as the customer's, and yours is not one of ours, so nothing could safely be sent.");
@@ -143,17 +144,17 @@ export async function runKit(kit: KitId, me: OsUser, origin: string): Promise<Ki
   const once: KitLink[] = [];
   const said: string[] = [];
 
-  const contact = async (kind: "tenant" | "landlord") => {
+  const contact = async (kind: "tenant" | "landlord", named?: { name: string; enquiry: string }) => {
     const c = await saveContact(
       {
         kind,
-        name: `${first} (test ${kind})`,
+        name: named?.name ?? `${first} (test ${kind})`,
         email,
         mobile: "07700 900000",
         address: kind === "landlord" ? TEST_ADDRESS : "",
         postcode: kind === "landlord" ? TEST_POSTCODE : "",
         source: "Create a test",
-        enquiry: kind === "tenant" ? "Looking for a two-bed in Didsbury from next month. (Test enquiry.)" : "Thinking of letting 14 Test Street. (Test lead.)",
+        enquiry: named?.enquiry ?? (kind === "tenant" ? "Looking for a two-bed in Didsbury from next month. (Test enquiry.)" : "Thinking of letting 14 Test Street. (Test lead.)"),
         notes: "Made by Admin → Testing. Kept out of REX; cleared from there.",
       },
       email,
@@ -173,6 +174,20 @@ export async function runKit(kit: KitId, me: OsUser, origin: string): Promise<Ki
     stored.push({ who: "agent", label: "Open the landlord", href: `/leads?side=landlord&open=os-${l.id}` });
     stored.push({ who: "agent", label: "Open the tenant", href: `/leads?side=tenant&open=os-${t.id}` });
     said.push(`Made ${l.name} and ${t.name}, both on ${email}. Reset it to Moved in to build the tenancy.`);
+  }
+
+  /* Landlord E2E and Tenant E2E (James, 13 Oct 2026): one landlord lead and
+     one tenant lead on the tester's email, to be walked by hand from lead to
+     Portfolio. The landlord first, so contacts[0] is the landlord and
+     contacts[1] the tenant, as on a live tenancy. */
+  if (kit === "e2e") {
+    const l = await contact("landlord", { name: "Landlord E2E", enquiry: "Thinking of letting 14 Test Street. (End-to-end test lead.)" });
+    const t = await contact("tenant", { name: "Tenant E2E", enquiry: "Interested in 14 Test Street once it is listed. (End-to-end test enquiry.)" });
+    refs.landlordEmail = email;
+    refs.tenantEmail = email;
+    stored.push({ who: "agent", label: "Open Landlord E2E", href: `/leads?side=landlord&open=os-${l.id}` });
+    stored.push({ who: "agent", label: "Open Tenant E2E", href: `/leads?side=tenant&open=os-${t.id}` });
+    said.push(`Made Landlord E2E and Tenant E2E, both on ${email}. Start with Landlord E2E: book the appraisal.`);
   }
 
   if (kit === "tenant-enquiry" || kit === "landlord-lead") {
@@ -252,7 +267,7 @@ export async function runKit(kit: KitId, me: OsUser, origin: string): Promise<Ki
     said.push(`Opened an empty pack for test application ${ref}, moving in three weeks from today. Attach documents as the agent, then send it to pre-tenancy.`);
   }
 
-  refs.stage = kit === "booked-appraisal" ? "booked" : kit === "tenant-passport" ? "passport" : "new";
+  refs.stage = kit === "booked-appraisal" ? "booked" : kit === "tenant-passport" ? "passport" : kit === "e2e" ? "start" : "new";
   const id = uid();
   const text = said.join(" ");
   await q(
@@ -311,7 +326,8 @@ export async function relinkKit(id: string, me: OsUser, origin: string, as?: "la
   if (as === "landlord") {
     if (!refs?.landlordEmail) throw new KitRefused("That test has no landlord to sign in as.");
     const link = await landlordLink(email, origin);
-    const appraisal = refs.appraisals?.[0];
+    /* An E2E file's appraisal is the one booked from its lead (lib/appraisal-store: lead-<lead id>). */
+    const appraisal = refs.appraisals?.[0] ?? (refs.leadIds?.[0] ? `lead-${refs.leadIds[0]}` : undefined);
     return appraisal ? `${link}&next=${encodeURIComponent(`/landlord?p=a:${appraisal}`)}` : link;
   }
   if (refs?.tenantEmail && (as === "tenant" || !refs.landlordEmail)) {

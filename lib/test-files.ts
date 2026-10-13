@@ -2,7 +2,7 @@ import "server-only";
 import { appraisalsChanged } from "@/lib/appraisal-store";
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
-import { findUserByEmail, type OsUser } from "@/lib/users";
+import { findUserByEmail, findUserById, type OsUser } from "@/lib/users";
 import { getContact } from "@/lib/contacts-store";
 import { createAppraisal, markTermsSent, recordValuation, setOutcome } from "@/lib/appraisal-store";
 import { createOrder } from "@/lib/works-orders";
@@ -106,12 +106,13 @@ async function toFile(r: Row): Promise<TestFile> {
   const stage = refs.stage ?? (kit === "booked-appraisal" ? "booked" : kit === "tenant-passport" ? "passport" : "new");
   const def = TEST_FILE_SIDES[side].stages.find((s) => s.id === stage);
   const contact = refs.contacts?.[0] ? await getContact(refs.contacts[0]).catch(() => null) : null;
+  const second = side === "e2e" && refs.contacts?.[1] ? await getContact(refs.contacts[1]).catch(() => null) : null;
   return {
     id: r.id,
     side,
     stage,
     stageLabel: def?.label ?? stage,
-    name: contact?.name ?? (side === "plc" ? "PLC pack" : "Test file"),
+    name: second && contact ? `${contact.name} and ${second.name}` : contact?.name ?? (side === "plc" ? "PLC pack" : "Test file"),
     byName: r.by_name,
     byEmail: r.created_by,
     createdAt: new Date(r.created_at).toISOString(),
@@ -135,12 +136,20 @@ export async function listTestFiles(me: OsUser, everyone: boolean): Promise<Test
 
 /* ── adding ──────────────────────────────────────────────────────────────── */
 
-const KIT_FOR: Record<TestFileSide, KitId> = { landlord: "landlord-lead", tenant: "tenant-enquiry", plc: "plc-pack", tenancy: "live-tenancy" };
+const KIT_FOR: Record<TestFileSide, KitId> = { landlord: "landlord-lead", tenant: "tenant-enquiry", plc: "plc-pack", tenancy: "live-tenancy", e2e: "e2e" };
 
 export async function addTestFile(side: TestFileSide, me: OsUser, origin: string): Promise<TestFile> {
   const run = await runKit(KIT_FOR[side], me, origin);
   const row = await load(run.id);
   if (!row) throw new KitRefused("The file was made but could not be read back.");
+  /* A second E2E pair is "Landlord E2E 2" and "Tenant E2E 2". */
+  if (side === "e2e") {
+    const same = await q<{ n: number }>(`SELECT count(*)::int AS n FROM os_test_kits WHERE created_by = $1 AND cleared_at IS NULL AND kit = 'e2e'`, [row.created_by]);
+    const n = same[0]?.n ?? 1;
+    if (n > 1) await q(`UPDATE os_contacts SET name = name || ' ' || $2 WHERE id = ANY($1) AND is_test`, [row.refs?.contacts ?? [], String(n)]);
+    const fresh = await load(run.id);
+    return toFile(fresh ?? row);
+  }
   /* A second landlord is "(test landlord 2)", so two files never look alike. */
   if (side !== "plc" && row.refs?.contacts?.[0]) {
     const same = await q<{ n: number }>(
@@ -275,9 +284,10 @@ async function unwind(refs: Refs, ownerEmail: string, since: Date | string, kitI
 
 export async function resetTestFile(id: string, stageId: string, me: OsUser, origin: string): Promise<TestFile> {
   if (!hasDb()) throw new KitRefused("There is no database here.");
-  if ((await testingClosed()).closed) throw new KitRefused("Testing is closed for launch.");
   const row = await load(id);
   if (!row) throw new KitRefused("That test file has gone. Refresh the list.");
+  /* An E2E pair can be put back to the start after launch too. */
+  if (row.kit !== "e2e" && (await testingClosed()).closed) throw new KitRefused("Testing is closed for launch.");
   if (!mayTouch(row, me)) throw new KitRefused("That is somebody else's test file.");
   const kit = (row.kit in KITS ? row.kit : "landlord-lead") as KitId;
   const side = sideOfKit(kit);
@@ -409,6 +419,16 @@ export async function resetTestFile(id: string, stageId: string, me: OsUser, ori
       links.push({ who: "agent", label: "The listing", href: `/listings?open=${built.listingId}` });
       if (built.appId) links.push({ who: "agent", label: "The application", href: `/applications?open=${encodeURIComponent(built.appId)}` });
     }
+  } else if (side === "e2e") {
+    /* Back to two new leads: everything the walk did is undone above, the
+       two people stay. */
+    const [landlordLead, tenantLead] = refs.leadIds ?? [];
+    if (!landlordLead || !tenantLead) throw new KitRefused("This file has lost one of its two people, so it cannot be reset. Delete it and add another.");
+    next.landlordEmail = email;
+    next.tenantEmail = email;
+    nextKit = "e2e";
+    links.push({ who: "agent", label: "Open Landlord E2E", href: `/leads?side=landlord&open=${landlordLead}` });
+    links.push({ who: "agent", label: "Open Tenant E2E", href: `/leads?side=tenant&open=${tenantLead}` });
   } else if (side === "tenancy") {
     /* BOTH SIDES OF ONE HOME, ALREADY LET (James, 20 Sep 2026). The landlord
        and the tenant are both the tester; the home joins the OS's own
@@ -572,14 +592,46 @@ export async function deleteTestFile(id: string, me: OsUser): Promise<void> {
  */
 export async function removeAllTesting(me: OsUser): Promise<{ files: number; strays: number }> {
   if (me.role !== "owner") throw new KitRefused("Only an owner can remove all testing.");
-  const rows = await q<{ id: string }>(`SELECT id FROM os_test_kits WHERE cleared_at IS NULL`);
+  /* Not the E2E pairs (James, 13 Oct 2026): they are kept past launch to
+     show the process, and go one at a time from the Test files tab. */
+  const rows = await q<{ id: string }>(`SELECT id FROM os_test_kits WHERE cleared_at IS NULL AND kit <> 'e2e'`);
   for (const r of rows) await deleteTestFile(r.id, me);
-  const strays = await q<{ id: string; created_by: string; created_at: Date }>(`SELECT id, created_by, created_at FROM os_contacts WHERE is_test`).catch(() => []);
+  const kept = (await q<{ c: string }>(`SELECT jsonb_array_elements_text(refs->'contacts') AS c FROM os_test_kits WHERE cleared_at IS NULL AND kit = 'e2e'`).catch(() => [])).map((r) => r.c);
+  const strays = await q<{ id: string; created_by: string; created_at: Date }>(`SELECT id, created_by, created_at FROM os_contacts WHERE is_test AND NOT (id = ANY($1))`, [kept]).catch(() => []);
   for (const c of strays) {
     await unwind({ contacts: [c.id], leadIds: [`os-${c.id}`] }, c.created_by || me.email, c.created_at);
     await q(`DELETE FROM os_contacts WHERE id = $1 AND is_test`, [c.id]).catch(() => []);
   }
   return { files: rows.length, strays: strays.length };
+}
+
+/**
+ * A Landlord E2E and Tenant E2E pair for everyone with an account (James,
+ * 13 Oct 2026: "a few test files put onto every person's account"), each on
+ * that person's own email, so the walk is theirs. Anyone who already has a
+ * pair, is locked out, or is not on one of our addresses is left alone.
+ */
+export async function e2eForEveryone(me: OsUser, origin: string): Promise<{ made: number; skipped: string[] }> {
+  if (me.role !== "owner") throw new KitRefused("Only an owner can give everyone a test file.");
+  const people = await q<{ id: string }>(
+    `SELECT u.id FROM os_users u
+      WHERE u.locked_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM os_test_kits k WHERE k.created_by = lower(u.email) AND k.kit = 'e2e' AND k.cleared_at IS NULL)
+      ORDER BY u.name`
+  );
+  let made = 0;
+  const skipped: string[] = [];
+  for (const p of people) {
+    const user = await findUserById(p.id).catch(() => null);
+    if (!user) continue;
+    try {
+      await addTestFile("e2e", user, origin);
+      made++;
+    } catch (e) {
+      skipped.push(`${user.name || user.email}: ${e instanceof Error ? e.message : "not made"}`);
+    }
+  }
+  return { made, skipped };
 }
 
 /** Ready for launch: everything above, and no new test files until reopened. */
