@@ -85,6 +85,8 @@ export interface ApplicationJourney {
   deal: { id: string; stage: string; url: string } | null;
   plc: { id: string; state: string; who: string } | null;
   handover: { mode: "shadow" | "live"; status: string; at: string } | null;
+  /** In Propoly, however it got there - the chip at the top of the let. */
+  inPropoly: { url: string | null; how: "open" | "finished" | "pushed" | "found" } | null;
   /** Every move the watcher recorded on the deal, newest first. */
   history: DealEvent[];
 }
@@ -315,7 +317,9 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
     buildHandoff(app).catch(() => null),
     latestHandover(app.id).catch(() => null),
     getCase(`plc-${app.id}`).catch(() => null),
-    accepted ? deals() : Promise.resolve(null),
+    /* Read even before the offer is accepted (13 Oct 2026): a let keyed
+       into Propoly by hand still shows as in Propoly. */
+    deals().catch(() => null),
     handoverMode().catch(() => "shadow" as const),
     switchOn("handover_deal").catch(() => false),
   ]);
@@ -558,7 +562,32 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
      the application itself rather than by asking her. */
   const history = deal ? await eventsForDeal(deal.app.id).catch(() => []) : [];
 
-  return { stops, actions, flags, deal: dealInfo, plc: plcInfo, handover: run ? { mode: run.mode, status: run.status, at: run.startedAt } : null, history };
+  /* IN PROPOLY, for the chip at the top of the let (James, 13 Oct 2026: "do
+     a check to see if it's already on Propoly"). Accepted: the deal, a
+     finished deal, or our own push. Not accepted yet: a deal at this home
+     only counts when one of its tenants is one of these applicants, so
+     another applicant's deal on the same house is never taken for this one. */
+  const norm = (x: string | null | undefined) => (x ?? "").toLowerCase().replace(/[^a-z@.]+/g, " ").trim();
+  const loose = !accepted && allDeals ? findDeal(app, allDeals) : null;
+  const sharesTenant =
+    loose != null &&
+    loose.app.tenants.some((t) =>
+      app.applicants.some((a) => (a.email && t.email && norm(a.email) === norm(t.email)) || (norm(a.name) !== "" && norm(a.name) === norm(t.name)))
+    );
+  const pushedUuid = run?.mode === "live" && run.status === "ok"
+    ? ((run.steps.find((x) => x.id === "deal" && x.state === "ok")?.response as { uuid?: string } | null)?.uuid ?? null)
+    : null;
+  const inPropoly: ApplicationJourney["inPropoly"] = deal
+    ? { url: dealUrlOf(deal), how: "open" }
+    : finished
+      ? { url: finished.uuid ? propolyDealUrl(finished.uuid) : null, how: "finished" }
+      : run?.mode === "live" && run.status === "ok"
+        ? { url: pushedUuid ? propolyDealUrl(pushedUuid) : null, how: "pushed" }
+        : sharesTenant && loose
+          ? { url: dealUrlOf(loose), how: "found" }
+          : null;
+
+  return { stops, actions, flags, deal: dealInfo, plc: plcInfo, handover: run ? { mode: run.mode, status: run.status, at: run.startedAt } : null, inPropoly, history };
 }
 
 /**

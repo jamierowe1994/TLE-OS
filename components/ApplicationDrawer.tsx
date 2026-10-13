@@ -17,6 +17,7 @@ import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-ev
 import ContactBlock from "@/components/ContactBlock";
 import FileDocuments from "@/components/FileDocuments";
 import NextStepCard, { type NextAction } from "@/components/NextStepCard";
+import HandoffPanel from "@/components/HandoffPanel";
 import { cardStatus, stageStatus } from "@/components/applications/LetsBoard";
 import { PORTAL_STAGES, propolyDealUrl } from "@/lib/business/propoly-stages";
 import { CANCEL_REASONS, CANCEL_WORDS } from "@/lib/let-cancel-words";
@@ -31,6 +32,7 @@ type Journey = {
   flags?: string[];
   deal?: { id: string; stage: string; url: string } | null;
   plc?: { id: string; state: string; who: string } | null;
+  inPropoly?: { url: string | null; how: "open" | "finished" | "pushed" | "found" } | null;
   history?: DealEvent[];
 };
 
@@ -855,6 +857,8 @@ export default function ApplicationDrawer({
   const [builder, setBuilder] = useState<{ mode: "update" | "reminder"; start?: { kind: string; to: string } | null } | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
   const closePanel = useCallback(() => setPanel(null), []);
+  const [propolyOpen, setPropolyOpen] = useState(false);
+  const closePropoly = useCallback(() => setPropolyOpen(false), []);
   const closePerson = useCallback(() => { setPerson(null); setPersonTab("messages"); }, []);
   const closeDocs = useCallback(() => setDocsOpen(false), []);
   const closeBuilder = useCallback(() => setBuilder(null), []);
@@ -888,6 +892,40 @@ export default function ApplicationDrawer({
   const dealStatus = deal ? cardStatus(deal, deal.effectiveStatusKey) : null;
   const flags = [...(journey?.ok ? journey.flags ?? [] : []), ...(deal?.flags ?? []).map((f) => f.label)].filter((f, i, all) => all.indexOf(f) === i);
   const plcState = journey?.ok ? journey.plc?.state ?? null : deal?.plc?.state ?? null;
+  /* IN PROPOLY OR NOT, at the top of every let (James, 13 Oct 2026): "if
+     they're not on that step, you can't get to pushing it". Read off the
+     journey's handover stop, which checks Propoly's deals each time the let
+     opens - so a let already in Propoly, whoever put it there, says so and
+     is never offered the push. Before the offer is accepted there is nothing
+     to push yet. */
+  const handoverStop = journey?.ok ? (journey.stops ?? []).find((x) => x.id === "handover") ?? null : null;
+  const propoly: { state: "checking" | "in" | "push" | "early" | "unknown"; url: string | null; sub: string | null } = !app
+    ? deal
+      ? { state: "in", url: propolyDealUrl(deal.app.id), sub: null }
+      : { state: "unknown", url: null, sub: null }
+    : journey === null
+      ? { state: "checking", url: null, sub: null }
+      : journey.ok && journey.inPropoly
+        ? {
+            state: "in",
+            url: journey.inPropoly.url,
+            sub: { open: "In Propoly", finished: "Moved in through Propoly", pushed: "Pushed to Propoly", found: "Found in Propoly, keyed in by hand" }[journey.inPropoly.how],
+          }
+        : !journey.ok || !handoverStop
+        ? { state: "unknown", url: null, sub: null }
+        : handoverStop.state === "done"
+          ? { state: "in", url: journey.deal?.url ?? null, sub: handoverStop.sub ?? null }
+          : handoverStop.state === "current"
+            ? { state: "push", url: null, sub: handoverStop.sub ?? null }
+            : { state: "early", url: null, sub: null };
+  const pushAction: NextAction = {
+    id: "handover",
+    label: "Push to Propoly",
+    detail: "The landlord, the home and the deal with its tenants go over, using what Propoly already has where it has it, so nothing is made twice.",
+    href: null,
+    who: "you",
+    push: true,
+  };
   const plcDone = plcState === "approved";
   const firstName = (n: string | null | undefined) => (n ?? "").trim().split(/\s+/)[0] || "";
 
@@ -974,6 +1012,45 @@ export default function ApplicationDrawer({
               {b.key === "notes" && (commentRows?.length ?? 0) > 0 && <span className="figures rounded-full bg-page px-1.5 text-[10.5px]">{commentRows!.length}</span>}
             </button>
           ))}
+          {/* Green once it is in Propoly (opens the deal), pink while it is not. */}
+          {propoly.state === "checking" ? (
+            <span className="inline-flex h-9 items-center gap-2 rounded-full border border-line/80 bg-white px-3.5 text-[12.5px] font-semibold text-muted">
+              <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+              Checking Propoly
+            </span>
+          ) : propoly.state === "in" ? (
+            propoly.url ? (
+              <a
+                href={propoly.url}
+                target="_blank"
+                rel="noreferrer"
+                title={propoly.sub ?? "Open the deal in Propoly"}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[#56634a]/25 bg-[#f1f4ec] px-3.5 text-[12.5px] font-semibold text-[#56634a] transition-colors hover:border-[#56634a]/60"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12.5l4.5 4.5L19 7" /></svg>
+                In Propoly <span aria-hidden>↗</span>
+              </a>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setPropolyOpen(true)}
+                title={propoly.sub ?? undefined}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[#56634a]/25 bg-[#f1f4ec] px-3.5 text-[12.5px] font-semibold text-[#56634a] transition-colors hover:border-[#56634a]/60"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12.5l4.5 4.5L19 7" /></svg>
+                In Propoly
+              </button>
+            )
+          ) : propoly.state === "push" || propoly.state === "early" ? (
+            <button
+              type="button"
+              onClick={() => setPropolyOpen(true)}
+              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-accent-dark/30 bg-accent-soft px-3.5 text-[12.5px] font-semibold text-accent-dark transition-colors hover:border-accent-dark"
+            >
+              <DoodleIcon name="rocket" size={13} />
+              {propoly.state === "push" ? "Push to Propoly" : "Not in Propoly"}
+            </button>
+          ) : null}
           {stepLabel && onStep && (
             <div className="flex items-center gap-1.5 sm:ml-2">
               <span className="mr-1 text-[11.5px] text-muted">{stepLabel}</span>
@@ -1003,11 +1080,7 @@ export default function ApplicationDrawer({
                 className={`group relative aspect-[16/10] overflow-hidden rounded-xl bg-box ${shots.length > 1 ? "sm:aspect-auto" : ""}`}
               >
                 <PropertyPhoto src={shots[0] ?? null} alt="" width={1400} height={875} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.015]" />
-                {shots.length > 0 && (
-                  <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-[11.5px] font-semibold backdrop-blur">
-                    <DoodleIcon name="pack/photo" size={12} /> {shots.length} {shots.length === 1 ? "photo" : "photos"}
-                  </span>
-                )}
+                {/* No count on the photo, as on the listing (13 Oct 2026): the "+17" says it. */}
               </button>
               {shots.length > 1 && (
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-1">
@@ -1268,6 +1341,49 @@ export default function ApplicationDrawer({
             noteSaid={{ ok: true, text: "Kept on the let, for everyone who opens it." }}
             activity={activityLog}
           />
+        )}
+      </Drawer>
+
+      {/* Push to Propoly from any stage of the let (James, 13 Oct 2026). The
+          same push as Next Step: it checks the deal terms first and stops to
+          ask which home if Propoly has more than one that could be it. */}
+      <Drawer open={propolyOpen} label="Push to Propoly" onClose={closePropoly}>
+        {propolyOpen && app && (
+          <>
+            <DrawerHead
+              icon="rocket"
+              title={propoly.state === "in" ? "In Propoly" : "Push to Propoly"}
+              sub={
+                propoly.state === "in"
+                  ? `${propoly.sub ?? "Pushed"}. The deal link shows here once Propoly is next read.`
+                  : propoly.state === "early"
+                    ? "Not in Propoly. The offer has to be accepted before anything goes across."
+                    : "Not in Propoly yet. Check the deal below, then push it - from any stage of the let."
+              }
+              onClose={closePropoly}
+            />
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
+              {propoly.state === "early" ? (
+                <p className="rounded-xl bg-white px-4 py-3.5 text-[12.5px] leading-relaxed text-muted">
+                  Accept the offer first - from Next step on the page, or the Offers on its listing. Once it is accepted this button pushes it, whatever stage the let is at.
+                </p>
+              ) : (
+                <div className="rounded-2xl border border-line/60 bg-white p-4 sm:p-5 [&>section]:rounded-none [&>section]:border-0 [&>section]:bg-transparent [&>section]:p-0">
+                  <NextStepCard
+                    applicationId={app.id}
+                    actions={[pushAction]}
+                    loading={false}
+                    checks={[]}
+                    onPlay={() => {}}
+                    playing={null}
+                    confirming={null}
+                    onChanged={() => setJourneyTick((n) => n + 1)}
+                  />
+                </div>
+              )}
+              {propoly.state !== "early" && <HandoffPanel applicationId={app.id} />}
+            </div>
+          </>
         )}
       </Drawer>
 
