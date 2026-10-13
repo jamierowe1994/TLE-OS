@@ -136,10 +136,13 @@ export function Pill({
   tone = "neutral",
 }: {
   children: React.ReactNode;
-  tone?: "neutral" | "accent" | "good";
+  tone?: "neutral" | "accent" | "good" | "warn";
 }) {
   const tones = {
     neutral: "bg-page text-muted",
+    /* Amber: coming up, not yet wrong (James, 12 Oct 2026 - "due soon should
+       be in amber, not in red. Red indicates that it's past its expiry"). */
+    warn: "bg-[#fdf3dc] text-[#8a5a00]",
     // Deepened clay for the text — the accent itself is too soft at 11px.
     accent: "bg-accent-soft text-accent-dark",
     good: "bg-[#e8f5ec] text-[#1e7a3c]",

@@ -3644,6 +3644,16 @@ CREATE TABLE IF NOT EXISTS os_portal_stats_daily (
 );
 CREATE INDEX IF NOT EXISTS os_portal_stats_daily_day ON os_portal_stats_daily (read_on, portal);
 
+-- The type of let on a home (James, 12 Oct 2026): Residential, HMO or
+-- Professional (a room in a shared house). Keyed on the REX property, else
+-- listing:<id>. No row = worked out from the address and the record.
+CREATE TABLE IF NOT EXISTS os_home_let_types (
+  home_key       TEXT PRIMARY KEY,
+  let_type       TEXT NOT NULL,
+  by_name        TEXT NOT NULL DEFAULT '',
+  set_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS os_let_cancellations (
   ref            TEXT PRIMARY KEY,
   deal_id        TEXT,

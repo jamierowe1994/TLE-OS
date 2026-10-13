@@ -72,9 +72,9 @@ const SOURCES: { id: string; label: string }[] = [
   { id: "downloaded from Propoly", label: "Out of Propoly" },
 ];
 
-const STATE: Record<Row["state"], { label: string; tone: "good" | "accent" | "neutral" }> = {
+const STATE: Record<Row["state"], { label: string; tone: "good" | "accent" | "neutral" | "warn" }> = {
   valid: { label: "In date", tone: "good" },
-  expiring: { label: "Due soon", tone: "accent" },
+  expiring: { label: "Due soon", tone: "warn" },
   expired: { label: "Expired", tone: "accent" },
   missing: { label: "No record", tone: "accent" },
   "not-required": { label: "Not required", tone: "neutral" },
@@ -87,6 +87,13 @@ const stateLabel = (r: Row) => (r.state === "not-required" && r.type === "gas_sa
    noise, so they are hidden - "No gas at the property" too. A row with a
    document on it still shows, so nothing filed goes out of sight. */
 const worthShowing = (r: Row) => r.state !== "not-required" || r.files.length > 0;
+
+/* Any licence answers "HMO licence". */
+const LICENCES = new Set(["mandatory_hmo_license", "additional_hmo_license", "selective_hmo_license"]);
+const answers = (row: Row, type: string) => row.type === type || (type === "mandatory_hmo_license" && LICENCES.has(row.type)) || (type === "smoke_alarms" && row.type === "co_alarms");
+
+/** A document uploaded on the file's Documents and marked as a certificate, not yet filed as one. */
+export interface LooseDoc { type: string; name: string; url: string; at: string }
 
 const day = (iso: string | null) => {
   if (!iso) return "";
@@ -101,6 +108,8 @@ export default function PropertyFile({
   screen = "the OS",
   propertyName = null,
   onLink,
+  required,
+  loose = [],
 }: {
   /** The REX property. Give this when you have it. */
   propertyId?: string | null;
@@ -116,6 +125,11 @@ export default function PropertyFile({
    *  appraisal), so it is not asked again. Only ever on a pick: a linked home
    *  that is listed moves an appraisal to Won, so nothing links on its own. */
   onLink?: (propertyId: string) => void | Promise<void>;
+  /** What this home has to hold (lib/let-type requiredFor). Any not on the
+   *  file shows as Missing with its own Attach, so the list is the whole job. */
+  required?: string[];
+  /** Documents uploaded as a certificate type; offered on that row to read in. */
+  loose?: LooseDoc[];
 }) {
   const [data, setData] = useState<Answer | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -256,7 +270,34 @@ export default function PropertyFile({
     </button>
   );
 
-  const rows = data ? data.rows.filter(worthShowing) : [];
+  const rows = (() => {
+    if (!data) return [];
+    /* With the home's list given, a duty it does not have here is not shown
+       as a gap (James, 12 Oct: "it's a UK property, in England, we know that
+       it will only have quite a certain number of things") - legionella on
+       an English home, say. Anything with a document on it still shows. */
+    const needed = (r: Row) => !required || r.files.length > 0 || r.state === "valid" || r.state === "held-here" || required.some((t) => answers(r, t));
+    const held = data.rows.filter(worthShowing).filter(needed);
+    const gaps: Row[] = (required ?? [])
+      .filter((t) => !data.rows.some((r) => answers(r, t)))
+      .map((t) => ({ type: t, label: TYPE_LABEL[t] ?? t, state: "missing", expiry: null, issued: null, inRex: false, fileInRex: false, files: [] }));
+    return [...held, ...gaps];
+  })();
+  const outstanding = !data ? 0 : required
+    ? rows.filter((r) => !r.renewal && !(r.checking && !r.checking.queried) && (r.state === "expired" || r.state === "expiring" || r.state === "missing")).length
+    : data.outstanding;
+
+  /* Read a document already uploaded on the file as this row's certificate:
+     the same reader and form as a fresh Attach. */
+  async function readIn(d: LooseDoc, type: string) {
+    forType.current = type;
+    try {
+      const blob = await fetch(`${d.url}${d.url.includes("?") ? "&" : "?"}bytes=1`).then((r) => (r.ok ? r.blob() : Promise.reject()));
+      await chose(new File([blob], d.name, { type: blob.type || "application/pdf" }));
+    } catch {
+      setWent(`${d.name} could not be opened to read. Download it and use Attach instead.`);
+    }
+  }
 
   return (
     <section className="rounded-[22px] border border-line/50 bg-white p-5">
@@ -265,9 +306,9 @@ export default function PropertyFile({
         <h3 className="flex items-center gap-2.5 text-[14px]">
           <DoodleIcon name="shield" size={17} className="text-accent-dark" />
           {title}
-          {data && data.outstanding > 0 && <Pill tone="accent">{data.outstanding} outstanding</Pill>}
+          {data && outstanding > 0 && <Pill tone="accent">{outstanding} outstanding</Pill>}
           {data && (data.checking ?? 0) > 0 && <Pill tone="neutral">{data.checking} with compliance</Pill>}
-          {data && rows.length > 0 && data.outstanding === 0 && !(data.checking ?? 0) && data.checked && <Pill tone="good">All in date</Pill>}
+          {data && rows.length > 0 && outstanding === 0 && !(data.checking ?? 0) && data.checked && <Pill tone="good">All in date</Pill>}
         </h3>
         {attachAll}
       </div>
@@ -371,7 +412,7 @@ export default function PropertyFile({
             const withCompliance = Boolean(r.checking && !r.checking.queried);
             const liveOk = r.state === "valid" || r.state === "not-required" || r.state === "held-here";
             return (
-              <li key={r.type} className={`rounded-xl border p-3 ${r.renewal || withCompliance ? "border-line/70" : r.state === "expired" ? "border-accent-dark bg-accent-soft/30" : r.state === "missing" || r.state === "expiring" ? "border-accent-dark/40" : "border-line/70"}`}>
+              <li key={r.type} className={`rounded-xl border p-3 ${r.renewal || withCompliance ? "border-line/70" : r.state === "expired" ? "border-accent-dark bg-accent-soft/30" : r.state === "expiring" ? "border-[#e0b24a]/70" : r.state === "missing" ? "border-accent-dark/40" : "border-line/70"}`}>
                 <div className="flex flex-wrap items-center gap-2.5">
                   <span className="text-[13px] font-semibold">{r.label}</span>
                   {r.verified && liveOk && (
@@ -406,6 +447,20 @@ export default function PropertyFile({
                       : `${liveOk ? `New certificate, ${CHECKING_LABEL.toLowerCase()}. ` : ""}Filed ${day(r.checking.at.slice(0, 10))}${r.checking.by ? ` by ${r.checking.by}` : ""}, runs to ${day(r.checking.expiry)}. It goes live once the compliance team have verified it.`}
                   </p>
                 )}
+                {/* Uploaded as a document but never read in as the certificate
+                    (James, 12 Oct: "they have a gas safety uploaded to this
+                    property ... why this hasn't tagged the gas"). */}
+                {r.state !== "valid" && !r.checking && loose.filter((d) => answers(r, d.type) || d.type === r.type).slice(0, 2).map((d) => (
+                  <div key={d.url} className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-box px-2.5 py-1.5 text-[12px]">
+                    <DoodleIcon name="doc" size={13} className="shrink-0 text-muted" />
+                    <span className="min-w-0 flex-1 truncate">
+                      Uploaded as a document {day(d.at.slice(0, 10))}: <a href={d.url} target="_blank" rel="noopener noreferrer" className="font-semibold hover:underline">{d.name}</a>
+                    </span>
+                    <button type="button" onClick={() => void readIn(d, r.type)} className="rounded-full bg-accent-dark px-3 py-1 text-[11px] font-semibold text-page">
+                      Read it in
+                    </button>
+                  </div>
+                ))}
                 {/* The newest file IS the certificate; a new one attached
                     on top replaces it here, the older ones fold away. Click
                     opens it in the sheet from the bottom of the page. */}

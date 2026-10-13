@@ -19,7 +19,7 @@ import { DOC_ACCEPT, DOC_TYPES, OTHER, SIDE_LABEL, docTypeLabel, type DocSide } 
 
 export type FromKind = "deal" | "listing" | "application" | "appraisal" | "viewing";
 
-type Doc = {
+export type Doc = {
   id: string;
   type: string;
   typeLabel: string;
@@ -45,6 +45,9 @@ export default function FileDocuments({
   sides = SIDES,
   showMissing = true,
   dropZone = false,
+  onDocs,
+  ask,
+  intro = "Kept on this home, so the office and the agent both see them. Uploading sends nothing to the landlord or tenant.",
 }: {
   address: string;
   propertyId?: string | number | null;
@@ -56,6 +59,11 @@ export default function FileDocuments({
   /** A big drop space at the top: drop files or click to pick them, then say
    *  what each is (the let's page, James 12 Oct 2026). */
   dropZone?: boolean;
+  /** Told what is held whenever it changes (the listing's checklist reads it). */
+  onDocs?: (docs: Doc[]) => void;
+  /** Open the upload with this type picked; a new `n` asks again. */
+  ask?: { type: string; n: number } | null;
+  intro?: string;
 }) {
   const [docs, setDocs] = useState<Doc[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -73,6 +81,17 @@ export default function FileDocuments({
     setQueue((q) => [...q, ...list]);
     setUploading(null);
   };
+
+  const told = useRef(onDocs);
+  told.current = onDocs;
+  useEffect(() => {
+    if (docs) told.current?.(docs);
+  }, [docs]);
+  useEffect(() => {
+    if (!ask) return;
+    setSaid(null);
+    setUploading(ask.type);
+  }, [ask?.n]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const prop = propertyId != null && String(propertyId).trim() ? String(propertyId) : "";
   const query = `address=${encodeURIComponent(address)}&property=${encodeURIComponent(prop)}`;
@@ -143,9 +162,7 @@ export default function FileDocuments({
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[11.5px] leading-snug text-muted">
-          Kept on this home, so the office and the agent both see them. Uploading sends nothing to the landlord or tenant.
-        </p>
+        <p className="text-[11.5px] leading-snug text-muted">{intro}</p>
         {uploading === false ? (
           <button
             type="button"

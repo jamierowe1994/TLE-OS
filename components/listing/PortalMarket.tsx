@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { PortalStat } from "@/lib/rex-portal-stats";
 import type { HistoryPoint, Market } from "@/lib/portal-market";
 
@@ -25,9 +25,30 @@ type Answer = {
   history?: HistoryPoint[];
 };
 
+/**
+ * The width the chart actually has, so it is drawn at real size: the words
+ * stay 11px whether the pop-out is a phone or a wide screen, instead of a
+ * fixed drawing stretched to fit (12 Oct 2026).
+ */
+function useWidth(fallback: number) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [w, setW] = useState(fallback);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => {
+      const next = Math.round(e.contentRect.width);
+      if (next > 0) setW(next);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+  return [ref, w] as const;
+}
+
 const ME = "var(--accent-dark)";
 const THEM = "color-mix(in srgb, var(--muted) 42%, var(--page))";
-const num = (n: number | null | undefined, dp = 0) => (n == null ? "—" : n.toLocaleString("en-GB", { maximumFractionDigits: dp, minimumFractionDigits: 0 }));
+const num = (n: number | null | undefined, dp = 0) => (n == null ? "-" : n.toLocaleString("en-GB", { maximumFractionDigits: dp, minimumFractionDigits: 0 }));
 const day = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 const todayLondon = () => new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
 
@@ -84,8 +105,9 @@ function Legend({ market = "Average live home" }: { market?: string }) {
  */
 function Strip({ market, listingId }: { market: Market; listingId: string }) {
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
-  /* Drawn near its real size, so the words stay readable. */
-  const W = 460;
+  /* Drawn at its real size, so the words stay readable. */
+  const [box, width] = useWidth(460);
+  const W = Math.max(260, width);
   const H = 190;
   const pad = { l: 12, r: 12, b: 26 };
   const max = Math.max(1, ...market.spread.map((h) => h.viewsPerDay)) * 1.05;
@@ -102,7 +124,7 @@ function Strip({ market, listingId }: { market: Market; listingId: string }) {
   const me = placed.find((p) => p.id === listingId) ?? null;
   const ticks = [0, max / 4, max / 2, (3 * max) / 4].map((t) => Math.round(t));
   return (
-    <div className="relative">
+    <div ref={box} className="relative">
       <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" role="img" aria-label={`Views a day for ${market.homes} live homes; this home ${me ? me.v : "not live"}, average ${market.average.viewsPerDay}`}>
         <line x1={pad.l} x2={W - pad.r} y1={H - pad.b} y2={H - pad.b} stroke="var(--line)" strokeWidth="1" />
         {ticks.map((t) => (
@@ -115,7 +137,20 @@ function Strip({ market, listingId }: { market: Market; listingId: string }) {
         ].map((m, i) => (
           <g key={m.label}>
             <line x1={x(m.v)} x2={x(m.v)} y1={i ? 26 : 12} y2={H - pad.b} stroke="var(--muted)" strokeWidth="1" strokeDasharray="3 3" opacity="0.7" />
-            <text x={x(m.v) + (i ? -4 : 4)} y={i ? 24 : 10} textAnchor={i ? "end" : "start"} fontSize="11" fill="var(--muted)">{m.label}</text>
+            {(() => {
+              /* Beside its line on whichever side it fits, never cut off at the edge on a phone. */
+              const cx = x(m.v);
+              const w = m.label.length * 6.2;
+              const right = cx + 4 + w <= W - pad.r;
+              const left = cx - 4 - w >= 0;
+              const side = i ? (left ? "end" : right ? "start" : "clamp") : right ? "start" : left ? "end" : "clamp";
+              const tx = side === "start" ? cx + 4 : side === "end" ? cx - 4 : Math.max(0, Math.min(cx - w / 2, W - pad.r - w));
+              return (
+                <text x={tx} y={i ? 24 : 10} textAnchor={side === "end" ? "end" : "start"} fontSize="11" fill="var(--muted)" stroke="var(--card)" strokeWidth="3" paintOrder="stroke">
+                  {m.label}
+                </text>
+              );
+            })()}
           </g>
         ))}
         {placed.map((p) => (
@@ -134,7 +169,7 @@ function Strip({ market, listingId }: { market: Market; listingId: string }) {
         {me && (
           <g>
             <line x1={me.cx} x2={me.cx} y1={44} y2={me.cy - R - 3} stroke={ME} strokeWidth="1.5" />
-            <text x={Math.min(Math.max(me.cx, 50), W - 50)} y={40} textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--ink)">This home · {me.v}</text>
+            <text x={Math.min(Math.max(me.cx, 50), W - 50)} y={40} textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--ink)" stroke="var(--card)" strokeWidth="3" paintOrder="stroke">This home · {me.v}</text>
           </g>
         )}
       </svg>
@@ -156,7 +191,7 @@ function PairBars({ rows, unit }: { rows: { label: string; me: number | null; th
       <div className="h-3 min-w-0 flex-1 rounded-r-[4px] bg-transparent">
         <div className="h-3 rounded-r-[4px]" style={{ width: `${v == null ? 0 : Math.max(2, (v / max) * 100)}%`, background: color }} />
       </div>
-      <span className="figures w-14 shrink-0 text-right text-[11.5px] text-ink">{v == null ? "—" : num(v, 1)}</span>
+      <span className="figures w-14 shrink-0 text-right text-[11.5px] text-ink">{v == null ? "-" : num(v, 1)}</span>
     </div>
   );
   return (
@@ -181,6 +216,7 @@ function PairBars({ rows, unit }: { rows: { label: string; me: number | null; th
 function Trend({ history }: { history: HistoryPoint[] }) {
   const pts = history.filter((h) => h.detail != null);
   const [hover, setHover] = useState<number | null>(null);
+  const [box, width] = useWidth(640);
   if (pts.length < 2) {
     return (
       <p className="rounded-xl border border-dashed border-line/80 px-4 py-6 text-center text-[12px] leading-relaxed text-muted">
@@ -188,7 +224,7 @@ function Trend({ history }: { history: HistoryPoint[] }) {
       </p>
     );
   }
-  const W = 640;
+  const W = Math.max(300, width);
   const H = 170;
   const pad = { l: 40, r: 12, t: 12, b: 26 };
   const ys = pts.map((p) => p.detail as number);
@@ -200,7 +236,7 @@ function Trend({ history }: { history: HistoryPoint[] }) {
   const d = pts.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.detail as number).toFixed(1)}`).join(" ");
   const h = hover != null ? pts[hover] : null;
   return (
-    <div className="relative">
+    <div ref={box} className="relative">
       <svg
         viewBox={`0 0 ${W} ${H}`}
         className="block h-auto w-full"
@@ -292,8 +328,10 @@ export default function PortalMarket({ listingId }: { listingId: string }) {
   const vsCtr = versus(m?.me?.ctr, m?.average.ctr);
   const reading = !m || m.asOf !== todayLondon();
 
+  /* Sized by the pop-out it sits in, not the window (James, 12 Oct 2026: "do
+     the same to the portal charts") - the same container rule as the pages. */
   return (
-    <div className="space-y-4">
+    <div className="@container space-y-4">
       {reading && tries < 6 && (
         <p className="flex items-center gap-2 text-[11.5px] text-muted">
           <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
@@ -302,13 +340,13 @@ export default function PortalMarket({ listingId }: { listingId: string }) {
       )}
 
       {/* The four numbers, each against the average live home. */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 @[38rem]:grid-cols-4">
         <Tile label="Views a day" value={num(m?.me?.viewsPerDay ?? null, 1)} sub={vs?.text ?? (m ? `Average ${num(m.average.viewsPerDay, 1)}` : null)} good={vs?.good} />
         <Tile label="Appearances a day" value={num(m?.me?.appearancesPerDay ?? null, 0)} sub={vsApp?.text ?? null} good={vsApp?.good} />
         <Tile label="Clicked through" value={num(m?.me?.ctr ?? a.totals?.ctr ?? null, 1)} unit="%" sub={vsCtr?.text ?? null} good={vsCtr?.good} />
         <Tile
           label="Rank by views a day"
-          value={m?.rank ? `${m.rank}` : "—"}
+          value={m?.rank ? `${m.rank}` : "-"}
           unit={m?.rank ? `of ${m.homes}` : undefined}
           sub={
             m?.me && m.rank
@@ -320,7 +358,7 @@ export default function PortalMarket({ listingId }: { listingId: string }) {
       </div>
 
       {m && m.homes > 1 ? (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 @[54rem]:grid-cols-2">
           <Card title="Against every live home" sub="Each dot is a home on the portals now. Hover one to see which.">
             <Strip market={m} listingId={listingId} />
           </Card>
@@ -377,9 +415,9 @@ export default function PortalMarket({ listingId }: { listingId: string }) {
                   </td>
                   <td className="figures py-2 text-right">{num(p.detail.total)}</td>
                   <td className="figures py-2 text-right">{num(p.summary.total)}</td>
-                  <td className="figures py-2 text-right">{p.ctr == null ? "—" : `${p.ctr}%`}</td>
-                  <td className="figures py-2 text-right">{p.detail.total && p.detail.mobile != null ? `${Math.round((p.detail.mobile / p.detail.total) * 100)}%` : "—"}</td>
-                  <td className={`py-2 text-right ${p.isStale ? "text-accent-dark" : "text-muted"}`}>{p.lastUpdated ? day(p.lastUpdated) : "—"}{p.isStale ? " · late" : ""}</td>
+                  <td className="figures py-2 text-right">{p.ctr == null ? "-" : `${p.ctr}%`}</td>
+                  <td className="figures py-2 text-right">{p.detail.total && p.detail.mobile != null ? `${Math.round((p.detail.mobile / p.detail.total) * 100)}%` : "-"}</td>
+                  <td className={`py-2 text-right ${p.isStale ? "text-accent-dark" : "text-muted"}`}>{p.lastUpdated ? day(p.lastUpdated) : "-"}{p.isStale ? " · late" : ""}</td>
                 </tr>
               ))}
             </tbody>

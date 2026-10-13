@@ -31,16 +31,17 @@ export async function GET(req: NextRequest) {
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const id = Number(req.nextUrl.searchParams.get("id"));
-  if (!Number.isInteger(id) || id <= 0) return NextResponse.json({ ok: true, files: [] });
+  if (!Number.isInteger(id) || id <= 0) return NextResponse.json({ ok: true, files: [], held: [] });
   const notTheirs = await listingIsTheirs(actor, id);
   if (notTheirs) return NextResponse.json({ ok: false, error: notTheirs }, { status: 403 });
 
   try {
     const details = await readListingDetails(id, { cached: true });
     const osId = details.record.osPropertyId;
-    if (!osId) return NextResponse.json({ ok: true, files: [] });
+    if (!osId) return NextResponse.json({ ok: true, files: [], held: [] });
     const staff = STAFF.has(actor.role);
-    const files = (await recordFiles(osId)).filter((f) => staff || AGENT_RECORD_PAPERS.has(f.field));
+    const all = await recordFiles(osId);
+    const files = all.filter((f) => staff || AGENT_RECORD_PAPERS.has(f.field));
 
     const wanted = req.nextUrl.searchParams.get("key");
     if (wanted) {
@@ -54,6 +55,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(
       {
         ok: true,
+        /* Which papers the record holds, including the ones only the office
+           may open (landlord ID): the listing says "held by the office"
+           rather than asking the agent for it again (12 Oct 2026). */
+        held: [...new Set(all.map((f) => f.field))],
         files: files.map((f) => ({
           field: f.field,
           label: FIELD_BY_KEY.get(f.field)?.label ?? "Document",

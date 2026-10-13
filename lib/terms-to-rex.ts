@@ -74,7 +74,9 @@ export async function fileTermsToRex(p: { propertyId: string; r2Key: string; fil
  * 12 Oct 2026: "DocuSeal-signed terms count"). Either is filed into REX
  * before a push by ensureTermsInRex, because REX will not publish without it.
  */
-export async function osTermsFor(propertyId: string): Promise<{ r2_key: string; file_name: string; at: Date | null; by_name: string | null } | null> {
+export type OsTerms = { r2_key: string; file_name: string; at: Date | null; by_name: string | null; source: "upload" | "signed" | "record" };
+
+export async function osTermsFor(propertyId: string): Promise<OsTerms | null> {
   if (!hasDb()) return null;
   const rows = await q<{ r2_key: string; file_name: string; at: Date | null; by_name: string | null }>(
     `SELECT r2_key, file_name, at, by_name FROM os_file_documents
@@ -82,7 +84,7 @@ export async function osTermsFor(propertyId: string): Promise<{ r2_key: string; 
       ORDER BY at DESC NULLS LAST LIMIT 1`,
     [propertyId]
   ).catch(() => []);
-  if (rows[0]) return rows[0];
+  if (rows[0]) return { ...rows[0], source: "upload" };
   const signed = await q<{ r2_key: string; file_name: string; at: Date | null; by_name: string | null }>(
     `SELECT d.r2_key, COALESCE(NULLIF(d.template_name, ''), 'Terms of business') || '.pdf' AS file_name,
             d.completed_at AS at, NULLIF(d.signer_name, '') AS by_name
@@ -92,7 +94,27 @@ export async function osTermsFor(propertyId: string): Promise<{ r2_key: string; 
       ORDER BY d.completed_at DESC LIMIT 1`,
     [propertyId]
   ).catch(() => []);
-  return signed[0] ?? null;
+  if (signed[0]) return { ...signed[0], source: "signed" };
+  return recordTermsFor(propertyId);
+}
+
+/**
+ * Terms filed on the OS property record (the clean sweep's papers). James,
+ * 12 Oct 2026, on 32 Elm Close: "the property is already on the system with
+ * terms of business. We don't need to sign them again" - the record held
+ * them and the listing still asked for a signature.
+ */
+export async function recordTermsFor(propertyId: string): Promise<OsTerms | null> {
+  if (!hasDb()) return null;
+  const homes = await q<{ id: string }>(`SELECT id FROM os_properties WHERE rex_property_id = $1 OR id = $1`, [propertyId]).catch(() => []);
+  if (!homes.length) return null;
+  const { recordFiles } = await import("@/lib/listing-record");
+  for (const h of homes) {
+    const files = await recordFiles(h.id).catch(() => []);
+    const t = files.find((f) => f.field === "doc_terms_of_business");
+    if (t) return { r2_key: t.key, file_name: t.name, at: null, by_name: null, source: "record" };
+  }
+  return null;
 }
 
 /**

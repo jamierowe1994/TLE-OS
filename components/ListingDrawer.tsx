@@ -11,8 +11,6 @@ import EmailToTenants from "@/components/EmailToTenants";
 import ProcessTimeline from "@/components/ProcessTimeline";
 import PortalMarket from "@/components/listing/PortalMarket";
 import TenancyLinkPanel from "@/components/TenancyLinkPanel";
-import ListingDocuments from "@/components/ListingDocuments";
-import PropertyFile from "@/components/PropertyFile";
 import BookViewing from "@/components/viewings/BookViewing";
 import ApplicationFormCard from "@/components/listing/ApplicationFormCard";
 import { CopyButton, DoneTick, PressButton } from "@/components/Bits";
@@ -53,10 +51,11 @@ import type { ListingDetails } from "@/lib/listing-details";
 import { inputFromDetails, missing as missingForPortals } from "@/lib/listing-requirements";
 import { useListingTerms } from "@/lib/use-listing-terms";
 import { fetchMe } from "@/lib/me";
-import SaveChip, { SaveScopeProvider, useSaveScope, type SaveScope } from "@/components/SaveChip";
-import FileDocuments from "@/components/FileDocuments";
+import SaveChip, { SaveScopeProvider, useSaveReporter, useSaveScope, type SaveScope } from "@/components/SaveChip";
 import ListingOwner from "@/components/listing/ListingOwner";
-import RecordPapers from "@/components/listing/RecordPapers";
+import ListingCompliance, { useListingHome } from "@/components/listing/ListingCompliance";
+import FieldSelect from "@/components/FieldSelect";
+import { LET_TYPES, type LetType } from "@/lib/let-type";
 import OfferWhoPicker, { type OfferPerson } from "@/components/offers/OfferWhoPicker";
 import ContactBlock from "@/components/ContactBlock";
 import ListingOffers, { type ListingOffer } from "@/components/listing/ListingOffers";
@@ -155,7 +154,7 @@ const TAB_LEAD: Record<TabKey, string> = {
   enquiries: "Everyone who has asked about this home, from the portals and the rest. Send them the tenant passport in one go, and see whose is done.",
   applications: "Only the people who have offered. Put each one to the landlord, then accept or decline it. The accepted one moves to Applications; the rest are held until its holding fee is paid.",
   marketing: "The facts, the advert the portals show, and the photographs. What a tenant sees, all in one place.",
-  compliance: "Every certificate the home needs and where it stands, then the documents: how we get in, the terms of business, and everything signed or filed against this listing.",
+  compliance: "What this home has to hold for its type of let, what is already on file for it, and one place to add more.",
   portals: "Where the advert is live, taking it off or putting it back, and how it is doing against every other home we have on the portals.",
 };
 
@@ -310,6 +309,21 @@ function ListingDrawerBody({
   const [emailing, setEmailing] = useState(false);
   /* Asked once, read by the header pill and by the Documents tab. */
   const terms = useListingTerms(listing?.id ?? null);
+  /* The type of let, and terms counted from wherever they already are
+     (James, 12 Oct 2026): the property record's, an upload, a signature. */
+  const { home, problem: homeProblem, setLetType } = useListingHome(listing?.id ?? "");
+  const termsOnFile = (terms.status === "ready" && terms.signed) || Boolean(home?.terms.held) || home?.terms.rex === true;
+  const termsKnown = terms.status === "ready" || home != null;
+  /* The listing's property types, asked for when the Type list first opens. */
+  const [propTypes, setPropTypes] = useState<{ id: string; label: string }[] | null>(null);
+  const loadPropTypes = () => {
+    if (propTypes) return;
+    setPropTypes([]);
+    void fetch("/api/listings/create?lists=1", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; types?: { id: string; label: string }[] }) => setPropTypes(j.ok ? j.types ?? [] : null))
+      .catch(() => setPropTypes(null));
+  };
   const [booking, setBooking] = useState(false);
 
   /* Where this property is actually advertised, live from REX's portal feed
@@ -430,6 +444,22 @@ function ListingDrawerBody({
   const editArea = AREA_DEFS.find((a) => a.id === "listing-edit")!;
   const editLevel = levelOf(areaAccess, editArea.id);
   const editCanPress = canAct(areaAccess, editArea);
+  const reporter = useSaveReporter();
+  /* The property type, straight from the line of facts: the same save as
+     Edit the advert's Type, so the same switch guards it. */
+  async function setPropertyType(propertyTypeId: string) {
+    if (!listing || !live || propertyTypeId === live.propertyTypeId) return;
+    const settle = reporter.begin("Property type");
+    try {
+      const r = await fetch("/api/listings/details", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: listing.id, propertyTypeId }) });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; details?: ListingDetails | null };
+      if (j.details) setLive(j.details);
+      if (!r.ok || !j.ok) throw new Error(j.error ?? "The type did not save.");
+      settle({ ok: true });
+    } catch (e) {
+      settle({ ok: false, problem: e instanceof Error ? e.message : "The type did not save.", retry: () => void setPropertyType(propertyTypeId) });
+    }
+  }
   const [portalBusy, setPortalBusy] = useState(false);
   const [portalConfirm, setPortalConfirm] = useState(false);
   const [portalNote, setPortalNote] = useState<string | null>(null);
@@ -1183,10 +1213,11 @@ function ListingDrawerBody({
       { icon: "shield", label: "EPC expires", text: epc ? dayOf(epc) : "Not recorded" },
       { icon: "clock", label: "On the market", text: listing.daysOnMarket != null ? `${listing.daysOnMarket} day${listing.daysOnMarket === 1 ? "" : "s"}` : "Not yet" },
       { icon: "pack/photo", label: "Photos", text: `${photos.length} on file` },
+      { icon: "home", label: "Type of let", text: home ? LET_TYPES.find((t) => t.value === home.letType)?.label ?? "Not set" : homeProblem ? "Did not load" : "Reading…" },
     ];
   })();
 
-  const highlights = facts.filter((f) => ["Type", "Bedrooms", "Bathrooms", "Deposit", "Available from", "Photos"].includes(f.label));
+  const highlights = facts.filter((f) => ["Type", "Type of let", "Bedrooms", "Bathrooms", "Deposit", "Available from"].includes(f.label));
   const quietFact = (t: string) => ["Not set", "Not recorded", "Reading…", "Did not load"].includes(t);
   /* What each pop-out holds, said on its tile. */
   const tileSub: Record<TabKey, string> = {
@@ -1194,7 +1225,7 @@ function ListingDrawerBody({
     enquiries: enquiries === null ? "Reading…" : `${enquirers} ${enquirers === 1 ? "person" : "people"}`,
     applications: savedOffers === null ? "Reading…" : openOffers ? `${openOffers} to decide` : `${savedOffers.length} so far`,
     marketing: marketingToGo == null ? "Facts, write-up, photos" : marketingToGo === 0 ? "Complete" : `${marketingToGo} to fill in`,
-    compliance: certs === null ? "Reading…" : certOk("epc") && certOk("gas_safety") && certOk("eicr") ? "And the documents" : "Certificates to add",
+    compliance: certs === null ? "Reading…" : certOk("epc") && certOk("gas_safety") && certOk("eicr") ? (termsKnown && !termsOnFile ? "Terms to add" : "Certificates and papers") : "Certificates to add",
     portals: pub && !pub.onPortals ? "Off for now" : "Live adverts, how they do",
   };
   const needsOf: Record<TabKey, boolean> = {
@@ -1204,7 +1235,7 @@ function ListingDrawerBody({
     enquiries: (enquiries?.length ?? 0) > 0,
     applications: openOffers > 0,
     marketing: photos.length === 0 || !shownBody,
-    compliance: (certs != null && !(certOk("epc") && certOk("gas_safety") && certOk("eicr"))) || (terms.status === "ready" && !terms.signed),
+    compliance: (certs != null && !(certOk("epc") && certOk("gas_safety") && certOk("eicr"))) || (termsKnown && !termsOnFile),
     portals: false,
   };
   const countOf: Partial<Record<TabKey, number>> = {
@@ -1329,17 +1360,17 @@ function ListingDrawerBody({
                 <ListingOwner listingId={listing.id} />
                 {/* A test file's listing (lib/test-overlay): negative id, never in REX. */}
                 {Number(listing.id) < 0 && <Tag tone="neutral">Test listing - only you can see it</Tag>}
-                {terms.status === "ready" && (
+                {termsKnown && (
                   <button
                     type="button"
                     onClick={() => pickTab("compliance")}
                     title="Open Compliance"
                     className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-                      terms.signed ? "bg-[#f1f4ec] text-[#56634a]" : "border border-accent-dark/50 bg-white text-accent-dark hover:border-accent-dark"
+                      termsOnFile ? "bg-[#f1f4ec] text-[#56634a]" : "border border-accent-dark/50 bg-white text-accent-dark hover:border-accent-dark"
                     }`}
                   >
                     <DoodleIcon name="file-contract" size={11} />
-                    {terms.signed ? "Terms signed" : "No terms on file"}
+                    {termsOnFile ? "Terms on file" : "No terms on file"}
                   </button>
                 )}
               </div>
@@ -1438,11 +1469,28 @@ function ListingDrawerBody({
         {/* ── 2. the landlord and how we get in ─────────────────────────── */}
         <section className={`${box} @container flex min-w-0 flex-col p-4 sm:p-5 xl:col-start-1`}>
           {/* A line of the home's facts. The rest live in Edit the advert. */}
-          <div className="grid grid-cols-3 gap-x-4 gap-y-3 @[34rem]:grid-cols-6">
+          {/* Sized to their words and wrapping, so "Terraced House" and
+              "Professional" are never cut short (12 Oct 2026). */}
+          <div className="flex flex-wrap gap-x-7 gap-y-3">
             {highlights.map((f) => (
-              <div key={f.label} className="min-w-0">
+              <div key={f.label} className="min-w-0 max-w-full">
                 <p className="truncate text-[10.5px] font-semibold uppercase tracking-wide text-muted">{f.label}</p>
-                <p className={`truncate text-[13px] ${quietFact(f.text) ? "text-muted" : "font-semibold"}`}>{f.text}</p>
+                {/* Type and Type of let change here (James, 12 Oct 2026): "click
+                    into that and change it ... a styled dropdown". */}
+                {f.label === "Type" && live && editCanPress ? (
+                  <FieldSelect
+                    variant="inline"
+                    value={live.propertyTypeId ?? ""}
+                    placeholder={live.propertyType ?? "Not set"}
+                    onOpen={loadPropTypes}
+                    options={(propTypes ?? []).map((t) => ({ value: t.id, label: t.label }))}
+                    onChange={(v) => void setPropertyType(v)}
+                  />
+                ) : f.label === "Type of let" && home ? (
+                  <FieldSelect variant="inline" value={home.letType} options={LET_TYPES} onChange={(v) => void setLetType(v as LetType)} />
+                ) : (
+                  <p className={`truncate text-[13px] ${quietFact(f.text) ? "text-muted" : "font-semibold"}`}>{f.text}</p>
+                )}
               </div>
             ))}
           </div>
@@ -2060,7 +2108,7 @@ function ListingDrawerBody({
 
             {tab === "compliance" && (
               <div className="space-y-5">
-                {listing.epcExpiry == null && (
+                {!requirements.find((r) => r.id === "epc")?.done && (
                   <button
                     type="button"
                     onClick={() => setDrop("epc")}
@@ -2069,58 +2117,41 @@ function ListingDrawerBody({
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-accent-dark"><DoodleIcon name="shield" size={18} /></span>
                     <span className="min-w-0 flex-1">
                       <span className="hand block text-[17px]">File the EPC</span>
-                      <span className="block text-[12.5px] text-muted">No EPC is recorded on this listing. Drop the certificate and we read the rating and the dates off it.</span>
+                      <span className="block text-[12.5px] text-muted">No EPC is recorded on this home. Drop the certificate and we read the rating and the dates off it.</span>
                     </span>
                     <span className="shrink-0 rounded-full bg-[var(--brown)] px-4 py-2.5 text-[12.5px] font-semibold text-white">Drop it here</span>
                   </button>
                 )}
-                <div className="[&>section]:rounded-none [&>section]:border-0 [&>section]:p-0">
-                  <PropertyFile key={`file-${drop ?? "x"}`} propertyId={listing.propertyId ?? null} address={listing.propertyId ? null : listing.name} screen="the listing" />
+                {/* One section, not four (James, 12 Oct 2026). */}
+                <ListingCompliance
+                  key={`file-${drop ?? "x"}`}
+                  listingId={String(listing.id)}
+                  propertyId={listing.propertyId ?? null}
+                  name={listing.name}
+                  address={[listing.name, listing.locality].filter(Boolean).join(", ")}
+                  home={home}
+                  homeProblem={homeProblem}
+                  onLetType={(v) => void setLetType(v)}
+                  terms={terms}
+                  landlord={{
+                    contactId: link?.landlord?.contactId ?? null,
+                    /* The real landlord only - never a guessed name on a contract. */
+                    name: landlord.status === "known" ? landlord.landlord.name : undefined,
+                    email: landlord.status === "known" ? (landlord.landlord.email ?? undefined) : undefined,
+                  }}
+                  landlordRegistration={live?.record.landlordRegistration ?? null}
+                />
+                <div className="rounded-[22px] border border-line/50 bg-white p-5">
+                  <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">How we get in</p>
+                  <p className="mt-1 mb-4 text-[12.5px] text-muted">Vacant, through the tenant, or through the landlord. The access button on the record follows this.</p>
+                  <AccessSettings
+                    value={access}
+                    onChange={setAccess}
+                    tenant={listing.tenant ?? null}
+                    landlord={landlord.status === "known" ? landlord.landlord : null}
+                  />
                 </div>
               </div>
-            )}
-
-            {tab === "compliance" && (
-              /* The home's documents, shared with Kirstie's deal and the
-                 application for the same address (James, 5 Oct 2026). */
-              <div className="mb-5 rounded-xl border border-line/50 bg-white p-5">
-                <p className="mb-3 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">Uploaded documents</p>
-                <FileDocuments
-                  address={[listing.name, listing.locality].filter(Boolean).join(", ")}
-                  propertyId={listing.propertyId ?? null}
-                  from={{ kind: "listing", id: listing.id }}
-                />
-              </div>
-            )}
-            {/* The home's papers from the property record (6 Oct 2026). */}
-            {tab === "compliance" && <RecordPapers listingId={listing.id} />}
-            {tab === "compliance" && (
-              <div className="mb-5 rounded-xl border border-line/50 bg-white p-5">
-                <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">How we get in</p>
-                <p className="mt-1 mb-4 text-[12.5px] text-muted">Vacant, through the tenant, or through the landlord. The access button on the record follows this.</p>
-                <AccessSettings
-                  value={access}
-                  onChange={setAccess}
-                  tenant={listing.tenant ?? null}
-                  landlord={landlord.status === "known" ? landlord.landlord : null}
-                />
-              </div>
-            )}
-            {tab === "compliance" && (
-              <ListingDocuments
-                terms={terms}
-                listingId={listing.id}
-                propertyId={listing.propertyId ?? null}
-                contactId={link?.landlord?.contactId ?? null}
-                /* Undefined, deliberately. These prefilled the Terms of
-                   Business e-sign from `landlordFor()` — so a contract could
-                   have gone out addressed to an invented person at an invented
-                   address. The panel already handles not knowing; it must be
-                   told the truth rather than handed a plausible name. */
-                landlordName={landlord.status === "known" ? landlord.landlord.name : undefined}
-                landlordEmail={landlord.status === "known" ? (landlord.landlord.email ?? undefined) : undefined}
-                address={listing.name}
-              />
             )}
           </div>
         )}

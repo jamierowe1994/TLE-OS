@@ -30,6 +30,8 @@ export default function FieldSelect({
   placeholder = "Choose",
   className = "",
   extra,
+  variant = "field",
+  onOpen,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -38,6 +40,11 @@ export default function FieldSelect({
   className?: string;
   /** A last row that does something rather than choosing - "+ Add a contractor". */
   extra?: { label: string; onPick: () => void };
+  /** "inline": the value as words with a chevron, for a line of facts
+   *  (the listing's Type and Type of let, 12 Oct 2026). */
+  variant?: "field" | "inline";
+  /** Told when the list opens - load the options then, not on every page. */
+  onOpen?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
@@ -55,8 +62,13 @@ export default function FieldSelect({
   }, [open]);
   useEffect(() => {
     if (!open) return;
-    setActive(Math.max(0, options.findIndex((o) => o.value === value)));
+    onOpen?.();
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* Again once options that load on opening arrive, so the chosen one is in view. */
+  useEffect(() => {
+    if (!open) return;
+    setActive(Math.max(0, options.findIndex((o) => o.value === value)));
+  }, [open, options.length]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open || active < 0) return;
     list.current?.querySelector<HTMLElement>(`[data-i="${active}"]`)?.scrollIntoView({ block: "nearest" });
@@ -86,9 +98,13 @@ export default function FieldSelect({
         aria-expanded={open}
         aria-controls={id}
         onClick={() => setOpen((v) => !v)}
-        className={`flex w-full items-center justify-between gap-2 rounded-lg border bg-box px-3 py-2.5 text-left text-[13px] outline-none transition-colors ${open ? "border-ink" : "border-line/80 hover:border-ink/40"} focus-visible:border-ink`}
+        className={
+          variant === "inline"
+            ? `-mx-1 flex max-w-full items-center gap-1 rounded-md px-1 text-left text-[13px] font-semibold outline-none transition-colors hover:bg-page focus-visible:bg-page ${open ? "bg-page" : ""}`
+            : `flex w-full items-center justify-between gap-2 rounded-lg border bg-box px-3 py-2.5 text-left text-[13px] outline-none transition-colors ${open ? "border-ink" : "border-line/80 hover:border-ink/40"} focus-visible:border-ink`
+        }
       >
-        <span className={`min-w-0 truncate ${chosen ? "" : "text-muted"}`}>{chosen ? chosen.label : placeholder}</span>
+        <span className={`min-w-0 ${variant === "inline" ? "whitespace-nowrap" : "truncate"} ${chosen || variant === "inline" ? "" : "text-muted"}`}>{chosen ? chosen.label : placeholder}</span>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className={`shrink-0 text-muted transition-transform duration-200 ${open ? "rotate-180" : ""}`}>
           <path d="M6 9l6 6 6-6" />
         </svg>
@@ -98,8 +114,14 @@ export default function FieldSelect({
           ref={list}
           id={id}
           role="listbox"
-          className="fade-up absolute left-0 right-0 top-full z-30 mt-1.5 max-h-64 overflow-y-auto rounded-xl border border-line/80 bg-white p-1 shadow-[0_14px_34px_-14px_rgba(0,0,0,0.3)]"
+          className={`fade-up absolute left-0 top-full z-30 mt-1.5 max-h-64 ${variant === "inline" ? "w-max min-w-[220px] max-w-[300px]" : "right-0"} overflow-y-auto rounded-xl border border-line/80 bg-white p-1 shadow-[0_14px_34px_-14px_rgba(0,0,0,0.3)]`}
         >
+          {!options.length && !extra && (
+            <li role="presentation" className="flex items-center gap-2 px-3 py-2 text-[12.5px] text-muted">
+              <span aria-hidden className="block h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+              Loading…
+            </li>
+          )}
           {options.map((o, i) => {
             const head = o.group && o.group !== lastGroup ? o.group : null;
             lastGroup = o.group;

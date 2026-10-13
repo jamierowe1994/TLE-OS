@@ -46,6 +46,21 @@ export async function GET(req: NextRequest) {
   const no = under ? await refusal(actor, under.scope, under.ref) : "Not a valid file reference.";
   if (no) return NextResponse.json({ ok: false, error: no }, { status: 403 });
 
+  /* ?bytes=1: the file itself through the OS, for the certificate reader to
+     read a document already on file (12 Oct 2026). Same check as the link;
+     a certificate is small, so the app carrying it once is fine. */
+  if (req.nextUrl.searchParams.get("bytes") === "1") {
+    try {
+      const obj = await withR2((client) => client.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: key })));
+      if ((obj.ContentLength ?? 0) > 12 * 1024 * 1024) return NextResponse.json({ ok: false, error: "Over 12MB." }, { status: 413 });
+      const body = await obj.Body?.transformToByteArray();
+      if (!body) return NextResponse.json({ ok: false, error: "Couldn't open that file." }, { status: 502 });
+      return new NextResponse(Buffer.from(body), { headers: { "content-type": obj.ContentType ?? "application/octet-stream", "cache-control": "private, no-store" } });
+    } catch {
+      return NextResponse.json({ ok: false, error: "Couldn't open that file." }, { status: 502 });
+    }
+  }
+
   try {
     /* ?save=1: the document sheet's Save button. The browser is told to
        download rather than show it, under the file's own name. */
