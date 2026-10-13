@@ -1594,3 +1594,15 @@ html[data-os-toast="up"] .os-toast-lift {
 .hud-typing { animation: hud-typing-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; transform-origin: 0 100%; }
 .hud-dot { display: block; width: 6px; height: 6px; border-radius: 9999px; background: var(--muted); animation: hud-dot 1.2s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .hud-typing, .hud-dot { animation: none; } }
+
+/* Steve steps aside while a pop-up is open (13 Oct 2026, the end-to-end
+   walk): he sits in the bottom-right corner above everything, which is
+   exactly where a pop-up puts its main button - Book, Next: the Email, Send
+   - so he was sitting on it. A centred pop-up, or anything marked as a modal,
+   fades him out until it closes; slide-out drawers keep him. */
+[data-steve-dock] { transition: opacity 0.2s ease, transform 0.2s ease; }
+body:has(.fixed.inset-0.flex.items-center.justify-center, .fixed.inset-0.flex.items-start.justify-center, [aria-modal="true"]) [data-steve-dock] {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(14px);
+}

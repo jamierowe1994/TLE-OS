@@ -6,6 +6,7 @@ import { leadsForListing, searchLedger } from "@/lib/lead-ledger";
 import { hiddenLeadIds } from "@/lib/hidden-leads";
 import { OS_LEAD_PREFIX } from "@/lib/contacts-as-leads";
 import type { Lead } from "@/lib/leads-sample";
+import { isTestId, testEnquiriesForListing } from "@/lib/test-overlay";
 
 /**
  * GET /api/viewings/people?q=&listing=
@@ -70,12 +71,14 @@ export async function GET(req: NextRequest) {
   if (hasDb() && needle.length >= 3) {
     const like = `%${needle.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
     const digits = needle.replace(/\D/g, "");
-    const params: unknown[] = [like, digits.length >= 5 ? `%${digits}%` : null];
-    if (!scope.everything && actor) params.push(actor.email);
+    const params: unknown[] = [like, digits.length >= 5 ? `%${digits}%` : null, actor?.email ?? ""];
     const rows = await q<{ id: string; name: string; email: string | null; mobile: string | null; rex_id: string | null; source: string | null }>(
       `SELECT id, name, email, mobile, rex_id, source FROM os_contacts
         WHERE kind = 'tenant'
-          ${params.length > 2 ? "AND created_by = $3" : ""}
+          ${!scope.everything && actor ? "AND created_by = $3" : ""}
+          /* Somebody else's test tenant is never offered (13 Oct 2026: an
+             owner searching "Tenant E2E" got every tester's). */
+          AND (NOT is_test OR lower(created_by) = lower($3))
           AND (name ILIKE $1 OR email ILIKE $1
                OR ($2::text IS NOT NULL AND regexp_replace(COALESCE(mobile, ''), '\\D', '', 'g') LIKE $2))
         ORDER BY created_at DESC LIMIT 20`,
@@ -93,12 +96,30 @@ export async function GET(req: NextRequest) {
       }));
   }
 
+  /* A TEST listing's enquirers (James, 13 Oct 2026, the E2E walk): they live
+     in the test overlay, not the lead ledger, so Book a viewing said "Nobody
+     has asked about this home yet" over the test tenant's enquiry. Its id is
+     the tenant's OS lead (os-<contact id>), so the viewing files on them. */
+  let testPeople: ViewingPerson[] = [];
+  if (!needle && isTestId(listing) && actor) {
+    testPeople = (await testEnquiriesForListing(Number(listing), actor.email).catch(() => [])).map((e) => ({
+      leadId: e.id,
+      name: e.name,
+      email: e.email,
+      phone: e.phone,
+      contactId: null,
+      note: e.source,
+    }));
+  }
+
   /* One row per person: the same email on two enquiries is one tenant, and
-     the newest file is the one to book against. */
+     the newest file is the one to book against. Not on a test listing: every
+     test person there carries the tester's own email, so they are told apart
+     by their file. */
   const seen = new Set<string>();
   const people: ViewingPerson[] = [];
-  for (const p of [...leads.map(toPerson), ...added]) {
-    const key = p.email.trim().toLowerCase() || p.phone.replace(/\D/g, "") || p.leadId;
+  for (const p of [...testPeople, ...leads.map(toPerson), ...added]) {
+    const key = isTestId(listing) ? p.leadId : p.email.trim().toLowerCase() || p.phone.replace(/\D/g, "") || p.leadId;
     if (seen.has(key)) continue;
     seen.add(key);
     people.push(p);

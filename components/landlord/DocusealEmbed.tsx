@@ -161,45 +161,54 @@ function DemoSign({ url, onCompleted, className = "", style }: EmbedProps) {
      signature in the OS (app/api/docuseal/test-signed), and only once that
      has saved does the sheet say done. */
   const test = url.startsWith("demo:test:");
+  /* The caller's box (className/style) is the scroller; the words sit in a
+     column of their own inside it, centred on the paper. Putting the column
+     width on the caller's box let an absolute inset-0 box centre itself on
+     the whole sheet, half the column's room to the right of the paper, and
+     the name box ran off its edge (James, 13 Oct 2026). */
   return (
-    <div className={`mx-auto max-w-[560px] space-y-4 p-6 text-[14px] leading-relaxed text-ink ${className}`} style={style}>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">{test ? "Terms of business · test file" : "Terms of business · sample"}</p>
-      {test ? (
-        <p>A test file has no real contract: nothing goes to DocuSeal, and nobody is emailed. Type a name and sign, and the file reads as signed by both sides - yours and the landlord&apos;s - so the listing can be made next.</p>
-      ) : (
-        <p>The sample contract for the demo: the rent agreed, the service, the management fee and the set-up fee from the file, and the standard terms. In the real OS this is the full contract, and it is signed here in the same place.</p>
-      )}
-      <label className="block">
-        <span className="text-[12px] font-semibold">Type your name to sign</span>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your full name" className="mt-1 w-full rounded-xl border border-line bg-white px-3 py-2.5 font-[cursive] text-[18px]" />
-      </label>
-      <button
-        type="button"
-        disabled={!name.trim() || busy}
-        onClick={async () => {
-          setBusy(true);
-          setProblem(null);
-          if (test) {
-            /* The appraisal id rides along on its own, so practice mode
-               recognises the tester's own file (middleware, own test ids). */
-            const id = url.slice("demo:test:".length);
-            const r = await fetch("/api/docuseal/test-signed", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ src: url, id, name: name.trim() }) }).catch(() => null);
-            const j = r ? ((await r.json().catch(() => ({}))) as { ok?: boolean; error?: string }) : null;
-            if (!j?.ok) {
-              setProblem(j?.error ?? "That didn't save - the connection dropped. Try again.");
-              setBusy(false);
-              return;
-            }
-          } else {
-            await fetch("/api/docuseal/demo-signed", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ src: url, name: name.trim() }) }).catch(() => null);
-          }
-          onCompleted?.();
-        }}
-        className="rounded-full bg-[#56423e] px-5 py-2.5 text-[13px] font-semibold text-white disabled:opacity-40"
-      >
-        {busy ? "Signing…" : "Sign the terms"}
-      </button>
-      {problem && <p className="text-[12.5px] text-accent-dark">{problem}</p>}
+    <div className={className} style={style}>
+      <div className="flex min-h-full items-center justify-center px-6 pb-24 pt-16 text-[14px] leading-relaxed text-ink">
+        <div className="w-full min-w-0 max-w-[500px] space-y-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">{test ? "Terms of business · test file" : "Terms of business · sample"}</p>
+          {test ? (
+            <p>A test file has no real contract: nothing goes to DocuSeal, and nobody is emailed. Type a name and sign, and the file reads as signed by both sides - yours and the landlord&apos;s - so the listing can be made next.</p>
+          ) : (
+            <p>The sample contract for the demo: the rent agreed, the service, the management fee and the set-up fee from the file, and the standard terms. In the real OS this is the full contract, and it is signed here in the same place.</p>
+          )}
+          <label className="block">
+            <span className="text-[12px] font-semibold">Type your name to sign</span>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your full name" className="mt-1 w-full rounded-xl border border-line bg-white px-3 py-2.5 font-[cursive] text-[18px]" />
+          </label>
+          <button
+            type="button"
+            disabled={!name.trim() || busy}
+            onClick={async () => {
+              setBusy(true);
+              setProblem(null);
+              if (test) {
+                /* The appraisal id rides along on its own, so practice mode
+                   recognises the tester's own file (middleware, own test ids). */
+                const id = url.slice("demo:test:".length);
+                const r = await fetch("/api/docuseal/test-signed", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ src: url, id, name: name.trim() }) }).catch(() => null);
+                const j = r ? ((await r.json().catch(() => ({}))) as { ok?: boolean; error?: string }) : null;
+                if (!j?.ok) {
+                  setProblem(j?.error ?? "That didn't save - the connection dropped. Try again.");
+                  setBusy(false);
+                  return;
+                }
+              } else {
+                await fetch("/api/docuseal/demo-signed", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ src: url, name: name.trim() }) }).catch(() => null);
+              }
+              onCompleted?.();
+            }}
+            className="rounded-full bg-[#56423e] px-5 py-2.5 text-[13px] font-semibold text-white disabled:opacity-40"
+          >
+            {busy ? "Signing…" : "Sign the terms"}
+          </button>
+          {problem && <p className="text-[12.5px] text-accent-dark">{problem}</p>}
+        </div>
+      </div>
     </div>
   );
 }

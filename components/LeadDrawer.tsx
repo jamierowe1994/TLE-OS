@@ -2855,6 +2855,7 @@ function LeadDrawerBody({
                                 void saveField({ name: next });
                               }}
                               className="hand text-[32px] leading-[1.1]"
+                              wrap
                             />
                           </h2>
                         ) : (
@@ -3170,6 +3171,7 @@ function LeadDrawerBody({
                                 void saveField({ name: next });
                               }}
                               className="text-[32px] leading-[1.1]"
+                              wrap
                             />
                           </h2>
                         ) : (

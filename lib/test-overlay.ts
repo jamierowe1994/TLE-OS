@@ -52,7 +52,9 @@ export type TestListing = {
   body: string;
   publishedAt: string;
   portals: { portal: string; url: string }[];
-  landlord: { name: string; email: string };
+  /** The phone is carried from 13 Oct 2026; older rows are looked up on the
+   *  file's landlord contact (lib/test-listing-answers testLandlord). */
+  landlord: { name: string; email: string; phone?: string | null };
   /**
    * Draft or live (James, 13 Oct 2026: a tester walks a listing from New
    * listing to Push to the portals, so a test listing has to be able to be a
@@ -93,6 +95,8 @@ export type TestOffer = {
   status: "received" | "accepted" | "unsuccessful";
   received: string;
   accepted: string | null;
+  /** Who put it forward (13 Oct 2026). Older rows fall back to the tester. */
+  agentName?: string | null;
 };
 
 export type TestDeal = {
@@ -217,6 +221,27 @@ export async function testListing(listingId: number | string): Promise<TestListi
   return r[0]?.payload ?? null;
 }
 
+/**
+ * The test file's own people on a test listing (James, 13 Oct 2026: the E2E
+ * walk). The kit's landlord and tenant contacts are OS contacts flagged
+ * is_test, and every one of them carries the TESTER's email - so an email
+ * alone can never tell Landlord E2E from Tenant E2E from last week's test
+ * tenant. This is the file the listing was made on, read by its kit.
+ */
+export type KitPerson = { id: string; name: string; email: string; mobile: string; kind: string };
+export async function kitPeopleForTestListing(listingId: number | string): Promise<KitPerson[]> {
+  if (!hasDb()) return [];
+  return q<KitPerson>(
+    `SELECT c.id::text AS id, c.name, COALESCE(c.email, '') AS email, COALESCE(c.mobile, '') AS mobile, c.kind
+       FROM os_test_records t
+       JOIN os_test_kits k ON k.id = t.kit_id AND k.cleared_at IS NULL
+       JOIN os_contacts c ON k.refs->'contacts' ? c.id::text
+      WHERE t.kind = 'listing' AND (t.payload->>'listingId')::bigint = $1 AND c.is_test
+      ORDER BY c.created_at ASC`,
+    [Number(listingId)]
+  ).catch(() => []);
+}
+
 export async function testListingForAppraisal(appraisalId: string): Promise<TestListing | null> {
   const r = await rows<TestListing>("listing", "payload->>'appraisalId' = $2", [appraisalId]);
   return r[0]?.payload ?? null;
@@ -244,7 +269,7 @@ export function testDealPushed(d: TestDeal | null | undefined): boolean {
   return Boolean(d.pushedAt) || PORTAL_STAGES.findIndex((s) => s.key === d.stageKey) > 0;
 }
 
-function toApplication(o: TestOffer, l: TestListing | null, deal: TestDeal | null): Application {
+function toApplication(o: TestOffer, l: TestListing | null, deal: TestDeal | null, tester: string | null = null): Application {
   return {
     id: o.appId,
     status: o.status,
@@ -259,7 +284,10 @@ function toApplication(o: TestOffer, l: TestListing | null, deal: TestDeal | nul
     property: l?.name ?? "Test listing",
     locality: l ? `${l.locality} ${l.postcode}`.trim() : "",
     image: l?.images[0] ?? null,
-    agent: deal?.agentName ?? null,
+    /* Before the deal there was no agent at all, so the file said "—" (James,
+       13 Oct 2026, the E2E walk): the one who put the offer forward, else the
+       tester whose file it is. */
+    agent: deal?.agentName || o.agentName || tester || null,
     offerAmount: o.amount,
     offerPeriod: "month",
     startDate: o.moveIn,
@@ -296,15 +324,18 @@ function toApplication(o: TestOffer, l: TestListing | null, deal: TestDeal | nul
   };
 }
 
-async function offerContext(o: TestOffer): Promise<{ l: TestListing | null; d: TestDeal | null }> {
-  const [l, d, plc] = await Promise.all([
+async function offerContext(o: TestOffer, kitId: string | null = null): Promise<{ l: TestListing | null; d: TestDeal | null; tester: string | null }> {
+  const [l, d, plc, kit] = await Promise.all([
     testListing(o.listingId),
     rows<TestDeal>("deal", "payload->>'appId' = $2", [o.appId]).then((r) => r[0]?.payload ?? null),
     q<{ state: PlcCase["state"] }>(`SELECT state FROM os_plc_cases WHERE id = $1`, [caseIdFor(o.appId)]).then((r) => r[0] ?? null).catch(() => null),
+    kitId && !o.agentName
+      ? q<{ by_name: string | null }>(`SELECT by_name FROM os_test_kits WHERE id = $1`, [kitId]).then((r) => r[0] ?? null).catch(() => null)
+      : Promise.resolve(null),
   ]);
   /* Where the deal really is, PLC pack included, so the board's label and
      the file's spine say the same thing. */
-  return { l, d: d ? { ...d, stageKey: testDealStage(d, plc) } : null };
+  return { l, d: d ? { ...d, stageKey: testDealStage(d, plc) } : null, tester: kit?.by_name?.trim() || null };
 }
 
 /** The tester's own test offers, as the Applications board draws them. */
@@ -312,24 +343,24 @@ export async function testApplicationsFor(email: string | null | undefined): Pro
   if (!email) return [];
   const os = await rows<TestOffer>("offer", MINE, [email]);
   return Promise.all(os.map(async (r) => {
-    const { l, d } = await offerContext(r.payload);
-    return toApplication(r.payload, l, d);
+    const { l, d, tester } = await offerContext(r.payload, r.kit_id);
+    return toApplication(r.payload, l, d, tester);
   }));
 }
 
 export async function testApplication(appId: string): Promise<{ app: Application; deal: TestDeal | null } | null> {
   const r = await rows<TestOffer>("offer", "payload->>'appId' = $2", [appId]);
   if (!r[0]) return null;
-  const { l, d } = await offerContext(r[0].payload);
-  return { app: toApplication(r[0].payload, l, d), deal: d };
+  const { l, d, tester } = await offerContext(r[0].payload, r[0].kit_id);
+  return { app: toApplication(r[0].payload, l, d, tester), deal: d };
 }
 
 /** Offers on a test landlord file's listing, as Applications - the portal maps them itself. */
 export async function testOffersForAppraisal(appraisalId: string): Promise<Application[]> {
   const os = await rows<TestOffer>("offer", "payload->>'appraisalId' = $2", [appraisalId]);
   return Promise.all(os.map(async (r) => {
-    const { l, d } = await offerContext(r.payload);
-    return toApplication(r.payload, l, d);
+    const { l, d, tester } = await offerContext(r.payload, r.kit_id);
+    return toApplication(r.payload, l, d, tester);
   }));
 }
 
@@ -777,7 +808,7 @@ export async function declineTestOffer(appId: string, by: { email: string }): Pr
  */
 export async function addTestOffer(p: {
   listingId: number;
-  by: { email: string };
+  by: { email: string; name?: string | null };
   name: string;
   email: string;
   amount: number;
@@ -811,6 +842,7 @@ export async function addTestOffer(p: {
     status: "received",
     received: new Date().toISOString(),
     accepted: null,
+    agentName: (p.by.name ?? "").trim() || null,
   };
   await putTestRecord(home.kit_id, home.owner_email, "offer", offer);
   return appId;
@@ -1043,7 +1075,7 @@ export async function makeTestListing(p: {
   deposit?: number | null;
   availableFrom?: string | null;
   propertyType?: string | null;
-  landlord: { name: string; email: string };
+  landlord: { name: string; email: string; phone?: string | null };
 }): Promise<TestListing> {
   const listingId = newTestId();
   const postcode = p.postcode.trim().toUpperCase();
@@ -1074,7 +1106,7 @@ export async function makeTestListing(p: {
       { portal: "Zoopla", url: "https://www.zoopla.co.uk/" },
       { portal: "OnTheMarket", url: "https://www.onthemarket.com/" },
     ],
-    landlord: p.landlord,
+    landlord: { ...p.landlord, phone: (p.landlord.phone ?? "").trim() || null },
     status: "draft",
     createdAt: now,
     availableFrom: available,

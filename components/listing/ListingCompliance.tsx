@@ -47,7 +47,9 @@ export function useListingHome(listingId: string | number) {
     let live = true;
     setHome(null);
     setProblem(null);
-    if (!(Number(id) > 0)) return;
+    /* A test listing (negative id) is asked too, since 13 Oct 2026: the route
+       answers it from the test file, so its test-signed terms count. */
+    if (!Number.isInteger(Number(id)) || Number(id) === 0) return;
     fetch(`/api/listings/home?id=${encodeURIComponent(id)}`, { cache: "no-store" })
       .then(async (r) => ({ r, j: (await r.json().catch(() => null)) as ({ ok?: boolean; error?: string } & ListingHome) | null }))
       .then(({ j }) => {

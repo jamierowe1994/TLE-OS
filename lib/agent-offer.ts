@@ -11,7 +11,7 @@ import { escapeHtml, renderTleEmail } from "@/lib/email/tle-emails";
 import { sendAsAgent } from "@/lib/send-as-agent";
 import { sendEmail } from "@/lib/resend";
 import { proseEmail } from "@/lib/email/prose";
-import { addTestOffer, isTestId, testListing } from "@/lib/test-overlay";
+import { addTestOffer, isTestId, kitPeopleForTestListing, testListing } from "@/lib/test-overlay";
 
 /**
  * An offer the AGENT puts forward for a tenant (1 Oct 2026, James: "build the
@@ -48,12 +48,13 @@ export async function offerContext(p: { listingId: string; email: string; name: 
   if (/^-\d+$/.test(p.listingId)) {
     const [t, rec] = await Promise.all([
       testListing(p.listingId).catch(() => null),
-      emailOk(p.email) ? passportFor(p.email) : Promise.resolve(null),
+      testPassportFor(p.listingId, p.email, p.name).catch(() => null),
     ]);
     return {
       home: t ? { id: p.listingId, address: t.name, locality: t.locality, askingPcm: t.rent, beds: t.beds, photo: t.images[0] ?? null } : null,
       tenant: {
-        name: rec?.data.legalName || p.name,
+        /* The person picked wins on a test file: see testPassportFor. */
+        name: p.name || rec?.data.legalName || "",
         email: p.email,
         passport: rec ? rec.data : null,
         passportDoneOn: rec?.submittedAt
@@ -84,6 +85,33 @@ export async function offerContext(p: { listingId: string; email: string; name: 
         : null,
     },
   };
+}
+
+/**
+ * A TEST tenant's passport (James, 13 Oct 2026, the E2E walk). Every test
+ * tenant a tester makes carries the tester's own email, so the newest
+ * passport on that email was another test tenant's: Tenant E2E's offer opened
+ * as "James (test tenant 2)". On a test listing a passport only counts when
+ * it is the file's own tenant contact's, or its name is the person's picked;
+ * otherwise there is none and the form asks the questions.
+ */
+async function testPassportFor(listingId: string, email: string, name: string): Promise<PassportRecord | null> {
+  const norm = (v: string | null | undefined) => (v ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  const want = norm(name);
+  if (!hasDb() || !emailOk(email) || !want) return null;
+  const kitTenants = new Set(
+    (await kitPeopleForTestListing(listingId).catch(() => [])).filter((c) => c.kind === "tenant" && norm(c.name) === want).map((c) => c.id)
+  );
+  const rows = await q<{ token: string; contact_id: string | null; name: string; legal: string | null }>(
+    `SELECT token, contact_id, name, data->>'legalName' AS legal FROM os_tenant_passports
+      WHERE lower(email) = lower($1) AND contact_id IS DISTINCT FROM 'demo'
+      ORDER BY created_at DESC LIMIT 50`,
+    [email.trim()]
+  ).catch(() => []);
+  const hit =
+    rows.find((r) => r.contact_id != null && kitTenants.has(r.contact_id)) ??
+    rows.find((r) => norm(r.legal) === want || norm(r.name) === want);
+  return hit ? await getPassport(hit.token).catch(() => null) : null;
 }
 
 async function passportFor(email: string): Promise<PassportRecord | null> {
@@ -144,7 +172,7 @@ export async function saveAgentOffer(me: OsUser, raw: Record<string, unknown>): 
     const pp = cleanPassport(raw.passport, { ...offerSubset(null), numAdults: "1", numChildren: "0" });
     const appId = await addTestOffer({
       listingId: t.listingId,
-      by: { email: me.email },
+      by: { email: me.email, name: me.name },
       name,
       email,
       amount,

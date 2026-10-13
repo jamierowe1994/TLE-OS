@@ -1,5 +1,6 @@
 import "server-only";
 import type { AssistantTool, ToolContext } from "@/lib/assistant-tools";
+import { libraryEntries, searchLibrary } from "@/lib/marketing-library";
 import { bookFor } from "@/lib/listings-cache";
 import { fetchViewingsFor } from "@/lib/rex-viewings";
 import { feedbackForListing } from "@/lib/rex-feedback";
@@ -408,29 +409,40 @@ const remember: AssistantTool = {
 const findFile: AssistantTool = {
   name: "find_file",
   description:
-    "Search the File Store (the marketing knowledge: brochures, guides, forms, templates, logos, videos the team has uploaded) by name, and hand the matches over as download buttons under your reply. Call it whenever someone asks for a document, form, template, brochure, guide or 'that file about X'. Leave query empty to list the most recent. Say what you found in a line; the buttons do the rest.",
+    "Search the File Store (the marketing library: landlord guides, checklists, letter campaigns, social media how-tos, brand and policy documents, templates) by its name AND by what is inside each file, and hand the matches over as download buttons under your reply. Each match comes with its write-up (what it is, who it's for, England and Wales or Scotland, key points): answer from that in a line or two, then let the button give them the PDF. Call it whenever someone asks for a document, guide or 'that file about X', or asks about a topic a library file covers. Leave query empty to list the most recent.",
   input_schema: {
     type: "object",
     properties: { query: { type: "string", description: "Words from the file's name, e.g. 'landlord guide' or 'fees'." } },
   },
   label: (i) => (str(i.query) ? `Looking in the File Store for ${str(i.query)}…` : "Looking in the File Store…"),
   async run(input) {
-    const files = await shelfFiles().catch(() => null);
+    const [files, library] = await Promise.all([shelfFiles().catch(() => null), libraryEntries().catch(() => [])]);
     if (!files) return { error: "I couldn't open the File Store just now." };
     const words = str(input.query).toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").filter((w) => w.length > 1);
-    const hits = words.length
+    const byName = words.length
       ? files.filter((f) => {
           const n = f.name.toLowerCase().replace(/[^a-z0-9]+/g, " ");
           /* Stems, so tenancy finds tenancies and guide finds guidelines. */
           return words.every((w) => n.includes(w.length > 5 ? w.slice(0, -2) : w.replace(/s$/, "")));
         })
       : files;
+    /* And by what is inside them (13 Oct 2026, lib/marketing-library). */
+    const read = words.length ? searchLibrary(library, str(input.query)) : [];
+    const keyOf = (href: string) => decodeURIComponent(href.split("key=")[1]?.split("&")[0] ?? "");
+    const byKey = new Map(files.map((f) => [keyOf(f.href), f]));
+    const fromRead = read.map((e) => (e.key ? byKey.get(e.key) : null) ?? files.find((f) => f.name === e.file) ?? null).filter((f): f is NonNullable<typeof f> => Boolean(f));
+    /* One button a file: the same guide uploaded twice is still one guide. */
+    const hits = [...new Map([...fromRead, ...byName].map((f) => [f.name, f])).values()];
     const top = hits.slice(0, 6);
+    const writeUp = (f: { href: string; name: string }) => library.find((e) => (e.key && e.key === keyOf(f.href)) || e.file === f.name) ?? null;
     return {
       __files: top.map((f) => ({ name: f.name, href: f.href })),
       found: hits.length,
-      files: top.map((f) => ({ name: f.name, size: `${Math.max(1, Math.round(f.size / 1024))} KB`, added: f.uploadedAt?.slice(0, 10) ?? null })),
-      ...(hits.length ? {} : { note: "Nothing in the File Store by that name. Files are added on Marketing hub > File Store." }),
+      files: top.map((f) => {
+        const w = writeUp(f);
+        return { name: f.name, size: `${Math.max(1, Math.round(f.size / 1024))} KB`, added: f.uploadedAt?.slice(0, 10) ?? null, ...(w ? { title: w.title, writeUp: w.content.slice(0, 1800) } : {}) };
+      }),
+      ...(hits.length ? {} : { note: "Nothing in the File Store matches that. Files are added on Marketing hub > File Store." }),
     };
   },
 };

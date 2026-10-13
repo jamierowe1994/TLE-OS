@@ -1,4 +1,5 @@
 import "server-only";
+import { LIBRARY_SECTION, libraryEntries, libraryIndex } from "@/lib/marketing-library";
 import type { OpenSurface } from "@/lib/open-record";
 import Anthropic from "@anthropic-ai/sdk";
 import { hasDb, q } from "@/lib/db";
@@ -97,8 +98,11 @@ async function systemBlocks(): Promise<Anthropic.TextBlockParam[]> {
   ]);
   /* Filed by shelf, so "Fees and terms" reads as one chapter rather than
      entries in the order somebody last touched them. */
+  /* The marketing library goes as one line a file (lib/marketing-library);
+     find_file brings up the whole entry when it is asked about. */
+  const library = entries.filter((e) => e.section === LIBRARY_SECTION);
   const knowledge = entries
-    .slice()
+    .filter((e) => e.section !== LIBRARY_SECTION)
     .sort((a, b) => a.section.localeCompare(b.section) || a.title.localeCompare(b.title))
     .map((e) => `## ${e.section}: ${e.title}\n\n${e.content}`)
     .join("\n\n---\n\n");
@@ -301,6 +305,16 @@ guidance above:\n\n${brief.body.trim()}`,
    * A read FAILURE is called out separately. Under the old catch it looked
    * identical to an empty table, so a broken database read would have had him
    * confidently telling agents the business had written nothing down. */
+  if (library.length) {
+    blocks.push({
+      type: "text",
+      text:
+        `The marketing library: every file on the File Store has been read and written up. One line each below. ` +
+        `When someone asks about something one of these covers - a landlord guide, a checklist, a letter campaign, a social media how-to - ` +
+        `call find_file with words from its title: it gives you the full write-up to answer from in a line or two, and puts the PDF under your reply to download. ` +
+        `Offer the landlord guides for the right country (England and Wales or Scotland).\n\n${libraryIndex(await libraryEntries(library))}`,
+    });
+  }
   if (knowledge) {
     blocks.push({
       type: "text",

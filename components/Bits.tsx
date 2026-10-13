@@ -99,12 +99,17 @@ export function InlineField({
   placeholder = "—",
   type = "text",
   className = "",
+  wrap = false,
 }: {
   value: string;
   onChange: (next: string) => void;
   placeholder?: string;
   type?: string;
   className?: string;
+  /** Wrap onto a second line instead of shortening with "...". For a heading
+   *  that sizes to its own words (a name in a hero), where the shortening
+   *  cut even a short name. */
+  wrap?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -124,7 +129,13 @@ export function InlineField({
            inline-block sizes to its content and overruns the column. The full
            value rides on the tooltip so nothing is hidden, only shortened. */
         title={value ? `${value}\n\nClick to edit` : "Click to edit"}
-        className={`-mx-1 inline-block max-w-full truncate align-bottom rounded px-1 text-left transition-colors hover:bg-accent-soft/40 ${className}`}
+        /* Wrapping: the box is allowed the parent's width plus the 4px either
+           side that -mx-1 hands back. Capped at max-w-full inside a heading
+           that is itself only as wide as the name, the px-1 padding came out
+           of the words and "Landlord E2E" read "Landlord E..." (13 Oct 2026). */
+        className={`-mx-1 inline-block align-bottom rounded px-1 text-left transition-colors hover:bg-accent-soft/40 ${
+          wrap ? "max-w-[calc(100%+0.5rem)] whitespace-normal break-words" : "max-w-full truncate"
+        } ${className}`}
       >
         {value || <span className="text-muted">{placeholder}</span>}
       </button>
