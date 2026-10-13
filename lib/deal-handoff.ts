@@ -170,7 +170,7 @@ export interface Handoff {
   locality: string;
   landlord: HandoffParty | null;
   /** `reference: false` - already a tenant, on the deal but not referenced (a tenant swap). */
-  tenants: (HandoffParty & { isPrimary: boolean; reference?: boolean })[];
+  tenants: (HandoffParty & { isPrimary: boolean; reference?: boolean; rentSharePcm?: number | null })[];
   /** A tenant swap (lib/tenant-swaps): the push starts a NEW deal rather than
    *  joining the one the home already has, on a home Propoly already holds
    *  with its landlord. */
@@ -282,6 +282,9 @@ export async function buildHandoff(application: Application): Promise<Handoff> {
     phone: a.phone,
     isPrimary: a.isPrimary,
     ...(application.swap ? { reference: joining.has(a.name) } : {}),
+    /* The newcomer's rent portion goes onto them in Propoly as their rent
+       share (rent_share_pcm_pence, proven on the test home 13 Oct 2026). */
+    ...(application.swap && joining.has(a.name) && application.swap.rentPortion ? { rentSharePcm: application.swap.rentPortion } : {}),
   }));
 
   const blockers: string[] = [];

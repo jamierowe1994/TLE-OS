@@ -808,7 +808,15 @@ async function pushDeal(
     const cc = ((contact?.ok ? contact.result : null) ?? {}) as Row;
     /* reference_required: every deal keyed by hand has it on (9 Oct 2026) -
        except a swap's staying tenants, who were referenced when they moved in. */
-    const payload = { deal_id: dealUuid, deal_uuid: dealUuid, tenant: { user_attributes: tenantAttributes(cc, t), reference_required: t.reference !== false } };
+    const payload = {
+      deal_id: dealUuid,
+      deal_uuid: dealUuid,
+      tenant: {
+        user_attributes: tenantAttributes(cc, t),
+        reference_required: t.reference !== false,
+        ...(t.rentSharePcm ? { rent_share_pcm_pence: Math.round(t.rentSharePcm * 100) } : {}),
+      },
+    };
     const res = await propolyPost("/api/v1/tenants", payload);
     if (res.status >= 200 && res.status < 300) {
       await rec.add({ id: sid, label: tlabel, state: "ok", detail: "Added to the deal.", request: payload, response: res.body });

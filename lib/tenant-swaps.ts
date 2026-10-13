@@ -13,6 +13,14 @@ import { hasDb, q } from "@/lib/db";
  * with everybody staying and the newcomer on it, and only the newcomer sent
  * for referencing (lib/handover). "Start Referencing" stays a press in
  * Propoly.
+ *
+ * TESTED ON PROPOLY'S TEST HOME, 13 Oct 2026 (five deals on "TLE OS TEST -
+ * DELETE ME"): a holding fee of 0, null, left out, or with a "not required"
+ * flag all came back as a week's rent and "due" - Propoly fills its own
+ * default and has no way to say "not required" from outside. So Kirstie sets
+ * it in Propoly (the swap-fee action on the let). Tenants DO take
+ * reference_required and rent_share_pcm_pence, so the newcomer alone is
+ * referenced and their rent portion lands on them.
  */
 
 export interface SwapPerson {

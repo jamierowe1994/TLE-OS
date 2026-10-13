@@ -404,7 +404,7 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
     actions.push({
       id: "swap-fee",
       label: "Take the holding fee off in Propoly",
-      detail: `A tenant swap has no holding fee, but Propoly put ${due ? `£${Math.round(due).toLocaleString("en-GB")}` : "one"} on this deal, so it is waiting at Start deal. Set the holding fee to not required and it moves on to referencing for ${app.swap.joining.join(", ")}.`,
+      detail: `A tenant swap has no holding fee, but Propoly puts its own on every deal started from the OS (${due ? `£${Math.round(due).toLocaleString("en-GB")} here` : "a week's rent"}) - it can't be switched off from outside Propoly. Set the holding fee to not required, check the deposit, then start referencing for ${app.swap.joining.join(", ")}.`,
       href: dealUrlOf(deal),
       who: "kirstie",
     });
