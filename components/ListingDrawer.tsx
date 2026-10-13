@@ -1475,9 +1475,10 @@ function ListingDrawerBody({
         {/* ── 2. the landlord and how we get in ─────────────────────────── */}
         <section className={`${box} @container flex min-w-0 flex-col p-4 sm:p-5 xl:col-start-1`}>
           {/* A line of the home's facts. The rest live in Edit the advert. */}
-          {/* Sized to their words and wrapping, so "Terraced House" and
-              "Professional" are never cut short (12 Oct 2026). */}
-          <div className="flex flex-wrap gap-x-7 gap-y-3">
+          {/* Spread across the full width on one line where they fit, three
+              to a row where they don't (James, 13 Oct 2026: "space that out
+              better"). Never truncated: "Terraced House", "Professional". */}
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4 @[26rem]:grid-cols-3 @[42rem]:flex @[42rem]:justify-between @[42rem]:gap-x-5">
             {highlights.map((f) => (
               <div key={f.label} className="min-w-0 max-w-full">
                 <p className="truncate text-[10.5px] font-semibold uppercase tracking-wide text-muted">{f.label}</p>
@@ -2136,8 +2137,6 @@ function ListingDrawerBody({
                   name={listing.name}
                   address={[listing.name, listing.locality].filter(Boolean).join(", ")}
                   home={home}
-                  homeProblem={homeProblem}
-                  onLetType={(v) => void setLetType(v)}
                   terms={terms}
                   landlord={{
                     contactId: link?.landlord?.contactId ?? null,

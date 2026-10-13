@@ -2,12 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
-import FieldSelect from "@/components/FieldSelect";
 import PropertyFile, { type LooseDoc } from "@/components/PropertyFile";
 import FileDocuments, { type Doc } from "@/components/FileDocuments";
 import SendTermsPopout from "@/components/SendTermsPopout";
 import { useSaveReporter } from "@/components/SaveChip";
-import { LET_TYPES, isHmoLet, letTypeLabel, type LetType } from "@/lib/let-type";
+import type { LetType } from "@/lib/let-type";
 import type { TermsState } from "@/lib/use-listing-terms";
 
 /**
@@ -19,13 +18,12 @@ import type { TermsState } from "@/lib/use-listing-terms";
  * upload list with every type it had never seen drawn as a dashed box, and
  * the property record's papers in a fourth box. Now:
  *
- *   1. What this home is - the type of let, and the country - and so what it
- *      has to hold.
- *   2. The certificates that type needs, each with its own Attach.
- *   3. The landlord's papers and the terms, each counted from wherever it
+ *   1. The certificates the home's type of let needs (chosen in the line of
+ *      facts on the page), each with its own Attach.
+ *   2. The landlord's papers and the terms, each counted from wherever it
  *      already is (an upload, a signature, the property record) so nobody is
  *      asked for what is already on the system.
- *   4. Everything else on file, with one place to drop more, Other included.
+ *   3. Everything else on file, folded away, with one place to drop more.
  */
 
 export type ListingHome = {
@@ -85,17 +83,6 @@ export function useListingHome(listingId: string | number) {
   return { home, problem, setLetType };
 }
 
-const LABEL: Record<string, string> = {
-  gas_safety: "gas safety",
-  eicr: "EICR",
-  epc: "EPC",
-  mandatory_hmo_license: "HMO licence",
-  emergency_lighting_fire_exit: "fire safety",
-  portable_appliance_testing: "PAT",
-  smoke_alarms: "smoke alarms",
-  legionella_risk_assessment: "legionella",
-};
-const listWords = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}` : xs[0] ?? "");
 /** A document uploaded as one of these is the certificate of that row. */
 const DOC_TO_CERT: Record<string, string> = { gas_safety: "gas_safety", eicr: "eicr", epc: "epc", licensing: "mandatory_hmo_license" };
 
@@ -110,8 +97,6 @@ export default function ListingCompliance({
   name,
   address,
   home,
-  homeProblem,
-  onLetType,
   terms,
   landlord,
   landlordRegistration,
@@ -123,8 +108,6 @@ export default function ListingCompliance({
   /** With the town, for the documents store. */
   address: string;
   home: ListingHome | null;
-  homeProblem: string | null;
-  onLetType: (v: LetType) => void;
   terms: TermsState;
   landlord: { contactId: string | number | null; name?: string; email?: string };
   landlordRegistration: string | null;
@@ -148,7 +131,9 @@ export default function ListingCompliance({
     };
   }, [listingId]);
 
+  const [docsOpen, setDocsOpen] = useState(false);
   const upload = (type: string) => {
+    setDocsOpen(true);
     setAsk((a) => ({ type, n: (a?.n ?? 0) + 1 }));
     requestAnimationFrame(() => document.getElementById("listing-docs")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
@@ -194,44 +179,10 @@ export default function ListingCompliance({
 
   const loose: LooseDoc[] = (docs ?? []).filter((d) => DOC_TO_CERT[d.type]).map((d) => ({ type: DOC_TO_CERT[d.type], name: d.fileName || d.name, url: d.url, at: d.at }));
   const reading = docs === null || papers === null || (terms.status === "loading" && !home);
-  const needs = home ? home.required.map((t) => LABEL[t] ?? t) : [];
   const card = "rounded-[22px] border border-line/50 bg-white p-5";
 
   return (
     <div className="space-y-5">
-      {/* ── 1. What this home is ── */}
-      <section className={card}>
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="block w-full max-w-[260px]">
-            <span className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">Type of let</span>
-            {home ? (
-              <FieldSelect className="mt-1.5" value={home.letType} onChange={(v) => onLetType(v as LetType)} options={LET_TYPES} />
-            ) : (
-              <span className="mt-1.5 flex items-center gap-2 text-[12.5px] text-muted">
-                {homeProblem ?? (
-                  <>
-                    <span className="block h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
-                    Reading the record…
-                  </>
-                )}
-              </span>
-            )}
-          </label>
-          {home && (
-            <span className="mb-1 inline-flex items-center gap-1.5 rounded-full bg-page px-3 py-1.5 text-[11.5px] font-semibold text-muted">
-              <DoodleIcon name="home" size={12} />
-              {home.scotland ? "Scotland" : "England"}
-            </span>
-          )}
-        </div>
-        {home && (
-          <p className="mt-3 text-[12.5px] leading-relaxed text-muted">
-            {letTypeLabel(home.letType)} {isHmoLet(home.letType) ? "lets need the HMO set as well" : "lets need"}: <span className="text-ink">{listWords(needs)}</span>.
-            {home.derived ? ` Worked out for you - ${home.why.toLowerCase()}. Change it if it's wrong.` : ` ${home.why}.`}
-          </p>
-        )}
-      </section>
-
       {/* ── 2. The certificates that type needs ── */}
       <div className="[&>section]:rounded-[22px] [&>section]:border-line/50">
         <PropertyFile
@@ -298,11 +249,21 @@ export default function ListingCompliance({
       </section>
 
       {/* ── 4. Everything on file, and one place to add more ── */}
+      {/* Folded away until asked for (James, 13 Oct 2026: "really long and
+          full of old documents ... collapse it"). It stays mounted, so the
+          checklist above still knows what is held; an Upload up there opens it. */}
       <section id="listing-docs" className={`${card} scroll-mt-4`}>
-        <h3 className="mb-3 flex items-center gap-2.5 text-[14px]">
+        <button type="button" onClick={() => setDocsOpen((o) => !o)} aria-expanded={docsOpen} className="flex w-full items-center gap-2.5 text-left text-[14px]">
           <DoodleIcon name="doc" size={17} className="text-accent-dark" />
-          Documents
-        </h3>
+          <span className="font-semibold">Documents</span>
+          <span className="text-[12px] text-muted">
+            {docs === null || papers === null ? "Reading…" : `${docs.length + papers.files.length} on file`}
+          </span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className={`ml-auto text-muted transition-transform duration-200 ${docsOpen ? "rotate-180" : ""}`}>
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
+        <div className={docsOpen ? "mt-4" : "hidden"}>
         <FileDocuments
           address={address}
           propertyId={propertyId}
@@ -336,6 +297,7 @@ export default function ListingCompliance({
             </ul>
           </div>
         )}
+        </div>
       </section>
 
       <SendTermsPopout

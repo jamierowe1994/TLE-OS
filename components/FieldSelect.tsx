@@ -100,7 +100,7 @@ export default function FieldSelect({
         onClick={() => setOpen((v) => !v)}
         className={
           variant === "inline"
-            ? `-mx-1 flex max-w-full items-center gap-1 rounded-md px-1 text-left text-[13px] font-semibold outline-none transition-colors hover:bg-page focus-visible:bg-page ${open ? "bg-page" : ""}`
+            ? `-mx-1 flex max-w-full items-center gap-1.5 rounded-md px-1 text-left text-[13px] font-semibold outline-none transition-colors hover:bg-page focus-visible:bg-page ${open ? "bg-page" : ""}`
             : `flex w-full items-center justify-between gap-2 rounded-lg border bg-box px-3 py-2.5 text-left text-[13px] outline-none transition-colors ${open ? "border-ink" : "border-line/80 hover:border-ink/40"} focus-visible:border-ink`
         }
       >
