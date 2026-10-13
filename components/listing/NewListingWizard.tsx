@@ -275,6 +275,7 @@ export default function NewListingWizard({ onClose, onCreated }: { onClose: () =
           homeLabel,
           postcode: homePostcode.toUpperCase(),
           typeId,
+          typeLabel: types.find((t) => t.id === typeId)?.label,
           rent: Number(rent),
           deposit: deposit === "" ? null : Number(deposit),
           availableFrom: availableFrom || null,

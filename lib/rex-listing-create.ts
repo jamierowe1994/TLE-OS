@@ -2,6 +2,8 @@ import "server-only";
 import { londonToday } from "@/lib/london-clock";
 import { isExpiredToken, rexCall, rexConfigured, rexWritesLocked } from "@/lib/rex";
 import { rexTokenFor } from "@/lib/rex-user";
+import { hasDb, q } from "@/lib/db";
+import { isTestFile, TEST_REFUSAL, TEST_STREET } from "@/lib/test-guard";
 
 /**
  * ADD A NEW LISTING, from the OS (16 Sep 2026).
@@ -48,6 +50,10 @@ export interface NewListing {
   serviceLevel?: string;
   /** The office the listing belongs to; the only one TLE uses. */
   locationId?: string;
+  /** Never sent to REX: what the test-file check asks by (lib/test-guard). */
+  appraisalId?: string | null;
+  /** The landlord, an OS or a REX contact id - never sent, the same check. */
+  contactId?: string | null;
 }
 
 export type NewListingOutcome =
@@ -123,11 +129,32 @@ export async function currentListingOn(propertyId: string): Promise<string | nul
   return row?.id != null ? String(row.id) : null;
 }
 
+async function isForTestFile(l: NewListing): Promise<boolean> {
+  if ((l.appraisalId || l.contactId) && (await isTestFile({ appraisalId: l.appraisalId ?? null, contactId: l.contactId ?? null }))) return true;
+  if (!hasDb()) return false;
+  const files = await q<{ id: string; address: string }>(
+    `SELECT id, address FROM os_market_appraisals WHERE rex_property_id = $1 LIMIT 5`,
+    [String(l.propertyId)]
+  ).catch(() => []);
+  for (const f of files) {
+    if (TEST_STREET.test(f.address) || (await isTestFile({ appraisalId: f.id }))) return true;
+  }
+  return false;
+}
+
 export async function createListing(l: NewListing, userId: string | null, dryRun = false): Promise<NewListingOutcome> {
   if (!rexConfigured()) return { ok: false, reason: "not_configured", detail: "The listings system is not connected on this environment." };
   if (!l.propertyId) return { ok: false, reason: "incomplete", detail: "Pick the address first." };
   if (!l.subcategoryId) return { ok: false, reason: "incomplete", detail: "Choose what kind of property it is - the portals refuse a listing without it." };
   if (!(l.rent > 0)) return { ok: false, reason: "incomplete", detail: "A rent is needed before a listing can exist." };
+
+  /* NEVER A TEST FILE (James, 18 Sep 2026: "Test files should never be pushed
+     anywhere"). Every REX write asks lib/test-guard; this one did not, and a
+     test file's listing reached here whenever its home had a REX id. Asked by
+     whatever the caller knows - the file, the landlord - and by the home:
+     any file on it that is a test, or the test address (13 Oct 2026). A test
+     file's listing is made in the OS instead (lib/test-overlay). */
+  if (await isForTestFile(l)) return { ok: false, reason: "test_file", detail: TEST_REFUSAL };
 
   const token = await rexTokenFor(userId).catch(() => null);
   const agentRexId = token ? await rexUserIdFor(userId) : null;

@@ -7,6 +7,8 @@ import { getAppraisal, markTermsSent } from "@/lib/appraisal-store";
 import { SERVICE_LEVELS } from "@/lib/market-appraisal";
 import { docusealConfigured, openTermsSigning, feeWording, DocusealBlocked, archiveTermsFor } from "@/lib/docuseal";
 import { signedFor } from "@/lib/signed-documents";
+import { isTestFile } from "@/lib/test-guard";
+import { testSignSrc } from "@/lib/test-terms";
 
 /**
  * Open a signing session for one appraisal's terms of business.
@@ -44,26 +46,33 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (!docusealConfigured()) {
-    return NextResponse.json(
-      { error: "DocuSeal isn't connected here. DOCUSEAL_URL and DOCUSEAL_API_KEY are both needed." },
-      { status: 503 }
-    );
-  }
-  const tpl = templateId();
-  if (!tpl) {
-    return NextResponse.json(
-      { error: "No terms template is configured — set DOCUSEAL_TOB_TEMPLATE_ID." },
-      { status: 503 }
-    );
-  }
-
   /* replace: Change on Prepare and send (James, 17 Sep 2026) - a typo in the
      landlord's address, a wrong box - draws the contract up again and
      archives the one it replaces, so there is only ever one live contract. */
   const body = (await req.json().catch(() => ({}))) as { id?: string; replace?: boolean };
   const id = (body.id ?? "").trim();
   if (!id) return NextResponse.json({ error: "Which appraisal?" }, { status: 400 });
+
+  /* A TEST FILE NEVER OPENS A DOCUSEAL CONTRACT (James, 13 Oct 2026). Asked
+     before DocuSeal is even looked for, so a tester is never stopped by its
+     connection: the answer is the stand-in signing sheet (lib/test-terms), in
+     the shape the screens open any contract in. Signing it files the test
+     row, and the file reads as signed by both sides. */
+  const test = await isTestFile({ appraisalId: id }).catch(() => false);
+
+  if (!test && !docusealConfigured()) {
+    return NextResponse.json(
+      { error: "DocuSeal isn't connected here. DOCUSEAL_URL and DOCUSEAL_API_KEY are both needed." },
+      { status: 503 }
+    );
+  }
+  const tpl = templateId();
+  if (!test && !tpl) {
+    return NextResponse.json(
+      { error: "No terms template is configured — set DOCUSEAL_TOB_TEMPLATE_ID." },
+      { status: 503 }
+    );
+  }
 
   const ma = await getAppraisal(id);
   if (!ma) return NextResponse.json({ error: "No such appraisal." }, { status: 404 });
@@ -94,6 +103,19 @@ export async function POST(req: NextRequest) {
       { error: `${ma.landlord} has already signed it, so it can't be changed here.` },
       { status: 409 }
     );
+  }
+
+  if (test) {
+    return NextResponse.json({
+      ok: true,
+      embedSrc: testSignSrc(ma.id),
+      slug: "test",
+      landlordSlug: null,
+      submissionId: null,
+      serviceLevel: service?.label ?? null,
+      valuation: ma.valuation,
+      test: true,
+    });
   }
 
   try {

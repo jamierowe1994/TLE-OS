@@ -44,6 +44,7 @@
  */
 
 import { SANDBOX_EMAIL_DOMAIN, SANDBOX_PREFIX } from "@/lib/sandbox";
+import { testTermsParties } from "@/lib/test-terms";
 
 export interface DocusealTemplate {
   id: number;
@@ -509,6 +510,10 @@ function newestFirst<T extends { id?: number }>(rows: T[]): T[] {
  * replaced.
  */
 export async function termsParties(externalId: string): Promise<TermsParty[]> {
+  /* A test file's contract is never DocuSeal's: it is signed in the OS alone,
+     and the row that says so answers here (lib/test-terms, 13 Oct 2026). */
+  const test = await testTermsParties(externalId).catch(() => null);
+  if (test) return test;
   const raw = await ds<{
     data?: Array<{
       id?: number;

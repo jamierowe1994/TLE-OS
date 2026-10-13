@@ -48,9 +48,11 @@ export default function ListingAction({
   const reporter = useSaveReporter();
   const [adding, setAdding] = useState(false);
 
+  /* The listing's own page (12 Oct 2026), which a test file's listing opens
+     on too - its id is negative and the board's ?open= only redirects here. */
   if (ma.listingId) {
     return (
-      <Link href={`/listings?open=${encodeURIComponent(ma.listingId)}&tab=marketing`} className={className}>
+      <Link href={`/listings/${encodeURIComponent(ma.listingId)}?tab=marketing`} className={className}>
         Open the listing <span aria-hidden>→</span>
       </Link>
     );
@@ -66,6 +68,9 @@ export default function ListingAction({
       {adding && createPortal(
         <NewListingPanel
           prefill={{
+            /* The file it comes from, so a test file's listing is made in the
+               OS alone (app/api/listings/create) and filed under it. */
+            appraisalId: ma.id,
             propertyId: ma.rexPropertyId,
             address: [ma.address, ma.postcode && !ma.address.toUpperCase().includes(ma.postcode.toUpperCase()) ? ma.postcode : ""]
               .filter(Boolean)
@@ -92,7 +97,7 @@ export default function ListingAction({
               } else settle({ ok: false, problem: j.error ?? "That didn't save." });
             }
             setAdding(false);
-            router.push(`/listings?open=${encodeURIComponent(listingId)}&tab=marketing`);
+            router.push(`/listings/${encodeURIComponent(listingId)}?tab=marketing`);
           }}
         />,
         document.body

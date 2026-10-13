@@ -5,6 +5,7 @@ import { leadScope } from "@/lib/scope";
 import { leadsForListing, salesAmong } from "@/lib/lead-ledger";
 import { hiddenLeadIds } from "@/lib/hidden-leads";
 import { ago } from "@/lib/rex-leads";
+import { isTestId, testEnquiriesForListing } from "@/lib/test-overlay";
 
 /**
  * ONE LISTING'S ENQUIRIES (2 Oct 2026).
@@ -35,6 +36,28 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { actor } = await whoIs(req).catch(() => ({ actor: null }));
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first.", leads: [] }, { status: 401 });
+
+  /* A test listing's enquiries are the test overlay's (lib/test-overlay),
+     for its tester alone: the one that lands when it is pushed live. */
+  if (isTestId(listingId)) {
+    const mine = await testEnquiriesForListing(Number(listingId), actor.email).catch(() => []);
+    return NextResponse.json({
+      ok: true,
+      live: true,
+      test: true,
+      leads: mine.map((e) => ({
+        id: e.id,
+        name: e.name,
+        source: e.source,
+        received: ago(Math.floor(new Date(e.receivedAt).getTime() / 1000)),
+        receivedAt: e.receivedAt,
+        email: e.email,
+        phone: e.phone,
+        enquiryMessage: e.message,
+        listingId: e.listingId,
+      })),
+    });
+  }
 
   const scope = await leadScope(req);
   if (scope.unlinked) return NextResponse.json({ ok: true, unlinked: true, leads: [] });

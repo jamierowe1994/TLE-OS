@@ -17,6 +17,7 @@ import { KITS, TEST_FILE_SIDES, sideOfKit, type KitId, type TestFileSide, type T
 import { KitRefused, londonAt, runKit, TEST_ADDRESS, TEST_POSTCODE, type Refs } from "@/lib/test-kits";
 import { clearTestRecords, newTestId, putTestRecord, type TestDeal, type TestListing, type TestOffer, type TestViewing } from "@/lib/test-overlay";
 import { caseIdFor } from "@/lib/plc";
+import { fileTestSignature } from "@/lib/test-terms";
 
 /**
  * TEST FILES: add them, put them back to a stage, delete them, and clear the
@@ -338,16 +339,12 @@ export async function resetTestFile(id: string, stageId: string, me: OsUser, ori
       }
       if (["signed", "takeon-booked", "takeon-done", ...MARKET].includes(stage.id)) {
         /* Signed by both sides. The row is what every screen reads for
-           "signed"; no DocuSeal submission is made for a test file. The id is
-           NEGATIVE - the column is DocuSeal's own bigint, and nothing real
-           can ever collide with it. */
-        await q(
-          `INSERT INTO os_signed_documents
-             (submitter_id, submission_id, appraisal_id, template_name, signer_name, signer_email, r2_key, completed_at)
-           VALUES ($1, $2, $3, 'Terms of business (test)', $4, $5, '', NOW() - INTERVAL '1 day')
-           ON CONFLICT (submitter_id) DO NOTHING`,
-          [-Date.now(), -1, ma.id, contact.name, email]
-        ).catch((e) => {
+           "signed"; no DocuSeal submission is made for a test file - the
+           same row signing one on screen files (lib/test-terms). Signed
+           now, not yesterday: a signature older than the figure just
+           recorded reads as signed on different figures, and Prepare and
+           send asked for it to be drawn up again. */
+        await fileTestSignature(ma.id, { name: contact.name, email }).catch((e) => {
           console.error("[test-files] could not file the test signature", (e as Error).message);
           return null;
         });

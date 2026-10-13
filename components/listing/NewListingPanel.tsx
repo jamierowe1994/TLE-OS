@@ -30,6 +30,8 @@ interface Props {
   /** The panel's title: "Re-let this home" when it comes from Portfolio. */
   heading?: string;
   prefill?: {
+    /** The appraisal file it is made from. A test file's listing stays in the OS. */
+    appraisalId?: string | null;
     propertyId?: string | null;
     address?: string | null;
     rent?: number | null;
@@ -94,9 +96,27 @@ export default function NewListingPanel({ onClose, onCreated, prefill, heading =
       .catch(() => {});
   }, []);
 
+  /* A TEST FILE (James, 13 Oct 2026): its home is never in REX, so there is
+     no address to look up or make - the listing is made in the OS alone, on
+     the file's own address, and the panel says so rather than sending the
+     tester hunting through REX for 14 Test Street. */
+  const [testFile, setTestFile] = useState(false);
+  useEffect(() => {
+    const id = prefill?.appraisalId;
+    if (!id) return;
+    let off = false;
+    fetch(`/api/listings/create?testFile=${encodeURIComponent(id)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { test?: boolean }) => !off && setTestFile(j.test === true))
+      .catch(() => {});
+    return () => {
+      off = true;
+    };
+  }, [prefill?.appraisalId]);
+
   /* The address lookup, a beat after they stop typing. */
   useEffect(() => {
-    if (picked || fresh) return;
+    if (picked || fresh || testFile) return;
     const q = query.trim();
     if (q.length < 3) {
       setFound(null);
@@ -111,7 +131,7 @@ export default function NewListingPanel({ onClose, onCreated, prefill, heading =
         .finally(() => setLooking(false));
     }, 350);
     return () => clearTimeout(t);
-  }, [query, picked, fresh]);
+  }, [query, picked, fresh, testFile]);
 
   const suggested = fiveWeeks(Number(rent) || null);
   /* Five weeks, filled in rather than only suggested: it is a required field
@@ -120,7 +140,7 @@ export default function NewListingPanel({ onClose, onCreated, prefill, heading =
   useEffect(() => {
     if (!depositByHand) setDeposit(suggested == null ? "" : String(suggested));
   }, [suggested, depositByHand]);
-  const ready = Boolean((picked || (fresh?.streetName && fresh.town && fresh.postcode)) && typeId && Number(rent) > 0);
+  const ready = Boolean((testFile || picked || (fresh?.streetName && fresh.town && fresh.postcode)) && typeId && Number(rent) > 0);
 
   async function create() {
     setSaving(true);
@@ -132,9 +152,11 @@ export default function NewListingPanel({ onClose, onCreated, prefill, heading =
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          propertyId: picked?.id,
-          address: picked ? undefined : fresh,
+          appraisalId: prefill?.appraisalId ?? undefined,
+          propertyId: testFile ? undefined : picked?.id,
+          address: picked || testFile ? undefined : fresh,
           typeId,
+          typeLabel: types.find((t) => t.id === typeId)?.label,
           rent: Number(rent),
           deposit: deposit === "" ? null : Number(deposit),
           availableFrom: availableFrom || null,
@@ -195,7 +217,12 @@ export default function NewListingPanel({ onClose, onCreated, prefill, heading =
           {/* 1. The address */}
           <section className="rounded-[20px] border border-line/50 bg-white p-4">
             <p className={label}>The address</p>
-            {picked ? (
+            {testFile ? (
+              <p className="mt-1.5 text-[13.5px] font-semibold">
+                {prefill?.address ?? "The test file's home"}
+                <span className="mt-0.5 block text-[11.5px] font-normal text-muted">A test file, so the listing is made in the OS only - nothing goes to REX or the portals.</span>
+              </p>
+            ) : picked ? (
               <p className="mt-1.5 flex items-center justify-between gap-3 text-[13.5px] font-semibold">
                 {picked.address}
                 <button type="button" onClick={() => { setPicked(null); setQuery(""); }} className="shrink-0 text-[11.5px] font-semibold text-muted hover:text-ink">Change</button>

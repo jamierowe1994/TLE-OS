@@ -26,7 +26,7 @@ import { readAnswers } from "@/lib/property-answers-store";
 import { progress as answerProgress } from "@/lib/property-questions";
 import type { ManagedProperty } from "@/lib/portfolio-types";
 import { EXTRA_DOC_KINDS } from "@/lib/landlord-doc-kinds";
-import { testDealForAppraisal, testListingForAppraisal, testOffersForAppraisal, testViewingsForListing } from "@/lib/test-overlay";
+import { isDraftTest, testDealForAppraisal, testListingForAppraisal, testOffersForAppraisal, testViewingsForListing } from "@/lib/test-overlay";
 
 /**
  * A signed-in landlord's view, live - built once here and read by every page
@@ -60,13 +60,16 @@ async function marketingFor(rexPropertyId: string | null, appraisalId?: string):
   const test = appraisalId ? await testListingForAppraisal(appraisalId).catch(() => null) : null;
   if (test) {
     const vs = await testViewingsForListing(test.listingId).catch(() => []);
+    /* A draft (New listing on a test file, 13 Oct 2026) reads as one until
+       it is pushed, as a real draft does. */
+    const live = !isDraftTest(test);
     return {
       marketing: {
-        live: true,
-        liveSince: day(test.publishedAt),
-        portals: test.portals.map((p) => ({ name: p.portal, href: p.url })),
+        live,
+        liveSince: live ? day(test.publishedAt) : day(null),
+        portals: live ? test.portals.map((p) => ({ name: p.portal, href: p.url })) : [],
         photos: test.images,
-        note: `${test.images.length} photographs`,
+        note: live ? `${test.images.length} photographs` : "Being written up and photographed",
       },
       viewings: vs.map((v) => ({
         id: `os-${v.appointmentId}`,

@@ -2,7 +2,7 @@ import "server-only";
 import { hasDb, q } from "@/lib/db";
 import type { ListingDetails } from "@/lib/listing-details";
 import type { Viewing } from "@/lib/rex-viewings";
-import { testListing, testViewingsForListing, type TestListing } from "@/lib/test-overlay";
+import { isDraftTest, testListing, testViewingsForListing, type TestListing } from "@/lib/test-overlay";
 
 /**
  * What each listing route answers for a TEST listing (negative id, lib/test-
@@ -31,8 +31,10 @@ export async function testDetails(id: number): Promise<{ ok: true; details: List
     rent: l.rent,
     rentPeriod: "month",
     advertisedAs: `£${l.rent.toLocaleString("en-GB")} pcm`,
-    deposit: Math.round((l.rent * 12 * 5) / 52),
-    availableFrom: null,
+    deposit: l.deposit ?? Math.round((l.rent * 12 * 5) / 52),
+    /* A draft made by New listing carries its date, so the portals' minimum
+       (lib/listing-requirements) passes and Push to the portals lights up. */
+    availableFrom: l.availableFrom ?? null,
     heading: l.heading,
     body: l.body,
     highlights: ["Two double bedrooms", "Newly fitted kitchen", "Garden", "Close to the tram"],
@@ -70,9 +72,25 @@ export async function testLandlord(id: number) {
   return l ? { ok: true, landlord: { contactId: null, name: l.landlord.name, email: l.landlord.email, phone: null } } : null;
 }
 
+/**
+ * Where a test listing is published. A draft (made by New listing, 13 Oct
+ * 2026) answers draft with no blockers, so the listing shows its Push to the
+ * portals button; everything else is live, as it always was.
+ */
 export async function testPublication(id: number) {
   const l = await testListing(id);
-  return l ? { ok: true, id, status: "published", channels: ["portals", "website"], onPortals: true, blockers: [], warnings: [], test: true } : null;
+  if (!l) return null;
+  const draft = isDraftTest(l);
+  return {
+    ok: true,
+    id,
+    status: draft ? "draft" : "published",
+    channels: draft ? [] : ["portals", "automatch", "external", "general"],
+    onPortals: !draft,
+    blockers: [],
+    warnings: [],
+    test: true,
+  };
 }
 
 export async function testPortals(id: number) {

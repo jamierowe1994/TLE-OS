@@ -63,6 +63,13 @@ export interface NewProperty {
   subcategoryId?: string | null;
   /** The landlord's REX contact id, joined as reln_type "owner". */
   ownerContactId?: string | null;
+  /**
+   * Never sent to REX - what the test-file check asks by when the owner has
+   * no REX id yet (a test landlord never has one): their OS contact, and the
+   * appraisal file the home comes from.
+   */
+  osContactId?: string | null;
+  appraisalId?: string | null;
 }
 
 /** `detail` is safe for any agent to read; `ownerDetail`, when there is one, names the lock. */
@@ -179,7 +186,14 @@ export async function createProperty(
      their test flag; a property has none, so it is recognised by the test
      address the kits all use and by a test owner. */
   /* Not the postcode alone: M20 2RN is a real street, see lib/test-guard. */
-  if (await isTestFile({ address: `${p.streetNumber ?? ""} ${p.streetName ?? ""}`, contactId: p.ownerContactId ?? null })) {
+  /* And the owner by their OS contact, and the file the home comes from (13
+     Oct 2026): a test landlord has no REX id, so on a typed address the check
+     above had nothing to recognise them by. */
+  const test =
+    (await isTestFile({ address: `${p.streetNumber ?? ""} ${p.streetName ?? ""}`, contactId: p.ownerContactId ?? null })) ||
+    (p.osContactId ? await isTestFile({ contactId: p.osContactId }) : false) ||
+    (p.appraisalId ? await isTestFile({ appraisalId: p.appraisalId }) : false);
+  if (test) {
     return { ok: false, reason: "test_file", detail: TEST_REFUSAL };
   }
 
