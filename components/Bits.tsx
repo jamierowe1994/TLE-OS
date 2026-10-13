@@ -66,12 +66,21 @@ export function CopyButton({ value, label }: { value: string; label: string }) {
           /* clipboard blocked — the value is on screen to select by hand */
         }
       }}
-      className="shrink-0 rounded-md p-1 text-muted opacity-0 transition-all hover:text-ink group-hover/row:opacity-100"
+      aria-label={`Copy ${label}`}
+      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-page hover:text-ink"
     >
+      {/* The two overlapping sheets everyone reads as copy (James, 13 Oct
+          2026: the doodle was "hard to see what it actually does"). Always
+          shown, not only on hover. */}
       {done ? (
-        <span className="text-[11px] font-semibold text-accent-dark">Copied</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="text-[#1e7a3c]">
+          <path d="M5 12.5l4.5 4.5L19 7" />
+        </svg>
       ) : (
-        <DoodleIcon name="doc" size={13} />
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <rect x="9" y="9" width="11" height="11" rx="2" />
+          <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+        </svg>
       )}
     </button>
   );

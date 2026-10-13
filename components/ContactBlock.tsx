@@ -39,6 +39,7 @@ export default function ContactBlock({
   onWhatsAppSent,
   className = "",
   nameClassName = "text-[14px] font-semibold",
+  call = role !== "landlord",
 }: {
   person: Person;
   personRef: string | null;
@@ -52,6 +53,9 @@ export default function ContactBlock({
   className?: string;
   /** The name's own look, where the card makes it the title. */
   nameClassName?: string;
+  /** The Call button. Off for a landlord (James, 13 Oct 2026: "that's asking
+   *  for trouble, accidentally calling a landlord") - WhatsApp and copy stay. */
+  call?: boolean;
 }) {
   const [p, setP] = useState<Person>(person);
   const [note, setNote] = useState<{ tone: "ok" | "bad" | "busy"; text: string } | null>(null);
@@ -89,7 +93,7 @@ export default function ContactBlock({
   }
 
   const row = (icon: string, label: string, value: string | null, field: "email" | "phone", type: string, actions: React.ReactNode) => (
-    <div className="group/row flex min-h-[38px] flex-wrap items-center gap-x-2.5 gap-y-1 py-1">
+    <div className="group/row flex min-h-[42px] flex-wrap items-center gap-x-2.5 gap-y-1 py-2">
       <DoodleIcon name={icon} size={14} className="shrink-0 text-muted" />
       {/* At least a number's width, so a narrow card puts the buttons
           underneath rather than cutting the number short. */}
@@ -117,10 +121,12 @@ export default function ContactBlock({
       <div className="mt-1 divide-y divide-line/40">
         {row("call", `${role ?? ""} phone`.trim(), p.phone, "phone", "tel", (
           <>
-            <a href={`tel:${(p.phone ?? "").replace(/\s+/g, "")}`} className={pill}>
-              <DoodleIcon name="call" size={12} className="text-accent-dark" />
-              Call
-            </a>
+            {call && (
+              <a href={`tel:${(p.phone ?? "").replace(/\s+/g, "")}`} className={pill}>
+                <DoodleIcon name="call" size={12} className="text-accent-dark" />
+                Call
+              </a>
+            )}
             <WhatsAppButton phone={p.phone ?? ""} name={p.name} onSent={onWhatsAppSent} className={pill}>
               <DoodleIcon name="message-2" size={12} className="text-accent-dark" />
               WhatsApp

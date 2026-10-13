@@ -143,8 +143,6 @@ export default function ListingPage() {
         initialTab={initialTab}
         onArchive={(id, action) => void move(id, action)}
         archiveBusy={busy}
-        onStep={at >= 0 && order.length > 1 ? step : undefined}
-        stepLabel={at >= 0 && order.length > 1 ? `${at + 1} of ${order.length}` : null}
       />
     </>
   );
