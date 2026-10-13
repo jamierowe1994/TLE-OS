@@ -70,12 +70,14 @@ export async function GET(req: NextRequest) {
   if (hasDb() && needle.length >= 3) {
     const like = `%${needle.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
     const digits = needle.replace(/\D/g, "");
-    const params: unknown[] = [like, digits.length >= 5 ? `%${digits}%` : null];
-    if (!scope.everything && actor) params.push(actor.email);
+    const params: unknown[] = [like, digits.length >= 5 ? `%${digits}%` : null, actor?.email ?? ""];
     const rows = await q<{ id: string; name: string; email: string | null; mobile: string | null; rex_id: string | null; source: string | null }>(
       `SELECT id, name, email, mobile, rex_id, source FROM os_contacts
         WHERE kind = 'tenant'
-          ${params.length > 2 ? "AND created_by = $3" : ""}
+          ${!scope.everything && actor ? "AND created_by = $3" : ""}
+          /* Somebody else's test tenant is never offered (13 Oct 2026: an
+             owner searching "Tenant E2E" got every tester's). */
+          AND (NOT is_test OR lower(created_by) = lower($3))
           AND (name ILIKE $1 OR email ILIKE $1
                OR ($2::text IS NOT NULL AND regexp_replace(COALESCE(mobile, ''), '\\D', '', 'g') LIKE $2))
         ORDER BY created_at DESC LIMIT 20`,

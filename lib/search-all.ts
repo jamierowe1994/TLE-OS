@@ -149,6 +149,8 @@ export async function searchAll(
       `SELECT id, kind, name, email, mobile, address, notes FROM os_contacts
         WHERE concat_ws(' ', name, email, mobile, address, postcode, notes) ILIKE ALL($1::text[])
           AND ($2::boolean OR lower(created_by) = lower($3))
+          /* Somebody else's test file is never found (13 Oct 2026). */
+          AND (NOT is_test OR lower(created_by) = lower($3))
         ORDER BY created_at DESC LIMIT 20`,
       [likes, whole, me.email]
     ).then((rows) => {

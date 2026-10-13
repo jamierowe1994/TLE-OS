@@ -63,6 +63,11 @@ export default function NextUp({
   const refId = ma.leadId ?? ma.id;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /* "Record the figure here" before the appointment time has come round
+     (13 Oct 2026, the end-to-end walk): an agent who arrives early, or a
+     test file walked in one sitting, was told to record the figure and
+     given nowhere to do it until the clock passed the booking. */
+  const [figureNow, setFigureNow] = useState(false);
   const reporter = useSaveReporter();
 
   const latest = (kind: string) => decks?.find((s) => s.kind === kind) ?? null;
@@ -270,7 +275,7 @@ export default function NextUp({
         </div>
       ),
     };
-  } else if (missingFigure || (visitPassed && ma.valuation == null)) {
+  } else if (missingFigure || ((visitPassed || figureNow) && ma.valuation == null)) {
     card = { icon: "pencil", title: "Record the figure", body: <ValuationSteps appraisal={ma} onSaved={onSaved} /> };
   } else if (ma.valuation != null && !post) {
     card = {
@@ -376,6 +381,9 @@ export default function NextUp({
           <Link href={`/market-appraisals/${ma.id}/build`} className={ghost}>
             Update presentation
           </Link>
+          <button type="button" onClick={() => setFigureNow(true)} className={primary}>
+            Record the figure
+          </button>
         </div>
       ),
     };

@@ -100,16 +100,19 @@ function toLead(r: Row): Lead {
  * An agent sees the ones they typed in: there is no REX assignee on a row
  * that has never been a REX lead, so who added it is the only honest owner.
  */
-export async function contactsAsLeads(createdBy: string | null, limit = 200): Promise<Lead[]> {
+export async function contactsAsLeads(createdBy: string | null, limit = 200, viewer: string | null = createdBy): Promise<Lead[]> {
   if (!hasDb()) return [];
   const cols = `id, kind, name, email, mobile, address, postcode, source, enquiry, notes,
                 created_by, created_at::text AS created_at, rex_id,
                 (SELECT NULLIF(u.name, '') FROM os_users u WHERE lower(u.email) = lower(os_contacts.created_by) LIMIT 1) AS created_by_name`;
+  /* A test file's people are its tester's alone (13 Oct 2026, the E2E walk:
+     an owner's whole-business list held every tester's Landlord E2E and
+     Tenant E2E among the real leads). */
   const rows = await q<Row>(
     createdBy
       ? `SELECT ${cols} FROM os_contacts WHERE created_by = $2 ORDER BY created_at DESC LIMIT $1`
-      : `SELECT ${cols} FROM os_contacts ORDER BY created_at DESC LIMIT $1`,
-    createdBy ? [limit, createdBy] : [limit]
+      : `SELECT ${cols} FROM os_contacts WHERE (NOT is_test OR lower(created_by) = lower($2)) ORDER BY created_at DESC LIMIT $1`,
+    [limit, createdBy ?? viewer ?? ""]
   ).catch(() => []);
   return rows.map(toLead);
 }

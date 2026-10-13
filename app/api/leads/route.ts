@@ -218,7 +218,7 @@ export async function GET(req: NextRequest) {
      all; anybody else sees the ones they typed. */
   const [hidden, mine, held, onFile] = await Promise.all([
     hiddenLeadIds().catch(() => new Set<string>()),
-    contactsAsLeads(scope.everything ? null : (actor?.email ?? null)).catch(() => []),
+    contactsAsLeads(scope.everything ? null : (actor?.email ?? null), 200, actor?.email ?? null).catch(() => []),
     memory.get(key) ?? readStored(key),
     onFileCount(),
   ]);

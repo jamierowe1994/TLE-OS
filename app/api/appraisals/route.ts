@@ -7,6 +7,7 @@ import { stagedAppraisals, withLiveStages } from "@/lib/appraisal-stage";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { whoIs } from "@/lib/admin";
+import { hasDb, q } from "@/lib/db";
 import { maskContactFields, sameName, seesContactLists } from "@/lib/contact-mask";
 import { SERVICE_LEVELS, type ServiceLevel } from "@/lib/market-appraisal";
 import type { NextRequest } from "next/server";
@@ -54,10 +55,20 @@ export async function GET(req: NextRequest) {
        two minutes (lib/appraisal-stage, stagedAppraisals); the unread counts
        are one cheap query and stay live on every call. One record is
        /api/appraisals/<id>, which the file page reads instead of this. */
-    const [rows, unread] = await Promise.all([stagedAppraisals(), unreadByAppraisal()]);
+    const [rows, unread, othersTests] = await Promise.all([
+      stagedAppraisals(),
+      unreadByAppraisal(),
+      /* Somebody else's test file is theirs alone (13 Oct 2026: every
+         tester's Landlord E2E appraisal would sit on everyone's board). */
+      hasDb()
+        ? q<{ lead: string }>(`SELECT 'os-' || id AS lead FROM os_contacts WHERE is_test AND lower(created_by) <> lower($1)`, [actor?.email ?? ""])
+            .then((r) => new Set(r.map((x) => x.lead)))
+            .catch(() => new Set<string>())
+        : Promise.resolve(new Set<string>()),
+    ]);
     /* New landlord messages, for the "new message" pill on the list and the file. */
     return NextResponse.json({
-      appraisals: rows.map((a: { id: string; agent?: string | null }) => ({
+      appraisals: rows.filter((a: { leadId?: string | null }) => !(a.leadId && othersTests.has(a.leadId))).map((a: { id: string; agent?: string | null }) => ({
         ...(full || sameName(a.agent, myName) ? a : maskContactFields(a)),
         unreadMessages: unread.get(a.id) ?? 0,
       })),

@@ -47,11 +47,13 @@ export async function GET(req: NextRequest) {
             a.id AS appraisal_id, a.appointment_at
        FROM os_contacts c
        LEFT JOIN os_market_appraisals a ON a.lead_id = 'os-' || c.id
-      WHERE ($1 <> '' AND lower(trim(c.email)) = $1)
-         OR ($2 <> '' AND right(regexp_replace(c.mobile, '\\D', '', 'g'), 9) = $2)
+      WHERE (($1 <> '' AND lower(trim(c.email)) = $1)
+         OR ($2 <> '' AND right(regexp_replace(c.mobile, '\\D', '', 'g'), 9) = $2))
+        /* Somebody else's test file is not an existing person (13 Oct 2026). */
+        AND (NOT c.is_test OR lower(c.created_by) = lower($3))
       ORDER BY c.created_at DESC
       LIMIT 5`,
-    [email, tail]
+    [email, tail, actor.email]
   ).catch(() => []);
 
   return NextResponse.json({
