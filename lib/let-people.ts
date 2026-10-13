@@ -1,6 +1,7 @@
 import "server-only";
 import { getApplicationById, type Application } from "@/lib/applications";
 import { isTestId, testApplication } from "@/lib/test-overlay";
+import { testLandlord } from "@/lib/test-listing-answers";
 import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
 import { landlordForListing, type Landlord } from "@/lib/rex-landlord";
 import type { OsUser } from "@/lib/users";
@@ -46,7 +47,14 @@ export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
       return { ok: false, status: 403, error: `That let is ${app.agent.split(/\s+/)[0]}'s.` };
     }
     const listingId = app.listingId != null ? String(app.listingId) : null;
-    const ll = listingId ? await landlordForListing(listingId).catch(() => null) : null;
+    /* A test let's landlord is its test listing's (James, 13 Oct 2026, the
+       E2E walk): REX was asked about a negative id and said nothing, so the
+       file read "Not held on the listing" over Landlord E2E. */
+    const ll = !listingId
+      ? null
+      : isTestId(listingId)
+        ? await testLandlord(Number(listingId)).catch(() => null)
+        : await landlordForListing(listingId).catch(() => null);
     return {
       ok: true,
       app,

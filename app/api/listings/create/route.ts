@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
       deposit: money(b.deposit),
       availableFrom,
       propertyType: str(b.typeLabel) || null,
-      landlord: { name: ma.landlord, email: (ma.landlordEmail ?? "").trim() || kit.owner },
+      landlord: { name: ma.landlord, email: (ma.landlordEmail ?? "").trim() || kit.owner, phone: ma.landlordMobile ?? null },
     });
     await record({
       kind: "listing_edited",

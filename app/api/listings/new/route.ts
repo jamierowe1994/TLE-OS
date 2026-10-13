@@ -178,7 +178,7 @@ export async function POST(req: NextRequest) {
       deposit: money(b.deposit),
       availableFrom,
       propertyType: str(b.typeLabel) || null,
-      landlord: { name: contact.name, email: contact.email || kit.owner },
+      landlord: { name: contact.name, email: contact.email || kit.owner, phone: contact.mobile || null },
     });
     if (appraisalId && hasDb()) {
       await q(

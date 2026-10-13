@@ -164,6 +164,13 @@ export default function AgentOfferRecorder({
   /* Rent as a share of income, the figure a landlord reads first. */
   const affordability = income && offerNum ? Math.round(((offerNum * 12) / income) * 100) : null;
   const changed = OFFER_FIELDS.filter((f) => known(f.key) && pp[f.key] !== fromPassport[f.key]);
+  /* What is still unanswered, read once by the About step's check and by the
+     passport card beside the form, so the card can never say "Nothing to
+     re-ask" over a "Still to ask" (James, 13 Oct 2026, the E2E walk). */
+  const stillToAsk = ABOUT.filter((k) => relevant(k, pp) && k !== "adverseCreditNote" && k !== "shareCode" && (pp[k] === null || pp[k] === ""));
+  const stillToAskWords = stillToAsk.map((k) => OFFER_FIELDS.find((f) => f.key === k)!.label.toLowerCase()).join(", ");
+  /* A test listing (negative id): nothing is written back to a passport. */
+  const testFile = /^-\d+$/.test(home.id);
   const added = OFFER_FIELDS.filter((f) => !known(f.key) && pp[f.key] !== null && pp[f.key] !== "");
 
   function check(s: number): string {
@@ -175,9 +182,8 @@ export default function AgentOfferRecorder({
     if (s === 1 && people.length && !movingIn.some((p) => p.id === "you")) return `${name} is the one making the offer, so they have to be moving in.`;
     if (s === 1 && pp.pets === null) return "Ask whether they have any pets.";
     if (s === 2) {
-      const missing = ABOUT.filter((k) => relevant(k, pp) && k !== "adverseCreditNote" && k !== "shareCode" && (pp[k] === null || pp[k] === ""));
       /* Asked of people who did their passport before these questions existed. */
-      if (missing.length) return `Still to ask: ${missing.map((k) => OFFER_FIELDS.find((f) => f.key === k)!.label.toLowerCase()).join(", ")}.`;
+      if (stillToAsk.length) return `Still to ask: ${stillToAskWords}.`;
     }
     if (s === 3 && !consent) return `Tick to say ${name} has agreed the details are right.`;
     return "";
@@ -271,7 +277,7 @@ export default function AgentOfferRecorder({
           />
         )}
         {known(k) && pp[k] !== fromPassport[k] && (
-          <p className="mt-1 text-[11.5px] text-muted">Was {show(k, fromPassport[k])} on the passport. Saved to it when you send.</p>
+          <p className="mt-1 text-[11.5px] text-muted">Was {show(k, fromPassport[k])} on the passport.{testFile ? "" : " Saved to it when you send."}</p>
         )}
       </div>
     );
@@ -287,7 +293,7 @@ export default function AgentOfferRecorder({
         <p className="mx-auto mt-2 max-w-md text-[14px] leading-relaxed text-ink/70">
           {gbp(offerNum)} a month on {home.address}, for {name}. It&apos;s on the file, ready to put to the landlord
           {sample && copyToTenant ? `, and ${name} has a copy by email to check` : ""}.
-          {added.length || changed.length ? ` ${added.length + changed.length} answer${added.length + changed.length === 1 ? "" : "s"} saved to ${name}'s passport, so nobody asks again.` : ""}
+          {!testFile && (added.length || changed.length) ? ` ${added.length + changed.length} answer${added.length + changed.length === 1 ? "" : "s"} saved to ${name}'s passport, so nobody asks again.` : ""}
         </p>
         {sample && <p className="mt-3 text-[12px] text-muted">This is the harness, so nothing was saved or sent.</p>}
         {saved && (
@@ -433,7 +439,7 @@ export default function AgentOfferRecorder({
               <p className="mt-1 text-[13px] text-muted">
                 {tenant.passport
                   ? `Everything here is from ${name}'s passport${tenant.passportDoneOn ? `, filled in ${tenant.passportDoneOn}` : ""}. Only change what has changed.`
-                  : `Ask ${name} these. What you put in is saved to their passport, so they are never asked again.`}
+                  : `Ask ${name} these.${testFile ? " This is a test file, so their passport is left as it is." : " What you put in is saved to their passport, so they are never asked again."}`}
               </p>
               <div className="mt-3">
                 {ABOUT.filter((k) => relevant(k, pp)).map((k) => answer(k))}
@@ -573,8 +579,10 @@ export default function AgentOfferRecorder({
               <span className="block truncate text-[12px] text-muted">{tenant.email}</span>
             </span>
           </div>
-          <p className={`mt-3 rounded-[12px] px-3 py-2 text-[12.5px] ${tenant.passport ? "bg-[#f1f4ec] text-[#56634a]" : "bg-[#fdefec] text-[#9d4340]"}`}>
-            {tenant.passport ? `Passport complete${tenant.passportDoneOn ? `, ${tenant.passportDoneOn}` : ""}. Nothing to re-ask.` : "No passport yet. You fill it in as you go."}
+          <p className={`mt-3 rounded-[12px] px-3 py-2 text-[12.5px] ${tenant.passport && !stillToAsk.length ? "bg-[#f1f4ec] text-[#56634a]" : "bg-[#fdefec] text-[#9d4340]"}`}>
+            {!tenant.passport
+              ? "No passport yet. You fill it in as you go."
+              : `${tenant.passportDoneOn ? `Passport complete, ${tenant.passportDoneOn}` : "Passport started, not finished"}. ${stillToAsk.length ? `Still to ask: ${stillToAskWords}.` : "Nothing to re-ask."}`}
           </p>
         </section>
       </aside>
