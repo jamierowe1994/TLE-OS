@@ -1322,9 +1322,13 @@ function ListingDrawerBody({
               className={`group relative aspect-[16/10] overflow-hidden rounded-xl bg-box ${shots.length > 1 ? "sm:aspect-auto" : ""}`}
             >
               <PropertyPhoto src={shots[0] ?? null} alt="" width={1400} height={875} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.015]" />
-              <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-[11.5px] font-semibold backdrop-blur">
-                <DoodleIcon name="pack/photo" size={12} /> {shots.length ? `${shots.length} ${shots.length === 1 ? "photo" : "photos"}` : "No photos yet - add them"}
-              </span>
+              {/* No count on the photo (James, 13 Oct 2026): the "+24" on the
+                  last square already says how many more there are. */}
+              {!shots.length && (
+                <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-[11.5px] font-semibold backdrop-blur">
+                  <DoodleIcon name="pack/photo" size={12} /> No photos yet - add them
+                </span>
+              )}
             </button>
             {shots.length > 1 && (
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-1">

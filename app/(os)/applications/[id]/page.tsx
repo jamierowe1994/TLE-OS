@@ -156,8 +156,6 @@ export default function LetPage() {
          is nothing to push, and offering it invites somebody to jump the gun. */
       aside={appRaw && isLet(appRaw) ? <HandoffPanel applicationId={String(appRaw.id)} /> : undefined}
       initialTab={initialTab}
-      onStep={at >= 0 && order.length > 1 ? step : undefined}
-      stepLabel={at >= 0 && order.length > 1 ? `${at + 1} of ${order.length}` : null}
     />
   );
 }

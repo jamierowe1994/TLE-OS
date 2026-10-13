@@ -85,6 +85,8 @@ export interface ApplicationJourney {
   deal: { id: string; stage: string; url: string } | null;
   plc: { id: string; state: string; who: string } | null;
   handover: { mode: "shadow" | "live"; status: string; at: string } | null;
+  /** In Propoly, however it got there - the chip at the top of the let. */
+  inPropoly: { url: string | null; how: "open" | "finished" | "pushed" | "found" } | null;
   /** Every move the watcher recorded on the deal, newest first. */
   history: DealEvent[];
 }
@@ -315,7 +317,9 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
     buildHandoff(app).catch(() => null),
     latestHandover(app.id).catch(() => null),
     getCase(`plc-${app.id}`).catch(() => null),
-    accepted ? deals() : Promise.resolve(null),
+    /* Read even before the offer is accepted (13 Oct 2026): a let keyed
+       into Propoly by hand still shows as in Propoly. */
+    deals().catch(() => null),
     handoverMode().catch(() => "shadow" as const),
     switchOn("handover_deal").catch(() => false),
   ]);
@@ -357,7 +361,11 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
        is known from the run; with the switch off it is started by hand. */
     const started = run.steps.find((s) => s.id === "deal" && s.state === "ok");
     const startedUuid = started ? ((started.response as { uuid?: string } | null)?.uuid ?? null) : null;
-    if (startedUuid) {
+    if (startedUuid && app.swap) {
+      /* A swap has no holding fee (James, 13 Oct 2026): the deal goes to
+         referencing for the newcomer once Propoly's deals are next read. */
+      actions.push({ id: "swap-refs", label: "Referencing the new tenant", detail: `The swap is in Propoly. ${app.swap.joining.join(", ")} ${app.swap.joining.length === 1 ? "is" : "are"} referenced; everybody staying is not.`, href: propolyDealUrl(startedUuid), who: "tenant" });
+    } else if (startedUuid) {
       actions.push({ id: "fee", label: "Waiting on the holding fee", detail: "The deal is in Propoly with the tenants on it, and the holding fee is taken from it.", href: propolyDealUrl(startedUuid), who: "tenant" });
     } else {
       actions.push({ id: "deal-start", label: "Start the deal in Propoly", detail: "The landlord and the home are in Propoly now. Start the deal there for these tenants - the holding fee is taken from the deal.", href: null, who: "kirstie" });
@@ -385,8 +393,22 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
   }
   stops.push(handoverStop);
 
-  /* In Propoly, fee not in: that is where it is, whoever's move it is. */
-  if (deal && !fee.settled) {
+  /* A TENANT SWAP HAS NO HOLDING FEE (James, 13 Oct 2026: "holding deposits
+     and things like that ... all sorted out externally"). The push sends a
+     fee of nothing, but Propoly fills in its own week's rent when it is sent
+     nothing - 44 South Bridge sat at Start deal with £762 due on 12 Oct. Set
+     to "not required" in Propoly, the deal moves on to referencing, as the
+     swaps Kirstie keys in by hand do. */
+  if (deal && app.swap && !fee.settled) {
+    const due = deal.app.propoly?.holdingFee ?? null;
+    actions.push({
+      id: "swap-fee",
+      label: "Take the holding fee off in Propoly",
+      detail: `A tenant swap has no holding fee, but Propoly puts its own on every deal started from the OS (${due ? `£${Math.round(due).toLocaleString("en-GB")} here` : "a week's rent"}) - it can't be switched off from outside Propoly. Set the holding fee to not required, check the deposit, then start referencing for ${app.swap.joining.join(", ")}.`,
+      href: dealUrlOf(deal),
+      who: "kirstie",
+    });
+  } else if (deal && !fee.settled) {
     actions.push({
       id: "fee",
       label: "Waiting on the holding fee",
@@ -505,6 +527,17 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
     });
   }
 
+  /* A swap has no holding fee: the stop says so rather than waiting on one
+     (13 Oct 2026). If Propoly put one on, it says that instead. */
+  if (app.swap) {
+    const hf = stops.find((x) => x.id === "holding_fee");
+    if (hf && hf.state !== "done") {
+      const due = deal && !fee.settled ? deal.app.propoly?.holdingFee ?? null : null;
+      if (due) Object.assign(hf, { sub: `Propoly put £${Math.round(due).toLocaleString("en-GB")} on - take it off`, tone: "warn" });
+      else Object.assign(hf, { sub: "None on a tenant swap", tone: "none", state: "off" });
+    }
+  }
+
   /* PLC: the agent starts it; Kirstie finishes it. */
   if (plcCase) {
     const st = PLC_STATES.find((x) => x.id === plcCase.state);
@@ -558,7 +591,32 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
      the application itself rather than by asking her. */
   const history = deal ? await eventsForDeal(deal.app.id).catch(() => []) : [];
 
-  return { stops, actions, flags, deal: dealInfo, plc: plcInfo, handover: run ? { mode: run.mode, status: run.status, at: run.startedAt } : null, history };
+  /* IN PROPOLY, for the chip at the top of the let (James, 13 Oct 2026: "do
+     a check to see if it's already on Propoly"). Accepted: the deal, a
+     finished deal, or our own push. Not accepted yet: a deal at this home
+     only counts when one of its tenants is one of these applicants, so
+     another applicant's deal on the same house is never taken for this one. */
+  const norm = (x: string | null | undefined) => (x ?? "").toLowerCase().replace(/[^a-z@.]+/g, " ").trim();
+  const loose = !accepted && allDeals ? findDeal(app, allDeals) : null;
+  const sharesTenant =
+    loose != null &&
+    loose.app.tenants.some((t) =>
+      app.applicants.some((a) => (a.email && t.email && norm(a.email) === norm(t.email)) || (norm(a.name) !== "" && norm(a.name) === norm(t.name)))
+    );
+  const pushedUuid = run?.mode === "live" && run.status === "ok"
+    ? ((run.steps.find((x) => x.id === "deal" && x.state === "ok")?.response as { uuid?: string } | null)?.uuid ?? null)
+    : null;
+  const inPropoly: ApplicationJourney["inPropoly"] = deal
+    ? { url: dealUrlOf(deal), how: "open" }
+    : finished
+      ? { url: finished.uuid ? propolyDealUrl(finished.uuid) : null, how: "finished" }
+      : run?.mode === "live" && run.status === "ok"
+        ? { url: pushedUuid ? propolyDealUrl(pushedUuid) : null, how: "pushed" }
+        : sharesTenant && loose
+          ? { url: dealUrlOf(loose), how: "found" }
+          : null;
+
+  return { stops, actions, flags, deal: dealInfo, plc: plcInfo, handover: run ? { mode: run.mode, status: run.status, at: run.startedAt } : null, inPropoly, history };
 }
 
 /**

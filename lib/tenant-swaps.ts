@@ -13,6 +13,14 @@ import { hasDb, q } from "@/lib/db";
  * with everybody staying and the newcomer on it, and only the newcomer sent
  * for referencing (lib/handover). "Start Referencing" stays a press in
  * Propoly.
+ *
+ * TESTED ON PROPOLY'S TEST HOME, 13 Oct 2026 (five deals on "TLE OS TEST -
+ * DELETE ME"): a holding fee of 0, null, left out, or with a "not required"
+ * flag all came back as a week's rent and "due" - Propoly fills its own
+ * default and has no way to say "not required" from outside. So Kirstie sets
+ * it in Propoly (the swap-fee action on the let). Tenants DO take
+ * reference_required and rent_share_pcm_pence, so the newcomer alone is
+ * referenced and their rent portion lands on them.
  */
 
 export interface SwapPerson {
@@ -31,6 +39,8 @@ export interface TenantSwap {
   joining: SwapPerson[];
   moveIn: string;
   rentPcm: number | null;
+  /** What the person moving in pays by themselves (13 Oct 2026). The deal keeps rentPcm, the home's. */
+  rentPortion: number | null;
   note: string;
   by: string;
   byEmail: string | null;
@@ -53,12 +63,14 @@ async function tq<T extends Record<string, unknown>>(text: string, params: unkno
       by_email TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       cancelled_at TIMESTAMPTZ
-    )`).then(() => undefined).catch((e) => { ready = null; throw e; });
+    )`)
+    .then(() => q(`ALTER TABLE os_tenant_swaps ADD COLUMN IF NOT EXISTS rent_portion NUMERIC`))
+    .then(() => undefined).catch((e) => { ready = null; throw e; });
   await ready;
   return q<T>(text, params);
 }
 
-type SwapRow = { id: string; listing_id: string; property: string; leaving: SwapPerson[]; staying: SwapPerson[]; joining: SwapPerson[]; move_in: Date | string; rent_pcm: string | null; note: string; by_name: string; by_email: string | null; created_at: Date };
+type SwapRow = { id: string; listing_id: string; property: string; leaving: SwapPerson[]; staying: SwapPerson[]; joining: SwapPerson[]; move_in: Date | string; rent_pcm: string | null; rent_portion?: string | null; note: string; by_name: string; by_email: string | null; created_at: Date };
 
 const ymd = (v: Date | string) => (typeof v === "string" ? v.slice(0, 10) : v.toISOString().slice(0, 10));
 const shape = (r: SwapRow): TenantSwap => ({
@@ -70,6 +82,7 @@ const shape = (r: SwapRow): TenantSwap => ({
   joining: r.joining ?? [],
   moveIn: ymd(r.move_in),
   rentPcm: r.rent_pcm == null ? null : Number(r.rent_pcm),
+  rentPortion: r.rent_portion == null ? null : Number(r.rent_portion),
   note: r.note,
   by: r.by_name,
   byEmail: r.by_email,
@@ -79,9 +92,9 @@ const shape = (r: SwapRow): TenantSwap => ({
 export async function createSwap(s: Omit<TenantSwap, "id" | "at">): Promise<TenantSwap> {
   const id = randomBytes(9).toString("base64url").replace(/[-_]/g, "x");
   const rows = await tq<SwapRow>(
-    `INSERT INTO os_tenant_swaps (id, listing_id, property, leaving, staying, joining, move_in, rent_pcm, note, by_name, by_email)
-     VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8, $9, $10, $11) RETURNING *`,
-    [id, s.listingId, s.property, JSON.stringify(s.leaving), JSON.stringify(s.staying), JSON.stringify(s.joining), s.moveIn, s.rentPcm, s.note, s.by, s.byEmail]
+    `INSERT INTO os_tenant_swaps (id, listing_id, property, leaving, staying, joining, move_in, rent_pcm, rent_portion, note, by_name, by_email)
+     VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8, $9, $10, $11, $12) RETURNING *`,
+    [id, s.listingId, s.property, JSON.stringify(s.leaving), JSON.stringify(s.staying), JSON.stringify(s.joining), s.moveIn, s.rentPcm, s.rentPortion, s.note, s.by, s.byEmail]
   );
   return shape(rows[0]);
 }

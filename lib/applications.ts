@@ -193,6 +193,8 @@ export interface Application {
     leaving: string[];
     staying: string[];
     joining: string[];
+    /** What the newcomer pays by themselves, when the agent gave it. */
+    rentPortion?: number | null;
     /** The home as the push needs it when it has no REX listing (a REX PM
      *  home, "pm-link-<property>"): its first line and postcode to find it in
      *  Propoly, who manages the deal, and the service. */
@@ -695,7 +697,7 @@ async function swapApplications(rexUserId: string | null): Promise<Application[]
       property: listing ? shaped.property : sw.property.split(",")[0],
       agent: listing ? shaped.agent : sw.by,
       statusLabel: "Tenant swap",
-      conditions: [`Tenant swap: ${sw.leaving.map((x) => x.name).join(", ")} out, ${sw.joining.map((x) => x.name).join(", ")} in.`, sw.note].filter(Boolean).join(" "),
+      conditions: [`Tenant swap: ${sw.leaving.map((x) => x.name).join(", ")} out, ${sw.joining.map((x) => x.name).join(", ")} in.`, sw.rentPortion != null ? `Their portion of the rent: £${sw.rentPortion.toLocaleString("en-GB")} a month.` : "", sw.note].filter(Boolean).join(" "),
       osDecision: null,
       applicants: [...sw.joining.map((x, i) => person(x, i === 0)), ...sw.staying.map((x) => person(x, false))],
       rightToRentIncomplete: true,
@@ -704,6 +706,7 @@ async function swapApplications(rexUserId: string | null): Promise<Application[]
         leaving: sw.leaving.map((x) => x.name),
         staying: sw.staying.map((x) => x.name),
         joining: sw.joining.map((x) => x.name),
+        rentPortion: sw.rentPortion,
         home: { line1, postcode, agentEmail: sw.byEmail, managed: listing ? true : (osHome?.service_level ?? "managed") === "managed" },
       },
     });

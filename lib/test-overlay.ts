@@ -707,6 +707,8 @@ export function testJourney(app: Application, deal: TestDeal | null, plc: PlcCas
     deal: deal ? { id: `test-${deal.appId}`, stage: stageKey ?? deal.stageKey, url: "" } : null,
     plc: plc ? { id: plc.id, state: plc.state, who: plcState?.who ?? "" } : null,
     handover: null,
+    /* A test let is "in Propoly" once its pretend push has run; there is no real deal to open. */
+    inPropoly: deal && testDealPushed(deal) ? { url: null, how: "pushed" } : null,
     history: [],
   };
 }

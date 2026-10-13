@@ -26,6 +26,14 @@ import type { PreTenancyDeal } from "@/app/api/pretenancy/deals/route";
 
 type Deal = PreTenancyDeal;
 
+/* A tenant swap in Propoly, however it was made: some tenants sent for
+   referencing and some not - the newcomer and the people staying (James,
+   13 Oct 2026: "44 South Road tenant (tenant swap)"). */
+const isSwapDeal = (d: Deal): boolean => {
+  const refs = (d.app.propoly as { tenantRefs?: Array<{ required: boolean }> } | null | undefined)?.tenantRefs ?? [];
+  return refs.some((r) => r.required) && refs.some((r) => !r.required);
+};
+
 /** An accepted let with no deal in Propoly yet (James, 12 Oct 2026). Not a
  *  deal, so not a column: a tab in the bottom-left corner says how many are
  *  waiting to be handed over, and each opens its file to push. */
@@ -137,7 +145,7 @@ function DealCard({ d, stageKey, onOpen }: { d: Deal; stageKey: string; onOpen: 
     <button type="button" onClick={onOpen} className="btn-press group flex w-full flex-col overflow-hidden rounded-xl border border-black/[0.06] bg-card p-2 text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition hover:border-black/20">
       <Photo src={d.app.image} className="aspect-[16/10] w-full rounded-xl" />
       <div className="px-1 pb-1 pt-2.5">
-        <p className="truncate text-[13px] font-semibold leading-tight">{d.app.propertyName}</p>
+        <p className="truncate text-[13px] font-semibold leading-tight">{d.app.propertyName}{isSwapDeal(d) ? " (tenant swap)" : ""}</p>
         <p className="mt-0.5 truncate text-[11.5px] text-muted">{lead ? lead.name : "No tenant recorded"}{d.app.tenants.length > 1 ? ` +${d.app.tenants.length - 1}` : ""}</p>
         <span className={`mt-2 inline-block max-w-full truncate rounded-full px-2.5 py-1 text-[11px] font-semibold ${st.tone}`}>{st.text}</span>
         <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted">
@@ -176,9 +184,9 @@ function HandoverTab({ waiting, all, onOpenApplication }: { waiting: WaitingLet[
                 <li key={w.id}>
                   <button type="button" onClick={() => { setOpen(false); onOpenApplication(w.id); }} className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-accent-soft/40">
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px] font-semibold">{w.property}</span>
+                      <span className="block truncate text-[13px] font-semibold">{w.property}{w.swap ? " (tenant swap)" : ""}</span>
                       <span className="block truncate text-[11px] text-muted">
-                        {w.swap ? "Tenant swap · " : ""}{w.tenant}{w.moveIn ? ` · moving in ${fmtDate(w.moveIn)}` : ""}{all && w.agent ? ` · ${w.agent}` : ""}
+                        {w.tenant}{w.moveIn ? ` · moving in ${fmtDate(w.moveIn)}` : ""}{all && w.agent ? ` · ${w.agent}` : ""}
                       </span>
                     </span>
                     <span className="whitespace-nowrap text-[12px] font-semibold text-accent-dark">Hand over</span>

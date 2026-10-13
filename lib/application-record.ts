@@ -68,6 +68,7 @@ export function toAppRecord(a: Application): AppRecord {
       adverseCredit: p.keyInfo?.adverseCredit ?? null,
     })),
     property: a.property,
+    swapPortion: a.swap?.rentPortion != null ? gbp(a.swap.rentPortion) : null,
     propertyId: a.propertyId,
     listingId: a.listingId != null ? String(a.listingId) : null,
     locality: a.locality,

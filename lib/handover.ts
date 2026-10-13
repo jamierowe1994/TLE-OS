@@ -808,7 +808,15 @@ async function pushDeal(
     const cc = ((contact?.ok ? contact.result : null) ?? {}) as Row;
     /* reference_required: every deal keyed by hand has it on (9 Oct 2026) -
        except a swap's staying tenants, who were referenced when they moved in. */
-    const payload = { deal_id: dealUuid, deal_uuid: dealUuid, tenant: { user_attributes: tenantAttributes(cc, t), reference_required: t.reference !== false } };
+    const payload = {
+      deal_id: dealUuid,
+      deal_uuid: dealUuid,
+      tenant: {
+        user_attributes: tenantAttributes(cc, t),
+        reference_required: t.reference !== false,
+        ...(t.rentSharePcm ? { rent_share_pcm_pence: Math.round(t.rentSharePcm * 100) } : {}),
+      },
+    };
     const res = await propolyPost("/api/v1/tenants", payload);
     if (res.status >= 200 && res.status < 300) {
       await rec.add({ id: sid, label: tlabel, state: "ok", detail: "Added to the deal.", request: payload, response: res.body });
@@ -827,6 +835,7 @@ async function pushDeal(
     if (p(tm.price_pcm_pence) != null && terms.rentPcm != null && p(tm.price_pcm_pence) !== terms.rentPcm) differs.push(`rent is ${pounds(p(tm.price_pcm_pence))}, not ${pounds(terms.rentPcm)}`);
     if (str(tm.move_in_date) && terms.moveIn && str(tm.move_in_date)?.slice(0, 10) !== terms.moveIn) differs.push(`move-in is ${dayOf(str(tm.move_in_date))}`);
     if (!found && terms.holdingFeePounds && !p(tm.holding_fee_pence)) differs.push("no holding fee is set");
+    if (o.packet.swap && p(tm.holding_fee_pence)) differs.push(`Propoly put a holding fee of ${pounds(p(tm.holding_fee_pence))} on it - a tenant swap has none, so set it to not required in Propoly and the deal moves to referencing`);
     const tenants = ((after.tenants ?? []) as Row[]).length;
     /* Propoly puts its Flatfair clause on every deal made from here. Right
        when the landlord opted into zero deposit; otherwise it comes off. */
