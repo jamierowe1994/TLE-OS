@@ -121,6 +121,8 @@ export interface DealTerms {
   /** None in Scotland; otherwise one week's rent, rounded down to the penny. */
   holdingFeePounds: number | null;
   scotland: boolean;
+  /** A tenant swap: never a holding fee. */
+  swap?: boolean;
 }
 
 /** REX's lettings_service_type id → Propoly's service level. */
@@ -149,6 +151,12 @@ export function isScottishListing(listing: Row, packet: Pick<Handoff, "locality"
 
 /** The deal as the accepted offer and the listing describe it. */
 export function dealDefaults(packet: Handoff, listing: Row): DealTerms {
+  const terms = dealDefaultsFor(packet, listing);
+  /* A tenant swap takes no holding fee (13 Oct 2026); it is sorted between the tenants. */
+  return packet.swap ? { ...terms, holdingFeePounds: 0, swap: true } : terms;
+}
+
+function dealDefaultsFor(packet: Handoff, listing: Row): DealTerms {
   const scotland = isScottishListing(listing, packet);
   const related = (listing.related ?? {}) as Row;
   const subcats = Array.isArray(related.listing_subcategories) ? (related.listing_subcategories as Row[]) : [];
@@ -190,7 +198,7 @@ export function withChanges(base: DealTerms, change: Partial<DealTerms> | null |
   const dep = money(change.depositPounds);
   if (dep !== undefined) out.depositPounds = dep;
   /* The holding fee follows the rent; it is never typed. */
-  out.holdingFeePounds = holdingFeeFor(out.rentPcm, out.scotland);
+  out.holdingFeePounds = out.swap ? 0 : holdingFeeFor(out.rentPcm, out.scotland);
   return out;
 }
 

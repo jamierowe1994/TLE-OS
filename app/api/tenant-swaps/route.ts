@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   const scope = await scopeForWho(req, who);
   if (scope.unlinked) return NextResponse.json({ ok: false, error: "We can't tell whose book this is." }, { status: 403 });
 
-  const body = (await req.json().catch(() => null)) as { listingId?: string; leaving?: string[]; joining?: Array<{ name?: string; email?: string; phone?: string }>; moveIn?: string; rentPcm?: number; note?: string } | null;
+  const body = (await req.json().catch(() => null)) as { listingId?: string; leaving?: string[]; joining?: Array<{ name?: string; email?: string; phone?: string }>; moveIn?: string; rentPcm?: number; rentPortion?: number; note?: string } | null;
   if (!body?.listingId) return NextResponse.json({ ok: false, error: "Which home?" }, { status: 400 });
   const { book } = await managedBookFor(scope.rexUserId);
   const home = book.properties.find((p) => String(p.listingId) === String(body.listingId));
@@ -50,6 +50,9 @@ export async function POST(req: NextRequest) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(body.moveIn ?? "")) return NextResponse.json({ ok: false, error: "When are they moving in?" }, { status: 400 });
   const rent = typeof body.rentPcm === "number" && body.rentPcm > 0 && body.rentPcm < 100000 ? Math.round(body.rentPcm * 100) / 100 : home.rentMonthly ?? null;
 
+  const portion = typeof body.rentPortion === "number" && body.rentPortion > 0 && body.rentPortion < 100000 ? Math.round(body.rentPortion * 100) / 100 : null;
+  if (portion != null && rent != null && portion > rent) return NextResponse.json({ ok: false, error: "Their portion is more than the rent for the whole home." }, { status: 400 });
+
   const swap = await createSwap({
     listingId: String(home.listingId),
     property: [home.name, home.locality].filter(Boolean).join(", "),
@@ -58,6 +61,7 @@ export async function POST(req: NextRequest) {
     joining,
     moveIn: body.moveIn!,
     rentPcm: rent,
+    rentPortion: portion,
     note: clean(body.note, 600),
     by: who.actor.name || who.actor.email,
     byEmail: who.actor.email ?? null,

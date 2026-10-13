@@ -361,7 +361,11 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
        is known from the run; with the switch off it is started by hand. */
     const started = run.steps.find((s) => s.id === "deal" && s.state === "ok");
     const startedUuid = started ? ((started.response as { uuid?: string } | null)?.uuid ?? null) : null;
-    if (startedUuid) {
+    if (startedUuid && app.swap) {
+      /* A swap has no holding fee (James, 13 Oct 2026): the deal goes to
+         referencing for the newcomer once Propoly's deals are next read. */
+      actions.push({ id: "swap-refs", label: "Referencing the new tenant", detail: `The swap is in Propoly. ${app.swap.joining.join(", ")} ${app.swap.joining.length === 1 ? "is" : "are"} referenced; everybody staying is not.`, href: propolyDealUrl(startedUuid), who: "tenant" });
+    } else if (startedUuid) {
       actions.push({ id: "fee", label: "Waiting on the holding fee", detail: "The deal is in Propoly with the tenants on it, and the holding fee is taken from it.", href: propolyDealUrl(startedUuid), who: "tenant" });
     } else {
       actions.push({ id: "deal-start", label: "Start the deal in Propoly", detail: "The landlord and the home are in Propoly now. Start the deal there for these tenants - the holding fee is taken from the deal.", href: null, who: "kirstie" });
@@ -389,8 +393,22 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
   }
   stops.push(handoverStop);
 
-  /* In Propoly, fee not in: that is where it is, whoever's move it is. */
-  if (deal && !fee.settled) {
+  /* A TENANT SWAP HAS NO HOLDING FEE (James, 13 Oct 2026: "holding deposits
+     and things like that ... all sorted out externally"). The push sends a
+     fee of nothing, but Propoly fills in its own week's rent when it is sent
+     nothing - 44 South Bridge sat at Start deal with £762 due on 12 Oct. Set
+     to "not required" in Propoly, the deal moves on to referencing, as the
+     swaps Kirstie keys in by hand do. */
+  if (deal && app.swap && !fee.settled) {
+    const due = deal.app.propoly?.holdingFee ?? null;
+    actions.push({
+      id: "swap-fee",
+      label: "Take the holding fee off in Propoly",
+      detail: `A tenant swap has no holding fee, but Propoly put ${due ? `£${Math.round(due).toLocaleString("en-GB")}` : "one"} on this deal, so it is waiting at Start deal. Set the holding fee to not required and it moves on to referencing for ${app.swap.joining.join(", ")}.`,
+      href: dealUrlOf(deal),
+      who: "kirstie",
+    });
+  } else if (deal && !fee.settled) {
     actions.push({
       id: "fee",
       label: "Waiting on the holding fee",
@@ -507,6 +525,17 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
         state: unsuccessful ? "off" : "upcoming",
       });
     });
+  }
+
+  /* A swap has no holding fee: the stop says so rather than waiting on one
+     (13 Oct 2026). If Propoly put one on, it says that instead. */
+  if (app.swap) {
+    const hf = stops.find((x) => x.id === "holding_fee");
+    if (hf && hf.state !== "done") {
+      const due = deal && !fee.settled ? deal.app.propoly?.holdingFee ?? null : null;
+      if (due) Object.assign(hf, { sub: `Propoly put £${Math.round(due).toLocaleString("en-GB")} on - take it off`, tone: "warn" });
+      else Object.assign(hf, { sub: "None on a tenant swap", tone: "none", state: "off" });
+    }
   }
 
   /* PLC: the agent starts it; Kirstie finishes it. */

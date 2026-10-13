@@ -698,7 +698,7 @@ export default function PropertyPage() {
                     viewing or offer. Any home with more than one tenant, or let
                     by the room (44 South Bridge isn't recorded as an HMO). */}
                 {(tenants.length > 1 || Boolean(house)) && (
-                  <button type="button" disabled={!canAct || !tenants.length} onClick={() => act({ kind: "swap" })} className={tile}>{tileIcon("User")}{tileText("Tenant swap", "One leaves, their replacement moves in")}</button>
+                  <button type="button" disabled={!canAct || !tenants.length} onClick={() => act({ kind: "swap" })} className={tile}>{tileIcon("user")}{tileText("Tenant swap", "One leaves, their replacement moves in")}</button>
                 )}
                 <button type="button" disabled={!propertyId} onClick={() => { pickTab("compliance"); setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }} className={tile}>{tileIcon("shield")}{tileText("Add a certificate", "Read and filed on the home")}</button>
                 {canAct && noticeIn ? (
@@ -1351,6 +1351,10 @@ function SwapSheet({ listingId, tenants, rent, onClose }: { listingId: string; t
   const [joining, setJoining] = useState([{ name: "", email: "", phone: "" }]);
   const [moveIn, setMoveIn] = useState("");
   const [rentPcm, setRentPcm] = useState(rent ? String(rent) : "");
+  /* Rent portion (James, 13 Oct 2026): what the person moving in pays, by
+     itself. The deal in Propoly keeps the rent for the whole home. */
+  const [portionOn, setPortionOn] = useState(false);
+  const [portion, setPortion] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -1365,12 +1369,13 @@ function SwapSheet({ listingId, tenants, rent, onClose }: { listingId: string; t
     const noEmail = people.find((j) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(j.email.trim()));
     if (noEmail) return setErr(`${noEmail.name.trim()} needs an email address - their referencing is sent to it.`);
     if (!moveIn) return setErr("When are they moving in?");
+    if (portionOn && !(Number(portion) > 0)) return setErr("Type their portion of the rent, or untick Rent portion.");
     setBusy(true);
     setErr(null);
     const r = await fetch("/api/tenant-swaps", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ listingId, leaving: [...leaving], joining: people, moveIn, rentPcm: Number(rentPcm) || undefined, note }),
+      body: JSON.stringify({ listingId, leaving: [...leaving], joining: people, moveIn, rentPcm: Number(rentPcm) || undefined, rentPortion: portionOn ? Number(portion) || undefined : undefined, note }),
     }).then((x) => x.json()).catch(() => null);
     if (!r?.ok) {
       setBusy(false);
@@ -1382,7 +1387,7 @@ function SwapSheet({ listingId, tenants, rent, onClose }: { listingId: string; t
   return (
     <div>
       <p className="text-[12.5px] leading-relaxed text-muted">
-        One tenant leaving and their replacement moving in, with no viewing or offer. It goes onto Applications, where Push to Propoly starts a new deal with everyone on it and sends only the new tenant for referencing.
+        One tenant leaving and their replacement moving in, with no viewing or offer. It goes onto Applications as a tenant swap, where Push to Propoly starts a new deal with everyone on it, sends only the new tenant for referencing, and takes no holding fee.
       </p>
       <div className="mt-4 grid gap-4">
         <div>
@@ -1423,6 +1428,28 @@ function SwapSheet({ listingId, tenants, rent, onClose }: { listingId: string; t
             <span className={label}>Rent for the home, a month</span>
             <input inputMode="decimal" value={rentPcm} onChange={(e) => setRentPcm(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="£" className={field} />
           </label>
+        </div>
+        <div>
+          <label className="flex items-center gap-2.5 text-[13px]">
+            <input
+              type="checkbox"
+              checked={portionOn}
+              onChange={(e) => {
+                setPortionOn(e.target.checked);
+                /* A fair first guess: the home's rent shared by everyone on it after the swap. */
+                const heads = tenants.length - leaving.size + Math.max(1, joining.filter((j) => j.name.trim()).length);
+                if (e.target.checked && !portion && Number(rentPcm) > 0 && heads > 0) setPortion(String(Math.round((Number(rentPcm) / heads) * 100) / 100));
+              }}
+            />
+            <span className="font-semibold">Rent portion</span>
+            <span className="text-[12px] text-muted">What the person moving in pays</span>
+          </label>
+          {portionOn && (
+            <label className="mt-2 block sm:max-w-[50%]">
+              <span className={label}>Their portion, a month</span>
+              <input inputMode="decimal" value={portion} onChange={(e) => setPortion(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="£" className={field} />
+            </label>
+          )}
         </div>
         <label>
           <span className={label}>Note</span>

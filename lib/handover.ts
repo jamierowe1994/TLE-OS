@@ -827,6 +827,7 @@ async function pushDeal(
     if (p(tm.price_pcm_pence) != null && terms.rentPcm != null && p(tm.price_pcm_pence) !== terms.rentPcm) differs.push(`rent is ${pounds(p(tm.price_pcm_pence))}, not ${pounds(terms.rentPcm)}`);
     if (str(tm.move_in_date) && terms.moveIn && str(tm.move_in_date)?.slice(0, 10) !== terms.moveIn) differs.push(`move-in is ${dayOf(str(tm.move_in_date))}`);
     if (!found && terms.holdingFeePounds && !p(tm.holding_fee_pence)) differs.push("no holding fee is set");
+    if (o.packet.swap && p(tm.holding_fee_pence)) differs.push(`Propoly put a holding fee of ${pounds(p(tm.holding_fee_pence))} on it - a tenant swap has none, so set it to not required in Propoly and the deal moves to referencing`);
     const tenants = ((after.tenants ?? []) as Row[]).length;
     /* Propoly puts its Flatfair clause on every deal made from here. Right
        when the landlord opted into zero deposit; otherwise it comes off. */
