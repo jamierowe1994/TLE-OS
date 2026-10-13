@@ -99,9 +99,24 @@ export async function GET(req: NextRequest) {
     const lead = t.app.applicants[0];
     return NextResponse.json({
       applicationId: asked,
+      /* Every field the handover panel reads, so it draws as for a real let
+         (13 Oct 2026: the panel read blockers.length and the file crashed).
+         Nothing is missing on a test file and nothing is held back. */
+      listingId: null,
+      property: t.deal?.property ?? "",
+      landlord: null,
+      rentPcm: rent,
+      startDate: t.deal?.moveIn ?? t.app.startDate ?? null,
+      agreementMonths: t.app.agreementMonths || 12,
+      documents: [],
+      certificates: [],
+      missing: [],
+      unrecognised: [],
+      blockers: [],
+      flowConfigured: true,
       mode: "live",
       runs: pushed && t.deal ? [testRun(asked, t.deal, t.deal.agentName)] : [],
-      tenants: lead ? [{ name: lead.name, email: lead.email, phone: lead.phone }] : [],
+      tenants: lead ? [{ name: lead.name, email: lead.email, phone: lead.phone, isPrimary: true }] : [],
       deal: pushed
         ? null
         : {
