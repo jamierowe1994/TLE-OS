@@ -493,7 +493,10 @@ function ListingDrawerBody({
     setPushSignIn(false);
     setPushing(0);
     const res = await portalCall("publish");
-    if (res.ok) setPushOk(true);
+    if (res.ok) {
+      setPushOk(true);
+      setActivityKey((k) => k + 1);
+    }
     else {
       setPushSignIn(Boolean(res.signIn));
       setPushError(res.error ?? "The portals did not take it.");
@@ -558,6 +561,11 @@ function ListingDrawerBody({
       off = true;
     };
   }, [listing?.id]);
+  /* Bumped after a push to the portals (James, 13 Oct 2026, E2E walk): the
+     push can bring an enquiry with it (a test listing's first one is seeded
+     by the push itself), and the Enquiries tile and Book a viewing's list
+     still said nobody until the page was reloaded. Harmless on a real one. */
+  const [activityKey, setActivityKey] = useState(0);
   useEffect(() => {
     if (!listing) { setEnquiries(null); setLiveApps(null); return; }
     let gone = false;
@@ -593,7 +601,7 @@ function ListingDrawerBody({
       })
       .catch(() => { if (!gone) setLiveApps([]); });
     return () => { gone = true; };
-  }, [listing]);
+  }, [listing, activityKey]);
 
   useEffect(() => {
     if (!listing) {
@@ -781,12 +789,18 @@ function ListingDrawerBody({
      person, viewers first because that is who offers nearly always. */
   const offerPeople = useMemo<OfferPerson[]>(() => {
     const out = new Map<string, OfferPerson>();
-    const keyOf = (name: string, email: string | null | undefined) => (email ?? "").trim().toLowerCase() || name.trim().toLowerCase();
+    /* On a TEST listing every test person - Landlord E2E, Tenant E2E - carries
+       the tester's own email, so the email matched the landlord's and every
+       viewer and enquirer was dropped as "the owner": the picker said nobody
+       had viewed over a booked viewing (James, 13 Oct 2026, E2E walk). There,
+       people are told apart by name as well. */
+    const keyOf = (name: string, email: string | null | undefined) =>
+      testListing ? `${name.trim().toLowerCase()}|${(email ?? "").trim().toLowerCase()}` : (email ?? "").trim().toLowerCase() || name.trim().toLowerCase();
     /* REX hangs the landlord on the viewing too; they never make the offer. */
     const owner = landlord.status === "known" ? landlord.landlord : null;
     const isOwner = (name: string, email: string | null | undefined) =>
       !!owner &&
-      ((!!owner.email && (email ?? "").trim().toLowerCase() === owner.email.trim().toLowerCase()) || name.trim().toLowerCase() === owner.name.trim().toLowerCase());
+      ((!testListing && !!owner.email && (email ?? "").trim().toLowerCase() === owner.email.trim().toLowerCase()) || name.trim().toLowerCase() === owner.name.trim().toLowerCase());
     const allViewings = [...(viewings?.past ?? []), ...(viewings?.upcoming ?? [])]
       .filter((v) => !v.cancelled)
       .sort((a, b) => new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime());
@@ -817,7 +831,7 @@ function ListingDrawerBody({
       out.set(k, { key: k, name: e.name, email: (e.email ?? "").trim(), phone: e.phone ?? "", note: `Enquired ${e.received}`.trim() });
     }
     return [...out.values()];
-  }, [viewings, enquiries, landlord]);
+  }, [viewings, enquiries, landlord, testListing]);
   const [reviewing, setReviewing] = useState(false);
   const [draftRent, setDraftRent] = useState("");
   const [draftTenants, setDraftTenants] = useState<TenantIn[]>([]);
@@ -1204,7 +1218,10 @@ function ListingDrawerBody({
     setPushError(null);
     setPushing(-1);
   };
-  const canFileAway = Boolean(onArchive) && (listing.archived || (!listing.letAgreed && listing.publicationStatus !== "published")) && listing.archiveReason !== "withdrawn";
+  /* Drafts only - the link says "File this draft away". Read off isLive (REX's
+     own answer) rather than the book's copy, which still said draft straight
+     after a push, so a live listing showed it (James, 13 Oct 2026, E2E walk). */
+  const canFileAway = Boolean(onArchive) && (listing.archived || (!listing.letAgreed && !isLive)) && listing.archiveReason !== "withdrawn";
   const facts = (() => {
     const wait = live ? null : liveFailed ? "Did not load" : "Reading…";
     const set = (v: string | number | null | undefined) => wait ?? (v == null || v === "" ? "Not set" : String(v));
@@ -1497,7 +1514,7 @@ function ListingDrawerBody({
                     options={(propTypes ?? []).map((t) => ({ value: t.id, label: t.label }))}
                     onChange={(v) => void setPropertyType(v)}
                   />
-                ) : f.label === "Type of let" && home ? (
+                ) : f.label === "Type of let" && home && !testListing ? (
                   <FieldSelect variant="inline" value={home.letType} options={LET_TYPES} onChange={(v) => void setLetType(v as LetType)} />
                 ) : (
                   <p className={`truncate text-[13px] ${quietFact(f.text) ? "text-muted" : "font-semibold"}`}>{f.text}</p>

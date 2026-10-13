@@ -5,7 +5,8 @@ import { readListingDetails } from "@/lib/listing-details";
 import { listingIsTheirs } from "@/lib/listing-gate";
 import { deriveLetType, isHmoLet, isLetType, requiredFor, type LetType } from "@/lib/let-type";
 import { isScottishHome } from "@/lib/compliance";
-import { isTestId } from "@/lib/test-overlay";
+import { isTestId, testListing } from "@/lib/test-overlay";
+import { testTermsParties } from "@/lib/test-terms";
 
 /**
  * WHAT THIS HOME IS, AND WHAT IS ALREADY ON FILE FOR IT (James, 12 Oct 2026).
@@ -81,11 +82,39 @@ async function answer(id: number) {
   };
 }
 
+/**
+ * A TEST listing's home (James, 13 Oct 2026, the E2E walk): its terms were
+ * signed in the OS alone (lib/test-terms fileTestSignature, on the appraisal
+ * the listing was made from), and the header still said "No terms on file"
+ * because a test listing had no home answer at all. Residential, nothing
+ * kept, and the terms held when that appraisal's test signature is there.
+ */
+async function testAnswer(id: number) {
+  const l = await testListing(id).catch(() => null);
+  if (!l) return null;
+  const parties = l.appraisalId ? await testTermsParties(l.appraisalId).catch(() => null) : null;
+  const signed = (parties ?? []).find((p) => p.role === "landlord" && p.completedAt);
+  return {
+    ok: true,
+    letType: "residential" as LetType,
+    derived: true,
+    why: "A test listing",
+    required: requiredFor("residential", { scotland: false, noGas: false }),
+    scotland: false,
+    noGas: false,
+    terms: { rex: null, held: signed ? { how: "Signed online (test)", name: "Terms of business (test)", at: signed.completedAt } : null },
+    test: true,
+  };
+}
+
 export async function GET(req: NextRequest) {
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const raw = req.nextUrl.searchParams.get("id");
-  if (isTestId(raw)) return NextResponse.json({ ok: false, error: "A test listing has no home record.", test: true }, { status: 409 });
+  if (isTestId(raw)) {
+    const t = await testAnswer(Number(raw));
+    return t ? NextResponse.json(t, { headers: { "cache-control": "private, no-store" } }) : NextResponse.json({ ok: false, error: "That test listing has gone.", test: true }, { status: 404 });
+  }
   const id = listingId(raw);
   if (!id) return NextResponse.json({ ok: false, error: "Which listing?" }, { status: 400 });
   const notTheirs = await listingIsTheirs(actor, id);

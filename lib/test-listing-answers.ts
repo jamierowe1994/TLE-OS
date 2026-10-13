@@ -2,7 +2,7 @@ import "server-only";
 import { hasDb, q } from "@/lib/db";
 import type { ListingDetails } from "@/lib/listing-details";
 import type { Viewing } from "@/lib/rex-viewings";
-import { isDraftTest, testListing, testViewingsForListing, type TestListing } from "@/lib/test-overlay";
+import { isDraftTest, kitPeopleForTestListing, testListing, testViewingsForListing, type TestListing } from "@/lib/test-overlay";
 
 /**
  * What each listing route answers for a TEST listing (negative id, lib/test-
@@ -67,9 +67,22 @@ export async function testDetails(id: number): Promise<{ ok: true; details: List
   return { ok: true, details, locks: { listing: true, rooms: true, media: true }, test: true };
 }
 
+/**
+ * The test listing's landlord. The phone used to be null always, so the
+ * listing said "No number on file" over Landlord E2E's 07700 900000 (James,
+ * 13 Oct 2026, the E2E walk). Now: the number the listing was made with, else
+ * the file's own landlord contact's (the one named on it first).
+ */
 export async function testLandlord(id: number) {
   const l = await testListing(id);
-  return l ? { ok: true, landlord: { contactId: null, name: l.landlord.name, email: l.landlord.email, phone: null } } : null;
+  if (!l) return null;
+  let phone = (l.landlord.phone ?? "").trim() || null;
+  if (!phone) {
+    const people = (await kitPeopleForTestListing(id)).filter((c) => c.kind === "landlord" && c.mobile.trim());
+    const named = people.find((c) => c.name.trim().toLowerCase() === l.landlord.name.trim().toLowerCase()) ?? people[0];
+    phone = named?.mobile.trim() || null;
+  }
+  return { ok: true as const, landlord: { contactId: null, name: l.landlord.name, email: l.landlord.email, phone } };
 }
 
 /**
@@ -106,17 +119,25 @@ export async function testListingViewings(id: number) {
   /* The tenant behind each one, so their name on the listing opens their
      record like a real applicant's (James, 20 Sep 2026). A test file's
      tenant is an OS contact, whose lead id is "os-<contact id>". */
+  /* Every test person shares the tester's email, so the email alone picked
+     whichever test contact came first; the name the viewing was booked for
+     decides it now, the email only when no name matches (13 Oct 2026). */
   const leadFor = new Map<string, string>();
-  if (hasDb() && vs.length) {
-    const emails = [...new Set(vs.map((v) => v.tenantEmail.toLowerCase()).filter(Boolean))];
-    const found = emails.length
-      ? await q<{ id: string; email: string }>(`SELECT id, LOWER(email) AS email FROM os_contacts WHERE LOWER(email) = ANY($1) AND is_test`, [emails]).catch(() => [])
-      : [];
-    for (const c of found) if (!leadFor.has(c.email)) leadFor.set(c.email, `os-${c.id}`);
-  }
   const names = hasDb() && vs.length
     ? new Map((await q<{ id: string; who: string; mins: number }>(`SELECT id, who, mins FROM os_appointments WHERE id = ANY($1)`, [vs.map((v) => v.appointmentId)]).catch(() => [])).map((r) => [r.id, r]))
     : new Map<string, { id: string; who: string; mins: number }>();
+  if (hasDb() && vs.length) {
+    const emails = [...new Set(vs.map((v) => v.tenantEmail.toLowerCase()).filter(Boolean))];
+    const found = emails.length
+      ? await q<{ id: string; email: string; name: string }>(`SELECT id, LOWER(email) AS email, LOWER(TRIM(name)) AS name FROM os_contacts WHERE LOWER(email) = ANY($1) AND is_test ORDER BY created_at ASC`, [emails]).catch(() => [])
+      : [];
+    for (const c of found) {
+      if (!leadFor.has(`${c.email}|${c.name}`)) leadFor.set(`${c.email}|${c.name}`, `os-${c.id}`);
+      if (!leadFor.has(c.email)) leadFor.set(c.email, `os-${c.id}`);
+    }
+  }
+  const leadOf = (email: string, who: string | undefined) =>
+    leadFor.get(`${email.toLowerCase()}|${(who ?? "").trim().toLowerCase()}`) ?? leadFor.get(email.toLowerCase()) ?? null;
   const all: Viewing[] = vs.map((v) => {
     const row = names.get(v.appointmentId);
     return {
@@ -134,7 +155,7 @@ export async function testListingViewings(id: number) {
       status: v.done ? "completed" : "booked",
       cancelled: false,
       agent: v.withName,
-      contacts: [{ id: `test-${v.appointmentId}`, name: row?.who || "Test applicant", email: v.tenantEmail, phone: null, leadId: leadFor.get(v.tenantEmail.toLowerCase()) ?? null }],
+      contacts: [{ id: `test-${v.appointmentId}`, name: row?.who || "Test applicant", email: v.tenantEmail, phone: null, leadId: leadOf(v.tenantEmail, row?.who) }],
       feedbackId: null,
       bookedAt: null,
       description: null,
