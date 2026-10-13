@@ -12,6 +12,7 @@ import { getApplicationById } from "@/lib/applications";
 import { decisionsFor } from "@/lib/offer-decisions";
 import { can } from "@/lib/roles";
 import type { OsUser } from "@/lib/users";
+import { isTestId, pushTestDeal, testApplication, testDealPushed, type TestDeal } from "@/lib/test-overlay";
 
 /**
  * GET  /api/handoff?application=37709 → the packet, what's missing, the mode,
@@ -55,9 +56,78 @@ function notTheirs(me: OsUser, agent: string | null | undefined): string | null 
   return agent.trim().toLowerCase() === (me.name ?? "").trim().toLowerCase() ? null : `That application is ${agent.split(/\s+/)[0]}'s.`;
 }
 
+/**
+ * A played push on a test application, in a real run's shape (lib/handover
+ * HandoverRun): live, ok, with the deal step done, so the Next Step card
+ * shows the same "Deal started" line it shows for a real push.
+ */
+function testRun(applicationId: string, deal: TestDeal, by: string) {
+  const at = deal.pushedAt ?? new Date().toISOString();
+  const step = (id: string, label: string, detail: string) => ({ id, label, state: "ok" as const, detail, at });
+  return {
+    id: `test-${applicationId}`,
+    applicationId,
+    mode: "live" as const,
+    status: "ok" as const,
+    steps: [
+      step("blockers", "Before this goes", "Nothing missing."),
+      step("property-match", "Property in Propoly", "Test file - played, nothing was sent to Propoly."),
+      step("deal", "The deal in Propoly", `Test deal for ${deal.tenantName} at ${deal.property}.`),
+      step("deal-check", "The deal, checked", "This is a test file, so nothing left the OS. The deal is waiting on the holding fee."),
+    ],
+    packet: null,
+    triggeredBy: by,
+    startedAt: at,
+    finishedAt: at,
+    error: null,
+  };
+}
+
 export async function GET(req: NextRequest) {
   const me = await who(req);
   if (!me) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
+  /* A test application: the deal the push would start, from the test file,
+     so the card shows the same terms to check as for a real let. Nothing is
+     read from REX or Propoly. */
+  const asked = req.nextUrl.searchParams.get("application");
+  if (asked && isTestId(asked)) {
+    const t = await testApplication(asked).catch(() => null);
+    if (!t) return NextResponse.json({ error: "That test application has gone." }, { status: 404 });
+    const rent = t.deal?.rent ?? t.app.offerAmount ?? null;
+    const week = rent ? Math.floor(((rent * 12) / 52) * 100) / 100 : null;
+    const pushed = testDealPushed(t.deal);
+    const lead = t.app.applicants[0];
+    return NextResponse.json({
+      applicationId: asked,
+      mode: "live",
+      runs: pushed && t.deal ? [testRun(asked, t.deal, t.deal.agentName)] : [],
+      tenants: lead ? [{ name: lead.name, email: lead.email, phone: lead.phone }] : [],
+      deal: pushed
+        ? null
+        : {
+            terms: {
+              rentPcm: rent,
+              moveIn: t.deal?.moveIn ?? t.app.startDate ?? null,
+              termMonths: t.app.agreementMonths || 12,
+              template: DEAL_TEMPLATES[0],
+              serviceLevel: "full_managed",
+              paymentSchedule: "monthly",
+              tenancyType: "assured_periodic_tenancy",
+              depositScheme: "tds_custodial",
+              zeroDeposit: false,
+              depositPounds: week != null ? Math.floor(week * 5 * 100) / 100 : null,
+              holdingFeePounds: week,
+              scotland: false,
+            } satisfies DealTerms,
+            problems: [],
+            templates: DEAL_TEMPLATES,
+            services: SERVICE_LEVELS,
+            schedules: PAYMENT_SCHEDULES,
+            tenancyTypes: TENANCY_TYPES,
+            schemes: ENGLISH_SCHEMES,
+          },
+    });
+  }
   if (!rexConfigured()) {
     return NextResponse.json({ error: "REX isn't connected here." }, { status: 503 });
   }
@@ -105,6 +175,20 @@ export async function POST(req: NextRequest) {
   }
   if (!body.applicationId) {
     return NextResponse.json({ error: "applicationId is required" }, { status: 400 });
+  }
+
+  /* A TEST application (a negative id, lib/test-overlay) is played, before
+     anything asks REX or Propoly (James, 13 Oct 2026: the test file walks the
+     real screens). Nothing is written anywhere but the test file: the deal is
+     marked pushed and moves on to the holding fee, and the answer is the
+     shape a real live push gives, so the card says what it says for one. */
+  if (isTestId(body.applicationId)) {
+    try {
+      const deal = await pushTestDeal(String(body.applicationId), { email: me.email });
+      return NextResponse.json({ ok: true, run: testRun(String(body.applicationId), deal, me.name || me.email || "Test file") });
+    } catch (e) {
+      return NextResponse.json({ error: publicError(e, "That didn't go through.") }, { status: 409 });
+    }
   }
 
   /* Whose it is, and whether it has been accepted - here or in REX. Before

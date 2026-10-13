@@ -6,6 +6,7 @@ import type { OsListing } from "@/lib/rex-listings";
 import type { Application } from "@/lib/applications";
 import type { ManagedProperty } from "@/lib/portfolio-types";
 import { caseIdFor, PLC_STATES, type PlcCase } from "@/lib/plc";
+import { getCase } from "@/lib/plc-store";
 import type { ApplicationJourney, JourneyAction, JourneyStop } from "@/lib/application-journey";
 
 /**
@@ -84,6 +85,11 @@ export type TestDeal = {
   stageKey: string;
   agentName: string;
   agentEmail: string;
+  /** When the tester pressed the real Push to Propoly on it (13 Oct 2026). A
+   *  deal from before then that is already past "deal started" counts as pushed. */
+  pushedAt?: string | null;
+  /** The home it became on move day: an os_properties row, pm-test-<kit>. */
+  homeId?: string | null;
 };
 
 export type TestViewing = {
@@ -200,12 +206,25 @@ function stageLabelOf(key: string | undefined): string | undefined {
   return key ? PORTAL_STAGES.find((s) => s.key === key)?.label : undefined;
 }
 
+/**
+ * Has the tester pressed Push to Propoly on this deal? (13 Oct 2026.) A deal
+ * already moved past "deal started" before the push was a button counts as
+ * pushed, so no file walked before today is sent back a step.
+ */
+export function testDealPushed(d: TestDeal | null | undefined): boolean {
+  if (!d) return false;
+  return Boolean(d.pushedAt) || PORTAL_STAGES.findIndex((s) => s.key === d.stageKey) > 0;
+}
+
 function toApplication(o: TestOffer, l: TestListing | null, deal: TestDeal | null): Application {
   return {
     id: o.appId,
     status: o.status,
     statusLabel: o.status === "accepted" ? "Accepted" : o.status === "unsuccessful" ? "Unsuccessful" : "Received",
-    stageLabel: stageLabelOf(deal?.stageKey),
+    /* Accepted and not pushed yet reads as a real one does on the board
+       (lib/application-journey stageLabels): "Handover due", which puts it
+       under the board's To Hand Over tab until the push. */
+    stageLabel: o.status === "accepted" && !testDealPushed(deal) ? "Handover due" : stageLabelOf(deal?.stageKey),
     closed: null,
     listingId: o.listingId,
     propertyId: null,
@@ -315,6 +334,31 @@ export async function testOfferForTenant(email: string): Promise<TestOffer | nul
   return r[0]?.payload ?? null;
 }
 
+/**
+ * The tester's own test lets once pushed, for the agent's board of lets
+ * (James, 13 Oct 2026: an accepted test let moves across the Applications
+ * board as its deal moves on). Each with where it really is, PLC pack
+ * included, and the pack itself for the card. Not pushed yet, a let is under
+ * the board's To Hand Over tab instead (its stageLabel says "Handover due").
+ */
+export async function testDealsForBoard(email: string | null | undefined): Promise<{ deal: TestDeal; stageKey: string; plc: PlcCase | null; listing: TestListing | null; offer: TestOffer | null }[]> {
+  if (!email) return [];
+  const [ds, os] = await Promise.all([rows<TestDeal>("deal", MINE, [email]), rows<TestOffer>("offer", MINE, [email])]);
+  const out = [];
+  for (const r of ds) {
+    const d = r.payload;
+    if (!testDealPushed(d)) continue;
+    const [plc, listing] = await Promise.all([
+      getCase(caseIdFor(d.appId)).catch(() => null),
+      testListing(d.listingId).catch(() => null),
+    ]);
+    const offer = os.find((o) => o.payload.appId === d.appId)?.payload ?? null;
+    if (offer?.status === "unsuccessful") continue;
+    out.push({ deal: d, stageKey: testDealStage(d, plc), plc, listing, offer });
+  }
+  return out;
+}
+
 /** The landlord behind a test tenancy, for a job raised by its tenant. */
 export async function landlordForTestDeal(dealId: string): Promise<{ name: string; email: string } | null> {
   const id = dealId.startsWith("test-") ? dealId.slice(5) : dealId;
@@ -362,20 +406,55 @@ export async function testHomesFor(email: string | null | undefined): Promise<Ma
   const out: ManagedProperty[] = [];
   for (const k of kits) {
     const pid = k.refs.osPropertyId!;
-    const [landlordId, tenantId] = k.refs.contacts ?? [];
-    const [prop, recs, people] = await Promise.all([
+    const [prop, recs] = await Promise.all([
       q<{ name: string; address: string; locality: string; postcode: string | null; town: string | null }>(
         `SELECT name, address, locality, postcode, town FROM os_properties WHERE id = $1 AND active`,
         [pid]
       ).catch(() => []),
       q<{ kind: Kind; payload: TestListing & TestDeal }>(`SELECT kind, payload FROM os_test_records WHERE kit_id = $1 ORDER BY created_at DESC`, [k.id]).catch(() => []),
-      q<{ id: string; mobile: string | null }>(`SELECT id, mobile FROM os_contacts WHERE id = ANY($1)`, [[landlordId, tenantId].filter(Boolean)]).catch(() => []),
     ]);
-    const phone = (id: string | undefined) => people.find((c) => c.id === id)?.mobile?.trim() || null;
     const home = prop[0];
     if (!home) continue;
-    const listing = recs.find((r) => r.kind === "listing")?.payload ?? null;
-    const deal = recs.find((r) => r.kind === "deal")?.payload ?? null;
+    const deals = recs.filter((r) => r.kind === "deal").map((r) => r.payload as TestDeal);
+    /* The deal that became this home (advanceTestDeal), else the one at move day, else the newest. */
+    const deal = deals.find((d) => d.homeId === pid) ?? deals.find((d) => d.stageKey === "move_day") ?? deals[0] ?? null;
+    const own = recs.find((r) => r.kind === "listing" && (!deal || (r.payload as TestListing).listingId === deal.listingId))?.payload as TestListing | undefined;
+    /* The listing can sit on another file (a tenant file's offer on a landlord
+       file's listing): read it, and its file, where it is. */
+    const elsewhere = !own && deal
+      ? (await q<{ kit_id: string; payload: TestListing }>(`SELECT kit_id, payload FROM os_test_records WHERE kind = 'listing' AND (payload->>'listingId')::bigint = $1 LIMIT 1`, [deal.listingId]).catch(() => []))[0] ?? null
+      : null;
+    const listing = own ?? elsewhere?.payload ?? (recs.find((r) => r.kind === "listing")?.payload as TestListing | undefined) ?? null;
+    const listingKit = elsewhere?.kit_id ?? k.id;
+
+    /* WHO IS WHO (13 Oct 2026). This read contacts[0] as the landlord and
+       contacts[1] as the tenant, which is only true of the live-tenancy kit.
+       A file may hold its two people in either order, or only one of them,
+       and the tenant may be on another file altogether. So: the landlord is
+       the landlord contact on the listing's file, and the tenant is the
+       deal's tenant - a test tenant contact with the deal's email, on this
+       file first, then on any open test file. */
+    const kitContacts = listingKit === k.id
+      ? k.refs.contacts ?? []
+      : (await q<{ contacts: string[] | null }>(`SELECT refs->'contacts' AS contacts FROM os_test_kits WHERE id = $1`, [listingKit]).catch(() => []))[0]?.contacts ?? [];
+    const [onFile, tenantRow] = await Promise.all([
+      q<{ id: string; kind: string; mobile: string | null }>(`SELECT id, kind, mobile FROM os_contacts WHERE id = ANY($1)`, [[...new Set([...kitContacts, ...(k.refs.contacts ?? [])])]]).catch(() => []),
+      deal?.tenantEmail
+        ? q<{ id: string; mobile: string | null }>(
+            `SELECT c.id, c.mobile FROM os_contacts c
+              WHERE c.is_test AND c.kind = 'tenant' AND LOWER(c.email) = LOWER($1)
+                AND EXISTS (SELECT 1 FROM os_test_kits t WHERE t.cleared_at IS NULL AND t.refs->'contacts' ? c.id)
+              ORDER BY (c.id = ANY($2)) DESC, c.created_at DESC LIMIT 1`,
+            [deal.tenantEmail, k.refs.contacts ?? []]
+          ).catch(() => [])
+        : Promise.resolve([] as { id: string; mobile: string | null }[]),
+    ]);
+    const landlordRow = onFile.find((c) => c.kind === "landlord" && kitContacts.includes(c.id)) ?? onFile.find((c) => c.kind === "landlord") ?? null;
+    const tenantFound = tenantRow[0] ?? onFile.find((c) => c.kind === "tenant") ?? null;
+    const landlordId = landlordRow?.id ?? k.refs.contacts?.[0];
+    const tenantId = tenantFound?.id ?? k.refs.contacts?.[1];
+    const people = [...onFile, ...tenantRow];
+    const phone = (id: string | undefined) => people.find((c) => c.id === id)?.mobile?.trim() || null;
     const rent = deal?.rent ?? listing?.rent ?? null;
     out.push({
       listingId: pid,
@@ -428,6 +507,15 @@ export function testDealStage(deal: TestDeal, plc: Pick<PlcCase, "state"> | null
   return deal.stageKey;
 }
 
+/** What each stage's "move on" button says on a test deal, in the words of the step it stands for. */
+const ADVANCE_WORDS: Record<string, { label: string; detail: string }> = {
+  holding_fee: { label: "Mark the holding fee paid", detail: "On a real let the tenant pays it through Propoly." },
+  referencing: { label: "Mark the references passed", detail: "On a real let the referencing comes back in Propoly." },
+  deposit: { label: "Mark the deposit registered", detail: "On a real let the deposit is taken and registered, or Flatfair is set up." },
+  tenancy_agreement: { label: "Mark the agreement signed", detail: "On a real let everybody signs it in Propoly." },
+  rent_payment: { label: "Mark the first rent received", detail: "On a real let the move-in monies arrive in PayProp." },
+};
+
 /**
  * A test application's spine, in the shape journeyFor() gives a real one:
  * REX's three stops, then Kirstie's eight at the deal's stage.
@@ -442,6 +530,7 @@ export function testDealStage(deal: TestDeal, plc: Pick<PlcCase, "state"> | null
  */
 export function testJourney(app: Application, deal: TestDeal | null, plc: PlcCase | null = null): ApplicationJourney {
   const accepted = app.status === "accepted";
+  const pushed = testDealPushed(deal);
   const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : null);
   const stops: JourneyStop[] = [
     { id: "received", label: "Received", sub: `Came in ${day(app.dateReceived) ?? ""}`.trim(), tone: "ok", state: "done" },
@@ -455,9 +544,9 @@ export function testJourney(app: Application, deal: TestDeal | null, plc: PlcCas
     {
       id: "handover",
       label: "Handover",
-      sub: deal ? "Test deal - handed over" : null,
-      tone: deal ? "ok" : "none",
-      state: deal ? "done" : accepted ? "current" : "upcoming",
+      sub: pushed ? "Test deal - pushed (nothing left the OS)" : accepted ? "Push it to Propoly" : null,
+      tone: pushed ? "ok" : "none",
+      state: pushed ? "done" : accepted ? "current" : "upcoming",
     },
   ];
   const stageKey = deal ? testDealStage(deal, plc) : null;
@@ -502,42 +591,84 @@ export function testJourney(app: Application, deal: TestDeal | null, plc: PlcCas
       who: "you",
       test: "decline",
     });
-  } else if (!plc) {
-    actions.push({ id: "plc-start", label: "Start the PLC check", detail: "The pre-let compliance pack has not been started for this let.", href: plcHref, who: "you" });
-  } else {
-    const queries = plc.findings.filter((f) => f.level !== "ok");
-    if (plc.state === "assembling") {
-      actions.push({ id: "plc-submit", label: "Finish and submit the PLC pack", detail: "Started but not sent to compliance yet.", href: plcHref, who: "you" });
-    } else if (plc.state === "deferred" && queries.length) {
-      actions.push({ id: "plc-query", label: "Answer Kirstie on the PLC pack", detail: queries.map((f) => f.message).join(" "), href: plcHref, who: "you" });
-    } else if (plc.state === "declined") {
-      actions.push({ id: "plc-declined", label: "The PLC pack was declined", detail: plc.decisionNote || "See Kirstie's note on the pack.", href: plcHref, who: "you" });
-    } else if (plc.state !== "approved") {
-      actions.push({
-        id: "plc-wait",
-        label: "Check and approve the PLC pack, as Kirstie",
-        detail: `With compliance (${plcState?.label ?? plc.state}). On a real pack this is Kirstie's; on a test one you play her part on the PLC queue - the first check, then the approval.`,
-        href: `/pre-tenancy/plc?case=${encodeURIComponent(plc.id)}`,
-        who: "you",
-      });
+  } else if (deal && !pushed) {
+    /* THE REAL BUTTON (James, 13 Oct 2026: walk a test file through the real
+       screens "with nothing refusing or slowing them"). The Next Step card's
+       Push to Propoly posts to /api/handoff as it does for a real let; for a
+       test application that route plays the push (pushTestDeal) and nothing
+       reaches Propoly or REX. The deal moves on to the holding fee. */
+    actions.push({
+      id: "handover",
+      label: "Push to Propoly",
+      detail: "Accepted. Push it to Propoly: the landlord, the home and the deal with its tenants go over. On this test file the push is played - nothing leaves the OS - and the deal moves on to the holding fee.",
+      href: null,
+      who: "you",
+      push: true,
+    });
+  } else if (pushed) {
+    /* The pack after the holding fee and referencing, as on a real let. */
+    const refAt = PORTAL_STAGES.findIndex((s) => s.key === "referencing");
+    const at = stageKey ? PORTAL_STAGES.findIndex((s) => s.key === stageKey) : -1;
+    if (!plc) {
+      if (at >= refAt) {
+        actions.push({
+          id: "plc-start",
+          label: "Start the PLC check",
+          detail: "The pre-let compliance pack has not been started for this let. On this test file, Send brings it straight back approved and the deal moves on to the deposit.",
+          href: plcHref,
+          who: "you",
+        });
+      }
+    } else {
+      const queries = plc.findings.filter((f) => f.level !== "ok");
+      if (plc.state === "assembling") {
+        actions.push({ id: "plc-submit", label: "Finish and submit the PLC pack", detail: "Started but not sent yet. On this test file, Send brings it straight back approved.", href: plcHref, who: "you" });
+      } else if (plc.state === "deferred" && queries.length) {
+        actions.push({ id: "plc-query", label: "Answer Kirstie on the PLC pack", detail: queries.map((f) => f.message).join(" "), href: plcHref, who: "you" });
+      } else if (plc.state === "declined") {
+        actions.push({ id: "plc-declined", label: "The PLC pack was declined", detail: plc.decisionNote || "See Kirstie's note on the pack.", href: plcHref, who: "you" });
+      } else if (plc.state !== "approved") {
+        actions.push({
+          id: "plc-wait",
+          label: "Check and approve the PLC pack, as Kirstie",
+          detail: `With compliance (${plcState?.label ?? plc.state}). On a real pack this is Kirstie's; on a test one you play her part on the PLC queue - the first check, then the approval.`,
+          href: `/pre-tenancy/plc?case=${encodeURIComponent(plc.id)}`,
+          who: "you",
+        });
+      }
     }
   }
   /* Moving the deal on: Kirstie's job on a real deal, the tester's here. Never
      past the PLC stop until the pack is approved - that is the check's whole
-     point, and the button would teach the opposite. */
-  if (deal && stageKey) {
+     point, and the button would teach the opposite. Not before the push
+     either: the push is what starts the deal. From referencing the PLC pack
+     leads, and sending it moves the deal on, so the button is a reminder
+     there rather than the next step. */
+  if (deal && stageKey && pushed) {
     const idx = PORTAL_STAGES.findIndex((s) => s.key === stageKey);
     const next = PORTAL_STAGES[idx + 1];
     const plcAt = PORTAL_STAGES.findIndex((s) => s.key === "plc");
     /* At the PLC stop means the pack is not approved yet (testDealStage moves an approved one past it). */
     if (next && idx !== plcAt) {
+      const words = ADVANCE_WORDS[stageKey];
       actions.push({
         id: "test-advance",
-        label: `Move the deal on to ${next.label}`,
-        detail: "On a real deal this happens as each step is done. On this test one, press it to take the next step.",
+        label: words?.label ?? `Move the deal on to ${next.label}`,
+        detail: `${words?.detail ?? "On a real deal this happens as each step is done."} On this test one, press it and the deal moves on to ${next.label}.`,
         href: null,
         who: "you",
         test: "advance",
+        ...(next.key === "plc" ? { minor: true } : {}),
+      });
+    }
+    /* Moved in: the home is on Portfolio now (advanceTestDeal made it). */
+    if (!next && deal.homeId) {
+      actions.push({
+        id: "test-home",
+        label: "See the home on Portfolio",
+        detail: "Moved in. The home is on Portfolio now with its landlord and tenant - only for you, and never counted in the figures.",
+        href: `/portfolio/${encodeURIComponent(deal.homeId)}`,
+        who: "you",
       });
     }
   }
@@ -664,8 +795,10 @@ export async function testOffersForListing(listingId: number): Promise<TestOffer
 /** "Move the deal on" on a test application: one stage, from where it really is. */
 export async function advanceTestDeal(appId: string, by: { email: string }, plc: PlcCase | null): Promise<void> {
   if (!(await mayPlay(appId, by.email))) throw new Error("That test application isn't one of yours.");
-  const d = (await rows<TestDeal>("deal", "payload->>'appId' = $2", [appId]))[0]?.payload;
+  const row = (await rows<TestDeal>("deal", "payload->>'appId' = $2", [appId]))[0];
+  const d = row?.payload;
   if (!d) throw new Error("Accept the offer first - there is no deal to move on yet.");
+  if (!testDealPushed(d)) throw new Error("Push it to Propoly first - the push is what starts the deal.");
   const from = testDealStage(d, plc);
   const idx = PORTAL_STAGES.findIndex((s) => s.key === from);
   const plcAt = PORTAL_STAGES.findIndex((s) => s.key === "plc");
@@ -675,6 +808,62 @@ export async function advanceTestDeal(appId: string, by: { email: string }, plc:
   await q(
     `UPDATE os_test_records SET payload = payload || jsonb_build_object('stageKey', $2::text) WHERE kind = 'deal' AND payload->>'appId' = $1`,
     [appId, next.key]
+  );
+  /* Move day: the tenant is in, so the home joins the managed book. */
+  if (next.key === "move_day") await moveInTestHome(row.kit_id, d);
+}
+
+/**
+ * "Push to Propoly" on a test application (James, 13 Oct 2026). The real
+ * button on the Next Step card posts to /api/handoff, which comes here for a
+ * test id before it asks REX or Propoly anything. Nothing leaves the OS: the
+ * deal is marked pushed and moves on from "deal started" to the holding fee,
+ * where a real deal goes once the push has started it.
+ */
+export async function pushTestDeal(appId: string, by: { email: string }): Promise<TestDeal> {
+  if (!(await mayPlay(appId, by.email))) throw new Error("That test application isn't one of yours.");
+  const t = await testApplication(appId);
+  if (!t) throw new Error("That test application has gone.");
+  if (t.app.status !== "accepted" || !t.deal) throw new Error("Accept the offer first. Only an accepted offer goes to Propoly.");
+  if (!testDealPushed(t.deal)) {
+    await q(
+      `UPDATE os_test_records
+          SET payload = payload || jsonb_build_object('pushedAt', $2::text, 'stageKey', CASE WHEN payload->>'stageKey' = 'deal_started' THEN 'holding_fee' ELSE payload->>'stageKey' END)
+        WHERE kind = 'deal' AND payload->>'appId' = $1`,
+      [appId, new Date().toISOString()]
+    );
+  }
+  const after = await rows<TestDeal>("deal", "payload->>'appId' = $2", [appId]);
+  return after[0]?.payload ?? t.deal;
+}
+
+/**
+ * The home a test let becomes on move day (James, 13 Oct 2026: "the home
+ * shows on Portfolio"). The same os_properties row the live-tenancy kit makes
+ * (lib/test-files, source 'test', id pm-test-<kit>), on the kit the listing is
+ * filed on, so a reset or a delete of that file takes it away again (unwind).
+ * Portfolio adds it for the tester only and never counts it (testHomesFor).
+ */
+async function moveInTestHome(kitId: string, d: TestDeal): Promise<void> {
+  const l = await testListing(d.listingId).catch(() => null);
+  const name = l?.name ?? d.property;
+  const locality = l?.locality ?? d.locality;
+  const postcode = l?.postcode ?? "";
+  const town = locality.split(",").map((x) => x.trim()).filter(Boolean).at(-1) ?? null;
+  const id = `pm-test-${kitId}`;
+  await q(
+    `INSERT INTO os_properties (id, source, ref, address, name, locality, postcode, town, bedrooms, management, categories, hmo, no_gas, rex_property_id, match_how, active)
+     VALUES ($1,'test',$2,$3,$4,$5,$6,$7,$8,'Active letting agreement','[]'::jsonb,FALSE,FALSE,NULL,'test file',TRUE)
+     ON CONFLICT (id) DO UPDATE SET address = EXCLUDED.address, name = EXCLUDED.name, locality = EXCLUDED.locality, postcode = EXCLUDED.postcode, active = TRUE, updated_at = NOW()`,
+    [id, `TEST-${kitId.slice(0, 6).toUpperCase()}`, [name, `${locality} ${postcode}`.trim()].filter(Boolean).join(", "), name, locality, postcode || null, town, l?.beds ?? 2]
+  );
+  await q(
+    `UPDATE os_test_kits SET refs = jsonb_set(COALESCE(refs, '{}'::jsonb), '{osPropertyId}', to_jsonb($2::text)) WHERE id = $1`,
+    [kitId, id]
+  );
+  await q(
+    `UPDATE os_test_records SET payload = payload || jsonb_build_object('homeId', $2::text) WHERE kind = 'deal' AND payload->>'appId' = $1`,
+    [d.appId, id]
   );
 }
 

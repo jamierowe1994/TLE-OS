@@ -41,13 +41,25 @@ export type OfferContext = {
 
 /** The home and the tenant's passport, for the screen to open on. */
 export async function offerContext(p: { listingId: string; email: string; name: string }): Promise<OfferContext> {
-  /* A test listing (negative id, lib/test-overlay) is read off its test file,
-     and nobody's passport is read for it. */
+  /* A test listing (negative id, lib/test-overlay) is read off its test file.
+     The tenant's passport is read as for a real one (13 Oct 2026), so the
+     offer opens filled in from it - read only: saving a test offer still
+     writes nothing back to the passport (saveAgentOffer). */
   if (/^-\d+$/.test(p.listingId)) {
-    const t = await testListing(p.listingId).catch(() => null);
+    const [t, rec] = await Promise.all([
+      testListing(p.listingId).catch(() => null),
+      emailOk(p.email) ? passportFor(p.email) : Promise.resolve(null),
+    ]);
     return {
       home: t ? { id: p.listingId, address: t.name, locality: t.locality, askingPcm: t.rent, beds: t.beds, photo: t.images[0] ?? null } : null,
-      tenant: { name: p.name, email: p.email, passport: null, passportDoneOn: null },
+      tenant: {
+        name: rec?.data.legalName || p.name,
+        email: p.email,
+        passport: rec ? rec.data : null,
+        passportDoneOn: rec?.submittedAt
+          ? new Date(rec.submittedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" })
+          : null,
+      },
     };
   }
   const h = /^\d+$/.test(p.listingId) ? await homeOnMarket(p.listingId).catch(() => null) : null;

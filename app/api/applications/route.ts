@@ -30,8 +30,34 @@ import { propolyOnlyLets } from "@/lib/propoly-only-lets";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * The tester's own test applications on their own (13 Oct 2026), for when
+ * there is no book to put them on top of: REX not connected here, or an
+ * account not linked to a REX user. A test file is the tester's, never in
+ * REX, so neither is a reason to hide it. Returned as a full answer with no
+ * error, so the board draws them - and only when there are some.
+ */
+async function testsOnly(req: NextRequest, email: string | null | undefined) {
+  if (!email || req.nextUrl.searchParams.get("tests") === "0") return null;
+  const rows = await testApplicationsFor(email).catch(() => []);
+  if (!rows.length) return null;
+  const cancelled = new Set((await allCancellations().catch(() => [])).flatMap((c) => [c.ref, c.dealId ?? ""]).filter(Boolean));
+  return {
+    applications: rows.map((a) => ({ ...a, stageLabel: a.stageLabel ?? a.statusLabel, test: true, ...(cancelled.has(String(a.id)) ? { closed: "Deal cancelled" } : {}) })),
+    osAccepted: [],
+    propolyOnly: [],
+    scope: "Your test files",
+    everything: false,
+    pulledAt: new Date().toISOString(),
+    testsOnly: true,
+  };
+}
+
 export async function GET(req: NextRequest) {
   if (!rexConfigured()) {
+    const { actor } = await whoIs(req).catch(() => ({ actor: null }));
+    const tests = await testsOnly(req, actor?.email);
+    if (tests) return NextResponse.json(tests);
     return NextResponse.json({ error: "Applications aren't connected here.", applications: [] }, { status: 503 });
   }
   const limit = Math.min(ASSEMBLE_AT, Number(req.nextUrl.searchParams.get("limit") ?? 100) || 100);
@@ -45,6 +71,8 @@ export async function GET(req: NextRequest) {
     whoIs(req).catch(() => ({ actor: null })),
   ]);
   if (scope.unlinked) {
+    const tests = await testsOnly(req, actor?.email);
+    if (tests) return NextResponse.json(tests);
     return NextResponse.json({
       error:
         "Your account isn't linked to your applications yet, so we can't show you yours, and we won't show you everybody's. Ask James to link your account.",
