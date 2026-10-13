@@ -1,15 +1,19 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { requireCapability } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
 import { R2_BUCKET, r2Configured, SCOPES, withR2 } from "@/lib/r2";
+import { forgetLibraryFile, readKeys, readLibraryFile, readNotes } from "@/lib/library-reader";
 
 /**
  * The File Store's housekeeping (30 Sep 2026, Francesca's ticket): delete a
  * file, and lock one so it can't be deleted.
  *
- *   GET                                   -> { locked: string[] }
- *   POST { action: "lock" | "unlock" | "delete", key }
+ *   GET                                   -> { locked, read: keys with a write-up, reads: notes }
+ *   POST { action: "lock" | "unlock" | "delete" | "read", key }
+ *
+ * "read" has Steve read the file again now (lib/library-reader); a delete
+ * takes the file's library write-up with it.
  *
  * Locks live in os_settings under "library_locks" rather than on the object,
  * because R2 metadata can't be changed without copying the whole file, and a
@@ -48,7 +52,8 @@ export async function GET(req: NextRequest) {
   if (!(await requireCapability(req, "see:marketing"))) {
     return NextResponse.json({ ok: true, locked: {}, canManage: false });
   }
-  return NextResponse.json({ ok: true, locked: await readLocks(), canManage: true });
+  const [locked, read, reads] = await Promise.all([readLocks(), readKeys(), readNotes()]);
+  return NextResponse.json({ ok: true, locked, read: [...read], reads, canManage: true });
 }
 
 export async function POST(req: NextRequest) {
@@ -95,6 +100,11 @@ export async function POST(req: NextRequest) {
       console.error("library delete failed", e);
       return NextResponse.json({ ok: false, error: "Storage didn't delete it. Try again." }, { status: 502 });
     }
+    await forgetLibraryFile(key);
+    return NextResponse.json({ ok: true, locked: locks });
+  }
+  if (body.action === "read") {
+    after(() => readLibraryFile(key, `Read again by ${me.name}`).then(() => undefined));
     return NextResponse.json({ ok: true, locked: locks });
   }
   return NextResponse.json({ ok: false, error: "Unknown action." }, { status: 400 });

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import {
   AbortMultipartUploadCommand,
   CompleteMultipartUploadCommand,
@@ -7,6 +7,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { requireCapability } from "@/lib/admin";
 import { R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
+import { readLibraryFile } from "@/lib/library-reader";
 
 /**
  * The File Store's upload, in pieces (30 Sep 2026).
@@ -124,6 +125,9 @@ export async function POST(req: NextRequest) {
           })
         )
       );
+      /* Steve reads it once the answer has gone (lib/library-reader), so the
+         upload never waits on the read. */
+      after(() => readLibraryFile(key).then(() => undefined));
       return NextResponse.json({ ok: true, key });
     } catch (e) {
       console.error("library upload complete failed", e);

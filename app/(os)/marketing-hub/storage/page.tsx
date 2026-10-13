@@ -40,6 +40,12 @@ import DoodleIcon from "@/components/DoodleIcon";
  * receive more than 10MB. Files now go to /api/r2/library/upload in 8MB
  * pieces with a progress bar, and a file that fails says which and why while
  * the rest carry on. Files can be deleted, and locked so they can't be.
+ *
+ * ── Steve reads what arrives (13 Oct 2026) ────────────────────────────────
+ *
+ * A PDF or picture is read once its upload finishes and written up for
+ * Steve's marketing library (lib/library-reader), so he can find it and hand
+ * it over. Each file says whether he has; one he couldn't read has Read now.
  */
 
 /** The scope and reference this shelf lives under: library/shelf/… */
@@ -67,6 +73,10 @@ const ACCEPT = [
 const MAX_BYTES = 500 * 1024 * 1024;
 
 type Lock = { by: string; at: string };
+type ReadNote = { state: "reading" | "failed" | "skipped"; at: string; note?: string };
+
+/** A read that hasn't finished in ten minutes isn't going to (a deploy cut it off). */
+const STALE_MS = 10 * 60 * 1000;
 
 /** One piece, with its progress. XHR rather than fetch: fetch cannot report
  *  how much of an upload has gone. */
@@ -169,6 +179,8 @@ export default function Storage() {
   const [done, setDone] = useState<string | null>(null);
   const [locks, setLocks] = useState<Record<string, Lock>>({});
   const [canManage, setCanManage] = useState(false);
+  const [read, setRead] = useState<Set<string>>(new Set());
+  const [reads, setReads] = useState<Record<string, ReadNote>>({});
   const [working, setWorking] = useState<string | null>(null);
   const picker = useRef<HTMLInputElement | null>(null);
 
@@ -186,6 +198,8 @@ export default function Storage() {
       if (l?.ok) {
         setLocks(l.locked ?? {});
         setCanManage(Boolean(l.canManage));
+        setRead(new Set<string>(l.read ?? []));
+        setReads(l.reads ?? {});
       }
     } catch (e) {
       /* Say which failed. "No files" and "could not look" are different facts
@@ -198,6 +212,28 @@ export default function Storage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /* How Steve's read of a file stands. A file uploaded in the last few
+     minutes with no write-up yet is still being read. */
+  function readState(f: StoredFile): { tone: "ok" | "busy" | "bad" | "off"; text: string } | null {
+    if (!canManage) return null;
+    if (read.has(f.key)) return { tone: "ok", text: "Read by Steve" };
+    const n = reads[f.key];
+    const age = (iso: string | null | undefined) => (iso ? Date.now() - new Date(iso).getTime() : Infinity);
+    if (n?.state === "reading" && age(n.at) < STALE_MS) return { tone: "busy", text: "Steve is reading it" };
+    if (n?.state === "skipped") return { tone: "off", text: n.note ?? "Not read" };
+    if (n?.state === "failed") return { tone: "bad", text: n.note ?? "Steve couldn't read it" };
+    if (!n && age(f.uploadedAt) < 3 * 60 * 1000) return { tone: "busy", text: "Steve is reading it" };
+    return { tone: "bad", text: "Not read by Steve yet" };
+  }
+
+  /* While anything is being read, look again every few seconds. */
+  const anyReading = (files ?? []).some((f) => readState(f)?.tone === "busy");
+  useEffect(() => {
+    if (!anyReading) return;
+    const t = window.setInterval(() => void load(), 6000);
+    return () => window.clearInterval(t);
+  }, [anyReading, load]);
 
   /* Leaving mid-upload loses it, so the browser asks first. */
   useEffect(() => {
@@ -237,7 +273,7 @@ export default function Storage() {
     await load();
   }
 
-  async function manage(action: "lock" | "unlock" | "delete", f: StoredFile) {
+  async function manage(action: "lock" | "unlock" | "delete" | "read", f: StoredFile) {
     if (action === "delete" && !window.confirm(`Delete ${f.name}? This can't be undone.`)) return;
     setWorking(f.key);
     setUploadErr(null);
@@ -254,6 +290,14 @@ export default function Storage() {
       if (action === "delete") {
         setFiles((fs) => (fs ?? []).filter((x) => x.key !== f.key));
         setDone(`${f.name} deleted.`);
+      }
+      if (action === "read") {
+        setRead((r) => {
+          const next = new Set(r);
+          next.delete(f.key);
+          return next;
+        });
+        setReads((r) => ({ ...r, [f.key]: { state: "reading", at: new Date().toISOString() } }));
       }
     } catch (e) {
       setUploadErr(e instanceof Error ? e.message : "That didn't work.");
@@ -372,10 +416,39 @@ export default function Storage() {
                       {f.uploadedAt ? ` · ${when(f.uploadedAt)}` : ""}
                       {locks[f.key] ? ` · Locked by ${locks[f.key].by}` : ""}
                     </span>
+                    {(() => {
+                      const r = readState(f);
+                      if (!r) return null;
+                      return (
+                        <span className={`mt-0.5 flex items-center gap-1.5 text-[11px] ${r.tone === "bad" ? "text-accent-dark" : "text-muted"}`}>
+                          {r.tone === "busy" ? (
+                            <span aria-hidden className="inline-block h-2.5 w-2.5 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+                          ) : r.tone === "ok" ? (
+                            <svg aria-hidden viewBox="0 0 12 12" className="h-2.5 w-2.5 shrink-0 text-accent-dark">
+                              <path d="M2 6.5 4.8 9 10 3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          ) : (
+                            <DoodleIcon name="info" size={11} />
+                          )}
+                          {r.text}
+                        </span>
+                      );
+                    })()}
                   </span>
                 </a>
                 {canManage && (
                   <span className="flex shrink-0 gap-1.5">
+                    {readState(f)?.tone === "bad" && (
+                      <button
+                        type="button"
+                        disabled={working === f.key}
+                        onClick={() => manage("read", f)}
+                        className="rounded-lg border border-line/80 px-2.5 py-2 text-[12px] disabled:opacity-40"
+                        title="Have Steve read it now"
+                      >
+                        Read now
+                      </button>
+                    )}
                     <button
                       type="button"
                       disabled={working === f.key}
