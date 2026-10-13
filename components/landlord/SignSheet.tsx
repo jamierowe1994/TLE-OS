@@ -170,6 +170,8 @@ export default function SignSheet({
   /* Half the column, so the CONTRACT is centred before signing starts and
      slides off centre by exactly the room the column needs. */
   const shift = split ? (GAP + COL_W) / 2 : 0;
+  /* A "demo:" address is our own stand-in, not DocuSeal's form. */
+  const standIn = url.startsWith("demo:");
   /* The card's height is measured only so the layout settles; the panel's own
      place comes from the slot beneath it. */
   void listH;
@@ -483,7 +485,11 @@ export default function SignSheet({
            * box either way, so the question stops mattering. The pages stay on
            * the paper because .scrollbox is width-clamped instead.
            */
-          className="absolute inset-0 overflow-y-auto"
+          className={standIn ? "absolute inset-y-0 left-0 overflow-y-auto" : "absolute inset-0 overflow-y-auto"}
+          /* The stand-in sheet (a test file, or the Showroom) has no panel of
+             theirs to keep inside the box, so it spans the paper alone and
+             its words centre on the paper rather than on the whole sheet. */
+          style={standIn ? { width: paperW } : undefined}
         />
 
         {/* READ IT LARGER. Phone only: on anything wider the page already
