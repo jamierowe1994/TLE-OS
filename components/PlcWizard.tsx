@@ -211,6 +211,11 @@ export default function PlcWizard({
   const demoRef = useRef(demo);
   demoRef.current = demo;
   const isDemo = !!demo;
+  /* A pack on a TEST application (a negative id, lib/test-overlay): Send
+     takes it as it is and it comes straight back approved (James, 13 Oct
+     2026), so the tester walks the let on without a document or a checker.
+     The server decides; this only stops the button refusing first. */
+  const testLet = !demo && /^-\d+$/.test(String(kase?.applicationRef ?? "").trim());
 
   /* Advance with the panel sliding out before the next one slides in, so the
      two are never on screen together. */
@@ -771,8 +776,14 @@ export default function PlcWizard({
           return (
           <div>
             <h1 className="text-2xl tracking-normal text-ink">
-              {gate.ready && blockers.length === 0 && rlpAnswered(kase) ? "Ready to Send" : "Not Ready to Send Yet"}
+              {testLet || (gate.ready && blockers.length === 0 && rlpAnswered(kase)) ? "Ready to Send" : "Not Ready to Send Yet"}
             </h1>
+            {testLet && (
+              <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+                This is a test file, so it sends as it is - with or without the documents below - and
+                comes straight back approved. The let then moves on to the deposit. Nothing leaves the OS.
+              </p>
+            )}
             <p className="mt-2 text-sm text-muted">
               {kase.address} · moving in {prettyDate(kase.moveInDate) ?? "date not set"} ·{" "}
               <button
@@ -1000,9 +1011,11 @@ export default function PlcWizard({
               <button
                 type="button"
                 onClick={submit}
-                disabled={!gate.ready || !rlpAnswered(kase)}
+                disabled={!testLet && (!gate.ready || !rlpAnswered(kase))}
                 title={
-                  !gate.ready
+                  testLet
+                    ? undefined
+                    : !gate.ready
                     ? "Attach what is needed, or say why it is not, first"
                     : !rlpAnswered(kase)
                       ? "Say whether the landlord wants Rent and Legal Protection first"
@@ -1065,7 +1078,9 @@ export default function PlcWizard({
                   {kase.decisionNote && <p className="mt-1 text-emerald-800">{kase.decisionNote}</p>}
                 </div>
                 <p className="mt-4 text-sm text-muted">
-                  Next: finish the deal in Propoly. Open the application and use its link to the deal.
+                  {testLet
+                    ? "Next: the deposit. This is a test file - open the application for the next step."
+                    : "Next: finish the deal in Propoly. Open the application and use its link to the deal."}
                 </p>
               </>
             ) : kase.state === "declined" ? (
@@ -1157,15 +1172,45 @@ export default function PlcWizard({
             <div className="flex justify-center">
               <DoneTick size={72} />
             </div>
-            <h1 className="mt-6 text-2xl tracking-normal text-ink">
-              That Is With the Compliance Team
-            </h1>
-            <p className="mx-auto mt-3 max-w-md text-sm text-muted">
-              They usually come back within 48 hours. You will get it back with a decision, and if
-              anything is missing they will say exactly what.
-            </p>
+            {kase.state === "approved" ? (
+              <>
+                {/* A test application's pack, passed on Send (13 Oct 2026). */}
+                <h1 className="mt-6 text-2xl tracking-normal text-ink">PLC Approved - on to the Deposit</h1>
+                <p className="mx-auto mt-3 max-w-md text-sm text-muted">
+                  This is a test file, so the pack was passed as soon as it was sent. The let has moved on
+                  to the deposit: open the application for the next step.
+                </p>
+              </>
+            ) : (
+              <>
+                <h1 className="mt-6 text-2xl tracking-normal text-ink">
+                  That Is With the Compliance Team
+                </h1>
+                <p className="mx-auto mt-3 max-w-md text-sm text-muted">
+                  They usually come back within 48 hours. You will get it back with a decision, and if
+                  anything is missing they will say exactly what.
+                </p>
+              </>
+            )}
             <div className="mt-8 flex flex-wrap justify-center gap-3">
-              {demo ? (
+              {!demo && kase.state === "approved" ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/applications/${encodeURIComponent(prefill?.applicationId ?? kase.applicationRef)}`)}
+                    className="rounded-lg border border-ink bg-ink px-4 py-2.5 text-sm text-white"
+                  >
+                    Open the application
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push("/applications")}
+                    className="rounded-lg border border-line px-4 py-2.5 text-sm"
+                  >
+                    Back to applications
+                  </button>
+                </>
+              ) : demo ? (
                 <>
                   <button
                     type="button"

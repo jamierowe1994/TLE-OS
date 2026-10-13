@@ -466,7 +466,7 @@ export async function removeDocument(id: string, key: string): Promise<PlcCase> 
  * document legitimately lives elsewhere; it does not skip the check, it
  * records that the agent overrode it.
  */
-export async function submitCase(id: string): Promise<PlcCase> {
+export async function submitCase(id: string, opts: { test?: boolean } = {}): Promise<PlcCase> {
   return mutate(id, (c) => {
     if (!canMove(c.state, "submitted")) {
       throw new PlcRefused(
@@ -474,6 +474,14 @@ export async function submitCase(id: string): Promise<PlcCase> {
           ? "This came back to you. Press Reopen and fix it before sending it again."
           : "This has already been submitted."
       );
+    }
+    /* A pack on a TEST application (a negative id, lib/test-overlay) goes as
+       it is (James, 13 Oct 2026): the tester walks the let end to end, and
+       the route passes it straight on. Asked for by the caller AND checked
+       here, so no real pack can ever be sent short. */
+    const ref = Number(String(c.applicationRef ?? "").trim());
+    if (opts.test && c.applicationRef && Number.isFinite(ref) && ref < 0) {
+      return { ...c, state: "submitted", submittedAt: new Date().toISOString(), agentNote: noteAsSent(c) };
     }
     if (!c.moveInDate) {
       /* Not pedantry: every date check is "in date ON the move-in date", so

@@ -25,6 +25,7 @@ import { getTobRegister, type TobStatus } from "@/lib/business/rex-esign";
 import { loadMoneyContext, moneyForDeal } from "@/lib/business/deal-money";
 import { PORTAL_STAGES, portalStageOf } from "@/lib/business/propoly-stages";
 import type { DealPortalOverlay } from "@/lib/business/types";
+import { testDealsForBoard } from "@/lib/test-overlay";
 
 // GET /api/pretenancy/deals — every Propoly deal across all TLE agents with
 // the portal overlay (notes, stage moves, checklist) merged in, plus the
@@ -144,6 +145,69 @@ export interface PreTenancyDeal {
   arrears: { owed: number; lastPayment: string | null } | null;
 }
 
+/**
+ * A test let as a card on the agent's board (James, 13 Oct 2026). Its id is
+ * the journey's own (test-<app id>), its listing id the test listing's, so
+ * the Applications page matches it to the test application and a card opens
+ * that file. Every money and register field is empty: nothing about a test
+ * let is in PayProp, Flatfair or REX, and the card must not pretend it is.
+ */
+function toBoardDeal(t: Awaited<ReturnType<typeof testDealsForBoard>>[number]): PreTenancyDeal {
+  const { deal: d, stageKey, plc, listing: l, offer: o } = t;
+  const st = plc ? PLC_STATES.find((x) => x.id === plc.state) : null;
+  return {
+    app: {
+      id: `test-${d.appId}`,
+      listingId: String(d.listingId),
+      images: l?.images ?? [],
+      stage: "accepted",
+      status: "Accepted",
+      propertyName: d.property,
+      locality: d.locality,
+      image: l?.images[0] ?? null,
+      offer: d.rent,
+      offerPeriod: "month",
+      affordability: null,
+      dateReceived: o?.received ?? d.pushedAt ?? null,
+      dateCommunicated: null,
+      dateAccepted: o?.accepted ?? null,
+      dateUnsuccessful: null,
+      daysToLandlord: null,
+      daysToDecision: null,
+      endDate: null,
+      leaseType: "periodic",
+      agreementType: "apt",
+      startDate: d.moveIn || null,
+      agreementMonths: o?.months || null,
+      occupants: o?.adults ?? null,
+      hasPets: o?.pets ?? false,
+      tenants: [{ name: d.tenantName, email: d.tenantEmail, phone: null, isPrimary: true }],
+      notes: "Test file",
+      conditions: null,
+    },
+    compliance: null,
+    statusKey: stageKey,
+    archived: false,
+    effectiveStatusKey: stageKey,
+    plc: plc ? { id: plc.id, state: plc.state, label: st?.label ?? plc.state, who: st?.who ?? "", decidedBy: plc.decidedBy, decidedAt: plc.decidedAt } : null,
+    money: { holding: null, deposit: null },
+    agentName: d.agentName,
+    agentEmail: d.agentEmail,
+    portal: { notesCount: 0, lastNote: null, override: null, checklistDone: 0, checklistTotal: CHECKLIST_ITEMS.length },
+    serviceLevel: "Fully managed",
+    rlp: null,
+    tenancy: null,
+    tobStatus: null,
+    flags: [],
+    schemeSuggestion: null,
+    holdingInvoice: null,
+    flatbond: null,
+    rentReceived: null,
+    rentSchedule: null,
+    arrears: null,
+  };
+}
+
 export async function GET(req: NextRequest) {
   /* The portal allowed EITHER a PRETENANCY_EMAILS address or an admin. Here it
      is one question, asked of the role: owner, support and pretenancy hold
@@ -180,6 +244,12 @@ export async function GET(req: NextRequest) {
   const now = new Date();
   const moneyWork = loadMoneyContext(now).catch(() => null);
 
+  /* The tester's own test lets (lib/test-overlay), on an agent's board only -
+     never Kirstie's working board, and never in the summary's counts. */
+  const testsWork = mineOnly
+    ? whoIs(req).then(({ actor }) => testDealsForBoard(actor?.email)).then((ts) => ts.map(toBoardDeal)).catch(() => [] as PreTenancyDeal[])
+    : Promise.resolve([] as PreTenancyDeal[]);
+
   const [allDeals, forecast] = await Promise.all([
     getAllPropolyDeals().catch(() => null),
     getPropolyMoveInForecast().catch(() => null),
@@ -188,9 +258,12 @@ export async function GET(req: NextRequest) {
     // Distinguish "no keys" from "cold cache didn't warm inside the deadline"
     // — the client retries the latter instead of claiming Propoly is missing.
     const { propolyConfigured } = await import("@/lib/business/propoly");
+    const configured = propolyConfigured();
+    /* No Propoly here at all: the tester's test lets are still a board. */
+    const tests = configured ? [] : await testsWork;
     return NextResponse.json({
-      configured: propolyConfigured(),
-      deals: null,
+      configured,
+      deals: tests.length ? tests : null,
       summary: null,
     });
   }
@@ -475,11 +548,12 @@ export async function GET(req: NextRequest) {
 
   /* When these deals were read from Propoly: the board says "Updated 3 min ago". */
   const savedAt = await propolyDealsSavedAt().catch(() => null);
+  const tests = await testsWork;
   return NextResponse.json({
     configured: true,
     /* Whose deals these are, for an agent's board: every agent's, or one person's own. */
     wholeBook: !mineOnly || wholeBook,
-    deals: out,
+    deals: tests.length ? [...tests, ...out] : out,
     summary,
     compliancePending,
     savedAt: savedAt ? new Date(savedAt).toISOString() : null,

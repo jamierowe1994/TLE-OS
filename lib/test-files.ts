@@ -246,8 +246,11 @@ async function unwind(refs: Refs, ownerEmail: string, since: Date | string, kitI
   /* A live tenancy file: its property record, the jobs raised on it, and any
      inspection that fell due for it. The property is deleted last, so a job
      is never left pointing at a home that has gone. */
-  if (refs.osPropertyId) {
-    const prop = refs.osPropertyId;
+  /* A test let that reached move day makes the same row on its listing's file
+     (lib/test-overlay moveInTestHome, 13 Oct 2026), pm-test-<kit>. Taken by
+     that id as well as by the ref, so a reset can never leave one behind. */
+  const homes = [...new Set([refs.osPropertyId, kitId ? `pm-test-${kitId}` : null].filter((x): x is string => Boolean(x)))];
+  for (const prop of homes) {
     await run(`DELETE FROM os_works_order_events WHERE order_id IN (SELECT id FROM os_works_orders WHERE property_id = $1)`, [prop]);
     await run(`DELETE FROM os_works_orders WHERE property_id = $1`, [prop]);
     await run(`DELETE FROM os_inspection_events WHERE inspection_id IN (SELECT id FROM os_inspections WHERE property_id = $1 OR os_property_id = $1)`, [prop]);

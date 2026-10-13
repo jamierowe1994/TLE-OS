@@ -29,6 +29,7 @@ import { pushCaseToRex } from "@/lib/plc-rex";
 import { recordActivity } from "@/lib/business/deal-watch";
 import { switchOn } from "@/lib/switches";
 import { isTestCase } from "@/lib/test-guard";
+import { isTestId } from "@/lib/test-overlay";
 import { moveInToRex } from "@/lib/plc-move-in-rex";
 
 /**
@@ -148,12 +149,19 @@ export async function POST(req: NextRequest, ctx: Ctx) {
      plays every side - first check AND final approval, still behind work:plc - so
      Howard can walk the whole check. It is safe because nothing about a test
      pack leaves the OS: no Propoly, no REX, no RLP request to anybody else. */
-  const testCase = isTestCase(await getCase(id).catch(() => null));
+  const found = await getCase(id).catch(() => null);
+  const testCase = isTestCase(found);
   if (testCase && (body.action === "push-rex" || body.action === "push-propoly")) {
     return NextResponse.json({ ok: false, error: "This is a test pack, so it stays in the OS and never goes to Propoly or REX." }, { status: 409 });
   }
+  /* A pack on a TEST APPLICATION (a negative id, lib/test-overlay) is passed
+     on Send (James, 13 Oct 2026: the test file walks end to end "with nothing
+     refusing or slowing them" - the PLC check auto-approved, then on to the
+     next section). Only those: a practice pack from Admin > Testing (TEST-,
+     30 Test Road) is still walked through the check as Kirstie. */
+  const autoPass = testCase && isTestId(found?.applicationRef);
   const prod = process.env.NODE_ENV === "production";
-  if (prod && COMPLIANCE_ONLY.has(body.action ?? "")) {
+  if (prod && !autoPass && COMPLIANCE_ONLY.has(body.action ?? "")) {
     if (!(await requireCapability(req, "work:plc"))) {
       return NextResponse.json(
         { ok: false, error: "Only the compliance team can work a pack. Send it to them and they will pick it up." },
@@ -191,6 +199,23 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         const current = await getCase(id);
         if (!current) {
           return NextResponse.json({ ok: false, error: "That handover no longer exists." }, { status: 404 });
+        }
+        /* The test application's pack: no gate, no reader, no checker. Sent,
+           read with nothing found, first-checked and approved by the tester in
+           one press, each step through the store as a real pack takes it.
+           Nothing is pushed: push-rex and push-propoly refuse a test pack
+           above, and the decision's own pushes are skipped for one below. */
+        if (autoPass) {
+          const me = await currentUser(req);
+          const by = await actorName(req, "Agent");
+          await submitCase(id, { test: true });
+          await recordScan(id, []);
+          await checkCase(id, { name: by, email: me?.email ?? null }, "Test file - passed on Send.");
+          /* No customer update is drafted: a test application has no landlord
+             in REX for it to go to (putPlcWithAgent finds none, after reading
+             the whole book to say so). */
+          const decided = await decideCase(id, "approved", by, "Test file - approved on Send, so the let moves on to the deposit.");
+          return NextResponse.json({ ok: true, autoApproved: true, ...(await payload(decided, req)) });
         }
         if (!rlpAnswered(current)) {
           return NextResponse.json(
