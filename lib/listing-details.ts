@@ -388,6 +388,11 @@ export async function planListingWrite(id: number, edit: ListingEdit): Promise<{
   if (edit.rent !== undefined) {
     data.price_rent = edit.rent;
     data.price_advertise_as = edit.rent == null ? null : `£${edit.rent.toLocaleString("en-GB")}`;
+    /* The OS's rent is a month's (the field says pcm). A listing started in
+       REX comes "per week" by default, and writing only the figure left it
+       weekly: Dan's one-bed in Wolverhampton went live at about £3,320 a
+       month, 13 Oct 2026. So the period always goes with the figure. */
+    if (edit.rent != null) data.price_rent_period = { id: "month" };
   }
   if (edit.deposit !== undefined) data.price_bond = edit.deposit;
   if (edit.availableFrom !== undefined) data.available_from_date = edit.availableFrom;

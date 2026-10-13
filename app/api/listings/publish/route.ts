@@ -260,6 +260,20 @@ export async function POST(req: NextRequest) {
       if ("error" in who) return NextResponse.json({ ok: false, error: who.error, needsAgent: true, signIn: who.signIn || undefined }, { status: 409 });
       token = who.token;
       as = who;
+      /* A MONTH'S RENT, NOT A WEEK'S (13 Oct 2026). The OS only takes a
+         monthly rent, and a listing begun in REX is "per week" by default, so
+         a figure typed here went to the portals as weekly: Dan's one-bed went
+         live at about £3,320 a month. Whatever was saved, it is put right
+         before it is published. */
+      const raw = await rexCall("Listings", "read", { id });
+      const period = String(((raw.result as { price_rent_period?: { id?: string } } | null)?.price_rent_period?.id) ?? "");
+      const rent = Number((raw.result as { price_rent?: unknown } | null)?.price_rent ?? 0);
+      if (raw.ok && rent > 0 && period !== "month") {
+        const fixed = await rexCall("Listings", "update", { data: { id, price_rent_period: { id: "month" } } }, token);
+        if (!fixed.ok) {
+          return NextResponse.json({ ok: false, error: "The rent is set per week in the listings system and could not be changed to per month, so it has not gone live. Try again in a minute, or ask the office." }, { status: 409 });
+        }
+      }
     } else if (was.status !== "published") {
       return NextResponse.json({ ok: false, error: "It is not published yet, so there is nothing to take off." }, { status: 409 });
     } else {
