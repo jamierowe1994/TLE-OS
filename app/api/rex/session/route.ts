@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { forgetRex, rexSessionFor, signInToRex } from "@/lib/rex-user";
+import { ensureRexLink, findUserById } from "@/lib/users";
 
 /**
  * Signing one person into REX, so their work is filed under their name.
@@ -39,6 +40,10 @@ export async function POST(req: NextRequest) {
 
   const out = await signInToRex(userId, email, password);
   if (!out.ok) return NextResponse.json({ ok: false, error: out.error }, { status: 401 });
+  /* Signed in to REX: they are that REX user, so join the two now, even when
+     their REX email isn't their OS one (lib/users ensureRexLink). */
+  const user = await findUserById(userId).catch(() => null);
+  if (user) await ensureRexLink(user).catch(() => null);
   return NextResponse.json({ ok: true, expiresAt: out.expiresAt });
 }
 

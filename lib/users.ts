@@ -187,7 +187,26 @@ export async function ensureRexLink(user: OsUser): Promise<string | null> {
   if (user.rexUserId) return user.rexUserId;
   try {
     const { agentByEmail } = await import("@/lib/rex-agents");
-    const agent = await agentByEmail(user.email);
+    /* By the OS email first, then by the email they sign in to REX with
+       (Bernadine Williams, 14 Oct 2026: her OS address is
+       @thelettingexperts.co.uk, her REX one @thepropertyexperts.co.uk, so
+       every screen said "link your REX account" while she was signed in to
+       REX). That address is proven: REX took its password. */
+    let agent = await agentByEmail(user.email);
+    if (!agent?.id && hasDb()) {
+      const t = await q<{ rex_email: string }>(`SELECT rex_email FROM os_rex_tokens WHERE user_id = $1`, [user.id]).catch(() => []);
+      const viaRex = t[0]?.rex_email ? await agentByEmail(t[0].rex_email) : null;
+      /* Never somebody else's: not when that REX address is another OS
+         person's own email, nor a REX user another OS account already has
+         (Sean's account was signed in to REX as Howard, 14 Oct 2026). */
+      if (viaRex?.id) {
+        const taken = await q<{ id: string }>(
+          `SELECT id FROM os_users WHERE id <> $1 AND (lower(email) = lower($2) OR rex_user_id = $3) LIMIT 1`,
+          [user.id, t[0].rex_email, viaRex.id]
+        ).catch(() => [{ id: "unknown" }]);
+        if (!taken.length) agent = viaRex;
+      }
+    }
     if (!agent?.id) return null;
     await linkRexUser(user.id, agent.id);
     return agent.id;
