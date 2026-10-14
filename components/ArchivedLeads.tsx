@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import ListSearch from "@/components/ListSearch";
+import PickOne from "@/components/PickOne";
 import { searchMatches } from "@/lib/search-match";
 import type { ArchivedLead } from "@/lib/hidden-leads";
 
@@ -22,6 +23,8 @@ export default function ArchivedLeads({ open, onClose }: { open: boolean; onClos
   const [busy, setBusy] = useState<string | null>(null);
   const [rowMsg, setRowMsg] = useState<{ id: string; text: string } | null>(null);
   const [q, setQ] = useState("");
+  const [fSide, setFSide] = useState<"tenant" | "landlord" | null>(null);
+  const [fAgent, setFAgent] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -47,10 +50,20 @@ export default function ArchivedLeads({ open, onClose }: { open: boolean; onClos
     return () => window.removeEventListener("keydown", esc);
   }, [open, onClose]);
 
+  /* Filters (James, 14 Oct 2026): search, tenant or landlord, and the agent
+     where the list holds more than one agent's leads. */
+  const agents = useMemo(() => [...new Set((leads ?? []).map((l) => l.agent).filter(Boolean))].sort(), [leads]);
   const shown = useMemo(
-    () => (leads ?? []).filter((l) => !q.trim() || searchMatches(q, l.name, l.about, l.agent)),
-    [leads, q]
+    () =>
+      (leads ?? []).filter(
+        (l) =>
+          (!fSide || l.side === fSide) &&
+          (!fAgent || l.agent === fAgent) &&
+          (!q.trim() || searchMatches(q, l.name, l.about, l.agent))
+      ),
+    [leads, q, fSide, fAgent]
   );
+  const filtered = Boolean(fSide || fAgent || q.trim());
 
   async function reactivate(l: ArchivedLead) {
     if (busy) return;
@@ -81,7 +94,6 @@ export default function ArchivedLeads({ open, onClose }: { open: boolean; onClos
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {leads && leads.length > 6 && <ListSearch value={q} onChange={setQ} placeholder="Name, address or agent…" />}
             <button
               type="button"
               onClick={onClose}
@@ -93,7 +105,32 @@ export default function ArchivedLeads({ open, onClose }: { open: boolean; onClos
           </div>
         </div>
 
-        <div className="mt-4 min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-6">
+        {leads && leads.length > 0 && (
+          <div className="relative z-10 mt-4 flex flex-wrap items-center gap-2 px-6">
+            <PickOne
+              tone="pink"
+              label="Tenants and landlords"
+              options={[{ id: "tenant" as const, label: "Tenants" }, { id: "landlord" as const, label: "Landlords" }]}
+              value={fSide}
+              onChange={setFSide}
+            />
+            {agents.length > 1 && (
+              <PickOne tone="pink" label="All agents" options={agents.map((a) => ({ id: a, label: a }))} value={fAgent} onChange={setFAgent} />
+            )}
+            <div className="ml-auto">
+              <ListSearch value={q} onChange={setQ} placeholder="Name, address or agent…" />
+            </div>
+          </div>
+        )}
+        {leads && leads.length > 0 && (
+          <p className="mt-3 px-6 text-[11px] text-muted">
+            {filtered
+              ? `${shown.length.toLocaleString("en-GB")} of ${leads.length.toLocaleString("en-GB")} archived`
+              : `${leads.length.toLocaleString("en-GB")} archived`}
+          </p>
+        )}
+
+        <div className="mt-2 min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-6">
           {error ? (
             <p className="rounded-2xl border border-line/50 bg-white px-4 py-3 text-[12.5px] font-semibold text-accent-dark" role="alert">{error}</p>
           ) : leads === null ? (
