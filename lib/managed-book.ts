@@ -8,7 +8,8 @@ import { getTenancyRegister } from "@/lib/business/payprop-tenancy";
 import { attach, payPropContacts } from "@/lib/business/payprop-tenant-contacts";
 import { nameKey, tenantContacts } from "@/lib/tenant-contacts";
 import { sittingTenantsByProperty } from "@/lib/rex-tenants";
-import { parseAddress, sameDoor, type Parsed } from "@/lib/address-parse";
+import { addrOf, parseAddress, sameDoor, sameHome, type Parsed } from "@/lib/address-parse";
+import { q } from "@/lib/db";
 import { tidyAddressLine } from "@/lib/address-tidy";
 import type {
   ManagedBook,
@@ -259,6 +260,45 @@ async function propertiesOwnedBy(rexUserId: string): Promise<Set<string>> {
 }
 
 /**
+ * REX PM HOMES THE ADDRESS MATCHER NEVER SAW (James, 14 Oct 2026). The REX
+ * PM list read on 2 Oct added 25 homes with no REX property behind them, and
+ * the matcher only ever ran at the September import. 44 Pilots Way had a let
+ * listing in REX all along - Lorna's, with photographs - but REX PM's list
+ * decides the book, so that listing was thrown out and the home stood as a
+ * bare "not on REX" row: no photos, and outside Lorna's own Portfolio (it
+ * showed her 0 homes). Same for 33 Eastfield Road, and Dan's and Kirstie's
+ * new lets. Now an unlinked REX PM home takes the REX property of the let
+ * at the same door, and keeps it in os_properties so compliance and the rest
+ * read the link too. Only a sure match: same postcode, street and numbers,
+ * the same unit, one REX property, and not one another home already holds.
+ * The OS's own record only - nothing is written to REX.
+ */
+async function linkByAddress(pm: PmHome[], lets: ManagedProperty[]): Promise<void> {
+  const held = new Set(pm.map((h) => h.rexPropertyId).filter(Boolean) as string[]);
+  const pc = (s: string | null | undefined) => (s ?? "").toUpperCase().replace(/\s+/g, "");
+  const doorOf = (s: string) => parseAddress(s);
+  for (const h of pm) {
+    if (h.rexPropertyId || !pc(h.postcode)) continue;
+    const door = doorOf(h.address);
+    const ids = new Set(
+      lets
+        .filter((p) => p.propertyId && pc(p.postcode) === pc(h.postcode) && sameHome(h.address, addrOf(p)) && sameDoor(door, doorOf(addrOf(p)), true))
+        .map((p) => p.propertyId as string)
+    );
+    if (ids.size !== 1) continue;
+    const [id] = [...ids];
+    if (held.has(id)) continue;
+    held.add(id);
+    h.rexPropertyId = id;
+    await q(
+      `UPDATE os_properties SET rex_property_id = $2, match_how = 'address, from the book', updated_at = NOW()
+        WHERE id = $1 AND (rex_property_id IS NULL OR rex_property_id = '')`,
+      [h.id, id]
+    ).catch((e) => console.error("[managed-book] could not keep the REX link for", h.id, e));
+  }
+}
+
+/**
  * The whole managed book, or one agent's slice of it.
  *
  * MULTI-TENANT: `rexUserId` narrows at REX, on listing_agent_1_id, so another
@@ -298,8 +338,10 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
      has been read across, a REX letting is in the book only if its home is on
      that list. Before that (never read), the older rule stands. */
   const pm = await pmManagedHomes();
+  const lets = rows.map(toProperty);
+  if (pm) await linkByAddress(pm, lets);
   const pmRexIds = pm ? new Set(pm.map((h) => h.rexPropertyId).filter(Boolean) as string[]) : null;
-  const properties = rows.map(toProperty).filter((p) => p.listingId && (!pmRexIds || (p.propertyId && pmRexIds.has(p.propertyId))));
+  const properties = lets.filter((p) => p.listingId && (!pmRexIds || (p.propertyId && pmRexIds.has(p.propertyId))));
 
   /**
    * The sitting tenant, where the listing does not name one.
