@@ -32,6 +32,7 @@ import CornerSwell from "@/components/CornerSwell";
 import { usePref } from "@/lib/prefs-store";
 import { dropJson, peekJson, readJson } from "@/lib/page-cache";
 import PassportsDoneList from "@/components/PassportsDoneList";
+import ArchivedLeads from "@/components/ArchivedLeads";
 import { doneAgo, type DonePassport } from "@/lib/passports-done-shape";
 import { PASSPORT_LABEL, type PassportState, type PassportStateRow } from "@/lib/passport-states-shape";
 
@@ -349,15 +350,35 @@ export default function Leads() {
      does it, by the "lead-removed" event - no reload needed. */
   const [removed, setRemoved] = useState<Set<string>>(new Set());
   const [hiddenIds, setHiddenIds] = useState<string[]>(() => peekJson<LeadsAnswer>("/api/leads")?.hiddenIds ?? []);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [restoredTick, setRestoredTick] = useState(0);
   useEffect(() => {
     const on = (e: Event) => {
       const id = (e as CustomEvent<string>).detail;
       if (id) setRemoved((cur) => new Set(cur).add(id));
+      /* Forget it was open: the drawer goes before its own close reaches the
+         page, and a lead still "open" here springs back up the moment
+         Reactivate returns it to the board. */
+      if (id) setOpenId((cur) => (cur === id ? null : cur));
       /* The held board still has them; the next visit must not paint it. */
       dropJson("/api/leads");
     };
+    /* Reactivated from Archived: back on the board now, and the next read
+       of the board fetched fresh. */
+    const back = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      if (!id) return;
+      setRemoved((cur) => { const next = new Set(cur); next.delete(id); return next; });
+      setHiddenIds((cur) => cur.filter((x) => x !== id));
+      dropJson("/api/leads");
+      setRestoredTick((n) => n + 1);
+    };
     window.addEventListener("lead-removed", on);
-    return () => window.removeEventListener("lead-removed", on);
+    window.addEventListener("lead-restored", back);
+    return () => {
+      window.removeEventListener("lead-removed", on);
+      window.removeEventListener("lead-restored", back);
+    };
   }, []);
   useEffect(() => {
     let gone = false;
@@ -400,7 +421,7 @@ export default function Leads() {
         if (!gone) setSource({ leads: [], live: false, loading: false, failed: true, reason: "We couldn't read your leads just now. Nothing is lost - try again in a minute." });
       });
     return () => { gone = true; window.clearTimeout(again); };
-  }, []);
+  }, [restoredTick]);
 
   /* Ours first, newest at the top. Somebody who has just typed a record in
      expects to see it, and burying it below three hundred portal enquiries is
@@ -744,6 +765,17 @@ export default function Leads() {
                 ]}
               />
             )}
+            {/* Archived (James Crumpton, 14 Oct 2026): the applicants taken
+                off the board, each with Reactivate. */}
+            <button
+              type="button"
+              data-steve="leads.archived"
+              onClick={() => setArchiveOpen(true)}
+              className="flex items-center gap-1.5 rounded-full border border-line/80 bg-white px-3.5 py-2 text-[12px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink"
+            >
+              <DoodleIcon name="folder" size={13} />
+              Archived
+            </button>
             {/* The brand colour they picked, as picked - not its deepened
                 cousin. The switch beside it is brown, so the one button that
                 MAKES something is the one thing on the row in the accent. */}
@@ -759,6 +791,7 @@ export default function Leads() {
       />
 
       <AddedHere refreshKey={addedTick} />
+      <ArchivedLeads open={archiveOpen} onClose={() => setArchiveOpen(false)} />
 
       {source.failed && ALL.length > 0 && (
         <p className="mt-4 rounded-2xl border border-line/50 bg-white px-4 py-3 text-[12px] text-muted" role="alert">

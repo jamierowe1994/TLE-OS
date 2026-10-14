@@ -1754,6 +1754,23 @@ function LeadDrawerBody({
       Mark as lost
     </button>
   );
+  /* Archive, where it can be found (James Crumpton, 14 Oct 2026): it lived
+     at the foot of the Activity tab as "Remove this lead", and nobody found
+     it. Beside Mark as lost, shown on a lost lead too - that is the one most
+     often finished with. Off the board, kept in Leads > Archived, back with
+     one press of Reactivate. Not in the top bar: that row is full at 1024. */
+  const archiveButton = (
+    <button
+      type="button"
+      data-steve="lead.archive"
+      onClick={() => { setPanelTab(null); setRemoveMsg(null); setRemoving(true); }}
+      title="Take them off the board. Leads > Archived brings them back."
+      className="inline-flex items-center gap-2 rounded-full px-3 py-2.5 text-[12.5px] font-semibold text-muted transition-colors hover:text-ink"
+    >
+      <DoodleIcon name="folder" size={12} />
+      Archive
+    </button>
+  );
   const lostRow = lostNow ? (
     <div className="mt-4 flex max-w-xl flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/70 bg-white/80 px-4 py-3">
       <p className="text-[12.5px] leading-relaxed">
@@ -2640,7 +2657,7 @@ function LeadDrawerBody({
           onClick={() => { setPanelTab(null); setRemoveMsg(null); setRemoving(true); }}
           className="font-semibold text-accent-dark transition-colors hover:underline"
         >
-          Remove this lead…
+          Archive this lead…
         </button>
       </div>
     </>
@@ -2926,6 +2943,7 @@ function LeadDrawerBody({
                           Send properties
                         </PressButton>
                         {!lostNow && lostButton}
+                        {archiveButton}
                       </div>
                       {lostRow}
                       <div className="mt-4 [&>div]:mt-0 [&>div]:border-t-0 [&>div]:pt-0 [&_button]:px-2.5 [&_button]:py-1 [&_button]:text-[11px]">{tagsRow}</div>
@@ -3218,6 +3236,7 @@ function LeadDrawerBody({
                           {nurturing ? "In nurture" : "Send to nurture"}
                         </button>
                         {!lostNow && lostButton}
+                        {archiveButton}
                       </div>
                       {lostRow}
                       <div className="mt-4 [&>div]:mt-0 [&>div]:border-t-0 [&>div]:pt-0 [&_button]:px-2.5 [&_button]:py-1 [&_button]:text-[11px]">{tagsRow}</div>
@@ -3746,16 +3765,16 @@ function LeadDrawerBody({
         <div className="fixed inset-0 z-[160] flex items-center justify-center p-4">
           <button type="button" aria-label="Cancel" onClick={() => setRemoving(false)} className="absolute inset-0 cursor-default bg-ink/45" />
           <div className="fade-up relative w-full max-w-md rounded-3xl border border-line/80 bg-page p-6 shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
-            <h2 className="text-[20px]">Remove {lead.name}?</h2>
+            <h2 className="text-[20px]">Archive {lead.name}?</h2>
             <p className="mt-2 text-[13px] leading-relaxed text-muted">
-              They disappear from your leads in the OS.
-              {lead.id.startsWith("rex-") ? " REX keeps the enquiry - nothing is changed there." : ""} It can be brought back if it was a mistake.
+              They come off your leads and wait in Archived, at the top of Leads, where Reactivate puts them back.
+              {lead.id.startsWith("rex-") ? " REX keeps the enquiry - nothing is changed there." : ""}
             </p>
             {removeMsg && <p className="mt-3 text-[12.5px] font-semibold text-accent-dark">{removeMsg}</p>}
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={() => setRemoving(false)} className="rounded-full border border-line/80 px-4 py-2 text-[12.5px] font-semibold hover:border-ink/40">Keep them</button>
               <button type="button" onClick={() => void removeLead()} disabled={removeBusy} className="rounded-full bg-accent-dark px-4 py-2 text-[12.5px] font-semibold text-page disabled:opacity-50">
-                {removeBusy ? "Removing…" : "Remove"}
+                {removeBusy ? "Archiving…" : "Archive"}
               </button>
             </div>
           </div>
