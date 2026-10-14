@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
-import { markSeen, noticesFor, seenAt } from "@/lib/notifications";
+import { doneIds, markSeen, noticesFor, seenAt } from "@/lib/notifications";
 
 /**
  * GET  /api/notifications → the bell: what happened, newest first, with how
- *      many are newer than the last time this person looked.
+ *      many are newer than the last time this person looked. ?open=1 leaves
+ *      out what they ticked done on the dashboard (Needs attention).
  * POST /api/notifications → they looked. Everything up to now is read.
  *
  * Scoped to the SUBJECT, so an owner viewing as an agent sees that agent's
@@ -20,7 +21,10 @@ export async function GET(req: NextRequest) {
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const me = subject ?? actor;
   const limit = Math.min(Math.max(Number(req.nextUrl.searchParams.get("limit") ?? 40) || 40, 1), 100);
-  const [notices, seen] = await Promise.all([noticesFor(me, limit), seenAt(actor.id)]);
+  const open = req.nextUrl.searchParams.get("open") === "1";
+  const [all, seen, done] = await Promise.all([noticesFor(me, open ? 100 : limit), seenAt(actor.id), open ? doneIds(actor.id) : Promise.resolve([])]);
+  const gone = new Set(done);
+  const notices = open ? all.filter((n) => !gone.has(n.id)).slice(0, limit) : all;
   const unread = seen ? notices.filter((n) => n.at > seen).length : notices.length;
   return NextResponse.json({ ok: true, notices, unread, seenAt: seen });
 }

@@ -402,6 +402,33 @@ export async function seenAt(userId: string): Promise<string | null> {
   return typeof v === "string" ? v : null;
 }
 
+/* Done on the dashboard (James, 14 Oct 2026: "when things are marked as done they clear from
+   the list"). The ids a person ticked on Needs attention, newest first, their own like the read
+   marker. Notice ids are stable (deal:<id>, task:<id>...), so a ticked line stays gone; a new
+   event is a new id and shows up again. The bell keeps everything. */
+const DONE_KEY = "notifications.done";
+const DONE_KEEP = 500;
+
+export async function doneIds(userId: string): Promise<string[]> {
+  if (!hasDb()) return [];
+  const rows = await q<{ value: unknown }>(`SELECT value FROM os_user_prefs WHERE user_id = $1 AND key = $2`, [userId, DONE_KEY]).catch(
+    () => []
+  );
+  const v = rows[0]?.value;
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+}
+
+export async function markDone(userId: string, id: string, done: boolean): Promise<void> {
+  if (!hasDb()) return;
+  const now = (await doneIds(userId)).filter((x) => x !== id);
+  const next = (done ? [id, ...now] : now).slice(0, DONE_KEEP);
+  await q(
+    `INSERT INTO os_user_prefs (user_id, key, value) VALUES ($1, $2, $3::jsonb)
+     ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+    [userId, DONE_KEY, JSON.stringify(next)]
+  );
+}
+
 export async function markSeen(userId: string, at = new Date()): Promise<void> {
   if (!hasDb()) return;
   await q(

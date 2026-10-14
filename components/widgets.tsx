@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { stageCounts, stageOf, type StageListing } from "@/lib/listing-stages";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -450,6 +450,8 @@ function DayList({ list, empty, muted = false }: { list: Appt[]; empty: string; 
 
 /* ── Attention list, with its ticks. ── */
 const noticesSlot: Slot = { p: null };
+/* Lines ticked in this tab, so a held copy of the list never paints them back before the next read. */
+const clearedHere = new Set<string>();
 
 /**
  * What needs you: the bell's own notices, on the board.
@@ -457,15 +459,27 @@ const noticesSlot: Slot = { p: null };
  * Until 6 Sep 2026 this was four typed lines ("Gas cert expires in 12 days -
  * 41 Harewood Road") shown to everybody. It is now the same feed the bell
  * reads - deal moves, money, PLC, chases, scoped to the person - with the
- * unread ones first. Ticking hides a line on this screen; the file is where
- * dealing happens, and opening the bell is what marks things read.
+ * unread ones first. The file is where dealing happens, and opening the bell
+ * is what marks things read.
+ *
+ * Ticking a line clears it (James, 14 Oct 2026: "when things are marked as done
+ * they clear from the list"). It used to cross the line out in this tab only, so
+ * it was back on the next visit. Now the tick is saved against the person
+ * (/api/notifications/done), the list asks for ?open=1, and a few seconds of
+ * Undo catch a slip. The bell itself still shows everything.
  */
 function AttentionWidget({ w, h }: { w: number; h: number }) {
   const { data, loading, error } = useShared<{ notices: Notice[]; unread: number; seenAt: string | null }>(
-    noticesSlot, "/api/notifications?limit=12",
+    noticesSlot, "/api/notifications?limit=12&open=1",
     (j) => (j.ok && Array.isArray(j.notices) ? { notices: j.notices as Notice[], unread: Number(j.unread ?? 0), seenAt: (j.seenAt as string | null) ?? null } : null)
   );
-  const [done, setDone] = useState<Set<string>>(new Set());
+  /* struck through for a moment, then gone */
+  const [fading, setFading] = useState<Set<string>>(new Set());
+  const [, setCleared] = useState(0);
+  const [undoId, setUndoId] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const undoTimer = useRef<number | null>(null);
+  useEffect(() => () => { if (undoTimer.current) window.clearTimeout(undoTimer.current); }, []);
   /* "View all" pops the whole list out (James, 9 Oct 2026): the tile cannot
      scroll, so growing it in place ran off the bottom. The tile reads 12;
      the pop-out reads the bell's full list when it opens. */
@@ -476,7 +490,7 @@ function AttentionWidget({ w, h }: { w: number; h: number }) {
     if (!showAll) return;
     let gone = false;
     setAllError(null);
-    fetch("/api/notifications?limit=100", { cache: "no-store" })
+    fetch("/api/notifications?limit=100&open=1", { cache: "no-store" })
       .then((r) => r.json())
       .then((j: { ok?: boolean; notices?: Notice[] }) => {
         if (gone) return;
@@ -492,23 +506,58 @@ function AttentionWidget({ w, h }: { w: number; h: number }) {
     href: n.href,
     hot: n.tone === "warn" || (data?.seenAt ? n.at > data.seenAt : true),
   });
-  const items = (data?.notices ?? []).map(shape);
-  const allItems = everything ? everything.map(shape) : items;
-  const tick = (id: string) =>
-    setDone((cur) => {
-      const next = new Set(cur);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+  const items = (data?.notices ?? []).filter((n) => !clearedHere.has(n.id)).map(shape);
+  const allItems = everything ? everything.filter((n) => !clearedHere.has(n.id)).map(shape) : items;
+  const save = (id: string, isDone: boolean) =>
+    fetch("/api/notifications/done", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id, done: isDone }),
+    })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean }) => Boolean(j.ok))
+      .catch(() => false);
+  /* the held list is out of date the moment a tick lands; the next visit reads it fresh */
+  const forget = () => { noticesSlot.p = null; noticesSlot.last = undefined; };
+  const tick = (id: string) => {
+    if (fading.has(id)) return;
+    setSaveError(null);
+    setFading((cur) => new Set(cur).add(id));
+    const gone = new Promise((r) => window.setTimeout(r, 650));
+    void Promise.all([save(id, true), gone]).then(([ok]) => {
+      setFading((cur) => { const next = new Set(cur); next.delete(id); return next; });
+      if (!ok) { setSaveError("That tick didn't save. Try again."); return; }
+      clearedHere.add(id);
+      forget();
+      setCleared((n) => n + 1);
+      setUndoId(id);
+      if (undoTimer.current) window.clearTimeout(undoTimer.current);
+      undoTimer.current = window.setTimeout(() => setUndoId(null), 6000);
     });
+  };
+  const undo = () => {
+    const id = undoId;
+    if (!id) return;
+    setUndoId(null);
+    clearedHere.delete(id);
+    forget();
+    setCleared((n) => n + 1);
+    void save(id, false).then((ok) => {
+      if (ok) return;
+      clearedHere.add(id);
+      setCleared((n) => n + 1);
+      setSaveError("Undo didn't save. Try again.");
+    });
+  };
   /** One line with its tick, on the tile and in the pop-out alike. */
   const line = (a: (typeof items)[number], onOpen?: () => void) => {
-    const ticked = done.has(a.id);
+    const ticked = fading.has(a.id);
     return (
-      <li key={a.id} className="flex items-start gap-2.5">
+      <li key={a.id} className={`flex items-start gap-2.5 transition-opacity duration-500 ${ticked ? "opacity-40" : ""}`}>
         <button
           type="button"
-          aria-label={ticked ? "Untick" : "Tick"}
+          aria-label={ticked ? "Done" : "Mark as done"}
+          title="Mark as done"
           onClick={() => tick(a.id)}
           className={`mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors ${
             ticked ? "border-accent-dark bg-accent-soft text-accent-dark" : "border-line"
@@ -526,7 +575,7 @@ function AttentionWidget({ w, h }: { w: number; h: number }) {
       </li>
     );
   };
-  const open = items.filter((a) => !done.has(a.id)).length;
+  const open = items.filter((a) => !fading.has(a.id)).length;
   if (h === 1) {
     return (
       <>
@@ -561,14 +610,32 @@ function AttentionWidget({ w, h }: { w: number; h: number }) {
         onClose={() => setShowAll(false)}
         icon="bell"
         title="Needs Attention"
-        sub="The same list as the bell, newest first. Ticking hides a line on this screen."
+        sub="The same list as the bell, newest first. Tick a line when it's dealt with and it clears."
       >
         <ul className="space-y-3">{allItems.map((a) => line(a, () => setShowAll(false)))}</ul>
         {everything === null && !allError && <p className="mt-4 text-[11.5px] text-muted">Reading the rest of the list…</p>}
         {allError && <p className="mt-4 text-[11.5px] text-accent-dark">{allError}</p>}
+        {everything !== null && allItems.length === 0 && <p className="mt-4 text-[11.5px] text-muted">Nothing needs you right now.</p>}
+        {saveError ? (
+          <p className="mt-4 text-[11.5px] text-accent-dark">{saveError}</p>
+        ) : undoId ? (
+          <p className="mt-4 text-[11.5px] text-muted">
+            Marked as done.{" "}
+            <button type="button" onClick={undo} className="font-semibold text-ink underline underline-offset-2">Undo</button>
+          </p>
+        ) : null}
       </ListPopout>
-      {w >= 2 && !loading && !error && (
-        <p className="mt-3 shrink-0 border-t border-line/50 pt-2 text-[10px] text-muted">The same list as the bell, newest first. Opening the bell marks it read.</p>
+      {saveError ? (
+        <p className="mt-3 shrink-0 border-t border-line/50 pt-2 text-[10.5px] text-accent-dark">{saveError}</p>
+      ) : undoId ? (
+        <p className="mt-3 shrink-0 border-t border-line/50 pt-2 text-[10.5px] text-muted">
+          Marked as done.{" "}
+          <button type="button" onClick={undo} className="font-semibold text-ink underline underline-offset-2">Undo</button>
+        </p>
+      ) : (
+        w >= 2 && !loading && !error && (
+          <p className="mt-3 shrink-0 border-t border-line/50 pt-2 text-[10px] text-muted">Tick a line when it&apos;s dealt with and it clears. The bell keeps everything.</p>
+        )
       )}
     </div>
   );
