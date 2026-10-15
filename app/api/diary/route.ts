@@ -103,33 +103,77 @@ async function ours(authorId: string | null, selfId: string): Promise<Appt[]> {
  * or the Outlook entry it made ("outlook-event", appraisal|<id>; the diary
  * knows an Outlook entry as ms-<first 16 of the sha1 of Graph's id>). Read
  * fresh, so the entry opens the file and offers Rearrange and Cancel.
+ *
+ * And by time and name when the id does not answer (James's Landlord E2E
+ * appraisal, 16 Oct 09:30, read "made outside the OS"): an entry that reads as
+ * a market appraisal, at the very minute an OS appraisal starts, naming its
+ * landlord or its street, is that appraisal. Several at once (every tester's
+ * E2E pair is at 14 Test Street) are narrowed to the diary owner's; still
+ * more than one, it is left unlinked rather than guessed.
  */
-async function appraisalLinks(): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
+type AppraisalLinks = {
+  byId: Map<string, string>;
+  booked: { id: string; name: string; landlord: string; street: string; agent: string; day: number; start: string }[];
+};
+
+async function appraisalLinks(): Promise<AppraisalLinks> {
+  const out: AppraisalLinks = { byId: new Map(), booked: [] };
   if (!hasDb()) return out;
-  const rows = await q<{ kind: string; record_id: string; event_id: string | null }>(
-    `SELECT kind, record_id, payload->>'eventId' AS event_id FROM os_case_state
-      WHERE kind = 'rex-diary' OR (kind = 'outlook-event' AND record_id LIKE 'appraisal|%')`
-  ).catch(() => []);
+  const [rows, booked] = await Promise.all([
+    q<{ kind: string; record_id: string; event_id: string | null }>(
+      `SELECT kind, record_id, payload->>'eventId' AS event_id FROM os_case_state
+        WHERE kind = 'rex-diary' OR (kind = 'outlook-event' AND record_id LIKE 'appraisal|%')`
+    ).catch(() => []),
+    q<{ id: string; landlord: string; address: string; agent: string | null; appointment_at: Date }>(
+      `SELECT id, landlord, address, agent, appointment_at FROM os_market_appraisals
+        WHERE appointment_at > NOW() - INTERVAL '21 days' AND appointment_at < NOW() + INTERVAL '90 days'
+          AND cancelled_at IS NULL`
+    ).catch(() => []),
+  ]);
   for (const r of rows) {
     if (!r.event_id) continue;
-    if (r.kind === "rex-diary") out.set(`rex-${r.event_id}`, r.record_id);
-    else out.set(`ms-${createHash("sha1").update(r.event_id).digest("hex").slice(0, 16)}`, r.record_id.slice("appraisal|".length));
+    if (r.kind === "rex-diary") out.byId.set(`rex-${r.event_id}`, r.record_id);
+    else out.byId.set(`ms-${createHash("sha1").update(r.event_id).digest("hex").slice(0, 16)}`, r.record_id.slice("appraisal|".length));
   }
+  out.booked = booked.map((b) => ({
+    id: b.id,
+    name: (b.landlord ?? "").trim(),
+    landlord: (b.landlord ?? "").trim().toLowerCase(),
+    street: (b.address ?? "").split(",")[0].trim().toLowerCase(),
+    agent: (b.agent ?? "").trim().toLowerCase(),
+    day: londonDayOffset(new Date(b.appointment_at)),
+    start: londonHHMM(new Date(b.appointment_at)),
+  }));
   return out;
 }
 
-function withAppraisalIds<B extends { appts: Appt[] }>(book: B, links: Map<string, string>): B {
-  if (!links.size) return book;
+/** The OS appraisal this entry is by time and name, or null when it is not one, or not only one. */
+function appraisalByTime(a: Appt, links: AppraisalLinks): string | null {
+  if (a.kind === "viewing" || a.kind === "slot" || a.fromPersonal) return null;
+  const text = `${a.what} ${a.where}`.toLowerCase();
+  if (!/\b(market |rental market )?appraisal\b|\bvaluation\b/.test(text)) return null;
+  const named = links.booked.filter(
+    (b) => b.day === a.day && b.start === a.start && ((b.landlord.length >= 3 && text.includes(b.landlord)) || (b.street.length >= 4 && text.includes(b.street)))
+  );
+  if (named.length <= 1) return named[0]?.id ?? null;
+  const whose = (a.agent ?? "").trim().toLowerCase();
+  const mine = named.filter((b) => whose && b.agent === whose);
+  return mine.length === 1 ? mine[0].id : null;
+}
+
+function withAppraisalIds<B extends { appts: Appt[] }>(book: B, links: AppraisalLinks): B {
+  if (!links.byId.size && !links.booked.length) return book;
   let hit = false;
   const appts = book.appts.map((a) => {
-    const id = links.get(a.id);
+    const id = links.byId.get(a.id) ?? appraisalByTime(a, links);
     if (!id) return a;
     hit = true;
     return {
       ...a,
       kind: "appraisal" as const,
       appraisalId: id,
+      /* Who it's with: the landlord, where the entry names nobody. */
+      who: a.who || links.booked.find((b) => b.id === id)?.name || "",
       link: a.link ?? { href: `/market-appraisals/${encodeURIComponent(id)}`, label: "The appraisal" },
     };
   });

@@ -13,6 +13,7 @@ import { agentUserFor, rewordQueuedPre, scheduleOnBooking } from "@/lib/pre-send
 import { queueVideoChase, queuedVideoChase, VIDEO_CHASE_KIND } from "@/lib/video-chase";
 import { presentationsFor, updatePresentation } from "@/lib/present-store";
 import { addTouch } from "@/lib/lead-touches";
+import { isTestFile } from "@/lib/test-guard";
 
 /**
  * CANCEL AND REARRANGE A MARKET APPRAISAL (James, 15 Oct 2026).
@@ -167,6 +168,8 @@ export async function cancelAppraisal(me: OsUser, id: string): Promise<Appraisal
 
   const was = ma.appointmentAt;
   const diaryOwner = d.bookerId ?? me.id;
+  /* A test file never reaches REX and never emails anybody (lib/test-guard). */
+  const test = await isTestFile({ appraisalId: ma.id, leadId: ma.leadId, address: ma.address }).catch(() => true);
 
   /* 1. The file. From here on it is cancelled whatever the diaries say. */
   const after = await markAppraisalCancelled(ma.id, me.name || me.email);
@@ -190,7 +193,7 @@ export async function cancelAppraisal(me: OsUser, id: string): Promise<Appraisal
   /* 3. REX's diary, only through the existing update and only if James's lock
      lets it. Its own words stay in the server log - agent screens never
      name it. Gone already counts as done. */
-  if (d.rexEventId) {
+  if (d.rexEventId && !test) {
     const r = await changeRexEvent({ userId: diaryOwner, eventId: d.rexEventId, cancel: { reason: "organiser" } }).catch((e) => ({
       ok: false,
       detail: e instanceof Error ? e.message : "the diary did not answer",
@@ -258,6 +261,9 @@ export async function rearrangeAppraisal(me: OsUser, id: string, startsAt: strin
   if (!(await mayChangeAppraisal(me, ma, d.bookerId))) return { ok: false, said: notYours(ma), steps };
 
   const wasCancelled = Boolean(ma.cancelledAt);
+  /* A test file never reaches REX (putAppraisalInRexDiary refuses it) and
+     nothing is scheduled to email anybody for it here. */
+  const test = await isTestFile({ appraisalId: ma.id, leadId: ma.leadId, address: ma.address }).catch(() => true);
   const was = ma.appointmentAt ?? ma.cancelledWas ?? null;
   const iso = at.toISOString();
   if (!wasCancelled && was && new Date(was).getTime() === at.getTime()) {
@@ -318,7 +324,9 @@ export async function rearrangeAppraisal(me: OsUser, id: string, startsAt: strin
 
   /* 3. What was waiting for it follows the new time. */
   try {
-    if (wasCancelled) {
+    if (test) {
+      /* Nothing queued or sent for a test file. */
+    } else if (wasCancelled) {
       /* Back on: the pre-presentation is scheduled the way booking schedules it. */
       await scheduleOnBooking({ ma: moved, me, origin });
     } else {
