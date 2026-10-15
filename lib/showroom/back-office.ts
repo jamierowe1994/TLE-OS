@@ -304,7 +304,7 @@ const REPAIR: BackOfficeJourney = {
     "The landlord cannot approve a quote with a button. They reply to the email, or the agent rings them and presses Landlord approved.",
     "The contractor has no button to accept the job. You press They've confirmed once they have said yes.",
     "There is no repair reporting by WhatsApp or by email yet. Those come in to a person, who logs them like a phone call.",
-    "Maintenance is switched off for agents until the back office opens (pilot phase 4).",
+    "Maintenance is switched off for agents until the back office opens.",
   ],
 };
 
@@ -581,7 +581,7 @@ const VISITS: BackOfficeJourney = {
     "The due list is read from the old system's open visit tasks for now; the OS's own cadence (3 months, then every 6, HMOs every 3) is ready behind it.",
     "Tell the landlord too only notes that they were told - it sends no email.",
     "A works order raised from a visit does not email the tenant.",
-    "Inspections are switched off for agents until the back office opens (pilot phase 4).",
+    "Inspections are switched off for agents until the back office opens.",
   ],
 };
 

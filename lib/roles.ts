@@ -107,7 +107,7 @@ export const ROLE_LABEL: Record<Role, string> = {
 
 export const ROLE_BLURB: Record<Role, string> = {
   owner: "Everything, including who gets which role. The wiring and the switches are theirs alone.",
-  super_admin: "Company figures, plus a short admin: people, permissions (read-only) and pre-launch.",
+  super_admin: "Company figures, plus a short admin: people, permissions (read-only), invites and tickets.",
   developer: "The wiring: connections, health, diagnostics. Not the money.",
   support: "The pre-tenancy board only. Superseded by Pre-tenancy — use that instead.",
   pretenancy: "Kirstie. Lands on the pre-tenancy board; sees exactly what Compliance sees too (the compliance desk and the clean sweep), so the office can cover for each other.",

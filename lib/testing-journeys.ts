@@ -728,7 +728,7 @@ export const JOURNEYS: Journey[] = [
       {
         id: "setup",
         title: "The five setup steps",
-        what: "Password, REX, email, how the pre-launch works, and light or dark. The MAILBOX is the only one that can be passed over; REX is required, and the screen says why.",
+        what: "Password, REX, email, how to get help, and light or dark. The MAILBOX is the only one that can be passed over; REX is required, and the screen says why.",
         how: [
           "Walk all five. The REX screen has one control and it is Connect - have the agent's REX email and password to hand before you start, or the walk stops here.",
           "Skip the mailbox on purpose, on the Email screen, and check the rest still finishes.",

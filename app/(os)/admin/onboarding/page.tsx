@@ -22,7 +22,7 @@ const LINKS = [
     path: "setup",
     label: "Signing up",
     blurb:
-      "The five screens after somebody follows their invite: password, REX, email, how the pre-launch works, and how it should look.",
+      "The five screens after somebody follows their invite: password, REX, email, how to get help, and how it should look.",
     detail:
       "Runs against nothing. The REX and email buttons are disabled, and no answer is saved anywhere.",
   },

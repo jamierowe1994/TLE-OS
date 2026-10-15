@@ -88,7 +88,7 @@ const STEVE: TourStep[] = [
     union: true,
     title: "And This Is The Important One",
     body: "Anything that looks wrong, anything confusing, and any idea you have. It takes a picture of what you were looking at and sends it straight to the development team, so you do not have to explain where you were.",
-    caveat: "Use it more than you think you should. During a pre-launch there is no such thing as too small.",
+    caveat: "Use it more than you think you should. Nothing is too small to tell us about.",
     dock: { open: true, tab: "feedback" },
   },
 ];
@@ -97,7 +97,7 @@ export const FAST: TourStep[] = [
   {
     id: "fast-open",
     title: "The Short Version",
-    body: "One thing, and it is the thing that matters most while this is still being built: how to tell us when something is not right.",
+    body: "One thing, and it is the thing that matters most: how to get help, and how to tell us when something is not right.",
   },
   ...STEVE,
 ];

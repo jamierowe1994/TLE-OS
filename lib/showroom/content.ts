@@ -424,7 +424,7 @@ export const LANDLORD_STEPS: ShowroomStep[] = [
     emails: [],
     notYet: [
       "No weekly \"how the viewings went\" email yet.",
-      "The \"an offer on your property\" email is hidden for the pilot - the landlord's answer comes back by phone.",
+      "The \"an offer on your property\" email is hidden for now - the landlord's answer comes back by phone.",
     ],
   },
   {

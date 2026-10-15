@@ -346,13 +346,12 @@ const blocksAs = (audience: EmailAudience) => (doc: EmailDoc) => blocks(doc, aud
 export const TLE_EMAILS: CatalogEntry[] = [
   {
     id: "pilot-invite",
-    group: "Pre-launch",
-    name: "Pilot Invitation",
+    group: "Joining",
+    name: "Invitation",
     audience: "partner",
-    trigger: "Sent by hand from Admin → Pre-launch when an agent is added to the pilot",
-    fires: "NOT WIRED YET — Admin → Pre-launch currently sends the account-verification email instead",
-    to: "The five pilot agents",
-    draft: true,
+    trigger: "Sent by hand from Admin → Testing → Phases, to the people ticked there",
+    fires: "Admin → Testing → Phases. Invites from Admin → People → Invites send the launch invitation instead",
+    to: "The people ticked on the Phases list",
     summary:
       "One line and one button: they're in, and here's the way in. Stripped back from a full block document on 29 Aug — everything else it used to say belongs in the first conversation, not the doorway. Hand-rolled on the shared shell, so it is no longer editable in the builder.",
     render: () => {
@@ -362,7 +361,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
   },
   {
     id: "launch-announcement",
-    group: "Pre-launch",
+    group: "Joining",
     name: "Launch Day",
     audience: "partner",
     trigger: "Sent to everyone on launch day, 14 October 2026",
@@ -1281,7 +1280,7 @@ TLE_EMAILS.push(
 );
 
 
-export const EMAIL_GROUPS = ["Pre-launch", "Market appraisals", "Compliance", "Pre-tenancy", "Maintenance", "Inspections", "Invoices", "Terms of business", "Accounts", "Tools"];
+export const EMAIL_GROUPS = ["Joining", "Market appraisals", "Compliance", "Pre-tenancy", "Maintenance", "Inspections", "Invoices", "Terms of business", "Accounts", "Tools"];
 
 /**
  * The agent's certificate chase, filled with a real book.
