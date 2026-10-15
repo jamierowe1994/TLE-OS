@@ -14,6 +14,8 @@ import {
   type FileRead,
   type PlcCase,
   type PlcDocument,
+  waiverFor,
+  whyPlaceholder,
 } from "@/lib/plc";
 
 /**
@@ -164,6 +166,10 @@ export default function PlcDocuments({
   const [over, setOver] = useState(false);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  /* The "not needed, because..." box open on one conditional check, and what is typed in it. */
+  const [whyOpen, setWhyOpen] = useState<CheckId | null>(null);
+  const [why, setWhy] = useState<Record<string, string>>({});
+  const [waiving, setWaiving] = useState<CheckId | null>(null);
   const filesInput = useRef<HTMLInputElement | null>(null);
   const folderInput = useRef<HTMLInputElement | null>(null);
   const addInput = useRef<HTMLInputElement | null>(null);
@@ -422,6 +428,41 @@ export default function PlcDocuments({
     }
   };
 
+  /* Rhiannon, 15 Oct 2026 (4 Williams Court, no gas): the row said "Needed, or
+     say why not" and the only place to say why was the last screen, so on a
+     home with no gas supply she pressed Add, found nothing to add, and was
+     stuck. The reason is given here, on the row that asks for it - the same
+     waiver the last screen records. */
+  const waive = async (id: CheckId, undo = false) => {
+    setErr(null);
+    if (demo) {
+      onChanged({
+        ...kase,
+        waivers: undo
+          ? (kase.waivers ?? []).filter((w) => w.checkId !== id)
+          : [
+              ...(kase.waivers ?? []).filter((w) => w.checkId !== id),
+              { checkId: id, reason: (why[id] ?? "").trim(), by: kase.agentName, at: new Date().toISOString() },
+            ],
+      });
+      setWhyOpen(null);
+      return;
+    }
+    setWaiving(id);
+    try {
+      const res = await api<{ case: PlcCase }>(`/api/plc/${kase.id}`, {
+        method: "POST",
+        body: JSON.stringify(undo ? { action: "unwaive", checkId: id } : { action: "waive", checkId: id, reason: why[id] ?? "" }),
+      });
+      onChanged(res.case);
+      setWhyOpen(null);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setWaiving(null);
+    }
+  };
+
   const addTo = (id: CheckId) => {
     forceNext.current = id;
     addInput.current?.click();
@@ -649,6 +690,8 @@ export default function PlcDocuments({
           const coveredBy = kase.documents.filter((d) => d.checkId !== c.id && d.covers?.includes(c.id));
           const has = filed.length > 0 || coveredBy.length > 0;
           const b = badge(c.id);
+          const conditional = gateOf(c, kase.letType) === "conditional";
+          const waiver = !has ? waiverFor(kase, c.id) : null;
           return (
             <li
               key={c.id}
@@ -660,28 +703,85 @@ export default function PlcDocuments({
                   className={`mt-1 h-2 w-2 shrink-0 self-center rounded-full ${has ? "bg-emerald-500" : "bg-neutral-300"}`}
                 />
                 <span className={`text-sm ${has ? "text-ink" : ""}`}>{c.label}</span>
-                <span className={`text-xs ${has ? "text-emerald-700" : b.tone}`}>
+                <span className={`text-xs ${has ? "text-emerald-700" : waiver ? "text-muted" : b.tone}`}>
                   {filed.length
                     ? filed.length === 1 ? "1 file" : `${filed.length} files`
                     : coveredBy.length
                       ? `Covered by the ${checkById(coveredBy[0].checkId)?.label.toLowerCase() ?? "report"}`
-                      : b.text}
+                      : waiver
+                        ? "Not needed"
+                        : b.text}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => addTo(c.id)}
-                  className="ml-auto text-xs text-muted underline-offset-2 hover:text-ink hover:underline"
-                >
-                  Add
-                </button>
+                <span className="ml-auto flex items-center gap-3">
+                  {conditional && !has && !waiver && whyOpen !== c.id && (
+                    <button
+                      type="button"
+                      onClick={() => setWhyOpen(c.id)}
+                      className="text-xs text-muted underline-offset-2 hover:text-ink hover:underline"
+                    >
+                      Not needed?
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => addTo(c.id)}
+                    className="text-xs text-muted underline-offset-2 hover:text-ink hover:underline"
+                  >
+                    Add
+                  </button>
+                </span>
               </div>
+              {waiver && (
+                <p className="mt-1 flex items-start gap-2 pl-5 text-xs text-muted">
+                  <span className="min-w-0">&ldquo;{waiver.reason}&rdquo;</span>
+                  <button
+                    type="button"
+                    onClick={() => void waive(c.id, true)}
+                    disabled={waiving === c.id}
+                    className="shrink-0 underline hover:text-ink disabled:opacity-40"
+                  >
+                    undo
+                  </button>
+                </p>
+              )}
+              {whyOpen === c.id && !has && !waiver && (
+                <form
+                  className="mt-2 flex flex-wrap items-center gap-2 pl-5"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if ((why[c.id] ?? "").trim().length >= 8) void waive(c.id);
+                  }}
+                >
+                  <input
+                    autoFocus
+                    value={why[c.id] ?? ""}
+                    onChange={(e) => setWhy((w) => ({ ...w, [c.id]: e.target.value }))}
+                    placeholder={whyPlaceholder(c.id)}
+                    className="min-w-0 flex-1 basis-56 rounded-lg border border-line bg-white px-3 py-1.5 text-xs outline-none focus:border-ink"
+                  />
+                  <button
+                    type="submit"
+                    disabled={(why[c.id] ?? "").trim().length < 8 || waiving === c.id}
+                    className="rounded-lg border border-line px-3 py-1.5 text-xs transition hover:bg-box disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {waiving === c.id ? "Saving…" : "Not needed"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWhyOpen(null)}
+                    className="text-xs text-muted underline-offset-2 hover:text-ink hover:underline"
+                  >
+                    Cancel
+                  </button>
+                </form>
+              )}
               {filed.length ? (
                 <ul className="mt-2 space-y-1.5">{filed.map(docRow)}</ul>
               ) : coveredBy.length ? (
                 <p className="mt-0.5 pl-5 text-xs text-muted">
                   In {coveredBy.map((d) => `"${d.name}"`).join(", ")}. Add its own document too if you have one.
                 </p>
-              ) : (
+              ) : waiver || whyOpen === c.id ? null : (
                 <p className="mt-0.5 pl-5 text-xs text-muted">{c.needs}</p>
               )}
             </li>

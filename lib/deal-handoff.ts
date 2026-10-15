@@ -177,6 +177,13 @@ export interface Handoff {
   swap?: boolean;
   /** The swap's home when it has no REX listing (see Application.swap.home). */
   swapHome?: { line1: string; postcode: string; agentEmail: string | null; managed: boolean } | null;
+  /**
+   * Let only on the listing (REX's let_only, Propoly's tenant find). The
+   * certificates are the landlord's to keep in date (Michael's rule, 7 Sep
+   * 2026), so `missing` is theirs to supply, not ours to book - but the PLC
+   * check still needs a copy of each before the tenancy starts.
+   */
+  letOnly?: boolean;
   rentPcm: number | null;
   startDate: string | null;
   agreementMonths: number | null;
@@ -197,10 +204,12 @@ export interface Handoff {
 }
 
 /** The landlord, off the listing's owner relationship. */
-async function landlordOf(listingId: number): Promise<{ landlord: HandoffParty | null; docs: HandoffDoc[] }> {
+async function landlordOf(listingId: number): Promise<{ landlord: HandoffParty | null; docs: HandoffDoc[]; letOnly: boolean }> {
   const res = await rexCall("Listings", "read", { id: listingId });
-  if (!res.ok) return { landlord: null, docs: [] };
+  if (!res.ok) return { landlord: null, docs: [], letOnly: false };
   const l = (res.result ?? {}) as Row;
+  const service = l.lettings_service_type as Row | string | null | undefined;
+  const serviceId = (typeof service === "string" ? service : str(service?.id) ?? str(service?.text) ?? "").toLowerCase().replace(/[\s-]+/g, "_");
   const related = (l.related ?? {}) as Row;
 
   const relns = (related.contact_reln_listing ?? []) as Row[];
@@ -230,6 +239,7 @@ async function landlordOf(listingId: number): Promise<{ landlord: HandoffParty |
         }
       : null,
     docs,
+    letOnly: /^(let_only|tenant_find)$/.test(serviceId),
   };
 }
 
@@ -241,9 +251,9 @@ export function handoffFlowConfigured(): boolean {
 
 export async function buildHandoff(application: Application): Promise<Handoff> {
   const listingId = application.listingId;
-  const { landlord, docs } = listingId
+  const { landlord, docs, letOnly } = listingId
     ? await landlordOf(listingId)
-    : { landlord: null, docs: [] as HandoffDoc[] };
+    : { landlord: null, docs: [] as HandoffDoc[], letOnly: false };
 
   const certificates = application.propertyId
     ? await certificatesFor(application.propertyId, application.startDate)
@@ -338,6 +348,7 @@ export async function buildHandoff(application: Application): Promise<Handoff> {
     locality: application.locality,
     landlord,
     tenants,
+    letOnly,
     rentPcm: application.offerAmount,
     startDate: application.startDate,
     agreementMonths: application.agreementMonths,

@@ -837,14 +837,19 @@ export default function ApplicationDrawer({
   /* The home's photos, from its listing. */
   const photoListing = app?.listingId ?? deal?.app.listingId ?? info?.listingId ?? null;
   const [gallery, setGallery] = useState<string[] | null>(null);
+  /* What we do for the landlord, off the same listing read: until a deal is
+     in Propoly it is the only place that says (Sean, 15 Oct 2026: a let only
+     read "Not known yet"). */
+  const [listingService, setListingService] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<number | null>(null);
   useEffect(() => {
     if (!photoListing) return;
     let live = true;
     fetch(`/api/listings/details?id=${encodeURIComponent(photoListing)}`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j: { ok?: boolean; details?: { images?: { url: string; priority: number }[] } }) => {
+      .then((j: { ok?: boolean; details?: { images?: { url: string; priority: number }[]; service?: string | null } }) => {
         if (!live || !j.ok) return;
+        if (j.details?.service) setListingService(j.details.service);
         const urls = [...(j.details?.images ?? [])].sort((a, b) => a.priority - b.priority).map((m) => m.url).filter(Boolean);
         if (urls.length) setGallery(urls);
       })
@@ -939,7 +944,7 @@ export default function ApplicationDrawer({
     { icon: "coin", label: isSwap ? "Rent, the home" : "Rent", text: rent ? `${rent} ${per}` : "No offer recorded" },
     ...(app?.swapPortion ? [{ icon: "coin", label: "Their portion", text: `${app.swapPortion} pcm` }] : []),
     { icon: "user", label: "Agent", text: agent },
-    { icon: "home", label: "Service", text: deal?.serviceLevel ?? deal?.app.propoly?.service ?? "Not known yet" },
+    { icon: "home", label: "Service", text: deal?.serviceLevel ?? deal?.app.propoly?.service ?? (listingService ? listingService.charAt(0) + listingService.slice(1).toLowerCase() : "Not known yet") },
     ...(app
       ? [
           { icon: "target", label: "Came in", text: received ? niceDate(received.when) : "No date" },

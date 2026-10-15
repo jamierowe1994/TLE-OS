@@ -14,6 +14,7 @@ import {
   groupOf,
   rlpAnswered,
   waiverFor,
+  whyPlaceholder,
   type CheckId,
   type LetType,
   type PlcCase,
@@ -912,23 +913,7 @@ export default function PlcWizard({
                         <input
                           value={why[c.id] ?? ""}
                           onChange={(e) => setWhy((w) => ({ ...w, [c.id]: e.target.value }))}
-                          placeholder={
-                            c.id === "gas-safety"
-                              ? "Why not needed? e.g. No gas supply to the property"
-                              : c.id === "guarantor-checks"
-                                ? "Why not needed? e.g. No guarantor on this tenancy"
-                                : c.id === "pat"
-                                  ? "Why not needed? e.g. The landlord supplies no electrical appliances"
-                                  : c.id === "fire-safety"
-                                    ? "Why not needed? e.g. Booked for the 8th, will follow"
-                                    : c.id === "alarms"
-                                      ? "Why not needed? e.g. Tested at check-in, record to follow"
-                                      : c.id === "emergency-lighting"
-                                        ? "Why not needed? e.g. No emergency lighting fitted at the property"
-                                        : c.id === "holding-deposit"
-                                          ? "Why not needed? e.g. No holding deposit was taken"
-                                          : "Why not needed? e.g. Council has no licensing scheme here"
-                          }
+                          placeholder={whyPlaceholder(c.id)}
                           className="min-w-0 flex-1 rounded-lg border border-line bg-white px-3 py-1.5 text-xs outline-none focus:border-ink"
                         />
                         <button

@@ -289,10 +289,13 @@ export const LISTING_TRACK: JourneyStep[] = [
   },
   {
     id: "handover", label: "Handover", icon: "key",
-    title: "Hand over to Kirstie",
+    /* Said as it is since the agent pushes the let themselves (9 Oct 2026).
+       Sean, 15 Oct 2026, on a let only: "how can I progress?" - the step
+       still read as a hand-off to Kirstie, with nothing to press. */
+    title: "Carry on from the let",
     detail:
-      "Property, landlord, applicants, agreed rent and dates go to pre-tenancy in one package, from the accepted application. Referencing and move-in run from there.",
-    action: "handoff", cta: "Hand over to Kirstie",
+      "The accepted offer is a let on Applications now. Open it and push it to Propoly; the holding fee, referencing and the PLC check follow from there. The listing keeps taking viewings until the holding fee is paid.",
+    action: "handoff", cta: "Open the let",
   },
 ];
 

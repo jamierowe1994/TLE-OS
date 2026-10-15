@@ -598,10 +598,13 @@ function ListingDrawerBody({
       .catch(() => { if (!gone) setViewings({ upcoming: [], past: [] }); });
     fetch(`/api/listings/${encodeURIComponent(id)}/applications`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j: { ok?: boolean; applications?: { id: string; statusLabel?: string; status?: string; listingId?: string | number; applicants?: { name?: string }[]; offerAmount?: number | null; dateReceived?: number | null }[] }) => {
+      .then((j: { ok?: boolean; applications?: { id: string; statusLabel?: string; status?: string; listingId?: string | number; applicants?: { name?: string }[]; offerAmount?: number | null; dateReceived?: number | null; osDecision?: { decision?: string } | null }[] }) => {
         if (gone) return;
         const mine = (j.applications ?? []).filter((a) => String(a.listingId ?? "") === id);
-        setLiveApps(mine.map((a) => ({ id: String(a.id), statusLabel: a.statusLabel ?? a.status ?? "", applicants: (a.applicants ?? []).map((x) => x.name).filter(Boolean).join(" & "), offerAmount: a.offerAmount ?? null, dateReceived: a.dateReceived ?? null })));
+        /* Accepted here counts as accepted (Sean, 15 Oct 2026): REX still had
+           it as received, so the Handover step never found the let. */
+        const acceptedHere = (a: (typeof mine)[number]) => a.status !== "unsuccessful" && a.osDecision?.decision === "accepted";
+        setLiveApps(mine.map((a) => ({ id: String(a.id), statusLabel: acceptedHere(a) ? "Accepted" : a.statusLabel ?? a.status ?? "", applicants: (a.applicants ?? []).map((x) => x.name).filter(Boolean).join(" & "), offerAmount: a.offerAmount ?? null, dateReceived: a.dateReceived ?? null })));
       })
       .catch(() => { if (!gone) setLiveApps([]); });
     return () => { gone = true; };
@@ -1252,7 +1255,7 @@ function ListingDrawerBody({
     enquiries: enquiries === null ? "Reading…" : `${enquirers} ${enquirers === 1 ? "person" : "people"}`,
     applications: savedOffers === null ? "Reading…" : openOffers ? `${openOffers} to decide` : `${savedOffers.length} so far`,
     marketing: marketingToGo == null ? "Facts, write-up, photos" : marketingToGo === 0 ? "Complete" : `${marketingToGo} to fill in`,
-    compliance: certs === null ? "Reading…" : certOk("epc") && certOk("gas_safety") && certOk("eicr") ? (termsKnown && !termsOnFile ? "Terms to add" : "Certificates and papers") : "Certificates to add",
+    compliance: certs === null ? "Reading…" : certOk("epc") && certOk("gas_safety") && certOk("eicr") ? (termsKnown && !termsOnFile ? "Terms to add" : "Certificates and papers") : /let\s*only|tenant\s*find/i.test(live?.service ?? "") ? "Copies from the landlord" : "Certificates to add",
     portals: pub && !pub.onPortals ? "Off for now" : "Live adverts, how they do",
   };
   const needsOf: Record<TabKey, boolean> = {
@@ -1473,7 +1476,7 @@ function ListingDrawerBody({
               title={canOffer ? undefined : "Once it is live with a rent, and not let agreed"}
             >
               {tileIcon("coin", "green")}
-              {tileText("Make an offer", canOffer ? "Viewed or asked" : "Once it is live")}
+              {tileText("Make an offer", canOffer ? "Viewed or asked" : listing.letAgreed ? "An offer is accepted" : "Once it is live")}
             </button>
             {sectionTile("marketing")}
             {sectionTile("viewings")}
@@ -1667,7 +1670,7 @@ function ListingDrawerBody({
               ],
               offers: [{ label: "Sent to the landlord", done: at > 2 }],
               accepted: [{ label: "Offer accepted", done: Boolean(accepted) }],
-              handover: [{ label: "Handed over to Kirstie", done: at > 4 }],
+              handover: [{ label: "On Applications as a let", done: accepted }],
             };
             const cols = { gridTemplateColumns: `repeat(${LISTING_TRACK.length}, minmax(0, 1fr))` };
             /* One short line under each step: done, how far, or what is next. */
@@ -1811,7 +1814,7 @@ function ListingDrawerBody({
                 const acceptedApp = here.action === "handoff" ? liveApps?.find((a) => /accept/i.test(a.statusLabel)) : undefined;
                 return acceptedApp ? (
                   <Link
-                    href={`/applications?open=${encodeURIComponent(acceptedApp.id)}`}
+                    href={`/applications/${encodeURIComponent(acceptedApp.id)}`}
                     className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white"
                   >
                     <DoodleIcon name={here.icon} size={14} />
@@ -2171,6 +2174,7 @@ function ListingDrawerBody({
                     email: landlord.status === "known" ? (landlord.landlord.email ?? undefined) : undefined,
                   }}
                   landlordRegistration={live?.record.landlordRegistration ?? null}
+                  letOnly={/let\s*only|tenant\s*find/i.test(live?.service ?? "")}
                 />
                 <div className="rounded-[22px] border border-line/50 bg-white p-5">
                   <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">How we get in</p>

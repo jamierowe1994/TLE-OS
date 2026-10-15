@@ -452,7 +452,22 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
       actions.push({ id: "rtr", label: "Record right to rent", detail: "Not recorded for every applicant on the application.", href: null, who: "you" });
     }
     for (const m of handoff.missing) {
-      actions.push({ id: `cert:${m.id}`, label: `Get the ${m.label}`, detail: m.why, href: "/compliance", who: "landlord" });
+      /* Let only (Sean, 15 Oct 2026, an intro-only on St Tridunana's Rest):
+         the certificates are the landlord's to keep, and Compliance leaves
+         let-only homes out, so "Get the Gas safety" sent him to a page that
+         did not have the home on it. On a let only it is a copy to ask the
+         landlord for, and it goes on the PLC check. */
+      actions.push(
+        handoff.letOnly
+          ? {
+              id: `cert:${m.id}`,
+              label: `Ask the landlord for the ${m.label}`,
+              detail: `${m.why} It's a let only, so keeping it in date is the landlord's job, but the PLC check needs a copy before the tenancy starts. Add it there when it comes in.`,
+              href: `/plc/start?application=${encodeURIComponent(app.id)}`,
+              who: "landlord",
+            }
+          : { id: `cert:${m.id}`, label: `Get the ${m.label}`, detail: m.why, href: "/compliance", who: "landlord" }
+      );
     }
   }
 
