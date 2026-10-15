@@ -140,8 +140,9 @@ export async function POST(req: NextRequest) {
       setUpFee: fees.setUp,
       managementFee: fees.management,
       /* Said, not left blank. An empty box on a signed contract is an argument
-         waiting to happen. */
-      additionalFees: "None",
+         waiting to happen. Whatever the agent recorded on Change the fees
+         goes in, so terms drawn up after a change carry it. */
+      additionalFees: ma.otherFees?.trim() || "None",
       externalId: ma.id,
     });
 

@@ -1601,8 +1601,18 @@ function Valuation({ deck, show }: { deck: Deck; show: boolean }) {
     /* VAT in: the figure the landlord actually pays (James, 16 Sep 2026). The
        file holds both before VAT, as the terms of business do. */
     v.feePct != null ? { label: "Management fee", value: `${incVat(v.feePct)}% of rent, including VAT` } : null,
-    v.setupFee != null ? { label: "Set-up fee", value: `${money(Math.round(v.setupFee * (1 + VAT_RATE)))} one-off, including VAT` } : null,
+    v.setupFee != null
+      ? { label: "Set-up fee", value: v.setupFee === 0 ? "None" : `${money(Math.round(v.setupFee * (1 + VAT_RATE)))} one-off, including VAT` }
+      : null,
+    /* Anything else agreed, in the agent's words - the same line the terms
+       of business carry in their "Additional Fees Agreed" box. */
+    v.otherFees?.trim() ? { label: "Other fees", value: v.otherFees.trim() } : null,
   ].filter(Boolean) as { label: string; value: string }[];
+  /* Changed after it was sent (Change the fees): said on the page, so the
+     landlord knows this is not the version first sent. */
+  const updated = deck.figuresUpdatedAt
+    ? new Date(deck.figuresUpdatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" })
+    : null;
 
   /**
    * THE THREE FIGURES AROUND THE FIGURE.
@@ -1662,7 +1672,12 @@ function Valuation({ deck, show }: { deck: Deck; show: boolean }) {
       <div className="mx-auto w-full max-w-[1040px]">
         <Rise show={show} i={0}>
           <span className="block text-[11px] font-semibold uppercase tracking-[0.3em] text-black/40">
-            What we&rsquo;d put it on at
+            The rent we&rsquo;d advertise at
+            {updated && (
+              <span className="mt-1.5 block whitespace-nowrap normal-case tracking-[0.04em] text-black/55 sm:ml-3 sm:mt-0 sm:inline">
+                Updated {updated}
+              </span>
+            )}
           </span>
         </Rise>
         <Rise show={show} i={1}>

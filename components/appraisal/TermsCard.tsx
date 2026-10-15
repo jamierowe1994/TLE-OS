@@ -79,9 +79,14 @@ export default function TermsCard({
   landlord,
   primary,
   ghost,
+  outOfDate = false,
 }: {
   appraisalId: string;
   landlord: string;
+  /** The fees changed after the terms were drawn up (Change the fees): the
+   *  contract out there carries the old ones, so the job is redrawing it,
+   *  not nudging. Nudges refuse in this state too (lib/contract-nudge). */
+  outOfDate?: boolean;
   /** The card's own button classes, so this matches whatever it sits inside. */
   primary: string;
   ghost: string;
@@ -136,6 +141,27 @@ export default function TermsCard({
   /* Reading, or DocuSeal is not connected here: the way forward is the same
      screen either way, so it is never a dead card. */
   if (!state) return <p className="text-[12.5px] text-muted">Reading the contract…</p>;
+  /* Before anything else, including DocuSeal not answering here: terms on
+     the old figures must not be chased (see outOfDate). */
+  const outLandlord = state.parties?.find((p) => p.role === "landlord") ?? null;
+  const outSent = state.sent?.to ?? (outLandlord?.sentAt ? outLandlord.email : null);
+  if (outOfDate && !outLandlord?.completedAt) {
+    return (
+      <div>
+        <div className="mb-3.5 rounded-xl border border-accent-dark/30 bg-white/70 px-3.5 py-3">
+          <p className="text-[12.5px] font-semibold text-accent-dark">The fees changed after the terms were drawn up</p>
+          <p className="mt-1 text-[11.5px] leading-relaxed">
+            {outSent
+              ? `The terms sent to ${outSent} carry the old figures. Draw them up again, sign your half, then nudge ${landlord} so they sign the new ones.`
+              : "Draw them up again with the new figures and sign your half before they go."}
+          </p>
+        </div>
+        <Link href={`/market-appraisals/${appraisalId}/send`} className={primary}>
+          Draw them up again <span aria-hidden>→</span>
+        </Link>
+      </div>
+    );
+  }
   if (state.connected === false) return prepare;
 
   const agent = state.parties?.find((p) => p.role === "agent");
@@ -159,6 +185,7 @@ export default function TermsCard({
   const sent = landlordParty.sentAt;
   const opened = landlordParty.openedAt;
   const signedIt = landlordParty.completedAt;
+
   const views = state.views ?? { presentation: 0, contract: 0 };
   const nudged = state.nudge;
   const nextAt = state.nextNudgeAt;

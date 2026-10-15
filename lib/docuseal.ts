@@ -390,7 +390,11 @@ export function feeWording(
       ? `${feePercent}% + VAT`
       : standardPct;
 
-  const setUp = setUpAmount != null
+  /* 0 is an agreed "no set-up fee" (Change the fees), not a blank - a blank
+     gets the standard one. */
+  const setUp = setUpAmount === 0
+    ? "None"
+    : setUpAmount != null
     ? `${money(setUpAmount)} + VAT`
     : tenantFind
       ? "75% of the first month's rent + VAT (minimum £500 + VAT)"

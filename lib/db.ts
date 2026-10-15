@@ -1171,6 +1171,10 @@ ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS valued_by       TEXT;
 -- When terms of business last went out for signature (6 Sep 2026). DocuSeal
 -- keeps the submission; this is the one fact the spine needs from it.
 ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS terms_sent_at   TIMESTAMPTZ;
+-- Anything agreed beyond the fee and the set-up, in the agent's words (Change
+-- the fees, 14 Oct 2026). Goes into the contract's "Additional Fees Agreed"
+-- box; NULL is "None", which is what that box said before this existed.
+ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS other_fees      TEXT;
 
 -- WHAT KIRSTIE HAS ALREADY BEEN TOLD.
 --
