@@ -281,9 +281,9 @@ export const PORTAL_FOLDERS: PortalFolder[] = [
       {
         kind: "open",
         id: "agent-prelaunch",
-        name: "Who is on the pre-launch",
-        blurb: "The roster, invitations, what people actually use, and what they have reported.",
-        href: "/admin/pre-launch",
+        name: "Inviting new starters",
+        blurb: "Who has been invited, who has joined, and how far each is through getting set up.",
+        href: "/admin/people/invites",
       },
       {
         kind: "email",

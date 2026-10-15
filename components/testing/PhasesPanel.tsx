@@ -128,7 +128,7 @@ export default function PhasesPanel() {
             <ul className="mt-1.5 space-y-0.5 text-muted">
               {result.phase === 1 && <li>{result.invited.length} invited by email.</li>}
               {result.inviteFailed.map((f) => (
-                <li key={f.email} className="text-accent-dark">{f.email}: {f.why}. Use Get a link on Pre-launch for this one.</li>
+                <li key={f.email} className="text-accent-dark">{f.email}: {f.why}. Use Copy link on People, Invites for this one.</li>
               ))}
               {result.phase === 3 && <li>{result.filesRemoved} test files removed.</li>}
               {result.phase !== 1 && <li>{result.announced} people told by email.</li>}
@@ -248,8 +248,8 @@ export default function PhasesPanel() {
                       </>
                     )}
                     <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
-                      Only this list is ever invited. Somebody who is not a lettings agent in REX is added from Pre-launch, Someone not on the roster.
-                      Our invitations sometimes land in Microsoft quarantine: for anybody who does not get theirs, Pre-launch, Get a link.
+                      Only this list is ever invited. Somebody who is not a lettings agent in REX is added on People, Invites.
+                      Our invitations sometimes land in Microsoft quarantine: for anybody who does not get theirs, People, Invites, Copy link.
                     </p>
                   </div>
                 );

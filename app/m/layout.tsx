@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import PhoneFrame from "@/components/m/PhoneFrame";
+import PageTracker from "@/components/PageTracker";
 
 /**
  * THE PHONE VIEW (16 Sep 2026).
@@ -39,6 +40,8 @@ export default function PhoneLayout({ children }: { children: React.ReactNode })
   return (
     <div className="os-type min-h-dvh bg-page text-ink">
       <PhoneFrame>{children}</PhoneFrame>
+      {/* Which screens are opened and for how long (Admin > Tracking). */}
+      <PageTracker />
     </div>
   );
 }

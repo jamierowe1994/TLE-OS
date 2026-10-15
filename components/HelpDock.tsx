@@ -504,15 +504,8 @@ function Dock() {
       .catch(() => setPosts([]));
   }, [signedIn]);
 
-  useEffect(() => {
-    if (!signedIn || !path) return;
-    fetch("/api/track", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ path }),
-      keepalive: true,
-    }).catch(() => {});
-  }, [path, signedIn]);
+  /* The page tracker lived here until 15 Oct 2026; it is components/PageTracker
+     now, so the iPhone app and the phone screens are counted too. */
 
   const rest = useCallback(() => {
     timers.current.forEach(clearTimeout);

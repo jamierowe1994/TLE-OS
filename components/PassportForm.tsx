@@ -995,6 +995,14 @@ export default function PassportForm({
     [token, demo]
   );
 
+  /* "They opened it" (15 Oct 2026, Admin > Tracking): once per load, from the
+     tenant's own browser, so an email scanner fetching the link never counts.
+     The server ignores anybody signed in to the OS. */
+  useEffect(() => {
+    if (demo || !token) return;
+    void fetch(`/api/tenant/passport/opened?token=${encodeURIComponent(token)}`, { method: "POST", keepalive: true }).catch(() => {});
+  }, [token, demo]);
+
   /* A save that failed is tried again (9 Oct 2026): every 10 seconds, and the
      moment the phone says it is back online. Angela Serwaa Mensah's signal
      dropped on the last page and nothing after it ever arrived. */

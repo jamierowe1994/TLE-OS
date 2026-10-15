@@ -4,6 +4,7 @@ import Shell from "@/components/Shell";
 import ThemeGate from "@/components/ThemeGate";
 import ViewAsBar from "@/components/ViewAsBar";
 import HelpDock from "@/components/HelpDock";
+import PageTracker from "@/components/PageTracker";
 import SetupGate from "@/components/SetupGate";
 import Tour from "@/components/Tour";
 import SteveGuide from "@/components/SteveGuide";
@@ -30,10 +31,12 @@ export default function OsLayout({ children }: { children: React.ReactNode }) {
           <Shell>{children}</Shell>
         </Suspense>
         {/* Follows the agent everywhere, because the report has to be one click
-            from the page that caused it. Also carries the page tracker. */}
+            from the page that caused it. */}
         <Suspense fallback={null}>
           <HelpDock />
         </Suspense>
+        {/* Which pages are opened and for how long (Admin > Tracking). */}
+        <PageTracker />
         {/* Sends anybody whose account is not finished back to /setup. Renders
             nothing; it is here rather than in Shell so it still runs on the
             admin screens, which hide the rail. */}

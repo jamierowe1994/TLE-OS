@@ -708,9 +708,9 @@ export const JOURNEYS: Journey[] = [
       {
         id: "invite",
         title: "The invite arrives",
-        what: "Admin, Pre-launch: pick somebody off the REX roster, choose their role, send. They get \"You're in\" with a one-time link that lasts 24 hours.",
-        how: ["Admin, Pre-launch. Find them on the roster, set the role, press Send.", "Check it arrived. If our mail is being quarantined, use the link option instead and give it to them another way.", "The Sent column only says sent when the OS emailed them - a hand-delivered link deliberately does not mark it."],
-        where: "/admin/pre-launch",
+        what: "Admin, People, Invites: pick somebody off the roster, choose their role, send. They get \"Welcome to TLE OS\" with a one-time link.",
+        how: ["Admin, People, Invites. Find them on the list, set the role, press the button or Reissue link.", "Check it arrived. If our mail is being quarantined, use the link option instead and give it to them another way.", "The Sent column only says sent when the OS emailed them - a hand-delivered link deliberately does not mark it."],
+        where: "/admin/people/invites",
         state: "built",
         since: "2026-09-14",
         notes: ["Every picture in every email we send was a redirect to the sign-in page until 14 Sep, so invites before then arrived with broken artwork."],

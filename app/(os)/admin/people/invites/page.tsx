@@ -5,16 +5,23 @@ import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
 import { ROLES, ROLE_LABEL } from "@/lib/roles";
 import { londonDayOffset, londonHHMM } from "@/lib/london-time";
+import PeopleTabs from "@/components/admin/PeopleTabs";
+import MailboxesCard from "@/components/admin/MailboxesCard";
 
 /**
- * Admin > Launch (James, 12 Oct 2026, for Wednesday 14 Oct).
+ * Admin > People > Invites (15 Oct 2026). This was Admin > Launch (James,
+ * 12 Oct 2026, for Wednesday 14 Oct): invite everybody at The Letting Experts
+ * who has no account, in one press.
  *
- * Invite everybody at The Letting Experts who has no account, in one press.
- * Untick anybody, add anybody, pick roles; then watch who signs up and how far
- * each person is through the pre-start checklist. lib/launch has the roster
- * rules; app/api/admin/launch the sending.
+ * After launch it is how a new starter is let in: untick anybody, add
+ * anybody, pick roles, send to whoever has not had one yet; then watch who
+ * signs up and how far each person is through the getting-set checklist.
+ * lib/launch has the roster rules; app/api/admin/launch the sending.
  *
- * Pre-launch stays as it was beside this: it is the pilot's screen.
+ * Pre-launch went the same day. Two of its cards live on here: what a new
+ * starter sees (replaying the joining screens), and whose email is connected
+ * (components/admin/MailboxesCard). Its roster was this page's list over
+ * again, its usage list is Admin > Tracking, and its reports are Tickets.
  */
 
 type Person = {
@@ -93,7 +100,7 @@ function readyCount(r: Ready): number {
   return [r.photo, r.rex === "live", r.email, r.setup, r.tour, Boolean(r.app)].filter(Boolean).length;
 }
 
-export default function LaunchPage() {
+export default function InvitesPage() {
   const [d, setD] = useState<Board | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
@@ -108,11 +115,11 @@ export default function LaunchPage() {
   const load = useCallback(() => {
     fetch("/api/admin/launch", { cache: "no-store" })
       .then(async (r) => {
-        if (!r.ok) throw new Error(r.status === 404 ? "This page is for owners." : "The launch list didn't load.");
+        if (!r.ok) throw new Error(r.status === 404 ? "This page is for owners." : "The invite list didn't load.");
         return r.json() as Promise<Board>;
       })
       .then((j) => {
-        if (!j.ok) throw new Error(j.error ?? "The launch list didn't load.");
+        if (!j.ok) throw new Error(j.error ?? "The invite list didn't load.");
         setD(j);
         setFailed(null);
       })
@@ -274,9 +281,10 @@ export default function LaunchPage() {
         illustration="/illustrations/people/team-spirit.svg"
         illustrationAspect={1.0}
         lineBreak="none"
-        title="Launch"
-        blurb="Invite everybody at The Letting Experts in one go, then watch them get set up."
+        title="People"
+        blurb="Invite new starters, then watch them get set up."
       />
+      <PeopleTabs />
 
       {flash && (
         <p className="fade-up mt-8 rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-4 text-[12.5px]">{flash}</p>
@@ -285,7 +293,7 @@ export default function LaunchPage() {
       {!d ? (
         <div className="mt-8 flex items-center gap-2.5 text-[12.5px] text-muted">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-accent-dark" aria-hidden />
-          Loading the launch list…
+          Loading the invite list…
         </div>
       ) : (
         <>
@@ -311,11 +319,11 @@ export default function LaunchPage() {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="min-w-0 max-w-[60ch]">
                 <h2 className="hand text-[19px] leading-tight">
-                  {d.launchedAt ? "Launched" : "Launch TLE OS"}
+                  {d.launchedAt ? "Invite New Starters" : "Launch TLE OS"}
                 </h2>
                 <p className="mt-1 text-[12px] leading-relaxed text-muted">
                   {d.launchedAt
-                    ? `First invites went ${at(d.launchedAt)}. Anybody ticked below who hasn't had one yet goes with the button.`
+                    ? `Launched ${at(d.launchedAt)}. Anybody ticked below who hasn't had an invite yet goes with the button: their own welcome email, with a one-time link to set up their account and a link to the TLE OS tour.`
                     : "Sends everybody ticked below their own welcome email: a one-time link to set up their account, and a link to the TLE OS tour."}{" "}
                   Each link lasts {d.linkDays} days.
                 </p>
@@ -643,6 +651,27 @@ export default function LaunchPage() {
           </section>
         </>
       )}
+
+      {/* From Pre-launch (15 Oct 2026): seeing what a new starter sees,
+          without spending a magic link. Every invite is single use, so these
+          replay the same screens against your own account. */}
+      <section className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5">
+        <h2 className="hand text-[17px] leading-tight">What a New Starter Sees</h2>
+        <p className="mt-1 text-[11.5px] text-muted">
+          Replays the joining screens against your own account. Setting up again will not undo your REX or email
+          connection, and running the walkthrough changes nothing at all.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <a href="/setup?replay=1" className="rounded-full border border-line/80 px-3.5 py-1.5 text-[11.5px] transition-colors hover:border-ink/40">
+            Set up an account
+          </a>
+          <a href="/dashboard?tour=choose" className="rounded-full border border-line/80 px-3.5 py-1.5 text-[11.5px] transition-colors hover:border-ink/40">
+            Show me round
+          </a>
+        </div>
+      </section>
+
+      <MailboxesCard />
     </>
   );
 }

@@ -49,7 +49,8 @@ export const MS_STATE_COOKIE = "os_ms_state";
 /**
  * Where to send somebody once Microsoft has finished with them.
  *
- * The callback used to be hardcoded to /admin/pre-launch, which was right when
+ * The callback used to be hardcoded to /admin/pre-launch (now People >
+ * Invites, the default below), which was right when
  * the only person connecting a mailbox was an owner standing on that board. A
  * new agent connecting theirs during setup is not an owner, so that redirect
  * landed them on a screen they cannot open, on their first morning, having
@@ -64,7 +65,8 @@ export const MS_RETURN_COOKIE = "os_ms_return";
 const MS_RETURNS: Record<string, string> = {
   setup: "/setup",
   profile: "/profile",
-  admin: "/admin/pre-launch",
+  /* People > Invites since 15 Oct 2026, when Pre-launch went. */
+  admin: "/admin/people/invites",
 };
 
 /** The name a caller may ask for, or null if it is not one we offer. */
@@ -74,7 +76,7 @@ export function msReturnName(raw: string | null | undefined): string | null {
 
 /** The path for a name. Anything unrecognised goes back to the old default. */
 export function msReturnPath(name: string | null | undefined): string {
-  return (name && MS_RETURNS[name]) || "/admin/pre-launch";
+  return (name && MS_RETURNS[name]) || "/admin/people/invites";
 }
 
 /**
