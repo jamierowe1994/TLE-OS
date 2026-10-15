@@ -133,7 +133,7 @@ export default function TermsCard({
   }
 
   const prepare = (
-    <Link href={`/market-appraisals/${appraisalId}/send`} className={primary}>
+    <Link href={`/market-appraisals/${appraisalId}/send`} data-steve="terms.prepare" className={primary}>
       Prepare the presentation and sign <span aria-hidden>→</span>
     </Link>
   );
@@ -156,7 +156,7 @@ export default function TermsCard({
               : "Draw them up again with the new figures and sign your half before they go."}
           </p>
         </div>
-        <Link href={`/market-appraisals/${appraisalId}/send`} className={primary}>
+        <Link href={`/market-appraisals/${appraisalId}/send`} data-steve="terms.prepare" className={primary}>
           Draw them up again <span aria-hidden>→</span>
         </Link>
       </div>
@@ -221,11 +221,11 @@ export default function TermsCard({
 
       <div className="flex flex-wrap items-center gap-2">
         {!signedIt && (
-          <button type="button" onClick={() => nudge(!sent)} disabled={busy || state.sendUnlocked === false} className={primary}>
+          <button type="button" data-steve="terms.nudge" onClick={() => nudge(!sent)} disabled={busy || state.sendUnlocked === false} className={primary}>
             {busy ? "Sending…" : sent ? "Nudge to sign" : "Send it to them"}
           </button>
         )}
-        <Link href={`/market-appraisals/${appraisalId}/send`} className={ghost}>
+        <Link href={`/market-appraisals/${appraisalId}/send`} data-steve="terms.prepare" className={ghost}>
           Open the contract
         </Link>
       </div>

@@ -152,6 +152,8 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
 
   /* Right to Rent follow-up checks owed inside four weeks (4 Oct 2026): the office. */
   const rtrDue = desk ? await followUpsDue(28).catch(() => []) : [];
+  /* ...and the ones recorded on a let itself (lib/application-rtr, 15 Oct 2026). */
+  const rtrLetDue = desk ? await import("@/lib/application-rtr").then((m) => m.rtrFollowUpsDue(28)).catch(() => []) : [];
 
   /* Agreed works not done, inside a week of move day (Michael, 29 Sep 2026):
      the office, who run the move-in. */
@@ -263,6 +265,18 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
       title: c.name,
       body: `Right to Rent follow-up check ${days < 0 ? `was due ${-days} day${days === -1 ? "" : "s"} ago` : days <= 0 ? "is due today" : `is due in ${days} day${days === 1 ? "" : "s"}`}${c.property ? ` (${c.property})` : ""}.`,
       href: me.role === "compliance" ? "/compliance-desk/id-checks" : "/pre-tenancy/id-checks",
+      tone: "warn",
+    });
+  }
+  for (const c of rtrLetDue) {
+    const days = ukDaysFromToday(String(c.followUpOn).slice(0, 10));
+    out.push({
+      id: `rtr-let:${c.id}`,
+      kind: "reminder",
+      at: c.at,
+      title: c.tenant,
+      body: `Right to Rent follow-up check ${days < 0 ? `was due ${-days} day${days === -1 ? "" : "s"} ago` : days <= 0 ? "is due today" : `is due in ${days} day${days === 1 ? "" : "s"}`}${c.property ? ` (${c.property})` : ""}.`,
+      href: `/applications/${encodeURIComponent(c.applicationId)}`,
       tone: "warn",
     });
   }

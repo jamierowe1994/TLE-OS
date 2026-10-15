@@ -71,6 +71,8 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     does: [
       "Read your own bento board of tiles.",
       "Press Customise to add, remove or resize tiles from the tray, then Done.",
+      /* Gurdeep Singh, 14 Oct 2026: "Can you check my emails this morning". */
+      "Ask Steve to check your emails: he reads your own Outlook inbox and picks out customers writing about your leads, homes and lets, anything with no reply yet and anything urgent, each linked to its file. Read only - he never sends, deletes, moves or marks anything as read, and only ever your own mailbox. It needs Microsoft 365 connected: Profile, the Connections tab, Connect.",
     ],
     wiring: "partial",
     caveats: ["The board layout is saved in your own browser, so it does not follow you to another device."],
@@ -155,6 +157,11 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       "Filter by stage using the tab strip: All open, Booked, Pre-appraisal, Appraisal, Post-appraisal, Take-on & photos, AML & compliance.",
       "Click an appraisal to open its file — the rent guide, the comparables behind it, and what needs doing now.",
       "From the file, Build the presentation makes the deck the landlord opens before you arrive.",
+      /* Jade Grewal, 15 Oct 2026, was told terms "go out through REX". They
+         do not: this is where they are sent from. */
+      "SENDING TERMS OF BUSINESS: open the landlord's appraisal. Once the figure is recorded and the post-appraisal deck is built, the Next up card says Prepare the presentation and sign, which opens Prepare and send. Four steps there, in any order: 1 Look through it (open the booklet - what the landlord will get); 2 Check the details - their home address fills from their record (Change to correct it; if it is blank, type it and press Save their address, or Same as the let property if they live there), then tick These are right, and the dates are right; 3 Sign your half (Draw up the contract); 4 Send it to the landlord - one email from the agent with the presentation and a link to sign in their own file. Unsigned terms are nudged automatically 2, 5 and 9 days after sending, and Nudge to sign on the appraisal's Next up card chases by hand.",
+      "Change the fees: on the appraisal file (top) or under the tick on Prepare and send, for the service, the management fee, a set-up fee and other fees, with why it changed. The deck and the terms both follow, and terms already drawn up or sent are drawn up again. Not once the landlord has signed.",
+      "A brand new home with no appraisal goes through + Add new listing on Listings, whose fifth screen draws up the terms to sign and send the same way.",
     ],
     wiring: "partial",
     caveats: [
@@ -190,6 +197,8 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       "Archived is not a REX state and nothing is deleted: a draft goes there once it has sat two months without being published, along with every listing REX holds that came off the market without a tenant. Bring back to drafts returns one for another two months.",
       "Pills like No photos and EPC not filed are telling you what REX is missing, not what this screen failed to load.",
       "Every other field on the file is read-only — the Marketing write-up is the only thing here that saves back to REX. Rent, availability, beds and the rest have to be changed in REX itself.",
+      "A home's address: ask Steve. He changes it in the OS after showing the old and new and a yes - on the managed-home record, or as the OS's own address for a listing - and it shows under the address on the listing and Portfolio pages as Address in the OS. The home's property record in REX is not changed: Steve tells them to change it there too, without naming REX. The push to Propoly uses the OS address for a town or postcode the REX record has blank (never over one REX holds), and says so on the handover run.",
+      "Terms of business are not sent from a listing: the Send terms button under Compliance is not switched on. They go from the landlord's appraisal file, Prepare and send (see Market Appraisals). A listing with no appraisal file behind it (most homes that were on the market before the OS) has no Prepare and send: if its terms already went out and are unsigned, chase them from the Terms to sign tile on the Dashboard - Send reminder emails the landlord from your own mailbox (Customise adds the tile if it is not there). If they hold signed terms, Upload them under Compliance. Otherwise it goes to James.",
       "Live advert links only appear for a property that is actually feeding a portal. No links means the feed is not running, not that the screen failed.",
     ],
     next: "A let property hands over to pre-tenancy.",
@@ -245,6 +254,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     caveats: [
       "Referencing has no source in any system we connect to, so it is not shown. The screen says so.",
       "The right-to-rent gap warning is real — it is counting applications with nothing recorded.",
+      "A tenant's right to rent expiry date (or no time limit) is recorded by asking Steve - he puts it on the let after a yes, and it shows on the tenant's Their application card as Right to rent expiry. The office's bell reminds them when the follow-up check is due. A Scottish let has no right to rent, so it shows none and takes none.",
     ],
     next: "An accepted application becomes a deal in Propoly and goes to pre-tenancy.",
   },

@@ -1,4 +1,5 @@
 "use client";
+import OsAddressLine from "@/components/OsAddressLine";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { londonToday } from "@/lib/london-clock";
@@ -1384,6 +1385,7 @@ function ListingDrawerBody({
             <p className="mt-1 text-[13px] text-muted">
               {[listing.locality, listing.publishedAt ? `live since ${dayOf(listing.publishedAt)}` : null].filter(Boolean).join(" · ")}
             </p>
+            <OsAddressLine propertyId={listing.propertyId} shown={[listing.name, listing.locality].filter(Boolean).join(", ")} />
             {/* Whose it is and the terms on the left; getting INTO the
                 property and getting it OUT to the database on the right, as
                 wide as their words. */}

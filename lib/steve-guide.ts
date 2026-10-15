@@ -141,7 +141,64 @@ export const GUIDE_TARGETS: GuideTarget[] = [
       press("appraisal.build", "Build presentation - or Update, if there is one already."),
     ],
   },
-  { id: "listing.new", about: "Add a new listing", steps: [nav("/listings", "Listings"), press("listings.new", "Add new listing, top right.")] },
+  /* Jade Grewal, 15 Oct 2026: "how do i sent out terms of business" - and
+     she was told they go through REX. They go from the appraisal's Prepare
+     and send screen (components/appraisal/PrepareAndSend), which marks each
+     of its four steps data-done, so the walk starts at whichever one is
+     left: look through the booklet, their home address and the tick, sign
+     your half, send. */
+  {
+    id: "appraisal.terms",
+    about: "Send a landlord their terms of business (Prepare and send on the appraisal: check the deck, their home address, tick the details, sign your half, send it). Also how to change the fees before sending",
+    steps: [
+      nav("/market-appraisals", "Market Appraisals"),
+      {
+        point: ["[data-steve-row]"],
+        say: "Open the landlord's appraisal.",
+        done: { any: [{ present: '[data-steve="terms.prepare"]' }, { present: '[data-steve="terms.build-deck"]' }, { present: '[data-steve="terms.step1"]' }] },
+      },
+      {
+        point: ['[data-steve="terms.prepare"]', '[data-steve="terms.build-deck"]'],
+        say: "Prepare the presentation and sign, on the Next up card. If it says Build the post-appraisal, build that deck first - the terms go with it.",
+        done: { present: '[data-steve="terms.step1"]' },
+      },
+      {
+        point: ['[data-steve="terms.booklet-next"]'],
+        say: "This is what the landlord will get. Open it with Next - you don't have to read to the end.",
+        done: { present: '[data-steve="terms.step1"][data-done]' },
+      },
+      {
+        point: ['[data-steve="terms.same-as-let"]', '[data-steve="terms.home"]'],
+        say: "Their home address goes on the contract. It fills from their record - if it's blank, type it and Save, or press Same as the let property if they live there.",
+        done: { present: '[data-steve="terms.home"][data-done]' },
+      },
+      {
+        point: ['[data-steve="terms.tick"]'],
+        say: "Check the landlord, fees and dates, then tick. Fees not right? Change the fees, just below the tick.",
+        done: { present: '[data-steve="terms.step2"][data-done]' },
+      },
+      {
+        point: ['[data-steve="terms.sign"]'],
+        say: "Draw up the contract and sign your half - the landlord can't open theirs until you have.",
+        done: { present: '[data-steve="terms.step3"][data-done]' },
+      },
+      {
+        point: ['[data-steve="terms.send"]'],
+        say: "Send it. One email from you: the presentation and a link to sign. It nudges them by itself after 2, 5 and 9 days.",
+        done: { any: [{ clicked: true }, { present: '[data-steve="terms.step4"][data-done]' }] },
+      },
+    ],
+  },
+  {
+    id: "appraisal.terms-chase",
+    about: "Chase terms of business already sent and not yet signed (Nudge to sign on the appraisal)",
+    steps: [
+      nav("/market-appraisals", "Market Appraisals"),
+      { point: ["[data-steve-row]"], say: "Open the landlord's appraisal.", done: { present: '[data-steve="terms.nudge"]' } },
+      press("terms.nudge", "Nudge to sign - a short reminder from you, with their link. It also nudges by itself 2, 5 and 9 days after sending."),
+    ],
+  },
+  { id: "listing.new", about: "Add a new listing (five screens: the home, the landlord, the let, check, then terms to sign and send)", steps: [nav("/listings", "Listings"), press("listings.new", "Add new listing, top right.")] },
   { id: "listing.open", about: "Open a listing's file", steps: [nav("/listings", "Listings"), openRow("listing.drawer", "Click the home you want - its file opens.")] },
   ...(["marketing", "compliance", "documents", "viewings", "applications"] as const).map((tab) => ({
     id: `listing.${tab}`,

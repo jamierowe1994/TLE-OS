@@ -59,7 +59,9 @@ export default function AssistantSays({
     parts.push(text.slice(last, at));
     /* Compared bare, so a query string on the end (?side=landlord) still
        matches the screen it belongs to and still gets to keep it. */
-    const known = screens.find((s) => s.href === href || href.startsWith(`${s.href}?`));
+    /* ...and a file under one (15 Oct 2026: his email summary links each
+       email to its let or home, /applications/<id>, /portfolio/<id>). */
+    const known = screens.find((s) => s.href === href || href.startsWith(`${s.href}?`) || (s.href !== "/" && href.startsWith(`${s.href}/`)));
     parts.push(label);
     if (known && !targets.some((t) => t.href === href)) {
       targets.push({ href, label });

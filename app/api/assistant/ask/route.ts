@@ -17,6 +17,7 @@ import { ask, budget, assistantConfigured } from "@/lib/assistant-brain";
 import { AGENT_NAV } from "@/lib/nav";
 import { keyIsOurs } from "@/lib/r2";
 import type { ScreenControl, ScreenSnapshot } from "@/lib/steve-never";
+import { readViewAs, VIEW_AS_COOKIE } from "@/lib/view-as";
 
 /**
  * Talking to the assistant.
@@ -67,14 +68,16 @@ export async function GET(req: NextRequest) {
     budget(),
   ]);
   return NextResponse.json({
-    history,
+    /* A card's outcome is logged as "[note] done — ..." for the console;
+       back in their own chat it reads as what he said (15 Oct 2026). */
+    history: history.map((l) => (l.role === "assistant" ? { ...l, text: l.text.replace(/^\[[a-z-]+\] (done|refused) — /, "") } : l)),
     onboarded,
     /* So the panel can say what he is rather than guess. */
     live: assistantConfigured() && b.left > 0,
     /* The screens a "take me there" button is allowed to point at. Sent from
        here rather than hardcoded in the dock so the rail stays the one list;
        Admin is excluded upstream in AGENT_NAV. */
-    screens: AGENT_NAV.map((n) => ({ href: n.href, label: n.label })),
+    screens: [...AGENT_NAV.map((n) => ({ href: n.href, label: n.label })), { href: "/profile", label: "Profile" }],
   });
 }
 
@@ -192,6 +195,7 @@ export async function POST(req: NextRequest) {
       memory,
       screen: readScreen(b.screen),
       today: readToday(b.today),
+      viewingAs: Boolean(readViewAs(req.cookies.get(VIEW_AS_COOKIE)?.value)),
     });
   } catch (e) {
     /* A model outage must not lose the question — it is still logged above,

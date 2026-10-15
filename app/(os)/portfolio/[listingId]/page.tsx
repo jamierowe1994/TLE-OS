@@ -1,4 +1,5 @@
 "use client";
+import OsAddressLine from "@/components/OsAddressLine";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -670,6 +671,7 @@ export default function PropertyPage() {
                 <p className="figures mt-1.5 text-[20px] font-semibold">{houseView && house && !lets ? houseLine : rentLine}</p>
               )}
               <p className="mt-1 text-[13px] text-muted">{sub}</p>
+              {!/^pm-/i.test(String(propertyId ?? "")) && <OsAddressLine propertyId={propertyId} shown={[title, p.locality, p.postcode].filter(Boolean).join(", ")} />}
               {house && (
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <button

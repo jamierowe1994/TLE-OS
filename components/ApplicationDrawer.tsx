@@ -718,6 +718,23 @@ export default function ApplicationDrawer({
     return () => { live = false; };
   }, [letId]);
 
+  /* Each tenant's right to rent expiry, recorded on the let (lib/application-rtr,
+     15 Oct 2026). Kept apart from the yes/no answer it sits beside. */
+  const [rtr, setRtr] = useState<{ tenant: string; tenantEmail: string; rightUntil: string | null; noTimeLimit: boolean; followUpOn: string | null }[]>([]);
+  useEffect(() => {
+    if (!letId) return;
+    let live = true;
+    fetch(`/api/applications/${encodeURIComponent(letId)}/right-to-rent`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (live && j?.ok && Array.isArray(j.records)) setRtr(j.records); })
+      .catch(() => { /* the yes/no still shows; the date just isn't added */ });
+    return () => { live = false; };
+  }, [letId]);
+  const rtrOf = (p: { name: string; email?: string | null }) =>
+    rtr.find((r) => (p.email && r.tenantEmail && r.tenantEmail.toLowerCase() === p.email.toLowerCase()) || r.tenant.trim().toLowerCase() === p.name.trim().toLowerCase()) ?? null;
+  const rtrLine = (r: NonNullable<ReturnType<typeof rtrOf>>) =>
+    r.noTimeLimit ? "No time limit" : r.rightUntil ? `Until ${niceDate(r.rightUntil)}` : null;
+
   const [draft, setDraft] = useState("");
   const [comments, setComments] = useState<AppActivity[] | null>(null);
   const [commentRows, setCommentRows] = useState<NoteRow[] | null>(null);
@@ -886,7 +903,8 @@ export default function ApplicationDrawer({
   const received = app?.activity?.find((a) => /received/i.test(a.what));
   const rent = app ? (/^£/.test(app.rent) ? app.rent.replace(/\s*pcm$/, "") : null) : deal?.app.offer != null ? `£${Math.round(deal.app.offer).toLocaleString("en-GB")}` : null;
   const per = !app && deal?.app.offerPeriod === "week" ? "pw" : "pcm";
-  const answered = people.filter((p) => p.rightToRent === true).length;
+  /* A recorded expiry means the check was made, whatever the notes say. */
+  const answered = people.filter((p) => p.rightToRent === true || rtrOf(p)).length;
   const offerIn = app ? app.stageKey === "accepted" || app.stageKey === "communicated" : false;
   const lead = people.find((p) => p.isPrimary) ?? people[0];
   const name = app?.property ?? deal?.app.propertyName ?? "This let";
@@ -1449,7 +1467,14 @@ export default function ApplicationDrawer({
                             ["Income", tenantShown.income != null ? `${gbp(tenantShown.income)} a year` : "Not recorded"],
                             ["Works", [tenantShown.employment, tenantShown.job].filter(Boolean).join(" · ") || "Not recorded"],
                             ["Employer", tenantShown.company || "Not recorded"],
-                            ...(scottishLet ? [] : [["Right to rent", <Answer key="rtr" v={tenantShown.rightToRent} yes="Recorded" no="Not recorded" />]]),
+                            ...(scottishLet
+                              ? []
+                              : [
+                                  ["Right to rent", <Answer key="rtr" v={tenantShown.rightToRent || (rtrOf(tenantShown) ? true : tenantShown.rightToRent)} yes="Recorded" no="Not recorded" />],
+                                  ...(rtrOf(tenantShown)
+                                    ? [["Right to rent expiry", <span key="rtre" data-steve="application.rtr-expiry" title={rtrOf(tenantShown)!.followUpOn ? `Follow-up check by ${niceDate(rtrOf(tenantShown)!.followUpOn!)}` : undefined}>{rtrLine(rtrOf(tenantShown)!)}</span>] as [string, React.ReactNode]]
+                                    : []),
+                                ]),
                             ["Landlord reference", <Answer key="ref" v={tenantShown.landlordRef} />],
                             ["Guarantor", <Answer key="g" v={tenantShown.guarantor} yes="Available" no="None" />],
                             ["Adverse credit", <Answer key="ac" v={tenantShown.adverseCredit == null ? null : !tenantShown.adverseCredit} yes="None" no="Disclosed" />],

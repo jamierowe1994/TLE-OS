@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { rexCall } from "@/lib/rex";
 import { propolyConfigured, propolyGet, propolyPatch, propolyPost } from "@/lib/business/propoly";
+import { osAddressForRexProperty } from "@/lib/os-property-address";
 import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
 import { switchOn } from "@/lib/switches";
 import { handoffFor, type Handoff } from "@/lib/deal-handoff";
@@ -320,7 +321,26 @@ export async function runHandover(
       .filter(Boolean)
       .join(" ")
       .trim();
-    const postcode = str(property.adr_postcode) ?? "";
+    /* THE OS ADDRESS FILLS A BLANK (James, 15 Oct 2026: "Yes, make the
+       Propoly push use the OS address when REX's town or postcode is blank").
+       Kayleigh's push was refused for a home with no town or postcode. Field
+       by field, and only where the listing has nothing: a town or postcode REX
+       holds is never overridden. Said on the run, so a deal that went with the
+       OS's town shows where it came from. */
+    /* REX hands the id back as a number, which str() reads as nothing. */
+    const osAddress = property.id != null && property.id !== "" ? await osAddressForRexProperty(String(property.id)).catch(() => null) : null;
+    const fromOs: string[] = [];
+    const postcode = str(property.adr_postcode) ?? (osAddress?.postcode ? (fromOs.push(`postcode ${osAddress.postcode}`), osAddress.postcode) : "");
+    const town = str(property.adr_suburb_or_town) ?? (osAddress?.town ? (fromOs.push(`town ${osAddress.town}`), osAddress.town) : "");
+    if (fromOs.length) {
+      await rec.add({
+        id: "os-address",
+        label: "Address from the OS",
+        state: "ok",
+        detail: `The listing has no ${fromOs.map((f) => f.split(" ")[0]).join(" or ")} for this home, so the OS address filled it: ${fromOs.join(", ")} (${osAddress?.from}).`,
+        response: { fromOs, town, postcode },
+      });
+    }
     const ours = `${line1}, ${postcode}`;
     const oursParsed = parseAddress(ours);
     const candidates: PropertyCandidate[] = [];
@@ -457,7 +477,7 @@ export async function runHandover(
           managed_by_user_id: managedBy,
           address_line1: line1,
           address_line2: typeof property.adr_building === "string" ? property.adr_building : (str((property.adr_building as Row | null)?.name) ?? ""),
-          town: str(property.adr_suburb_or_town) ?? "",
+          town,
           county: str(property.adr_state_or_region) ?? "",
           district: str(property.adr_locality) ?? "",
           postcode,
