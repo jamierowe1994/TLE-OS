@@ -52,6 +52,13 @@ const verdict = (b: Bug) =>
   : b.botState === "not_a_bug" ? "Bot: not a fault"
   : "";
 
+
+/* A first, then anything not sorted yet, then B and C (James, 15 Oct 2026:
+   Richard Callow raised four and none showed). Unsorted went last, under
+   every recommendation, so a new ticket never reached the top six on Admin
+   or the top of Tickets until the bot had looked at it. */
+const TICKET_RANK: Record<string, number> = { A: 0, none: 1, B: 2, C: 3 };
+
 export default function Tickets() {
   const [bugs, setBugs] = useState<Bug[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -120,7 +127,7 @@ export default function Tickets() {
     list
       .filter((b) => (show === "all" ? true : b.state === "open" || b.state === "ack"))
       .filter((b) => (letter === "all" ? true : letter === "none" ? !b.priority : b.priority === letter))
-      .sort((a, b) => (a.priority ?? "Z").localeCompare(b.priority ?? "Z") || b.createdAt.localeCompare(a.createdAt));
+      .sort((a, b) => TICKET_RANK[a.priority ?? "none"] - TICKET_RANK[b.priority ?? "none"] || b.createdAt.localeCompare(a.createdAt));
   const counts = { A: people.filter((b) => b.priority === "A" && b.state !== "fixed" && b.state !== "wontfix").length,
                    B: people.filter((b) => b.priority === "B" && b.state !== "fixed" && b.state !== "wontfix").length,
                    C: people.filter((b) => b.priority === "C" && b.state !== "fixed" && b.state !== "wontfix").length,

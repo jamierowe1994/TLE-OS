@@ -35,7 +35,7 @@ function useOpenTickets(): Ticket[] | null | undefined {
       .then((j: { bugs?: Ticket[] }) => {
         if (gone) return;
         const open = (j.bugs ?? []).filter((b) => b.kind !== "auto" && (b.state === "open" || b.state === "ack"));
-        open.sort((a, b) => (a.priority ?? "Z").localeCompare(b.priority ?? "Z") || b.createdAt.localeCompare(a.createdAt));
+        open.sort((a, b) => TICKET_RANK[a.priority ?? "none"] - TICKET_RANK[b.priority ?? "none"] || b.createdAt.localeCompare(a.createdAt));
         setT(open);
       })
       .catch(() => !gone && setT(undefined));
@@ -45,6 +45,13 @@ function useOpenTickets(): Ticket[] | null | undefined {
   }, []);
   return t;
 }
+
+
+/* A first, then anything not sorted yet, then B and C (James, 15 Oct 2026:
+   Richard Callow raised four and none showed). Unsorted went last, under
+   every recommendation, so a new ticket never reached the top six on Admin
+   or the top of Tickets until the bot had looked at it. */
+const TICKET_RANK: Record<string, number> = { A: 0, none: 1, B: 2, C: 3 };
 
 export default function AdminOverview() {
   const { d, denied, failed, load } = useAdmin();
