@@ -4,6 +4,7 @@ import { fetchManagedBook } from "./managed-book";
 import { archiveBook } from "./tenancy-archive";
 import { withNotice } from "./portfolio-notice";
 import { withRecordLandlords } from "./record-landlords";
+import { withAgentMoves } from "./agent-moves";
 import { certificatesFor, type ComplianceBook } from "./rex-compliance";
 import type { ManagedBook } from "./portfolio-types";
 
@@ -156,9 +157,12 @@ export async function managedBookFor(rexUserId: string | null): Promise<{
   stale: boolean;
 }> {
   const raw = await rawBookFor(rexUserId);
-  /* And the landlord from the OS record where REX names nobody
+  /* Homes moved to another agent in the OS (lib/agent-moves, 15 Oct 2026),
+     first, so notice and landlords read the book as the agent now has it.
+     And the landlord from the OS record where REX names nobody
      (lib/record-landlords, 15 Oct 2026), laid on the same way. */
-  return { ...raw, book: await withRecordLandlords(await withNotice(raw.book, rexUserId)) };
+  const moved = await withAgentMoves(raw.book, rexUserId, async () => (await rawBookFor(null)).book);
+  return { ...raw, book: await withRecordLandlords(await withNotice(moved, rexUserId)) };
 }
 
 async function rawBookFor(rexUserId: string | null): Promise<{

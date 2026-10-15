@@ -20,6 +20,7 @@ import { OPEN, STATUS_LABEL, day as shortDay, nextFor } from "@/components/maint
 import BookForm, { type Person } from "@/components/inspections/BookForm";
 import RentBox from "@/components/portfolio/RentBox";
 import ServiceTag from "@/components/portfolio/ServiceTag";
+import HomeAgent from "@/components/portfolio/HomeAgent";
 import ContactBlock from "@/components/ContactBlock";
 import Guarantors from "@/components/Guarantors";
 import { SPECS, STATUS_LABEL as NOTICE_STATUS, type Notice, type NoticeKind } from "@/lib/section-notices-spec";
@@ -729,7 +730,7 @@ export default function PropertyPage() {
               <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
                 <Info icon="key" label="Let type" text={p.letType ?? "Not set"} />
                 <Info icon="calendar" label="Let since" text={p.letSince ? day(p.letSince) : "Not set"} />
-                <Info icon="user" label="Agent" text={p.agent?.name ?? "No agent"} />
+                <HomeAgent propertyId={p.test ? null : p.propertyId} agent={p.agent} movedFrom={p.agentMovedFrom} everything={everything} />
                 <Info icon="clock" label="On the books since" text={day(houseView && house ? house.members.map((m) => m.onBooksSince).filter(Boolean).sort()[0] ?? null : p.onBooksSince)} />
               </div>
 

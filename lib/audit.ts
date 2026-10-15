@@ -61,6 +61,9 @@ export type AuditKind =
   /* A landlord typed onto a home's own OS record where REX names nobody
      (15 Oct 2026, lib/record-landlords). Not mirrored to REX. */
   | "record_landlord_saved"
+  /* A home moved to another agent in the OS, or put back (15 Oct 2026,
+     lib/agent-moves). REX is not changed. */
+  | "home_agent_moved"
   /* A landlord's own home address saved on their OS record (15 Oct 2026,
      lib/landlord-home). Personal data, and the terms of business carry it. */
   | "landlord_home_address_saved"

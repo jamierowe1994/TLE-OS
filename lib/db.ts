@@ -2696,6 +2696,27 @@ ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS landlord_name TEXT;
 -- 44 Pilots Way): typed on the home's page where REX names no owner. OS only.
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS landlord_email TEXT;
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS landlord_phone TEXT;
+-- Whose Portfolio a home sits in, held in the OS (15 Oct 2026, Sean McMahon:
+-- "tons of properties are missing"). REX is left as it is. kind 'home' moves
+-- one home (key = the book row's property id); kind 'agent' moves every home
+-- one agent has (key = that agent's REX user id) - Margo Wilson's Glasgow
+-- book, which Sean is buying. lib/agent-moves lays these over the book.
+CREATE TABLE IF NOT EXISTS os_agent_moves (
+  kind         TEXT NOT NULL,
+  key          TEXT NOT NULL,
+  label        TEXT NOT NULL DEFAULT '',
+  to_rex_id    TEXT NOT NULL,
+  to_name      TEXT NOT NULL,
+  note         TEXT NOT NULL DEFAULT '',
+  set_by       TEXT NOT NULL DEFAULT '',
+  set_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (kind, key)
+);
+-- Margaret Wilson's homes are Sean McMahon's (James and Michael Healy, 15 Oct
+-- 2026). Seeded once; an owner can change or remove it afterwards.
+INSERT INTO os_agent_moves (kind, key, label, to_rex_id, to_name, note, set_by)
+  VALUES ('agent', '55877', 'Margaret Wilson', '66146', 'Sean McMahon', 'Margo''s Glasgow book is Sean''s', 'James Rowe')
+  ON CONFLICT (kind, key) DO NOTHING;
 -- A landlord's own home (correspondence) address (15 Oct 2026, Rhiannon and
 -- Richard Callow): the address they live at, not the let. The terms of business
 -- need it. One row a person, found by their email or their contact ref

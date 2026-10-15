@@ -56,6 +56,8 @@ export interface ManagedProperty {
   /** When the listing was created in REX. ISO date. */
   onBooksSince: string | null;
   agent: { id: string; name: string } | null;
+  /** The agent the home was moved from in the OS (lib/agent-moves); REX still names them. */
+  agentMovedFrom?: string | null;
   landlord: Party | null;
   tenants: Party[];
   image: string | null;

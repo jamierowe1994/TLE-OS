@@ -213,6 +213,15 @@ function pmCounts(pm: PmHome[], inBook: Set<string> | null): Pick<ManagedCounts,
   };
 }
 
+/** pmCounts for a book laid over afterwards (lib/agent-moves): the homes in it, by property id. */
+export async function pmCountsFor(propertyIds: Set<string>): Promise<Pick<ManagedCounts, "homes" | "homesOccupied" | "homesVacant" | "upcomingVacancies"> | null> {
+  const pm = await pmManagedHomes();
+  if (!pm) return null;
+  /* A home not on REX stands in the book under its own OS id. */
+  const mine = pm.filter((h) => propertyIds.has(h.id) || Boolean(h.rexPropertyId && propertyIds.has(h.rexPropertyId)));
+  return pmCounts(mine, null);
+}
+
 export function countsOf(all: ManagedProperty[], landlords: ManagedLandlord[]): ManagedCounts {
   /* Each home once, on its latest let - see lib/current-lets. */
   const properties = currentLets(all);
