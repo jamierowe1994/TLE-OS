@@ -111,7 +111,7 @@ export const proposeAddressChange: AssistantTool = {
       note:
         `Shown to them: the old address (${before}) and the new (${parts.address}). Nothing has changed yet. Say both in one short line and end with exactly "Shall I change it?" - a yes, or the Change it button, saves it in the OS.` +
         (alsoElsewhere
-          ? " Say too that this home's address is also on its property record in the back office (where it was set up): once it's changed in the OS, change it there as well so the listing and the portals match. Never name REX."
+          ? " Say too that this home's address is also on its property record in the back office (where it was set up): once it's changed in the OS, change it there as well so the listing and the portals match. Until then, the push to Propoly uses the OS address wherever that record has no town or postcode. Never name REX."
           : ""),
     };
   },
