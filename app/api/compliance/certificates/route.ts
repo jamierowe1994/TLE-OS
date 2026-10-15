@@ -120,21 +120,31 @@ export async function POST(req: NextRequest) {
   if (file.size > 25 * 1024 * 1024) return NextResponse.json({ ok: false, error: "That file is over 25MB." }, { status: 413 });
 
   const name = file.name || `${type}.pdf`;
-  const filed = await fileCertificate({
-    bytes: new Uint8Array(await file.arrayBuffer()),
-    fileName: name,
-    contentType: file.type,
-    propertyId,
-    propertyName,
-    type,
-    expiry,
-    issue: issueRaw || null,
-    source,
-    by,
-    refreshBook: req.nextUrl.searchParams.get("refresh") === "1",
-    /* The compliance office filing it has checked it already (4 Oct 2026). */
-    checkedBy: can(me.role, "see:agent-compliance") ? by : null,
-  });
+  /* Said, not thrown (15 Oct 2026, Dan's EPC on 11 Oct): a filing that broke
+     came back as an HTML error page, the drop zone could not read it and said
+     "The upload did not answer", while the file it had already stored showed
+     on the property record as if it had been received. */
+  let filed: Awaited<ReturnType<typeof fileCertificate>>;
+  try {
+    filed = await fileCertificate({
+      bytes: new Uint8Array(await file.arrayBuffer()),
+      fileName: name,
+      contentType: file.type,
+      propertyId,
+      propertyName,
+      type,
+      expiry,
+      issue: issueRaw || null,
+      source,
+      by,
+      refreshBook: req.nextUrl.searchParams.get("refresh") === "1",
+      /* The compliance office filing it has checked it already (4 Oct 2026). */
+      checkedBy: can(me.role, "see:agent-compliance") ? by : null,
+    });
+  } catch (e) {
+    console.error("[certificates] filing failed", { propertyId, type, error: e instanceof Error ? e.message : String(e) });
+    return NextResponse.json({ ok: false, error: "The certificate did not file, so it has not been counted. Try again in a minute, or send it to the compliance team." }, { status: 500 });
+  }
   if (filed.duplicate) return NextResponse.json({ ok: true, duplicate: true, certificate: outCert(filed.row) });
   return NextResponse.json({ ok: true, certificate: outCert(filed.row), share: filed.share });
 }
