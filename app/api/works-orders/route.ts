@@ -9,6 +9,7 @@ import { createOrder, listOrders, listContractors, worksSummary, logEvent, KINDS
 import { emailsForMove, outcomeLine } from "@/lib/works-emails";
 import { alreadyTakenOn, carriedJobs, markTakenOn, withCarried } from "@/lib/works-carried";
 import { landlordKey, landlordPrefsFor, ringsForApproval } from "@/lib/landlord-prefs";
+import { mineFor } from "@/lib/works-mine";
 
 /**
  * Works orders: the list, the figures, and raising one.
@@ -21,7 +22,8 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const { actor, subject } = await whoIs(req);
+  const who = await whoIs(req);
+  const { actor, subject } = who;
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!hasDb()) return NextResponse.json({ ok: true, live: false, reason: "No database on this environment.", orders: [], contractors: [], summary: null });
   const kindRaw = req.nextUrl.searchParams.get("kind");
@@ -51,8 +53,12 @@ export async function GET(req: NextRequest) {
      (/api/works-orders/<id>). An agent's list carries them shortened (lib/
      contact-mask, 10 Oct 2026) so the whole book's tenants are not one call. */
   const shown = seesContactLists(actor.role) ? orders : orders.map((o) => maskContactFields(o));
+  /* Which of them are this person's own (Rhiannon, 15 Oct 2026, lib/works-mine):
+     the board shows Mine or Everyone, and the tiles count whichever is shown.
+     A failed read of their homes is said on the page, never an empty Mine. */
+  const mine = await mineFor(req, who, orders, carried?.jobs ?? null, carried?.done ?? []).catch(() => null);
   return NextResponse.json({
-    ok: true, live: true, orders: shown, contractors, summary, ringForApproval,
+    ok: true, live: true, orders: shown, contractors, summary, ringForApproval, mine,
     carried: carried?.jobs ?? [],
     /* Planned jobs a certificate on file has since finished (5 Oct 2026). */
     carriedDone: carried?.done ?? [],
@@ -86,6 +92,12 @@ export async function POST(req: NextRequest) {
       await logEvent(order.id, by, "note", "Taken on from the old system, where it was already in progress. Nobody was emailed.");
       return NextResponse.json({ ok: true, order, emails: [] });
     }
+    /* Steps passed by with Skip for now (Howard, 12 Oct 2026): said on the
+       timeline, so whoever opens the job knows what nobody checked. */
+    const skipped = Array.isArray((b as { skipped?: unknown }).skipped)
+      ? ((b as { skipped: unknown[] }).skipped).filter((x): x is string => typeof x === "string" && x.length < 60).slice(0, 8)
+      : [];
+    if (skipped.length) await logEvent(order.id, by, "note", `Raised with ${skipped.map((x) => x.toLowerCase()).join(" and ")} skipped for now. Check ${skipped.length === 1 ? "it" : "them"} on the job.`);
     /* The step emails, after the job is safe. Each outcome goes on the
        timeline so the sheet says who was told. */
     const emails = await emailsForMove(order, "raised", subject ?? actor).catch(() => []);
