@@ -12,6 +12,8 @@ import { sendAsAgent } from "@/lib/send-as-agent";
 import { sendEmail } from "@/lib/resend";
 import { proseEmail } from "@/lib/email/prose";
 import { addTestOffer, isTestId, kitPeopleForTestListing, testListing } from "@/lib/test-overlay";
+import { addOfferPeople, checkOthers, partLink } from "@/lib/offer-people";
+import { incomeOf, personLines } from "@/lib/offer-people-shape";
 
 /**
  * An offer the AGENT puts forward for a tenant (1 Oct 2026, James: "build the
@@ -151,12 +153,21 @@ function cleanPassport(raw: unknown, was: OfferPassport): OfferPassport {
 
 export class OfferRefused extends Error {}
 
-export async function saveAgentOffer(me: OsUser, raw: Record<string, unknown>): Promise<{ id: string; copy: string; passport: string; href?: string }> {
+export async function saveAgentOffer(me: OsUser, raw: Record<string, unknown>): Promise<{ id: string; copy: string; passport: string; href?: string; links: { name: string; url: string }[] }> {
   if (!hasDb()) throw new OfferRefused("This can't be saved on this environment.");
   const email = str(raw.email, 200).toLowerCase();
   const name = str(raw.name, 120);
   if (!emailOk(email)) throw new OfferRefused("The tenant needs an email address on their record first.");
   if (!name) throw new OfferRefused("Who is the offer for?");
+  /* The other adults moving in, each with their own part (lib/offer-people,
+     James 14 Oct 2026): filled in by the agent now, or a link for them. */
+  const checked = checkOthers(raw.others);
+  if (!checked.ok) throw new OfferRefused(checked.error);
+  const others = checked.others;
+  const keepPeople = async (offerId: string, listingId: string | null, property: string) =>
+    (await addOfferPeople({ offerId, listingId, property, leadName: name, others, filledBy: "agent", byName: me.name || me.email }).catch(() => []))
+      .filter((m) => !m.filled)
+      .map((m) => ({ name: m.name, url: partLink(m.token) }));
 
   /* A TEST listing (7 Oct 2026): the same checks, filed on the test file as
      a test offer. No passport is touched, nobody is emailed. */
@@ -183,7 +194,8 @@ export async function saveAgentOffer(me: OsUser, raw: Record<string, unknown>): 
     }).catch((e) => {
       throw new OfferRefused(e instanceof Error ? e.message : "That didn't save.");
     });
-    return { id: appId, copy: "not asked for", passport: "unchanged, this is a test file", href: `/applications?open=${encodeURIComponent(appId)}` };
+    const links = await keepPeople(appId, String(t.listingId), t.name ?? "");
+    return { id: appId, copy: "not asked for", passport: "unchanged, this is a test file", href: `/applications?open=${encodeURIComponent(appId)}`, links };
   }
 
   /* The home, read again here: the rent cap is the law, so it is checked on
@@ -238,7 +250,12 @@ export async function saveAgentOffer(me: OsUser, raw: Record<string, unknown>): 
     /* The household's income as the agent saw it - theirs plus whoever else
        is ticked as moving in - which is what the landlord's affordability
        figure is worked from. Falls back to theirs alone. */
-    householdIncome: Math.max(0, Math.round(Number(raw.householdIncome) || 0)) || Number(String(after.annualIncome).replace(/[£,\s]/g, "")) || null,
+    householdIncome:
+      Math.max(
+        Math.max(0, Math.round(Number(raw.householdIncome) || 0)),
+        incomeOf({ annualIncome: after.annualIncome }) + others.reduce((t, o) => t + (o.mode === "fill" ? incomeOf(o.answers) : 0), 0)
+      ) || null,
+    others: others.map((o) => ({ name: o.answers.name, part: o.mode === "fill" ? "filled by the agent" : "link sent" })),
     passport: after,
     changes,
     recordedBy: { name: me.name, email: me.email, how },
@@ -280,6 +297,11 @@ export async function saveAgentOffer(me: OsUser, raw: Record<string, unknown>): 
       [`Offer: ${gbp(amount)} a month (advertised at ${gbp(asking)})`, `Move in: ${whenWords}`, `Moving in: ${who}`, `Working: ${workLine(after)}`, ...workFlags(after)].join("\n"),
       works.length ? `Works before moving day:\n${works.map((w) => `- ${w}`).join("\n")}` : "",
       note ? `For the landlord:\n${note}` : "",
+      ...others.map((o) =>
+        o.mode === "fill"
+          ? `Also moving in: ${o.answers.name}:\n${personLines(o.answers).map((l) => `${l.label}: ${l.value}`).join("\n")}`
+          : `Also moving in: ${o.answers.name}. Their part is with them to fill in from their own link.`
+      ),
       `Open the offer: ${base}/offers/${id}`,
     ];
     try {
@@ -295,5 +317,6 @@ export async function saveAgentOffer(me: OsUser, raw: Record<string, unknown>): 
      VALUES ($1,$2,$3,$4,$5,'offer',$6::jsonb,$7,$8)`,
     [id, email, name, listingId, address, JSON.stringify(payload), listingAgent, `${outcome}; copy ${copy}; passport ${passportNote}`.slice(0, 300)]
   );
-  return { id, copy, passport: passportNote };
+  const links = await keepPeople(id, listingId, address);
+  return { id, copy, passport: passportNote, links };
 }

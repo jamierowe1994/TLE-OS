@@ -557,7 +557,12 @@ type OsOfferRow = {
   name: string | null;
   listing_id: string | null;
   address: string | null;
-  payload: { amount?: number; moveIn?: string; adults?: number; children?: number; pets?: boolean; movingIn?: string[]; recordedBy?: { name?: string } } | null;
+  payload: {
+    amount?: number; moveIn?: string; adults?: number; children?: number; pets?: boolean; movingIn?: string[]; recordedBy?: { name?: string };
+    /* The lead's offer answers, and (from the public offer link) every applicant's own. */
+    passport?: Partial<Record<string, unknown>>;
+    applicants?: Array<{ name?: string; email?: string; phone?: string; dob?: string; isPrimary?: boolean; employment?: string; job?: string; company?: string; position?: string; zeroHours?: boolean; inProbation?: boolean; income?: number; rightToRent?: boolean; landlordRef?: boolean; guarantor?: boolean; adverseCredit?: boolean; adverseCreditNote?: string }>;
+  } | null;
   created_at: Date;
   by_name: string | null;
   decided_at: Date;
@@ -582,6 +587,9 @@ async function osAcceptedApplications(rexUserId: string | null, rexApps: Applica
       ORDER BY d.decided_at DESC LIMIT 100`
   );
   const out: Application[] = [];
+  /* Every other adult's own part (lib/offer-people, 14 Oct 2026). */
+  const { offerPeople } = await import("@/lib/offer-people");
+  const parts = await offerPeople(rows.map((r) => r.id)).catch(() => new Map());
   for (const r of rows) {
     const email = (r.email ?? "").trim().toLowerCase();
     /* Somebody made the REX application by hand: that one is the file. */
@@ -613,20 +621,52 @@ async function osAcceptedApplications(rexUserId: string | null, rexApps: Applica
       system_modtime: Math.floor(new Date(r.decided_at).getTime() / 1000),
       system_created_user: { name: p.recordedBy?.name ?? r.by_name ?? null },
     });
-    /* The lead tenant, from the offer itself. Others moving in are named on
-       the offer and added to the deal in Propoly. */
-    const others = (p.movingIn ?? []).filter((n) => n && n !== r.name && !/^child/i.test(n));
+    /* EVERY ADULT IS AN APPLICANT (James, 14 Oct 2026). The lead from the
+       offer; the others from their own parts, or from the offer link where
+       the lead typed everyone in. So each of them reaches the deal in
+       Propoly with their email, as the push needs (lib/deal-handoff). */
+    const pp = (p.passport ?? {}) as Record<string, unknown>;
+    const b = (v: unknown) => (typeof v === "boolean" ? v : null);
+    const formLead = (p.applicants ?? []).find((a) => a.isPrimary) ?? null;
+    const formOthers = (p.applicants ?? []).filter((a) => !a.isPrimary && a.name);
+    const income = Number(String(pp.annualIncome ?? "").replace(/[£,\s]/g, "")) || null;
+    const lead: Applicant = {
+      id: null, contactId: null, name: r.name || r.email || "Tenant", email: r.email, phone: formLead?.phone || (typeof pp.mobile === "string" ? pp.mobile : null) || null, isPrimary: true,
+      dob: formLead?.dob || null, incomePerYear: formLead?.income || income, employmentRex: null, guarantorCount: 0,
+      keyInfo: formLead
+        ? { employment: formLead.employment || null, job: formLead.job || null, company: formLead.company || null, position: formLead.position || null, zeroHours: b(formLead.zeroHours), inProbation: b(formLead.inProbation), salary: formLead.income || null, rightToRent: b(formLead.rightToRent), landlordRef: b(formLead.landlordRef), guarantor: b(formLead.guarantor), adverseCredit: b(formLead.adverseCredit), adverseCreditNote: formLead.adverseCreditNote || null }
+        : pp.applicantType || pp.hasBritishPassport != null
+          ? { employment: (pp.applicantType as string) || null, job: null, company: null, position: null, zeroHours: b(pp.zeroHours), inProbation: b(pp.onProbation), salary: income, rightToRent: pp.hasBritishPassport === true || Boolean(pp.shareCode) ? true : b(pp.hasBritishPassport), landlordRef: b(pp.landlordRef), guarantor: b(pp.guarantor), adverseCredit: b(pp.adverseCredit), adverseCreditNote: (pp.adverseCreditNote as string) || null }
+          : null,
+    };
+    const fromForm: Applicant[] = formOthers.map((a) => ({
+      id: null, contactId: null, name: a.name!, email: a.email || null, phone: a.phone || null, isPrimary: false, dob: a.dob || null, incomePerYear: a.income || null, employmentRex: null, guarantorCount: 0,
+      keyInfo: { employment: a.employment || null, job: a.job || null, company: a.company || null, position: a.position || null, zeroHours: b(a.zeroHours), inProbation: b(a.inProbation), salary: a.income || null, rightToRent: b(a.rightToRent), landlordRef: b(a.landlordRef), guarantor: b(a.guarantor), adverseCredit: b(a.adverseCredit), adverseCreditNote: a.adverseCreditNote || null },
+    }));
+    const fromParts: Applicant[] = (parts.get(r.id) ?? []).map((m: import("@/lib/offer-people").OfferPerson) => {
+      const a = m.answers;
+      const inc = Number(a.annualIncome) || null;
+      return {
+        id: null, contactId: null, name: m.name, email: a.email || null, phone: a.mobile || null, isPrimary: false, dob: a.dob || null, incomePerYear: inc, employmentRex: null, guarantorCount: 0,
+        keyInfo: m.filled
+          ? { employment: a.applicantType || null, job: a.job || null, company: a.employer || null, position: null, zeroHours: a.zeroHours, inProbation: a.onProbation, salary: inc, rightToRent: a.hasBritishPassport === true || Boolean(a.shareCode) ? true : a.hasBritishPassport, landlordRef: a.landlordRef, guarantor: a.guarantor, adverseCredit: a.adverseCredit, adverseCreditNote: a.adverseCreditNote || null }
+          : null,
+      };
+    });
+    const applicants = [lead, ...fromForm, ...fromParts];
+    const named = new Set(applicants.map((a) => a.name.trim().toLowerCase()));
+    /* Anybody named on the offer with no part of their own yet. */
+    const others = (p.movingIn ?? []).filter((n) => n && !named.has(n.trim().toLowerCase()) && !/^child/i.test(n));
+    const waiting = fromParts.filter((a) => !a.keyInfo).map((a) => a.name);
     out.push({
       ...shaped,
       /* No address on a listing REX would not read: the offer's own. */
       property: listing ? shaped.property : (r.address ?? "").split(",")[0] || shaped.property,
       locality: listing ? shaped.locality : (r.address ?? "").split(",").slice(1).join(",").trim() || shaped.locality,
-      conditions: others.length ? `Also moving in: ${others.join(", ")}.` : null,
+      conditions: [others.length ? `Also moving in: ${others.join(", ")}.` : "", waiting.length ? `Still to fill in their part: ${waiting.join(", ")}.` : ""].filter(Boolean).join(" ") || null,
       osDecision: null,
-      applicants: [
-        { id: null, contactId: null, name: r.name || r.email || "Tenant", email: r.email, phone: null, isPrimary: true, dob: null, incomePerYear: null, employmentRex: null, guarantorCount: 0, keyInfo: null },
-      ],
-      rightToRentIncomplete: true,
+      applicants,
+      rightToRentIncomplete: others.length > 0 || applicants.some((a) => a.keyInfo?.rightToRent !== true),
     });
   }
   return out;

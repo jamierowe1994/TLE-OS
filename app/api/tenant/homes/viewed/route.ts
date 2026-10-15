@@ -11,6 +11,8 @@ import { sendEmail } from "@/lib/resend";
 import { APPLICANT_TYPES, EMPTY_PASSPORT, TRADING_FOR, WORK_HOURS, householdIncome, workFlags, workLine, type PassportData } from "@/lib/passport-shape";
 import { savePassport } from "@/lib/passport";
 import { diffOffer, offerSubset, show, type OfferChange, type OfferPassport } from "@/lib/offer-passport";
+import { addOfferPeople, checkOthers, partLink } from "@/lib/offer-people";
+import { incomeOf, personLines, type OtherAdult } from "@/lib/offer-people-shape";
 
 /**
  * After a viewing, from the tenant's own area (James, 18 Sep 2026): the three
@@ -108,6 +110,9 @@ export async function POST(req: NextRequest) {
 
   /* What they said, checked. */
   let payload: Record<string, unknown>;
+  /* The other adults moving in, each with their part filled in now or left
+     for their own link (lib/offer-people, 14 Oct 2026). */
+  let others: OtherAdult[] = [];
   if (kind === "not_for_me") {
     payload = { reasons: list(b.reasons), note: str(b.note) };
   } else if (kind === "questions") {
@@ -129,6 +134,9 @@ export async function POST(req: NextRequest) {
        passport and kept here with the original, for the agent only. */
     /* A blank household count reads as the sheet's own default (1 adult,
        no children), so filling it in is not flagged to the agent as a change. */
+    const checked = checkOthers(b.others);
+    if (!checked.ok) return NextResponse.json({ ok: false, error: checked.error }, { status: 400 });
+    others = checked.others;
     const held = offerSubset(data);
     const before = { ...held, numAdults: held.numAdults || "1", numChildren: held.numChildren || "0" };
     const after = cleanPassport(b.passport, before);
@@ -148,7 +156,13 @@ export async function POST(req: NextRequest) {
       works: list(o.works),
       /* For the landlord's affordability figure: everyone on the passport's
          household page, as referencing counts it. */
-      householdIncome: householdIncome({ ...EMPTY_PASSPORT, ...(data ?? {}), ...after }).total,
+      householdIncome: (() => {
+        const fromPassport = householdIncome({ ...EMPTY_PASSPORT, ...(data ?? {}), ...after }).total;
+        /* The others' own answers count too, where the passport never had them. */
+        const fromParts = incomeOf({ annualIncome: after.annualIncome }) + others.reduce((t, o) => t + (o.mode === "fill" ? incomeOf(o.answers) : 0), 0);
+        return fromPassport == null && !fromParts ? null : Math.max(fromPassport ?? 0, fromParts);
+      })(),
+      others: others.map((o) => ({ name: o.answers.name, part: o.mode === "fill" ? "filled by the lead" : "link sent" })),
       adults: Number(after.numAdults),
       children: Number(after.numChildren),
       pets: after.pets === true,
@@ -183,6 +197,11 @@ export async function POST(req: NextRequest) {
     body = [
       `${who} would like to offer on ${address}.`,
       [`Offer: ${gbp(p.amount)} a month${p.asking ? ` (advertised at ${gbp(p.asking)})` : ""}`, `Move in: ${moveIn}`, `Moving in: ${p.movingIn.length ? p.movingIn.join(", ") : `${p.adults} adult${p.adults === 1 ? "" : "s"}${p.children ? `, ${p.children} child${p.children === 1 ? "" : "ren"}` : ""}`}${p.pets ? `, with pets${p.petsNote ? ` (${p.petsNote})` : ""}` : ", no pets"}`].join("\n"),
+      ...others.map((o) =>
+        o.mode === "fill"
+          ? `Also moving in: ${o.answers.name} (filled in by ${who}):\n${personLines(o.answers).map((l) => `${l.label}: ${l.value}`).join("\n")}`
+          : `Also moving in: ${o.answers.name}. Their part is with them to fill in from their own link; it joins the offer when they finish.`
+      ),
       p.works.length ? `Works they want done before moving day:\n${p.works.map((w) => `- ${w}`).join("\n")}` : "",
       p.note ? `For the landlord:\n${p.note}` : "",
       `From their tenant passport, confirmed as up to date:\n${passportLines(p.passport, p.changes).join("\n")}`,
@@ -212,5 +231,10 @@ export async function POST(req: NextRequest) {
   const on = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" });
   await noteOnLeads({ email: me.email, name: me.name, phone, address, line: `${on}: ${subject}.${outcome === "sent" ? ` Emailed to ${to}.` : ""}` }).catch(() => null);
 
-  return NextResponse.json({ ok: true, sentTo: outcome === "sent" ? to : null });
+  const made = kind === "offer" ? await addOfferPeople({ offerId: id, listingId, property: address, leadName: me.name || me.email, others, filledBy: "lead", byName: me.name || me.email }).catch(() => []) : [];
+  return NextResponse.json({
+    ok: true,
+    sentTo: outcome === "sent" ? to : null,
+    links: made.filter((m) => !m.filled).map((m) => ({ name: m.name, url: partLink(m.token) })),
+  });
 }

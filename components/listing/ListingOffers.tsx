@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Tag } from "@/components/ListingTags";
 import type { OfferDetail } from "@/app/api/listings/[id]/offers/route";
+import OfferPartsList from "@/components/offers/OfferPartsList";
 
 /**
  * THE OFFERS ON ONE HOME (7 Oct 2026).
@@ -299,6 +300,7 @@ function OfferOpened({ o, asking, onBack, decide, notes }: { o: ListingOffer; as
           </div>
         ))}
       </dl>
+      {d?.parts?.length ? <OfferPartsList parts={d.parts} /> : null}
       {d?.works.length ? (
         <div className="mt-3 rounded-2xl border border-line/50 bg-white px-3.5 py-3 text-[12.5px]">
           <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">Asked for before moving in</p>

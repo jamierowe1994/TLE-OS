@@ -7,6 +7,8 @@ import { assembled } from "@/lib/applications-board";
 import { rexConfigured } from "@/lib/rex";
 import { isTestId, testOffersForListing } from "@/lib/test-overlay";
 import { decisionsFor, decisionsForListing } from "@/lib/offer-decisions";
+import { offerPeople, toOfferParts, type OfferPerson } from "@/lib/offer-people";
+import type { OfferPart } from "@/lib/offer-people-shape";
 
 /**
  * ONE LISTING'S OFFERS (7 Oct 2026).
@@ -53,6 +55,8 @@ export type ListingOffer = {
 };
 
 export type OfferDetail = {
+  /** The other adults moving in, each with their own part (14 Oct 2026). */
+  parts?: OfferPart[];
   email: string | null;
   phone: string | null;
   /** Everyone named on it, the lead first. */
@@ -143,6 +147,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       })().catch(() => []),
     ]);
 
+    /* Every other adult's part, for the offers made in the OS. */
+    const partsBy = await offerPeople(osRows.map((r) => r.id)).catch(() => new Map<string, OfferPerson[]>());
     for (const r of osRows) {
       const d = decided.get(`os:${r.id}`) ?? null;
       const p = r.payload ?? {};
@@ -168,6 +174,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         undoable: Boolean(d),
         href: `/offers/${encodeURIComponent(r.id)}`,
         detail: {
+          parts: toOfferParts(partsBy.get(r.id) ?? [], r.name || ""),
           email: r.email || null,
           phone: p.passport?.mobile || p.passport?.phone || null,
           people: (p.movingIn?.length ? p.movingIn : [r.name || r.email]).filter(Boolean),
@@ -177,7 +184,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           petsNote: p.petsNote?.trim() || null,
           work: [p.passport?.applicantType, p.passport?.workHours].filter(Boolean).join(", ") || null,
           guarantor: typeof p.passport?.guarantor === "boolean" ? p.passport.guarantor : null,
-          income: typeof p.householdIncome === "number" && p.householdIncome > 0 ? p.householdIncome : null,
+          /* The lead plus every part filled in, including one filled in after
+             the offer went in (14 Oct 2026); the offer's own figure if larger. */
+          income: (() => {
+            const kept = typeof p.householdIncome === "number" && p.householdIncome > 0 ? p.householdIncome : 0;
+            const lead = Number(String((p.passport as { annualIncome?: string } | undefined)?.annualIncome ?? "").replace(/[£,\s]/g, "")) || 0;
+            const parts = (partsBy.get(r.id) ?? []).reduce((t, m) => t + (m.filled ? Number(m.answers.annualIncome) || 0 : 0), 0);
+            return Math.max(kept, lead + parts) || null;
+          })(),
           affordability: null,
           works: (p.works ?? []).map((w) => (typeof w === "string" ? w : String((w as { text?: string; label?: string })?.text ?? (w as { label?: string })?.label ?? ""))).filter(Boolean),
           note: p.note?.trim() || null,

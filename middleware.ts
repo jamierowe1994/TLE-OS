@@ -952,6 +952,10 @@ export const config = {
        applicant who has no account. It answers only for a home on the market
        now, reads nothing Rightmove does not already show, and writes only the
        application itself - never to REX. See app/api/tenant/apply. */
+    /* `api/tenant/offer-part` is one adult's part of an offer (14 Oct 2026):
+       the link the lead tenant or the agent sends to another adult moving
+       in. The token opens that one part only, and nothing else about the
+       offer. See app/api/tenant/offer-part. */
     /* `mail-img` is a newsletter picture (30 Sep 2026): fetched by the mail
        client of whoever opens the email, which has no session. Safe because
        the route only serves a uuid name from its own R2 prefix - see
@@ -965,6 +969,6 @@ export const config = {
        browser fetches it with no say over the redirect, and a 307 to the
        sign-in page means no phone alerts at all. A static file, at the root
        only, holding nothing but the code that shows an alert. */
-    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|visit|api/visit|proof|send|api/tenant/passport|api/tenant/feedback|api/tenant/apply|api/tenant/homes|api/tenant/session|api/tenant/maintenance|api/tenant/documents|api/tenant/messages|api/landlord|api/calendar|brand|email|mail-img|nl|rex|r|api/r|library|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$|sw\\.js$).*)",
+    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|visit|api/visit|proof|send|api/tenant/passport|api/tenant/feedback|api/tenant/apply|api/tenant/offer-part|api/tenant/homes|api/tenant/session|api/tenant/maintenance|api/tenant/documents|api/tenant/messages|api/landlord|api/calendar|brand|email|mail-img|nl|rex|r|api/r|library|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$|sw\\.js$).*)",
   ],
 };

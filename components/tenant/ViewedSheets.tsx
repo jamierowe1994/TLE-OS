@@ -9,6 +9,7 @@ import { APPLICANT_TYPES, TRADING_FOR, WORK_HOURS, isEmployed, isTrading, workFl
 import Toaster from "@/components/Toaster";
 import { DateField, MovingIn, RentField, WorksList } from "@/components/offers/OfferParts";
 import { show, type OfferFieldKey, type OfferPassport } from "@/lib/offer-passport";
+import OtherAdults, { PartLinks, othersProblem, useOtherAdults } from "@/components/offers/OtherAdults";
 
 /**
  * AFTER THE VIEWING: the three answers, each in its own bottom sheet (James,
@@ -117,6 +118,13 @@ export default function ViewedSheets({
   const adults = people.length ? Math.max(1, movingIn.filter((p) => p.who !== "Child").length) : Math.max(1, parseInt(pp.numAdults, 10) || 1);
   const children = people.length ? movingIn.filter((p) => p.who === "Child").length : Math.max(0, parseInt(pp.numChildren, 10) || 0);
   const flags = workFlags(pp);
+  /* Every other adult moving in, with their own part (14 Oct 2026): the
+     names off the passport, or blanks for the count when there is none. */
+  const extraNames = people.length
+    ? movingIn.filter((p) => p.who === "Adult").map((p) => (/^Adult \d+$/.test(p.name) ? "" : p.name))
+    : Array.from({ length: Math.max(0, adults - 1) }, () => "");
+  const [others, setOthers] = useOtherAdults(extraNames);
+  const [links, setLinks] = useState<{ name: string; url: string }[]>([]);
   const [offerNote, setOfferNote] = useState("");
   const [confirmed, setConfirmed] = useState(false);
 
@@ -141,6 +149,8 @@ export default function ViewedSheets({
       if (!amount.trim() || offerError) return setErr(offerError ?? "Tell us what you'd like to offer each month.");
       if (!moveIn) return setErr("Choose the day you'd like to move in.");
       if (people.length && !ticked.has("you")) return setErr("You're the one making the offer, so you need to be moving in.");
+      const gap = othersProblem(others);
+      if (gap) return setErr(gap);
       if (!confirmed) return setErr("Tick to say your details are up to date.");
     }
     if (sample) return setDone(kind);
@@ -156,7 +166,8 @@ export default function ViewedSheets({
         note,
         topics,
         message,
-        offer: { amount: offerNum, moveIn, note: offerNote, confirmed, works, movingIn: movingIn.map((p) => p.name) },
+        offer: { amount: offerNum, moveIn, note: offerNote, confirmed, works, movingIn: [...movingIn.filter((p) => p.who !== "Adult").map((p) => p.name), ...others.map((o) => o.answers.name.trim())] },
+        others,
         passport: { ...pp, numAdults: String(adults), numChildren: String(children) },
       }),
     })
@@ -164,6 +175,7 @@ export default function ViewedSheets({
       .catch(() => null);
     setBusy(false);
     if (!r?.ok) return setErr(r?.error ?? "That didn't send. Try again in a minute.");
+    setLinks(Array.isArray(r.links) ? r.links : []);
     setDone(kind);
   }
 
@@ -291,7 +303,10 @@ export default function ViewedSheets({
         footer={done === "offer" ? undefined : <button type="button" disabled={busy} onClick={() => send("offer")} className={primary}>{busy ? "Sending…" : "Put my offer forward"}</button>}
       >
         {done === "offer" ? (
-          <Done kind="offer" />
+          <>
+            <Done kind="offer" />
+            <PartLinks links={links} actor="lead" />
+          </>
         ) : (
           <>
             <h2 className="text-[20px] font-bold leading-tight">Make an Offer</h2>
@@ -349,6 +364,15 @@ export default function ViewedSheets({
                   </div>
                 </div>
                 {pp.pets && <input value={pp.petsNote} onChange={(e) => set("petsNote", e.target.value)} placeholder="What, and how many?" className={input} />}
+              </>
+            )}
+
+            {others.length > 0 && (
+              <>
+                <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">The other {others.length === 1 ? "adult" : "adults"} moving in</p>
+                <div className="mt-2">
+                  <OtherAdults others={others} onChange={setOthers} actor="lead" field={field} label={label} />
+                </div>
               </>
             )}
 

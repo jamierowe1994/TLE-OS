@@ -6,6 +6,8 @@ import DoodleIcon from "@/components/DoodleIcon";
 import { APPLICANT_TYPES, TRADING_FOR, WORK_HOURS, householdPeople, isEmployed, isTrading, workFlags, workLine, type PassportData } from "@/lib/passport-shape";
 import { DateField, MovingIn, RentField, WorksList } from "@/components/offers/OfferParts";
 import { OFFER_FIELDS, offerSubset, show, type OfferFieldKey, type OfferPassport } from "@/lib/offer-passport";
+import OtherAdults, { PartLinks, othersProblem, useOtherAdults } from "@/components/offers/OtherAdults";
+import { incomeOf } from "@/lib/offer-people-shape";
 
 /**
  * The agent puts an offer forward FOR the tenant (1 Oct 2026, James after a
@@ -145,7 +147,7 @@ export default function AgentOfferRecorder({
   const [err, setErr] = useState("");
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [saved, setSaved] = useState<{ id: string; copy: string; passport: string; href?: string } | null>(null);
+  const [saved, setSaved] = useState<{ id: string; copy: string; passport: string; href?: string; links?: { name: string; url: string }[] } | null>(null);
 
   const set = <K extends OfferFieldKey>(k: K, v: OfferPassport[K]) => setPp((cur) => ({ ...cur, [k]: v }));
   /* With a passport, the household is the ticked people; without one, the steppers. */
@@ -158,7 +160,17 @@ export default function AgentOfferRecorder({
   const others = (tenant.passport?.coOccupantIncomes ?? "")
     .split("\n")
     .map((l, k) => ({ id: `adult-${k + 2}`, income: money(l.split(" - ")[1] ?? "") }));
-  const income = money(pp.annualIncome) + others.filter((o) => !people.length || ticked.has(o.id)).reduce((t, o) => t + o.income, 0);
+  /* Every other adult moving in gets their own part (James, 14 Oct 2026):
+     filled in here, or their own link once the offer is saved. */
+  const extraNames = people.length
+    ? movingIn.filter((p) => p.who === "Adult").map((p) => (/^Adult \d+$/.test(p.name) ? "" : p.name))
+    : Array.from({ length: Math.max(0, adults - 1) }, () => "");
+  const [parts, setParts] = useOtherAdults(extraNames);
+  const partIncome = parts.reduce((t, o) => t + (o.mode === "fill" ? incomeOf(o.answers) : 0), 0);
+  const income = Math.max(
+    money(pp.annualIncome) + others.filter((o) => !people.length || ticked.has(o.id)).reduce((t, o) => t + o.income, 0),
+    money(pp.annualIncome) + partIncome
+  );
   const today = londonToday();
 
   /* Rent as a share of income, the figure a landlord reads first. */
@@ -184,6 +196,8 @@ export default function AgentOfferRecorder({
     if (s === 2) {
       /* Asked of people who did their passport before these questions existed. */
       if (stillToAsk.length) return `Still to ask: ${stillToAskWords}.`;
+      const gap = othersProblem(parts);
+      if (gap) return gap;
     }
     if (s === 3 && !consent) return `Tick to say ${name} has agreed the details are right.`;
     return "";
@@ -215,7 +229,8 @@ export default function AgentOfferRecorder({
         how,
         works,
         note: conditions,
-        movingIn: movingIn.map((p) => p.name),
+        movingIn: [...movingIn.filter((p) => p.who !== "Adult").map((p) => p.name), ...parts.map((o) => o.answers.name.trim())],
+        others: parts,
         householdIncome: income,
         passport: { ...pp, numAdults: String(adults), numChildren: String(children) },
         consent,
@@ -226,7 +241,7 @@ export default function AgentOfferRecorder({
       .catch(() => null);
     setBusy(false);
     if (!r?.ok) return setErr(r?.error ?? "That didn't save. Try again.");
-    setSaved({ id: r.id, copy: r.copy, passport: r.passport, href: r.href });
+    setSaved({ id: r.id, copy: r.copy, passport: r.passport, href: r.href, links: Array.isArray(r.links) ? r.links : [] });
     setDone(true);
   }
 
@@ -302,6 +317,9 @@ export default function AgentOfferRecorder({
               {saved.copy === "sent" ? `${name}'s copy has gone.` : saved.copy === "not asked for" ? `${name} wasn't sent a copy.` : `${name}'s copy didn't go: ${saved.copy.replace(/^not sent: /, "").replace(/\.$/, "")}.`}{" "}
               Passport {saved.passport}.
             </p>
+            <div className="mx-auto max-w-md">
+              <PartLinks links={saved.links ?? []} actor="agent" />
+            </div>
             <a href={saved.href ?? `/offers/${saved.id}`} className="mt-5 inline-block rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-white">
               Open the offer
             </a>
@@ -450,6 +468,15 @@ export default function AgentOfferRecorder({
                     <p key={f}>{f}</p>
                   ))}
                 </div>
+              )}
+              {parts.length > 0 && (
+                <>
+                  <h3 className="mt-7 text-[16px] font-bold">The Other {parts.length === 1 ? "Adult" : "Adults"} Moving In</h3>
+                  <p className="mt-1 text-[13px] text-muted">The landlord needs the same from each of them. Fill it in for them now, or send them their own link once the offer is saved.</p>
+                  <div className="mt-3">
+                    <OtherAdults others={parts} onChange={setParts} actor="agent" field={inp} label={lbl} />
+                  </div>
+                </>
               )}
             </>
           )}

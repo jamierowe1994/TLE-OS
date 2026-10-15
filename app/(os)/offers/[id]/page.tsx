@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { hasDb, q } from "@/lib/db";
 import { OFFER_FIELDS, show, type OfferChange, type OfferFieldKey, type OfferPassport } from "@/lib/offer-passport";
+import OfferPartsList from "@/components/offers/OfferPartsList";
+import { offerPeople, toOfferParts } from "@/lib/offer-people";
 
 /**
  * AN OFFER, AS THE AGENT SEES IT (James, 18 Sep 2026). What a tenant sent
@@ -67,6 +69,8 @@ export default async function OfferPage({ params }: { params: Promise<{ id: stri
   const r = rows[0];
   if (!r) notFound();
   const p = r.payload ?? {};
+  /* The other adults' own parts (14 Oct 2026). */
+  const parts = toOfferParts((await offerPeople([r.id]).catch(() => new Map())).get(r.id) ?? [], r.name || "");
   const changes = p.changes ?? [];
   const changed = new Map(changes.map((c) => [c.key, c]));
   const when = new Date(r.created_at).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit", timeZone: "Europe/London" });
@@ -126,6 +130,7 @@ export default async function OfferPage({ params }: { params: Promise<{ id: stri
                 <Line k="Moving in" v={p.movingIn?.length ? p.movingIn.join(", ") : `${p.adults ?? 1} adult${p.adults === 1 ? "" : "s"}${p.children ? `, ${p.children} child${p.children === 1 ? "" : "ren"}` : ""}`} />
                 <Line k="Pets" v={p.pets ? `Yes${p.petsNote ? ` - ${p.petsNote}` : ""}` : "No"} />
               </dl>
+              <OfferPartsList parts={parts} />
               {p.works?.length ? (
                 <div className="mt-5 rounded-[16px] bg-panel p-4">
                   <p className={eyebrow}>Works before moving day</p>
