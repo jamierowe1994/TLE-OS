@@ -31,6 +31,8 @@
  *    there when James has the real ones.
  */
 
+import { incVat } from "@/lib/appraisal-email";
+
 /* ───────────────────────── the data ───────────────────────── */
 
 export type PresentAgent = {
@@ -1086,6 +1088,57 @@ export function feeOnRent(
   /* A one-off is not a monthly cost and must never be divided into one. */
   if (row.oneOff != null) return { month: 0, year: row.oneOff };
   return null;
+}
+
+/**
+ * THE FEE THIS LANDLORD AGREED, for the top of "What it costs".
+ *
+ * STANDARD_FEES leads with Experts Management because before the visit that is
+ * the service on offer. Once a post-appraisal deck carries an agreed service,
+ * a page that still says "16.8% of rent collected for Experts Management"
+ * under a figure page reading "Tenant find" is two pages disagreeing in front
+ * of the landlord - and since Change the fees (14 Oct 2026) the service can
+ * move after sending. So the headline follows the agreed service; the full
+ * schedule below it stays exactly as it is.
+ *
+ * The rate is the agreed one where the agent recorded it (feePct, before VAT,
+ * printed with VAT in like the figure page), otherwise the schedule's.
+ *
+ * Only on the post-appraisal deck, the same rule the Fees slide follows for
+ * its rent: before the visit nothing has been agreed. `row` is the schedule
+ * line the service matched, null when it did not (or there is nothing agreed),
+ * and then the headline is the deck's own.
+ */
+export function agreedFees(deck: PresentDeck): {
+  headline: string | null;
+  headlineFor: string | null;
+  row: PresentFees["rows"][number] | null;
+  /** That line at the agreed rate, for the "On £X a month" example. */
+  priced: PresentFees["rows"][number] | null;
+} {
+  const f = deck.fees;
+  const own = { headline: f?.headline ?? null, headlineFor: f?.headlineFor ?? null, row: null, priced: null };
+  const v = deck.valuation;
+  if (!f || !v?.serviceLevel || deckKind(deck) !== "post-appraisal") return own;
+  /* By name, the same way the figure page finds the level: "Fully managed",
+     "Rent collect", "Tenant find" against the schedule's own labels. */
+  const kind = (s: string) => {
+    const n = s.toLowerCase();
+    return /manag/.test(n) ? "managed" : /collect/.test(n) ? "collect" : /find/.test(n) ? "find" : null;
+  };
+  const want = kind(v.serviceLevel);
+  const row = want ? f.rows.find((r) => kind(r.label) === want) ?? null : null;
+  if (!row) return own;
+  /* A percentage service at the agreed rate. Tenant Find has no management
+     fee to agree, so its line is the schedule's. */
+  const pct = row.pct != null && v.feePct != null ? Number(incVat(v.feePct)) : row.pct;
+  const headline =
+    pct != null
+      ? `${pct}% of rent collected`
+      : row.firstMonthPct != null
+        ? `${row.firstMonthPct}% of the first month’s rent`
+        : row.amount;
+  return { headline, headlineFor: row.label, row, priced: { ...row, pct } };
 }
 
 /** Pounds, rounded, the way every slide prints them. */

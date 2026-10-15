@@ -33,7 +33,7 @@ import {
   type NationalStat,
 } from "@/lib/present-stats";
 import { useEffect, useRef, useState } from "react";
-import { deckKind, feeOnRent, money, type PresentDeck as Deck } from "@/lib/present";
+import { agreedFees, deckKind, feeOnRent, money, type PresentDeck as Deck } from "@/lib/present";
 import {
   CORAL,
   CreamSlide,
@@ -2251,8 +2251,14 @@ export function Fees({ deck, show }: { deck: Deck; show: boolean }) {
      page whose whole premise is that no figure has been agreed yet. Caught in
      the sample, which carries a valuation for every kind on purpose. */
   const rent = deckKind(deck) === "post-appraisal" ? (deck.valuation?.rent ?? 0) : 0;
+  /* The headline follows the service the landlord agreed (see agreedFees),
+     and that service leads the examples too; the schedule stays whole. */
+  const agreed = agreedFees(deck);
   const priced = rent
-    ? f.rows.map((r) => ({ row: r, cost: feeOnRent(r, rent) })).filter((x) => x.cost)
+    ? [...f.rows]
+        .sort((a, b) => Number(b === agreed.row) - Number(a === agreed.row))
+        .map((r) => ({ row: r, cost: feeOnRent(r === agreed.row ? agreed.priced! : r, rent) }))
+        .filter((x) => x.cost)
     : [];
 
   return (
@@ -2263,17 +2269,17 @@ export function Fees({ deck, show }: { deck: Deck; show: boolean }) {
             What it costs
           </span>
         </Rise>
-        {f.headline && (
+        {agreed.headline && (
           <Rise show={show} i={1}>
             <h2
               className="mt-4 leading-[1.02] tracking-[-0.015em]"
               style={{ fontFamily: HAND, fontWeight: 700, fontSize: "clamp(32px, 3.8vw, 54px)" }}
             >
-              <span style={{ color: CORAL }}>{f.headline}</span>
+              <span style={{ color: CORAL }}>{agreed.headline}</span>
             </h2>
           </Rise>
         )}
-        {f.headlineFor && (
+        {agreed.headlineFor && (
           <Rise show={show} i={2}>
             {/* The second clause is CONDITIONAL on there being exclusions.
                 It used to promise "and what it does not" unconditionally, and
@@ -2285,7 +2291,7 @@ export function Fees({ deck, show }: { deck: Deck; show: boolean }) {
                 not the schedule - and once the second column arrived it was
                 introducing a price list as a list of inclusions. */}
             <p className="mt-3 text-[14.5px] font-light text-black/55">
-              for {f.headlineFor}. Below is the full schedule
+              for {agreed.headlineFor}. Below is the full schedule
               {priced.length > 0 ? ", with examples based on your proposed rent" : ""}
               {f.excluded.length > 0 ? ", and what it does not cover." : "."}
             </p>
@@ -2343,7 +2349,13 @@ export function Fees({ deck, show }: { deck: Deck; show: boolean }) {
                         className="flex items-baseline justify-between gap-5 py-2.5"
                         style={{ borderTop: n === 0 ? "none" : "1px solid rgba(0,0,0,0.09)" }}
                       >
-                        <span className="text-[12.5px] font-light text-black/60">{row.label}</span>
+                        <span
+                          className={`text-[12.5px] ${
+                            row === agreed.row ? "font-medium text-black/80" : "font-light text-black/60"
+                          }`}
+                        >
+                          {row.label}
+                        </span>
                         <span className="shrink-0 text-right">
                           <span
                             className="block text-[15px] leading-none"
