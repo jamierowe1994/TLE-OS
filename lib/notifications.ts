@@ -234,6 +234,24 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
       tone: viewing || l.landlord ? "warn" : "none",
     });
   }
+  /* A lead passed to them in the OS ("Not my lead", lib/lead-owner), and for
+     owners and the office, a lead sent back to the office and still there. */
+  const { movesForBell } = await import("@/lib/lead-owner");
+  for (const m of await movesForBell({ rexUserId: me.rexUserId, email: me.email, pool: owner }).catch(() => [])) {
+    const who = m.name || "A lead";
+    out.push({
+      id: `moved:${m.leadId}:${m.at}`,
+      kind: "lead",
+      at: m.at,
+      title: m.pool ? `Back to the office: ${who}` : `Lead passed to you: ${who}`,
+      body: [
+        m.pool ? `${m.byName} sent it back${m.fromName && m.fromName !== m.byName ? ` from ${m.fromName}` : ""}. Give it to the right agent.` : `From ${m.byName}.`,
+        m.reason ? `"${m.reason}"` : null,
+      ].filter(Boolean).join(" "),
+      href: `/leads?open=${encodeURIComponent(m.leadId)}`,
+      tone: m.pool ? "warn" : "none",
+    });
+  }
   for (const c of rtrDue) {
     /* UK calendar days (Rig run 4, P-066): rounding milliseconds said "was due
        1 day ago" every afternoon of the day it was due. */

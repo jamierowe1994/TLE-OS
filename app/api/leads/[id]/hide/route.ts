@@ -4,6 +4,7 @@ import { hasDb } from "@/lib/db";
 import { hideLead, unhideLead } from "@/lib/hidden-leads";
 import { q } from "@/lib/db";
 import { ensureRexLink } from "@/lib/users";
+import { heldBy, ownerOf } from "@/lib/lead-owner";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,14 @@ async function act(req: NextRequest, ctx: { params: Promise<{ id: string }> }, h
   /* An agent hides their own leads (18 Sep sweep, item 4): the lead's
      assignee by REX id, or the agent named on it. Owners and the office are
      not gated. A lead the ledger does not hold is an OS one, which is theirs. */
-  if (actor.role === "agent") {
+  const moved = actor.role === "agent" ? await ownerOf(id).catch(() => null) : null;
+  if (moved) {
+    /* Passed on in the OS (lib/lead-owner): its holder's to archive. */
+    const mine = await ensureRexLink(actor).catch(() => null);
+    if (!heldBy(moved, { rexUserId: mine, email: actor.email })) {
+      return NextResponse.json({ ok: false, error: moved.pool ? "That lead is back with the office." : `That lead is ${moved.toName.split(/\s+/)[0]}'s. Only they can take it off the board.` }, { status: 403 });
+    }
+  } else if (actor.role === "agent") {
     const rows = await q<{ assignee_id: string | null; agent: string | null }>(`SELECT assignee_id, agent FROM os_leads WHERE id = $1`, [id]).catch(() => []);
     const lead = rows[0];
     if (lead) {

@@ -351,6 +351,7 @@ export default function Leads() {
   const [removed, setRemoved] = useState<Set<string>>(new Set());
   const [hiddenIds, setHiddenIds] = useState<string[]>(() => peekJson<LeadsAnswer>("/api/leads")?.hiddenIds ?? []);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [movedTo, setMovedTo] = useState<Record<string, string>>({});
   const [restoredTick, setRestoredTick] = useState(0);
   useEffect(() => {
     const on = (e: Event) => {
@@ -373,11 +374,22 @@ export default function Leads() {
       dropJson("/api/leads");
       setRestoredTick((n) => n + 1);
     };
+    /* Passed to somebody else from the drawer by an owner or the office
+       ("Not my lead", components/LeadReassign): the row wears the new name
+       now, and the next read of the board is fresh. */
+    const moved = (e: Event) => {
+      const d = (e as CustomEvent<{ id: string; agent: string }>).detail;
+      if (!d?.id) return;
+      setMovedTo((cur) => ({ ...cur, [d.id]: d.agent }));
+      dropJson("/api/leads");
+    };
     window.addEventListener("lead-removed", on);
     window.addEventListener("lead-restored", back);
+    window.addEventListener("lead-reassigned", moved);
     return () => {
       window.removeEventListener("lead-removed", on);
       window.removeEventListener("lead-restored", back);
+      window.removeEventListener("lead-reassigned", moved);
     };
   }, []);
   useEffect(() => {
@@ -478,10 +490,11 @@ export default function Leads() {
       seen.add(l.id);
       const label = spines[l.id]?.label;
       const followUpAt = spines[l.id]?.followUpAt ?? null;
-      out.push(label || followUpAt ? { ...l, ...(label ? { spineLabel: label } : {}), followUpAt } : l);
+      const was = movedTo[l.id] ? { ...l, agent: movedTo[l.id] } : l;
+      out.push(label || followUpAt ? { ...was, ...(label ? { spineLabel: label } : {}), followUpAt } : was);
     }
     return out;
-  }, [ours, source.leads, found, spines, removed, hiddenIds]);
+  }, [ours, source.leads, found, spines, removed, hiddenIds, movedTo]);
 
   // The dropdowns offer what the book actually contains — no imagined values.
   const sources = useMemo(() => [...new Set(ALL.map((l) => l.source))].sort(), [ALL]);

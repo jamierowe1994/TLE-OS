@@ -7,7 +7,9 @@ import { hiddenLeadIds } from "@/lib/hidden-leads";
 import { ago } from "@/lib/rex-leads";
 import { hasDb, q } from "@/lib/db";
 import { rexConfigured } from "@/lib/rex";
-import { contactsAsLeads } from "@/lib/contact-leads";
+import { contactLeadsByIds, contactsAsLeads } from "@/lib/contact-leads";
+import { overlayOwners } from "@/lib/lead-owner";
+import { ledgerLeadsByIds } from "@/lib/lead-ledger";
 import { whoIs } from "@/lib/admin";
 
 /**
@@ -196,9 +198,9 @@ export async function GET(req: NextRequest) {
   /* WHOSE LEADS. Resolved before anything is fetched or read from cache.
      whoIs is asked alongside rather than after: the contacts below need the
      actor, and leadScope does not hand it back (lib/scope is not ours). */
-  const [scope, { actor }] = await Promise.all([
+  const [scope, { actor, subject, viewingAs }] = await Promise.all([
     leadScope(req),
-    whoIs(req).catch(() => ({ actor: null })),
+    whoIs(req).catch(() => ({ actor: null, subject: null, viewingAs: false })),
   ]);
   if (scope.unlinked) {
     return NextResponse.json({
@@ -244,7 +246,16 @@ export async function GET(req: NextRequest) {
       asAskedAll(b.leads as typeof mine).catch(() => b.leads as typeof mine),
     ]);
     const ours = mine.filter((l) => !l.contactId || !rexContacts.has(l.contactId));
-    const leads = [...ours, ...asked].filter((l) => l && l.id && !hidden.has(l.id) && !sales.has(l.id));
+    /* Passed on in the OS ("Not my lead", lib/lead-owner): gone from the
+       board of the agent who passed it, on the board of the one who has it,
+       and wearing its new name (or Unassigned) on the whole business's. */
+    const held = await overlayOwners(
+      [...ours, ...asked],
+      scope,
+      { email: (viewingAs ? subject?.email : actor?.email) ?? null },
+      async (ids) => [...(await ledgerLeadsByIds(ids)), ...(await contactLeadsByIds(ids))] as typeof asked
+    ).catch(() => [...ours, ...asked]);
+    const leads = held.filter((l) => l && l.id && !hidden.has(l.id) && !sales.has(l.id));
     /* This month and last, counted from everything on file rather than the
        500 the board carries (Rig P-010), plus contacts typed in by hand,
        which the board shows but the ledger never holds. */

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import TranslateText from "@/components/TranslateText";
 
 /**
  * The side panel on a record (10 Oct 2026): Messages, Notes and Activity.
@@ -77,6 +78,7 @@ export default function RecordSidePanel({
   notePlaceholder,
   noteSaid,
   activity,
+  onLanguage,
 }: {
   /** Whose record: "Sophie" or "14 Moor Street". */
   name: string;
@@ -94,6 +96,8 @@ export default function RecordSidePanel({
   noteSaid?: { ok: boolean; text: string } | null;
   /** The record's own activity log; the tab is left off without one. */
   activity?: React.ReactNode;
+  /** A customer's message turned out to be in another language (Translate). */
+  onLanguage?: (language: string) => void;
 }) {
   const tabs: { key: PanelTab; label: string; icon: string }[] = [
     { key: "messages", label: "Messages", icon: "message" },
@@ -130,7 +134,7 @@ export default function RecordSidePanel({
       </div>
 
       <div className="min-h-0 flex-1">
-        {tab === "messages" && <Messages name={name} url={conversationUrl} none={noConversation} />}
+        {tab === "messages" && <Messages name={name} url={conversationUrl} none={noConversation} onLanguage={onLanguage} />}
         {tab === "notes" && <Notes rows={notes} onAdd={onAddNote} placeholder={notePlaceholder} said={noteSaid} name={name} />}
         {tab === "activity" && <div className="h-full overflow-y-auto overscroll-contain px-5 py-4">{activity}</div>}
       </div>
@@ -140,7 +144,7 @@ export default function RecordSidePanel({
 
 /* ── Messages ─────────────────────────────────────────────────────────── */
 
-function Messages({ name, url, none }: { name: string; url: string | null; none?: string }) {
+function Messages({ name, url, none, onLanguage }: { name: string; url: string | null; none?: string; onLanguage?: (language: string) => void }) {
   const [state, setState] = useState<{ loading: boolean; items: ConvItem[]; notes: string[]; error: string | null }>({ loading: true, items: [], notes: [], error: null });
   const [open, setOpen] = useState<string | null>(null);
   const end = useRef<HTMLDivElement>(null);
@@ -178,7 +182,7 @@ function Messages({ name, url, none }: { name: string; url: string | null; none?
     return out;
   }, [state.items]);
 
-  if (open && url) return <EmailView url={url} id={open} onBack={() => setOpen(null)} onOpen={setOpen} />;
+  if (open && url) return <EmailView url={url} id={open} onBack={() => setOpen(null)} onOpen={setOpen} onLanguage={onLanguage} />;
 
   return (
     /* Room at the foot on a phone, so the newest message scrolls clear of Steve. */
@@ -203,7 +207,7 @@ function Messages({ name, url, none }: { name: string; url: string | null; none?
                 <ul className="space-y-2">
                   {g.items.map((it) => (
                     <li key={it.id}>
-                      <Bubble it={it} onOpen={() => setOpen(it.id)} />
+                      <Bubble it={it} onOpen={() => setOpen(it.id)} onLanguage={onLanguage} />
                     </li>
                   ))}
                 </ul>
@@ -217,7 +221,7 @@ function Messages({ name, url, none }: { name: string; url: string | null; none?
   );
 }
 
-function Bubble({ it, onOpen }: { it: ConvItem; onOpen: () => void }) {
+function Bubble({ it, onOpen, onLanguage }: { it: ConvItem; onOpen: () => void; onLanguage?: (language: string) => void }) {
   if (it.direction === "event") {
     return (
       <p className="flex items-center justify-center gap-1.5 py-1 text-center text-[11px] text-muted">
@@ -257,6 +261,11 @@ function Bubble({ it, onOpen }: { it: ConvItem; onOpen: () => void }) {
       ) : (
         <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 ${ours ? "rounded-br-md bg-accent-dark text-white" : "rounded-bl-md bg-[#e9e9eb] text-[#1c1c1e]"}`}>{inner}</div>
       )}
+      {/* Theirs, not in English: Translate underneath (lib/translate). An
+          email's is the preview; the whole email translates when opened. */}
+      {!ours && it.text && (
+        <TranslateText text={email ? `${it.subject ?? ""}\n${it.text}`.trim() : it.text} onLanguage={onLanguage} className="mt-1 max-w-[85%] px-1" />
+      )}
       <span className="mt-0.5 px-1 text-[10px] text-muted">
         {it.channel === "text" ? "Text" : it.channel === "portal" ? "Portal message" : "Email"}
         {it.by ? ` · ${it.by}` : ""} · {timeOf(it.at)}
@@ -278,9 +287,18 @@ function Bubble({ it, onOpen }: { it: ConvItem; onOpen: () => void }) {
   );
 }
 
+/** An email's words, without its HTML, for translating. */
+function emailText(html: string, subject: string): string {
+  if (typeof window === "undefined") return subject;
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  doc.querySelectorAll("style,script,blockquote").forEach((n) => n.remove());
+  const body = (doc.body?.innerText || doc.body?.textContent || "").replace(/\n{3,}/g, "\n\n").trim();
+  return `${subject}\n\n${body}`.slice(0, 7000);
+}
+
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 
-function EmailView({ url, id, onBack, onOpen }: { url: string; id: string; onBack: () => void; onOpen: (id: string) => void }) {
+function EmailView({ url, id, onBack, onOpen, onLanguage }: { url: string; id: string; onBack: () => void; onOpen: (id: string) => void; onLanguage?: (language: string) => void }) {
   const [state, setState] = useState<{ email: FullEmail | null; error: string | null }>({ email: null, error: null });
   useEffect(() => {
     let gone = false;
@@ -314,6 +332,9 @@ function EmailView({ url, id, onBack, onOpen }: { url: string; id: string; onBac
                 Open in Outlook to reply
               </a>
             )}
+            {/* The whole email, offered whatever the guess says: a long
+                email's own words are under the signature and quoted thread. */}
+            <TranslateText text={emailText(e.html, e.subject)} onLanguage={onLanguage} force className="mt-1.5" />
           </>
         )}
       </div>

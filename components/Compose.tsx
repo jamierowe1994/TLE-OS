@@ -45,6 +45,7 @@ export default function Compose({
   to,
   audience = "any",
   merge,
+  language,
 }: {
   open: boolean;
   onClose: () => void;
@@ -54,6 +55,8 @@ export default function Compose({
   audience?: "landlord" | "tenant" | "any";
   /** name, firstName, address, postcode, agent — whatever the caller holds. */
   merge: Record<string, string | undefined>;
+  /** The customer's language, when a Translate press found one (lib/translate). */
+  language?: string | null;
 }) {
   const [templates, setTemplates] = useState<Template[] | null>(null);
   const [picked, setPicked] = useState<string>("");
@@ -66,6 +69,31 @@ export default function Compose({
   } | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  /* Translate my reply (Amrit Bhogal, 14 Oct 2026): the agent writes in
+     English, sees it in the customer's language, checks it, and puts it in
+     the message themselves. Nothing sends until they press Send. */
+  const [tr, setTr] = useState<{ open: boolean; lang: string; busy: boolean; subject: string; body: string; error: string | null }>({ open: false, lang: "", busy: false, subject: "", body: "", error: null });
+  useEffect(() => {
+    if (!open) setTr({ open: false, lang: "", busy: false, subject: "", body: "", error: null });
+  }, [open]);
+  async function translateReply() {
+    const lang = tr.lang.trim();
+    if (!lang || !body.trim() || tr.busy) return;
+    setTr((t) => ({ ...t, busy: true, error: null }));
+    const one = async (text: string) => {
+      if (!text.trim()) return "";
+      const r = await fetch("/api/translate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text, to: lang }) });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; translation?: string };
+      if (!r.ok || !j.ok) throw new Error(j.error ?? "That couldn't be translated just now.");
+      return j.translation ?? "";
+    };
+    try {
+      const [s2, b2] = await Promise.all([one(subject), one(body)]);
+      setTr((t) => ({ ...t, busy: false, subject: s2, body: b2 }));
+    } catch (e) {
+      setTr((t) => ({ ...t, busy: false, error: e instanceof Error ? e.message : "That couldn't be translated just now." }));
+    }
+  }
 
   /* ── Tell Steve the composer is open, and to whom ─────────────────────────
 
@@ -217,6 +245,82 @@ export default function Compose({
               placeholder="Hi…"
             />
           </label>
+
+          <div className="mt-2">
+            {!tr.open ? (
+              <button
+                type="button"
+                onClick={() => setTr((t) => ({ ...t, open: true, lang: t.lang || language || "" }))}
+                disabled={!body.trim()}
+                title={body.trim() ? "Write it in English, then see it in their language" : "Write the message first"}
+                className="text-[12px] font-semibold text-accent-dark hover:underline disabled:cursor-not-allowed disabled:text-muted disabled:no-underline"
+              >
+                Translate my reply{language ? ` into ${language}` : ""}
+              </button>
+            ) : (
+              <div className="rounded-xl border border-line/80 bg-panel p-3">
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="min-w-[10rem] flex-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">Into</span>
+                    <input
+                      value={tr.lang}
+                      onChange={(e) => setTr((t) => ({ ...t, lang: e.target.value }))}
+                      onKeyDown={(e) => e.key === "Enter" && void translateReply()}
+                      placeholder="Their language, e.g. Polish"
+                      className="mt-1 w-full rounded-lg border border-line/80 bg-white px-2.5 py-1.5 text-[13px]"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void translateReply()}
+                    disabled={!tr.lang.trim() || !body.trim() || tr.busy}
+                    className="inline-flex items-center gap-2 rounded-full bg-accent-dark px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-50"
+                  >
+                    {tr.busy && <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" aria-hidden />}
+                    {tr.busy ? "Translating…" : tr.body ? "Translate again" : "Translate"}
+                  </button>
+                  <button type="button" onClick={() => setTr((t) => ({ ...t, open: false }))} className="px-2 py-2 text-[12px] text-muted hover:text-ink">
+                    Close
+                  </button>
+                </div>
+                {tr.error && <p className="mt-2 text-[12px] text-accent-dark">{tr.error}</p>}
+                {tr.body && (
+                  <div className="mt-3">
+                    <p className="text-[11px] leading-relaxed text-muted">
+                      In {tr.lang.trim()}. Read it through and change anything that is not right - it is not sent until you press Send.
+                    </p>
+                    {tr.subject && (
+                      <input
+                        value={tr.subject}
+                        onChange={(e) => setTr((t) => ({ ...t, subject: e.target.value }))}
+                        className="mt-2 w-full rounded-lg border border-line/80 bg-white px-2.5 py-1.5 text-[13px]"
+                      />
+                    )}
+                    <textarea
+                      value={tr.body}
+                      onChange={(e) => setTr((t) => ({ ...t, body: e.target.value }))}
+                      rows={8}
+                      className="mt-2 w-full resize-y rounded-lg border border-line/80 bg-white px-2.5 py-2 text-[13px] leading-relaxed"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        /* Theirs first, our English underneath, so both of
+                           them - and anybody reading the file later - know
+                           what was said. */
+                        if (tr.subject) setSubject(tr.subject);
+                        setBody(`${tr.body}\n\n----------\nIn English:\n\n${body}`);
+                        setTr((t) => ({ ...t, open: false, subject: "", body: "" }));
+                      }}
+                      className="mt-2 rounded-full border border-accent-dark px-4 py-1.5 text-[12px] font-semibold text-accent-dark hover:bg-accent-soft"
+                    >
+                      Use this in the message
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* UNFILLED MERGE FIELDS, NAMED. They are left in the text rather
               than blanked, so this is a warning about something visible rather

@@ -299,7 +299,7 @@ const propertyDetail: AssistantTool = {
 const propertyContacts: AssistantTool = {
   name: "property_contacts",
   description:
-    "Get the landlord and tenant for a property, with email and phone. Call this when somebody asks who owns a property, who lives there, or how to contact either. Needs a listingId from find_property. An empty list means REX wouldn't answer, NOT that the property has no landlord — say so rather than reporting nobody.",
+    "Get the landlord and tenant for a property, with email and phone, and the tenants' guarantors. Call this when somebody asks who owns a property, who lives there, who the guarantor is, or how to contact any of them. Needs a listingId from find_property. An empty list means REX wouldn't answer, NOT that the property has no landlord — say so rather than reporting nobody.",
   input_schema: {
     type: "object",
     properties: { listingId: { type: "string", description: "The listingId returned by find_property." } },
@@ -321,9 +321,18 @@ const propertyContacts: AssistantTool = {
     if (!people.length) {
       return { listingId, contacts: [], note: "REX returned nothing for this property. That means the lookup failed or nobody is attached — it does NOT mean the property has no landlord. Worth checking in REX directly." };
     }
+    /* The tenants' guarantors, kept in the OS (lib/guarantors, 15 Oct 2026:
+       Steve had told Lorna there was no guarantor field anywhere). */
+    const { guarantorsFor } = await import("@/lib/guarantors");
+    const guarantors = await guarantorsFor({ emails: people.filter((c) => /tenant/i.test(c.role ?? "")).map((c) => c.email) }).catch(() => null);
     return {
       listingId,
       contacts: people.map((c) => ({ name: c.name, role: orMissing(c.role), email: orMissing(c.email), phone: orMissing(c.phone) })),
+      guarantors:
+        guarantors === null
+          ? "The guarantors couldn't be read just now."
+          : guarantors.map((g) => ({ name: g.name, for: g.applicantName, relationship: orMissing(g.relationship), email: orMissing(g.email), phone: orMissing(g.phone), address: orMissing(g.address) })),
+      guarantorsNote: "Guarantors are kept in the OS: on the tenant lead (The tenant card), on the let in Applications and on the home in Portfolio, under Guarantors. An empty list means none has been added there yet.",
     };
   },
 };

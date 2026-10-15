@@ -71,6 +71,9 @@ export type Lead = {
   spineLabel?: string;
   /** Banked: the morning an agent said they would get back in touch (an open follow-up task). */
   followUpAt?: string | null;
+  /** Passed on in the OS ("Not my lead", lib/lead-owner): who has it now,
+   *  null when it is back with the office, and who moved it. */
+  passedOn?: { toName: string | null; byName: string; fromName: string; at: string; reason: string; pool: boolean };
 };
 
 export const STAGE_TONE: Record<Stage, "accent" | "neutral" | "good"> = {

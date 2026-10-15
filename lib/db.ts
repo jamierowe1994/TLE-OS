@@ -2117,6 +2117,54 @@ CREATE INDEX IF NOT EXISTS os_leads_received_idx ON os_leads (received_at DESC);
 CREATE INDEX IF NOT EXISTS os_leads_listing_idx ON os_leads (listing_id);
 CREATE INDEX IF NOT EXISTS os_leads_assignee_idx ON os_leads (assignee_id, received_at DESC);
 
+-- WHO HAS A LEAD, WHEN IT ISN'T WHO REX SAYS (15 Oct 2026, Dan Richards:
+-- "Not my lead"). One row per lead that has been passed on in the OS, read
+-- over REX's assignee everywhere a lead is scoped (lib/lead-owner). REX is
+-- not told: its assignee stays as it was. pool = back to the office, nobody's
+-- until an owner or the office gives it to somebody. Never deleted, only
+-- overwritten by the next move; the moves themselves are in os_lead_touches.
+CREATE TABLE IF NOT EXISTS os_lead_owners (
+  lead_id        TEXT PRIMARY KEY,
+  to_rex_user_id TEXT,
+  to_email       TEXT,
+  to_name        TEXT NOT NULL DEFAULT '',
+  pool           BOOLEAN NOT NULL DEFAULT FALSE,
+  reason         TEXT NOT NULL DEFAULT '',
+  from_name      TEXT NOT NULL DEFAULT '',
+  by_email       TEXT NOT NULL DEFAULT '',
+  by_name        TEXT NOT NULL DEFAULT '',
+  at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_lead_owners_rex_idx ON os_lead_owners (to_rex_user_id);
+CREATE INDEX IF NOT EXISTS os_lead_owners_email_idx ON os_lead_owners (lower(to_email));
+
+-- GUARANTORS (15 Oct 2026, Lorna Fieldson: "a section needs adding to include
+-- a guarantor"). Kept in the OS only (lib/guarantors). Each belongs to one
+-- applicant, found again by that applicant's email wherever they turn up -
+-- the lead, the let in Applications, the home in Portfolio - and by the lead
+-- or let it was added on. removed_at hides one; nothing is deleted.
+CREATE TABLE IF NOT EXISTS os_guarantors (
+  id              TEXT PRIMARY KEY,
+  applicant_name  TEXT NOT NULL DEFAULT '',
+  applicant_email TEXT,
+  lead_id         TEXT,
+  let_ref         TEXT,
+  name            TEXT NOT NULL,
+  email           TEXT NOT NULL DEFAULT '',
+  phone           TEXT NOT NULL DEFAULT '',
+  relationship    TEXT NOT NULL DEFAULT '',
+  address         TEXT NOT NULL DEFAULT '',
+  created_by      TEXT NOT NULL DEFAULT '',
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by      TEXT,
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  removed_at      TIMESTAMPTZ,
+  removed_by      TEXT
+);
+CREATE INDEX IF NOT EXISTS os_guarantors_applicant_idx ON os_guarantors (lower(applicant_email));
+CREATE INDEX IF NOT EXISTS os_guarantors_lead_idx ON os_guarantors (lead_id);
+CREATE INDEX IF NOT EXISTS os_guarantors_let_idx ON os_guarantors (let_ref);
+
 -- PEOPLE WE HAVE ALREADY PULLED OUT OF REX (16 Sep 2026).
 --
 -- The first read-through store, and the shape the rest will follow: nothing is

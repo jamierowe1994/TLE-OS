@@ -21,6 +21,7 @@ import BookForm, { type Person } from "@/components/inspections/BookForm";
 import RentBox from "@/components/portfolio/RentBox";
 import ServiceTag from "@/components/portfolio/ServiceTag";
 import ContactBlock from "@/components/ContactBlock";
+import Guarantors from "@/components/Guarantors";
 import { SPECS, STATUS_LABEL as NOTICE_STATUS, type Notice, type NoticeKind } from "@/lib/section-notices-spec";
 import type { PropertyDraft } from "@/lib/property-drafts";
 import { readJson } from "@/lib/page-cache";
@@ -789,6 +790,8 @@ export default function PropertyPage() {
                 ) : (
                   <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">No tenant on record. It is empty, or the let has not been recorded.</p>
                 )}
+                {/* Their guarantors, from the lead and the let (lib/guarantors). */}
+                {tenants.length > 0 && !roomsOnly && !p.test && <Guarantors source={{ listing: String(p.listingId) }} className="mt-3" />}
                 {tenants.length > 0 && (
                   <div className="mt-3 rounded-xl bg-box px-4 py-3 text-[12.5px]">
                     {tenancy.state === "loading" ? <Loading label="Reading the tenancy dates" />
