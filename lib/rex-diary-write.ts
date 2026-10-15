@@ -77,6 +77,14 @@ export async function calendarFor(rexEmail: string, token: string | null): Promi
   return null;
 }
 
+/** REX refuses an event_location with a blank description ("The event location
+ *  description field is required when event location is present", 8 Oct 2026),
+ *  so a blank one is left out of the entry altogether. */
+function rexLocation(description: string | null | undefined): { event_location?: { description: string } } {
+  const d = (description ?? "").trim();
+  return d ? { event_location: { description: d } } : {};
+}
+
 function rexTime(iso: string): { time: string; tzid: string } {
   return { time: new Date(iso).toISOString().replace(".000Z", "+00:00"), tzid: "Europe/London" };
 }
@@ -97,7 +105,7 @@ export function appraisalEventData(ma: MarketAppraisal, calendarId: string) {
     ].join("\n"),
     starts_at: rexTime(start),
     ends_at: rexTime(end),
-    event_location: { description: address },
+    ...rexLocation(address),
     ...(records.length ? { records } : {}),
   };
 }
@@ -263,7 +271,7 @@ export async function putViewingInRexDiary(p: {
         description: p.description ?? `Booked in TLE OS.${p.contactId ? "" : ` Applicant: ${p.applicantName} (not yet a REX contact).`}`,
         starts_at: rexTime(p.startsAt),
         ends_at: rexTime(end),
-        event_location: { description: p.address },
+        ...rexLocation(p.address),
         records,
       },
       return_id: true,
@@ -320,7 +328,7 @@ export async function changeRexEvent(p: {
     description: e.description ?? "",
     starts_at: e.starts_at,
     ends_at: e.ends_at,
-    event_location: { description: e.event_location?.description ?? "" },
+    ...rexLocation(e.event_location?.description),
   };
   if (p.moveTo) {
     data.starts_at = rexTime(p.moveTo.startsAt);
@@ -328,7 +336,7 @@ export async function changeRexEvent(p: {
   }
   if (p.describe) {
     data.description = p.describe.description.slice(0, 4000);
-    if (p.describe.location) data.event_location = { description: p.describe.location };
+    if (p.describe.location?.trim()) data.event_location = { description: p.describe.location.trim() };
   }
   if (p.cancel) {
     data.is_cancelled = true;

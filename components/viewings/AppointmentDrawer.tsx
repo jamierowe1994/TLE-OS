@@ -29,6 +29,7 @@ import {
   toneOf,
 } from "@/components/viewings/shared";
 import { WhatsAppButton } from "@/components/WhatsAppQr";
+import CancelAppointment, { canCancelGeneral } from "@/components/CancelAppointment";
 
 /**
  * The quick look: what IS this, and what do I need to know before I go.
@@ -505,9 +506,14 @@ export default function AppointmentDrawer({
               <DoodleIcon name="folder" size={13} />
               Take me to the file — {appt.link.label}
             </Link>
+          ) : canCancelGeneral(appt) ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="flex-1 text-[11px] text-muted">Not linked to a record.</p>
+              <CancelAppointment appt={appt} onDone={onClose} className={secondary} />
+            </div>
           ) : (
             <p className="text-center text-[11px] text-muted">
-              {appt.fromRex ? "A calendar entry in REX, not linked to a record here." : "Not linked to a record."}
+              {appt.fromRex || appt.fromOutlook ? "A calendar entry made outside the OS, not linked to a record here. Change it where it was made." : "Not linked to a record."}
             </p>
           )}
         </div>

@@ -10,7 +10,7 @@ import { scopeForWho } from "@/lib/scope";
 import { whoIs } from "@/lib/admin";
 import { osFeedbackFor } from "@/lib/viewing-feedback-store";
 import { outlookDiaryFor, type OutlookRead } from "@/lib/outlook-diary";
-import { noteRexOutlookSync } from "@/lib/rex-outlook-sync";
+import { noteRexOutlookSync, withoutPulledCopies } from "@/lib/rex-outlook-sync";
 
 /**
  * The team's diary, cached — same manners as leads and listings.
@@ -292,7 +292,7 @@ export async function GET(req: NextRequest) {
     o ? { state: o.state, ...(o.reason ? { reason: o.reason } : {}), ...(o.ageing ? { ageing: true } : {}) } : { state: "not_yours" as const };
   /* An agent's book is already only theirs; marking it would say nothing. */
   const shaped = async (book: DiaryBook) => {
-    const scoped = merged(forScope(book, who), mine);
+    const scoped = withoutPulledCopies(merged(forScope(book, who), mine));
     const [marked, outlook] = await Promise.all([withOsFeedback(mineOnly ? scoped : own(scoped, self)), outlookP]);
     /* Both calendars side by side: note whether their REX copies into their
        Outlook, so a booking is not put there twice (lib/rex-outlook-sync).
