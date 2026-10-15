@@ -115,9 +115,9 @@ async function post(req: NextRequest) {
      whole - too big, or the connection dropped - so say that, not "form". */
   const form = await req.formData().catch(() => null);
   if (!form) {
-    const big = Number(req.headers.get("content-length") ?? 0) > 25 * 1024 * 1024;
+    const big = Number(req.headers.get("content-length") ?? 0) > 50 * 1024 * 1024;
     return NextResponse.json(
-      { ok: false, error: big ? "That file is over 25MB, so it was not kept. Save a smaller copy and upload that." : "The file did not arrive whole, so it was not kept. Try again." },
+      { ok: false, error: big ? "That file is over 50MB, so it was not kept. Save a smaller copy and upload that." : "The file did not arrive whole, so it was not kept. Try again." },
       { status: big ? 413 : 400 }
     );
   }
@@ -136,7 +136,7 @@ async function post(req: NextRequest) {
   if (!CERT_TYPES.has(type)) return NextResponse.json({ ok: false, error: `type must be one of ${[...CERT_TYPES].join(", ")}.` }, { status: 400 });
   const badDate = dateProblem(expiry, "expiry") ?? (issueRaw ? dateProblem(issueRaw, "issue") : null);
   if (badDate) return NextResponse.json({ ok: false, error: `${badDate} Nothing was kept.` }, { status: 400 });
-  if (file.size > 25 * 1024 * 1024) return NextResponse.json({ ok: false, error: "That file is over 25MB, so it was not kept. Save a smaller copy and upload that." }, { status: 413 });
+  if (file.size > 50 * 1024 * 1024) return NextResponse.json({ ok: false, error: "That file is over 50MB, so it was not kept. Save a smaller copy and upload that." }, { status: 413 });
 
   const name = file.name || `${type}.pdf`;
   /* Said, not thrown (15 Oct 2026, Dan's EPC on 11 Oct; Josel on the

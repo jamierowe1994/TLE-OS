@@ -75,7 +75,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
       const form = await req.formData();
       const file = form.get("file");
       if (!(file instanceof File) || file.size === 0) return NextResponse.json({ ok: false, error: "No file." }, { status: 400 });
-      if (file.size > 25 * 1024 * 1024) return NextResponse.json({ ok: false, error: "Files up to 25 MB, please." }, { status: 400 });
+      if (file.size > 50 * 1024 * 1024) return NextResponse.json({ ok: false, error: "Files up to 50 MB, please." }, { status: 400 });
       if (!r2Configured) return NextResponse.json({ ok: false, error: "Storage isn't connected on this environment." }, { status: 503 });
       const kind = String(form.get("kind") ?? "photo");
       if (kind === "certificate") {

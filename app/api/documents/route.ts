@@ -68,8 +68,9 @@ export async function POST(req: NextRequest) {
   if (!isFromKind(fromKind) || !fromId) return NextResponse.json({ ok: false, error: "Which file is this for?" }, { status: 400 });
   if (!address && !propertyId) return NextResponse.json({ ok: false, error: "This file has no address, so there is nowhere to keep it." }, { status: 400 });
   if (file.size === 0) return NextResponse.json({ ok: false, error: "That file is empty." }, { status: 400 });
-  /* Next cuts a request body off at about 10MB once middleware has seen it (lib/r2). */
-  const max = Math.min(SCOPES.document.maxBytes, 10 * 1024 * 1024);
+  /* The document scope's own cap (50MB); next.config lets middleware pass a
+     body that size through whole. */
+  const max = SCOPES.document.maxBytes;
   if (file.size > max) {
     return NextResponse.json(
       { ok: false, error: `That file is ${(file.size / 1024 / 1024).toFixed(1)}MB - the limit is ${max / 1024 / 1024}MB.` },

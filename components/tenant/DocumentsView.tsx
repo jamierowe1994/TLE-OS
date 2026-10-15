@@ -52,7 +52,7 @@ export default function DocumentsView({ v, sample = false }: { v: TenantHome; sa
       <div className={`${card} p-5 sm:p-6`} data-search>
         <h2 className="text-[19px] font-bold">Send us something</h2>
         <p className="mt-1.5 max-w-xl text-[13px] leading-relaxed text-muted">
-          Whatever we have asked you for. Each one goes straight to your agent and onto your file. A PDF or a photograph, up to 25MB.
+          Whatever we have asked you for. Each one goes straight to your agent and onto your file. A PDF or a photograph, up to 50MB.
         </p>
         {/* Right to rent is England only: no slot for it on a Scottish passport or let (James, 15 Oct 2026). */}
         <SendDocuments sample={sample} noRightToRent={Boolean(v.passport.rules?.noRightToRent) || isScottish(v.deal?.locality, v.enquiry?.locality)} />

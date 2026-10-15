@@ -36,10 +36,11 @@ const nextConfig: NextConfig = {
   // off without a word, so an upload between 10MB and a route's own limit
   // (25MB for a certificate) arrived as a broken form and failed. 15 Oct 2026:
   // Richard Callow's EPC failed four times on 27 Addison Road and never
-  // reached the home, so the PLC pack could not bring it in. 26mb sits just
-  // above the largest upload any route accepts; each route keeps its own cap.
+  // reached the home, so the PLC pack could not bring it in. Same day, a 30MB
+  // EPC was turned away at 25MB, so certificates and documents now take 50MB
+  // and this sits just above that; each route keeps its own cap.
   experimental: {
-    middlewareClientMaxBodySize: "26mb",
+    middlewareClientMaxBodySize: "51mb",
   },
   // The build stamp, worn in the profile footer. Ends the "is this screen
   // even running the new code?" conversation for good: a stale tab says an

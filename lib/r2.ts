@@ -130,7 +130,7 @@ export const SCOPES = {
       "image/webp",
       "image/heic",
     ],
-    maxBytes: 25 * 1024 * 1024,
+    maxBytes: 50 * 1024 * 1024,
   },
   /**
    * The File Store — guides, brochures, decks, anything the office has made.
