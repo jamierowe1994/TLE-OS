@@ -17,6 +17,9 @@ import { MORE_TOOLS } from "@/lib/assistant-steve-more";
 import { PA_TOOLS } from "@/lib/assistant-steve-pa";
 import type { ScreenSnapshot } from "@/lib/steve-never";
 import { searchMatches } from "@/lib/search-match";
+import { checkMyEmails } from "@/lib/assistant-steve-mail";
+import { proposeRtrExpiry } from "@/lib/assistant-steve-rtr";
+import { proposeAddressChange } from "@/lib/assistant-steve-address";
 
 /**
  * WHAT STEVE CAN ACTUALLY GO AND FIND OUT.
@@ -58,6 +61,9 @@ export interface ToolContext {
   me?: { id: string; name: string; email: string };
   /** The controls on their screen, as the browser read them (lib/screen-controls). */
   screen?: ScreenSnapshot | null;
+  /** An owner wearing somebody else's view: reading their post or writing
+   *  under their name is refused (lib/view-as). */
+  viewingAs?: boolean;
 }
 
 /** A tool's answer, plus the one-line label the widget shows while it runs. */
@@ -154,7 +160,9 @@ const findProperty: AssistantTool = {
        (lib/search-match). */
     const hits = (...fields: (string | null | undefined)[]) => searchMatches(query, ...fields);
     const mine = book.listings
-      .filter((l) => hits(l.name, l.locality))
+      /* ...or its listing number, which is all he has for the listing open
+         on their screen (15 Oct 2026). */
+      .filter((l) => hits(l.name, l.locality) || String(l.id) === query)
       .slice(0, 8)
       .map((l) => ({
         listingId: l.id,
@@ -798,7 +806,10 @@ async function mayOpen(kind: FileKind, id: string, ctx: ToolContext): Promise<st
   }
   if (kind === "appraisal") {
     const a = (await listAppraisals().catch(() => [])).find((x) => x.id === id);
-    return a && a.agent === ctx.scope.label ? null : "That appraisal isn't one of yours, so I won't open it for you.";
+    /* No such id is a lost id, not somebody else's file (15 Oct 2026: he
+       guessed one from memory and told Jade her own appraisal was not hers). */
+    if (!a) return "I don't have that appraisal's id any more - find it again with find_property and use the id it gives.";
+    return a.agent === ctx.scope.label ? null : "That appraisal isn't one of yours, so I won't open it for you.";
   }
   return null;
 }
@@ -822,8 +833,14 @@ const fileInput: Anthropic.Tool.InputSchema = {
 const offerToOpen: AssistantTool = {
   name: "offer_to_open",
   description:
-    "Offer to open a property's file on their screen. Call it whenever someone asks about a property (or a lead or appraisal) and you have found the one they mean and it has a file in find_property's `files`. Answer their question as normal, then end with a short offer such as 'I found it - want me to open the file?'. A 'Yes, open it' button appears under your reply, and a typed yes opens it too, so do not call open_file yourself after offering. Only one offer per reply.",
-  input_schema: fileInput,
+    "Offer to open a property's file on their screen. Call it whenever someone asks about a property (or a lead or appraisal) and you have found the one they mean and it has a file in find_property's `files`. Answer their question as normal, then end with a short offer such as 'I found it - want me to open the file?'. A 'Yes, open it' button appears under your reply, and a typed yes opens it too, so do not call open_file yourself after offering. Only one offer per reply. Give `walkThrough` (a show_on_screen target) when the file is where they will DO the thing they asked about - e.g. an appraisal with walkThrough appraisal.terms for sending terms - and the walk-through starts as it opens; then offer as 'want me to open it and show you?'.",
+  input_schema: {
+    ...fileInput,
+    properties: {
+      ...(fileInput.properties as Record<string, unknown>),
+      walkThrough: { type: "string", enum: GUIDE_TARGETS.map((t) => t.id), description: "Optional. A walk-through to start once the file is open." },
+    },
+  },
   label: (i) => `Finding the file for ${str(i.label) || "it"}…`,
   async run(input, ctx) {
     const kind = str(input.kind) as FileKind;
@@ -832,7 +849,13 @@ const offerToOpen: AssistantTool = {
     if (!href) return { error: "I need a kind and an id from find_property's files." };
     const refused = await mayOpen(kind, id, ctx);
     if (refused) return { error: refused };
-    return { __offer: { href, label: str(input.label) || "the file" }, ok: "The 'Yes, open it' button is under your reply. Finish with a one-line offer to open it." };
+    const guide = guideTarget(str(input.walkThrough))?.id;
+    return {
+      __offer: { href, label: str(input.label) || "the file", ...(guide ? { guide } : {}) },
+      ok: guide
+        ? "The 'Yes, open it' button is under your reply; pressing it opens the file and starts the walk-through. Finish with a one-line offer to open it and show them."
+        : "The 'Yes, open it' button is under your reply. Finish with a one-line offer to open it.",
+    };
   },
 };
 
@@ -874,14 +897,18 @@ export const TOOLS: AssistantTool[] = [
   openFile,
   ...MORE_TOOLS,
   ...PA_TOOLS,
+  /* 15 Oct 2026, from four questions agents asked and he couldn't answer. */
+  checkMyEmails,
+  proposeRtrExpiry,
+  proposeAddressChange,
 ];
 
-export type FileLink = { href: string; label: string };
+export type FileLink = { href: string; label: string; /** A walk-through (lib/steve-guide) to start as it opens. */ guide?: string };
 
 /** An offer to open a file, if a tool made one. */
 export function offerIn(result: unknown): FileLink | null {
   const o = (result as { __offer?: unknown } | null)?.__offer as FileLink | undefined;
-  return o && typeof o.href === "string" ? { href: o.href, label: String(o.label ?? "") } : null;
+  return o && typeof o.href === "string" ? { href: o.href, label: String(o.label ?? ""), ...(o.guide && guideTarget(o.guide) ? { guide: o.guide } : {}) } : null;
 }
 
 /** The files a find_property result says can be opened, as links. */

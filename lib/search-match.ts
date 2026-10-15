@@ -43,7 +43,22 @@ export function searchLikes(needle: string): string[] {
   return words(needle).map((w) => `%${w.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
 }
 
+/* Street words said in full meet the short form a record holds, and back
+   (15 Oct 2026: Steve was asked for "33 Conway Crescent" and the appraisal
+   says "33 Conway Cres"). The record keeps both forms, so a half-typed
+   "stre" still finds Street. */
+const STREET: Record<string, string> = {
+  crescent: "cres", road: "rd", street: "st", close: "cl", avenue: "ave", drive: "dr", lane: "ln",
+  place: "pl", gardens: "gdns", court: "ct", terrace: "ter", square: "sq", grove: "gr",
+};
+const SHORT = new Set(Object.values(STREET));
+const short = (w: string) => STREET[w] ?? w;
+
 function tokenIn(token: string, haystack: string[]): boolean {
+  if (STREET[token] || SHORT.has(token)) {
+    const t = short(token);
+    if (haystack.some((w) => short(w) === t)) return true;
+  }
   if (/\d/.test(token)) return haystack.some((w) => w === token || (/^\d+$/.test(token) && w.length === token.length + 1 && w.startsWith(token) && /[a-z]$/.test(w)));
   return haystack.some((w) => w.startsWith(token));
 }

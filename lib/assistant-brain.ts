@@ -186,6 +186,20 @@ adverts, somebody's whole book. Use them.
   appraisal_next_step (and show_on_screen for where to click): find where they
   are, name the one next step, and offer to open it. Walk them through, one
   step at a time - do not dump the whole process.
+- "How do I send terms of business?" (15 Oct 2026): they go from the
+  landlord's APPRAISAL, Prepare and send - not from the listing, and NEVER
+  through REX: never tell anybody to send, resend or chase terms in REX, and
+  if an earlier answer in this conversation said they go through REX, that
+  answer was wrong - say so in a few words and give the right route. Find the landlord's appraisal with find_property (the home on
+  their screen gives you the address), call appraisal_next_step on it, then
+  say the steps in a few short lines (check the deck, their home address and
+  the tick, sign your half, send) - or, if the figure or the post-appraisal
+  deck is still missing, that that comes first. ALWAYS finish with
+  offer_to_open on the appraisal WITH walkThrough "appraisal.terms" ("want me
+  to open it and show you?") - a plain open cannot show them round; terms
+  already sent and unsigned: walkThrough "appraisal.terms-chase". Already on
+  that appraisal: show_on_screen appraisal.terms instead. No appraisal file
+  for the home: say so plainly and give the other routes from the system map.
 - For a document, form, template, brochure or guide, look in the File Store
   with find_file and hand it over - the download buttons appear under your reply.
 - Knowledge under "Law and news" was read from articles and legislation and
@@ -476,6 +490,8 @@ export interface AskContext {
   screen?: ScreenSnapshot | null;
   /** Their own diary today, one line each, when the dock has it. */
   today?: string[] | null;
+  /** An owner viewing the OS as somebody else (lib/view-as). */
+  viewingAs?: boolean;
 }
 
 /**
@@ -746,7 +762,19 @@ export async function ask(
         const oneHome = new Set(found.map(street)).size === 1 ? found : [];
         const pool = named.length ? named : fromMemory ? [] : oneHome.length ? oneHome : found.length === 1 ? found : [];
         offer = (kindSaid ? pool.find((f) => f.href.startsWith(kindSaid)) : null) ?? pool[0] ?? null;
-        if (offer && !/\bopen\b[^.?!]*\?/i.test(text)) reply = `${text}\n\nWant me to open the file?`;
+        /* He already ended on a question of his own ("Want me to show you
+           the tile?"): a second one under it is a menu (15 Oct 2026), so the
+           file is not offered this time. */
+        const lastAsk = /[^.?!\n]*\?\s*$/.exec(text)?.[0] ?? "";
+        const asksToOpenIt = /\bopen\b/i.test(lastAsk) && (Boolean(offer && lastAsk.toLowerCase().includes(street(offer))) || /\b(it|the file|the listing|the appraisal|their file)\b/i.test(lastAsk));
+        if (offer && lastAsk && !asksToOpenIt) offer = null;
+        else if (offer && !lastAsk) reply = `${text}\n\nWant me to open the file?`;
+        /* Terms on an appraisal (15 Oct 2026): the open shows them round too,
+           when he forgot to ask for the walk-through himself. */
+        if (offer && !offer.guide && offer.href.startsWith("/market-appraisals/") && /\bshow you\b/i.test(text)) {
+          if (/\bnudge\b|\bchase\b/i.test(text)) offer = { ...offer, guide: "appraisal.terms-chase" };
+          else if (/\bterms\b|prepare and send/i.test(text)) offer = { ...offer, guide: "appraisal.terms" };
+        }
       }
       return {
         text: reply || "I couldn't put an answer together for that one — it's gone to James.",
@@ -778,6 +806,7 @@ export async function ask(
         surfaces: ctx.surfaces,
         me: ctx.me,
         screen: ctx.screen,
+        viewingAs: ctx.viewingAs,
       });
       /* Last one wins, and there is only ever one on the card. If he proposed
          twice in a turn the second is what he was actually talking about by

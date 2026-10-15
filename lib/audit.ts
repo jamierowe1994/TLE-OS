@@ -77,7 +77,11 @@ export type AuditKind =
   | "reading_paused"
   /* Marketing's Base44 app read the lead figures with its key (12 Oct 2026,
      /api/marketing/leads-feed). Counts only; at most one line an hour. */
-  | "marketing_feed_read";
+  | "marketing_feed_read"
+  /* Saved through Steve's card (lib/assistant-actions, 15 Oct 2026): a
+     tenant's right to rent expiry on a let, and a home's address in the OS. */
+  | "rtr_expiry_recorded"
+  | "property_address_changed";
 
 export interface AuditRow {
   id: string;

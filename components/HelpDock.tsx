@@ -212,7 +212,7 @@ type Line = {
   card?: Proposal;
   sealed?: string;
   /** A file he offered to open: the "Yes, open it" button (2 Oct 2026). */
-  offer?: { href: string; label: string };
+  offer?: { href: string; label: string; guide?: string };
   /** Set once the offer has been taken, so it is not offered twice. */
   offerTaken?: boolean;
   /** Downloads from the File Store he found (2 Oct 2026). */
@@ -229,7 +229,7 @@ type Line = {
 
 /** Mirrors ActionProposal server-side, narrowed to what the card draws. */
 type Proposal = {
-  kind: "note" | "reminder" | "write-up" | "email" | "fill-compose" | "tasks" | "job";
+  kind: "note" | "reminder" | "write-up" | "email" | "fill-compose" | "tasks" | "job" | "rtr-expiry" | "address";
   items?: { title: string; detail?: string; due?: string | null }[];
   assigneeName?: string | null;
   address?: string | null;
@@ -283,6 +283,9 @@ function todayDiary(): Promise<TodayLine[]> {
   return todayAsking;
 }
 
+/** Cards a typed yes may press: a change to one record he asked "Shall I...?" about. */
+const SAVE_ON_YES: Proposal["kind"][] = ["rtr-expiry", "address"];
+
 const CARD_TITLE: Record<Proposal["kind"], string> = {
   /* Never actually drawn — a fill-compose is applied on arrival and its card
      suppressed, because the result is visible in the boxes themselves. Present
@@ -295,6 +298,8 @@ const CARD_TITLE: Record<Proposal["kind"], string> = {
   job: "Standing job, ready to set up",
   "write-up": "New advert, ready to publish",
   email: "Email, ready to send",
+  "rtr-expiry": "Right to rent expiry, ready to save",
+  address: "New address, ready to change",
 };
 const CARD_BUTTON: Record<Proposal["kind"], string> = {
   "fill-compose": "Type it in",
@@ -304,6 +309,8 @@ const CARD_BUTTON: Record<Proposal["kind"], string> = {
   job: "Set it up",
   "write-up": "Publish it",
   email: "Send it",
+  "rtr-expiry": "Save it",
+  address: "Change it",
 };
 /* The consequence, spelled out. Somebody pressing a button in a chat bubble
    deserves to know it reaches Rightmove. */
@@ -315,6 +322,8 @@ const CARD_EFFECT: Record<Proposal["kind"], string> = {
   job: "I'll do it on that schedule and report back in your bell and here. It only looks things up - it never sends or changes anything. Pause or stop it from my Tasks tab.",
   "write-up": "Writes to REX and goes live on Rightmove, Zoopla and OnTheMarket in about five to ten minutes.",
   email: "Sends from YOUR Microsoft mailbox, so it is in your Sent Items and their reply threads onto it. BCC'd to REX so it shows on their timeline. The address is looked up again when you press - it always goes to the person on the record.",
+  "rtr-expiry": "Saves on the let, beside the right to rent check. The office gets a reminder when the follow-up check is due. Nothing is sent to anyone.",
+  address: "Changes the address on the home's record in the OS, where Portfolio reads it. Nothing is sent to anyone.",
 };
 
 /* Not inside the iPhone app (James, 2 Oct 2026): the app's floating nav bar
@@ -938,9 +947,13 @@ function Dock() {
     react(res.ok ? "happy" : "confused", 1600);
   }
 
-  function openFile(link: { href: string; label: string }) {
+  function openFile(link: { href: string; label: string; guide?: string }) {
     if (!link.href.startsWith("/")) return;
     const target = link.href.split("?")[0];
+    /* Open it AND show them (15 Oct 2026, sending terms): the guide is
+       started first - it keeps itself in sessionStorage - so it survives the
+       page changing, or reloading when the file is the page they are on. */
+    if (link.guide) window.dispatchEvent(new CustomEvent(GUIDE_EVENT, { detail: link.guide }));
     window.setTimeout(() => {
       if (target === path) window.location.assign(link.href);
       else router.push(link.href);
@@ -969,6 +982,16 @@ function Dock() {
       setDraft("");
       setLines((l) => [...l, { role: "agent", text }]);
       void runPlan(lastSteve);
+      return;
+    }
+    /* "Yes" to "Shall I save it?" / "Shall I change it?" on a record card
+       (15 Oct 2026): the same as pressing it. Only these kinds - an email or
+       an advert still waits for the button itself. */
+    const atCard = lastSteve ? lines.lastIndexOf(lastSteve) : -1;
+    if (!sending.length && lastSteve?.card && lastSteve.sealed && !lastSteve.settled && SAVE_ON_YES.includes(lastSteve.card.kind) && YES.test(text)) {
+      setDraft("");
+      setLines((l) => [...l, { role: "agent", text }]);
+      void confirm(atCard);
       return;
     }
     if (!sending.length && lastSteve?.offer && !lastSteve.offerTaken && YES.test(text)) {

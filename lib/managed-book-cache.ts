@@ -126,6 +126,16 @@ export function refresh<T>(key: string, work: () => Promise<T>): Promise<Held<T>
   return p;
 }
 
+/**
+ * Forget every held book, here and in os_cache, so the next read is fresh -
+ * after the OS changes something a book row is built from (a home's address
+ * on its OS record, 15 Oct 2026).
+ */
+export async function forgetBooks(): Promise<void> {
+  for (const k of [...memory.keys()]) if (k.startsWith(`${BOOK_BASE}:`)) memory.delete(k);
+  if (hasDb()) await q(`DELETE FROM os_cache WHERE key LIKE $1`, [`${BOOK_BASE}:%`]).catch(() => {});
+}
+
 export function inFlight(key: string): boolean {
   return refreshing.has(key);
 }

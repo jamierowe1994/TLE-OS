@@ -2272,6 +2272,29 @@ ALTER TABLE os_id_checks ADD COLUMN IF NOT EXISTS no_time_limit BOOLEAN NOT NULL
 ALTER TABLE os_id_checks ADD COLUMN IF NOT EXISTS follow_up_on DATE;
 CREATE INDEX IF NOT EXISTS os_id_checks_follow_up ON os_id_checks (follow_up_on) WHERE follow_up_on IS NOT NULL;
 
+-- A tenant's right to rent expiry, recorded on the let itself (15 Oct 2026,
+-- lib/application-rtr; Kirstie: "how do I put in a tenants right to rent
+-- expiry date"). The let's own right-to-rent answer is a yes/no with no date
+-- (REX notes or the offer); this is the date beside it. One row per time it
+-- was recorded - the newest per tenant is what the let shows - and never on a
+-- Scottish let, which has no right to rent.
+CREATE TABLE IF NOT EXISTS os_application_rtr (
+  id               TEXT PRIMARY KEY,
+  application_id   TEXT NOT NULL,
+  tenant_name      TEXT NOT NULL,
+  tenant_email     TEXT NOT NULL DEFAULT '',
+  property         TEXT NOT NULL DEFAULT '',
+  right_until      DATE,
+  no_time_limit    BOOLEAN NOT NULL DEFAULT FALSE,
+  follow_up_on     DATE,
+  recorded_by      TEXT NOT NULL,
+  recorded_by_name TEXT NOT NULL DEFAULT '',
+  via              TEXT NOT NULL DEFAULT 'steve',
+  recorded_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_application_rtr_app ON os_application_rtr (application_id, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS os_application_rtr_follow_up ON os_application_rtr (follow_up_on) WHERE follow_up_on IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS os_cache (
   key            TEXT PRIMARY KEY,
   payload        JSONB NOT NULL,

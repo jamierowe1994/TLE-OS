@@ -109,6 +109,33 @@ export type ActionProposal =
       onceDate: string | null;
     }
   | {
+      /** A tenant's right to rent expiry on their let (lib/application-rtr,
+       *  15 Oct 2026). The let and the tenant are checked again at the press. */
+      kind: "rtr-expiry";
+      listingId: null;
+      address: string;
+      letId: string;
+      tenant: string;
+      until: string | null;
+      noTimeLimit: boolean;
+      /** What the card says, as composed. */
+      text: string;
+    }
+  | {
+      /** A home's address on its OS record (lib/os-property-address, 15 Oct
+       *  2026). Re-found in their book at the press. */
+      kind: "address";
+      listingId: null;
+      address: string;
+      osPropertyId: string;
+      homeId: string;
+      before: string;
+      after: { address: string; name: string; town: string; postcode: string; locality: string };
+      /** The home is also on a back-office property record, to change there too. */
+      alsoElsewhere: boolean;
+      text: string;
+    }
+  | {
       kind: "email";
       listingId: string;
       address: string;
@@ -376,6 +403,49 @@ async function doEmail(
   }
 }
 
+async function doRtr(p: Extract<ActionProposal, { kind: "rtr-expiry" }>, actor: { id: string; name: string; osUserId: string | null }): Promise<ActionOutcome> {
+  const { findUserById } = await import("@/lib/users");
+  const me = actor.osUserId ? await findUserById(actor.osUserId) : null;
+  if (!me) return { ok: false, message: "I couldn't tell who you are, so nothing was saved." };
+  const { recordRtr } = await import("@/lib/application-rtr");
+  const r = await recordRtr(p.letId, p.tenant, p.until, p.noTimeLimit, me);
+  if (!r.ok) return { ok: false, message: r.error };
+  const { record } = await import("@/lib/audit");
+  await record({ kind: "rtr_expiry_recorded", actorId: me.id, actorEmail: me.email, subjectEmail: r.record.tenantEmail, detail: `${p.address} · ${r.record.tenant} · ${r.record.noTimeLimit ? "no time limit" : `until ${r.record.rightUntil}`} · let ${p.letId}` });
+  const day = (ymd: string) => new Date(`${ymd}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" });
+  return {
+    ok: true,
+    message: `Saved on ${p.address}: ${r.record.tenant}'s right to rent ${r.record.noTimeLimit ? "has no time limit" : `runs until ${day(r.record.rightUntil!)}`}. It shows on the let beside the right to rent check${r.record.followUpOn ? `, and the office gets a reminder before the follow-up check on ${day(r.record.followUpOn)}` : ""}.`,
+  };
+}
+
+async function doAddress(p: Extract<ActionProposal, { kind: "address" }>, scope: Scope, actor: { id: string; name: string; osUserId: string | null }): Promise<ActionOutcome> {
+  if (!hasDb()) return { ok: false, message: "There's no database on this environment, so there's nowhere to save it." };
+  const { findUserById } = await import("@/lib/users");
+  const me = actor.osUserId ? await findUserById(actor.osUserId) : null;
+  if (!me) return { ok: false, message: "I couldn't tell who you are, so nothing was changed." };
+  /* Theirs to change at the moment of pressing, not just when it was proposed. */
+  const { addressBook } = await import("@/lib/assistant-steve-address");
+  const book = await addressBook(scope, me.role);
+  if ("error" in book) return { ok: false, message: book.error };
+  const { managedBookFor, forgetBooks } = await import("@/lib/managed-book-cache");
+  const { osRecordFor, saveOsAddress } = await import("@/lib/os-property-address");
+  const home = (await managedBookFor(book.rex)).book.properties.find((x) => x.listingId === p.homeId);
+  const rec = home ? await osRecordFor(home) : null;
+  if (!rec || rec.id !== p.osPropertyId) return { ok: false, message: "That home isn't in your book any more, so I haven't changed it." };
+  const saved = await saveOsAddress(p.osPropertyId, p.after);
+  if (!saved) return { ok: false, message: "That didn't save. Try again in a moment." };
+  await forgetBooks();
+  const { record } = await import("@/lib/audit");
+  await record({ kind: "property_address_changed", actorId: me.id, actorEmail: me.email, subjectId: p.osPropertyId, detail: `${saved.before} -> ${p.after.address}` });
+  return {
+    ok: true,
+    message:
+      `Changed in the OS: ${p.after.address} (it was ${saved.before}).` +
+      (p.alsoElsewhere ? " It's also on the home's property record in the back office, where listings are set up - change it there too so the listing and the portals match." : ""),
+  };
+}
+
 /** Plain text as REX wants it: HTML, with the line breaks preserved. */
 function toHtml(text: string): string {
   return text
@@ -433,6 +503,10 @@ export async function perform(
       return doJob(proposal, actor);
     case "write-up":
       return doWriteUp(proposal, await rexTokenFor(actor.osUserId));
+    case "rtr-expiry":
+      return doRtr(proposal, actor);
+    case "address":
+      return doAddress(proposal, scope, actor);
     case "email":
       return doEmail(
         proposal,

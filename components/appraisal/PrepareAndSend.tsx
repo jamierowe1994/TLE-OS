@@ -224,8 +224,10 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
     ["Visit", day(ma.appointmentAt)],
   ];
 
+  /* data-steve + data-done: Steve's walk-through (lib/steve-guide
+     "appraisal.terms") points at the first step not yet done. */
   const step = (n: number, done: boolean, title: string, body: React.ReactNode) => (
-    <li className="flex gap-3.5">
+    <li className="flex gap-3.5" data-steve={`terms.step${n}`} data-done={done ? "1" : undefined}>
       <span
         className="mt-0.5 flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[12px] font-semibold"
         style={done ? { background: "#56423e", color: "#fff" } : { background: "#f0ebe9", color: "#8d7b76" }}
@@ -267,6 +269,7 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
                       <button
                         key={label}
                         type="button"
+                        data-steve={dir > 0 ? "terms.booklet-next" : undefined}
                         onClick={() => api?.go(dir)}
                         disabled={!can}
                         className="rounded-full border border-line/70 bg-white px-4 py-2 text-[12.5px] font-semibold disabled:opacity-40"
@@ -311,7 +314,7 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
                 ))}
                 <div className="flex gap-3 text-[12px]">
                   <dt className="w-[128px] shrink-0 text-muted">Their home address</dt>
-                  <dd className="min-w-0 flex-1">
+                  <dd className="min-w-0 flex-1" data-steve="terms.home" data-done={homeAddress && !editingHome ? "1" : undefined}>
                     {llHome.state === "loading" ? (
                       <span className="flex items-center gap-1.5 text-muted">
                         <span aria-hidden className="inline-block h-2.5 w-2.5 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
@@ -356,6 +359,7 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
                     </button>
                     <button
                       type="button"
+                      data-steve="terms.same-as-let"
                       disabled={llHome.note?.tone === "busy" || !llHome.canSave}
                       onClick={async () => { if (await llHome.save(letAddress, true)) setEditingHome(false); }}
                       className="rounded-full border border-line/80 bg-white px-4 py-1.5 text-[12px] font-semibold transition-colors hover:border-ink/40 disabled:opacity-40"
@@ -372,7 +376,7 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
               {llHome.note && llHome.note.tone !== "busy" && (
                 <p className={`mb-2 text-[11.5px] ${llHome.note.tone === "bad" ? "text-accent-dark" : "text-muted"}`}>{llHome.note.text}</p>
               )}
-              <label className="flex cursor-pointer items-start gap-2.5 text-[12px] leading-relaxed">
+              <label data-steve="terms.tick" className="flex cursor-pointer items-start gap-2.5 text-[12px] leading-relaxed">
                 <input
                   type="checkbox"
                   checked={checked}
@@ -444,6 +448,7 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
                      openSigning() reopened the contract already signed at the
                      old figures, and Send then refused it - no way forward. */
                   onClick={() => void openSigning(Boolean(staleSignature))}
+                  data-steve="terms.sign"
                   disabled={busy === "sign" || needsHome || llHome.state === "loading"}
                   className="rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white disabled:opacity-60"
                 >
@@ -472,6 +477,7 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
                   <button
                     type="button"
                     onClick={send}
+                    data-steve="terms.send"
                     disabled={Boolean(blocking) || busy === "send" || sendUnlocked === false}
                     className="w-full rounded-2xl bg-accent-dark px-6 py-4 text-[15px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
                   >

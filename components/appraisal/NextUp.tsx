@@ -283,7 +283,7 @@ export default function NextUp({
       title: "Build the post-appraisal deck",
       sub: "The deck they saw, plus the figure and the terms to sign.",
       body: (
-        <Link href={`/market-appraisals/${ma.id}/build?kind=post-appraisal`} className={primary}>
+        <Link href={`/market-appraisals/${ma.id}/build?kind=post-appraisal`} data-steve="terms.build-deck" className={primary}>
           Build the post-appraisal <span aria-hidden>→</span>
         </Link>
       ),
