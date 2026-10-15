@@ -35,6 +35,15 @@ export const NUDGE_DAYS = [2, 5, 9];
 
 export class NudgeRefused extends Error {}
 
+/**
+ * Terms drawn up BEFORE the figures last moved. termsSentAt is stamped each
+ * time a contract is drawn up (app/api/docuseal/sign) and valuedAt each time
+ * the rent or a fee is recorded, so the later of the two says which is true.
+ */
+export function termsOutOfDate(ma: { termsSentAt?: string | null; valuedAt?: string | null }): boolean {
+  return Boolean(ma.termsSentAt && ma.valuedAt && ma.valuedAt > ma.termsSentAt);
+}
+
 export interface NudgeRecord {
   count: number;
   autoCount: number;
@@ -62,6 +71,13 @@ export async function sendContractNudge(p: {
   auto?: boolean;
 }): Promise<{ to: string; count: number }> {
   const { ma, origin } = p;
+  /* The fees changed after the contract was drawn up (Change the fees, 14 Oct
+     2026): a nudge now - by hand or on the 2/5/9-day timer - would hand the
+     landlord a link to terms on the old figures. It waits until the agent
+     has drawn them up again, which stamps terms_sent_at past the change. */
+  if (termsOutOfDate(ma)) {
+    throw new NudgeRefused("The fees changed after the terms were drawn up. Draw them up again and sign them on Prepare and send first, so the nudge points at the right ones.");
+  }
   const to = (ma.landlordEmail ?? "").trim().toLowerCase();
   if (!to.includes("@")) throw new NudgeRefused(`No email address on ${ma.landlord}.`);
   const sent = await contractSendRecord(ma.id);
@@ -148,6 +164,9 @@ export async function runContractNudges(origin: string, now = new Date()): Promi
       if ((await signedFor(id)).some((r) => r.completed_at)) continue;
       const ma = await getAppraisal(id);
       if (!ma || ma.stage === "won" || ma.stage === "lost") continue;
+      /* Fees changed since the terms were drawn up: wait for the redraw
+         rather than chase the old contract (and log a refusal every run). */
+      if (termsOutOfDate(ma)) continue;
       await sendContractNudge({ ma, origin, by: "automatic", auto: true });
       out.sent++;
     } catch (e) {

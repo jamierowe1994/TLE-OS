@@ -54,6 +54,7 @@ export default async function SendTermsPage({ params }: { params: Promise<{ id: 
     serviceLabel: SERVICE_LEVELS.find((s) => s.id === ma.serviceLevel)?.label ?? null,
     feePct: ma.feePct ?? null,
     setupFee: ma.setupFee ?? null,
+    otherFees: ma.otherFees ?? null,
     valuedAt: ma.valuedAt ?? null,
     appointmentAt: ma.appointmentAt ?? null,
   };

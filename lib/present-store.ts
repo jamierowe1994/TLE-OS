@@ -96,7 +96,9 @@ export async function createPresentation(params: {
  *
  * The token, the opens and the welcome video stay. A landlord who already
  * has the link opens the new version, and a video recorded against the deck
- * is not lost because the agent changed a comparable.
+ * is not lost because the agent changed a comparable. So does the "Updated"
+ * date from Change the fees: the builder rebuilds from the changed figures,
+ * so the deck is still not the version first sent.
  */
 export async function updatePresentation(token: string, deck: PresentDeck): Promise<PresentationRow | null> {
   if (!hasDb() || !token) return null;
@@ -106,10 +108,39 @@ export async function updatePresentation(token: string, deck: PresentDeck): Prom
                                      THEN jsonb_build_object('welcomeVideo', deck -> 'welcomeVideo')
                                      ELSE '{}'::jsonb END
                              || jsonb_build_object('createdAt', deck -> 'createdAt')
+                             || CASE WHEN deck ? 'figuresUpdatedAt'
+                                     THEN jsonb_build_object('figuresUpdatedAt', deck -> 'figuresUpdatedAt')
+                                     ELSE '{}'::jsonb END
       WHERE token = $1
       RETURNING token, kind, ref, deck, author_name, created_at,
                 first_opened_at, last_opened_at, opens`,
     [token, JSON.stringify(deck)]
+  );
+  return rows[0] ? toRow(rows[0]) : null;
+}
+
+/**
+ * CHANGE THE FEES on a deck already sent (James Crumpton, 14 Oct 2026).
+ *
+ * Only the terms beside the figure move - service, fee, set-up, other fees -
+ * merged into `valuation` in one statement, so nothing else on the snapshot
+ * (the comparables, the video, the opens) is touched. Stamps
+ * figuresUpdatedAt, which the figure page shows as "Updated <date>".
+ */
+export async function changeDeckFigures(
+  token: string,
+  figures: { serviceLevel: string | null; feePct: number | null; setupFee: number | null; otherFees: string | null }
+): Promise<PresentationRow | null> {
+  if (!hasDb() || !token) return null;
+  const now = new Date().toISOString();
+  const rows = await q<Raw>(
+    `UPDATE os_presentations
+        SET deck = jsonb_set(deck, '{valuation}', COALESCE(deck -> 'valuation', '{}'::jsonb) || $2::jsonb, true)
+                   || jsonb_build_object('figuresUpdatedAt', $3::text, 'updatedAt', $3::text)
+      WHERE token = $1 AND deck -> 'valuation' IS NOT NULL AND jsonb_typeof(deck -> 'valuation') = 'object'
+      RETURNING token, kind, ref, deck, author_name, created_at,
+                first_opened_at, last_opened_at, opens`,
+    [token, JSON.stringify(figures), now]
   );
   return rows[0] ? toRow(rows[0]) : null;
 }

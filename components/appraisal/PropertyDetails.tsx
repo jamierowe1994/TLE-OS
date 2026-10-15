@@ -45,7 +45,7 @@ export default function PropertyDetails({
           <p className="mt-0.5 text-[14px] font-semibold">{summary}</p>
           <p className="mt-0.5 text-[11.5px] text-muted">
             {facts.ignoreLookup
-              ? "The lookup found the wrong property, so none of its facts or its sale estimate go on the deck."
+              ? "The lookup found the wrong property, so none of its facts go on the presentation."
               : corrected
                 ? "Corrected by you. This is what the deck says."
                 : "From the property lookup. Correct it if anything is wrong - the deck uses what is here."}

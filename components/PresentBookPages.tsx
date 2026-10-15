@@ -1336,7 +1336,7 @@ export function BookTestimonial({ deck }: { deck: Deck }) {
   );
 }
 
-/** Page 13L: THE FIGURE - the rent we would put it on at, big, with the terms it comes with. */
+/** Page 13L: THE FIGURE - the rent we would advertise at, big, with the terms it comes with. */
 export function BookValuation({ deck }: { deck: Deck }) {
   const v = deck.valuation;
   /* Which of the three levels the agreed service is, by its name. */
@@ -1354,13 +1354,22 @@ export function BookValuation({ deck }: { deck: Deck }) {
         v.serviceLevel ? ["Service", v.serviceLevel] : null,
         /* VAT in, the figure the landlord pays (James, 16 Sep 2026). */
         v.feePct != null ? ["Fee", `${incVat(v.feePct)}% of rent including VAT, ${gbp(Math.round((v.rent * v.feePct * (1 + VAT_RATE)) / 100))} a month at this rent`] : null,
-        v.setupFee != null ? ["Set-up", `${gbp(Math.round(v.setupFee * (1 + VAT_RATE)))} one-off, including VAT`] : null,
+        v.setupFee != null ? ["Set-up", v.setupFee === 0 ? "None" : `${gbp(Math.round(v.setupFee * (1 + VAT_RATE)))} one-off, including VAT`] : null,
+        /* The deck's "Other fees" line, said the same way here. */
+        v.otherFees?.trim() ? ["Other fees", v.otherFees.trim()] : null,
       ].filter(Boolean) as [string, string][])
     : [];
+  /* Changed after it was sent - the deck's figure slide says it too. */
+  const updated = deck.figuresUpdatedAt
+    ? new Date(deck.figuresUpdatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" })
+    : null;
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       <div className="absolute left-[96px] top-[84px] w-[1250px]">
-        <EyebrowRule>What we&rsquo;d put it on at</EyebrowRule>
+        <div className="flex items-center gap-5">
+          <EyebrowRule>The rent we&rsquo;d advertise at</EyebrowRule>
+          {updated && <span className="text-[13px] text-black/55">Updated {updated}</span>}
+        </div>
         <h1 className="mt-6 text-[60px] leading-[1.1]" style={TITLE}>
           The figure, and
           <br />

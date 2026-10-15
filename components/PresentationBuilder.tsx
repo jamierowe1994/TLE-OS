@@ -297,6 +297,7 @@ export default function PresentationBuilder({
         serviceLevel: level?.label ?? null,
         feePct: appraisal.feePct ?? null,
         setupFee: appraisal.setupFee ?? null,
+        otherFees: appraisal.otherFees ?? null,
         note: appraisal.valuationNote ?? null,
       },
       /* THE SIGNING LINK GOES ON THE DECK ITSELF. James, 1 Sep: opening the
@@ -1605,6 +1606,7 @@ export default function PresentationBuilder({
               serviceLevel: level?.label ?? null,
               feePct: appraisal.feePct ?? null,
               setupFee: appraisal.setupFee ?? null,
+              otherFees: appraisal.otherFees ?? null,
               note: appraisal.valuationNote ?? null,
             }
           : null,
@@ -1834,7 +1836,13 @@ export default function PresentationBuilder({
                     The lookup&apos;s facts are switched off for this property. The deck uses only the details above.
                   </p>
                 ) : (
-                  <MaterialInfoPanel material={material} warning={d.addressWarning} hideVerbose compact />
+                  <MaterialInfoPanel
+                    material={material}
+                    warning={d.addressWarning}
+                    hideVerbose
+                    compact
+                    rent={kind === "post-appraisal" ? (appraisal?.valuation ?? null) : null}
+                  />
                 )}
                 <div className="space-y-5">
                   {d.subjectPoint && (

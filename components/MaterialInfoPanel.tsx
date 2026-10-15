@@ -25,6 +25,13 @@ import { valuationLines, VERBOSE_GROUPS, type MaterialInfo } from "@/lib/matinfo
  * **The valuation is labelled a SALE value.** Homesearch's `quick_valuation`
  * is a capital estimate. On a lettings appraisal, an unlabelled "£140,000"
  * next to rent figures is a number waiting to be misread out loud.
+ *
+ * **In the builder it is not the headline.** Richard Callow, 15 Oct 2026:
+ * "build the presentation is all suited to sales" - the first figure on the
+ * first step was "Est. sale value", with "Last sold" under it. The money tile
+ * there is the RENT now (the agreed figure, when there is one), and the sale
+ * figures sit inside "More about it" as a reference line. They never reached
+ * the deck either way.
  */
 
 /** Fields worth seeing before the fold, in the order a landlord asks for them. */
@@ -43,8 +50,12 @@ export default function MaterialInfoPanel({
   loading,
   hideVerbose = false,
   compact = false,
+  rent = null,
 }: {
   material: MaterialInfo | null;
+  /** The agreed rent, £ pcm - the compact view's money tile. Without one there
+   *  is no money tile: the sale estimate is never the headline on a let. */
+  rent?: number | null;
   /** Drop Construction and Risks — see VERBOSE_GROUPS. */
   hideVerbose?: boolean;
   /**
@@ -110,15 +121,17 @@ export default function MaterialInfoPanel({
   if (compact) {
     const groups = material.groups.filter((g) => !hideVerbose || !VERBOSE_GROUPS.includes(g.id));
     const active = groups.find((g) => g.id === tab) ?? groups[0] ?? null;
-    /* The order a landlord asks, with the money first. Tenure is second on
-       purpose - freehold or leasehold changes the conversation - and the
-       measurements come after the words. Only what Homesearch actually
-       holds is drawn; a blank tile would be a question we cannot answer. */
+    /* The order a landlord asks, with the money first - and on a let the
+       money is the RENT. Tenure is second on purpose - freehold or leasehold
+       changes the conversation (a leasehold flat may need the freeholder's
+       consent to let) - and the measurements come after the words. Only what
+       Homesearch actually holds is drawn; a blank tile would be a question we
+       cannot answer. */
     const estimate = val.find((f) => f.label === "Estimated value");
     const lastSold = val.find((f) => f.label === "Last sold");
     const by = (label: string) => all.find((f) => f.label === label);
     const facts = [
-      estimate ? { label: "Est. sale value", value: estimate.value, money: true } : null,
+      rent != null && rent > 0 ? { label: "Agreed rent", value: `£${rent.toLocaleString("en-GB")} pcm`, money: true } : null,
       by("Tenure"),
       by("Bedrooms"),
       by("Property type"),
@@ -152,12 +165,6 @@ export default function MaterialInfoPanel({
               </div>
             ))}
           </dl>
-        )}
-        {lastSold && (
-          <p className="mt-2 text-[11px] text-muted">
-            {lastSold.label}: <span className="figures text-ink">{lastSold.value}</span>. The value is a sale
-            estimate, not rent.
-          </p>
         )}
 
         {groups.length > 0 && (
@@ -202,6 +209,12 @@ export default function MaterialInfoPanel({
                   From Homesearch, live. Blanks are fields Homesearch does not hold for this
                   property, not fields we chose to leave out.
                 </p>
+                {(estimate || lastSold) && (
+                  <p className="mt-1.5 text-[10.5px] leading-relaxed text-muted">
+                    For reference only, never on the presentation:{" "}
+                    {[estimate && `sale estimate ${estimate.value}`, lastSold && `last sold ${lastSold.value}`].filter(Boolean).join(" · ")}.
+                  </p>
+                )}
               </div>
             )}
           </div>

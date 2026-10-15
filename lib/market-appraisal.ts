@@ -94,8 +94,13 @@ export interface MarketAppraisal {
   serviceLevel: ServiceLevel | null;
   /** Management fee, percent of rent. */
   feePct: number | null;
-  /** Tenancy set-up fee, £. */
+  /** Tenancy set-up fee, £. 0 is "no set-up fee", which is not the same as
+   *  none recorded (null) - the contract fills the standard one for null. */
   setupFee: number | null;
+  /** Anything agreed beyond the fee and the set-up, in the agent's words - the
+   *  contract's "Additional Fees Agreed" box. Null reads "None". Optional so
+   *  the records written before it existed still type. */
+  otherFees?: string | null;
   /** Anything the figure needs explaining by — conditions, a range, a caveat. */
   valuationNote: string | null;
   /** ISO, and who. A figure with no author cannot be questioned later. */

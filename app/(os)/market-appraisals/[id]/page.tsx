@@ -16,6 +16,7 @@ import ConfirmLine from "@/components/appraisal/ConfirmLine";
 import AppraisalOutcome from "@/components/AppraisalOutcome";
 import WelcomeVideoRecorder from "@/components/WelcomeVideoRecorder";
 import NextUp, { SAGE_INK, SAGE_WASH, type SentDeck } from "@/components/appraisal/NextUp";
+import ChangeFees from "@/components/appraisal/ChangeFees";
 import { glanceFor } from "@/components/appraisal/glance";
 import {
   MA_STAGES,
@@ -307,6 +308,20 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
           <a href={post.url} target="_blank" rel="noreferrer" className={pill}>
             <DoodleIcon name="file-contract" size={13} className="text-accent-dark" /> Post-appraisal deck
           </a>
+        )}
+        {/* Agreed a different fee or service after it went (James Crumpton,
+            14 Oct 2026): change it on the deck they already have. */}
+        {post && ma.valuation != null && (
+          <ChangeFees
+            appraisalId={ma.id}
+            className={pill}
+            onSaved={(next) => {
+              saved(next);
+              loadDecks();
+            }}
+          >
+            <DoodleIcon name="pencil" size={13} className="text-accent-dark" /> Change the fees
+          </ChangeFees>
         )}
         {/* The welcome video, recorded against the pre-appraisal deck. */}
         {pre && !past && ma.preSend?.state !== "sent" && (

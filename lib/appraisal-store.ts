@@ -69,6 +69,7 @@ interface Row extends Record<string, unknown> {
      actually arrives and converted once, in rowTo. */
   fee_pct: string | number | null;
   setup_fee: number | null;
+  other_fees?: string | null;
   valuation_note: string | null;
   valued_at: string | Date | null;
   valued_by: string | null;
@@ -80,7 +81,7 @@ interface Row extends Record<string, unknown> {
 
 /** Every column the reads select, in one place so they cannot drift apart. */
 const COLS = `id, lead_id, landlord, address, postcode, agent, appointment_at,
-              stage, valuation, service_level, fee_pct, setup_fee,
+              stage, valuation, service_level, fee_pct, setup_fee, other_fees,
               valuation_note, valued_at, valued_by, rex_property_id,
               present_token, terms_sent_at, created_at`;
 
@@ -105,6 +106,7 @@ function rowTo(r: Row): MarketAppraisal {
     feePct:
       r.fee_pct == null || r.fee_pct === "" ? null : Number(r.fee_pct),
     setupFee: r.setup_fee,
+    otherFees: r.other_fees ?? null,
     valuationNote: r.valuation_note,
     valuedAt: r.valued_at ? new Date(r.valued_at).toISOString() : null,
     valuedBy: r.valued_by,
@@ -381,6 +383,8 @@ export interface ValuationPatch {
   serviceLevel?: MarketAppraisal["serviceLevel"];
   feePct?: number | null;
   setupFee?: number | null;
+  /** Anything agreed beyond the fee and the set-up. Null is "None". */
+  otherFees?: string | null;
   valuationNote?: string | null;
   rexPropertyId?: string | null;
 }
@@ -439,6 +443,7 @@ export async function recordValuation(
     if (has("serviceLevel")) put("service_level", patch.serviceLevel ?? null);
     if (has("feePct")) put("fee_pct", patch.feePct ?? null);
     if (has("setupFee")) put("setup_fee", patch.setupFee ?? null);
+    if (has("otherFees")) put("other_fees", patch.otherFees ?? null);
     if (has("valuationNote")) put("valuation_note", patch.valuationNote ?? null);
     /* Cleared by a person is stored as '', not NULL, so the lead's own
        property is never adopted back over their decision (adoptLeadProperties). */
@@ -448,7 +453,7 @@ export async function recordValuation(
        property with recording a valuation they never touched — on the one
        field whose whole job is answering "who said it was worth this". */
     const touchedFigure = (
-      ["valuation", "serviceLevel", "feePct", "setupFee", "valuationNote"] as const
+      ["valuation", "serviceLevel", "feePct", "setupFee", "otherFees", "valuationNote"] as const
     ).some((k) => has(k));
     if (touchedFigure) {
       put("valued_by", by);
@@ -477,9 +482,10 @@ export async function recordValuation(
     ...(has("serviceLevel") ? { serviceLevel: patch.serviceLevel ?? null } : {}),
     ...(has("feePct") ? { feePct: patch.feePct ?? null } : {}),
     ...(has("setupFee") ? { setupFee: patch.setupFee ?? null } : {}),
+    ...(has("otherFees") ? { otherFees: patch.otherFees ?? null } : {}),
     ...(has("valuationNote") ? { valuationNote: patch.valuationNote ?? null } : {}),
     ...(has("rexPropertyId") ? { rexPropertyId: patch.rexPropertyId ?? null } : {}),
-    ...(["valuation", "serviceLevel", "feePct", "setupFee", "valuationNote"] as const).some((k) =>
+    ...(["valuation", "serviceLevel", "feePct", "setupFee", "otherFees", "valuationNote"] as const).some((k) =>
       has(k)
     )
       ? { valuedAt: now, valuedBy: by }

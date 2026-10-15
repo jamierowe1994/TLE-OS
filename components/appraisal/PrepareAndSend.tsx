@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import ChangeFees from "@/components/appraisal/ChangeFees";
 import PresentBook, { PAGE_H, PAGE_W } from "@/components/PresentBook";
 import { DeckStyleCtx, themeVars, INK } from "@/components/present-kit";
 import SignModal from "@/components/landlord/SignModal";
@@ -62,6 +64,7 @@ export interface SendSubject {
   serviceLabel: string | null;
   feePct: number | null;
   setupFee: number | null;
+  otherFees?: string | null;
   valuedAt: string | null;
   appointmentAt: string | null;
 }
@@ -71,6 +74,7 @@ const day = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : null;
 
 export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: PresentDeck | null }) {
+  const router = useRouter();
   const [parties, setParties] = useState<Party[] | null>(null);
   const [sendUnlocked, setSendUnlocked] = useState<boolean | null>(null);
   const [read, setRead] = useState(false);
@@ -201,7 +205,8 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
     ["Service", ma.serviceLabel],
     ["Rent", money(ma.valuation) ? `${money(ma.valuation)} per month` : null],
     ["Management fee", ma.feePct != null ? `${ma.feePct}% of rent` : null],
-    ["Set-up fee", money(ma.setupFee)],
+    ["Set-up fee", ma.setupFee === 0 ? "None" : money(ma.setupFee)],
+    ...(ma.otherFees?.trim() ? [["Other fees", ma.otherFees.trim()] as [string, string]] : []),
     ["Valued on", day(ma.valuedAt)],
     ["Visit", day(ma.appointmentAt)],
   ];
@@ -294,6 +299,26 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
                 <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} className="mt-0.5" />
                 <span>These are right, and the dates are right.</span>
               </label>
+              {/* Not right, or agreed differently since (James Crumpton, 14 Oct
+                  2026): change them here, and the booklet above and the terms
+                  both follow. The tick comes off - the details it vouched for
+                  have just moved. */}
+              {deck?.valuation && !landlord?.completedAt && (
+                <p className="mt-2.5 text-[11.5px] leading-relaxed text-muted">
+                  Service or fees not right?{" "}
+                  <ChangeFees
+                    appraisalId={ma.id}
+                    className="font-semibold text-ink underline underline-offset-4"
+                    onSaved={() => {
+                      setChecked(false);
+                      router.refresh();
+                      recheck();
+                    }}
+                  >
+                    Change the fees
+                  </ChangeFees>
+                </p>
+              )}
             </div>
           )}
         </ol>

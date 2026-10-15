@@ -166,8 +166,10 @@ export type PresentMarket = {
  *
  * This is the number the landlord has already been told in their own kitchen,
  * repeated so they can show it to whoever else decides. It is a SNAPSHOT of
- * what was agreed at the visit — if the figure is later revised, that is a new
- * deck, not an edit to this one, because the old one has already been read.
+ * what was agreed at the visit. The SERVICE and the FEES can be changed after it
+ * has gone (Change the fees, 14 Oct 2026) - the landlord and agent sometimes
+ * settle on something different afterwards - and the deck then says
+ * "Updated <date>" so nobody mistakes it for the first version.
  *
  * Everything except the rent is optional and the slide reads without it. An
  * agent who agreed a rent and left the fee to the office must still be able to
@@ -180,6 +182,9 @@ export type PresentValuation = {
   serviceLevel: string | null;
   feePct: number | null;
   setupFee: number | null;
+  /** Anything agreed beyond the fee and the set-up, in the agent's words -
+   *  the contract's "Additional Fees Agreed" box. Null is "None". */
+  otherFees?: string | null;
   note: string | null;
 };
 
@@ -376,6 +381,15 @@ export type PresentDeck = {
   createdAt: string;
   /** When Update presentation last changed it. The link stays the same. */
   updatedAt?: string | null;
+  /**
+   * When the agent last changed the service or the fees after sending it
+   * (Change the fees, James Crumpton 14 Oct 2026). The landlord sees
+   * "Updated <date>" on the figure page, because the deck they open at the
+   * same link is no longer the one first sent. Kept across Update
+   * presentation (lib/present-store), since the figures it rebuilds from are
+   * the changed ones.
+   */
+  figuresUpdatedAt?: string | null;
 };
 
 export type PresentBuilderPicks = {
@@ -741,7 +755,7 @@ export const SLIDES: { id: SlideId; title: string; removable: boolean; section: 
      already had the conversation and is opening this for one thing: the
      number. Making them scroll past anything to reach it reads as building a
      case before daring to say it. Figure first, then what it costs. */
-  { id: "valuation", title: "What we'd put it on at", removable: true, section: "close" },
+  { id: "valuation", title: "The rent we'd advertise at", removable: true, section: "close" },
   /* James, 4 Sep: the fee gets a page of its own. The source deck put a
      service comparison in front of a landlord with no price anywhere on it,
      which leaves them working out the cost in their head while we talk. */
@@ -976,7 +990,7 @@ export function slideHasContent(deck: PresentDeck, id: SlideId): boolean {
   /* The fee page needs a fee. An agent who has not set one yet gets no slide
      rather than a page of dashes — and the builder can then tell them so. */
   if (id === "fees") return Boolean(deck.fees && (deck.fees.rows.length || deck.fees.headline));
-  /* No rent, no offer slide. A "What we'd put it on at" heading above a dash
+  /* No rent, no offer slide. A "The rent we'd advertise at" heading above a dash
      is the worst thing on any of these decks: the landlord opened it for
      exactly that number. */
   if (id === "valuation") return Boolean(deck.valuation?.rent);

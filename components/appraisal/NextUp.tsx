@@ -307,7 +307,15 @@ export default function NextUp({
         post.opens > 0
           ? `The post-appraisal deck has been opened ${post.opens} time${post.opens === 1 ? "" : "s"}.`
           : "Check it through as they will see it, sign your half, then send it.",
-      body: <TermsCard appraisalId={ma.id} landlord={ma.landlord} primary={primary} ghost={ghost} />,
+      body: (
+        <TermsCard
+          appraisalId={ma.id}
+          landlord={ma.landlord}
+          primary={primary}
+          ghost={ghost}
+          outOfDate={Boolean(ma.termsSentAt && ma.valuedAt && ma.valuedAt > ma.termsSentAt)}
+        />
+      ),
     };
   } else if (!pre) {
     card = ma.appointmentAt && new Date(ma.appointmentAt) > new Date()
