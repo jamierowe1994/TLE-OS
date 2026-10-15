@@ -8,6 +8,7 @@ import DiaryGrid from "@/components/DiaryGrid";
 import { DiaryOwnerTag } from "@/components/Wire";
 import { PressButton } from "@/components/Bits";
 import CancelAppointment from "@/components/CancelAppointment";
+import CancelViewing, { canCancelViewing, targetFromAppt } from "@/components/CancelViewing";
 import { KIND_META, minutesOf, type Appt } from "@/lib/diary";
 import { useMyDiary, refreshDiary } from "@/lib/diary-store";
 
@@ -457,6 +458,14 @@ export default function DiaryCalendar({
                   onDone={() => setSelId(null)}
                   className="w-full rounded-full border border-line/80 px-4 py-2 text-[12px] font-semibold text-muted transition-colors hover:border-ink hover:text-ink disabled:opacity-50"
                 />
+                {/* A booked viewing, cancelled from the diary itself (Lorna, 15 Oct 2026). */}
+                {canCancelViewing(sel) && (
+                  <CancelViewing
+                    target={targetFromAppt(sel)}
+                    onDone={() => setSelId(null)}
+                    className="w-full rounded-full border border-line/80 px-4 py-2 text-[12px] font-semibold text-muted transition-colors hover:border-ink hover:text-ink disabled:opacity-50"
+                  />
+                )}
               </div>
 
               <p className="mt-4 text-[10px] leading-relaxed text-muted">

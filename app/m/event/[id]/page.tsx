@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import PhoneCancelViewing from "@/components/m/PhoneCancelViewing";
 import type { Appt } from "@/lib/diary";
 import type { PhonePerson } from "@/app/api/m/people/route";
 import type { PhoneEventFacts } from "@/app/api/m/event/route";
@@ -241,6 +242,13 @@ function Event({ appt }: { appt: Appt }) {
           <DoodleIcon name="camera" size={18} /> Scan Their ID
         </Link>
       )}
+      <PhoneCancelViewing
+        appt={appt}
+        back="/m"
+        diaryKey={DIARY_KEY}
+        buttonClass="flex h-14 w-full items-center justify-center rounded-2xl border border-line/70 bg-card text-[15px] font-semibold text-accent-dark active:bg-panel disabled:opacity-60"
+        cardClass="mt-6 rounded-[20px] border border-line/70 bg-card p-4"
+      />
     </>
   );
 }

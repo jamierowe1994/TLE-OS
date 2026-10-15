@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from "next/server";
-import { hasDb } from "@/lib/db";
+import { hasDb, q } from "@/lib/db";
 import { TEST_REFUSAL, testDetails, testLandlord, testListingViewings, testPortals, testPublication } from "@/lib/test-listing-answers";
 import { isTestId } from "@/lib/test-overlay";
 import { whoIs } from "@/lib/admin";
@@ -34,6 +34,19 @@ export async function GET(req: NextRequest) {
 
   try {
     const all = await fetchViewingsFor(id, property);
+    /* Cancelled ones still to come (Lorna, 15 Oct 2026): REX stops returning
+       an entry once it is cancelled, so the tab dropped it without a word.
+       The ledger keeps it, marked, and it is listed as Cancelled. */
+    if (hasDb()) {
+      const have = new Set(all.map((v) => v.id));
+      const off = await q<{ payload: Viewing }>(
+        `SELECT payload FROM os_viewings
+          WHERE cancelled AND kind = 'viewing' AND starts_at > NOW() - INTERVAL '1 day'
+            AND (listing_id = $1 OR ($2::text IS NOT NULL AND property_id = $2))`,
+        [id, property]
+      ).catch(() => []);
+      for (const r of off) if (r.payload?.id && !have.has(r.payload.id)) all.push({ ...r.payload, cancelled: true, status: "Cancelled" });
+    }
     const contactIds = [...new Set(all.flatMap((v) => v.contacts.map((c) => c.id)))];
     let leadIds = await leadIdsByContact(contactIds);
     /* Kept AFTER the reply when every viewer already has a lead (2 Oct

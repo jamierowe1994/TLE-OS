@@ -194,3 +194,57 @@ export async function removeFromOutlook(userId: string, key: string): Promise<{ 
   forgetOutlookDiary(userId);
   return { ok: true, detail: "Taken out of your Outlook calendar." };
 }
+
+/**
+ * Take out the copy of a cancelled viewing that REX put in the agent's Outlook
+ * (Lorna's ticket, 15 Oct 2026). Some people's REX copies its diary into their
+ * Outlook (lib/rex-outlook-sync); when the OS cancels the REX entry, REX's
+ * copy in Outlook is left to REX's own sync, which "often doesn't save" - and
+ * the viewing stays in their calendar. Only an entry starting at exactly that
+ * time whose subject names the viewer (or, with no surname, the street) is
+ * taken, and never one the OS made itself (those go by removeFromOutlook).
+ */
+export async function removeOutlookTwin(
+  userId: string,
+  v: { startsAt: string; minutes: number; who: string; address: string }
+): Promise<{ ok: boolean; detail: string }> {
+  let token: string;
+  try {
+    token = await msAccessTokenFor(userId);
+  } catch {
+    return { ok: false, detail: "Your Outlook is not connected, so check your calendar yourself." };
+  }
+  const start = new Date(v.startsAt);
+  if (Number.isNaN(start.getTime())) return { ok: false, detail: "No time to look for." };
+  const from = new Date(start.getTime() - 60_000).toISOString();
+  const to = new Date(start.getTime() + Math.max(15, v.minutes) * 60_000 + 60_000).toISOString();
+  const res = await fetch(
+    `${GRAPH}/me/calendarView?startDateTime=${encodeURIComponent(from)}&endDateTime=${encodeURIComponent(to)}&$select=id,subject,start,categories,isCancelled&$top=50`,
+    { headers: { Authorization: `Bearer ${token}`, Prefer: 'outlook.timezone="UTC"' }, cache: "no-store", signal: AbortSignal.timeout(8000) }
+  ).catch(() => null);
+  if (!res?.ok) return { ok: false, detail: "Outlook didn't answer, so check your calendar yourself." };
+  const j = (await res.json().catch(() => ({}))) as { value?: { id?: string; subject?: string; start?: { dateTime?: string }; categories?: string[]; isCancelled?: boolean }[] };
+  const parts = v.who.trim().split(/\s+/);
+  const word = (parts.length > 1 ? parts[parts.length - 1] : v.address.split(",")[0]).trim().toLowerCase();
+  if (word.length < 3) return { ok: false, detail: "Nothing to match it by." };
+  const twins = (j.value ?? []).filter((e) => {
+    if (!e.id || e.isCancelled || (e.categories ?? []).includes("TLE OS")) return false;
+    const s = e.start?.dateTime;
+    const at = s ? new Date(/[zZ]$/.test(s) ? s : `${s}Z`).getTime() : NaN;
+    return Math.abs(at - start.getTime()) < 60_000 && (e.subject ?? "").toLowerCase().includes(word);
+  });
+  if (!twins.length) return { ok: true, detail: "" };
+  let gone = 0;
+  for (const e of twins) {
+    const del = await fetch(`${GRAPH}/me/events/${encodeURIComponent(e.id!)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    }).catch(() => null);
+    if (del && (del.ok || del.status === 404)) gone++;
+  }
+  forgetOutlookDiary(userId);
+  return gone === twins.length
+    ? { ok: true, detail: "Taken out of your Outlook calendar." }
+    : { ok: false, detail: "Outlook would not take it out - remove it from your calendar yourself." };
+}

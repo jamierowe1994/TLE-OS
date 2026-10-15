@@ -34,6 +34,7 @@ async function ours(userId: string): Promise<FeedEntry[]> {
        FROM os_appointments
       WHERE author_id = $1
         AND rex_event_id IS NULL
+        AND cancelled_at IS NULL
         AND starts_at > NOW() - INTERVAL '21 days'
         AND starts_at < NOW() + INTERVAL '90 days'
       ORDER BY starts_at`,

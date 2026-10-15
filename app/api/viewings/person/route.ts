@@ -20,6 +20,6 @@ export async function GET(req: NextRequest) {
   const contactId = req.nextUrl.searchParams.get("contact");
   const email = req.nextUrl.searchParams.get("email");
   const leadId = req.nextUrl.searchParams.get("lead");
-  const { upcoming, past } = await viewingsForPerson({ contactId, email, leadId }).catch(() => ({ upcoming: [], past: [] }));
-  return NextResponse.json({ ok: true, upcoming, past });
+  const { upcoming, past, cancelled } = await viewingsForPerson({ contactId, email, leadId }).catch(() => ({ upcoming: [], past: [], cancelled: [] }));
+  return NextResponse.json({ ok: true, upcoming, past, cancelled });
 }

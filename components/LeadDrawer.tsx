@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSlideOver } from "@/lib/use-slide-over";
+import CancelViewing, { type CancelTarget } from "@/components/CancelViewing";
 import { registerOpen } from "@/lib/open-record";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -559,7 +560,18 @@ function CardTitle({ icon, children }: { icon: string; children: React.ReactNode
   );
 }
 /** One viewing on a person's record: when, where, how it went, and the way in. */
-function ViewingLine({ v, onConfirm }: { v: PersonViewing; onConfirm?: (v: PersonViewing) => void }) {
+function ViewingLine({
+  v,
+  onConfirm,
+  cancelTarget,
+  onCancelled,
+}: {
+  v: PersonViewing;
+  onConfirm?: (v: PersonViewing) => void;
+  /** Given, the line offers Cancel viewing (Lorna, 15 Oct 2026). */
+  cancelTarget?: CancelTarget;
+  onCancelled?: (said: string) => void;
+}) {
   const been = new Date(v.startsAt).getTime() < Date.now();
   const when = new Date(v.startsAt).toLocaleString("en-GB", {
     timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
@@ -588,10 +600,19 @@ function ViewingLine({ v, onConfirm }: { v: PersonViewing; onConfirm?: (v: Perso
             <DoodleIcon name="mail" size={11} /> Send confirmation
           </button>
         )}
+        {!been && !v.cancelled && cancelTarget && (
+          <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <CancelViewing
+              target={cancelTarget}
+              onDone={(said) => onCancelled?.(said)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-line/80 px-2.5 py-1 text-[10.5px] font-semibold transition-colors hover:border-accent-dark hover:text-accent-dark disabled:opacity-50"
+            />
+          </span>
+        )}
       </span>
       <span className="flex shrink-0 items-center gap-2">
-        <Pill tone={been ? (v.feedback ? "good" : "neutral") : "accent"}>
-          {been ? (v.feedback ? "Feedback in" : "Been") : "Booked"}
+        <Pill tone={v.cancelled ? "neutral" : been ? (v.feedback ? "good" : "neutral") : "accent"}>
+          {v.cancelled ? "Cancelled" : been ? (v.feedback ? "Feedback in" : "Been") : "Booked"}
         </Pill>
         {v.listingId && (
           <a
@@ -1475,12 +1496,15 @@ function LeadDrawerBody({
   /* Every viewing this person has, live (lib/person-viewings) - what they
      have seen and what is booked. `booked` is what was just made in this
      session, before the ledger has read it back from REX. */
-  const [theirs, setTheirs] = useState<{ upcoming: PersonViewing[]; past: PersonViewing[] }>({ upcoming: [], past: [] });
+  const [theirs, setTheirs] = useState<{ upcoming: PersonViewing[]; past: PersonViewing[]; cancelled: PersonViewing[] }>({ upcoming: [], past: [], cancelled: [] });
   /* Bumped when a confirmation is sent from the Viewings tab, so the line
      re-reads and says so. */
   const [confirmTick, setConfirmTick] = useState(0);
+  /* Bumped when a viewing is cancelled from the record, so it re-reads. */
+  const [cancelTick, setCancelTick] = useState(0);
+  const [cancelSaid, setCancelSaid] = useState<string | null>(null);
   useEffect(() => {
-    if (!lead || leadSide(lead) !== "tenant") return setTheirs({ upcoming: [], past: [] });
+    if (!lead || leadSide(lead) !== "tenant") return setTheirs({ upcoming: [], past: [], cancelled: [] });
     const q = new URLSearchParams();
     if (lead.contactId) q.set("contact", String(lead.contactId));
     if (contact.email || lead.email) q.set("email", contact.email || lead.email);
@@ -1489,13 +1513,13 @@ function LeadDrawerBody({
     let live = true;
     fetch(`/api/viewings/person?${q}`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((j: { ok?: boolean; upcoming?: PersonViewing[]; past?: PersonViewing[] } | null) => {
-        if (live && j?.ok) setTheirs({ upcoming: j.upcoming ?? [], past: j.past ?? [] });
+      .then((j: { ok?: boolean; upcoming?: PersonViewing[]; past?: PersonViewing[]; cancelled?: PersonViewing[] } | null) => {
+        if (live && j?.ok) setTheirs({ upcoming: j.upcoming ?? [], past: j.past ?? [], cancelled: j.cancelled ?? [] });
       })
       .catch(() => { /* the record reads fine without it */ });
     return () => { live = false; };
     /* Re-read when a booking is made here, so the new one appears at once. */
-  }, [lead, contact.email, booked.length, confirmTick]);
+  }, [lead, contact.email, booked.length, confirmTick, cancelTick]);
   const theirViewings = [...theirs.upcoming, ...theirs.past];
   /* A viewing in their diary puts them on Viewings, whatever REX's stage
      word says - so a lead with a viewing booked opens on step 4 every time,
@@ -1530,6 +1554,22 @@ function LeadDrawerBody({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
   const nextViewing = theirs.upcoming[0] ?? null;
+  /* The one the top button cancels (Lorna, 15 Oct 2026): their next booked
+     viewing, when the OS can call it off - not a test file's. */
+  const cancellable = (v: PersonViewing | null) => Boolean(v && !v.test && (v.id.startsWith("rex-") || v.id.startsWith("os-")));
+  const cancelTargetOf = (v: PersonViewing): CancelTarget => ({
+    id: v.id,
+    startsAt: v.startsAt,
+    mins: v.mins,
+    who: v.booking?.applicantName || lead?.name || "",
+    email: v.booking?.applicantEmail ?? (contact.email || lead?.email || null),
+    address: v.address,
+    unaccompanied: Boolean(v.booking?.unaccompanied),
+  });
+  const viewingCancelled = (said: string) => {
+    setCancelSaid(said);
+    setCancelTick((n) => n + 1);
+  };
 
 
   if (!lead || !detail) return null;
@@ -2221,7 +2261,7 @@ function LeadDrawerBody({
   /** Their viewings, newest first, each opening the property it was on. */
   const viewingsPanel = (
     <div>
-      {theirViewings.length === 0 ? (
+      {theirViewings.length === 0 && theirs.cancelled.length === 0 ? (
         <p className="text-[13px] text-muted">Nothing booked, and nothing viewed yet. Book one from the top of the record.</p>
       ) : (
         <ul className="space-y-2.5">
@@ -2230,6 +2270,8 @@ function LeadDrawerBody({
             <ViewingLine
               key={v.id}
               v={v}
+              cancelTarget={cancellable(v) ? cancelTargetOf(v) : undefined}
+              onCancelled={viewingCancelled}
               onConfirm={(pv) =>
                 pv.booking &&
                 setConfirming({
@@ -2242,6 +2284,10 @@ function LeadDrawerBody({
                 })
               }
             />
+          ))}
+          {theirs.cancelled.length > 0 && <li className="pt-2 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">Cancelled</li>}
+          {theirs.cancelled.map((v) => (
+            <ViewingLine key={v.id} v={v} />
           ))}
           {theirs.past.length > 0 && <li className="pt-2 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">Been to</li>}
           {theirs.past.map((v) => (
@@ -2994,13 +3040,33 @@ function LeadDrawerBody({
                         </p>
                       </div>
                                             <div className="mt-5 flex flex-wrap gap-2.5">
-                        <PressButton
-                          onClick={() => { setBookMode("viewing"); setBooking(true); }}
-                          className="press-ring inline-flex items-center gap-2 rounded-full bg-brown px-5 py-2.5 text-[13px] font-semibold text-white"
-                        >
-                          <DoodleIcon name="calendar" size={14} />
-                          Book a viewing
-                        </PressButton>
+                        {/* A viewing already booked: the button cancels it rather
+                            than offering to book (Lorna and James, 15 Oct 2026).
+                            Booking another stays one press away. */}
+                        {cancellable(nextViewing) && nextViewing ? (
+                          <>
+                            <CancelViewing
+                              target={cancelTargetOf(nextViewing)}
+                              onDone={viewingCancelled}
+                              className="press-ring inline-flex items-center gap-2 rounded-full bg-brown px-5 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60"
+                            />
+                            <PressButton
+                              onClick={() => { setBookMode("viewing"); setBooking(true); }}
+                              className="press-ring inline-flex items-center gap-2 rounded-full border border-brown/60 px-5 py-2.5 text-[13px] font-semibold text-brown transition-colors hover:bg-brown hover:text-white"
+                            >
+                              <DoodleIcon name="calendar" size={14} />
+                              Book another
+                            </PressButton>
+                          </>
+                        ) : (
+                          <PressButton
+                            onClick={() => { setBookMode("viewing"); setBooking(true); }}
+                            className="press-ring inline-flex items-center gap-2 rounded-full bg-brown px-5 py-2.5 text-[13px] font-semibold text-white"
+                          >
+                            <DoodleIcon name="calendar" size={14} />
+                            Book a viewing
+                          </PressButton>
+                        )}
                         <PressButton
                           onClick={() => setEmailing(true)}
                           className="press-ring inline-flex items-center gap-2 rounded-full border border-brown/60 px-5 py-2.5 text-[13px] font-semibold text-brown transition-colors hover:bg-brown hover:text-white"
@@ -3012,6 +3078,13 @@ function LeadDrawerBody({
                         {!lostNow && lostButton}
                         {archiveButton}
                       </div>
+                      {cancellable(nextViewing) && nextViewing ? (
+                        <p className="mt-2 text-[11.5px] text-muted">
+                          Booked: {nextViewing.address}, {whenFull(nextViewing.startsAt)}
+                          {theirs.upcoming.length > 1 ? ` (and ${theirs.upcoming.length - 1} more on the Viewings tab)` : ""}
+                        </p>
+                      ) : null}
+                      {cancelSaid && <p className="mt-2 text-[11.5px] text-accent-dark">{cancelSaid}</p>}
                       {lostRow}
                       <div className="mt-4 [&>div]:mt-0 [&>div]:border-t-0 [&>div]:pt-0 [&_button]:px-2.5 [&_button]:py-1 [&_button]:text-[11px]">{tagsRow}</div>
                     </div>

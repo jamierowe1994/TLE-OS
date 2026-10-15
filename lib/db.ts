@@ -1901,6 +1901,10 @@ ALTER TABLE os_appointments ADD COLUMN IF NOT EXISTS lead_id TEXT;
 ALTER TABLE os_appointments ADD COLUMN IF NOT EXISTS contact_email TEXT;
 ALTER TABLE os_appointments ADD COLUMN IF NOT EXISTS booking JSONB;
 CREATE INDEX IF NOT EXISTS os_appointments_lead ON os_appointments (lead_id);
+-- A viewing cancelled in the OS (Lorna's ticket, 15 Oct 2026; lib/viewing-cancelled).
+-- Kept rather than deleted, so the person's record still says it was booked and
+-- called off; every diary, list and reminder reads only the ones still on.
+ALTER TABLE os_appointments ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
 
 -- A person's OS diary and their PERSONAL calendar, both read only (Amrit's
 -- ticket, 14 Oct 2026; lib/personal-calendar). Opt-in from Profile.

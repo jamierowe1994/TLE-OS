@@ -4,7 +4,9 @@ import { ensureRexLink, type OsUser } from "@/lib/users";
 import { rexCall } from "@/lib/rex";
 import { changeRexEvent } from "@/lib/rex-diary-write";
 import { rexCopiesToOutlook } from "@/lib/rex-outlook-sync";
-import { putInOutlook, removeFromOutlook, icsFile } from "@/lib/outlook-calendar";
+import { putInOutlook, removeFromOutlook, removeOutlookTwin, icsFile } from "@/lib/outlook-calendar";
+import { heldDiary } from "@/lib/diary-cache";
+import { recordViewingCancelled, viewingCancelledAlready } from "@/lib/viewing-cancelled";
 import { escapeHtml, renderTleEmail } from "@/lib/email/tle-emails";
 import { sendAsAgent } from "@/lib/send-as-agent";
 
@@ -62,14 +64,22 @@ type OsRow = { id: string; author_id: string | null; starts_at: Date; booking: R
  * A viewing REX did take still has a row here (rex_event_id set), which the
  * confirmation and the landlord's portal read, so that follows REX's move.
  */
+/* The Outlook entry was made under the key of the time it was BOOKED at,
+   so that key is kept on the row and reused for every later move. */
+function outlookKeyOf(row: OsRow): string {
+  const b = row.booking ?? {};
+  if (typeof b.outlookKey === "string" && b.outlookKey) return b.outlookKey;
+  /* A booking's own time when it reads as one; the row's otherwise - a bad
+     stored value must not stop a cancel. */
+  const booked = new Date(String(b.startsAt ?? ""));
+  const at = Number.isNaN(booked.getTime()) ? new Date(row.starts_at) : booked;
+  return `viewing|${String(b.leadId ?? "")}|${b.listingId != null ? String(b.listingId) : "-"}|${at.toISOString()}`;
+}
+
 async function moveOurRow(me: OsUser, row: OsRow, p: ViewingChangeInput, steps: Record<string, string>): Promise<void> {
   if (!hasDb()) return;
   const b = row.booking ?? {};
-  /* The Outlook entry was made under the key of the time it was BOOKED at,
-     so that key is kept on the row and reused for every later move. */
-  const outlookKey = typeof b.outlookKey === "string" && b.outlookKey
-    ? b.outlookKey
-    : `viewing|${String(b.leadId ?? "")}|${b.listingId != null ? String(b.listingId) : "-"}|${new Date(String(b.startsAt ?? row.starts_at)).toISOString()}`;
+  const outlookKey = outlookKeyOf(row);
   if (p.action !== "move" || !p.newStartsAt) return;
   const at = new Date(p.newStartsAt).toISOString();
   await q(
@@ -107,51 +117,133 @@ async function moveOurRow(me: OsUser, row: OsRow, p: ViewingChangeInput, steps: 
 const pretty = (iso: string) =>
   new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" });
 
-export async function changeViewing(me: OsUser, p: ViewingChangeInput): Promise<{ said: string; steps: Record<string, string> }> {
+/** REX's way of saying an entry is not there (any more) - cancelled entries vanish. */
+const isNotFound = (detail: string | null | undefined) => /not found|could not find/i.test(detail ?? "");
+
+export async function changeViewing(me: OsUser, p: ViewingChangeInput): Promise<{ ok: boolean; said: string; steps: Record<string, string> }> {
   const steps: Record<string, string> = {};
+  const cancel = p.action === "cancel";
+
+  /* ALREADY OFF (Lorna, 15 Oct 2026). Her second and third presses on the
+     same viewing were each a fresh attempt; now a second press says so and
+     emails nobody again. The held diary is told once more in case a copy
+     from another process still had it. */
+  if (cancel) {
+    const before = await viewingCancelledAlready(p.viewingId);
+    if (before) {
+      await recordViewingCancelled(p.viewingId, before).catch(() => undefined);
+      return { ok: true, said: "That viewing is already cancelled and out of the diary.", steps: { os: "Already cancelled." } };
+    }
+  }
+
+  /* The diary's own copy of it: whose it is, when REX can no longer say. */
+  const held = p.viewingId.startsWith("rex-")
+    ? (await heldDiary().catch(() => null))?.book.appts.find((a) => a.id === p.viewingId) ?? null
+    : null;
+  const myRexEmail = hasDb()
+    ? (await q<{ rex_email: string }>(`SELECT rex_email FROM os_rex_tokens WHERE user_id = $1`, [me.id]).catch(() => []))[0]?.rex_email?.toLowerCase() ?? null
+    : null;
+  const mineByDiary = (a: { agentEmail?: string; agent?: string } | null) => {
+    if (!a) return null;
+    const owner = (a.agentEmail ?? "").toLowerCase();
+    if (owner) return owner === (me.email ?? "").toLowerCase() || owner === myRexEmail;
+    return Boolean(me.name) && (a.agent ?? "").trim().toLowerCase() === (me.name ?? "").trim().toLowerCase();
+  };
 
   /* REX: the diary id is rex-<event id> for anything REX holds. */
   const eventId = p.viewingId.startsWith("rex-") ? p.viewingId.slice(4) : null;
+  /* Gone from REX already: cancelled there by an earlier press or by hand.
+     The OS still has to catch up - its diary, ledger and the applicant. */
+  let goneFromRex = false;
   /* WHOSE VIEWING. Any agent could cancel or move any REX event by its id
      (18 Sep sweep, item 4). An agent changes their own diary: the event's
      organiser by REX id, or by name when REX gives no id. Owners and the
      office are not gated. A refusal changes nothing and emails nobody. */
+  let ownViewing: boolean | null = null;
   if (eventId && me.role === "agent") {
     const read = await rexCall("CalendarEvents", "read", { id: eventId }).catch(() => null);
     const ev = (read?.ok ? read.result : null) as { organiser_user?: { id?: unknown; name?: string | null } | null; calendar?: { owner_user?: { id?: unknown; name?: string | null } | null } | null } | null;
-    if (!ev) return { said: "That viewing could not be read just now, so nothing was changed. Try again in a minute.", steps: { rex: "Not read." } };
-    const who = ev.organiser_user ?? ev.calendar?.owner_user ?? null;
-    const mine = await ensureRexLink(me).catch(() => null);
-    const byId = who?.id != null && mine ? String(who.id) === String(mine) : null;
-    const byName = (who?.name ?? "").trim().toLowerCase() === (me.name ?? "").trim().toLowerCase() && Boolean(me.name);
-    if (!(byId === true || (byId === null && byName))) {
-      const first = (who?.name ?? "").trim().split(/\s+/)[0];
-      return { said: first ? `That viewing is ${first}'s. Only they can cancel or move it.` : "That viewing is another agent's. Only they can cancel or move it.", steps: { rex: "Not changed." } };
+    if (!ev) {
+      /* REX no longer returns a cancelled entry, so "not found" after an
+         earlier press is the expected answer - and the diary's copy says
+         whose it was. Anything else (REX not answering) changes nothing. */
+      if (cancel && isNotFound(read?.error) && mineByDiary(held) === true) {
+        goneFromRex = true;
+        ownViewing = true;
+      } else {
+        return { ok: false, said: "That viewing could not be read just now, so nothing was changed. Try again in a minute.", steps: { rex: "Not read." } };
+      }
+    } else {
+      const who = ev.organiser_user ?? ev.calendar?.owner_user ?? null;
+      const mine = await ensureRexLink(me).catch(() => null);
+      const byId = who?.id != null && mine ? String(who.id) === String(mine) : null;
+      const byName = (who?.name ?? "").trim().toLowerCase() === (me.name ?? "").trim().toLowerCase() && Boolean(me.name);
+      if (!(byId === true || (byId === null && byName))) {
+        const first = (who?.name ?? "").trim().split(/\s+/)[0];
+        return { ok: false, said: first ? `That viewing is ${first}'s. Only they can cancel or move it.` : "That viewing is another agent's. Only they can cancel or move it.", steps: { rex: "Not changed." } };
+      }
+      ownViewing = true;
     }
   }
+  if (ownViewing === null && held) ownViewing = mineByDiary(held);
+
   /* OURS ONLY: a viewing REX never took. The same rule on whose it is - an
      agent moves their own - read off the row rather than REX. */
   const ourId = p.viewingId.startsWith("os-") ? p.viewingId.slice(3) : null;
+  let ourCancelled = false;
   if (ourId) {
     const rows = hasDb()
       ? await q<OsRow>(`SELECT id, author_id, starts_at, booking FROM os_appointments WHERE id = $1`, [ourId]).catch(() => [])
       : [];
     const row = rows[0];
-    if (!row) return { said: "That viewing could not be found, so nothing was changed.", steps: { os: "Not found." } };
+    if (!row) return { ok: false, said: "That viewing could not be found, so nothing was changed.", steps: { os: "Not found." } };
     if (me.role === "agent" && row.author_id && row.author_id !== me.id) {
-      return { said: "That viewing is another agent's. Only they can cancel or move it.", steps: { os: "Not changed." } };
+      return { ok: false, said: "That viewing is another agent's. Only they can cancel or move it.", steps: { os: "Not changed." } };
     }
-    await moveOurRow(me, row, p, steps);
+    ownViewing = row.author_id === me.id;
+    if (cancel) {
+      /* A viewing only the OS holds used to stay booked: the cancel never
+         touched its row or its Outlook entry (15 Oct 2026). */
+      ourCancelled = true;
+      steps.os = "Cancelled.";
+      if (row.booking) {
+        const key = outlookKeyOf(row);
+        const known = hasDb() ? await q(`SELECT 1 FROM os_case_state WHERE kind = 'outlook-event' AND record_id = $1`, [key]).catch(() => []) : [];
+        if (known.length) {
+          const gone = await removeFromOutlook(me.id, key).catch(() => ({ ok: false, detail: "Outlook would not take it out - remove it from your calendar yourself." }));
+          steps.outlook = gone.detail;
+        }
+      }
+    } else {
+      await moveOurRow(me, row, p, steps);
+    }
   }
 
-  if (eventId) {
+  if (eventId && !goneFromRex) {
     const r = await changeRexEvent({
       userId: me.id,
       eventId,
-      ...(p.action === "cancel" ? { cancel: { reason: p.reason === "applicant" ? "applicant" : "organiser" } } : {}),
+      ...(cancel ? { cancel: { reason: p.reason === "applicant" ? "applicant" : "organiser" } } : {}),
       ...(p.action === "move" && p.newStartsAt ? { moveTo: { startsAt: p.newStartsAt, minutes: p.minutes } } : {}),
-    }).catch((e) => ({ ok: false, detail: e instanceof Error ? e.message : "REX did not answer" }));
-    steps.rex = r.ok ? (p.action === "cancel" ? "Cancelled in REX." : "Moved in REX.") : `Not changed in REX: ${r.detail}.`;
+    }).catch((e) => ({ ok: false, detail: e instanceof Error ? e.message : "the diary did not answer" }));
+    if (!r.ok && cancel && isNotFound(r.detail)) goneFromRex = true;
+    /* Agent screens never name REX; its own words stay in the server log. */
+    else if (r.ok) steps.rex = cancel ? "Cancelled in the diary." : "Moved in the diary.";
+    else {
+      console.error("[viewing-change] diary refused", eventId, r.detail);
+      steps.rex = /rex/i.test(r.detail) ? "The diary didn't take it - try again in a minute." : `Not changed: ${r.detail}.`;
+    }
+  }
+  if (goneFromRex) steps.rex = "Cancelled in the diary.";
+
+  /* A cancel that did not take is said as one, and nothing else is done:
+     before, the applicant was emailed and the screen said cancelled while the
+     viewing stayed booked. */
+  if (cancel && !ourCancelled && !steps.rex?.startsWith("Cancelled")) {
+    return { ok: false, said: `Nothing was changed - the viewing is still booked. ${steps.rex ?? ""}`.trim(), steps };
+  }
+  if (p.action === "move" && eventId && !steps.rex?.startsWith("Moved")) {
+    return { ok: false, said: `Nothing was changed - the viewing is still at its old time. ${steps.rex ?? ""}`.trim(), steps };
   }
 
   /* Outlook: only a viewing booked through the OS has an entry, found through
@@ -162,14 +254,15 @@ export async function changeViewing(me: OsUser, p: ViewingChangeInput): Promise<
       [eventId]
     ).catch(() => []);
     const outlookKey = rows[0] ? `viewing|${rows[0].record_id}` : null;
+    const rexCopies = await rexCopiesToOutlook(me.id).catch(() => false);
     /* Their REX copies its diary into Outlook (lib/rex-outlook-sync): REX's
        copy moves or goes with the change above, and ours, if there is one
        from before that was known, is the duplicate - taken out, not moved. */
-    if (outlookKey && steps.rex?.startsWith(p.action === "cancel" ? "Cancelled" : "Moved") && (await rexCopiesToOutlook(me.id))) {
+    if (outlookKey && rexCopies) {
       const gone = await removeFromOutlook(me.id, outlookKey).catch(() => null);
-      steps.outlook = gone?.ok ? "Your Outlook follows REX; the extra copy was taken out." : "Your Outlook follows REX.";
+      steps.outlook = gone?.ok ? "Your Outlook follows the diary; the extra copy was taken out." : "Your Outlook follows the diary.";
     } else if (outlookKey) {
-      if (p.action === "cancel") {
+      if (cancel) {
         steps.outlook = (await removeFromOutlook(me.id, outlookKey)).detail;
       } else if (p.newStartsAt) {
         const o = await putInOutlook({
@@ -184,6 +277,30 @@ export async function changeViewing(me: OsUser, p: ViewingChangeInput): Promise<
         steps.outlook = o.ok ? "Moved in your Outlook calendar." : o.detail;
       }
     }
+    /* REX's own copy in their Outlook (Lorna's REX copies 13 of 14 entries):
+       left to REX's sync it can stay, and the viewing looks booked in Outlook
+       and in our diary. Their own viewing only - never anyone else's calendar. */
+    if (cancel && rexCopies && ownViewing === true) {
+      const twin = await removeOutlookTwin(me.id, { startsAt: p.oldStartsAt, minutes: p.minutes, who: p.applicantName, address: p.address }).catch(() => null);
+      if (twin?.detail && !steps.outlook?.startsWith("Taken out")) steps.outlook = twin.detail;
+    }
+  }
+
+  /* Cancelled: every copy the OS holds is told now (lib/viewing-cancelled) -
+     the ledger, our own row, the held diary - so it shows as cancelled
+     everywhere and no reminder text or email goes for it. */
+  if (cancel) {
+    await recordViewingCancelled(p.viewingId, {
+      at: new Date().toISOString(),
+      by: me.id,
+      byName: me.name || "",
+      startsAt: p.oldStartsAt,
+      mins: p.minutes,
+      address: p.address,
+      who: p.applicantName,
+      agentEmail: held?.agentEmail ?? (ownViewing ? myRexEmail ?? me.email ?? null : null),
+      reason: p.reason === "applicant" ? "applicant" : "organiser",
+    });
   }
 
   /* REX took it, so it moved there - and our own row of it follows, because
@@ -195,7 +312,24 @@ export async function changeViewing(me: OsUser, p: ViewingChangeInput): Promise<
 
   /* The applicant - unless the booker is showing them the email instead. */
   if (p.notify === false) {
-    return { said: [steps.outlook, steps.rex].filter(Boolean).join(" ") || "Moved.", steps };
+    return { ok: true, said: [steps.outlook, steps.rex].filter(Boolean).join(" ") || "Moved.", steps };
+  }
+  /* Opened from the diary or the phone, a viewing REX holds often carries no
+     email - the diary entry has none. The ledger's copy of the viewing and
+     our own booking of it do, so the applicant is still told (15 Oct 2026). */
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((p.applicantEmail ?? "").trim()) && hasDb()) {
+    const found = eventId
+      ? await q<{ email: string | null }>(
+          `SELECT COALESCE(
+              (SELECT c->>'email' FROM os_viewings v, jsonb_array_elements(v.contacts) c WHERE v.id = $1 AND COALESCE(c->>'email', '') <> '' LIMIT 1),
+              (SELECT booking->>'applicantEmail' FROM os_appointments WHERE rex_event_id = $2 AND COALESCE(booking->>'applicantEmail', '') <> '' LIMIT 1)
+            ) AS email`,
+          [p.viewingId, eventId]
+        ).catch(() => [])
+      : ourId
+        ? await q<{ email: string | null }>(`SELECT booking->>'applicantEmail' AS email FROM os_appointments WHERE id = $1`, [ourId]).catch(() => [])
+        : [];
+    if (found[0]?.email) p = { ...p, applicantEmail: found[0].email };
   }
   const to = (p.applicantEmail ?? "").trim();
   const firstName = p.applicantName.trim().split(/\s+/)[0] || "there";
@@ -250,5 +384,5 @@ export async function changeViewing(me: OsUser, p: ViewingChangeInput): Promise<
     }
   }
 
-  return { said: [steps.applicant, steps.outlook, steps.rex].filter(Boolean).join(" "), steps };
+  return { ok: true, said: [steps.applicant, steps.outlook, steps.rex ?? steps.os].filter(Boolean).join(" "), steps };
 }

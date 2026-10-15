@@ -66,11 +66,11 @@ type Row = {
 const iso = (d: Date | string) => new Date(d).toISOString();
 
 /** Upcoming first, then the ones that have been, newest first. */
-export async function viewingsForPerson(p: { contactId?: string | null; email?: string | null; leadId?: string | null }): Promise<{ upcoming: PersonViewing[]; past: PersonViewing[] }> {
+export async function viewingsForPerson(p: { contactId?: string | null; email?: string | null; leadId?: string | null }): Promise<{ upcoming: PersonViewing[]; past: PersonViewing[]; cancelled: PersonViewing[] }> {
   const email = (p.email ?? "").trim().toLowerCase();
   const contactId = (p.contactId ?? "").trim();
   const leadId = (p.leadId ?? "").trim();
-  if (!hasDb() || (!email && !contactId && !leadId)) return { upcoming: [], past: [] };
+  if (!hasDb() || (!email && !contactId && !leadId)) return { upcoming: [], past: [], cancelled: [] };
 
   /* Containment on the contacts array: by REX contact id, and by email. A GIN
      index on contacts would make this an index hit; at today's size (a few
@@ -107,8 +107,8 @@ export async function viewingsForPerson(p: { contactId?: string | null; email?: 
      the copy. One REX did take comes back above as rex-<event> once the diary
      has been read, and is not shown twice. The confirmation's state rides
      along, so the record can offer to send it. */
-  const own = await q<{ id: string; starts_at: Date; mins: number; where_at: string; author_name: string; rex_event_id: string | null; booking: OsBooking | null }>(
-    `SELECT id, starts_at, mins, where_at, author_name, rex_event_id, booking
+  const own = await q<{ id: string; starts_at: Date; mins: number; where_at: string; author_name: string; rex_event_id: string | null; booking: OsBooking | null; cancelled_at: Date | null }>(
+    `SELECT id, starts_at, mins, where_at, author_name, rex_event_id, booking, cancelled_at
        FROM os_appointments
       WHERE kind = 'viewing' AND booking IS NOT NULL
         AND (($1 <> '' AND lead_id = $1) OR ($2 <> '' AND LOWER(contact_email) = $2))
@@ -129,8 +129,8 @@ export async function viewingsForPerson(p: { contactId?: string | null; email?: 
       listingId: b.listingId,
       address: a.where_at || b.address || "A property",
       agent: a.author_name || null,
-      status: "booked",
-      cancelled: false,
+      status: a.cancelled_at ? "Cancelled" : "booked",
+      cancelled: Boolean(a.cancelled_at),
       feedback: false,
       booking: b,
       confirmed: sent ? `Confirmation sent to ${sent.to} on ${sentWords(sent.sentAt)}.` : null,
@@ -158,8 +158,16 @@ export async function viewingsForPerson(p: { contactId?: string | null; email?: 
 
   const now = Date.now();
   const live = all.filter((v) => !v.cancelled);
+  /* Called off and not yet past (Lorna, 15 Oct 2026): the record says so,
+     rather than the viewing simply vanishing or still reading Booked. */
+  const ids = new Set<string>();
+  const cancelled = all
+    .filter((v) => v.cancelled && new Date(v.startsAt).getTime() >= now - 86_400_000)
+    .filter((v) => (ids.has(v.id) ? false : (ids.add(v.id), true)))
+    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
   return {
     upcoming: live.filter((v) => new Date(v.startsAt).getTime() >= now).sort((a, b) => a.startsAt.localeCompare(b.startsAt)),
     past: live.filter((v) => new Date(v.startsAt).getTime() < now).sort((a, b) => b.startsAt.localeCompare(a.startsAt)),
+    cancelled,
   };
 }

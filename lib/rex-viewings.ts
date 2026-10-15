@@ -239,6 +239,10 @@ export async function recordViewings(incoming: Viewing[]): Promise<void> {
      (9 Oct 2026): it is held time that never goes to REX, and the first
      viewing booked at its start matched it, which hid the slot. */
   for (const v of viewings) {
+    /* Never a cancelled one (15 Oct 2026): Lorna rebooked the 3pm she had
+       just cancelled, and the new booking would have been tied to the dead
+       entry and hidden with it. */
+    if (v.cancelled) continue;
     if (!v.listingLabel && !v.title) continue;
     const street = (v.listingLabel ?? v.title).split(",")[0].trim().toLowerCase();
     if (street.length < 4) continue;
@@ -246,6 +250,7 @@ export async function recordViewings(incoming: Viewing[]): Promise<void> {
       `UPDATE os_appointments SET rex_event_id = $1, synced_at = COALESCE(synced_at, NOW())
         WHERE rex_event_id IS NULL
           AND kind <> 'slot'
+          AND cancelled_at IS NULL
           AND ABS(EXTRACT(EPOCH FROM (starts_at - $2::timestamptz))) <= 120
           AND (LOWER(where_at) LIKE $3 OR LOWER(title) LIKE $3)`,
       [v.id, v.startsAt, `%${street}%`]
