@@ -8,6 +8,7 @@ import {
 import { requireCapability } from "@/lib/admin";
 import { R2_BUCKET, r2Configured, safeName, SCOPES, withR2 } from "@/lib/r2";
 import { readLibraryFile } from "@/lib/library-reader";
+import { shelfFolder } from "@/lib/library-files";
 
 /**
  * The File Store's upload, in pieces (30 Sep 2026).
@@ -26,7 +27,7 @@ import { readLibraryFile } from "@/lib/library-reader";
  * CORS rules, which is the reason /api/r2/upload gives for going through the
  * server in the first place.
  *
- *   POST { action: "start", name, type, size }        -> { key, uploadId, partSize }
+ *   POST { action: "start", name, type, size, folder? } -> { key, uploadId, partSize }
  *   PUT  ?key&uploadId&part=<1..n>   body: the bytes   -> { etag }
  *   POST { action: "complete", key, uploadId, parts }  -> { key, name, size }
  *   POST { action: "abort", key, uploadId }            -> { ok }
@@ -57,6 +58,7 @@ export async function POST(req: NextRequest) {
   let body: {
     action?: string;
     name?: string;
+    folder?: string;
     type?: string;
     size?: number;
     key?: string;
@@ -84,7 +86,9 @@ export async function POST(req: NextRequest) {
         415
       );
     }
-    const key = `${SHELF}${Date.now()}-${safeName(name)}`;
+    /* Into a folder when one is open on the page (lib/library-files). */
+    const folder = shelfFolder(body.folder);
+    const key = `${SHELF}${folder ? `${folder}/` : ""}${Date.now()}-${safeName(name)}`;
     try {
       const made = await withR2((c) =>
         c.send(

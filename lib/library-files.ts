@@ -10,9 +10,39 @@ import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
  * (lib/r2-access), and a download goes through /api/r2/file, which signs a
  * five-minute link - nothing here hands out a bucket URL.
  */
-export type LibraryFile = { key: string; name: string; size: number; uploadedAt: string | null; href: string };
+export type LibraryFile = { key: string; name: string; folder: string; size: number; uploadedAt: string | null; href: string };
 
 const PREFIX = "library/shelf/";
+
+/**
+ * Folders on the shelf (Francesca, 7 Oct 2026: "the carousel posts will be
+ * all over the place otherwise"). A folder is one more step in the key,
+ * library/shelf/<folder>/<timestamp>-<name>, so everything stays under the
+ * shelf: the same access rule, the same delete and lock checks, and Steve
+ * still reads and finds it. One level only - a carousel is a folder of
+ * slides, not a tree. An empty folder is held by a zero-byte object whose
+ * key ends in "/", which every list skips as a file.
+ */
+export function shelfFolder(raw: unknown): string {
+  return String(raw ?? "")
+    .replace(/[/\\]+/g, " ")
+    .replace(/[^\w\- ]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 60);
+}
+
+/** "library/shelf/Pro carousel/1729-slide.png" -> { folder: "Pro carousel", name: "slide.png" }. */
+export function shelfParts(key: string): { folder: string; name: string } {
+  const tail = key.startsWith(PREFIX) ? key.slice(PREFIX.length) : key;
+  const cut = tail.lastIndexOf("/");
+  return {
+    folder: cut > 0 ? tail.slice(0, cut) : "",
+    /* "<timestamp>-5_Renters Rights Act FAQ.pdf": the upload stamp and
+       the team's own ordering number come off for reading. */
+    name: tail.slice(cut + 1).replace(/^\d+-/, "").replace(/^\d{1,3}_/, ""),
+  };
+}
 
 export async function shelfFiles(): Promise<LibraryFile[]> {
   if (!r2Configured) return [];
@@ -24,9 +54,7 @@ export async function shelfFiles(): Promise<LibraryFile[]> {
       if (!o.Key || o.Key.endsWith("/")) continue;
       out.push({
         key: o.Key,
-        /* "<timestamp>-5_Renters Rights Act FAQ.pdf": the upload stamp and
-           the team's own ordering number come off for reading. */
-        name: o.Key.slice(PREFIX.length).replace(/^\d+-/, "").replace(/^\d{1,3}_/, ""),
+        ...shelfParts(o.Key),
         size: o.Size ?? 0,
         uploadedAt: o.LastModified ? new Date(o.LastModified).toISOString() : null,
         href: `/api/r2/file?key=${encodeURIComponent(o.Key)}&save=1`,
