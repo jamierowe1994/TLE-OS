@@ -5,9 +5,10 @@ import { managedBookFor } from "@/lib/managed-book-cache";
 import { landlordsOf } from "@/lib/managed-book";
 import { currentLets } from "@/lib/current-lets";
 import { getComplianceBook } from "@/lib/compliance-cache";
-import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
+import { getAllPropolyDeals, type BusinessDeal } from "@/lib/business/propoly-deals";
 import { isOwnDeal, whoIsRexUser } from "@/lib/propoly-only-lets";
-import { getApplications } from "@/lib/applications";
+import { getApplications, type Application } from "@/lib/applications";
+import type { ManagedProperty } from "@/lib/portfolio-types";
 import { peopleLike } from "@/lib/rex-people-store";
 import { leadSide, type Lead } from "@/lib/leads-sample";
 import { searchLikes, searchMatches, searchRank, searchTokens } from "@/lib/search-match";
@@ -80,7 +81,72 @@ function snippetOf(text: string, needle: string): string {
   return `${start > 0 ? "…" : ""}${t.slice(start, start + 110).trim()}${start + 110 < t.length ? "…" : ""}`;
 }
 
-async function cachedLeads(rexUserId: string | null): Promise<Lead[]> {
+/* One row of each kind, as search shows it - shared with Recent
+   (lib/search-recent, 15 Oct 2026), so a file you opened lately looks the
+   same as the file found by typing. */
+type Row = Omit<FoundItem, "score" | "place"> & { score: number };
+
+export const leadRow = (l: Lead): Row => {
+  const side = leadSide(l);
+  return {
+    id: `lead:${l.id}`,
+    group: side,
+    label: side === "tenant" ? "Tenant enquiry" : "Landlord enquiry",
+    title: l.name,
+    sub: [l.preferred || l.area, l.source].filter((x) => x && x !== "—").join(" · "),
+    href: `/leads?open=${encodeURIComponent(l.id)}`,
+    score: 3,
+  };
+};
+export const contactRow = (r: { id: string; kind: string; name: string; email: string; mobile: string; address: string }): Row => {
+  const id = `os-${r.id}`;
+  const side = r.kind === "landlord" ? "landlord" : "tenant";
+  return { id: `lead:${id}`, group: side, label: side === "tenant" ? "Tenant" : "Landlord", title: r.name || r.email, sub: r.address || r.email || r.mobile, href: `/leads?open=${encodeURIComponent(id)}`, score: 2 };
+};
+export const homeRow = (h: ManagedProperty): Row => ({
+  id: `home:${h.listingId}`, group: "portfolio", label: "Managed home", title: h.name, sub: [h.locality, h.service].filter(Boolean).join(" · "), href: `/portfolio/${encodeURIComponent(h.listingId)}`, image: h.image ?? null, score: 2,
+});
+export const listingRow = (l: { id: string | number; name: string; locality: string }, image: string | null): Row => ({
+  id: `listing:${l.id}`, group: "portfolio", label: "Listing", title: l.name, sub: `${l.locality} · listing ${l.id}`, href: `/listings?open=${encodeURIComponent(l.id)}`, image, score: 2,
+});
+export const appRow = (a: Application): Row => {
+  const names = a.applicants.map((x) => x.name).join(", ");
+  return { id: `app:${a.id}`, group: "tenant", label: "Application", title: names || "Application", sub: a.property, href: `/applications?open=${encodeURIComponent(a.id)}`, score: 2 };
+};
+export const dealRow = (d: BusinessDeal, rexUserId: string | null): Row => ({
+  id: `deal:${d.app.id}`,
+  group: "backoffice",
+  label: "Let in progress",
+  title: d.app.propertyName,
+  sub: [d.statusKey.replace(/_/g, " "), d.app.tenants.map((t) => t.name).join(", ")].filter(Boolean).join(" · "),
+  href: rexUserId ? `/applications?deal=${encodeURIComponent(d.app.id)}` : `/pre-tenancy?deal=${encodeURIComponent(d.app.id)}`,
+  score: 2,
+});
+export const appraisalRow = (r: { id: string; landlord: string; address: string; stage: string }): Row => ({
+  id: `ma:${r.id}`, group: "landlord", label: "Market appraisal", title: r.landlord, sub: [r.address, r.stage.replace(/_/g, " ")].filter(Boolean).join(" · "), href: `/market-appraisals/${encodeURIComponent(r.id)}`, score: 2,
+});
+export const certRow = (p: { id: string | number; name: string; locality: string }, image: string | null): Row => ({
+  id: `cert:${p.id}`, group: "backoffice", label: "Certificates", title: p.name, sub: p.locality, href: `/compliance?open=${encodeURIComponent(p.id)}`, image, score: 1,
+});
+export const inspectionRow = (r: { id: string; kind: string; status: string; property_name: string; due_at: string | Date | null }, image: string | null): Row => {
+  const due = r.due_at ? new Date(r.due_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+  return { id: `insp:${r.id}`, group: "backoffice", label: "Inspection", title: r.property_name, sub: [r.kind, r.status, due && `due ${due}`].filter(Boolean).join(" · "), href: `/inspections?open=${encodeURIComponent(r.id)}`, image, score: 1 };
+};
+export const invoiceRow = (r: { id: string; number: string | null; status: string; property: string; to_name: string }): Row => ({
+  id: `inv:${r.id}`, group: "backoffice", label: "Invoice", title: r.number ? `Invoice ${r.number}` : "Draft invoice", sub: [r.to_name, r.property, r.status].filter(Boolean).join(" · "), href: `/maintenance/invoices/${encodeURIComponent(r.id)}`, score: 1,
+});
+export const worksRow = (r: { id: string; ref: number; status: string; property_name: string; title: string; contractor_name: string; category: string }, image: string | null): Row => ({
+  id: `wo:${r.id}`,
+  group: "works",
+  label: `Works order ${r.ref}`,
+  title: r.title || r.category || "A job",
+  sub: [r.property_name, r.status.replace(/_/g, " "), r.contractor_name].filter(Boolean).join(" · "),
+  href: `/maintenance?open=${encodeURIComponent(r.id)}`,
+  image,
+  score: 1,
+});
+
+export async function cachedLeads(rexUserId: string | null): Promise<Lead[]> {
   if (!hasDb()) return [];
   const key = rexUserId ? `leads:v2:agent:${rexUserId}` : "leads:v2:all";
   const rows = await q<{ payload: { book?: { leads?: Lead[] } } }>(`SELECT payload FROM os_cache WHERE key = $1`, [key]).catch(() => []);
@@ -129,16 +195,7 @@ export async function searchAll(
   /* ── Tenant and landlord enquiries ───────────────────────────────────── */
   for (const l of leads) {
     if (!searchMatches(needle, l.name, l.email, l.phone, l.address, l.preferred)) continue;
-    const side = leadSide(l);
-    add({
-      id: `lead:${l.id}`,
-      group: side,
-      label: side === "tenant" ? "Tenant enquiry" : "Landlord enquiry",
-      title: l.name,
-      sub: [l.preferred || l.area, l.source].filter((x) => x && x !== "—").join(" · "),
-      href: `/leads?open=${encodeURIComponent(l.id)}`,
-      score: 3,
-    });
+    add(leadRow(l));
   }
 
   const jobs: Promise<void>[] = [];
@@ -155,11 +212,9 @@ export async function searchAll(
       [likes, whole, me.email]
     ).then((rows) => {
       for (const r of rows) {
-        const id = `os-${r.id}`;
-        if (leadById.has(id)) continue;
-        const side = r.kind === "landlord" ? "landlord" : "tenant";
+        if (leadById.has(`os-${r.id}`)) continue;
         const inNotes = !searchMatches(needle, r.name, r.email, r.mobile, r.address) && r.notes;
-        add({ id: `lead:${id}`, group: side, label: side === "tenant" ? "Tenant" : "Landlord", title: r.name || r.email, sub: r.address || r.email || r.mobile, href: `/leads?open=${encodeURIComponent(id)}`, snippet: inNotes ? snippetOf(r.notes, needle) : null, score: 2 });
+        add({ ...contactRow(r), snippet: inNotes ? snippetOf(r.notes, needle) : null });
       }
     })
   );
@@ -188,7 +243,7 @@ export async function searchAll(
   for (const h of homes) {
     const img = h.image ?? null;
     if (searchMatches(needle, h.name, h.locality, h.address) || (/^\d{5,}$/.test(needle.trim()) && (String(h.listingId).includes(needle.trim()) || String(h.propertyId ?? "").includes(needle.trim())))) {
-      add({ id: `home:${h.listingId}`, group: "portfolio", label: "Managed home", title: h.name, sub: [h.locality, h.service].filter(Boolean).join(" · "), href: `/portfolio/${encodeURIComponent(h.listingId)}`, image: img, score: 2 }, `${h.name}, ${h.locality}`);
+      add(homeRow(h), `${h.name}, ${h.locality}`);
     }
     for (const t of h.tenants) {
       if (searchMatches(needle, t.name, t.email, t.phone)) {
@@ -217,7 +272,7 @@ export async function searchAll(
     if (homeIds.has(String(l.id))) continue;
     const pid = (l as { propertyId?: string | null }).propertyId ?? null;
     if (searchMatches(needle, l.name, l.locality) || (/^\d{5,}$/.test(needle.trim()) && (String(l.id).includes(needle.trim()) || String(pid ?? "").includes(needle.trim())))) {
-      add({ id: `listing:${l.id}`, group: "portfolio", label: "Listing", title: l.name, sub: `${l.locality} · listing ${l.id}`, href: `/listings?open=${encodeURIComponent(l.id)}`, image: imageByListing.get(String(l.id)) ?? null, score: 2 }, `${l.name}, ${l.locality}`);
+      add(listingRow(l, imageByListing.get(String(l.id)) ?? null), `${l.name}, ${l.locality}`);
     }
   }
 
@@ -239,7 +294,7 @@ export async function searchAll(
   for (const a of applications) {
     const names = a.applicants.map((x) => x.name).join(", ");
     if (!searchMatches(needle, a.property, names, ...a.applicants.map((x) => x.email ?? ""), ...a.applicants.map((x) => x.phone ?? ""))) continue;
-    add({ id: `app:${a.id}`, group: "tenant", label: "Application", title: names || "Application", sub: a.property, href: `/applications?open=${encodeURIComponent(a.id)}`, score: 2 }, `${a.property}, ${a.locality}`);
+    add(appRow(a), `${a.property}, ${a.locality}`);
   }
 
   /* People read from REX: last among tenants - remembered, not ours. */
@@ -257,7 +312,7 @@ export async function searchAll(
       [likes, whole, me.name, me.email]
     ).then((rows) => {
       for (const r of rows) {
-        add({ id: `ma:${r.id}`, group: "landlord", label: "Market appraisal", title: r.landlord, sub: [r.address, r.stage.replace(/_/g, " ")].filter(Boolean).join(" · "), href: `/market-appraisals/${encodeURIComponent(r.id)}`, score: 2 }, r.address);
+        add(appraisalRow(r), r.address);
       }
     })
   );
@@ -268,20 +323,12 @@ export async function searchAll(
     if (rexUserId && (!meRex || !isOwnDeal(d, meRex))) continue;
     const tenants = d.app.tenants.map((t) => t.name).join(", ");
     if (!searchMatches(needle, d.app.propertyName, tenants, ...d.app.tenants.map((t) => t.email ?? ""))) continue;
-    add({
-      id: `deal:${d.app.id}`,
-      group: "backoffice",
-      label: "Let in progress",
-      title: d.app.propertyName,
-      sub: [d.statusKey.replace(/_/g, " "), tenants].filter(Boolean).join(" · "),
-      href: rexUserId ? `/applications?deal=${encodeURIComponent(d.app.id)}` : `/pre-tenancy?deal=${encodeURIComponent(d.app.id)}`,
-      score: 2,
-    }, [d.app.propertyName, d.app.locality].filter(Boolean).join(", "));
+    add(dealRow(d, rexUserId), [d.app.propertyName, d.app.locality].filter(Boolean).join(", "));
   }
   for (const p of compliance?.book.properties ?? []) {
     if (!whole && !myPropertyIds.has(String(p.id))) continue;
     if (!searchMatches(needle, p.name, p.locality)) continue;
-    add({ id: `cert:${p.id}`, group: "backoffice", label: "Certificates", title: p.name, sub: p.locality, href: `/compliance?open=${encodeURIComponent(p.id)}`, image: imageByProperty.get(String(p.id)) ?? null, score: 1 }, `${p.name}, ${p.locality}`);
+    add(certRow(p, imageByProperty.get(String(p.id)) ?? null), `${p.name}, ${p.locality}`);
   }
   jobs.push(
     sql<{ id: string; kind: string; status: string; listing_id: string; property_label: string; agent_email: string; answers: unknown }>(
@@ -305,8 +352,7 @@ export async function searchAll(
     ).then((rows) => {
       for (const r of rows) {
         if (!whole && !(r.listing_id && myListingIds.has(r.listing_id)) && !(r.property_id && myPropertyIds.has(r.property_id))) continue;
-        const due = r.due_at ? new Date(r.due_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
-        add({ id: `insp:${r.id}`, group: "backoffice", label: "Inspection", title: r.property_name, sub: [r.kind, r.status, due && `due ${due}`].filter(Boolean).join(" · "), href: `/inspections?open=${encodeURIComponent(r.id)}`, image: (r.listing_id && imageByListing.get(r.listing_id)) || null, score: 1 });
+        add(inspectionRow(r, (r.listing_id && imageByListing.get(r.listing_id)) || null));
       }
     })
   );
@@ -321,7 +367,7 @@ export async function searchAll(
         for (const r of rows) {
           /* Found in the reference or the notes: say where. */
           const why = searchMatches(needle, r.number, r.to_name, r.property) ? null : snippetOf([r.reference, r.notes].filter(Boolean).join(" - "), needle);
-          add({ id: `inv:${r.id}`, group: "backoffice", label: "Invoice", title: r.number ? `Invoice ${r.number}` : "Draft invoice", sub: [r.to_name, r.property, r.status].filter(Boolean).join(" · "), href: `/maintenance/invoices/${encodeURIComponent(r.id)}`, snippet: why, score: 1 });
+          add({ ...invoiceRow(r), snippet: why });
         }
       })
     );
@@ -340,15 +386,8 @@ export async function searchAll(
         if (!whole && !(r.property_id && (myPropertyIds.has(r.property_id) || myListingIds.has(r.property_id)))) continue;
         const inText = !searchMatches(needle, String(r.ref), r.title, r.property_name, r.locality, r.tenant, r.landlord, r.contractor_name);
         add({
-          id: `wo:${r.id}`,
-          group: "works",
-          label: `Works order ${r.ref}`,
-          title: r.title || r.category || "A job",
-          sub: [r.property_name, r.status.replace(/_/g, " "), r.contractor_name].filter(Boolean).join(" · "),
-          href: `/maintenance?open=${encodeURIComponent(r.id)}`,
-          image: (r.property_id && (imageByProperty.get(r.property_id) || imageByListing.get(r.property_id))) || null,
+          ...worksRow(r, (r.property_id && (imageByProperty.get(r.property_id) || imageByListing.get(r.property_id))) || null),
           snippet: inText && r.description ? snippetOf(r.description, needle) : null,
-          score: 1,
         }, `${r.property_name}, ${r.locality}`);
       }
     })

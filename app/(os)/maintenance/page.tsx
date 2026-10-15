@@ -21,6 +21,7 @@ import JobDrawer from "@/components/maintenance/JobDrawer";
 import { Fact, OPEN, STATUS_LABEL, day, nextFor, pounds, type Property } from "@/components/maintenance/works-ui";
 import { searchMatches } from "@/lib/search-match";
 import { usePref } from "@/lib/prefs-store";
+import { useNoteVisit } from "@/lib/recent-visits";
 
 /**
  * Maintenance: every job on the managed book, reported through paid.
@@ -58,6 +59,7 @@ export default function Maintenance() {
   const [showClosed, setShowClosed] = useState(false);
   const [raising, setRaising] = useState<Kind | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  useNoteVisit(openId ? `wo:${openId}` : null);
   const [q, setQ] = useState("");
 
   const load = useCallback(() => {

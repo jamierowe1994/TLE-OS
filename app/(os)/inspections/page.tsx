@@ -19,6 +19,7 @@ import { asChecks, checkLines, checksDone, CHECKS } from "@/lib/inspection-check
 import { REPAIR_CATEGORIES, URGENCIES } from "@/lib/works-catalogue";
 import SaveChip, { SaveScopeProvider, useSaveReporter, useSaveScope } from "@/components/SaveChip";
 import { searchMatches } from "@/lib/search-match";
+import { useNoteVisit } from "@/lib/recent-visits";
 
 /**
  * Inspections: the visits we owe the book, and the permission that lets us in.
@@ -114,6 +115,7 @@ export default function Inspections() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"due" | "hand" | "done">("due");
   const [openId, setOpenId] = useState<string | null>(null);
+  useNoteVisit(openId ? `insp:${openId}` : null);
   const [q, setQ] = useState("");
 
   const load = useCallback(() => {

@@ -13,6 +13,7 @@ import {
   type CertKey, type CertStatus, type CompProperty,
 } from "@/lib/compliance";
 import { searchMatches } from "@/lib/search-match";
+import { useNoteVisit } from "@/lib/recent-visits";
 
 /**
  * Compliance — the page that keeps every home legal and every tenant safe.
@@ -73,6 +74,7 @@ export default function Compliance() {
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
+  useNoteVisit(openId ? `cert:${openId}` : null);
   /* ?open=<property id> from the search bar or the bell. */
   useEffect(() => {
     const wanted = new URLSearchParams(window.location.search).get("open");

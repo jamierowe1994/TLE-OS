@@ -51,6 +51,7 @@ import SaveChip, { SaveScopeProvider, useSaveReporter, useSaveScope } from "@/co
 import FileDocuments from "@/components/FileDocuments";
 import { fetchMe } from "@/lib/me";
 import { searchMatches } from "@/lib/search-match";
+import { useNoteVisit } from "@/lib/recent-visits";
 
 /* ------------------------------- data shapes ------------------------------- */
 
@@ -358,6 +359,7 @@ function Board({ user }: { user: UserProfile }) {
   const [agent, setAgent] = useState("all");
   const [showCancelled, setShowCancelled] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  useNoteVisit(openId ? `deal:${openId}` : null);
   // Which stage tab is active. Always opens on the first stage.
   const [tab, setTab] = useState<string>("deal_started");
   const [moreOpen, setMoreOpen] = useState(false);

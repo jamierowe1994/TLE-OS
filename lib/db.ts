@@ -2776,6 +2776,18 @@ CREATE TABLE IF NOT EXISTS os_tenancy_archive (
   last_seen      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS os_tenancy_archive_property ON os_tenancy_archive (property_id, last_seen DESC);
+-- Recent files (James, 15 Oct 2026): the files each person opened last, for
+-- Search before anything is typed (lib/search-recent). One row per person per
+-- file - opening it again moves visited_at - and forty kept per person. ref is
+-- search's own row id ("lead:<id>", "home:<listing id>", "wo:<id>"...).
+-- user_id is the os_users id of whoever is signed in. Never written to REX.
+CREATE TABLE IF NOT EXISTS os_recent_files (
+  user_id    TEXT NOT NULL,
+  ref        TEXT NOT NULL,
+  visited_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, ref)
+);
+CREATE INDEX IF NOT EXISTS os_recent_files_user ON os_recent_files (user_id, visited_at DESC);
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS service_basis TEXT;
 -- REX PM's own "Active letting agreement" list, read off its Properties screen
 -- (2 Oct 2026): pm_managed is the book REX PM's dashboard counts (527 that

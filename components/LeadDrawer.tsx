@@ -60,6 +60,7 @@ import LeadReassign from "@/components/LeadReassign";
 import TranslateText from "@/components/TranslateText";
 import Guarantors from "@/components/Guarantors";
 import type { PreOnBooking } from "@/lib/pre-send-time";
+import { useNoteVisit } from "@/lib/recent-visits";
 
 /**
  * The lead record, as a sheet that slides in from the right over a scrim.
@@ -643,6 +644,8 @@ type LeadDrawerProps = {
    save chip - a hook cannot hear a provider its own component renders. */
 export default function LeadDrawer(props: LeadDrawerProps) {
   const saves = useSaveScope(props.lead?.id ?? null);
+  /* Recent in Search (lib/search-recent). */
+  useNoteVisit(props.lead ? `lead:${props.lead.id}` : null);
   return (
     <SaveScopeProvider scope={saves}>
       <LeadDrawerBody {...props} saves={saves} />

@@ -6,7 +6,8 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import NotificationBell from "@/components/NotificationBell";
 import SignedOutWatch from "@/components/SignedOutWatch";
-import SearchPalette from "@/components/SearchPalette";
+import SearchPalette, { OPEN_SEARCH } from "@/components/SearchPalette";
+import DoodleIcon from "@/components/DoodleIcon";
 import LaunchNav from "@/components/LaunchNav";
 import { readTheme, type ThemeChoice } from "@/lib/theme";
 import { FRONT, BACK, railFor, type NavItem } from "@/lib/nav";
@@ -310,6 +311,18 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         <header className="flex items-center justify-between border-b border-line/70 px-5 py-4 lg:hidden">
           <span className="hand text-2xl">TLE OS</span>
           <span className="flex items-center gap-2">
+            {/* Search rides it too (15 Oct 2026): below lg the sidebar and
+                its Search are hidden, and a phone has no ⌘K, so Search for
+                anything - and Recent in it - had no way in on a phone. */}
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event(OPEN_SEARCH))}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 bg-page transition-colors hover:border-ink/40"
+              title="Search for anything"
+              aria-label="Search for anything"
+            >
+              <DoodleIcon name="search" size={16} className="text-ink" />
+            </button>
             {/* The bell rides the mobile bar so a screen without a page header
                 still has it - the page headers carry their own on desktop. */}
             <NotificationBell compact />

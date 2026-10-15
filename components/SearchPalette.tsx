@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
+import { refFromPath, useNoteVisit } from "@/lib/recent-visits";
 
 /**
  * Search for anything (10 Oct 2026). Search in the sidebar, or ⌘K, darkens
@@ -11,6 +12,11 @@ import DoodleIcon from "@/components/DoodleIcon";
  * five groups - Tenant, Landlord, Back office, Portfolio, Works orders - with
  * the photo of the home where there is one. Arrow keys move, Enter opens,
  * Escape closes. The searching is lib/search-all.
+ *
+ * Before anything is typed it shows Recent (15 Oct 2026): the files this
+ * person opened last, newest first, kept against their account so the phone
+ * has the same list (lib/search-recent). A file that is a page of its own is
+ * noted here as it opens; drawers note their own (lib/recent-visits).
  *
  * Opened from anywhere with: window.dispatchEvent(new Event(OPEN_SEARCH)).
  */
@@ -20,6 +26,9 @@ export const OPEN_SEARCH = "os-search-open";
 type Group = "tenant" | "landlord" | "backoffice" | "portfolio" | "works";
 type Item = { id: string; group: Group; label: string; title: string; sub: string; href: string; image?: string | null; snippet?: string | null; also?: Array<{ label: string; href: string }> };
 type Answer = { groups: { group: Group; items: Item[]; more: number }[]; reason?: string };
+
+/* The last list read, so the next open paints it at once while it re-reads. */
+let heldRecent: Item[] | null = null;
 
 const GROUPS: Record<Group, { title: string; icon: string }> = {
   tenant: { title: "Tenant", icon: "user" },
@@ -56,6 +65,64 @@ function Marked({ text, words }: { text: string; words: string[] }) {
   );
 }
 
+/** One row: the photo or initials, the name, what it is, the line under it. */
+function ResultRow({ it, i, on, words, onHover, onGo }: { it: Item; i: number; on: boolean; words: string[]; onHover: (i: number) => void; onGo: (it: Item) => void }) {
+  return (
+    <li>
+      <button
+        type="button"
+        data-row={i}
+        onMouseMove={() => onHover(i)}
+        onClick={() => onGo(it)}
+        className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition-colors ${on ? "bg-card shadow-[0_6px_18px_-12px_rgba(16,16,20,0.35)]" : ""}`}
+      >
+        {it.image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={it.image} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover" loading="lazy" />
+        ) : (
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-soft/60 text-[12px] font-semibold text-accent-dark">
+            {it.group === "tenant" || it.group === "landlord" ? initials(it.title) || <DoodleIcon name={GROUPS[it.group].icon} size={15} /> : <DoodleIcon name={GROUPS[it.group].icon} size={15} />}
+          </span>
+        )}
+        <span className="min-w-0 flex-1">
+          <span className="flex items-baseline gap-2">
+            <span className="truncate text-[13.5px] text-ink">
+              <Marked text={it.title} words={words} />
+            </span>
+            <span className="shrink-0 rounded-full bg-page px-2 py-0.5 text-[10px] font-semibold text-muted">{it.label}</span>
+          </span>
+          {it.sub && (
+            <span className="block truncate text-[11.5px] text-muted">
+              <Marked text={it.sub} words={words} />
+            </span>
+          )}
+          {it.snippet && (
+            <span className="mt-0.5 block line-clamp-2 text-[11.5px] leading-snug text-ink/70">
+              <Marked text={it.snippet} words={words} />
+            </span>
+          )}
+        </span>
+        {on && <span className="hidden shrink-0 text-[10.5px] text-muted sm:block">Enter</span>}
+      </button>
+      {/* The same home's other records (12 Oct 2026): one row, small links. */}
+      {it.also && it.also.length > 0 && (
+        <span className="flex flex-wrap gap-1.5 pb-1.5 pl-[68px] pr-3">
+          {it.also.map((a) => (
+            <button
+              key={a.href}
+              type="button"
+              onClick={() => onGo({ ...it, href: a.href })}
+              className="rounded-full border border-line/70 bg-white px-2.5 py-0.5 text-[11px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink"
+            >
+              {a.label} →
+            </button>
+          ))}
+        </span>
+      )}
+    </li>
+  );
+}
+
 export default function SearchPalette() {
   const router = useRouter();
   const pathname = usePathname();
@@ -69,6 +136,35 @@ export default function SearchPalette() {
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const seq = useRef(0);
+  const [recent, setRecent] = useState<Item[] | null>(heldRecent);
+  const [recentFailed, setRecentFailed] = useState(false);
+
+  /* A Portfolio home, a listing, a let, an appraisal or an invoice opening
+     as its own page is a visit. */
+  useNoteVisit(refFromPath(pathname));
+
+  /* Read afresh every time it opens: what was opened since, in order, and
+     only what this person can still open. */
+  useEffect(() => {
+    if (!open) return;
+    let live = true;
+    setRecentFailed(false);
+    fetch("/api/search/recent", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; items?: Item[] }) => {
+        if (!live) return;
+        if (!j.ok) {
+          setRecentFailed(true);
+          return;
+        }
+        heldRecent = j.items ?? [];
+        setRecent(heldRecent);
+      })
+      .catch(() => live && setRecentFailed(true));
+    return () => {
+      live = false;
+    };
+  }, [open]);
 
   const close = useCallback(() => {
     setShown(false);
@@ -124,7 +220,10 @@ export default function SearchPalette() {
     return () => window.clearTimeout(t);
   }, [q]);
 
-  const flat = useMemo(() => (answer?.groups ?? []).flatMap((g) => g.items), [answer]);
+  const typing = q.trim().length >= 2;
+  const flat = useMemo(() => (typing ? (answer?.groups ?? []).flatMap((g) => g.items) : recent ?? []), [typing, answer, recent]);
+  /* Back to the top of whichever list is showing. */
+  useEffect(() => setActive(0), [typing]);
   const words = useMemo(() => q.trim().split(/\s+/).filter((w) => w.length > 1), [q]);
 
   const go = useCallback(
@@ -196,11 +295,32 @@ export default function SearchPalette() {
         </label>
 
         <div ref={list} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
-          {q.trim().length < 2 ? (
-            <div className="px-3 py-6 text-center">
-              <p className="text-[13px] text-ink">Tenants, landlords, back office, portfolio and works orders.</p>
-              <p className="mt-1 text-[12px] text-muted">A name, an address, a phone number, an email, a word from a note or a job.</p>
-            </div>
+          {!typing ? (
+            recent && recent.length > 0 ? (
+              <section>
+                <h3 className="flex items-center gap-2 px-3 pb-1.5 pt-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">
+                  <DoodleIcon name="clock" size={12} />
+                  Recent
+                </h3>
+                <ul>
+                  {recent.map((it, i) => (
+                    <ResultRow key={it.id} it={it} i={i} on={i === active} words={[]} onHover={setActive} onGo={go} />
+                  ))}
+                </ul>
+                <p className="px-3 pb-1 pt-2 text-[11px] text-muted">Or type a name, an address, a phone number, an email, a word from a note or a job.</p>
+              </section>
+            ) : recent === null && !recentFailed ? (
+              <div className="flex items-center justify-center gap-2 py-8 text-[12px] text-muted">
+                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-line border-t-ink" />
+                Loading your recent files…
+              </div>
+            ) : (
+              <div className="px-3 py-6 text-center">
+                <p className="text-[13px] text-ink">Tenants, landlords, back office, portfolio and works orders.</p>
+                <p className="mt-1 text-[12px] text-muted">A name, an address, a phone number, an email, a word from a note or a job.</p>
+                {recentFailed && !recent && <p className="mt-3 text-[11px] text-muted">Your recent files didn&apos;t load just now.</p>}
+              </div>
+            )
           ) : failed ? (
             <p className="m-2 rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-3 text-[12.5px]">Search didn&apos;t answer just now. Try again in a moment.</p>
           ) : answer && !answer.groups.length && !busy ? (
@@ -222,61 +342,7 @@ export default function SearchPalette() {
                   {g.items.map((it) => {
                     row += 1;
                     const i = row;
-                    const on = i === active;
-                    return (
-                      <li key={it.id}>
-                        <button
-                          type="button"
-                          data-row={i}
-                          onMouseMove={() => setActive(i)}
-                          onClick={() => go(it)}
-                          className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition-colors ${on ? "bg-card shadow-[0_6px_18px_-12px_rgba(16,16,20,0.35)]" : ""}`}
-                        >
-                          {it.image ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={it.image} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover" loading="lazy" />
-                          ) : (
-                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-soft/60 text-[12px] font-semibold text-accent-dark">
-                              {g.group === "tenant" || g.group === "landlord" ? initials(it.title) || <DoodleIcon name={GROUPS[g.group].icon} size={15} /> : <DoodleIcon name={GROUPS[g.group].icon} size={15} />}
-                            </span>
-                          )}
-                          <span className="min-w-0 flex-1">
-                            <span className="flex items-baseline gap-2">
-                              <span className="truncate text-[13.5px] text-ink">
-                                <Marked text={it.title} words={words} />
-                              </span>
-                              <span className="shrink-0 rounded-full bg-page px-2 py-0.5 text-[10px] font-semibold text-muted">{it.label}</span>
-                            </span>
-                            {it.sub && (
-                              <span className="block truncate text-[11.5px] text-muted">
-                                <Marked text={it.sub} words={words} />
-                              </span>
-                            )}
-                            {it.snippet && (
-                              <span className="mt-0.5 block line-clamp-2 text-[11.5px] leading-snug text-ink/70">
-                                <Marked text={it.snippet} words={words} />
-                              </span>
-                            )}
-                          </span>
-                          {on && <span className="hidden shrink-0 text-[10.5px] text-muted sm:block">Enter</span>}
-                        </button>
-                        {/* The same home's other records (12 Oct 2026): one row, small links. */}
-                        {it.also && it.also.length > 0 && (
-                          <span className="flex flex-wrap gap-1.5 pb-1.5 pl-[68px] pr-3">
-                            {it.also.map((a) => (
-                              <button
-                                key={a.href}
-                                type="button"
-                                onClick={() => go({ ...it, href: a.href })}
-                                className="rounded-full border border-line/70 bg-white px-2.5 py-0.5 text-[11px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink"
-                              >
-                                {a.label} →
-                              </button>
-                            ))}
-                          </span>
-                        )}
-                      </li>
-                    );
+                    return <ResultRow key={it.id} it={it} i={i} on={i === active} words={words} onHover={setActive} onGo={go} />;
                   })}
                 </ul>
                 {g.more > 0 && <p className="px-3 pt-0.5 text-[11px] text-muted">And {g.more} more - add a word to narrow it down.</p>}
