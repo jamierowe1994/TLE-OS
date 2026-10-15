@@ -18,6 +18,7 @@ export default function PersonQuestions({
   self = false,
   field,
   label,
+  noRightToRent = false,
 }: {
   value: PersonAnswers;
   onChange: (next: PersonAnswers) => void;
@@ -25,6 +26,8 @@ export default function PersonQuestions({
   /** The screen's own input and label looks. */
   field: string;
   label: string;
+  /** A Scottish home: Right to rent is England only, so it is not asked (James, 15 Oct 2026). */
+  noRightToRent?: boolean;
 }) {
   const set = <K extends keyof PersonAnswers>(k: K, v: PersonAnswers[K]) => onChange({ ...value, [k]: v });
   /* You, a named person, or "they" until a name is typed - so it never reads "Does they work?". */
@@ -124,8 +127,8 @@ export default function PersonQuestions({
         </span>
       </label>
 
-      <YesNo q={`${Do} have a British or Irish passport?`} v={value.hasBritishPassport} on={(v) => set("hasBritishPassport", v)} />
-      {value.hasBritishPassport === false && (
+      {!noRightToRent && <YesNo q={`${Do} have a British or Irish passport?`} v={value.hasBritishPassport} on={(v) => set("hasBritishPassport", v)} />}
+      {!noRightToRent && value.hasBritishPassport === false && (
         <label className="mt-3 block">
           <span className={label}>{Their} share code</span>
           <input value={value.shareCode} onChange={(e) => set("shareCode", e.target.value.toUpperCase())} placeholder="From gov.uk/prove-right-to-rent" autoComplete="off" className={field} />

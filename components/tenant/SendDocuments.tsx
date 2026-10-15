@@ -21,7 +21,7 @@ const HINT: Record<string, string> = {
 
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 
-export default function SendDocuments({ sample = false }: { sample?: boolean }) {
+export default function SendDocuments({ sample = false, noRightToRent = false }: { sample?: boolean; noRightToRent?: boolean }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [docs, setDocs] = useState<TenantDocument[] | null>(null);
@@ -60,7 +60,7 @@ export default function SendDocuments({ sample = false }: { sample?: boolean }) 
     <>
       {err && <p className="mt-3 text-[13px] font-semibold text-accent-dark">{err}</p>}
       <ul className="mt-3 divide-y divide-line/60">
-        {TENANT_DOC_KINDS.map((k) => {
+        {TENANT_DOC_KINDS.filter((k) => !(noRightToRent && k.id === "right_to_rent")).map((k) => {
           const sent = (docs ?? []).filter((d) => d.kind === k.id);
           const last = sent[0];
           return (

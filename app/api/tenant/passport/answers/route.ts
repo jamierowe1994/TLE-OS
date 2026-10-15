@@ -4,6 +4,7 @@ import { findUserById } from "@/lib/users";
 import { can } from "@/lib/roles";
 import { findDonePassportByEmail, findPassportByEmail, getPassport } from "@/lib/passport";
 import { householdIncome } from "@/lib/passport-shape";
+import { forScreen, passportRules } from "@/lib/passport-scotland";
 
 /**
  * GET /api/tenant/passport/answers?email= -> the tenant's passport, every answer
@@ -15,6 +16,10 @@ import { householdIncome } from "@/lib/passport-shape";
  *
  * The agent's own passport for that email, or - for the office, which sees
  * everybody - a finished one of anyone's, exactly as the invite GET decides.
+ *
+ * &home= is the home on the agent's screen, when there is one: a Scottish home
+ * (or a Scottish passport) never shows nationality or Right to rent
+ * (lib/passport-scotland).
  */
 
 /* Postgres's "2026-10-07 12:00:03.05+00" as ISO, which every browser reads. */
@@ -43,6 +48,7 @@ export async function GET(req: NextRequest) {
           .then((d) => (d ? getPassport(d.token) : ownRec))
           .catch(() => ownRec);
   if (!rec) return NextResponse.json({ ok: false, error: "There's no passport for them yet." }, { status: 404 });
+  const rules = await passportRules(rec, req.nextUrl.searchParams.get("home"));
 
   return NextResponse.json({
     ok: true,
@@ -51,6 +57,7 @@ export async function GET(req: NextRequest) {
     submittedAt: iso(rec.submittedAt),
     updatedAt: iso(rec.updatedAt),
     householdIncome: householdIncome(rec.data).total,
-    data: rec.data,
+    data: forScreen(rec.data, rules),
+    rules,
   });
 }

@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { publicOrigin } from "@/lib/origin";
-import { createPassport, findDonePassportByEmail, findPassportByEmail, getPassport, markInvited } from "@/lib/passport";
+import { createPassport, findDonePassportByEmail, findPassportByEmail, getPassport, markInvited, markScottishHome } from "@/lib/passport";
+import { isScottish } from "@/lib/property-flags";
+import { forScreen, passportRules } from "@/lib/passport-scotland";
 import { can } from "@/lib/roles";
 import { householdIncome } from "@/lib/passport-shape";
 import { renderTleEmail } from "@/lib/email/tle-emails";
@@ -76,7 +78,8 @@ export async function GET(req: NextRequest) {
      on the lead as a tick, and its answers fill in the tenant's details, so
      the agent never re-asks what the tenant has already told us. */
   const full = existing ? (existing.token === ownDone?.token ? ownDone : await getPassport(existing.token).catch(() => null)) : null;
-  const d = full?.data;
+  /* Scotland: no Right to rent on the summary (lib/passport-scotland). */
+  const d = full ? forScreen(full.data, await passportRules(full, req.nextUrl.searchParams.get("home"))) : undefined;
   const yes = (b: boolean | null | undefined) => (b == null ? null : b ? "Yes" : "No");
   const income = d ? householdIncome(d).total : null;
   return NextResponse.json({
@@ -107,7 +110,7 @@ export async function POST(req: NextRequest) {
   const me = userId ? await findUserById(userId) : null;
   if (!me) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
 
-  let body: { name?: string; email?: string; address?: string; whenPretty?: string; again?: boolean; preview?: boolean };
+  let body: { name?: string; email?: string; address?: string; home?: string; whenPretty?: string; again?: boolean; preview?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -139,6 +142,10 @@ export async function POST(req: NextRequest) {
   }
 
   const existing = await findPassportByEmail(email, me.id);
+  /* Sent for a Scottish home: no nationality on it from now on, even when the
+     invite itself has already gone (lib/passport-scotland). */
+  const scottishHome = isScottish(body.home, body.address);
+  if (existing && scottishHome) await markScottishHome(existing.token).catch(() => null);
   if (existing?.invitedAt && !body.again) {
     return NextResponse.json({
       ok: true,
@@ -149,6 +156,7 @@ export async function POST(req: NextRequest) {
   }
 
   const token = existing?.token ?? (await createPassport({ name, email, agentId: me.id })).token;
+  if (scottishHome) await markScottishHome(token).catch(() => null);
   const link = `${publicOrigin(req)}/tenant/passport/${token}`;
   const firstName = name.split(/\s+/)[0] || "there";
   const whenPretty = (body.whenPretty ?? "").trim();

@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import PassportBook, { CLAY, COVER, PassportBack, photoPosition, type PassportFocus } from "@/components/PassportBook";
+import PassportBook, { CLAY, COVER, PassportBack, PassportRulesContext, photoPosition, type PassportFocus } from "@/components/PassportBook";
 import PassportScene, { PassportFlat } from "@/components/PassportScene";
 import PassportPhone, { PassportPhoneFinish } from "@/components/passport/PassportPhone";
 import {
@@ -13,7 +13,6 @@ import {
   isEmployed,
   isTrading,
   EMPTY_PASSPORT,
-  SECTIONS,
   answered,
   completeness,
   householdIncome,
@@ -23,8 +22,13 @@ import {
   otherName,
   othersCreditDone,
   withOtherCredit,
+  sectionsFor,
   type PassportData,
+  type PassportRules,
 } from "@/lib/passport-shape";
+
+/** An English passport: every question asked. Stable, so the card's context does not change each render. */
+const NO_RULES: PassportRules = {};
 
 /**
  * The tenant passport, filled in.
@@ -915,6 +919,7 @@ export default function PassportForm({
   agentName = "",
   demo = false,
   accountExists = false,
+  rules = NO_RULES,
 }: {
   token: string;
   initial: PassportData;
@@ -929,7 +934,11 @@ export default function PassportForm({
   /** This email already has a tenant login, so the end opens it rather than
    *  making another. */
   accountExists?: boolean;
+  /** A Scottish passport (lib/passport-scotland): no nationality and no Right
+   *  to rent section - not asked, not required, not on the card. */
+  rules?: PassportRules;
 }) {
+  const noNationality = Boolean(rules.noNationality);
   const [d, setD] = useState<PassportData>({ ...EMPTY_PASSPORT, ...initial });
   const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [submitted, setSubmitted] = useState(Boolean(submittedAt));
@@ -1024,7 +1033,7 @@ export default function PassportForm({
   /* Every other adult's credit (14 Oct 2026) is part of finishing HERE, on
      the form's own copy of the sections. SECTIONS itself is left alone so a
      passport finished before the question existed keeps its stamps. */
-  const formSections = SECTIONS.map((sc) => (sc.key === "declarations" ? { ...sc, done: (x: PassportData) => sc.done(x) && othersCreditDone(x) } : sc));
+  const formSections = sectionsFor(rules).map((sc) => ({ ...sc, done: (x: PassportData) => sc.done(x, rules) && (sc.key !== "declarations" || othersCreditDone(x)) }));
   const sections =
     questions.length > 0
       ? [
@@ -1039,8 +1048,8 @@ export default function PassportForm({
         ]
       : formSections;
 
-  const { done, total } = completeness(d);
-  const bar = answered(d);
+  const { done, total } = completeness(d, rules);
+  const bar = answered(d, rules);
   const household = householdIncome(d);
   const allDone = done === total && othersCreditDone(d) && (questions.length === 0 || extraDone);
   const lastStep = step === sections.length - 1;
@@ -1226,7 +1235,8 @@ export default function PassportForm({
               </div>
             ),
           },
-          {
+          /* Never asked in Scotland (Lianna Denholm, 15 Oct 2026). */
+          ...(noNationality ? [] : [{
             key: "nationality",
             done: Boolean(d.nationality.trim()),
             node: (
@@ -1240,12 +1250,13 @@ export default function PassportForm({
                 </Field>
               </>
             ),
-          },
+          }]),
           {
             key: "contact",
             done: Boolean(d.email.trim() && d.mobile.trim()),
             node: (
               <>
+                {noNationality && born && <Note>{born.long}. Cool, you were born on a {born.weekday}.</Note>}
                 <Note>Last one for this page: how we reach you.</Note>
                 <div className="grid gap-5 sm:grid-cols-2">
                   <Field label="Email address">
@@ -1754,6 +1765,7 @@ export default function PassportForm({
 
   if (phase === "loading" || phase === "done" || phase === "docked") {
     return (
+      <PassportRulesContext.Provider value={rules}>
       <div data-passport-page>
         <div className="hidden sm:block">
           <FinishStage data={d} phase={phase} token={token} demo={demo} onBack={() => setPhase("form")} />
@@ -1762,10 +1774,12 @@ export default function PassportForm({
           <PassportPhoneFinish d={d} phase={phase} token={token} demo={demo} onBack={() => setPhase("form")} />
         </div>
       </div>
+      </PassportRulesContext.Provider>
     );
   }
 
   return (
+    <PassportRulesContext.Provider value={rules}>
     <QuietFocus.Provider value={demo}>
     <PassportToken.Provider value={token}>
     <div
@@ -1927,10 +1941,12 @@ export default function PassportForm({
         accountExists={accountExists}
         pct={bar.pct}
         allDone={allDone}
+        rules={rules}
         onFinish={() => void finish()}
       />
     </div>
     </PassportToken.Provider>
     </QuietFocus.Provider>
+    </PassportRulesContext.Provider>
   );
 }

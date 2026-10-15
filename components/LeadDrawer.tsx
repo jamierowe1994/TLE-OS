@@ -856,7 +856,7 @@ function LeadDrawerBody({
     if (!lead || !passportEmail || leadSide(lead) !== "tenant") { setPassport(null); return; }
     let live = true;
     setPassportSaid(null);
-    fetch(`/api/tenant/passport/invite?email=${encodeURIComponent(passportEmail)}`, { cache: "no-store" })
+    fetch(`/api/tenant/passport/invite?email=${encodeURIComponent(passportEmail)}${enqProperty ? `&home=${encodeURIComponent(enqProperty)}` : ""}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => {
         if (live && j?.ok)
@@ -1039,7 +1039,8 @@ function LeadDrawerBody({
       const j = await fetch("/api/tenant/passport/invite", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: lead.name, email: passportEmail, again }),
+        /* The home they asked about: a Scottish one means no nationality (lib/passport-scotland). */
+        body: JSON.stringify({ name: lead.name, email: passportEmail, again, home: enqProperty }),
       }).then((r) => r.json());
       if (!j.ok) throw new Error(j.error ?? "That did not send.");
       setPassport((p) => ({ done: false, summary: null, ...(p ?? {}), sent: true, invitedAt: j.invitedAt ?? new Date().toISOString(), path: j.path ?? null }));
@@ -4195,7 +4196,7 @@ function LeadDrawerBody({
         onAddAnother={bookMode === "viewing" ? setBlockAnchor : undefined}
       />
       <AddToBlock anchor={blockAnchor} onClose={() => setBlockAnchor(null)} />
-      <PassportAnswers email={answersOpen ? passportEmail || null : null} name={lead.name} onClose={() => setAnswersOpen(false)} />
+      <PassportAnswers email={answersOpen ? passportEmail || null : null} name={lead.name} home={enqProperty} onClose={() => setAnswersOpen(false)} />
 
       {/* ── Recording the appraisal: what was found, what was said. Saving
           writes a real note and moves the record to the follow-up. ── */}

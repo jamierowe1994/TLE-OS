@@ -8,6 +8,7 @@ import { DateField, MovingIn, RentField, WorksList } from "@/components/offers/O
 import { OFFER_FIELDS, offerSubset, show, type OfferFieldKey, type OfferPassport } from "@/lib/offer-passport";
 import OtherAdults, { PartLinks, othersProblem, useOtherAdults } from "@/components/offers/OtherAdults";
 import { incomeOf } from "@/lib/offer-people-shape";
+import { isScottish } from "@/lib/property-flags";
 
 /**
  * The agent puts an offer forward FOR the tenant (1 Oct 2026, James after a
@@ -123,6 +124,9 @@ export default function AgentOfferRecorder({
     return v !== null && v !== "";
   };
   const name = first(tenant.name);
+  /* Right to Rent is England-only law: a Scottish home never asks it (James, 15 Oct 2026). */
+  const scottish = isScottish(home.locality, home.address);
+  const about = scottish ? ABOUT.filter((k) => k !== "hasBritishPassport" && k !== "shareCode") : ABOUT;
 
   const [step, setStep] = useState(0);
   const [amount, setAmount] = useState(String(home.askingPcm));
@@ -182,7 +186,7 @@ export default function AgentOfferRecorder({
   /* What is still unanswered, read once by the About step's check and by the
      passport card beside the form, so the card can never say "Nothing to
      re-ask" over a "Still to ask" (James, 13 Oct 2026, the E2E walk). */
-  const stillToAsk = ABOUT.filter((k) => relevant(k, pp) && k !== "adverseCreditNote" && k !== "shareCode" && (pp[k] === null || pp[k] === ""));
+  const stillToAsk = about.filter((k) => relevant(k, pp) && k !== "adverseCreditNote" && k !== "shareCode" && (pp[k] === null || pp[k] === ""));
   const stillToAskWords = stillToAsk.map((k) => OFFER_FIELDS.find((f) => f.key === k)!.label.toLowerCase()).join(", ");
   /* A test listing (negative id): nothing is written back to a passport. */
   const testFile = /^-\d+$/.test(home.id);
@@ -199,7 +203,7 @@ export default function AgentOfferRecorder({
     if (s === 2) {
       /* Asked of people who did their passport before these questions existed. */
       if (stillToAsk.length) return `Still to ask: ${stillToAskWords}.`;
-      const gap = othersProblem(parts);
+      const gap = othersProblem(parts, scottish);
       if (gap) return gap;
     }
     if (s === 3 && !consent) return `Tick to say ${name} has agreed the details are right.`;
@@ -463,7 +467,7 @@ export default function AgentOfferRecorder({
                   : `Ask ${name} these.${testFile ? " This is a test file, so their passport is left as it is." : " What you put in is saved to their passport, so they are never asked again."}`}
               </p>
               <div className="mt-3">
-                {ABOUT.filter((k) => relevant(k, pp)).map((k) => answer(k))}
+                {about.filter((k) => relevant(k, pp)).map((k) => answer(k))}
               </div>
               {flags.length > 0 && (
                 <div className="mt-3 rounded-[12px] bg-[#fdefec] px-4 py-3 text-[13px] text-[#9d4340]">
@@ -477,7 +481,7 @@ export default function AgentOfferRecorder({
                   <h3 className="mt-7 text-[16px] font-bold">The Other {parts.length === 1 ? "Adult" : "Adults"} Moving In</h3>
                   <p className="mt-1 text-[13px] text-muted">The landlord needs the same from each of them. Fill it in for them now, or send them their own link once the offer is saved.</p>
                   <div className="mt-3">
-                    <OtherAdults others={parts} onChange={setParts} actor="agent" field={inp} label={lbl} />
+                    <OtherAdults others={parts} onChange={setParts} actor="agent" field={inp} label={lbl} scottish={scottish} />
                   </div>
                 </>
               )}

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import PersonQuestions from "@/components/offers/PersonQuestions";
 import { emptyPerson, missingFrom, type PersonAnswers } from "@/lib/offer-people-shape";
+import { SCOTLAND } from "@/lib/passport-shape";
 
 /**
  * ONE ADULT'S PART OF AN OFFER (James, 14 Oct 2026).
@@ -16,7 +17,7 @@ import { emptyPerson, missingFrom, type PersonAnswers } from "@/lib/offer-people
 const field = "mt-1.5 block h-12 w-full min-w-0 rounded-[12px] border border-black/15 bg-white px-3.5 text-[14px] outline-none focus:border-accent-dark";
 const label = "text-[13px] font-semibold";
 
-type Part = { name: string; leadName: string; property: string; filled: boolean; answers: PersonAnswers };
+type Part = { name: string; leadName: string; property: string; filled: boolean; scottish?: boolean; answers: PersonAnswers };
 
 export default function OfferPartPage() {
   const { token } = useParams<{ token: string }>();
@@ -40,7 +41,7 @@ export default function OfferPartPage() {
 
   async function send() {
     setErr("");
-    const gaps = missingFrom(answers);
+    const gaps = missingFrom(answers, part?.scottish ? SCOTLAND : {});
     if (gaps.length) return setErr(`Still needed: ${gaps.join(", ")}.`);
     setBusy(true);
     const r = await fetch(`/api/tenant/offer-part/${encodeURIComponent(token)}`, {
@@ -85,13 +86,13 @@ export default function OfferPartPage() {
           <p className="text-[11.5px] font-semibold uppercase tracking-[0.16em] text-accent-dark">Your part of the offer</p>
           <h1 className="mt-1.5 text-[26px] font-bold leading-tight">{part.property}</h1>
           <p className="mt-2 text-[13.5px] leading-relaxed text-black/60">
-            {lead} has made an offer on {part.property} with you moving in too. The landlord needs the same from you as from {lead}: who you are, your work and income, and your right to rent. It takes about two minutes.
+            {lead} has made an offer on {part.property} with you moving in too. The landlord needs the same from you as from {lead}: who you are, your work and income{part.scottish ? "" : ", and your right to rent"}. It takes about two minutes.
           </p>
           {part.filled && (
             <p className="mt-3 rounded-[12px] bg-accent-soft/70 px-3.5 py-2.5 text-[12.5px] leading-snug">Your part is already in. Change anything here and send it again.</p>
           )}
           <div className="mt-6 rounded-2xl border border-black/10 bg-white p-5 sm:p-6">
-            <PersonQuestions value={answers} onChange={setAnswers} self field={field} label={label} />
+            <PersonQuestions value={answers} onChange={setAnswers} self field={field} label={label} noRightToRent={part.scottish} />
           </div>
           <p className="mt-4 text-[12px] leading-snug text-black/55">
             Your answers go only to The Letting Experts, for this offer and the referencing that follows it.

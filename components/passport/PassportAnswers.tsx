@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import PassportScene from "@/components/PassportScene";
-import { EMPTY_PASSPORT, isEmployed, isTrading, otherAdultCount, otherCredit, otherName, type PassportData } from "@/lib/passport-shape";
+import { PassportRulesContext } from "@/components/PassportBook";
+import { EMPTY_PASSPORT, isEmployed, isTrading, otherAdultCount, otherCredit, otherName, type PassportData, type PassportRules } from "@/lib/passport-shape";
 
 /**
  * A TENANT'S PASSPORT, AS A LIST (James, 8 Oct 2026).
@@ -18,7 +19,7 @@ import { EMPTY_PASSPORT, isEmployed, isTrading, otherAdultCount, otherCredit, ot
  * agent reads a file. Read only, from GET /api/tenant/passport/answers.
  */
 
-type Answer = { ok?: boolean; error?: string; name?: string; email?: string; submittedAt?: string | null; updatedAt?: string; householdIncome?: number | null; data?: PassportData };
+type Answer = { ok?: boolean; error?: string; name?: string; email?: string; submittedAt?: string | null; updatedAt?: string; householdIncome?: number | null; data?: PassportData; rules?: PassportRules };
 
 const yn = (b: boolean | null | undefined) => (b == null ? null : b ? "Yes" : "No");
 const money = (s: string | number | null | undefined) => {
@@ -29,7 +30,7 @@ const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "n
 const dob = (s: string) => (/^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(`${s}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : s || null);
 const month = (s: string) => (/^\d{4}-\d{2}$/.test(s) ? new Date(`${s}-01T12:00:00`).toLocaleDateString("en-GB", { month: "long", year: "numeric" }) : s || null);
 
-function groups(d: PassportData, household: number | null): { title: string; rows: [string, string | null][] }[] {
+function groups(d: PassportData, household: number | null, rules: PassportRules): { title: string; rows: [string, string | null][] }[] {
   /* Each adult's credit under their own name (Rhiannon, 14 Oct 2026). A
      passport from before the others were asked shows "Not answered". */
   const others = otherAdultCount(d);
@@ -45,18 +46,24 @@ function groups(d: PassportData, household: number | null): { title: string; row
         ["Legal name", d.legalName || null],
         ["Known as", d.knownAs || null],
         ["Date of birth", dob(d.dob)],
-        ["Nationality", d.nationality || null],
+        /* Never on a Scottish passport (Lianna Denholm, 15 Oct 2026). */
+        ...(rules.noNationality ? [] : ([["Nationality", d.nationality || null]] as [string, string | null][])),
         ["Email", d.email || null],
         ["Mobile", d.mobile || null],
       ],
     },
-    {
-      title: "Right to rent",
-      rows: [
-        ["British or Irish passport", yn(d.hasBritishPassport)],
-        ...(d.hasBritishPassport === false ? ([["Share code", d.shareCode || null]] as [string, string | null][]) : []),
-      ],
-    },
+    /* England only: never on a Scottish passport (James, 15 Oct 2026). */
+    ...(rules.noRightToRent
+      ? []
+      : [
+          {
+            title: "Right to rent",
+            rows: [
+              ["British or Irish passport", yn(d.hasBritishPassport)],
+              ...(d.hasBritishPassport === false ? ([["Share code", d.shareCode || null]] as [string, string | null][]) : []),
+            ] as [string, string | null][],
+          },
+        ]),
     {
       title: "Work and money",
       rows: [
@@ -109,21 +116,27 @@ function groups(d: PassportData, household: number | null): { title: string; row
   ];
 }
 
-export default function PassportAnswers({ email, name, onClose }: { email: string | null; name?: string; onClose: () => void }) {
+export default function PassportAnswers({ email, name, home, onClose }: {
+  email: string | null;
+  name?: string;
+  /** The home on the agent's screen, when there is one: a Scottish home shows no nationality. */
+  home?: string | null;
+  onClose: () => void;
+}) {
   const [a, setA] = useState<Answer | null>(null);
 
   useEffect(() => {
     if (!email) return;
     setA(null);
     let live = true;
-    fetch(`/api/tenant/passport/answers?email=${encodeURIComponent(email)}`, { cache: "no-store" })
+    fetch(`/api/tenant/passport/answers?email=${encodeURIComponent(email)}${home ? `&home=${encodeURIComponent(home)}` : ""}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((j: Answer) => live && setA(j))
       .catch(() => live && setA({ ok: false, error: "The passport didn't load. Try again." }));
     return () => {
       live = false;
     };
-  }, [email]);
+  }, [email, home]);
 
   useEffect(() => {
     if (!email) return;
@@ -175,11 +188,13 @@ export default function PassportAnswers({ email, name, onClose }: { email: strin
             <>
               {/* The card, front and back: drag it or tap it to turn it over. */}
               <div className="h-[300px]">
-                <PassportScene data={d} focus={null} side="front" />
+                <PassportRulesContext.Provider value={a.rules ?? {}}>
+                  <PassportScene data={d} focus={null} side="front" />
+                </PassportRulesContext.Provider>
               </div>
               <p className="-mt-1 text-center text-[11px] text-muted">Drag or tap the card to see the back.</p>
 
-              {groups(d, a.householdIncome ?? null).map((g) => (
+              {groups(d, a.householdIncome ?? null, a.rules ?? {}).map((g) => (
                 <section key={g.title} className="mt-5">
                   <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">{g.title}</p>
                   <dl className="mt-2 overflow-hidden rounded-2xl border border-line/60 bg-white">

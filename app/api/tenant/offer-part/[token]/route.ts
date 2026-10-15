@@ -3,6 +3,7 @@ import { whoIs } from "@/lib/admin";
 import { fillOfferPerson, offerPersonByToken } from "@/lib/offer-people";
 import { cleanPerson, missingFrom } from "@/lib/offer-people-shape";
 import { jsonObject } from "@/lib/json-body";
+import { SCOTLAND } from "@/lib/passport-shape";
 
 /**
  * ONE ADULT'S PART OF AN OFFER, BY THEIR OWN LINK (James, 14 Oct 2026).
@@ -24,7 +25,8 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ token: str
   const p = await offerPersonByToken(token);
   if (!p) return NextResponse.json({ ok: false, error: "That link isn't right, or the offer has gone." }, { status: 404 });
   return NextResponse.json(
-    { ok: true, name: p.name, leadName: p.leadName, property: p.property, filled: p.filled, answers: p.answers },
+    /* A Scottish home asks no Right to rent, and shows none back (lib/passport-scotland). */
+    { ok: true, name: p.name, leadName: p.leadName, property: p.property, filled: p.filled, scottish: p.scottish, answers: p.scottish ? { ...p.answers, hasBritishPassport: null, shareCode: "" } : p.answers },
     { headers: { "cache-control": "private, no-store" } }
   );
 }
@@ -34,8 +36,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
   const p = await offerPersonByToken(token);
   if (!p) return NextResponse.json({ ok: false, error: "That link isn't right, or the offer has gone." }, { status: 404 });
   const b = (await jsonObject(req)) as Record<string, unknown>;
-  const answers = cleanPerson(b.answers);
-  const gaps = missingFrom(answers);
+  const sent = cleanPerson(b.answers);
+  /* Scotland: never asked, so whatever was stored before is kept, not blanked. */
+  const answers = p.scottish ? { ...sent, hasBritishPassport: p.answers.hasBritishPassport, shareCode: p.answers.shareCode } : sent;
+  const gaps = missingFrom(answers, p.scottish ? SCOTLAND : {});
   if (gaps.length) return NextResponse.json({ ok: false, error: `Still needed: ${gaps.join(", ")}.` }, { status: 400 });
   const { actor } = await whoIs(req).catch(() => ({ actor: null }));
   const saved = await fillOfferPerson(token, answers, actor ? { kind: "agent", name: actor.name || actor.email } : { kind: "self", name: answers.name });

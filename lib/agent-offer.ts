@@ -4,7 +4,10 @@ import { hasDb, q } from "@/lib/db";
 import type { OsUser } from "@/lib/users";
 import { homeOnMarket } from "@/lib/tenant-homes";
 import { agentEmailFor } from "@/lib/tenant-find";
-import { createPassport, findPassportByEmail, getPassport, savePassport, type PassportRecord } from "@/lib/passport";
+import { createPassport, findPassportByEmail, getPassport, markScottishHome, savePassport, type PassportRecord } from "@/lib/passport";
+import { isScottish } from "@/lib/property-flags";
+import { SCOTLAND } from "@/lib/passport-shape";
+import { forScreen } from "@/lib/passport-scotland";
 import { APPLICANT_TYPES, EMPTY_PASSPORT, TRADING_FOR, WORK_HOURS, workFlags, workLine, type PassportData } from "@/lib/passport-shape";
 import { diffOffer, offerSubset, type OfferPassport } from "@/lib/offer-passport";
 import { escapeHtml, renderTleEmail } from "@/lib/email/tle-emails";
@@ -58,7 +61,7 @@ export async function offerContext(p: { listingId: string; email: string; name: 
         /* The person picked wins on a test file: see testPassportFor. */
         name: p.name || rec?.data.legalName || "",
         email: p.email,
-        passport: rec ? rec.data : null,
+        passport: rec ? (t && isScottish(t.locality, t.name) ? forScreen(rec.data, SCOTLAND) : rec.data) : null,
         passportDoneOn: rec?.submittedAt
           ? new Date(rec.submittedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" })
           : null,
@@ -81,7 +84,8 @@ export async function offerContext(p: { listingId: string; email: string; name: 
     tenant: {
       name: rec?.data.legalName || p.name,
       email: p.email,
-      passport: rec ? rec.data : null,
+      /* A Scottish home: no nationality or Right to rent sent to the screen (lib/passport-scotland). */
+      passport: rec ? (h && isScottish(h.locality, h.name) ? forScreen(rec.data, SCOTLAND) : rec.data) : null,
       passportDoneOn: rec?.submittedAt
         ? new Date(rec.submittedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" })
         : null,
@@ -161,7 +165,14 @@ export async function saveAgentOffer(me: OsUser, raw: Record<string, unknown>): 
   if (!name) throw new OfferRefused("Who is the offer for?");
   /* The other adults moving in, each with their own part (lib/offer-people,
      James 14 Oct 2026): filled in by the agent now, or a link for them. */
-  const checked = checkOthers(raw.others);
+  /* A Scottish home asks no Right to rent of anyone (James, 15 Oct 2026). */
+  const listingRaw = str(raw.listingId, 20);
+  const scotHome = isTestId(raw.listingId)
+    ? await testListing(listingRaw).then((t) => isScottish(t?.locality, t?.name)).catch(() => false)
+    : /^\d+$/.test(listingRaw)
+      ? await homeOnMarket(listingRaw).then((h) => isScottish(h?.locality, h?.name)).catch(() => false)
+      : false;
+  const checked = checkOthers(raw.others, scotHome ? SCOTLAND : {});
   if (!checked.ok) throw new OfferRefused(checked.error);
   const others = checked.others;
   const keepPeople = async (offerId: string, listingId: string | null, property: string) =>
@@ -219,7 +230,9 @@ export async function saveAgentOffer(me: OsUser, raw: Record<string, unknown>): 
   let rec = await passportFor(email);
   const held = offerSubset(rec?.data ?? null);
   const before = { ...held, numAdults: held.numAdults || "1", numChildren: held.numChildren || "0" };
-  const after = cleanPassport(raw.passport, before);
+  const sent = cleanPassport(raw.passport, before);
+  /* Never asked on a Scottish home, so what the passport holds is kept, not blanked. */
+  const after = scotHome ? { ...sent, hasBritishPassport: before.hasBritishPassport, shareCode: before.shareCode } : sent;
   const changes = rec ? diffOffer(before, after) : [];
   let passportNote: string;
   if (rec) {
@@ -232,6 +245,8 @@ export async function saveAgentOffer(me: OsUser, raw: Record<string, unknown>): 
     rec = await getPassport(made.token);
     passportNote = "started from this offer, not sent";
   }
+  /* An offer on a Scottish home: the passport carries no nationality from now on (lib/passport-scotland). */
+  if (rec && isScottish(home.locality, address)) await markScottishHome(rec.token).catch(() => null);
 
   const movingIn = list(raw.movingIn, 20);
   const works = list(raw.works);
@@ -299,7 +314,7 @@ export async function saveAgentOffer(me: OsUser, raw: Record<string, unknown>): 
       note ? `For the landlord:\n${note}` : "",
       ...others.map((o) =>
         o.mode === "fill"
-          ? `Also moving in: ${o.answers.name}:\n${personLines(o.answers).map((l) => `${l.label}: ${l.value}`).join("\n")}`
+          ? `Also moving in: ${o.answers.name}:\n${personLines(o.answers, scotHome ? SCOTLAND : {}).map((l) => `${l.label}: ${l.value}`).join("\n")}`
           : `Also moving in: ${o.answers.name}. Their part is with them to fill in from their own link.`
       ),
       `Open the offer: ${base}/offers/${id}`,

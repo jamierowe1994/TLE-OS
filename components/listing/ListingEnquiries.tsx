@@ -45,7 +45,11 @@ function StatusPill({ s, onOpen }: { s: Status | undefined; onOpen: () => void }
   );
 }
 
-export default function ListingEnquiries({ enquiries }: { enquiries: Enquiry[] }) {
+export default function ListingEnquiries({ enquiries, home }: {
+  enquiries: Enquiry[];
+  /** The listing's address with its postcode: a Scottish home's passports carry no nationality (lib/passport-scotland). */
+  home?: string;
+}) {
   const [statuses, setStatuses] = useState<Record<string, Status> | null>(null);
   const [picking, setPicking] = useState(false);
   const [chosen, setChosen] = useState<Set<string>>(new Set());
@@ -123,7 +127,7 @@ export default function ListingEnquiries({ enquiries }: { enquiries: Enquiry[] }
       const j = await fetch("/api/tenant/passport/invite", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: e.name, email: e.email.trim() }),
+        body: JSON.stringify({ name: e.name, email: e.email.trim(), home }),
       })
         .then((r) => r.json() as Promise<{ ok?: boolean; alreadySent?: boolean; invitedAt?: string; error?: string; said?: string }>)
         .catch(() => null);
@@ -315,7 +319,7 @@ export default function ListingEnquiries({ enquiries }: { enquiries: Enquiry[] }
           document.body
         )}
 
-      <PassportAnswers email={viewing?.email ?? null} name={viewing?.name} onClose={() => setViewing(null)} />
+      <PassportAnswers email={viewing?.email ?? null} name={viewing?.name} home={home} onClose={() => setViewing(null)} />
     </section>
   );
 }

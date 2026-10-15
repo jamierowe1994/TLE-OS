@@ -3,6 +3,7 @@ import { londonToday } from "@/lib/london-clock";
 import { rexCall, rexRows } from "@/lib/rex";
 import { unitLine } from "@/lib/address-parse";
 import { hasDb, q } from "@/lib/db";
+import { isScottish } from "@/lib/property-flags";
 
 /**
  * Tenancy applications — the real ones, out of REX.
@@ -333,6 +334,17 @@ function applicantOf(t: Row, keyInfo: KeyInfo | null): Applicant {
   };
 }
 
+/**
+ * A let in Scotland, where Right to Rent is not the law (James, 15 Oct 2026:
+ * it is England-only, so it is neither asked on a Scottish passport nor owed
+ * on a Scottish application). By the postcode, or REX's Scottish agreement
+ * type (153279, as lib/handover-deal reads it) when the listing carries one.
+ */
+function scottishLet(r: Row, postcode: string | null): boolean {
+  const listing = (r.listing ?? {}) as Row;
+  return String(((listing.agreement_type ?? null) as Row | null)?.id ?? "") === "153279" || isScottish(postcode);
+}
+
 export function shapeApplication(r: Row): Application {
   const listing = (r.listing ?? {}) as Row;
   const property = (listing.property ?? {}) as Row;
@@ -396,9 +408,9 @@ export function shapeApplication(r: Row): Application {
     createdAt: num(r.system_ctime),
     updatedAt: num(r.system_modtime),
     // The whole point of the exercise. One "Yes" on the primary is not a
-    // Right to Rent check on a household of three.
+    // Right to Rent check on a household of three. Never owed on a Scottish let.
     rightToRentIncomplete:
-      applicants.length > 0 && applicants.some((a) => a.keyInfo?.rightToRent !== true),
+      !scottishLet(r, str(property.adr_postcode)) && applicants.length > 0 && applicants.some((a) => a.keyInfo?.rightToRent !== true),
   };
 }
 
@@ -666,7 +678,7 @@ async function osAcceptedApplications(rexUserId: string | null, rexApps: Applica
       conditions: [others.length ? `Also moving in: ${others.join(", ")}.` : "", waiting.length ? `Still to fill in their part: ${waiting.join(", ")}.` : ""].filter(Boolean).join(" ") || null,
       osDecision: null,
       applicants,
-      rightToRentIncomplete: others.length > 0 || applicants.some((a) => a.keyInfo?.rightToRent !== true),
+      rightToRentIncomplete: !isScottish(shaped.locality, r.address) && (others.length > 0 || applicants.some((a) => a.keyInfo?.rightToRent !== true)),
     });
   }
   return out;
@@ -740,7 +752,7 @@ async function swapApplications(rexUserId: string | null): Promise<Application[]
       conditions: [`Tenant swap: ${sw.leaving.map((x) => x.name).join(", ")} out, ${sw.joining.map((x) => x.name).join(", ")} in.`, sw.rentPortion != null ? `Their portion of the rent: £${sw.rentPortion.toLocaleString("en-GB")} a month.` : "", sw.note].filter(Boolean).join(" "),
       osDecision: null,
       applicants: [...sw.joining.map((x, i) => person(x, i === 0)), ...sw.staying.map((x) => person(x, false))],
-      rightToRentIncomplete: true,
+      rightToRentIncomplete: !isScottish(shaped.locality, sw.property),
       locality: listing ? shaped.locality : sw.property.split(",").slice(1).join(",").trim() || shaped.locality,
       swap: {
         leaving: sw.leaving.map((x) => x.name),

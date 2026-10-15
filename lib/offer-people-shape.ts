@@ -15,6 +15,8 @@
  * this one list.
  */
 
+import type { PassportRules } from "@/lib/passport-shape";
+
 export type PersonAnswers = {
   name: string;
   email: string;
@@ -71,7 +73,7 @@ export const tradingType = (t: string) => t === "Self-employed" || t === "Compan
 export const incomeOf = (p: Pick<PersonAnswers, "annualIncome">) => Number(String(p.annualIncome).replace(/[£,\s]/g, "")) || 0;
 
 /** What a filled-in part still needs, in the person's own words. Empty = done. */
-export function missingFrom(p: PersonAnswers): string[] {
+export function missingFrom(p: PersonAnswers, rules: PassportRules = {}): string[] {
   const out: string[] = [];
   const words = p.name.trim().split(/\s+/).filter(Boolean);
   if (words.length < 2) out.push("their full name");
@@ -86,8 +88,9 @@ export function missingFrom(p: PersonAnswers): string[] {
   }
   if (tradingType(p.applicantType) && !p.tradingFor) out.push("how long they've traded");
   if (!incomeOf(p) && (employedType(p.applicantType) || tradingType(p.applicantType))) out.push("their income");
-  if (p.hasBritishPassport === null) out.push("right to rent");
-  if (p.hasBritishPassport === false && p.shareCode.trim().length < 6) out.push("their share code");
+  /* Right to rent is England only: never asked on a Scottish let (James, 15 Oct 2026). */
+  if (!rules.noRightToRent && p.hasBritishPassport === null) out.push("right to rent");
+  if (!rules.noRightToRent && p.hasBritishPassport === false && p.shareCode.trim().length < 6) out.push("their share code");
   if (p.landlordRef === null) out.push("a landlord reference");
   if (p.guarantor === null) out.push("a guarantor");
   if (p.adverseCredit === null) out.push("adverse credit");
@@ -132,7 +135,7 @@ export function cleanPerson(raw: unknown): PersonAnswers {
 export type OfferPart = { name: string; filled: boolean; by: string | null; lines: { label: string; value: string }[]; link: string };
 
 /** The lines the agent reads, the same everywhere. */
-export function personLines(p: PersonAnswers): { label: string; value: string }[] {
+export function personLines(p: PersonAnswers, rules: PassportRules = {}): { label: string; value: string }[] {
   const yn = (v: boolean | null) => (v === null ? "Not said" : v ? "Yes" : "No");
   const inc = incomeOf(p);
   return [
@@ -143,7 +146,7 @@ export function personLines(p: PersonAnswers): { label: string; value: string }[
     ...(p.job || p.employer ? [{ label: "Job", value: [p.job, p.employer].filter(Boolean).join(" at ") }] : []),
     ...(employedType(p.applicantType) ? [{ label: "Zero-hours contract", value: yn(p.zeroHours) }, { label: "On probation", value: yn(p.onProbation) }] : []),
     { label: "Income", value: inc ? `£${inc.toLocaleString("en-GB")} a year` : "Not said" },
-    { label: "Right to rent", value: p.hasBritishPassport ? "British or Irish passport" : p.shareCode ? `Share code ${p.shareCode}` : "Not given yet" },
+    ...(rules.noRightToRent ? [] : [{ label: "Right to rent", value: p.hasBritishPassport ? "British or Irish passport" : p.shareCode ? `Share code ${p.shareCode}` : "Not given yet" }]),
     { label: "Landlord reference", value: yn(p.landlordRef) },
     { label: "Guarantor", value: yn(p.guarantor) },
     { label: "Adverse credit", value: p.adverseCredit ? `Yes${p.adverseCreditNote ? `: ${p.adverseCreditNote}` : ""}` : yn(p.adverseCredit) },

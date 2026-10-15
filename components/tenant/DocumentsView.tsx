@@ -1,6 +1,7 @@
 import DoodleIcon from "@/components/DoodleIcon";
 import type { TenantHome } from "@/lib/tenant-home-view";
 import SendDocuments from "@/components/tenant/SendDocuments";
+import { isScottish } from "@/lib/property-flags";
 
 /**
  * Documents: one section of the tenant portal, drawn from the home view.
@@ -53,7 +54,8 @@ export default function DocumentsView({ v, sample = false }: { v: TenantHome; sa
         <p className="mt-1.5 max-w-xl text-[13px] leading-relaxed text-muted">
           Whatever we have asked you for. Each one goes straight to your agent and onto your file. A PDF or a photograph, up to 25MB.
         </p>
-        <SendDocuments sample={sample} />
+        {/* Right to rent is England only: no slot for it on a Scottish passport or let (James, 15 Oct 2026). */}
+        <SendDocuments sample={sample} noRightToRent={Boolean(v.passport.rules?.noRightToRent) || isScottish(v.deal?.locality, v.enquiry?.locality)} />
       </div>
 
       <a
