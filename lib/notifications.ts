@@ -47,6 +47,11 @@ import { SPECS, STATUS_LABEL } from "@/lib/section-notices-spec";
  *                            viewing requests and landlord leads (5 Oct
  *                            2026), the last three days. Owners also get
  *                            every landlord lead (lib/lead-ledger newLeadsFor)
+ *   offers in                the listing's agent, when somebody else put the
+ *                            offer on (the tenant, a colleague, the office) -
+ *                            not their own, never a test file's. The last
+ *                            week, read from the offer itself (Howard, ticket
+ *                            0268fdcc, 15 Oct 2026)
  *   viewings booked          the agent whose diary it is in, when somebody
  *                            else booked it; owners, every new one (lib/rex-
  *                            viewings newBookingsFor, 5 Oct 2026)
@@ -169,7 +174,32 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
 
   const booked = owner || me.name?.trim() ? await newBookingsFor({ name: me.name ?? "", everyone: owner }).catch(() => []) : [];
 
+  /* Offers in on their listings, made by somebody else (ticket 0268fdcc,
+     15 Oct 2026). sent_to is the listing's agent each offer path wrote to;
+     the agent's own offers carry recordedBy with their email. Test offers
+     live on the test file, not here, so a test listing never rings. */
+  const offersIn = await q<{ id: string; name: string; email: string; address: string | null; listing_id: string; amount: string | null; created_at: Date }>(
+    `SELECT id, name, email, address, listing_id, payload->>'amount' AS amount, created_at FROM os_tenant_viewing_responses
+      WHERE kind = 'offer' AND listing_id IS NOT NULL AND created_at > NOW() - INTERVAL '7 days'
+        AND LOWER(sent_to) = LOWER($1)
+        AND LOWER(COALESCE(payload->'recordedBy'->>'email', '')) <> LOWER($1)
+      ORDER BY created_at DESC LIMIT 20`,
+    [me.email]
+  ).catch(() => []);
+
   const out: Notice[] = [...reminders];
+  for (const o of offersIn) {
+    const amount = Number(o.amount);
+    out.push({
+      id: `offer:${o.id}`,
+      kind: "deal",
+      at: new Date(o.created_at).toISOString(),
+      title: `Offer in: ${o.name || o.email}`,
+      body: `${Number.isFinite(amount) && amount > 0 ? `£${amount.toLocaleString("en-GB")} a month on ` : "On "}${o.address || "one of your listings"}. Accept, decline or send it to the landlord.`,
+      href: `/listings/${encodeURIComponent(o.listing_id)}?tab=applications&offer=${encodeURIComponent(`os:${o.id}`)}`,
+      tone: "warn",
+    });
+  }
   for (const b of booked) {
     const when = new Date(b.startsAt).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
     const mine = b.agent.toLowerCase() === (me.name ?? "").toLowerCase();

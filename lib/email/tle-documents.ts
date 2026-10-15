@@ -534,6 +534,31 @@ export const TENANT_OFFER_COPY = {
 } as const;
 
 /**
+ * An offer, put to the landlord by the agent (Howard, 8 Oct 2026, ticket
+ * 0268fdcc). Never sent on its own (James, 2 Oct 2026: no automatic landlord
+ * or tenant messages): the agent presses Send to the landlord on the offer,
+ * reads it, adds a line of their own, and sends it from their own address.
+ * The rent, the move-in day and who would live there - no income, no contact
+ * details. lib/offer-landlord-email fills it.
+ */
+export const LANDLORD_OFFER = {
+  subject: "An offer on {{address}}",
+  preheader: "{{amountWords}} a month, moving in {{moveInWords}}. Let {{agentName}} know what you think.",
+  mode: "blocks",
+  blocks: [
+    H("lo1", "An Offer on Your Home"),
+    T("lo2", "Hi {{firstName}},<br><br>We've had an offer on <strong>{{address}}</strong>."),
+    T("lo3", "{{summaryList}}"),
+    T("lo4", "{{agentLine}}"),
+    T("lo5", "Reply to this email or give {{agentName}} a ring to say whether you'd like to accept it. Nothing is agreed until you say yes."),
+    SP("lo6", 8),
+    T("lo7", "{{agentName}}<br>The Letting Experts"),
+    FOOT("lo8", "You're getting this because The Letting Experts are letting your home."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/**
  * A customer update, written by the OS and sent by the agent (James, 2 Oct
  * 2026). Something happened on the let - references back, the PLC sent back,
  * the agreement out - and the landlord or tenant should hear. Nothing sends

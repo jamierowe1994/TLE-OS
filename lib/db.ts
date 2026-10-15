@@ -1608,6 +1608,25 @@ CREATE TABLE IF NOT EXISTS os_offer_decisions (
 );
 CREATE INDEX IF NOT EXISTS os_offer_decisions_listing ON os_offer_decisions (listing_id);
 
+-- An offer sent to the landlord by the agent (Howard, 8 Oct 2026, ticket
+-- 0268fdcc). Never automatic: the agent opens the preview and presses Send
+-- (lib/offer-landlord-email). One row per press, so the offer and the Offers
+-- in list can say when it went and who sent it. ref as os_offer_decisions.
+CREATE TABLE IF NOT EXISTS os_offer_landlord_sends (
+  id           TEXT PRIMARY KEY,
+  ref          TEXT NOT NULL,
+  listing_id   TEXT,
+  to_email     TEXT NOT NULL DEFAULT '',
+  subject      TEXT NOT NULL DEFAULT '',
+  by_name      TEXT NOT NULL DEFAULT '',
+  by_email     TEXT NOT NULL DEFAULT '',
+  outcome      TEXT NOT NULL DEFAULT '',
+  sent         BOOLEAN NOT NULL DEFAULT FALSE,
+  sent_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_offer_landlord_sends_ref ON os_offer_landlord_sends (ref, sent_at DESC);
+CREATE INDEX IF NOT EXISTS os_offer_landlord_sends_listing ON os_offer_landlord_sends (listing_id);
+
 -- Rent behind, told to the agent (lib/rent-nudges, 8 Oct 2026). One row per
 -- tenant per rent day, so an agent hears once; "run|<hour>" rows mark that
 -- an hour's check has been made.

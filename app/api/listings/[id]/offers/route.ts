@@ -9,6 +9,7 @@ import { isTestId, testOffersForListing } from "@/lib/test-overlay";
 import { decisionsFor, decisionsForListing } from "@/lib/offer-decisions";
 import { offerPeople, toOfferParts, type OfferPerson } from "@/lib/offer-people";
 import type { OfferPart } from "@/lib/offer-people-shape";
+import { landlordSends, type LandlordSend } from "@/lib/offer-landlord-email";
 
 /**
  * ONE LISTING'S OFFERS (7 Oct 2026).
@@ -52,6 +53,8 @@ export type ListingOffer = {
   href: string;
   /** What the offer says, for opening it on the listing (12 Oct 2026). */
   detail: OfferDetail;
+  /** When the agent last sent it to the landlord (ticket 0268fdcc, 15 Oct 2026). */
+  landlordSent?: LandlordSend | null;
 };
 
 export type OfferDetail = {
@@ -92,6 +95,12 @@ type OsRow = {
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" });
 const newestFirst = (a: ListingOffer, b: ListingOffer) => String(b.at ?? "").localeCompare(String(a.at ?? ""));
 
+/** Each offer with when it last went to the landlord. */
+async function withSends(offers: ListingOffer[]): Promise<ListingOffer[]> {
+  const sent = await landlordSends(offers.map((o) => o.ref)).catch(() => new Map<string, LandlordSend>());
+  return offers.map((o) => ({ ...o, landlordSent: sent.get(o.ref) ?? null }));
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const listingId = String(id ?? "").trim();
@@ -125,7 +134,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           detail: { ...NO_DETAIL, people: [o.applicantName] },
         });
       }
-      return NextResponse.json({ ok: true, offers: offers.sort(newestFirst) });
+      return NextResponse.json({ ok: true, offers: (await withSends(offers)).sort(newestFirst) });
     }
 
     const [osRows, decided, rex] = await Promise.all([
@@ -245,7 +254,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       });
     }
 
-    return NextResponse.json({ ok: true, offers: offers.sort(newestFirst) });
+    return NextResponse.json({ ok: true, offers: (await withSends(offers)).sort(newestFirst) });
   } catch (e) {
     console.error("listing offers failed", e);
     return NextResponse.json({ ok: false, error: "Couldn't read the offers.", offers: [] }, { status: 500 });

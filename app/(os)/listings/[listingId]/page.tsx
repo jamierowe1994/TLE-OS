@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import ListingDrawer, { type Listing } from "@/components/ListingDrawer";
 import { peekJson, readJson } from "@/lib/page-cache";
 import { listingOrder } from "@/lib/listing-order";
@@ -36,8 +36,14 @@ export default function ListingPage() {
     const hit = held?.listings?.find((l) => String(l.id) === listingId);
     return hit ? { state: "ready", listing: hit } : { state: "loading" };
   });
-  /* Read once, so a link straight to ?tab=marketing lands on Marketing. */
-  const [initialTab] = useState<string | null>(() => (typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("tab")));
+  /* Read once, so a link straight to ?tab=marketing lands on Marketing.
+     From the router, not window.location: arriving by a client navigation
+     (a row on Offers in, 15 Oct 2026) the page renders before the address
+     bar changes, so window.location still held the board's own address. */
+  const search = useSearchParams();
+  const [initialTab] = useState<string | null>(() => search.get("tab"));
+  /* One offer to open on the listing's Offers (?offer=, from Offers in). */
+  const [initialOffer] = useState<string | null>(() => search.get("offer"));
   const [order, setOrder] = useState<string[]>([]);
   useEffect(() => setOrder(listingOrder()), []);
 
@@ -141,6 +147,7 @@ export default function ListingPage() {
         key={listing.id}
         listing={listing}
         initialTab={initialTab}
+        initialOffer={initialOffer}
         onArchive={(id, action) => void move(id, action)}
         archiveBusy={busy}
       />

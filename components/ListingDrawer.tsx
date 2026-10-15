@@ -241,6 +241,7 @@ function ListingDrawerBody({
   archiveBusy,
   saves,
   initialTab,
+  initialOffer,
 }: {
   /** Every save on this listing, for the chip by the back link. */
   saves: SaveScope;
@@ -259,6 +260,8 @@ function ListingDrawerBody({
   /** Open on this view rather than Home - ?tab=marketing from the appraisal
    *  file's "Write the description" (Howard, 1 Oct 2026). */
   initialTab?: string | null;
+  /** An offer to open on the Offers pop-out (?offer=, from Listings > Offers in). */
+  initialOffer?: string | null;
 }) {
   /* The pop-out open over the page, if any. Kept in the address (?tab=), so
      a link or a reload opens it again. */
@@ -269,6 +272,7 @@ function ListingDrawerBody({
       const u = new URL(window.location.href);
       if (t) u.searchParams.set("tab", t);
       else u.searchParams.delete("tab");
+      u.searchParams.delete("offer");
       window.history.replaceState(window.history.state, "", u.toString());
     } catch { /* fine */ }
   }, []);
@@ -1958,7 +1962,7 @@ function ListingDrawerBody({
                 {/* Every offer on this listing, with Accept and Decline (7 Oct 2026). */}
                 <Card title="Offers" icon="coin">
                   {!LISTING_OFFERS_LIVE ? (
-                    <ListingOffers offers={savedOffers} canOffer={canOffer} onChanged={() => setOffersTick((n) => n + 1)} asking={per === "pcm" ? listing.rent ?? null : null} home={listing.name} />
+                    <ListingOffers offers={savedOffers} canOffer={canOffer} onChanged={() => setOffersTick((n) => n + 1)} asking={per === "pcm" ? listing.rent ?? null : null} home={listing.name} listingId={String(listing.id)} initialOpen={initialOffer ?? null} />
                   ) : offers.length ? (
                     <ul className="space-y-3">
                       {offers.map((o, i) => (

@@ -52,6 +52,7 @@ import {
   TENANT_PASSPORT_INVITE,
   TENANT_PASSPORT_REQUEST,
   TENANT_OFFER_COPY,
+  LANDLORD_OFFER,
   CUSTOMER_UPDATE,
   APPLICATION_FORM_INVITE,
   OFFER_LINK_INVITE,
@@ -991,6 +992,30 @@ The Letting Experts`
           address: "8 Recreation Terrace",
           agentName: "Sam Whitaker",
           summaryList: "<strong>Rent:</strong> £1,250 a month<br><strong>Moving in:</strong> Saturday 24 October 2026<br><strong>Who:</strong> Sophie Turner and Jordan Reid, with a small, older dog<br><strong>Works before moving day:</strong> fix the shower over the bath",
+        })
+      )(),
+  },
+  {
+    id: "landlord-offer",
+    group: "Doorways",
+    name: "An Offer on Your Home - Sent by the Agent",
+    audience: "landlord",
+    trigger: "The agent presses Send to the landlord on an offer (the listing's Offers, or Offers in on Listings)",
+    fires: "Wired 15 Oct 2026. Never automatic: the agent reads it in a preview, adds a line of their own and presses Send. POST /api/offers/landlord-email -> lib/offer-landlord-email, from the agent's own Outlook where connected. Needs customer email on. Logged on the listing's notes.",
+    to: "The listing's landlord",
+    draft: false,
+    summary: "The offer as it stands: the rent against the asking rent, the move-in day and who would live there, with a line from the agent. Asks the landlord to reply or ring to accept; nothing is agreed until they say yes. No income or contact details.",
+    doc: LANDLORD_OFFER,
+    render: (o) =>
+      blocksAs("landlord")(
+        withSample(o ?? LANDLORD_OFFER, {
+          firstName: "Raj",
+          address: "8 Recreation Terrace",
+          agentName: "Sam Whitaker",
+          amountWords: "£1,250",
+          moveInWords: "Saturday 24 October",
+          summaryList: "<strong>Rent offered:</strong> £1,250 a month, the asking rent<br><strong>Moving in:</strong> Saturday 24 October 2026<br><strong>Who would live there:</strong> Sophie Turner and Jordan Reid, 2 adults, with a small, older dog",
+          agentLine: "Sophie and Jordan viewed on Tuesday and loved the garden. Both work full time locally, and they're happy to go ahead with referencing straight away.",
         })
       )(),
   },

@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Tag } from "@/components/ListingTags";
+import DoodleIcon from "@/components/DoodleIcon";
 import type { OfferDetail } from "@/app/api/listings/[id]/offers/route";
 import OfferPartsList from "@/components/offers/OfferPartsList";
+import SendOfferToLandlord from "@/components/offers/SendOfferToLandlord";
 
 /**
  * THE OFFERS ON ONE HOME (7 Oct 2026).
@@ -25,7 +27,9 @@ import OfferPartsList from "@/components/offers/OfferPartsList";
  *
  * Decisions are kept in the OS (POST /api/offers/decide); REX is still marked
  * by hand, and the application's file says so. A test offer plays its own
- * test file's Accept/Decline. Nothing is sent to the tenant or landlord.
+ * test file's Accept/Decline. Nothing is sent to the tenant or landlord by
+ * itself; Send to the landlord on an opened offer is the agent's own press,
+ * with a preview first (components/offers/SendOfferToLandlord, 15 Oct 2026).
  */
 
 export type ListingOffer = {
@@ -42,6 +46,8 @@ export type ListingOffer = {
   undoable: boolean;
   href: string;
   detail?: OfferDetail;
+  /** When the agent last sent it to the landlord (ticket 0268fdcc). */
+  landlordSent?: { at: string; by: string } | null;
 };
 
 const short = (iso: string) =>
@@ -61,6 +67,8 @@ export default function ListingOffers({
   onChanged,
   asking = null,
   home = "This home",
+  listingId = null,
+  initialOpen = null,
 }: {
   offers: ListingOffer[] | null;
   canOffer: boolean;
@@ -69,12 +77,25 @@ export default function ListingOffers({
   asking?: number | null;
   /** The home's name, for the accepted moment. */
   home?: string;
+  /** The listing, for Send to the landlord. */
+  listingId?: string | null;
+  /** An offer to open on arrival (?offer=, from Listings > Offers in, 15 Oct 2026). */
+  initialOpen?: string | null;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [err, setErr] = useState<{ ref: string; text: string } | null>(null);
   const [openRef, setOpenRef] = useState<string | null>(null);
   const [won, setWon] = useState<ListingOffer | null>(null);
+  const [toLandlord, setToLandlord] = useState<ListingOffer | null>(null);
+
+  /* Opened straight from the Offers in list: once, when the offers arrive. */
+  const [asked, setAsked] = useState(initialOpen);
+  useEffect(() => {
+    if (!asked || !offers) return;
+    if (offers.some((o) => o.ref === asked)) setOpenRef(asked);
+    setAsked(null);
+  }, [asked, offers]);
 
   const sorted = useMemo(() => [...(offers ?? [])].sort((a, b) => ORDER[a.status] - ORDER[b.status]), [offers]);
   const open = sorted.find((o) => o.ref === openRef) ?? null;
@@ -218,7 +239,7 @@ export default function ListingOffers({
           <div className="w-1/2 min-w-0 pr-1" aria-hidden={Boolean(open)} inert={open ? true : undefined}>
             <ul className="divide-y divide-line/40">
               {sorted.map((o) => {
-                const sub = [o.via, o.at ? `made ${short(o.at)}` : "", o.moveIn ? `moving in ${short(o.moveIn)}` : ""].filter(Boolean).join(" · ");
+                const sub = [o.via, o.at ? `made ${short(o.at)}` : "", o.moveIn ? `moving in ${short(o.moveIn)}` : "", o.landlordSent ? `sent to the landlord ${short(o.landlordSent.at)}` : ""].filter(Boolean).join(" · ");
                 return (
                   <li key={o.ref} className={`py-3 ${o.status === "declined" ? "opacity-60" : ""}`}>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -246,10 +267,29 @@ export default function ListingOffers({
           </div>
 
           <div className="w-1/2 min-w-0 pl-1" aria-hidden={!open} inert={open ? undefined : true}>
-            {open && <OfferOpened o={open} asking={asking} onBack={() => { setConfirming(null); setOpenRef(null); }} decide={decide(open, true)} notes={notes(open)} />}
+            {open && (
+              <OfferOpened
+                o={open}
+                asking={asking}
+                onBack={() => { setConfirming(null); setOpenRef(null); }}
+                decide={decide(open, true)}
+                notes={notes(open)}
+                onSendToLandlord={listingId && open.status !== "declined" ? () => setToLandlord(open) : null}
+              />
+            )}
           </div>
         </div>
       </div>
+
+      {toLandlord && listingId && (
+        <SendOfferToLandlord
+          offerRef={toLandlord.ref}
+          listingId={listingId}
+          name={toLandlord.name}
+          onClose={() => setToLandlord(null)}
+          onSent={onChanged}
+        />
+      )}
 
       {won && (
         <OfferWon
@@ -263,7 +303,22 @@ export default function ListingOffers({
 }
 
 /** One offer, opened on the listing: everything it says, and the same decision. */
-function OfferOpened({ o, asking, onBack, decide, notes }: { o: ListingOffer; asking: number | null; onBack: () => void; decide: React.ReactNode; notes: React.ReactNode }) {
+function OfferOpened({
+  o,
+  asking,
+  onBack,
+  decide,
+  notes,
+  onSendToLandlord,
+}: {
+  o: ListingOffer;
+  asking: number | null;
+  onBack: () => void;
+  decide: React.ReactNode;
+  notes: React.ReactNode;
+  /** Null where it can't be sent (a declined offer, no listing). */
+  onSendToLandlord: (() => void) | null;
+}) {
   const d = o.detail;
   const facts: Array<[string, string]> = [];
   if (o.amount != null) facts.push(["Offer", `${gbp(o.amount)} a month${asking ? (o.amount >= asking ? " · the asking rent" : ` · ${gbp(asking - o.amount)} under the asking ${gbp(asking)}`) : ""}`]);
@@ -311,6 +366,23 @@ function OfferOpened({ o, asking, onBack, decide, notes }: { o: ListingOffer; as
         <div className="mt-3 rounded-2xl border border-line/50 bg-white px-3.5 py-3 text-[12.5px] leading-relaxed">
           <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">In their words</p>
           <p className="mt-1.5 whitespace-pre-line">{d.note}</p>
+        </div>
+      )}
+      {onSendToLandlord && (
+        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-line/50 bg-white px-3.5 py-3">
+          <span className="min-w-0 flex-1 basis-[200px] text-[12px] leading-snug text-muted">
+            {o.landlordSent
+              ? `Sent to the landlord ${short(o.landlordSent.at)} by ${o.landlordSent.by}.`
+              : "The landlord hasn't been told about this offer by email yet."}
+          </span>
+          <button
+            type="button"
+            onClick={onSendToLandlord}
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-line px-3.5 py-2 text-[12px] font-semibold text-ink transition-colors hover:border-accent hover:bg-accent-soft"
+          >
+            <DoodleIcon name="mail" size={14} />
+            {o.landlordSent ? "Send again" : "Send to the landlord"}
+          </button>
         </div>
       )}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">

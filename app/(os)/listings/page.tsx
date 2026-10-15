@@ -15,6 +15,8 @@ import CornerSwell from "@/components/CornerSwell";
 import { searchMatches } from "@/lib/search-match";
 import { rememberListingOrder } from "@/lib/listing-order";
 import NewListingWizard from "@/components/listing/NewListingWizard";
+import OffersInList, { offerHref, type HomeOnBoard } from "@/components/listing/OffersInList";
+import type { OpenOfferRow } from "@/app/api/offers/open/route";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { DIARY } from "@/lib/diary";
 import { Readiness, Tag, boardGaps, readiness, statusOf, type PublishCheck } from "@/components/ListingTags";
@@ -456,13 +458,30 @@ export default function Listings() {
      stays on its listing until it is accepted, so this is where they are
      found across the book; ?stage=offers is the Applications page's link. */
   const [openOffers, setOpenOffers] = useState<Record<string, number> | null>(null);
-  useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("stage") === "offers") setStage("offers");
+  /* Every open offer, one row each (Howard, ticket 84a81dae, 15 Oct 2026): what
+     Offers in opens on. "By home" is the list of listings it used to be. */
+  const [offerRows, setOfferRows] = useState<OpenOfferRow[] | null>(null);
+  const [offersError, setOffersError] = useState<string | null>(null);
+  const [offersBy, setOffersBy] = useState<"offer" | "home">("offer");
+  const loadOffers = useCallback(() => {
+    setOffersError(null);
+    setOfferRows(null);
     fetch("/api/offers/open", { cache: "no-store" })
       .then((r) => r.json())
-      .then((j: { ok?: boolean; byListing?: Record<string, number> }) => setOpenOffers(j.ok ? (j.byListing ?? {}) : {}))
-      .catch(() => setOpenOffers({}));
+      .then((j: { ok?: boolean; error?: string; byListing?: Record<string, number>; rows?: OpenOfferRow[] }) => {
+        setOpenOffers(j.ok ? (j.byListing ?? {}) : {});
+        if (j.ok) setOfferRows(j.rows ?? []);
+        else setOffersError(j.error ?? "The offers couldn't be read just now.");
+      })
+      .catch(() => {
+        setOpenOffers({});
+        setOffersError("The OS couldn't be reached. Nothing is lost - try again in a moment.");
+      });
   }, []);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("stage") === "offers") setStage("offers");
+    loadOffers();
+  }, [loadOffers]);
   const [period, setPeriod] = useState<PeriodId>("any");
   /* Tiles by default, like Market Appraisals (James, 11 Sep 2026). */
   const [view, setView] = useState<"list" | "tiles">("tiles");
@@ -662,6 +681,19 @@ export default function Listings() {
      that 360 are withdrawn listings and were never part of the 269. */
   const archivedInBook = useMemo(() => LISTINGS.filter((l) => l.archived).length, [LISTINGS]);
 
+  /* Offers in, one row per offer: searched by the home or the person. */
+  const eachOffer = stage === "offers" && offersBy === "offer";
+  const offerHomes = useMemo(() => {
+    const m = new Map<string, HomeOnBoard>();
+    for (const l of LISTINGS) m.set(String(l.id), { name: l.name, image: l.image ?? null, rent: l.rent ?? null, perMonth: l.rentPeriod !== "week" });
+    return m;
+  }, [LISTINGS]);
+  const shownOffers = useMemo(() => {
+    if (!offerRows) return offerRows;
+    const needle = q.trim();
+    return needle ? offerRows.filter((r) => searchMatches(needle, r.name, r.home, offerHomes.get(r.listingId)?.name)) : offerRows;
+  }, [offerRows, q, offerHomes]);
+
   const board = useMemo(() => {
     const needle = q.trim();
     const band = RENT_BANDS.find((b) => b.id === rentBand);
@@ -839,8 +871,9 @@ export default function Listings() {
             id: "offers" as const,
             label: "Offers in",
             icon: "coin",
-            count: openOffers === null ? null : WORKING.filter((l) => (openOffers[String(l.id)] ?? 0) > 0).length,
-            blurb: "An offer waiting on a decision. Still taking viewings until one is accepted",
+            /* Offers, not homes, since 15 Oct 2026: the tab opens on one row per offer. */
+            count: offerRows === null ? null : offerRows.length,
+            blurb: "Every offer waiting on a decision. The home keeps taking viewings until one is accepted",
           },
           { id: "all" as const, label: "All listings", icon: "analytics", count: WORKING.filter((l) => !l.test).length - (byStage["Let agreed"] ?? 0), blurb: "Everything still being marketed. Let agreed has its own tab" },
           { id: "Let agreed" as const, label: "Let agreed", icon: "key", count: byStage["Let agreed"], blurb: "Taken, and working through to a tenancy" },
@@ -887,7 +920,7 @@ export default function Listings() {
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="hand text-[17px]">
             {q.trim() && !["offers", "photos", "compliance", "archived"].includes(stage) ? "Search" : stage === "all" ? "All listings" : stage === "offers" ? "Offers in" : stage === "photos" ? "Missing photos" : stage === "compliance" ? "Needs compliance" : stage === "archived" ? "Archived" : stage}
-            <span className="figures ml-2 text-[14px] text-muted">{board.length}</span>
+            <span className="figures ml-2 text-[14px] text-muted">{eachOffer ? shownOffers?.length ?? "" : board.length}</span>
           </h2>
           <span className="flex items-center gap-3">
             {stage !== "all" && (
@@ -895,9 +928,38 @@ export default function Listings() {
                 Show all listings
               </button>
             )}
-            <ListSearch value={q} onChange={setQ} placeholder="Search properties…" />
+            <ListSearch value={q} onChange={setQ} placeholder={eachOffer ? "Search offers…" : "Search properties…"} />
           </span>
         </div>
+        {stage === "offers" && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="min-w-0 flex-1 basis-[240px] text-[12px] leading-relaxed text-muted">
+              {offersBy === "offer"
+                ? "Every offer waiting on a decision, newest first. Open one to accept or decline it, or send it to the landlord."
+                : "The homes with an offer waiting. Open one and go to Offers."}
+            </p>
+            <Segmented
+              value={offersBy}
+              onChange={setOffersBy}
+              options={[
+                { id: "offer" as const, label: "Each offer" },
+                { id: "home" as const, label: "By home" },
+              ]}
+            />
+          </div>
+        )}
+        {eachOffer && (
+          <OffersInList
+            rows={shownOffers}
+            error={offersError}
+            homes={offerHomes}
+            onRetry={loadOffers}
+            onOpen={(r) => {
+              rememberListingOrder([r.listingId]);
+              router.push(offerHref(r));
+            }}
+          />
+        )}
         {/* What the archive IS, said once, at the top of it. An agent opening
             a tab of 300 properties they have never seen before deserves the
             sentence that explains why they are all here. */}
@@ -928,8 +990,8 @@ export default function Listings() {
         {stage === "archived" && archive.error && !archive.loading && (
           <p className="py-6 text-[12.5px] text-accent-dark">{archive.error}</p>
         )}
-        {book.loading && <BoardSkeleton kind="cards" label="Fetching your listings…" count={6} />}
-        {!book.loading && !book.live && book.listings.length === 0 && (
+        {!eachOffer && book.loading && <BoardSkeleton kind="cards" label="Fetching your listings…" count={6} />}
+        {!eachOffer && !book.loading && !book.live && book.listings.length === 0 && (
           <div className="py-8 text-center" role={book.failed ? "alert" : "status"}>
             <p className="text-[13px] font-semibold text-ink">{book.failed ? "Your listings didn't load" : "No listings to show yet"}</p>
             <p className="mx-auto mt-1.5 max-w-md text-[12px] leading-relaxed text-muted">{book.reason}</p>
@@ -940,13 +1002,13 @@ export default function Listings() {
             )}
           </div>
         )}
-        {board.length === 0 && (book.live || book.listings.length > 0) && !(stage === "archived" && (archive.loading || archive.error)) && (
+        {!eachOffer && board.length === 0 && (book.live || book.listings.length > 0) && !(stage === "archived" && (archive.loading || archive.error)) && (
           <p className="py-6 text-[12.5px] text-muted">
             Nothing matches{period === "any" ? "" : " in that window"} - widen the rent band or clear the filters.
           </p>
         )}
         <div className={`cascade ${view === "tiles" ? "grid grid-cols-[repeat(auto-fill,minmax(min(100%,330px),1fr))] gap-4" : "space-y-3"}`}>
-        {board.map((l) => {
+        {(eachOffer ? [] : board).map((l) => {
           const st = statusOf(l);
           const views = viewingsFor(l.name);
           /* Withdrawn is REX's own state and cannot be undone from the OS, so
@@ -1142,6 +1204,7 @@ export default function Listings() {
         </div>
       </div>
 
+      {!eachOffer && (
       <p className="mt-4 text-[11px] leading-relaxed text-muted">
         {stage === "archived" ? (
           <>
@@ -1159,6 +1222,7 @@ export default function Listings() {
           </>
         )}
       </p>
+      )}
 
       {adding && (
         /* New listing in five screens, landlord and terms included (12 Oct

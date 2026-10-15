@@ -4,6 +4,7 @@ import { hasDb, q } from "@/lib/db";
 import { sendEmail } from "@/lib/resend";
 import { renderPlain } from "@/lib/campaign-mail";
 import { userByName } from "@/lib/tenant-email-send";
+import { agentEmailFor } from "@/lib/tenant-find";
 import { sendNotForThem } from "@/lib/tenant-journey-emails";
 import { randomUUID } from "node:crypto";
 import { findPassportByEmail, getPassport } from "@/lib/passport";
@@ -111,6 +112,11 @@ export async function POST(req: NextRequest) {
      goes with it, read and never changed: the feedback page asks for the rent
      and the day, nothing more. */
   let offerId: string | null = null;
+  /* Who hears: the viewing's agent, as before, and the listing's own agent
+     when that is somebody else (ticket 0268fdcc, 15 Oct 2026). sent_to is the
+     listing's agent, which is what rings their bell (lib/notifications). */
+  const agent = await userByName(f.agent);
+  const listingAgent = offer && f.listing_id ? await agentEmailFor(String(f.listing_id), null).catch(() => null) : null;
   if (offer && f.listing_id) {
     offerId = randomUUID();
     const found = await findPassportByEmail(f.email, null).catch(() => null);
@@ -119,7 +125,7 @@ export async function POST(req: NextRequest) {
     const pp = offerSubset(data);
     await q(
       `INSERT INTO os_tenant_viewing_responses (id, email, name, listing_id, address, kind, payload, sent_to, outcome)
-       VALUES ($1,$2,$3,$4,$5,'offer',$6::jsonb,NULL,'from the viewing feedback page')`,
+       VALUES ($1,$2,$3,$4,$5,'offer',$6::jsonb,$7,'from the viewing feedback page')`,
       [
         offerId,
         f.email.toLowerCase(),
@@ -143,6 +149,7 @@ export async function POST(req: NextRequest) {
           changes: [],
           answers,
         }),
+        listingAgent ?? agent?.email ?? null,
       ]
     ).catch(() => {
       offerId = null;
@@ -151,8 +158,7 @@ export async function POST(req: NextRequest) {
 
   /* The agent hears either way. Staff mail, so it is not behind the customer
      switch: an offer sitting in a table nobody reads is the failure here. */
-  const agent = await userByName(f.agent);
-  if (agent?.email) {
+  if (agent?.email || listingAgent) {
     /* What a stranger typed on a public page, going into HTML (18 Sep 2026).
        renderPlain was built for our own words and lets markup through, so an
        answer could carry a link, an image, or a line in the button shape that
@@ -189,7 +195,8 @@ export async function POST(req: NextRequest) {
       "",
       `Their email: ${safe(f.email)}`,
     ].join("\n");
-    await sendEmail({ to: agent.email, subject, html: renderPlain(safe(subject), text).html, text: text.replace(/\*\*/g, ""), replyTo: f.email }).catch(() => null);
+    const to = [...new Set([agent?.email, listingAgent].filter((e): e is string => Boolean(e)).map((e) => e.toLowerCase()))];
+    for (const one of to) await sendEmail({ to: one, subject, html: renderPlain(safe(subject), text).html, text: text.replace(/\*\*/g, ""), replyTo: f.email }).catch(() => null);
   }
 
   if (!b.interested) await sendNotForThem(f.token).catch(() => null);
