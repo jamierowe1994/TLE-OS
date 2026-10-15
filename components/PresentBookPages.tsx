@@ -1,7 +1,7 @@
 "use client";
 
 import { INK, Line } from "@/components/present-kit";
-import { APPRAISAL_PROMISES, defaultBio, type PresentDeck as Deck } from "@/lib/present";
+import { agreedFees, APPRAISAL_PROMISES, defaultBio, type PresentDeck as Deck } from "@/lib/present";
 import { incVat, VAT_RATE } from "@/lib/appraisal-email";
 import { AGENDA, AGENDA_INTRO, APPROACH, COMPLIANCE, LEGAL_CAVEAT, LEGAL_ITEMS, MANAGEMENT, MARKETING_POINTS, MAX_PRICE, NEXT_STEPS, PORTALS_COPY, REGULATED, REGULATED_INTRO, RENT_COLLECTION, RENT_LEGAL, SCREENING, SERVICE_LEVELS, SERVICE_LEVELS_INTRO, SERVICE_ROWS, WHAT_WE_OFFER } from "@/lib/present-copy";
 import { FROM_US, FROM_YOU } from "@/components/PresentDeck";
@@ -1428,6 +1428,27 @@ export function BookFees({ deck }: { deck: Deck }) {
         : r.oneOff != null
           ? `${gbp(r.oneOff)} one-off`
           : null;
+  /* The headline follows the service the landlord agreed, and that service
+     leads the example line at its agreed rate (see agreedFees, which the
+     deck's Fees slide uses too). The schedule below stays whole. */
+  const agreed = agreedFees(deck);
+  const examples = f
+    ? [...f.rows]
+        .sort((a, b) => Number(b === agreed.row) - Number(a === agreed.row))
+        .map((r) => {
+          const m = monthly(r === agreed.row ? agreed.priced! : r);
+          return m ? { label: r.label, m, mine: r === agreed.row } : null;
+        })
+        .filter((x): x is { label: string; m: string; mine: boolean } => x != null)
+    : [];
+  /* "One percentage of the rent we collect ... start to finish" is the
+     managed service; said about a tenant find it is not true. */
+  const kindOf = agreed.row ? agreed.row.label.toLowerCase() : "";
+  const opener = /find/.test(kindOf)
+    ? "One fee, charged once on the first month’s rent."
+    : /collect/.test(kindOf)
+      ? "One percentage of the rent we collect."
+      : "One percentage of the rent we collect, and it covers the tenancy from start to finish.";
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       <div className="absolute left-[96px] top-[84px] w-[1250px]">
@@ -1445,10 +1466,10 @@ export function BookFees({ deck }: { deck: Deck }) {
                 above it. */}
             <div className="mt-12 grid grid-cols-[1fr_420px] items-start gap-x-14">
               <div>
-                {f.headline && (
+                {agreed.headline && (
                   <p className="flex flex-wrap items-baseline gap-x-4 leading-none">
-                    <span className="text-[46px]" style={{ ...TITLE, color: "var(--p-accent)" }}>{f.headline}</span>
-                    {f.headlineFor && <span className="text-[18px] text-black/55">{f.headlineFor}</span>}
+                    <span className="text-[46px]" style={{ ...TITLE, color: "var(--p-accent)" }}>{agreed.headline}</span>
+                    {agreed.headlineFor && <span className="text-[18px] text-black/55">{agreed.headlineFor}</span>}
                   </p>
                 )}
                 <dl className="mt-10">
@@ -1471,20 +1492,19 @@ export function BookFees({ deck }: { deck: Deck }) {
                   label baseline-aligned to it starts at ~22. Top-aligned the
                   paragraph floated above the rate. */}
               <p className="pt-[22px] text-[16px] leading-[1.65] text-black/65">
-                One percentage of the rent we collect, and it covers the tenancy from start to finish. Nothing is added later that is not on this page, and what is not included is written here too.
+                {opener} Nothing is added later that is not on this page, and what is not included is written here too.
               </p>
             </div>
             {rent != null && (
               <div className="mt-10 rounded-[22px] px-8 py-6" style={{ background: "var(--p-tint)", width: 1248 }}>
                 <p className="text-[11px] uppercase tracking-[0.3em] text-black/55">At {gbp(rent)} a month, that is</p>
                 <p className="mt-3 text-[19px] leading-[1.6] text-black/80" style={TITLE}>
-                  {f.rows
-                    .map((r) => {
-                      const m = monthly(r);
-                      return m ? `${r.label}: ${m}` : null;
-                    })
-                    .filter(Boolean)
-                    .join("  \u00b7  ")}
+                  {examples.map((x, n) => (
+                    <span key={x.label} className={agreed.row && !x.mine ? "text-black/50" : undefined}>
+                      {n > 0 && "  \u00b7  "}
+                      {x.label}: {x.m}
+                    </span>
+                  ))}
                 </p>
               </div>
             )}
