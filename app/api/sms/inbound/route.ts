@@ -6,6 +6,8 @@ import { ALWAYS_SEND_TO } from "@/lib/switches";
 import { twilioSigned } from "@/lib/sms";
 import { timeForText } from "@/lib/viewing-texts";
 import { userByName } from "@/lib/tenant-email-send";
+import { allAgents } from "@/lib/rex-agents";
+import { isInternalAddress } from "@/lib/email-policy";
 
 /**
  * A text back to the TLE number (10 Oct 2026). Twilio POSTs it here - set as
@@ -15,6 +17,14 @@ import { userByName } from "@/lib/tenant-email-send";
  * emailed straight to that viewing's agent: a viewer replying "running ten
  * minutes late" half an hour before needs a person, not a screen. Anything we
  * cannot place goes to Howard.
+ *
+ * The agent is found the way the reminder found their phone (lib/viewing-texts
+ * phoneForAgent): their OS account, else the work address on their user in the
+ * agents list, matched by the name the diary gives, else the address kept with
+ * their headshot (os_staff_photos) when the agents list does not answer. Until 15 Oct 2026 it was
+ * the OS account only, so every reply to an agent without one - Kirstie
+ * Wallington's viewers on 13 and 14 Oct - went to Howard, who was getting
+ * other people's viewers in his inbox.
  *
  * Signed: refuses with no TWILIO_AUTH_TOKEN, and on a signature that does not
  * check out (lib/sms twilioSigned). Twilio retries on failure, so the message
@@ -51,8 +61,7 @@ export async function POST(req: NextRequest) {
   ).catch(() => []);
   const hit = ours[0] ?? null;
 
-  const agent = hit?.agent ? await userByName(hit.agent).catch(() => null) : null;
-  const tell = agent?.email ?? ALWAYS_SEND_TO[0];
+  const tell = (hit?.agent ? await agentEmail(hit.agent) : null) ?? ALWAYS_SEND_TO[0];
 
   const fresh = await q<{ sid: string }>(
     `INSERT INTO os_sms_inbound (sid, from_number, body, reply_to, viewing_id, told) VALUES ($1,$2,$3,$4,$5,$6)
@@ -75,4 +84,18 @@ export async function POST(req: NextRequest) {
 <p style="font-family:Arial,sans-serif;font-size:14px;color:#555">Their number: <a href="tel:${esc(from)}">${esc(from)}</a>. Ring or text them from your own phone - a reply to this email does not reach them.</p>`;
   await sendEmail({ to: tell, subject, html, audience: "internal" }).catch(() => undefined);
   return EMPTY;
+}
+
+/** The agent's work address by name, or null when neither list knows them. */
+async function agentEmail(name: string): Promise<string | null> {
+  const user = await userByName(name).catch(() => null);
+  if (user?.email) return user.email;
+  const n = name.trim().toLowerCase();
+  const agents = await allAgents().catch(() => []);
+  /* One of ours only: this email carries a customer's number and words, and
+     the internal sender would refuse anything else anyway. */
+  const hit = agents.find((a) => a.name.trim().toLowerCase() === n && a.email && isInternalAddress(a.email));
+  if (hit) return hit.email;
+  const kept = await q<{ emails: string[] }>(`SELECT emails FROM os_staff_photos WHERE lower(name) = $1 LIMIT 1`, [n]).catch(() => []);
+  return (kept[0]?.emails ?? []).map((e) => e.trim().toLowerCase()).find((e) => isInternalAddress(e)) ?? null;
 }
