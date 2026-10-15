@@ -3,7 +3,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { moveOrder, logEvent, getContractor, tenantsOf, type WorksOrder } from "@/lib/works-orders";
 import { withR2, R2_BUCKET, safeName, r2Configured } from "@/lib/r2";
 import { pendingKeyFor } from "@/lib/property-match";
-import { CERT_TYPES, PLAUSIBLE, YMD, fileCertificate } from "@/lib/certificate-intake";
+import { CERT_TYPES, PLAUSIBLE, REAL_DAY, fileCertificate } from "@/lib/certificate-intake";
 import type { SharePerson } from "@/lib/certificate-share";
 
 /**
@@ -35,7 +35,7 @@ export async function fileJobCertificate(o: WorksOrder, input: {
   const issue = (input.issue ?? "").trim();
   if (!CERT_TYPES.has(type)) throw new CertificateRefused("Choose what the certificate is.");
   if (!PLAUSIBLE(expiry)) throw new CertificateRefused("Put the date it runs out on it.");
-  if (issue && !YMD.test(issue)) throw new CertificateRefused("The issue date does not look right.");
+  if (issue && !REAL_DAY(issue)) throw new CertificateRefused("The issue date does not look right.");
   if (!r2Configured) throw new CertificateRefused("Storage isn't connected on this environment.");
 
   /* The file is in R2 TWICE, once on the job and once in the property's

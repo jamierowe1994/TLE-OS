@@ -4,7 +4,7 @@ import { hasDb, q } from "@/lib/db";
 import { DOC_KINDS } from "@/lib/landlord-account";
 import { readable, readsFor, REGISTERS, type RegisterRead } from "@/lib/cert-register";
 import { heldComplianceBook } from "@/lib/compliance-cache";
-import { fileCertificate, PLAUSIBLE, YMD, releaseHeldCertificate, shareOnceChecked } from "@/lib/certificate-intake";
+import { fileCertificate, PLAUSIBLE, REAL_DAY, releaseHeldCertificate, shareOnceChecked } from "@/lib/certificate-intake";
 import { pendingKeyFor } from "@/lib/property-match";
 import { R2_BUCKET, r2Configured, withR2 } from "@/lib/r2";
 import { documentQueriedEmail } from "@/lib/email/agent-emails";
@@ -465,7 +465,7 @@ export async function answer(p: {
     if (types) {
       const f = p.fileAs;
       if (!f?.expiry || !PLAUSIBLE(f.expiry)) throw new Error("Put the date it runs out in first, so it can be filed as a certificate.");
-      if (f.issue && !YMD.test(f.issue)) throw new Error("The issue date needs to be a date.");
+      if (f.issue && !REAL_DAY(f.issue)) throw new Error("The issue date needs to be a date.");
       const type = types.some((t) => t.id === f.type) ? f.type : types[0].id;
       const said = await fileLandlordCertificate({ id: p.id, type, expiry: f.expiry, issue: f.issue ?? null, by: p.by });
       await recordCheck(p);

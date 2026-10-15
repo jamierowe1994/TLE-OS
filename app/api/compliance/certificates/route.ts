@@ -7,8 +7,8 @@ import { r2Configured } from "@/lib/r2";
 import { rexWriteBlockedBecause } from "@/lib/plc-rex";
 import {
   CERT_TYPES,
-  PLAUSIBLE,
-  YMD,
+  FilingFailed,
+  dateProblem,
   fileCertificate,
   outCert,
   writeCertificateRow,
@@ -67,7 +67,18 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ ok: true, stored: true, blocked: await rexWriteBlockedBecause(), certificates: rows.map(outCert) });
 }
 
+/* Whatever throws on the way through, the screen gets words and not a bare
+   500 page it cannot read (Josel, compliance desk, 7-12 Oct). */
 export async function POST(req: NextRequest) {
+  try {
+    return await post(req);
+  } catch (e) {
+    console.error("[compliance/certificates] POST threw:", e);
+    return NextResponse.json({ ok: false, error: "Something went wrong there. Look on the home to see whether the certificate is on file before trying again; if it fails twice, tell the office." }, { status: 500 });
+  }
+}
+
+async function post(req: NextRequest) {
   /* Filing a certificate is anyone's job - an agent on a listing, Kirstie on
      a deal - so any signed-in person may. Reading the whole list is not. */
   const { actor } = await whoIs(req);
@@ -90,8 +101,8 @@ export async function POST(req: NextRequest) {
        stored row is put right first, then REX is brought up to it. */
     const fix = (await req.json().catch(() => null)) as { expiry?: string; issue?: string } | null;
     if (fix?.expiry || fix?.issue) {
-      if (fix.expiry && !PLAUSIBLE(fix.expiry)) return NextResponse.json({ ok: false, error: "expiry must be YYYY-MM-DD between 2000 and 2045." }, { status: 400 });
-      if (fix.issue && !YMD.test(fix.issue)) return NextResponse.json({ ok: false, error: "issue must be YYYY-MM-DD." }, { status: 400 });
+      const bad = (fix.expiry ? dateProblem(fix.expiry, "expiry") : null) ?? (fix.issue ? dateProblem(fix.issue, "issue") : null);
+      if (bad) return NextResponse.json({ ok: false, error: bad }, { status: 400 });
       rows = await q<CertRow>(`UPDATE os_certificates SET expiry = COALESCE($2, expiry), issue = COALESCE($3, issue) WHERE id = $1 RETURNING *`, [retry, fix.expiry ?? null, fix.issue ?? null]);
     }
     const r = await writeCertificateRow(rows[0], `Written by TLE OS from ${rows[0].source || "a dropped file"} (${rows[0].name}).`, req.nextUrl.searchParams.get("refresh") === "1");
@@ -100,8 +111,16 @@ export async function POST(req: NextRequest) {
   }
 
   if (!r2Configured) return NextResponse.json({ ok: false, error: "File storage isn't configured here, so the certificate cannot be kept." }, { status: 503 });
+  /* A form that will not open is nearly always one that did not arrive
+     whole - too big, or the connection dropped - so say that, not "form". */
   const form = await req.formData().catch(() => null);
-  if (!form) return NextResponse.json({ ok: false, error: "Expected a file and its facts as a form." }, { status: 400 });
+  if (!form) {
+    const big = Number(req.headers.get("content-length") ?? 0) > 25 * 1024 * 1024;
+    return NextResponse.json(
+      { ok: false, error: big ? "That file is over 25MB, so it was not kept. Save a smaller copy and upload that." : "The file did not arrive whole, so it was not kept. Try again." },
+      { status: big ? 413 : 400 }
+    );
+  }
   const file = form.get("file");
   /* No REX property yet (a market appraisal, say): the address is the key,
      and the file waits there for the property. */
@@ -115,11 +134,13 @@ export async function POST(req: NextRequest) {
   if (!(file instanceof File) || !file.size) return NextResponse.json({ ok: false, error: "No file." }, { status: 400 });
   if (!/^(\d+|pending-[a-z0-9-]+|pm-[0-9a-f-]+)$/i.test(propertyId)) return NextResponse.json({ ok: false, error: "propertyId must be the REX property id, an OS property id, or give an address." }, { status: 400 });
   if (!CERT_TYPES.has(type)) return NextResponse.json({ ok: false, error: `type must be one of ${[...CERT_TYPES].join(", ")}.` }, { status: 400 });
-  if (!PLAUSIBLE(expiry)) return NextResponse.json({ ok: false, error: "expiry must be YYYY-MM-DD between 2000 and 2045." }, { status: 400 });
-  if (issueRaw && !YMD.test(issueRaw)) return NextResponse.json({ ok: false, error: "issue must be YYYY-MM-DD." }, { status: 400 });
-  if (file.size > 25 * 1024 * 1024) return NextResponse.json({ ok: false, error: "That file is over 25MB." }, { status: 413 });
+  const badDate = dateProblem(expiry, "expiry") ?? (issueRaw ? dateProblem(issueRaw, "issue") : null);
+  if (badDate) return NextResponse.json({ ok: false, error: `${badDate} Nothing was kept.` }, { status: 400 });
+  if (file.size > 25 * 1024 * 1024) return NextResponse.json({ ok: false, error: "That file is over 25MB, so it was not kept. Save a smaller copy and upload that." }, { status: 413 });
 
   const name = file.name || `${type}.pdf`;
+  /* Never a bare 500 (Josel, 7-12 Oct, four times): whatever goes wrong, the
+     screen is told in words, and told whether the certificate was kept. */
   const filed = await fileCertificate({
     bytes: new Uint8Array(await file.arrayBuffer()),
     fileName: name,
@@ -134,7 +155,12 @@ export async function POST(req: NextRequest) {
     refreshBook: req.nextUrl.searchParams.get("refresh") === "1",
     /* The compliance office filing it has checked it already (4 Oct 2026). */
     checkedBy: can(me.role, "see:agent-compliance") ? by : null,
+  }).catch((e: unknown) => {
+    if (e instanceof FilingFailed) return { failed: e.message, kept: e.kept };
+    console.error("[compliance/certificates] filing threw:", e);
+    return { failed: "Something went wrong filing it, and the certificate was not kept. Upload it again; if it fails twice, tell the office.", kept: false };
   });
+  if ("failed" in filed) return NextResponse.json({ ok: false, kept: filed.kept, error: filed.failed }, { status: 500 });
   if (filed.duplicate) return NextResponse.json({ ok: true, duplicate: true, certificate: outCert(filed.row) });
   return NextResponse.json({ ok: true, certificate: outCert(filed.row), share: filed.share });
 }
