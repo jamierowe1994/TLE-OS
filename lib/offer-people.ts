@@ -2,6 +2,8 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { cleanPerson, missingFrom, personLines, type OfferPart, type OtherAdult, type PersonAnswers } from "@/lib/offer-people-shape";
+import { isScottish } from "@/lib/property-flags";
+import { SCOTLAND, type PassportRules } from "@/lib/passport-shape";
 
 /**
  * THE OTHER ADULTS ON AN OFFER, KEPT (James, 14 Oct 2026; the questions and
@@ -27,6 +29,8 @@ export type OfferPerson = {
   filledBy: "lead" | "self" | "agent" | null;
   filledAt: string | null;
   createdAt: string;
+  /** The offer is on a Scottish home: no Right to rent asked or shown (lib/passport-scotland). */
+  scottish: boolean;
 };
 
 let ready: Promise<void> | null = null;
@@ -64,6 +68,7 @@ const shape = (r: Row): OfferPerson => ({
   filledBy: r.filled_by === "lead" || r.filled_by === "self" || r.filled_by === "agent" ? r.filled_by : null,
   filledAt: r.filled_at ? new Date(r.filled_at).toISOString() : null,
   createdAt: new Date(r.created_at).toISOString(),
+  scottish: isScottish(r.property),
 });
 
 const newToken = () => randomBytes(16).toString("base64url");
@@ -73,7 +78,7 @@ const newToken = () => randomBytes(16).toString("base64url");
  * one left for a link needs only the name. Returns what to tell the sender:
  * the reason a part was refused, or the rows made.
  */
-export function checkOthers(raw: unknown): { ok: true; others: OtherAdult[] } | { ok: false; error: string } {
+export function checkOthers(raw: unknown, rules: PassportRules = {}): { ok: true; others: OtherAdult[] } | { ok: false; error: string } {
   const list = Array.isArray(raw) ? raw.slice(0, 8) : [];
   const others: OtherAdult[] = [];
   for (const item of list) {
@@ -83,7 +88,7 @@ export function checkOthers(raw: unknown): { ok: true; others: OtherAdult[] } | 
     const who = answers.name || "the other adult";
     if (answers.name.split(/\s+/).filter(Boolean).length < 2) return { ok: false, error: `Give ${who === "the other adult" ? "each adult" : who} a full name, first and last.` };
     if (mode === "fill") {
-      const gaps = missingFrom(answers);
+      const gaps = missingFrom(answers, rules);
       if (gaps.length) return { ok: false, error: `For ${who}, still needed: ${gaps.join(", ")}.` };
     }
     others.push({ mode, answers });
@@ -136,7 +141,7 @@ export function toOfferParts(list: OfferPerson[], leadName: string): OfferPart[]
     name: m.name,
     filled: m.filled,
     by: m.filledBy === "self" ? "Filled in by them" : m.filledBy === "agent" ? "Filled in by the agent" : m.filledBy === "lead" ? `Filled in by ${(leadName || "the lead tenant").split(/\s+/)[0]}` : null,
-    lines: m.filled ? personLines(m.answers) : [],
+    lines: m.filled ? personLines(m.answers, m.scottish ? SCOTLAND : {}) : [],
     link: partLink(m.token),
   }));
 }

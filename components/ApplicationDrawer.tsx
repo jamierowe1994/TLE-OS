@@ -22,6 +22,7 @@ import HandoffPanel from "@/components/HandoffPanel";
 import { cardStatus, stageStatus } from "@/components/applications/LetsBoard";
 import { PORTAL_STAGES, propolyDealUrl } from "@/lib/business/propoly-stages";
 import { CANCEL_REASONS, CANCEL_WORDS } from "@/lib/let-cancel-words";
+import { isScottish } from "@/lib/property-flags";
 import type { PreTenancyDeal } from "@/app/api/pretenancy/deals/route";
 
 type JourneyAction = NextAction;
@@ -892,6 +893,8 @@ export default function ApplicationDrawer({
   /* "44 South Bridge (tenant swap)" in the heading (13 Oct 2026); the record keeps the plain address. */
   const isSwap = Boolean(app?.id.startsWith("swap:"));
   const locality = app?.locality ?? deal?.app.locality ?? "";
+  /* Right to Rent is England-only law: a Scottish let shows none (James, 15 Oct 2026). */
+  const scottishLet = isScottish(locality, name);
   const image = app?.image ?? deal?.app.image ?? null;
   /* Every photo of the home, off its listing (James, 12 Oct 2026: "on
      Applications we only seem to show the one photo"), the one the record
@@ -949,7 +952,7 @@ export default function ApplicationDrawer({
       ? [
           { icon: "target", label: "Came in", text: received ? niceDate(received.when) : "No date" },
           { icon: "checklist", label: "Checks", text: `${ticked} of ${checklist.length} done` },
-          { icon: "shield", label: "Right to rent", text: `${answered} of ${people.length}` },
+          ...(scottishLet ? [] : [{ icon: "shield", label: "Right to rent", text: `${answered} of ${people.length}` }]),
         ]
       : []),
     { icon: "wallet", label: "Holding fee", text: isSwap ? "None on a tenant swap" : deal ? stageStatus(deal, "holding_fee").text : "No deal yet" },
@@ -1446,7 +1449,7 @@ export default function ApplicationDrawer({
                             ["Income", tenantShown.income != null ? `${gbp(tenantShown.income)} a year` : "Not recorded"],
                             ["Works", [tenantShown.employment, tenantShown.job].filter(Boolean).join(" · ") || "Not recorded"],
                             ["Employer", tenantShown.company || "Not recorded"],
-                            ["Right to rent", <Answer key="rtr" v={tenantShown.rightToRent} yes="Recorded" no="Not recorded" />],
+                            ...(scottishLet ? [] : [["Right to rent", <Answer key="rtr" v={tenantShown.rightToRent} yes="Recorded" no="Not recorded" />]]),
                             ["Landlord reference", <Answer key="ref" v={tenantShown.landlordRef} />],
                             ["Guarantor", <Answer key="g" v={tenantShown.guarantor} yes="Available" no="None" />],
                             ["Adverse credit", <Answer key="ac" v={tenantShown.adverseCredit == null ? null : !tenantShown.adverseCredit} yes="None" no="Disclosed" />],

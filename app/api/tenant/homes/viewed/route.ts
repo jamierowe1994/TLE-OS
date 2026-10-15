@@ -9,7 +9,9 @@ import { agentEmailFor, noteOnLeads } from "@/lib/tenant-find";
 import { proseEmail } from "@/lib/email/prose";
 import { sendEmail } from "@/lib/resend";
 import { APPLICANT_TYPES, EMPTY_PASSPORT, TRADING_FOR, WORK_HOURS, householdIncome, workFlags, workLine, type PassportData } from "@/lib/passport-shape";
-import { savePassport } from "@/lib/passport";
+import { markScottishHome, savePassport } from "@/lib/passport";
+import { isScottish } from "@/lib/property-flags";
+import { SCOTLAND } from "@/lib/passport-shape";
 import { diffOffer, offerSubset, show, type OfferChange, type OfferPassport } from "@/lib/offer-passport";
 import { addOfferPeople, checkOthers, partLink } from "@/lib/offer-people";
 import { incomeOf, personLines, type OtherAdult } from "@/lib/offer-people-shape";
@@ -49,7 +51,7 @@ const yn = (b: boolean | null | undefined) => (b == null ? "not said" : b ? "yes
  * an asterisk and what it said before; one worth a second look (lib/offer-
  * passport watched) says so. Plain text: the email is prose.
  */
-function passportLines(d: OfferPassport, changes: OfferChange[]): string[] {
+function passportLines(d: OfferPassport, changes: OfferChange[], scottish: boolean): string[] {
   const mark = (k: keyof OfferPassport, line: string) => {
     const c = changes.find((x) => x.key === k);
     return c ? `${line} *  (was: ${c.from})${c.watch ? "  - worth a look" : ""}` : line;
@@ -58,8 +60,9 @@ function passportLines(d: OfferPassport, changes: OfferChange[]): string[] {
     mark("applicantType", `Working: ${workLine(d)}`),
     ...workFlags(d).map((f) => `  ! ${f}`),
     mark("annualIncome", `Income: ${show("annualIncome", d.annualIncome)}`),
-    mark("hasBritishPassport", `British or Irish passport: ${show("hasBritishPassport", d.hasBritishPassport)}`),
-    ...(d.hasBritishPassport ? [] : [mark("shareCode", `Share code: ${show("shareCode", d.shareCode)}`)]),
+    /* Right to rent is England only: never on a Scottish home's offer (James, 15 Oct 2026). */
+    ...(scottish ? [] : [mark("hasBritishPassport", `British or Irish passport: ${show("hasBritishPassport", d.hasBritishPassport)}`)]),
+    ...(scottish || d.hasBritishPassport ? [] : [mark("shareCode", `Share code: ${show("shareCode", d.shareCode)}`)]),
     mark("landlordRef", `Landlord reference: ${show("landlordRef", d.landlordRef)}`),
     mark("guarantor", `Guarantor: ${show("guarantor", d.guarantor)}`),
     mark("adverseCredit", `Adverse credit: ${show("adverseCredit", d.adverseCredit)}${d.adverseCredit && d.adverseCreditNote ? ` (${d.adverseCreditNote})` : ""}`),
@@ -107,6 +110,8 @@ export async function POST(req: NextRequest) {
   const address = home ? [home.name, home.locality].filter(Boolean).join(", ") : str(b.address, 200) || "the home they viewed";
   const record = await tenantPassport(me.email).catch(() => null);
   const data = record?.data ?? null;
+  /* A Scottish home: no Right to rent asked of anyone on the offer (lib/passport-scotland). */
+  const scotHome = Boolean(home) && isScottish(home?.locality, address);
 
   /* What they said, checked. */
   let payload: Record<string, unknown>;
@@ -134,16 +139,20 @@ export async function POST(req: NextRequest) {
        passport and kept here with the original, for the agent only. */
     /* A blank household count reads as the sheet's own default (1 adult,
        no children), so filling it in is not flagged to the agent as a change. */
-    const checked = checkOthers(b.others);
+    const checked = checkOthers(b.others, scotHome ? SCOTLAND : {});
     if (!checked.ok) return NextResponse.json({ ok: false, error: checked.error }, { status: 400 });
     others = checked.others;
     const held = offerSubset(data);
     const before = { ...held, numAdults: held.numAdults || "1", numChildren: held.numChildren || "0" };
-    const after = cleanPassport(b.passport, before);
+    const sent = cleanPassport(b.passport, before);
+    /* Never asked on a Scottish home, so what the passport holds is kept, not blanked. */
+    const after = scotHome ? { ...sent, hasBritishPassport: before.hasBritishPassport, shareCode: before.shareCode } : sent;
     const changes = diffOffer(before, after);
     if (changes.length && record) {
       await savePassport(record.token, { ...(data as PassportData), ...after }).catch(() => null);
     }
+    /* An offer on a Scottish home: no nationality on their passport from now on (lib/passport-scotland). */
+    if (record && scotHome) await markScottishHome(record.token).catch(() => null);
     payload = {
       amount,
       asking,
@@ -199,12 +208,12 @@ export async function POST(req: NextRequest) {
       [`Offer: ${gbp(p.amount)} a month${p.asking ? ` (advertised at ${gbp(p.asking)})` : ""}`, `Move in: ${moveIn}`, `Moving in: ${p.movingIn.length ? p.movingIn.join(", ") : `${p.adults} adult${p.adults === 1 ? "" : "s"}${p.children ? `, ${p.children} child${p.children === 1 ? "" : "ren"}` : ""}`}${p.pets ? `, with pets${p.petsNote ? ` (${p.petsNote})` : ""}` : ", no pets"}`].join("\n"),
       ...others.map((o) =>
         o.mode === "fill"
-          ? `Also moving in: ${o.answers.name} (filled in by ${who}):\n${personLines(o.answers).map((l) => `${l.label}: ${l.value}`).join("\n")}`
+          ? `Also moving in: ${o.answers.name} (filled in by ${who}):\n${personLines(o.answers, scotHome ? SCOTLAND : {}).map((l) => `${l.label}: ${l.value}`).join("\n")}`
           : `Also moving in: ${o.answers.name}. Their part is with them to fill in from their own link; it joins the offer when they finish.`
       ),
       p.works.length ? `Works they want done before moving day:\n${p.works.map((w) => `- ${w}`).join("\n")}` : "",
       p.note ? `For the landlord:\n${p.note}` : "",
-      `From their tenant passport, confirmed as up to date:\n${passportLines(p.passport, p.changes).join("\n")}`,
+      `From their tenant passport, confirmed as up to date:\n${passportLines(p.passport, p.changes, scotHome).join("\n")}`,
       p.changes.length
         ? `* ${p.changes.length === 1 ? "One answer was" : `${p.changes.length} answers were`} changed with this offer. They can't see these marks.${p.changes.some((c) => c.watch) ? " Worth a look before it goes to the landlord." : ""}\nOpen the offer: ${OFFER_LINK}`
         : `Open the offer: ${OFFER_LINK}`,

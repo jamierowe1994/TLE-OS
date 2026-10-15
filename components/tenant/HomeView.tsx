@@ -10,6 +10,7 @@ import { offerSubset } from "@/lib/offer-passport";
 import { householdPeople } from "@/lib/passport-shape";
 import type { TenantHome, TenantProperty } from "@/lib/tenant-home-view";
 import { DEAL, STAGE_UPDATE, locksFor, phaseOf } from "@/lib/tenant-journey";
+import { isScottish } from "@/lib/property-flags";
 
 /* The line under the stop on the phone's ring (SpinePhone). */
 const RING_WORDS: Record<string, string> = {
@@ -134,6 +135,8 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
           passport={offerSubset(v.passport.data)}
           people={v.passport.data ? householdPeople(v.passport.data) : []}
           passportHref={v.passport.path}
+          /* Right to rent is England only: a Scottish passport or home never asks it (James, 15 Oct 2026). */
+          scottish={Boolean(v.passport.rules?.noRightToRent) || isScottish(v.enquiry.locality, v.enquiry.property)}
           sample={sample}
           base={base}
         />

@@ -40,11 +40,14 @@ export interface PassportRecord {
   createdAt: string;
   updatedAt: string;
   submittedAt: string | null;
+  /** Sent for a home in Scotland at some point (lib/passport-scotland). */
+  scottishHome: boolean;
 }
 
 type Row = {
   token: string; contact_id: string | null; agent_id: string | null; name: string; email: string;
   data: Partial<PassportData>; created_at: string; updated_at: string; submitted_at: string | null;
+  scottish_home?: boolean | null;
 };
 
 const toRecord = (r: Row): PassportRecord => ({
@@ -60,11 +63,12 @@ const toRecord = (r: Row): PassportRecord => ({
   createdAt: r.created_at,
   updatedAt: r.updated_at,
   submittedAt: r.submitted_at,
+  scottishHome: r.scottish_home === true,
 });
 
 const COLS = `token, contact_id, agent_id, name, email, data,
   created_at::text AS created_at, updated_at::text AS updated_at,
-  submitted_at::text AS submitted_at`;
+  submitted_at::text AS submitted_at, scottish_home`;
 
 /** 32 bytes of randomness. This link is the only credential, so it is not
  *  guessable and it is not derived from anything about the person. */
@@ -252,5 +256,11 @@ export async function submitPassport(token: string): Promise<PassportRecord | nu
   return rows[0] ? toRecord(rows[0]) : null;
 }
 
+/** This passport was sent for a home in Scotland. Sticky: never set back. */
+export async function markScottishHome(token: string): Promise<void> {
+  if (!hasDb() || !token) return;
+  await q("UPDATE os_tenant_passports SET scottish_home = TRUE WHERE token = $1 AND NOT scottish_home", [token]);
+}
+
 export { EMPTY_PASSPORT, SECTIONS, completeness, cleanPassportData, passportComplete, INCOMPLETE } from "@/lib/passport-shape";
-export type { PassportData } from "@/lib/passport-shape";
+export type { PassportData, PassportRules } from "@/lib/passport-shape";

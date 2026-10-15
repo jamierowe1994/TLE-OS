@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import PersonQuestions from "@/components/offers/PersonQuestions";
 import { emptyPerson, missingForLink, missingFrom, type OtherAdult, type PersonAnswers } from "@/lib/offer-people-shape";
+import { SCOTLAND } from "@/lib/passport-shape";
 import { toast } from "@/lib/toast";
 
 /**
@@ -36,10 +37,10 @@ export function useOtherAdults(names: string[], seeds: Partial<PersonAnswers>[] 
 }
 
 /** What still stops the offer going, for the sender: null when it can go. */
-export function othersProblem(others: OtherAdult[]): string | null {
+export function othersProblem(others: OtherAdult[], scottish = false): string | null {
   for (const [i, o] of others.entries()) {
     const who = o.answers.name.trim() || `Adult ${i + 2}`;
-    const gaps = o.mode === "fill" ? missingFrom(o.answers) : missingForLink(o.answers);
+    const gaps = o.mode === "fill" ? missingFrom(o.answers, scottish ? SCOTLAND : {}) : missingForLink(o.answers);
     if (gaps.length) return `${o.mode === "fill" ? `For ${who}, still needed` : `To send ${who} a link, add`}: ${gaps.join(", ")}.`;
   }
   return null;
@@ -51,6 +52,7 @@ export default function OtherAdults({
   actor,
   field,
   label,
+  scottish = false,
 }: {
   others: OtherAdult[];
   onChange: (next: OtherAdult[]) => void;
@@ -58,6 +60,8 @@ export default function OtherAdults({
   actor: "lead" | "agent";
   field: string;
   label: string;
+  /** A Scottish home: no Right to rent asked (James, 15 Oct 2026). */
+  scottish?: boolean;
 }) {
   if (!others.length) return null;
   const put = (i: number, o: OtherAdult) => onChange(others.map((x, n) => (n === i ? o : x)));
@@ -69,7 +73,7 @@ export default function OtherAdults({
           <div key={i} className="rounded-[16px] border border-line/70 bg-white p-4">
             <p className="text-[14px] font-semibold">{o.answers.name.trim() || `Adult ${i + 2}`}</p>
             <p className="mt-0.5 text-[12px] leading-snug text-muted">
-              The landlord needs the same from {first} as from {actor === "lead" ? "you" : "the lead tenant"}: who they are, their work and income, and right to rent.
+              The landlord needs the same from {first} as from {actor === "lead" ? "you" : "the lead tenant"}: who they are, their work and income{scottish ? "" : ", and right to rent"}.
             </p>
             <div className="mt-3 grid grid-cols-2 gap-1.5 rounded-full bg-page p-1">
               {(["fill", "link"] as const).map((m) => (
@@ -86,7 +90,7 @@ export default function OtherAdults({
             </div>
             <div className="mt-4">
               {o.mode === "fill" ? (
-                <PersonQuestions value={o.answers} onChange={(a) => put(i, { ...o, answers: a })} field={field} label={label} />
+                <PersonQuestions value={o.answers} onChange={(a) => put(i, { ...o, answers: a })} field={field} label={label} noRightToRent={scottish} />
               ) : (
                 <>
                   <label className="block">

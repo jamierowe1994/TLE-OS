@@ -1466,6 +1466,11 @@ ALTER TABLE os_tenant_passports ADD COLUMN IF NOT EXISTS agent_id TEXT;
 -- When and by whom the invite email went (4 Sep 2026). Null = minted, never sent.
 ALTER TABLE os_tenant_passports ADD COLUMN IF NOT EXISTS invited_at TIMESTAMPTZ;
 ALTER TABLE os_tenant_passports ADD COLUMN IF NOT EXISTS invited_by TEXT;
+-- Sent for a home in Scotland (15 Oct 2026, lib/passport-scotland): a
+-- Scottish passport carries no nationality. Set when an invite, a viewing or
+-- an offer names a Scottish home, and never set back, because the passport is
+-- reused for the next home and Scotland's rule must not fall off it.
+ALTER TABLE os_tenant_passports ADD COLUMN IF NOT EXISTS scottish_home BOOLEAN NOT NULL DEFAULT FALSE;
 -- Every timed tenant email that has gone, keyed so it can never go twice
 -- (16 Sep 2026, lib/tenant-reminders.ts): "passport-nudge-1:<token>",
 -- "viewing-reminder:<viewing id>:<email>". A row is written only once the

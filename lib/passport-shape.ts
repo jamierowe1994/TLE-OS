@@ -269,12 +269,27 @@ export function householdIncome(d: PassportData): { total: number | null; from: 
  * neither can hold a section open, or a British passport holder with clean
  * credit would be stuck on questions that do not apply to them.
  */
+/**
+ * What changes a passport's questions, decided on the server from who sent it
+ * and which home it is for (lib/passport-scotland).
+ *
+ * noNationality (Lianna Denholm and James, 15 Oct 2026): in Scotland the
+ * passport must not carry nationality. noRightToRent (James, the same day):
+ * Right to Rent is England-only law, so a Scottish passport has no Right to
+ * rent section at all. Neither is asked, required, or shown anywhere the
+ * answers appear. Left out, a passport is the English one.
+ */
+export type PassportRules = { noNationality?: boolean; noRightToRent?: boolean };
+
+/** Scotland's rules: both answers off. */
+export const SCOTLAND: PassportRules = { noNationality: true, noRightToRent: true };
+
 export const SECTIONS: {
   key: string;
   title: string;
   blurb: string;
   stamp: string;
-  done: (d: PassportData) => boolean;
+  done: (d: PassportData, rules?: PassportRules) => boolean;
 }[] = [
   {
     key: "identity",
@@ -282,7 +297,7 @@ export const SECTIONS: {
     blurb: "Your legal name as it appears on your ID, so referencing matches first time.",
     stamp: "IDENTITY",
     /* Mobile too (James, 9 Oct 2026): "we're going to need to be able to contact these people". */
-    done: (d) => Boolean(d.legalName.trim() && d.dob && d.nationality.trim() && d.email.trim() && d.mobile.trim()),
+    done: (d, rules) => Boolean(d.legalName.trim() && d.dob && (rules?.noNationality || d.nationality.trim()) && d.email.trim() && d.mobile.trim()),
   },
   {
     key: "right-to-rent",
@@ -325,6 +340,11 @@ export const SECTIONS: {
   },
 ];
 
+/** The sections this passport has: no Right to rent in Scotland. */
+export function sectionsFor(rules?: PassportRules): typeof SECTIONS {
+  return rules?.noRightToRent ? SECTIONS.filter((s) => s.key !== "right-to-rent") : SECTIONS;
+}
+
 /**
  * Only known fields, of the right kind (moved here from PUT /api/tenant/passport
  * on 9 Oct 2026 so the account step can save with the same rule). Anything
@@ -345,13 +365,14 @@ export function cleanPassportData(raw: Partial<Record<keyof PassportData, unknow
 export const INCOMPLETE = "Some of your answers haven't reached us yet - your signal may have dropped. Go back, check each page is filled in, and press again.";
 
 /** Every section answered: the server's test before a passport is marked finished. */
-export function passportComplete(d: PassportData): boolean {
-  return SECTIONS.every((s) => s.done(d));
+export function passportComplete(d: PassportData, rules?: PassportRules): boolean {
+  return sectionsFor(rules).every((s) => s.done(d, rules));
 }
 
-export function completeness(d: PassportData): { done: number; total: number; pct: number } {
-  const done = SECTIONS.filter((s) => s.done(d)).length;
-  return { done, total: SECTIONS.length, pct: Math.round((done / SECTIONS.length) * 100) };
+export function completeness(d: PassportData, rules?: PassportRules): { done: number; total: number; pct: number } {
+  const sections = sectionsFor(rules);
+  const done = sections.filter((s) => s.done(d, rules)).length;
+  return { done, total: sections.length, pct: Math.round((done / sections.length) * 100) };
 }
 
 /**
@@ -371,8 +392,11 @@ export function completeness(d: PassportData): { done: number; total: number; pc
  * and a credit note only of people who said yes. Counting them would mean a
  * British passport holder with clean credit could never reach 100%.
  */
-export function answered(d: PassportData): { done: number; total: number; pct: number } {
+export function answered(d: PassportData, rules?: PassportRules): { done: number; total: number; pct: number } {
   const optional = new Set<keyof PassportData>([
+    /* Never asked in Scotland, so never counted there. */
+    ...(rules?.noNationality ? (["nationality"] as const) : []),
+    ...(rules?.noRightToRent ? (["hasBritishPassport"] as const) : []),
     "knownAs", "photo", "photoFocus", "movedIn", "shareCode", "savings", "coOccupantIncomes", "coOccupantCredit", "previousAddress",
     "adverseCreditNote", "petsNote", "rentOnTime", "landlordRef", "numChildren",
     /* Only asked of some people, by what they do. */

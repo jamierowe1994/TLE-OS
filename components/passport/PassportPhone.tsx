@@ -16,6 +16,7 @@ import {
   withOtherCredit,
   workLine,
   type PassportData,
+  type PassportRules,
 } from "@/lib/passport-shape";
 import type { PassportQuestion } from "@/components/PassportForm";
 
@@ -114,6 +115,7 @@ export default function PassportPhone({
   pct,
   allDone,
   onFinish,
+  rules = {},
 }: {
   d: PassportData;
   set: Setter;
@@ -131,7 +133,10 @@ export default function PassportPhone({
   pct: number;
   allDone: boolean;
   onFinish: () => void;
+  /** A Scottish passport (lib/passport-scotland): no nationality row, no Right to rent rows. */
+  rules?: PassportRules;
 }) {
+  const noNationality = Boolean(rules.noNationality);
   /* A passport already handed in opens on its list; a new one on the welcome. */
   const [screen, setScreen] = useState<"intro" | number>(submitted ? 0 : "intro");
   /* The page on its way out, kept on screen while the new one swipes in. */
@@ -195,7 +200,8 @@ export default function PassportPhone({
           key: "dob", icon: "calendar", label: "Date of birth", value: longDob(d.dob), required: true, question: "When were you born?",
           sheet: (close) => <DateSheet value={d.dob} max={`${thisYear - 16}-12-31`} onSave={(v) => { set("dob", v); close(); }} />,
         },
-        { key: "nationality", icon: "target", label: "Nationality", value: d.nationality.trim(), required: true, question: "What's your nationality?", sheet: text("nationality", { placeholder: "Start typing", list: NATIONALITY_QUICK, required: true }) },
+        /* Never asked in Scotland (Lianna Denholm, 15 Oct 2026). */
+        ...(noNationality ? [] : [{ key: "nationality", icon: "target", label: "Nationality", value: d.nationality.trim(), required: true, question: "What's your nationality?", sheet: text("nationality", { placeholder: "Start typing", list: NATIONALITY_QUICK, required: true }) }]),
       ],
     },
     {
@@ -204,9 +210,10 @@ export default function PassportPhone({
       rows: [
         { key: "email", icon: "mail", label: "Email", value: d.email.trim(), required: true, question: "Your email address", hint: "Where your agent writes to you, and how you log in.", sheet: text("email", { type: "email", inputMode: "email", placeholder: "you@example.com", required: true }) },
         { key: "mobile", icon: "call", label: "Mobile number", value: d.mobile.trim(), required: true, question: "Your mobile number", hint: "So your agent can reach you about a viewing or an offer.", sheet: text("mobile", { type: "tel", inputMode: "tel", placeholder: "e.g. 07123 456789", required: true }) },
-        { key: "hasBritishPassport", icon: "shield", label: "British or Irish passport", value: yes(d.hasBritishPassport), required: true, question: "Do you have a British or Irish passport?", hint: "Every landlord in England has to check this by law. This one question decides how.", sheet: yesNo("hasBritishPassport") },
+        /* Right to rent: England only, so never on a Scottish passport (James, 15 Oct 2026). */
+        { key: "hasBritishPassport", icon: "shield", label: "British or Irish passport", value: yes(d.hasBritishPassport), required: true, when: !rules.noRightToRent, question: "Do you have a British or Irish passport?", hint: "Every landlord in England has to check this by law. This one question decides how.", sheet: yesNo("hasBritishPassport") },
         {
-          key: "shareCode", icon: "lock", label: "Share code", value: d.shareCode.trim(), required: true, when: d.hasBritishPassport === false, question: "Your share code",
+          key: "shareCode", icon: "lock", label: "Share code", value: d.shareCode.trim(), required: true, when: !rules.noRightToRent && d.hasBritishPassport === false, question: "Your share code",
           hint: "Free from gov.uk/prove-right-to-rent. It takes about two minutes and lasts 90 days. With this we can do the whole check online, today.",
           sheet: text("shareCode", { placeholder: "e.g. W12 A34 B56", required: true }),
         },

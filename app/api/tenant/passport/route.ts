@@ -17,6 +17,7 @@ import { passportQuestions, setPassportAnswer, valuesFor } from "@/lib/attribute
 import { sendPassportThanks } from "@/lib/tenant-journey-emails";
 import { currentTenant } from "@/lib/tenant-account";
 import { normaliseEmail } from "@/lib/users";
+import { forScreen, keepStored, passportRules } from "@/lib/passport-scotland";
 
 /**
  * The tenant's own passport, reached by the link in their email.
@@ -58,12 +59,13 @@ export async function GET(req: NextRequest) {
      ROW, never by anything the caller sent - that is what stops a token being
      used to read another agent's questions, and what makes an agent with none
      add nothing at all. */
-  const [questions, answers] = await Promise.all([
+  const [questions, answers, rules] = await Promise.all([
     passportQuestions(rec.agentId).catch(() => []),
     rec.agentId ? valuesFor(rec.agentId, token).catch(() => ({})) : Promise.resolve({}),
+    passportRules(rec),
   ]);
 
-  return NextResponse.json({ passport: rec, questions, answers });
+  return NextResponse.json({ passport: { ...rec, data: forScreen(rec.data, rules) }, questions, answers, rules });
 }
 
 export async function PUT(req: NextRequest) {
@@ -79,6 +81,8 @@ export async function PUT(req: NextRequest) {
   if (!body?.data || typeof body.data !== "object" || Array.isArray(body.data)) {
     return NextResponse.json({ error: "Expected a passport." }, { status: 400 });
   }
+  /* Scotland asks no nationality (lib/passport-scotland). */
+  const rules = await passportRules(existing);
 
   /* A FINISHED passport (Rig run 4, P-034, 10 Oct 2026). The link alone could
      change one after it was finished - name, income - or wipe every answer
@@ -91,7 +95,7 @@ export async function PUT(req: NextRequest) {
     if (!mine) {
       return NextResponse.json({ error: "This passport is finished. Sign in to your tenant area to update it." }, { status: 409 });
     }
-    if (!passportComplete(cleanPassportData(body.data))) {
+    if (!passportComplete(cleanPassportData(body.data), rules)) {
       return NextResponse.json({ error: INCOMPLETE, incomplete: true }, { status: 409 });
     }
   }
@@ -99,7 +103,9 @@ export async function PUT(req: NextRequest) {
   /* Only known fields are kept. Anything else in the payload is dropped rather
      than stored - the row is JSONB, so without this it would happily accept
      whatever a caller invented and hand it back to the next reader. */
-  const clean = cleanPassportData(body.data);
+  /* A Scottish passport's form never holds a nationality, so the one stored
+     (from before 15 Oct 2026) is kept rather than blanked by the save. */
+  const clean = keepStored(cleanPassportData(body.data), existing.data, rules);
 
   try {
     const saved = await savePassport(token, clean);
@@ -119,7 +125,7 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({ passport: saved });
+    return NextResponse.json({ passport: saved ? { ...saved, data: forScreen(saved.data, rules) } : saved });
   } catch (e) {
     return NextResponse.json(
       { error: publicError(e, "That didn't save.") },
@@ -142,14 +148,15 @@ export async function POST(req: NextRequest) {
        and the passport was marked finished without them). */
     const existing = await getPassport(token).catch(() => null);
     if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
-    if (!passportComplete(existing.data)) {
+    const rules = await passportRules(existing);
+    if (!passportComplete(existing.data, rules)) {
       return NextResponse.json({ error: INCOMPLETE, incomplete: true }, { status: 409 });
     }
     const rec = await submitPassport(token).catch(() => null);
     if (!rec) return NextResponse.json({ error: "Not found." }, { status: 404 });
     /* "Thank you for your passport", once (lib/tenant-journey-emails). */
     await sendPassportThanks(token).catch(() => null);
-    return NextResponse.json({ passport: rec });
+    return NextResponse.json({ passport: { ...rec, data: forScreen(rec.data, rules) } });
   }
 
   /* Minting a link. STAFF ONLY - this is the one operation that creates a

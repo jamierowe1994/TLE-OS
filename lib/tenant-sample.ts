@@ -202,7 +202,7 @@ export function sampleFor(stage: TenantStageKey): TenantHome {
     market: MARKET,
     agent: AGENT,
     deal,
-    passport: { record: null, path: null, done: 6, total: 6, data: SOPHIE_PASSPORT },
+    passport: { record: null, path: null, done: 6, total: 6, data: SOPHIE_PASSPORT, rules: {} },
     next,
     stops,
     activity: activity.slice(0, 4).map(({ at: _at, ...a }) => a),

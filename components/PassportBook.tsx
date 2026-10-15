@@ -1,6 +1,15 @@
 "use client";
 
-import { SECTIONS, householdIncome, money, type PassportData } from "@/lib/passport-shape";
+import { createContext, useContext } from "react";
+import { SECTIONS, householdIncome, money, sectionsFor, type PassportData, type PassportRules } from "@/lib/passport-shape";
+
+/**
+ * The rules this passport is drawn by (lib/passport-scotland): a Scottish
+ * passport has no nationality line, no Right to rent block and no Right to
+ * rent stamp. Provided by
+ * the form and the agent's answers panel; left out, the card is the English one.
+ */
+export const PassportRulesContext = createContext<PassportRules>({});
 
 /**
  * The passport card, drawn as they fill it in. Two faces.
@@ -252,12 +261,13 @@ function RoundStamp() {
   );
 }
 
-/** Six section stamps: brown once earned, outlined until then. */
+/** A stamp per section (six, five in Scotland): brown once earned, outlined until then. */
 function Stamps({ data }: { data: PassportData }) {
+  const rules = useContext(PassportRulesContext);
   return (
     <div className="flex items-center" style={{ gap: 8 }}>
-      {SECTIONS.map((s, i) => {
-        const done = s.done(data);
+      {sectionsFor(rules).map((s, i) => {
+        const done = s.done(data, rules);
         return (
           <span
             key={s.key}
@@ -295,7 +305,8 @@ function PersonMark() {
 /* ── The front ───────────────────────────────────────────────────────────── */
 
 export default function PassportBook({ data, focus = null }: { data: PassportData; focus?: PassportFocus }) {
-  const identity = SECTIONS[0].done(data);
+  const rules = useContext(PassportRulesContext);
+  const identity = SECTIONS[0].done(data, rules);
   const name = data.legalName.trim();
   const BAND = 150;
 
@@ -350,7 +361,8 @@ export default function PassportBook({ data, focus = null }: { data: PassportDat
             <Cell label="Tenant ID" value={docNumber(data)} icon="id" width={214} />
           </div>
           <div className="flex flex-col" style={{ gap: 22, width: 160 }}>
-            <Cell label="Nationality" value={data.nationality.trim()} icon="globe" lit={focus === "nationality"} width={160} />
+            {/* Never in Scotland (Lianna Denholm, 15 Oct 2026). */}
+            {!rules.noNationality && <Cell label="Nationality" value={data.nationality.trim()} icon="globe" lit={focus === "nationality"} width={160} />}
             <Cell label="Known as" value={data.knownAs.trim()} icon="person" lit={focus === "knownAs"} width={160} />
           </div>
         </div>
@@ -393,6 +405,7 @@ function mrz(d: PassportData): [string, string] {
   const first = parts.slice(0, -1).join("<");
   const name = pad(`${last}<<${first}`.replace(/[^A-Z<]/g, ""), 36);
   const dob = d.dob ? d.dob.slice(2).replace(/-/g, "") : "<<<<<<";
+  /* Blank on a Scottish passport: the screens are never sent one. */
   const nat = pad(cap(d.nationality).replace(/[^A-Z]/g, ""), 3);
   return [`P<TLE${name}`, pad(`${docNumber(d).replace("-", "")}<${nat}${dob}`, 41)];
 }
@@ -436,6 +449,7 @@ const VRule = () => <div aria-hidden style={{ width: 1.5, alignSelf: "stretch" }
 
 export function PassportBack({ data }: { data: PassportData }) {
   const d = data;
+  const rules = useContext(PassportRulesContext);
   const hh = householdIncome(d);
   const [l1, l2] = mrz(d);
   const rtr =
@@ -454,9 +468,12 @@ export function PassportBack({ data }: { data: PassportData }) {
       }
     >
       <div className="absolute inset-x-0 grid grid-cols-2 px-9" style={{ top: BAND + 24, columnGap: 36, rowGap: 14 }}>
-        <Group title="Right to rent" icon="shield" done={SECTIONS[1].done(d)}>
-          <Small label="Checked by" value={rtr} width={330} />
-        </Group>
+        {/* England only: never on a Scottish passport (James, 15 Oct 2026). */}
+        {!rules.noRightToRent && (
+          <Group title="Right to rent" icon="shield" done={SECTIONS[1].done(d)}>
+            <Small label="Checked by" value={rtr} width={330} />
+          </Group>
+        )}
         <Group title="What they earn" icon="coins" done={SECTIONS[2].done(d)}>
           <div className="flex" style={{ gap: 10 }}>
             <Small label="Status" value={d.applicantType} width={150} />
@@ -475,6 +492,8 @@ export function PassportBack({ data }: { data: PassportData }) {
             <Small label="Household" value={hh.total === null ? "" : `£${hh.total.toLocaleString("en-GB")}`} width={120} />
           </div>
         </Group>
+        {/* Across the whole card when Right to rent is not there, so the grid has no hole. */}
+        <div style={rules.noRightToRent ? { gridColumn: "1 / -1" } : undefined}>
         <Group title="Current rental" icon="home" done={SECTIONS[4].done(d)}>
           <Small label="Address" value={d.currentAddress.trim()} width={330} />
           <div className="flex" style={{ gap: 16, marginTop: 8 }}>
@@ -485,6 +504,7 @@ export function PassportBack({ data }: { data: PassportData }) {
             <Small label="Reference" value={yesNo(d.landlordRef)} width={100} />
           </div>
         </Group>
+        </div>
         <div style={{ gridColumn: "1 / -1" }}>
           <Group title="Declared" icon="doc" done={SECTIONS[5].done(d)}>
             <div className="flex" style={{ gap: 12 }}>
@@ -502,7 +522,7 @@ export function PassportBack({ data }: { data: PassportData }) {
 
       {/* The stamp, pressed in, bottom right. */}
       <div className="absolute" style={{ right: 30, bottom: 28, transform: "rotate(-6deg)" }}>
-        <Emboss size={168} strong={SECTIONS.every((s) => s.done(d))} />
+        <Emboss size={168} strong={sectionsFor(rules).every((s) => s.done(d, rules))} />
       </div>
 
       <div className="absolute flex items-end" style={{ left: 36, right: 226, bottom: 34, gap: 18 }}>

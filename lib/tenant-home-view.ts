@@ -1,7 +1,8 @@
 import "server-only";
 import type { Stop } from "@/lib/landlord-journey";
 import { findUserById } from "@/lib/users";
-import { completeness, type PassportData } from "@/lib/passport-shape";
+import { completeness, type PassportData, type PassportRules } from "@/lib/passport-shape";
+import { forScreen, passportRules } from "@/lib/passport-scotland";
 import type { PassportRecord } from "@/lib/passport";
 import { tenantDealViews, tenantPassport, type TenantAccount, type TenantDealView } from "@/lib/tenant-account";
 import { STAGE_UPDATE, fillUpdate, findingRoad, isStage, type TenantStageKey } from "@/lib/tenant-journey";
@@ -48,7 +49,8 @@ export type TenantHome = {
   market: TenantProperty[];
   agent: { name: string; email: string | null; phone: string | null; photo: string | null } | null;
   deal: TenantDealView | null;
-  passport: { record: PassportRecord | null; path: string | null; done: number; total: number; data: PassportData | null };
+  /** rules: a Scottish passport has no nationality or Right to rent (lib/passport-scotland). */
+  passport: { record: PassportRecord | null; path: string | null; done: number; total: number; data: PassportData | null; rules: PassportRules };
   next: { title: string; blurb: string; cta: string; href: string };
   stops: Stop[];
   activity: { label: string; sub: string; when: string; tone: "done" | "live" | "quiet" }[];
@@ -58,10 +60,13 @@ const day = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
 
 export async function loadTenantHome(me: TenantAccount): Promise<TenantHome> {
-  const [deals, record] = await Promise.all([tenantDealViews(me).catch(() => []), tenantPassport(me.email)]);
+  const [deals, stored] = await Promise.all([tenantDealViews(me).catch(() => []), tenantPassport(me.email)]);
   const deal = deals[0] ?? null;
+  /* Scotland: no nationality or Right to rent, counted or shown (lib/passport-scotland). */
+  const rules: PassportRules = stored ? await passportRules(stored).catch(() => ({})) : {};
+  const record = stored ? { ...stored, data: forScreen(stored.data, rules) } : null;
   const data = record?.data ?? null;
-  const { done, total } = data ? completeness(data) : { done: 0, total: 6 };
+  const { done, total } = data ? completeness(data, rules) : { done: 0, total: 6 };
   const first = me.name.split(/\s+/)[0] || me.name;
   /* Before a deal: the home they asked about, from the portal or from
      Rightmove and the rest (os_leads). Nearly everybody has one on day one,
@@ -178,7 +183,7 @@ export async function loadTenantHome(me: TenantAccount): Promise<TenantHome> {
     market: onMarket,
     agent,
     deal,
-    passport: { record, path: passportPath, done, total, data },
+    passport: { record, path: passportPath, done, total, data, rules },
     next,
     stops,
     activity: activity.slice(0, 4),

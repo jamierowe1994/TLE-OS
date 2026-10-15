@@ -3,6 +3,7 @@ import { getPassport } from "@/lib/passport";
 import { passportQuestions, valuesFor } from "@/lib/attributes";
 import { findUserById } from "@/lib/users";
 import { tenantAccountByEmail } from "@/lib/tenant-account";
+import { forScreen, passportRules } from "@/lib/passport-scotland";
 
 /**
  * The passport, reached by the link in the tenant's email.
@@ -51,20 +52,23 @@ export default async function Page({ params }: { params: Promise<{ token: string
    * last two cheap and the form identical to what it is today.
    */
   const email = (record.data.email || record.email || "").trim();
-  const [questions, answers, agent, account] = await Promise.all([
+  const [questions, answers, agent, account, rules] = await Promise.all([
     passportQuestions(record.agentId).catch(() => []),
     record.agentId ? valuesFor(record.agentId, token).catch(() => ({})) : Promise.resolve({}),
     record.agentId ? findUserById(record.agentId).catch(() => null) : Promise.resolve(null),
     /* Whether this email already has a tenant login: decides if the last
        screen makes an account or opens the one they have. */
     email.includes("@") ? tenantAccountByEmail(email).catch(() => null) : Promise.resolve(null),
+    /* Scotland: no nationality or Right to rent asked or shown (lib/passport-scotland). */
+    passportRules(record),
   ]);
 
   return (
     <main>
       <PassportForm
         token={record.token}
-        initial={record.data}
+        initial={forScreen(record.data, rules)}
+        rules={rules}
         submittedAt={record.submittedAt}
         questions={questions}
         initialAnswers={answers}

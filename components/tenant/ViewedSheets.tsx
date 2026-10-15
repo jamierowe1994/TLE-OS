@@ -70,6 +70,7 @@ export default function ViewedSheets({
   passport,
   people,
   passportHref,
+  scottish = false,
   sample,
   base,
 }: {
@@ -82,6 +83,8 @@ export default function ViewedSheets({
   /** Who is on the passport, by name, to tick off as moving in. */
   people: HouseholdPerson[];
   passportHref: string | null;
+  /** A Scottish passport or home: no Right to rent asked (lib/passport-scotland). */
+  scottish?: boolean;
   sample: boolean;
   base: string;
 }) {
@@ -152,7 +155,7 @@ export default function ViewedSheets({
       if (!amount.trim() || offerError) return setErr(offerError ?? "Tell us what you'd like to offer each month.");
       if (!moveIn) return setErr("Choose the day you'd like to move in.");
       if (people.length && !ticked.has("you")) return setErr("You're the one making the offer, so you need to be moving in.");
-      const gap = othersProblem(others);
+      const gap = othersProblem(others, scottish);
       if (gap) return setErr(gap);
       if (!confirmed) return setErr("Tick to say your details are up to date.");
     }
@@ -374,7 +377,7 @@ export default function ViewedSheets({
               <>
                 <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">The other {others.length === 1 ? "adult" : "adults"} moving in</p>
                 <div className="mt-2">
-                  <OtherAdults others={others} onChange={setOthers} actor="lead" field={field} label={label} />
+                  <OtherAdults others={others} onChange={setOthers} actor="lead" field={field} label={label} scottish={scottish} />
                 </div>
               </>
             )}
@@ -430,10 +433,12 @@ export default function ViewedSheets({
                   <input inputMode="numeric" value={pp.annualIncome} onChange={(e) => set("annualIncome", e.target.value)} placeholder="A year, before tax" className={`${field} pl-7`} />
                 </div>
               </Fact>
-              <Fact id="rtr" title="Right to rent" value={pp.hasBritishPassport ? "British or Irish passport" : pp.shareCode ? `Share code ${pp.shareCode}` : "Not given yet"} editing={editing} setEditing={setEditing}>
-                <YesNo q="Do you have a British or Irish passport?" v={pp.hasBritishPassport} on={(v) => set("hasBritishPassport", v)} />
-                {pp.hasBritishPassport === false && <input value={pp.shareCode} onChange={(e) => set("shareCode", e.target.value.toUpperCase())} placeholder="Your share code" className={`${field} mt-2`} />}
-              </Fact>
+              {!scottish && (
+                <Fact id="rtr" title="Right to rent" value={pp.hasBritishPassport ? "British or Irish passport" : pp.shareCode ? `Share code ${pp.shareCode}` : "Not given yet"} editing={editing} setEditing={setEditing}>
+                  <YesNo q="Do you have a British or Irish passport?" v={pp.hasBritishPassport} on={(v) => set("hasBritishPassport", v)} />
+                  {pp.hasBritishPassport === false && <input value={pp.shareCode} onChange={(e) => set("shareCode", e.target.value.toUpperCase())} placeholder="Your share code" className={`${field} mt-2`} />}
+                </Fact>
+              )}
               <Fact id="ref" title="Landlord reference" value={show("landlordRef", pp.landlordRef)} editing={editing} setEditing={setEditing}>
                 <YesNo q="Can your current or last landlord give a reference?" v={pp.landlordRef} on={(v) => set("landlordRef", v)} />
               </Fact>

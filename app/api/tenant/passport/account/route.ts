@@ -9,6 +9,7 @@ import { startVerification } from "@/lib/verification";
 import { renderTenantSignIn } from "@/lib/email/tle-emails";
 import { sendEmail } from "@/lib/resend";
 import { sendPassportThanks } from "@/lib/tenant-journey-emails";
+import { keepStored, passportRules } from "@/lib/passport-scotland";
 
 /**
  * The end of the passport: an account, and straight in.
@@ -62,10 +63,12 @@ export async function POST(req: NextRequest) {
      came back for this step, and the passport was finished without them. Now
      this step saves what the screen holds, and nothing is finished, and no
      account made, while a required answer is still missing. */
+  /* Scotland asks no nationality, and keeps any stored one (lib/passport-scotland). */
+  const rules = await passportRules(record);
   if (body.data && typeof body.data === "object" && !record.submittedAt) {
-    record = (await savePassport(token, cleanPassportData(body.data)).catch(() => null)) ?? record;
+    record = (await savePassport(token, keepStored(cleanPassportData(body.data), record.data, rules)).catch(() => null)) ?? record;
   }
-  if (!record.submittedAt && !passportComplete(record.data)) {
+  if (!record.submittedAt && !passportComplete(record.data, rules)) {
     return NextResponse.json({ ok: false, incomplete: true, error: INCOMPLETE }, { status: 409 });
   }
 
