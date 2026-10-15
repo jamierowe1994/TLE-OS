@@ -2596,6 +2596,14 @@ function ListingDrawerBody({
             tenant={listing.tenant ?? null}
             landlord={landlord.status === "known" ? landlord.landlord : null}
             onApply={(p) => { setOpenViewing(null); applyFor(p); }}
+            onCancelled={() => {
+              /* Shown as cancelled straight away; the tab's next read agrees. */
+              setViewings((cur) => cur && {
+                upcoming: cur.upcoming.map((x) => (x.id === v.id ? { ...x, cancelled: true } : x)),
+                past: cur.past,
+              });
+              setOpenViewing(null);
+            }}
             onClose={() => setOpenViewing(null)}
           />
         );

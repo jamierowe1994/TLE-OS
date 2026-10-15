@@ -97,7 +97,7 @@ async function refreshAfterAccess(id: string): Promise<void> {
   if (!property) return;
   const rows = await q<{ listing_id: string }>(
     `SELECT DISTINCT booking->>'listingId' AS listing_id FROM os_appointments
-      WHERE kind = 'viewing' AND starts_at > NOW() AND booking->>'listingId' ~ '^[0-9]+$'`
+      WHERE kind = 'viewing' AND cancelled_at IS NULL AND starts_at > NOW() AND booking->>'listingId' ~ '^[0-9]+$'`
   ).catch(() => []);
   const { readListingDetails } = await import("@/lib/listing-details");
   for (const r of rows) {

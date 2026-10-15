@@ -12,6 +12,7 @@ import { osFeedbackFor } from "@/lib/viewing-feedback-store";
 import { outlookDiaryFor, type OutlookRead } from "@/lib/outlook-diary";
 import { noteRexOutlookSync, withoutPulledCopies } from "@/lib/rex-outlook-sync";
 import { personalBusyFor, type PersonalRead } from "@/lib/personal-calendar";
+import { cancelledViewings, withoutCancelled } from "@/lib/viewing-cancelled";
 
 /**
  * The team's diary, cached — same manners as leads and listings.
@@ -49,6 +50,7 @@ async function ours(authorId: string | null, selfId: string): Promise<Appt[]> {
         WHERE starts_at > NOW() - INTERVAL '21 days'
           AND starts_at < NOW() + INTERVAL '60 days'
           AND rex_event_id IS NULL
+          AND cancelled_at IS NULL
           AND ($1::text IS NULL OR author_id = $1)
         ORDER BY starts_at`,
       [authorId]
@@ -287,13 +289,16 @@ export async function GET(req: NextRequest) {
      for the slow REX pull; applying it to our own table would mean saving a
      travel buffer and watching the diary insist it isn't there for another
      minute and a half. */
-  const [scope, rexLogin, mine, found] = await Promise.all([
+  const [scope, rexLogin, mine, found, gone] = await Promise.all([
     scopeForWho(req, who0),
     hasDb()
       ? q<{ rex_email: string }>(`SELECT rex_email FROM os_rex_tokens WHERE user_id = $1`, [person.id]).catch(() => [])
       : Promise.resolve([] as { rex_email: string }[]),
     ours(mineOnly ? person.id : null, person.id),
     rexConfigured() ? heldDiary() : Promise.resolve(null),
+    /* Cancelled in the OS, read fresh: REX stops returning a cancelled entry,
+       but a held copy (or the agent's Outlook twin of it) still has it. */
+    cancelledViewings(),
   ]);
   const who = mineOnly
     ? { email: (person.email ?? "").toLowerCase() || null, name: (scope.everything ? person.name : scope.label) || null, rexEmail: rexLogin[0]?.rex_email ?? null }
@@ -323,7 +328,7 @@ export async function GET(req: NextRequest) {
       const theirs = mineOnly ? marked.appts : marked.appts.filter((a) => a.own);
       after(() => noteRexOutlookSync(actor.id, theirs, outlook.appts).catch(() => undefined));
     }
-    const withBoth = withOutlook(marked, outlook, mineOnly);
+    const withBoth = withoutCancelled(withOutlook(marked, outlook, mineOnly), gone);
     const personal = await personalP;
     return { ...withPersonal(withBoth, personal), whose, outlook: outlookSaid(outlook), personal: personalSaid(personal) };
   };
@@ -337,7 +342,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       live: false,
-      mine: [...mine, ...(outlook?.appts ?? []), ...personal.appts],
+      mine: [...mine, ...withoutCancelled({ appts: outlook?.appts ?? [] }, gone).appts, ...personal.appts],
       whose,
       outlook: outlookSaid(outlook),
       personal: personalSaid(personal),

@@ -109,7 +109,7 @@ export async function allSpines(): Promise<Record<string, Spine>> {
     q<{ lead_id: string }>(`select distinct lead_id from os_market_appraisals where lead_id is not null`),
     /* A viewing booked from the lead (/api/viewings/book) is the tenant
        lead's job done (Howard, 1 Oct 2026: it goes under Completed). */
-    q<{ lead_id: string }>(`select distinct lead_id from os_appointments where kind = 'viewing' and lead_id is not null`).catch(() => []),
+    q<{ lead_id: string }>(`select distinct lead_id from os_appointments where kind = 'viewing' and lead_id is not null and cancelled_at is null`).catch(() => []),
     /* Banked to get back in touch on a date (Howard, 1 Oct 2026). */
     q<{ lead_id: string; due_at: Date }>(
       `select lead_id, min(due_at) as due_at from os_tasks where kind = 'follow-up' and done_at is null and lead_id is not null and due_at is not null group by lead_id`

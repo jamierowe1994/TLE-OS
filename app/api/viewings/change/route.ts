@@ -49,5 +49,7 @@ export async function POST(req: NextRequest) {
        the Reschedule and Cancel buttons, which still tell them here. */
     notify: b.notify !== false,
   });
-  return NextResponse.json({ ok: true, ...out });
+  /* ok is what happened, not that the request arrived (15 Oct 2026): a cancel
+     that changed nothing used to come back ok and the screen said cancelled. */
+  return NextResponse.json(out, { status: out.ok ? 200 : 409 });
 }

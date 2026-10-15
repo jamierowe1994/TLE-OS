@@ -70,6 +70,22 @@ export async function heldDiary(): Promise<Cached | null> {
   return hold.memory ?? stored;
 }
 
+/**
+ * Take one entry out of the held book now (Lorna's ticket, 15 Oct 2026). A
+ * viewing cancelled in the OS stayed in the diary for as long as the held copy
+ * lived - two minutes fresh, up to an hour stale, longer after 8pm when the
+ * timer sleeps - so the agent saw it still booked and pressed Cancel again.
+ */
+export async function dropFromHeldDiary(id: string): Promise<void> {
+  const held = await heldDiary();
+  if (!held || !held.book.appts.some((a) => a.id === id)) return;
+  const entry = { book: { ...held.book, appts: held.book.appts.filter((a) => a.id !== id) }, at: held.at };
+  hold.memory = entry;
+  if (!hasDb()) return;
+  /* Keeps its own time: dropping one entry is not a fresh read of REX. */
+  await q(`UPDATE os_cache SET payload = $2 WHERE key = $1`, [CACHE_KEY, JSON.stringify({ book: entry.book })]).catch(() => null);
+}
+
 /** Read the diary again. Callers arriving while one is running join it. */
 export function refreshDiaryBook(): Promise<Cached> {
   if (!hold.refreshing) {

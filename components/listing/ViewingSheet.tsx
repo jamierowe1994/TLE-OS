@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import CancelViewing from "@/components/CancelViewing";
 import {
   AccessComposer,
   AccessSettings,
@@ -62,6 +63,7 @@ export default function ViewingSheet({
   tenant,
   landlord,
   onApply,
+  onCancelled,
   onClose,
 }: {
   viewing: SheetViewing;
@@ -73,6 +75,8 @@ export default function ViewingSheet({
   tenant?: { name: string; email: string; phone: string } | null;
   landlord?: { name: string; email: string | null; phone: string | null } | null;
   onApply?: (p: { id: string; name: string; phone?: string | null }) => void;
+  /** Given, a booked viewing still to come offers Cancel viewing (Lorna, 15 Oct 2026). */
+  onCancelled?: (said: string) => void;
   onClose: () => void;
 }) {
   const [setting, setSetting] = useState(false);
@@ -126,6 +130,23 @@ export default function ViewingSheet({
             {v.cancelled ? " · cancelled" : past ? (v.feedbackId ? " · feedback in" : " · been") : ` · ${v.status ?? "booked"}`}
           </p>
           {v.description && <p className="mt-2 whitespace-pre-line text-[12px] leading-relaxed text-muted">{v.description}</p>}
+          {onCancelled && !past && !v.cancelled && (v.id.startsWith("rex-") || v.id.startsWith("os-")) && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <CancelViewing
+                target={{
+                  id: v.id,
+                  startsAt: v.startsAt,
+                  mins: v.mins,
+                  who: v.contacts.map((c) => c.name).filter(Boolean).join(" and "),
+                  email: v.contacts.find((c) => c.email)?.email ?? null,
+                  address,
+                  unaccompanied: /unaccompanied/i.test(v.type ?? ""),
+                }}
+                onDone={onCancelled}
+                className={pill}
+              />
+            </div>
+          )}
         </section>
 
         {/* ── can we get in? ── */}

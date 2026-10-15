@@ -30,6 +30,7 @@ import {
 } from "@/components/viewings/shared";
 import { WhatsAppButton } from "@/components/WhatsAppQr";
 import CancelAppointment, { canCancelGeneral } from "@/components/CancelAppointment";
+import CancelViewing, { canCancelViewing, targetFromAppt } from "@/components/CancelViewing";
 
 /**
  * The quick look: what IS this, and what do I need to know before I go.
@@ -500,6 +501,8 @@ export default function AppointmentDrawer({
                   Property
                 </Link>
               )}
+              {/* Straight from the diary, without opening the file (Lorna, 15 Oct 2026). */}
+              {canCancelViewing(appt) && <CancelViewing target={targetFromAppt(appt)} onDone={() => onClose()} className={secondary} />}
             </div>
           ) : appt.link ? (
             <Link href={appt.link.href} className={`${primary} w-full`}>

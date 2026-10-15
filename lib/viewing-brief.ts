@@ -82,7 +82,7 @@ export async function refreshViewingDiaries(listingId: string): Promise<number> 
   if (!hasDb() || !/^\d+$/.test(listingId)) return 0;
   const rows = await q<{ id: string; rex_event_id: string | null; author_id: string; author_name: string; lead_id: string | null; booking: Record<string, unknown> | null }>(
     `SELECT id, rex_event_id, author_id, author_name, lead_id, booking FROM os_appointments
-      WHERE kind = 'viewing' AND starts_at > NOW() AND booking->>'listingId' = $1`,
+      WHERE kind = 'viewing' AND cancelled_at IS NULL AND starts_at > NOW() AND booking->>'listingId' = $1`,
     [listingId]
   ).catch(() => []);
   if (!rows.length) return 0;
