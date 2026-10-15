@@ -1,6 +1,6 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
-import type { Appt } from "@/lib/diary";
+import { minutesOf, type Appt } from "@/lib/diary";
 
 /**
  * DOES THIS PERSON'S REX COPY ITS DIARY INTO THEIR OUTLOOK?
@@ -64,4 +64,31 @@ export async function noteRexOutlookSync(userId: string, theirs: Appt[], outlook
      ON CONFLICT (kind, record_id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()`,
     [KIND, userId, JSON.stringify({ on, at: new Date().toISOString(), twinned, of: rex.length })]
   ).catch(() => null);
+}
+
+/**
+ * THE OS'S OUTLOOK ENTRY, PULLED BACK IN BY THEIR REX (Richard, 14 Oct 2026:
+ * "OS has created two appointments in the diary" for one appraisal).
+ *
+ * The OS writes a booking once to REX and once to Outlook. Some people's REX
+ * reads their Outlook calendar into itself, so the Outlook entry came back as
+ * a second REX entry at the same time - two REX entries, both drawn. It is
+ * recognisable by the title the OS gives its Outlook entries ("Market
+ * appraisal - ...", "Viewing - ..."). Dropped only when the booking is already
+ * on the day at that time from somewhere else, so nothing goes missing.
+ */
+const OS_OUTLOOK_TITLE = /^(Market appraisal|Viewing|Unaccompanied viewing|Take-on visit) - /;
+export function withoutPulledCopies<B extends { appts: Appt[] }>(book: B): B {
+  const copy = (a: Appt) => Boolean(a.fromRex) && OS_OUTLOOK_TITLE.test(a.what ?? "");
+  const copies = book.appts.filter(copy);
+  if (!copies.length) return book;
+  const drop = new Set(
+    copies.filter((c) =>
+      book.appts.some((a) =>
+        a !== c && !copy(a) && a.day === c.day && (!a.agentEmail || a.agentEmail === c.agentEmail) &&
+        Math.abs(minutesOf(a.start) - minutesOf(c.start)) <= 2
+      )
+    )
+  );
+  return drop.size ? { ...book, appts: book.appts.filter((a) => !drop.has(a)) } : book;
 }

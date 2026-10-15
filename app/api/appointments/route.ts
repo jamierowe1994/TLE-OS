@@ -4,6 +4,8 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
+import { whoIs } from "@/lib/admin";
+import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 
 /**
  * Appointments and reminders made in the OS.
@@ -99,4 +101,40 @@ export async function POST(req: NextRequest) {
       { status: 502 }
     );
   }
+}
+
+/**
+ * Cancel a general appointment made here (Rhiannon, 15 Oct 2026: "no option
+ * to cancel" a duplicate she had put in her diary).
+ *
+ * Only the OS's own general entries, and only the person who made them: a
+ * booked viewing cancels through its own file (lib/viewing-change), a slot
+ * through Remove slot, an inspection visit through the inspection. None of
+ * these rows reach Outlook or anywhere else, so taking the row out is the
+ * whole of it.
+ */
+export async function DELETE(req: NextRequest) {
+  try {
+    assertNotViewingAs(req.cookies.get(VIEW_AS_COOKIE)?.value);
+  } catch (e) {
+    if (e instanceof ViewingAsRefused) return NextResponse.json({ ok: false, said: e.message }, { status: 423 });
+    throw e;
+  }
+  const { actor } = await whoIs(req);
+  if (!actor) return NextResponse.json({ ok: false, said: "Sign in first." }, { status: 401 });
+  if (!hasDb()) return NextResponse.json({ ok: false, said: "Nothing to cancel here." }, { status: 503 });
+  const b = (await req.json().catch(() => ({}))) as { id?: string };
+  const rowId = String(b.id ?? "").replace(/^os-/, "");
+  if (!/^[A-Za-z0-9-]{8,64}$/.test(rowId)) return NextResponse.json({ ok: false, said: "Which appointment?" }, { status: 400 });
+
+  const gone = await q<{ id: string }>(
+    `DELETE FROM os_appointments
+      WHERE id = $1 AND author_id = $2 AND booking IS NULL AND rex_event_id IS NULL
+        AND kind <> 'slot' AND id NOT LIKE 'inspection-%'
+      RETURNING id`,
+    [rowId, actor.id]
+  ).catch(() => null);
+  if (gone === null) return NextResponse.json({ ok: false, said: "That didn't cancel it. Try again." }, { status: 502 });
+  if (!gone.length) return NextResponse.json({ ok: false, said: "That appointment isn't yours to cancel, or it has gone already." }, { status: 404 });
+  return NextResponse.json({ ok: true, said: "Cancelled and taken out of your diary." });
 }
