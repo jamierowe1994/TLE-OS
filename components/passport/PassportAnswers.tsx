@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import PassportScene from "@/components/PassportScene";
-import { EMPTY_PASSPORT, isEmployed, isTrading, type PassportData } from "@/lib/passport-shape";
+import { EMPTY_PASSPORT, isEmployed, isTrading, otherAdultCount, otherCredit, otherName, type PassportData } from "@/lib/passport-shape";
 
 /**
  * A TENANT'S PASSPORT, AS A LIST (James, 8 Oct 2026).
@@ -30,6 +30,14 @@ const dob = (s: string) => (/^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(`${s}T12:00
 const month = (s: string) => (/^\d{4}-\d{2}$/.test(s) ? new Date(`${s}-01T12:00:00`).toLocaleDateString("en-GB", { month: "long", year: "numeric" }) : s || null);
 
 function groups(d: PassportData, household: number | null): { title: string; rows: [string, string | null][] }[] {
+  /* Each adult's credit under their own name (Rhiannon, 14 Oct 2026). A
+     passport from before the others were asked shows "Not answered". */
+  const others = otherAdultCount(d);
+  const leadFirst = d.legalName.trim().split(/\s+/)[0] || "lead tenant";
+  const othersCredit: [string, string | null][] = Array.from({ length: others }, (_, k) => {
+    const c = otherCredit(d, k);
+    return [`Adverse credit, ${otherName(d, k) || `adult ${k + 2}`}`, c.credit ? `Yes${c.note.trim() ? `: ${c.note.trim()}` : ""}` : yn(c.credit)];
+  });
   return [
     {
       title: "Who they are",
@@ -90,8 +98,9 @@ function groups(d: PassportData, household: number | null): { title: string; row
     {
       title: "Everything else",
       rows: [
-        ["Adverse credit", yn(d.adverseCredit)],
+        [others ? `Adverse credit, ${leadFirst}` : "Adverse credit", yn(d.adverseCredit)],
         ...(d.adverseCredit ? ([["About it", d.adverseCreditNote || null]] as [string, string | null][]) : []),
+        ...othersCredit,
         ["Guarantor available", yn(d.guarantor)],
         ["Pets", d.pets ? d.petsNote || "Yes" : yn(d.pets)],
         ["Smoker", yn(d.smoker)],
@@ -174,8 +183,8 @@ export default function PassportAnswers({ email, name, onClose }: { email: strin
                 <section key={g.title} className="mt-5">
                   <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">{g.title}</p>
                   <dl className="mt-2 overflow-hidden rounded-2xl border border-line/60 bg-white">
-                    {g.rows.map(([label, value]) => (
-                      <div key={label} className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-3 border-b border-line/40 px-4 py-2.5 last:border-b-0">
+                    {g.rows.map(([label, value], i) => (
+                      <div key={`${i}-${label}`} className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-3 border-b border-line/40 px-4 py-2.5 last:border-b-0">
                         <dt className="text-[12.5px] text-muted">{label}</dt>
                         <dd className={`min-w-0 break-words text-[13px] ${value ? "font-semibold" : "text-muted/70"}`}>{value ?? "Not answered"}</dd>
                       </div>

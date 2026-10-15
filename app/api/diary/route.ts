@@ -11,6 +11,7 @@ import { whoIs } from "@/lib/admin";
 import { osFeedbackFor } from "@/lib/viewing-feedback-store";
 import { outlookDiaryFor, type OutlookRead } from "@/lib/outlook-diary";
 import { noteRexOutlookSync, withoutPulledCopies } from "@/lib/rex-outlook-sync";
+import { personalBusyFor, type PersonalRead } from "@/lib/personal-calendar";
 
 /**
  * The team's diary, cached — same manners as leads and listings.
@@ -210,6 +211,17 @@ function withOutlook(book: DiaryBook, outlook: OutlookRead | null, mineOnly: boo
   const appts = [...book.appts, ...extra].sort((a, b) => a.day - b.day || a.start.localeCompare(b.start));
   return { ...book, appts };
 }
+/**
+ * Their personal calendar's busy times, laid in as "Busy (personal)" (14 Oct
+ * 2026). Drawn even where a work entry sits at the same time: it is a
+ * different fact (they are busy at home too), and the booker should see both.
+ */
+function withPersonal(book: DiaryBook, personal: PersonalRead): DiaryBook {
+  if (!personal.appts.length) return book;
+  const appts = [...book.appts, ...personal.appts].sort((a, b) => a.day - b.day || a.start.localeCompare(b.start));
+  return { ...book, appts };
+}
+const personalSaid = (p: PersonalRead) => ({ state: p.state, ...(p.reason ? { reason: p.reason } : {}), ...(p.ageing ? { ageing: true } : {}) });
 const minutesOf = (hhmm: string) => {
   const [h, m] = hhmm.split(":").map(Number);
   return (h || 0) * 60 + (m || 0);
@@ -233,6 +245,16 @@ export async function GET(req: NextRequest) {
         state: "failed" as const,
         appts: [],
         reason: "Your Outlook calendar couldn't be read just now.",
+      }));
+  /* Their PERSONAL calendar's busy times, when they have set it up on Profile
+     (lib/personal-calendar, 14 Oct 2026). Times only, never titles; their
+     own, never somebody they are viewing as. */
+  const personalP: Promise<PersonalRead> = viewingAs
+    ? Promise.resolve({ state: "off" as const, appts: [] })
+    : personalBusyFor({ id: actor.id, name: actor.name || "", email: actor.email || "" }).catch(() => ({
+        state: "failed" as const,
+        appts: [],
+        reason: "Your personal calendar couldn't be read just now.",
       }));
   /* An owner sees the business; everybody else sees their own mailbox. The
      picker on the Viewings screen is drawn from `everything`, so it simply
@@ -301,7 +323,9 @@ export async function GET(req: NextRequest) {
       const theirs = mineOnly ? marked.appts : marked.appts.filter((a) => a.own);
       after(() => noteRexOutlookSync(actor.id, theirs, outlook.appts).catch(() => undefined));
     }
-    return { ...withOutlook(marked, outlook, mineOnly), whose, outlook: outlookSaid(outlook) };
+    const withBoth = withOutlook(marked, outlook, mineOnly);
+    const personal = await personalP;
+    return { ...withPersonal(withBoth, personal), whose, outlook: outlookSaid(outlook), personal: personalSaid(personal) };
   };
 
   if (!rexConfigured()) {
@@ -309,13 +333,14 @@ export async function GET(req: NextRequest) {
        entries over separately for it to merge on top — they are real, and
        dropping them because the demo diary is standing in would lose work
        somebody actually did. */
-    const outlook = await outlookP;
+    const [outlook, personal] = await Promise.all([outlookP, personalP]);
     return NextResponse.json({
       ok: true,
       live: false,
-      mine: [...mine, ...(outlook?.appts ?? [])],
+      mine: [...mine, ...(outlook?.appts ?? []), ...personal.appts],
       whose,
       outlook: outlookSaid(outlook),
+      personal: personalSaid(personal),
       everything: false,
       reason: "REX isn't connected here.",
     });

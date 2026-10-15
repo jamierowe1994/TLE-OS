@@ -35,6 +35,9 @@ interface DiaryState {
   /** Their own Outlook calendar, read in beside REX (24 Sep 2026): whether it
    *  came, and why not. Null until read. */
   outlook: { state: "connected" | "not_connected" | "failed" | "not_yours"; reason?: string } | null;
+  /** Their PERSONAL calendar's busy times (lib/personal-calendar, 14 Oct 2026):
+   *  "off" when they have not set it up on Profile. Null until read. */
+  personal?: { state: "off" | "connected" | "failed"; reason?: string; ageing?: boolean } | null;
 }
 
 /** The server (and first client) snapshot must be the SAME object every
@@ -73,10 +76,10 @@ function read(): Promise<void> {
   return fetch("/api/diary", { cache: "no-store" })
     .then((r) => r.json())
     .then((j) => {
-      followUp(Boolean(j.stale || j.outlook?.ageing));
+      followUp(Boolean(j.stale || j.outlook?.ageing || j.personal?.ageing));
       if (j.ok && j.live && Array.isArray(j.appts)) {
         // Live book — the server has already merged our own appointments in.
-        set({ appts: j.appts, live: true, loading: false, agents: j.agents ?? [], everything: Boolean(j.everything), error: null, whose: j.whose ?? null, outlook: j.outlook ?? null });
+        set({ appts: j.appts, live: true, loading: false, agents: j.agents ?? [], everything: Boolean(j.everything), error: null, whose: j.whose ?? null, outlook: j.outlook ?? null, personal: j.personal ?? null });
       } else if (j.ok && Array.isArray(j.mine)) {
         /* No REX on this environment. Appointments made HERE are real and
            still show; nothing stands in for the rest. */
@@ -89,6 +92,7 @@ function read(): Promise<void> {
           error: j.reason ?? "REX isn't connected on this environment.",
           whose: j.whose ?? null,
           outlook: j.outlook ?? null,
+          personal: j.personal ?? null,
         });
       } else {
         set({ ...state, loading: false, error: j.error ?? j.reason ?? "REX didn't answer." });

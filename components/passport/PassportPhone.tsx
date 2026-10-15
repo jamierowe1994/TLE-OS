@@ -10,6 +10,10 @@ import {
   isEmployed,
   isTrading,
   money,
+  otherAdultCount,
+  otherCredit,
+  otherName,
+  withOtherCredit,
   workLine,
   type PassportData,
 } from "@/lib/passport-shape";
@@ -284,6 +288,21 @@ export default function PassportPhone({
       ],
     },
   ];
+  /* Every other adult's credit, on a page of their own after the lead's
+     (Rhiannon, 14 Oct 2026). Four to a page, like everything else here. */
+  const otherRows: Row[] = Array.from({ length: otherAdultCount(d) }, (_, k) => {
+    const who = otherName(d, k) || `Adult ${k + 2}`;
+    const firstOf = who.split(/\s+/)[0];
+    const c = otherCredit(d, k);
+    return {
+      key: `credit-${k + 2}`, icon: "info", label: `${who}: adverse credit`, value: c.credit === true ? c.note.trim() || "Yes" : yes(c.credit), required: true,
+      question: `Any adverse credit for ${firstOf}? CCJs, defaults or bankruptcy.`, hint: "The same question, for them. Referencing checks everyone moving in.",
+      sheet: (close) => <YesNoMoreSheet value={c.credit} note={c.note.trim()} noteLabel="Tell us about it" notePlaceholder="A couple of sentences. Context helps." onSave={(v, note) => { set("coOccupantCredit", withOtherCredit(d, k, v, v ? note : "")); close(); }} />,
+    };
+  });
+  for (let i = 0; i < otherRows.length; i += 4) {
+    pages.push({ key: `others-${i}`, title: otherRows.length === 1 ? "The Other Adult" : "The Other Adults", rows: otherRows.slice(i, i + 4) });
+  }
   /* The agent's own questions, four to a page. */
   const extra: Row[] = questions.map((qn) => {
     const v = answers[qn.id] ?? "";

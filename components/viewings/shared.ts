@@ -86,6 +86,7 @@ export function titleOf(a: Appt): string {
 
 /** The line under it: the thing if the person led, then where it is. */
 export function subOf(a: Appt): string {
+  if (a.fromPersonal) return "Your personal calendar";
   const first = a.who ? subjectOf(a) : KIND_META[a.kind].label;
   return a.where ? `${first} · ${a.where}` : first;
 }

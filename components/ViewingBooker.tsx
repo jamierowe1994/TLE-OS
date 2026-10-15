@@ -392,7 +392,7 @@ export default function ViewingBooker({
     return at.toISOString();
   })();
 
-  const { appts: allAppts, everything, outlook } = useDiary();
+  const { appts: allAppts, everything, outlook, personal } = useDiary();
   const [profile] = usePref<BaseProfile | null>(PROFILE_KEY, null);
   /* Who is doing the booking, for when no agent name is given. */
   const [meName, setMeName] = useState<string>("");
@@ -1490,6 +1490,19 @@ export default function ViewingBooker({
                     </a>
                   </p>
                 )
+              )}
+              {/* Their personal calendar, when they set it up on Profile (14 Oct
+                  2026): busy times only, drawn as "Busy (personal)". */}
+              {bookingOwn && personal?.state === "connected" && (
+                <p className="mt-1 text-[10.5px] text-muted">Your personal calendar&apos;s busy times are drawn in as Busy (personal), without what they are.</p>
+              )}
+              {bookingOwn && personal?.state === "failed" && (
+                <p className="mt-1 text-[10.5px] text-accent-dark">
+                  {personal.reason ?? "Your personal calendar isn't shown."}{" "}
+                  <a href="/profile?tab=connections" className="font-semibold underline underline-offset-2">
+                    Check it on your profile
+                  </a>
+                </p>
               )}
               {/* ══ THE PICK, UNDER THE DIARY (viewings) ══
                   The time and its boxes, and nothing else: the email has its

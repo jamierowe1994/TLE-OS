@@ -18,6 +18,11 @@ import {
   completeness,
   householdIncome,
   money,
+  otherAdultCount,
+  otherCredit,
+  otherName,
+  othersCreditDone,
+  withOtherCredit,
   type PassportData,
 } from "@/lib/passport-shape";
 
@@ -1016,10 +1021,14 @@ export default function PassportForm({
 
   const extraDone = questions.length > 0 && questions.every((qn) => !qn.required || (answers[qn.id] ?? "").trim() !== "");
 
+  /* Every other adult's credit (14 Oct 2026) is part of finishing HERE, on
+     the form's own copy of the sections. SECTIONS itself is left alone so a
+     passport finished before the question existed keeps its stamps. */
+  const formSections = SECTIONS.map((sc) => (sc.key === "declarations" ? { ...sc, done: (x: PassportData) => sc.done(x) && othersCreditDone(x) } : sc));
   const sections =
     questions.length > 0
       ? [
-          ...SECTIONS,
+          ...formSections,
           {
             key: "extra",
             title: agentName ? `A few more from ${agentName}` : "A few more questions",
@@ -1028,15 +1037,15 @@ export default function PassportForm({
             done: () => extraDone,
           },
         ]
-      : SECTIONS;
+      : formSections;
 
   const { done, total } = completeness(d);
   const bar = answered(d);
   const household = householdIncome(d);
-  const allDone = done === total && (questions.length === 0 || extraDone);
+  const allDone = done === total && othersCreditDone(d) && (questions.length === 0 || extraDone);
   const lastStep = step === sections.length - 1;
   const unanswered = questions.filter((qn) => qn.required && (answers[qn.id] ?? "").trim() === "");
-  const sectionsLeft = total - done + (questions.length > 0 && !extraDone ? 1 : 0);
+  const sectionsLeft = sections.filter((sc) => !sc.done(d)).length;
   const finishLabel = allDone
     ? "Great, create my passport"
     : done === total && unanswered.length
@@ -1533,6 +1542,42 @@ export default function PassportForm({
                   </Field>
                 ),
               },
+              /* The same question for every other adult moving in, each
+                 by name (Rhiannon, 14 Oct 2026): referencing checks all of
+                 them, so the second person's CCJ must not be news then. */
+              ...Array.from({ length: otherAdultCount(d) }, (_, k): Part[] => {
+                const who = otherName(d, k) || (otherAdultCount(d) === 1 ? "the other adult" : `adult ${k + 2}`);
+                const firstOf = who.split(/\s+/)[0];
+                const c = otherCredit(d, k);
+                return [
+                  {
+                    key: `ccj-${k + 2}`,
+                    done: c.credit !== null,
+                    value: c.credit,
+                    summary: <>{who.charAt(0).toUpperCase() + who.slice(1)}&apos;s adverse credit: <strong>{yes(c.credit)}</strong></>,
+                    node: (
+                      <YesNo
+                        label={`And ${firstOf}? Any adverse credit? CCJs, defaults or bankruptcy.`}
+                        hint="The same question, for them. Referencing checks everyone moving in."
+                        value={c.credit}
+                        onChange={(v) => set("coOccupantCredit", withOtherCredit(d, k, v, v ? c.note : ""))}
+                      />
+                    ),
+                  },
+                  {
+                    key: `ccj-${k + 2}-note`,
+                    when: c.credit === true,
+                    done: Boolean(c.note.trim()),
+                    typed: true,
+                    summary: <span className="text-muted">{c.note.trim()}</span>,
+                    node: (
+                      <Field label="Tell us about it" hint="A couple of sentences. Context helps, and it is rarely a no on its own.">
+                        <textarea rows={3} autoFocus={!demo} className={`${input} resize-none leading-relaxed`} value={c.note} onChange={(e) => set("coOccupantCredit", withOtherCredit(d, k, true, e.target.value))} />
+                      </Field>
+                    ),
+                  },
+                ];
+              }).flat(),
               {
                 key: "guarantor",
                 done: d.guarantor !== null,
@@ -1769,7 +1814,11 @@ export default function PassportForm({
                 Back
               </button>
             )}
-            {!(lastStep && lastScreen) ? (
+            {/* A typed note open on the very last screen still needs its
+                Continue to fold it (14 Oct 2026): "Tell us about it" after a
+                Yes to adverse credit sat there with only the finish button,
+                which cannot confirm it, whenever no agent questions follow. */}
+            {!(lastStep && lastScreen) || flowOpenTyped ? (
               <button
                 type="button"
                 onClick={advance}

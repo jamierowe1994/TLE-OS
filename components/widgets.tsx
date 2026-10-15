@@ -234,13 +234,15 @@ function DiaryWidget({ w, h }: { w: number; h: number }) {
   const today = appts
     .filter((a) => a.day === 0)
     .sort((a, b) => minutesOf(a.start) - minutesOf(b.start));
+  /* Personal busy times are in the calendar but are not appointments to count (14 Oct 2026). */
+  const booked = today.filter((a) => !a.fromPersonal);
   if (w === 1 && h === 1) {
     return (
       <button type="button" onClick={() => setOpen(true)} className="block w-full text-left">
         <Head icon="calendar" label="Diary" />
         <BigCount
-          value={loading ? "—" : String(today.length)}
-          hint={loading ? "reading your diary…" : `today · next at ${today[0]?.start ?? "—"}`}
+          value={loading ? "—" : String(booked.length)}
+          hint={loading ? "reading your diary…" : `today · next at ${booked[0]?.start ?? "—"}`}
         />
         <DiaryCalendar open={open} onClose={() => setOpen(false)} />
       </button>
@@ -331,7 +333,7 @@ function TodayWidget({ w, h }: { w: number; h: number }) {
      tile said "Nothing in the diary today", because none of it was a viewing
      or an appraisal. The rest of the day is counted, and the full calendar
      shows it. */
-  const otherToday = appts.filter((a) => a.day === 0 && a.kind === "other").length;
+  const otherToday = appts.filter((a) => a.day === 0 && a.kind === "other" && !a.fromPersonal).length;
   const emptyLine =
     otherToday > 0
       ? `Nothing booked in today - ${otherToday} other ${otherToday === 1 ? "entry" : "entries"} in your diary.`

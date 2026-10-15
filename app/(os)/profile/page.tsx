@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import EmailFooterSetup from "@/components/EmailFooterSetup";
+import PersonalCalendar from "@/components/PersonalCalendar";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import CustomAttributes from "@/components/CustomAttributes";
@@ -699,7 +700,7 @@ export default function ProfilePage() {
         {tab === "connections" && (
           <div className="max-w-2xl">
             <p className="mb-4 text-[12.5px] leading-relaxed text-muted">
-              The three accounts that are yours rather than the agency’s. Everything else the
+              The accounts and calendars that are yours rather than the agency’s. Everything else the
               OS talks to is connected once for the whole business, so there is nothing for you
               to do about it.
             </p>
@@ -730,6 +731,10 @@ export default function ProfilePage() {
                   mailbox (James, 21 Sep 2026). Only once the mailbox is
                   connected: the quick road reads it out of that mailbox. */}
               {setup?.emailConnected === true && <EmailFooterSetup mailbox={setup?.email ?? ""} />}
+
+              {/* Their PERSONAL calendar, both ways and read only (Amrit, 14 Oct
+                  2026): the OS diary out to it, its busy times in. */}
+              <PersonalCalendar />
 
               {/* REX signs in with their own credentials, so it brings its own
                   form. Same tile shape as the other two. */}

@@ -165,7 +165,10 @@ export default function AgentOfferRecorder({
   const extraNames = people.length
     ? movingIn.filter((p) => p.who === "Adult").map((p) => (/^Adult \d+$/.test(p.name) ? "" : p.name))
     : Array.from({ length: Math.max(0, adults - 1) }, () => "");
-  const [parts, setParts] = useOtherAdults(extraNames);
+  const extraSeeds = people.length
+    ? movingIn.filter((p) => p.who === "Adult").map((p) => (p.credit == null ? {} : { adverseCredit: p.credit, adverseCreditNote: p.creditNote ?? "" }))
+    : [];
+  const [parts, setParts] = useOtherAdults(extraNames, extraSeeds);
   const partIncome = parts.reduce((t, o) => t + (o.mode === "fill" ? incomeOf(o.answers) : 0), 0);
   const income = Math.max(
     money(pp.annualIncome) + others.filter((o) => !people.length || ticked.has(o.id)).reduce((t, o) => t + o.income, 0),

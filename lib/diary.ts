@@ -96,6 +96,9 @@ export type Appt = {
   fromOutlook?: boolean;
   /** An Outlook entry the OS itself put there (tagged "TLE OS"). */
   fromOs?: boolean;
+  /** A busy time from the person's own PERSONAL calendar (lib/personal-calendar):
+   *  a time and nothing else, drawn as "Busy (personal)". */
+  fromPersonal?: boolean;
   /**
    * The REX listing and property this appointment is attached to.
    *

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import PersonQuestions from "@/components/offers/PersonQuestions";
-import { emptyPerson, missingForLink, missingFrom, type OtherAdult } from "@/lib/offer-people-shape";
+import { emptyPerson, missingForLink, missingFrom, type OtherAdult, type PersonAnswers } from "@/lib/offer-people-shape";
 import { toast } from "@/lib/toast";
 
 /**
@@ -13,8 +13,11 @@ import { toast } from "@/lib/toast";
  */
 
 /** The adults beyond the lead, kept in step with who is ticked as moving in. */
-export function useOtherAdults(names: string[]): [OtherAdult[], (next: OtherAdult[]) => void] {
-  const [others, setOthers] = useState<OtherAdult[]>(() => names.map((n) => ({ mode: "fill", answers: emptyPerson(n) })));
+export function useOtherAdults(names: string[], seeds: Partial<PersonAnswers>[] = []): [OtherAdult[], (next: OtherAdult[]) => void] {
+  /* What their passport already says about them (each adult's credit, 14 Oct
+     2026) arrives filled in, so nobody is asked twice. */
+  const fresh = (n: string, i: number): OtherAdult => ({ mode: "fill", answers: { ...emptyPerson(n), ...(seeds[i] ?? {}) } });
+  const [others, setOthers] = useState<OtherAdult[]>(() => names.map(fresh));
   /* The count as well as the names: two blank names and one read the same joined. */
   const key = `${names.length}:${names.join("|")}`;
   const last = useRef(key);
@@ -25,7 +28,7 @@ export function useOtherAdults(names: string[]): [OtherAdult[], (next: OtherAdul
       names.map((n, i) => {
         /* Keep what was typed: the same person by name, or the same place in the list when the passport gives no name. */
         const same = (n.trim() ? cur.find((o) => o.answers.name.trim() === n.trim()) : null) ?? (!n.trim() && cur[i] ? cur[i] : null);
-        return same ?? { mode: "fill" as const, answers: emptyPerson(n) };
+        return same ?? fresh(n, i);
       })
     );
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps

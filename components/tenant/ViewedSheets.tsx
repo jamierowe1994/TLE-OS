@@ -5,7 +5,7 @@ import { londonToday } from "@/lib/london-clock";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import Sheet from "@/components/tenant/Sheet";
-import { APPLICANT_TYPES, TRADING_FOR, WORK_HOURS, isEmployed, isTrading, workFlags } from "@/lib/passport-shape";
+import { APPLICANT_TYPES, TRADING_FOR, WORK_HOURS, isEmployed, isTrading, workFlags, type HouseholdPerson } from "@/lib/passport-shape";
 import Toaster from "@/components/Toaster";
 import { DateField, MovingIn, RentField, WorksList } from "@/components/offers/OfferParts";
 import { show, type OfferFieldKey, type OfferPassport } from "@/lib/offer-passport";
@@ -80,7 +80,7 @@ export default function ViewedSheets({
   /** The passport answers the offer shows back, and lets them change. */
   passport: OfferPassport;
   /** Who is on the passport, by name, to tick off as moving in. */
-  people: { id: string; name: string; who: string }[];
+  people: HouseholdPerson[];
   passportHref: string | null;
   sample: boolean;
   base: string;
@@ -123,7 +123,10 @@ export default function ViewedSheets({
   const extraNames = people.length
     ? movingIn.filter((p) => p.who === "Adult").map((p) => (/^Adult \d+$/.test(p.name) ? "" : p.name))
     : Array.from({ length: Math.max(0, adults - 1) }, () => "");
-  const [others, setOthers] = useOtherAdults(extraNames);
+  const extraSeeds = people.length
+    ? movingIn.filter((p) => p.who === "Adult").map((p) => (p.credit == null ? {} : { adverseCredit: p.credit, adverseCreditNote: p.creditNote ?? "" }))
+    : [];
+  const [others, setOthers] = useOtherAdults(extraNames, extraSeeds);
   const [links, setLinks] = useState<{ name: string; url: string }[]>([]);
   const [offerNote, setOfferNote] = useState("");
   const [confirmed, setConfirmed] = useState(false);
