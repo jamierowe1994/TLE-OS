@@ -31,6 +31,16 @@ const nextConfig: NextConfig = {
   // Pin the workspace root — a stray lockfile in the user home directory
   // otherwise makes Next trace files from the wrong root.
   outputFileTracingRoot: __dirname,
+  // Every request passes through middleware.ts, and Next 15.5 lets middleware
+  // see only the first 10MB of a body unless told otherwise. The rest is cut
+  // off without a word, so an upload between 10MB and a route's own limit
+  // (25MB for a certificate) arrived as a broken form and failed. 15 Oct 2026:
+  // Richard Callow's EPC failed four times on 27 Addison Road and never
+  // reached the home, so the PLC pack could not bring it in. 26mb sits just
+  // above the largest upload any route accepts; each route keeps its own cap.
+  experimental: {
+    middlewareClientMaxBodySize: "26mb",
+  },
   // The build stamp, worn in the profile footer. Ends the "is this screen
   // even running the new code?" conversation for good: a stale tab says an
   // old name, and that's the whole diagnosis. Railway provides the sha.

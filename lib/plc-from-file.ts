@@ -10,6 +10,7 @@ import { docTypeLabel, OTHER } from "@/lib/doc-types";
 import { attachDocument, getCase, noteFileKeys, PlcRefused } from "@/lib/plc-store";
 import { checkById, CHECK_GROUPS, COVERABLE, guessCheck, type CheckId, type PlcCase } from "@/lib/plc";
 import { readDroppedFile } from "@/lib/plc-read-file";
+import { CHECKING_LABEL } from "@/lib/cert-hold";
 import { isTestCase } from "@/lib/test-guard";
 
 /**
@@ -307,11 +308,18 @@ async function homeRecords(address: string, propertyId: string | null): Promise<
 async function fromCertificates(run: Run, ids: string[]) {
   if (!ids.length || !hasDb()) return;
   const validOn = run.current.moveInDate ?? ymdToday();
-  const rows = await q<{ type_id: string; expiry: string; issue: string | null; r2_key: string; name: string; source: string }>(
-    `SELECT type_id, expiry::text AS expiry, issue::text AS issue, r2_key, name, source
-       FROM os_certificates
-      WHERE property_id = ANY($1) AND expiry >= $2::date AND NOT awaiting_check
-      ORDER BY expiry DESC, added_at DESC`,
+  /* A gas record or EICR still waiting for compliance's check comes in too
+     (15 Oct 2026: Richard Callow uploaded both on 27 Addison Road's listing,
+     and the pack left them out because they were waiting, so he uploaded
+     them again). The wait is about REX and the book, not the pack: the pack
+     is checked anyway, and pushCaseToRex leaves a waiting one for compliance's
+     Verified to write. One compliance has queried does not come in. */
+  const rows = await q<{ type_id: string; expiry: string; issue: string | null; r2_key: string; name: string; source: string; awaiting_check: boolean }>(
+    `SELECT c.type_id, c.expiry::text AS expiry, c.issue::text AS issue, c.r2_key, c.name, c.source, c.awaiting_check
+       FROM os_certificates c
+      WHERE c.property_id = ANY($1) AND c.expiry >= $2::date
+        AND NOT EXISTS (SELECT 1 FROM os_compliance_checks k WHERE k.kind = 'certificate' AND k.subject_id = c.id AND k.state = 'queried')
+      ORDER BY c.expiry DESC, c.added_at DESC`,
     [ids, validOn]
   ).catch(() => []);
 
@@ -361,7 +369,7 @@ async function fromCertificates(run: Run, ids: string[]) {
         expiryDate: expiry,
         expiryDerived: undefined,
         issueDate: read.issueDate ?? r.issue,
-        note: `Already on file for this home${r.source ? ` (${r.source})` : ""}.`,
+        note: `Already on file for this home${r.source ? ` (${r.source})` : ""}.${r.awaiting_check ? ` ${CHECKING_LABEL}.` : ""}`,
       },
     });
   }

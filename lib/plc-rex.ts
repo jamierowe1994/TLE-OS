@@ -11,6 +11,7 @@ import { refreshComplianceBook } from "@/lib/compliance-cache";
 import { getCase, recordRexPush } from "@/lib/plc-store";
 import { checkById, type CheckId, type PlcCase, type PlcDocument, type PushResult, type RexPush } from "@/lib/plc";
 import { isTestCase } from "@/lib/test-guard";
+import { hasDb, q } from "@/lib/db";
 
 /**
  * The approved pack, into REX's compliance table.
@@ -334,11 +335,26 @@ export async function pushCaseToRex(caseId: string, by: string): Promise<RexPush
     return push;
   }
 
+  /* A gas record or EICR the pack brought in from the home while it waits
+     for compliance's check (lib/plc-from-file) is theirs to send to REX, on
+     Verified (releaseHeldCertificate), not the pack's. */
+  const waiting = new Set(
+    hasDb()
+      ? (
+          await q<{ r2_key: string }>(`SELECT r2_key FROM os_certificates WHERE awaiting_check AND r2_key = ANY($1)`, [certs.map((d) => d.key)]).catch(() => [])
+        ).map((r) => r.r2_key)
+      : []
+  );
+
   const results: PushResult[] = [];
   const done = new Set<string>();
   for (const doc of certs) {
     const type = rexTypeFor(doc.checkId, doc.name) as string;
     const label = checkById(doc.checkId)?.label ?? doc.checkId;
+    if (waiting.has(doc.key)) {
+      results.push({ checkId: doc.checkId, name: doc.name, type, outcome: "skipped", note: "Waiting for the compliance team to verify it. It goes into REX once they have." });
+      continue;
+    }
     if (done.has(type)) {
       results.push({ checkId: doc.checkId, name: doc.name, type, outcome: "skipped", note: "REX takes one entry per certificate type and this pack already wrote one." });
       continue;

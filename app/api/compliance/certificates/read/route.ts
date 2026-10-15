@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
 import Anthropic from "@anthropic-ai/sdk";
 import { whoIs } from "@/lib/admin";
+import { realDayOrNull } from "@/lib/real-day";
 
 /**
  * POST /api/compliance/certificates/read → what one certificate says.
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest) {
   const file = form?.get("file");
   const expect = String(form?.get("expect") ?? "").trim();
   if (!(file instanceof File) || !file.size) return NextResponse.json({ ok: false, error: "No file." }, { status: 400 });
-  if (file.size > MAX_BYTES) return NextResponse.json({ ok: false, error: "Over 12MB - almost certainly a whole pack, not one certificate." }, { status: 413 });
+  if (file.size > MAX_BYTES) return NextResponse.json({ ok: false, error: "That file is over 12MB, too big to read the dates off. Type them in below." }, { status: 413 });
 
   const bytes = Buffer.from(await file.arrayBuffer());
   const name = (file.name || "").toLowerCase();
@@ -101,7 +102,9 @@ export async function POST(req: NextRequest) {
     });
     const call = res.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "report_certificate");
     const r = (call?.input ?? {}) as Record<string, unknown>;
-    const ymd = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+    /* A worked-out "2025-02-29" comes back as the 28th, never as a date the
+       filing will refuse (lib/certificate-intake realDayOrNull). */
+    const ymd = realDayOrNull;
     return NextResponse.json({
       ok: true,
       read: {

@@ -1,5 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { realDayOrNull } from "@/lib/real-day";
 import { contentBlock, fetchDocument } from "@/lib/plc-scan";
 import { PLC_CHECKS, type CheckId, type FileRead, type PlcDocument } from "@/lib/plc";
 
@@ -85,10 +86,9 @@ const TOOL: Anthropic.Tool = {
   },
 };
 
-const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const date = (v: unknown): string | null => {
-  const s = String(v ?? "").trim();
-  return YMD.test(s) && s >= "1990-01-01" && s <= "2060-12-31" ? s : null;
+  const s = realDayOrNull(String(v ?? ""));
+  return s && s >= "1990-01-01" && s <= "2060-12-31" ? s : null;
 };
 
 export const sorterConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY);
