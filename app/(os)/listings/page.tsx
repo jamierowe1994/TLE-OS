@@ -725,28 +725,36 @@ export default function Listings() {
     if (!book.live) return;
     const want = board
       .filter((l) => !l.archived && !l.letAgreed && l.publicationStatus !== "published" && boardGaps(l).length === 0)
-      .map((l) => `${l.id}:${l.lastUpdated ?? ""}`)
+      /* Keyed on the listing's modified time (15 Oct 2026): lastUpdated is
+         words like "3d ago", the same for two saves on one day. */
+      .map((l) => `${l.id}:${l.modifiedAt ?? l.lastUpdated ?? ""}`)
       .filter((key) => !asked.current.has(key));
     if (!want.length) return;
     want.forEach((key) => asked.current.add(key));
     setChecks((c) => ({ ...c, ...Object.fromEntries(want.map((key) => [key, "checking" as const])) }));
     void (async () => {
-      for (let i = 0; i < want.length; i += 24) {
-        const batch = want.slice(i, i + 24);
+      /* Four at a time, one batch after another (15 Oct 2026, bug e8a23c44:
+         24 in one request ran past the 100-second timeout). The server answers
+         inside its own time budget and says which are still pending; those
+         go to the back of the queue, a few times at most, then read as failed. */
+      const queue = want.map((key) => ({ key, tries: 0 }));
+      while (queue.length) {
+        const batch = queue.splice(0, 4);
         const settled: Record<string, PublishCheck> = {};
         try {
-          const j = (await fetch(`/api/listings/readiness?ids=${encodeURIComponent(batch.join(","))}`, { cache: "no-store" }).then((r) => r.json())) as {
+          const j = (await fetch(`/api/listings/readiness?ids=${encodeURIComponent(batch.map((b) => b.key).join(","))}`, { cache: "no-store" }).then((r) => r.json())) as {
             ok?: boolean;
-            results?: Record<string, { gaps?: { label: string }[]; failed?: boolean }>;
+            results?: Record<string, { gaps?: { label: string }[]; failed?: boolean; pending?: boolean }>;
           };
-          for (const key of batch) {
-            const r = j.ok ? j.results?.[key.split(":")[0]] : undefined;
-            settled[key] = r?.gaps ? r.gaps.map((g) => g.label) : "failed";
+          for (const b of batch) {
+            const r = j.ok ? j.results?.[b.key.split(":")[0]] : undefined;
+            if (r?.pending && b.tries < 3) queue.push({ key: b.key, tries: b.tries + 1 });
+            else settled[b.key] = r?.gaps ? r.gaps.map((g) => g.label) : "failed";
           }
         } catch {
-          for (const key of batch) settled[key] = "failed";
+          for (const b of batch) settled[b.key] = "failed";
         }
-        setChecks((c) => ({ ...c, ...settled }));
+        if (Object.keys(settled).length) setChecks((c) => ({ ...c, ...settled }));
       }
     })();
   }, [board, book.live]);
@@ -1074,7 +1082,7 @@ export default function Listings() {
                     {/* Where it is, as a pill on the rent's line (tiles). */}
                     {view === "tiles" && !l.archived && (
                       <span className="ml-auto min-w-0">
-                        <Readiness r={readiness(l, checks[`${l.id}:${l.lastUpdated ?? ""}`])} pill />
+                        <Readiness r={readiness(l, checks[`${l.id}:${l.modifiedAt ?? l.lastUpdated ?? ""}`])} pill />
                       </span>
                     )}
                   </span>
@@ -1096,7 +1104,7 @@ export default function Listings() {
                         {archiveWhy({ archived: true, reason: l.archiveReason ?? null, since: l.archivedSince ?? null, ageDays: l.archiveAgeDays ?? null })}
                       </span>
                     ) : (
-                      <Readiness r={readiness(l, checks[`${l.id}:${l.lastUpdated ?? ""}`])} compact={view === "tiles"} buttonOnly={view !== "tiles"} />
+                      <Readiness r={readiness(l, checks[`${l.id}:${l.modifiedAt ?? l.lastUpdated ?? ""}`])} compact={view === "tiles"} buttonOnly={view !== "tiles"} />
                     )}
                   </span>
                 </div>

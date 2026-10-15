@@ -1980,6 +1980,16 @@ function LeadDrawerBody({
       WhatsApp
     </WhatsAppButton>
   ) : null;
+  /* The enquiry named somebody other than the record it was filed under
+     (lib/lead-enquirer): the name and number at the top are the ones they
+     typed, and this says what the record holds, so neither is a surprise. */
+  const onFileEl = lead && (lead.onFileAs || lead.onFilePhone) ? (
+    <p className="mt-1 text-[12px] text-muted">
+      {lead.onFileAs
+        ? `On file as ${[lead.onFileAs, lead.onFilePhone].filter(Boolean).join(", ")} - the email they used belongs to that record.`
+        : `Number on file: ${lead.onFilePhone}. The one above is the number they gave on this enquiry.`}
+    </p>
+  ) : null;
   /* Email beside the address, as WhatsApp is beside the number (James, 12 Oct
      2026): it opens the OS's own compose window, so it is sent and logged here. */
   const emailEl = contact.email ? (
@@ -2890,6 +2900,7 @@ function LeadDrawerBody({
                         {enqProperty && enqProperty !== "—" ? enqProperty : interestedIn || (lead.subject === "Viewing enquiry" ? "Viewing enquiry" : "General enquiry")} · via {enquiry?.source || lead.source}
                         {receivedIso ? ` · ${whenAgo(receivedIso)}` : ""}
                       </p>
+                      {onFileEl}
                       {/* Their own words - the first thing anyone should read. */}
                       <div className="mt-4 max-w-xl rounded-2xl border border-line/70 p-4">
                         <p className="flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-muted">
@@ -3208,6 +3219,7 @@ function LeadDrawerBody({
                         Via {enquiry?.source || lead.source}
                         {receivedIso ? ` · ${whenAgo(receivedIso)}` : ""}
                       </p>
+                      {onFileEl}
                       <p className="mt-4 max-w-xl text-[13px] leading-relaxed">
                         {enqMessage
                           ? enqMessage.length > 220 ? `${enqMessage.slice(0, 217)}…` : enqMessage

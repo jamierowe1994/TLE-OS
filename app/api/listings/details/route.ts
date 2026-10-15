@@ -12,6 +12,7 @@ import { OPTIONS } from "@/lib/listing-requirements";
 import { isExpiredToken, rexCall, rexConfigured, rexWritesLocked } from "@/lib/rex";
 import { rexTokenFor } from "@/lib/rex-user";
 import { isOwner } from "@/lib/agent-words";
+import { refusalInWords } from "@/lib/rex-refusal";
 import { recordFact } from "@/lib/property-facts";
 import { bandForScore, forgetRecord, normaliseLarn, saveAgentLarn, withScottishFooter } from "@/lib/listing-record";
 
@@ -64,6 +65,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "The listing did not answer. Try again in a minute." }, { status: 502 });
   }
 }
+
+const EPC_NEEDS_DATE = "Everything else is saved. The EPC scores go to the portals once the date on the EPC is added.";
 
 const count = (v: unknown): number | null | undefined => {
   if (v === undefined) return undefined;
@@ -171,6 +174,17 @@ export async function PATCH(req: NextRequest) {
     else if (typeof b.epcBand === "string" && /^[A-G]$/.test(b.epcBand)) epcBand = b.epcBand;
     else bad.push("EPC rating");
   }
+  /* The date the EPC was lodged: REX refuses the scores without it ("Epc
+     Lodgement Date is required", bug bf3ba4c2, 11-12 Oct 2026). A real day,
+     never in the future. */
+  let epcLodged: string | null | undefined;
+  if (b.epcLodged !== undefined) {
+    const v = typeof b.epcLodged === "string" ? b.epcLodged.trim() : b.epcLodged;
+    const day = typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(`${v}T00:00:00Z`) : null;
+    if (v === null || v === "") epcLodged = null;
+    else if (day && Number.isFinite(day.getTime()) && day.toISOString().slice(0, 10) === v && v <= new Date().toISOString().slice(0, 10)) epcLodged = v as string;
+    else bad.push("date on the EPC (a real date, not in the future)");
+  }
   let larn: string | null | undefined;
   if (b.landlordRegistration !== undefined) {
     if (b.landlordRegistration === null || b.landlordRegistration === "") larn = null;
@@ -198,9 +212,13 @@ export async function PATCH(req: NextRequest) {
        must carry the landlord registration number and REX has no field for
        it, so it rides as the description's last line - the way Scottish
        agents put it on the portals. */
-    const epcTouched = epcBand !== undefined || epcCurrent !== undefined || epcPotential !== undefined;
+    const epcTouched = epcBand !== undefined || epcCurrent !== undefined || epcPotential !== undefined || epcLodged !== undefined;
     let epcKeptOnly = false;
-    let epcWrite: Record<string, number> | undefined;
+    /* Both scores, no lodgement date: kept here, not sent - sending them took
+       the whole advert down with them (bug bf3ba4c2; Dan's description on 149
+       Goldthorne Terrace, a3d142bd, 11 Oct 2026). */
+    let epcNeedsDate = false;
+    let epcWrite: Record<string, number | string> | undefined;
     if (epcTouched || larn !== undefined || agentLarn !== undefined) {
       const current = await readListingDetails(id).catch(() => null);
       const key = current?.record.factsKey ?? null;
@@ -224,15 +242,31 @@ export async function PATCH(req: NextRequest) {
         if (next !== body) edit.body = next;
       }
       if (epcTouched && current) {
-        const now = epcCurrent !== undefined ? epcCurrent : current.epc.current;
+        /* The score the Marketing tab showed: REX's, or where REX has none the
+           OS's property record (components/listing/listing-draft), which the
+           tab never sends back because it was never changed. */
+        const now = epcCurrent !== undefined ? epcCurrent : current.epc.current ?? current.record?.epc?.score ?? null;
         const pot = epcPotential !== undefined ? epcPotential : current.epc.potential;
         const band = epcBand !== undefined ? epcBand : bandForScore(now);
         if (key && band) {
           await recordFact({ propertyId: key, field: "epc_rating", value: now ? `${band} (${now})` : band, source: "manual", sourceRef: `listing ${id}`, by: actor.email });
         }
-        /* REX takes the two scores together or refuses the save. */
-        if (now != null && pot != null) {
+        /* REX takes the two scores together or refuses the save, and only
+           with the date the EPC was lodged. Every one of the 156 current
+           rentals carrying scores on 15 Oct 2026 had that date; the 65 with
+           no EPC had nothing, so the scores alone are refused. */
+        const lodged = epcLodged !== undefined ? epcLodged : current.epc.lodged;
+        if (now != null && pot != null && lodged) {
           epcWrite = { epc_current_eer: now, epc_potential_eer: pot };
+          if (epcLodged) {
+            epcWrite.epc_lodgement_date = epcLodged;
+            /* An EPC runs ten years from lodgement; REX holds both dates on
+               every listing that has one. Only filled where it has none. */
+            if (!current.epc.expiry) epcWrite.epc_expiry_date = `${Number(epcLodged.slice(0, 4)) + 10}${epcLodged.slice(4).replace("-02-29", "-02-28")}`;
+          }
+        } else if (now != null && pot != null) {
+          epcKeptOnly = true;
+          epcNeedsDate = true;
         } else epcKeptOnly = true;
       }
       forgetRecord(current?.propertyId);
@@ -253,7 +287,7 @@ export async function PATCH(req: NextRequest) {
       if (epcTouched || larn !== undefined || agentLarn !== undefined || propertyTypeId) {
         forgetListing(id);
         const details = await readListingDetails(id).catch(() => null);
-        return NextResponse.json({ ok: true, id, note: epcKeptOnly ? "Kept here. Add the potential score to send the rating to the portals." : "Saved.", details });
+        return NextResponse.json({ ok: true, id, note: epcNeedsDate ? EPC_NEEDS_DATE : epcKeptOnly ? "Kept here. Add the potential score to send the rating to the portals." : "Saved.", epcHeld: epcNeedsDate || undefined, details });
       }
       const details = factKeys.length ? await readListingDetails(id).catch(() => null) : null;
       return NextResponse.json({ ok: true, id, note: factKeys.length ? "Saved." : "Nothing to change.", details });
@@ -287,7 +321,9 @@ export async function PATCH(req: NextRequest) {
         if (!r.ok && token && isExpiredToken(r)) {
           return NextResponse.json({ ok: false, error: "Your sign-in to the listings system has lapsed. Reconnect it on your Profile and try again.", reconnect: true }, { status: 401 });
         }
-        outcome.listing = r.ok ? "Saved." : isOwner(actor) ? `REX refused it: ${r.error ?? r.status}` : "The advert did not save. Try again in a minute.";
+        /* Said as what to do, not "try again": a refused field is refused
+           every time (bf3ba4c2 told Dan to try again in a minute). */
+        outcome.listing = r.ok ? "Saved." : isOwner(actor) ? `REX refused it: ${r.error ?? r.status}` : refusalInWords(r.error, "The advert did not save.");
         failed ||= !r.ok;
       }
     }
@@ -302,7 +338,7 @@ export async function PATCH(req: NextRequest) {
 
     /* Read back rather than trusting the write: REX trims and normalises. */
     const details = await readListingDetails(id).catch(() => null);
-    return NextResponse.json({ ok: !failed, id, outcome, details, error: failed ? [outcome.listing, outcome.rooms].filter((x) => x && x !== "Saved.").join(" ") : undefined });
+    return NextResponse.json({ ok: !failed, id, outcome, details, note: epcNeedsDate && !failed ? EPC_NEEDS_DATE : undefined, epcHeld: epcNeedsDate || undefined, error: failed ? [outcome.listing, outcome.rooms].filter((x) => x && x !== "Saved.").join(" ") : undefined });
   } catch (e) {
     return NextResponse.json({ ok: false, error: "The listing did not answer. Try again in a minute." }, { status: 502 });
   }

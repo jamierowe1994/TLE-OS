@@ -73,6 +73,9 @@ export interface ListingDetails {
   parking: string | null;
   epc: {
     rating: string | null; expiry: string | null; chartUrl: string | null; fileUrl: string | null;
+    /** The date the EPC was lodged. REX refuses the scores without it (bug
+        bf3ba4c2, 11-12 Oct 2026), so the save asks for it first. */
+    lodged: string | null;
     /** REX's SAP scores. REX only takes the two together (6 Oct 2026). */
     current: number | null; potential: number | null;
     /** The band from the current score, or REX's own rating where it has one. */
@@ -302,6 +305,7 @@ export async function readListingDetails(id: number, opts: { cached?: boolean } 
     epc: {
       rating: str(l.epc_rating),
       expiry: str(l.epc_expiry_date),
+      lodged: str(l.epc_lodgement_date),
       chartUrl: abs((l.epc_combined_chart as Obj | null)?.url ?? (l.epc_eer_chart as Obj | null)?.url),
       fileUrl: abs((l.epc_file as Obj | null)?.url),
       current: eerNow,

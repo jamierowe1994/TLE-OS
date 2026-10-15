@@ -15,12 +15,17 @@ import { bandForScore, type EpcBand } from "@/lib/listing-record";
  */
 
 const MODEL = process.env.CERT_READER_MODEL ?? "claude-haiku-4-5-20251001";
-const KEY = (fileUrl: string) => `epc-read:v1:${fileUrl.replace(/^https?:/, "")}`;
+/* v2 (15 Oct 2026): the date as well as the scores, so a listing read under
+   v1 is read once more rather than kept without one. */
+const KEY = (fileUrl: string) => `epc-read:v2:${fileUrl.replace(/^https?:/, "")}`;
 
 export interface EpcRead {
   band: EpcBand | null;
   current: number | null;
   potential: number | null;
+  /** The date the certificate was lodged (YYYY-MM-DD). REX will not take the
+      two scores without it (bug bf3ba4c2, 11 Oct 2026). */
+  lodged: string | null;
 }
 
 const SYSTEM = `You are reading one UK Energy Performance Certificate (England, Wales or Scotland)
@@ -29,6 +34,9 @@ for a lettings agent who must put its rating on an advert. Report only what is p
   over 100), the number shown against the current band on the energy efficiency rating chart.
 - potential: the POTENTIAL energy efficiency rating score from the same chart.
 - band: the current energy efficiency band letter, A to G.
+- certificate_date: the date of the certificate (also printed as "Date of certificate",
+  "Date of lodgement" or "Certificate date"), as YYYY-MM-DD.
+- valid_until: the "Valid until" date, as YYYY-MM-DD. Newer certificates print only this one.
 Ignore the environmental impact (CO2) rating chart; Scottish certificates print both, and only
 the energy efficiency one is wanted. Leave anything you cannot see empty rather than guessing.`;
 
@@ -41,10 +49,35 @@ const TOOL: Anthropic.Tool = {
       band: { type: "string", enum: ["A", "B", "C", "D", "E", "F", "G", ""] },
       current: { type: "integer", description: "Current energy efficiency score, or 0 if not printed" },
       potential: { type: "integer", description: "Potential energy efficiency score, or 0 if not printed" },
+      certificate_date: { type: "string", description: "Date of the certificate as YYYY-MM-DD, or empty if not printed" },
+      valid_until: { type: "string", description: "Valid until date as YYYY-MM-DD, or empty if not printed" },
     },
     required: ["band", "current", "potential"],
   },
 };
+
+/** A real calendar date, YYYY-MM-DD, or null. */
+const ymd = (v: unknown): string | null => {
+  if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v.trim())) return null;
+  const d = new Date(`${v.trim()}T00:00:00Z`);
+  return Number.isFinite(d.getTime()) && d.toISOString().slice(0, 10) === v.trim() ? v.trim() : null;
+};
+
+/**
+ * The lodgement date: printed, or ten years before "Valid until" (an EPC
+ * runs ten years from the day it is lodged; the newer certificates print
+ * only the end date). Never a date in the future.
+ */
+export function lodgedFrom(certificateDate: unknown, validUntil: unknown): string | null {
+  const today = new Date().toISOString().slice(0, 10);
+  const printed = ymd(certificateDate);
+  if (printed && printed <= today) return printed;
+  const until = ymd(validUntil);
+  if (!until) return null;
+  /* 29 February ten years back is the 28th. */
+  const from = ymd(`${Number(until.slice(0, 4)) - 10}${until.slice(4)}`) ?? `${Number(until.slice(0, 4)) - 10}-02-28`;
+  return from <= today ? from : null;
+}
 
 const score = (v: unknown): number | null => {
   const n = Number(v);
@@ -72,7 +105,7 @@ export async function readEpcFile(fileUrl: string): Promise<EpcRead> {
 
   const out = await new Anthropic().messages.create({
     model: MODEL,
-    max_tokens: 200,
+    max_tokens: 300,
     system: SYSTEM,
     tools: [TOOL],
     tool_choice: { type: "tool", name: "report_epc" },
@@ -95,7 +128,7 @@ export async function readEpcFile(fileUrl: string): Promise<EpcRead> {
   const printed = typeof x.band === "string" && /^[A-G]$/.test(x.band) ? (x.band as EpcBand) : null;
   /* The score decides the band when both are read and they disagree: the
      letter is the easier thing to misread off a coloured chart. */
-  const read: EpcRead = { band: bandForScore(current) ?? printed, current, potential };
+  const read: EpcRead = { band: bandForScore(current) ?? printed, current, potential, lodged: lodgedFrom(x.certificate_date, x.valid_until) };
   if (hasDb() && (read.band || read.current)) {
     await q(
       `INSERT INTO os_cache (key, payload, computed_at) VALUES ($1, $2, NOW())

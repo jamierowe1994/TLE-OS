@@ -158,7 +158,7 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
     setEpcNote(null);
     try {
       const r = await fetch(`/api/listings/epc-read?id=${encodeURIComponent(id)}`, { cache: "no-store" });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; band?: string | null; current?: number | null; potential?: number | null };
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; band?: string | null; current?: number | null; potential?: number | null; lodged?: string | null };
       if (!j.ok) throw new Error(j.error ?? "The EPC could not be read.");
       const marks: Record<string, string> = {};
       setDraft((d) => {
@@ -166,6 +166,7 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
         if (j.band) { next.epcBand = j.band; marks.epcBand = "the EPC"; }
         if (j.current != null) { next.epcCurrent = j.current; marks.epcCurrent = "the EPC"; }
         if (j.potential != null) { next.epcPotential = j.potential; marks.epcPotential = "the EPC"; }
+        if (j.lodged) { next.epcLodged = j.lodged; marks.epcLodged = "the EPC"; }
         return next;
       });
       setFilledBy((m) => ({ ...m, ...marks }));
@@ -187,7 +188,7 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
   const epcTried = useRef<string | null>(null);
   useEffect(() => {
     if (!details || !draft || !canEdit || !details.epc.fileUrl || epcTried.current === details.id) return;
-    if (draft.epcBand && draft.epcCurrent != null && draft.epcPotential != null) return;
+    if (draft.epcBand && draft.epcCurrent != null && draft.epcPotential != null && draft.epcLodged) return;
     epcTried.current = details.id;
     void readEpc(details.id, true);
   }, [details, draft, canEdit, readEpc]);
@@ -261,17 +262,27 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ id: details.id, ...changes, sources }),
       });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; details?: ListingDetails | null };
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; note?: string; epcHeld?: boolean; details?: ListingDetails | null };
       if (j.details) {
         setDetails(j.details);
-        setDraftState((d) => (d && !j.ok ? d : draftFrom(j.details!)));
+        /* Scores held back for want of the EPC's date stay in the boxes, so
+           adding the date and saving again is all it takes. */
+        setDraftState((d) =>
+          d && !j.ok
+            ? d
+            : d && j.epcHeld
+              ? { ...draftFrom(j.details!), epcBand: d.epcBand, epcCurrent: d.epcCurrent, epcPotential: d.epcPotential, epcLodged: d.epcLodged }
+              : draftFrom(j.details!)
+        );
         onSaved?.(j.details);
       }
       if (j.ok) {
         setFilledBy({});
         setSources({});
       }
-      setNote(j.ok ? { tone: "good", text: "Saved. Live adverts update within about 10 minutes." } : { tone: "bad", text: j.error ?? "That did not save." });
+      /* The server's own words when it held something back (the EPC scores
+         without their date, 15 Oct 2026). */
+      setNote(j.ok ? { tone: "good", text: j.note && j.note !== "Saved." ? j.note : "Saved. Live adverts update within about 10 minutes." } : { tone: "bad", text: j.error ?? "That did not save." });
       /* No Try again on the chip: the advert goes out only from its own Save. */
       settle(j.ok ? { ok: true } : { ok: false, problem: j.error ?? "That did not save." });
     } catch {
@@ -578,6 +589,10 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
             {label("epcPotential", "Potential score")}
             <input type="number" min={1} max={120} disabled={!canEdit} value={draft.epcPotential ?? ""} onChange={(e) => setDraft((d) => ({ ...d, epcPotential: e.target.value === "" ? null : Math.max(1, Math.min(120, Math.round(Number(e.target.value)))) }))} placeholder="e.g. 79" className={`${fieldCls} mt-1 border-line/70`} />
           </label>
+          <label className="block min-w-0">
+            {label("epcLodged", "Date on the EPC")}
+            <input type="date" max={new Date().toISOString().slice(0, 10)} disabled={!canEdit} value={draft.epcLodged ?? ""} onChange={(e) => setDraft((d) => ({ ...d, epcLodged: e.target.value || null }))} className={`${fieldCls} mt-1 border-line/70 ${draft.epcLodged ? "" : "text-muted"}`} />
+          </label>
           {details.record?.scotland && (
             <label className="col-span-2 block min-w-0 sm:col-span-3 lg:col-span-1">
               {label("landlordRegistration", "Landlord registration number")}
@@ -594,7 +609,9 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
         <p className="mt-2.5 text-[11px] leading-relaxed text-muted">
           {epcNote ?? (draft.epcCurrent != null && draft.epcPotential == null
             ? "Add the potential score too and the rating goes to the portals with the advert. Until then it is kept here."
-            : "Every advert has to show the EPC rating.")}
+            : draft.epcCurrent != null && draft.epcPotential != null && !draft.epcLodged
+              ? "Add the date on the EPC and the rating goes to the portals with the advert. Until then it is kept here, and the rest of the advert still saves."
+              : "Every advert has to show the EPC rating.")}
           {details.record?.scotland && " In Scotland the landlord's registration number and your letting agent registration number (LARN) have to be on the advert as well, so saving adds both as the last lines of the description. Your LARN is remembered for your other Scottish listings."}
         </p>
       </section>
@@ -857,7 +874,9 @@ export default function ListingMarketing({ listingId, initial, canEdit, lockedNo
       {(changed.length > 0 || note) && (
         <div className="sticky bottom-3 z-10 mt-5 flex flex-wrap items-center gap-3 rounded-2xl border border-line/60 bg-white/95 px-4 py-3 shadow-[0_18px_40px_-20px_rgba(0,0,0,0.35)] backdrop-blur">
           <p className={`min-w-0 flex-1 text-[12px] leading-snug ${note?.tone === "bad" ? "text-accent-dark" : "text-muted"}`}>
-            {changed.length > 0 ? `Not saved yet: ${changed.map((k) => CHANGE_WORDS[k]).join(", ")}.${note?.tone === "bad" ? ` ${note.text}` : ""}` : note?.text}
+            {/* A good note can sit beside changes too: the EPC scores held back
+                for want of their date stay in the boxes (15 Oct 2026). */}
+            {changed.length > 0 ? `Not saved yet: ${changed.map((k) => CHANGE_WORDS[k]).join(", ")}.${note && (note.tone === "bad" || changed.every((k) => k.startsWith("epc"))) ? ` ${note.text}` : ""}` : note?.text}
           </p>
           {changed.length > 0 ? (
             <>

@@ -4,6 +4,7 @@ import { can } from "@/lib/roles";
 import { hasDb, q } from "@/lib/db";
 import { scopeForWho } from "@/lib/scope";
 import { contactIdOf, isOsContactLead } from "@/lib/contact-leads";
+import { ownedBySql } from "@/lib/contacts-store";
 
 /**
  * May this person open this lead?
@@ -16,8 +17,9 @@ import { contactIdOf, isOsContactLead } from "@/lib/contact-leads";
  * The rule is the board's own, so a lead opens exactly when it would be on
  * your Leads screen (app/api/leads leadScope):
  *   - an owner, or a role that sees the whole business, opens any lead;
- *   - anybody else opens the REX leads assigned to their REX user, and the
- *     contacts they typed in by hand;
+ *   - anybody else opens the REX leads assigned to their REX user, the
+ *     contacts they typed in by hand, and the tenant-area people who asked
+ *     about their homes;
  *   - an owner viewing as an agent sees what that agent sees.
  * A lead the ledger has never held is refused for a scoped person rather than
  * guessed at: the board records every lead before it shows it.
@@ -47,11 +49,16 @@ export async function leadAccess(
   }
 
   if (isOsContactLead(id)) {
-    const rows = await q<{ created_by: string | null }>(`SELECT created_by FROM os_contacts WHERE id = $1`, [contactIdOf(id)]).catch(() => null);
-    if (rows === null) return no("We couldn't check that lead just now. Try again in a minute.", 503);
-    const by = (rows[0]?.created_by ?? "").trim().toLowerCase();
+    /* Theirs when they typed it in, or when it is a tenant-area person who
+       asked about one of their homes (lib/contacts-store ownedBySql). */
     const me = (who.viewingAs ? who.subject?.email : who.actor.email)?.trim().toLowerCase() ?? "";
-    return by && by === me ? allowed : no("That lead isn't in your book.");
+    if (!me) return no("That lead isn't in your book.");
+    const rows = await q<{ id: string }>(
+      `SELECT c.id FROM os_contacts c WHERE c.id = $1 AND ${ownedBySql("c", "$2")}`,
+      [contactIdOf(id), me]
+    ).catch(() => null);
+    if (rows === null) return no("We couldn't check that lead just now. Try again in a minute.", 503);
+    return rows.length ? allowed : no("That lead isn't in your book.");
   }
 
   const rows = await q<{ assignee_id: string | null }>(`SELECT assignee_id FROM os_leads WHERE id = $1`, [id]).catch(() => null);

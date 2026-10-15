@@ -7,6 +7,9 @@ import { rexWriteBlockedBecause, writeCertificateToRex } from "@/lib/plc-rex";
 import { refreshComplianceBook } from "@/lib/compliance-cache";
 import { shareCertificate, type SharePerson, type ShareResult } from "@/lib/certificate-share";
 import { CHECKING_LABEL, HELD_FOR_CHECK } from "@/lib/cert-hold";
+import { REAL_DAY, YMD, realDayOrNull, sayDay } from "@/lib/real-day";
+
+export { REAL_DAY, YMD, realDayOrNull, sayDay };
 
 /**
  * FILING A CERTIFICATE. One path, whichever door it came in by.
@@ -41,9 +44,27 @@ export const CERT_TYPES = new Set([
   "legionella_risk_assessment", "portable_appliance_testing", "smoke_alarms", "co_alarms", "emergency_lighting_fire_exit",
 ]);
 
-export const YMD = /^\d{4}-\d{2}-\d{2}$/;
 /** No certificate on this book carries a date outside these years; anything else is a misread. */
-export const PLAUSIBLE = (v: string) => YMD.test(v) && v >= "2000-01-01" && v <= "2045-12-31";
+export const PLAUSIBLE = (v: string) => REAL_DAY(v) && v >= "2000-01-01" && v <= "2045-12-31";
+
+/** Why a typed or read date will not do, in words for the person filing it. */
+export function dateProblem(v: string, what: "expiry" | "issue"): string | null {
+  const label = what === "expiry" ? "The date it runs out" : "The issue date";
+  if (!YMD.test(v)) return `${label} needs to be a date.`;
+  if (!REAL_DAY(v)) return `${label}, ${sayDay(v)}, is not a real date. Check it against the certificate and put it right.`;
+  if (what === "expiry" && !PLAUSIBLE(v)) return `${label}, ${sayDay(v)}, looks wrong - it should be between 2000 and 2045.`;
+  return null;
+}
+
+/**
+ * Filing failed. `kept` says whether the certificate is on the home anyway, so
+ * the screen can tell the person whether to upload it again.
+ */
+export class FilingFailed extends Error {
+  constructor(message: string, readonly kept: boolean) {
+    super(message);
+  }
+}
 
 /**
  * REX's type → the OS's certificate key, so the file lands in the SAME vault
@@ -232,10 +253,21 @@ export async function shareOnceChecked(certificateId: string): Promise<ShareResu
  * certificate again because somebody pressed upload twice.
  */
 export async function fileCertificate(input: FileCertificate): Promise<{ row: CertRow; duplicate: boolean; share: ShareResult | null }> {
+  /* Every door checks the date first, but a date that is not on the calendar
+     reached Postgres once (7 Oct) and failed as a bare 500; say so instead. */
+  const badDate = dateProblem(input.expiry, "expiry") ?? (input.issue ? dateProblem(input.issue, "issue") : null);
+  if (badDate) throw new FilingFailed(`${badDate} Nothing was kept.`, false);
+
+  /* Up to and including the row, a failure means nothing is on the home. */
+  const notKept = (step: string) => (e: unknown): never => {
+    console.error(`[certificate-intake] ${step} failed for ${input.propertyId} ${input.type}:`, e);
+    throw new FilingFailed(`The certificate was not kept - ${step} failed. Nothing was saved, so upload it again.`, false);
+  };
+
   const twin = await q<CertRow>(
     `SELECT * FROM os_certificates WHERE property_id = $1 AND type_id = $2 AND name = $3 AND expiry = $4 ORDER BY added_at LIMIT 1`,
     [input.propertyId, input.type, input.fileName, input.expiry]
-  );
+  ).catch(notKept("looking for a copy already on file"));
   if (twin[0]) return { row: twin[0], duplicate: true, share: null };
 
   const id = uid();
@@ -250,7 +282,7 @@ export async function fileCertificate(input: FileCertificate): Promise<{ row: Ce
         Metadata: { "original-name": encodeURIComponent(input.fileName), "property-id": input.propertyId, source: encodeURIComponent(input.source) },
       })
     )
-  );
+  ).catch(notKept("storing the file"));
   /* A gas safety record or EICR from anyone but the compliance office waits
      for their check before it goes live (lib/cert-hold): not into REX, not
      counted, until releaseHeldCertificate. */
@@ -262,15 +294,39 @@ export async function fileCertificate(input: FileCertificate): Promise<{ row: Ce
     `INSERT INTO os_certificates (id, property_id, property_name, type_id, expiry, issue, r2_key, name, source, added_by, share_people, awaiting_check, rex_note, rex_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, CASE WHEN $12 THEN NOW() END) RETURNING *`,
     [id, input.propertyId, input.propertyName, input.type, input.expiry, input.issue || null, key, input.fileName, input.source, input.by, JSON.stringify(input.people ?? []), held, held ? "Waiting for compliance to verify it before it goes into REX." : ""]
-  );
+  ).catch(notKept("saving it on the home"));
   if (held) return { row: rows[0], duplicate: false, share: waitingForCheck(true) };
-  const row = await writeCertificateRow(rows[0], `Written by TLE OS from ${input.source} (${input.fileName}).`, input.refreshBook === true);
+
+  /* From here the certificate is on the home. Nothing after this fails the
+     filing: a REX write that throws is a retry from the home, and a tick
+     that does not save leaves it on compliance's To verify list, whose
+     Verified sends it on - once, as ever (shareOnceChecked's claim). */
+  let row = rows[0];
+  try {
+    row = await writeCertificateRow(rows[0], `Written by TLE OS from ${input.source} (${input.fileName}).`, input.refreshBook === true);
+  } catch (e) {
+    console.error(`[certificate-intake] REX write for ${row.id} threw:`, e);
+  }
   if (!input.checkedBy) return { row, duplicate: false, share: waitingForCheck(false) };
   /* The office filed it: their tick, and on it goes. */
-  await q(
-    `INSERT INTO os_compliance_checks (kind, subject_id, state, note, by_name) VALUES ('certificate', $1, 'verified', $2, $3)
-     ON CONFLICT (kind, subject_id) DO NOTHING`,
-    [row.id, "Filed by compliance, so checked as it was filed.", input.checkedBy]
-  );
-  return { row, duplicate: false, share: await shareOnceChecked(row.id) };
+  try {
+    await q(
+      `INSERT INTO os_compliance_checks (kind, subject_id, state, note, by_name) VALUES ('certificate', $1, 'verified', $2, $3)
+       ON CONFLICT (kind, subject_id) DO NOTHING`,
+      [row.id, "Filed by compliance, so checked as it was filed.", input.checkedBy]
+    );
+  } catch (e) {
+    console.error(`[certificate-intake] tick for ${row.id} did not save:`, e);
+    return {
+      row,
+      duplicate: false,
+      share: { armed: false, skipped: "the tick did not save", outcomes: [], line: "Kept on the home. It could not be ticked as checked just now, so it is on the To verify list - verify it there to send it on." },
+    };
+  }
+  try {
+    return { row, duplicate: false, share: await shareOnceChecked(row.id) };
+  } catch (e) {
+    console.error(`[certificate-intake] send-on for ${row.id} failed:`, e);
+    return { row, duplicate: false, share: { armed: false, skipped: "the send did not start", outcomes: [], line: "Kept on the home and ticked as checked. Sending it on to the landlord and tenants did not start." } };
+  }
 }
