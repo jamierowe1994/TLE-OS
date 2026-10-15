@@ -13,6 +13,7 @@ import { outlookDiaryFor, type OutlookRead } from "@/lib/outlook-diary";
 import { noteRexOutlookSync, withoutPulledCopies } from "@/lib/rex-outlook-sync";
 import { personalBusyFor, type PersonalRead } from "@/lib/personal-calendar";
 import { cancelledViewings, withoutCancelled } from "@/lib/viewing-cancelled";
+import { createHash } from "node:crypto";
 
 /**
  * The team's diary, cached — same manners as leads and listings.
@@ -94,6 +95,45 @@ async function ours(authorId: string | null, selfId: string): Promise<Appt[]> {
        with them — a diary short a travel block still beats no diary. */
     return [];
   }
+}
+
+/**
+ * WHICH APPRAISAL IS THIS ENTRY (15 Oct 2026). An appraisal booked in the OS
+ * reaches the diary as the REX entry booking made (os_case_state "rex-diary")
+ * or the Outlook entry it made ("outlook-event", appraisal|<id>; the diary
+ * knows an Outlook entry as ms-<first 16 of the sha1 of Graph's id>). Read
+ * fresh, so the entry opens the file and offers Rearrange and Cancel.
+ */
+async function appraisalLinks(): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (!hasDb()) return out;
+  const rows = await q<{ kind: string; record_id: string; event_id: string | null }>(
+    `SELECT kind, record_id, payload->>'eventId' AS event_id FROM os_case_state
+      WHERE kind = 'rex-diary' OR (kind = 'outlook-event' AND record_id LIKE 'appraisal|%')`
+  ).catch(() => []);
+  for (const r of rows) {
+    if (!r.event_id) continue;
+    if (r.kind === "rex-diary") out.set(`rex-${r.event_id}`, r.record_id);
+    else out.set(`ms-${createHash("sha1").update(r.event_id).digest("hex").slice(0, 16)}`, r.record_id.slice("appraisal|".length));
+  }
+  return out;
+}
+
+function withAppraisalIds<B extends { appts: Appt[] }>(book: B, links: Map<string, string>): B {
+  if (!links.size) return book;
+  let hit = false;
+  const appts = book.appts.map((a) => {
+    const id = links.get(a.id);
+    if (!id) return a;
+    hit = true;
+    return {
+      ...a,
+      kind: "appraisal" as const,
+      appraisalId: id,
+      link: a.link ?? { href: `/market-appraisals/${encodeURIComponent(id)}`, label: "The appraisal" },
+    };
+  });
+  return hit ? { ...book, appts } : book;
 }
 
 /** The REX book with our own entries merged in, sorted as one day reads. */
@@ -289,7 +329,7 @@ export async function GET(req: NextRequest) {
      for the slow REX pull; applying it to our own table would mean saving a
      travel buffer and watching the diary insist it isn't there for another
      minute and a half. */
-  const [scope, rexLogin, mine, found, gone] = await Promise.all([
+  const [scope, rexLogin, mine, found, gone, appraisals] = await Promise.all([
     scopeForWho(req, who0),
     hasDb()
       ? q<{ rex_email: string }>(`SELECT rex_email FROM os_rex_tokens WHERE user_id = $1`, [person.id]).catch(() => [])
@@ -299,6 +339,7 @@ export async function GET(req: NextRequest) {
     /* Cancelled in the OS, read fresh: REX stops returning a cancelled entry,
        but a held copy (or the agent's Outlook twin of it) still has it. */
     cancelledViewings(),
+    appraisalLinks(),
   ]);
   const who = mineOnly
     ? { email: (person.email ?? "").toLowerCase() || null, name: (scope.everything ? person.name : scope.label) || null, rexEmail: rexLogin[0]?.rex_email ?? null }
@@ -328,7 +369,7 @@ export async function GET(req: NextRequest) {
       const theirs = mineOnly ? marked.appts : marked.appts.filter((a) => a.own);
       after(() => noteRexOutlookSync(actor.id, theirs, outlook.appts).catch(() => undefined));
     }
-    const withBoth = withoutCancelled(withOutlook(marked, outlook, mineOnly), gone);
+    const withBoth = withAppraisalIds(withoutCancelled(withOutlook(marked, outlook, mineOnly), gone), appraisals);
     const personal = await personalP;
     return { ...withPersonal(withBoth, personal), whose, outlook: outlookSaid(outlook), personal: personalSaid(personal) };
   };
@@ -342,7 +383,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       live: false,
-      mine: [...mine, ...withoutCancelled({ appts: outlook?.appts ?? [] }, gone).appts, ...personal.appts],
+      mine: [...mine, ...withAppraisalIds(withoutCancelled({ appts: outlook?.appts ?? [] }, gone), appraisals).appts, ...personal.appts],
       whose,
       outlook: outlookSaid(outlook),
       personal: personalSaid(personal),

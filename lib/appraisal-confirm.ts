@@ -82,7 +82,9 @@ function londonWhen(iso: string): string {
 export function inviteFor(ma: MarketAppraisal, agent: { name: string; phone: string }, minutes = 45): AppraisalInvite {
   return {
     landlordName: ma.landlord,
-    address: [ma.address, ma.postcode].filter((s) => s && !ma.address.includes(s)).join(", ") || ma.address,
+    /* The street, then the postcode unless the street has it: this used to
+       test the street against itself and say only "HU5 2AB" (15 Oct 2026). */
+    address: [ma.address, ma.postcode].filter((s, i) => s && (i === 0 || !ma.address.toUpperCase().includes(s.toUpperCase()))).join(", ") || ma.address,
     whenPretty: ma.appointmentAt
       ? londonWhen(ma.appointmentAt)
       : "",
@@ -111,7 +113,7 @@ export interface ConfirmationDraft {
 
 const recordKey = (ma: MarketAppraisal) => `appraisal|${ma.id}`;
 
-async function prepare(ma: MarketAppraisal, me: OsUser, minutes?: number, unsaved = false, origin?: string) {
+async function prepare(ma: MarketAppraisal, me: OsUser, minutes?: number, unsaved = false, origin?: string, movedFrom?: string | null) {
   /* The landlord's address is derived from the contact on read, never stored
      on the appraisal - so read it back. An appointment being booked right now
      (the booker's email column) is not saved yet: its time, place and email
@@ -123,7 +125,9 @@ async function prepare(ma: MarketAppraisal, me: OsUser, minutes?: number, unsave
     : stored ?? ma;
   const invite = inviteFor(full, { name: me.name || "The Letting Experts", phone: await phoneOf(me.id) }, minutes && minutes > 0 ? minutes : 45);
   const prev = await lastSent(recordKey(full));
-  const moved = hasMoved(prev, full.appointmentAt);
+  /* Rearranged (15 Oct 2026): it says it moved even when no confirmation
+     went for the old time - the landlord had still agreed that time. */
+  const moved = hasMoved(prev, full.appointmentAt) || Boolean(movedFrom && full.appointmentAt && new Date(movedFrom).getTime() !== new Date(full.appointmentAt).getTime());
   let subject = confirmSubjectFor(invite);
   const links = origin && full.appointmentAt
     ? calendarLinks({
@@ -145,8 +149,8 @@ async function prepare(ma: MarketAppraisal, me: OsUser, minutes?: number, unsave
   return { full, invite, prev, moved, subject, text, links };
 }
 
-export async function draftBookingConfirmation(input: { ma: MarketAppraisal; me: OsUser; minutes?: number; unsaved?: boolean; origin?: string }): Promise<ConfirmationDraft> {
-  const { full, prev, moved, subject, text, links } = await prepare(input.ma, input.me, input.minutes, input.unsaved, input.origin);
+export async function draftBookingConfirmation(input: { ma: MarketAppraisal; me: OsUser; minutes?: number; unsaved?: boolean; origin?: string; movedFrom?: string | null }): Promise<ConfirmationDraft> {
+  const { full, prev, moved, subject, text, links } = await prepare(input.ma, input.me, input.minutes, input.unsaved, input.origin, input.movedFrom);
   const to = (full.landlordEmail ?? "").trim();
   return {
     ok: true,
@@ -160,7 +164,7 @@ export async function draftBookingConfirmation(input: { ma: MarketAppraisal; me:
         ? "The landlord has no email address on the file, so this cannot go. Ring them, or add their email."
         : undefined,
     alreadySent: prev && isRepeat(prev, full.appointmentAt) ? { at: prev.sentAt, to: prev.to, subject: prev.subject } : undefined,
-    moved: moved && prev?.startsAt ? { from: prev.startsAt } : undefined,
+    moved: moved && (prev?.startsAt || input.movedFrom) ? { from: (input.movedFrom || prev?.startsAt)! } : undefined,
     /* The buttons in the body replace the attachment people missed. */
     attachment: full.appointmentAt && !links ? "market-appraisal.ics" : null,
   };
@@ -212,5 +216,71 @@ export async function sendBookingConfirmation(input: {
 
   await recordSent(recordKey(full), { sentAt: new Date().toISOString(), startsAt: full.appointmentAt, to, subject, by: me.email });
   await markConfirmed(full.leadId, me.email);
+  return { sent: true, to };
+}
+
+/* ── CANCELLED (James, 15 Oct 2026) ────────────────────────────────────────
+ *
+ * Offered after an appraisal is cancelled, never sent by the cancel itself:
+ * the agent sees it, can change any of it, and presses Send. Once per
+ * cancelled time - a second Send says when it went (lib/confirmations).
+ */
+const cancelKey = (ma: MarketAppraisal) => `appraisal-cancel|${ma.id}`;
+
+async function prepareCancel(id: string, me: OsUser) {
+  const full = await getAppraisal(id).catch(() => null);
+  if (!full) return null;
+  const was = full.cancelledWas ?? null;
+  const invite = inviteFor({ ...full, appointmentAt: was }, { name: me.name || "The Letting Experts", phone: await phoneOf(me.id) });
+  const first = (full.landlord || "there").trim().split(/\s+/)[0];
+  const subject = `Cancelled - Market appraisal at ${invite.address}`;
+  const text = [
+    `Hi ${first},`,
+    "",
+    `Just to confirm, your market appraisal at ${invite.address}${invite.whenPretty ? ` on **${invite.whenPretty}**` : ""} has been cancelled.`,
+    "",
+    `If you'd like to find another time, reply to this email${invite.agentPhone ? ` or call me on ${invite.agentPhone}` : ""} and I'll book you back in.`,
+    "",
+    "Kind regards,",
+    invite.agentName,
+    "The Letting Experts",
+  ].join("\n");
+  return { full, was, subject, text, prev: await lastSent(cancelKey(full)) };
+}
+
+export async function draftCancelNotice(input: { id: string; me: OsUser }): Promise<ConfirmationDraft | { ok: false; error: string }> {
+  const p = await prepareCancel(input.id, input.me);
+  if (!p) return { ok: false, error: "That appraisal isn't here any more." };
+  const to = (p.full.landlordEmail ?? "").trim();
+  return {
+    ok: true,
+    to: to.includes("@") ? to : null,
+    toName: p.full.landlord,
+    subject: p.subject,
+    html: renderPlain(p.subject, p.text).html,
+    blocked: !p.full.cancelledAt
+      ? "This appraisal is booked, not cancelled, so there is nothing to tell them."
+      : !to.includes("@")
+        ? "The landlord has no email address on the file, so this cannot go. Ring them instead."
+        : undefined,
+    alreadySent: p.prev && isRepeat(p.prev, p.was) ? { at: p.prev.sentAt, to: p.prev.to, subject: p.prev.subject } : undefined,
+    attachment: null,
+  };
+}
+
+export async function sendCancelNotice(input: { id: string; me: OsUser; subject?: string; html?: string; again?: boolean }): Promise<ConfirmationResult> {
+  const p = await prepareCancel(input.id, input.me);
+  if (!p) return { sent: false, reason: "That appraisal isn't here any more." };
+  if (!p.full.cancelledAt) return { sent: false, reason: "This appraisal is booked, not cancelled." };
+  const to = (p.full.landlordEmail ?? "").trim();
+  if (!to.includes("@")) return { sent: false, reason: "The landlord has no email address on their record." };
+  if (isRepeat(p.prev, p.was) && !input.again) {
+    return { sent: false, to, reason: `Already sent to ${p.prev!.to} on ${sentWords(p.prev!.sentAt)}.`, alreadySent: true };
+  }
+  const subject = (input.subject ?? "").trim() || p.subject;
+  const html = input.html ? cleanEmailHtml(input.html) : renderPlain(subject, p.text).html;
+  const out = await sendAsAgent({ me: input.me, to, toName: p.full.landlord, subject, html });
+  if (!out.sent) return { sent: false, to, reason: out.detail };
+  await recordSent(cancelKey(p.full), { sentAt: new Date().toISOString(), startsAt: p.was, to, subject, by: input.me.email });
   return { sent: true, to };
 }

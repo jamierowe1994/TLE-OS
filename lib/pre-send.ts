@@ -179,6 +179,35 @@ async function queuePre(ma: MarketAppraisal, sender: OsUser, sendAt: Date, deckU
   return id;
 }
 
+/**
+ * A rearranged visit (lib/appraisal-change, 15 Oct 2026): the pre-presentation
+ * still waiting to go names the old time, and the runner would rightly refuse
+ * it as "moved after this was written". Re-worded for the new time, as whoever
+ * queued it, at the moment it was already due. Nothing queued, nothing done.
+ */
+export async function rewordQueuedPre(ma: MarketAppraisal): Promise<boolean> {
+  if (!hasDb() || !ma.appointmentAt) return false;
+  const refs = [...new Set([ma.leadId, ma.id].filter((r): r is string => Boolean(r)))];
+  const rows = await q<{ id: string; queued_by_id: string | null; body: string }>(
+    `SELECT id, queued_by_id, body FROM os_scheduled_sends WHERE kind = $1 AND ref = ANY($2) AND state = 'queued'`,
+    [PRE_KIND, refs]
+  ).catch(() => []);
+  let done = false;
+  for (const r of rows) {
+    const sender = r.queued_by_id ? await findUserById(r.queued_by_id).catch(() => null) : null;
+    const deckUrl = /https?:\/\/\S+\/present\/[A-Za-z0-9_-]+/.exec(r.body)?.[0];
+    if (!sender || !deckUrl) continue;
+    const invite = inviteFor(ma, sender, deckUrl);
+    const wrote = await q(`UPDATE os_scheduled_sends SET subject = $2, body = $3 WHERE id = $1 AND state = 'queued' RETURNING id`, [
+      r.id,
+      subjectFor(invite),
+      bodyFor(invite),
+    ]).catch(() => []);
+    if (wrote.length) done = true;
+  }
+  return done;
+}
+
 export interface PreSendResult {
   sent: boolean;
   /** Not sent, but still queued: customer email is switched off here, and the

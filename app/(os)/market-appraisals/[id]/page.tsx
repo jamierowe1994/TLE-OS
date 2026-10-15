@@ -13,6 +13,7 @@ import ListingAction from "@/components/appraisal/ListingAction";
 import PhotosPanel from "@/components/appraisal/PhotosPanel";
 import TakeOnWizard from "@/components/appraisal/TakeOnWizard";
 import ConfirmLine from "@/components/appraisal/ConfirmLine";
+import AppraisalChange from "@/components/AppraisalChange";
 import AppraisalOutcome from "@/components/AppraisalOutcome";
 import WelcomeVideoRecorder from "@/components/WelcomeVideoRecorder";
 import NextUp, { SAGE_INK, SAGE_WASH, type SentDeck } from "@/components/appraisal/NextUp";
@@ -325,7 +326,7 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
           </ChangeFees>
         )}
         {/* The welcome video, recorded against the pre-appraisal deck. */}
-        {pre && !past && ma.preSend?.state !== "sent" && (
+        {pre && !past && !ma.cancelledAt && ma.preSend?.state !== "sent" && (
           <span className="[&>button]:!border-line/70 [&>button]:!bg-white [&>button]:!px-3.5 [&>button]:!py-2 [&>button]:!text-[12px] [&>button]:!font-semibold">
             <WelcomeVideoRecorder compact token={pre.token} address={ma.address} />
           </span>
@@ -480,11 +481,38 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
                 </p>
               )}
             </>
+          ) : ma.cancelledAt ? (
+            /* Cancelled (James, 15 Oct 2026): the file and everything on it
+               stay; Rebook puts it back in the diary. */
+            <div className="mt-4">
+              <span className="inline-flex rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-semibold text-accent-dark">Cancelled</span>
+              {ma.cancelledWas && <p className="mt-2.5 text-[14px] text-muted line-through">{longDate(ma.cancelledWas)}</p>}
+              <p className="mt-1.5 text-[12px] text-muted">
+                Cancelled{ma.cancelledBy ? ` by ${ma.cancelledBy}` : ""} on{" "}
+                {new Date(ma.cancelledAt).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}. Nothing is in the diary for it.
+              </p>
+            </div>
           ) : (
             <p className="mt-4 text-[13px] leading-relaxed text-muted">
               No date on this appraisal. It was booked without one - worth chasing, because the
               pre-appraisal deck is scheduled from the appointment.
             </p>
+          )}
+          {/* Rearrange and Cancel, the same as from the diary (James, 15 Oct
+              2026). A visit that has been is written up, not moved. */}
+          {(ma.cancelledAt || (when && !past)) && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <AppraisalChange
+                appraisalId={ma.id}
+                appraisal={ma}
+                buttonClass="inline-flex items-center gap-1.5 rounded-full border border-line/80 bg-white px-3.5 py-2 text-[12px] font-semibold transition-colors hover:border-ink/40 disabled:opacity-50"
+                noteClass="w-full text-[11.5px] leading-snug text-accent-dark"
+                onChanged={(next) => {
+                  if (next) saved(next as MarketAppraisal);
+                  else reload();
+                }}
+              />
+            </div>
           )}
           {/* What the landlord has been sent: the confirmation until it has
               gone, then the latest thing sent, and the rest one press away.

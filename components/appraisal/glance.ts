@@ -47,7 +47,9 @@ export function glanceFor(
   const passed = Boolean(when && when < now);
 
   /* ── the visit, said by the clock ── */
-  const visit: GlanceItem = !when || !ma.appointmentAt
+  const visit: GlanceItem = ma.cancelledAt
+    ? { icon: "calendar", title: "Appraisal cancelled", sub: ma.cancelledWas ? `Was ${longDay(ma.cancelledWas)} at ${clock(ma.cancelledWas)} - Rebook to put it back in the diary` : "Rebook to put it back in the diary" }
+    : !when || !ma.appointmentAt
     ? { icon: "calendar", title: "No date on this appraisal", sub: "Booked without one - worth chasing" }
     : passed
       ? { icon: "calendar", title: "Visit completed", sub: `${longDay(ma.appointmentAt)} at ${clock(ma.appointmentAt)}${ma.agent ? ` · ${ma.agent}` : ""}` }
@@ -57,7 +59,9 @@ export function glanceFor(
 
   /* ── the pre-presentation ── */
   const ps = ma.preSend;
-  const pre: GlanceItem = ps?.state === "sent"
+  const pre: GlanceItem = ma.cancelledAt && ps?.state !== "sent"
+    ? { icon: "mail", title: "Pre-presentation on hold", sub: "Nothing goes while it's cancelled" }
+    : ps?.state === "sent"
     ? { icon: "mail", title: "Pre-presentation sent", sub: `${ps.at ? shortDay(ps.at) : "Sent"}${ps.opens ? ` · opened ${ps.opens} time${ps.opens === 1 ? "" : "s"}` : " · not opened yet"}` }
     : ps?.state === "queued" && ps.at
       ? { icon: "mail", title: `Pre-presentation goes ${preSendWhen(ps.at, now)}`, sub: "Or as soon as you send it" }
@@ -113,7 +117,7 @@ export function glanceFor(
   switch (stage) {
     case "booked":
     case "pre_appraisal":
-      return [pre, video, visit];
+      return ma.cancelledAt ? [visit, pre, video] : [pre, video, visit];
     case "appraisal":
       return [visit, presentation, passed ? figure : pre];
     case "post_appraisal":

@@ -44,6 +44,9 @@ export interface CancelledViewing {
   reason: "organiser" | "applicant";
 }
 
+/** Where an appraisal's cancel or move is kept (lib/appraisal-change). */
+export const APPRAISAL_GONE_KIND = "appraisal-cancelled";
+
 export async function recordViewingCancelled(viewingId: string, v: CancelledViewing): Promise<void> {
   if (!hasDb()) return;
   await q(
@@ -75,10 +78,13 @@ export async function viewingCancelledAlready(viewingId: string): Promise<Cancel
 export async function cancelledViewings(): Promise<Map<string, CancelledViewing>> {
   const out = new Map<string, CancelledViewing>();
   if (!hasDb()) return out;
+  /* Appraisals cancelled or moved in the OS ride along (lib/appraisal-change,
+     15 Oct 2026): the same shape, so the same hiding of the entry and of its
+     copy in the agent's Outlook. */
   const rows = await q<{ record_id: string; payload: CancelledViewing }>(
     `SELECT record_id, payload FROM os_case_state
-      WHERE kind = $1 AND (payload->>'startsAt')::timestamptz > NOW() - INTERVAL '30 days'`,
-    [KIND]
+      WHERE kind = ANY($1) AND (payload->>'startsAt')::timestamptz > NOW() - INTERVAL '30 days'`,
+    [[KIND, APPRAISAL_GONE_KIND]]
   ).catch(() => []);
   for (const r of rows) out.set(r.record_id, r.payload);
   return out;

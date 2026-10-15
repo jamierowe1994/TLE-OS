@@ -9,6 +9,7 @@ import { DiaryOwnerTag } from "@/components/Wire";
 import { PressButton } from "@/components/Bits";
 import CancelAppointment from "@/components/CancelAppointment";
 import CancelViewing, { canCancelViewing, targetFromAppt } from "@/components/CancelViewing";
+import AppraisalChange, { canChangeAppraisalAppt } from "@/components/AppraisalChange";
 import { KIND_META, minutesOf, type Appt } from "@/lib/diary";
 import { useMyDiary, refreshDiary } from "@/lib/diary-store";
 
@@ -464,6 +465,14 @@ export default function DiaryCalendar({
                     target={targetFromAppt(sel)}
                     onDone={() => setSelId(null)}
                     className="w-full rounded-full border border-line/80 px-4 py-2 text-[12px] font-semibold text-muted transition-colors hover:border-ink hover:text-ink disabled:opacity-50"
+                  />
+                )}
+                {/* A market appraisal the OS booked: Rearrange and Cancel (James, 15 Oct 2026). */}
+                {canChangeAppraisalAppt(sel) && (
+                  <AppraisalChange
+                    key={sel.appraisalId}
+                    appraisalId={sel.appraisalId!}
+                    buttonClass="flex w-full items-center justify-center gap-1.5 rounded-full border border-line/80 px-4 py-2 text-[12px] font-semibold text-muted transition-colors hover:border-ink hover:text-ink disabled:opacity-50"
                   />
                 )}
               </div>

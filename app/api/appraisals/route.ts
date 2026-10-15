@@ -17,9 +17,9 @@ import { publicOrigin } from "@/lib/origin";
 import { readFacts } from "@/lib/lead-facts";
 import type { ConfirmationResult } from "@/lib/appraisal-confirm";
 
-import { putAppraisalInRexDiary, type DiaryOutcome } from "@/lib/rex-diary-write";
-import { rexCopiesToOutlook } from "@/lib/rex-outlook-sync";
-import { putInOutlook, type OutlookOutcome, removeFromOutlook } from "@/lib/outlook-calendar";
+import type { DiaryOutcome } from "@/lib/rex-diary-write";
+import type { OutlookOutcome } from "@/lib/outlook-calendar";
+import { putAppraisalInDiaries } from "@/lib/appraisal-diary";
 /**
  * The appraisals the OS has booked.
  *
@@ -163,38 +163,12 @@ export async function POST(req: NextRequest) {
           pre = null;
           console.error("[pre-send] booking", e instanceof Error ? e.message : e);
         }
-        /* REX's diary, as the silent mirror (lib/rex-diary-write). Never the
-           reason a booking fails. First, so Outlook below knows whether REX
-           will copy it there itself. */
-        try {
-          rexDiary = await putAppraisalInRexDiary({ ma: full, userId: me.id });
-        } catch (e) {
-          rexDiary = { ok: false, reason: "refused", detail: publicError(e, "Couldn't reach REX.") };
-        }
-        /* Into the agent's own Outlook calendar (lib/outlook-calendar,
-           15 Sep 2026) - that is their diary. James: nobody should need REX's
-           calendar sync, which often does not save. */
-        /* Unless their REX already copies its diary into Outlook (Howard, 24
-           Sep 2026: two of everything) - then REX's copy is the one, once REX
-           has taken it. See lib/rex-outlook-sync. */
-        if (rexDiary?.ok && (await rexCopiesToOutlook(me.id))) {
-          /* One we made before this was known is the duplicate: take it out. */
-          await removeFromOutlook(me.id, `appraisal|${appraisal.id}`).catch(() => null);
-          outlook = { ok: true, eventId: "", moved: false, duplicate: false, viaRex: true } as OutlookOutcome;
-        } else try {
-          const where = [appraisal.address, appraisal.postcode].filter((x) => x && !appraisal.address.includes(x)).join(", ") || appraisal.address;
-          outlook = await putInOutlook({
-            userId: me.id,
-            key: `appraisal|${appraisal.id}`,
-            subject: `Market appraisal - ${where} with ${appraisal.landlord}`,
-            body: `Booked in TLE OS.\nLandlord: ${full.landlord}${full.landlordMobile ? `, ${full.landlordMobile}` : ""}${full.landlordEmail ? `, ${full.landlordEmail}` : ""}`,
-            location: where,
-            startsAt: appraisal.appointmentAt,
-            minutes: 60,
-          });
-        } catch (e) {
-          outlook = { ok: false, reason: "refused", detail: publicError(e, "Couldn't reach Outlook.") };
-        }
+        /* REX's diary as the silent mirror, then the agent's own Outlook
+           (James, 15 Sep 2026: that is their diary) - unless their REX copies
+           its diary into Outlook (Howard, 24 Sep 2026: two of everything).
+           One place for it now, lib/appraisal-diary, so Rearrange writes it
+           the same way (15 Oct 2026). */
+        ({ rexDiary, outlook } = await putAppraisalInDiaries(full, me.id));
       } else {
         confirmation = { sent: false, reason: "Not signed in, so the confirmation could not go out in anybody's name." };
       }

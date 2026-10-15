@@ -31,6 +31,7 @@ import {
 import { WhatsAppButton } from "@/components/WhatsAppQr";
 import CancelAppointment, { canCancelGeneral } from "@/components/CancelAppointment";
 import CancelViewing, { canCancelViewing, targetFromAppt } from "@/components/CancelViewing";
+import AppraisalChange, { canChangeAppraisalAppt } from "@/components/AppraisalChange";
 
 /**
  * The quick look: what IS this, and what do I need to know before I go.
@@ -503,6 +504,16 @@ export default function AppointmentDrawer({
               )}
               {/* Straight from the diary, without opening the file (Lorna, 15 Oct 2026). */}
               {canCancelViewing(appt) && <CancelViewing target={targetFromAppt(appt)} onDone={() => onClose()} className={secondary} />}
+            </div>
+          ) : appt.appraisalId ? (
+            /* A market appraisal the OS booked (James, 15 Oct 2026): the file,
+               and Rearrange and Cancel straight from the diary. */
+            <div className="flex flex-wrap gap-2">
+              <Link href={`/market-appraisals/${encodeURIComponent(appt.appraisalId)}`} className={`${primary} flex-1`}>
+                <DoodleIcon name="folder" size={13} />
+                Open the appraisal
+              </Link>
+              {canChangeAppraisalAppt(appt) && <AppraisalChange key={appt.appraisalId} appraisalId={appt.appraisalId} buttonClass={secondary} />}
             </div>
           ) : appt.link ? (
             <Link href={appt.link.href} className={`${primary} w-full`}>

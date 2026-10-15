@@ -30,6 +30,9 @@ export type ViewingBookingInput = {
 
 export type AppraisalBookingInput = {
   leadId: string;
+  /** Rearrange: the appraisal itself (one with no lead), and when it was before. */
+  id?: string;
+  movedFrom?: string | null;
   landlord: string;
   email?: string | null;
   address: string;
@@ -39,6 +42,8 @@ export type AppraisalBookingInput = {
 
 export type ConfirmTarget =
   | { kind: "appraisal"; id: string }
+  /** The landlord told an appraisal is cancelled (15 Oct 2026). */
+  | { kind: "appraisal-cancelled"; id: string }
   | { kind: "appraisal-new"; appraisal: AppraisalBookingInput }
   | { kind: "viewing"; booking: ViewingBookingInput }
   /** The same viewing, to the property's landlord (the booker's last-but-one step). */
@@ -70,6 +75,8 @@ export interface ConfirmEditorHandle {
 export function payloadOf(t: ConfirmTarget): Record<string, unknown> {
   return t.kind === "appraisal"
     ? { kind: "appraisal", id: t.id }
+    : t.kind === "appraisal-cancelled"
+      ? { kind: "appraisal-cancelled", id: t.id }
     : t.kind === "appraisal-new"
       ? { kind: "appraisal", appraisal: t.appraisal }
       : t.kind === "takeon"
@@ -173,7 +180,7 @@ const ConfirmEditor = forwardRef<ConfirmEditorHandle, { target: ConfirmTarget; o
         )}
         {draft.moved && (
           <p className="rounded-xl bg-panel px-3.5 py-2.5 text-[12px] leading-snug text-muted">
-            They were confirmed for {when(draft.moved.from)}. The time has changed, so this one says it has moved.
+            They were booked for {when(draft.moved.from)}. The time has changed, so this one says it has moved.
           </p>
         )}
         <label className="block">

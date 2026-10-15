@@ -76,6 +76,9 @@ interface Row extends Record<string, unknown> {
   rex_property_id: string | null;
   present_token: string | null;
   terms_sent_at: string | Date | null;
+  cancelled_at?: string | Date | null;
+  cancelled_was?: string | Date | null;
+  cancelled_by?: string | null;
   created_at: string | Date;
 }
 
@@ -83,7 +86,8 @@ interface Row extends Record<string, unknown> {
 const COLS = `id, lead_id, landlord, address, postcode, agent, appointment_at,
               stage, valuation, service_level, fee_pct, setup_fee, other_fees,
               valuation_note, valued_at, valued_by, rex_property_id,
-              present_token, terms_sent_at, created_at`;
+              present_token, terms_sent_at, cancelled_at, cancelled_was,
+              cancelled_by, created_at`;
 
 function rowTo(r: Row): MarketAppraisal {
   return {
@@ -115,6 +119,9 @@ function rowTo(r: Row): MarketAppraisal {
     rexPropertyId: r.rex_property_id || null,
     presentToken: r.present_token,
     termsSentAt: r.terms_sent_at ? new Date(r.terms_sent_at).toISOString() : null,
+    cancelledAt: r.cancelled_at ? new Date(r.cancelled_at).toISOString() : null,
+    cancelledWas: r.cancelled_was ? new Date(r.cancelled_was).toISOString() : null,
+    cancelledBy: r.cancelled_by ?? null,
     createdAt: new Date(r.created_at).toISOString(),
   };
 }
@@ -378,6 +385,52 @@ export async function setOutcome(id: string, outcome: "won" | "lost" | null): Pr
   return getAppraisal(id);
 }
 
+/**
+ * CANCELLED (James, 15 Oct 2026; lib/appraisal-change does the rest). The
+ * time is cleared - every reminder, nudge, deck chase and diary that reads it
+ * stops by itself - and kept in cancelled_was so the file can say what was
+ * called off. Nothing else on the file is touched.
+ */
+export async function markAppraisalCancelled(id: string, by: string): Promise<MarketAppraisal | null> {
+  if (hasDb()) {
+    await q(
+      `UPDATE os_market_appraisals
+          SET cancelled_was = COALESCE(appointment_at, cancelled_was),
+              cancelled_at = NOW(), cancelled_by = $2, appointment_at = NULL, updated_at = NOW()
+        WHERE id = $1`,
+      [id, by]
+    );
+  } else {
+    const all = await readFile();
+    const i = all.findIndex((r) => r.id === id);
+    if (i < 0) return null;
+    all[i] = { ...all[i], cancelledWas: all[i].appointmentAt ?? all[i].cancelledWas ?? null, cancelledAt: new Date().toISOString(), cancelledBy: by, appointmentAt: null };
+    await writeFile(all);
+  }
+  appraisalsChanged();
+  return getAppraisal(id);
+}
+
+/** REARRANGED: the visit is at a new time, and on again if it was cancelled. */
+export async function moveAppraisal(id: string, appointmentAt: string): Promise<MarketAppraisal | null> {
+  if (hasDb()) {
+    await q(
+      `UPDATE os_market_appraisals
+          SET appointment_at = $2, cancelled_at = NULL, cancelled_was = NULL, cancelled_by = NULL, updated_at = NOW()
+        WHERE id = $1`,
+      [id, appointmentAt]
+    );
+  } else {
+    const all = await readFile();
+    const i = all.findIndex((r) => r.id === id);
+    if (i < 0) return null;
+    all[i] = { ...all[i], appointmentAt, cancelledAt: null, cancelledWas: null, cancelledBy: null };
+    await writeFile(all);
+  }
+  appraisalsChanged();
+  return getAppraisal(id);
+}
+
 export interface ValuationPatch {
   valuation?: number | null;
   serviceLevel?: MarketAppraisal["serviceLevel"];
@@ -546,6 +599,10 @@ export async function createAppraisal(input: NewAppraisal): Promise<MarketApprai
          postcode       = EXCLUDED.postcode,
          agent          = EXCLUDED.agent,
          appointment_at = EXCLUDED.appointment_at,
+         /* Booked again from the lead after it was cancelled: on again. */
+         cancelled_at   = CASE WHEN EXCLUDED.appointment_at IS NULL THEN os_market_appraisals.cancelled_at END,
+         cancelled_was  = CASE WHEN EXCLUDED.appointment_at IS NULL THEN os_market_appraisals.cancelled_was END,
+         cancelled_by   = CASE WHEN EXCLUDED.appointment_at IS NULL THEN os_market_appraisals.cancelled_by END,
          updated_at     = NOW()
        RETURNING ${COLS}`,
       [

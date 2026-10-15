@@ -76,7 +76,7 @@ export async function setRexNoteId(touchId: string, rexNoteId: string): Promise<
 export async function appraisalBooked(leadId: string): Promise<boolean> {
   if (!hasDb()) return false;
   const rows = await q<{ n: string }>(
-    `select count(*)::text as n from os_market_appraisals where lead_id = $1`,
+    `select count(*)::text as n from os_market_appraisals where lead_id = $1 and cancelled_at is null`,
     [leadId]
   );
   return Number(rows[0]?.n ?? 0) > 0;
@@ -106,7 +106,8 @@ export async function allSpines(): Promise<Record<string, Spine>> {
               by_name, at
          from os_lead_touches order by at desc`
     ),
-    q<{ lead_id: string }>(`select distinct lead_id from os_market_appraisals where lead_id is not null`),
+    /* A cancelled appraisal is not a booked one (15 Oct 2026). */
+    q<{ lead_id: string }>(`select distinct lead_id from os_market_appraisals where lead_id is not null and cancelled_at is null`),
     /* A viewing booked from the lead (/api/viewings/book) is the tenant
        lead's job done (Howard, 1 Oct 2026: it goes under Completed). */
     q<{ lead_id: string }>(`select distinct lead_id from os_appointments where kind = 'viewing' and lead_id is not null and cancelled_at is null`).catch(() => []),
