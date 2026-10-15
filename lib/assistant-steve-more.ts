@@ -421,7 +421,9 @@ const findFile: AssistantTool = {
     const words = str(input.query).toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").filter((w) => w.length > 1);
     const byName = words.length
       ? files.filter((f) => {
-          const n = f.name.toLowerCase().replace(/[^a-z0-9]+/g, " ");
+          /* A file's folder counts as part of its name: "the Pro carousel"
+             finds every slide in that folder. */
+          const n = `${f.folder} ${f.name}`.toLowerCase().replace(/[^a-z0-9]+/g, " ");
           /* Stems, so tenancy finds tenancies and guide finds guidelines. */
           return words.every((w) => n.includes(w.length > 5 ? w.slice(0, -2) : w.replace(/s$/, "")));
         })
@@ -432,7 +434,7 @@ const findFile: AssistantTool = {
     const byKey = new Map(files.map((f) => [keyOf(f.href), f]));
     const fromRead = read.map((e) => (e.key ? byKey.get(e.key) : null) ?? files.find((f) => f.name === e.file) ?? null).filter((f): f is NonNullable<typeof f> => Boolean(f));
     /* One button a file: the same guide uploaded twice is still one guide. */
-    const hits = [...new Map([...fromRead, ...byName].map((f) => [f.name, f])).values()];
+    const hits = [...new Map([...fromRead, ...byName].map((f) => [`${f.folder}/${f.name}`, f])).values()];
     const top = hits.slice(0, 6);
     const writeUp = (f: { href: string; name: string }) => library.find((e) => (e.key && e.key === keyOf(f.href)) || e.file === f.name) ?? null;
     return {
@@ -440,7 +442,7 @@ const findFile: AssistantTool = {
       found: hits.length,
       files: top.map((f) => {
         const w = writeUp(f);
-        return { name: f.name, size: `${Math.max(1, Math.round(f.size / 1024))} KB`, added: f.uploadedAt?.slice(0, 10) ?? null, ...(w ? { title: w.title, writeUp: w.content.slice(0, 1800) } : {}) };
+        return { name: f.name, ...(f.folder ? { folder: f.folder } : {}), size: `${Math.max(1, Math.round(f.size / 1024))} KB`, added: f.uploadedAt?.slice(0, 10) ?? null, ...(w ? { title: w.title, writeUp: w.content.slice(0, 1800) } : {}) };
       }),
       ...(hits.length ? {} : { note: "Nothing in the File Store matches that. Files are added on Marketing hub > File Store." }),
     };

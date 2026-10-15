@@ -46,6 +46,14 @@ import DoodleIcon from "@/components/DoodleIcon";
  * A PDF or picture is read once its upload finishes and written up for
  * Steve's marketing library (lib/library-reader), so he can find it and hand
  * it over. Each file says whether he has; one he couldn't read has Read now.
+ *
+ * ── Folders, and every file (15 Oct 2026, Francesca's ticket) ─────────────
+ *
+ * The list stopped at 100 files without a word; it now reads the shelf a
+ * page at a time until it has all of it. Folders keep a carousel's slides
+ * together: a folder is library/shelf/<folder>/ (lib/library-files), so
+ * Steve still reads and finds what goes in one. Files already on the shelf
+ * stay at the top, where they were.
  */
 
 /** The scope and reference this shelf lives under: library/shelf/… */
@@ -113,12 +121,13 @@ async function postJson<T>(body: Record<string, unknown>): Promise<T> {
 }
 
 /** One file, start to finish. Each piece gets a second try before giving up. */
-async function uploadFile(file: File, onProgress: (sent: number) => void): Promise<void> {
+async function uploadFile(file: File, folder: string, onProgress: (sent: number) => void): Promise<void> {
   if (file.size > MAX_BYTES) {
     throw new Error(`It is ${(file.size / 1024 / 1024).toFixed(0)}MB, and the limit is 500MB a file.`);
   }
   const { key, uploadId, partSize } = await postJson<{ key: string; uploadId: string; partSize: number }>({
     action: "start",
+    folder,
     name: file.name,
     type: file.type,
     size: file.size,
@@ -147,6 +156,8 @@ async function uploadFile(file: File, onProgress: (sent: number) => void): Promi
 interface StoredFile {
   key: string;
   name: string;
+  /** "" at the top of the shelf. */
+  folder: string;
   size: number;
   uploadedAt: string | null;
 }
@@ -167,8 +178,20 @@ function when(iso: string | null): string {
   });
 }
 
+/** The open folder lives in the address (?folder=), so a refresh or the
+ *  browser's Back lands where you were. */
+function folderInAddress(): string {
+  if (typeof window === "undefined") return "";
+  return new URLSearchParams(window.location.search).get("folder") ?? "";
+}
+
 export default function Storage() {
   const [files, setFiles] = useState<StoredFile[] | null>(null);
+  const [folders, setFolders] = useState<string[]>([]);
+  /** The folder open now; "" is the top of the shelf. */
+  const [folder, setFolder] = useState("");
+  /** The New folder box: null while closed. */
+  const [naming, setNaming] = useState<string | null>(null);
   /** Null while unknown, false when this environment has no vault at all. */
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -192,7 +215,8 @@ export default function Storage() {
       const j = await r.json();
       if (!j.ok) throw new Error(j.error ?? "Could not read the shelf.");
       setConfigured(j.configured !== false);
-      setFiles(j.files ?? []);
+      setFiles((j.files ?? []).map((f: StoredFile) => ({ ...f, folder: f.folder ?? "" })));
+      setFolders(j.folders ?? []);
       setFailed(null);
       const l = await fetch("/api/r2/library", { cache: "no-store" }).then((x) => x.json()).catch(() => null);
       if (l?.ok) {
@@ -213,6 +237,75 @@ export default function Storage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    setFolder(folderInAddress());
+    const back = () => setFolder(folderInAddress());
+    window.addEventListener("popstate", back);
+    return () => window.removeEventListener("popstate", back);
+  }, []);
+
+  function openFolder(name: string) {
+    setFolder(name);
+    setNaming(null);
+    setDone(null);
+    setUploadErr(null);
+    const url = new URL(window.location.href);
+    if (name) url.searchParams.set("folder", name);
+    else url.searchParams.delete("folder");
+    /* A second click on the same folder is not somewhere new to go back from. */
+    if (url.href !== window.location.href) window.history.pushState(null, "", url);
+    window.scrollTo({ top: 0 });
+  }
+
+  /* Made on the server (lib/library-files cleans the name), then opened. A
+     name that matches one already there opens that one instead. */
+  async function makeFolder() {
+    const wanted = (naming ?? "").trim();
+    if (!wanted) return;
+    const same = folders.find((f) => f.toLowerCase() === wanted.toLowerCase());
+    if (same) {
+      openFolder(same);
+      return;
+    }
+    setWorking("folder");
+    setUploadErr(null);
+    try {
+      const r = await fetch("/api/r2/library", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "folder", folder: wanted }),
+      });
+      const j = await r.json().catch(() => ({ ok: false, error: "The server didn't answer." }));
+      if (!j.ok) throw new Error(j.error ?? "The folder wasn't made. Try again.");
+      setFolders((fs) => [...new Set([...fs, j.folder as string])].sort((a, b) => a.localeCompare(b, "en-GB", { sensitivity: "base" })));
+      openFolder(j.folder);
+    } catch (e) {
+      setUploadErr(e instanceof Error ? e.message : "The folder wasn't made. Try again.");
+    } finally {
+      setWorking(null);
+    }
+  }
+
+  async function dropFolder(name: string) {
+    if (!window.confirm(`Delete the empty folder ${name}?`)) return;
+    setWorking(`folder:${name}`);
+    setUploadErr(null);
+    try {
+      const r = await fetch("/api/r2/library", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "unfolder", folder: name }),
+      });
+      const j = await r.json().catch(() => ({ ok: false, error: "The server didn't answer." }));
+      if (!j.ok) throw new Error(j.error ?? "That didn't work.");
+      setFolders((fs) => fs.filter((f) => f !== name));
+      setDone(`The folder ${name} is deleted.`);
+    } catch (e) {
+      setUploadErr(e instanceof Error ? e.message : "That didn't work.");
+    } finally {
+      setWorking(null);
+    }
+  }
   /* How Steve's read of a file stands. A file uploaded in the last few
      minutes with no write-up yet is still being read. */
   function readState(f: StoredFile): { tone: "ok" | "busy" | "bad" | "off"; text: string } | null {
@@ -257,7 +350,7 @@ export default function Storage() {
     for (const [index, file] of list.entries()) {
       setProgress({ name: file.name, sent: 0, total: file.size, index: index + 1, of: list.length });
       try {
-        await uploadFile(file, (sent) =>
+        await uploadFile(file, folder, (sent) =>
           setProgress({ name: file.name, sent, total: file.size, index: index + 1, of: list.length })
         );
         ok++;
@@ -269,7 +362,7 @@ export default function Storage() {
     setBusy(false);
     if (picker.current) picker.current.value = "";
     if (failures.length) setUploadErr(failures.join(" "));
-    if (ok) setDone(`${ok} file${ok === 1 ? "" : "s"} uploaded.`);
+    if (ok) setDone(`${ok} file${ok === 1 ? "" : "s"} uploaded${folder ? ` to ${folder}` : ""}.`);
     await load();
   }
 
@@ -306,6 +399,13 @@ export default function Storage() {
     }
   }
 
+  /* What the open folder holds, and how full each folder is. */
+  const shown = files?.filter((f) => f.folder === folder) ?? null;
+  const inFolder = new Map<string, number>();
+  for (const f of files ?? []) if (f.folder) inFolder.set(f.folder, (inFolder.get(f.folder) ?? 0) + 1);
+  const atTop = folder === "";
+  const total = files?.length ?? 0;
+
   return (
     <>
       <PageHeader
@@ -315,14 +415,31 @@ export default function Storage() {
 
       <div className="fade-up mt-8 rounded-2xl border border-line/80 bg-panel p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-[15px]">The shelf</p>
+          <div className="min-w-0">
+            {atTop ? (
+              <p className="text-[15px]">The shelf</p>
+            ) : (
+              <nav aria-label="Where you are" className="flex min-w-0 items-center gap-1.5 text-[15px]">
+                <button type="button" onClick={() => openFolder("")} className="shrink-0 text-muted underline-offset-2 hover:text-ink hover:underline">
+                  The shelf
+                </button>
+                <svg aria-hidden viewBox="0 0 12 12" className="h-3 w-3 shrink-0 text-muted">
+                  <path d="M4.5 2.5 8 6l-3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <DoodleIcon name="folder" size={15} className="text-accent-dark" />
+                  <span className="truncate">{folder}</span>
+                </span>
+              </nav>
+            )}
             <p className="mt-1 text-[12px] text-muted">
-              {files === null
+              {files === null || shown === null
                 ? "Looking…"
                 : failed
                   ? "Couldn't read the shelf."
-                  : `${files.length} file${files.length === 1 ? "" : "s"} · PDFs, images, video, Word and PowerPoint, up to 500MB each`}
+                  : atTop
+                    ? `${total} file${total === 1 ? "" : "s"}${folders.length ? ` · ${folders.length} folder${folders.length === 1 ? "" : "s"}` : ""} · PDFs, images, video, Word and PowerPoint, up to 500MB each`
+                    : `${shown.length} file${shown.length === 1 ? "" : "s"} in this folder · uploads go into it`}
             </p>
           </div>
 
@@ -334,15 +451,71 @@ export default function Storage() {
             className="hidden"
             onChange={(e) => upload(e.target.files)}
           />
-          <button
-            type="button"
-            disabled={busy || configured === false}
-            onClick={() => picker.current?.click()}
-            className="rounded-lg bg-accent-dark px-3.5 py-2 text-[12.5px] font-semibold text-white disabled:opacity-40"
-          >
-            {busy ? "Uploading…" : "Upload files"}
-          </button>
+          <span className="flex shrink-0 flex-wrap gap-2">
+            {!atTop && (
+              <button
+                type="button"
+                onClick={() => openFolder("")}
+                className="rounded-lg border border-line/80 px-3 py-2 text-[12.5px]"
+              >
+                Back to the shelf
+              </button>
+            )}
+            {atTop && canManage && configured !== false && (
+              <button
+                type="button"
+                disabled={busy || naming !== null}
+                onClick={() => setNaming("")}
+                className="flex items-center gap-1.5 rounded-lg border border-line/80 px-3 py-2 text-[12.5px] disabled:opacity-40"
+              >
+                <DoodleIcon name="folder" size={14} />
+                New folder
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={busy || configured === false}
+              onClick={() => picker.current?.click()}
+              className="rounded-lg bg-accent-dark px-3.5 py-2 text-[12.5px] font-semibold text-white disabled:opacity-40"
+            >
+              {busy ? "Uploading…" : atTop ? "Upload files" : "Upload to this folder"}
+            </button>
+          </span>
         </div>
+
+        {naming !== null && (
+          <form
+            className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-line/70 bg-box p-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void makeFolder();
+            }}
+          >
+            <label htmlFor="new-folder" className="sr-only">Folder name</label>
+            <input
+              id="new-folder"
+              autoFocus
+              value={naming}
+              maxLength={60}
+              onChange={(e) => setNaming(e.target.value)}
+              onKeyDown={(e) => e.key === "Escape" && setNaming(null)}
+              placeholder="Folder name, e.g. Pro carousel - landlord tips"
+              className="min-w-0 flex-1 basis-56 rounded-lg border border-line/80 bg-panel px-3 py-2 text-[13px] outline-none focus:border-ink"
+            />
+            <span className="flex gap-2">
+              <button
+                type="submit"
+                disabled={!naming.trim() || working === "folder"}
+                className="rounded-lg bg-accent-dark px-3.5 py-2 text-[12.5px] font-semibold text-white disabled:opacity-40"
+              >
+                {working === "folder" ? "Making it…" : "Make folder"}
+              </button>
+              <button type="button" onClick={() => setNaming(null)} className="rounded-lg border border-line/80 px-3 py-2 text-[12.5px]">
+                Cancel
+              </button>
+            </span>
+          </form>
+        )}
 
         {configured === false && (
           <p className="mt-3 rounded-xl border border-line/70 bg-box p-3 text-[12px] leading-relaxed text-muted">
@@ -388,23 +561,77 @@ export default function Storage() {
           </p>
         )}
 
-        {files !== null && files.length === 0 && !failed && configured !== false && (
+        {files === null && (
+          <div className="mt-4 space-y-1.5" aria-label="Loading the shelf">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-[62px] animate-pulse rounded-xl border border-line/50 bg-box/70" />
+            ))}
+          </div>
+        )}
+
+        {atTop && files !== null && !failed && folders.length > 0 && (
+          <ul className="mt-4 grid gap-1.5 sm:grid-cols-2">
+            {folders.map((name) => {
+              const n = inFolder.get(name) ?? 0;
+              return (
+                <li key={name} className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openFolder(name)}
+                    className="flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-line/70 p-3 text-left transition-colors hover:border-ink"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-line/80 bg-box text-accent-dark">
+                      <DoodleIcon name="folder" size={17} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px]">{name}</span>
+                      <span className="block text-[11px] text-muted">{n ? `${n} file${n === 1 ? "" : "s"}` : "Empty"}</span>
+                    </span>
+                    <svg aria-hidden viewBox="0 0 12 12" className="h-3 w-3 shrink-0 text-muted">
+                      <path d="M4.5 2.5 8 6l-3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  {canManage && n === 0 && (
+                    <button
+                      type="button"
+                      disabled={working === `folder:${name}`}
+                      onClick={() => dropFolder(name)}
+                      className="shrink-0 rounded-lg border border-line/80 px-2.5 py-2 text-[12px] disabled:opacity-40"
+                      title="Delete this empty folder"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {shown !== null && shown.length === 0 && !failed && configured !== false && (atTop ? folders.length === 0 : true) && (
           <p className="mt-4 text-[12.5px] text-muted">
-            Nothing filed yet. Anything you put here is available to the rest of the OS.
+            {atTop
+              ? "Nothing filed yet. Anything you put here is available to the rest of the OS."
+              : "Nothing in this folder yet. Upload to this folder puts files here, and Steve reads them as he does the rest."}
           </p>
         )}
 
-        {files !== null && files.length > 0 && (
+        {shown !== null && shown.length > 0 && (
           <ul className="mt-4 space-y-1.5">
-            {files.map((f) => (
-              <li key={f.key} className="flex items-center gap-2">
+            {atTop && folders.length > 0 && (
+              <li className="pt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">Not in a folder</li>
+            )}
+            {shown.map((f) => (
+              /* On a phone the buttons go under the file rather than
+                 squeezing its name down to a few letters. */
+              <li key={f.key} className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
                 {/* A plain link, because /api/r2/file signs a five-minute URL and
                     redirects to it — the bucket itself stays private. */}
                 <a
                   href={`/api/r2/file?key=${encodeURIComponent(f.key)}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-line/70 p-3 transition-colors hover:border-ink"
+                  className="flex min-w-0 flex-1 basis-full items-center gap-3 rounded-xl border border-line/70 p-3 transition-colors hover:border-ink sm:basis-auto"
                 >
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-line/80 bg-box text-muted">
                     <DoodleIcon name="doc" size={17} />
@@ -437,7 +664,7 @@ export default function Storage() {
                   </span>
                 </a>
                 {canManage && (
-                  <span className="flex shrink-0 gap-1.5">
+                  <span className="ml-auto flex shrink-0 gap-1.5">
                     {readState(f)?.tone === "bad" && (
                       <button
                         type="button"

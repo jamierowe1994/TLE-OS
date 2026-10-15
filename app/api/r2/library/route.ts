@@ -1,9 +1,10 @@
 import { after, NextRequest, NextResponse } from "next/server";
-import { DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, ListObjectsV2Command, PutObjectCommand } from "@aws-sdk/client-s3";
 import { requireCapability } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
 import { R2_BUCKET, r2Configured, SCOPES, withR2 } from "@/lib/r2";
 import { forgetLibraryFile, readKeys, readLibraryFile, readNotes } from "@/lib/library-reader";
+import { shelfFolder } from "@/lib/library-files";
 
 /**
  * The File Store's housekeeping (30 Sep 2026, Francesca's ticket): delete a
@@ -11,6 +12,7 @@ import { forgetLibraryFile, readKeys, readLibraryFile, readNotes } from "@/lib/l
  *
  *   GET                                   -> { locked, read: keys with a write-up, reads: notes }
  *   POST { action: "lock" | "unlock" | "delete" | "read", key }
+ *   POST { action: "folder" | "unfolder", folder }   (7 Oct ticket, built 15 Oct)
  *
  * "read" has Steve read the file again now (lib/library-reader); a delete
  * takes the file's library write-up with it.
@@ -59,11 +61,38 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const me = await requireCapability(req, "see:marketing");
   if (!me) return NextResponse.json({ ok: false, error: "Only marketing and the office can change the File Store." }, { status: 403 });
-  let body: { action?: string; key?: string };
+  let body: { action?: string; key?: string; folder?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ ok: false, error: "Expected JSON." }, { status: 400 });
+  }
+
+  /* A folder (lib/library-files): one more step in the key under the shelf.
+     Made by a zero-byte "<folder>/" object so it shows before anything is in
+     it; taken away only when it is empty, so no file goes with it unseen. */
+  if (body.action === "folder" || body.action === "unfolder") {
+    const folder = shelfFolder(body.folder);
+    if (!folder) return NextResponse.json({ ok: false, error: "Give the folder a name." }, { status: 400 });
+    if (!r2Configured) {
+      return NextResponse.json({ ok: false, error: "Storage isn't configured on this environment." }, { status: 503 });
+    }
+    const marker = `${SHELF}${folder}/`;
+    try {
+      if (body.action === "folder") {
+        await withR2((c) => c.send(new PutObjectCommand({ Bucket: R2_BUCKET, Key: marker, Body: "", ContentType: "application/x-directory" })));
+        return NextResponse.json({ ok: true, folder });
+      }
+      const inside = await withR2((c) => c.send(new ListObjectsV2Command({ Bucket: R2_BUCKET, Prefix: marker, MaxKeys: 2 })));
+      if ((inside.Contents ?? []).some((o) => o.Key && o.Key !== marker)) {
+        return NextResponse.json({ ok: false, error: "Only an empty folder can be deleted. Delete what's in it first." }, { status: 409 });
+      }
+      await withR2((c) => c.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: marker })));
+      return NextResponse.json({ ok: true, folder });
+    } catch (e) {
+      console.error("library folder failed", e);
+      return NextResponse.json({ ok: false, error: "Storage didn't do that. Try again." }, { status: 502 });
+    }
   }
   const key = String(body.key ?? "");
   if (!key.startsWith(SHELF) || key.includes("..")) {

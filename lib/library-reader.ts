@@ -44,8 +44,10 @@ export type ReadNote = { state: "reading" | "failed" | "skipped"; at: string; no
 
 export const libraryEntryId = (key: string) => "library-" + crypto.createHash("sha1").update(key).digest("hex").slice(0, 12);
 
-/** "<timestamp>-5_Renters Rights Act FAQ.pdf" -> "Renters Rights Act FAQ.pdf", as lib/library-files does. */
-export const shelfName = (key: string) => key.slice(SHELF.length).replace(/^\d+-/, "").replace(/^\d{1,3}_/, "");
+/** "<timestamp>-5_Renters Rights Act FAQ.pdf" -> "Renters Rights Act FAQ.pdf", as lib/library-files does,
+ *  and a file in a folder by its own name, not the folder's. */
+export const shelfName = (key: string) =>
+  key.slice(SHELF.length).replace(/^.*\//, "").replace(/^\d+-/, "").replace(/^\d{1,3}_/, "");
 
 const noDashes = (s: string) => s.replace(/[—–]/g, "-");
 
@@ -142,6 +144,9 @@ export async function readLibraryFile(key: string, by = "Steve read it on upload
     });
     if (!got.bytes?.byteLength) return done("failed", "The stored file came back empty.");
     const name = shelfName(key) || got.original || key;
+    /* A file in a folder is read knowing which: a carousel slide on its own
+       says little, "slide 3 of the Pro carousel" says what it is for. */
+    const folder = key.slice(SHELF.length).split("/").slice(0, -1).join("/");
     const what = kind(name, got.type);
     if (!what) return done("skipped", "Steve reads PDFs and pictures. Word, PowerPoint and video aren't read.");
 
@@ -150,11 +155,11 @@ export async function readLibraryFile(key: string, by = "Steve read it on upload
     if (what === "pdf") {
       const text = await pdfText(buf).catch(() => "");
       if (text.length >= THIN_TEXT) {
-        content = [{ type: "text", text: prompt(name, text.slice(0, 60_000)) }];
+        content = [{ type: "text", text: prompt(folder ? `${name} (in the folder "${folder}")` : name, text.slice(0, 60_000)) }];
       } else if (buf.byteLength <= MAX_DOC_BYTES) {
         content = [
           { type: "document", source: { type: "base64", media_type: "application/pdf", data: buf.toString("base64") } },
-          { type: "text", text: prompt(name, null) },
+          { type: "text", text: prompt(folder ? `${name} (in the folder "${folder}")` : name, null) },
         ];
       } else {
         return done("failed", "It's all pictures and too big to read the pages (over 30MB).");
@@ -163,7 +168,7 @@ export async function readLibraryFile(key: string, by = "Steve read it on upload
       if (buf.byteLength > MAX_IMAGE_BYTES) return done("skipped", "Pictures over 5MB aren't read.");
       content = [
         { type: "image", source: { type: "base64", media_type: what as "image/jpeg", data: buf.toString("base64") } },
-        { type: "text", text: prompt(name, null) },
+        { type: "text", text: prompt(folder ? `${name} (in the folder "${folder}")` : name, null) },
       ];
     }
 
@@ -185,6 +190,7 @@ export async function readLibraryFile(key: string, by = "Steve read it on upload
           `Offer it when: ${w.offerWhen ?? ""}`,
           `For: ${WHO[w.audience] ?? w.audience} · ${w.region}`,
           `File: ${name}`,
+          ...(folder ? [`Folder: ${folder}`] : []),
           `File key: ${key}`,
         ].join("\n")
       ),

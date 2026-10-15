@@ -408,6 +408,18 @@ function Dock() {
      testing): pictures of their own, and a recording of the screen. Both go
      up AFTER the words, to /api/bugs/media - see sendFeedback. */
   const [pics, setPics] = useState<File[]>([]);
+  /* A screenshot dragged over the form, and what happened to one that
+     couldn't be added (Howard, 14 Oct: drag it in rather than save it first). */
+  const [dragging, setDragging] = useState(false);
+  const [picNote, setPicNote] = useState("");
+  /* The paste keys named the way this keyboard has them, and none on a
+     phone, where there is nothing to drag from and no keys to name. Set after
+     the first paint so the server and the browser draw the same thing first. */
+  const [pasteKeys, setPasteKeys] = useState("Ctrl+V");
+  useEffect(() => {
+    if (window.matchMedia("(pointer: coarse)").matches) setPasteKeys("");
+    else if (/Mac/.test(navigator.platform || navigator.userAgent)) setPasteKeys("Cmd+V");
+  }, []);
   const [voice, setVoice] = useState(false);
   const [sending, setSending] = useState("");
   const [lost, setLost] = useState("");
@@ -1204,6 +1216,7 @@ function Dock() {
     setSent(true);
     setFb("");
     setPics([]);
+    setPicNote("");
     rec.clear();
     /* A bow for a bug or a confusion, the hop for an idea - see SENT_MOOD. */
     setMood(SENT_MOOD[kind] ?? "happy");
@@ -1216,11 +1229,22 @@ function Dock() {
     }, dropped ? 6000 : 2400);
   }
 
-  /** Pictures somebody chose or pasted. Images only, four at most. */
+  /** Pictures somebody chose, pasted or dragged in. Images only, four at most,
+   *  and a file that can't be added says why rather than vanishing. */
   function addPics(list: Iterable<File>) {
-    const images = [...list].filter((f) => /^image\/(png|jpeg|webp)$/.test(f.type));
-    if (images.length) setPics((p) => [...p, ...images].slice(0, 4));
+    const all = [...list];
+    const images = all.filter((f) => /^image\/(png|jpeg|webp)$/.test(f.type));
+    const room = Math.max(0, 4 - pics.length);
+    const notes: string[] = [];
+    if (images.length < all.length) notes.push("Only PNG, JPEG and WebP pictures can be added here.");
+    if (images.length > room) notes.push("Four pictures at most on one report.");
+    setPicNote(notes.join(" "));
+    if (images.length && room) setPics((p) => [...p, ...images].slice(0, 4));
   }
+
+  /* Only a drag carrying files lights the form up: dragging a bit of text
+     across it is somebody tidying their words, not adding a picture. */
+  const carriesFiles = (e: React.DragEvent) => [...e.dataTransfer.types].includes("Files");
 
   async function record() {
     const started = await rec.start(voice);
@@ -1230,6 +1254,10 @@ function Dock() {
 
   /** A file size somebody can read, rather than bytes. */
   const weigh = (n: number) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))}KB` : `${(n / 1024 / 1024).toFixed(1)}MB`);
+
+  const addHint = pasteKeys
+    ? `You can also drag a screenshot onto this box, or paste one with ${pasteKeys}.`
+    : "You can also paste a screenshot straight into the box above.";
 
   const uploading = files.some((f) => !f.key && !f.error);
   const canSend = !busy && !uploading && (Boolean(draft.trim()) || files.some((f) => f.key));
@@ -1889,7 +1917,50 @@ function Dock() {
                   {lost || "Thanks - that's logged."}
                 </p>
               ) : (
-                <>
+                /* The whole form takes a dropped screenshot, and a pasted one
+                   wherever the cursor is in it, not only in the text box. */
+                <div
+                  className="relative"
+                  onDragEnter={(e) => {
+                    if (!carriesFiles(e)) return;
+                    e.preventDefault();
+                    setDragging(true);
+                  }}
+                  onDragOver={(e) => {
+                    if (!carriesFiles(e)) return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = busy || pics.length >= 4 ? "none" : "copy";
+                    if (!dragging) setDragging(true);
+                  }}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+                  }}
+                  onDrop={(e) => {
+                    if (!carriesFiles(e)) return;
+                    e.preventDefault();
+                    setDragging(false);
+                    if (!busy) addPics(e.dataTransfer.files);
+                  }}
+                  onPaste={(e) => {
+                    /* A screenshot taken with the keyboard lands on the
+                       clipboard, so pasting it here is the shortest road. */
+                    const pasted = [...e.clipboardData.files];
+                    if (pasted.some((f) => f.type.startsWith("image/"))) {
+                      e.preventDefault();
+                      /* The browser calls every pasted picture "image.png". */
+                      if (!busy) addPics(pasted.map((f) => (f.name === "image.png" ? new File([f], "Pasted screenshot.png", { type: f.type }) : f)));
+                    }
+                  }}
+                >
+                  {dragging && (
+                    <div
+                      aria-hidden
+                      className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-accent-dark bg-panel/95 text-[12.5px] font-semibold text-accent-dark"
+                    >
+                      <DoodleIcon name="camera" size={18} />
+                      {pics.length >= 4 ? "Four pictures is the most" : "Drop your screenshot here"}
+                    </div>
+                  )}
                   <p className="mt-3 text-[13.5px]">Tell us what happened</p>
                   <p className="mt-1 text-[11px] text-muted">
                     On {path}. We take a picture of the page when you send, so no need to describe it.
@@ -1916,15 +1987,6 @@ function Dock() {
                     onChange={(e) => setFb(e.target.value)}
                     rows={4}
                     placeholder="What were you doing, and what happened?"
-                    onPaste={(e) => {
-                      /* A screenshot taken with the keyboard lands on the
-                         clipboard, so pasting it here is the shortest road. */
-                      const pasted = [...e.clipboardData.files];
-                      if (pasted.some((f) => f.type.startsWith("image/"))) {
-                        e.preventDefault();
-                        addPics(pasted);
-                      }
-                    }}
                     className="mt-3 w-full rounded-2xl border border-line/80 bg-box p-3 text-[12.5px] outline-none transition-colors focus:border-ink"
                   />
 
@@ -1977,9 +2039,10 @@ function Dock() {
                   )}
                   <p className="mt-1.5 text-[10.5px] leading-relaxed text-muted">
                     {rec.supported
-                      ? `Recording: this box closes, you show us what goes wrong, then press Stop. Up to ${MAX_SECONDS / 60} minutes. You can also paste a screenshot straight into the box above.`
-                      : "You can also paste a screenshot straight into the box above."}
+                      ? `Recording: this box closes, you show us what goes wrong, then press Stop. Up to ${MAX_SECONDS / 60} minutes. ${addHint}`
+                      : addHint}
                   </p>
+                  {picNote && <p className="mt-1.5 text-[11px] text-[#C4412F]">{picNote}</p>}
                   {rec.problem && <p className="mt-1.5 text-[11px] text-[#C4412F]">{rec.problem}</p>}
 
                   {(rec.clip || pics.length > 0) && (
@@ -2001,7 +2064,10 @@ function Dock() {
                           <span className="min-w-0 flex-1 truncate">{f.name || "Pasted screenshot"} · {weigh(f.size)}</span>
                           <button
                             type="button"
-                            onClick={() => setPics((p) => p.filter((_, n) => n !== i))}
+                            onClick={() => {
+                              setPics((p) => p.filter((_, n) => n !== i));
+                              setPicNote("");
+                            }}
                             className="text-muted underline underline-offset-2 hover:text-ink"
                           >
                             Remove
@@ -2063,7 +2129,7 @@ function Dock() {
                       )}
                     </div>
                   )}
-                </>
+                </div>
               )}
             </div>
           </div>

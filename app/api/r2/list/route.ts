@@ -24,12 +24,21 @@ import { refusal } from "@/lib/r2-access";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-/** Plenty for one record; a record with more than this has a different problem. */
-const MAX_KEYS = 100;
+/**
+ * Read a page at a time until the record is all read. This was one page of
+ * 100, "plenty for one record" - true of a certificate folder, not of the
+ * File Store, where Francesca's 101st file simply never appeared (ticket
+ * 1a8b37e9, 7 Oct 2026). The ceiling is only a backstop against a runaway.
+ */
+const PAGE_KEYS = 1000;
+const MAX_PAGES = 20;
 
 export interface StoredFile {
   key: string;
   name: string;
+  /** The folder under the record it sits in ("" at the top). Only the File
+   *  Store files into folders: library/shelf/<folder>/<timestamp>-<name>. */
+  folder: string;
   size: number;
   uploadedAt: string | null;
 }
@@ -62,26 +71,50 @@ export async function GET(req: NextRequest) {
   const prefix = `${SCOPES[scopeRaw].prefix}/${ref}/`;
 
   try {
-    const out = await withR2((client) =>
-      client.send(new ListObjectsV2Command({ Bucket: R2_BUCKET, Prefix: prefix, MaxKeys: MAX_KEYS }))
-    );
-    const files: StoredFile[] = (out.Contents ?? [])
-      .filter((o) => o.Key && !o.Key.endsWith("/"))
-      .map((o) => {
-        const key = o.Key!;
-        // Keys are prefix/<timestamp>-<name>; show the human half.
-        const tail = key.slice(prefix.length);
-        return {
-          key,
-          name: tail.replace(/^\d+-/, ""),
+    const files: StoredFile[] = [];
+    /* Folders, including an empty one held by its "<folder>/" marker. */
+    const folders = new Set<string>();
+    let token: string | undefined;
+    let complete = false;
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const out = await withR2((client) =>
+        client.send(
+          new ListObjectsV2Command({ Bucket: R2_BUCKET, Prefix: prefix, MaxKeys: PAGE_KEYS, ContinuationToken: token })
+        )
+      );
+      for (const o of out.Contents ?? []) {
+        if (!o.Key) continue;
+        // Keys are prefix/[folder/]<timestamp>-<name>; show the human half.
+        const tail = o.Key.slice(prefix.length);
+        const cut = tail.lastIndexOf("/");
+        const folder = cut > 0 ? tail.slice(0, cut) : "";
+        if (folder) folders.add(folder);
+        if (o.Key.endsWith("/")) continue;
+        files.push({
+          key: o.Key,
+          name: tail.slice(cut + 1).replace(/^\d+-/, ""),
+          folder,
           size: o.Size ?? 0,
           uploadedAt: o.LastModified ? new Date(o.LastModified).toISOString() : null,
-        };
-      })
-      // Newest first — the current certificate is the one that matters.
-      .sort((a, b) => (b.uploadedAt ?? "").localeCompare(a.uploadedAt ?? ""));
+        });
+      }
+      if (!out.IsTruncated || !out.NextContinuationToken) {
+        complete = true;
+        break;
+      }
+      token = out.NextContinuationToken;
+    }
+    // Newest first — the current certificate is the one that matters.
+    files.sort((a, b) => (b.uploadedAt ?? "").localeCompare(a.uploadedAt ?? ""));
 
-    return NextResponse.json({ ok: true, configured: true, files });
+    return NextResponse.json({
+      ok: true,
+      configured: true,
+      files,
+      folders: [...folders].sort((a, b) => a.localeCompare(b, "en-GB", { sensitivity: "base" })),
+      /* Said rather than hidden, should the backstop ever be reached. */
+      ...(complete ? {} : { more: true }),
+    });
   } catch (e) {
     return NextResponse.json(
       { ok: false, error: r2Problem(e, "Could not read the vault.") },
