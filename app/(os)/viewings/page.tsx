@@ -209,7 +209,7 @@ export default function Viewings() {
     <>
       <PageHeader
         guide="viewings"
-        title="Viewings"
+        title="Diary"
         /* Search is the icon over the diary (components/ListSearch); finding anything is ⌘K. */
         search={false}
         blurb="Your day, and the week around it. Every appointment opens into what it is, where it is, who's coming and what you need before you knock."
@@ -234,7 +234,7 @@ export default function Viewings() {
               className="w-full sm:w-auto sm:min-w-[392px]"
               options={[
                 { id: "calendar", label: "Calendar", icon: <DoodleIcon name="calendar" size={14} /> },
-                { id: "diary", label: "Diary", icon: <DoodleIcon name="list" size={14} /> },
+                { id: "diary", label: "List", icon: <DoodleIcon name="list" size={14} /> },
                 { id: "feedback", label: "Feedback", icon: <DoodleIcon name="message" size={14} /> },
               ]}
               value={view}

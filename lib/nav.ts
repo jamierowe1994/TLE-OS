@@ -53,7 +53,8 @@ export const FRONT: NavItem[] = [
      read as one queue when it is two. */
   { href: "/market-appraisals", label: "Market Appraisals", icon: "trend-up" },
   { href: "/listings", label: "Listings", icon: "home" },
-  { href: "/viewings", label: "Viewings", icon: "calendar" },
+  /* Called Diary in the menu (James, 15 Oct 2026); the page is still /viewings. */
+  { href: "/viewings", label: "Diary", icon: "calendar" },
   { href: "/applications", label: "Applications", icon: "checklist" },
   /* Every journey from the other side of the glass (James, 28 Sep 2026) -
      lib/showroom. Hidden from agents until Phase 3; owners see it now. */

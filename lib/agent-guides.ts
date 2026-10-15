@@ -249,12 +249,12 @@ export const AGENT_GUIDES: Guide[] = [
     id: "viewings",
     title: "Booking and Running Viewings",
     blurb:
-      "How a viewing is booked from the applicant's lead, what the applicant receives the moment you press Book it, and how your day, your week and the feedback all come together on Viewings.",
+      "How a viewing is booked from the applicant's lead, what the applicant receives the moment you press Book it, and how your day, your week and the feedback all come together in the Diary.",
     icon: "calendar",
     href: "/viewings",
     minutes: 8,
     cover: img("v-screen"),
-    coverCaption: "Viewings: your day, the week around it, and what is still owed feedback.",
+    coverCaption: "Diary: your day, the week around it, and what is still owed feedback.",
     intro:
       "A viewing is the moment a lead becomes a likely tenant, and most of what happens around it now happens for you. You book it from the applicant's lead in a few clicks. It goes into your Outlook calendar, you check the applicant's confirmation and send it, with a head start on their application, and afterwards the feedback you record is kept together, property by property, ready for the landlord. This is how it fits together.",
     steps: [
@@ -292,8 +292,8 @@ export const AGENT_GUIDES: Guide[] = [
           "When you press Send, to the applicant: 'Your viewing is booked. Next, your tenant passport', with the address, the time, a calendar invite, and a link to start their tenant passport. It comes from your own mailbox where that is connected, or from The Letting Experts where it is not, and either way their reply comes straight to you. To you: 'Viewing booked' with the address and time. Nothing goes to the landlord, and there are no texts yet. If the lead has no email address, nothing can be sent, so ring them.",
       },
       {
-        title: "Your Day on Viewings",
-        body: "Viewings, the screen pictured at the top, is where your appointments live once they are booked. The five tiles count what is coming up, what is on today, the next seven days, the viewings that have happened with no feedback yet, and the ones where feedback is in. Below them, the month sits beside the day you are looking at; click any date to see that day in order, and Print for a run sheet to take with you.",
+        title: "Your Day in the Diary",
+        body: "Diary, the screen pictured at the top, is where your appointments live once they are booked. The five tiles count what is coming up, what is on today, the next seven days, the viewings that have happened with no feedback yet, and the ones where feedback is in. Below them, the month sits beside the day you are looking at; click any date to see that day in order, and Print for a run sheet to take with you.",
         why: "Feedback due is the tile to keep at zero. It counts every viewing in the last fortnight where nobody has written down what was said, and that is exactly what a landlord will ring to ask about.",
       },
       {

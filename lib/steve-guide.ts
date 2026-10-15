@@ -101,7 +101,7 @@ export const GUIDE_TARGETS: GuideTarget[] = [
   { id: "leads.landlord", about: "Landlord leads", steps: toLeads("landlord") },
   { id: "market-appraisals", about: "Market appraisals - valuations booked with landlords", steps: [nav("/market-appraisals", "Market Appraisals")] },
   { id: "listings", about: "Listings - the homes being let, drafts and live", steps: [nav("/listings", "Listings")] },
-  { id: "viewings", about: "Viewings - the viewings diary", steps: [nav("/viewings", "Viewings")] },
+  { id: "viewings", about: "Diary (Viewings) - the viewings diary", steps: [nav("/viewings", "Diary")] },
   { id: "applications", about: "Applications - tenants who have applied for a home", steps: [nav("/applications", "Applications")] },
   { id: "admin", about: "Admin overview (owners only)", steps: toAdmin("/admin", "Overview") },
   { id: "admin.people", about: "Admin > People - who has an account", steps: toAdmin("/admin/people", "People") },
@@ -162,7 +162,7 @@ export const GUIDE_TARGETS: GuideTarget[] = [
     id: "viewing.open",
     about: "Open a viewing's file",
     steps: [
-      nav("/viewings", "Viewings"),
+      nav("/viewings", "Diary"),
       openRow("appointment.drawer", "Click the viewing in the diary."),
       press("appointment.open-viewing", "Open the viewing file."),
     ],
@@ -171,7 +171,7 @@ export const GUIDE_TARGETS: GuideTarget[] = [
     id: "viewing.feedback",
     about: "Record feedback on a viewing, or mark a no-show",
     steps: [
-      nav("/viewings", "Viewings"),
+      nav("/viewings", "Diary"),
       openRow("appointment.drawer", "Click the viewing that has happened."),
       { point: ['[data-steve="appointment.open-viewing"]'], say: "Open the viewing file.", done: { present: '[data-steve="viewing.drawer"]' } },
       press("viewing.complete", "Complete the viewing - whether they came, and what they thought."),
@@ -181,7 +181,7 @@ export const GUIDE_TARGETS: GuideTarget[] = [
     id: "viewing.note",
     about: "Add a note to a viewing",
     steps: [
-      nav("/viewings", "Viewings"),
+      nav("/viewings", "Diary"),
       openRow("appointment.drawer", "Click the viewing."),
       { point: ['[data-steve="appointment.open-viewing"]'], say: "Open the viewing file.", done: { present: '[data-steve="viewing.drawer"]' } },
       { point: ['[data-steve="viewing.note"]'], say: "Type it here and press Enter.", done: { clicked: true } },
