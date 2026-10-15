@@ -71,6 +71,7 @@ export const OPEN_STATUSES: Status[] = ["reported", "approval", "approved", "sch
  * through one thing at a time."
  */
 export { STEPS, stepOf, type StepId } from "@/lib/works-steps";
+import { stepOf as stepOfOrder, isSkippable, skippedLine, type SkippableStep } from "@/lib/works-steps";
 
 export const PAID_HOW = [
   { id: "payprop", label: "Charged to the landlord through PayProp" },
@@ -139,6 +140,8 @@ export interface WorksOrder {
   landlordSkipped: boolean;
   /** A discreet repair: no automatic email goes to any tenant on it. */
   quietTenants: boolean;
+  /** Steps skipped for now (lib/works-steps SKIPPABLE). Nothing is stamped to fake them. */
+  skippedSteps: string[];
   /** Planned jobs: when the tenants were sent the booking, by hand. */
   tenantsToldBookedAt: string | null;
   /** Planned jobs: the tenants are told who will be in touch to arrange access (a tick, off by default). */
@@ -244,6 +247,7 @@ function toOrder(r: Row): WorksOrder {
     landlordMobile: s(r.landlord_mobile),
     landlordSkipped: r.landlord_skipped === true,
     quietTenants: r.quiet_tenants === true,
+    skippedSteps: Array.isArray(r.skipped_steps) ? (r.skipped_steps as unknown[]).filter((x): x is string => typeof x === "string") : [],
     tenantsToldBookedAt: iso(r.tenants_told_booked_at),
     accessNotice: r.tenants_access_notice === true,
     landlordToldAt: iso(r.landlord_told_at),
@@ -300,7 +304,7 @@ const COLS = `id, ref, kind, status, property_id, property_name, locality, landl
   title, description, category, urgency,
   due_at, reported_by, reported_at, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence, quote_pence,
   approved_by, approved_at, completed_at, completion_note, invoice_pence, invoice_ref, invoiced_at, paid_at, paid_how,
-  cancelled_reason, files, rehearsal, tenants, landlord_skipped, quiet_tenants, tenants_told_booked_at, tenants_access_notice, created_at, updated_at`;
+  cancelled_reason, files, rehearsal, tenants, landlord_skipped, quiet_tenants, tenants_told_booked_at, tenants_access_notice, skipped_steps, created_at, updated_at`;
 
 /* ── contractors ────────────────────────────────────────────────────────── */
 
@@ -546,6 +550,8 @@ export type Move =
   | { action: "contractor_confirmed"; note?: string }
   | { action: "tenant_happy"; happy: "yes" | "no"; note?: string }
   | { action: "payee"; payee: "contractor" | "agent"; note?: string }
+  /* Skip for now (Howard, 15 Oct 2026): only the current step, only a SKIPPABLE one. Sends nothing. */
+  | { action: "skip_step"; step: SkippableStep; note?: string }
   /* ── the sheet ── */
   | { action: "quote"; quotePence: number; note?: string }
   | { action: "approve"; approvedBy: string; note?: string }
@@ -644,6 +650,14 @@ export async function moveOrder(id: string, move: Move, by: string): Promise<Wor
       set("tenant_happy_at", new Date());
       set("tenant_happy_note", (move.note ?? "").trim());
       text = move.happy === "yes" ? `The tenant is happy with the work.${move.note ? ` ${move.note}` : ""}` : `The tenant is NOT happy: ${move.note?.trim() || "no detail given"}. Back with the agent.`;
+      break;
+    }
+    case "skip_step": {
+      if (!isSkippable(move.step)) throw new Error("That step can't be skipped.");
+      if (stepOfOrder(o) !== move.step) throw new Error("That isn't the step the job is on.");
+      set("skipped_steps", JSON.stringify([...new Set([...o.skippedSteps, move.step])]));
+      eventKind = "skipped";
+      text = `${skippedLine(move.step)}${move.note?.trim() ? ` ${move.note.trim()}` : ""}`;
       break;
     }
     case "payee": {

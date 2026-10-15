@@ -232,10 +232,10 @@ async function worksReminders(list: Person[], now: number): Promise<Reminder[]> 
   const rows = await q<{
     id: string; ref: number; title: string; property_name: string; raised_by: string; status: string; arranging: string | null;
     landlord_follow_up_at: Date | null; landlord_resolved_at: Date | null; landlord_told_at: Date | null; contractor_confirmed_at: Date | null;
-    scheduled_at: Date | null; completed_at: Date | null; tenant_happy: string | null; tenant_happy_at: Date | null; tenant_happy_note: string; created_at: Date; urgency: string | null;
+    scheduled_at: Date | null; completed_at: Date | null; tenant_happy: string | null; tenant_happy_at: Date | null; tenant_happy_note: string; created_at: Date; urgency: string | null; skipped_steps: unknown;
     landlord: string; landlord_mobile: string; quote_pence: number | null; authority_pence: number; updated_at: Date; job_emails: string | null; over_amount: number | null;
   }>(`SELECT w.id, w.ref, w.title, w.property_name, w.raised_by, w.status, w.arranging, w.landlord_follow_up_at, w.landlord_resolved_at, w.landlord_told_at, w.contractor_confirmed_at,
-             w.scheduled_at, w.completed_at, w.tenant_happy, w.tenant_happy_at, w.tenant_happy_note, w.created_at, w.urgency,
+             w.scheduled_at, w.completed_at, w.tenant_happy, w.tenant_happy_at, w.tenant_happy_note, w.created_at, w.urgency, w.skipped_steps,
              w.landlord, w.landlord_mobile, w.quote_pence, w.authority_pence, w.updated_at, lp.job_emails, lp.over_amount
         FROM os_works_orders w LEFT JOIN os_landlord_prefs lp ON lp.landlord_key = LOWER(TRIM(w.landlord_email))
        WHERE NOT w.rehearsal AND w.status NOT IN ('paid', 'cancelled')`).catch(() => []);
@@ -245,7 +245,9 @@ async function worksReminders(list: Person[], now: number): Promise<Reminder[]> 
     if (!who) continue;
     const href = `/maintenance?open=${encodeURIComponent(r.id)}`;
     const t = (d: Date | null) => (d ? new Date(d).getTime() : 0);
-    if (!r.landlord_told_at && now - t(r.created_at) > 4 * 3600000) {
+    /* Skipped for now on the job (Howard, 15 Oct 2026): no nag to do it. */
+    const skipped = Array.isArray(r.skipped_steps) && r.skipped_steps.includes("tell_landlord");
+    if (!r.landlord_told_at && !skipped && now - t(r.created_at) > 4 * 3600000) {
       out.push({ id: `works_landlord_untold:${r.id}`, userId: who.id, kind: "works_landlord_untold", title: `Tell the landlord about #${r.ref} ${r.title}`, body: `${r.property_name}. Reported ${whenAgo(new Date(r.created_at).toISOString(), now)} and the landlord hasn't been told.`, href, tone: r.urgency === "emergency" ? "warn" : "none", dueAt: new Date(t(r.created_at) + 4 * 3600000).toISOString() });
     }
     if (r.arranging === "landlord" && !r.landlord_resolved_at && r.landlord_follow_up_at && t(r.landlord_follow_up_at) <= now) {

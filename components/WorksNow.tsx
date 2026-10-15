@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Contractor, Move, RankedContractor, WorksOrder, PaidHow } from "@/lib/works-orders";
-import { STEPS, stepOf, type StepId } from "@/lib/works-steps";
+import { STEPS, stepOf, isSkippable, skippedLine, wasSkipped, WHY_OPTIONAL, WHY_REQUIRED, type StepId } from "@/lib/works-steps";
 import { categoriesOf, CATEGORY_CERT_TYPE, JOB_CERT_TYPES } from "@/lib/works-catalogue";
 import FieldDate from "@/components/FieldDate";
 import FieldSelect from "@/components/FieldSelect";
@@ -82,9 +82,12 @@ export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, 
   const line = LINE.filter((s) => o.kind === "repair" || s !== "aftercare");
   const isDone = (s: StepId) => { const idx = LINE.indexOf(s); return at > idx || (step === "landlord_follow_up" && idx < 2); };
   const isHere = (s: StepId) => s === step || (step === "landlord_follow_up" && s === "arranging");
+  /* Skipped and still not done: the track shows it hollow, not ticked. */
+  const isSkipped = (s: StepId) => !isHere(s) && wasSkipped(o, s) && (s === "tell_landlord" ? !o.landlordToldAt : s === "aftercare" ? !o.tenantHappy : false);
 
   const body = (
     <>
+      {step !== "closed" && <Need step={step} />}
       {step === "tell_landlord" && <TellLandlord o={o} f={f} setF={setF} move={move} busy={busy} />}
       {step === "arranging" && <Arranging o={o} f={f} setF={setF} move={move} busy={busy} />}
       {step === "landlord_follow_up" && <LandlordFollowUp o={o} f={f} setF={setF} move={move} busy={busy} />}
@@ -95,6 +98,8 @@ export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, 
       {step === "aftercare" && <Aftercare o={o} f={f} setF={setF} move={move} busy={busy} />}
       {step === "payment" && <Payment o={o} move={move} busy={busy} />}
       {step === "invoice" && <Money o={o} f={f} setF={setF} move={move} busy={busy} onInvoiceLandlord={onInvoiceLandlord} />}
+      {isSkippable(step) && <SkipForNow o={o} step={step} move={move} busy={busy} />}
+      {step !== "closed" && <StillSkipped o={o} step={step} move={move} busy={busy} />}
       {step === "closed" && (
         <p className="text-[13px]">
           {o.status === "cancelled" ? `Cancelled. ${o.cancelledReason}` : o.status === "paid" ? `Paid ${dayOf(o.paidAt)}.` : `The landlord sorted it themselves, resolved ${dayOf(o.landlordResolvedAt)}.`}
@@ -119,19 +124,20 @@ export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, 
           {step !== "closed" && (
             <ol className="mt-4 flex items-start" aria-label="Progress">
               {line.map((s, i) => {
-                const done = isDone(s);
+                const skipped = isSkipped(s);
+                const done = isDone(s) && !skipped;
                 const here = isHere(s);
                 return (
-                  <li key={s} className="relative flex min-w-0 flex-1 flex-col items-center text-center" title={STEPS.find((x) => x.id === s)?.label}>
-                    {i > 0 && <span aria-hidden className={`absolute right-1/2 top-[9px] h-[2px] w-full ${done || here ? "bg-sage" : "bg-white"}`} />}
+                  <li key={s} className="relative flex min-w-0 flex-1 flex-col items-center text-center" title={`${STEPS.find((x) => x.id === s)?.label}${skipped ? " (skipped)" : ""}`}>
+                    {i > 0 && <span aria-hidden className={`absolute right-1/2 top-[9px] h-[2px] w-full ${done || here || skipped ? "bg-sage" : "bg-white"}`} />}
                     <span
                       className={`relative z-[1] flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
-                        here ? "bg-accent-dark text-white ring-4 ring-white" : done ? "bg-sage text-white" : "border-2 border-white bg-accent-soft text-transparent"
+                        here ? "bg-accent-dark text-white ring-4 ring-white" : done ? "bg-sage text-white" : skipped ? "border-2 border-dashed border-sage bg-white text-sage" : "border-2 border-white bg-accent-soft text-transparent"
                       }`}
                     >
-                      {done ? "✓" : here ? i + 1 : ""}
+                      {done ? "✓" : here ? i + 1 : skipped ? "-" : ""}
                     </span>
-                    <span className={`mt-1.5 hidden w-full truncate px-0.5 text-[10.5px] sm:block ${here ? "font-semibold text-accent-dark" : done ? "text-ink/70" : "text-ink/45"}`}>{SHORT[s]}</span>
+                    <span className={`mt-1.5 hidden w-full truncate px-0.5 text-[10.5px] sm:block ${here ? "font-semibold text-accent-dark" : done ? "text-ink/70" : skipped ? "italic text-ink/55" : "text-ink/45"}`}>{skipped ? "Skipped" : SHORT[s]}</span>
                   </li>
                 );
               })}
@@ -152,9 +158,10 @@ export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, 
           <ol className="flex items-center gap-1" aria-label="Progress">
             {LINE.filter((s) => o.kind === "repair" || s !== "aftercare").map((s) => {
               const idx = LINE.indexOf(s);
-              const done = at > idx || (step === "landlord_follow_up" && idx < 2);
+              const skipped = isSkipped(s);
+              const done = (at > idx || (step === "landlord_follow_up" && idx < 2)) && !skipped;
               const here = s === step || (step === "landlord_follow_up" && s === "arranging");
-              return <li key={s} title={STEPS.find((x) => x.id === s)?.label} className={`h-1.5 rounded-full transition-all ${here ? "w-5 bg-accent-dark" : done ? "w-2.5 bg-ink/60" : "w-2.5 bg-line"}`}></li>;
+              return <li key={s} title={`${STEPS.find((x) => x.id === s)?.label}${skipped ? " (skipped)" : ""}`} className={`h-1.5 rounded-full transition-all ${here ? "w-5 bg-accent-dark" : done ? "w-2.5 bg-ink/60" : skipped ? "w-2.5 border border-dashed border-ink/50 bg-white" : "w-2.5 bg-line"}`}></li>;
             })}
           </ol>
         )}
@@ -164,6 +171,58 @@ export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, 
 
       <div className="mt-3">{body}</div>
       {err && <p className="mt-2 text-[12px] text-accent-dark">{err}</p>}
+    </div>
+  );
+}
+
+/** Required or optional, said on every step (Howard, 15 Oct 2026). */
+function Need({ step }: { step: StepId }) {
+  const optional = isSkippable(step);
+  const why = optional ? WHY_OPTIONAL[step] : WHY_REQUIRED[step];
+  return (
+    <p className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[11.5px] text-muted">
+      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${optional ? "border border-line/80 bg-white text-ink/60" : "bg-ink/80 text-page"}`}>{optional ? "Optional" : "Required"}</span>
+      {why && <span className="min-w-0">{why}</span>}
+    </p>
+  );
+}
+
+/** Moves the job past an optional step without writing down a fact that didn't happen. Sends nothing. */
+function SkipForNow({ o, step, move, busy }: { o: WorksOrder; step: "tell_landlord" | "aftercare"; move: (m: Move) => Promise<void>; busy: boolean }) {
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line/50 pt-3">
+      <button type="button" disabled={busy} onClick={() => void move({ action: "skip_step", step })} className={btn}>Skip for now</button>
+      <span className="text-[11px] text-muted">
+        {step === "tell_landlord"
+          ? `Nothing is sent. It goes on the job as skipped, and you can still tell ${o.landlord ? o.landlord.split(" ")[0] : "them"} later.`
+          : "Nothing is sent. It goes on the job as skipped, and you can still record their answer later."}
+      </span>
+    </div>
+  );
+}
+
+/** A step skipped earlier and still not done: there to do whenever, not in the way. */
+function StillSkipped({ o, step, move, busy }: { o: WorksOrder; step: StepId; move: (m: Move) => Promise<void>; busy: boolean }) {
+  const [open, setOpen] = useState<"tell_landlord" | "aftercare" | null>(null);
+  const [f, setF] = useState<Record<string, string>>({});
+  const left = (["tell_landlord", "aftercare"] as const).filter((s) => s !== step && wasSkipped(o, s) && (s === "tell_landlord" ? !o.landlordToldAt : !o.tenantHappy));
+  if (!left.length) return null;
+  const done = async (m: Move) => { await move(m); setOpen(null); setF({}); };
+  return (
+    <div className="mt-3 space-y-2">
+      {left.map((s) => (
+        <div key={s} className="rounded-xl border border-dashed border-line/90 bg-white px-3 py-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[12px] text-muted">{skippedLine(s).replace(" for now", "")}</p>
+            <button type="button" onClick={() => setOpen(open === s ? null : s)} className={btn}>{open === s ? "Close" : s === "tell_landlord" ? "Tell them now" : "Record it now"}</button>
+          </div>
+          {open === s && (
+            <div className="mt-3">
+              {s === "tell_landlord" ? <TellLandlord o={o} f={f} setF={setF} move={done} busy={busy} /> : <Aftercare o={o} f={f} setF={setF} move={done} busy={busy} />}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

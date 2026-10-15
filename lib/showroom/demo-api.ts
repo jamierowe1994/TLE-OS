@@ -20,7 +20,7 @@ import { answerAppraisals, appraisalBook } from "@/lib/showroom/demo-appraisals"
 import { answerPretenancy, pretenancyBook } from "@/lib/showroom/demo-pretenancy";
 import type { Move, WorksOrder, WorksEvent } from "@/lib/works-orders";
 import type { Finding, Inspection } from "@/lib/inspections";
-import { STEPS, stepOf } from "@/lib/works-steps";
+import { STEPS, stepOf, isSkippable, skippedLine } from "@/lib/works-steps";
 import { URGENCIES } from "@/lib/works-catalogue";
 import { CAST, CONTRACTORS, DEMO_TOKEN, VISIT_ID, rankedFor, stepped, type DemoWorld } from "@/lib/showroom/demo-world";
 
@@ -98,6 +98,12 @@ function applyMove(w: DemoWorld, o: WorksOrder, move: Move, by: string): WorksOr
     case "tenant_happy":
       Object.assign(n, { tenantHappy: move.happy, tenantHappyAt: at, tenantHappyNote: (move.note ?? "").trim() });
       text = move.happy === "yes" ? "The tenant is happy with the work." : `The tenant is NOT happy: ${move.note?.trim() || "no detail given"}. Back with the agent.`;
+      break;
+    case "skip_step":
+      if (!isSkippable(move.step) || stepOf(o) !== move.step) throw new Error("That step can't be skipped.");
+      n.skippedSteps = [...new Set([...(o.skippedSteps ?? []), move.step])];
+      kind = "skipped";
+      text = skippedLine(move.step);
       break;
     case "payee":
       n.payee = move.payee;
