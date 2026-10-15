@@ -20,6 +20,7 @@ import RaiseJob from "@/components/maintenance/RaiseJob";
 import JobDrawer from "@/components/maintenance/JobDrawer";
 import { Fact, OPEN, STATUS_LABEL, day, nextFor, pounds, type Property } from "@/components/maintenance/works-ui";
 import { searchMatches } from "@/lib/search-match";
+import { usePref } from "@/lib/prefs-store";
 
 /**
  * Maintenance: every job on the managed book, reported through paid.
@@ -52,7 +53,7 @@ export default function Maintenance() {
     else if (params.get("section") === "planned") setSection("planned");
     else setSection((cur) => (cur === "contractors" ? "repair" : cur));
   }, [rail, params]);
-  const [data, setData] = useState<{ orders: WorksOrder[]; contractors: Contractor[]; summary: WorksSummary | null; lastMonth?: WorksSummary | null; lastMonthOn?: string | null; live: boolean; reason?: string; canCorporate?: boolean; carried?: CarriedJob[]; carriedDone?: CarriedDone[]; carriedReadAt?: string | null; carriedError?: string; ringForApproval?: string[] } | null>(null);
+  const [data, setData] = useState<{ orders: WorksOrder[]; contractors: Contractor[]; summary: WorksSummary | null; lastMonth?: WorksSummary | null; lastMonthOn?: string | null; live: boolean; reason?: string; canCorporate?: boolean; carried?: CarriedJob[]; carriedDone?: CarriedDone[]; carriedReadAt?: string | null; carriedError?: string; ringForApproval?: string[]; mine?: { orders: string[]; carried: string[]; summary: WorksSummary; startOn: "mine" | "everyone"; note: string | null } | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showClosed, setShowClosed] = useState(false);
   const [raising, setRaising] = useState<Kind | null>(null);
@@ -77,7 +78,17 @@ export default function Maintenance() {
     } catch { /* fine */ }
   }, []);
 
-  const orders = data?.orders ?? [];
+  /* Mine or Everyone (Rhiannon, 15 Oct 2026). An agent opens on their own
+     homes' jobs, the office and the owners on the lot (the server says which,
+     lib/works-mine); whichever the person last chose follows them about. If
+     the server could not work out Mine at all, it is Everyone and no toggle. */
+  const [savedView, saveView] = usePref<"" | "mine" | "everyone">("maintenance-view-v1", "");
+  const mine = data?.mine ?? null;
+  const view: "mine" | "everyone" = mine ? (savedView || mine.startOn) : "everyone";
+  const mineOrders = useMemo(() => new Set(mine?.orders ?? []), [mine]);
+  const mineCarried = useMemo(() => new Set(mine?.carried ?? []), [mine]);
+  const allOrders = useMemo(() => data?.orders ?? [], [data]);
+  const orders = useMemo(() => (view === "mine" ? allOrders.filter((o) => mineOrders.has(o.id)) : allOrders), [view, allOrders, mineOrders]);
   const rows = useMemo(() => {
     const needle = q.trim();
     return orders.filter((o) => {
@@ -92,8 +103,9 @@ export default function Maintenance() {
      figures, until somebody takes them on here. */
   const carried = useMemo(() => {
     const needle = q.trim();
-    return (data?.carried ?? []).filter((j) => j.kind === section && (!needle || searchMatches(needle, j.title, j.address, j.tenant, j.landlord, j.managedBy, j.category)));
-  }, [data, section, q]);
+    return (data?.carried ?? []).filter((j) => j.kind === section && (view === "everyone" || mineCarried.has(j.taskId)) && (!needle || searchMatches(needle, j.title, j.address, j.tenant, j.landlord, j.managedBy, j.category)));
+  }, [data, section, q, view, mineCarried]);
+  const carriedDone = useMemo(() => (data?.carriedDone ?? []).filter((j) => view === "everyone" || mineCarried.has(j.taskId)), [data, view, mineCarried]);
   const [takingOn, setTakingOn] = useState<string | null>(null);
   async function takeOn(j: CarriedJob) {
     setTakingOn(j.taskId);
@@ -112,13 +124,17 @@ export default function Maintenance() {
     load();
     setOpenId(r.order.id);
   }
-  const s = data?.summary;
+  /* The tiles count what the board shows. */
+  const s = view === "mine" ? mine?.summary : data?.summary;
   /* Last month's figures, if we have them. The snapshot started on 11 Sep
      2026, so until roughly mid-October there is nothing to compare against
      and the tiles simply do not draw a delta - see lib/works-trend.ts. A
      tile that invents a trend is worse than a tile with no trend on it. */
-  const was = data?.lastMonth ?? null;
-  const open = orders.find((o) => o.id === openId) ?? null;
+  /* The month-ago snapshot is the whole business's, so Mine draws no delta
+     rather than one measured against everybody's jobs. */
+  const was = view === "mine" ? null : data?.lastMonth ?? null;
+  /* A job opened by link opens whoever's it is. */
+  const open = allOrders.find((o) => o.id === openId) ?? null;
 
   return (
     <>
@@ -212,12 +228,30 @@ export default function Maintenance() {
             ]}
           />
         )}
-        {section !== "contractors" && section !== "invoices" && section !== "accounts" && (
-          <button type="button" onClick={() => setShowClosed((v) => !v)} className="ml-auto text-[11.5px] text-muted underline transition-colors hover:text-ink">
-            {showClosed ? "Hide finished jobs" : "Show finished jobs"}
-          </button>
+        {section !== "contractors" && section !== "invoices" && (
+          <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 sm:ml-auto sm:w-auto">
+            {mine && (
+              <Segmented
+                className="sm:min-w-[220px]"
+                value={view}
+                onChange={(v) => saveView(v)}
+                options={[
+                  { id: "mine" as const, label: "Mine", icon: <DoodleIcon name="user" size={14} />, title: "Jobs on the homes in your own book, and any you raised" },
+                  { id: "everyone" as const, label: "Everyone", icon: <DoodleIcon name="grid" size={14} />, title: "Every job on the managed book" },
+                ]}
+              />
+            )}
+            {section !== "accounts" && (
+              <button type="button" onClick={() => setShowClosed((v) => !v)} className="ml-auto text-[11.5px] text-muted underline transition-colors hover:text-ink sm:ml-0">
+                {showClosed ? "Hide finished jobs" : "Show finished jobs"}
+              </button>
+            )}
+          </div>
         )}
       </div>
+      {view === "mine" && mine?.note && section !== "contractors" && section !== "invoices" && (
+        <p className="mt-3 text-[12px] text-muted">{mine.note}</p>
+      )}
 
       {error && <p className="mt-4 rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-4 text-[12.5px]">{error}</p>}
       {data && !data.live && <p className="mt-4 text-[12.5px] text-muted">{data.reason}</p>}
@@ -245,12 +279,20 @@ export default function Maintenance() {
           />
           <div className="min-w-0">
             <p className="hand text-[24px] leading-tight">
-              {section === "repair" ? "Nothing broken that we know of." : "Nothing planned."}
+              {section === "repair"
+                ? view === "mine" ? "Nothing broken on your homes that we know of." : "Nothing broken that we know of."
+                : view === "mine" ? "Nothing planned on your homes." : "Nothing planned."}
             </p>
             <p className="mt-2 max-w-[46ch] text-[13px] leading-relaxed text-muted">
               {section === "repair"
                 ? "Report a repair when a tenant or landlord lets you know, and we'll help you keep everything on track."
                 : "Plan a certificate from Compliance when one is coming up, or straight from here."}
+              {view === "mine" && (
+                <>
+                  {" "}
+                  <button type="button" onClick={() => saveView("everyone")} className="underline underline-offset-2 hover:text-ink">See everyone&apos;s</button>
+                </>
+              )}
             </p>
             <PressButton
               onClick={() => { setRaising(section === "repair" ? "repair" : "planned"); }}
@@ -297,7 +339,7 @@ export default function Maintenance() {
             </section>
           ))}
           {carried.length > 0 && <CarriedList jobs={carried} readAt={data?.carriedReadAt ?? null} busy={takingOn} onTakeOn={(j) => void takeOn(j)} />}
-          {section === "planned" && (data?.carriedDone?.length ?? 0) > 0 && <DoneOnCertificates jobs={data!.carriedDone!} />}
+          {section === "planned" && carriedDone.length > 0 && <DoneOnCertificates jobs={carriedDone} />}
         </div>
       )}
       {data?.carriedError && <p className="mt-4 rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-4 text-[12.5px]">{data.carriedError}</p>}
