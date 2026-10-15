@@ -2,6 +2,8 @@ import "server-only";
 import { londonToday } from "@/lib/london-clock";
 import { isExpiredToken, rexCall, rexConfigured, rexWritesLocked } from "@/lib/rex";
 import { rexTokenFor } from "@/lib/rex-user";
+import { fillPropertySource, wantsSource } from "@/lib/rex-property-source";
+import { refusalInWords } from "@/lib/rex-refusal";
 import { hasDb, q } from "@/lib/db";
 import { isTestFile, TEST_REFUSAL, TEST_STREET } from "@/lib/test-guard";
 
@@ -178,7 +180,16 @@ export async function createListing(l: NewListing, userId: string | null, dryRun
     };
   }
 
-  const res = await rexCall("Listings", "create", { data: payload, return_id: true }, token);
+  let res = await rexCall("Listings", "create", { data: payload, return_id: true }, token);
+  /* "Please select a Source before saving this property" (bug 9ad8cc4f, 9 Oct
+     2026): the Source is on the property, not the listing. Filled in behind
+     its own switch, then asked once more - a refused create made nothing, so
+     asking again cannot make two (lib/rex-property-source). */
+  if (!res.ok && wantsSource(res.error)) {
+    const source = await fillPropertySource(l.propertyId, token);
+    if (!source.ok) return { ok: false, reason: source.reason, detail: source.detail, ownerDetail: source.ownerDetail, payload };
+    res = await rexCall("Listings", "create", { data: payload, return_id: true }, token);
+  }
   if (isExpiredToken(res)) {
     return { ok: false, reason: "rex_session_expired", detail: "Your REX sign-in has run out. Sign in again to carry on." };
   }
@@ -186,7 +197,9 @@ export async function createListing(l: NewListing, userId: string | null, dryRun
     return {
       ok: false,
       reason: "refused",
-      detail: "The listing was not accepted. Check the details and try again.",
+      /* REX's own reason where it gives one, in plain words (9ad8cc4f: the
+         missing Source read "Check the details", which nothing could fix). */
+      detail: refusalInWords(res.error, "The listing was not accepted."),
       ownerDetail: res.error ?? `The listing was refused (${res.status}).`,
       payload,
     };

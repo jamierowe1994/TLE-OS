@@ -37,6 +37,8 @@ export interface Draft {
   epcBand: string | null;
   epcCurrent: number | null;
   epcPotential: number | null;
+  /** The date the EPC was lodged (YYYY-MM-DD). REX takes the scores only with it. */
+  epcLodged: string | null;
   /** Scottish homes: the agent's Letting Agent Registration Number. */
   agentLarn: string | null;
   /** REX's listing subcategory id - the property type the portals insist on. */
@@ -77,6 +79,7 @@ export const draftFrom = (d: ListingDetails): Draft => ({
   epcBand: d.epc.band ?? d.record?.epc?.band ?? null,
   epcCurrent: d.epc.current ?? d.record?.epc?.score ?? null,
   epcPotential: d.epc.potential,
+  epcLodged: d.epc.lodged ?? null,
   landlordRegistration: d.record?.landlordRegistration ?? null,
   propertyTypeId: d.propertyTypeId ?? null,
   agentLarn: d.agentLarn ?? null,
@@ -122,6 +125,7 @@ export const CHANGE_WORDS: Record<keyof Draft, string> = {
   epcBand: "EPC rating",
   epcCurrent: "EPC score",
   epcPotential: "EPC potential score",
+  epcLodged: "EPC date",
   landlordRegistration: "landlord registration number",
   propertyTypeId: "property type",
   agentLarn: "letting agent registration number",
