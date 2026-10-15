@@ -22,12 +22,22 @@ import { rexCall, rexRows, rexWritesLocked } from "@/lib/rex";
  * already there, that is the answer, not an error.
  */
 
+/**
+ * Does REX hold terms of business for this home? True, false, or null when
+ * REX did not answer - and null is not a yes (15 Oct 2026, bugs 2fb80600 and
+ * 718558c6: a timed-out search waved 6 Ruskin Place through, REX refused the
+ * publish, and Lianna saw only "The portals did not take that change").
+ * A slow first try is asked once more, quietly, before giving up.
+ */
 export async function rexHasTerms(propertyId: string): Promise<boolean | null> {
-  const res = await rexCall("ComplianceEntries", "search", {
-    criteria: [{ name: "parent_object_id", type: "in", value: [propertyId] }],
-    limit: 100,
-  });
-  if (!res.ok) return null;
+  const ask = (quiet: boolean) =>
+    rexCall("ComplianceEntries", "search", { criteria: [{ name: "parent_object_id", type: "in", value: [propertyId] }], limit: 100 }, null, { quiet });
+  let res = await ask(true).catch(() => null);
+  if (!res?.ok) {
+    await new Promise((r) => setTimeout(r, 1500));
+    res = await ask(false).catch(() => null);
+  }
+  if (!res?.ok) return null;
   return rexRows(res.result).some((r) => r.type_id === "terms_of_business" && r.system_record_state !== "archived");
 }
 
@@ -122,12 +132,21 @@ export async function recordTermsFor(propertyId: string): Promise<OsTerms | null
 
 /**
  * Before a push: REX's entry if it has one; otherwise file the OS upload now.
- * True when REX holds terms (or has just been given them).
+ *
+ *   "yes"     REX holds terms, or has just been given them
+ *   "no"      REX holds none and the OS has none to give it
+ *   "unknown" REX did not answer and the OS has none to give it - NOT a yes
+ *             (15 Oct 2026: REX refused the publish when this was a yes)
+ *
+ * When REX does not answer and the OS does hold signed terms, they are filed
+ * anyway: fileTermsToRex already takes "an active entry is already there" as
+ * success, so filing onto a home REX was holding terms for all along is safe.
  */
-export async function ensureTermsInRex(propertyId: string): Promise<boolean> {
-  if ((await rexHasTerms(propertyId)) !== false) return true;
+export async function ensureTermsInRex(propertyId: string): Promise<"yes" | "no" | "unknown" | "not_filed"> {
+  const inRex = await rexHasTerms(propertyId);
+  if (inRex === true) return "yes";
   const mine = await osTermsFor(propertyId);
-  if (!mine) return false;
+  if (!mine) return inRex === false ? "no" : "unknown";
   const r = await fileTermsToRex({ propertyId, r2Key: mine.r2_key, fileName: mine.file_name, uploadedAt: mine.at, byName: mine.by_name });
-  return r.ok;
+  return r.ok ? "yes" : "not_filed";
 }

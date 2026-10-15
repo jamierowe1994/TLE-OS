@@ -8,11 +8,17 @@ import { record } from "@/lib/audit";
 import { invalidateListingBook } from "@/lib/listings-cache";
 import { forgetListing, listingRead, readListingDetails } from "@/lib/listing-details";
 import { listingIsTheirs } from "@/lib/listing-gate";
-import { publishGaps } from "@/lib/listing-publish-check";
+import { publishGaps, TERMS_UNCHECKED } from "@/lib/listing-publish-check";
 import { isExpiredToken, rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
 import { rexTokenFor } from "@/lib/rex-user";
 import { forAgent, isOwner } from "@/lib/agent-words";
 import { ensureRexLink, findUserByEmail, findUserByRexId, type OsUser } from "@/lib/users";
+
+/** What an agent can do about missing terms, said the same way wherever it is found missing. */
+const TERMS_SENTENCE =
+  "The landlord's signed terms of business have to be on file before it can go live - send them from the Documents tab, or ask the office to add the signed copy.";
+const TERMS_UNCHECKED_SENTENCE =
+  "The listings system did not say in time whether the landlord's signed terms of business are on file, so it has not gone live. Try again in a minute.";
 
 /**
  * Putting a listing on Rightmove, OnTheMarket and Zoopla, and taking it off.
@@ -228,8 +234,9 @@ export async function POST(req: NextRequest) {
           {
             ok: false,
             error: [
-              gaps.some((g) => g.id !== "terms") ? `Finish the Marketing tab first: ${gaps.filter((g) => g.id !== "terms").map((g) => g.label.toLowerCase()).join(", ")}.` : "",
-              gaps.some((g) => g.id === "terms") ? "The landlord's signed terms of business have to be on file before it can go live - send them from the Documents tab, or ask the office to add the signed copy." : "",
+              gaps.some((g) => g.id !== "terms" && g.id !== TERMS_UNCHECKED) ? `Finish the Marketing tab first: ${gaps.filter((g) => g.id !== "terms" && g.id !== TERMS_UNCHECKED).map((g) => g.label.toLowerCase()).join(", ")}.` : "",
+              gaps.some((g) => g.id === "terms") ? TERMS_SENTENCE : "",
+              gaps.some((g) => g.id === TERMS_UNCHECKED) ? TERMS_UNCHECKED_SENTENCE : "",
             ].filter(Boolean).join(" "),
             missing: gaps.map((g) => g.id),
           },
@@ -249,11 +256,15 @@ export async function POST(req: NextRequest) {
       /* Terms uploaded in the OS but not yet in REX go in now, or REX refuses. */
       if (details.propertyId) {
         const { ensureTermsInRex } = await import("@/lib/terms-to-rex");
-        if (!(await ensureTermsInRex(details.propertyId).catch(() => true))) {
-          return NextResponse.json(
-            { ok: false, error: "The signed terms of business could not be filed in the listings system, so it cannot go live yet. Try again in a minute, or ask the office.", missing: ["terms"] },
-            { status: 422 }
-          );
+        /* "unknown" is not a yes any more (15 Oct 2026): it went to REX
+           without terms and came back refused. */
+        const terms = await ensureTermsInRex(details.propertyId).catch(() => "unknown" as const);
+        if (terms !== "yes") {
+          const error =
+            terms === "no" ? TERMS_SENTENCE
+            : terms === "unknown" ? TERMS_UNCHECKED_SENTENCE
+            : "The signed terms of business could not be filed in the listings system, so it cannot go live yet. Try again in a minute, or ask the office.";
+          return NextResponse.json({ ok: false, error, missing: [terms === "unknown" ? TERMS_UNCHECKED : "terms"] }, { status: 422 });
         }
       }
       const who = await agentToken(actor, details.agent);
@@ -311,6 +322,12 @@ export async function POST(req: NextRequest) {
         actorEmail: actor.email,
         detail: `${id}: ${action} REFUSED${token ? (as.asActor ? "" : ` as ${as.name}`) : " as the office account"} - ${why}`,
       }).catch(() => {});
+      /* REX's own terms rule (15 Oct 2026, bugs 2fb80600 and 718558c6):
+         something the agent can do, so it is said as such - the same
+         sentence as the go-live check - and not as the portals being down. */
+      if (action === "publish" && /terms of business is required/i.test(String(res.error ?? ""))) {
+        return NextResponse.json({ ok: false, error: TERMS_SENTENCE, missing: ["terms"] }, { status: 422 });
+      }
       return NextResponse.json({ ok: false, error: isOwner(actor) ? res.error ?? `REX refused it (${res.status}).` : plain }, { status: 502 });
     }
 

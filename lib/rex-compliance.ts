@@ -4,7 +4,7 @@ import { hasDb } from "@/lib/db";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import { sittingTenantsByProperty } from "@/lib/rex-tenants";
 import { fetchListingBook } from "@/lib/rex-listings";
-import type { CertKey, CompProperty } from "@/lib/compliance";
+import type { Cert, CertKey, CompProperty } from "@/lib/compliance";
 import { activeOsProperties, factsByRexId } from "@/lib/os-properties";
 import { osCertsFor } from "@/lib/os-certs";
 import { applySweep, holdToNextTenancy } from "@/lib/sweep-certs";
@@ -155,6 +155,48 @@ export interface CertSubject {
    *  landlord's duty, so the book carries this and lib/compliance excludes
    *  them from the totals (Michael, 7 Sep 2026). */
   service?: string | null;
+}
+
+/**
+ * ONE HOME'S EPC, AND NOTHING ELSE (15 Oct 2026, bug 1f6bd9ad).
+ *
+ * The go-live check used to ask certificatesFor about one property, and
+ * certificatesFor always adds every home the OS manages, so one EPC question
+ * became a sweep of the whole book: about fifty ComplianceEntries searches,
+ * the sitting-tenants walk and a Listings search per chunk. The Listings
+ * board asks it for every ready-looking draft, so opening the board fired
+ * several sweeps at once and REX stopped answering (548 timeouts by 15 Oct).
+ *
+ * This asks REX about the one property, once more if it is slow, and adds
+ * what the OS holds itself (an EPC filed here that REX has not caught up
+ * with). Same rules as the book: the latest expiry wins, an issue date with
+ * no expiry gets the usual ten years. Throws when REX does not answer, so a
+ * caller can tell "no EPC" from "could not ask".
+ */
+export async function epcForProperty(propertyId: string): Promise<Cert | null> {
+  const id = String(propertyId);
+  const own = (await osCertsFor([id]).catch(() => new Map<string, Partial<Record<CertKey, Cert>>>())).get(id)?.epc ?? null;
+  /* A home REX CRM has no property for: the OS is its record. */
+  if (!/^\d+$/.test(id) || !rexConfigured()) return own ? { ...own, fromOs: true } : null;
+  const search = (quiet: boolean) =>
+    rexCall("ComplianceEntries", "search", { criteria: [{ name: "parent_object_id", type: "in", value: [id] }], limit: 100 }, null, { quiet });
+  let res = await search(true).catch(() => null);
+  if (!res?.ok) {
+    await new Promise((r) => setTimeout(r, 1500));
+    res = await search(false);
+    if (!res.ok) throw new Error(`REX did not give the EPC for property ${id} (${res.error ?? res.status}).`);
+  }
+  let best: Cert | null = null;
+  for (const e of rexRows(res.result) as RexEntry[]) {
+    if (e.type_id !== "epc") continue;
+    const detail = e.details?.epc;
+    const expires = daysUntil(detail?.expiry_date) ?? daysUntil(plusMonths(detail?.issue_date, LIFE_MONTHS.epc));
+    if (!best || (expires != null && (best.expires == null || expires > best.expires))) {
+      best = { expires, attached: Boolean(e.file?.url), fileUrl: e.file?.url ?? null, ...(detail?.not_required ? { notRequired: true } : {}) };
+    }
+  }
+  if (own && (!best || (own.expires != null && (best.expires == null || own.expires > best.expires)))) best = { ...own, fromOs: true };
+  return best;
 }
 
 /** The current rental book's certificates — the Compliance screen. */
