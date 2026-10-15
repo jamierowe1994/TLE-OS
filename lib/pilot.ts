@@ -124,19 +124,49 @@ export async function removeInvite(email: string): Promise<void> {
 
 /* ── usage ────────────────────────────────────────────────────────────────── */
 
+/* The day a view belongs to is London's (15 Oct 2026, Admin > Tracking), so
+   a visit at half past midnight in summer lands on the day it happened on.
+   Rows before then were dated by the database's own clock, UTC. */
+const LONDON_DAY = `(now() at time zone 'Europe/London')::date`;
+
 /** Count a visit. Upserted per person per page per day — see the schema. */
 export async function trackView(userId: string, path: string): Promise<void> {
   if (!hasDb() || !userId || !path) return;
   try {
     await q(
       `insert into os_page_views (user_id, path, day, views, last_at)
-       values ($1, $2, current_date, 1, now())
+       values ($1, $2, ${LONDON_DAY}, 1, now())
        on conflict (user_id, path, day)
        do update set views = os_page_views.views + 1, last_at = now()`,
       [userId, path]
     );
   } catch {
     /* Never let analytics break a page load. */
+  }
+}
+
+/** Longest a single report can add: a page left open over lunch is not a
+    two-hour read. The client also stops counting after five idle minutes. */
+const MAX_REPORT_SECONDS = 30 * 60;
+
+/**
+ * Time on a page (15 Oct 2026). `first` is true on the first report of a
+ * visit, so a visit that reports twice (hidden, then left) counts once in
+ * `timed` and both halves in `seconds`. Never throws.
+ */
+export async function trackTime(userId: string, path: string, seconds: number, first: boolean): Promise<void> {
+  const s = Math.round(Math.min(Math.max(seconds, 0), MAX_REPORT_SECONDS));
+  if (!hasDb() || !userId || !path || s <= 0) return;
+  try {
+    await q(
+      `insert into os_page_views (user_id, path, day, views, last_at, seconds, timed)
+       values ($1, $2, ${LONDON_DAY}, 0, now(), $3, $4)
+       on conflict (user_id, path, day)
+       do update set seconds = os_page_views.seconds + $3, timed = os_page_views.timed + $4`,
+      [userId, path, s, first ? 1 : 0]
+    );
+  } catch {
+    /* Never let analytics break a page. */
   }
 }
 

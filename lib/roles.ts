@@ -126,6 +126,7 @@ export type Capability =
   | "see:wiring"        // connections, health, environment state
   | "see:reports"       // bugs, the pilot, Steve, the guides, the portals
   | "see:prelaunch"     // the pre-launch readiness report, and only that
+  | "see:tracking"      // who uses what in the OS, and how much (Admin > Tracking). Owners only (15 Oct 2026)
   | "see:pretenancy"    // Kirstie's run-up to a move-in
   | "see:everything"    // unscoped data rather than only your own book
   | "see:roles"         // READ who holds what
@@ -157,7 +158,7 @@ const MATRIX: Record<Role, Capability[]> = {
     "admin:open", "staff:internal", "see:people", "see:business", "see:marketing",
     "see:wiring", "see:reports", "see:prelaunch", "see:pretenancy", "see:everything",
     "see:roles", "manage:people", "manage:roles", "manage:switches", "edit:knowledge",
-    "see:agent-compliance", "see:clean-sweep", "work:plc",
+    "see:agent-compliance", "see:clean-sweep", "work:plc", "see:tracking",
   ],
   /* Susan runs the business, so she sees all of it, unscoped — and since
      4 Sep she also has a short admin of her own. Seven entries, and the list

@@ -81,6 +81,13 @@ const nextConfig: NextConfig = {
       { source: "/admin/pre-tenancy/:path*", destination: "/pre-tenancy/:path*", permanent: false },
       { source: "/admin/marketing", destination: "/marketing-hub", permanent: false },
       { source: "/admin/marketing/:path*", destination: "/marketing-hub/:path*", permanent: false },
+      /* Launch and Pre-launch went on 15 Oct 2026, the day after launch.
+         Inviting is People > Invites (Launch moved there whole, with
+         Pre-launch's email connections); what people use is Tracking. A
+         Microsoft sign-in still on its way back to Pre-launch lands on
+         Invites, where the mailbox card says how it went. */
+      { source: "/admin/launch", destination: "/admin/people/invites", permanent: false },
+      { source: "/admin/pre-launch", destination: "/admin/people/invites", permanent: false },
     ];
   },
 };

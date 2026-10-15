@@ -235,6 +235,14 @@ CREATE TABLE IF NOT EXISTS os_page_views (
   PRIMARY KEY (user_id, path, day)
 );
 CREATE INDEX IF NOT EXISTS os_page_views_path ON os_page_views (path);
+-- How long a page was on screen (15 Oct 2026, Admin > Tracking). Seconds the
+-- page was visible with somebody active on it, added up per person per page
+-- per day; "timed" counts the visits that reported a time, so the average stay
+-- is seconds / timed. Counts from this deploy - nothing measured time on a
+-- page before. Day is London's, from components/PageTracker.
+ALTER TABLE os_page_views ADD COLUMN IF NOT EXISTS seconds INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE os_page_views ADD COLUMN IF NOT EXISTS timed INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS os_page_views_day ON os_page_views (day);
 
 -- Every email that actually left, as it left.
 --
@@ -1471,6 +1479,14 @@ ALTER TABLE os_tenant_passports ADD COLUMN IF NOT EXISTS invited_by TEXT;
 -- an offer names a Scottish home, and never set back, because the passport is
 -- reused for the next home and Scotland's rule must not fall off it.
 ALTER TABLE os_tenant_passports ADD COLUMN IF NOT EXISTS scottish_home BOOLEAN NOT NULL DEFAULT FALSE;
+-- When the tenant opened their passport link (15 Oct 2026, Admin > Tracking).
+-- Recorded by the page itself once it has loaded in their browser, never by
+-- the server render, so an email scanner fetching the link is not an open;
+-- a signed-in member of staff opening it is not counted either. Before this,
+-- opens were only in Railway's HTTP logs.
+ALTER TABLE os_tenant_passports ADD COLUMN IF NOT EXISTS opened_at TIMESTAMPTZ;
+ALTER TABLE os_tenant_passports ADD COLUMN IF NOT EXISTS last_opened_at TIMESTAMPTZ;
+ALTER TABLE os_tenant_passports ADD COLUMN IF NOT EXISTS opens INTEGER NOT NULL DEFAULT 0;
 -- Every timed tenant email that has gone, keyed so it can never go twice
 -- (16 Sep 2026, lib/tenant-reminders.ts): "passport-nudge-1:<token>",
 -- "viewing-reminder:<viewing id>:<email>". A row is written only once the

@@ -369,7 +369,7 @@ async function doEmail(
       return {
         ok: false,
         blocked: true,
-        message: "Your Microsoft mailbox isn't connected, so I can't send as you — and I won't send as anybody else. Connect it on the pre-launch screen and I'll send this straight away.",
+        message: "Your Microsoft mailbox isn't connected, so I can't send as you — and I won't send as anybody else. Connect it on your Profile and I'll send this straight away.",
       };
     }
     return { ok: false, message: e instanceof Error ? e.message : "That send failed." };

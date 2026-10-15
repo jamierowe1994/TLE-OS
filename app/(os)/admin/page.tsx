@@ -73,7 +73,7 @@ export default function AdminOverview() {
     <>
       <PageHeader
         title="Admin"
-        blurb="Who's set up, who's been in, what's connected, and what's left before launch."
+        blurb="Who's set up, who's been in, and what they've reported. Tracking has who uses what."
         illustrationNode={<LaunchClock size={30} />}
         illustrationHeight={118}
         illustrationAspect={3.6}

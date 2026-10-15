@@ -226,7 +226,7 @@ export async function record(
   );
 
   /* One email per fix, not per run: a bot re-recording the same fix is quiet.
-     A to_fix is not emailed at all - it joins the list on Pre-launch, and a
+     A to_fix is not emailed at all - it joins the list on Tickets, and a
      mail per line of a list is the noise the list exists to replace. */
   const emailed: string[] = [];
   if ((p.state === "fix_ready" || p.state === "needs_you") && !(wasReady && p.state === "fix_ready")) {
@@ -247,7 +247,7 @@ export async function record(
       ...(p.state === "fix_ready"
         ? [
             `To put it live, open ${pr} and press Merge pull request, or tell Claude Code "push the bug bot fix".`,
-            "Not happy with it? Close the pull request and say why on Pre-launch.",
+            "Not happy with it? Close the pull request and say why on Tickets.",
           ]
         : []),
       "",
