@@ -139,28 +139,33 @@ async function post(req: NextRequest) {
   if (file.size > 25 * 1024 * 1024) return NextResponse.json({ ok: false, error: "That file is over 25MB, so it was not kept. Save a smaller copy and upload that." }, { status: 413 });
 
   const name = file.name || `${type}.pdf`;
-  /* Never a bare 500 (Josel, 7-12 Oct, four times): whatever goes wrong, the
-     screen is told in words, and told whether the certificate was kept. */
-  const filed = await fileCertificate({
-    bytes: new Uint8Array(await file.arrayBuffer()),
-    fileName: name,
-    contentType: file.type,
-    propertyId,
-    propertyName,
-    type,
-    expiry,
-    issue: issueRaw || null,
-    source,
-    by,
-    refreshBook: req.nextUrl.searchParams.get("refresh") === "1",
-    /* The compliance office filing it has checked it already (4 Oct 2026). */
-    checkedBy: can(me.role, "see:agent-compliance") ? by : null,
-  }).catch((e: unknown) => {
-    if (e instanceof FilingFailed) return { failed: e.message, kept: e.kept };
-    console.error("[compliance/certificates] filing threw:", e);
-    return { failed: "Something went wrong filing it, and the certificate was not kept. Upload it again; if it fails twice, tell the office.", kept: false };
-  });
-  if ("failed" in filed) return NextResponse.json({ ok: false, kept: filed.kept, error: filed.failed }, { status: 500 });
+  /* Said, not thrown (15 Oct 2026, Dan's EPC on 11 Oct; Josel on the
+     compliance desk, 7-12 Oct): a filing that broke came back as an HTML
+     error page the screens could not read. Now it is a sentence, and it says
+     whether the certificate was kept (lib/certificate-intake FilingFailed);
+     anything after the save no longer fails the filing at all. */
+  let filed: Awaited<ReturnType<typeof fileCertificate>>;
+  try {
+    filed = await fileCertificate({
+      bytes: new Uint8Array(await file.arrayBuffer()),
+      fileName: name,
+      contentType: file.type,
+      propertyId,
+      propertyName,
+      type,
+      expiry,
+      issue: issueRaw || null,
+      source,
+      by,
+      refreshBook: req.nextUrl.searchParams.get("refresh") === "1",
+      /* The compliance office filing it has checked it already (4 Oct 2026). */
+      checkedBy: can(me.role, "see:agent-compliance") ? by : null,
+    });
+  } catch (e) {
+    if (e instanceof FilingFailed) return NextResponse.json({ ok: false, kept: e.kept, error: e.message }, { status: 500 });
+    console.error("[certificates] filing failed", { propertyId, type, error: e instanceof Error ? e.message : String(e) });
+    return NextResponse.json({ ok: false, kept: false, error: "The certificate did not file, so it has not been counted. Try again in a minute, or send it to the compliance team." }, { status: 500 });
+  }
   if (filed.duplicate) return NextResponse.json({ ok: true, duplicate: true, certificate: outCert(filed.row) });
   return NextResponse.json({ ok: true, certificate: outCert(filed.row), share: filed.share });
 }
