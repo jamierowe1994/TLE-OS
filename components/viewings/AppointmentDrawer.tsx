@@ -513,7 +513,7 @@ export default function AppointmentDrawer({
             </div>
           ) : (
             <p className="text-center text-[11px] text-muted">
-              {appt.fromRex || appt.fromOutlook ? "A calendar entry made outside the OS, not linked to a record here. Change it where it was made." : "Not linked to a record."}
+              {appt.fromPersonal ? "From your personal calendar. Only the time is shown here - change it in your personal calendar." : appt.fromRex || appt.fromOutlook ? "A calendar entry made outside the OS, not linked to a record here. Change it where it was made." : "Not linked to a record."}
             </p>
           )}
         </div>

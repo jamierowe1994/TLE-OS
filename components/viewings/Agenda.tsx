@@ -160,6 +160,8 @@ export default function Agenda({
 
   let title: React.ReactNode;
   let count = 0;
+  /** Rows to draw, when that is not the count: a day of only personal busy times draws them but counts none. */
+  let rows: number | null = null;
   let body: React.ReactNode;
   let empty: string;
 
@@ -184,7 +186,9 @@ export default function Agenda({
 
   if (mode === "day") {
     const list = byDay.get(selected) ?? [];
-    count = list.length;
+    /* Personal busy times are drawn, not counted. */
+    count = list.filter((a) => !a.fromPersonal).length;
+    rows = list.length;
     title = (
       <>
         <h2 className="hand text-[17px] leading-tight">{fmtFull(selDate)}</h2>
@@ -240,7 +244,7 @@ export default function Agenda({
                 </span>
                 {dn && <span className="text-[10.5px] text-muted">{fmtShort(dateOfOffset(d))}</span>}
                 <span className="ml-auto text-[10.5px] text-muted">
-                  {list.length} {list.length === 1 ? "appointment" : "appointments"}
+                  {list.filter((a) => !a.fromPersonal).length} {list.filter((a) => !a.fromPersonal).length === 1 ? "appointment" : "appointments"}
                 </span>
               </button>
               <ul>
@@ -325,7 +329,7 @@ export default function Agenda({
             {error}
           </p>
         )}
-        {count ? body : <p className="py-10 text-center text-[12.5px] text-muted">{empty}</p>}
+        {(rows ?? count) ? body : <p className="py-10 text-center text-[12.5px] text-muted">{empty}</p>}
       </div>
     </section>
   );

@@ -83,6 +83,14 @@ export interface PassportData {
   numAdults: string;
   numChildren: string;
   coOccupantIncomes: string;
+  /* ── Every other adult's credit (Rhiannon, 14 Oct 2026) ──
+     The lead was asked about adverse credit and the second person was not,
+     so it surfaced at referencing. One line per other adult, in the same
+     order as coOccupantIncomes: "" not asked yet, "No", or "Yes" /
+     "Yes - what they said". Text lines for the same reason as the incomes:
+     the passport JSONB holds strings and booleans only. Read and written
+     through otherCredit / withOtherCredit, never by hand. */
+  coOccupantCredit: string;
 
   /* ── Rental history ── */
   rentedLast12Months: boolean | null;
@@ -112,7 +120,7 @@ export const EMPTY_PASSPORT: PassportData = {
   hasBritishPassport: null, shareCode: "",
   applicantType: "", annualIncome: "", savings: "",
   onProbation: null, zeroHours: null, workHours: "", tradingFor: "",
-  numAdults: "", numChildren: "", coOccupantIncomes: "",
+  numAdults: "", numChildren: "", coOccupantIncomes: "", coOccupantCredit: "",
   rentedLast12Months: null, rentOnTime: null, landlordRef: null,
   currentAddress: "", movedIn: "", livedThreeYears: null, previousAddress: "",
   adverseCredit: null, adverseCreditNote: "", guarantor: null,
@@ -137,14 +145,54 @@ export const APPLICANT_TYPES = [
  * adults from the household page, and the children, who are counted rather
  * than named. The offer ticks these, all on by default.
  */
-export function householdPeople(d: Pick<PassportData, "legalName" | "numAdults" | "numChildren" | "coOccupantIncomes">): { id: string; name: string; who: string }[] {
+export type HouseholdPerson = { id: string; name: string; who: string; credit?: boolean | null; creditNote?: string };
+
+export function householdPeople(
+  d: Pick<PassportData, "legalName" | "numAdults" | "numChildren" | "coOccupantIncomes"> & Partial<Pick<PassportData, "coOccupantCredit">>
+): HouseholdPerson[] {
   const adults = Math.max(1, parseInt(d.numAdults, 10) || 1);
   const children = Math.max(0, parseInt(d.numChildren, 10) || 0);
   const lines = d.coOccupantIncomes.split("\n").map((l) => l.split(" - ")[0].trim());
-  const out = [{ id: "you", name: d.legalName.trim() || "The applicant", who: "Lead tenant" }];
-  for (let k = 0; k < adults - 1; k++) out.push({ id: `adult-${k + 2}`, name: lines[k] || `Adult ${k + 2}`, who: "Adult" });
+  const out: HouseholdPerson[] = [{ id: "you", name: d.legalName.trim() || "The applicant", who: "Lead tenant" }];
+  for (let k = 0; k < adults - 1; k++) {
+    const c = otherCredit(d, k);
+    out.push({ id: `adult-${k + 2}`, name: lines[k] || `Adult ${k + 2}`, who: "Adult", credit: c.credit, creditNote: c.note.trim() });
+  }
   for (let k = 0; k < children; k++) out.push({ id: `child-${k + 1}`, name: children === 1 ? "Child" : `Child ${k + 1}`, who: "Child" });
   return out;
+}
+
+/** How many adults besides the lead, from the household page (0 when just them). */
+export function otherAdultCount(d: Pick<PassportData, "numAdults">): number {
+  return Math.min(8, Math.max(0, (parseInt(d.numAdults, 10) || 1) - 1));
+}
+
+/** The k-th other adult's name (0 = the second person), or "" when not given. */
+export function otherName(d: Pick<PassportData, "coOccupantIncomes">, k: number): string {
+  return (d.coOccupantIncomes.split("\n")[k] ?? "").split(" - ")[0].trim();
+}
+
+/** The k-th other adult's adverse credit answer (0 = the second person). */
+export function otherCredit(d: Partial<Pick<PassportData, "coOccupantCredit">>, k: number): { credit: boolean | null; note: string } {
+  /* Trailing spaces kept: the note is read back into a box while it is typed. */
+  const line = ((d.coOccupantCredit ?? "").split("\n")[k] ?? "").trimStart();
+  if (/^no\s*$/i.test(line)) return { credit: false, note: "" };
+  if (/^yes\b/i.test(line)) return { credit: true, note: line.replace(/^yes\s*(-\s?)?/i, "") };
+  return { credit: null, note: "" };
+}
+
+/** coOccupantCredit with the k-th other adult's answer changed. */
+export function withOtherCredit(d: Pick<PassportData, "coOccupantCredit">, k: number, credit: boolean | null, note = ""): string {
+  const lines = d.coOccupantCredit.split("\n");
+  while (lines.length <= k) lines.push("");
+  const clean = note.replace(/[\r\n]+/g, " ").slice(0, 300);
+  lines[k] = credit === null ? "" : credit ? (clean.trim() ? `Yes - ${clean}` : "Yes") : "No";
+  return lines.join("\n").replace(/\n+$/, "");
+}
+
+/** Every other adult has answered the credit question. */
+export function othersCreditDone(d: Pick<PassportData, "numAdults" | "coOccupantCredit">): boolean {
+  return Array.from({ length: otherAdultCount(d) }, (_, k) => otherCredit(d, k).credit).every((c) => c !== null);
 }
 
 export const WORK_HOURS = ["Full-time", "Part-time"] as const;
@@ -270,7 +318,9 @@ export const SECTIONS: {
     blurb: "Better said now than found later. None of these is automatically a no.",
     stamp: "DECLARED",
     /* Smoker too (9 Oct 2026): it was asked but never required, so three
-       passports finished without it. */
+       passports finished without it. The other adults' credit (14 Oct 2026)
+       is required on the screens but deliberately NOT here: passports
+       finished before it existed would lose their DECLARED stamp. */
     done: (d) => d.adverseCredit !== null && d.guarantor !== null && d.pets !== null && d.smoker !== null,
   },
 ];
@@ -323,7 +373,7 @@ export function completeness(d: PassportData): { done: number; total: number; pc
  */
 export function answered(d: PassportData): { done: number; total: number; pct: number } {
   const optional = new Set<keyof PassportData>([
-    "knownAs", "photo", "photoFocus", "movedIn", "shareCode", "savings", "coOccupantIncomes", "previousAddress",
+    "knownAs", "photo", "photoFocus", "movedIn", "shareCode", "savings", "coOccupantIncomes", "coOccupantCredit", "previousAddress",
     "adverseCreditNote", "petsNote", "rentOnTime", "landlordRef", "numChildren",
     /* Only asked of some people, by what they do. */
     "onProbation", "zeroHours", "workHours", "tradingFor",

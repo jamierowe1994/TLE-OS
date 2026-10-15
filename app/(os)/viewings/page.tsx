@@ -162,10 +162,13 @@ export default function Viewings() {
     setPanel(id);
   }
 
+  /* Personal busy times are drawn but never counted (14 Oct 2026): a school
+     run is not an appointment, and 58 of them would bury the real number. */
+  const counted = (list: Appt[]) => list.filter((a) => !a.fromPersonal).length;
   const tiles = [
-    { id: "upcoming" as const, label: "Upcoming", icon: "analytics", count: upcoming.length, blurb: "Everything still to happen", on: panel === "upcoming" },
-    { id: "today" as const, label: "Today", icon: "clock", count: today.length, blurb: "What is on today", on: panel === "day" && selected === 0 },
-    { id: "week" as const, label: "Next 7 days", icon: "calendar", count: week.length, blurb: "Today and the six days after it, hour by hour", on: panel === "week" },
+    { id: "upcoming" as const, label: "Upcoming", icon: "analytics", count: counted(upcoming), blurb: "Everything still to happen", on: panel === "upcoming" },
+    { id: "today" as const, label: "Today", icon: "clock", count: counted(today), blurb: "What is on today", on: panel === "day" && selected === 0 },
+    { id: "week" as const, label: "Next 7 days", icon: "calendar", count: counted(week), blurb: "Today and the six days after it, hour by hour", on: panel === "week" },
     { id: "due" as const, label: "Feedback due", icon: "message", count: due.length, blurb: "Been, and nobody has written down what was said", on: panel === "due" },
     { id: "in" as const, label: "Feedback in", icon: "checklist", count: fedBack.length, blurb: "Ready for the landlord", on: panel === "in" },
   ];
@@ -372,7 +375,7 @@ export default function Viewings() {
                       <h3 className={`text-[14px] ${d === 0 ? "text-accent-dark" : ""}`}>{dn ?? fmtFull(dateOfOffset(d))}</h3>
                       <span className="text-[10.5px] text-muted">{fmtShort(dateOfOffset(d))}</span>
                       <span className="ml-auto text-[10.5px] text-muted">
-                        {list.length} {list.length === 1 ? "appointment" : "appointments"}
+                        {list.filter((a) => !a.fromPersonal).length} {list.filter((a) => !a.fromPersonal).length === 1 ? "appointment" : "appointments"}
                       </span>
                     </div>
                     <ul className="cascade">
@@ -445,7 +448,7 @@ function WeekSummary({
   onPrint: () => void;
 }) {
   const days = Array.from({ length: 7 }, (_, i) => i);
-  const total = days.reduce((n, d) => n + (byDay.get(d)?.length ?? 0), 0);
+  const total = days.reduce((n, d) => n + (byDay.get(d)?.filter((a) => !a.fromPersonal).length ?? 0), 0);
   return (
     <section className={`fade-up flex h-full flex-col ${card} p-5`}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line/60 pb-3">
@@ -469,6 +472,7 @@ function WeekSummary({
           const first = timed[0]?.start;
           const last = timed.length ? timed[timed.length - 1].start : undefined;
           const viewings = list.filter((a) => a.kind === "viewing").length;
+          const booked = list.filter((a) => !a.fromPersonal).length;
           const dn = nearLabel(d);
           return (
             <li key={d} className="border-b border-line/40 last:border-0">
@@ -484,7 +488,7 @@ function WeekSummary({
                       : `${first && last ? `${first} to ${last}` : "All day"}${viewings ? ` · ${viewings} ${viewings === 1 ? "viewing" : "viewings"}` : ""}`}
                   </span>
                 </span>
-                <span className={`figures text-[17px] font-semibold ${list.length ? "text-ink" : "text-muted/40"}`}>{list.length}</span>
+                <span className={`figures text-[17px] font-semibold ${booked ? "text-ink" : "text-muted/40"}`}>{booked}</span>
                 <span className="w-3 text-right text-[13px] text-muted/70">›</span>
               </button>
             </li>

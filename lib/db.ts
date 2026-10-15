@@ -1881,6 +1881,25 @@ ALTER TABLE os_appointments ADD COLUMN IF NOT EXISTS contact_email TEXT;
 ALTER TABLE os_appointments ADD COLUMN IF NOT EXISTS booking JSONB;
 CREATE INDEX IF NOT EXISTS os_appointments_lead ON os_appointments (lead_id);
 
+-- A person's OS diary and their PERSONAL calendar, both read only (Amrit's
+-- ticket, 14 Oct 2026; lib/personal-calendar). Opt-in from Profile.
+--   feed_hash: SHA-256 of the private subscribe link's token. The token itself
+--     is never stored, so a read of this table is not a way into anyone's
+--     diary; the link is shown once, and Reset makes a new one.
+--   busy_url: the secret iCal address of their personal calendar, which the
+--     OS only ever READS, for busy times without titles.
+CREATE TABLE IF NOT EXISTS os_calendar_links (
+  user_id        TEXT PRIMARY KEY,
+  feed_hash      TEXT UNIQUE,
+  feed_made_at   TIMESTAMPTZ,
+  feed_read_at   TIMESTAMPTZ,
+  busy_url       TEXT,
+  busy_set_at    TIMESTAMPTZ,
+  busy_read_at   TIMESTAMPTZ,
+  busy_error     TEXT,
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Presentations sent to landlords — the pre-appraisal deck they open from a
 -- link in the confirmation email.
 --
