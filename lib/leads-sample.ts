@@ -59,6 +59,12 @@ export type Lead = {
   /** The REX contact behind the lead, when there is one - where a campaign
    *  email is sent from and filed against. */
   contactId?: string;
+  /** The name and number the contact record holds, when the enquiry itself
+   *  gave different ones (lib/lead-enquirer): REX files an enquiry against
+   *  whoever already has that email, so the board shows who actually asked
+   *  and keeps the record's details here. */
+  onFileAs?: string;
+  onFilePhone?: string;
   /** The OS's own word for where a landlord lead is - "2nd contact",
    *  "Nurture", "Appraisal booked" - folded from the log (lib/lead-spine).
    *  Unset when nothing has been logged, and the REX stage stands. */

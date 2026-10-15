@@ -2,7 +2,7 @@ import { after, NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
 import { fetchLeadBook, type LeadBook } from "@/lib/rex-leads";
 import { leadScope } from "@/lib/scope";
-import { ledgerBoard, ledgerSourceMonths, ledgerStats, readNewValuations, recordLeads, salesAmong, type SourceMonthRow } from "@/lib/lead-ledger";
+import { asAskedAll, ledgerBoard, ledgerSourceMonths, ledgerStats, readNewValuations, recordLeads, salesAmong, type SourceMonthRow } from "@/lib/lead-ledger";
 import { hiddenLeadIds } from "@/lib/hidden-leads";
 import { ago } from "@/lib/rex-leads";
 import { hasDb, q } from "@/lib/db";
@@ -235,12 +235,16 @@ export async function GET(req: NextRequest) {
        list, whose snippets never say "sales" (lib/lead-ledger salesAmong).
        Asked of these ids only, and kept off hiddenIds: the page only needs
        the hand-removed ones (its search and contacts never carry a sale). */
-    const [sales, filed] = await Promise.all([
+    /* Who actually asked, where the enquiry names somebody other than the
+       contact REX filed it under (lib/lead-enquirer). The scan's cached book
+       is REX's list as REX gave it, so this is asked of every board. */
+    const [sales, filed, asked] = await Promise.all([
       salesAmong(b.leads.map((l) => l.id)).catch(() => new Set<string>()),
       ledgerSourceMonths(scope.rexUserId, [...hidden]),
+      asAskedAll(b.leads as typeof mine).catch(() => b.leads as typeof mine),
     ]);
     const ours = mine.filter((l) => !l.contactId || !rexContacts.has(l.contactId));
-    const leads = [...ours, ...(b.leads as typeof ours)].filter((l) => l && l.id && !hidden.has(l.id) && !sales.has(l.id));
+    const leads = [...ours, ...asked].filter((l) => l && l.id && !hidden.has(l.id) && !sales.has(l.id));
     /* This month and last, counted from everything on file rather than the
        500 the board carries (Rig P-010), plus contacts typed in by hand,
        which the board shows but the ledger never holds. */

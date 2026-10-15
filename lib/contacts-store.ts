@@ -119,10 +119,59 @@ function toContact(r: Row): OsContact {
   };
 }
 
+/** Who adds a person from the tenant area: the tenant, not a member of staff. */
+export const TENANT_AREA = "Tenant area";
+
+/**
+ * Whose a tenant-area person is (Dan Richards' ticket, 15 Oct 2026).
+ *
+ * A tenant who enquires from their own area is filed on Leads by the tenant
+ * area itself (lib/tenant-find noteOnLeads), so `created_by` names nobody on
+ * the staff - and a person nobody owns turned up on every agent's board:
+ * Dan, in Wolverhampton, was shown suchendra pasam, who had asked about a
+ * flat in Glasgow, viewed one there in June and had a viewing booked there.
+ *
+ * They belong to the agents of the homes they asked about - the staff their
+ * enquiries, viewing replies and offers were emailed to, newest first, which
+ * is the area they are actually looking in. Only when they have asked about
+ * nothing yet, the agent who sent them their passport. `c` is the os_contacts
+ * row's alias. A text[] of lower-case emails; empty when nobody is known.
+ */
+export const tenantAreaAgentsSql = (c: string) => `COALESCE(
+  NULLIF(ARRAY(
+    SELECT lower(x.sent_to) FROM (
+      SELECT e.sent_to, e.created_at FROM os_tenant_enquiries e
+       WHERE e.contact_id = ${c}.id OR (${c}.email <> '' AND lower(e.email) = lower(${c}.email))
+      UNION ALL
+      SELECT r.sent_to, r.created_at FROM os_tenant_viewing_responses r
+       WHERE ${c}.email <> '' AND lower(r.email) = lower(${c}.email)
+    ) x
+    WHERE COALESCE(x.sent_to, '') LIKE '%@%'
+    GROUP BY lower(x.sent_to) ORDER BY max(x.created_at) DESC
+  ), '{}'::text[]),
+  ARRAY(
+    SELECT lower(u.email) FROM os_tenant_passports p JOIN os_users u ON u.id = p.agent_id
+     WHERE ${c}.email <> '' AND lower(p.email) = lower(${c}.email)
+     ORDER BY p.created_at DESC LIMIT 1
+  )
+)`;
+
+/** The owner's name on the staff list: who typed them in, or for a
+ *  tenant-area person the agent they are routed to (their email when that
+ *  agent has no account). Null when nobody is known. */
+export const ownerNameSql = (c: string) => `CASE WHEN ${c}.created_by = '${TENANT_AREA}'
+  THEN (SELECT COALESCE(NULLIF(u.name, ''), o.email) FROM (SELECT (${tenantAreaAgentsSql(c)})[1] AS email) o
+          LEFT JOIN os_users u ON lower(u.email) = o.email LIMIT 1)
+  ELSE (SELECT NULLIF(u.name, '') FROM os_users u WHERE lower(u.email) = lower(${c}.created_by) LIMIT 1) END`;
+
+/** Is this person on `$n`'s own board? `$n` is a lower-case email. */
+export const ownedBySql = (c: string, param: string) =>
+  `(lower(${c}.created_by) = ${param} OR (${c}.created_by = '${TENANT_AREA}' AND ${param} = ANY(${tenantAreaAgentsSql(c)})))`;
+
 const COLUMNS = `id, kind, name, name_first, name_last, email, mobile, address, postcode,
   source, enquiry, notes, created_by, created_at::text AS created_at,
   rex_id, rex_state, rex_detail, rex_at::text AS rex_at, rex_by, is_test,
-  (SELECT NULLIF(u.name, '') FROM os_users u WHERE lower(u.email) = lower(os_contacts.created_by) LIMIT 1) AS created_by_name`;
+  ${ownerNameSql("os_contacts")} AS created_by_name`;
 
 /** Write the record. Throws if there is no database — a Save that cannot save
  *  must say so rather than return a cheerful object nobody stored. */
@@ -224,9 +273,23 @@ export async function getContact(id: string): Promise<OsContact | null> {
 
 /** Newest first. `state` narrows to one outcome — "held" is the useful one,
  *  because it is the list of everything still waiting to reach REX. */
-export async function listContacts(opts?: { state?: RexState; limit?: number }): Promise<OsContact[]> {
+export async function listContacts(opts?: { state?: RexState; limit?: number; ownedBy?: string | null }): Promise<OsContact[]> {
   if (!hasDb()) return [];
   const limit = Math.min(Math.max(opts?.limit ?? 100, 1), 500);
+  /* One person's own (see ownedBySql): the ones they typed in, and the
+     tenant-area people who asked about their homes. The Leads board merged
+     the whole business's list into every agent's board until 15 Oct 2026. */
+  const owner = opts?.ownedBy?.trim().toLowerCase();
+  if (owner) {
+    const rows = await q<Row>(
+      `SELECT ${COLUMNS} FROM os_contacts
+        WHERE NOT is_test AND ${ownedBySql("os_contacts", "$1")}
+          ${opts?.state ? "AND rex_state = $3" : ""}
+        ORDER BY created_at DESC LIMIT $2`,
+      opts?.state ? [owner, limit, opts.state] : [owner, limit]
+    );
+    return rows.map(toContact);
+  }
   /* Test contacts never reach REX, so they are never on the list of people
      waiting to - a Push to REX button beside one would be a way to put a
      tester's own address into the live system. */

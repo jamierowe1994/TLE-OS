@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { maskContactFields, seesContactLists } from "@/lib/contact-mask";
 import { publicError } from "@/lib/public-error";
 import { whoIs } from "@/lib/admin";
+import { leadScope } from "@/lib/scope";
 import { hasDb } from "@/lib/db";
 import { saveContact, listContacts, markRex, type NewContact, type RexState } from "@/lib/contacts-store";
 import { pushContactToRex, pushBlockedBecause } from "@/lib/rex-contacts";
@@ -14,8 +15,8 @@ import { record } from "@/lib/audit";
  * POST → saves the contact in the OS, then TRIES to create it in REX. The two
  *        are reported separately, because they succeed and fail independently
  *        and a caller that conflates them will lie about one of them.
- * GET  → the contacts added here, newest first. `?state=held` is the queue of
- *        everything saved but not yet in REX.
+ * GET  → the contacts added here that are on this person's board, newest
+ *        first. `?state=held` is the queue of those saved but not yet in REX.
  *
  * ── Saving is never conditional on REX ────────────────────────────────────
  *
@@ -51,7 +52,8 @@ function whyNoActor(): string {
 }
 
 export async function GET(req: NextRequest) {
-  const { actor } = await whoIs(req);
+  const who = await whoIs(req);
+  const { actor } = who;
   if (!actor) return NextResponse.json({ error: whyNoActor() }, { status: 401 });
 
   const stateParam = req.nextUrl.searchParams.get("state");
@@ -59,12 +61,25 @@ export async function GET(req: NextRequest) {
     ? (stateParam as RexState)
     : undefined;
 
+  /* WHOSE (Dan Richards' ticket, 15 Oct 2026). The Leads board merges this
+     list into the board, and it used to be the whole business's for anybody:
+     every agent had every other agent's hand-added people on their own board
+     (shortened, and refused when opened), and every tenant-area enquiry too -
+     Dan in Wolverhampton was shown a tenant looking in Glasgow. Now it is the
+     board's own scope (lib/scope leadScope): the whole business for an owner
+     and the office, otherwise the ones this person added and the tenant-area
+     people who asked about their homes (lib/contacts-store ownedBySql). An
+     owner viewing as somebody sees theirs. */
+  const scope = await leadScope(req);
+  const ownedBy = scope.everything ? null : ((who.viewingAs ? who.subject?.email : actor.email) ?? "").trim().toLowerCase() || "-";
+
   /* Somebody else's contacts come with their email and mobile shortened for
      an agent (lib/contact-mask, 10 Oct 2026); their own come whole, and
-     opening one contact gives its full details. */
-  const full = seesContactLists(actor.role);
+     opening one contact gives its full details. A scoped list is all their
+     own. */
+  const full = seesContactLists(actor.role) || ownedBy !== null;
   const me = actor.email.trim().toLowerCase();
-  const contacts = (await listContacts({ state })).map((c) =>
+  const contacts = (await listContacts({ state, ownedBy })).map((c) =>
     full || (c.createdBy ?? "").trim().toLowerCase() === me ? c : maskContactFields(c)
   );
   return NextResponse.json({

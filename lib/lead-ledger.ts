@@ -2,6 +2,7 @@ import "server-only";
 import { hasDb, q } from "@/lib/db";
 import type { Lead } from "@/lib/leads-sample";
 import { searchLikes, searchMatches } from "@/lib/search-match";
+import { withEnquirer } from "@/lib/lead-enquirer";
 
 /**
  * The lead ledger: every enquiry the OS has ever seen, kept.
@@ -107,16 +108,23 @@ export async function salesAmong(ids: string[]): Promise<Set<string>> {
  * (19 Sep 2026: Sunny Brar and Cheryl M Jennings sat on the board as landlord
  * leads for a day). A handful a day, twenty a run at most, READ-ONLY on REX.
  */
-export async function readNewValuations(limit = 20): Promise<number> {
+export async function readNewValuations(limit = 20, opts: { everyNewLead?: boolean } = {}): Promise<number> {
   if (!hasDb()) return 0;
   const { readEnquiry, ENQUIRY_VERSION } = await import("@/lib/rex-enquiry");
+  /* everyNewLead (the five-minute scan, 15 Oct 2026): every lead from the
+     last two days too, valuations first. The whole enquiry is where the name
+     and number the person TYPED live (lib/lead-enquirer) - REX files it under
+     whichever contact already has that email, and Sean McMahon's test as
+     "Sean Murphy" read as Sean McMahon on the board until somebody opened it.
+     A few new leads per run, one Leads/read each, still READ-ONLY. */
   const rows = await q<{ id: string }>(
     `SELECT id FROM os_leads
-      WHERE id LIKE 'rex-%' AND enquiry = 'Valuation'
+      WHERE id LIKE 'rex-%'
         AND (payload->>'enquiryFull' IS NULL OR COALESCE((payload->>'enquiryV')::int, 0) <> $1)
-        AND COALESCE(received_at, first_seen) > NOW() - INTERVAL '120 days'
-      ORDER BY received_at DESC NULLS LAST LIMIT $2`,
-    [ENQUIRY_VERSION, limit]
+        AND ((enquiry = 'Valuation' AND COALESCE(received_at, first_seen) > NOW() - INTERVAL '120 days')
+             OR ($3 AND COALESCE(received_at, first_seen) > NOW() - INTERVAL '2 days'))
+      ORDER BY (enquiry = 'Valuation') DESC, received_at DESC NULLS LAST LIMIT $2`,
+    [ENQUIRY_VERSION, limit, opts.everyNewLead === true]
   ).catch(() => []);
   let n = 0;
   for (const r of rows) {
@@ -140,7 +148,28 @@ export async function ledgerBoard(rexUserId: string | null, limit = 500): Promis
       : `SELECT payload FROM os_leads WHERE ${NOT_SALES} ORDER BY received_at DESC NULLS LAST LIMIT $1`,
     rexUserId ? [limit, rexUserId] : [limit]
   ).catch(() => []);
-  return rows.map((r) => r.payload);
+  return rows.map((r) => asAsked(r.payload));
+}
+
+/** A ledger row's lead with the enquirer's own name and number (lib/lead-enquirer). */
+const asAsked = (p: Lead): Lead => withEnquirer(p, (p as { enquiryFields?: unknown }).enquiryFields);
+
+/**
+ * The same, for a board that did not come from the ledger: the scan's cached
+ * book is REX's list as REX returned it, without the enquiry read in full.
+ * One primary-key lookup for the ids drawn, like salesAmong.
+ */
+export async function asAskedAll<L extends Lead>(leads: L[]): Promise<L[]> {
+  const ids = leads.filter((l) => l.id?.startsWith("rex-")).map((l) => l.id);
+  if (!hasDb() || !ids.length) return leads;
+  const rows = await q<{ id: string; f: unknown }>(
+    `SELECT id, payload->'enquiryFields' AS f FROM os_leads
+      WHERE id = ANY($1::text[]) AND jsonb_typeof(payload->'enquiryFields') = 'array'`,
+    [ids]
+  ).catch(() => []);
+  if (!rows.length) return leads;
+  const fields = new Map(rows.map((r) => [r.id, r.f]));
+  return leads.map((l) => (fields.has(l.id) ? withEnquirer(l, fields.get(l.id)) : l));
 }
 
 /** One cell of the Lead sources tile: lettings leads on file in a London month, by side and source. */
@@ -194,19 +223,27 @@ export async function searchLedger(rexUserId: string | null, needle: string, lim
   const digits = text.replace(/\D/g, "");
   const params: unknown[] = [likes, digits.length >= 5 ? `%${digits}%` : null, limit * 3];
   if (rexUserId) params.push(rexUserId);
-  const rows = await q<{ payload: Lead; name: string | null; email: string | null; address: string | null; agent: string | null; area: string | null; phone: string | null }>(
-    `SELECT payload, name, email, address, agent, payload->>'area' AS area, phone FROM os_leads
-      WHERE ${NOT_SALES}
-        ${rexUserId ? "AND assignee_id = $4" : ""}
-        AND (concat_ws(' ', name, email, address, agent, payload->>'area') ILIKE ALL($1::text[])
-             OR ($2::text IS NOT NULL AND regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') LIKE $2))
+  /* The name and number typed on the enquiry are searched too (lib/lead-
+     enquirer): Sean McMahon looked for "Sean Murphy", the name on his
+     website enquiry, and REX had filed it under Sean McMahon. */
+  const rows = await q<{ payload: Lead; name: string | null; email: string | null; address: string | null; agent: string | null; area: string | null; phone: string | null; asked: string | null }>(
+    `SELECT payload, name, email, address, agent, payload->>'area' AS area, phone, asked FROM (
+       SELECT os_leads.*, (SELECT string_agg(f->>1, ' ') FROM jsonb_array_elements(
+                CASE WHEN jsonb_typeof(payload->'enquiryFields') = 'array' THEN payload->'enquiryFields' ELSE '[]'::jsonb END) f
+              WHERE lower(f->>0) IN ('name', 'first name', 'last name', 'phone default', 'phone number', 'phone')) AS asked
+         FROM os_leads
+        WHERE ${NOT_SALES}
+          ${rexUserId ? "AND assignee_id = $4" : ""}
+     ) l
+      WHERE (concat_ws(' ', name, email, address, agent, payload->>'area', asked) ILIKE ALL($1::text[])
+             OR ($2::text IS NOT NULL AND regexp_replace(concat_ws(' ', phone, asked), '\\D', '', 'g') LIKE $2))
       ORDER BY received_at DESC NULLS LAST LIMIT $3`,
     params
   ).catch(() => []);
   return rows
-    .filter((r) => searchMatches(text, r.name, r.email, r.address, r.agent, r.area, r.phone))
+    .filter((r) => searchMatches(text, r.name, r.email, r.address, r.agent, r.area, r.phone, r.asked))
     .slice(0, limit)
-    .map((r) => r.payload);
+    .map((r) => asAsked(r.payload));
 }
 
 export async function ledgerStats(): Promise<LedgerStats> {
@@ -222,7 +259,7 @@ export async function leadsForListing(listingId: string, limit = 100): Promise<L
     `SELECT payload FROM os_leads WHERE listing_id = $1 ORDER BY received_at DESC NULLS LAST LIMIT $2`,
     [listingId, limit]
   ).catch(() => []);
-  return rows.map((r) => r.payload);
+  return rows.map((r) => asAsked(r.payload));
 }
 
 /**
