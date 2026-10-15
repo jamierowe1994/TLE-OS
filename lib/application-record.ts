@@ -75,7 +75,8 @@ export function toAppRecord(a: Application): AppRecord {
     image: a.image,
     rent: a.offerAmount ? `${gbp(a.offerAmount)} pcm` : "—",
     moveIn: a.startDate ?? "—",
-    stageKey: a.status,
+    /* Accepted in the OS is accepted on the page too (Sean, 15 Oct 2026): the PLC tile sat greyed "once the offer is accepted" on a let he had accepted. */
+    stageKey: isLet(a) ? "accepted" : a.status,
     ticked: 0,
     agent: a.agent ?? "—",
     flag: a.affordabilityPct != null && a.affordabilityPct > 40 ? `Rent is ${a.affordabilityPct.toFixed(0)}% of income` : undefined,

@@ -270,6 +270,18 @@ export const gateOf = (check: Check, letType: LetType | null | undefined): Gate 
 
 export const checkById = (id: CheckId) => PLC_CHECKS.find((c) => c.id === id) ?? null;
 
+/** The prompt in the "why not needed" box, per conditional check: an example of a real reason. */
+export const whyPlaceholder = (id: CheckId): string =>
+  ({
+    "gas-safety": "Why not needed? e.g. No gas supply to the property",
+    "guarantor-checks": "Why not needed? e.g. No guarantor on this tenancy",
+    pat: "Why not needed? e.g. The landlord supplies no electrical appliances",
+    "fire-safety": "Why not needed? e.g. Booked for the 8th, will follow",
+    alarms: "Why not needed? e.g. Tested at check-in, record to follow",
+    "emergency-lighting": "Why not needed? e.g. No emergency lighting fitted at the property",
+    "holding-deposit": "Why not needed? e.g. No holding deposit was taken",
+  } as Partial<Record<CheckId, string>>)[id] ?? "Why not needed? e.g. Council has no licensing scheme here";
+
 /* ──────────────────────────── how they're asked ────────────────────────── */
 
 /**

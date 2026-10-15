@@ -6,6 +6,7 @@ import { hasDb } from "@/lib/db";
 import { assembled } from "@/lib/applications-board";
 import { rexConfigured } from "@/lib/rex";
 import { testApplicationsFor } from "@/lib/test-overlay";
+import { decisionsForListing } from "@/lib/offer-decisions";
 
 /**
  * ONE LISTING'S APPLICATIONS (2 Oct 2026).
@@ -36,16 +37,22 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (scope.unlinked) return NextResponse.json({ unlinked: true, applications: [] });
 
   try {
-    const [{ held, stale }, tests] = await Promise.all([
+    const [{ held, stale }, tests, decided] = await Promise.all([
       assembled(scope.rexUserId),
       testApplicationsFor(who?.actor?.email).catch(() => []),
+      /* The agent's own Accept or Decline, as the board carries it (Sean, 15
+         Oct 2026, 20 St Tridunana's Rest): without it a let accepted in the
+         OS read as "not put to landlord" here, so the listing's Handover step
+         could not find it and sent him back to the offers he had just
+         accepted from. */
+      decisionsForListing(listingId).catch(() => new Map()),
     ]);
     const { applications, stages, closed } = held.value;
     const mine = (a: { listingId?: number | string | null }) => String(a.listingId ?? "") === listingId;
     return NextResponse.json({
       applications: [
         ...tests.filter(mine).map((a) => ({ ...a, stageLabel: a.stageLabel ?? a.statusLabel, test: true })),
-        ...applications.filter(mine).map((a) => ({ ...a, stageLabel: stages.get(a.id) ?? a.statusLabel, closed: closed.get(a.id) ?? null })),
+        ...applications.filter(mine).map((a) => ({ ...a, stageLabel: stages.get(a.id) ?? a.statusLabel, closed: closed.get(a.id) ?? null, osDecision: decided.get(`rex:${a.id}`) ?? null })),
       ],
       scope: scope.label,
       ...(stale ? { stale: true } : {}),

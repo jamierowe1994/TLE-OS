@@ -56,6 +56,7 @@ export interface Handoff {
     required: boolean;
   }[];
   missing: { id: string; label: string; why: string }[];
+  letOnly?: boolean;
   unrecognised: string[];
   blockers: string[];
   flowConfigured: boolean;
@@ -309,6 +310,12 @@ export default function HandoffPanel({ applicationId }: { applicationId: string 
               </li>
             ))}
         </ul>
+        {h.letOnly && (
+          <p className="mt-2.5 text-[11px] leading-snug text-muted">
+            Let only: keeping these in date is the landlord&apos;s job, so none of them holds up the push. The PLC
+            check still needs a copy of each before the tenancy starts.
+          </p>
+        )}
       </div>
 
       {/* Uploads on the listing — a different place, holding different paper. */}

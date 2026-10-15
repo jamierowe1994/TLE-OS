@@ -102,6 +102,7 @@ export default function ListingCompliance({
   terms,
   landlord,
   landlordRegistration,
+  letOnly,
 }: {
   listingId: string;
   propertyId: string | null;
@@ -113,6 +114,8 @@ export default function ListingCompliance({
   terms: TermsState;
   landlord: { contactId: string | number | null; name?: string; email?: string };
   landlordRegistration: string | null;
+  /** Let only on the listing: the certificates are the landlord's to keep in date. */
+  letOnly?: boolean;
 }) {
   const [docs, setDocs] = useState<Doc[] | null>(null);
   const [papers, setPapers] = useState<{ files: Paper[]; held: string[] } | null>(null);
@@ -185,6 +188,17 @@ export default function ListingCompliance({
 
   return (
     <div className="space-y-5">
+      {/* Let only (Sean, 15 Oct 2026): "Certificates to add" read as our job on
+          a home where it is the landlord's (Michael's rule). Said once, here. */}
+      {letOnly && (
+        <p className="flex items-start gap-2.5 rounded-[18px] bg-accent-soft/60 px-4 py-3 text-[12.5px] leading-snug text-ink">
+          <DoodleIcon name="shield" size={15} className="mt-0.5 shrink-0 text-accent-dark" />
+          <span>
+            Let only, so keeping the certificates in date is the landlord&apos;s job, not ours, and none of them stops the
+            let moving on. Ask the landlord for copies: the PLC check needs them before the tenancy starts.
+          </span>
+        </p>
+      )}
       {/* ── 2. The certificates that type needs ── */}
       <div className="[&>section]:rounded-[22px] [&>section]:border-line/50">
         <PropertyFile
