@@ -2677,6 +2677,26 @@ ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS landlord_name TEXT;
 -- 44 Pilots Way): typed on the home's page where REX names no owner. OS only.
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS landlord_email TEXT;
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS landlord_phone TEXT;
+-- A landlord's own home (correspondence) address (15 Oct 2026, Rhiannon and
+-- Richard Callow): the address they live at, not the let. The terms of business
+-- need it. One row a person, found by their email or their contact ref
+-- ("os:<id>" | "rex:<id>"), so the same landlord reads the same address on a
+-- lead, an appraisal, a listing and a home on Portfolio. OS only: nothing here
+-- is written to REX. source = agent | same-as-property | payprop | rex | new-listing.
+CREATE TABLE IF NOT EXISTS os_landlord_addresses (
+  id               TEXT PRIMARY KEY,
+  email            TEXT NOT NULL DEFAULT '',
+  person_ref       TEXT NOT NULL DEFAULT '',
+  name             TEXT NOT NULL DEFAULT '',
+  address          TEXT NOT NULL DEFAULT '',
+  postcode         TEXT NOT NULL DEFAULT '',
+  same_as_property BOOLEAN NOT NULL DEFAULT false,
+  source           TEXT NOT NULL DEFAULT 'agent',
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by       TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS os_landlord_addresses_email ON os_landlord_addresses (email);
+CREATE INDEX IF NOT EXISTS os_landlord_addresses_ref ON os_landlord_addresses (person_ref);
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS agent_name TEXT;
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS payprop_no TEXT;
 -- The tenants in residence, from the same sheet (24 Sep 2026), where REX CRM holds none.

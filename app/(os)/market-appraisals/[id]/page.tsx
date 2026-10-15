@@ -26,6 +26,7 @@ import {
 } from "@/lib/market-appraisal";
 import { WhatsAppButton } from "@/components/WhatsAppQr";
 import ContactBlock from "@/components/ContactBlock";
+import { LandlordOnFile } from "@/components/LandlordHomeAddress";
 import FileDocuments from "@/components/FileDocuments";
 
 /**
@@ -408,6 +409,7 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
             role="landlord"
             person={{ name: ma.landlord, email: ma.landlordEmail ?? null, phone: ma.landlordMobile ?? null }}
             personRef={ma.landlordRef ?? null}
+            home={{ propertyAddress: [ma.address, ma.postcode && !ma.address.includes(ma.postcode) ? ma.postcode : null].filter(Boolean).join(", ") }}
             onSaved={() => reload()}
             onWhatsAppSent={
               ma.leadId
@@ -433,6 +435,15 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
                   }
                 : undefined
             }
+          />
+          {/* Their ID, AML and bank details already held from their other
+              homes (Jade Grewal, 14 Oct 2026). Nothing shown when there are none. */}
+          <LandlordOnFile
+            className="pb-4"
+            email={ma.landlordEmail ?? null}
+            name={ma.landlord}
+            propertyAddress={[ma.address, ma.postcode].filter(Boolean).join(", ")}
+            appraisalId={ma.id}
           />
           {/* Which REX property this is, captured at the booking stage — long
               before terms are signed, and by a person rather than by matching

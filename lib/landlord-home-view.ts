@@ -26,6 +26,8 @@ import { readAnswers } from "@/lib/property-answers-store";
 import { progress as answerProgress } from "@/lib/property-questions";
 import type { ManagedProperty } from "@/lib/portfolio-types";
 import { EXTRA_DOC_KINDS } from "@/lib/landlord-doc-kinds";
+import { landlordPapersOnFile, type PaperOnFile } from "@/lib/landlord-papers";
+import { bankOnFile, type BankOnFile } from "@/lib/landlord-home";
 import { isDraftTest, testDealForAppraisal, testListingForAppraisal, testOffersForAppraisal, testViewingsForListing } from "@/lib/test-overlay";
 
 /**
@@ -226,8 +228,9 @@ export async function loadLandlordHome(me: Me, pick?: string | null) {
     movedIn = Boolean(tDeal && tDeal.stageKey === "move_day" && tDeal.moveIn && new Date(tDeal.moveIn).getTime() < Date.now() - 24 * 3600 * 1000);
   }
   const first = me.name.split(/\s+/)[0] || me.name;
+  const onFile = open[0] ? await landlordOnFile(me, open[0]) : NOTHING_ON_FILE;
   const base = open[0]
-    ? await appraisalView(open[0], first, docs, msgs, offers, me.id)
+    ? await appraisalView(open[0], first, docs, msgs, offers, me.id, onFile)
     : book[0]
       ? await managedView(book[0], first, compliance.get(book[0].propertyId ?? "") ?? null, offers)
       : null;
@@ -245,7 +248,40 @@ export async function loadLandlordHome(me: Me, pick?: string | null) {
      in the dropdown even when ?p= was absent or stale. */
   const at = open[0] ? `a:${open[0].appraisal.id}` : book[0] ? `m:${book[0].propertyId ?? book[0].listingId}` : null;
 
-  return { view, open, rest, compliance, docs, first, at };
+  return { view, open, rest, compliance, docs, first, at, onFile };
+}
+
+/**
+ * WHAT WE ALREADY HOLD FOR THEM (Jade Grewal, 14 Oct 2026: "A landlord with
+ * multiple properties, will he have to upload ID each time, will it also pull
+ * through his bank details?").
+ *
+ * Their photo ID from another of their properties - a portal upload on
+ * another file, another home's PLC pack or Documents tab - counts here, so
+ * they are not asked again (lib/landlord-papers). Bank details are never
+ * asked for on the portal: PayProp collects them. When PayProp already holds
+ * an account for them, the file says so, by its last four digits only.
+ */
+export type OnFile = { id: PaperOnFile | null; bank: BankOnFile | null };
+export const NOTHING_ON_FILE: OnFile = { id: null, bank: null };
+
+async function landlordOnFile(me: Me, j: AppraisalJourney): Promise<OnFile> {
+  const [papers, bank] = await Promise.all([
+    landlordPapersOnFile({ name: me.name, email: me.email, notAt: j.appraisal.address, notAppraisal: j.appraisal.id }).catch(() => ({ id: null, aml: null })),
+    bankOnFile({ email: me.email, name: me.name }).catch(() => null),
+  ]);
+  return { id: papers.id, bank };
+}
+
+/** "On file  •  from 12 Moor Street" - for a paper from another of their homes. */
+export function onFileSub(p: PaperOnFile): string {
+  return p.from ? `On file  •  from ${p.from}` : "On file from another of your properties";
+}
+
+/** The read-only bank row, when PayProp holds an account for them. */
+export function bankRow(b: BankOnFile | null): { title: string; sub: string; state: "uploaded"; href: null } | null {
+  if (!b?.onFile) return null;
+  return { title: "Bank details", sub: `With PayProp${b.ending ? `  •  ending ${b.ending}` : ""}`, state: "uploaded", href: null };
 }
 
 /* --------------------------------------------------------- the feeders -- */
@@ -284,7 +320,7 @@ export async function requiredDocsFor(appraisalId: string | null | undefined): P
   ];
 }
 
-async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordDocument[], msgs: LandlordMessage[], offers: ViewOffer[] = [], landlordId: string | null = null): Promise<LandlordView> {
+async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordDocument[], msgs: LandlordMessage[], offers: ViewOffer[] = [], landlordId: string | null = null, onFile: OnFile = NOTHING_ON_FILE): Promise<LandlordView> {
   const a = j.appraisal;
   const latest = j.decks[0] ?? null;
   const post = j.decks.find((d) => d.kind === "post-appraisal") ?? null;
@@ -363,6 +399,8 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
       const u = uploaded(r.kind);
       if (u && heldIds.includes(u.id) && !verifiedIds.has(u.id)) return { title: r.title, sub: `${CHECKING_LABEL}  •  sent ${day(u.uploadedAt) ?? ""}`, state: "pending" as const, href: `/api/landlord/documents/${u.id}` };
       if (u) return { title: r.title, sub: `Uploaded  •  ${day(u.uploadedAt) ?? ""}`, state: "uploaded" as const, href: `/api/landlord/documents/${u.id}` };
+      /* Their ID from another of their properties: not asked for again. */
+      if (r.kind === "id" && onFile.id) return { title: r.title, sub: onFileSub(onFile.id), state: "uploaded" as const, href: null };
       /* The national register counts. A current certificate is public and we
          can see it, so nobody is asked to send a copy (James, 17 Sep 2026). */
       if (r.kind === "epc" && (property?.epc || registerEpc)) {
@@ -377,6 +415,7 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
       return { title: r.title, sub: r.missing, state: "missing" as const, href: null };
     }),
     ...mine.filter((d) => d.kind === "other").map((d) => ({ title: d.name, sub: `Uploaded  •  ${day(d.uploadedAt) ?? ""}`, state: "uploaded" as const, href: `/api/landlord/documents/${d.id}` })),
+    ...(bankRow(onFile.bank) ? [bankRow(onFile.bank)!] : []),
   ];
   const required = documents.filter((d) => needDocs.some((r) => r.title === d.title));
   const have = required.filter((d) => d.state === "uploaded").length;

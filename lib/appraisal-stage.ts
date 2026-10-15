@@ -10,6 +10,7 @@ import { listVault } from "@/lib/vault";
 import { pendingKeyFor } from "@/lib/property-match";
 import { PRE_SEND_HOLD_MS, PRE_SEND_SOON_MS } from "@/lib/pre-send-time";
 import { allDone, progress, type Answers } from "@/lib/property-questions";
+import { landlordPapersOnFile, type PaperOnFile } from "@/lib/landlord-papers";
 
 /* lib/property-answers-store's os_case_state kind. Read here in the batch
    rather than through readAnswers, which asks one appraisal at a time. */
@@ -152,6 +153,8 @@ interface Batch {
   esign: Map<string, string>;
   answers: Map<string, Answers>;
   extras: Map<string, string[]>;
+  /** Their photo ID from another of their homes, by appraisal id (lib/landlord-papers). */
+  idElsewhere: Map<string, PaperOnFile>;
 }
 
 const refsOf = (ma: MarketAppraisal) => [...new Set([ma.leadId, ma.id].filter((r): r is string => Boolean(r)))];
@@ -164,7 +167,7 @@ function push<K, V>(m: Map<K, V[]>, k: K, v: V) {
 }
 
 async function readBatch(list: MarketAppraisal[]): Promise<Batch> {
-  const out: Batch = { decks: new Map(), signed: new Map(), docs: new Map(), sends: new Map(), esign: new Map(), answers: new Map(), extras: new Map() };
+  const out: Batch = { decks: new Map(), signed: new Map(), docs: new Map(), sends: new Map(), esign: new Map(), answers: new Map(), extras: new Map(), idElsewhere: new Map() };
   if (!hasDb() || !list.length) return out;
   const ids = [...new Set(list.map((m) => m.id))];
   const refs = [...new Set(list.flatMap(refsOf))];
@@ -212,6 +215,19 @@ async function readBatch(list: MarketAppraisal[]): Promise<Batch> {
     push(out.decks, d.ref, { kind: d.kind, createdAt: iso(d.created_at)!, firstOpenedAt: iso(d.first_opened_at), opens: Number(d.opens ?? 0), video: d.video });
   for (const s of signed) out.signed.set(s.appraisal_id, { signer_name: s.signer_name, completed_at: iso(s.completed_at)! });
   for (const d of docs) push(out.docs, emailKey(d.email), { kind: d.kind, uploadedAt: iso(d.uploaded_at)! });
+  /* A landlord with more than one home shows their ID once (Jade Grewal,
+     14 Oct 2026). Their portal no longer asks for it when another home holds
+     it, so the AML stop counts it too. Only looked for where it can matter:
+     terms signed, and no ID on their portal. */
+  const wantId = list.filter((m) => out.signed.has(m.id) && !(out.docs.get(emailKey(m.landlordEmail)) ?? []).some((d) => d.kind === "id"));
+  const found = await Promise.all(
+    wantId.slice(0, 40).map((m) =>
+      landlordPapersOnFile({ name: m.landlord, email: m.landlordEmail, notAt: m.address, notAppraisal: m.id }).catch(() => ({ id: null, aml: null }))
+    )
+  );
+  wantId.slice(0, 40).forEach((m, i) => {
+    if (found[i].id) out.idElsewhere.set(m.id, found[i].id!);
+  });
   for (const s of sends) push(out.sends, s.ref, { kind: s.kind, state: s.state, send_at: s.send_at, sent_at: s.sent_at, created_at: iso(s.created_at)! });
   for (const e of esign) out.esign.set(e.ref, iso(e.created_at)!);
   for (const c of cases) {
@@ -235,6 +251,8 @@ function signalsFor(ma: MarketAppraisal, b: Batch, certs: CertTick[], listedIds:
   const answers = b.answers.get(ma.id) ?? {};
   const extras = b.extras.get(ma.id) ?? [];
   const kinds = new Set(docs.map((d) => d.kind));
+  const idElsewhere = b.idElsewhere.get(ma.id) ?? null;
+  if (idElsewhere) kinds.add("id");
 
   const deck = (kind: string) => decks.filter((d) => d.kind === kind).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0] ?? null;
   const pre = deck("pre-appraisal");
@@ -301,7 +319,11 @@ function signalsFor(ma: MarketAppraisal, b: Batch, certs: CertTick[], listedIds:
   tick("takeon", "questions", "Property questions answered", facts.answered, null, signedDoc && !facts.answered ? `${asked.done} of ${asked.of} parts done, chased by email` : undefined);
 
   /* aml */
-  tick("aml", "id", "ID on the landlord portal", kinds.has("id"), iso(docs.find((d) => d.kind === "id")?.uploadedAt ?? null));
+  tick(
+    "aml", "id", "ID on the landlord portal", kinds.has("id"),
+    iso(docs.find((d) => d.kind === "id")?.uploadedAt ?? idElsewhere?.at ?? null),
+    idElsewhere && !docs.some((d) => d.kind === "id") ? `on file${idElsewhere.from ? ` from ${idElsewhere.from}` : " from another home"}` : undefined
+  );
   tick("aml", "ownership", "Proof of ownership on the portal", kinds.has("ownership"), iso(docs.find((d) => d.kind === "ownership")?.uploadedAt ?? null));
   for (const c of certs) tick("aml", `cert-${c.key}`, `${c.label} on file`, c.held, c.at, c.detail);
   /* And whatever else the agent asked this property for (Documents This

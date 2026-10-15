@@ -31,6 +31,7 @@ import { ATTEMPT_KINDS, CONTACT_TRIES, tenantContact, touchIcon, touchSentence, 
 import { Pill } from "@/components/Wire";
 import { leadSide } from "@/lib/leads-sample";
 import { isOsLead, osContactIdFrom } from "@/lib/contacts-as-leads";
+import LandlordHomeAddress from "@/components/LandlordHomeAddress";
 import { InlineField } from "@/components/Bits";
 import { UploadForm } from "@/components/FileDocuments";
 import { DOC_TYPES, OTHER, docTypeLabel } from "@/lib/doc-types";
@@ -3358,6 +3359,14 @@ function LeadDrawerBody({
                         copyable
                         address
                         onChange={(v) => landlordAddress(v)}
+                      />
+                      {/* Where THEY live, for the terms of business (Rhiannon, 15 Oct 2026).
+                          The row above is the let. */}
+                      <LandlordHomeAddress
+                        email={contact.email || lead.email}
+                        personRef={ours ? `os:${osContactIdFrom(lead.id)}` : lead.contactId ? `rex:${lead.contactId}` : null}
+                        name={lead.name}
+                        propertyAddress={propAddress || null}
                       />
                     </div>
                     {saveLine}

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { record } from "@/lib/audit";
+import { saveHomeAddress } from "@/lib/landlord-home";
 import { gateListingWrite } from "@/lib/listing-gate";
 import { invalidateListingBook } from "@/lib/listings-cache";
 import { createListing, currentListingOn, type NewListing } from "@/lib/rex-listing-create";
@@ -259,6 +260,11 @@ export async function POST(req: NextRequest) {
          ON CONFLICT (kind, record_id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW(), updated_by = EXCLUDED.updated_by`,
         [ma.id, JSON.stringify({ listingId: made.listingId, propertyId, landlordAddress: str(b.landlordAddress) || null, by: actor.email, at: new Date().toISOString() }), actor.email]
       );
+    }
+    /* And on the landlord's own record, so the lead, Portfolio and the next
+       contract read the same address (lib/landlord-home, 15 Oct 2026). */
+    if (str(b.landlordAddress)) {
+      await saveHomeAddress({ email: contact.email, ref: `os:${contact.id}`, name: contact.name, address: str(b.landlordAddress), source: "new-listing", by: actor.email }).catch(() => undefined);
     }
   } catch (e) {
     /* The listing is real; say the file did not save rather than pretend. */
