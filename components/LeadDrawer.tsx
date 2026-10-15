@@ -1048,6 +1048,8 @@ function LeadDrawerBody({
 
   /** The name, editable for people the OS owns. */
   const [personName, setPersonName] = useState("");
+  /* Their REX record has no name (15 Oct 2026), so saving the name shown is a real change. */
+  const [needsName, setNeedsName] = useState(false);
   /** What happened to the last edit — saved, saved-but-not-mirrored, or failed. */
   const [sync, setSync] = useState<{ busy: boolean; text: string; bad?: boolean } | null>(null);
   /** Set by the first save, so a slow read-back on open cannot undo it. */
@@ -1200,6 +1202,8 @@ function LeadDrawerBody({
     EMPTY_CASE
   );
   useEffect(() => setShowProcess(false), [lead?.id]);
+  /* Only a different person clears it: the board refreshing this one must not. */
+  useEffect(() => setNeedsName(false), [lead?.id]);
   /* Anything open on top belongs to the lead it was opened for. Keyed on the
      id, not the object: the board hands over a fresh object whenever the spine
      re-reads, and that must not shut an email somebody is halfway through. */
@@ -1414,7 +1418,9 @@ function LeadDrawerBody({
     const settle = reporter.begin(`${lead.name ? `${lead.name}'s details` : "Contact details"}`);
     try {
       const r = await fetch("/api/people/contact", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; needsName?: boolean };
+      /* No name on their record: the name box takes the one shown, unchanged. */
+      setNeedsName(Boolean(j.needsName));
       if (!j.ok) {
         setSync({ busy: false, text: j.error ?? "That didn't save.", bad: true });
         settle({ ok: false, problem: j.error ?? "That didn't save." });
@@ -2877,7 +2883,7 @@ function LeadDrawerBody({
                               value={personName}
                               onChange={(v) => {
                                 const next = v.trim();
-                                if (!next || next === personName) return;
+                                if (!next || (next === personName && !needsName)) return;
                                 setPersonName(next);
                                 void saveField({ name: next });
                               }}
@@ -3195,7 +3201,7 @@ function LeadDrawerBody({
                               value={personName}
                               onChange={(v) => {
                                 const next = v.trim();
-                                if (!next || next === personName) return;
+                                if (!next || (next === personName && !needsName)) return;
                                 setPersonName(next);
                                 void saveField({ name: next });
                               }}

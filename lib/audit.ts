@@ -58,6 +58,9 @@ export type AuditKind =
      floor plan uploaded (15 Sep 2026). */
   | "listing_edited"
   | "listing_owner_changed"
+  /* A landlord typed onto a home's own OS record where REX names nobody
+     (15 Oct 2026, lib/record-landlords). Not mirrored to REX. */
+  | "record_landlord_saved"
   /* An owner locked somebody out of the OS, or let them back in (10 Oct
      2026, lib/lockout), and every sign-in a locked person tried. */
   | "user_locked"

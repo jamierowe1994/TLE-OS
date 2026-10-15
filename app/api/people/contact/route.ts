@@ -75,6 +75,12 @@ export async function PATCH(req: NextRequest) {
       const c = (now.result ?? {}) as Row;
       const was = { name: str(c.name) || [str(c.name_first), str(c.name_last)].filter(Boolean).join(" "), email: str(c.email_address), mobile: str(c.phone_number) };
       const next = { name: name ?? was.name, email: email ?? was.email, mobile: phone ?? was.mobile };
+      /* REX refuses a person with no name (auto ticket 4c7e51e3, 15 Oct 2026:
+         an email changed on a lead whose REX record had none). Say so here,
+         before anything is sent, so the agent knows to add the name. */
+      if (!next.name.trim()) {
+        return NextResponse.json({ ok: false, needsName: true, error: "Their record has no name yet, so this can't be saved. Put their name in first, then try again." }, { status: 400 });
+      }
       const [first, ...rest] = next.name.split(/\s+/);
       const contact = {
         id: `rex:${rexId}`, kind: "landlord", name: next.name,

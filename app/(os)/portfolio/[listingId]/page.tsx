@@ -393,6 +393,13 @@ export default function PropertyPage() {
   ].filter(Boolean).join(" · ");
   const canAct = !p.test && Boolean(propertyId);
 
+  /* A landlord added on this page shows at once, on every let of the home
+     that names nobody else. */
+  const setLandlordHere = (l: Party) =>
+    setBook((b) => (b.state === "ready"
+      ? { ...b, data: { ...b.data, properties: b.data.properties.map((x) => (x.propertyId === propertyId && (!x.landlord || x.landlord.contactId.startsWith("record:")) ? { ...x, landlord: l } : x)) } }
+      : b));
+
   const raiseHome = propertyId
     ? { id: propertyId, name: house ? house.name : p.name, locality: p.locality, landlord: landlord?.name, tenant: tenants[0]?.name ?? null }
     : null;
@@ -800,7 +807,13 @@ export default function PropertyPage() {
                     {landlord.email && landlord.email.includes("@") && (
                       <LandlordJobEmails key={landlord.email} compact landlord={landlord.email} name={landlord.name} className="mt-3 border-t border-line/40 pt-3" />
                     )}
+                    {/* Kept on the OS record only (lib/record-landlords): changed here, not on the card. */}
+                    {landlord.contactId.startsWith("record:") && propertyId && !p.test && (
+                      <RecordLandlord propertyId={propertyId} current={landlord} onSaved={setLandlordHere} />
+                    )}
                   </div>
+                ) : propertyId && !p.test ? (
+                  <RecordLandlord propertyId={propertyId} current={null} onSaved={setLandlordHere} />
                 ) : (
                   <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">No landlord on record for this home.</p>
                 )}
@@ -1083,6 +1096,61 @@ function TenancyLine({ t, long = false }: { t: { startDate: string | null; endDa
 /** A tenant or the landlord: the same block as every person in the OS, changeable
  *  where REX knows them (James, 12 Oct 2026). REX PM's own tenants carry no REX
  *  contact, so theirs is read only. */
+/**
+ * The landlord of a home REX names no owner for, kept on the OS's own record
+ * (Lorna Fieldson, 14 Oct 2026, 44 Pilots Way). "Add the landlord" when there
+ * is nobody, "Change" on one already kept here. Never written to REX.
+ */
+function RecordLandlord({ propertyId, current, onSaved }: { propertyId: string; current: Party | null; onSaved: (l: Party) => void }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(current?.name ?? "");
+  const [email, setEmail] = useState(current?.email ?? "");
+  const [phone, setPhone] = useState(current?.phone ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const field = "w-full rounded-xl border border-line/80 bg-page px-3 py-2 text-[13px]";
+
+  if (!open) {
+    return current ? (
+      <button type="button" onClick={() => setOpen(true)} className="mt-2 text-[11.5px] text-muted underline">Change the landlord</button>
+    ) : (
+      <div className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">
+        <p>No landlord on record for this home.</p>
+        <button type="button" onClick={() => setOpen(true)} className="mt-1.5 font-semibold text-ink underline">Add the landlord</button>
+      </div>
+    );
+  }
+  async function save() {
+    if (saving || name.trim().length < 2) return;
+    setSaving(true);
+    setError(null);
+    const r = await fetch("/api/portfolio/landlord", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ propertyId, name, email, phone }),
+    }).then((x) => x.json()).catch(() => null);
+    setSaving(false);
+    if (!r?.ok) { setError(r?.error ?? "The landlord couldn't be saved just now. Try again in a minute."); return; }
+    onSaved(r.landlord as Party);
+    setOpen(false);
+  }
+  return (
+    <form className="mt-2 space-y-2 rounded-xl bg-accent-soft/30 p-3" onSubmit={(e) => { e.preventDefault(); void save(); }}>
+      <label className="block text-[11.5px] text-muted">Name<input value={name} onChange={(e) => setName(e.target.value)} required minLength={2} maxLength={120} autoComplete="off" className={`${field} mt-1`} /></label>
+      <label className="block text-[11.5px] text-muted">Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" className={`${field} mt-1`} /></label>
+      <label className="block text-[11.5px] text-muted">Phone<input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="off" className={`${field} mt-1`} /></label>
+      <p className="text-[11px] text-muted">Kept on this home&apos;s file in the OS.</p>
+      {error && <p className="text-[11.5px] text-accent-dark">{error}</p>}
+      <div className="flex flex-wrap items-center gap-3">
+        <PressButton onClick={() => void save()} disabled={saving || name.trim().length < 2} className="rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page">
+          {saving ? "Saving…" : "Save"}
+        </PressButton>
+        <button type="button" onClick={() => { setOpen(false); setError(null); }} className="text-[11.5px] text-muted underline">Cancel</button>
+      </div>
+    </form>
+  );
+}
+
 function PartyCard({ p, plain = false, role }: { p: Party; plain?: boolean; role?: string }) {
   const body = (
     <ContactBlock

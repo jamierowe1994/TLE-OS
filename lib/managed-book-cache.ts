@@ -3,6 +3,7 @@ import { hasDb, q } from "./db";
 import { fetchManagedBook } from "./managed-book";
 import { archiveBook } from "./tenancy-archive";
 import { withNotice } from "./portfolio-notice";
+import { withRecordLandlords } from "./record-landlords";
 import { certificatesFor, type ComplianceBook } from "./rex-compliance";
 import type { ManagedBook } from "./portfolio-types";
 
@@ -155,7 +156,9 @@ export async function managedBookFor(rexUserId: string | null): Promise<{
   stale: boolean;
 }> {
   const raw = await rawBookFor(rexUserId);
-  return { ...raw, book: await withNotice(raw.book, rexUserId) };
+  /* And the landlord from the OS record where REX names nobody
+     (lib/record-landlords, 15 Oct 2026), laid on the same way. */
+  return { ...raw, book: await withRecordLandlords(await withNotice(raw.book, rexUserId)) };
 }
 
 async function rawBookFor(rexUserId: string | null): Promise<{

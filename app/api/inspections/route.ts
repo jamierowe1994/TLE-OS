@@ -11,7 +11,7 @@ import { getComplianceBook } from "@/lib/compliance-cache";
 import { isOurs } from "@/lib/compliance";
 import { lastClosedByHome, lastImport, openTasks } from "@/lib/rexpm-tasks";
 import {
-  createInspection, dueFromTasks, dueList, inspectionRules, listInspections, openFindings, summarise,
+  createInspection, dueFromTasks, dueList, inspectionRules, listInspections, logEvent, moveInspection, openFindings, summarise,
   KIND_IDS, type Kind, type NewInspection,
 } from "@/lib/inspections";
 
@@ -145,12 +145,34 @@ export async function POST(req: NextRequest) {
   const { actor, subject } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
-  const b = (await req.json().catch(() => null)) as Partial<NewInspection> | null;
+  const b = (await req.json().catch(() => null)) as (Partial<NewInspection> & { doneOn?: string }) | null;
   if (!b || !b.propertyName?.trim()) return NextResponse.json({ ok: false, error: "An inspection needs a property." }, { status: 400 });
   const kind = (KIND_IDS as readonly string[]).includes(b.kind ?? "") ? (b.kind as Kind) : "interim";
+  /* Already done (Rhiannon Dodge, 12 Oct 2026): a due row the agent has
+     already visited - done in the old system after its tasks were copied
+     across, which the board cannot see. The day is checked before anything
+     is written, so a bad date raises nothing. */
+  let doneAt: string | null = null;
+  if (b.doneOn != null) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(b.doneOn).trim());
+    const d = m ? new Date(`${m[0]}T12:00:00Z`) : null;
+    if (!d || Number.isNaN(d.getTime())) return NextResponse.json({ ok: false, error: "Pick the day the visit was done." }, { status: 400 });
+    if (d.getTime() > Date.now() + 12 * 3600_000) return NextResponse.json({ ok: false, error: "A visit can't be done on a day that hasn't happened yet." }, { status: 400 });
+    doneAt = d.getTime() > Date.now() ? new Date().toISOString() : d.toISOString();
+  }
   try {
     const by = (subject ?? actor).name || (subject ?? actor).email;
-    const inspection = await createInspection({ ...b, kind, propertyName: b.propertyName, rexpmTaskId: typeof b.rexpmTaskId === "string" ? b.rexpmTaskId : null }, by);
+    const { doneOn: _doneOn, ...fields } = b;
+    let inspection = await createInspection({ ...fields, kind, propertyName: b.propertyName, rexpmTaskId: typeof b.rexpmTaskId === "string" ? b.rexpmTaskId : null }, by);
+    if (doneAt) {
+      /* Visited on that day, then closed: the write-up lives where the visit
+         was made, so nothing is left here asking for one. No emails - neither
+         move sends any. The cadence counts from this day from now on, and a
+         copied-across task it came from leaves the due list. */
+      await moveInspection(inspection.id, { action: "visited", at: doneAt }, by);
+      await logEvent(inspection.id, by, "note", "Recorded as already done: the visit was made and written up before it was booked here.");
+      inspection = await moveInspection(inspection.id, { action: "close" }, by);
+    }
     return NextResponse.json({ ok: true, inspection });
   } catch (e) {
     return NextResponse.json({ ok: false, error: publicError(e, "Could not raise it.") }, { status: 400 });

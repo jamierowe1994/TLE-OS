@@ -66,6 +66,8 @@ const readWhen = (iso: string) => {
   const same = d.toLocaleDateString("en-GB", { timeZone: "Europe/London" }) === new Date().toLocaleDateString("en-GB", { timeZone: "Europe/London" });
   return same ? `at ${time} today` : `on ${d.toLocaleDateString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short" })}`;
 };
+/** The old system's copy is more than two days old, so it may hold visits since done. */
+const staleRead = (iso: string | null | undefined) => !iso || Date.now() - new Date(iso).getTime() > 2 * 24 * 3600_000;
 const stamp = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—");
 const forInput = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 /** The London day of a stored date, as a date box wants it (YYYY-MM-DD). */
@@ -85,7 +87,9 @@ function nextFor(i: Inspection): { text: string; hot: boolean } {
     case "report": return { text: `Visited ${day(i.visitedAt)} · write it up`, hot: false };
     case "send_report": return { text: "Written up · send it to the landlord", hot: false };
     case "actions": return { text: `${i.openActions} thing${i.openActions === 1 ? "" : "s"} to raise`, hot: true };
-    case "closed": return { text: i.status === "cancelled" ? i.cancelledReason || "Cancelled" : `Closed ${day(i.closedAt ?? i.reportSentAt)}`, hot: false };
+    /* The visit's own day first: one marked Already done on the 15th for a
+       visit on the 3rd reads "Visited 3 Oct", the day the cadence counts from. */
+    case "closed": return { text: i.status === "cancelled" ? i.cancelledReason || "Cancelled" : i.visitedAt ? `Visited ${day(i.visitedAt)}` : `Closed ${day(i.closedAt ?? i.reportSentAt)}`, hot: false };
   }
 }
 
@@ -141,7 +145,7 @@ export default function Inspections() {
      the sheet's own "Change due date", so the timeline says who moved it,
      from what, to what and why. A raised visit is never recomputed or
      re-imported, so the date stays where it was put. */
-  async function raise(d: DueVisit, newDue?: { day: string; note: string }): Promise<boolean> {
+  async function raise(d: DueVisit, newDue?: { day: string; note: string }, doneOn?: string): Promise<boolean> {
     const r = await fetch("/api/inspections", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -149,9 +153,17 @@ export default function Inspections() {
         kind: d.kind, propertyName: d.propertyName, locality: d.locality, propertyId: d.propertyId, listingId: d.listingId,
         landlord: d.landlord, landlordEmail: d.landlordEmail, tenant: d.tenant, tenantEmail: d.tenantEmail, tenantPhone: d.tenantPhone,
         tenancyStart: d.tenancyStart, dueAt: d.dueAt, osPropertyId: d.osPropertyId ?? null, rexpmTaskId: d.taskId ?? null,
+        ...(doneOn ? { doneOn } : {}),
       }),
     }).then((x) => x.json()).catch(() => null);
     if (!r?.ok) { setError(r?.error ?? "Could not raise it."); return false; }
+    /* Already done: it is recorded and closed, so it leaves Due and sits
+       under Done; the list stays where the agent is working through it. */
+    if (doneOn) {
+      setError(null);
+      load();
+      return true;
+    }
     if (newDue) {
       const e = await fetch(`/api/inspections/${r.inspection.id}`, {
         method: "PATCH",
@@ -230,9 +242,20 @@ export default function Inspections() {
         {data?.source === "rex-pm" ? (
           /* The due list is the old system's open tasks for now (1 Oct 2026).
              Agent copy never names the system - see lib/rexpm-tasks. */
-          <span className="ml-auto text-[11px] text-muted">
-            Copied across from the old system{data.readAt ? ` ${readWhen(data.readAt)}` : ""}. Visits booked here take over from it.
-          </span>
+          staleRead(data.readAt) ? (
+            /* Rhiannon Dodge, 12 Oct 2026: "a lot of my properties' inspections
+               are overdue, which they aren't". The copy is only as fresh as
+               its last read, and a visit done in the old system after it
+               still shows as owed here - so past two days the line says so
+               plainly, and says what to do about a row that is wrong. */
+            <span className="w-full rounded-xl bg-accent-soft/40 px-3 py-2 text-[12px] text-ink sm:ml-auto sm:w-auto sm:max-w-[520px]">
+              Copied across from the old system {data.readAt ? readWhen(data.readAt) : ""}. A visit done there since then still shows as due here: press <b className="font-semibold">Already done</b> on it and give the day.
+            </span>
+          ) : (
+            <span className="ml-auto text-[11px] text-muted">
+              Copied across from the old system{data.readAt ? ` ${readWhen(data.readAt)}` : ""}. Visits booked here take over from it.
+            </span>
+          )
         ) : data?.rules ? (
           <span className="ml-auto text-[11px] text-muted">
             First visit {data.rules.firstAfterMonths} months in, then every {data.rules.thenEveryMonths}. HMOs every {data.rules.hmoEveryMonths}.
@@ -253,7 +276,7 @@ export default function Inspections() {
           <section className="mt-4 rounded-[22px] border border-line/50 bg-white p-5">
             <ul className="divide-y divide-line/50">
               {due.map((d) => (
-                <DueRow key={d.key} d={d} onBook={() => void raise(d)} onMoveDue={(day, note) => raise(d, { day, note })} />
+                <DueRow key={d.key} d={d} onBook={() => void raise(d)} onMoveDue={(day, note) => raise(d, { day, note })} onDone={(day) => raise(d, undefined, day)} />
               ))}
             </ul>
           </section>
@@ -268,8 +291,9 @@ export default function Inspections() {
 }
 
 /** One home on the Due list: book it, or change when it is due. */
-function DueRow({ d, onBook, onMoveDue }: { d: DueVisit; onBook: () => void; onMoveDue: (day: string, note: string) => Promise<boolean> }) {
+function DueRow({ d, onBook, onMoveDue, onDone }: { d: DueVisit; onBook: () => void; onMoveDue: (day: string, note: string) => Promise<boolean>; onDone: (day: string) => Promise<boolean> }) {
   const [editing, setEditing] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
   return (
                 <li className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 py-3 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
                   <span className="min-w-0">
@@ -282,16 +306,26 @@ function DueRow({ d, onBook, onMoveDue }: { d: DueVisit; onBook: () => void; onM
                   <span className={`col-start-1 text-[12px] md:col-start-auto ${d.daysAway < 0 ? "font-semibold text-accent-dark" : "text-muted"}`}>
                     {d.daysAway < 0 ? `${Math.abs(d.daysAway)} day${d.daysAway === -1 ? "" : "s"} over` : d.daysAway === 0 ? "Due today" : `Due ${day(d.dueAt)}`} · {d.why}
                     {d.managedBy ? <span className="block text-[10.5px] font-normal text-muted">With {d.managedBy}</span> : null}
-                    {!editing && (
-                      <button type="button" onClick={() => setEditing(true)} className="block text-[11px] font-normal text-muted underline">
-                        Change due date
-                      </button>
+                    {!editing && !doneOpen && (
+                      <span className="flex flex-wrap gap-x-3">
+                        <button type="button" onClick={() => setEditing(true)} className="text-[11px] font-normal text-muted underline">
+                          Change due date
+                        </button>
+                        <button type="button" onClick={() => setDoneOpen(true)} className="text-[11px] font-normal text-muted underline">
+                          Already done
+                        </button>
+                      </span>
                     )}
                   </span>
                   {/* Raises it and opens it on the booking form (3 Oct 2026). */}
                   <PressButton onClick={onBook} className="rounded-full bg-ink px-4 py-2 text-[12px] font-semibold text-page">
                     Book it
                   </PressButton>
+                  {doneOpen && (
+                    <div className="col-span-full">
+                      <AlreadyDoneForm onSave={onDone} onDone={() => setDoneOpen(false)} />
+                    </div>
+                  )}
                   {editing && (
                     <div className="col-span-full">
                       <DueDateForm
@@ -348,6 +382,52 @@ function DueDateForm({ current, hint, onSave, onDone }: { current: string | null
           className="rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page"
         >
           {saving ? "Saving…" : "Save"}
+        </PressButton>
+        <button type="button" onClick={onDone} className="text-[11.5px] text-muted underline">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A due row that was already visited (12 Oct 2026) - most often done in the
+ * old system after its tasks were copied across. The day it was done, never
+ * one still to come; saving records it visited and closed, so it leaves the
+ * Due list for Done and the next one is counted from that day.
+ */
+function AlreadyDoneForm({ onSave, onDone }: { onSave: (day: string) => Promise<boolean>; onDone: () => void }) {
+  const today = todayInput();
+  const [value, setValue] = useState(today);
+  const [saving, setSaving] = useState(false);
+  const future = Boolean(value) && value > today;
+  return (
+    <div className="mt-2 rounded-xl bg-accent-soft/30 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-2 text-[12px] text-muted">
+          Visited on
+          <input
+            type="date"
+            value={value}
+            max={today}
+            onChange={(e) => setValue(e.target.value)}
+            className="rounded-xl border border-line/80 bg-page px-3 py-1.5 text-[13px] text-ink"
+          />
+        </label>
+      </div>
+      <p className="mt-1.5 text-[11px] text-muted">It moves to Done with that day, and the next visit is counted from it. Nobody is emailed.</p>
+      {future && <p className="mt-1 text-[11px] text-accent-dark">A visit can&apos;t be done on a day that hasn&apos;t happened yet.</p>}
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        <PressButton
+          disabled={saving || !value || future}
+          onClick={async () => {
+            setSaving(true);
+            const ok = await onSave(value);
+            setSaving(false);
+            if (ok) onDone();
+          }}
+          className="rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page"
+        >
+          {saving ? "Saving…" : "Mark as done"}
         </PressButton>
         <button type="button" onClick={onDone} className="text-[11.5px] text-muted underline">Cancel</button>
       </div>

@@ -227,6 +227,12 @@ export async function pushContactUpdateToRex(
     return { ok: false, reason: "refused", detail: "This person is not in REX yet, so there is nothing to update." };
   }
 
+  /* REX refuses a person saved with no name ("A person cannot be saved
+     without a name", auto ticket 4c7e51e3, 15 Oct 2026). Nothing is sent. */
+  if (!(contact.nameFirst || contact.name || contact.nameLast || "").trim()) {
+    return { ok: false, reason: "refused", detail: "This person has no name on their record, so the change can't go across. Add their name first." };
+  }
+
   const blocked = await pushBlockedBecause();
   if (blocked) return { ok: false, ...blocked };
   if (rexWritesLocked("Contacts", "update")) {

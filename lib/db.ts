@@ -2602,6 +2602,10 @@ CREATE INDEX IF NOT EXISTS os_properties_rex ON os_properties (rex_property_id);
 -- 2026): the compliance book falls back to these where REX CRM names nobody.
 -- payprop_no is the six-digit number on her sheet, kept for the next pass.
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS landlord_name TEXT;
+-- The landlord's email and mobile on the OS record (15 Oct 2026, Lorna Fieldson,
+-- 44 Pilots Way): typed on the home's page where REX names no owner. OS only.
+ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS landlord_email TEXT;
+ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS landlord_phone TEXT;
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS agent_name TEXT;
 ALTER TABLE os_properties ADD COLUMN IF NOT EXISTS payprop_no TEXT;
 -- The tenants in residence, from the same sheet (24 Sep 2026), where REX CRM holds none.
