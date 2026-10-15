@@ -610,6 +610,10 @@ ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenants_told_booked_at  TIM
 -- 10 Oct 2026: optional, a tick on Plan a certificate). Its own column, off
 -- by default, so no planned job raised before it starts emailing tenants.
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenants_access_notice   BOOLEAN NOT NULL DEFAULT false;
+-- Steps the agent skipped for now (Howard, 15 Oct 2026): only the ones
+-- lib/works-steps SKIPPABLE allows, so the job moves on without a landlord
+-- told or a tenant happy being written down that never happened.
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS skipped_steps           JSONB NOT NULL DEFAULT '[]'::jsonb;
 /* The tenant's number on its own (James, 7 Sep 2026: "name, then number
    after"). The tenant column was one string with both in it, which every
    email then had to pick apart with a regex. */
