@@ -1,5 +1,5 @@
 import { DOC_KINDS, landlordProperties, type DocKind, type LandlordAccount } from "@/lib/landlord-account";
-import { loadLandlordHome, requiredDocsFor } from "@/lib/landlord-home-view";
+import { bankRow, loadLandlordHome, onFileSub, requiredDocsFor } from "@/lib/landlord-home-view";
 import { DECK_KINDS } from "@/lib/present";
 import { CHECKING_LABEL } from "@/lib/cert-hold";
 import { hasDb, q } from "@/lib/db";
@@ -61,7 +61,7 @@ const kindLabel = (kind: DocKind) => DOC_KINDS.find((k) => k.id === kind)?.label
  *  same one as Home - it used to show the first open appraisal whatever was
  *  picked (19 Sep 2026). */
 export async function loadLandlordDocuments(me: LandlordAccount, pick?: string | null): Promise<DocsView> {
-  const [{ open, compliance, docs }, managed] = await Promise.all([loadLandlordHome(me, pick), landlordProperties(me)]);
+  const [{ open, compliance, docs, onFile }, managed] = await Promise.all([loadLandlordHome(me, pick), landlordProperties(me)]);
   const j = open[0] ?? null;
   const mine = j ? docs.filter((d) => !d.appraisalId || d.appraisalId === j.appraisal.id) : docs;
   const heldIds = mine.filter((d) => LANDLORD_HELD.has(d.kind)).map((d) => d.id);
@@ -80,7 +80,7 @@ export async function loadLandlordDocuments(me: LandlordAccount, pick?: string |
      a landlord whose properties are all managed has nothing to send. */
   const need = j ? await requiredDocsFor(j.appraisal.id) : [];
   const needed: DocRow[] = j
-    ? need.filter((r) => !mine.some((d) => d.kind === r.kind) && !(r.kind === "epc" && epcOnRegister)).map((r) => ({
+    ? need.filter((r) => !mine.some((d) => d.kind === r.kind) && !(r.kind === "epc" && epcOnRegister) && !(r.kind === "id" && onFile.id)).map((r) => ({
         title: r.title,
         sub: r.missing,
         state: "missing" as const,
@@ -103,6 +103,10 @@ export async function loadLandlordDocuments(me: LandlordAccount, pick?: string |
     ...(j && epcOnRegister && !mine.some((d) => d.kind === "epc")
       ? [{ title: "Energy Performance Certificate (EPC)", sub: `On the national register  •  rating ${epcOnRegister}`, state: "uploaded" as const, href: null }]
       : []),
+    /* Their ID from another of their properties, and PayProp's bank account
+       for them (lib/landlord-home-view landlordOnFile): held, so not asked. */
+    ...(j && onFile.id && !mine.some((d) => d.kind === "id") ? [{ title: "Photo ID", sub: onFileSub(onFile.id), state: "uploaded" as const, href: null }] : []),
+    ...(j && bankRow(onFile.bank) ? [bankRow(onFile.bank)!] : []),
   ];
 
   const fromUs: DocRow[] = [];

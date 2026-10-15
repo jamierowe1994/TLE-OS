@@ -1542,6 +1542,7 @@ function ListingDrawerBody({
                     role="landlord"
                     person={{ name: landlord.landlord.name, email: landlord.landlord.email, phone: landlord.landlord.phone }}
                     personRef={landlord.landlord.contactId && landlord.landlord.from !== "record" ? `rex:${landlord.landlord.contactId}` : null}
+                    home={{ propertyAddress: [listing.name, listing.locality].filter(Boolean).join(", ") }}
                   />
                   {landlord.landlord.from === "record" && (
                     <p className="mt-2 text-[11.5px] leading-relaxed text-muted">From the managed property record. They are not on this listing yet, so nothing is sent to them from here.</p>

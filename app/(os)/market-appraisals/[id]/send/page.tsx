@@ -47,6 +47,7 @@ export default async function SendTermsPage({ params }: { params: Promise<{ id: 
     id: ma.id,
     landlord: ma.landlord,
     landlordEmail: ma.landlordEmail ?? null,
+    landlordRef: ma.landlordRef ?? null,
     address: ma.address,
     postcode: ma.postcode ?? null,
     agent: ma.agent ?? null,

@@ -47,11 +47,12 @@ export const LANDLORD_SIGNING: SigningStep[] = [
 ];
 
 /**
- * The agent's five. They sign first, and they fill the two boxes the OS
- * cannot know: the landlord's own address, and anything agreed at the table.
+ * The agent's five. They sign first, and they check the two boxes that are
+ * theirs to vouch for: the landlord's own address (filled from the landlord's
+ * record since 15 Oct 2026, lib/landlord-home), and anything agreed at the table.
  */
 export const AGENT_SIGNING: SigningStep[] = [
-  { field: "Landlord Address", label: "Their home address", sub: "Not the property - the address the landlord lives at" },
+  { field: "Landlord Address", label: "Their home address", sub: "Filled in from their record - check it is where they live" },
   { field: "Additional Fees Agreed", label: "Anything else agreed", sub: "Leave as None if nothing was" },
   { field: "Agent Signature", label: "Your signature" },
   { field: "Agent Signed Name", label: "Your name" },

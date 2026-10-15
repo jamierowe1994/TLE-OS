@@ -7,6 +7,8 @@ import { DeckStyleCtx, themeVars, INK } from "@/components/present-kit";
 import SignModal from "@/components/landlord/SignModal";
 import { AGENT_SIGNING } from "@/lib/signing-steps";
 import { asStyle, slidesFor, type PresentDeck } from "@/lib/present";
+import AddressField from "@/components/AddressField";
+import { useLandlordHome } from "@/components/LandlordHomeAddress";
 
 /**
  * PREPARE, CHECK, SIGN, SEND.
@@ -55,6 +57,8 @@ export interface SendSubject {
   id: string;
   landlord: string;
   landlordEmail: string | null;
+  /** "os:<id>" | "rex:<id>": their record, for their home address. */
+  landlordRef?: string | null;
   address: string;
   postcode: string | null;
   agent: string | null;
@@ -83,6 +87,13 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
   const [api, setApi] = useState<{ go: (dir: 1 | -1) => void } | null>(null);
   const stage = useRef<HTMLDivElement | null>(null);
   const [room, setRoom] = useState(0);
+  /* Their own home address: the contract needs it (Richard Callow, 15 Oct
+     2026). Read from their record; asked for here only when there is none. */
+  const letAddress = [ma.address, ma.postcode && !ma.address.includes(ma.postcode) ? ma.postcode : null].filter(Boolean).join(", ");
+  const llHome = useLandlordHome({ email: ma.landlordEmail, personRef: ma.landlordRef ?? null, name: ma.landlord, propertyAddress: letAddress });
+  const homeAddress = llHome.home?.address ?? "";
+  const [homeDraft, setHomeDraft] = useState("");
+  const [editingHome, setEditingHome] = useState(false);
   const [tall, setTall] = useState(0);
 
   const pull = useCallback(async () => {
@@ -185,7 +196,9 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
   const open = page.at >= 0;
 
   /* What is still missing, said together - none of it has to come first. */
+  const needsHome = llHome.state !== "loading" && !homeAddress;
   const missing = [
+    needsHome && "add their home address",
     !read && "open the presentation",
     !checked && "tick the details",
     !signed && "sign your half",
@@ -273,7 +286,9 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
 
       {/* ── the four things: reading and checking on the left, signing and
             sending on the right ── */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* minmax(0,1fr) on a phone: a bare grid track sized itself to the
+          longest email on the file and pushed the steps off the screen. */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2">
         <ol className="space-y-6 rounded-[20px] border border-line/60 bg-white p-6">
           {step(1, read, "Look through it", <p className="text-[12px] leading-relaxed text-muted">{read ? "Opened. Look through as much as you like." : "Open the booklet above. You don't have to read to the end."}</p>)}
 
@@ -286,12 +301,85 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
                 {details.map(([k, v]) => (
                   <div key={k} className="flex gap-3 text-[12px]">
                     <dt className="w-[128px] shrink-0 text-muted">{k}</dt>
-                    <dd className={v ? "font-medium" : "text-accent-dark"}>{v ?? "Not on the file"}</dd>
+                    <dd className={`min-w-0 break-words ${v ? "font-medium" : "text-accent-dark"}`}>{v ?? "Not on the file"}</dd>
                   </div>
                 ))}
+                <div className="flex gap-3 text-[12px]">
+                  <dt className="w-[128px] shrink-0 text-muted">Their home address</dt>
+                  <dd className="min-w-0 flex-1">
+                    {llHome.state === "loading" ? (
+                      <span className="flex items-center gap-1.5 text-muted">
+                        <span aria-hidden className="inline-block h-2.5 w-2.5 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+                        Looking it up…
+                      </span>
+                    ) : homeAddress && !editingHome ? (
+                      <span>
+                        <span className="font-medium">{homeAddress}</span>
+                        <span className="text-muted">
+                          {llHome.home?.sameAsProperty ? "  •  they live at the let" : !llHome.home?.saved ? `  •  ${llHome.home?.source === "payprop" ? "from PayProp" : "from their contact record"}` : ""}
+                        </span>
+                        {!signed && (
+                          <button type="button" onClick={() => { setHomeDraft(homeAddress); setEditingHome(true); }} className="ml-2 text-[11.5px] font-semibold text-accent-dark hover:underline">
+                            Change
+                          </button>
+                        )}
+                      </span>
+                    ) : !homeAddress ? (
+                      <span className="text-accent-dark">Not on their record yet</span>
+                    ) : null}
+                  </dd>
+                </div>
               </dl>
+              {/* No address on their record: asked for here, saved to the
+                  record, and then it is on every contract and every screen. */}
+              {llHome.state !== "loading" && (!homeAddress || editingHome) && (
+                <div className="mb-3 rounded-xl border border-accent-dark/25 bg-accent-soft/30 p-3">
+                  {!homeAddress && (
+                    <p className="mb-2 text-[12px] leading-relaxed">
+                      The terms are a contract, so they need the address {ma.landlord} lives at.
+                    </p>
+                  )}
+                  <AddressField value={homeDraft} onChange={setHomeDraft} />
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={homeDraft.trim().length < 6 || llHome.note?.tone === "busy" || !llHome.canSave}
+                      onClick={async () => { if (await llHome.save(homeDraft)) setEditingHome(false); }}
+                      className="rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page disabled:opacity-40"
+                    >
+                      Save their address
+                    </button>
+                    <button
+                      type="button"
+                      disabled={llHome.note?.tone === "busy" || !llHome.canSave}
+                      onClick={async () => { if (await llHome.save(letAddress, true)) setEditingHome(false); }}
+                      className="rounded-full border border-line/80 bg-white px-4 py-1.5 text-[12px] font-semibold transition-colors hover:border-ink/40 disabled:opacity-40"
+                    >
+                      Same as the let property
+                    </button>
+                    {editingHome && (
+                      <button type="button" onClick={() => setEditingHome(false)} className="text-[11.5px] text-muted underline">Cancel</button>
+                    )}
+                  </div>
+                  {!llHome.canSave && <p className="mt-2 text-[11.5px] text-accent-dark">Add their email to the file first, so the address has somebody to belong to.</p>}
+                </div>
+              )}
+              {llHome.note && llHome.note.tone !== "busy" && (
+                <p className={`mb-2 text-[11.5px] ${llHome.note.tone === "bad" ? "text-accent-dark" : "text-muted"}`}>{llHome.note.text}</p>
+              )}
               <label className="flex cursor-pointer items-start gap-2.5 text-[12px] leading-relaxed">
-                <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} className="mt-0.5" />
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={needsHome}
+                  onChange={(e) => {
+                    setChecked(e.target.checked);
+                    /* Ticked as right: an address offered from PayProp or
+                       REX is kept on their record from here. */
+                    if (e.target.checked && llHome.home && !llHome.home.saved) void llHome.save(llHome.home.address, llHome.home.sameAsProperty, llHome.home.source === "payprop" || llHome.home.source === "rex" ? llHome.home.source : undefined);
+                  }}
+                  className="mt-0.5"
+                />
                 <span>These are right, and the dates are right.</span>
               </label>
             </div>
@@ -331,13 +419,15 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
                      openSigning() reopened the contract already signed at the
                      old figures, and Send then refused it - no way forward. */
                   onClick={() => void openSigning(Boolean(staleSignature))}
-                  disabled={busy === "sign"}
+                  disabled={busy === "sign" || needsHome || llHome.state === "loading"}
                   className="rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white disabled:opacity-60"
                 >
                   {busy === "sign" ? "Drawing it up…" : staleSignature ? "Draw it up with the new figures" : agent ? "Open the contract" : "Draw up the contract"}
                 </button>
                 <p className="mt-2 text-[11.5px] leading-relaxed text-muted">
-                  Your name, the date and your signature. The landlord cannot open theirs until this is done.
+                  {needsHome
+                    ? "Add their home address in step 2 first - it goes on the contract."
+                    : "Your name, the date and your signature. The landlord cannot open theirs until this is done."}
                 </p>
               </div>
             )

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import { CopyButton, InlineField } from "@/components/Bits";
 import { WhatsAppButton } from "@/components/WhatsAppQr";
+import LandlordHomeAddress from "@/components/LandlordHomeAddress";
 
 /**
  * ONE WAY TO SHOW A PERSON (James, 12 Oct 2026).
@@ -40,6 +41,7 @@ export default function ContactBlock({
   className = "",
   nameClassName = "text-[14px] font-semibold",
   call = role !== "landlord",
+  home,
 }: {
   person: Person;
   personRef: string | null;
@@ -56,6 +58,9 @@ export default function ContactBlock({
   /** The Call button. Off for a landlord (James, 13 Oct 2026: "that's asking
    *  for trouble, accidentally calling a landlord") - WhatsApp and copy stay. */
   call?: boolean;
+  /** A landlord's own home address under the email (Rhiannon, 15 Oct 2026):
+   *  pass the let's address for "Same as the let property", or {} without one. */
+  home?: { propertyAddress?: string | null };
 }) {
   const [p, setP] = useState<Person>(person);
   const [note, setNote] = useState<{ tone: "ok" | "bad" | "busy"; text: string } | null>(null);
@@ -139,6 +144,9 @@ export default function ContactBlock({
             Email
           </a>
         ))}
+        {home && (
+          <LandlordHomeAddress email={p.email} personRef={personRef} name={p.name} propertyAddress={home.propertyAddress ?? null} />
+        )}
       </div>
       {note && (
         <p className={`mt-1.5 text-[11.5px] leading-snug ${note.tone === "bad" ? "text-accent-dark" : "text-muted"}`}>

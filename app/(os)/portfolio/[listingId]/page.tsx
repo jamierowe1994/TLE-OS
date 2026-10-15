@@ -803,7 +803,7 @@ export default function PropertyPage() {
                 <p className={`${eyebrow} mb-3`}>Landlord</p>
                 {landlord ? (
                   <div className="text-[13px]">
-                    <PartyCard p={landlord} plain role="landlord" />
+                    <PartyCard p={landlord} plain role="landlord" home={{ propertyAddress: [title, p.locality, p.postcode].filter(Boolean).join(", ") }} />
                     {landlord.email && landlord.email.includes("@") && (
                       <LandlordJobEmails key={landlord.email} compact landlord={landlord.email} name={landlord.name} className="mt-3 border-t border-line/40 pt-3" />
                     )}
@@ -1151,10 +1151,11 @@ function RecordLandlord({ propertyId, current, onSaved }: { propertyId: string; 
   );
 }
 
-function PartyCard({ p, plain = false, role }: { p: Party; plain?: boolean; role?: string }) {
+function PartyCard({ p, plain = false, role, home }: { p: Party; plain?: boolean; role?: string; home?: { propertyAddress?: string | null } }) {
   const body = (
     <ContactBlock
       role={role}
+      home={home}
       person={{ name: p.name, email: p.email, phone: p.phone }}
       personRef={/^\d+$/.test(String(p.contactId ?? "")) ? `rex:${p.contactId}` : null}
     />

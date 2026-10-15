@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { directListingLandlordAddress } from "@/lib/contract-send";
+import { findHomeAddress } from "@/lib/landlord-home";
 import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
@@ -118,6 +119,28 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  /* THE LANDLORD'S OWN ADDRESS (Richard Callow, 15 Oct 2026: "Wont allow me
+     to send lettings terms of business without adding landlord home address").
+     The template makes the box required, so a blank one stopped the agent
+     inside the signing form with nothing to copy from. Now it comes from the
+     landlord's record (lib/landlord-home) - saved, or what PayProp or REX
+     already hold - and Prepare and send asks for it, with "Same as the let
+     property", before this is pressed. A contract is not drawn up without
+     one: it is a contract, and it needs an address for the landlord. */
+  const home = await findHomeAddress({
+    email,
+    ref: ma.landlordRef ?? null,
+    name: ma.landlord,
+    propertyAddress: [ma.address, ma.postcode].filter(Boolean).join(", "),
+  }).catch(() => null);
+  const landlordAddress = (home?.saved ? home.address : null) ?? (await directListingLandlordAddress(ma.id).catch(() => null)) ?? home?.address ?? "";
+  if (!landlordAddress.trim()) {
+    return NextResponse.json(
+      { error: `Add ${ma.landlord}'s home address first. The terms are a contract, so they need the address the landlord lives at.`, needsHomeAddress: true },
+      { status: 409 }
+    );
+  }
+
   try {
     const fees = feeWording(service?.label ?? ma.serviceLevel, ma.feePct ?? null, ma.setupFee ?? null);
     const session = await openTermsSigning(tpl, {
@@ -128,12 +151,9 @@ export async function POST(req: NextRequest) {
       agentEmail: me.email,
       landlordName: ma.landlord,
       landlordEmail: email,
-      /* The landlord's own address is not held separately from the property's
-         today. Sending the property address for both is wrong on a contract,
-         so the landlord address is left BLANK rather than guessed — an empty
-         box an agent can fill beats a confident wrong one. */
-      /* New listing asks for it (12 Oct 2026), so a file made there carries it. */
-      landlordAddress: (await directListingLandlordAddress(ma.id).catch(() => null)) ?? "",
+      /* Their own address, never the let's unless the agent said they live
+         there ("Same as the let property") - see above. */
+      landlordAddress,
       contactNumber: (ma.landlordMobile ?? "").trim(),
       propertyAddress: [ma.address, ma.postcode].filter(Boolean).join(", "),
       serviceLevel: service?.label ?? "",
