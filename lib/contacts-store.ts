@@ -165,8 +165,13 @@ export const ownerNameSql = (c: string) => `CASE WHEN ${c}.created_by = '${TENAN
   ELSE (SELECT NULLIF(u.name, '') FROM os_users u WHERE lower(u.email) = lower(${c}.created_by) LIMIT 1) END`;
 
 /** Is this person on `$n`'s own board? `$n` is a lower-case email. */
+/* Passed on in the OS ("Not my lead", lib/lead-owner): a person handed to
+   somebody else, or back to the office, is no longer theirs; one handed to
+   them is. The lead id of a hand-added person is 'os-' + their id. */
 export const ownedBySql = (c: string, param: string) =>
-  `(lower(${c}.created_by) = ${param} OR (${c}.created_by = '${TENANT_AREA}' AND ${param} = ANY(${tenantAreaAgentsSql(c)})))`;
+  `(((lower(${c}.created_by) = ${param} OR (${c}.created_by = '${TENANT_AREA}' AND ${param} = ANY(${tenantAreaAgentsSql(c)})))
+      AND NOT EXISTS (SELECT 1 FROM os_lead_owners o WHERE o.lead_id = 'os-' || ${c}.id))
+    OR ('os-' || ${c}.id) IN (SELECT o.lead_id FROM os_lead_owners o WHERE NOT o.pool AND lower(o.to_email) = ${param}))`;
 
 const COLUMNS = `id, kind, name, name_first, name_last, email, mobile, address, postcode,
   source, enquiry, notes, created_by, created_at::text AS created_at,

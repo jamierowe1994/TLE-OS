@@ -5,6 +5,7 @@ import { hasDb, q } from "@/lib/db";
 import { scopeForWho } from "@/lib/scope";
 import { contactIdOf, isOsContactLead } from "@/lib/contact-leads";
 import { ownedBySql } from "@/lib/contacts-store";
+import { heldBy, ownerOf } from "@/lib/lead-owner";
 
 /**
  * May this person open this lead?
@@ -48,10 +49,17 @@ export async function leadAccess(
     return no("We can't tell which REX user you are, so we can't open leads for you. Ask James to link your account.");
   }
 
+  /* Passed on in the OS ("Not my lead", lib/lead-owner): the holder opens
+     it and nobody else does - not the agent who passed it on, and not
+     anybody while it is back with the office. */
+  const me = (who.viewingAs ? who.subject?.email : who.actor.email)?.trim().toLowerCase() ?? "";
+  const moved = await ownerOf(id).catch(() => undefined);
+  if (moved === undefined) return no("We couldn't check that lead just now. Try again in a minute.", 503);
+  if (moved) return heldBy(moved, { rexUserId: scope.rexUserId, email: me }) ? allowed : no("That lead isn't in your book.");
+
   if (isOsContactLead(id)) {
     /* Theirs when they typed it in, or when it is a tenant-area person who
        asked about one of their homes (lib/contacts-store ownedBySql). */
-    const me = (who.viewingAs ? who.subject?.email : who.actor.email)?.trim().toLowerCase() ?? "";
     if (!me) return no("That lead isn't in your book.");
     const rows = await q<{ id: string }>(
       `SELECT c.id FROM os_contacts c WHERE c.id = $1 AND ${ownedBySql("c", "$2")}`,

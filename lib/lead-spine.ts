@@ -15,7 +15,9 @@
 /** What an agent can log against a lead. */
 import { ukDaysFromToday } from "@/lib/london-clock";
 
-export type TouchKind = "call" | "text" | "whatsapp" | "email" | "visit" | "note" | "nurture" | "rejoin" | "lost";
+/* "moved": passed to another agent or back to the office (lib/lead-owner).
+   Written by the server only; the body is the whole sentence. */
+export type TouchKind = "call" | "text" | "whatsapp" | "email" | "visit" | "note" | "nurture" | "rejoin" | "lost" | "moved";
 
 /** How a contact attempt went. Only the contact kinds carry one. */
 export type TouchOutcome = "spoke" | "no_answer" | "voicemail" | "replied" | "sent";
@@ -276,6 +278,8 @@ export function touchSentence(t: LeadTouch): string {
       return "Back on the spine";
     case "lost":
       return `Marked as lost${t.body ? ` - ${t.body}` : ""}`;
+    case "moved":
+      return t.body || "Passed on";
   }
 }
 
@@ -290,6 +294,7 @@ export function touchIcon(t: LeadTouch): string {
     case "nurture": return "clock";
     case "rejoin": return "target";
     case "lost": return "cross";
+    case "moved": return "user";
   }
 }
 

@@ -140,6 +140,9 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       "Click a lead to open its drawer, then step through the record with Previous and Next.",
       "In the drawer, the single next-action button does that step's work — booking a viewing, booking the appraisal, sending the email, recording the offer.",
       "On a landlord, the last step is Book the appraisal. Pick a day and a time and it creates the appraisal and takes you to its file. Booking the same landlord again moves the appointment rather than making a second one.",
+      "A lead given to the wrong agent: press Not my lead in the drawer (beside Mark as lost) to pass it to the right agent, picked from a list of every agent with the towns their work is in, or Back to the office, where owners and the office see it under Not assigned and give it out. Owners and the office see the same button as Reassign, on any lead. The new agent gets it in their bell and the move goes on the lead's activity. REX still shows the old agent: the move is kept in the OS.",
+      "Guarantors: a tenant lead has a Guarantors box inside The tenant card. Press Add a guarantor for the guarantor's name, email, phone, how they know the applicant, their address, and which applicant they are for. One applicant can have several. They follow the applicant by email onto the let in Applications and the home in Portfolio. Kept in the OS only, not sent to Propoly.",
+      "Translate: a customer's message or enquiry that is not in English has a Translate link under it, which shows it in English and names the language. When writing an email, Translate my reply puts the agent's English into their language to check and use. Nothing is sent until the agent presses Send.",
     ],
     wiring: "live",
     next: "A landlord lead leaves here at Appraisal booked and continues on Market Appraisals. A tenant lead leaves at Application received and continues on Applications.",
@@ -236,6 +239,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       "Show or hide unsuccessful applications.",
       "Choose your columns.",
       "Click an application for the file and the handover.",
+      "On a let's file, the Guarantors box under the applicants lists each applicant's guarantors - carried over from the tenant lead by their email - and Add a guarantor puts on another.",
     ],
     wiring: "live",
     caveats: [
@@ -343,6 +347,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       "Search the managed book by address, landlord, tenant or agent, and filter it by service level, agent, town or certificates needing a look.",
       "Open a property to see its rent, service, let date, agent, landlord, sitting tenant, photographs and certificates, and open the same record in REX.",
       "Switch to Landlords to see each landlord with their properties and rent roll, and to Map to see the book on a map with the properties needing attention picked out.",
+      "On a home's page, the Tenants box shows the tenants' guarantors, the ones added on their lead or let, matched by the tenant's email.",
     ],
     wiring: "partial",
     caveats: [

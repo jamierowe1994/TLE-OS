@@ -52,8 +52,12 @@ import { EMPTY_CASE, type AppraisalCase } from "@/lib/appraisal";
 import { saveLabel, useCaseState } from "@/lib/case-state";
 import { isStalled, NURTURE_BRANCH, startingStep, TENANT_TRACK, trackFor } from "@/lib/journey";
 import { fetchMe } from "@/lib/me";
+import { can } from "@/lib/roles";
 import { WhatsAppButton } from "@/components/WhatsAppQr";
 import RecordSidePanel, { type NoteRow, type PanelTab } from "@/components/RecordSidePanel";
+import LeadReassign from "@/components/LeadReassign";
+import TranslateText from "@/components/TranslateText";
+import Guarantors from "@/components/Guarantors";
 import type { PreOnBooking } from "@/lib/pre-send-time";
 
 /**
@@ -660,12 +664,14 @@ function LeadDrawerBody({
   // not a picture of software.
   /* Who is looking at this, for the booker's diary and the passport's
      "sent by". Asked once when the drawer opens. */
-  const [me, setMe] = useState<{ name?: string; email?: string } | null>(null);
+  const [me, setMe] = useState<{ name?: string; email?: string; office?: boolean } | null>(null);
   useEffect(() => {
     if (!lead) return;
     let live = true;
     fetchMe()
-      .then((j) => { if (live && j?.user) setMe({ name: j.user.name, email: j.user.email }); })
+      /* office: owners and the whole-business roles, who reassign any lead
+         ("Reassign" rather than "Not my lead", lib/lead-owner worksThePool). */
+      .then((j) => { if (live && j?.user) setMe({ name: j.user.name, email: j.user.email, office: !j.viewingAs && can(j.actor?.role ?? j.role ?? null, "see:everything") }); })
       .catch(() => { /* the drawer works without it */ });
     return () => { live = false; };
   }, [lead]);
@@ -1075,6 +1081,11 @@ function LeadDrawerBody({
      those rows. Nothing here is remembered in component state and lost when
      the drawer closes - which is what "log the attempt" used to do. */
   const [touches, setTouches] = useState<LeadTouch[]>([]);
+  const [reassigning, setReassigning] = useState(false);
+  /* The language they write in, once a Translate press has found it, so the
+     email window can offer the reply in it (lib/translate). */
+  const [theirLanguage, setTheirLanguage] = useState<string | null>(null);
+  useEffect(() => setTheirLanguage(null), [lead?.id]);
   const [spine, setSpine] = useState<Spine | null>(null);
   const [logging, setLogging] = useState<LogMode | null>(null);
   const nextUpRef = useRef<HTMLElement | null>(null);
@@ -1555,7 +1566,9 @@ function LeadDrawerBody({
      rail. */
   const sp = !isTenant ? spine : null;
   /* The newest thing logged against the lead, whatever it was. */
-  const latestTouch = touches.length ? [...touches].sort((x, y) => y.at.localeCompare(x.at))[0] : null;
+  /* A lead passed between agents is not a contact with them (lib/lead-owner). */
+  const contactTouches = touches.filter((t) => t.kind !== "moved");
+  const latestTouch = contactTouches.length ? [...contactTouches].sort((x, y) => y.at.localeCompare(x.at))[0] : null;
   /* The tenant's reading of the same log: tries, whether anybody actually
      spoke to them, and nurture (Howard, 24 Sep 2026). */
   const tc = isTenant ? tenantContact(touches) : null;
@@ -1777,6 +1790,21 @@ function LeadDrawerBody({
       Archive
     </button>
   );
+  /* Not my lead (Dan Richards, 15 Oct 2026): pass it to the right agent or
+     back to the office rather than marking it lost (components/LeadReassign).
+     Owners and the office see it as Reassign, for any lead. */
+  const notMineButton = (
+    <button
+      type="button"
+      data-steve="lead.reassign"
+      onClick={() => { setPanelTab(null); setReassigning(true); }}
+      title={me?.office ? "Give this lead to another agent, or back to the office" : "Pass it to the agent who should have it, or back to the office"}
+      className="inline-flex items-center gap-2 rounded-full px-3 py-2.5 text-[12.5px] font-semibold text-muted transition-colors hover:text-ink"
+    >
+      <DoodleIcon name="user" size={12} />
+      {me?.office ? "Reassign" : "Not my lead"}
+    </button>
+  );
   const lostRow = lostNow ? (
     <div className="mt-4 flex max-w-xl flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/70 bg-white/80 px-4 py-3">
       <p className="text-[12.5px] leading-relaxed">
@@ -1994,6 +2022,20 @@ function LeadDrawerBody({
       {lead.onFileAs
         ? `On file as ${[lead.onFileAs, lead.onFilePhone].filter(Boolean).join(", ")} - the email they used belongs to that record.`
         : `Number on file: ${lead.onFilePhone}. The one above is the number they gave on this enquiry.`}
+    </p>
+  ) : null;
+  /* Passed on in the OS (lib/lead-owner): who sent it here, and why. */
+  const passedEl = lead?.passedOn ? (
+    <p className="mt-1 flex items-center gap-1.5 text-[12px] text-muted">
+      <DoodleIcon name="user" size={11} />
+      <span>
+        {lead.passedOn.pool
+          ? `Back with the office - sent by ${lead.passedOn.byName}`
+          : `Passed to ${lead.passedOn.toName} by ${lead.passedOn.byName}`}
+        {lead.passedOn.fromName && lead.passedOn.fromName !== lead.passedOn.byName ? ` (was ${lead.passedOn.fromName})` : ""}
+        {`, ${whenAgo(lead.passedOn.at)}`}
+        {lead.passedOn.reason ? ` - ${lead.passedOn.reason}` : ""}
+      </span>
     </p>
   ) : null;
   /* Email beside the address, as WhatsApp is beside the number (James, 12 Oct
@@ -2633,7 +2675,7 @@ function LeadDrawerBody({
                           <span className="min-w-0 flex-1">
                             <span className="block text-[12.5px]">
                               {touchSentence(t)}
-                              {t.kind !== "nurture" && t.body ? <span className="text-muted"> — {t.body}</span> : null}
+                              {t.kind !== "nurture" && t.kind !== "moved" && t.body ? <span className="text-muted"> — {t.body}</span> : null}
                             </span>
                             <span className="block text-[10.5px] text-muted">
                               {t.byName} · {whenAgo(t.at)}
@@ -2907,6 +2949,7 @@ function LeadDrawerBody({
                         {receivedIso ? ` · ${whenAgo(receivedIso)}` : ""}
                       </p>
                       {onFileEl}
+                      {passedEl}
                       {/* Their own words - the first thing anyone should read. */}
                       <div className="mt-4 max-w-xl rounded-2xl border border-line/70 p-4">
                         <p className="flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-muted">
@@ -2921,6 +2964,7 @@ function LeadDrawerBody({
                         ) : enqMessage ? (
                           <>
                             <p className="mt-2 line-clamp-5 whitespace-pre-line text-[14px] leading-relaxed">{enqMessage}</p>
+                            <TranslateText text={enqMessage} onLanguage={setTheirLanguage} className="mt-1.5" />
                             {(enqMessage.length > 320 || enqMessage.split("\n").length > 5) && (
                               <button type="button" onClick={() => setEnquiryOpen(true)} className="mt-1.5 text-[12px] font-semibold text-accent-dark hover:underline">
                                 Read more
@@ -2959,6 +3003,7 @@ function LeadDrawerBody({
                           <DoodleIcon name="mail" size={14} />
                           Send properties
                         </PressButton>
+                        {notMineButton}
                         {!lostNow && lostButton}
                         {archiveButton}
                       </div>
@@ -3059,6 +3104,9 @@ function LeadDrawerBody({
                           ))}
                       </dl>
                     )}
+                    {/* Their guarantors (Lorna Fieldson, 15 Oct 2026): kept in the
+                        OS, and on the let and the home once they get there. */}
+                    <Guarantors source={{ lead: lead.id }} className="mt-4 border-t border-line/50 pt-3" />
                   </section>
 
                   {/* The property they asked about. */}
@@ -3226,6 +3274,7 @@ function LeadDrawerBody({
                         {receivedIso ? ` · ${whenAgo(receivedIso)}` : ""}
                       </p>
                       {onFileEl}
+                      {passedEl}
                       <p className="mt-4 max-w-xl text-[13px] leading-relaxed">
                         {enqMessage
                           ? enqMessage.length > 220 ? `${enqMessage.slice(0, 217)}…` : enqMessage
@@ -3235,6 +3284,7 @@ function LeadDrawerBody({
                               ? "Reading their enquiry from REX…"
                               : "Nothing written with the enquiry."}
                       </p>
+                      {enqMessage && <TranslateText text={enqMessage} onLanguage={setTheirLanguage} className="mt-1.5 max-w-xl" />}
                       <div className="mt-5 flex flex-wrap gap-2.5">
                         <button
                           type="button"
@@ -3253,6 +3303,7 @@ function LeadDrawerBody({
                           <DoodleIcon name="clock" size={14} />
                           {nurturing ? "In nurture" : "Send to nurture"}
                         </button>
+                        {notMineButton}
                         {!lostNow && lostButton}
                         {archiveButton}
                       </div>
@@ -3640,6 +3691,7 @@ function LeadDrawerBody({
                 onAddNote={addNoteText}
                 noteSaid={noteRex}
                 activity={activityTab}
+                onLanguage={setTheirLanguage}
               />
             </div>
           )}
@@ -3659,7 +3711,10 @@ function LeadDrawerBody({
               </div>
               <button type="button" onClick={() => setEnquiryOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-full border border-line/80 text-[12px] text-muted hover:text-ink">✕</button>
             </div>
-            <p className="min-h-0 flex-1 overflow-y-auto whitespace-pre-line px-6 py-5 text-[14.5px] leading-relaxed">{enqMessage}</p>
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              <p className="whitespace-pre-line text-[14.5px] leading-relaxed">{enqMessage}</p>
+              <TranslateText text={enqMessage} onLanguage={setTheirLanguage} className="mt-3" />
+            </div>
           </div>
         </div>
       )}
@@ -3778,6 +3833,29 @@ function LeadDrawerBody({
         </div>
       )}
 
+      {reassigning && (
+        <LeadReassign
+          leadId={lead.id}
+          leadName={lead.name}
+          currentAgent={lead.agent}
+          onClose={() => setReassigning(false)}
+          onMoved={({ agent, gone }) => {
+            setReassigning(false);
+            if (gone) {
+              /* Off their board, as Archive does: the page drops it and closes us. */
+              window.dispatchEvent(new CustomEvent("lead-removed", { detail: lead.id }));
+              onClose();
+              return;
+            }
+            window.dispatchEvent(new CustomEvent("lead-reassigned", { detail: { id: lead.id, agent } }));
+            fetch(`/api/leads/${encodeURIComponent(lead.id)}/touches`, { cache: "no-store" })
+              .then((r) => (r.ok ? r.json() : null))
+              .then((j) => { if (j?.ok) takeLog(j); })
+              .catch(() => {});
+          }}
+        />
+      )}
+
       {/* ── Remove: the OS forgets the lead; REX keeps it. ── */}
       {removing && (
         <div className="fixed inset-0 z-[160] flex items-center justify-center p-4">
@@ -3804,6 +3882,7 @@ function LeadDrawerBody({
           placeholder somebody has to remember to replace. */}
       <Compose
         open={composing}
+        language={theirLanguage}
         onClose={() => setComposing(false)}
         /* An email that actually went is a row in the log - the spine's
            "Email sent" tick is that row, not the act of opening the window. */

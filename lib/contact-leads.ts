@@ -119,3 +119,18 @@ export async function contactsAsLeads(createdBy: string | null, limit = 200, vie
   ).catch(() => []);
   return rows.map(toLead);
 }
+
+/** Named hand-added people as leads, whoever added them - for a lead passed
+    on in the OS to somebody who did not type it in (lib/lead-owner). */
+export async function contactLeadsByIds(leadIds: string[]): Promise<Lead[]> {
+  const ids = leadIds.filter(isOsContactLead).map(contactIdOf);
+  if (!hasDb() || !ids.length) return [];
+  const rows = await q<Row>(
+    `SELECT id, kind, name, email, mobile, address, postcode, source, enquiry, notes,
+            created_by, created_at::text AS created_at, rex_id,
+            ${ownerNameSql("os_contacts")} AS created_by_name
+       FROM os_contacts WHERE id = ANY($1::text[])`,
+    [ids]
+  ).catch(() => []);
+  return rows.map(toLead);
+}

@@ -15,6 +15,7 @@ import { Pill } from "@/components/Wire";
 import { type SpineStop } from "@/components/StageSpine";
 import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-events";
 import ContactBlock from "@/components/ContactBlock";
+import Guarantors from "@/components/Guarantors";
 import FileDocuments from "@/components/FileDocuments";
 import NextStepCard, { type NextAction } from "@/components/NextStepCard";
 import HandoffPanel from "@/components/HandoffPanel";
@@ -1218,6 +1219,9 @@ export default function ApplicationDrawer({
             ) : (
               <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">No tenant recorded on this let yet.</p>
             )}
+            {/* Guarantors (Lorna Fieldson, 15 Oct 2026): carried over from the
+                lead by the applicant's email, added here too (lib/guarantors). */}
+            {letId && people.length > 0 && <Guarantors source={{ let: letId }} className="mt-4" />}
 
             {/* Where it's up to, across the box underneath (as on a listing). */}
             <div className="mt-5 border-t border-line/50 pt-4">

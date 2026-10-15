@@ -3,6 +3,7 @@ import { hasDb, q } from "@/lib/db";
 import type { Lead } from "@/lib/leads-sample";
 import { searchLikes, searchMatches } from "@/lib/search-match";
 import { withEnquirer } from "@/lib/lead-enquirer";
+import { leadHeldBySql } from "@/lib/lead-owner";
 
 /**
  * The lead ledger: every enquiry the OS has ever seen, kept.
@@ -144,10 +145,18 @@ export async function ledgerBoard(rexUserId: string | null, limit = 500): Promis
   if (!hasDb()) return [];
   const rows = await q<{ payload: Lead }>(
     rexUserId
-      ? `SELECT payload FROM os_leads WHERE assignee_id = $2 AND ${NOT_SALES} ORDER BY received_at DESC NULLS LAST LIMIT $1`
+      ? `SELECT payload FROM os_leads WHERE ${leadHeldBySql("os_leads", "$2")} AND ${NOT_SALES} ORDER BY received_at DESC NULLS LAST LIMIT $1`
       : `SELECT payload FROM os_leads WHERE ${NOT_SALES} ORDER BY received_at DESC NULLS LAST LIMIT $1`,
     rexUserId ? [limit, rexUserId] : [limit]
   ).catch(() => []);
+  return rows.map((r) => asAsked(r.payload));
+}
+
+/** Named leads from the ledger, for a board that must show leads REX's walk
+    for its scope never returns (passed on in the OS, lib/lead-owner). */
+export async function ledgerLeadsByIds(ids: string[]): Promise<Lead[]> {
+  if (!hasDb() || !ids.length) return [];
+  const rows = await q<{ payload: Lead }>(`SELECT payload FROM os_leads WHERE id = ANY($1::text[]) AND ${NOT_SALES}`, [ids]).catch(() => []);
   return rows.map((r) => asAsked(r.payload));
 }
 
@@ -199,7 +208,7 @@ export async function ledgerSourceMonths(rexUserId: string | null, hidden: strin
       WHERE received_at >= date_trunc('month', (NOW() AT TIME ZONE 'Europe/London') - INTERVAL '1 month') AT TIME ZONE 'Europe/London'
         AND ${NOT_SALES}
         AND NOT (id = ANY($1::text[]))
-        ${rexUserId ? "AND assignee_id = $2" : ""}
+        ${rexUserId ? `AND ${leadHeldBySql("os_leads", "$2")}` : ""}
       GROUP BY 1, 2, 3`,
     rexUserId ? [hidden, rexUserId] : [hidden]
   ).catch(() => null);
@@ -233,7 +242,7 @@ export async function searchLedger(rexUserId: string | null, needle: string, lim
               WHERE lower(f->>0) IN ('name', 'first name', 'last name', 'phone default', 'phone number', 'phone')) AS asked
          FROM os_leads
         WHERE ${NOT_SALES}
-          ${rexUserId ? "AND assignee_id = $4" : ""}
+          ${rexUserId ? `AND ${leadHeldBySql("os_leads", "$4")}` : ""}
      ) l
       WHERE (concat_ws(' ', name, email, address, agent, payload->>'area', asked) ILIKE ALL($1::text[])
              OR ($2::text IS NOT NULL AND regexp_replace(concat_ws(' ', phone, asked), '\\D', '', 'g') LIKE $2))
@@ -306,7 +315,7 @@ export async function newLeadsFor(p: { rexUserId: string | null; email: string; 
             WHERE received_at > NOW() - make_interval(days => $1) AND first_seen > NOW() - make_interval(days => $1)
               AND COALESCE(source, '') <> 'REX diary'
               AND ${NOT_SALES}
-              AND (($2::text IS NOT NULL AND assignee_id = $2) OR ($3 AND enquiry = 'Valuation'))
+              AND (($2::text IS NOT NULL AND ${leadHeldBySql("os_leads", "$2")}) OR ($3 AND enquiry = 'Valuation'))
             ORDER BY first_seen DESC LIMIT $4`,
           [days, p.rexUserId, p.allLandlords, limit]
         ).catch(() => [])
