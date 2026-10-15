@@ -13,8 +13,8 @@ import { useEffect } from "react";
  * target at the moment it is clicked. A desktop mail app still opens as it
  * always did.
  *
- * Sending from the OS itself (with a reference to match the reply) waits on
- * OUTBOUND_COMPOSER_SEND, which is off.
+ * Sending from the OS itself is the lead's Write an email (components/Compose),
+ * which follows the "Email to landlords and tenants" switch.
  */
 export default function MailLinksNewTab() {
   useEffect(() => {

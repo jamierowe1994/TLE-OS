@@ -31,13 +31,16 @@ export interface MailLine {
   preview: string;
   unread: boolean;
   link: string | null;
+  /** The body as plain text, only when asked for (withText) - for finding a
+   *  home's reference in it (lib/home-refs). Never sent to a browser. */
+  text?: string;
 }
 
 export type ThreadResult =
   | { ok: true; mailbox: string; messages: MailLine[] }
   | { ok: false; reason: "not_connected" | "refused"; detail: string };
 
-export async function conversationWith(userId: string, email: string, limit = 25): Promise<ThreadResult> {
+export async function conversationWith(userId: string, email: string, limit = 25, opts: { withText?: boolean } = {}): Promise<ThreadResult> {
   const who = email.trim().toLowerCase();
   if (!/^[^\s@"]+@[^\s@"]+\.[^\s@"]+$/.test(who)) return { ok: false, reason: "refused", detail: "No usable email address to look for." };
 
@@ -59,12 +62,15 @@ export async function conversationWith(userId: string, email: string, limit = 25
   const params = new URLSearchParams({
     $search: `"participants:${who}"`,
     $top: String(Math.min(Math.max(limit, 1), 50)),
-    $select: "id,subject,from,toRecipients,receivedDateTime,sentDateTime,bodyPreview,isRead,webLink",
+    $select: `id,subject,from,toRecipients,receivedDateTime,sentDateTime,bodyPreview,isRead,webLink${opts.withText ? ",body" : ""}`,
   });
   let res: Response;
   try {
     res = await fetch(`${GRAPH}/me/messages?${params.toString()}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(opts.withText ? { Prefer: 'outlook.body-content-type="text"' } : {}),
+      },
       cache: "no-store",
       signal: AbortSignal.timeout(15_000),
     });
@@ -77,7 +83,7 @@ export async function conversationWith(userId: string, email: string, limit = 25
   const j = (await res.json().catch(() => ({}))) as {
     value?: Array<{
       id: string; subject?: string; bodyPreview?: string; isRead?: boolean; webLink?: string;
-      receivedDateTime?: string; sentDateTime?: string;
+      receivedDateTime?: string; sentDateTime?: string; body?: { content?: string };
       from?: { emailAddress?: { name?: string; address?: string } };
     }>;
   };
@@ -95,6 +101,7 @@ export async function conversationWith(userId: string, email: string, limit = 25
       preview: (m.bodyPreview ?? "").replace(/\s+/g, " ").trim().slice(0, 220),
       unread: direction === "in" && m.isRead === false,
       link: m.webLink ?? null,
+      ...(opts.withText ? { text: (m.body?.content ?? m.bodyPreview ?? "").slice(0, 20_000) } : {}),
     };
   });
   messages.sort((a, b) => (a.at < b.at ? 1 : -1));

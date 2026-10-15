@@ -30,6 +30,8 @@ export type ConvItem = {
   openable: boolean;
   link?: string | null;
   unread?: boolean;
+  /** On a home's Messages: how the email was tied to this home (lib/home-refs). */
+  matched?: { on: "reference" | "postcode"; ref: string; home: string } | { on: "email" };
 };
 
 export type NoteRow = { id: string; author: string; when: string; text: string; badge?: string | null };
@@ -259,6 +261,19 @@ function Bubble({ it, onOpen }: { it: ConvItem; onOpen: () => void }) {
         {it.channel === "text" ? "Text" : it.channel === "portal" ? "Portal message" : "Email"}
         {it.by ? ` · ${it.by}` : ""} · {timeOf(it.at)}
       </span>
+      {email && it.matched && (
+        /* Which home, and on what (Howard, 14 Oct 2026): a reference is
+           certain, a postcode nearly so, the address alone is a guess for a
+           landlord with more than one home. */
+        <span className={`flex max-w-[85%] items-center gap-1 px-1 text-[10px] ${it.matched.on === "email" ? "text-muted" : "text-ink/70"}`}>
+          <DoodleIcon name={it.matched.on === "email" ? "mail" : "home"} size={10} />
+          {it.matched.on === "reference"
+            ? `${it.matched.home} · matched by reference ${it.matched.ref}`
+            : it.matched.on === "postcode"
+              ? `${it.matched.home} · matched by postcode ${it.matched.ref}`
+              : "No reference quoted · matched by their email address"}
+        </span>
+      )}
     </div>
   );
 }

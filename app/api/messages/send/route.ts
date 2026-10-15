@@ -1,13 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
-import { hasDb, q } from "@/lib/db";
 import { proseEmail } from "@/lib/email/prose";
 import { applyMerge, type MergeValues } from "@/lib/message-templates";
-import { COMPOSER_LOCKED_REASON, composerSendEnabled } from "@/lib/outbound";
+import { isInternalAddress } from "@/lib/email-policy";
+import { sendAsAgent } from "@/lib/send-as-agent";
+import { sendingLocked, switchOn } from "@/lib/switches";
+import { findUserById } from "@/lib/users";
 
 /**
  * Compose, preview, and — when it is switched on — send.
+ *
+ * ── Which switch, and which road ──────────────────────────────────────────
+ *
+ * The same as every other email an agent writes to one person: "Email to
+ * landlords and tenants" (customer_email) decides whether a customer may be
+ * written to, and lib/send-as-agent decides the road - their own Outlook when
+ * that is armed and connected, otherwise our sender with their address to
+ * reply to.
+ *
+ * Until 15 Oct 2026 this route had a lock of its own, the Railway variable
+ * OUTBOUND_COMPOSER_SEND, put on before launch ("don't send anything yet",
+ * James, 30 Aug) and never set. So with customer email on, Richard Callow
+ * still found Send greyed out on an applicant who had enquired about a home,
+ * reading "Sending is off". It also sent on the staff sender, which refuses a
+ * customer address, so setting the variable would only have moved the
+ * failure. One switch, the one on Admin, Switches, now governs it.
  *
  * ── The order of the guards is the whole design ───────────────────────────
  *
@@ -22,7 +40,7 @@ import { COMPOSER_LOCKED_REASON, composerSendEnabled } from "@/lib/outbound";
  *
  * os_sent_emails is the Activity log an agent opens to see what a landlord
  * received. Writing a preview into it would put an email in that log which
- * nobody ever got. The insert is inside the sent branch, after the send
+ * nobody ever got. The copy is filed by lib/send-as-agent once the send has
  * succeeded, and nowhere else.
  *
  * ── Unresolved merge fields refuse ────────────────────────────────────────
@@ -72,8 +90,10 @@ export async function POST(req: NextRequest) {
     html,
     missing,
     /* Said on every response, so the composer never has to guess whether the
-       button it is about to enable would actually do anything. */
-    sendEnabled: composerSendEnabled(),
+       button it is about to enable would actually do anything. One of our own
+       addresses goes whatever customer email says, as it does in
+       lib/send-as-agent - that is how a test reaches the tester. */
+    sendEnabled: await mayWrite(to),
   };
 
   if (b.intent !== "send") {
@@ -82,9 +102,9 @@ export async function POST(req: NextRequest) {
 
   /* ── from here down, someone pressed Send ─────────────────────────────── */
 
-  if (!composerSendEnabled()) {
+  if (!preview.sendEnabled) {
     return NextResponse.json(
-      { ...preview, sent: false, locked: true, reason: COMPOSER_LOCKED_REASON },
+      { ...preview, sent: false, locked: true, reason: LOCKED_REASON },
       { status: 409 }
     );
   }
@@ -107,26 +127,30 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  try {
-    const { sendEmail } = await import("@/lib/resend");
-    await sendEmail({ to, subject: subjectMerged.text, html });
-  } catch (e) {
+  const me = await findUserById(actorId);
+  if (!me) {
+    return NextResponse.json({ ...preview, sent: false, reason: "Sign in first." }, { status: 401 });
+  }
+
+  /* lib/send-as-agent files the copy in os_sent_emails itself, whichever road
+     it took, and only once it has gone - so nothing is logged here. */
+  const r = await sendAsAgent({ me, to, subject: subjectMerged.text, html });
+  if (!r.sent) {
     return NextResponse.json(
-      { ...preview, sent: false, reason: publicError(e) },
-      { status: 502 }
+      { ...preview, sent: false, reason: r.detail },
+      { status: r.reason === "refused" ? 502 : 409 }
     );
   }
 
-  /* Only now. See the note at the top. */
-  if (hasDb()) {
-    await q(
-      `INSERT INTO os_sent_emails (id, to_email, subject, html, actor_email)
-       VALUES ($1,$2,$3,$4,$5)`,
-      [`msg-${crypto.randomUUID()}`, to, subjectMerged.text, html, actorId]
-    ).catch(() => {
-      /* Filing the copy is not the job. Delivering was. */
-    });
-  }
+  return NextResponse.json({ ...preview, sent: true, via: r.via, reason: r.detail });
+}
 
-  return NextResponse.json({ ...preview, sent: true, reason: "Sent." });
+const LOCKED_REASON =
+  "Email to landlords and tenants is switched off on Admin, Switches, so it has not been sent " +
+  "and nothing has reached them. Send it from Outlook if it cannot wait.";
+
+async function mayWrite(to: string): Promise<boolean> {
+  if (sendingLocked()) return false;
+  if (isInternalAddress(to)) return true;
+  return switchOn("customer_email");
 }

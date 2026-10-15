@@ -3,6 +3,7 @@ import { hasDb, q } from "@/lib/db";
 import { conversationWith } from "@/lib/mailbox-read";
 import { msAccessTokenFor } from "@/lib/microsoft";
 import { smsNumber } from "@/lib/sms";
+import { matchHome, type HomeMatch, type HomeRefs } from "@/lib/home-refs";
 
 /**
  * Everything said with one person, as one conversation (10 Oct 2026).
@@ -24,6 +25,11 @@ import { smsNumber } from "@/lib/sms";
  *                               between the bubbles rather than bubbles
  *
  * Nothing is copied: each source is asked when the panel opens.
+ *
+ * On a HOME (a listing, a let's landlord) the emails are sorted by the home's
+ * reference before they are shown (Howard, 14 Oct 2026, lib/home-refs): one
+ * quoting another of the landlord's homes goes to that home, and each email
+ * says whether it was matched by reference, postcode or only the address.
  */
 
 export type Channel = "email" | "text" | "portal" | "call" | "whatsapp" | "visit";
@@ -43,11 +49,15 @@ export interface ConvItem {
   openable: boolean;
   link?: string | null;
   unread?: boolean;
+  /** On a home's Messages only: how this email was tied to the home. */
+  matched?: HomeMatch;
 }
 
 export interface Conversation {
   ok: true;
   items: ConvItem[];
+  /** The home the emails were sorted against, when there was one. */
+  home?: { label: string; ref: string | null };
   /** Why a source said nothing, worth a line in the panel (Outlook not connected, say). */
   notes: string[];
 }
@@ -75,6 +85,8 @@ export async function conversationFor(p: {
   emails: string[];
   phones: string[];
   leadId?: string | null;
+  /** Sort the emails by this home's reference (lib/home-refs). */
+  home?: HomeRefs | null;
 }): Promise<Conversation> {
   const emails = [...new Set(p.emails.map((e) => e.trim().toLowerCase()).filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)))];
   const phones = [...new Set(p.phones.map((x) => smsNumber(x)).filter((x): x is string => Boolean(x)))];
@@ -82,6 +94,9 @@ export async function conversationFor(p: {
   const notes: string[] = [];
 
   const jobs: Promise<void>[] = [];
+  /* The whole text of each email, for finding a home's reference in it. Kept
+     here rather than on the item, so it never reaches the browser. */
+  const full = new Map<string, string>();
 
   /* Outlook, both ways. */
   if (p.viewingAs) {
@@ -89,12 +104,13 @@ export async function conversationFor(p: {
   } else {
     for (const email of emails) {
       jobs.push(
-        conversationWith(p.userId, email, 40).then((r) => {
+        conversationWith(p.userId, email, 40, { withText: Boolean(p.home) }).then((r) => {
           if (!r.ok) {
             notes.push(r.detail);
             return;
           }
           for (const m of r.messages) {
+            if (m.text !== undefined) full.set(`ms:${m.id}`, `${m.subject}\n${m.text}`);
             items.push({
               id: `ms:${m.id}`,
               channel: "email",
@@ -123,6 +139,7 @@ export async function conversationFor(p: {
         )
           .then((rows) => {
             for (const r of rows) {
+              if (p.home) full.set(`os:${r.id}`, `${r.subject}\n${plain(r.html)}`);
               items.push({
                 id: `os:${r.id}`,
                 channel: "email",
@@ -220,9 +237,35 @@ export async function conversationFor(p: {
   /* The OS's own email can also sit in the agent's Sent Items when it went
      out as them: one bubble, the Outlook one, which has the thread. */
   const seen = new Set(items.filter((i) => i.id.startsWith("ms:")).map((i) => `${i.subject.toLowerCase()}|${i.at.slice(0, 16)}`));
-  const merged = items.filter((i) => !(i.id.startsWith("os:") && seen.has(`${i.subject.toLowerCase()}|${i.at.slice(0, 16)}`)));
+  let merged = items.filter((i) => !(i.id.startsWith("os:") && seen.has(`${i.subject.toLowerCase()}|${i.at.slice(0, 16)}`)));
+
+  /* On a home: by reference first, the email address only as the fall-back. */
+  const home = p.home ?? null;
+  if (home) {
+    let elsewhere = 0;
+    merged = merged.flatMap((i) => {
+      if (i.channel !== "email") return [i];
+      const m = matchHome(full.get(i.id) ?? `${i.subject}\n${i.text}`, home);
+      if (m === "elsewhere") {
+        elsewhere++;
+        return [];
+      }
+      return [{ ...i, matched: m }];
+    });
+    if (elsewhere) {
+      notes.push(
+        `${elsewhere === 1 ? "One email quotes" : `${elsewhere} emails quote`} the reference of another of their homes, so ${elsewhere === 1 ? "it is" : "they are"} on that home's messages rather than here.`
+      );
+    }
+  }
+
   merged.sort((a, b) => (a.at < b.at ? -1 : 1));
-  return { ok: true, items: merged, notes: [...new Set(notes)] };
+  return {
+    ok: true,
+    items: merged,
+    notes: [...new Set(notes)],
+    ...(home ? { home: { label: home.label, ref: home.prpRef } } : {}),
+  };
 }
 
 export interface FullEmail {
