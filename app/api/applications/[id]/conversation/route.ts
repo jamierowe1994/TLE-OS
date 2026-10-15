@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { conversationFor, openEmail } from "@/lib/conversation";
 import { letPeople } from "@/lib/let-people";
+import { homeForListing } from "@/lib/home-refs";
+import { isTestId } from "@/lib/test-overlay";
 
 /**
  * A let's conversation with one of its people (12 Oct 2026): emails both
@@ -39,5 +41,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (!emails.length && !phones.length) {
     return NextResponse.json({ ok: true, items: [], notes: [`No email or mobile for ${person.name || "them"}, so there's no conversation to show.`] });
   }
-  return NextResponse.json(await conversationFor({ userId: actor.id, viewingAs, emails, phones }));
+  /* The landlord may have other homes with us: their emails are sorted by
+     this let's home reference (lib/home-refs). A tenant's are all this let's. */
+  const listingId = r.let.listingId;
+  const home = sp.get("with") === "landlord" && listingId && !isTestId(listingId) ? await homeForListing(listingId).catch(() => null) : null;
+  return NextResponse.json(await conversationFor({ userId: actor.id, viewingAs, emails, phones, home }));
 }

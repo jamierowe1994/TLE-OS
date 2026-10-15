@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { conversationFor, openEmail } from "@/lib/conversation";
+import { homeForListing } from "@/lib/home-refs";
 import { landlordForListing } from "@/lib/rex-landlord";
 import { testLandlord } from "@/lib/test-listing-answers";
 import { isTestId } from "@/lib/test-overlay";
@@ -9,7 +10,9 @@ import { isTestId } from "@/lib/test-overlay";
  * A listing's Messages (10 Oct 2026): the conversation with its landlord -
  * emails both ways, texts, portal chat (lib/conversation). Who the landlord
  * is comes from the listing itself (lib/rex-landlord), never from the page,
- * so the route can only ever show what was said with that landlord.
+ * so the route can only ever show what was said with that landlord - and of
+ * that, what is about THIS home: emails quoting another of their homes'
+ * references go to that home (lib/home-refs, Howard 14 Oct 2026).
  *
  *   GET            the stream, with { landlord } to name them
  *   GET ?open=<id> one email in full, with its thread
@@ -42,6 +45,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (!emails.length && !phones.length) {
     return NextResponse.json({ ok: true, items: [], notes: [`No email or mobile for ${landlord.name || "the landlord"} on REX, so there's no conversation to show.`], landlord: { name: landlord.name } });
   }
-  const conv = await conversationFor({ userId: actor.id, viewingAs, emails, phones });
+  const home = isTestId(id) ? null : await homeForListing(id).catch(() => null);
+  const conv = await conversationFor({ userId: actor.id, viewingAs, emails, phones, home });
   return NextResponse.json({ ...conv, landlord: { name: landlord.name } });
 }
