@@ -21,7 +21,8 @@ import { registerOpen } from "@/lib/open-record";
  *
  * ── Sending is off, and the screen says so rather than pretending ─────────
  *
- * The server refuses while OUTBOUND_COMPOSER_SEND is unset, and reports
+ * The server refuses while "Email to landlords and tenants" is off on Admin,
+ * Switches (one of our own addresses goes regardless, as a test), and reports
  * `sendEnabled` on every response. The button reads "Sending is off" and is
  * disabled, instead of looking armed and failing on click. A disabled control
  * that explains itself is honest; one that looks ready and then apologises is
@@ -250,11 +251,14 @@ export default function Compose({
           {note && <p className="mt-3 text-[12px] leading-relaxed text-accent-dark">{note}</p>}
         </div>
 
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-line/70 px-5 py-3.5">
+        {/* Clear of Steve's round button in the corner, which sat on top of Send. */}
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-line/70 py-3.5 pl-5 pr-24">
           <p className="text-[11px] leading-relaxed text-muted">
             {preview?.sendEnabled
               ? "This will go to the address above."
-              : "Sending is switched off, so nothing leaves the building yet."}
+              : preview
+                ? "Email to landlords and tenants is switched off, so this cannot go from here. Send it from Outlook if it cannot wait."
+                : "Pick a template or write the message, then send."}
           </p>
           <PressButton
             onClick={async () => {
@@ -271,12 +275,12 @@ export default function Compose({
               }
             }}
             disabled={!canSend}
-            className={`flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-semibold ${
+            className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-[12px] font-semibold ${
               canSend ? "bg-accent-dark text-white" : "cursor-not-allowed bg-line/40 text-muted"
             }`}
           >
             <DoodleIcon name="mail" size={13} />
-            {preview?.sendEnabled ? "Send" : "Sending is off"}
+            {preview && !preview.sendEnabled ? "Sending is off" : "Send"}
           </PressButton>
         </div>
       </aside>
