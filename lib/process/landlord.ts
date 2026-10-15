@@ -59,7 +59,7 @@ export const LANDLORD_PROCESS: ProcessMap = {
     /* ── The two front doors ─────────────────────────────────────────── */
     n({ id: "enquiry", kind: "trigger", lane: "spine", col: 0, status: "live", title: "Valuation enquiry", blurb: "GetAgent, OnTheMarket, Rightmove or the website. In the lead book within five minutes of REX seeing it. They have almost certainly asked two other agents at the same time.", trigger: { on: "rex.lead.created" }, href: "/leads?side=landlord" }),
     n({ id: "added", kind: "trigger", lane: "side", col: 0, row: -1, status: "live", title: "Landlord added by hand", blurb: "A call, a referral, a chat at a viewing. Typed in on Add new lead; it writes to the OS and pushes the contact to REX.", trigger: { on: "contact.added" }, href: "/leads?new=1" }),
-    n({ id: "bond", kind: "trigger", lane: "side", col: 0, row: -2, status: "planned", title: "Found by Bond", blurb: "The prospecting workspace: a landlord whose tenancy is near its anniversary, flagged before they go looking. LOCKED for the pilot - it names properties, not people, until the Land Registry route is built.", href: "/tools" }),
+    n({ id: "bond", kind: "trigger", lane: "side", col: 0, row: -2, status: "planned", title: "Found by Bond", blurb: "The prospecting workspace: a landlord whose tenancy is near its anniversary, flagged before they go looking. LOCKED for now - it names properties, not people, until the Land Registry route is built.", href: "/tools" }),
 
     n({ id: "lead", kind: "screen", lane: "spine", col: 1, status: "live", title: "The landlord lead", blurb: "Their enquiry in full, what the portal told us about the property, the map pin, and the track along the bottom. Redesigned 11 Sep and pushed; no landlord has been worked through it start to finish yet.", href: "/leads?side=landlord" }),
 
@@ -118,7 +118,7 @@ export const LANDLORD_PROCESS: ProcessMap = {
     n({ id: "feedback", kind: "email", lane: "spine", col: 20, status: "planned", title: "How the viewings went", blurb: "What the applicants said, week by week, and what it means for the rent. NOT BUILT, and worse: 29 viewings have been and gone with no feedback recorded anywhere, so there is nothing to send.", trigger: { on: "viewing.feedback", after: "weekly" } }),
 
     /* ── The offer ───────────────────────────────────────────────────── */
-    n({ id: "offer", kind: "email", lane: "spine", col: 21, status: "built", title: "An offer on your property", blurb: "The figure, the applicants, what referencing will check. HIDDEN FOR THE PILOT: the button said sent and nothing left, and the landlord on it was a placeholder address.", trigger: { on: "offer.received", after: "straight away" } }),
+    n({ id: "offer", kind: "email", lane: "spine", col: 21, status: "built", title: "An offer on your property", blurb: "The figure, the applicants, what referencing will check. HIDDEN FOR NOW: the button said sent and nothing left, and the landlord on it was a placeholder address.", trigger: { on: "offer.received", after: "straight away" } }),
     n({ id: "landlord-says", kind: "decision", lane: "spine", col: 22, status: "planned", title: "Accept or decline?", blurb: "Today it comes back by phone and an agent types it in. The link that puts it to them is written and gated.", trigger: { on: "offer.decided" } }),
     n({ id: "declined", kind: "email", lane: "nurture", col: 22, row: 1, status: "planned", title: "Back on the market", blurb: "Declined: what we learned, and what we would change. Straight back to viewings rather than silence. NOT WRITTEN." }),
 
@@ -143,7 +143,7 @@ export const LANDLORD_PROCESS: ProcessMap = {
     /* Both doors meet at the lead. */
     { from: "enquiry", to: "lead", kind: "main" },
     { from: "added", to: "lead", kind: "branch", label: "same person, no portal behind them" },
-    { from: "bond", to: "lead", kind: "branch", label: "locked for the pilot" },
+    { from: "bond", to: "lead", kind: "branch", label: "locked for now" },
 
     { from: "lead", to: "first-contact", kind: "main" },
     { from: "lead", to: "first-email", kind: "branch", label: "before anybody rings" },

@@ -7,17 +7,16 @@ import { SAGE_INK, SAGE_WASH } from "@/components/appraisal/NextUp";
 import AdminLoadFailed from "@/components/AdminLoadFailed";
 import { useAdmin, when, AUDIT_KIND } from "@/lib/admin-client";
 import { useEffect, useState } from "react";
-import LaunchClock from "@/components/admin/LaunchClock";
 
 /**
  * The overview, in the same frame as every board in the OS (James, 12 Sep
  * 2026: "bring this into line"): the masthead, the staff census as a row of
  * tiles that go somewhere, then the latest activity beside the open tickets.
  *
- * James, 2 Oct 2026: the launch countdown - the team's flip clock - stands
- * where the illustration was; "What to focus on today" is gone, and Tickets
- * replaced To do. Every figure is the live census from /api/admin, and the
- * clock counts to 9am London on 14 October from the browser's own clock.
+ * James, 2 Oct 2026: "What to focus on today" is gone, and Tickets replaced
+ * To do. Every figure is the live census from /api/admin. The launch
+ * countdown that stood in the masthead from 2 Oct went after launch day
+ * (15 Oct 2026); the illustration it replaced is back.
  */
 
 const card = "rounded-[22px] border border-line/50 bg-white";
@@ -74,9 +73,7 @@ export default function AdminOverview() {
       <PageHeader
         title="Admin"
         blurb="Who's set up, who's been in, and what they've reported. Tracking has who uses what."
-        illustrationNode={<LaunchClock size={30} />}
-        illustrationHeight={118}
-        illustrationAspect={3.6}
+        illustration="/illustrations/people/team-spirit.svg"
         lineBreak="none"
       />
 

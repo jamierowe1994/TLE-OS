@@ -23,7 +23,7 @@
  *  3. email     — SKIPPABLE, and the only one. It needs a working Microsoft
  *                 365 sign-in, and somebody standing at a desk on day one may
  *                 simply not have one yet. Blocking on it would strand them.
- *  4. how       — what a pre-launch actually is, and what we need back. This
+ *  4. how       — where help is, and how to tell us something is wrong. This
  *                 sits AFTER the connecting and before the decorating: it is
  *                 the one screen we want them to read, so it goes where the
  *                 admin is finished and the fun hasn't started.
@@ -128,7 +128,7 @@ export const STEPS: StepMeta[] = [
     id: "password",
     short: "Password",
     title: "Your password",
-    blurb: "Done — you set this when you followed the link in your email.",
+    blurb: "Done - you set this when you followed the link in your email.",
   },
   {
     id: "rex",
@@ -146,8 +146,8 @@ export const STEPS: StepMeta[] = [
   },
   {
     id: "how",
-    short: "How this works",
-    title: "How the pre-launch works",
+    short: "Getting help",
+    title: "How to get help",
     blurb: "The one screen worth reading. It is short.",
   },
 ];

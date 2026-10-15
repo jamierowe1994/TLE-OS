@@ -76,7 +76,7 @@ const SOURCE_LABEL: Record<string, string> = {
   hub: "Team Hub",
   website: "Website",
   added: "Added by you",
-  invite: "Pilot invite",
+  invite: "Invite list",
   departed: "Team Hub says they've left",
 };
 

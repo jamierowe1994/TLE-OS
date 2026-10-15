@@ -224,7 +224,7 @@ export const PORTAL_FOLDERS: PortalFolder[] = [
         kind: "email",
         id: "agent-invite",
         name: "Their invitation",
-        blurb: "The email that brings somebody onto the pre-launch, with the link that becomes their account.",
+        blurb: "The email that welcomes somebody new, with the link that becomes their account.",
         emailId: "pilot-invite",
       },
       {

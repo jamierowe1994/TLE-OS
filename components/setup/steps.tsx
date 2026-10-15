@@ -72,8 +72,8 @@ export function Welcome({
       </h1>
       <p className="mt-3 text-[13px] leading-relaxed">
         {rexOptional
-          ? "Your password is set, so your account exists. A few more things and the OS is yours: your REX if you use it, your email, and how this pre-launch works."
-          : "Your password is set, so your account exists. Three more things and the OS is yours: your REX, your email, and how this pre-launch works."}
+          ? "Your password is set, so your account exists. A few more things and the OS is yours: your REX if you use it, your email, and how to get help."
+          : "Your password is set, so your account exists. Three more things and the OS is yours: your REX, your email, and how to get help."}
       </p>
       <p className="mt-3 text-[12px] leading-relaxed text-muted">
         One at a time, and it takes about three minutes. Nothing here is
@@ -277,23 +277,26 @@ export function StepEmail({
   );
 }
 
-/* ── How the pre-launch works ──────────────────────────────────────────────
+/* ── Getting help ──────────────────────────────────────────────────────────
    The one screen we actually want read, which is why it sits after the
    connecting is done and before the decorating starts.
 
    James: "explain the rules, so don't call it rules". So it is framed as what
-   we need FROM them rather than what is expected OF them. */
+   we need FROM them rather than what is expected OF them. Until launch day
+   (14 Oct 2026) this was "How The Pre-launch Works" and opened on "This is
+   early, on purpose"; a new starter joining now is joining a live system, so
+   it says where help is and how to tell us something is wrong. */
 
 const POINTS: { icon: string; head: string; body: string }[] = [
   {
     icon: "info",
-    head: "This is early, on purpose",
-    body: "You are among the first people using it. Some screens are complete, some are half built, and a few are still a shell. Nothing you do here can break anything in REX.",
+    head: "Steve is there when you are stuck",
+    body: "Ask him how to do anything, or open his Guides for a step-by-step walk-through of the real screens. He sits in the bottom right of every screen.",
   },
   {
     icon: "cross",
-    head: "If a figure looks wrong, say so",
-    body: "A number that disagrees with what you know is the single most useful thing you can report. Do not assume somebody else has already noticed, because usually nobody has.",
+    head: "If something looks wrong, tell us",
+    body: "A figure that disagrees with what you know, a button that does nothing, a screen that confuses you. Report it from the same corner. It takes a picture of what you were looking at, so you do not have to explain where you were.",
   },
   {
     icon: "magic-wand",
@@ -305,7 +308,7 @@ const POINTS: { icon: string; head: string; body: string }[] = [
 export function StepHow({ onNext }: { onNext: () => void }) {
   return (
     <>
-      <Title>How The Pre-launch Works</Title>
+      <Title>How to Get Help</Title>
       <Blurb>Short, and the only screen here worth reading properly.</Blurb>
 
       <ul className="mt-5 flex flex-col gap-4">
@@ -323,8 +326,8 @@ export function StepHow({ onNext }: { onNext: () => void }) {
       </ul>
 
       <p className="mt-5 rounded-xl border border-line/80 bg-box p-3.5 text-[12px] leading-relaxed">
-        There is a button for all of this, in the bottom right of every screen.
-        We will point at it in a minute.
+        Do not assume somebody else has already reported it, because usually
+        nobody has. We will point at the button in a minute.
       </p>
 
       <button type="button" onClick={onNext} className={`${PRIMARY} mt-5`}>

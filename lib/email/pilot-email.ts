@@ -32,9 +32,9 @@ export function pilotInviteEmail(link: string, firstName?: string): VerifyEmail 
   const text = [
     "You're in.",
     "",
-    "Welcome to TLE OS. We're building it now, and you're one of the first",
-    "through the door - what you tell us over the next few weeks is what",
-    "shapes it for everybody else.",
+    "Welcome to TLE OS, the home for everything you do at The Letting",
+    "Experts - your leads, listings, viewings, lets and landlords in one",
+    "place. Your account is ready for you to set up.",
     "",
     "Open the link below to confirm your address and choose a password.",
     "",
@@ -43,8 +43,9 @@ export function pilotInviteEmail(link: string, firstName?: string): VerifyEmail 
     "Have your REX sign-in to hand. It is the first thing we ask for, and the",
     "OS has nothing to show you until it is connected.",
     "",
-    "Then have a look around when it suits you, and say so when something",
-    "feels wrong. The link works once and lasts 24 hours.",
+    "Once you're in, the button in the bottom right of every screen is where",
+    "to ask for help or tell us something looks wrong. The link works once",
+    "and lasts 24 hours.",
   ].join("\n");
 
   return {
@@ -59,8 +60,11 @@ export function pilotInviteEmail(link: string, firstName?: string): VerifyEmail 
          read as shy for something that is meant to feel like an opening; the
          version before that was six paragraphs and read as a manual. This is
          the middle: welcome, we are building it, and you are part of that. */
+      /* Until launch day this said "We're building it now, and you're one of
+         the first through the door", which stopped being true on 14 Oct
+         2026; it now says what the launch invite says (lib/email/launch-email). */
       intro:
-        "Welcome to TLE OS. We're building it now, and you're one of the first through the door - what you tell us over the next few weeks is what shapes it for everybody else.",
+        "Welcome to TLE OS, the home for everything you do at The Letting Experts - your leads, listings, viewings, lets and landlords in one place. Your account is ready for you to set up.",
       button: "Set up your account",
       link,
       /* "Nothing to prepare" until 14 Sep 2026, which was not true: setup asks
@@ -70,7 +74,7 @@ export function pilotInviteEmail(link: string, firstName?: string): VerifyEmail 
          first thing the pilot learns about the OS is that it lied in the
          doorway. */
       footnote:
-        "Have your REX sign-in to hand: it is the first thing we ask for. Then have a look around when it suits you, and say so when something feels wrong.",
+        "Have your REX sign-in to hand: it is the first thing we ask for. Once you're in, the button in the bottom right of every screen is where to ask for help or tell us something looks wrong.",
     }),
   };
 }

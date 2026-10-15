@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  if (!send) return NextResponse.json({ ok: true, message: `${email} added to the pilot.` });
+  if (!send) return NextResponse.json({ ok: true, message: `${email} added to the invite list.` });
 
   /* Sending is a separate act from inviting, so a list can be built up over a
      week and fired in one go — and so a mis-click adds a row rather than an
@@ -185,7 +185,7 @@ export async function POST(req: NextRequest) {
     await record({
       kind: "password_reset",
       actorId: owner.id, actorEmail: owner.email, subjectEmail: email,
-      detail: reissue ? "pilot invite reissued with a fresh link" : "pilot invite sent",
+      detail: reissue ? "invite reissued with a fresh link" : "invite sent",
     });
   } catch (e) {
     /* Not sent, so the new link goes and the old one - untouched - still works. */

@@ -216,7 +216,7 @@ export default function Tickets() {
     <>
       <h1 className="hand text-[24px] leading-tight">Tickets</h1>
       <p className="mt-1 text-[12.5px] text-muted">
-        What the pilot agents raise. A is broken, C is a recommendation, B is everything else. The bot sorts a fault when it has looked; an idea is a C the moment it lands. Change a letter by pressing it.
+        What people raise. A is broken, C is a recommendation, B is everything else. The bot sorts a fault when it has looked; an idea is a C the moment it lands. Change a letter by pressing it.
       </p>
 
       <div className="fade-up mt-4 grid gap-3 sm:grid-cols-4">
