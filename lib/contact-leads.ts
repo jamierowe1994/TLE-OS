@@ -2,6 +2,7 @@ import { hasDb, q } from "@/lib/db";
 import { ago } from "@/lib/rex-leads";
 import type { Lead } from "@/lib/leads-sample";
 import { areaOf } from "@/lib/contacts-as-leads";
+import { ownedBySql, ownerNameSql } from "@/lib/contacts-store";
 
 /**
  * Contacts added by hand, read back as leads.
@@ -99,18 +100,20 @@ function toLead(r: Row): Lead {
  * `createdBy` null means unscoped - an owner looking at the whole business.
  * An agent sees the ones they typed in: there is no REX assignee on a row
  * that has never been a REX lead, so who added it is the only honest owner.
+ * A tenant who filed themselves from the tenant area is the agent's whose
+ * home they asked about (lib/contacts-store tenantAreaAgentsSql).
  */
 export async function contactsAsLeads(createdBy: string | null, limit = 200, viewer: string | null = createdBy): Promise<Lead[]> {
   if (!hasDb()) return [];
   const cols = `id, kind, name, email, mobile, address, postcode, source, enquiry, notes,
                 created_by, created_at::text AS created_at, rex_id,
-                (SELECT NULLIF(u.name, '') FROM os_users u WHERE lower(u.email) = lower(os_contacts.created_by) LIMIT 1) AS created_by_name`;
+                ${ownerNameSql("os_contacts")} AS created_by_name`;
   /* A test file's people are its tester's alone (13 Oct 2026, the E2E walk:
      an owner's whole-business list held every tester's Landlord E2E and
      Tenant E2E among the real leads). */
   const rows = await q<Row>(
     createdBy
-      ? `SELECT ${cols} FROM os_contacts WHERE created_by = $2 ORDER BY created_at DESC LIMIT $1`
+      ? `SELECT ${cols} FROM os_contacts WHERE ${ownedBySql("os_contacts", "lower($2)")} ORDER BY created_at DESC LIMIT $1`
       : `SELECT ${cols} FROM os_contacts WHERE (NOT is_test OR lower(created_by) = lower($2)) ORDER BY created_at DESC LIMIT $1`,
     [limit, createdBy ?? viewer ?? ""]
   ).catch(() => []);

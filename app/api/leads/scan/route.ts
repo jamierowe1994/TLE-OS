@@ -48,8 +48,9 @@ export async function POST(req: NextRequest) {
   }
   const written = await recordLeads(book.leads);
   /* The whole message for new valuation requests, so a sale is known as one
-     before anybody opens it (lib/lead-ledger readNewValuations). */
-  const valuationsRead = await readNewValuations().catch(() => 0);
+     before anybody opens it, and for every other new lead, so the board names
+     the person who actually asked (lib/lead-ledger readNewValuations). */
+  const valuationsRead = await readNewValuations(12, { everyNewLead: true }).catch(() => 0);
   /* The board cache the page reads (app/api/leads/route.ts, key leads:v2:all):
      refreshed here so the next open is instant and current. */
   if (hasDb()) {
