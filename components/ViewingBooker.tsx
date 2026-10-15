@@ -856,10 +856,23 @@ export default function ViewingBooker({
         ? appraisalId
           ? { kind: "takeon", id: appraisalId, startsAt, minutes: mins }
           : null
-      : !leadId || !chosen
+      : (!leadId && !(mode === "appraisal" && appraisalId)) || !chosen
       ? null
       : mode === "appraisal"
-        ? { kind: "appraisal-new", appraisal: { leadId, landlord: chosen.name, email: chosen.email, address: address || "", startsAt, minutes: mins } }
+        ? {
+            kind: "appraisal-new",
+            appraisal: {
+              leadId: leadId ?? "",
+              landlord: chosen.name,
+              email: chosen.email,
+              address: address || "",
+              startsAt,
+              minutes: mins,
+              /* Rearrange (15 Oct 2026): this appraisal, and the "new time" wording. */
+              ...(appraisalId ? { id: appraisalId } : {}),
+              ...(editing ? { movedFrom: editing.startsAt } : {}),
+            },
+          }
         : viewingBooking
           ? { kind: "viewing", booking: viewingBooking }
           : null;
@@ -1213,7 +1226,7 @@ export default function ViewingBooker({
                     : stage === "when" && editing
                       ? "Change the Time"
                       : stage === "done"
-                ? mode === "appraisal" ? "Appraisal booked" : mode === "takeon" ? "Take-on booked" : editing ? (timeChanged || lengthChanged ? "Viewing Moved" : "Viewing Unchanged") : flow ? "Viewing Booked" : "Viewing booked"
+                ? mode === "appraisal" ? (editing ? "Appraisal Moved" : "Appraisal booked") : mode === "takeon" ? "Take-on booked" : editing ? (timeChanged || lengthChanged ? "Viewing Moved" : "Viewing Unchanged") : flow ? "Viewing Booked" : "Viewing booked"
                 : stage === "who"
                   ? "Who do we tell?"
                   : stage === "applicant"
@@ -1583,7 +1596,7 @@ export default function ViewingBooker({
                             className="mt-0.5"
                           />
                           <span>
-                            <span className="block font-semibold">Email the confirmation</span>
+                            <span className="block font-semibold">{editing && mode === "appraisal" ? "Email them the new time" : "Email the confirmation"}</span>
                             <span className="block text-[11px] leading-snug text-muted">
                               {mode === "appraisal"
                                 ? "To the landlord, with the calendar invite. Change any of the words first."
@@ -2001,7 +2014,13 @@ export default function ViewingBooker({
                     ) : (
                       <DoodleIcon name={willSend ? "mail" : "calendar"} size={15} />
                     )}
-                    {savingBuffers || booking ? "Booking…" : draftLoading ? "Getting the email ready…" : willSend ? "Book and send" : "Book it"}
+                    {savingBuffers || booking
+                      ? editing ? "Moving it…" : "Booking…"
+                      : draftLoading
+                        ? "Getting the email ready…"
+                        : editing
+                          ? willSend ? "Move It and Send" : "Move It"
+                          : willSend ? "Book and send" : "Book it"}
                   </span>
                 </PressButton>
                 )}

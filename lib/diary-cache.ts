@@ -1,7 +1,7 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { fetchDiary, type DiaryBook } from "@/lib/rex-diary";
-import { londonDayOffset, londonParts } from "@/lib/london-time";
+import { londonDayOffset, londonHHMM, londonParts } from "@/lib/london-time";
 
 /**
  * The held copy of the office diary, and the one place it is refreshed.
@@ -83,6 +83,24 @@ export async function dropFromHeldDiary(id: string): Promise<void> {
   hold.memory = entry;
   if (!hasDb()) return;
   /* Keeps its own time: dropping one entry is not a fresh read of REX. */
+  await q(`UPDATE os_cache SET payload = $2 WHERE key = $1`, [CACHE_KEY, JSON.stringify({ book: entry.book })]).catch(() => null);
+}
+
+/**
+ * Move one entry in the held book now (a rearranged appraisal, 15 Oct 2026),
+ * so the diary shows it at its new time straight away rather than at the old
+ * one until the next read of REX.
+ */
+export async function moveInHeldDiary(id: string, startsAt: string, mins?: number): Promise<void> {
+  const held = await heldDiary();
+  if (!held || !held.book.appts.some((a) => a.id === id)) return;
+  const at = new Date(startsAt);
+  const appts = held.book.appts
+    .map((a) => (a.id === id ? { ...a, day: londonDayOffset(at), start: londonHHMM(at), ...(mins ? { mins } : {}) } : a))
+    .sort((a, b) => a.day - b.day || a.start.localeCompare(b.start));
+  const entry = { book: { ...held.book, appts }, at: held.at };
+  hold.memory = entry;
+  if (!hasDb()) return;
   await q(`UPDATE os_cache SET payload = $2 WHERE key = $1`, [CACHE_KEY, JSON.stringify({ book: entry.book })]).catch(() => null);
 }
 

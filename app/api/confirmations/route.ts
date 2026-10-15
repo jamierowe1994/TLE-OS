@@ -4,7 +4,7 @@ import { whoIs } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
 import { appraisalIdForLead, getAppraisal } from "@/lib/appraisal-store";
 import type { MarketAppraisal } from "@/lib/market-appraisal";
-import { draftBookingConfirmation, sendBookingConfirmation } from "@/lib/appraisal-confirm";
+import { draftBookingConfirmation, draftCancelNotice, sendBookingConfirmation, sendCancelNotice } from "@/lib/appraisal-confirm";
 import { fullAddressFor } from "@/lib/viewing-brief";
 import { draftLandlordViewing, draftViewingConfirmation, sendLandlordViewing, sendViewingConfirmation, viewingKey, type ViewingBooking } from "@/lib/viewing-confirm";
 import { publicOrigin } from "@/lib/origin";
@@ -34,7 +34,7 @@ export const maxDuration = 60;
 
 type Body = {
   action?: "draft" | "send";
-  kind?: "appraisal" | "viewing" | "viewing-landlord" | "takeon" | "update";
+  kind?: "appraisal" | "appraisal-cancelled" | "viewing" | "viewing-landlord" | "takeon" | "update";
   /** A customer update: which person on it (lib/customer-updates). */
   index?: number;
   /** A customer update: also put it in their portal's Messages once sent. */
@@ -49,7 +49,11 @@ type Body = {
     movedFrom?: string | null;
   };
   /** An appraisal being booked, before it is saved: the booker's email column. */
-  appraisal?: { leadId?: string; landlord?: string; email?: string | null; address?: string; startsAt?: string; minutes?: number };
+  appraisal?: {
+    leadId?: string; landlord?: string; email?: string | null; address?: string; startsAt?: string; minutes?: number;
+    /** Rearrange (15 Oct 2026): the appraisal itself, and when it was, so the email says it moved. */
+    id?: string; movedFrom?: string | null;
+  };
   minutes?: number;
   subject?: string;
   html?: string;
@@ -87,19 +91,31 @@ export async function POST(req: NextRequest) {
   try {
     if (body.kind === "appraisal" && body.action !== "send" && body.appraisal) {
       const a = body.appraisal;
-      if (!a.leadId || !a.startsAt || Number.isNaN(new Date(a.startsAt).getTime())) {
+      if ((!a.leadId && !a.id) || !a.startsAt || Number.isNaN(new Date(a.startsAt).getTime())) {
         return NextResponse.json({ ok: false, error: "Which appraisal, and when?" }, { status: 400 });
       }
       const pending = {
-        id: appraisalIdForLead(a.leadId),
-        leadId: a.leadId,
+        id: a.id || appraisalIdForLead(a.leadId!),
+        leadId: a.leadId || null,
         landlord: (a.landlord ?? "").trim() || "there",
         address: (a.address ?? "").trim() || "your property",
         postcode: "",
         appointmentAt: a.startsAt,
         landlordEmail: (a.email ?? "").trim() || null,
       } as unknown as MarketAppraisal;
-      return NextResponse.json(await draftBookingConfirmation({ ma: pending, me: actor, minutes: Number(a.minutes) || undefined, unsaved: true, origin }));
+      const movedFrom = a.movedFrom && !Number.isNaN(new Date(a.movedFrom).getTime()) ? a.movedFrom : null;
+      return NextResponse.json(await draftBookingConfirmation({ ma: pending, me: actor, minutes: Number(a.minutes) || undefined, unsaved: true, origin, movedFrom }));
+    }
+
+    /* AN APPRAISAL CANCELLED (15 Oct 2026): the landlord told, only when the
+       agent presses Send, once per cancelled time. */
+    if (body.kind === "appraisal-cancelled") {
+      if (!body.id) return NextResponse.json({ ok: false, error: "Which appraisal?" }, { status: 400 });
+      if (body.action === "send") {
+        const r = await sendCancelNotice({ id: body.id, me: actor, subject: body.subject, html: body.html, again: body.again === true });
+        return NextResponse.json({ ok: r.sent, sent: r.sent, alreadySent: r.alreadySent ?? false, detail: r.sent ? `Sent to ${r.to}.` : r.reason });
+      }
+      return NextResponse.json(await draftCancelNotice({ id: body.id, me: actor }));
     }
 
     if (body.kind === "appraisal") {

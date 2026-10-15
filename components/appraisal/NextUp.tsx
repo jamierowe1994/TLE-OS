@@ -204,6 +204,14 @@ export default function NextUp({
     card = { icon: "clock", title: "Reading the file…" };
   } else if (stage === "lost") {
     card = { icon: "cross", eyebrow: "Outcome", title: "Marked lost", sub: "Reopen it from the top of the page if they call back." };
+  } else if (ma.cancelledAt && (stage === "booked" || stage === "pre_appraisal")) {
+    /* Cancelled (15 Oct 2026): no video, no send - it waits to be rebooked. */
+    card = {
+      icon: "calendar",
+      eyebrow: "Cancelled",
+      title: "Waiting to be rebooked",
+      sub: "Nothing goes to the landlord and nothing is in the diary. Rebook it from The appointment when they're ready.",
+    };
   } else if (stage === "won") {
     card = {
       icon: "star",

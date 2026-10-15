@@ -112,6 +112,9 @@ export type Appt = {
   propertyId?: string | null;
   /** The lead the booking was made for, on a viewing booked in the OS. */
   leadId?: string | null;
+  /** The market appraisal this entry is, when the OS booked it (15 Oct 2026):
+   *  the diary offers Rearrange and Cancel on it. */
+  appraisalId?: string;
   /**
    * What was said afterwards, out of REX - see lib/rex-feedback.ts.
    *

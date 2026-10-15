@@ -92,7 +92,10 @@ function rexTime(iso: string): { time: string; tzid: string } {
 export function appraisalEventData(ma: MarketAppraisal, calendarId: string) {
   const start = ma.appointmentAt!;
   const end = new Date(new Date(start).getTime() + MINUTES * 60000).toISOString();
-  const address = [ma.address, ma.postcode].filter((x) => x && !ma.address.includes(x)).join(", ") || ma.address;
+  /* The street, then the postcode unless the street already has it. This
+     tested the street against itself and dropped it, so the entry read
+     "at HU3 6LD" (seen 15 Oct 2026). */
+  const address = [ma.address, ma.postcode].filter((x, i) => x && (i === 0 || !ma.address.toUpperCase().includes(x.toUpperCase()))).join(", ") || ma.address;
   const records: { service: string; id: string }[] = [];
   if (ma.rexPropertyId) records.push({ service: "Properties", id: String(ma.rexPropertyId) });
   return {

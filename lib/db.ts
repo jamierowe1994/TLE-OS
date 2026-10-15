@@ -1187,6 +1187,13 @@ ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS terms_sent_at   TIMEST
 -- the fees, 14 Oct 2026). Goes into the contract's "Additional Fees Agreed"
 -- box; NULL is "None", which is what that box said before this existed.
 ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS other_fees      TEXT;
+-- Cancelled in the OS (James, 15 Oct 2026; lib/appraisal-change). The file is
+-- kept with everything on it; appointment_at is cleared so every reminder,
+-- nudge and diary that reads the time stops on its own, and the time it was
+-- for is kept in cancelled_was. Rearranging clears all three.
+ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS cancelled_at    TIMESTAMPTZ;
+ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS cancelled_was   TIMESTAMPTZ;
+ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS cancelled_by    TEXT;
 
 -- WHAT KIRSTIE HAS ALREADY BEEN TOLD.
 --

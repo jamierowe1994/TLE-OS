@@ -368,9 +368,9 @@ const SPINE = MA_STAGES.filter((s) => s.id !== "lost");
  * pills at the foot - blush for a missing figure, sage for a recorded one.
  */
 function AppraisalCard({ m, tile }: { m: MarketAppraisal & { live: MaStage }; tile: boolean }) {
-  const when = m.appointmentAt
-    ? new Date(m.appointmentAt).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
-    : null;
+  const fmt = (iso: string) => new Date(iso).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  /* Cancelled (15 Oct 2026): says so, with the time it was for. */
+  const when = m.appointmentAt ? fmt(m.appointmentAt) : m.cancelledAt ? `Cancelled${m.cancelledWas ? ` - was ${fmt(m.cancelledWas)}` : ""}` : null;
   const at = SPINE.findIndex((s) => s.id === m.live);
   const stage = MA_STAGES.find((s) => s.id === m.live)?.label;
   const missing = needsValuation(m);
@@ -395,6 +395,7 @@ function AppraisalCard({ m, tile }: { m: MarketAppraisal & { live: MaStage }; ti
           {m.unreadMessages === 1 ? "New message" : `${m.unreadMessages} new messages`}
         </span>
       )}
+      {m.cancelledAt && <span className="rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-semibold text-accent-dark">Cancelled</span>}
       {missing && <span className="rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-semibold text-accent-dark">No figure yet</span>}
       {m.valuation ? (
         <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: SAGE_WASH, color: SAGE_INK }}>

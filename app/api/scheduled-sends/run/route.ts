@@ -96,8 +96,8 @@ const TOO_LATE_MS = 12 * 60 * 60 * 1000;
  */
 async function preAppraisalStillStands(ref: string, body: string): Promise<string | null> {
   if (!ref) return null;
-  const rows = await q<{ stage: string; appointment_at: string | Date | null }>(
-    `SELECT stage, appointment_at FROM os_market_appraisals
+  const rows = await q<{ stage: string; appointment_at: string | Date | null; cancelled_at: string | Date | null }>(
+    `SELECT stage, appointment_at, cancelled_at FROM os_market_appraisals
       WHERE id = $1 OR lead_id = $1 OR id = 'lead-' || $1
       ORDER BY created_at DESC LIMIT 1`,
     [ref]
@@ -107,6 +107,9 @@ async function preAppraisalStillStands(ref: string, body: string): Promise<strin
   const ma = rows[0];
   if (!ma) return null;
   if (ma.stage === "lost") return "The appraisal was marked lost before this was due, so it was not sent.";
+  /* Cancelling stops the queue itself (lib/appraisal-change); this is the
+     backstop for a row written in the same moment. */
+  if (ma.cancelled_at) return "The appraisal was cancelled, so it was not sent.";
   if (!ma.appointment_at) return null;
   const visit = new Date(ma.appointment_at).getTime();
   if (visit < Date.now()) return "The visit had already happened by the time this was due, so it was not sent.";

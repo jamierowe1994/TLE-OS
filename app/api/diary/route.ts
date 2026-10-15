@@ -13,6 +13,7 @@ import { outlookDiaryFor, type OutlookRead } from "@/lib/outlook-diary";
 import { noteRexOutlookSync, withoutPulledCopies } from "@/lib/rex-outlook-sync";
 import { personalBusyFor, type PersonalRead } from "@/lib/personal-calendar";
 import { cancelledViewings, withoutCancelled } from "@/lib/viewing-cancelled";
+import { createHash } from "node:crypto";
 
 /**
  * The team's diary, cached — same manners as leads and listings.
@@ -94,6 +95,89 @@ async function ours(authorId: string | null, selfId: string): Promise<Appt[]> {
        with them — a diary short a travel block still beats no diary. */
     return [];
   }
+}
+
+/**
+ * WHICH APPRAISAL IS THIS ENTRY (15 Oct 2026). An appraisal booked in the OS
+ * reaches the diary as the REX entry booking made (os_case_state "rex-diary")
+ * or the Outlook entry it made ("outlook-event", appraisal|<id>; the diary
+ * knows an Outlook entry as ms-<first 16 of the sha1 of Graph's id>). Read
+ * fresh, so the entry opens the file and offers Rearrange and Cancel.
+ *
+ * And by time and name when the id does not answer (James's Landlord E2E
+ * appraisal, 16 Oct 09:30, read "made outside the OS"): an entry that reads as
+ * a market appraisal, at the very minute an OS appraisal starts, naming its
+ * landlord or its street, is that appraisal. Several at once (every tester's
+ * E2E pair is at 14 Test Street) are narrowed to the diary owner's; still
+ * more than one, it is left unlinked rather than guessed.
+ */
+type AppraisalLinks = {
+  byId: Map<string, string>;
+  booked: { id: string; name: string; landlord: string; street: string; agent: string; day: number; start: string }[];
+};
+
+async function appraisalLinks(): Promise<AppraisalLinks> {
+  const out: AppraisalLinks = { byId: new Map(), booked: [] };
+  if (!hasDb()) return out;
+  const [rows, booked] = await Promise.all([
+    q<{ kind: string; record_id: string; event_id: string | null }>(
+      `SELECT kind, record_id, payload->>'eventId' AS event_id FROM os_case_state
+        WHERE kind = 'rex-diary' OR (kind = 'outlook-event' AND record_id LIKE 'appraisal|%')`
+    ).catch(() => []),
+    q<{ id: string; landlord: string; address: string; agent: string | null; appointment_at: Date }>(
+      `SELECT id, landlord, address, agent, appointment_at FROM os_market_appraisals
+        WHERE appointment_at > NOW() - INTERVAL '21 days' AND appointment_at < NOW() + INTERVAL '90 days'
+          AND cancelled_at IS NULL`
+    ).catch(() => []),
+  ]);
+  for (const r of rows) {
+    if (!r.event_id) continue;
+    if (r.kind === "rex-diary") out.byId.set(`rex-${r.event_id}`, r.record_id);
+    else out.byId.set(`ms-${createHash("sha1").update(r.event_id).digest("hex").slice(0, 16)}`, r.record_id.slice("appraisal|".length));
+  }
+  out.booked = booked.map((b) => ({
+    id: b.id,
+    name: (b.landlord ?? "").trim(),
+    landlord: (b.landlord ?? "").trim().toLowerCase(),
+    street: (b.address ?? "").split(",")[0].trim().toLowerCase(),
+    agent: (b.agent ?? "").trim().toLowerCase(),
+    day: londonDayOffset(new Date(b.appointment_at)),
+    start: londonHHMM(new Date(b.appointment_at)),
+  }));
+  return out;
+}
+
+/** The OS appraisal this entry is by time and name, or null when it is not one, or not only one. */
+function appraisalByTime(a: Appt, links: AppraisalLinks): string | null {
+  if (a.kind === "viewing" || a.kind === "slot" || a.fromPersonal) return null;
+  const text = `${a.what} ${a.where}`.toLowerCase();
+  if (!/\b(market |rental market )?appraisal\b|\bvaluation\b/.test(text)) return null;
+  const named = links.booked.filter(
+    (b) => b.day === a.day && b.start === a.start && ((b.landlord.length >= 3 && text.includes(b.landlord)) || (b.street.length >= 4 && text.includes(b.street)))
+  );
+  if (named.length <= 1) return named[0]?.id ?? null;
+  const whose = (a.agent ?? "").trim().toLowerCase();
+  const mine = named.filter((b) => whose && b.agent === whose);
+  return mine.length === 1 ? mine[0].id : null;
+}
+
+function withAppraisalIds<B extends { appts: Appt[] }>(book: B, links: AppraisalLinks): B {
+  if (!links.byId.size && !links.booked.length) return book;
+  let hit = false;
+  const appts = book.appts.map((a) => {
+    const id = links.byId.get(a.id) ?? appraisalByTime(a, links);
+    if (!id) return a;
+    hit = true;
+    return {
+      ...a,
+      kind: "appraisal" as const,
+      appraisalId: id,
+      /* Who it's with: the landlord, where the entry names nobody. */
+      who: a.who || links.booked.find((b) => b.id === id)?.name || "",
+      link: a.link ?? { href: `/market-appraisals/${encodeURIComponent(id)}`, label: "The appraisal" },
+    };
+  });
+  return hit ? { ...book, appts } : book;
 }
 
 /** The REX book with our own entries merged in, sorted as one day reads. */
@@ -289,7 +373,7 @@ export async function GET(req: NextRequest) {
      for the slow REX pull; applying it to our own table would mean saving a
      travel buffer and watching the diary insist it isn't there for another
      minute and a half. */
-  const [scope, rexLogin, mine, found, gone] = await Promise.all([
+  const [scope, rexLogin, mine, found, gone, appraisals] = await Promise.all([
     scopeForWho(req, who0),
     hasDb()
       ? q<{ rex_email: string }>(`SELECT rex_email FROM os_rex_tokens WHERE user_id = $1`, [person.id]).catch(() => [])
@@ -299,6 +383,7 @@ export async function GET(req: NextRequest) {
     /* Cancelled in the OS, read fresh: REX stops returning a cancelled entry,
        but a held copy (or the agent's Outlook twin of it) still has it. */
     cancelledViewings(),
+    appraisalLinks(),
   ]);
   const who = mineOnly
     ? { email: (person.email ?? "").toLowerCase() || null, name: (scope.everything ? person.name : scope.label) || null, rexEmail: rexLogin[0]?.rex_email ?? null }
@@ -328,7 +413,7 @@ export async function GET(req: NextRequest) {
       const theirs = mineOnly ? marked.appts : marked.appts.filter((a) => a.own);
       after(() => noteRexOutlookSync(actor.id, theirs, outlook.appts).catch(() => undefined));
     }
-    const withBoth = withoutCancelled(withOutlook(marked, outlook, mineOnly), gone);
+    const withBoth = withAppraisalIds(withoutCancelled(withOutlook(marked, outlook, mineOnly), gone), appraisals);
     const personal = await personalP;
     return { ...withPersonal(withBoth, personal), whose, outlook: outlookSaid(outlook), personal: personalSaid(personal) };
   };
@@ -342,7 +427,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       live: false,
-      mine: [...mine, ...withoutCancelled({ appts: outlook?.appts ?? [] }, gone).appts, ...personal.appts],
+      mine: [...mine, ...withAppraisalIds(withoutCancelled({ appts: outlook?.appts ?? [] }, gone), appraisals).appts, ...personal.appts],
       whose,
       outlook: outlookSaid(outlook),
       personal: personalSaid(personal),

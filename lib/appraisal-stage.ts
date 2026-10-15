@@ -78,6 +78,10 @@ export function deriveAppraisalStage(ma: MarketAppraisal, f: AppraisalFacts): { 
   if (ma.stage === "lost") return { stage: "lost", why: "Marked lost." };
   if (ma.stage === "won") return { stage: "won", why: "Marked won." };
   if (f.listed) return { stage: "won", why: "The property is listed." };
+  /* Cancelled before the visit (15 Oct 2026): it waits, and says so. */
+  if (ma.cancelledAt && !f.valued && !f.termsSigned) {
+    return { stage: "pre_appraisal", why: "Cancelled. Nothing goes to the landlord and nothing is in the diary until it is rebooked." };
+  }
   if (f.termsSigned && f.answered && f.landlordDocs) return { stage: "aml", why: "Terms signed, the property questions answered, and the landlord's ID and proof of ownership are on the portal." };
   if (f.termsSigned && !f.answered) return { stage: "takeon", why: "Terms signed. The landlord still has property questions to answer - they are chased by email until they do." };
   if (f.termsSigned) return { stage: "takeon", why: "Terms signed. Next is the take-on visit and photographs." };

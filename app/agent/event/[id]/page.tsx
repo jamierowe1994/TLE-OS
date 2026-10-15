@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PhoneCancelViewing from "@/components/m/PhoneCancelViewing";
+import PhoneAppraisalChange from "@/components/m/PhoneAppraisalChange";
 import type { Appt } from "@/lib/diary";
 import type { PhonePerson } from "@/app/api/m/people/route";
 import type { PhoneEventFacts } from "@/app/api/m/event/route";
@@ -242,6 +243,13 @@ function Event({ appt, back }: { appt: Appt; back: string }) {
         </Link>
       )}
       <PhoneCancelViewing
+        appt={appt}
+        back={back}
+        diaryKey={DIARY_KEY}
+        buttonClass="m-btn m-press w-full !h-[52px] text-accent-dark disabled:opacity-60"
+        cardClass="m-group mt-6 p-4"
+      />
+      <PhoneAppraisalChange
         appt={appt}
         back={back}
         diaryKey={DIARY_KEY}

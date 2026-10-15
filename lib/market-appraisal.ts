@@ -121,6 +121,14 @@ export interface MarketAppraisal {
   presentToken: string | null;
   /** ISO, when terms of business last went out for signature (DocuSeal). Null until they have. */
   termsSentAt?: string | null;
+  /**
+   * CANCELLED (James, 15 Oct 2026; lib/appraisal-change). The file stays,
+   * appointmentAt goes back to null so nothing timed fires, and the time it
+   * was for is kept here. Rearrange clears all three.
+   */
+  cancelledAt?: string | null;
+  cancelledWas?: string | null;
+  cancelledBy?: string | null;
   createdAt: string;
   /** Attached by the list API: the stage read from the record (lib/appraisal-stage)
    *  and one line saying why. Absent on a bare row. */
@@ -211,6 +219,7 @@ export function effectiveStage(ma: MarketAppraisal, now = new Date()): MaStage {
  */
 export function needsValuation(ma: MarketAppraisal, now = new Date()): boolean {
   if (ma.stage === "won" || ma.stage === "lost") return false;
+  if (ma.cancelledAt) return false;
   if (ma.valuation != null) return false;
   return Boolean(ma.appointmentAt && new Date(ma.appointmentAt) < now);
 }
@@ -218,6 +227,7 @@ export function needsValuation(ma: MarketAppraisal, now = new Date()): boolean {
 /** Open work, worst first: overdue valuations, then soonest appointment. */
 export function urgencyOf(ma: MarketAppraisal, now = new Date()): number {
   if (needsValuation(ma, now)) return 0; // a forgotten valuation is the worst thing here
+  if (ma.cancelledAt) return 3; // called off: below everything still booked
   if (!ma.appointmentAt) return 1; // booked with no date — a real defect
   return 2 + new Date(ma.appointmentAt).getTime() / 1e13;
 }
