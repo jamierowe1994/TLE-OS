@@ -268,6 +268,27 @@ export const SWITCHES: Switch[] = [
   },
   {
     /**
+     * The property's Source, so REX will make the listing (15 Oct 2026, bug
+     * 9ad8cc4f - awaiting James's yes).
+     *
+     * REX can refuse a new listing on a property with no Source (More Info >
+     * Source, a custom field on the property). On, when it does, the OS sets
+     * "Personal referral / word of mouth" on the property and asks for the
+     * listing once more (lib/rex-property-source). A Source already there is
+     * never changed. Off, nothing is written: the agent is told the home
+     * needs a Source.
+     */
+    key: "rex_property_source",
+    label: "Fill in the Source on REX properties",
+    what: "When REX refuses a new listing because the home has no Source, the OS sets the property's Source to \"Personal referral / word of mouth\" and asks again, so the listing is made.",
+    who: "Nobody is emailed. This writes one field on a REX property - the live system six businesses share. CustomFields/setFieldValues must also be on REX_ALLOW_WRITES.",
+    confirm: "WRITE TO REX",
+    /* No old variable: this never existed before. Unset means off. */
+    legacyEnv: "REX_PROPERTY_SOURCE",
+    legacyOn: "on",
+  },
+  {
+    /**
      * The offer-accepted handover, for real.
      *
      * Off (the default) is SHADOW: every accepted application is worked
