@@ -6,7 +6,7 @@ import { can } from "@/lib/roles";
 import { bookFor } from "@/lib/listings-cache";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { searchMatches } from "@/lib/search-match";
-import { addressParts, osRecordFor } from "@/lib/os-property-address";
+import { addressParts, osHomeAddress, osRecordFor } from "@/lib/os-property-address";
 import type { ManagedProperty } from "@/lib/portfolio-types";
 
 /**
@@ -34,7 +34,7 @@ export async function addressBook(scope: Scope, role: string | null | undefined)
 export const proposeAddressChange: AssistantTool = {
   name: "propose_address_change",
   description:
-    "Change a home's address in the OS. Call it when somebody asks to edit, correct or fix a property's address (a missing town or postcode, a typo, a flat number). Give the home (listingId, or `find` with the address as they know it; the home open on their screen is used if neither) and newAddress: the WHOLE new address with town and postcode, e.g. 'Flat 2, 5 Canter Close, Liverpool, L9 9JE' - never invent a part. Call it FIRST, as soon as they ask how to change an address, WITHOUT newAddress: it says whether the OS holds this home's address and what it is now, so you never promise a change you cannot make. Then ask for the whole new address and call again with it. Shows the old and new address on a card; nothing changes until they say yes. Some homes' addresses are not held by the OS - it then tells you so and where it is changed instead.",
+    "Change a home's address in the OS. Call it when somebody asks to edit, correct or fix a property's address (a missing town or postcode, a typo, a flat number). Give the home (listingId, or `find` with the address as they know it; the home open on their screen is used if neither) and newAddress: the WHOLE new address with town and postcode, e.g. 'Flat 2, 5 Canter Close, Liverpool, L9 9JE' - never invent a part. Call it FIRST, as soon as they ask how to change an address, WITHOUT newAddress: it says whether the OS holds this home's address and what it is now, so you never promise a change you cannot make. Then ask for the whole new address and call again with it. Shows the old and new address on a card; nothing changes until they say yes. Most homes' addresses also live on their back-office property record; it tells you when to say it needs changing there too.",
   input_schema: {
     type: "object",
     properties: {
@@ -73,23 +73,21 @@ export const proposeAddressChange: AssistantTool = {
     const home = homes[0] ?? null;
     const record = home ? await osRecordFor(home).catch(() => null) : null;
 
-    if (!record) {
-      const now = home ? [home.name, home.locality].filter(Boolean).join(", ") : listing ? `${listing.name}, ${listing.locality}` : null;
-      if (!now) return { error: "That home isn't on your book, so I can't change its address." };
-      return {
-        notHeldByTheOs: true,
-        addressNow: now,
-        note:
-          "The OS doesn't keep its own copy of this home's address: the listing, Portfolio and the push to Propoly all read it from the home's property record in the back office - where the home was first set up - fresh each time. So it is changed there, not here, and the OS shows the new one shortly after. Tell them that in plain words, WITHOUT naming the system (never say REX), and offer to note it for James with note_a_gap so it can be changed in the OS later.",
-      };
-    }
+    /* Where the OS keeps it: the managed-home record when there is one,
+       otherwise the OS's own address row for the REX property (option A,
+       James via the ticket session, 15 Oct 2026). */
+    const rexPropertyId = record ? null : String(home?.propertyId ?? listing?.propertyId ?? "") || null;
+    const shownNow = home ? [home.name, home.locality].filter(Boolean).join(", ") : listing ? `${listing.name}, ${listing.locality}` : null;
+    if (!record && !shownNow) return { error: "That home isn't on your book, so I can't change its address." };
+    if (!record && !rexPropertyId) return { error: "I can't tell which home record this is, so I won't change it. It's gone to James." };
+    const held = rexPropertyId ? await osHomeAddress(rexPropertyId).catch(() => null) : null;
+    const before = record ? record.address : held?.address ?? (shownNow as string);
 
-    const before = record.address;
     if (!asked) {
       return {
-        heldByTheOs: true,
+        canChange: true,
         addressNow: before,
-        note: "The OS holds this home's address, so you can change it. Ask for the whole new address with the town and postcode, then call again with newAddress.",
+        note: "You can change this home's address in the OS. Ask for the whole new address with the town and postcode, then call again with newAddress.",
       };
     }
     const parts = addressParts(asked);
@@ -97,23 +95,23 @@ export const proposeAddressChange: AssistantTool = {
     if (before.replace(/\W/g, "").toLowerCase() === parts.address.replace(/\W/g, "").toLowerCase()) {
       return { error: `That's already the address the OS holds: ${before}.` };
     }
+    const alsoElsewhere = record ? record.linked : true;
     return {
       __proposal: {
         kind: "address",
         listingId: null,
-        address: [home!.name, home!.locality].filter(Boolean).join(", "),
-        osPropertyId: record.id,
-        homeId: home!.listingId,
+        address: shownNow ?? before,
+        target: record ? { kind: "os-record", osPropertyId: record.id, homeId: home!.listingId } : { kind: "home", rexPropertyId: rexPropertyId as string, listingId: home?.listingId ?? (listing ? String(listing.id) : null) },
         before,
         after: parts,
-        alsoElsewhere: record.linked,
+        alsoElsewhere,
         text: `Now: ${before}\nNew: ${parts.address}`,
       },
       done: false,
       note:
         `Shown to them: the old address (${before}) and the new (${parts.address}). Nothing has changed yet. Say both in one short line and end with exactly "Shall I change it?" - a yes, or the Change it button, saves it in the OS.` +
-        (record.linked
-          ? " This home is also on a property record in the back office (where listings are set up): say that once it is changed in the OS, they should change it there too so the listing and the portals match. Never name REX."
+        (alsoElsewhere
+          ? " Say too that this home's address is also on its property record in the back office (where it was set up): once it's changed in the OS, change it there as well so the listing and the portals match. Never name REX."
           : ""),
     };
   },

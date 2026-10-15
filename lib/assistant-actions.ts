@@ -127,8 +127,8 @@ export type ActionProposal =
       kind: "address";
       listingId: null;
       address: string;
-      osPropertyId: string;
-      homeId: string;
+      /** The managed-home record, or the OS's own address row for a REX property. */
+      target: { kind: "os-record"; osPropertyId: string; homeId: string } | { kind: "home"; rexPropertyId: string; listingId: string | null };
       before: string;
       after: { address: string; name: string; town: string; postcode: string; locality: string };
       /** The home is also on a back-office property record, to change there too. */
@@ -429,20 +429,35 @@ async function doAddress(p: Extract<ActionProposal, { kind: "address" }>, scope:
   const book = await addressBook(scope, me.role);
   if ("error" in book) return { ok: false, message: book.error };
   const { managedBookFor, forgetBooks } = await import("@/lib/managed-book-cache");
-  const { osRecordFor, saveOsAddress } = await import("@/lib/os-property-address");
-  const home = (await managedBookFor(book.rex)).book.properties.find((x) => x.listingId === p.homeId);
-  const rec = home ? await osRecordFor(home) : null;
-  if (!rec || rec.id !== p.osPropertyId) return { ok: false, message: "That home isn't in your book any more, so I haven't changed it." };
-  const saved = await saveOsAddress(p.osPropertyId, p.after);
-  if (!saved) return { ok: false, message: "That didn't save. Try again in a moment." };
+  const { osRecordFor, saveOsAddress, saveOsHomeAddress } = await import("@/lib/os-property-address");
+  const managed = (await managedBookFor(book.rex)).book.properties;
+  let before: string | null;
+  let subject: string;
+  if (p.target.kind === "os-record") {
+    const t = p.target;
+    const home = managed.find((x) => x.listingId === t.homeId);
+    const rec = home ? await osRecordFor(home) : null;
+    if (!rec || rec.id !== t.osPropertyId) return { ok: false, message: "That home isn't in your book any more, so I haven't changed it." };
+    const saved = await saveOsAddress(t.osPropertyId, p.after);
+    if (!saved) return { ok: false, message: "That didn't save. Try again in a moment." };
+    before = saved.before;
+    subject = t.osPropertyId;
+  } else {
+    const t = p.target;
+    const listings = (await bookFor(book.rex)).listings;
+    const theirs = listings.some((l) => String(l.propertyId) === t.rexPropertyId) || managed.some((x) => String(x.propertyId) === t.rexPropertyId);
+    if (!theirs) return { ok: false, message: "That home isn't in your book any more, so I haven't changed it." };
+    before = (await saveOsHomeAddress(t.rexPropertyId, t.listingId, p.after, { id: me.id, name: me.name || me.email })).before ?? p.before;
+    subject = `rex-property:${t.rexPropertyId}`;
+  }
   await forgetBooks();
   const { record } = await import("@/lib/audit");
-  await record({ kind: "property_address_changed", actorId: me.id, actorEmail: me.email, subjectId: p.osPropertyId, detail: `${saved.before} -> ${p.after.address}` });
+  await record({ kind: "property_address_changed", actorId: me.id, actorEmail: me.email, subjectId: subject, detail: `${before ?? "(none)"} -> ${p.after.address}` });
   return {
     ok: true,
     message:
-      `Changed in the OS: ${p.after.address} (it was ${saved.before}).` +
-      (p.alsoElsewhere ? " It's also on the home's property record in the back office, where listings are set up - change it there too so the listing and the portals match." : ""),
+      `Changed in the OS: ${p.after.address} (it was ${before ?? p.before}).` +
+      (p.alsoElsewhere ? " It's also on the home's property record in the back office, where it was set up - change it there too so the listing and the portals match." : ""),
   };
 }
 

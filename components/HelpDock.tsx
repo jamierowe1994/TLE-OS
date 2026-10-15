@@ -323,7 +323,7 @@ const CARD_EFFECT: Record<Proposal["kind"], string> = {
   "write-up": "Writes to REX and goes live on Rightmove, Zoopla and OnTheMarket in about five to ten minutes.",
   email: "Sends from YOUR Microsoft mailbox, so it is in your Sent Items and their reply threads onto it. BCC'd to REX so it shows on their timeline. The address is looked up again when you press - it always goes to the person on the record.",
   "rtr-expiry": "Saves on the let, beside the right to rent check. The office gets a reminder when the follow-up check is due. Nothing is sent to anyone.",
-  address: "Changes the address on the home's record in the OS, where Portfolio reads it. Nothing is sent to anyone.",
+  address: "Changes the home's address in the OS, shown on its listing and Portfolio pages. Nothing is sent to anyone.",
 };
 
 /* Not inside the iPhone app (James, 2 Oct 2026): the app's floating nav bar

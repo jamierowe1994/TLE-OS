@@ -2295,6 +2295,24 @@ CREATE TABLE IF NOT EXISTS os_application_rtr (
 CREATE INDEX IF NOT EXISTS os_application_rtr_app ON os_application_rtr (application_id, recorded_at DESC);
 CREATE INDEX IF NOT EXISTS os_application_rtr_follow_up ON os_application_rtr (follow_up_on) WHERE follow_up_on IS NOT NULL;
 
+-- A home's address as the OS holds it, for homes with no os_properties
+-- record of their own (15 Oct 2026, lib/os-property-address; Kayleigh: "How
+-- do I edit the address on a property?"). Keyed by the REX property, so the
+-- listing, Portfolio and the Propoly push all find the same row. REX is not
+-- written: the agent changes it on the back-office record too.
+CREATE TABLE IF NOT EXISTS os_home_addresses (
+  rex_property_id TEXT PRIMARY KEY,
+  listing_id      TEXT,
+  address         TEXT NOT NULL,
+  name            TEXT NOT NULL,
+  town            TEXT NOT NULL,
+  postcode        TEXT NOT NULL,
+  locality        TEXT NOT NULL,
+  set_by          TEXT NOT NULL,
+  set_by_name     TEXT NOT NULL DEFAULT '',
+  set_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS os_cache (
   key            TEXT PRIMARY KEY,
   payload        JSONB NOT NULL,
