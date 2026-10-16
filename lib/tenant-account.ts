@@ -7,7 +7,8 @@ import { findUserById, normaliseEmail } from "@/lib/users";
 import { getAllPropolyDeals, type BusinessDeal } from "@/lib/business/propoly-deals";
 import { getMeta } from "@/lib/business/deal-store";
 import { derivedStageFor } from "@/lib/business/deal-stage";
-import { PORTAL_STAGES } from "@/lib/business/propoly-stages";
+import { stagesFor } from "@/lib/business/propoly-stages";
+import { isScottish } from "@/lib/property-flags";
 import { findPassportByEmail, getPassport, type PassportRecord } from "@/lib/passport";
 import { STAGE_UPDATE } from "@/lib/tenant-journey";
 
@@ -232,20 +233,32 @@ const TENANT_WORDS: Record<string, { label: string; now: string; next: string }>
   Object.entries(STAGE_UPDATE).map(([key, u]) => [key, { label: u.label, now: u.blurb, next: u.next }])
 );
 
+/* Scotland takes no holding fee (16 Oct 2026), so its track has no such stop
+   and the words never promise one. A Scottish deal Propoly still shows at its
+   own holding fee is, to the tenant, a deal being set up. */
+function scotStage(stageKey: string, scot: boolean): string {
+  return scot && stageKey === "holding_fee" ? "deal_started" : stageKey;
+}
+function wordsFor(stageKey: string, scot: boolean): { label: string; now: string; next: string } {
+  const w = TENANT_WORDS[stageKey] ?? TENANT_WORDS.deal_started;
+  return scot && stageKey === "deal_started" ? { ...w, next: "Referencing is next: you'll get a link to fill in your references." } : w;
+}
+
 export async function tenantDealViews(account: TenantAccount): Promise<TenantDealView[]> {
   const all = (await getAllPropolyDeals().catch(() => null)) ?? [];
   const mine = dealsFor(account.email, all);
   const out: TenantDealView[] = [];
   for (const d of mine) {
     const meta = await getMeta(d.app.id).catch(() => null);
-    const stageKey = await derivedStageFor(d, meta);
-    const idx = Math.max(0, PORTAL_STAGES.findIndex((s) => s.key === stageKey));
-    const stages: TenantStage[] = PORTAL_STAGES.map((s, i) => ({
+    const scot = isScottish(d.app.locality, d.app.propertyName);
+    const stageKey = scotStage(await derivedStageFor(d, meta), scot);
+    const idx = Math.max(0, stagesFor(scot).findIndex((s) => s.key === stageKey));
+    const stages: TenantStage[] = stagesFor(scot).map((s, i) => ({
       key: s.key,
       label: TENANT_WORDS[s.key]?.label ?? s.label,
       state: i < idx ? "done" : i === idx ? "current" : "upcoming",
     }));
-    const words = TENANT_WORDS[stageKey] ?? TENANT_WORDS.deal_started;
+    const words = wordsFor(stageKey, scot);
     out.push({
       id: d.app.id,
       property: d.app.propertyName,
@@ -264,16 +277,18 @@ export async function tenantDealViews(account: TenantAccount): Promise<TenantDea
   /* A test file's deal (lib/test-overlay), for the tester signed in as their
      own test tenant - Propoly has never heard of it. */
   for (const t of await testDealsForTenant(account.email).catch(() => [])) {
-    const idx = Math.max(0, PORTAL_STAGES.findIndex((s) => s.key === t.stageKey));
-    const words = TENANT_WORDS[t.stageKey] ?? TENANT_WORDS.deal_started;
+    const scot = isScottish(t.locality, t.property);
+    const stageKey = scotStage(t.stageKey, scot);
+    const idx = Math.max(0, stagesFor(scot).findIndex((s) => s.key === stageKey));
+    const words = wordsFor(stageKey, scot);
     out.push({
       id: `test-${t.appId}`,
       property: t.property,
       locality: t.locality,
       rentPcm: t.rent,
       moveIn: t.moveIn,
-      stageKey: t.stageKey,
-      stages: PORTAL_STAGES.map((s, i) => ({ key: s.key, label: TENANT_WORDS[s.key]?.label ?? s.label, state: i < idx ? "done" : i === idx ? "current" : "upcoming" })),
+      stageKey,
+      stages: stagesFor(scot).map((s, i) => ({ key: s.key, label: TENANT_WORDS[s.key]?.label ?? s.label, state: i < idx ? "done" : i === idx ? "current" : "upcoming" })),
       now: words.now,
       next: words.next,
       agent: { name: t.agentName, email: t.agentEmail },
@@ -290,7 +305,7 @@ export async function tenantDealViews(account: TenantAccount): Promise<TenantDea
      shows. Only while they are still a tenant on that let in the book: a
      tenant who has moved out stops seeing it. */
   const sent = await sittingHomes(account.email).catch(() => []);
-  const doneStages = PORTAL_STAGES.map((s) => ({ key: s.key, label: TENANT_WORDS[s.key]?.label ?? s.label, state: "done" as const }));
+  const doneStages = stagesFor(false).map((s) => ({ key: s.key, label: TENANT_WORDS[s.key]?.label ?? s.label, state: "done" as const }));
   for (const h of sent) {
     if (out.some((d) => normaliseAddress(d.property) === normaliseAddress(h.propertyName))) continue;
     const agent = h.agentUserId ? await findUserById(h.agentUserId).catch(() => null) : null;

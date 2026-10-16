@@ -77,6 +77,16 @@ export const PORTAL_STAGES: PortalStageInfo[] = [
   },
 ];
 
+/**
+ * The track for one deal. Scotland takes no holding fee (James, 16 Oct 2026:
+ * it isn't required there and neither Scottish agent takes one), so a
+ * Scottish deal's track has no holding fee stop - on the let, the drawer and
+ * both customer portals alike.
+ */
+export function stagesFor(scotland: boolean): PortalStageInfo[] {
+  return scotland ? PORTAL_STAGES.filter((s) => s.key !== "holding_fee") : PORTAL_STAGES;
+}
+
 export const PORTAL_STAGE_BY_KEY: Record<string, PortalStageInfo> =
   Object.fromEntries(PORTAL_STAGES.map((s) => [s.key, s]));
 

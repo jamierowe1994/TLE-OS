@@ -4,6 +4,7 @@ import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view
 import { letPeople } from "@/lib/let-people";
 import { createUpdate } from "@/lib/customer-updates";
 import { HEADLINE, updateVars, type UpdateKind } from "@/lib/customer-update-copy";
+import { isScottish } from "@/lib/property-flags";
 
 /**
  * POST { kind, role: "tenant" | "landlord", index? } → a customer update the
@@ -56,6 +57,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     firstName: who.name.trim().split(/\s+/)[0] ?? "",
     agentName,
     moveIn: day(r.let.moveIn),
+    scotland: isScottish(r.let.locality, r.let.property),
   });
   const made = await createUpdate(
     {

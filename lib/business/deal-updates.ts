@@ -6,6 +6,7 @@ import { referenceState } from "@/lib/business/stage-evidence";
 import { findDuplicates } from "@/lib/business/deal-dupes";
 import { createUpdate, type UpdateRecipient } from "@/lib/customer-updates";
 import { AUDIENCE, HEADLINE, updateVars, type UpdateKind } from "@/lib/customer-update-copy";
+import { isScottish } from "@/lib/property-flags";
 
 /**
  * The Propoly watcher's moves, turned into customer updates for the agent
@@ -31,7 +32,8 @@ const first = (name: string) => name.trim().split(/\s+/)[0] || "there";
 
 export function dealRecipients(deal: BusinessDeal, kind: UpdateKind, opts: { onlyTenant?: string } = {}): Omit<UpdateRecipient, "state">[] {
   const agentName = deal.managerName ? deal.managerName.replace(/\b\w/g, (c) => c.toUpperCase()) : "The Letting Experts";
-  const ctx = (name: string) => ({ address: deal.app.propertyName, firstName: first(name), agentName, moveIn: words(deal.app.startDate) });
+  const scotland = isScottish(deal.app.locality, deal.app.propertyName);
+  const ctx = (name: string) => ({ address: deal.app.propertyName, firstName: first(name), agentName, moveIn: words(deal.app.startDate), scotland });
   const out: Omit<UpdateRecipient, "state">[] = [];
   const roles = AUDIENCE[kind];
   if (roles.includes("tenant")) {

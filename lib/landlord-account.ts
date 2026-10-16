@@ -19,7 +19,8 @@ import { money, workLine, type PassportData } from "@/lib/passport-shape";
 import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
 import { getMeta } from "@/lib/business/deal-store";
 import { derivedStageFor } from "@/lib/business/deal-stage";
-import { PORTAL_STAGES } from "@/lib/business/propoly-stages";
+import { stagesFor } from "@/lib/business/propoly-stages";
+import { isScottish } from "@/lib/property-flags";
 import { propertyKey } from "@/lib/business/payprop-portfolio";
 import { CERT_META, requiredCerts, statusOf, withCompliance, type CertKey, type CertStatus, type CompProperty } from "@/lib/compliance";
 import { CHECKING_LABEL } from "@/lib/cert-hold";
@@ -505,6 +506,16 @@ const LANDLORD_WORDS: Record<string, { label: string; now: string; next: string 
   move_day: { label: "Move-in day", now: "Everything is in place. The tenant moves in on the date agreed.", next: "Keys, inventory and check-in are handled by your agent." },
 };
 
+/* Scotland takes no holding fee (16 Oct 2026): no such stop on the track,
+   and no promise of one in the words. */
+function landlordScotStage(stageKey: string, scot: boolean): string {
+  return scot && stageKey === "holding_fee" ? "deal_started" : stageKey;
+}
+function landlordWords(stageKey: string, scot: boolean): { label: string; now: string; next: string } {
+  const w = LANDLORD_WORDS[stageKey] ?? LANDLORD_WORDS.deal_started;
+  return scot && stageKey === "deal_started" ? { ...w, next: "Referencing starts next: we check the tenant's employer, previous landlord and credit." } : w;
+}
+
 /** A UK postcode found anywhere in a line of address, squashed: "NN1 4AB" -> "NN14AB". */
 function postcodeKey(text: string): string | null {
   const m = /\b([A-Z]{1,2}\d[A-Z\d]?)\s*(\d[A-Z]{2})\b/i.exec(text ?? "");
@@ -546,16 +557,17 @@ export async function landlordProgress(email: string, propertyNames: string[]): 
   mine.sort((a, b) => (a.app.startDate ?? "9999").localeCompare(b.app.startDate ?? "9999"));
   const d = mine[0];
   const meta = await getMeta(d.app.id).catch(() => null);
-  const stageKey = await derivedStageFor(d, meta);
-  const idx = Math.max(0, PORTAL_STAGES.findIndex((s) => s.key === stageKey));
-  const words = LANDLORD_WORDS[stageKey] ?? LANDLORD_WORDS.deal_started;
+  const scot = isScottish(d.app.locality, d.app.propertyName);
+  const stageKey = landlordScotStage(await derivedStageFor(d, meta), scot);
+  const idx = Math.max(0, stagesFor(scot).findIndex((s) => s.key === stageKey));
+  const words = landlordWords(stageKey, scot);
   return {
     property: [d.app.propertyName, d.app.locality].filter(Boolean).join(", "),
     tenants: d.app.tenants.map((t) => t.name.split(/\s+/)[0]).filter(Boolean).join(" and ") || "The tenant",
     moveIn: d.app.startDate,
     rentPcm: d.app.offer,
     stageKey,
-    stages: PORTAL_STAGES.map((s, i) => ({
+    stages: stagesFor(scot).map((s, i) => ({
       key: s.key,
       label: LANDLORD_WORDS[s.key]?.label ?? s.label,
       state: i < idx ? "done" : i === idx ? "current" : "upcoming",
@@ -567,15 +579,17 @@ export async function landlordProgress(email: string, propertyNames: string[]): 
 
 /** A test file's deal (lib/test-overlay) in the same landlord words as a real one. */
 export function testProgress(d: { property: string; locality: string; tenantName: string; moveIn: string; rent: number; stageKey: string }): ViewProgress {
-  const idx = Math.max(0, PORTAL_STAGES.findIndex((s) => s.key === d.stageKey));
-  const words = LANDLORD_WORDS[d.stageKey] ?? LANDLORD_WORDS.deal_started;
+  const scot = isScottish(d.locality, d.property);
+  const stageKey = landlordScotStage(d.stageKey, scot);
+  const idx = Math.max(0, stagesFor(scot).findIndex((s) => s.key === stageKey));
+  const words = landlordWords(stageKey, scot);
   return {
     property: [d.property, d.locality].filter(Boolean).join(", "),
     tenants: d.tenantName.split(/\s+/)[0] || "The tenant",
     moveIn: d.moveIn,
     rentPcm: d.rent,
-    stageKey: d.stageKey,
-    stages: PORTAL_STAGES.map((s, i) => ({ key: s.key, label: LANDLORD_WORDS[s.key]?.label ?? s.label, state: i < idx ? "done" : i === idx ? "current" : "upcoming" })),
+    stageKey,
+    stages: stagesFor(scot).map((s, i) => ({ key: s.key, label: LANDLORD_WORDS[s.key]?.label ?? s.label, state: i < idx ? "done" : i === idx ? "current" : "upcoming" })),
     now: words.now,
     next: words.next,
   };

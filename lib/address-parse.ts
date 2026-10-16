@@ -145,6 +145,12 @@ export function sameHome(a: string, b: string): boolean {
   const x = parseAddress(a);
   const y = parseAddress(b);
   if (!x.street || !y.street || x.street !== y.street) return false;
+  /* The same building and the same flat in it (16 Oct 2026): REX's
+     "Flat 5 (2F2) 285 Leith Walk" is Propoly's "285/5 Leith Walk", but the
+     floor code puts an extra number in one and not the other, so Sean's
+     pushed deal was never found and the let sat on "Waiting on the holding
+     fee" after Propoly had moved it on. */
+  if (x.building && x.unit && y.building && y.unit) return x.building === y.building && x.unit === y.unit;
   if (x.nums.size && y.nums.size) return same(x.nums, y.nums);
   /* No number either side: a named house. The street and the name must agree. */
   return !x.nums.size && !y.nums.size && x.sig.size > 0 && y.sig.size > 0 && (covers(x.sig, y.sig) || covers(y.sig, x.sig));

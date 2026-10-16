@@ -14,7 +14,8 @@ import { loadMoneyContext, moneyForDeal, type MoneyContext } from "@/lib/busines
 import { stageEvidence } from "@/lib/business/stage-evidence";
 import { withoutDuplicates } from "@/lib/business/deal-dupes";
 import { flatbondForDeal, loadFlatbonds } from "@/lib/business/flatfair-deal";
-import { PORTAL_STAGES, propolyDealUrl } from "@/lib/business/propoly-stages";
+import { PORTAL_STAGES, propolyDealUrl, stagesFor } from "@/lib/business/propoly-stages";
+import { isScottish } from "@/lib/property-flags";
 import { switchOn } from "@/lib/switches";
 import { q } from "@/lib/db";
 import { closedReasons, getApplications } from "@/lib/applications";
@@ -119,7 +120,11 @@ async function money(): Promise<MoneyContext | null> {
   return m;
 }
 
-function findDeal(app: Application, all: BusinessDeal[]): BusinessDeal | null {
+function findDeal(app: Application, all: BusinessDeal[], pushed?: string | null): BusinessDeal | null {
+  /* The deal our own push started is this let's, whatever either side calls
+     the address (16 Oct 2026, 285/5 Leith Walk). */
+  const own = pushed ? all.find((d) => d.app.id === pushed) : null;
+  if (own) return own;
   if (!app.property?.trim()) return null;
   const hits = all.filter((d) => sameHome(app.property, d.app.propertyName ?? ""));
   if (hits.length === 0) return null;
@@ -213,8 +218,27 @@ export function findSwapDeal(app: Application, all: BusinessDeal[]): BusinessDea
  * hold). Null when the deal isn't in Propoly or Propoly couldn't be read.
  */
 export async function dealForApplication(app: Application): Promise<BusinessDeal | null> {
-  const all = await deals();
-  return all ? findDeal(app, all) : null;
+  const [all, runs] = await Promise.all([deals(), handoversFor(app.id, 10).catch(() => [])]);
+  const live = runs.find((r) => r.mode === "live" && r.status === "ok");
+  return all ? findDeal(app, all, live ? pushedDealOf(live.steps) : null) : null;
+}
+
+/** The deal a finished live push started, from its "deal" step. */
+function pushedDealOf(steps: { id: string; state: string; response?: unknown }[]): string | null {
+  return (steps.find((x) => x.id === "deal" && x.state === "ok")?.response as { uuid?: string } | null)?.uuid ?? null;
+}
+
+/** Every application's pushed deal, in one read, for a list. */
+async function pushedDeals(): Promise<Map<string, string>> {
+  const rows = await q<{ application_id: string; steps: { id: string; state: string; response?: unknown }[] }>(
+    `SELECT application_id, steps FROM os_handovers WHERE mode = 'live' AND status = 'ok' ORDER BY started_at`
+  ).catch(() => []);
+  const out = new Map<string, string>();
+  for (const r of rows) {
+    const uuid = Array.isArray(r.steps) ? pushedDealOf(r.steps) : null;
+    if (uuid) out.set(r.application_id, uuid);
+  }
+  return out;
 }
 
 /** Whether Propoly's deals could be read just now. A null deal means nothing when they couldn't. */
@@ -405,7 +429,15 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
   /* A tenant swap's home already has a deal - the tenancy being changed - so
      only the new one counts: the deal its own push started, or one keyed in
      by hand with a joiner on it (lib/tenant-swaps). */
-  const deal = accepted && allDeals ? (app.swap ? findSwapDeal(app, allDeals) : findDeal(app, allDeals)) : null;
+  const pushedUuid = run?.mode === "live" && run.status === "ok" ? pushedDealOf(run.steps) : null;
+  const deal = accepted && allDeals ? (app.swap ? findSwapDeal(app, allDeals) : findDeal(app, allDeals, pushedUuid)) : null;
+  /* SCOTLAND TAKES NO HOLDING FEE (James, 16 Oct 2026): it isn't required
+     there and neither Scottish agent takes one. The push already sends none,
+     but Propoly fills in its own on every deal started from the OS, so 285/5
+     Leith Walk sat behind a fee nobody was going to pay. The stop comes off
+     the track; if Propoly put one on, the step is taking it off. */
+  const scotland = !app.swap && isScottish(app.locality, app.property);
+  const track = stagesFor(scotland);
   /* Not open in Propoly: finished there, perhaps (12 Oct 2026). */
   const finished = accepted && !deal && !app.swap ? findCompleted(app, (await completes()) ?? []) : null;
 
@@ -443,10 +475,12 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
       /* A swap has no holding fee (James, 13 Oct 2026): the deal goes to
          referencing for the newcomer once Propoly's deals are next read. */
       actions.push({ id: "swap-refs", label: "Referencing the new tenant", detail: `The swap is in Propoly. ${app.swap.joining.join(", ")} ${app.swap.joining.length === 1 ? "is" : "are"} referenced; everybody staying is not.`, href: propolyDealUrl(startedUuid), who: "tenant" });
+    } else if (startedUuid && scotland) {
+      actions.push({ id: "scot-fee", label: "Take the holding fee off in Propoly", detail: "Scotland takes no holding fee, but Propoly puts its own on every deal started from the OS. Set it to not required, check the deposit, then start referencing.", href: propolyDealUrl(startedUuid), who: "kirstie" });
     } else if (startedUuid) {
       actions.push({ id: "fee", label: "Waiting on the holding fee", detail: "The deal is in Propoly with the tenants on it, and the holding fee is taken from it.", href: propolyDealUrl(startedUuid), who: "tenant" });
     } else {
-      actions.push({ id: "deal-start", label: "Start the deal in Propoly", detail: "The landlord and the home are in Propoly now. Start the deal there for these tenants - the holding fee is taken from the deal.", href: null, who: "kirstie" });
+      actions.push({ id: "deal-start", label: "Start the deal in Propoly", detail: scotland ? "The landlord and the home are in Propoly now. Start the deal there for these tenants - there's no holding fee in Scotland, so set it to not required." : "The landlord and the home are in Propoly now. Start the deal there for these tenants - the holding fee is taken from the deal.", href: null, who: "kirstie" });
     }
   } else if (run?.mode === "live") {
     const failed = run.steps.find((s) => s.state === "failed" || s.state === "blocked");
@@ -477,7 +511,16 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
      nothing - 44 South Bridge sat at Start deal with £762 due on 12 Oct. Set
      to "not required" in Propoly, the deal moves on to referencing, as the
      swaps Kirstie keys in by hand do. */
-  if (deal && app.swap && !fee.settled) {
+  if (deal && scotland && !fee.settled) {
+    const due = deal.app.propoly?.holdingFee ?? null;
+    actions.push({
+      id: "scot-fee",
+      label: "Take the holding fee off in Propoly",
+      detail: `Scotland takes no holding fee, but Propoly puts its own on every deal started from the OS (${due ? `£${Math.round(due).toLocaleString("en-GB")} here` : "a week's rent"}) - it can't be switched off from outside Propoly. Set the holding fee to not required, check the deposit, then start referencing.${held.length ? ` ${heldNames} ${held.length === 1 ? "is" : "are"} held until then.` : ""}`,
+      href: dealUrlOf(deal),
+      who: "kirstie",
+    });
+  } else if (deal && app.swap && !fee.settled) {
     const due = deal.app.propoly?.holdingFee ?? null;
     actions.push({
       id: "swap-fee",
@@ -498,7 +541,9 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
     actions.push({
       id: "held",
       label: `${held.length} other offer${held.length === 1 ? "" : "s"} held`,
-      detail: `${heldNames} ${held.length === 1 ? "stays" : "stay"} open until the holding fee is paid, and the home keeps taking viewings. Once it's paid you'll be asked to let them know.`,
+      detail: scotland
+        ? `${heldNames} ${held.length === 1 ? "stays" : "stay"} open until the deal is through to referencing in Propoly, and the home keeps taking viewings. Then you'll be asked to let them know.`
+        : `${heldNames} ${held.length === 1 ? "stays" : "stay"} open until the holding fee is paid, and the home keeps taking viewings. Once it's paid you'll be asked to let them know.`,
       href: null,
       who: "tenant",
       minor: true,
@@ -582,13 +627,13 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
       },
       meta
     );
-    const currentIdx = Math.max(0, PORTAL_STAGES.findIndex((s) => s.key === stageKey));
+    const currentIdx = Math.max(0, track.findIndex((s) => s.key === stageKey));
     const evidenceDeal = m
       ? { ...moneyForDeal(m, deal.app.propertyName, deal.app.startDate), startDate: deal.app.startDate, app: deal.app, flatbond }
       : { startDate: deal.app.startDate, app: deal.app, flatbond };
     dealInfo = { id: deal.app.id, stage: stageKey, url: propolyDealUrl(deal.app.id) };
 
-    PORTAL_STAGES.forEach((s, i) => {
+    track.forEach((s, i) => {
       const reached = i <= currentIdx;
       const ev = stageEvidence(s.key, evidenceDeal, { reached, moneyLoaded: Boolean(m?.loaded) });
       let sub: string | null = ev.text || null;
@@ -609,7 +654,7 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
       });
     });
   } else {
-    PORTAL_STAGES.forEach((s, i) => {
+    track.forEach((s, i) => {
       stops.push({
         id: s.key,
         label: s.label,
@@ -696,9 +741,6 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
     loose.app.tenants.some((t) =>
       app.applicants.some((a) => (a.email && t.email && norm(a.email) === norm(t.email)) || (norm(a.name) !== "" && norm(a.name) === norm(t.name)))
     );
-  const pushedUuid = run?.mode === "live" && run.status === "ok"
-    ? ((run.steps.find((x) => x.id === "deal" && x.state === "ok")?.response as { uuid?: string } | null)?.uuid ?? null)
-    : null;
   const inPropoly: ApplicationJourney["inPropoly"] = deal
     ? { url: dealUrlOf(deal), how: "open" }
     : finished
@@ -734,7 +776,7 @@ export async function stageLabels(apps: Application[]): Promise<Map<string, stri
   /* Accepted here counts as accepted (9 Oct 2026), as on the file itself. */
   const isAccepted = (a: Application) => a.status === "accepted" || a.osDecision?.decision === "accepted";
   const accepted = apps.filter(isAccepted);
-  const [all, done] = accepted.length ? await Promise.all([deals().catch(() => null), completes()]) : [null, null];
+  const [all, done, pushed] = accepted.length ? await Promise.all([deals().catch(() => null), completes(), pushedDeals()]) : [null, null, new Map<string, string>()];
   const intro = await introOnlyIds().catch(() => new Set<string>());
   /* Only a live push that finished counts: a blocked one leaves it waiting. */
   const swapsPushed = apps.some((a) => a.swap)
@@ -753,7 +795,7 @@ export async function stageLabels(apps: Application[]): Promise<Map<string, stri
       out.set(a.id, keyed ? dealStatusLabel(keyed.statusKey) : swapsPushed.has(a.id) ? "In Propoly" : all ? "Handover due" : "Accepted");
       continue;
     }
-    const deal = all ? findDeal(a, all) : null;
+    const deal = all ? findDeal(a, all, pushed.get(a.id)) : null;
     if (deal) { out.set(a.id, dealStatusLabel(deal.statusKey)); continue; }
     /* Not open in Propoly: finished there, perhaps. */
     if (done && findCompleted(a, done)) { out.set(a.id, "Moved in"); continue; }

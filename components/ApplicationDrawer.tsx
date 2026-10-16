@@ -20,7 +20,7 @@ import FileDocuments from "@/components/FileDocuments";
 import NextStepCard, { type NextAction } from "@/components/NextStepCard";
 import HandoffPanel from "@/components/HandoffPanel";
 import { cardStatus, stageStatus } from "@/components/applications/LetsBoard";
-import { PORTAL_STAGES, propolyDealUrl } from "@/lib/business/propoly-stages";
+import { PORTAL_STAGES, propolyDealUrl, stagesFor } from "@/lib/business/propoly-stages";
 import { CANCEL_REASONS, CANCEL_WORDS } from "@/lib/let-cancel-words";
 import { isScottish } from "@/lib/property-flags";
 import { applicantKey } from "@/lib/lead-tenant-key";
@@ -270,8 +270,10 @@ function Spine({ stops }: { stops: SpineStop[] }) {
 
 /** Kirstie's eight, read off the deal alone - for a let with no application. */
 function dealStops(d: PreTenancyDeal): SpineStop[] {
-  const at = Math.max(0, PORTAL_STAGES.findIndex((s) => s.key === d.effectiveStatusKey));
-  return PORTAL_STAGES.map((s, i) => {
+  /* No holding fee stop in Scotland (16 Oct 2026, lib/business/propoly-stages). */
+  const track = stagesFor(isScottish(d.app.locality, d.app.propertyName));
+  const at = Math.max(0, track.findIndex((s) => s.key === d.effectiveStatusKey));
+  return track.map((s, i) => {
     const st = i <= at ? stageStatus(d, s.key) : null;
     return {
       id: s.key,
@@ -389,15 +391,17 @@ type LetLandlord = { name: string; email: string | null; phone: string | null; c
 type LetInfo = { tenants: LetPerson[]; landlord: LetLandlord | null; landlordProblem: string | null; listingId: string | null };
 type Cancellation = { reason: string; note: string; by: string; at: string };
 
-function EmailBuilder({ letId, mode, people, start, onClose }: {
+function EmailBuilder({ letId, mode, people, start, scotland, onClose }: {
   letId: string;
   mode: "update" | "reminder";
   people: LetInfo | null;
   /** Arriving with a message and a person already picked (after a cancel). */
   start?: { kind: string; to: string } | null;
+  /** Scotland takes no holding fee, so there's nothing to remind anyone to pay. */
+  scotland?: boolean;
   onClose: () => void;
 }) {
-  const list = mode === "update" ? UPDATES : REMINDERS;
+  const list = mode === "update" ? UPDATES : scotland ? REMINDERS.filter((t) => t.kind !== "nudge_holding_fee") : REMINDERS;
   const parties = [
     ...(people?.tenants ?? []).map((t, i) => ({ key: `tenant:${i}`, role: "tenant" as const, index: i, name: t.name, email: t.email, tag: t.isPrimary ? "Lead tenant" : "Tenant" })),
     ...(people?.landlord ? [{ key: "landlord", role: "landlord" as const, index: 0, name: people.landlord.name, email: people.landlord.email, tag: "Landlord" }] : []),
@@ -1018,7 +1022,7 @@ export default function ApplicationDrawer({
           ...(scottishLet ? [] : [{ icon: "shield", label: "Right to rent", text: `${answered} of ${people.length}` }]),
         ]
       : []),
-    { icon: "wallet", label: "Holding fee", text: intro ? "None - intro only" : isSwap ? "None on a tenant swap" : deal ? stageStatus(deal, "holding_fee").text : "No deal yet" },
+    { icon: "wallet", label: "Holding fee", text: intro ? "None - intro only" : isSwap ? "None on a tenant swap" : scottishLet ? "None in Scotland" : deal ? stageStatus(deal, "holding_fee").text : "No deal yet" },
   ];
 
   /* The activity log, for the panel at the top: what the record holds, then
@@ -1653,7 +1657,7 @@ export default function ApplicationDrawer({
 
       {/* Customer update and Send a reminder: the email builder. */}
       <Drawer open={Boolean(builder)} label={builder?.mode === "reminder" ? "Send a reminder" : "Customer update"} onClose={closeBuilder}>
-        {builder && <EmailBuilder key={`${builder.mode}-${builder.start?.kind ?? ""}-${builder.start?.to ?? ""}`} letId={letId} mode={builder.mode} people={info} start={builder.start} onClose={closeBuilder} />}
+        {builder && <EmailBuilder key={`${builder.mode}-${builder.start?.kind ?? ""}-${builder.start?.to ?? ""}`} letId={letId} mode={builder.mode} people={info} start={builder.start} scotland={scottishLet} onClose={closeBuilder} />}
       </Drawer>
 
       {lightbox != null && <PhotoLightbox photos={shots} start={lightbox} name={name} onClose={() => setLightbox(null)} />}

@@ -40,6 +40,8 @@ export interface CopyContext {
   moveIn?: string | null;
   /** The things the PLC check needs, already plain sentences. */
   needs?: string[];
+  /** A Scottish home: no holding fee is taken there (16 Oct 2026). */
+  scotland?: boolean;
 }
 
 export interface UpdateCopy {
@@ -57,7 +59,7 @@ const FOOT = {
 
 /** Agent-facing: one line saying what happened. */
 export const HEADLINE: Record<UpdateKind, string> = {
-  referencing_started: "Holding fee in, referencing started",
+  referencing_started: "Referencing started",
   references_back: "References are back",
   reference_failed: "A reference has failed",
   guarantor_needed: "References passed, but a guarantor is needed",
@@ -112,6 +114,26 @@ export function updateCopy(kind: UpdateKind, role: "tenant" | "landlord", c: Cop
   let o: UpdateCopy;
   switch (kind) {
     case "referencing_started":
+      /* Scotland takes no holding fee (16 Oct 2026): "Holding Deposit
+         Received" would thank them for money nobody asked for. */
+      if (c.scotland) {
+        o = t
+          ? {
+              subject: `Your references are under way - ${c.address}`,
+              preheader: "Your references are the next step.",
+              heading: "Your References Are Under Way",
+              body: `The deal for ${at} is set up. There's no holding fee in Scotland, so the next step is your references.`,
+              nextLine: "Your references have been requested. Look out for an email from the referencing company and fill it in as soon as you can: it's the quickest way to your move-in date.",
+            }
+          : {
+              subject: `References requested - ${c.address}`,
+              preheader: "Your new tenant's references are under way.",
+              heading: "References Requested",
+              body: `The deal for ${at} is set up and your new tenant's references have been requested.`,
+              nextLine: "I'll let you know as soon as they're back.",
+            };
+        break;
+      }
       o = t
         ? {
             subject: `Holding deposit received - ${c.address}`,
