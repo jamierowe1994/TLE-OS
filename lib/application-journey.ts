@@ -2,9 +2,9 @@ import { houseKeyOf, parseAddress, sameHome } from "@/lib/address-parse";
 import type { Application } from "@/lib/applications";
 import { decisionsFor } from "@/lib/offer-decisions";
 import { buildHandoff } from "@/lib/deal-handoff";
-import { handoverMode, latestHandover } from "@/lib/handover";
+import { handoverMode, handoversFor } from "@/lib/handover";
 import { getCase } from "@/lib/plc-store";
-import { PLC_STATES } from "@/lib/plc";
+import { PLC_STATES, caseIdFor } from "@/lib/plc";
 import { dealStatusLabel, getAllPropolyDeals, getPropolyCompletes, type BusinessDeal, type CompletedDeal } from "@/lib/business/propoly-deals";
 import { getOverlays, getMeta } from "@/lib/business/deal-store";
 import { derivePortalStage } from "@/lib/business/deal-stage";
@@ -385,8 +385,16 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
   /* The three sources the rest reads from, in parallel. */
   const [handoff, run, plcCase, allDeals, mode, dealOn] = await Promise.all([
     buildHandoff(app).catch(() => null),
-    latestHandover(app.id).catch(() => null),
-    getCase(`plc-${app.id}`).catch(() => null),
+    /* The push that went, over any rehearsal run after it: a rehearsal
+       after a live push made the let read "not in Propoly yet" and offered
+       Push to Propoly again, which on a swap starts a second deal. */
+    handoversFor(app.id, 10).then((runs) => runs.find((r) => r.mode === "live" && r.status === "ok") ?? runs[0] ?? null).catch(() => null),
+    /* The pack's id is the application's with anything but letters, digits
+       and dashes made a dash (lib/plc caseIdFor): "swap:g2h4..." is kept as
+       "plc-swap-g2h4...". Read as "plc-swap:g2h4..." it was never found, so a
+       swap or an OS offer said "Start the PLC check" over a pack already
+       started, sent or passed (Lianna, 16 Oct 2026, 44 South Bridge). */
+    getCase(caseIdFor(app.id)).catch(() => null),
     /* Read even before the offer is accepted (13 Oct 2026): a let keyed
        into Propoly by hand still shows as in Propoly. */
     deals().catch(() => null),

@@ -75,6 +75,27 @@ export async function withRecordLandlords(book: ManagedBook): Promise<ManagedBoo
   return { ...book, properties, landlords, counts };
 }
 
+/**
+ * The landlord the OS record holds for one REX property: the name from the
+ * sweep, and the email and mobile an agent typed with Change landlord. For a
+ * let with no REX listing to ask - a tenant swap on a REX PM home (Lianna,
+ * 16 Oct 2026, 44 South Bridge: "no landlord details on file" while the home
+ * had Jacqueline Nisbet's name, email and mobile).
+ */
+export async function recordLandlordFor(rexPropertyId: string | null | undefined): Promise<Party | null> {
+  if (!hasDb() || !rexPropertyId) return null;
+  const rows = await q<Held>(
+    `SELECT id, rex_property_id, landlord_name, landlord_email, landlord_phone FROM os_properties
+      WHERE (rex_property_id = $1 OR id = $1) AND landlord_name IS NOT NULL AND btrim(landlord_name) <> ''
+      ORDER BY active DESC, (landlord_email IS NOT NULL OR landlord_phone IS NOT NULL) DESC, updated_at DESC LIMIT 1`,
+    [rexPropertyId]
+  );
+  const r = rows[0];
+  if (!r) return null;
+  const name = (r.landlord_name ?? "").trim();
+  return { contactId: `record:${key(name)}`, name, email: r.landlord_email?.trim() || null, phone: r.landlord_phone?.trim() || null };
+}
+
 /** The OS record rows that stand for a home in the book: its own id, or every row tied to its REX property. */
 export async function recordRowsFor(propertyId: string): Promise<{ id: string; landlord_name: string | null }[]> {
   if (!hasDb() || !propertyId) return [];

@@ -202,6 +202,11 @@ export interface Application {
      *  home, "pm-link-<property>"): its first line and postcode to find it in
      *  Propoly, who manages the deal, and the service. */
     home: { line1: string; postcode: string; agentEmail: string | null; managed: boolean };
+    /** The home's id on Portfolio (a REX listing number, or "pm-link-<property>"). */
+    homeRef?: string;
+    /** The REX property behind the home, so the OS record's landlord can be
+     *  read for a home with no REX listing (16 Oct 2026). */
+    rexPropertyId?: string | null;
   } | null;
   /** The Propoly deal this application started, when the OS pushed it (its
    *  handover's "deal" step). The let page matches a deal to its application
@@ -815,6 +820,8 @@ async function swapApplications(rexUserId: string | null): Promise<Application[]
         joining: sw.joining.map((x) => x.name),
         rentPortion: sw.rentPortion,
         home: { line1, postcode, agentEmail: sw.byEmail, managed: listing ? true : (osHome?.service_level ?? "managed") === "managed" },
+        homeRef: sw.listingId,
+        rexPropertyId: rexPropertyId ?? ((listing?.property as Row | null)?.id != null ? String((listing!.property as Row).id) : null),
       },
     });
   }

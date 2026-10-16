@@ -1595,7 +1595,7 @@ export default function ApplicationDrawer({
                           personRef={landlordShown.contactId && landlordShown.from !== "record" ? `rex:${landlordShown.contactId}` : null}
                         />
                         {landlordShown.from === "record" && (
-                          <p className="mt-2.5 text-[11.5px] leading-relaxed text-muted">From the managed property record. They are not on the listing yet.</p>
+                          <p className="mt-2.5 text-[11.5px] leading-relaxed text-muted">{info.listingId ? "From the managed property record. They are not on the listing yet." : "From the home's record in the OS. Change them on the home's page."}</p>
                         )}
                       </section>
                       {info.listingId && (

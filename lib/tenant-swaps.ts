@@ -108,6 +108,16 @@ export async function openSwaps(): Promise<TenantSwap[]> {
   return rows.map(shape);
 }
 
+/** The open swap on one home, newest first - so the home's page can say one is under way (16 Oct 2026). */
+export async function openSwapFor(listingId: string): Promise<TenantSwap | null> {
+  if (!hasDb() || !listingId) return null;
+  const rows = await tq<SwapRow>(
+    `SELECT * FROM os_tenant_swaps WHERE listing_id = $1 AND cancelled_at IS NULL AND created_at > NOW() - INTERVAL '120 days' ORDER BY created_at DESC LIMIT 1`,
+    [listingId]
+  );
+  return rows[0] ? shape(rows[0]) : null;
+}
+
 export async function cancelSwap(id: string): Promise<boolean> {
   const rows = await tq<{ id: string }>(`UPDATE os_tenant_swaps SET cancelled_at = NOW() WHERE id = $1 AND cancelled_at IS NULL RETURNING id`, [id]);
   return rows.length > 0;

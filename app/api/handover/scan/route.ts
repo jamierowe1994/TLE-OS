@@ -42,7 +42,12 @@ export async function GET(req: NextRequest) {
 
   const since = Date.now() - LOOKBACK_DAYS * 86_400_000;
   const apps = await getApplications(300);
-  const done = await handedOverIds("shadow");
+  /* A let already pushed for real is not rehearsed afterwards (16 Oct 2026):
+     44 South Bridge's swap went to Propoly at 18:10 on 12 Oct and this scan
+     rehearsed it at 06:04 the next morning, so its newest run read "not in
+     Propoly yet" whenever Propoly's deals weren't to hand. */
+  const [shadowDone, liveDone] = await Promise.all([handedOverIds("shadow"), handedOverIds("live")]);
+  const done = new Set([...shadowDone, ...liveDone]);
   /* Intro only never hands over (lib/intro-only). */
   const intro = await introOnlyIds().catch(() => new Set<string>());
   const due = apps

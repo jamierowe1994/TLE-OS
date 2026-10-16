@@ -4,7 +4,9 @@ import { whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { rexConfigured } from "@/lib/rex";
-import { createSwap, type SwapPerson } from "@/lib/tenant-swaps";
+import { createSwap, openSwapFor, type SwapPerson } from "@/lib/tenant-swaps";
+import { getCase } from "@/lib/plc-store";
+import { caseIdFor, PLC_STATES } from "@/lib/plc";
 import { markApplicationsFiled } from "@/lib/applications-board";
 import { forgetApplications } from "@/lib/applications";
 
@@ -21,6 +23,50 @@ export const runtime = "nodejs";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const clean = (v: unknown, n = 120) => (typeof v === "string" ? v.trim().slice(0, n) : "");
+
+/**
+ * GET /api/tenant-swaps?listingId=<home> -> the swap under way on a home in the
+ * caller's book, with where its PLC check stands (16 Oct 2026, Lianna on 44
+ * South Bridge: she went to the home for the PLC check, and the home's page
+ * showed no sign the swap had ever been made). { ok, swap: null } when none.
+ */
+/** Where the PLC stands, in the words an agent uses. */
+const PLC_SHORT: Record<string, string> = {
+  assembling: "PLC not sent yet",
+  submitted: "PLC with compliance",
+  scanning: "PLC with compliance",
+  reviewing: "PLC with compliance",
+  checked: "PLC with compliance",
+  approved: "PLC passed",
+  deferred: "PLC needs an answer",
+  declined: "PLC declined",
+};
+
+export async function GET(req: NextRequest) {
+  if (!hasDb()) return NextResponse.json({ ok: true, swap: null });
+  const who = await whoIs(req).catch(() => null);
+  if (!who?.actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
+  const listingId = clean(req.nextUrl.searchParams.get("listingId"), 60);
+  if (!listingId) return NextResponse.json({ ok: false, error: "Which home?" }, { status: 400 });
+  const swap = await openSwapFor(listingId);
+  if (!swap) return NextResponse.json({ ok: true, swap: null });
+  /* Only for a home the caller may see, as making one is. */
+  const scope = await scopeForWho(req, who);
+  if (scope.unlinked) return NextResponse.json({ ok: false, error: "We can't tell whose book this is." }, { status: 403 });
+  if (rexConfigured()) {
+    const { book } = await managedBookFor(scope.rexUserId);
+    if (!book.properties.some((p) => String(p.listingId) === listingId)) return NextResponse.json({ ok: true, swap: null });
+  }
+  const application = `swap:${swap.id}`;
+  const pack = await getCase(caseIdFor(application)).catch(() => null);
+  const st = pack ? PLC_STATES.find((x) => x.id === pack.state) : null;
+  return NextResponse.json({
+    ok: true,
+    application,
+    swap: { leaving: swap.leaving.map((x) => x.name), staying: swap.staying.map((x) => x.name), joining: swap.joining.map((x) => x.name), moveIn: swap.moveIn, rentPcm: swap.rentPcm, rentPortion: swap.rentPortion, by: swap.by, at: swap.at },
+    plc: pack ? { state: pack.state, label: st?.label ?? pack.state, who: st?.who ?? "", short: PLC_SHORT[pack.state] ?? "PLC under way" } : null,
+  });
+}
 
 export async function POST(req: NextRequest) {
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });

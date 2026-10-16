@@ -6,6 +6,7 @@ import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
 import { landlordForListing, type Landlord } from "@/lib/rex-landlord";
 import type { OsUser } from "@/lib/users";
 import { applyLead, leadOverrides } from "@/lib/lead-tenant";
+import { recordLandlordFor } from "@/lib/record-landlords";
 
 /**
  * Who is on a let, read on the server from the let itself - never from the
@@ -57,6 +58,10 @@ export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
       : isTestId(listingId)
         ? await testLandlord(Number(listingId)).catch(() => null)
         : await landlordForListing(listingId).catch(() => null);
+    /* A tenant swap on a REX PM home has no listing to ask (16 Oct 2026):
+       its landlord is the one the OS record holds for the home. Shown as a
+       record landlord - nobody in REX behind it. */
+    const swapLandlord = !listingId && app.swap?.rexPropertyId ? await recordLandlordFor(app.swap.rexPropertyId).catch(() => null) : null;
     return {
       ok: true,
       app,
@@ -70,8 +75,16 @@ export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
         agentName: app.agent,
         moveIn: app.startDate,
         tenants: app.applicants.map((p) => ({ name: p.name, email: p.email, phone: p.phone, contactId: p.contactId, isPrimary: p.isPrimary })),
-        landlord: ll && ll.ok ? ll.landlord : null,
-        landlordProblem: !listingId ? "This let isn't linked to a listing, so its landlord can't be looked up." : ll && !ll.ok ? ll.problem : null,
+        landlord: swapLandlord
+          ? { contactId: null, name: swapLandlord.name, email: swapLandlord.email, phone: swapLandlord.phone, from: "record" }
+          : ll && ll.ok ? ll.landlord : null,
+        landlordProblem: swapLandlord
+          ? null
+          : !listingId
+            ? app.swap
+              ? "No landlord is held for this home yet. Add them on the home's page with Change landlord."
+              : "This let isn't linked to a listing, so its landlord can't be looked up."
+            : ll && !ll.ok ? ll.problem : null,
       },
     };
   }

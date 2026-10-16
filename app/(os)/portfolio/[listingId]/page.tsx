@@ -69,7 +69,8 @@ type Action =
   | { kind: "inspection"; inspection: Inspection }
   | { kind: "notices"; start: NoticeKind }
   | { kind: "tenant-notice"; draft?: PropertyDraft }
-  | { kind: "swap" };
+  | { kind: "swap" }
+  | { kind: "swap-open" };
 const DRAFT_TITLE: Record<string, string> = { repair: "Report a repair", planned: "Plan a certificate", "tenant-notice": "Tenant gave notice" };
 
 /** One line on the latest activity list. */
@@ -80,6 +81,12 @@ const REVIEW_OUTCOME: Record<string, string> = {
 
 
 type Loaded<T> = { state: "loading" } | { state: "failed"; error: string } | { state: "ready"; data: T };
+/** A tenant swap under way on the home (GET /api/tenant-swaps, 16 Oct 2026). */
+type SwapUnderWay = {
+  application: string;
+  swap: { leaving: string[]; staying: string[]; joining: string[]; moveIn: string; rentPcm: number | null; rentPortion: number | null; by: string; at: string };
+  plc: { state: string; label: string; who: string; short: string } | null;
+};
 
 type Book = { ok: boolean; error?: string; properties: ManagedProperty[]; everything?: boolean };
 type Works = { orders: WorksOrder[]; contractors: Contractor[]; carried: CarriedJob[]; canCorporate: boolean };
@@ -301,6 +308,21 @@ export default function PropertyPage() {
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [showLogins, setShowLogins] = useState(false);
+
+  /* A swap made on this home (Lianna, 16 Oct 2026): she came back to the
+     home for the swap's PLC check and found no sign of it here, so the
+     Tenant swap tile turns into the swap under way, with the way to its PLC. */
+  const [swapOn, setSwapOn] = useState<SwapUnderWay | null>(null);
+  useEffect(() => {
+    if (!p?.listingId) return;
+    let live = true;
+    setSwapOn(null);
+    fetch(`/api/tenant-swaps?listingId=${encodeURIComponent(p.listingId)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (live && j?.ok && j.swap) setSwapOn({ application: j.application, swap: j.swap, plc: j.plc ?? null }); })
+      .catch(() => { /* no swap shown; making one still works */ });
+    return () => { live = false; };
+  }, [p?.listingId]);
 
   /* ── drafts: a form started and not sent (lib/property-drafts) ───────── */
   const [drafts, setDrafts] = useState<Loaded<PropertyDraft[]>>({ state: "loading" });
@@ -714,7 +736,12 @@ export default function PropertyPage() {
                 {/* Lianna, 12 Oct 2026: one sharer out, their replacement in, no
                     viewing or offer. Any home with more than one tenant, or let
                     by the room (44 South Bridge isn't recorded as an HMO). */}
-                {(tenants.length > 1 || Boolean(house)) && (
+                {swapOn ? (
+                  <button type="button" onClick={() => act({ kind: "swap-open" })} className={tile}>
+                    {tileIcon("user")}
+                    {tileText("Tenant swap under way", `${swapOn.swap.joining.join(", ")} in ${day(swapOn.swap.moveIn)} · ${swapOn.plc?.short ?? "PLC check next"}`)}
+                  </button>
+                ) : (tenants.length > 1 || Boolean(house)) && (
                   <button type="button" disabled={!canAct || !tenants.length} onClick={() => act({ kind: "swap" })} className={tile}>{tileIcon("user")}{tileText("Tenant swap", "One leaves, their replacement moves in")}</button>
                 )}
                 {/* Sean McMahon, 16 Oct 2026: tenants report repairs in their portal, as Fixflow had them do. */}
@@ -1049,6 +1076,11 @@ export default function PropertyPage() {
             onClose={closeAction}
             onSaved={() => { void finishAction(); loadEnding(); pickTab("tenancy"); }}
           />
+        </Modal>
+      )}
+      {action?.kind === "swap-open" && swapOn && (
+        <Modal onClose={closeAction} title="Tenant swap under way">
+          <SwapOpen s={swapOn} onAnother={() => act({ kind: "swap" })} canAct={canAct && tenants.length > 0} />
         </Modal>
       )}
       {action?.kind === "swap" && (
@@ -1424,6 +1456,54 @@ function NoticeSheet({
         <PressButton onClick={() => void save()} className={`rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page ${busy ? "opacity-50" : ""}`}>
           {busy ? "Recording…" : "Record notice"}
         </PressButton>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The swap already made on this home (16 Oct 2026): who is going, who is
+ * coming, from when and at what rent, and where its PLC check stands - with
+ * the PLC check and the let one press away. The let carries the rest.
+ */
+function SwapOpen({ s, onAnother, canAct }: { s: SwapUnderWay; onAnother: () => void; canAct: boolean }) {
+  const pounds = (n: number | null) => (n == null ? null : `£${n.toLocaleString("en-GB")}`);
+  const plcHref = `/plc/start?application=${encodeURIComponent(s.application)}`;
+  const plcLabel = !s.plc ? "Start the PLC check" : s.plc.state === "assembling" ? "Finish the PLC check" : s.plc.state === "deferred" ? "Answer compliance on the PLC" : "See the PLC check";
+  const rows: Array<[string, string]> = [
+    ["Leaving", s.swap.leaving.join(", ") || "—"],
+    ["Moving in", s.swap.joining.join(", ") || "—"],
+    ["Staying", s.swap.staying.join(", ") || "—"],
+    ["From", day(s.swap.moveIn)],
+    ["Rent for the home", s.swap.rentPcm != null ? `${pounds(s.swap.rentPcm)} a month` : "—"],
+    ...(s.swap.rentPortion != null ? [["Their portion", `${pounds(s.swap.rentPortion)} a month`] as [string, string]] : []),
+    ["PLC check", s.plc ? s.plc.short : "Not started yet"],
+  ];
+  return (
+    <div>
+      <p className="text-[12.5px] leading-relaxed text-muted">
+        Made by {s.swap.by} on {day(s.swap.at)}. It is on Applications as its own let: the PLC check and everything after it is done from there.
+      </p>
+      <dl className="mt-4 grid gap-2.5">
+        {rows.map(([k, v]) => (
+          <div key={k} className="grid grid-cols-[130px_minmax(0,1fr)] gap-3 text-[13px]">
+            <dt className="text-[10px] font-bold uppercase tracking-wider text-muted">{k}</dt>
+            <dd className="min-w-0 break-words">{v}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
+        {canAct && (
+          <button type="button" onClick={onAnother} className="mr-auto text-[12px] font-semibold text-muted underline-offset-2 hover:text-ink hover:underline">
+            Make another swap
+          </button>
+        )}
+        <Link href={`/applications/${encodeURIComponent(s.application)}`} className="rounded-full border border-line/80 px-4 py-2.5 text-[12.5px] font-semibold hover:border-ink">
+          Open the let
+        </Link>
+        <Link href={plcHref} className="rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page">
+          {plcLabel}
+        </Link>
       </div>
     </div>
   );
