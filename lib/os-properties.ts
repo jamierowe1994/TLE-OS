@@ -131,6 +131,8 @@ export interface PmHome extends OsProperty {
   pmStatus: "occupied" | "vacant" | null;
   pmUpcomingVacancy: boolean;
   pmService: string | null;
+  /** When REX PM's list was last read across, so a let newer than it can tell REX PM has not seen it. */
+  pmReadAt: string | null;
 }
 
 /**
@@ -150,6 +152,7 @@ export async function pmManagedHomes(): Promise<PmHome[] | null> {
     pmStatus: r.pm_status === "occupied" || r.pm_status === "vacant" ? r.pm_status : null,
     pmUpcomingVacancy: Boolean(r.pm_upcoming_vacancy),
     pmService: r.pm_service ?? null,
+    pmReadAt: r.pm_read_at ? new Date(r.pm_read_at).toISOString() : null,
   }));
 }
 

@@ -61,8 +61,11 @@ const MAX = 1000;
  * Portfolio would be five walks of the same service.
  */
 const TTL_MS = 30 * 60 * 1000;
-let held: { at: number; map: Map<string, SittingTenants> } | null = null;
-let inflight: Promise<Map<string, SittingTenants>> | null = null;
+/** One accepted application, reduced to what a book needs to vouch for a name. */
+export interface AcceptedLet { listingId: string | null; startDate: string | null; names: string[] }
+type Walked = { map: Map<string, SittingTenants>; byProperty: Map<string, AcceptedLet[]> };
+let held: { at: number; walked: Walked } | null = null;
+let inflight: Promise<Walked> | null = null;
 
 function ended(a: Application): { end: number | null; pastTerm: boolean } {
   if (!a.startDate) return { end: null, pastTerm: false };
@@ -79,15 +82,31 @@ function ended(a: Application): { end: number | null; pastTerm: boolean } {
  * key means "we do not know", never "empty".
  */
 export async function sittingTenantsByProperty(): Promise<Map<string, SittingTenants>> {
-  if (held && Date.now() - held.at < TTL_MS) return held.map;
+  return (await walked()).map;
+}
+
+/**
+ * propertyId → every accepted application on it, moved in or not, on any of
+ * its listings (16 Oct 2026). The sitting tenant above is one per property
+ * and skips the not-yet-moved-in, so it cannot say whether a name is backed
+ * by an application; this can. Room 2, 5b Newton Road: Lauren Johnstone's
+ * application from 9 Oct is on a newer listing than the one the book reads.
+ */
+export async function acceptedLetsByProperty(): Promise<Map<string, AcceptedLet[]>> {
+  return (await walked()).byProperty;
+}
+
+async function walked(): Promise<Walked> {
+  if (held && Date.now() - held.at < TTL_MS) return held.walked;
   if (!inflight) {
     inflight = walk().finally(() => { inflight = null; });
   }
   return inflight;
 }
 
-async function walk(): Promise<Map<string, SittingTenants>> {
+async function walk(): Promise<Walked> {
   const out = new Map<string, SittingTenants>();
+  const byProperty = new Map<string, AcceptedLet[]>();
   const apps = await getApplications(MAX, null).catch(() => [] as Application[]);
 
   /* Newest accepted wins. Sorted by start date, falling back to the id,
@@ -106,6 +125,12 @@ async function walk(): Promise<Map<string, SittingTenants>> {
      at 5b Newton Road showed Lauren Johnstone days before her move-in. It is
      skipped, so whoever is in the home now still stands. Today is read on
      every walk, so she appears on her start date without anyone touching it. */
+  for (const a of accepted) {
+    const k = a.propertyId as string;
+    const one: AcceptedLet = { listingId: a.listingId != null ? String(a.listingId) : null, startDate: a.startDate, names: a.applicants.map((t) => t.name).filter(Boolean) };
+    byProperty.set(k, [...(byProperty.get(k) ?? []), one]);
+  }
+
   const today = londonToday();
   for (const a of accepted) {
     if (a.startDate && String(a.startDate).slice(0, 10) > today) continue;
@@ -118,6 +143,7 @@ async function walk(): Promise<Map<string, SittingTenants>> {
     out.set(a.propertyId as string, { people, names: people.map((t) => t.name), startDate: a.startDate, pastTerm, listingId: a.listingId != null ? String(a.listingId) : null });
   }
   for (const [k, v] of out) if (v.people.length === 0) out.delete(k);
-  held = { at: Date.now(), map: out };
-  return out;
+  const walked: Walked = { map: out, byProperty };
+  held = { at: Date.now(), walked };
+  return walked;
 }

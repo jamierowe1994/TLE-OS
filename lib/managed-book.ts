@@ -7,7 +7,7 @@ import { matchHome, rentBook } from "@/lib/rent-status";
 import { getTenancyRegister } from "@/lib/business/payprop-tenancy";
 import { attach, payPropContacts } from "@/lib/business/payprop-tenant-contacts";
 import { nameKey, tenantContacts } from "@/lib/tenant-contacts";
-import { sittingTenantsByProperty } from "@/lib/rex-tenants";
+import { acceptedLetsByProperty, sittingTenantsByProperty } from "@/lib/rex-tenants";
 import { addrOf, parseAddress, sameDoor, sameHome, type Parsed } from "@/lib/address-parse";
 import { q } from "@/lib/db";
 import { introOnlyIds } from "@/lib/intro-only";
@@ -488,6 +488,38 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
     if (outOfScope(door, o) || properties.some((p) => p.propertyId === o.id)) continue;
     properties.push(pmRow(o, o.id, o.id, false));
     pmFor.set(o.id, o);
+  }
+
+  /* LAST LET'S TENANT, CARRIED OVER (Kirstie, 16 Oct 2026). 6 Linford Close
+     was re-let to Ricky Harris and Megan Farrow from 3 Sep, but the new REX
+     listing still named Aaron Hopkins - the 2024 tenant, on the old listing
+     too - and the listing's tenant beats everything, so the home's page put
+     Aaron's phone and email in front of the agent. A listing tenant is set
+     aside only when all of these hold: every name on it is on an EARLIER let
+     of the same home; REX PM, read after this let began and not showing the
+     home vacant, names somebody else (no surname in common - "V Reddy" is
+     Vihar Reddy); and no accepted application on this home names them,
+     either on this let or starting after REX PM was read (Lauren Johnstone
+     at Room 2, 5b Newton Road moved in on 9 Oct, after REX PM's 2 Oct read,
+     on a newer listing - REX PM still had Bailey Deakin). Then the REX PM
+     fill below names who is there. Anything less and the listing stands. */
+  const surname = (n: string) => n.toLowerCase().replace(/[^a-z\s]/g, " ").trim().split(/\s+/).pop() ?? "";
+  const applied = await acceptedLetsByProperty().catch(() => null);
+  for (const p of currentLets(properties)) {
+    if (!p.tenants.length || !p.propertyId || !p.letSince || !applied) continue;
+    const o = pmFor.get(p.propertyId) as PmHome | undefined;
+    if (!o?.tenantNames || !o.pmReadAt || o.pmStatus === "vacant" || o.pmReadAt <= p.letSince) continue;
+    const mine = p.tenants.map((t) => nameKey(t.name));
+    const carried = properties.some((q) =>
+      q.propertyId === p.propertyId && q.listingId !== p.listingId && (q.letSince ?? "") < p.letSince! &&
+      mine.every((k) => q.tenants.some((t) => nameKey(t.name) === k)));
+    if (!carried) continue;
+    const pmSurnames = new Set(o.tenantNames.split(/\s*(?:[,;&]|\band\b)\s*/i).filter(Boolean).map(surname));
+    if (p.tenants.some((t) => pmSurnames.has(surname(t.name)))) continue;
+    const backed = (applied.get(p.propertyId) ?? []).filter((a) =>
+      a.listingId === String(p.listingId) || (a.startDate != null && a.startDate > o.pmReadAt!));
+    if (backed.some((a) => a.names.some((n) => mine.includes(nameKey(n))))) continue;
+    p.tenants = [];
   }
 
   /* WHO LIVES THERE, FROM REX PM (6 Oct 2026). REX named nobody on 334 of
