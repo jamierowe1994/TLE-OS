@@ -395,11 +395,14 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
   /* The agent REX PM names on the home (James, 12 Oct 2026: Lianna's
      Portfolio filter showed 4 of her 35 - the REX PM homes carried no agent).
      Their REX user id where a REX row in the book has the same name, so the
-     filter by agent finds both kinds; otherwise the name stands on its own. */
-  const nameKey = (n: string) => { const w = n.toLowerCase().replace(/[^a-z\s]/g, " ").trim().split(/\s+/); return `${w[0] ?? ""} ${w[w.length - 1] ?? ""}`; };
+     filter by agent finds both kinds; otherwise the name stands on its own.
+     Named agentKey, not nameKey: it shadowed lib/tenant-contacts' nameKey, so
+     the tenant lookup below keyed "Ryan Gear-Hollis" as "ryan hollis" and 30
+     held tenants with a middle name, hyphen or apostrophe never showed. */
+  const agentKey = (n: string) => { const w = n.toLowerCase().replace(/[^a-z\s]/g, " ").trim().split(/\s+/); return `${w[0] ?? ""} ${w[w.length - 1] ?? ""}`; };
   const agentIds = new Map<string, { id: string; name: string }>();
-  for (const p of properties) if (p.agent) agentIds.set(nameKey(p.agent.name), p.agent);
-  const agentOf = (o: OsProperty) => (o.agentName ? agentIds.get(nameKey(o.agentName)) ?? { id: `name:${o.agentName}`, name: o.agentName } : null);
+  for (const p of properties) if (p.agent) agentIds.set(agentKey(p.agent.name), p.agent);
+  const agentOf = (o: OsProperty) => (o.agentName ? agentIds.get(agentKey(o.agentName)) ?? { id: `name:${o.agentName}`, name: o.agentName } : null);
   const pmRow = (o: OsProperty, propertyId: string, listingId: string, onRex: boolean): ManagedProperty => ({
     listingId,
     propertyId,
