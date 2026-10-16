@@ -443,10 +443,25 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
      Road's Room 3 - never reached Rhiannon's Portfolio even once the whole-
      business view had it. A REX PM room joins an agent's book when another
      room of the same house is already in it: same building, same street. */
+  /* The same postcode too, where both carry one (Kayleigh Wright, 16 Oct
+     2026): building and street word alone made her 5 New Lane, PR9 the same
+     "house" as Flat 12, 1-5 New Street, LE9 - Graham's - so it sat in her
+     Portfolio. */
   const houseKey = (d: Parsed) => (d.building ? `${d.building}|${d.street}` : null);
-  const theirHouses = new Set(properties.map((p) => houseKey(doorOf(p))).filter((k): k is string => Boolean(k)));
+  const pcOf = (s: string | null | undefined) => (s ?? "").toUpperCase().replace(/\s+/g, "");
+  const theirHouses = new Map<string, Set<string>>();
+  for (const p of properties) {
+    const k = houseKey(doorOf(p));
+    if (!k) continue;
+    if (!theirHouses.has(k)) theirHouses.set(k, new Set());
+    theirHouses.get(k)!.add(pcOf(p.postcode));
+  }
+  const inTheirHouse = (d: Parsed, o: OsProperty) => {
+    const pcs = theirHouses.get(houseKey(d) ?? "");
+    return Boolean(pcs) && (!pcOf(o.postcode) || pcs!.has("") || pcs!.has(pcOf(o.postcode)));
+  };
   const outOfScope = (d: Parsed, o: OsProperty) =>
-    Boolean(rexUserId) && !theirHouses.has(houseKey(d) ?? "") && !(o.rexPropertyId && owned?.has(o.rexPropertyId));
+    Boolean(rexUserId) && !inTheirHouse(d, o) && !(o.rexPropertyId && owned?.has(o.rexPropertyId));
   for (const o of extra) {
     const door = parseAddress(o.address);
     if (o.rexPropertyId) {

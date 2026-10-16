@@ -62,6 +62,13 @@ export function parseAddress(s: string): Parsed {
   /* "Room 1/5a Newton Road", "Room 2 / 66a Fore Street": the slash after a
      unit is a comma, not a floor code. */
   raw = raw.replace(/^(\s*(?:room|studio|bed(?:room)?|flat|apartment|unit)\s*[a-z0-9]+)\s*\/\s*/i, "$1, ");
+  /* "1 / 11 Station Road", "3 / 26 Garland Road": REX PM's own join of a
+     flat and its building, with spaces round the slash - flat 1 at number 11
+     (Kayleigh Wright, 16 Oct 2026). Read as Edinburgh's building/flat it was
+     flat 11 at building 1, never met REX's "Flat 1, 11 Station Road", and
+     three of her homes were missing from her Portfolio. Edinburgh's "109/2"
+     and Glasgow's "0/1, 11 Firpark" have no spaces and read as before. */
+  raw = raw.replace(/^\s*(\d+[a-z]?)\s+\/\s+(\d+[a-z]?)\b/i, "$1, $2");
   const scot = raw.match(/^\s*(\d+[a-z]?)\s*[-/]\s*(\d+[a-z]?)\b/i);
   let scotBuilding: string | null = null;
   let scotUnit: string | null = null;
