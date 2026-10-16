@@ -49,6 +49,14 @@ export type SetupState = {
   emailSkipped?: boolean;
   /** "I don't use REX" - only offered to people whose job is not in REX (see rexOptional). */
   rexSkipped?: boolean;
+  /**
+   * An agent REX refused, who chose to carry on and connect it later (16 Oct
+   * 2026). Not an answer to the REX step - it stays unticked - but it stops a
+   * wrong REX password locking somebody out of the whole OS. Their work still
+   * reads by their REX id, and anything that writes to REX asks for the
+   * sign-in on the spot (components/SignInAgain).
+   */
+  rexLater?: string;
   finishedAt?: string;
   tour?: TourChoice;
   tourAt?: string;
@@ -178,6 +186,9 @@ export function isStepDone(id: SetupStepId, view: SetupView): boolean {
  */
 export function firstUnfinished(view: SetupView): SetupStepId | null {
   for (const id of STEP_ORDER) {
+    /* "Connect REX later" moves the wizard on without ticking REX. The
+       browser's own copy calls it rexSkipped until the server's comes back. */
+    if (id === "rex" && (view.state.rexLater || view.state.rexSkipped)) continue;
     if (!isStepDone(id, view)) return id;
   }
   return null;

@@ -174,6 +174,19 @@ export async function startVerification(
  * operation on purpose: a "check" that a caller can perform without consuming
  * is a replayable token waiting for somebody to forget the second call.
  */
+/** What consumeVerification says for a code that is not there (spent, replaced or never real). */
+export const LINK_NOT_VALID = "That link isn't valid. Ask for a new one.";
+
+/**
+ * The same refusal in words for a member of staff (16 Oct 2026). Agents kept
+ * clicking the invite in their inbox after they had already set up with it,
+ * read "isn't valid", and told James the OS did not know their email. The
+ * account was fine: the link was spent. Customers' pages keep the plain one,
+ * because "ask James" means nothing to a landlord.
+ */
+export const STAFF_LINK_NOT_VALID =
+  "That link has already been used, or a newer one has replaced it. If you have set your password before, sign in with it. If not, ask James for a new link.";
+
 export async function consumeVerification(
   token: string,
   purpose: Purpose = "join"
@@ -199,7 +212,7 @@ export async function consumeVerification(
      ever existed. Expiry is safe to name because they already hold a real
      token to have got here. A join link must not set the password on a live
      account, and a reset link must not create one - same message either way. */
-  if (!row) throw new VerificationError("That link isn't valid. Ask for a new one.");
+  if (!row) throw new VerificationError(LINK_NOT_VALID);
 
   const expiresAt = new Date(row.expires_at);
   if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() < Date.now()) {

@@ -110,6 +110,10 @@ export function StepRex({
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* REX has said no at least once. Only then is an agent offered a way past
+     (16 Oct 2026): Rovena Buci, Tony Poon and Ed Westwood each sat on this
+     screen after REX refused their password, with nothing to press. */
+  const [refused, setRefused] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -122,9 +126,12 @@ export function StepRex({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      const j = (await r.json()) as { ok?: boolean; error?: string };
+      const j = (await r.json()) as { ok?: boolean; error?: string; refused?: boolean };
       if (j.ok) onDone();
-      else setError(j.error ?? "REX would not accept that. Check the address and try again.");
+      else {
+        setError(j.error ?? "REX would not accept that. Check the address and try again.");
+        if (r.status === 401) setRefused(true);
+      }
     } catch {
       setError("We could not reach REX just then. Try again in a moment.");
     } finally {
@@ -204,6 +211,17 @@ export function StepRex({
         <button type="button" onClick={onSkip} className={`${GHOST} mt-3`}>
           I don&apos;t use REX, skip this
         </button>
+      )}
+      {!optional && !preview && onSkip && refused && (
+        <>
+          <button type="button" onClick={onSkip} className={`${GHOST} mt-3`}>
+            Carry on and connect REX later
+          </button>
+          <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
+            You can still use the OS. Connect REX from your Profile once you have your REX
+            password, and anything that needs it will ask you then.
+          </p>
+        </>
       )}
       {preview && (
         <button type="button" onClick={onDone} className={`${GHOST} mt-3`}>

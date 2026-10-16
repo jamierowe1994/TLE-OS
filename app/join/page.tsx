@@ -181,6 +181,14 @@ function ChoosePassword({ token }: { token: string }) {
       {error && (
         <p className="mt-4 rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-3 text-[12.5px] leading-relaxed">
           {error}
+          {/* A spent link is usually somebody already set up (16 Oct 2026):
+              the way on is the sign-in page, so it is one tap away. */}
+          {/sign in with it/.test(error) && (
+            <>
+              {" "}
+              <a href="/sign-in" className="font-semibold underline">Go to sign in</a>
+            </>
+          )}
         </p>
       )}
 

@@ -82,7 +82,8 @@ export default function Wizard({
     }
     /* Greet somebody who has answered nothing yet; send somebody part-way
        through straight back to the question they stopped at. */
-    const started = STEP_ORDER.some((id) => id !== "password" && isStepDone(id, view));
+    const started =
+      Boolean(view.state.rexLater) || STEP_ORDER.some((id) => id !== "password" && isStepDone(id, view));
     setScreen(started ? next : "welcome");
   }, [ready, dry, mail, view]);
 
@@ -140,7 +141,7 @@ export default function Wizard({
         <Welcome
           name={view.name}
           rexOptional={view.rexOptional}
-          onNext={() => go(isStepDone("rex", view) ? "email" : "rex")}
+          onNext={() => go(isStepDone("rex", view) || view.state.rexLater ? "email" : "rex")}
         />
       )}
 
