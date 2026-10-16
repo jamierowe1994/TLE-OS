@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
-import { gateOf, type Check, type CheckId, type Finding, type PlcCase } from "@/lib/plc";
+import { gateOf, sentAnywayNow, type Check, type CheckId, type Finding, type PlcCase, type SentAnyway } from "@/lib/plc";
 
 /**
  * The compliance side of a PLC handover, and the pieces it is built from.
@@ -160,6 +160,48 @@ function Fact({ label, value }: { label: string; value: string }) {
 
 /* ───────────────────────────── the compliance side ─────────────────────── */
 
+/**
+ * Sent anyway (James, 16 Oct 2026). The agent went past what the reader
+ * flagged, so it is the first thing on the pack: who, why, and each warning
+ * they went past, before anything else is read.
+ */
+function SentAnywayCard({ s, checks }: { s: SentAnyway; checks: Check[] }) {
+  const n = s.warnings.length;
+  return (
+    <section className="rounded-[18px] border border-[#e8b4ab] bg-[#fdefec] p-5">
+      <Head icon="info" title="Sent Anyway" tone="pink" />
+      <p className="mt-3 text-[13px] leading-relaxed text-[#9d4340]">
+        {s.by} sent this past {n === 1 ? "a warning" : `${n} warnings`} from the reader on {prettyWhen(s.at)}. Check{" "}
+        {n === 1 ? "it" : "these"} first.
+      </p>
+      <p className="mt-3 rounded-xl bg-white/80 px-4 py-3 text-[13.5px] leading-relaxed text-ink">
+        <span className="block text-[11.5px] text-muted">Their reason</span>
+        &ldquo;{s.reason}&rdquo;
+      </p>
+      <ul className="mt-3 space-y-2">
+        {s.warnings.map((w, i) => (
+          <li key={i} className="flex gap-3 text-[13px] text-ink">
+            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#c0504a]" />
+            <span className="min-w-0">
+              {w.message}
+              <span className="block text-[12px] text-muted">
+                {checks.find((c) => c.id === w.checkId)?.label ?? w.checkId}
+                {w.documentName ? ` · ${w.documentName}` : ""}
+              </span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** A small tag for the queue: this one was sent past the reader's warnings. */
+export function SentAnywayTag({ c }: { c: Pick<PlcCase, "sentAnyway" | "submittedAt" | "state"> }) {
+  if (!sentAnywayNow(c)) return null;
+  return <span className="shrink-0 whitespace-nowrap rounded-full bg-[#fdefec] px-2.5 py-1 text-[11px] font-semibold text-[#9d4340]">Sent anyway</span>;
+}
+
 /** Renders its own <li>, so the caller keys it and does NOT wrap it — an li
  *  inside an li is a hydration error, not just untidy markup. */
 function FindingRow({ f, checks }: { f: Finding; checks: Check[] }) {
@@ -237,8 +279,11 @@ export function ComplianceSide({
   const canCheck = data.me?.canCheck ?? true;
   const canApprove = data.me?.canApprove ?? true;
 
+  const anyway = sentAnywayNow(c);
+
   return (
     <div className="space-y-4">
+      {anyway && <SentAnywayCard s={anyway} checks={data.checks} />}
       <section className="rounded-[18px] border border-line/70 bg-card p-5">
         <div className="grid gap-4 sm:grid-cols-4">
           <Fact label="From" value={c.agentName} />
@@ -362,7 +407,7 @@ export function ComplianceSide({
                        the exact impression the flag exists to prevent. */
                     d.placeholder ? (
                       <span key={d.key} className="text-muted">
-                        {d.name}{" "}
+                        {d.label || d.name}{" "}
                         <span className="text-xs">(name only, no file attached)</span>
                       </span>
                     ) : (
@@ -373,8 +418,10 @@ export function ComplianceSide({
                           rel="noreferrer"
                           className="rounded-full bg-page px-2.5 py-1 text-[12px] font-medium underline decoration-line underline-offset-2 transition hover:text-accent-dark"
                         >
-                          {d.name}
+                          {d.label || d.name}
                         </a>
+                        {/* Anything else, named by the agent (16 Oct 2026): their words lead, the file name follows. */}
+                        {d.label && <span className="text-[11.5px] text-muted">{d.name}</span>}
                         {/* What the reader saw when it was dropped: the date
                             that matters, for checking against the file. */}
                         {d.read?.expiryDate && (

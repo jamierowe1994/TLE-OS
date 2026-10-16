@@ -23,6 +23,7 @@ import {
   type PropolyPush,
   type RexPush,
   type RlpRequest,
+  type SentAnyway,
   type Waiver,
 } from "@/lib/plc";
 
@@ -73,6 +74,7 @@ interface Row extends Record<string, unknown> {
   rlp_request: RlpRequest | null;
   let_type: string | null;
   file_keys: string[] | null;
+  sent_anyway: SentAnyway[] | null;
   submitted_at: string | Date | null;
   scanned_at: string | Date | null;
   decided_at: string | Date | null;
@@ -112,6 +114,7 @@ function rowTo(r: Row): PlcCase {
     documents: Array.isArray(r.documents) ? r.documents : [],
     findings: Array.isArray(r.findings) ? r.findings : [],
     waivers: Array.isArray(r.waivers) ? r.waivers : [],
+    sentAnyway: Array.isArray(r.sent_anyway) ? r.sent_anyway : [],
     propolyPush: r.propoly_push ?? null,
     rexPush: r.rex_push ?? null,
     checkedAt: iso(r.checked_at),
@@ -132,7 +135,7 @@ function rowTo(r: Row): PlcCase {
 const COLS = `id, application_ref, address, agent_name, agent_email, state,
               move_in_date, agent_note, documents, findings, waivers, propoly_push, rex_push, submitted_at,
               scanned_at, decided_at, decided_by, decision_note, created_at,
-              checked_at, checked_by, checked_by_email, check_note, rlp_wanted, rlp_request, let_type, file_keys`;
+              checked_at, checked_by, checked_by_email, check_note, rlp_wanted, rlp_request, let_type, file_keys, sent_anyway`;
 
 /* ──────────────────────────── the file backend ──────────────────────────── */
 
@@ -172,7 +175,7 @@ async function mutate(id: string, fn: (c: PlcCase) => PlcCase): Promise<PlcCase>
               waivers = $12::jsonb, propoly_push = $13::jsonb, rex_push = $14::jsonb,
               checked_at = $15, checked_by = $16, checked_by_email = $17, check_note = $18,
               rlp_wanted = $19, rlp_request = $20::jsonb, let_type = $21,
-              file_keys = $22::jsonb,
+              file_keys = $22::jsonb, sent_anyway = $23::jsonb,
               updated_at = NOW()
         WHERE id = $1
         RETURNING ${COLS}`,
@@ -199,6 +202,7 @@ async function mutate(id: string, fn: (c: PlcCase) => PlcCase): Promise<PlcCase>
         next.rlpRequest ? JSON.stringify(next.rlpRequest) : null,
         next.letType ?? null,
         JSON.stringify(next.fileKeys ?? []),
+        JSON.stringify(next.sentAnyway ?? []),
       ]
     );
     return rowTo(saved[0]);
@@ -448,6 +452,26 @@ export async function setCovers(id: string, key: string, covers: CheckId[]): Pro
   });
 }
 
+/** What an Anything else file is, in the agent's words (16 Oct 2026). Blank takes it off. */
+export async function setDocumentLabel(id: string, key: string, label: string): Promise<PlcCase> {
+  const clean = label.replace(/\s+/g, " ").trim().slice(0, 80);
+  return mutate(id, (c) => {
+    if (c.state !== "assembling") {
+      throw new PlcRefused("This pack is with compliance. Ask them to send it back to change it.");
+    }
+    if (!c.documents.some((d) => d.key === key)) throw new PlcRefused("That file isn't on this pack.");
+    return {
+      ...c,
+      documents: c.documents.map((d) => {
+        if (d.key !== key) return d;
+        const next: PlcDocument = { ...d, label: clean };
+        if (!clean) delete next.label;
+        return next;
+      }),
+    };
+  });
+}
+
 export async function removeDocument(id: string, key: string): Promise<PlcCase> {
   return mutate(id, (c) => {
     if (c.state !== "assembling") {
@@ -573,6 +597,11 @@ export async function recordPropolyPush(id: string, push: PropolyPush): Promise<
 
 export async function recordRexPush(id: string, push: RexPush): Promise<PlcCase> {
   return mutate(id, (c) => ({ ...c, rexPush: push }));
+}
+
+/** A Send anyway, written once the pack has gone (at = its submittedAt). */
+export async function recordSentAnyway(id: string, entry: SentAnyway): Promise<PlcCase> {
+  return mutate(id, (c) => ({ ...c, sentAnyway: [...(c.sentAnyway ?? []), entry] }));
 }
 
 export async function recordPreflight(id: string, findings: Finding[]): Promise<PlcCase> {

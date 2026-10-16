@@ -2655,6 +2655,8 @@ ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS file_keys JSONB NOT NULL DEFAU
 -- landlord's ID on one pack can be offered to the packs for their other homes.
 ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS rex_property_id TEXT;
 ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS landlord_name TEXT;
+-- Send anyway (16 Oct 2026): who sent the pack past the reader's warnings, which ones, and why.
+ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS sent_anyway JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 -- Certificates that came in OUTSIDE a PLC pack (5 Sep 2026): the backlog
 -- downloaded out of Propoly and dropped in, batch by batch. The OS keeps the

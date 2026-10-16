@@ -9,6 +9,7 @@ import {
   PlcRefused,
   recordPreflight,
   recordScan,
+  recordSentAnyway,
   reopenCase,
   setRlpWanted,
   submitCase,
@@ -16,7 +17,7 @@ import {
   updateDetails,
   waiveCheck,
 } from "@/lib/plc-store";
-import { gateFor, missingDocuments, PLC_CHECKS, rlpAnswered, scanSummary, sortFindings, type CheckId, type PlcCase } from "@/lib/plc";
+import { gateFor, missingDocuments, PLC_CHECKS, rlpAnswered, scanSummary, sortFindings, type CheckId, type PlcCase, type SentAnyway } from "@/lib/plc";
 import { scanCase, scanConfigured, type ScanOutcome } from "@/lib/plc-scan";
 import { actorName, currentUser } from "@/lib/plc-actor";
 import { isPlcApprover } from "@/lib/plc-approvers";
@@ -155,7 +156,8 @@ function softenWaived(c: PlcCase, findings: ScanOutcome["findings"]): ScanOutcom
    the pack is sent. The reason is required. */
 function sentAnyway(findings: ScanOutcome["findings"], anyway: { by: string; reason: string }): ScanOutcome["findings"] {
   return findings.map((f) =>
-    f.level === "blocker" ? { ...f, level: "query" as const, message: `${f.message} - sent anyway by ${anyway.by}: "${anyway.reason}"` } : f
+    /* The reason itself leads the pack once, in the Sent anyway card (SentAnyway on the case), not on every line. */
+    f.level === "blocker" ? { ...f, level: "query" as const, message: `${f.message} - sent anyway by ${anyway.by}` } : f
   );
 }
 
@@ -174,17 +176,27 @@ async function finishSend(
   current: PlcCase,
   testCase: boolean,
   onProgress?: (read: number, of: number) => void,
-  anyway?: { by: string; reason: string } | null
+  anyway?: { by: string; email: string | null; reason: string } | null
 ): Promise<{ status: number; error: string | null }> {
   let outcome: ScanOutcome | null = null;
+  /* The warnings the agent went past, kept as they were (16 Oct 2026), so
+     compliance see exactly what was overridden as well as who and why. */
+  let wentPast: SentAnyway["warnings"] = [];
+  const pastOf = (f: ScanOutcome["findings"]) =>
+    f.filter((x) => x.level === "blocker").map((x) => ({ checkId: x.checkId, message: x.message, ...(x.documentName ? { documentName: x.documentName } : {}) }));
   if (anyway && preflightStillFresh(current)) {
     /* Sent anyway on the reading just done: no second read of the pack. */
-    outcome = { findings: sentAnyway(softenWaived(current, current.findings), anyway), recommendation: null as unknown as ScanOutcome["recommendation"] };
+    const softened = softenWaived(current, current.findings);
+    wentPast = pastOf(softened);
+    outcome = { findings: sentAnyway(softened, anyway), recommendation: null as unknown as ScanOutcome["recommendation"] };
   } else if (scanConfigured() && current.state === "assembling" && current.moveInDate) {
     try {
       outcome = await scanCase(current, onProgress);
       if (outcome) outcome = { ...outcome, findings: softenWaived(current, outcome.findings) };
-      if (outcome && anyway) outcome = { ...outcome, findings: sentAnyway(outcome.findings, anyway) };
+      if (outcome && anyway) {
+        wentPast = pastOf(outcome.findings);
+        outcome = { ...outcome, findings: sentAnyway(outcome.findings, anyway) };
+      }
     } catch {
       /* A reader that fails is not a reason to hold the pack: it goes
          through unscanned and Kirstie reads it, as before the reader
@@ -215,6 +227,9 @@ async function finishSend(
     from: current.decidedAt ? "deferred" : null,
     to: "submitted",
   });
+  if (anyway && wentPast.length && submitted.submittedAt) {
+    await recordSentAnyway(id, { by: anyway.by, byEmail: anyway.email, reason: anyway.reason, at: submitted.submittedAt, warnings: wentPast });
+  }
   if (!outcome) return { status: 200, error: null };
 
   await markScanning(id);
@@ -368,7 +383,9 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         if (body.anyway !== undefined && anywayReason.length < 3) {
           return NextResponse.json({ ok: false, error: "Say in a few words why it's fine to send.", ...(await payload(current, req)) }, { status: 400 });
         }
-        const anyway = anywayReason ? { by: await actorName(req, "Agent"), reason: anywayReason } : null;
+        const anyway = anywayReason
+          ? { by: await actorName(req, "Agent"), email: (await currentUser(req))?.email?.toLowerCase() ?? null, reason: anywayReason }
+          : null;
         /* On the reading just done, Send anyway is quick: answered here, not in the background. */
         if (body.async && scanConfigured() && current.state === "assembling" && current.moveInDate && !(anyway && preflightStillFresh(current))) {
           const running = sendJobs.get(id);

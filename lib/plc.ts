@@ -487,7 +487,16 @@ export type PlcDocument = {
   covers?: CheckId[];
   /** Brought in from the home's Documents tab rather than uploaded on the pack (8 Oct 2026). */
   fromFile?: boolean;
+  /**
+   * What the agent says it is, for a file under Anything else (James, 16 Oct
+   * 2026 call: "title deeds" rather than a scan called IMG_4432.pdf). Shown
+   * in place of the file name to compliance and used as its name in Propoly.
+   */
+  label?: string;
 };
+
+/** What a document is called on screen: the agent's own name for it, else the file name. */
+export const docTitle = (d: Pick<PlcDocument, "name" | "label">) => d.label?.trim() || d.name;
 
 /** Which checks a document filed under one check may also answer. */
 export const COVERABLE: Partial<Record<CheckId, CheckId[]>> = {
@@ -531,6 +540,28 @@ export type Waiver = {
   reason: string;
   by: string;
   at: string;
+};
+
+/**
+ * The agent sent the pack past what the reader flagged (James, 16 Oct 2026:
+ * "If it says this might fail because of this, then we should still have a
+ * Send anyway button"). Who, why, and the exact warnings they went past, so
+ * compliance open the pack knowing what to look at first. `at` is the
+ * submission it went with (the case's submittedAt), which is how a pack that
+ * comes back and goes again without one no longer shows it.
+ */
+export type SentAnyway = {
+  by: string;
+  byEmail?: string | null;
+  reason: string;
+  at: string;
+  warnings: { checkId: CheckId; message: string; documentName?: string }[];
+};
+
+/** The Send anyway that went with this submission, if it did. */
+export const sentAnywayNow = (c: Pick<PlcCase, "sentAnyway" | "submittedAt" | "state">): SentAnyway | null => {
+  if (c.state === "assembling" || !c.submittedAt) return null;
+  return (c.sentAnyway ?? []).find((s) => s.at === c.submittedAt) ?? null;
 };
 
 /** One document's fate in a push to Propoly. */
@@ -602,6 +633,8 @@ export type PlcCase = {
   agentNote: string;
   /** Conditional checks declared not needed, each with its reason. */
   waivers: Waiver[];
+  /** Every Send anyway on this pack, oldest first. Kept when it comes back: it is the record. */
+  sentAnyway?: SentAnyway[];
   /** The last push of the approved pack into Propoly. Null until one runs. */
   propolyPush?: PropolyPush | null;
   rexPush?: RexPush | null;

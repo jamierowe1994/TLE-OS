@@ -167,7 +167,8 @@ export async function pushCaseToPropoly(caseId: string, by: string): Promise<Pro
          no approved pack had reached here yet, so nothing was lost. */
       form.set("deal_uuid", dealId);
       form.set("type", type);
-      form.set("name", doc.name);
+      /* The agent's own name for an Anything else file (16 Oct 2026), else the file name. */
+      form.set("name", doc.label || doc.name);
       if (expiry) form.set("expiration", expiry);
       /* Copied into a plain ArrayBuffer: the S3 client hands back a view over
          a buffer the Blob constructor will not accept as-is. */

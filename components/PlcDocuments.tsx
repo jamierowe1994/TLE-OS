@@ -406,6 +406,30 @@ export default function PlcDocuments({
     }
   };
 
+  /* What an Anything else file is, in the agent's words (James, 16 Oct 2026
+     call): "title deeds", so compliance are not opening IMG_4432 to find out.
+     Saved when the box is left or Enter is pressed. */
+  const setLabel = async (d: PlcDocument, label: string) => {
+    if ((d.label ?? "") === label.trim()) return;
+    setErr(null);
+    if (demo) {
+      onChanged({ ...kase, documents: kase.documents.map((x) => (x.key === d.key ? { ...x, label: label.trim() || undefined } : x)) });
+      return;
+    }
+    setBusyKey(d.key);
+    try {
+      const res = await api<{ case: PlcCase }>(`/api/plc/${kase.id}/documents`, {
+        method: "PATCH",
+        body: JSON.stringify({ key: d.key, label }),
+      });
+      onChanged(res.case);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
   /* A reference report that carries the Right to Rent check too: ticked here,
      and the Right to Rent line reads as covered. */
   const setCovers = async (d: PlcDocument, covers: CheckId[]) => {
@@ -522,6 +546,14 @@ export default function PlcDocuments({
               );
             })}
           </div>
+        )}
+        {d.checkId === "other" && (
+          <OtherLabel
+            key={`${d.key}:${d.label ?? ""}`}
+            doc={d}
+            busy={busyKey === d.key}
+            onSave={(label) => void setLabel(d, label)}
+          />
         )}
         <div className="flex w-full items-center gap-2 sm:w-auto">
           <select
@@ -678,7 +710,7 @@ export default function PlcDocuments({
         <div id="check-other" className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-3">
           <p className="text-sm text-amber-900">
             {unsorted.length === 1 ? "One file" : `${unsorted.length} files`} we could not sort. Pick where each one goes,
-            or leave it under Anything else.
+            or leave it under Anything else and say what it is.
           </p>
           <ul className="mt-2 space-y-1.5">{unsorted.map(docRow)}</ul>
         </div>
@@ -789,5 +821,35 @@ export default function PlcDocuments({
         })}
       </ul>
     </div>
+  );
+}
+
+/** "What is it?" on a file under Anything else: typed by the agent, carried to compliance. */
+function OtherLabel({ doc, busy, onSave }: { doc: PlcDocument; busy: boolean; onSave: (label: string) => void }) {
+  const [draft, setDraft] = useState(doc.label ?? "");
+  const save = () => {
+    const next = draft.replace(/\s+/g, " ").trim();
+    if (next !== (doc.label ?? "")) onSave(next);
+  };
+  return (
+    <label className="order-last flex w-full flex-wrap items-center gap-x-2 gap-y-1 pl-[3.25rem]">
+      <span className="text-xs text-amber-900">What is it?</span>
+      <input
+        value={draft}
+        disabled={busy}
+        maxLength={80}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+        placeholder={doc.read?.what ? `e.g. ${doc.read.what}` : "e.g. Title deeds"}
+        className="min-w-0 flex-1 basis-48 rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs text-ink outline-none focus:border-amber-500 disabled:opacity-60"
+      />
+      {doc.label && draft.trim() === doc.label && <span className="text-xs text-emerald-700">Saved</span>}
+    </label>
   );
 }

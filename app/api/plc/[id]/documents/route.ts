@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { publicError } from "@/lib/public-error";
-import { attachDocument, moveDocument, PlcRefused, removeDocument, setCovers } from "@/lib/plc-store";
+import { attachDocument, moveDocument, PlcRefused, removeDocument, setCovers, setDocumentLabel } from "@/lib/plc-store";
 import { checkById, COVERABLE, missingDocuments, PLC_CHECKS, type CheckId, type FileRead } from "@/lib/plc";
 import { keyIsOurs, r2Configured } from "@/lib/r2";
 import { actorName, currentUser } from "@/lib/plc-actor";
@@ -8,7 +8,7 @@ import { mirrorToFile } from "@/lib/plc-from-file";
 
 /**
  * POST   /api/plc/<id>/documents  → file an already-uploaded document
- * PATCH  /api/plc/<id>/documents  → move one to another check ({ key, checkId })
+ * PATCH  /api/plc/<id>/documents  → move one to another check ({ key, checkId }), or name it ({ key, label })
  * DELETE /api/plc/<id>/documents?key=... → take one back out
  *
  * The upload itself is /api/r2/upload, unchanged: it stores the bytes under
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
-  let body: { key?: string; checkId?: string; covers?: string[] };
+  let body: { key?: string; checkId?: string; covers?: string[]; label?: string };
   try {
     body = await req.json();
   } catch {
@@ -115,6 +115,15 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   if (body.key && Array.isArray(body.covers)) {
     try {
       const updated = await setCovers(id, body.key, body.covers.filter((x): x is CheckId => Boolean(checkById(x as CheckId))));
+      return NextResponse.json({ ok: true, case: updated, missing: missingDocuments(updated).map((m) => m.id) });
+    } catch (e) {
+      return fail(e);
+    }
+  }
+  /* What an Anything else file is ({ key, label }), in the agent's words (16 Oct 2026). */
+  if (body.key && typeof body.label === "string") {
+    try {
+      const updated = await setDocumentLabel(id, body.key, body.label);
       return NextResponse.json({ ok: true, case: updated, missing: missingDocuments(updated).map((m) => m.id) });
     } catch (e) {
       return fail(e);

@@ -962,6 +962,15 @@ export default function PlcWizard({
                         </button>
                       )}
                     </div>
+                    {/* Anything else, by the names the agent gave them (16 Oct 2026). */}
+                    {c.id === "other" && count > 0 && (
+                      <p className="mt-1 pl-7 text-xs text-muted">
+                        {documents
+                          .filter((d) => d.checkId === "other")
+                          .map((d) => (d.label ? d.label : `${d.name} (not named)`))
+                          .join(", ")}
+                      </p>
+                    )}
                     {waiver && !has && (
                       <p className="mt-1.5 flex items-start gap-2 pl-7 text-xs text-muted">
                         <span className="min-w-0">&ldquo;{waiver.reason}&rdquo;</span>
