@@ -60,6 +60,7 @@ import RecordSidePanel, { type NoteRow, type PanelTab } from "@/components/Recor
 import LeadReassign from "@/components/LeadReassign";
 import TranslateText from "@/components/TranslateText";
 import Guarantors from "@/components/Guarantors";
+import OfferFromViewing from "@/components/offers/OfferFromViewing";
 import type { PreOnBooking } from "@/lib/pre-send-time";
 import { useNoteVisit } from "@/lib/recent-visits";
 
@@ -565,12 +566,15 @@ function ViewingLine({
   onConfirm,
   cancelTarget,
   onCancelled,
+  offer,
 }: {
   v: PersonViewing;
   onConfirm?: (v: PersonViewing) => void;
   /** Given, the line offers Cancel viewing (Lorna, 15 Oct 2026). */
   cancelTarget?: CancelTarget;
   onCancelled?: (said: string) => void;
+  /** Given on a home they have been to: Make an offer / Send offer form (Dan, 16 Oct 2026). */
+  offer?: { name: string; email: string };
 }) {
   const been = new Date(v.startsAt).getTime() < Date.now();
   const when = new Date(v.startsAt).toLocaleString("en-GB", {
@@ -599,6 +603,9 @@ function ViewingLine({
           >
             <DoodleIcon name="mail" size={11} /> Send confirmation
           </button>
+        )}
+        {been && !v.cancelled && offer && v.listingId && (
+          <OfferFromViewing small listingId={v.listingId} address={firstLine(v.address)} name={offer.name} email={offer.email} />
         )}
         {!been && !v.cancelled && cancelTarget && (
           <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -1554,6 +1561,21 @@ function LeadDrawerBody({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
   const nextViewing = theirs.upcoming[0] ?? null;
+  /* AFTER THE VIEWING (Dan Richards, 16 Oct 2026). The tenant track ends at
+     Viewings, so a lead who had been round still read "Book a viewing - last
+     step on the tenant track", with no way on to an offer. Once their newest
+     viewing is behind them, Next up asks whether they want it instead
+     (components/offers/OfferFromViewing). A viewing still to come today can be
+     called done by hand - the agent is often back before its slot ends. Held
+     for this drawer only; the clock catches up on its own. */
+  const [doneEarly, setDoneEarly] = useState<string | null>(null);
+  useEffect(() => setDoneEarly(null), [lead?.id]);
+  const stillToCome = theirs.upcoming.filter((v) => v.id !== doneEarly);
+  const viewedHome = stillToCome.length
+    ? null
+    : (theirs.upcoming.find((v) => v.id === doneEarly) ?? theirs.past[0] ?? null);
+  const londonDay = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { timeZone: "Europe/London" });
+  const canCallDone = Boolean(nextViewing && nextViewing.id !== doneEarly && theirs.upcoming.length === 1 && londonDay(nextViewing.startsAt) === londonDay(new Date().toISOString()));
   /* The one the top button cancels (Lorna, 15 Oct 2026): their next booked
      viewing, when the OS can call it off - not a test file's. */
   const cancellable = (v: PersonViewing | null) => Boolean(v && !v.test && (v.id.startsWith("rex-") || v.id.startsWith("os-")));
@@ -1605,6 +1627,8 @@ function LeadDrawerBody({
   const stalled = isStalled(lead);
   const here = track[Math.min(step, track.length - 1)];
   const finished = step >= track.length - 1;
+  /* Been round, nothing else booked: Next up is the offer, not another booking. */
+  const afterViewing = isTenant && !stalled && here.id === "viewing" && viewedHome ? viewedHome : null;
   /* The landlord spine, when the log has answered. `sp` is null for a tenant
      and while the log is still loading, and every derived behaviour hangs off
      it being present - so a slow answer costs nothing but a moment of the old
@@ -2291,7 +2315,7 @@ function LeadDrawerBody({
           ))}
           {theirs.past.length > 0 && <li className="pt-2 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">Been to</li>}
           {theirs.past.map((v) => (
-            <ViewingLine key={v.id} v={v} />
+            <ViewingLine key={v.id} v={v} offer={{ name: personName || lead?.name || "", email: contact.email || lead?.email || "" }} />
           ))}
         </ul>
       )}
@@ -3045,10 +3069,23 @@ function LeadDrawerBody({
                             Booking another stays one press away. */}
                         {cancellable(nextViewing) && nextViewing ? (
                           <>
+                            {/* Back from today's viewing before its slot is over
+                                (Dan Richards, 16 Oct 2026): Next up moves on to the offer. */}
+                            {canCallDone && (
+                              <PressButton
+                                onClick={() => setDoneEarly(nextViewing.id)}
+                                className="press-ring inline-flex items-center gap-2 rounded-full bg-brown px-5 py-2.5 text-[13px] font-semibold text-white"
+                              >
+                                <DoodleIcon name="checklist" size={14} />
+                                Viewing done
+                              </PressButton>
+                            )}
                             <CancelViewing
                               target={cancelTargetOf(nextViewing)}
                               onDone={viewingCancelled}
-                              className="press-ring inline-flex items-center gap-2 rounded-full bg-brown px-5 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60"
+                              className={canCallDone
+                                ? "press-ring inline-flex items-center gap-2 rounded-full border border-brown/60 px-5 py-2.5 text-[13px] font-semibold text-brown transition-colors hover:bg-brown hover:text-white disabled:opacity-60"
+                                : "press-ring inline-flex items-center gap-2 rounded-full bg-brown px-5 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60"}
                             />
                             <PressButton
                               onClick={() => { setBookMode("viewing"); setBooking(true); }}
@@ -3061,10 +3098,12 @@ function LeadDrawerBody({
                         ) : (
                           <PressButton
                             onClick={() => { setBookMode("viewing"); setBooking(true); }}
-                            className="press-ring inline-flex items-center gap-2 rounded-full bg-brown px-5 py-2.5 text-[13px] font-semibold text-white"
+                            className={afterViewing
+                              ? "press-ring inline-flex items-center gap-2 rounded-full border border-brown/60 px-5 py-2.5 text-[13px] font-semibold text-brown transition-colors hover:bg-brown hover:text-white"
+                              : "press-ring inline-flex items-center gap-2 rounded-full bg-brown px-5 py-2.5 text-[13px] font-semibold text-white"}
                           >
                             <DoodleIcon name="calendar" size={14} />
-                            Book a viewing
+                            {afterViewing ? "Book another viewing" : "Book a viewing"}
                           </PressButton>
                         )}
                         <PressButton
@@ -3138,7 +3177,7 @@ function LeadDrawerBody({
                   </div>
                 </header>
 
-                <div className="grid gap-4 xl:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
                   {/* Who they are - editable, and filled in by the passport once it is done. */}
                   <section className="rounded-2xl border border-line/60 bg-card p-5">
                     <div className="flex items-start justify-between gap-2">
@@ -3290,6 +3329,30 @@ function LeadDrawerBody({
                             </button>
                           </div>
                         )}
+                      </div>
+                    ) : afterViewing ? (
+                      <div className="mt-3">
+                        <p className="hand text-[17px] leading-snug">Viewing done - do they want it?</p>
+                        <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
+                          {firstLine(afterViewing.address)}, {whenFull(afterViewing.startsAt)}
+                          {afterViewing.agent ? ` with ${afterViewing.agent}` : ""}
+                        </p>
+                        <div className="mt-4">
+                          <OfferFromViewing
+                            key={afterViewing.id}
+                            listingId={afterViewing.listingId}
+                            address={firstLine(afterViewing.address)}
+                            name={personName || lead.name}
+                            email={contact.email || lead.email || ""}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => { setBookMode("viewing"); setBooking(true); }}
+                          className="mt-3.5 text-[11.5px] font-semibold text-muted transition-colors hover:text-ink"
+                        >
+                          Not for them? Book another viewing
+                        </button>
                       </div>
                     ) : (
                       <div className="mt-3 flex flex-col gap-4 [&>div:first-child>p:first-child]:hidden [&>div:first-child>p.hand]:mt-0 [&>div:last-child]:items-start [&_.press-ring]:bg-brown [&_.press-ring]:text-white">{nextActionEl}</div>
