@@ -27,6 +27,8 @@ import type { TermsState } from "@/lib/use-listing-terms";
  */
 
 export type ListingHome = {
+  /** Marked intro only in the OS (lib/intro-only): who and when. */
+  introOnly?: { by: string; at: string } | null;
   letType: LetType;
   derived: boolean;
   why: string;
@@ -82,7 +84,27 @@ export function useListingHome(listingId: string | number) {
     [home, id, reporter]
   );
 
-  return { home, problem, setLetType };
+  /* Intro only on or off (16 Oct 2026). Kept in the OS alone. */
+  const setIntroOnly = useCallback(
+    async (on: boolean) => {
+      const was = home;
+      if (home) setHome({ ...home, introOnly: on ? { by: "you", at: new Date().toISOString() } : null });
+      const settle = reporter.begin("Service");
+      try {
+        const r = await fetch("/api/listings/home", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, introOnly: on }) });
+        const j = (await r.json().catch(() => null)) as ({ ok?: boolean; error?: string } & ListingHome) | null;
+        if (!r.ok || !j?.ok) throw new Error(j?.error ?? "That did not save.");
+        setHome(j);
+        settle({ ok: true });
+      } catch (e) {
+        setHome(was);
+        settle({ ok: false, problem: e instanceof Error ? e.message : "That did not save.", retry: () => void setIntroOnly(on) });
+      }
+    },
+    [home, id, reporter]
+  );
+
+  return { home, problem, setLetType, setIntroOnly };
 }
 
 /** A document uploaded as one of these is the certificate of that row. */
@@ -103,6 +125,7 @@ export default function ListingCompliance({
   landlord,
   landlordRegistration,
   letOnly,
+  introOnly,
 }: {
   listingId: string;
   propertyId: string | null;
@@ -116,6 +139,8 @@ export default function ListingCompliance({
   landlordRegistration: string | null;
   /** Let only on the listing: the certificates are the landlord's to keep in date. */
   letOnly?: boolean;
+  /** Intro only (lib/intro-only): nothing here is ours to chase. */
+  introOnly?: boolean;
 }) {
   const [docs, setDocs] = useState<Doc[] | null>(null);
   const [papers, setPapers] = useState<{ files: Paper[]; held: string[] } | null>(null);
@@ -190,7 +215,16 @@ export default function ListingCompliance({
     <div className="space-y-5">
       {/* Let only (Sean, 15 Oct 2026): "Certificates to add" read as our job on
           a home where it is the landlord's (Michael's rule). Said once, here. */}
-      {letOnly && (
+      {introOnly && (
+        <p className="flex items-start gap-2.5 rounded-[18px] bg-accent-soft/60 px-4 py-3 text-[12.5px] leading-snug text-ink">
+          <DoodleIcon name="shield" size={15} className="mt-0.5 shrink-0 text-accent-dark" />
+          <span>
+            Intro only, so the certificates are the landlord&apos;s and nothing here is chased. The advert still needs the EPC
+            rating, and the terms of business still need signing before it goes live.
+          </span>
+        </p>
+      )}
+      {letOnly && !introOnly && (
         <p className="flex items-start gap-2.5 rounded-[18px] bg-accent-soft/60 px-4 py-3 text-[12.5px] leading-snug text-ink">
           <DoodleIcon name="shield" size={15} className="mt-0.5 shrink-0 text-accent-dark" />
           <span>

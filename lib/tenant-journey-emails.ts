@@ -9,6 +9,7 @@ import { phoneForEmail } from "@/lib/agent-phone";
 import { getApplications } from "@/lib/applications";
 import { createUpdate, type UpdateRecipient } from "@/lib/customer-updates";
 import { putAcceptedWithAgent } from "@/lib/handover";
+import { isIntroOnly } from "@/lib/intro-only";
 import { rexConfigured } from "@/lib/rex";
 import type { ReminderResult } from "@/lib/tenant-reminders";
 import { alreadyDone, claim, deliver, dryFor, firstName, logDone, london, release, userByName, validEmail, type Dry } from "@/lib/tenant-email-send";
@@ -520,6 +521,14 @@ export async function applicationEmails(given: Dry, out: Out) {
       continue;
     }
 
+    if (a.status === "accepted" && (await isIntroOnly(a.listingId).catch(() => false))) {
+      /* Intro only (lib/intro-only): the accepted email walks the tenant
+         through the holding fee to the keys, which are the landlord's here.
+         Nothing is put with the agent; they tell the tenant themselves. */
+      out.push({ key: `accepted:${a.id}`, emailId: "customer-update", to: a.agent ?? "", subject: "", state: "skipped", detail: `Intro only, so no accepted email: ${address}.` });
+      await seen(a);
+      continue;
+    }
     if (a.status === "accepted") {
       /* The same update a live handover makes, under the same key. */
       const made = await putAcceptedWithAgent(a.id).catch(() => null);

@@ -316,7 +316,7 @@ function ListingDrawerBody({
   const terms = useListingTerms(listing?.id ?? null);
   /* The type of let, and terms counted from wherever they already are
      (James, 12 Oct 2026): the property record's, an upload, a signature. */
-  const { home, problem: homeProblem, setLetType } = useListingHome(listing?.id ?? "");
+  const { home, problem: homeProblem, setLetType, setIntroOnly } = useListingHome(listing?.id ?? "");
   const termsOnFile = (terms.status === "ready" && terms.signed) || Boolean(home?.terms.held) || home?.terms.rex === true;
   const termsKnown = terms.status === "ready" || home != null;
   /* The listing's property types, asked for when the Type list first opens. */
@@ -1030,7 +1030,17 @@ function ListingDrawerBody({
     const to = Math.min(Math.max(i, floor), LISTING_TRACK.length - 1);
     if (to !== step) saveStep({ at: LISTING_TRACK[to].id });
   };
-  const here = LISTING_TRACK[Math.min(step, LISTING_TRACK.length - 1)];
+  const trackHere = LISTING_TRACK[Math.min(step, LISTING_TRACK.length - 1)];
+  /* Intro only (lib/intro-only): the let ends at the landlord's yes, so the
+     last step says so rather than sending the agent on to Propoly. */
+  const here =
+    home?.introOnly && trackHere.id === "handover"
+      ? {
+          ...trackHere,
+          title: "Intro only - nothing more to do",
+          detail: "The landlord has agreed the tenant. Invoice the landlord for the introduction; the referencing, the agreement, the deposit and the move-in are theirs.",
+        }
+      : trackHere;
   const advance = () => setStep(step + 1);
 
   // What's already happened here, from the shared diary — same entries the
@@ -1245,10 +1255,13 @@ function ListingDrawerBody({
       { icon: "clock", label: "On the market", text: listing.daysOnMarket != null ? `${listing.daysOnMarket} day${listing.daysOnMarket === 1 ? "" : "s"}` : "Not yet" },
       { icon: "pack/photo", label: "Photos", text: `${photos.length} on file` },
       { icon: "home", label: "Type of let", text: home ? LET_TYPES.find((t) => t.value === home.letType)?.label ?? "Not set" : homeProblem ? "Did not load" : "Reading…" },
+      /* Intro only is chosen here (16 Oct 2026, lib/intro-only); the rest is the listing's own. */
+      { icon: "home", label: "Service", text: home?.introOnly ? "Intro only" : live ? (live.serviceOnRecord ?? live.service ?? "Not set") : wait ?? "Not set" },
     ];
   })();
 
-  const highlights = facts.filter((f) => ["Type", "Type of let", "Bedrooms", "Bathrooms", "Deposit", "Available from"].includes(f.label));
+  const highlights = facts.filter((f) => ["Type", "Type of let", "Service", "Bedrooms", "Bathrooms", "Deposit", "Available from"].includes(f.label));
+  const introOnly = Boolean(home?.introOnly);
   const quietFact = (t: string) => ["Not set", "Not recorded", "Reading…", "Did not load"].includes(t);
   /* What each pop-out holds, said on its tile. */
   const tileSub: Record<TabKey, string> = {
@@ -1256,7 +1269,7 @@ function ListingDrawerBody({
     enquiries: enquiries === null ? "Reading…" : `${enquirers} ${enquirers === 1 ? "person" : "people"}`,
     applications: savedOffers === null ? "Reading…" : openOffers ? `${openOffers} to decide` : `${savedOffers.length} so far`,
     marketing: marketingToGo == null ? "Facts, write-up, photos" : marketingToGo === 0 ? "Complete" : `${marketingToGo} to fill in`,
-    compliance: certs === null ? "Reading…" : certOk("epc") && certOk("gas_safety") && certOk("eicr") ? (termsKnown && !termsOnFile ? "Terms to add" : "Certificates and papers") : /let\s*only|tenant\s*find/i.test(live?.service ?? "") ? "Copies from the landlord" : "Certificates to add",
+    compliance: introOnly ? (termsKnown && !termsOnFile ? "Terms to add" : "The landlord's, intro only") : certs === null ? "Reading…" : certOk("epc") && certOk("gas_safety") && certOk("eicr") ? (termsKnown && !termsOnFile ? "Terms to add" : "Certificates and papers") : /let\s*only|tenant\s*find/i.test(live?.service ?? "") ? "Copies from the landlord" : "Certificates to add",
     portals: pub && !pub.onPortals ? "Off for now" : "Live adverts, how they do",
   };
   const needsOf: Record<TabKey, boolean> = {
@@ -1266,7 +1279,7 @@ function ListingDrawerBody({
     enquiries: (enquiries?.length ?? 0) > 0,
     applications: openOffers > 0,
     marketing: photos.length === 0 || !shownBody,
-    compliance: (certs != null && !(certOk("epc") && certOk("gas_safety") && certOk("eicr"))) || (termsKnown && !termsOnFile),
+    compliance: (!introOnly && certs != null && !(certOk("epc") && certOk("gas_safety") && certOk("eicr"))) || (termsKnown && !termsOnFile),
     portals: false,
   };
   const countOf: Partial<Record<TabKey, number>> = {
@@ -1525,6 +1538,16 @@ function ListingDrawerBody({
                   />
                 ) : f.label === "Type of let" && home && !testListing ? (
                   <FieldSelect variant="inline" value={home.letType} options={LET_TYPES} onChange={(v) => void setLetType(v as LetType)} />
+                ) : f.label === "Service" && home && live ? (
+                  <FieldSelect
+                    variant="inline"
+                    value={home.introOnly ? "intro_only" : "own"}
+                    options={[
+                      { value: "own", label: live.serviceOnRecord ?? "As agreed", sub: "The service on the terms" },
+                      { value: "intro_only", label: "Intro only", sub: "We find the tenant, the landlord does the rest" },
+                    ]}
+                    onChange={(v) => void setIntroOnly(v === "intro_only")}
+                  />
                 ) : (
                   <p className={`truncate text-[13px] ${quietFact(f.text) ? "text-muted" : "font-semibold"}`}>{f.text}</p>
                 )}
@@ -2177,6 +2200,7 @@ function ListingDrawerBody({
                   }}
                   landlordRegistration={live?.record.landlordRegistration ?? null}
                   letOnly={/let\s*only|tenant\s*find/i.test(live?.service ?? "")}
+                  introOnly={introOnly}
                 />
                 <div className="rounded-[22px] border border-line/50 bg-white p-5">
                   <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">How we get in</p>

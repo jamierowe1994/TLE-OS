@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { introOnlyIds } from "@/lib/intro-only";
 import { publicError } from "@/lib/public-error";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
@@ -105,7 +106,17 @@ export async function GET(req: NextRequest) {
     /* The lead tenant as changed in the OS (lib/lead-tenant), over a held copy too. */
     const leads = await leadOverrides().catch(() => new Map<string, string>());
     if (leads.size) for (const a of [...applications, ...testRows]) applyLead(a, leads);
-    const tests = testRows.map((a) => ({ ...a, stageLabel: a.stageLabel ?? a.statusLabel, test: true, ...(cancelledRefs.has(String(a.id)) ? { closed: "Deal cancelled" } : {}) }));
+    /* Intro only ends at the landlord's yes, here or in REX (lib/intro-only).
+       The held board knows REX's yes; the OS's own is only known here. */
+    const intro = await introOnlyIds().catch(() => new Set<string>());
+    const introDone = (a: { listingId?: number | null; swap?: unknown; status: string; id: string }) =>
+      !a.swap && a.listingId != null && intro.has(String(a.listingId)) && a.status !== "unsuccessful" && (a.status === "accepted" || decided.get(`rex:${a.id}`)?.decision === "accepted");
+    const tests = testRows.map((a) => ({
+      ...a,
+      stageLabel: introDone(a) ? "Intro only" : a.stageLabel ?? a.statusLabel,
+      test: true,
+      ...(cancelledRefs.has(String(a.id)) ? { closed: "Deal cancelled" } : introDone(a) ? { closed: "Intro only - done" } : {}),
+    }));
     /* ?include=<id>: one application asked for by name - the PLC wizard's
        "Open the application" (6 Oct 2026). The board's cut drops accepted
        lets whose move-in has passed, so a pack could point at an application
@@ -119,8 +130,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       applications: [...tests, ...[...shown, ...extra].map((a) => ({
         ...a,
-        stageLabel: stages.get(a.id) ?? a.statusLabel,
-        closed: closed.get(a.id) ?? null,
+        stageLabel: introDone(a) ? "Intro only" : stages.get(a.id) ?? a.statusLabel,
+        closed: introDone(a) ? "Intro only - done" : closed.get(a.id) ?? null,
         osDecision: decided.get(`rex:${a.id}`) ?? null,
       }))],
       osAccepted,

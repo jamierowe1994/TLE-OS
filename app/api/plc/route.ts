@@ -7,6 +7,7 @@ import { currentUser } from "@/lib/plc-actor";
 import { whoIs } from "@/lib/admin";
 import { can } from "@/lib/roles";
 import { moveInToRex } from "@/lib/plc-move-in-rex";
+import { applicationIsIntroOnly } from "@/lib/intro-only";
 
 /**
  * GET  /api/plc          → every handover, newest first
@@ -71,6 +72,13 @@ export async function POST(req: NextRequest) {
      A handover names the person accountable for the pack, and that is not a
      field a caller should be able to set. */
   const me = await currentUser(req);
+
+  /* Intro only ends at the landlord's yes (lib/intro-only): no PLC pack. */
+  if (body.applicationRef) {
+    if (await applicationIsIntroOnly(body.applicationRef)) {
+      return NextResponse.json({ ok: false, error: "This let is intro only, so there is no PLC check - the landlord takes it from here." }, { status: 409 });
+    }
+  }
 
   try {
     const created = await createCase({

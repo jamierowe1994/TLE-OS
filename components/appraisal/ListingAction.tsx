@@ -32,6 +32,8 @@ const LISTING_SERVICE: Record<ServiceLevel, string> = {
   full_managed: "managed",
   rent_collect: "rent_collect",
   tenant_find: "let_only",
+  /* Ours alone: the create route sends REX let only and keeps the mark. */
+  intro_only: "intro_only",
 };
 
 export default function ListingAction({

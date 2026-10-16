@@ -1,5 +1,6 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
+import { isIntroOnly } from "@/lib/intro-only";
 import type { ListingDetails } from "@/lib/listing-details";
 import type { Viewing } from "@/lib/rex-viewings";
 import { isDraftTest, kitPeopleForTestListing, testListing, testViewingsForListing, type TestListing } from "@/lib/test-overlay";
@@ -45,7 +46,8 @@ export async function testDetails(id: number): Promise<{ ok: true; details: List
     receptions: 1,
     propertyType: l.propertyType,
     letType: "Long term",
-    service: "Fully managed",
+    service: (await isIntroOnly(l.listingId).catch(() => false)) ? "Intro only" : "Fully managed",
+    serviceOnRecord: "Fully managed",
     councilTaxBand: "B",
     parking: "On street",
     epc: { rating: "C", expiry: null, lodged: null, chartUrl: null, fileUrl: null, current: 72, potential: 80, band: "C" },

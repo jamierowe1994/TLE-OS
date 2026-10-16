@@ -6,6 +6,7 @@ import { closedReasons, getApplicationById, getApplications } from "@/lib/applic
 import { decisionsFor, isDecisionRef } from "@/lib/offer-decisions";
 import { dealForApplication } from "@/lib/application-journey";
 import { feeOf, otherOpenOffers, releaseOthers } from "@/lib/offer-hold";
+import { isIntroOnly } from "@/lib/intro-only";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 
 /**
@@ -42,7 +43,9 @@ async function load(req: NextRequest, applicationId: string) {
   const here = all.filter((a) => String(a.listingId ?? "") === listingId);
   const closed = await closedReasons(here).catch(() => new Map<string, string>());
   const offers = await otherOpenOffers(listingId, `rex:${app.id}`, here, closed);
-  return { me, app, listingId, fee: feeOf(deal), offers };
+  /* Intro only takes no holding fee (lib/intro-only): the landlord's yes is the end of it. */
+  const intro = await isIntroOnly(listingId).catch(() => false);
+  return { me, app, listingId, fee: intro ? { settled: true, paidAt: null, words: "Intro only, so no holding fee" } : feeOf(deal), offers };
 }
 
 export async function GET(req: NextRequest) {

@@ -72,6 +72,8 @@ type SampleListing = {
   imageCount: number;
   image: string | null;
   serviceType?: string | null;
+  /** Marked intro only in the OS (lib/intro-only), stamped by the server. */
+  introOnly?: boolean;
   tenant?: { name: string; email: string; phone: string } | null;
   /** Let in fact though still advertised, or its deal fell through: stamped
    *  by the server (lib/listings-taken, 12 Oct 2026). Both count as let agreed. */
@@ -448,6 +450,8 @@ export default function Listings() {
   }, []);
   const [rentBand, setRentBand] = useState<string | null>(null);
   const [loc, setLoc] = useState<string | null>(null);
+  /* Intro only or not (16 Oct 2026, lib/intro-only). */
+  const [svc, setSvc] = useState<string | null>(null);
   /* Available used to be a switch of its own, because it answers the one
      question asked all day - what can I put someone in NOW. It is a stage on
      the tabs now, which answers the same question and three others beside it,
@@ -703,6 +707,8 @@ export default function Listings() {
       const cmp = l.rentMonthly ?? l.rent;
       if (band && !(cmp != null && band.test(cmp))) return false;
       if (loc && l.locality !== loc) return false;
+      if (svc === "intro_only" && !l.introOnly) return false;
+      if (svc === "other" && l.introOnly) return false;
       // "Available" is what the status chip already means — published and not
       // let agreed. Defined once, in statusOf, so the switch and the chip can
       // never drift apart and show a house the other disagrees with.
@@ -743,7 +749,7 @@ export default function Listings() {
        Most-recently-cold first is the order somebody scanning it wants. */
     else if (stage === "archived") rows.sort((a, b) => (b.archivedSince ?? "").localeCompare(a.archivedSince ?? ""));
     return rows;
-  }, [WORKING, archive.listings, q, sort, rentBand, loc, stage, period, activityAt, openOffers, held]);
+  }, [WORKING, archive.listings, q, sort, rentBand, loc, svc, stage, period, activityAt, openOffers, held]);
   boardIds.current = board.map((l) => String(l.id));
 
   /* ── READY TO PUBLISH, ON THE PUSH ROUTE'S OWN WORD (17 Sep 2026) ───────
@@ -897,12 +903,13 @@ export default function Listings() {
               Activity
             </button>
             <FilterPanel
-              active={[sort, rentBand, loc].filter(Boolean).length + (period === "any" ? 0 : 1)}
-              onClear={() => { setSort(null); setRentBand(null); setLoc(null); setPeriod("any"); }}
+              active={[sort, rentBand, loc, svc].filter(Boolean).length + (period === "any" ? 0 : 1)}
+              onClear={() => { setSort(null); setRentBand(null); setLoc(null); setSvc(null); setPeriod("any"); }}
               groups={[
                 { label: "Sort by", options: SORTS, value: sort, onChange: setSort },
                 { label: "Rent", options: RENT_BANDS, value: rentBand, onChange: setRentBand },
                 { label: "Location", options: localities, value: loc, onChange: setLoc, searchable: true },
+                { label: "Service", options: [{ id: "intro_only", label: "Intro only" }, { id: "other", label: "Every other service" }], value: svc, onChange: setSvc },
                 { label: "Date listed", options: PERIODS.filter((x) => x.id !== "any").map((x) => ({ id: x.id, label: x.label })), value: period === "any" ? null : period, onChange: (v) => setPeriod((v ?? "any") as PeriodId) },
               ]}
             />
@@ -1102,6 +1109,7 @@ export default function Listings() {
                       <Tag tone={l.archived ? "neutral" : st.tone}>
                         {l.archived ? archiveLabel(l.archiveReason ?? null) : st.label}
                       </Tag>
+                      {l.introOnly && <Tag tone="neutral">Intro only</Tag>}
                       {!l.archived && !l.letAgreed && l.taken && <Tag tone="accent">Still advertised</Tag>}
                       {!l.archived && !l.letAgreed && !l.taken && l.fellThrough && <Tag tone="accent">Fell through</Tag>}
                       {l.tenant && <Tag tone="neutral">Tenanted</Tag>}

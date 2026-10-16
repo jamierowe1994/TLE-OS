@@ -19,6 +19,7 @@ import { switchOn } from "@/lib/switches";
 import { q } from "@/lib/db";
 import { closedReasons, getApplications } from "@/lib/applications";
 import { feeOf, otherOpenOffers } from "@/lib/offer-hold";
+import { introOnlyIds, isIntroOnly } from "@/lib/intro-only";
 
 /**
  * One application's journey, start to keys - the agent's view of Kirstie's
@@ -89,6 +90,9 @@ export interface ApplicationJourney {
   inPropoly: { url: string | null; how: "open" | "finished" | "pushed" | "found" } | null;
   /** Every move the watcher recorded on the deal, newest first. */
   history: DealEvent[];
+  /** Intro only (16 Oct 2026, lib/intro-only): the file ends once the tenant
+   *  is agreed. `done` once they are. Null on every other service. */
+  introOnly?: { done: boolean } | null;
 }
 
 /* ── the slow parts, kept for five minutes ─────────────────────────────── */
@@ -235,6 +239,40 @@ const dayWords = (iso: string | null | undefined) => {
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 };
 
+/* ── intro only (lib/intro-only) ───────────────────────────────────────── */
+
+/** The last stop on an intro-only let: the landlord's yes is the end of it. */
+export function introStop(accepted: boolean, unsuccessful = false): JourneyStop {
+  return {
+    id: "intro",
+    label: "Intro only",
+    sub: unsuccessful ? null : accepted ? "Tenant introduced - nothing more to do" : "Ends once the landlord agrees the tenant",
+    tone: accepted ? "ok" : "none",
+    state: unsuccessful ? "off" : accepted ? "done" : "upcoming",
+  };
+}
+
+export const INTRO_INVOICE: JourneyAction = {
+  id: "intro-invoice",
+  label: "Invoice the landlord for the introduction",
+  detail: "It's an intro only, so this is the last step: the landlord takes it from here - referencing, the agreement, the deposit and the move-in are theirs. Nothing goes to Kirstie or Propoly.",
+  href: null,
+  who: "you",
+};
+
+/**
+ * A test file's journey, cut down the same way when its listing is marked
+ * intro only, so a tester can walk one: the offer, the landlord's yes, and
+ * the end. The test's own Accept and Decline stay.
+ */
+export function introOnlyTestJourney(j: ApplicationJourney, accepted: boolean): ApplicationJourney {
+  const stops = j.stops.filter((x) => x.id === "received" || x.id === "decision");
+  stops.push(introStop(accepted));
+  const actions = j.actions.filter((a) => a.test === "accept" || a.test === "decline" || a.decide);
+  if (accepted) actions.push(INTRO_INVOICE);
+  return { ...j, stops, actions, flags: [], deal: null, plc: null, handover: null, inPropoly: null, history: [], introOnly: { done: accepted } };
+}
+
 /* ── the journey ───────────────────────────────────────────────────────── */
 
 export async function journeyFor(app: Application): Promise<ApplicationJourney> {
@@ -310,6 +348,38 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
         { id: "decide-undo", label: "Undo the decline", detail: "Puts it back to an open offer on the listing.", href: null, who: "you", decide: "undo" }
       );
     }
+  }
+
+  /* INTRO ONLY (training call, 16 Oct 2026): we advertise, market and find
+     the tenant; the landlord does the rest. So the file ends at the
+     landlord's yes - no handover, no Propoly, no PLC, no certificates to
+     chase, no holding fee. The agent invoices for the introduction and that
+     is the last thing the OS asks of anybody. */
+  if (!app.swap && (await isIntroOnly(app.listingId).catch(() => false))) {
+    stops.push(introStop(accepted, unsuccessful));
+    if (accepted && app.listingId != null) {
+      /* No holding fee to wait for, so the other offers can go now. */
+      const listingId = String(app.listingId);
+      const here = (await getApplications(300).catch(() => [] as Application[])).filter((a) => String(a.listingId ?? "") === listingId);
+      const closed = await closedReasons(here).catch(() => new Map<string, string>());
+      const others = await otherOpenOffers(listingId, ref, here, closed).catch(() => []);
+      if (others.length) {
+        actions.push({
+          id: "release",
+          label: "Let the other applicants know",
+          detail: `${others.map((h) => h.name).join(", ")} ${others.length === 1 ? "is" : "are"} still open on this home. Let them go and you'll get a "not this one" to read and send to each.`,
+          href: null,
+          who: "you",
+          release: others.length,
+        });
+      }
+    }
+    if (accepted) actions.push(INTRO_INVOICE);
+    actions.push(...decisionActions);
+    if ((osAccepted || app.id.startsWith("os:")) && !rexAccepted) {
+      actions.push({ id: "decide-undo", label: "Undo the accept", detail: "Puts it back to an open offer on the listing.", href: null, who: "you", decide: "undo", minor: true });
+    }
+    return { stops, actions, flags, deal: null, plc: null, handover: null, inPropoly: null, history: [], introOnly: { done: accepted } };
   }
 
   /* The three sources the rest reads from, in parallel. */
@@ -657,6 +727,7 @@ export async function stageLabels(apps: Application[]): Promise<Map<string, stri
   const isAccepted = (a: Application) => a.status === "accepted" || a.osDecision?.decision === "accepted";
   const accepted = apps.filter(isAccepted);
   const [all, done] = accepted.length ? await Promise.all([deals().catch(() => null), completes()]) : [null, null];
+  const intro = await introOnlyIds().catch(() => new Set<string>());
   /* Only a live push that finished counts: a blocked one leaves it waiting. */
   const swapsPushed = apps.some((a) => a.swap)
     ? new Set((await q<{ application_id: string }>(`SELECT DISTINCT application_id FROM os_handovers WHERE mode = 'live' AND status = 'ok' AND application_id LIKE 'swap:%'`).catch(() => [])).map((r) => r.application_id))
@@ -666,6 +737,8 @@ export async function stageLabels(apps: Application[]): Promise<Map<string, stri
     if (a.status === "unsuccessful") { out.set(a.id, "Unsuccessful"); continue; }
     if (!isAccepted(a) && a.status === "received") { out.set(a.id, "Not put to landlord"); continue; }
     if (!isAccepted(a) && a.status === "communicated") { out.set(a.id, "Landlord decision"); continue; }
+    /* Intro only ends at the landlord's yes (lib/intro-only): never "Handover due". */
+    if (!a.swap && a.listingId != null && intro.has(String(a.listingId))) { out.set(a.id, "Intro only"); continue; }
     /* A swap's home has the old tenancy's deal: its own shows up once pushed. */
     if (a.swap) {
       const keyed = all ? findSwapDeal(a, all) : null;

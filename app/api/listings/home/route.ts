@@ -7,12 +7,21 @@ import { deriveLetType, isHmoLet, isLetType, requiredFor, type LetType } from "@
 import { isScottishHome } from "@/lib/compliance";
 import { isTestId, testListing } from "@/lib/test-overlay";
 import { testTermsParties } from "@/lib/test-terms";
+import { introOnlyMark, setIntroOnly } from "@/lib/intro-only";
+import { forgetListing } from "@/lib/listing-details";
+import { record } from "@/lib/audit";
 
 /**
  * WHAT THIS HOME IS, AND WHAT IS ALREADY ON FILE FOR IT (James, 12 Oct 2026).
  *
  *   GET   ?id=<listing>               -> { letType, derived, why, required, scotland, noGas, terms }
  *   PATCH { id, letType }             -> the same, with the new type kept
+ *   PATCH { id, introOnly }           -> the same, marked intro only or not
+ *
+ * Intro only (16 Oct 2026, lib/intro-only) is the one service the OS keeps
+ * itself: the agent or the office marks it here, and the file then ends at
+ * the landlord's yes. The other services are the listing's own and are not
+ * changed from here.
  *
  * The type of let decides the certificates the listing's Compliance asks for.
  * Terms count from wherever they already are - REX's entry, an upload marked
@@ -70,8 +79,10 @@ async function answer(id: number) {
     };
   }
 
+  const intro = await introOnlyMark(id).catch(() => null);
   return {
     ok: true,
+    introOnly: intro ? { by: intro.by, at: intro.at } : null,
     letType,
     derived: !k,
     why: k ? `Set by ${k.by_name || "the office"}` : guess.why,
@@ -94,8 +105,10 @@ async function testAnswer(id: number) {
   if (!l) return null;
   const parties = l.appraisalId ? await testTermsParties(l.appraisalId).catch(() => null) : null;
   const signed = (parties ?? []).find((p) => p.role === "landlord" && p.completedAt);
+  const intro = await introOnlyMark(id).catch(() => null);
   return {
     ok: true,
+    introOnly: intro ? { by: intro.by, at: intro.at } : null,
     letType: "residential" as LetType,
     derived: true,
     why: "A test listing",
@@ -133,7 +146,32 @@ export async function PATCH(req: NextRequest) {
   if (actor.role !== "agent" && !OFFICE.has(actor.role)) return NextResponse.json({ ok: false, error: "The type of let is for the listing's agent or the office." }, { status: 403 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "There is no database on this environment." }, { status: 503 });
 
-  const b = (await req.json().catch(() => ({}))) as { id?: unknown; letType?: unknown };
+  const b = (await req.json().catch(() => ({}))) as { id?: unknown; letType?: unknown; introOnly?: unknown };
+
+  /* Intro only, on or off. A test listing can be marked too, so a tester
+     can walk an intro-only let end to end. */
+  if (typeof b.introOnly === "boolean") {
+    const testId = isTestId(b.id);
+    const lid = testId ? Number(b.id) : listingId(b.id);
+    if (!lid) return NextResponse.json({ ok: false, error: "Which listing?" }, { status: 400 });
+    if (!testId) {
+      const notTheirs = await listingIsTheirs(actor, lid);
+      if (notTheirs) return NextResponse.json({ ok: false, error: notTheirs }, { status: 403 });
+    }
+    try {
+      await setIntroOnly(lid, b.introOnly, { by: actor.name || actor.email, source: "listing" });
+      await forgetListing(lid);
+      await record({ kind: "listing_edited", actorId: actor.id, actorEmail: actor.email, detail: `listing ${lid} ${b.introOnly ? "marked intro only" : "no longer intro only"} (kept in the OS only)` }).catch(() => {});
+      if (testId) {
+        const t = await testAnswer(lid);
+        return t ? NextResponse.json(t) : NextResponse.json({ ok: false, error: "That test listing has gone.", test: true }, { status: 404 });
+      }
+      return NextResponse.json(await answer(lid));
+    } catch {
+      return NextResponse.json({ ok: false, error: "That did not save. Try again in a minute." }, { status: 502 });
+    }
+  }
+
   if (isTestId(b.id)) return NextResponse.json({ ok: false, error: "A test listing has no home record.", test: true }, { status: 409 });
   const id = listingId(b.id);
   if (!id) return NextResponse.json({ ok: false, error: "Which listing?" }, { status: 400 });

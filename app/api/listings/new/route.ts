@@ -13,6 +13,7 @@ import { createAppraisal, recordValuation } from "@/lib/appraisal-store";
 import { hasDb, q } from "@/lib/db";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 import type { ServiceLevel } from "@/lib/market-appraisal";
+import { setIntroOnly } from "@/lib/intro-only";
 import { isTestFile } from "@/lib/test-guard";
 import { adoptTestKit, kitFor, makeTestListing } from "@/lib/test-overlay";
 
@@ -43,7 +44,9 @@ export const maxDuration = 60;
 
 const SIGN_IN = new Set<string>(["no_rex_session", "rex_session_expired"]);
 /* The file speaks Propoly's service levels; the listing speaks REX's. */
-const LISTING_SERVICE: Record<ServiceLevel, string> = { full_managed: "managed", rent_collect: "rent_collect", tenant_find: "let_only" };
+/* Intro only has no word in REX: it goes as let only, its nearest, and the OS
+   keeps the intro only mark (lib/intro-only, 16 Oct 2026). */
+const LISTING_SERVICE: Record<ServiceLevel, string> = { full_managed: "managed", rent_collect: "rent_collect", tenant_find: "let_only", intro_only: "let_only" };
 
 interface Body {
   contactId?: unknown;
@@ -135,12 +138,13 @@ export async function POST(req: NextRequest) {
   if (!rent) return NextResponse.json({ ok: false, step: "let", error: "A rent is needed before a listing can exist." }, { status: 400 });
   const typeId = str(b.typeId);
   if (!typeId) return NextResponse.json({ ok: false, step: "let", error: "Choose what kind of property it is." }, { status: 400 });
-  const service = (["full_managed", "tenant_find", "rent_collect"] as const).find((s) => s === str(b.service));
+  const service = (["full_managed", "tenant_find", "rent_collect", "intro_only"] as const).find((s) => s === str(b.service));
   if (!service) return NextResponse.json({ ok: false, step: "let", error: "Choose the service." }, { status: 400 });
-  const feePct = money(b.feePct);
+  /* Intro only has no fee on the rent: the set-up fee is the intro fee. */
+  const feePct = service === "intro_only" ? 0 : money(b.feePct);
   if (feePct == null || feePct > 100) return NextResponse.json({ ok: false, step: "let", error: "Put in the fee, as a percentage of the rent." }, { status: 400 });
   const setupFee = money(b.setupFee);
-  if (setupFee == null) return NextResponse.json({ ok: false, step: "let", error: "Put in the set-up fee (0 if there isn't one)." }, { status: 400 });
+  if (setupFee == null) return NextResponse.json({ ok: false, step: "let", error: service === "intro_only" ? "Put in the intro fee." : "Put in the set-up fee (0 if there isn't one)." }, { status: 400 });
   const homeLabel = str(b.homeLabel);
   if (!homeLabel) return NextResponse.json({ ok: false, step: "home", error: "Which home is it?" }, { status: 400 });
   const availableFrom = /^\d{4}-\d{2}-\d{2}$/.test(str(b.availableFrom)) ? str(b.availableFrom) : null;
@@ -181,6 +185,7 @@ export async function POST(req: NextRequest) {
       propertyType: str(b.typeLabel) || null,
       landlord: { name: contact.name, email: contact.email || kit.owner, phone: contact.mobile || null },
     });
+    if (service === "intro_only") await setIntroOnly(made.listingId, true, { by: actor.name || actor.email, source: "new-listing" }).catch(() => undefined);
     if (appraisalId && hasDb()) {
       await q(
         `UPDATE os_case_state SET payload = payload || jsonb_build_object('listingId', $2::text) WHERE kind = 'direct-listing' AND record_id = $1`,
@@ -243,6 +248,7 @@ export async function POST(req: NextRequest) {
     );
   }
   const owner = await putOwnerOnListing(made.listingId, { contactId: contact.rexId ?? null, propertyId });
+  if (service === "intro_only") await setIntroOnly(made.listingId, true, { by: actor.name || actor.email, source: "new-listing" }).catch(() => undefined);
 
   /* 3. The file behind it, so the terms run exactly as an appraisal's do. */
   const leadId = `os-${contact.id}`;

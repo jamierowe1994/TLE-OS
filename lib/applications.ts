@@ -4,6 +4,7 @@ import { rexCall, rexRows } from "@/lib/rex";
 import { unitLine } from "@/lib/address-parse";
 import { hasDb, q } from "@/lib/db";
 import { isScottish } from "@/lib/property-flags";
+import { introOnlyIds } from "@/lib/intro-only";
 import { applyLead, leadOverrides } from "@/lib/lead-tenant";
 
 /**
@@ -1145,7 +1146,7 @@ export async function closedReasons(apps: Application[]): Promise<Map<string, st
   /* A pack left half-done long after the move-in is abandoned, not live. */
   const monthAgo = new Date(Date.now() - 30 * 86400000).toLocaleDateString("en-CA", { timeZone: "Europe/London" });
   const ids = [...new Set(apps.map((a) => a.listingId).filter((x): x is number => x != null))];
-  const [state, packOpen, cancelled] = await Promise.all([listingStates(ids), openPlcPacks(), cancelledRefs()]);
+  const [state, packOpen, cancelled, intro] = await Promise.all([listingStates(ids), openPlcPacks(), cancelledRefs(), introOnlyIds().catch(() => new Set<string>())]);
 
   const out = new Map<string, string>();
   for (const a of apps) {
@@ -1156,6 +1157,13 @@ export async function closedReasons(apps: Application[]): Promise<Map<string, st
       continue;
     }
     const s = a.listingId != null ? state.get(a.listingId) : undefined;
+    /* Intro only (lib/intro-only): agreed is the end of it. Nothing more
+       happens here, so it leaves the lets in progress. */
+    const agreed = a.status === "accepted" || a.osDecision?.decision === "accepted";
+    if (agreed && !a.swap && a.listingId != null && intro.has(String(a.listingId))) {
+      out.set(a.id, "Intro only - done");
+      continue;
+    }
     if (a.status === "accepted") {
       /* Not while its PLC check is still going (6 Oct 2026): REX's start
          date passing does not move anybody in, and Rhiannon's Room 2 vanished

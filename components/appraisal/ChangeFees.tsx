@@ -284,7 +284,7 @@ function ChangeFeesSheet({
 
               <div>
                 <span className="mb-1.5 block text-[12.5px] font-semibold">Service</span>
-                <div className="grid gap-2 sm:grid-cols-3">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {SERVICE_LEVELS.map((s) => (
                     <button
                       key={s.id}
@@ -309,8 +309,8 @@ function ChangeFeesSheet({
                       ? <span className="text-accent-dark">A percentage between 0 and 100.</span>
                       : next.feePct != null
                         ? `Before VAT. The landlord sees ${Math.round(next.feePct * (1 + VAT) * 100) / 100}% including VAT.`
-                        : level === "tenant_find"
-                          ? "Tenant find has no management fee - leave it blank."
+                        : level === "tenant_find" || level === "intro_only"
+                          ? `${level === "intro_only" ? "Intro only" : "Tenant find"} has no management fee - leave it blank.`
                           : "Before VAT. Blank if there isn't one."
                   }
                 >

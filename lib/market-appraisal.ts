@@ -176,12 +176,19 @@ export interface AppraisalTick {
  * Rent protection is deliberately NOT here: it is a tag on a deal, not a
  * service level, and it has been mistaken for one before.
  */
-export type ServiceLevel = "full_managed" | "tenant_find" | "rent_collect";
+export type ServiceLevel = "full_managed" | "tenant_find" | "rent_collect" | "intro_only";
 
+/*
+ * INTRO ONLY is the one level of our own (training call, 16 Oct 2026): we
+ * advertise, market and find the tenant, the landlord does the rest. It never
+ * becomes a Propoly deal - the file stops once the tenant is agreed - so no
+ * translation is ever needed for it (lib/intro-only).
+ */
 export const SERVICE_LEVELS: { id: ServiceLevel; label: string }[] = [
   { id: "full_managed", label: "Fully managed" },
   { id: "tenant_find", label: "Tenant find" },
   { id: "rent_collect", label: "Rent collect" },
+  { id: "intro_only", label: "Intro only" },
 ];
 
 /**

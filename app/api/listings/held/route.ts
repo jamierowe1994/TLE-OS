@@ -7,6 +7,7 @@ import { rexConfigured } from "@/lib/rex";
 import { decisionsFor } from "@/lib/offer-decisions";
 import { dealForApplication, dealsReadable } from "@/lib/application-journey";
 import { feeOf } from "@/lib/offer-hold";
+import { introOnlyIds } from "@/lib/intro-only";
 
 /**
  * GET /api/listings/held -> { held: { [listingId]: { tenant, words } } }
@@ -45,8 +46,10 @@ export async function GET(req: NextRequest) {
       return decided.get(`rex:${a.id}`)?.decision === "accepted";
     });
     const out: Record<string, { tenant: string; words: string }> = {};
+    /* Intro only has no holding fee to wait on (lib/intro-only). */
+    const intro = await introOnlyIds().catch(() => new Set<string>());
     await Promise.all(
-      accepted.map(async (a) => {
+      accepted.filter((a) => !intro.has(String(a.listingId))).map(async (a) => {
         const fee = feeOf(await dealForApplication(a).catch(() => null));
         if (fee.settled) return;
         out[String(a.listingId)] = {

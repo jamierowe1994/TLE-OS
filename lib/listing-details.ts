@@ -1,6 +1,7 @@
 import "server-only";
 import { rexCall, type RexResponse } from "@/lib/rex";
 import { readMarketingFacts, type FactSource } from "@/lib/listing-marketing-store";
+import { isIntroOnly } from "@/lib/intro-only";
 import { RULES } from "@/lib/staleness";
 import { bandForScore, larnForAgent, recordForProperty, type EpcBand, type ListingRecord } from "@/lib/listing-record";
 
@@ -69,6 +70,8 @@ export interface ListingDetails {
   propertyType: string | null;
   letType: string | null;
   service: string | null;
+  /** The service as the listing record has it, under an intro only mark. */
+  serviceOnRecord?: string | null;
   councilTaxBand: string | null;
   parking: string | null;
   epc: {
@@ -234,6 +237,9 @@ export async function readListingDetails(id: number, opts: { cached?: boolean } 
   const pubErrP = listingRead(id, "ListingPublication", "getErrorsPreventingPublication", { listing_id: id }, { fresh });
   const upErrP = listingRead(id, "ListingPortalUploads", "getErrorsPreventingUpload", { listing_id: id }, { fresh });
   const heldP = readMarketingFacts(String(id)).catch(() => ({}) as Awaited<ReturnType<typeof readMarketingFacts>>);
+  /* Intro only is the OS's own word for the service (lib/intro-only): REX
+     holds let only for these, and every screen reads "Intro only". */
+  const introP = isIntroOnly(id).catch(() => false);
   /* Not left dangling if Listings/read throws below. */
   pubErrP.catch(() => null);
   upErrP.catch(() => null);
@@ -299,7 +305,8 @@ export async function readListingDetails(id: number, opts: { cached?: boolean } 
     propertyTypeId: str(((subcats[0] ?? {}).subcategory as Obj | null)?.id),
     propertyTypeRowId: str((subcats[0] ?? {}).id),
     letType: text(l.let_type),
-    service: text(l.lettings_service_type),
+    service: (await introP) ? "Intro only" : text(l.lettings_service_type),
+    serviceOnRecord: text(l.lettings_service_type),
     councilTaxBand: str(p.meta_tax_band) ?? str(p.meta_rates_council),
     parking: text(p.attr_parking_type) ?? yesNo(p.attr_has_parking),
     epc: {

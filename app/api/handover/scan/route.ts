@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { introOnlyIds } from "@/lib/intro-only";
 import { publicError } from "@/lib/public-error";
 import { timingSafeEqual } from "node:crypto";
 import { getApplications } from "@/lib/applications";
@@ -42,8 +43,11 @@ export async function GET(req: NextRequest) {
   const since = Date.now() - LOOKBACK_DAYS * 86_400_000;
   const apps = await getApplications(300);
   const done = await handedOverIds("shadow");
+  /* Intro only never hands over (lib/intro-only). */
+  const intro = await introOnlyIds().catch(() => new Set<string>());
   const due = apps
     .filter((a) => a.status === "accepted")
+    .filter((a) => a.listingId == null || !intro.has(String(a.listingId)))
     .filter((a) => a.dateAccepted && new Date(a.dateAccepted).getTime() >= since)
     .filter((a) => !done.has(a.id))
     .slice(0, PER_RUN);

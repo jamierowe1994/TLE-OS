@@ -37,6 +37,8 @@ type Journey = {
   plc?: { id: string; state: string; who: string } | null;
   inPropoly?: { url: string | null; how: "open" | "finished" | "pushed" | "found" } | null;
   history?: DealEvent[];
+  /** Intro only (lib/intro-only): the let ends at the landlord's yes. */
+  introOnly?: { done: boolean } | null;
 };
 
 /**
@@ -963,6 +965,9 @@ export default function ApplicationDrawer({
   const dealStatus = deal ? cardStatus(deal, deal.effectiveStatusKey) : null;
   const flags = [...(journey?.ok ? journey.flags ?? [] : []), ...(deal?.flags ?? []).map((f) => f.label)].filter((f, i, all) => all.indexOf(f) === i);
   const plcState = journey?.ok ? journey.plc?.state ?? null : deal?.plc?.state ?? null;
+  /* Intro only (16 Oct 2026): no PLC, no Propoly, no reminders - the file
+     ends at the landlord's yes and says so. */
+  const intro = journey?.ok ? journey.introOnly ?? null : null;
   /* IN PROPOLY OR NOT, at the top of every let (James, 13 Oct 2026): "if
      they're not on that step, you can't get to pushing it". Read off the
      journey's handover stop, which checks Propoly's deals each time the let
@@ -1005,7 +1010,7 @@ export default function ApplicationDrawer({
     { icon: "coin", label: isSwap ? "Rent, the home" : "Rent", text: rent ? `${rent} ${per}` : "No offer recorded" },
     ...(app?.swapPortion ? [{ icon: "coin", label: "Their portion", text: `${app.swapPortion} pcm` }] : []),
     { icon: "user", label: "Agent", text: agent },
-    { icon: "home", label: "Service", text: deal?.serviceLevel ?? deal?.app.propoly?.service ?? (listingService ? listingService.charAt(0) + listingService.slice(1).toLowerCase() : "Not known yet") },
+    { icon: "home", label: "Service", text: intro ? "Intro only" : deal?.serviceLevel ?? deal?.app.propoly?.service ?? (listingService ? listingService.charAt(0) + listingService.slice(1).toLowerCase() : "Not known yet") },
     ...(app
       ? [
           { icon: "target", label: "Came in", text: received ? niceDate(received.when) : "No date" },
@@ -1013,7 +1018,7 @@ export default function ApplicationDrawer({
           ...(scottishLet ? [] : [{ icon: "shield", label: "Right to rent", text: `${answered} of ${people.length}` }]),
         ]
       : []),
-    { icon: "wallet", label: "Holding fee", text: isSwap ? "None on a tenant swap" : deal ? stageStatus(deal, "holding_fee").text : "No deal yet" },
+    { icon: "wallet", label: "Holding fee", text: intro ? "None - intro only" : isSwap ? "None on a tenant swap" : deal ? stageStatus(deal, "holding_fee").text : "No deal yet" },
   ];
 
   /* The activity log, for the panel at the top: what the record holds, then
@@ -1085,7 +1090,12 @@ export default function ApplicationDrawer({
             </button>
           ))}
           {/* Green once it is in Propoly (opens the deal), pink while it is not. */}
-          {propoly.state === "checking" ? (
+          {intro ? (
+            <span className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[#56634a]/25 bg-[#f1f4ec] px-3.5 text-[12.5px] font-semibold text-[#56634a]">
+              <DoodleIcon name="key" size={13} />
+              Intro only
+            </span>
+          ) : propoly.state === "checking" ? (
             <span className="inline-flex h-9 items-center gap-2 rounded-full border border-line/80 bg-white px-3.5 text-[12.5px] font-semibold text-muted">
               <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
               Checking Propoly
@@ -1199,6 +1209,9 @@ export default function ApplicationDrawer({
             <div className="grid flex-1 auto-rows-fr grid-cols-2 gap-2 @[40rem]:grid-cols-4">
               {/* The PLC check: from the record once the landlord has the
                   offer, done once it is approved. */}
+              {intro ? (
+                <Tile icon="shield" dark label="No PLC check" sub="Intro only - the landlord's" off />
+              ) : (
               <Tile
                 icon="shield"
                 dark
@@ -1208,6 +1221,7 @@ export default function ApplicationDrawer({
                 off={!plcDone && (Boolean(cancelled) || !app || !offerIn)}
                 href={app ? `/plc/start?application=${encodeURIComponent(app.id)}` : undefined}
               />
+              )}
               <Tile icon="message" label="Add a comment" sub="For the whole team" onClick={() => setPanel("notes")} steve="application.add-comment" />
               <Tile icon="upload" label="Add a document" sub="Drop it in" onClick={() => setDocsOpen(true)} />
               <Tile
@@ -1224,7 +1238,7 @@ export default function ApplicationDrawer({
                 onClick={() => setPerson({ role: "landlord", index: 0 })}
               />
               <Tile icon="mail" label="Customer update" sub="Email tenant or landlord" onClick={() => setBuilder({ mode: "update" })} />
-              <Tile icon="clock" label="Send a reminder" sub="Sign, pay, references" off={Boolean(cancelled)} onClick={() => setBuilder({ mode: "reminder" })} />
+              <Tile icon="clock" label="Send a reminder" sub={intro ? "Intro only - nothing to chase" : "Sign, pay, references"} off={Boolean(cancelled) || Boolean(intro)} onClick={() => setBuilder({ mode: "reminder" })} />
               <Tile
                 icon="logout"
                 label={cancelled ? "Deal cancelled" : "Cancel the deal"}
@@ -1236,7 +1250,7 @@ export default function ApplicationDrawer({
           </section>
 
           {/* Once the offer is accepted the handover IS the next action. */}
-          {aside && !cancelled && <div className="min-w-0 xl:col-span-2">{aside}</div>}
+          {aside && !cancelled && !intro && <div className="min-w-0 xl:col-span-2">{aside}</div>}
 
           {/* ── 2. the facts and the people, the spine underneath ────────── */}
           <section className={`${box} flex min-w-0 flex-col p-4 sm:p-5 xl:col-start-1`}>
@@ -1306,7 +1320,7 @@ export default function ApplicationDrawer({
               <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
                 <p className="flex flex-wrap items-baseline gap-x-3">
                   <span className="hand text-[16px]">Where it&apos;s up to</span>
-                  <span className="text-[11.5px] text-muted">The offer, then Kirstie&apos;s stages.</span>
+                  <span className="text-[11.5px] text-muted">{intro ? "The offer, and that's the end of it - intro only." : <>The offer, then Kirstie&apos;s stages.</>}</span>
                 </p>
                 {stops && here && <span className="text-[11.5px] text-muted">Step {(hereIdx >= 0 ? hereIdx : stops.length - 1) + 1} of {stops.length}</span>}
               </div>
@@ -1344,12 +1358,21 @@ export default function ApplicationDrawer({
               </>
             ) : app ? (
               <>
+                {intro?.done && (
+                  <div className="mb-4 flex items-start gap-3 rounded-xl border border-[#56634a]/20 bg-[#f1f4ec] px-4 py-3.5 text-[#3f5a32]">
+                    <DoodleIcon name="checklist" size={16} className="mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-[14px] font-semibold">Intro only - nothing more to do</p>
+                      <p className="mt-0.5 text-[12px] leading-relaxed">The landlord has agreed the tenant. Invoice the introduction and the file is finished: the landlord takes it from here.</p>
+                    </div>
+                  </div>
+                )}
                 <div className="[&>section]:rounded-none [&>section]:border-0 [&>section]:bg-transparent [&>section]:p-0">
                   <NextStepCard
                     applicationId={app.id}
                     actions={journey?.ok ? journey.actions ?? [] : null}
                     loading={journey === null}
-                    checks={checklist}
+                    checks={intro?.done ? [] : checklist}
                     onPlay={(a) => void play(a)}
                     playing={playing}
                     confirming={confirming}

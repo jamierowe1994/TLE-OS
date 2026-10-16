@@ -5,6 +5,7 @@ import type { ListingBook, OsListing } from "@/lib/rex-listings";
 import { cacheKeyFor, heldFor, refresh, FRESH_MS, STALE_MS } from "@/lib/listings-cache";
 import { withArchiveState } from "@/lib/listings-archive-view";
 import { withTakenState } from "@/lib/listings-taken";
+import { introOnlyIds } from "@/lib/intro-only";
 import { rexConfigured } from "@/lib/rex";
 import { whoIs } from "@/lib/admin";
 import { forAgent } from "@/lib/agent-words";
@@ -88,8 +89,11 @@ export async function GET(req: NextRequest) {
     /* Taken (12 Oct 2026, lib/listings-taken): let in fact though REX still
        has it published. Stamped here with the archive state, for the same
        reason - a Relist has to show the moment it is pressed. */
-    const [archived, mine] = await Promise.all([withArchiveState(book).then(withTakenState), tests]);
-    return withTests(archived, mine);
+    const [archived, mine, intro] = await Promise.all([withArchiveState(book).then(withTakenState), tests, introOnlyIds().catch(() => new Set<string>())]);
+    /* Intro only (lib/intro-only), stamped at serve time too: kept in the OS,
+       so the book never carries it. */
+    const withIntro = <L extends { id?: unknown; listingId?: unknown }>(ls: L[]) => (intro.size ? ls.map((l) => (intro.has(String(l.id ?? l.listingId)) ? { ...l, introOnly: true } : l)) : ls);
+    return withTests({ ...archived, listings: withIntro(archived.listings) }, withIntro(mine));
   };
   if (held && age < FRESH_MS) {
     return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await serve(held.book)), ageMs: age });

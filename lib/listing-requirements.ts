@@ -65,6 +65,9 @@ export const SERVICE_LEVELS = [
   { id: "managed", label: "Managed" },
   { id: "rent_collect", label: "Rent collect" },
   { id: "let_only", label: "Let only" },
+  /* Ours, not REX's (16 Oct 2026): REX is sent let only and the OS keeps the
+     intro only mark (lib/intro-only). */
+  { id: "intro_only", label: "Intro only" },
 ];
 
 export const MIN_FEATURES = 5;

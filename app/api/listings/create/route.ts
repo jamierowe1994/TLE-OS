@@ -137,6 +137,10 @@ export async function POST(req: NextRequest) {
       propertyType: str(b.typeLabel) || null,
       landlord: { name: ma.landlord, email: (ma.landlordEmail ?? "").trim() || kit.owner, phone: ma.landlordMobile ?? null },
     });
+    if (str(b.serviceLevel) === "intro_only" || ma.serviceLevel === "intro_only") {
+      const { setIntroOnly } = await import("@/lib/intro-only");
+      await setIntroOnly(made.listingId, true, { by: actor.name || actor.email, source: "appraisal" }).catch(() => undefined);
+    }
     await record({
       kind: "listing_edited",
       actorId: actor.id,
@@ -198,7 +202,8 @@ export async function POST(req: NextRequest) {
     /* Always long term (James, 12 Oct 2026): with Section 21 gone there is
        no choice to make, so the question came off the panel. */
     letType: "long_term",
-    serviceLevel: str(b.serviceLevel) || "managed",
+    /* Intro only is the OS's own (lib/intro-only): REX is sent let only. */
+    serviceLevel: str(b.serviceLevel) === "intro_only" ? "let_only" : str(b.serviceLevel) || "managed",
     /* For the test-file check only (lib/rex-listing-create); never sent. */
     appraisalId: appraisalId || null,
     contactId: str(b.address?.ownerContactId) || str(b.ownerContactId) || null,
@@ -226,6 +231,10 @@ export async function POST(req: NextRequest) {
      one the caller names, else the property's owners (lib/rex-listing-owner,
      behind its own switch). Never holds the listing up. */
   const owner = await putOwnerOnListing(made.listingId, { contactId: str(b.address?.ownerContactId) || str(b.ownerContactId) || null, propertyId });
+  if (str(b.serviceLevel) === "intro_only") {
+    const { setIntroOnly } = await import("@/lib/intro-only");
+    await setIntroOnly(made.listingId, true, { by: actor.name || actor.email, source: appraisalId ? "appraisal" : "new-listing" }).catch(() => undefined);
+  }
 
   await invalidateListingBook();
   /* The signed terms from the appraisal that won this home go onto the new

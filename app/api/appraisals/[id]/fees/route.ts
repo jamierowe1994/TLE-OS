@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { getAppraisal, recordValuation } from "@/lib/appraisal-store";
+import { followFile } from "@/lib/intro-only";
 import { effectiveStage, SERVICE_LEVELS, type MarketAppraisal, type ServiceLevel } from "@/lib/market-appraisal";
 import { changeDeckFigures, presentationsFor } from "@/lib/present-store";
 import { contractSendRecord } from "@/lib/contract-send";
@@ -174,7 +175,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   }
   const level = b.serviceLevel ? SERVICE_LEVELS.find((s) => s.id === b.serviceLevel)?.id ?? undefined : null;
   if (level === undefined) {
-    return NextResponse.json({ ok: false, field: "serviceLevel", error: "Pick one of the three services." }, { status: 400 });
+    return NextResponse.json({ ok: false, field: "serviceLevel", error: "Pick one of the services." }, { status: 400 });
   }
   const other = typeof b.otherFees === "string" ? b.otherFees.replace(/\s+/g, " ").trim().slice(0, 400) : "";
   const reason = typeof b.reason === "string" ? b.reason.trim().slice(0, 600) : "";
@@ -215,6 +216,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       who
     );
     if (!saved) return NextResponse.json({ ok: false, error: "No such appraisal." }, { status: 404 });
+    if (before.serviceLevel !== after.serviceLevel) await followFile({ ...ma, serviceLevel: after.serviceLevel }, who);
 
     /* 2. The deck, behind the same link. */
     const row = await changeDeckFigures(deck.token, {

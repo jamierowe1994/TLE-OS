@@ -381,10 +381,15 @@ export function feeWording(
 ): { setUp: string; management: string } {
   const money = (n: number) => `£${n.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
   const id = (serviceLevel ?? "").toLowerCase();
-  const tenantFind = id.includes("tenant");
+  const intro = id.includes("intro");
+  /* Intro only (16 Oct 2026) has no fee on the rent either: its one fee is
+     the introduction, in the set-up box. */
+  const tenantFind = id.includes("tenant") || intro;
   const standardPct = id.includes("manage") ? "14% + VAT (16.8% inc VAT)" : "12% + VAT (14.4% inc VAT)";
 
-  const management = tenantFind
+  const management = intro
+    ? "Not applicable - Intro only"
+    : tenantFind
     ? "Not applicable — Tenant Find"
     : feePercent != null
       ? `${feePercent}% + VAT`

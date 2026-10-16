@@ -10,6 +10,7 @@ import { whoIs } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
 import { maskContactFields, sameName, seesContactLists } from "@/lib/contact-mask";
 import { SERVICE_LEVELS, type ServiceLevel } from "@/lib/market-appraisal";
+import { followFile } from "@/lib/intro-only";
 import type { NextRequest } from "next/server";
 import { scheduleOnBooking } from "@/lib/pre-send";
 import type { PreOnBooking } from "@/lib/pre-send-time";
@@ -292,6 +293,7 @@ export async function PATCH(req: NextRequest) {
     if (!appraisal) {
       return NextResponse.json({ error: "No such appraisal." }, { status: 404 });
     }
+    if (level !== undefined) await followFile(appraisal, me.name || me.email);
     return NextResponse.json({ appraisal });
   } catch (e) {
     return NextResponse.json(

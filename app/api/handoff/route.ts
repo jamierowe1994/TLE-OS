@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isIntroOnly } from "@/lib/intro-only";
 import { publicError } from "@/lib/public-error";
 import { handoffFor } from "@/lib/deal-handoff";
 import { ensureHandoverTodos, handoverMode, handoversFor, runHandover } from "@/lib/handover";
@@ -198,6 +199,10 @@ export async function POST(req: NextRequest) {
      marked pushed and moves on to the holding fee, and the answer is the
      shape a real live push gives, so the card says what it says for one. */
   if (isTestId(body.applicationId)) {
+    const t = await testApplication(String(body.applicationId)).catch(() => null);
+    if (await isIntroOnly(t?.app.listingId).catch(() => false)) {
+      return NextResponse.json({ error: "This is an intro only, so nothing goes to Propoly - the landlord takes it from here." }, { status: 409 });
+    }
     try {
       const deal = await pushTestDeal(String(body.applicationId), { email: me.email });
       return NextResponse.json({ ok: true, run: testRun(String(body.applicationId), deal, me.name || me.email || "Test file") });
@@ -218,6 +223,10 @@ export async function POST(req: NextRequest) {
     if (mine?.decision !== "accepted") {
       return NextResponse.json({ error: "Accept the offer first. Only an accepted offer goes to Propoly." }, { status: 409 });
     }
+  }
+  /* Intro only ends at the landlord's yes (lib/intro-only): nothing of it goes to Propoly. */
+  if (await isIntroOnly(app.listingId).catch(() => false)) {
+    return NextResponse.json({ error: "This is an intro only, so nothing goes to Propoly - the landlord takes it from here." }, { status: 409 });
   }
   /* Force sends a second live run. Only the office, with the first in front of them. */
   if (body.force === true && !isOffice(me)) {

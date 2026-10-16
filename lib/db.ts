@@ -3908,6 +3908,17 @@ CREATE TABLE IF NOT EXISTS os_home_let_types (
   set_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Intro only (training call, 16 Oct 2026): we advertise, market and find the
+-- tenant, the landlord does the rest. One row per listing marked so; no row =
+-- the service the listing already has. Kept in the OS only - REX has no word
+-- for it (lib/intro-only).
+CREATE TABLE IF NOT EXISTS os_intro_only (
+  listing_id     TEXT PRIMARY KEY,
+  source         TEXT NOT NULL DEFAULT 'listing',
+  by_name        TEXT NOT NULL DEFAULT '',
+  set_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS os_let_cancellations (
   ref            TEXT PRIMARY KEY,
   deal_id        TEXT,

@@ -10,6 +10,7 @@ import { nameKey, tenantContacts } from "@/lib/tenant-contacts";
 import { sittingTenantsByProperty } from "@/lib/rex-tenants";
 import { addrOf, parseAddress, sameDoor, sameHome, type Parsed } from "@/lib/address-parse";
 import { q } from "@/lib/db";
+import { introOnlyIds } from "@/lib/intro-only";
 import { tidyAddressLine } from "@/lib/address-tidy";
 import type {
   ManagedBook,
@@ -350,7 +351,9 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
   const lets = rows.map(toProperty);
   if (pm) await linkByAddress(pm, lets);
   const pmRexIds = pm ? new Set(pm.map((h) => h.rexPropertyId).filter(Boolean) as string[]) : null;
-  const properties = lets.filter((p) => p.listingId && (!pmRexIds || (p.propertyId && pmRexIds.has(p.propertyId))));
+  /* Intro only is never ours to look after (lib/intro-only, 16 Oct 2026). */
+  const intro = await introOnlyIds().catch(() => new Set<string>());
+  const properties = lets.filter((p) => p.listingId && !intro.has(String(p.listingId)) && (!pmRexIds || (p.propertyId && pmRexIds.has(p.propertyId))));
 
   /**
    * The sitting tenant, where the listing does not name one.
