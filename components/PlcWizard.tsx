@@ -24,6 +24,8 @@ import { DateField } from "@/components/offers/OfferParts";
 import type { Prefill } from "@/lib/plc-prefill";
 import { demoCase } from "@/lib/plc-demo";
 import { prettyWhen } from "@/components/PlcReview";
+import { unwatchSend, watchSend } from "@/lib/plc-send-watch";
+import { toast } from "@/lib/toast";
 
 /**
  * Starting a PLC check.
@@ -183,6 +185,15 @@ export default function PlcWizard({
   };
 }) {
   const router = useRouter();
+  /* A Send reading in the background (16 Oct 2026): how far, and whether this page is still here to hear it. */
+  const [sendProgress, setSendProgress] = useState<{ read: number; of: number } | null>(null);
+  const here = useRef(true);
+  useEffect(() => {
+    here.current = true;
+    return () => {
+      here.current = false;
+    };
+  }, []);
   const [step, setStep] = useState<Step>("gathering");
   const [leaving, setLeaving] = useState(false);
   const [prefill, setPrefill] = useState<Prefill | null>(null);
@@ -410,15 +421,34 @@ export default function PlcWizard({
       return;
     }
     try {
-      const res = await api<{ case: PlcCase }>(`/api/plc/${kase.id}`, {
+      type SendAnswer = { case: PlcCase; reading?: boolean; progress?: { read: number; of: number } };
+      let res = await api<SendAnswer>(`/api/plc/${kase.id}`, {
         method: "POST",
-        body: JSON.stringify({ action: "submit" }),
+        body: JSON.stringify({ action: "submit", async: true }),
       });
+      /* Read in the background (16 Oct 2026): the corner card follows the
+         agent if they leave, and this page asks until the answer is in. */
+      if (res.reading) {
+        watchSend({ id: kase.id, address: kase.address, href: `${window.location.pathname}${window.location.search}` });
+        setSendProgress(res.progress ?? null);
+        while (res.reading) {
+          await new Promise((r) => window.setTimeout(r, 3000));
+          if (!here.current) return;
+          res = await api<SendAnswer>(`/api/plc/${kase.id}`, {
+            method: "POST",
+            body: JSON.stringify({ action: "send-status" }),
+          });
+          if (res.reading) setSendProgress(res.progress ?? null);
+        }
+        unwatchSend(kase.id);
+      }
       setKase(res.case);
       /* A beat on the spinner before the tick, because a state change with no
          duration reads as nothing having happened. */
       window.setTimeout(() => setStep("done"), 1400);
     } catch (e) {
+      unwatchSend(kase.id);
+      if (!here.current) return;
       setError((e as Error).message);
       /* A refusal carries findings (the reader's, or the gate's). Re-read the
          case so the review screen shows the exact lines, not just the sentence. */
@@ -524,6 +554,7 @@ export default function PlcWizard({
           className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full border border-line/80 bg-white px-3.5 py-2 text-[12.5px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink sm:left-6"
         >
           <span aria-hidden>←</span> Back to the application
+          {kase?.state === "assembling" && <span className="font-normal text-muted/80">· saved as you go</span>}
         </Link>
       )}
 
@@ -1013,6 +1044,26 @@ export default function PlcWizard({
               <button type="button" onClick={() => go("tenant")} className={SECONDARY}>
                 Back
               </button>
+              {/* Save for later (James, 16 Oct 2026): everything filed is kept as
+                  it is added, so this saves the note and goes back to the let;
+                  Start the PLC check opens it where it was left. */}
+              {!demo && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await saveNote();
+                      toast("Saved. Carry on any time from the application.");
+                      router.push(`/applications/${encodeURIComponent(prefill?.applicationId ?? kase.applicationRef)}`);
+                    } catch (e) {
+                      setError((e as Error).message);
+                    }
+                  }}
+                  className={SECONDARY}
+                >
+                  Save and finish later
+                </button>
+              )}
             </div>
           </div>
           );
@@ -1025,7 +1076,28 @@ export default function PlcWizard({
               Reading the pack and sending it over
               <Ellipsis />
             </p>
-            <p className="mt-2 text-sm text-muted">Each document is read for its dates first. A minute, usually.</p>
+            {sendProgress?.of ? (
+              <div className="mx-auto mt-5 max-w-xs">
+                <div className="h-1.5 overflow-hidden rounded-full bg-line/60">
+                  <div className="h-full rounded-full bg-neutral-900 transition-[width] duration-700" style={{ width: `${Math.max(4, Math.round((sendProgress.read / sendProgress.of) * 100))}%` }} />
+                </div>
+                <p className="mt-2 text-xs text-muted">Read {sendProgress.read} of {sendProgress.of} documents</p>
+              </div>
+            ) : null}
+            <p className="mt-4 text-sm text-muted">
+              Each document is read for its dates first, which can take a few minutes.
+              <br />
+              You can leave this page: it carries on, and the corner of the screen says when it&apos;s done.
+            </p>
+            {kase && (
+              <button
+                type="button"
+                onClick={() => router.push(`/applications/${encodeURIComponent(prefill?.applicationId ?? kase.applicationRef)}`)}
+                className={`${SECONDARY} mt-6`}
+              >
+                Back to the application
+              </button>
+            )}
           </div>
         )}
 

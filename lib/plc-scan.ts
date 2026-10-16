@@ -479,7 +479,8 @@ export type ScanOutcome = {
   };
 };
 
-export async function scanCase(c: PlcCase): Promise<ScanOutcome> {
+/** onProgress: called as each document is read (how many done, of how many), for the Send card. */
+export async function scanCase(c: PlcCase, onProgress?: (done: number, total: number) => void): Promise<ScanOutcome> {
   const findings: Finding[] = [];
   const results: { checkId: CheckId; result: RuleResult }[] = [];
 
@@ -556,15 +557,35 @@ export async function scanCase(c: PlcCase): Promise<ScanOutcome> {
   const client = new Anthropic();
   const readable = c.documents.filter((d) => checkById(d.checkId)?.scan !== "none");
 
-  /* Sequential on purpose. A pack is under ten documents, and firing them all
-     at once buys a couple of seconds at the cost of a rate limit that would
-     fail the whole scan rather than one document. */
-  for (const doc of readable) {
-    try {
-      const read = await scanOne(client, doc, c);
-      findings.push(...read.findings);
-      results.push({ checkId: doc.checkId, result: read.result });
-    } catch (e) {
+  /* Three at a time (16 Oct 2026). One by one, a 13-document pack (Lianna's
+     tenant swap on 44 South Bridge) ran past the 100 seconds a page waits.
+     Not all at once either: a rate limit would then fail most of the pack
+     rather than one document. Each document's findings stay in pack order. */
+  type Read = { findings: Finding[]; result: RuleResult };
+  const reads: Array<{ ok: true; read: Read } | { ok: false; error: unknown }> = new Array(readable.length);
+  let next = 0;
+  let finished = 0;
+  onProgress?.(0, readable.length);
+  await Promise.all(
+    Array.from({ length: Math.min(3, readable.length) }, async () => {
+      while (next < readable.length) {
+        const at = next++;
+        try {
+          reads[at] = { ok: true, read: await scanOne(client, readable[at], c) };
+        } catch (error) {
+          reads[at] = { ok: false, error };
+        }
+        onProgress?.(++finished, readable.length);
+      }
+    })
+  );
+  for (const [at, doc] of readable.entries()) {
+    const got = reads[at];
+    if (got.ok) {
+      findings.push(...got.read.findings);
+      results.push({ checkId: doc.checkId, result: got.read.result });
+    } else {
+      const e = got.error;
       findings.push({
         checkId: doc.checkId,
         level: "query",

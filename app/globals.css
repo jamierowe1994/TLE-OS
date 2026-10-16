@@ -1353,6 +1353,19 @@ html[data-os-toast="up"] .os-toast-lift {
     color 150ms cubic-bezier(0.4, 0, 0.2, 1),
     border-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
+/* A PLC check being sent (components/PlcSendCard, 16 Oct 2026): its card sits
+   in the corner too, so Steve rises above it, and above a toast as well when
+   both are up. The toast itself rises above the card. */
+html[data-os-send="up"] .os-toast-lift {
+  translate: 0 calc(-1 * var(--os-send-lift, 0px));
+}
+html[data-os-send="up"][data-os-toast="up"] .os-toast-lift {
+  translate: 0 calc(-1 * (var(--os-send-lift, 0px) + var(--os-toast-lift, 0px)));
+}
+html[data-os-send="up"] .os-toast-pill-wrap {
+  translate: 0 calc(-1 * var(--os-send-lift, 0px));
+}
+
 /* The bump on landing: squashed flat as he hits the floor (the drop's first
    bounce is 51% of its 600ms), stretched as he comes off it, then himself.
    From his feet, so he squashes into the floor rather than shrinking. */

@@ -12,6 +12,7 @@ import DocumentSheet from "@/components/DocumentSheet";
 import GuideLayer from "@/components/GuideLayer";
 import Watchdog from "@/components/Watchdog";
 import Toaster from "@/components/Toaster";
+import PlcSendCard from "@/components/PlcSendCard";
 import MailLinksNewTab from "@/components/MailLinksNewTab";
 
 export default function OsLayout({ children }: { children: React.ReactNode }) {
@@ -70,6 +71,8 @@ export default function OsLayout({ children }: { children: React.ReactNode }) {
             than in a drawer, so a save that lands as a drawer closes is still
             heard. */}
         <Toaster />
+        {/* A PLC check reading in the background, in the corner on every page. */}
+        <PlcSendCard />
       </IntroGate>
     </ThemeGate>
   );

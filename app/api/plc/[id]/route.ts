@@ -117,6 +117,88 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   }
 }
 
+/* ── The send, after the gate: read, hold on a blocker, else submit ──────── */
+
+type SendJob = { at: number; done: boolean; status: number; error: string | null; read: number; of: number };
+/** A finished send is kept a while, so the page and the corner card can both hear it. */
+const KEEP_MS = 30 * 60_000;
+const g = globalThis as unknown as { __plcSendJobs?: Map<string, SendJob> };
+const sendJobs: Map<string, SendJob> = (g.__plcSendJobs ??= new Map());
+
+/* ── "Not needed" lets it through (James, 16 Oct 2026) ─────────────────────
+   44 South Bridge: Smoke and CO alarms marked not needed by Lianna, then the
+   gas record's "CO alarm in attic space out of date 2025 (still fitted)"
+   stopped the send as a blocker. When the agent has said a check is not
+   needed, a reader blocker about that same thing goes to compliance as a
+   question with the agent's reason beside it, rather than holding the pack. */
+const WAIVED_TOPICS: Partial<Record<CheckId, RegExp>> = {
+  alarms: /\b(co|carbon monoxide|smoke|heat)\b[^.]*\balarms?\b|\balarms?\b/i,
+};
+function softenWaived(c: PlcCase, findings: ScanOutcome["findings"]): ScanOutcome["findings"] {
+  const waived = (c.waivers ?? []).filter((w) => WAIVED_TOPICS[w.checkId as CheckId]);
+  if (!waived.length) return findings;
+  return findings.map((f) => {
+    if (f.level !== "blocker") return f;
+    const w = waived.find((x) => WAIVED_TOPICS[x.checkId as CheckId]!.test(f.message));
+    if (!w) return f;
+    const label = PLC_CHECKS.find((k) => k.id === w.checkId)?.label ?? w.checkId;
+    return { ...f, level: "query" as const, message: `${f.message} - ${label} marked not needed by ${w.by}: "${w.reason}"` };
+  });
+}
+
+async function finishSend(id: string, current: PlcCase, testCase: boolean, onProgress?: (read: number, of: number) => void): Promise<{ status: number; error: string | null }> {
+  let outcome: ScanOutcome | null = null;
+  if (scanConfigured() && current.state === "assembling" && current.moveInDate) {
+    try {
+      outcome = await scanCase(current, onProgress);
+      if (outcome) outcome = { ...outcome, findings: softenWaived(current, outcome.findings) };
+    } catch {
+      /* A reader that fails is not a reason to hold the pack: it goes
+         through unscanned and Kirstie reads it, as before the reader
+         existed. */
+      outcome = null;
+    }
+  }
+  if (outcome) {
+    const blockers = outcome.findings.filter((f) => f.level === "blocker");
+    if (blockers.length) {
+      await recordPreflight(id, outcome.findings);
+      return {
+        status: 409,
+        error: `The reader found ${blockers.length} thing${blockers.length === 1 ? "" : "s"} that would fail the check. Fix ${
+          blockers.length === 1 ? "it" : "them"
+        } and send again.`,
+      };
+    }
+  }
+
+  const submitted = await submitCase(id);
+  if (!testCase) await recordActivity({
+    id: submitted.id,
+    property: submitted.address,
+    agentEmail: submitted.agentEmail || null,
+    agentName: submitted.agentName,
+    event: "plc_submitted",
+    from: current.decidedAt ? "deferred" : null,
+    to: "submitted",
+  });
+  if (!outcome) return { status: 200, error: null };
+
+  await markScanning(id);
+  const scanned = await recordScan(id, outcome.findings);
+  if (outcome.recommendation && !testCase) {
+    await recordRecommendation({
+      caseId: id,
+      address: scanned.address,
+      verdict: outcome.recommendation.verdict,
+      headline: outcome.recommendation.headline,
+      perCheck: outcome.recommendation.perCheck,
+      submittedAt: scanned.submittedAt,
+    });
+  }
+  return { status: 200, error: null };
+}
+
 export async function POST(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
   let body: {
@@ -127,6 +209,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     reason?: string;
     wanted?: boolean;
     test?: boolean;
+    /** The wizard's Send: answer at once and read in the background (send-status). */
+    async?: boolean;
   };
   try {
     body = await req.json();
@@ -238,59 +322,48 @@ export async function POST(req: NextRequest, ctx: Ctx) {
           );
         }
 
-        let outcome: ScanOutcome | null = null;
-        if (scanConfigured() && current.state === "assembling" && current.moveInDate) {
-          try {
-            outcome = await scanCase(current);
-          } catch {
-            /* A reader that fails is not a reason to hold the pack: it goes
-               through unscanned and Kirstie reads it, as before the reader
-               existed. */
-            outcome = null;
+        /* The wizard's Send (Lianna, 16 Oct 2026): a 13-document pack took the
+           reader past Cloudflare's 100 seconds, so the agent saw "That didn't
+           work (524)" while the server went on to finish - it had found a
+           blocker and held the pack, and nobody was told. Now the wizard is
+           answered at once, the reading carries on here, and it asks
+           send-status until the answer is in. Anything else that sends still
+           waits for the whole thing, as before. */
+        if (body.async && scanConfigured() && current.state === "assembling" && current.moveInDate) {
+          const running = sendJobs.get(id);
+          if (!running || running.done) {
+            for (const [k, j] of sendJobs) if (j.done && Date.now() - j.at > KEEP_MS) sendJobs.delete(k);
+            const job: SendJob = { at: Date.now(), done: false, status: 200, error: null, read: 0, of: 0 };
+            sendJobs.set(id, job);
+            void finishSend(id, current, testCase, (read, of) => Object.assign(job, { read, of }))
+              .then((r) => Object.assign(job, r, { done: true }))
+              .catch((e) => Object.assign(job, { done: true, status: 502, error: publicError(e, "The send didn't finish. Press Send again.") }));
           }
+          return NextResponse.json({ ok: true, reading: true, progress: { read: 0, of: current.documents.length }, ...(await payload(current, req)) }, { status: 202 });
         }
-        if (outcome) {
-          const blockers = outcome.findings.filter((f) => f.level === "blocker");
-          if (blockers.length) {
-            const held = await recordPreflight(id, outcome.findings);
-            return NextResponse.json(
-              {
-                ok: false,
-                error: `The reader found ${blockers.length} thing${blockers.length === 1 ? "" : "s"} that would fail the check. Fix ${
-                  blockers.length === 1 ? "it" : "them"
-                } and send again.`,
-                ...(await payload(held, req)),
-              },
-              { status: 409 }
-            );
-          }
-        }
+        const r = await finishSend(id, current, testCase);
+        const after = await getCase(id);
+        return NextResponse.json(
+          { ok: r.status === 200, ...(r.error ? { error: r.error } : {}), ...(after ? await payload(after, req) : {}) },
+          { status: r.status }
+        );
+      }
 
-        const submitted = await submitCase(id);
-        if (!testCase) await recordActivity({
-          id: submitted.id,
-          property: submitted.address,
-          agentEmail: submitted.agentEmail || null,
-          agentName: submitted.agentName,
-          event: "plc_submitted",
-          from: current.decidedAt ? "deferred" : null,
-          to: "submitted",
-        });
-        if (!outcome) return NextResponse.json({ ok: true, ...(await payload(submitted, req)) });
-
-        await markScanning(id);
-        const scanned = await recordScan(id, outcome.findings);
-        if (outcome.recommendation && !testCase) {
-          await recordRecommendation({
-            caseId: id,
-            address: scanned.address,
-            verdict: outcome.recommendation.verdict,
-            headline: outcome.recommendation.headline,
-            perCheck: outcome.recommendation.perCheck,
-            submittedAt: scanned.submittedAt,
-          });
+      case "send-status": {
+        /* Where a background Send (above) has got to. */
+        const job = sendJobs.get(id);
+        const now = await getCase(id);
+        if (!now) return NextResponse.json({ ok: false, error: "That handover no longer exists." }, { status: 404 });
+        if (job && !job.done) return NextResponse.json({ ok: true, reading: true, progress: { read: job.read, of: job.of }, ...(await payload(now, req)) }, { status: 202 });
+        if (job) {
+          return NextResponse.json({ ok: job.status === 200, ...(job.error ? { error: job.error } : {}), ...(await payload(now, req)) }, { status: job.status });
         }
-        return NextResponse.json({ ok: true, ...(await payload(scanned, req)) });
+        /* No job here: it finished and was read, or the server restarted mid-read. */
+        if (now.state !== "assembling") return NextResponse.json({ ok: true, ...(await payload(now, req)) });
+        return NextResponse.json(
+          { ok: false, error: "The send didn't finish, so nothing was sent. Press Send again.", ...(await payload(now, req)) },
+          { status: 409 }
+        );
       }
 
       case "push-rex": {

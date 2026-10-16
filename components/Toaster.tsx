@@ -86,7 +86,7 @@ export default function Toaster({ at = "bottom" }: { at?: "bottom" | "top" } = {
       aria-live="polite"
       role="status"
       className={`pointer-events-none fixed z-[200] flex ${
-        at === "top" ? "inset-x-0 top-4 justify-center px-4" : "bottom-3 right-3 justify-end pl-4"
+        at === "top" ? "inset-x-0 top-4 justify-center px-4" : "os-toast-pill-wrap bottom-3 right-3 justify-end pl-4"
       }`}
     >
       {item && (
