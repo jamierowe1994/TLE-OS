@@ -561,8 +561,28 @@ export async function getApplications(limit = 100, rexUserId?: string | null): P
   /* The lead tenant as an agent changed it in the OS (lib/lead-tenant). */
   const leads = await leadOverrides().catch(() => new Map<string, string>());
   if (leads.size) for (const a of out) applyLead(a, leads);
+  await applyAgreedRent(out).catch(() => null);
   appsCache.set(key, { at: Date.now(), apps: out });
   return out;
+}
+
+/**
+ * A REX application accepted here at a countered figure (16 Oct 2026,
+ * lib/offer-counters): the agreed rent and move-in, not REX's first offer,
+ * so the file and the push to Propoly carry what was agreed. REX itself is
+ * updated by hand. OS offers carry theirs on the offer already.
+ */
+async function applyAgreedRent(apps: Application[]): Promise<void> {
+  const rex = apps.filter((a) => !isOsApplication(a.id));
+  if (!rex.length || !hasDb()) return;
+  const { agreedOnRexApps } = await import("@/lib/offer-counters");
+  const agreed = await agreedOnRexApps(rex.map((a) => a.id));
+  for (const a of rex) {
+    const c = agreed.get(a.id);
+    if (!c) continue;
+    a.offerAmount = c.amount;
+    if (c.moveIn) a.startDate = c.moveIn;
+  }
 }
 
 /** Application id -> the Propoly deal its push started, newest push winning. */
@@ -855,7 +875,11 @@ export async function getApplicationById(id: string): Promise<Application | null
     limit: 1,
   }).catch(() => null);
   const rows = res?.ok ? rexRows(res.result) : [];
-  if (rows.length) return applyLead(shapeApplication(rows[0]), await leadOverrides().catch(() => new Map<string, string>()));
+  if (rows.length) {
+    const one = applyLead(shapeApplication(rows[0]), await leadOverrides().catch(() => new Map<string, string>()));
+    await applyAgreedRent([one]).catch(() => null);
+    return one;
+  }
 
   /* REX would not filter on the id. Do it the long way rather than tell an
      agent the file does not exist. */

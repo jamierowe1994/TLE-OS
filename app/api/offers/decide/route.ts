@@ -5,10 +5,13 @@ import { forgetApplications, getApplicationById } from "@/lib/applications";
 import { markApplicationsFiled } from "@/lib/applications-board";
 import { hasDb, q } from "@/lib/db";
 import { clearDecision, isDecisionRef, recordDecision } from "@/lib/offer-decisions";
+import { latestCounter, settleOsOffer, unsettleOsOffer } from "@/lib/offer-counters";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 
 /**
  * POST /api/offers/decide { ref, listingId?, decision: "accepted" | "declined" | "undo" }
+ *
+ * Accepting a countered offer agrees the newest counter's figure (16 Oct 2026).
  *
  * The agent's Accept or Decline on an offer (7 Oct 2026, James). Kept in the
  * OS only (lib/offer-decisions) - nothing here writes to REX, and the tenant
@@ -72,6 +75,18 @@ export async function POST(req: NextRequest) {
   try {
     if (decision === "undo") await clearDecision(ref);
     else await recordDecision({ ref, listingId, decision, by: { name: actor.name || actor.email, email: actor.email } });
+    /* Countered (16 Oct 2026, lib/offer-counters): accepting takes the figure
+       on the table, so the application and the push carry the agreed rent.
+       Undo puts the first offer back. A REX application's agreed figure is
+       laid over it in lib/applications; REX itself is changed by hand. */
+    if (ref.startsWith("os:")) {
+      if (decision === "accepted") {
+        const agreed = await latestCounter(ref);
+        if (agreed) await settleOsOffer(ref.slice(3), agreed);
+      } else if (decision === "undo") {
+        await unsettleOsOffer(ref.slice(3));
+      }
+    }
     /* An accept makes an application (lib/applications); the page the agent
        lands on next must have it, not a minute-old pull without it. */
     forgetApplications();

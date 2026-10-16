@@ -108,7 +108,9 @@ export default function OffersInList({
             r.amount != null && asking ? (r.amount >= asking ? "asking rent" : `${gbp(asking - r.amount)} under`) : null;
           const status = r.held
             ? { tone: "neutral" as const, label: "Held", note: "Another offer is accepted" }
-            : r.landlordSent
+            : r.countered
+              ? { tone: "accent" as const, label: "Negotiating", note: `${r.countered.side === "landlord" ? "Landlord" : "Tenant"} countered${r.countered.offered != null ? `, first offer ${gbp(r.countered.offered)}` : ""}` }
+              : r.landlordSent
               ? { tone: "good" as const, label: "With the landlord", note: `Sent ${day(r.landlordSent.at)}` }
               : { tone: "accent" as const, label: "To decide", note: "Landlord not told yet" };
           return (
