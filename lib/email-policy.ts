@@ -50,6 +50,11 @@
  */
 const BUILT_IN_INTERNAL = [
   "thelettingexperts.co.uk",
+  /* Built in on 16 Oct 2026. It had only ever been in INTERNAL_EMAIL_DOMAINS
+     on Railway, so a dropped variable would quietly shut out every TLE agent
+     who came over from sales and still signs in on a Property Experts
+     address (Rovena Buci, Zilvinas Navickis, James Crumpton). */
+  "thepropertyexperts.co.uk",
   "therecruitmentexperts.co.uk",
 ] as const;
 
@@ -107,7 +112,7 @@ export function wrongDomainMessage(email: string): string {
   const d = domainOf(email);
   const list = internalDomains().map((x) => `@${x}`).join(" or ");
   return (
-    `That's ${d ? `an @${d}` : "not a work"} address - TLE OS only lets you in on a Letting Experts one. ` +
+    `That's ${d ? `an @${d}` : "not a work"} address - TLE OS only lets you in on a Letting Experts or Property Experts one. ` +
     `Try your ${list} address instead. ` +
     `If you don't have one yet, that's a question for James rather than for this box.`
   );

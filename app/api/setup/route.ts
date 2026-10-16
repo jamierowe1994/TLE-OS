@@ -67,6 +67,7 @@ function coerce(raw: unknown): SetupState {
     done,
     emailSkipped: r.emailSkipped === true,
     rexSkipped: r.rexSkipped === true,
+    rexLater: typeof r.rexLater === "string" ? r.rexLater : undefined,
     finishedAt: typeof r.finishedAt === "string" ? r.finishedAt : undefined,
     tour,
     tourAt: typeof r.tourAt === "string" ? r.tourAt : undefined,
@@ -191,13 +192,18 @@ export async function PATCH(req: NextRequest) {
       /* Connecting email after skipping it clears the skip, so the profile
          stops offering to finish something that is finished. */
       if (body.step === "email") next.emailSkipped = body.skip === true;
-      /* Only somebody whose job is not in REX may pass over it; an agent's
-         "skip" is refused here as well as never being offered. */
+      /* Only somebody whose job is not in REX may pass over it. An agent's
+         "skip" is "later" instead (16 Oct 2026): offered only once REX has
+         refused them, so a REX password they cannot remember on their first
+         morning no longer locks them out of the OS. It is recorded as later,
+         never as "I don't use REX", so the step stays unticked. */
       if (body.step === "rex") {
         if (body.skip === true) {
           const who = await findUserById(userId);
           if (REX_ROLES.has(who?.role ?? "agent")) {
-            return NextResponse.json({ ok: false, error: "Agents connect REX: it is where their work is." }, { status: 400 });
+            next.rexLater = now;
+            await writeState(userId, next);
+            return NextResponse.json({ ok: true, saved: true, db: true, state: next });
           }
         }
         next.rexSkipped = body.skip === true;

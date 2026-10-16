@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { consumeVerification, VerificationError } from "@/lib/verification";
+import { consumeVerification, VerificationError, LINK_NOT_VALID, STAFF_LINK_NOT_VALID } from "@/lib/verification";
 import { createSessionToken, hashPassword, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
 import { createUser, findUserByEmail } from "@/lib/users";
 import { isFoundingOwner } from "@/lib/email-policy";
@@ -74,7 +74,8 @@ export async function POST(req: NextRequest) {
   try {
     ({ email } = await consumeVerification(token));
   } catch (e) {
-    const msg = e instanceof VerificationError ? e.message : "That link isn't valid. Ask for a new one.";
+    const raw = e instanceof VerificationError ? e.message : LINK_NOT_VALID;
+    const msg = raw === LINK_NOT_VALID ? STAFF_LINK_NOT_VALID : raw;
     return NextResponse.json({ ok: false, error: msg }, { status: 400 });
   }
 

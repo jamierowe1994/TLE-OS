@@ -39,7 +39,17 @@ export async function POST(req: NextRequest) {
   }
 
   const out = await signInToRex(userId, email, password);
-  if (!out.ok) return NextResponse.json({ ok: false, error: out.error }, { status: 401 });
+  if (!out.ok) {
+    /* REX's own words are "Username or password not valid." On 16 Oct 2026
+       agents fresh from choosing their TLE OS password typed that one here,
+       read REX's line as "the OS doesn't recognise my email", and stopped.
+       Say whose password this box wants. */
+    const refused = /username or password|not valid|invalid/i.test(out.error);
+    const error = refused
+      ? "REX didn't accept that email and password. This box wants the ones you use to sign in to REX itself - your REX password, not the TLE OS one you just chose."
+      : out.error;
+    return NextResponse.json({ ok: false, error, refused }, { status: 401 });
+  }
   /* Signed in to REX: they are that REX user, so join the two now, even when
      their REX email isn't their OS one (lib/users ensureRexLink). */
   const user = await findUserById(userId).catch(() => null);
