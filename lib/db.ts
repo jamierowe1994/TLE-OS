@@ -2310,6 +2310,18 @@ CREATE TABLE IF NOT EXISTS os_application_rtr (
 CREATE INDEX IF NOT EXISTS os_application_rtr_app ON os_application_rtr (application_id, recorded_at DESC);
 CREATE INDEX IF NOT EXISTS os_application_rtr_follow_up ON os_application_rtr (follow_up_on) WHERE follow_up_on IS NOT NULL;
 
+-- The lead tenant on a let, when an agent changed it in the OS (Lianna, 16 Oct
+-- 2026: "when we've got multiple applicants, we can change the lead tenant").
+-- One row per application; the applicant is matched by contact id, email or
+-- name. REX's own application is not changed.
+CREATE TABLE IF NOT EXISTS os_lead_tenants (
+  application_id TEXT PRIMARY KEY,
+  applicant_key  TEXT NOT NULL,
+  applicant_name TEXT NOT NULL DEFAULT '',
+  set_by         TEXT NOT NULL DEFAULT '',
+  set_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- A home's address as the OS holds it, for homes with no os_properties
 -- record of their own (15 Oct 2026, lib/os-property-address; Kayleigh: "How
 -- do I edit the address on a property?"). Keyed by the REX property, so the

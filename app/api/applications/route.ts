@@ -18,6 +18,7 @@ import { acceptedRexRefs } from "@/lib/offer-decisions";
 import { hasDb, q } from "@/lib/db";
 import { can } from "@/lib/roles";
 import { propolyOnlyLets } from "@/lib/propoly-only-lets";
+import { applyLead, leadOverrides } from "@/lib/lead-tenant";
 
 /**
  * GET  /api/applications?limit=100  → the live book from REX, newest first
@@ -101,6 +102,9 @@ export async function GET(req: NextRequest) {
     const cancelledRefs = new Set(cancelledLets.flatMap((c) => [c.ref, c.dealId ?? ""]).filter(Boolean));
     const propolyOnly = propolyOnlyAll.filter((p) => !cancelledRefs.has(String(p.id)));
     const { applications, stages, closed } = held.value;
+    /* The lead tenant as changed in the OS (lib/lead-tenant), over a held copy too. */
+    const leads = await leadOverrides().catch(() => new Map<string, string>());
+    if (leads.size) for (const a of [...applications, ...testRows]) applyLead(a, leads);
     const tests = testRows.map((a) => ({ ...a, stageLabel: a.stageLabel ?? a.statusLabel, test: true, ...(cancelledRefs.has(String(a.id)) ? { closed: "Deal cancelled" } : {}) }));
     /* ?include=<id>: one application asked for by name - the PLC wizard's
        "Open the application" (6 Oct 2026). The board's cut drops accepted

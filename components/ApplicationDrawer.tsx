@@ -23,6 +23,7 @@ import { cardStatus, stageStatus } from "@/components/applications/LetsBoard";
 import { PORTAL_STAGES, propolyDealUrl } from "@/lib/business/propoly-stages";
 import { CANCEL_REASONS, CANCEL_WORDS } from "@/lib/let-cancel-words";
 import { isScottish } from "@/lib/property-flags";
+import { applicantKey } from "@/lib/lead-tenant-key";
 import type { PreTenancyDeal } from "@/app/api/pretenancy/deals/route";
 
 type JourneyAction = NextAction;
@@ -681,11 +682,23 @@ export default function ApplicationDrawer({
   /* The Auto save chip by the back link (23 Sep 2026). */
   const saves = useSaveScope(letId || null);
   const [leadIds, setLeadIds] = useState<Record<string, string>>({});
-  const people: AppPerson[] = app?.applicants?.length
+  /* A lead tenant changed here (lib/lead-tenant), shown at once rather than after a reload. */
+  const [leadKey, setLeadKey] = useState<string | null>(null);
+  const [leadBusy, setLeadBusy] = useState<string | null>(null);
+  const peopleRead: AppPerson[] = app?.applicants?.length
     ? app.applicants
     : app
       ? [{ name: app.tenant, contactId: null, email: null, phone: null, isPrimary: true }]
       : (deal?.app.tenants ?? []).map((t) => ({ name: t.name, contactId: null, email: t.email ?? null, phone: t.phone ?? null, isPrimary: Boolean(t.isPrimary) }));
+  const people: AppPerson[] = (() => {
+    const at = leadKey ? peopleRead.findIndex((p) => applicantKey(p) === leadKey) : -1;
+    if (at < 0) return peopleRead;
+    const out = peopleRead.map((p, i) => ({ ...p, isPrimary: i === at }));
+    out.unshift(...out.splice(at, 1));
+    return out;
+  })();
+  /* Only on a let the OS holds (not a Propoly-only one), with more than one tenant. */
+  const canChangeLead = Boolean(app) && people.length > 1;
 
   useEffect(() => {
     const ids = people.map((p) => p.contactId).filter((x): x is string => Boolean(x));
@@ -810,6 +823,33 @@ export default function ApplicationDrawer({
       live = false;
     };
   }, [letId]);
+
+  async function makeLead(p: AppPerson): Promise<void> {
+    if (!letId || leadBusy) return;
+    const key = applicantKey(p);
+    setLeadBusy(key);
+    const settle = saves.reporter.begin("Lead tenant");
+    try {
+      const r = await fetch(`/api/applications/${encodeURIComponent(letId)}/lead`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ key }),
+      });
+      const j = (await r.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!r.ok || !j?.ok) {
+        settle({ ok: false, problem: j?.error ?? "That didn't save." });
+        return;
+      }
+      setLeadKey(key);
+      /* The lead reads first, so an open tenant panel follows them there. */
+      setPerson((cur) => (cur?.role === "tenant" ? { role: "tenant", index: 0 } : cur));
+      settle({ ok: true });
+    } catch {
+      settle({ ok: false, problem: "That didn't save. Try again." });
+    } finally {
+      setLeadBusy(null);
+    }
+  }
 
   async function addComment(text: string): Promise<boolean> {
     const t = text.trim();
@@ -1231,7 +1271,19 @@ export default function ApplicationDrawer({
                       <button type="button" onClick={() => setPerson({ role: "tenant", index: i })} className="truncate text-left text-[13px] font-semibold underline-offset-2 hover:underline">
                         {p.name}
                       </button>
-                      {p.isPrimary && <Pill tone="accent">Lead</Pill>}
+                      {p.isPrimary ? (
+                        <Pill tone="accent">Lead</Pill>
+                      ) : canChangeLead ? (
+                        <button
+                          type="button"
+                          onClick={() => makeLead(p)}
+                          disabled={Boolean(leadBusy)}
+                          data-steve="application.make-lead"
+                          className="shrink-0 rounded-full border border-line/70 bg-white px-2.5 py-1 text-[11px] font-semibold text-ink transition-colors hover:border-ink/40 disabled:opacity-50"
+                        >
+                          {leadBusy === applicantKey(p) ? "Saving…" : "Make lead tenant"}
+                        </button>
+                      ) : null}
                     </div>
                     <ContactBlock
                       showName={false}
@@ -1458,6 +1510,16 @@ export default function ApplicationDrawer({
                         person={{ name: tenantShown.name, email: tenantShown.email ?? null, phone: tenantShown.phone ?? null }}
                         personRef={/^\d+$/.test(String(tenantShown.contactId ?? "")) ? `rex:${tenantShown.contactId}` : null}
                       />
+                      {canChangeLead && !tenantShown.isPrimary && (
+                        <button
+                          type="button"
+                          onClick={() => makeLead(tenantShown)}
+                          disabled={Boolean(leadBusy)}
+                          className="mt-3 rounded-full border border-line/70 bg-white px-3 py-1.5 text-[12px] font-semibold text-ink transition-colors hover:border-ink/40 disabled:opacity-50"
+                        >
+                          {leadBusy === applicantKey(tenantShown) ? "Saving…" : `Make ${firstName(tenantShown.name) || "them"} the lead tenant`}
+                        </button>
+                      )}
                     </section>
                     {app && (
                       <section className="rounded-xl border border-line/50 bg-white p-4">

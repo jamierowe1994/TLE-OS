@@ -4,6 +4,7 @@ import { rexCall, rexRows } from "@/lib/rex";
 import { unitLine } from "@/lib/address-parse";
 import { hasDb, q } from "@/lib/db";
 import { isScottish } from "@/lib/property-flags";
+import { applyLead, leadOverrides } from "@/lib/lead-tenant";
 
 /**
  * Tenancy applications — the real ones, out of REX.
@@ -557,6 +558,9 @@ export async function getApplications(limit = 100, rexUserId?: string | null): P
       if (d) a.propolyDealId = d;
     }
   }
+  /* The lead tenant as an agent changed it in the OS (lib/lead-tenant). */
+  const leads = await leadOverrides().catch(() => new Map<string, string>());
+  if (leads.size) for (const a of out) applyLead(a, leads);
   appsCache.set(key, { at: Date.now(), apps: out });
   return out;
 }
@@ -851,7 +855,7 @@ export async function getApplicationById(id: string): Promise<Application | null
     limit: 1,
   }).catch(() => null);
   const rows = res?.ok ? rexRows(res.result) : [];
-  if (rows.length) return shapeApplication(rows[0]);
+  if (rows.length) return applyLead(shapeApplication(rows[0]), await leadOverrides().catch(() => new Map<string, string>()));
 
   /* REX would not filter on the id. Do it the long way rather than tell an
      agent the file does not exist. */

@@ -1,5 +1,6 @@
 import "server-only";
 import { getApplications, type Application } from "@/lib/applications";
+import { applyLead, leadOverrides } from "@/lib/lead-tenant";
 import { isTestId, testApplication } from "@/lib/test-overlay";
 import { factsByRexId } from "@/lib/os-properties";
 
@@ -131,7 +132,7 @@ export async function prefillFor(opts: {
      is read from the overlay - the PLC check is walked on it like any other. */
   if (opts.applicationId && isTestId(opts.applicationId)) {
     const t = await testApplication(opts.applicationId);
-    return t ? shape(t.app) : null;
+    return t ? shape(applyLead(t.app, await leadOverrides().catch(() => new Map<string, string>()))) : null;
   }
   const [book, facts] = await Promise.all([
     getApplications(300),

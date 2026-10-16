@@ -5,6 +5,7 @@ import { testLandlord } from "@/lib/test-listing-answers";
 import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
 import { landlordForListing, type Landlord } from "@/lib/rex-landlord";
 import type { OsUser } from "@/lib/users";
+import { applyLead, leadOverrides } from "@/lib/lead-tenant";
 
 /**
  * Who is on a let, read on the server from the let itself - never from the
@@ -40,6 +41,7 @@ export async function letPeople(ref: string, me: OsUser): Promise<LetAnswer> {
   let app: Application | null = null;
   if (isTestId(ref)) app = (await testApplication(ref).catch(() => null))?.app ?? null;
   else if (!/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(ref)) app = await getApplicationById(ref).catch(() => null);
+  if (app) applyLead(app, await leadOverrides().catch(() => new Map<string, string>()));
 
   if (app) {
     /* An agent reads their own lets, as the journey route does. */
