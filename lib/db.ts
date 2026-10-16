@@ -1644,6 +1644,24 @@ CREATE TABLE IF NOT EXISTS os_offer_decisions (
 );
 CREATE INDEX IF NOT EXISTS os_offer_decisions_listing ON os_offer_decisions (listing_id);
 
+-- The back-and-forth on an offer (James, 16 Oct 2026): the tenant offers
+-- 1,000, the landlord counters at 1,050, they agree on 1,050. One row per
+-- counter, oldest first; the newest is the figure on the table, and Accept
+-- takes it. ref as os_offer_decisions, plus "test:<appId>" for a test offer.
+CREATE TABLE IF NOT EXISTS os_offer_counters (
+  id           TEXT PRIMARY KEY,
+  ref          TEXT NOT NULL,
+  listing_id   TEXT,
+  side         TEXT NOT NULL CHECK (side IN ('landlord', 'tenant')),
+  amount       NUMERIC NOT NULL,
+  move_in      TEXT,
+  note         TEXT NOT NULL DEFAULT '',
+  by_name      TEXT NOT NULL DEFAULT '',
+  by_email     TEXT NOT NULL DEFAULT '',
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_offer_counters_ref ON os_offer_counters (ref, created_at);
+
 -- An offer sent to the landlord by the agent (Howard, 8 Oct 2026, ticket
 -- 0268fdcc). Never automatic: the agent opens the preview and presses Send
 -- (lib/offer-landlord-email). One row per press, so the offer and the Offers

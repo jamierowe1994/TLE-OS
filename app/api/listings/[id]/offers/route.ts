@@ -10,6 +10,7 @@ import { decisionsFor, decisionsForListing } from "@/lib/offer-decisions";
 import { offerPeople, toOfferParts, type OfferPerson } from "@/lib/offer-people";
 import type { OfferPart } from "@/lib/offer-people-shape";
 import { landlordSends, type LandlordSend } from "@/lib/offer-landlord-email";
+import { countersFor, type OfferCounter } from "@/lib/offer-counters";
 
 /**
  * ONE LISTING'S OFFERS (7 Oct 2026).
@@ -55,6 +56,10 @@ export type ListingOffer = {
   detail: OfferDetail;
   /** When the agent last sent it to the landlord (ticket 0268fdcc, 15 Oct 2026). */
   landlordSent?: LandlordSend | null;
+  /** What the tenant first offered, before any counter (16 Oct 2026). */
+  offered?: number | null;
+  /** The back-and-forth, oldest first (lib/offer-counters). */
+  counters?: OfferCounter[];
 };
 
 export type OfferDetail = {
@@ -85,7 +90,7 @@ type OsRow = {
   name: string;
   email: string;
   payload: {
-    amount?: number; moveIn?: string; recordedBy?: { name?: string }; source?: string; via?: string;
+    amount?: number; offeredAmount?: number; moveIn?: string; recordedBy?: { name?: string }; source?: string; via?: string;
     movingIn?: string[]; adults?: number; children?: number; pets?: boolean; petsNote?: string; works?: unknown[]; note?: string; householdIncome?: number;
     passport?: { guarantor?: boolean; applicantType?: string; workHours?: string; phone?: string; mobile?: string };
   };
@@ -95,10 +100,30 @@ type OsRow = {
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" });
 const newestFirst = (a: ListingOffer, b: ListingOffer) => String(b.at ?? "").localeCompare(String(a.at ?? ""));
 
-/** Each offer with when it last went to the landlord. */
+/**
+ * Each offer with when it last went to the landlord, and its counters
+ * (16 Oct 2026). An open offer that has been countered shows the figure on
+ * the table; an accepted one already carries the agreed figure.
+ */
 async function withSends(offers: ListingOffer[]): Promise<ListingOffer[]> {
-  const sent = await landlordSends(offers.map((o) => o.ref)).catch(() => new Map<string, LandlordSend>());
-  return offers.map((o) => ({ ...o, landlordSent: sent.get(o.ref) ?? null }));
+  const refs = offers.map((o) => o.ref);
+  const [sent, counters] = await Promise.all([
+    landlordSends(refs).catch(() => new Map<string, LandlordSend>()),
+    countersFor(refs).catch(() => new Map<string, OfferCounter[]>()),
+  ]);
+  return offers.map((o) => {
+    const list = counters.get(o.ref) ?? [];
+    const last = list[list.length - 1] ?? null;
+    const onTable = o.status === "open" && last;
+    return {
+      ...o,
+      landlordSent: sent.get(o.ref) ?? null,
+      offered: o.offered ?? o.amount,
+      counters: list,
+      amount: onTable ? last.amount : o.amount,
+      moveIn: onTable && last.moveIn ? last.moveIn : o.moveIn,
+    };
+  });
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -124,6 +149,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           appId: o.appId,
           name: o.applicantName,
           amount: o.amount,
+          offered: (o as { offeredAmount?: number }).offeredAmount ?? o.amount,
           moveIn: o.moveIn || null,
           at: o.received,
           via: "Test offer",
@@ -167,6 +193,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         appId: null,
         name: r.name || r.email,
         amount: typeof p.amount === "number" ? p.amount : null,
+        offered: typeof p.offeredAmount === "number" ? p.offeredAmount : typeof p.amount === "number" ? p.amount : null,
         moveIn: p.moveIn ?? null,
         at: new Date(r.created_at).toISOString(),
         via: p.recordedBy?.name

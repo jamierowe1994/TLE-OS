@@ -7,6 +7,8 @@ import DoodleIcon from "@/components/DoodleIcon";
 import type { OfferDetail } from "@/app/api/listings/[id]/offers/route";
 import OfferPartsList from "@/components/offers/OfferPartsList";
 import SendOfferToLandlord from "@/components/offers/SendOfferToLandlord";
+import { CounterForm, NegotiationHistory } from "@/components/offers/OfferNegotiation";
+import type { OfferCounter } from "@/lib/offer-counters";
 
 /**
  * THE OFFERS ON ONE HOME (7 Oct 2026).
@@ -30,6 +32,11 @@ import SendOfferToLandlord from "@/components/offers/SendOfferToLandlord";
  * test file's Accept/Decline. Nothing is sent to the tenant or landlord by
  * itself; Send to the landlord on an opened offer is the agent's own press,
  * with a preview first (components/offers/SendOfferToLandlord, 15 Oct 2026).
+ *
+ * COUNTER (James, 16 Oct 2026): an open offer can be countered, back and
+ * forth, each round keyed in for the side that made it
+ * (components/offers/OfferNegotiation). The newest figure is on the table,
+ * and Accept agrees it.
  */
 
 export type ListingOffer = {
@@ -48,7 +55,13 @@ export type ListingOffer = {
   detail?: OfferDetail;
   /** When the agent last sent it to the landlord (ticket 0268fdcc). */
   landlordSent?: { at: string; by: string } | null;
+  /** What was first offered, before any counter. */
+  offered?: number | null;
+  /** The back-and-forth, oldest first (16 Oct 2026). */
+  counters?: OfferCounter[];
 };
+
+const countered = (o: ListingOffer) => Boolean(o.counters?.length);
 
 const short = (iso: string) =>
   new Date(iso.length === 10 ? `${iso}T12:00:00` : iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" });
@@ -88,6 +101,8 @@ export default function ListingOffers({
   const [openRef, setOpenRef] = useState<string | null>(null);
   const [won, setWon] = useState<ListingOffer | null>(null);
   const [toLandlord, setToLandlord] = useState<ListingOffer | null>(null);
+  /* The offer whose counter form is open (16 Oct 2026). */
+  const [countering, setCountering] = useState<string | null>(null);
 
   /* Opened straight from the Offers in list: once, when the offers arrive. */
   const [asked, setAsked] = useState(initialOpen);
@@ -175,7 +190,24 @@ export default function ListingOffers({
               onBlur={() => confirming === `acc:${o.ref}` && setConfirming(null)}
               className={`rounded-full bg-[var(--brown)] font-semibold text-white disabled:opacity-50 ${pad}`}
             >
-              {busy === o.ref ? "Saving…" : confirming === `acc:${o.ref}` ? "Yes, the landlord accepts" : "Accept for the landlord"}
+              {busy === o.ref
+                ? "Saving…"
+                : countered(o) && o.amount != null
+                  ? confirming === `acc:${o.ref}` ? `Yes, agreed at ${gbp(o.amount)}` : `Agree at ${gbp(o.amount)}`
+                  : confirming === `acc:${o.ref}` ? "Yes, the landlord accepts" : "Accept for the landlord"}
+            </button>
+          )}
+          {/* The back-and-forth (16 Oct 2026): opens the offer with the form. */}
+          {!taken && (
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() => { setConfirming(null); setOpenRef(o.ref); setCountering(o.ref); }}
+              className={`rounded-full border font-semibold disabled:opacity-50 ${pad} ${
+                countering === o.ref ? "border-accent-dark bg-accent-soft text-ink" : "border-line text-ink hover:border-accent hover:bg-accent-soft"
+              }`}
+            >
+              Counter
             </button>
           )}
           <button
@@ -219,7 +251,9 @@ export default function ListingOffers({
       )}
       {confirming === `acc:${o.ref}` && (
         <p className="mt-1.5 text-[11px] leading-snug text-muted">
-          Accept {o.name}&apos;s offer on the landlord&apos;s behalf? It goes onto Applications, ready to push to Propoly. The other offers are held until the holding fee is paid.
+          {countered(o) && o.amount != null
+            ? <>Both sides agree {gbp(o.amount)} a month? It goes onto Applications at that rent, ready to push to Propoly. The other offers are held until the holding fee is paid.</>
+            : <>Accept {o.name}&apos;s offer on the landlord&apos;s behalf? It goes onto Applications, ready to push to Propoly. The other offers are held until the holding fee is paid.</>}
         </p>
       )}
       {o.status === "open" && taken && (
@@ -239,7 +273,14 @@ export default function ListingOffers({
           <div className="w-1/2 min-w-0 pr-1" aria-hidden={Boolean(open)} inert={open ? true : undefined}>
             <ul className="divide-y divide-line/40">
               {sorted.map((o) => {
-                const sub = [o.via, o.at ? `made ${short(o.at)}` : "", o.moveIn ? `moving in ${short(o.moveIn)}` : "", o.landlordSent ? `sent to the landlord ${short(o.landlordSent.at)}` : ""].filter(Boolean).join(" · ");
+                const last = o.counters?.[o.counters.length - 1] ?? null;
+                const sub = [
+                  o.via,
+                  o.at ? `made ${short(o.at)}` : "",
+                  o.moveIn ? `moving in ${short(o.moveIn)}` : "",
+                  o.landlordSent ? `sent to the landlord ${short(o.landlordSent.at)}` : "",
+                ].filter(Boolean).join(" · ");
+                const talk = last && o.status === "open" ? `${last.side === "landlord" ? "Landlord" : "Tenant"} countered${o.offered != null ? `, first offer ${gbp(o.offered)}` : ""}` : null;
                 return (
                   <li key={o.ref} className={`py-3 ${o.status === "declined" ? "opacity-60" : ""}`}>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -251,10 +292,11 @@ export default function ListingOffers({
                       >
                         <span className="hand block truncate text-[13.5px] group-hover:text-accent-dark group-hover:underline group-hover:underline-offset-2">{o.name}</span>
                         <span className="block truncate text-[10.5px] text-muted">{sub}</span>
+                        {talk && <span className="block truncate text-[10.5px] font-semibold text-accent-dark">{talk}</span>}
                         {o.decided && <span className="block truncate text-[10.5px] text-muted">{o.decided}</span>}
                       </button>
                       <Tag tone={o.status === "accepted" ? "good" : o.status === "declined" ? "neutral" : "accent"}>
-                        {o.status === "accepted" ? "Accepted" : o.status === "declined" ? "Declined" : taken ? "Held" : "Open"}
+                        {o.status === "accepted" ? "Accepted" : o.status === "declined" ? "Declined" : taken ? "Held" : countered(o) ? "Negotiating" : "Open"}
                       </Tag>
                       {o.amount != null && <span className="figures whitespace-nowrap text-[13px]">{gbp(o.amount)}</span>}
                       {decide(o)}
@@ -271,9 +313,23 @@ export default function ListingOffers({
               <OfferOpened
                 o={open}
                 asking={asking}
-                onBack={() => { setConfirming(null); setOpenRef(null); }}
+                onBack={() => { setConfirming(null); setOpenRef(null); setCountering(null); }}
                 decide={decide(open, true)}
                 notes={notes(open)}
+                negotiation={
+                  <>
+                    <NegotiationHistory o={open} canTakeBack={open.status === "open" && !taken && countering !== open.ref} onChanged={onChanged} />
+                    {countering === open.ref && open.status === "open" && (
+                      <CounterForm
+                        key={`${open.ref}:${open.counters?.length ?? 0}`}
+                        o={open}
+                        asking={asking}
+                        onCancel={() => setCountering(null)}
+                        onSaved={() => { setCountering(null); onChanged(); }}
+                      />
+                    )}
+                  </>
+                }
                 onSendToLandlord={listingId && open.status !== "declined" ? () => setToLandlord(open) : null}
               />
             )}
@@ -310,18 +366,23 @@ function OfferOpened({
   decide,
   notes,
   onSendToLandlord,
+  negotiation,
 }: {
   o: ListingOffer;
   asking: number | null;
   onBack: () => void;
   decide: React.ReactNode;
   notes: React.ReactNode;
+  /** The back-and-forth and the counter form (16 Oct 2026). */
+  negotiation?: React.ReactNode;
   /** Null where it can't be sent (a declined offer, no listing). */
   onSendToLandlord: (() => void) | null;
 }) {
   const d = o.detail;
   const facts: Array<[string, string]> = [];
-  if (o.amount != null) facts.push(["Offer", `${gbp(o.amount)} a month${asking ? (o.amount >= asking ? " · the asking rent" : ` · ${gbp(asking - o.amount)} under the asking ${gbp(asking)}`) : ""}`]);
+  /* Countered: the figure on the table, or the one agreed (16 Oct 2026). */
+  const label = !countered(o) ? "Offer" : o.status === "accepted" ? "Agreed rent" : o.status === "open" ? "On the table" : "Last figure";
+  if (o.amount != null) facts.push([label, `${gbp(o.amount)} a month${asking ? (o.amount >= asking ? " · the asking rent" : ` · ${gbp(asking - o.amount)} under the asking ${gbp(asking)}`) : ""}`]);
   if (o.moveIn) facts.push(["Moving in", short(o.moveIn)]);
   if (d?.people.length) facts.push(["Who would live there", d.people.join(", ")]);
   if (d && (d.adults != null || d.children != null)) facts.push(["Household", [d.adults != null ? `${d.adults} adult${d.adults === 1 ? "" : "s"}` : null, d.children ? `${d.children} child${d.children === 1 ? "" : "ren"}` : null].filter(Boolean).join(", ") || "-"]);
@@ -344,7 +405,7 @@ function OfferOpened({
           {o.decided && <p className="text-[11.5px] text-muted">{o.decided}</p>}
         </div>
         <Tag tone={o.status === "accepted" ? "good" : o.status === "declined" ? "neutral" : "accent"}>
-          {o.status === "accepted" ? "Accepted" : o.status === "declined" ? "Declined" : "Open"}
+          {o.status === "accepted" ? "Accepted" : o.status === "declined" ? "Declined" : countered(o) ? "Negotiating" : "Open"}
         </Tag>
       </div>
       <dl className="mt-4 divide-y divide-line/40 rounded-2xl border border-line/50 bg-white">
@@ -355,6 +416,7 @@ function OfferOpened({
           </div>
         ))}
       </dl>
+      {negotiation}
       {d?.parts?.length ? <OfferPartsList parts={d.parts} /> : null}
       {d?.works.length ? (
         <div className="mt-3 rounded-2xl border border-line/50 bg-white px-3.5 py-3 text-[12.5px]">

@@ -8,6 +8,7 @@ import { rexConfigured } from "@/lib/rex";
 import { testApplicationsFor } from "@/lib/test-overlay";
 import { decisionsFor } from "@/lib/offer-decisions";
 import { landlordSends, type LandlordSend } from "@/lib/offer-landlord-email";
+import { countersFor, type OfferCounter } from "@/lib/offer-counters";
 
 /**
  * GET /api/offers/open -> { byListing: { [listingId]: n }, total, rows }
@@ -43,6 +44,8 @@ export type OpenOfferRow = {
   /** Another offer on the same home is accepted, so this one waits. */
   held: boolean;
   landlordSent: LandlordSend | null;
+  /** The newest counter, when there has been one: amount above is then its figure (16 Oct 2026). */
+  countered: { side: "landlord" | "tenant"; offered: number | null } | null;
 };
 
 type OsOpen = {
@@ -101,7 +104,7 @@ export async function GET(req: NextRequest) {
     const mine = await offerListingIds(req, who);
     const decided = await decisionsFor(rex.map((a) => `rex:${a.id}`));
     const isOpen = (s: string) => s === "received" || s === "communicated";
-    const rows: Omit<OpenOfferRow, "held" | "landlordSent">[] = [];
+    const rows: Omit<OpenOfferRow, "held" | "landlordSent" | "countered">[] = [];
     const named = (a: { applicants: { name: string }[] }) => a.applicants.map((p) => p.name).filter(Boolean).join(" & ") || "Applicant not named";
     for (const a of rex) {
       if (!isOpen(a.status) || decided.has(`rex:${a.id}`) || a.listingId == null) continue;
@@ -131,9 +134,23 @@ export async function GET(req: NextRequest) {
     const taken = new Set<string>(acceptedHere.map((r) => String(r.listing_id)));
     for (const a of rex) if (a.status === "accepted" && a.listingId != null) taken.add(String(a.listingId));
     for (const t of tests) if (t.status === "accepted" && t.listingId != null) taken.add(String(t.listingId));
-    const sent = await landlordSends(rows.map((r) => r.ref)).catch(() => new Map<string, LandlordSend>());
+    const [sent, counters] = await Promise.all([
+      landlordSends(rows.map((r) => r.ref)).catch(() => new Map<string, LandlordSend>()),
+      countersFor(rows.map((r) => r.ref)).catch(() => new Map<string, OfferCounter[]>()),
+    ]);
     const out: OpenOfferRow[] = rows
-      .map((r) => ({ ...r, held: taken.has(r.listingId), landlordSent: sent.get(r.ref) ?? null }))
+      .map((r) => {
+        const list = counters.get(r.ref) ?? [];
+        const last = list[list.length - 1] ?? null;
+        return {
+          ...r,
+          held: taken.has(r.listingId),
+          landlordSent: sent.get(r.ref) ?? null,
+          amount: last ? last.amount : r.amount,
+          moveIn: last?.moveIn ?? r.moveIn,
+          countered: last ? { side: last.side, offered: r.amount } : null,
+        };
+      })
       .sort((a, b) => String(b.at ?? "").localeCompare(String(a.at ?? "")));
 
     const total = Object.values(byListing).reduce((n, x) => n + x, 0);

@@ -757,7 +757,7 @@ async function mayPlay(appId: string, email: string): Promise<{ kitId: string; o
 }
 
 /** "Accept the offer" on a test application: accepted, and its deal started. */
-export async function acceptTestOffer(appId: string, by: { name: string; email: string }): Promise<void> {
+export async function acceptTestOffer(appId: string, by: { name: string; email: string }, agreed?: { amount: number; moveIn: string | null } | null): Promise<void> {
   const who = await mayPlay(appId, by.email);
   if (!who) throw new Error("That test application isn't one of yours.");
   await q(
@@ -765,6 +765,17 @@ export async function acceptTestOffer(appId: string, by: { name: string; email: 
       WHERE kind = 'offer' AND payload->>'appId' = $1`,
     [appId, new Date().toISOString()]
   );
+  /* Accepted at a countered figure (16 Oct 2026, lib/offer-counters): the
+     test offer says the agreed rent, so its deal does too. */
+  if (agreed) {
+    await q(
+      `UPDATE os_test_records SET payload = payload
+          || jsonb_build_object('offeredAmount', COALESCE(payload->'offeredAmount', payload->'amount'), 'amount', $2::numeric)
+          || CASE WHEN $3::text IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('moveIn', $3::text) END
+        WHERE kind = 'offer' AND payload->>'appId' = $1`,
+      [appId, agreed.amount, agreed.moveIn]
+    );
+  }
   const t = await testApplication(appId);
   if (!t || t.deal) return;
   const l = await testListing(t.app.listingId ?? 0);

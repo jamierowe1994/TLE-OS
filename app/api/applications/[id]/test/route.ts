@@ -4,6 +4,7 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { getCase } from "@/lib/plc-store";
 import { caseIdFor } from "@/lib/plc";
+import { latestCounter } from "@/lib/offer-counters";
 import { acceptTestOffer, advanceTestDeal, declineTestOffer, isTestId } from "@/lib/test-overlay";
 
 /**
@@ -28,7 +29,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   const body = (await req.json().catch(() => ({}))) as { action?: string };
   try {
     if (body.action === "accept") {
-      await acceptTestOffer(id, { name: me.name ?? "", email: me.email });
+      /* Countered (16 Oct 2026): accepted at the figure on the table. */
+      const agreed = await latestCounter(`test:${id}`).catch(() => null);
+      await acceptTestOffer(id, { name: me.name ?? "", email: me.email }, agreed);
     } else if (body.action === "decline") {
       await declineTestOffer(id, { email: me.email });
     } else if (body.action === "advance") {
