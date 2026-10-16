@@ -32,6 +32,9 @@ function dealFor(a: Application, deals: PreTenancyDeal[]): PreTenancyDeal | null
   if (!isLet(a)) return null;
   const name = a.property.trim().toLowerCase();
   return (
+    /* The deal the OS pushed for it, exactly (a swap on a REX PM home has no
+       listing number and Propoly words its address differently). */
+    (a.propolyDealId ? deals.find((d) => d.app.id === a.propolyDealId) : undefined) ??
     deals.find((d) => a.listingId != null && d.app.listingId != null && Number(d.app.listingId) === a.listingId) ??
     deals.find((d) => d.app.propertyName.trim().toLowerCase() === name) ??
     null

@@ -63,6 +63,8 @@ function sameLetHome(rex: Application, deal: BusinessDeal): boolean {
 function onRex(deal: BusinessDeal, book: Application[]): boolean {
   const received = deal.app.dateReceived ? Date.parse(`${deal.app.dateReceived}T12:00:00Z`) : NaN;
   return book.some((a) => {
+    /* The deal the OS itself pushed for this application: the same let. */
+    if (a.propolyDealId && a.propolyDealId === deal.app.id) return true;
     if (a.status === "unsuccessful") return false;
     if (!sameLetHome(a, deal)) return false;
     if (!Number.isFinite(received) || !a.createdAt) return true;

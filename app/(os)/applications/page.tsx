@@ -373,7 +373,10 @@ export default function Applications() {
           matchApplication={(d) => {
             const lid = d.app.listingId ? Number(d.app.listingId) : null;
             const name = d.app.propertyName.trim().toLowerCase();
-            const hit = (apps ?? []).find((a) => isLet(a) && ((lid != null && a.listingId === lid) || a.property.trim().toLowerCase() === name));
+            /* The deal the OS pushed for it first, exactly (see lib/applications propolyDealId). */
+            const hit =
+              (apps ?? []).find((a) => a.propolyDealId === d.app.id) ??
+              (apps ?? []).find((a) => isLet(a) && ((lid != null && a.listingId === lid) || a.property.trim().toLowerCase() === name));
             return hit?.id ?? null;
           }}
           onOpenApplication={(id, order) => openApp(id, order)}

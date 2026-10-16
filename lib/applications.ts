@@ -201,6 +201,13 @@ export interface Application {
      *  Propoly, who manages the deal, and the service. */
     home: { line1: string; postcode: string; agentEmail: string | null; managed: boolean };
   } | null;
+  /** The Propoly deal this application started, when the OS pushed it (its
+   *  handover's "deal" step). The let page matches a deal to its application
+   *  by this first: a swap on a REX PM home has no listing number and its
+   *  address is written differently in Propoly ("South Bridge 44 (3f1)" vs
+   *  "3f1, 44 South Bridge"), so without it the deal opened as a second file
+   *  with the PLC check greyed out (Lianna, 16 Oct 2026). */
+  propolyDealId?: string | null;
 }
 
 /* ── reading the prose back out ───────────────────────────────────────────── */
@@ -543,7 +550,30 @@ export async function getApplications(limit = 100, rexUserId?: string | null): P
     }
     out.sort((x, y) => (y.createdAt ?? 0) - (x.createdAt ?? 0));
   }
+  if (limit >= 100) {
+    const pushed = await pushedDeals().catch(() => new Map<string, string>());
+    for (const a of out) {
+      const d = pushed.get(a.id);
+      if (d) a.propolyDealId = d;
+    }
+  }
   appsCache.set(key, { at: Date.now(), apps: out });
+  return out;
+}
+
+/** Application id -> the Propoly deal its push started, newest push winning. */
+async function pushedDeals(): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (!hasDb()) return out;
+  const rows = await q<{ application_id: string; deal: string | null }>(
+    `SELECT application_id,
+            (SELECT s->'response'->>'uuid' FROM jsonb_array_elements(CASE WHEN jsonb_typeof(steps) = 'array' THEN steps ELSE '[]'::jsonb END) s
+              WHERE s->>'id' = 'deal' AND s->>'state' = 'ok' LIMIT 1) AS deal
+       FROM os_handovers
+      WHERE mode = 'live' AND status = 'ok'
+      ORDER BY started_at ASC`
+  );
+  for (const r of rows) if (r.deal) out.set(r.application_id, r.deal);
   return out;
 }
 
