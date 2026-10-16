@@ -5,6 +5,7 @@ import { managedBookFor } from "@/lib/managed-book-cache";
 import { peopleForProperty, type Person } from "@/lib/rex-property-people";
 import { addrOf, houseKeyOf, isRoomAddress, norm, parseAddress } from "@/lib/address-parse";
 import { roomLabel } from "@/lib/houses";
+import { KIND_LABEL, peopleOn } from "@/lib/property-people";
 
 /**
  * Who is on a home: the landlord, every sitting tenant, where it is, and
@@ -47,11 +48,13 @@ export async function GET(req: NextRequest) {
   let lat: number | null = null;
   let lng: number | null = null;
   let source = "nothing on file";
+  let homeId = id;
 
   try {
     const { book } = await managedBookFor(null);
     const p = book.properties.find((x) => x.propertyId === id || x.listingId === id);
     if (p) {
+      if (p.propertyId) homeId = p.propertyId;
       landlord = p.landlord ? { contactId: p.landlord.contactId, name: p.landlord.name, email: p.landlord.email ?? "", phone: p.landlord.phone ?? "" } : null;
       tenants = p.tenants.map((t) => ({ contactId: t.contactId, name: t.name, email: t.email ?? "", phone: t.phone ?? "" }));
       /* A shared house (James, 8 Oct 2026): "especially if it's an HMO, we
@@ -115,9 +118,14 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  /* The joint landlords and points of contact kept on the home (lib/property-people,
+     16 Oct 2026), so whatever fills a landlord from here can offer them too. */
+  const others = (await peopleOn(homeId).catch(() => [])).map((x) => ({ kind: x.kind, label: KIND_LABEL[x.kind], name: x.name, email: x.email ?? "", phone: x.phone ?? "", relation: x.relation }));
+
   return NextResponse.json({
     ok: true,
     landlord: shape(landlord),
+    others,
     tenants: tenants.map((t) => ({ name: t.name, email: t.email, phone: t.phone, ...(t.room ? { room: t.room } : {}) })),
     /** Kept so anything still reading the old shape does not break. */
     tenant: shape(tenants[0] ?? null),

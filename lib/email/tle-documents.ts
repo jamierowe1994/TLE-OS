@@ -1584,6 +1584,31 @@ export const TENANT_PASSPORT_THANKS = {
   branding: { showSignoff: false },
 } as const;
 
+/**
+ * A sitting tenant's login to the tenant portal (Sean McMahon, agent call,
+ * 16 Oct 2026: "the way Fixflow sent them their login"). Sent when the agent
+ * presses Send out logins, from that agent. No password: the button signs them
+ * in, and after that they ask for a fresh link with their email.
+ */
+export const TENANT_PORTAL_LOGIN = {
+  subject: "Your tenant account for {{address}}",
+  preheader: "Report a repair online and follow it until it's fixed. No password needed.",
+  mode: "blocks",
+  blocks: [
+    H("tpl1", "Your Tenant Account Is Ready"),
+    T("tpl2", "Hi {{firstName}},<br><br>{{agentName}} has set up your tenant account with The Letting Experts for {{address}}."),
+    T("tpl3", "From now on, the quickest way to report a repair is online. Tell us what's wrong and where, and you can follow it from reported to fixed. Your messages to us are kept there too."),
+    SP("tpl4", 8),
+    BTN("tpl5", "Open my tenant account", "{{link}}"),
+    SP("tpl6", 8),
+    T("tpl7", "There's no password to remember. The button signs you straight in and works for 14 days. After that, go to <a href=\"{{signInHref}}\">{{signInLink}}</a> at any time and type in this email address, and we'll send you a fresh link."),
+    T("tpl8", "{{emergencyLine}}"),
+    T("tpl9", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    FOOT("tpl10", "You're getting this because you rent your home through The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
 /** Two days after the passport invite, nothing typed. */
 export const TENANT_PASSPORT_NUDGE_1 = {
   subject: "Your tenant passport is ready when you are",

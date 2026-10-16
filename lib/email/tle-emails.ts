@@ -94,6 +94,7 @@ import {
   TENANT_ENQUIRY_REPLY,
   TENANT_ADDED_WELCOME,
   TENANT_PASSPORT_THANKS,
+  TENANT_PORTAL_LOGIN,
   TENANT_PASSPORT_NUDGE_1,
   TENANT_PASSPORT_NUDGE_2,
   TENANT_MATCHES,
@@ -1529,6 +1530,22 @@ TLE_EMAILS.push(
     "Thank you, the profile is complete and with the agent, the agent will be in touch if they're successful, and a button to log in any time.",
     TENANT_PASSPORT_THANKS,
     { link: `${SITE}/tenant/sign-in` }
+  ),
+  tenantEntry(
+    "tenant-portal-login",
+    "Your Tenant Account Is Ready",
+    "An agent presses Send out logins for a home's tenants",
+    "Wired 16 Oct 2026. lib/tenant-logins sendLogins, from Send out logins on the home's page and the review on Properties. From the agent who pressed it. A press, not a timer, so it needs customer email only, not the Automatic tenant emails switch.",
+    "Each sitting tenant with an email",
+    "Their account is set up for the home, report repairs online and follow them, a button that signs them in for 14 days with no password, how to get a fresh link with their email, and to ring for an emergency.",
+    TENANT_PORTAL_LOGIN,
+    {
+      link: `${SITE}/tenant/enter?token=sample`,
+      signInLink: `${SITE.replace(/^https?:\/\//, "")}/tenant/sign-in`,
+      signInHref: `${SITE}/tenant/sign-in?link=1`,
+      address: "Flat 2, 14 Ruskin Place, Glasgow",
+      emergencyLine: "For an emergency, like a gas smell, a flood or no heating, please don't wait for a reply online. Ring Sean on 07700 900123.",
+    }
   ),
   tenantEntry(
     "tenant-passport-nudge-1",

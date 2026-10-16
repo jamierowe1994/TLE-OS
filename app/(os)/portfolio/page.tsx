@@ -21,6 +21,7 @@ import PickOne from "@/components/PickOne";
 import PastTenancies from "@/components/portfolio/PastTenancies";
 import Segmented from "@/components/Segmented";
 import ListSearch from "@/components/ListSearch";
+import SendLogins from "@/components/portfolio/SendLogins";
 import { searchMatches } from "@/lib/search-match";
 
 /**
@@ -326,6 +327,7 @@ export default function Portfolio() {
     return [...rows.filter((p) => p.test), ...rows.filter((p) => !p.test)];
   }, [book, q, service, agent, town, lookOnly, notOnRexOnly, reletOnly, sort, attention, certBy, summaryOf]);
 
+  const [logins, setLogins] = useState(false);
   const filtering = Boolean(q.trim() || service || agent || town || lookOnly || notOnRexOnly || reletOnly);
   const relets = useMemo(() => (book ? currentLets(book.properties).filter((p) => p.notice).length : 0), [book]);
 
@@ -393,6 +395,13 @@ export default function Portfolio() {
 
   return (
     <>
+      {logins && (
+        <SendLogins
+          listings={filtering ? filteredHomes.filter((h) => h.tenants.length > 0).map((h) => String(h.listingId)) : undefined}
+          title={filtering ? `The ${filteredHomes.length === 1 ? "home" : `${filteredHomes.length} homes`} shown${agent ? `, ${agent}` : ""}` : undefined}
+          onClose={() => setLogins(false)}
+        />
+      )}
       <PageHeader
         title="Properties"
         blurb={blurb}
@@ -499,6 +508,11 @@ export default function Portfolio() {
               Relet{relets ? ` · ${relets}` : ""}
             </button>
             <PickOne label="Sort" options={SORTS} value={sort} onChange={setSort} />
+            {/* Sean McMahon, 16 Oct 2026: every tenant's portal login at once, reviewed first. Filtered, it covers what's shown. */}
+            <button type="button" disabled={!book} onClick={() => setLogins(true)} className={`${pillClass(false)} inline-flex items-center gap-1.5 disabled:opacity-40`}>
+              <DoodleIcon name="mail" size={12} className="text-accent-dark" />
+              Send out logins
+            </button>
             <span className="ml-auto">
               <ListSearch value={q} onChange={setQ} placeholder="Address, landlord, tenant or agent…" />
             </span>

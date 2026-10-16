@@ -3,7 +3,7 @@ import { testDealsForTenant } from "@/lib/test-overlay";
 import { cookies } from "next/headers";
 import { hasDb, q } from "@/lib/db";
 import { TENANT_COOKIE, hashPassword, uid, verifyPassword, verifyPortalToken } from "@/lib/auth";
-import { normaliseEmail } from "@/lib/users";
+import { findUserById, normaliseEmail } from "@/lib/users";
 import { getAllPropolyDeals, type BusinessDeal } from "@/lib/business/propoly-deals";
 import { getMeta } from "@/lib/business/deal-store";
 import { derivedStageFor } from "@/lib/business/deal-stage";
@@ -283,7 +283,49 @@ export async function tenantDealViews(account: TenantAccount): Promise<TenantDea
   }
   /* Nearest move-in first. */
   out.sort((a, b) => (a.moveIn ?? "9999").localeCompare(b.moveIn ?? "9999"));
+  /* A sitting tenant an agent sent their login to (lib/tenant-logins, 16 Oct
+     2026): no Propoly deal - they moved in before the OS, or through REX - so
+     the home comes from the agent's send, as moved in. Last, so a deal in
+     progress (a move to another of our homes) is still the one the portal
+     shows. Only while they are still a tenant on that let in the book: a
+     tenant who has moved out stops seeing it. */
+  const sent = await sittingHomes(account.email).catch(() => []);
+  const doneStages = PORTAL_STAGES.map((s) => ({ key: s.key, label: TENANT_WORDS[s.key]?.label ?? s.label, state: "done" as const }));
+  for (const h of sent) {
+    if (out.some((d) => normaliseAddress(d.property) === normaliseAddress(h.propertyName))) continue;
+    const agent = h.agentUserId ? await findUserById(h.agentUserId).catch(() => null) : null;
+    out.push({
+      id: `home-${h.listingId}`,
+      property: h.propertyName,
+      locality: h.locality,
+      rentPcm: h.rentPcm,
+      moveIn: h.letSince,
+      stageKey: "living",
+      stages: doneStages,
+      now: TENANT_WORDS.living?.now ?? "",
+      next: TENANT_WORDS.living?.next ?? "",
+      agent: { name: agent?.name ?? null, email: agent?.email ?? null },
+      otherTenants: [],
+      flatfair: false,
+    });
+  }
   return out;
+}
+
+const normaliseAddress = (a: string) => a.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/** The homes an agent sent this address a login for, that it is still a tenant on. */
+async function sittingHomes(email: string) {
+  const { portalHomesFor, sittingLets } = await import("@/lib/tenant-logins");
+  const homes = await portalHomesFor(email);
+  if (!homes.length) return [];
+  const { managedBookFor } = await import("@/lib/managed-book-cache");
+  const { book } = await managedBookFor(null).catch(() => ({ book: null }));
+  /* The book can't be read: show what the agent sent rather than lock the
+     tenant out of reporting a repair. */
+  if (!book) return homes;
+  const sitting = sittingLets(book.properties.filter((p) => p.tenants.length > 0));
+  return homes.filter((h) => sitting.some((p) => String(p.listingId) === h.listingId && p.tenants.some((t) => t.email && normaliseEmail(t.email) === email)));
 }
 
 /** Their passport, if one was ever minted for this email. */

@@ -91,6 +91,10 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
   const [landlordMobile, setLandlordMobile] = useState(draft?.landlordMobile ?? "");
   const [landlordName, setLandlordName] = useState(draft?.landlordName ?? "");
   const [landlordSkipped, setLandlordSkipped] = useState(Boolean(draft?.landlordSkipped));
+  /* The landlord on file and anyone else kept on the home - a joint landlord,
+     a point of contact (lib/property-people, 16 Oct 2026) - to pick who the
+     job is reported to. */
+  const [reportTo, setReportTo] = useState<{ label: string; name: string; email: string; phone: string }[]>([]);
   const [source, setSource] = useState("");
   const [access, setAccess] = useState(draft?.access ?? "");
   const [place, setPlace] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
@@ -173,6 +177,11 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
       setReporter(0);
       if (list.length) got.push(list.length === 1 ? "the tenant" : `${list.length} tenants`);
       else if (picked.tenant) setRows([{ name: picked.tenant, phone: "", email: "", on: true }]);
+      const others = (Array.isArray(j.others) ? j.others : []) as { label: string; name: string; email: string; phone: string; relation?: string }[];
+      setReportTo(others.length ? [
+        ...(l?.name ? [{ label: "Landlord", name: l.name, email: l.email ?? "", phone: l.phone ?? "" }] : []),
+        ...others.map((o) => ({ label: o.relation ? `${o.label}, ${o.relation}` : o.label, name: o.name, email: o.email, phone: o.phone })),
+      ] : []);
       setLandlordName(l?.name ?? picked.landlord ?? "");
       setLandlordEmail(l?.email ?? "");
       setLandlordMobile(l?.phone ?? "");
@@ -678,6 +687,27 @@ export default function RaiseJob({ kind, contractors, home = null, inline = fals
             </div>
           ) : (
             <>
+              {at("landlord") && reportTo.length > 1 && (
+              <div className="sm:col-span-2">
+                <p className={label}>Who to report it to</p>
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  {reportTo.map((o) => {
+                    const on = o.name === landlordName && o.email === landlordEmail;
+                    return (
+                      <button
+                        key={`${o.label}-${o.name}`}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => { setLandlordName(o.name); setLandlordEmail(o.email); setLandlordMobile(o.phone); }}
+                        className={`rounded-full border px-3 py-1.5 text-left text-[12px] transition-colors ${on ? "border-accent-dark bg-accent-dark text-page" : "border-line/80 bg-white hover:border-ink"}`}
+                      >
+                        <span className="font-semibold">{o.name}</span> <span className={on ? "opacity-80" : "text-muted"}>· {o.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              )}
               {at("landlord") && (
               <div>
                 <label className={label}>Landlord</label>

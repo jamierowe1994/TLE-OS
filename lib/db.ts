@@ -4371,6 +4371,50 @@ CREATE TABLE IF NOT EXISTS users (
   PRIMARY KEY (id)
 );
 
+
+-- More people on a home than the one landlord (agent call, 16 Oct 2026): a
+-- married couple who own through a company, the husband on the record and the
+-- wife doing the talking. kind 'joint_landlord' is a second owner, kind
+-- 'contact' somebody the agent deals with who is not the landlord. property_id
+-- is the book's property id, as os_properties.landlord_* uses. OS only: none
+-- of it is written to REX. removed_at keeps a removed person for the audit.
+CREATE TABLE IF NOT EXISTS os_property_people (
+  id          TEXT PRIMARY KEY,
+  property_id TEXT NOT NULL,
+  kind        TEXT NOT NULL,
+  name        TEXT NOT NULL,
+  email       TEXT,
+  phone       TEXT,
+  relation    TEXT NOT NULL DEFAULT '',
+  added_by    TEXT NOT NULL DEFAULT '',
+  added_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  removed_at  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS os_property_people_property ON os_property_people (property_id) WHERE removed_at IS NULL;
+
+-- A sitting tenant sent their tenant portal login (Sean McMahon, 16 Oct 2026:
+-- "the way Fixflow did"). Ties the address to the home the agent sent it for,
+-- so the portal knows their tenancy without a Propoly deal and a repair they
+-- report lands on the right home. One row per address per let.
+CREATE TABLE IF NOT EXISTS os_tenant_portal_homes (
+  email         TEXT NOT NULL,
+  listing_id    TEXT NOT NULL,
+  property_id   TEXT,
+  name          TEXT NOT NULL DEFAULT '',
+  property_name TEXT NOT NULL DEFAULT '',
+  locality      TEXT NOT NULL DEFAULT '',
+  let_since     TEXT,
+  rent_pcm      NUMERIC,
+  agent_user_id TEXT,
+  sent_by       TEXT NOT NULL DEFAULT '',
+  first_sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_sent_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  sends         INTEGER NOT NULL DEFAULT 1,
+  PRIMARY KEY (email, listing_id)
+);
+CREATE INDEX IF NOT EXISTS os_tenant_portal_homes_listing ON os_tenant_portal_homes (listing_id);
+
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a

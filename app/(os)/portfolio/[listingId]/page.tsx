@@ -23,6 +23,8 @@ import RentBox from "@/components/portfolio/RentBox";
 import ServiceTag from "@/components/portfolio/ServiceTag";
 import HomeAgent from "@/components/portfolio/HomeAgent";
 import ContactBlock from "@/components/ContactBlock";
+import HomePeople from "@/components/portfolio/HomePeople";
+import SendLogins from "@/components/portfolio/SendLogins";
 import Guarantors from "@/components/Guarantors";
 import { SPECS, STATUS_LABEL as NOTICE_STATUS, type Notice, type NoticeKind } from "@/lib/section-notices-spec";
 import type { PropertyDraft } from "@/lib/property-drafts";
@@ -203,7 +205,7 @@ export default function PropertyPage() {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
-      if (action || openJob || showAll || lightbox != null) return;
+      if (action || openJob || showAll || showLogins || lightbox != null) return;
       if (e.key === "ArrowRight") step(1);
       if (e.key === "ArrowLeft") step(-1);
     };
@@ -298,6 +300,7 @@ export default function PropertyPage() {
   const [openJob, setOpenJob] = useState<WorksOrder | null>(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [showLogins, setShowLogins] = useState(false);
 
   /* ── drafts: a form started and not sent (lib/property-drafts) ───────── */
   const [drafts, setDrafts] = useState<Loaded<PropertyDraft[]>>({ state: "loading" });
@@ -395,6 +398,9 @@ export default function PropertyPage() {
     house && !lets ? `shared house · ${house.rooms.length} ${house.rooms.length === 1 ? "room" : "rooms"}, ${letRooms.length} let` : null,
   ].filter(Boolean).join(" · ");
   const canAct = !p.test && Boolean(propertyId);
+  /* The lets whose tenants Send out logins covers: the room picked, or every
+     let of the house, or the home. */
+  const loginListings = (roomP ? [roomP] : house ? house.members : [p]).filter((x) => x.tenants.length > 0).map((x) => String(x.listingId));
 
   /* A landlord added on this page shows at once, on every let of the home
      that names nobody else. */
@@ -711,6 +717,8 @@ export default function PropertyPage() {
                 {(tenants.length > 1 || Boolean(house)) && (
                   <button type="button" disabled={!canAct || !tenants.length} onClick={() => act({ kind: "swap" })} className={tile}>{tileIcon("user")}{tileText("Tenant swap", "One leaves, their replacement moves in")}</button>
                 )}
+                {/* Sean McMahon, 16 Oct 2026: tenants report repairs in their portal, as Fixflow had them do. */}
+                <button type="button" disabled={p.test || !loginListings.length} onClick={() => setShowLogins(true)} className={tile}>{tileIcon("mail")}{tileText("Send out logins", "Tenant account, to report repairs")}</button>
                 <button type="button" disabled={!propertyId} onClick={() => { pickTab("compliance"); setTimeout(() => document.getElementById("sections")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }} className={tile}>{tileIcon("shield")}{tileText("Add a certificate", "Read and filed on the home")}</button>
                 {canAct && noticeIn ? (
                   <button type="button" disabled={visits.state !== "ready"} onClick={() => void bookCheckout()} className={tile}>{tileIcon("key")}{tileText("Book the check-out", leaving?.moveOutOn ? `They leave ${day(leaving.moveOutOn)}` : "Notice is in")}</button>
@@ -822,6 +830,10 @@ export default function PropertyPage() {
                   <RecordLandlord propertyId={propertyId} current={null} onSaved={setLandlordHere} />
                 ) : (
                   <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">No landlord on record for this home.</p>
+                )}
+                {/* A joint owner, or the person the agent actually deals with (agent call, 16 Oct 2026). OS only. */}
+                {propertyId && !p.test && (
+                  <HomePeople key={propertyId} propertyId={propertyId} />
                 )}
               </section>
             </div>
@@ -1023,6 +1035,7 @@ export default function PropertyPage() {
           />
         </Modal>
       )}
+      {showLogins && <SendLogins listings={loginListings} title={roomP ? `${roomLabel(roomP)}, ${title}` : title} onClose={() => setShowLogins(false)} />}
       {action?.kind === "tenant-notice" && propertyId && (
         <Modal onClose={closeAction} title="Tenant gave notice">
           <NoticeSheet

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import PassportScene from "@/components/PassportScene";
 import { EMPTY_PASSPORT, type PassportData } from "@/lib/passport-shape";
@@ -39,6 +39,11 @@ export default function TenantSignIn() {
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
   const [dev, setDev] = useState<{ link: string; note: string } | null>(null);
+  /* ?link=1 opens on the one-time link (the Send out logins email, 16 Oct
+     2026): those tenants have no password. */
+  useEffect(() => {
+    try { if (new URLSearchParams(window.location.search).get("link") === "1") setMode("link"); } catch { /* fine */ }
+  }, []);
 
   /* Email and password: the account they made at the end of their passport. */
   async function signIn(e: React.FormEvent) {

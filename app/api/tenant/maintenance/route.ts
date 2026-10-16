@@ -4,6 +4,8 @@ import { currentTenant } from "@/lib/tenant-account";
 import { loadTenantHome } from "@/lib/tenant-home-view";
 import { createOrder, listOrders } from "@/lib/works-orders";
 import { hasDb } from "@/lib/db";
+import { portalHomesFor } from "@/lib/tenant-logins";
+import { managedBookFor } from "@/lib/managed-book-cache";
 
 /**
  * A TENANT REPORTING SOMETHING BROKEN.
@@ -96,6 +98,11 @@ export async function POST(req: NextRequest) {
   const [testLandlord, testHome] = isTest
     ? await Promise.all([landlordForTestDeal(deal.id).catch(() => null), propertyForTestDeal(deal.id).catch(() => null)])
     : [null, null];
+  /* A sitting tenant sent their login by the agent (lib/tenant-logins): the
+     home was the agent's pick from their own book, so it is known for
+     certain and the job is linked to it, landlord and all, as an agent's
+     own report would be. */
+  const sitting = deal.id.startsWith("home-") ? await sittingHomeFor(me.email, deal.id.slice(5)).catch(() => null) : null;
   const order = await createOrder(
     {
       kind: "repair",
@@ -103,7 +110,7 @@ export async function POST(req: NextRequest) {
          order carries the address and the agent links it. Better an honest
          gap than a guessed id pointing at the wrong home. A test tenancy's
          home is the OS's own record, known for certain, so it is linked. */
-      propertyId: testHome?.id ?? null,
+      propertyId: testHome?.id ?? sitting?.propertyId ?? null,
       propertyName: deal.property,
       locality: deal.locality,
       tenant: me.name,
@@ -116,9 +123,20 @@ export async function POST(req: NextRequest) {
       urgency: "routine",
       reportedBy: "Tenant",
       ...(testLandlord ? { landlord: testLandlord.name, landlordEmail: testLandlord.email } : {}),
+      ...(sitting?.landlord ? { landlord: sitting.landlord.name, landlordEmail: sitting.landlord.email ?? "", landlordMobile: sitting.landlord.phone ?? "" } : {}),
     },
     me.name || me.email
   );
 
   return NextResponse.json({ ok: true, ref: order.ref });
+}
+
+/** The home behind a sitting tenant's portal login, and its landlord, from the book. */
+async function sittingHomeFor(email: string, listingId: string) {
+  const homes = await portalHomesFor(email);
+  const h = homes.find((x) => x.listingId === listingId);
+  if (!h) return null;
+  const { book } = await managedBookFor(null).catch(() => ({ book: null }));
+  const p = book?.properties.find((x) => String(x.listingId) === listingId) ?? null;
+  return { propertyId: h.propertyId ?? p?.propertyId ?? null, landlord: p?.landlord ?? null };
 }

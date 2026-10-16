@@ -150,7 +150,11 @@ export async function startVerification(
   }
 
   const token = mintToken();
-  const ttl = purpose === "join" && opts.ttlMs ? opts.ttlMs : TTL_BY_PURPOSE[purpose];
+  /* A tenant's portal login (lib/tenant-logins, 16 Oct 2026) is opened when
+     they next have a repair, not the day it lands: up to 14 days, still single use. */
+  const ttl = purpose === "join" && opts.ttlMs ? opts.ttlMs
+    : purpose === "tenant" && opts.ttlMs ? Math.min(opts.ttlMs, 14 * 24 * 60 * 60 * 1000)
+    : TTL_BY_PURPOSE[purpose];
   const expires = new Date(Date.now() + ttl).toISOString();
 
   if (!opts.keepOthers) {
