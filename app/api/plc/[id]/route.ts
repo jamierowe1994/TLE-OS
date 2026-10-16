@@ -146,12 +146,45 @@ function softenWaived(c: PlcCase, findings: ScanOutcome["findings"]): ScanOutcom
   });
 }
 
-async function finishSend(id: string, current: PlcCase, testCase: boolean, onProgress?: (read: number, of: number) => void): Promise<{ status: number; error: string | null }> {
+/* ── Send anyway (James, 16 Oct 2026) ──────────────────────────────────────
+   44 South Bridge again: the reader flagged "Accept with Guarantor" on the
+   referencing and a mortgage letter as the wrong proof of ownership, both of
+   which the agent knew were fine. "If it says this might fail because of
+   this, then we should still have a Send anyway button." So every blocker is
+   kept, and goes to compliance as a question with the agent's reason on it;
+   the pack is sent. The reason is required. */
+function sentAnyway(findings: ScanOutcome["findings"], anyway: { by: string; reason: string }): ScanOutcome["findings"] {
+  return findings.map((f) =>
+    f.level === "blocker" ? { ...f, level: "query" as const, message: `${f.message} - sent anyway by ${anyway.by}: "${anyway.reason}"` } : f
+  );
+}
+
+/** The last reading still describes this pack: nothing filed or waived since, and every flagged document still on it. */
+function preflightStillFresh(c: PlcCase): boolean {
+  if (!c.scannedAt || !c.findings.some((f) => f.level === "blocker")) return false;
+  const at = Date.parse(c.scannedAt);
+  const changed = [...c.documents.map((d) => d.addedAt), ...(c.waivers ?? []).map((w) => w.at)].some((t) => t && Date.parse(t) > at);
+  if (changed) return false;
+  const names = new Set(c.documents.map((d) => d.name));
+  return c.findings.every((f) => !f.documentName || names.has(f.documentName));
+}
+
+async function finishSend(
+  id: string,
+  current: PlcCase,
+  testCase: boolean,
+  onProgress?: (read: number, of: number) => void,
+  anyway?: { by: string; reason: string } | null
+): Promise<{ status: number; error: string | null }> {
   let outcome: ScanOutcome | null = null;
-  if (scanConfigured() && current.state === "assembling" && current.moveInDate) {
+  if (anyway && preflightStillFresh(current)) {
+    /* Sent anyway on the reading just done: no second read of the pack. */
+    outcome = { findings: sentAnyway(softenWaived(current, current.findings), anyway), recommendation: null as unknown as ScanOutcome["recommendation"] };
+  } else if (scanConfigured() && current.state === "assembling" && current.moveInDate) {
     try {
       outcome = await scanCase(current, onProgress);
       if (outcome) outcome = { ...outcome, findings: softenWaived(current, outcome.findings) };
+      if (outcome && anyway) outcome = { ...outcome, findings: sentAnyway(outcome.findings, anyway) };
     } catch {
       /* A reader that fails is not a reason to hold the pack: it goes
          through unscanned and Kirstie reads it, as before the reader
@@ -211,6 +244,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     test?: boolean;
     /** The wizard's Send: answer at once and read in the background (send-status). */
     async?: boolean;
+    /** Send anyway: the agent's reason for sending past what the reader flagged. */
+    anyway?: string;
   };
   try {
     body = await req.json();
@@ -329,19 +364,25 @@ export async function POST(req: NextRequest, ctx: Ctx) {
            answered at once, the reading carries on here, and it asks
            send-status until the answer is in. Anything else that sends still
            waits for the whole thing, as before. */
-        if (body.async && scanConfigured() && current.state === "assembling" && current.moveInDate) {
+        const anywayReason = typeof body.anyway === "string" ? body.anyway.trim().slice(0, 500) : "";
+        if (body.anyway !== undefined && anywayReason.length < 3) {
+          return NextResponse.json({ ok: false, error: "Say in a few words why it's fine to send.", ...(await payload(current, req)) }, { status: 400 });
+        }
+        const anyway = anywayReason ? { by: await actorName(req, "Agent"), reason: anywayReason } : null;
+        /* On the reading just done, Send anyway is quick: answered here, not in the background. */
+        if (body.async && scanConfigured() && current.state === "assembling" && current.moveInDate && !(anyway && preflightStillFresh(current))) {
           const running = sendJobs.get(id);
           if (!running || running.done) {
             for (const [k, j] of sendJobs) if (j.done && Date.now() - j.at > KEEP_MS) sendJobs.delete(k);
             const job: SendJob = { at: Date.now(), done: false, status: 200, error: null, read: 0, of: 0 };
             sendJobs.set(id, job);
-            void finishSend(id, current, testCase, (read, of) => Object.assign(job, { read, of }))
+            void finishSend(id, current, testCase, (read, of) => Object.assign(job, { read, of }), anyway)
               .then((r) => Object.assign(job, r, { done: true }))
               .catch((e) => Object.assign(job, { done: true, status: 502, error: publicError(e, "The send didn't finish. Press Send again.") }));
           }
           return NextResponse.json({ ok: true, reading: true, progress: { read: 0, of: current.documents.length }, ...(await payload(current, req)) }, { status: 202 });
         }
-        const r = await finishSend(id, current, testCase);
+        const r = await finishSend(id, current, testCase, undefined, anyway);
         const after = await getCase(id);
         return NextResponse.json(
           { ok: r.status === 200, ...(r.error ? { error: r.error } : {}), ...(after ? await payload(after, req) : {}) },

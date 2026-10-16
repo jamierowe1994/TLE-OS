@@ -188,6 +188,8 @@ export default function PlcWizard({
   /* A Send reading in the background (16 Oct 2026): how far, and whether this page is still here to hear it. */
   const [sendProgress, setSendProgress] = useState<{ read: number; of: number } | null>(null);
   const here = useRef(true);
+  /* Send anyway (16 Oct 2026): why the agent is sending past the reader's flags. */
+  const [anywayWhy, setAnywayWhy] = useState("");
   useEffect(() => {
     here.current = true;
     return () => {
@@ -399,7 +401,8 @@ export default function PlcWizard({
     return res.case;
   };
 
-  const submit = async () => {
+  /** anyway: the agent's reason for sending past what the reader flagged (Send anyway). */
+  const submit = async (anyway?: string) => {
     if (!kase) return;
     setError(null);
     /* The note first, so what compliance read is what is in the box, even
@@ -424,7 +427,7 @@ export default function PlcWizard({
       type SendAnswer = { case: PlcCase; reading?: boolean; progress?: { read: number; of: number } };
       let res = await api<SendAnswer>(`/api/plc/${kase.id}`, {
         method: "POST",
-        body: JSON.stringify({ action: "submit", async: true }),
+        body: JSON.stringify({ action: "submit", async: true, ...(anyway ? { anyway } : {}) }),
       });
       /* Read in the background (16 Oct 2026): the corner card follows the
          agent if they leave, and this page asks until the answer is in. */
@@ -892,6 +895,34 @@ export default function PlcWizard({
                   ))}
                 </ul>
                 <p className="mt-1 text-xs text-amber-800">Replace the document, or fix the move-in date if that is what is wrong.</p>
+                {/* Send anyway (James, 16 Oct 2026): the agent may know it's fine.
+                    Every line above still goes to compliance, with this reason on it. */}
+                {!demo && (
+                  <div className="mt-3 border-t border-amber-200 pt-3">
+                    <label className="block text-xs font-medium text-amber-900" htmlFor="plc-anyway">
+                      Know it&apos;s fine? Say why, and send it anyway
+                    </label>
+                    <textarea
+                      id="plc-anyway"
+                      rows={2}
+                      value={anywayWhy}
+                      onChange={(e) => setAnywayWhy(e.target.value)}
+                      placeholder="e.g. Guarantor is in place and referenced. The mortgage letter names the landlord at this address."
+                      className="mt-1.5 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-amber-500"
+                    />
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => submit(anywayWhy.trim())}
+                        disabled={anywayWhy.trim().length < 3 || (!testLet && (!gate.ready || !rlpAnswered(kase)))}
+                        className={SECONDARY}
+                      >
+                        Send anyway
+                      </button>
+                      <span className="text-xs text-amber-800">Compliance sees each of these, with your reason.</span>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1026,7 +1057,7 @@ export default function PlcWizard({
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <button
                 type="button"
-                onClick={submit}
+                onClick={() => submit()}
                 disabled={!testLet && (!gate.ready || !rlpAnswered(kase))}
                 title={
                   testLet
