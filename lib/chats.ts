@@ -293,8 +293,22 @@ export interface Room {
   archived: boolean;
 }
 
+/**
+ * The room everybody is in.
+ *
+ * Called "The Letting Experts" since 18 Oct 2026 (James): "General" is what
+ * the software called it, not what the company calls itself, and the one chat
+ * every agent is in should carry the name over the door. The row is renamed in
+ * place rather than replaced - its id, its messages and everybody's read marks
+ * are the same room they were.
+ */
+export const GENERAL_NAME = "The Letting Experts";
+
 async function ensureGeneral(): Promise<void> {
-  await q(`INSERT INTO os_team_rooms (id, kind, name) VALUES ($1, 'general', 'General') ON CONFLICT (id) DO NOTHING`, [GENERAL]).catch(() => null);
+  await q(`INSERT INTO os_team_rooms (id, kind, name) VALUES ($1, 'general', $2) ON CONFLICT (id) DO NOTHING`, [GENERAL, GENERAL_NAME]).catch(() => null);
+  /* Idempotent, and only ever moves off the old name: somebody who renames it
+     deliberately later does not get it taken back on the next read. */
+  await q(`UPDATE os_team_rooms SET name = $2 WHERE id = $1 AND name = 'General'`, [GENERAL, GENERAL_NAME]).catch(() => null);
 }
 
 export async function roomsFor(me: OsUser): Promise<Room[]> {
@@ -355,18 +369,70 @@ export interface TeamMessage {
   replies: number;
 }
 
+/**
+ * WHO RUNS A GROUP CHAT (James, 18 Oct 2026: "let's say Susan and I are both
+ * admins for any of the group chats").
+ *
+ * An admin is an owner - Susan and James - or the person who started the room.
+ * No new column and no new table: `created_by` has been on os_team_rooms since
+ * the huddles were built, and `isOwner` already names the two of them. A
+ * `role` column on os_team_members was the other option and was not taken,
+ * because it would need every existing row backfilled to say what the two
+ * fields already say, and a second answer to "is this person an admin" is a
+ * second answer that can disagree.
+ *
+ * What an admin may do that a member may not: rename the room, take somebody
+ * out of it, and delete it for everybody. Starting one is not an admin power -
+ * anybody may do that, and does.
+ */
+export function roomAdmin(me: OsUser, room: { kind: string; createdBy: string | null }): boolean {
+  /* Nobody administers the company room. It has no owner to be, everybody is
+     in it, and the one thing an admin could do to it that matters - delete it
+     for everyone - is the one thing that must never happen to it. */
+  if (room.kind === "general") return false;
+  return isOwner(me) || (Boolean(room.createdBy) && room.createdBy === me.id);
+}
+
 /** Can this person read the room? General is everyone's; a huddle is its members'. */
-export async function canSee(me: OsUser, roomId: string): Promise<{ kind: "general" | "huddle"; name: string } | null> {
+export async function canSee(me: OsUser, roomId: string): Promise<{ kind: "general" | "huddle"; name: string; createdBy: string | null; admin: boolean } | null> {
   if (!hasDb()) return null;
   if (roomId === GENERAL) await ensureGeneral();
-  const rows = await q<{ kind: string; name: string; member: boolean }>(
-    `SELECT kind, name, EXISTS (SELECT 1 FROM os_team_members m WHERE m.room_id = r.id AND m.user_id = $2) AS member FROM os_team_rooms r WHERE id = $1`,
+  const rows = await q<{ kind: string; name: string; created_by: string | null; member: boolean }>(
+    `SELECT kind, name, created_by, EXISTS (SELECT 1 FROM os_team_members m WHERE m.room_id = r.id AND m.user_id = $2) AS member FROM os_team_rooms r WHERE id = $1`,
     [roomId, me.id]
   ).catch(() => []);
   const r = rows[0];
   if (!r) return null;
   if (r.kind !== "general" && !r.member) return null;
-  return { kind: r.kind === "general" ? "general" : "huddle", name: r.name };
+  const kind = r.kind === "general" ? ("general" as const) : ("huddle" as const);
+  return { kind, name: r.name, createdBy: r.created_by, admin: roomAdmin(me, { kind, createdBy: r.created_by }) };
+}
+
+/** An admin renames the room. The name is what everybody in it sees. */
+export async function renameRoom(roomId: string, name: string): Promise<void> {
+  await q(`UPDATE os_team_rooms SET name = $2 WHERE id = $1`, [roomId, name]);
+}
+
+/** An admin takes somebody out. They can be invited back; nothing they said is touched. */
+export async function removeMember(roomId: string, userId: string): Promise<void> {
+  await q(`DELETE FROM os_team_members WHERE room_id = $1 AND user_id = $2`, [roomId, userId]);
+}
+
+/**
+ * An admin deletes the room FOR EVERYBODY: the messages, the membership and
+ * the room itself, plus everyone's archive and clear marks for it, which would
+ * otherwise sit in os_chat_state pointing at a room that is not there.
+ *
+ * Not the same act as the Delete on a row in the list, which only hides a chat
+ * from the person who pressed it. The screen has to keep the two apart in
+ * words, because the consequences are not comparable.
+ */
+export async function deleteRoomForEveryone(roomId: string): Promise<void> {
+  if (roomId === GENERAL) throw new Error("The company room cannot be deleted.");
+  await q(`DELETE FROM os_team_messages WHERE room_id = $1`, [roomId]).catch(() => null);
+  await q(`DELETE FROM os_team_members WHERE room_id = $1`, [roomId]).catch(() => null);
+  await q(`DELETE FROM os_chat_state WHERE chat_key = $1`, [`room:${roomId}`]).catch(() => null);
+  await q(`DELETE FROM os_team_rooms WHERE id = $1`, [roomId]);
 }
 
 export async function roomMessages(me: OsUser, roomId: string, replyTo: string | null, peek = false): Promise<TeamMessage[]> {

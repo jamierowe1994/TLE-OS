@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import PageHeader from "@/components/PageHeader";
 import LineIcon from "@/components/LineIcon";
 import { searchMatches } from "@/lib/search-match";
 import { isGif, previewOf, TEAM_GIFS } from "@/lib/chat-gif";
@@ -99,6 +98,24 @@ function Avatar({ name, photo, size = 36, tone = "pink", ring = false }: { name:
  * more stacked one over the next, the third circle saying "+N" when there are
  * more than three. Fills a fixed slot so names line up down the list.
  */
+/* The room everybody is in. lib/chats renames the row itself; this is what the
+   screen says while the list is still loading. */
+const GENERAL_NAME = "The Letting Experts";
+
+/**
+ * The Letting Experts' own face, for the room that is the whole company.
+ * The logo rather than a message icon: it is the one chat with a name over the
+ * door, and a generic speech bubble made it read as a system notice.
+ */
+function BrandFace({ size = 38 }: { size?: number }) {
+  return (
+    <span className="flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent-soft" style={{ width: size, height: size }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/brand/tle-logo.png" alt="" className="h-[72%] w-[72%] object-contain" />
+    </span>
+  );
+}
+
 const SLOT = 66;
 function GroupFace({ faces, members, name, size = 28 }: { faces: Face[]; members: number; name: string; size?: number }) {
   if (!faces.length) return <span className="flex shrink-0 items-center" style={{ width: SLOT }}><Avatar name={name} size={38} tone="sage" /></span>;
@@ -267,7 +284,9 @@ export default function Huddles() {
       const el = frame.current;
       if (!el) return;
       const top = el.getBoundingClientRect().top + window.scrollY;
-      setFrameH(Math.max(460, Math.round(window.innerHeight - top - 28)));
+      /* To the bottom of the window: the page has no padding under it any
+         more, so the composer sits on the edge the way a chat app's does. */
+      setFrameH(Math.max(460, Math.round(window.innerHeight - top)));
     };
     fit();
     const t = window.setTimeout(fit, 700);
@@ -280,13 +299,19 @@ export default function Huddles() {
 
   const openRoom = open?.kind === "room" ? data?.rooms.find((r) => r.id === open.id) ?? null : null;
 
-  /* What this tab lists: the chats in play, or the archived ones. */
-  const roomsHere = (data?.rooms ?? []).filter((r) => r.archived === showArchived);
-  const workHere = (data?.work ?? []).filter((t) => t.archived === showArchived);
-  const archivedHere = tab === "team" ? (data?.rooms ?? []).filter((r) => r.archived) : (data?.work ?? []).filter((t) => t.archived);
-  const archivedUnread = archivedHere.reduce((s, c) => s + c.unread, 0);
+  /* THE FOUR SECTIONS. Everything in play is listed at once, so these are
+     the four lists rather than "whatever the open tab holds"; archived is a
+     single place now, not one per tab, because a chat put away is put away. */
+  const roomsHere = (data?.rooms ?? []).filter((r) => !r.archived);
+  const workHere = (data?.work ?? []).filter((t) => !t.archived);
   const generalHere = roomsHere.find((r) => r.kind === "general") ?? null;
   const huddlesHere = roomsHere.filter((r) => r.kind === "huddle");
+  const landlordsHere = workHere.filter((t) => t.kind === "landlord");
+  const tenantsHere = workHere.filter((t) => t.kind === "tenant");
+  const archivedRooms = (data?.rooms ?? []).filter((r) => r.archived);
+  const archivedWork = (data?.work ?? []).filter((t) => t.archived);
+  const archivedHere = [...archivedRooms, ...archivedWork];
+  const archivedUnread = archivedHere.reduce((s, c) => s + c.unread, 0);
 
   /* Archive, bring back or delete, for you alone. */
   const act = async (key: string, action: "archive" | "unarchive" | "delete", what: { name: string; kind: "general" | "huddle" | "landlord" | "tenant" }) => {
@@ -312,6 +337,31 @@ export default function Huddles() {
     load();
   };
 
+  /* One customer row, used by Landlords, by Tenants and by Archived. */
+  const renderThread = (t: Thread) => {
+    const [kind, ...rest] = t.key.split(":");
+    const id = rest.join(":");
+    const landlord = kind === "landlord";
+    return (
+      <SwipeRow key={t.key} open={swiped === t.key} onOpen={() => setSwiped(t.key)} onClose={() => setSwiped(null)} actions={actionsFor(t.key, t.archived, { name: t.name, kind: landlord ? "landlord" : "tenant" })}>
+        <Row
+          active={open?.kind === kind && open.id === id}
+          onClick={() => go("customers", { kind: landlord ? "landlord" : "tenant", id })}
+          face={
+            <span className="flex shrink-0 items-center" style={{ width: SLOT }}>
+              <Avatar name={t.name} size={38} tone={landlord ? "pink" : "sage"} />
+            </span>
+          }
+          name={t.name}
+          about={landlord ? t.about : ""}
+          line={`${t.last.from === "agent" ? "You: " : ""}${t.last.body}`}
+          at={t.last.at}
+          unread={t.unread}
+        />
+      </SwipeRow>
+    );
+  };
+
   const actionsFor = (key: string, archived: boolean, what: { name: string; kind: "general" | "huddle" | "landlord" | "tenant" }): SwipeAction[] => [
     archived
       ? { label: "Unarchive", icon: "unarchive", tone: "quiet", run: () => void act(key, "unarchive", what) }
@@ -320,58 +370,41 @@ export default function Huddles() {
   ];
 
   return (
-    <>
-      <PageHeader title="Huddles" blurb="Your team, your landlords and your tenants in one place. The same chats as Chats on the TLE OS app." />
-
-      <div ref={frame} style={{ height: frameH ?? 560 }} className="hud fade-up mt-5 flex overflow-hidden rounded-[var(--radius-card)] border border-[var(--hud-line)] bg-[var(--hud-list)]">
+    /* FULL BLEED (James, 18 Oct 2026). This sat in a bordered card inside the
+       shell's padding, under a page title, and read as an embed of a chat
+       rather than as a chat: a 320px list, a narrow column of messages, and
+       too little of either on screen to follow a conversation. The title has
+       gone - the room's own name is the title, as it is in Teams and Slack -
+       and the negative margins cancel the shell's padding so the thing fills
+       the window. The margins mirror main's own classes in components/Shell;
+       they have to be changed together. */
+    <div className="-mb-28 -mt-8 -mx-5 flex flex-col lg:-mx-10 xl:-mr-[84px] 2xl:-ml-14">
+      <div ref={frame} style={{ height: frameH ?? 560 }} className="hud flex overflow-hidden border-t border-[var(--hud-line)] bg-[var(--hud-list)]">
         {/* The list. */}
-        <aside className={`${showChat ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-[var(--hud-line)] bg-[var(--hud-list)] md:w-[320px] md:border-r`}>
-          <div className="px-3 pt-3">
-            <div role="tablist" className="flex gap-1 rounded-full bg-[var(--hud-tabs)] p-1">
-              {(
-                [
-                  ["team", "Team", data?.unread.play ?? 0],
-                  ["customers", "Landlords & Tenants", data?.unread.work ?? 0],
-                ] as const
-              ).map(([id, label, n]) => (
-                <button
-                  key={id}
-                  role="tab"
-                  type="button"
-                  aria-selected={tab === id}
-                  onClick={() => {
-                    setShowArchived(false);
-                    if (tab !== id) go(id, null);
-                  }}
-                  className={`flex h-8 flex-1 items-center justify-center gap-1.5 rounded-full px-2 text-[12.5px] font-medium transition-colors ${tab === id ? "bg-[var(--hud-tab-on)] text-ink shadow-[0_1px_3px_rgba(0,0,0,0.12)]" : "text-muted hover:text-ink"}`}
-                >
-                  <span className="truncate">{label}</span>
-                  <Count n={n} />
-                </button>
-              ))}
-            </div>
-          </div>
-
+        <aside className={`${showChat ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-[var(--hud-line)] bg-[var(--hud-list)] md:w-[300px] md:border-r lg:w-[340px]`}>
+          {/* THE RAIL (James, 18 Oct 2026). Two pills that crossed team with
+              landlords-and-tenants have become four plain sections down the
+              left, in the order he asked for: huddles at the top, then the
+              company room, then the two kinds of customer separately. Everything
+              is on screen at once, so nothing is a click away behind a tab. */}
           {showArchived ? (
-            <div className="flex items-center gap-2 px-3 pb-1 pt-3">
+            <div className="flex items-center gap-2 px-4 pb-2 pt-4">
               <button type="button" onClick={() => setShowArchived(false)} aria-label="Back to your chats" className="flex h-7 w-7 items-center justify-center rounded-full border border-[var(--hud-line-strong)] text-muted hover:text-ink">
                 <LineIcon name="arrow-left" size={13} />
               </button>
-              <p className="text-[12.5px] font-medium text-ink">Archived</p>
+              <p className="text-[13px] font-semibold text-ink">Archived</p>
             </div>
-          ) : tab === "team" ? (
-            <div className="flex items-center justify-between gap-2 px-4 pb-1 pt-3">
-              <p className="text-[11.5px] font-medium text-muted">General and your huddles</p>
+          ) : (
+            <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-4">
+              <p className="text-[15px] font-semibold tracking-[-0.01em] text-ink">Chats</p>
               <button
                 type="button"
                 onClick={() => setPicker({ invite: null })}
                 className="flex h-8 items-center gap-1.5 rounded-full bg-ink px-3 text-[12px] font-semibold text-page transition-opacity hover:opacity-85"
               >
-                <span className="text-[15px] leading-none">+</span> Start a Huddle
+                <span className="text-[15px] leading-none">+</span> New
               </button>
             </div>
-          ) : (
-            <p className="px-4 pb-1 pt-3 text-[11.5px] font-medium text-muted">Your landlords and tenants, from their portals</p>
           )}
 
           <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 pt-1">
@@ -379,31 +412,33 @@ export default function Huddles() {
               <ErrorBox text={listError} onRetry={load} />
             ) : !data ? (
               <Spinner label="Loading your chats" />
-            ) : tab === "team" ? (
+            ) : showArchived ? (
               <>
-                {generalHere && (
-                  <SwipeRow open={swiped === `room:${GENERAL}`} onOpen={() => setSwiped(`room:${GENERAL}`)} onClose={() => setSwiped(null)} actions={actionsFor(`room:${GENERAL}`, showArchived, { name: "General", kind: "general" })}>
+                {archivedRooms.map((r) => (
+                  <SwipeRow key={r.id} open={swiped === `room:${r.id}`} onOpen={() => setSwiped(`room:${r.id}`)} onClose={() => setSwiped(null)} actions={actionsFor(`room:${r.id}`, true, { name: r.name, kind: r.kind })}>
                     <Row
-                      active={open?.kind === "room" && open.id === GENERAL}
-                      onClick={() => go("team", { kind: "room", id: GENERAL, thread: null })}
-                      face={
-                        <span className="flex shrink-0 items-center" style={{ width: SLOT }}>
-                          <span className="flex h-[38px] w-[38px] items-center justify-center rounded-full bg-accent-dark text-white">
-                            <LineIcon name="message" size={17} />
-                          </span>
-                        </span>
-                      }
-                      name="General"
-                      line={generalHere.last ? `${first(generalHere.last.who)}: ${previewOf(generalHere.last.body)}` : "Open to everyone"}
-                      at={generalHere.last?.at ?? null}
-                      unread={generalHere.unread}
+                      active={open?.kind === "room" && open.id === r.id}
+                      onClick={() => go("team", { kind: "room", id: r.id, thread: null })}
+                      face={r.kind === "general" ? <span className="flex shrink-0 items-center" style={{ width: SLOT }}><BrandFace /></span> : <GroupFace faces={r.faces} members={r.members} name={r.name} />}
+                      name={r.kind === "general" ? GENERAL_NAME : r.name}
+                      line={r.last ? `${first(r.last.who)}: ${previewOf(r.last.body)}` : "Nothing said yet"}
+                      at={r.last?.at ?? null}
+                      unread={r.unread}
                     />
                   </SwipeRow>
+                ))}
+                {archivedWork.map((t) => renderThread(t))}
+                {!archivedRooms.length && !archivedWork.length && (
+                  <p className="mx-2 mt-2 rounded-xl bg-[var(--hud-row-hover)] px-3 py-3 text-[12.5px] leading-snug text-muted">Nothing archived.</p>
                 )}
-                {!showArchived && <p className="mb-1 mt-4 px-2 text-[11.5px] font-medium text-muted">Huddles</p>}
+              </>
+            ) : (
+              <>
+                {/* Huddles, at the top. */}
+                <SectionHead label="Huddles" n={huddlesHere.reduce((a, r) => a + r.unread, 0)} first />
                 {huddlesHere.length ? (
                   huddlesHere.map((r) => (
-                    <SwipeRow key={r.id} open={swiped === `room:${r.id}`} onOpen={() => setSwiped(`room:${r.id}`)} onClose={() => setSwiped(null)} actions={actionsFor(`room:${r.id}`, showArchived, { name: r.name, kind: "huddle" })}>
+                    <SwipeRow key={r.id} open={swiped === `room:${r.id}`} onOpen={() => setSwiped(`room:${r.id}`)} onClose={() => setSwiped(null)} actions={actionsFor(`room:${r.id}`, false, { name: r.name, kind: "huddle" })}>
                       <Row
                         active={open?.kind === "room" && open.id === r.id}
                         onClick={() => go("team", { kind: "room", id: r.id, thread: null })}
@@ -415,41 +450,39 @@ export default function Huddles() {
                       />
                     </SwipeRow>
                   ))
-                ) : showArchived ? (
-                  !generalHere && <p className="mx-2 mt-2 rounded-xl bg-[var(--hud-row-hover)] px-3 py-3 text-[12.5px] leading-snug text-muted">Nothing archived.</p>
                 ) : (
-                  <p className="mx-2 rounded-xl bg-[var(--hud-row-hover)] px-3 py-3 text-[12.5px] leading-snug text-muted">No huddles yet. Start one with the agents near you.</p>
+                  <Nothing>No huddles yet. Start one with New.</Nothing>
                 )}
-              </>
-            ) : workHere.length ? (
-              workHere.map((t) => {
-                const [kind, ...rest] = t.key.split(":");
-                const id = rest.join(":");
-                const landlord = kind === "landlord";
-                return (
-                  <SwipeRow key={t.key} open={swiped === t.key} onOpen={() => setSwiped(t.key)} onClose={() => setSwiped(null)} actions={actionsFor(t.key, showArchived, { name: t.name, kind: landlord ? "landlord" : "tenant" })}>
+
+                {/* The company room. */}
+                <SectionHead label="Team" n={generalHere?.unread ?? 0} />
+                {generalHere ? (
+                  <SwipeRow open={swiped === `room:${GENERAL}`} onOpen={() => setSwiped(`room:${GENERAL}`)} onClose={() => setSwiped(null)} actions={actionsFor(`room:${GENERAL}`, false, { name: GENERAL_NAME, kind: "general" })}>
                     <Row
-                      active={open?.kind === kind && open.id === id}
-                      onClick={() => go("customers", { kind: landlord ? "landlord" : "tenant", id })}
+                      active={open?.kind === "room" && open.id === GENERAL}
+                      onClick={() => go("team", { kind: "room", id: GENERAL, thread: null })}
                       face={
                         <span className="flex shrink-0 items-center" style={{ width: SLOT }}>
-                          <Avatar name={t.name} size={38} tone={landlord ? "pink" : "sage"} />
+                          <BrandFace />
                         </span>
                       }
-                      name={t.name}
-                      tag={landlord ? "Landlord" : "Tenant"}
-                      about={landlord ? t.about : ""}
-                      line={`${t.last.from === "agent" ? "You: " : ""}${t.last.body}`}
-                      at={t.last.at}
-                      unread={t.unread}
+                      name={GENERAL_NAME}
+                      line={generalHere.last ? `${first(generalHere.last.who)}: ${previewOf(generalHere.last.body)}` : "Everyone is in this one"}
+                      at={generalHere.last?.at ?? null}
+                      unread={generalHere.unread}
                     />
                   </SwipeRow>
-                );
-              })
-            ) : (
-              <p className="mx-2 mt-2 rounded-xl bg-[var(--hud-row-hover)] px-3 py-3 text-[12.5px] leading-snug text-muted">
-                {showArchived ? "Nothing archived." : "No messages yet. When one of your landlords or tenants writes through their portal, it lands here."}
-              </p>
+                ) : (
+                  <Nothing>Archived. Bring it back from Archived below.</Nothing>
+                )}
+
+                {/* The two kinds of customer, apart rather than mixed. */}
+                <SectionHead label="Landlords" n={landlordsHere.reduce((a, t) => a + t.unread, 0)} />
+                {landlordsHere.length ? landlordsHere.map((t) => renderThread(t)) : <Nothing>Nothing from a landlord yet.</Nothing>}
+
+                <SectionHead label="Tenants" n={tenantsHere.reduce((a, t) => a + t.unread, 0)} />
+                {tenantsHere.length ? tenantsHere.map((t) => renderThread(t)) : <Nothing>Nothing from a tenant yet.</Nothing>}
+              </>
             )}
           </div>
 
@@ -498,7 +531,7 @@ export default function Huddles() {
                 <LineIcon name="message" size={20} />
               </span>
               <p className="mt-3 text-[13.5px] font-medium text-ink">Pick a Conversation</p>
-              <p className="mt-1 max-w-[300px] text-[12.5px] text-muted">Choose a landlord or tenant on the left to read what they wrote and reply.</p>
+              <p className="mt-1 max-w-[300px] text-[12.5px] text-muted">Pick a huddle, the team room, a landlord or a tenant on the left.</p>
             </div>
           )}
         </section>
@@ -515,7 +548,7 @@ export default function Huddles() {
           }}
         />
       )}
-    </>
+    </div>
   );
 }
 
@@ -600,6 +633,24 @@ function SwipeRow({ open, onOpen, onClose, actions, children }: { open: boolean;
   );
 }
 
+/**
+ * A heading in the rail. Sticky, because the four lists scroll as one and a
+ * heading that has scrolled away leaves you reading names with no idea whose
+ * they are.
+ */
+function SectionHead({ label, n, first = false }: { label: string; n: number; first?: boolean }) {
+  return (
+    <p className={`sticky top-0 z-10 flex items-center gap-2 bg-[var(--hud-list)] px-2 pb-1 ${first ? "pt-1" : "pt-4"} text-[11px] font-semibold uppercase tracking-[0.08em] text-muted`}>
+      <span className="flex-1">{label}</span>
+      <Count n={n} />
+    </p>
+  );
+}
+
+function Nothing({ children }: { children: React.ReactNode }) {
+  return <p className="mx-2 rounded-xl bg-[var(--hud-row-hover)] px-3 py-2.5 text-[12px] leading-snug text-muted">{children}</p>;
+}
+
 function Row({ active, onClick, face, name, tag, about, line, at, unread }: { active: boolean; onClick: () => void; face: React.ReactNode; name: string; tag?: string; about?: string; line: string; at: string | null; unread: number }) {
   return (
     <button type="button" onClick={onClick} className={`flex w-full items-center gap-1 rounded-xl px-2.5 py-2.5 text-left transition-colors ${active ? "bg-[var(--hud-row-active)]" : "hover:bg-[var(--hud-row-hover)]"}`}>
@@ -664,7 +715,7 @@ function RoomPane({
   onInvite: () => void;
   onLeft: () => void;
 }) {
-  const [data, setData] = useState<{ room: { id: string; kind: "general" | "huddle"; name: string }; me: string; messages: TeamMsg[]; members: Face[] } | null>(null);
+  const [data, setData] = useState<{ room: { id: string; kind: "general" | "huddle"; name: string; admin?: boolean }; me: string; messages: TeamMsg[]; members: Face[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [people, setPeople] = useState(false);
   /* In a huddle of two: how far the other person has read (the ticks). */
@@ -679,7 +730,7 @@ function RoomPane({
          other person would see two blue ticks for something not seen. */
       fetch(`${url}${document.hidden ? `${url.includes("?") ? "&" : "?"}peek=1` : ""}`, { cache: "no-store" })
         .then((r) => r.json())
-        .then((j: { ok?: boolean; error?: string; room?: { id: string; kind: "general" | "huddle"; name: string }; me?: string; messages?: TeamMsg[]; members?: Face[]; otherRead?: string | null }) => {
+        .then((j: { ok?: boolean; error?: string; room?: { id: string; kind: "general" | "huddle"; name: string; admin?: boolean }; me?: string; messages?: TeamMsg[]; members?: Face[]; otherRead?: string | null }) => {
           if (!j.ok || !j.room) throw new Error(j.error ?? "The chat did not load.");
           setData({ room: j.room, me: j.me ?? "", messages: j.messages ?? [], members: j.members ?? [] });
           setOtherRead(j.otherRead ?? null);
@@ -759,8 +810,73 @@ function RoomPane({
     onLeft();
   };
 
-  const title = thread ? "Question" : (data?.room.name ?? (id === GENERAL ? "General" : "Huddle"));
-  const line = thread ? (question ? `Asked by ${question.author}` : "") : general ? "Open to everyone" : data ? `${data.members.length} people` : "";
+  /* WHO CAN DO THESE. The server decides and says so on the room; this only
+     draws what it was told. A button hidden here is a courtesy, not the
+     guard - the routes refuse the same things on their own. */
+  const admin = Boolean(data?.room.admin) && !thread;
+
+  const rename = async () => {
+    const was = data?.room.name ?? "";
+    const name = window.prompt("What should this chat be called?", was)?.trim();
+    if (!name || name === was) return;
+    const j = (await fetch(`/api/m/rooms/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name }),
+    })
+      .then((r) => r.json())
+      .catch(() => ({ ok: false, error: "No connection. The name did not change." }))) as { ok?: boolean; error?: string };
+    if (!j.ok) {
+      window.alert(j.error ?? "The name did not change.");
+      return;
+    }
+    setPeople(false);
+    await load();
+    onRead();
+  };
+
+  const removePerson = async (who: Face) => {
+    if (!window.confirm(`Take ${who.name} out of ${data?.room.name ?? "this chat"}? They can be invited back, and what they have said stays.`)) return;
+    const j = (await fetch(`/api/m/rooms/${encodeURIComponent(id)}/members`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ userId: who.id }),
+    })
+      .then((r) => r.json())
+      .catch(() => ({ ok: false, error: "No connection. Nobody was taken out." }))) as { ok?: boolean; error?: string };
+    if (!j.ok) {
+      window.alert(j.error ?? "That did not work.");
+      return;
+    }
+    await load();
+  };
+
+  /* The destructive one. It is worded for what it actually does - everybody
+     loses the conversation, not just you - and it says the name back. */
+  const deleteForAll = async () => {
+    const name = data?.room.name ?? "this chat";
+    if (!window.confirm(`Delete ${name} for everyone in it?\n\nThe whole conversation goes, for every person in it, and it cannot be undone.`)) return;
+    const j = (await fetch(`/api/m/rooms/${encodeURIComponent(id)}?everyone=1`, { method: "DELETE" })
+      .then((r) => r.json())
+      .catch(() => ({ ok: false, error: "No connection. Nothing was deleted." }))) as { ok?: boolean; error?: string };
+    if (!j.ok) {
+      window.alert(j.error ?? "That did not work.");
+      return;
+    }
+    setPeople(false);
+    onLeft();
+  };
+
+  const title = thread ? "Question" : (data?.room.name ?? (id === GENERAL ? GENERAL_NAME : "Huddle"));
+  const line = thread
+    ? question
+      ? `Asked by ${question.author}`
+      : ""
+    : general
+      ? "Everyone is in this one"
+      : data
+        ? `${data.members.length} people${data.room.admin ? " · you run this one" : ""}`
+        : "";
   const faces = data && !general && !thread ? (groupFaces?.faces.length ? groupFaces : { faces: data.members.slice(0, 4), members: data.members.length }) : null;
 
   return (
@@ -768,7 +884,7 @@ function RoomPane({
       <PaneHead
         back={onBack}
         backAlways={Boolean(thread)}
-        face={faces ? <GroupFace faces={faces.faces} members={faces.members} name={data!.room.name} /> : undefined}
+        face={faces ? <GroupFace faces={faces.faces} members={faces.members} name={data!.room.name} /> : general && !thread ? <span className="flex shrink-0 items-center"><BrandFace size={34} /></span> : undefined}
         title={title}
         line={line}
         right={
@@ -794,7 +910,17 @@ function RoomPane({
                 <li key={m.id} className="flex items-center gap-2.5 px-2 py-1.5">
                   <Avatar name={m.name} photo={m.photo} size={28} tone={toneOf(m.id)} />
                   <span className="truncate text-[13px] text-ink">{m.name}</span>
-                  {m.id === data.me && <span className="ml-auto text-[11px] text-muted">You</span>}
+                  {m.id === data.me ? (
+                    <span className="ml-auto text-[11px] text-muted">You</span>
+                  ) : admin ? (
+                    <button
+                      type="button"
+                      onClick={() => void removePerson(m)}
+                      className="ml-auto rounded-md px-1.5 py-0.5 text-[11.5px] text-muted transition-colors hover:bg-accent-soft hover:text-accent-dark"
+                    >
+                      Take out
+                    </button>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -809,9 +935,19 @@ function RoomPane({
               >
                 Invite More People
               </button>
-              <button type="button" onClick={leave} className="w-full rounded-lg px-2 py-1.5 text-left text-[13px] font-medium text-accent-dark hover:bg-panel">
+              {admin && (
+                <button type="button" onClick={() => void rename()} className="w-full rounded-lg px-2 py-1.5 text-left text-[13px] font-medium text-ink hover:bg-panel">
+                  Rename This Chat
+                </button>
+              )}
+              <button type="button" onClick={leave} className="w-full rounded-lg px-2 py-1.5 text-left text-[13px] font-medium text-ink hover:bg-panel">
                 Leave the Huddle
               </button>
+              {admin && (
+                <button type="button" onClick={() => void deleteForAll()} className="w-full rounded-lg px-2 py-1.5 text-left text-[13px] font-medium text-accent-dark hover:bg-panel">
+                  Delete for Everyone
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1042,17 +1178,19 @@ function Bubbles({ items, empty, typing = null }: { items: Item[]; empty: string
 
   if (!items.length && !typing) return <p className="py-16 text-center text-[13px] text-muted">{empty}</p>;
   return (
-    <ol className="mx-auto flex max-w-[780px] flex-col gap-1 py-4">
+    <ol className="mx-auto flex max-w-[1040px] flex-col gap-1 px-2 py-5">
       {rows.map((r) => {
         if ("day" in r)
           return (
-            <li key={`d-${r.day}`} className="my-2 text-center text-[11px] font-medium text-muted">
-              {r.day}
+            <li key={`d-${r.day}`} className="my-3 flex items-center gap-3 px-1">
+              <span className="h-px flex-1 bg-[var(--hud-line)]" />
+              <span className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted">{r.day}</span>
+              <span className="h-px flex-1 bg-[var(--hud-line)]" />
             </li>
           );
         const { m, head, tail } = r;
         const gif = isGif(m.body);
-        const bubble = `max-w-[min(78%,520px)] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2.5 text-left text-[13.5px] leading-snug ${
+        const bubble = `max-w-[min(74%,680px)] whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-left text-[14.5px] leading-relaxed ${
           m.mine ? "rounded-br-md bg-accent-dark text-white" : "rounded-bl-md bg-[var(--hud-them)] text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
         }`;
         const content = gif ? (
@@ -1192,8 +1330,8 @@ function Composer({
     >
       {pop === "emoji" && <EmojiTray onPick={addEmoji} />}
       {pop === "gif" && <GifTray busy={busy} onPick={(url) => void send(url)} />}
-      {err && <p className="mx-auto mb-2 max-w-[780px] text-[12px] text-accent-dark">{err}</p>}
-      <div className="mx-auto flex max-w-[780px] items-end gap-1.5 rounded-2xl border border-[var(--hud-line-strong)] bg-[var(--hud-input)] p-1.5 pl-2 focus-within:border-ink/40">
+      {err && <p className="mx-auto mb-2 max-w-[1040px] text-[12px] text-accent-dark">{err}</p>}
+      <div className="mx-auto flex max-w-[1040px] items-end gap-1.5 rounded-2xl border border-[var(--hud-line-strong)] bg-[var(--hud-input)] p-1.5 pl-2 focus-within:border-ink/40">
         <button
           type="button"
           onClick={() => setPop((p) => (p === "emoji" ? null : "emoji"))}
@@ -1257,7 +1395,7 @@ function Composer({
           )}
         </button>
       </div>
-      {foot && <p className={`mx-auto mt-1.5 max-w-[780px] px-1 text-[11.5px] ${footWarn ? "text-accent-dark" : "text-muted"}`}>{foot}</p>}
+      {foot && <p className={`mx-auto mt-1.5 max-w-[1040px] px-1 text-[11.5px] ${footWarn ? "text-accent-dark" : "text-muted"}`}>{foot}</p>}
     </form>
   );
 }
