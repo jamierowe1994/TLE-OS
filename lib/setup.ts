@@ -97,6 +97,15 @@ export type SetupView = {
    */
   rexOptional: boolean;
   emailConnected: boolean;
+  /**
+   * The address Microsoft says the mailbox is, when one is connected.
+   *
+   * Their OS email and their 365 login are not always the same person's idea
+   * of the same thing - several people here have more than one Microsoft
+   * login - so the confirmation screen names the one email will actually
+   * leave from rather than the one we hold on the account.
+   */
+  emailMailbox: string | null;
   state: SetupState;
 };
 

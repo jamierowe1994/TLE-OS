@@ -100,6 +100,7 @@ const SIGNED_OUT: SetupView = {
   rexConnected: false,
   rexOptional: false,
   emailConnected: false,
+  emailMailbox: null,
   state: { ...EMPTY_SETUP, done: {} },
 };
 
@@ -130,6 +131,7 @@ export async function GET(req: NextRequest) {
       rexConnected: rex.connected,
       rexOptional: !REX_ROLES.has(user?.role ?? "agent"),
       emailConnected: ms.connected,
+      emailMailbox: ms.email,
       /* The password step is implied rather than recorded: they cannot be
          holding a session without having set one. Stamping it on read means
          an account created before this wizard existed does not get sent back

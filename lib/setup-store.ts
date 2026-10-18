@@ -95,6 +95,7 @@ const BLANK: SetupView = {
   rexConnected: false,
   rexOptional: false,
   emailConnected: false,
+  emailMailbox: null,
   state: { ...EMPTY_SETUP, done: {} },
 };
 

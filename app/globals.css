@@ -1073,6 +1073,21 @@ body {
   }
 }
 
+/* The setup tick. It DRAWS - stroke-dashoffset on a pathLength of 1 - rather
+   than fading in, because a tick that fades reads as a picture appearing and a
+   tick that draws reads as something being finished, which is the whole point
+   of the screen it sits on. The ring pops once underneath it. Both are
+   motion-safe: reduced motion gets the finished mark, still, immediately. */
+@keyframes tickDraw {
+  from { stroke-dasharray: 1; stroke-dashoffset: 1; }
+  to   { stroke-dasharray: 1; stroke-dashoffset: 0; }
+}
+@keyframes tickPop {
+  0%   { opacity: 0; transform: scale(0.72); }
+  60%  { opacity: 1; transform: scale(1.06); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
 /* The passport page runs one colour edge to edge - the palette's pink - with
    the masthead sitting on it rather than on a white strip. James, 12 Sep
    2026: "I like colours to flow throughout. If we're going to pick a colour,

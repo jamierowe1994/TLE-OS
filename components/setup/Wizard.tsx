@@ -158,6 +158,14 @@ export default function Wizard({
         <StepEmail
           preview={demo || dry}
           problem={mailProblem}
+          /* What the server last said, as a hint for the first paint. The
+             screen asks Microsoft itself before it claims anything. */
+          connected={view.emailConnected}
+          mailbox={view.emailMailbox}
+          /* Microsoft says it worked. The screen still checks, but this is
+             what makes it check at all rather than redrawing the button. */
+          justConnected={mail === "connected"}
+          onNext={() => void complete("email")}
           onSkip={() => void complete("email", { skip: true })}
         />
       )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import RexDino from "@/components/RexDino";
 import {
@@ -236,16 +236,172 @@ export function StepRex({
    The only skippable step. It needs a working Microsoft 365 sign-in, and a
    new starter on their first morning may simply not have one yet. */
 
+/**
+ * The tick, drawn rather than stamped.
+ *
+ * Same path as the progress rail's Pip so the one on the rail and the one in
+ * the middle of the screen are visibly the same mark. It draws itself on with
+ * stroke-dashoffset, which is the only honest way to animate a tick: it is a
+ * stroke, and a stroke that fades in reads as a picture appearing rather than
+ * as something being completed. Reduced motion gets the finished mark with no
+ * drawing and no ring.
+ */
+function BigTick() {
+  return (
+    <span
+      className="relative flex h-16 w-16 items-center justify-center rounded-full bg-accent-dark text-page motion-safe:animate-[tickPop_0.42s_cubic-bezier(0.22,1,0.36,1)_both]"
+      aria-hidden
+    >
+      <svg viewBox="0 0 12 12" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+        <path
+          d="M2.5 6.4 4.8 8.7 9.5 3.6"
+          pathLength={1}
+          className="motion-safe:animate-[tickDraw_0.5s_cubic-bezier(0.22,1,0.36,1)_0.14s_both]"
+        />
+      </svg>
+    </span>
+  );
+}
+
+/** What the live check came back with. */
+type MailCheck =
+  | { state: "checking" }
+  | { state: "connected"; email: string | null }
+  | { state: "no"; problem: string | null };
+
 export function StepEmail({
   preview,
   problem,
+  connected = false,
+  mailbox = null,
+  justConnected = false,
+  onNext,
   onSkip,
 }: {
   preview: boolean;
   /** Whatever Microsoft said on the way back, already turned into English. */
   problem: string | null;
+  /** What /api/setup last said. A hint for the first paint, not the answer. */
+  connected?: boolean;
+  /** The address that connection sends as, as far as /api/setup knows. */
+  mailbox?: string | null;
+  /** They have just come back from the consent screen having said yes. */
+  justConnected?: boolean;
+  /** Confirmed and moving on. */
+  onNext: () => void;
   onSkip: () => void;
 }) {
+  /* WHY THIS SCREEN ASKS AT ALL (18 Oct 2026).
+     The callback redirected to /setup?mail=connected and this component drew
+     the same "Connect Your Email" screen it had drawn a minute earlier, with
+     the same button. New starters read that as a failure: some connected two
+     and three times over, and the rest messaged James to say it was broken.
+     Nothing was broken except that nobody had been told.
+
+     So when there is any reason to think a mailbox is there, the screen asks
+     Microsoft rather than guessing - a row in our own table proves a token was
+     stored, not that it works - and says so plainly either way. */
+  const shouldCheck = !preview && (justConnected || connected);
+  /* A preview has no mailbox to ask about, so it SHOWS the confirmation
+     rather than asking: /setup?replay=1&mail=connected walks somebody through
+     the screen a connected agent gets. Without this the one screen nobody
+     could see before shipping would stay the one screen nobody can see. */
+  const [check, setCheck] = useState<MailCheck>(
+    preview && justConnected
+      ? { state: "connected", email: mailbox }
+      : shouldCheck
+        ? { state: "checking" }
+        : { state: "no", problem: null }
+  );
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    if (!shouldCheck) return;
+    let alive = true;
+    setCheck({ state: "checking" });
+    (async () => {
+      try {
+        const r = await fetch("/api/mailbox/check", { cache: "no-store" });
+        const d = (await r.json()) as { connected?: boolean; email?: string | null; problem?: string | null };
+        if (!alive) return;
+        if (d.connected) {
+          setCheck({ state: "connected", email: d.email ?? mailbox ?? null });
+          return;
+        }
+        /* One retry, once, and only for somebody who has just come back from
+           Microsoft. The token is written in the callback a redirect before
+           this runs, so a check that lands first would otherwise tell a person
+           who did everything right that nothing happened. */
+        if (justConnected && attempt === 0) {
+          setTimeout(() => alive && setAttempt(1), 1200);
+          return;
+        }
+        setCheck({ state: "no", problem: d.problem ?? null });
+      } catch {
+        if (!alive) return;
+        setCheck({
+          state: "no",
+          problem: "We could not check your mailbox just then. Try again in a moment.",
+        });
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [shouldCheck, justConnected, attempt, mailbox]);
+
+  if (check.state === "checking") {
+    return (
+      <>
+        <Title>Checking Your Email</Title>
+        <Blurb>One moment. We are asking Microsoft whether that connected.</Blurb>
+        <div className="my-10 flex flex-col items-center gap-3">
+          <span
+            className="h-9 w-9 rounded-full border-[2.5px] border-line border-t-accent-dark motion-safe:animate-spin"
+            aria-hidden
+          />
+          <p className="text-[11.5px] text-muted" role="status">
+            Checking your mailbox
+          </p>
+        </div>
+      </>
+    );
+  }
+
+  if (check.state === "connected") {
+    return (
+      <>
+        <Title>Your Email Is Connected</Title>
+        <Blurb>
+          That worked. Nothing else to do on this step.
+        </Blurb>
+
+        <div className="my-8 flex flex-col items-center gap-4">
+          <BigTick />
+          {check.email && (
+            <p className="text-center text-[13px] leading-relaxed">
+              Email from the OS will go out as{" "}
+              <strong className="font-semibold">{check.email}</strong>
+            </p>
+          )}
+          <p className="max-w-[18rem] text-center text-[11.5px] leading-relaxed text-muted">
+            In your name, from your address, and it lands in your own Sent
+            items. Replies come back to you.
+          </p>
+        </div>
+
+        <button type="button" onClick={onNext} className={`${PRIMARY} mt-1`}>
+          Next
+        </button>
+
+        <p className="mt-4 text-[10.5px] leading-relaxed text-muted">
+          You can test it, change it or disconnect it any time from your
+          profile.
+        </p>
+      </>
+    );
+  }
+
   return (
     <>
       <Title>Connect Your Email</Title>
@@ -268,7 +424,10 @@ export function StepEmail({
         </p>
       </div>
 
-      {problem && <Problem>{problem}</Problem>}
+      {/* Microsoft's own reason first, because it names the thing to do about
+          it; the check's wording only stands in when the trip back said
+          nothing was wrong and the mailbox still is not there. */}
+      {(problem || check.problem) && <Problem>{problem ?? check.problem}</Problem>}
 
       <a
         href={preview ? undefined : "/api/auth/microsoft/start?from=setup"}
