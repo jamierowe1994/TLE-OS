@@ -1,7 +1,8 @@
 "use client";
 
-import { use, useState } from "react";
+import { Suspense, use, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import Wizard from "@/components/setup/Wizard";
 
 /**
@@ -52,5 +53,20 @@ export default function PreviewSetup({
 
   /* Unmounted entirely while the closing panel is up, so "run it again" gets
      a fresh mount and a fresh set of answers without needing a key. */
-  return <Wizard forceDemo onFinish={() => setDone(true)} />;
+  return (
+    /* ?mail=connected shows the email step as somebody who has just come back
+       from Microsoft sees it, and ?mail=denied as somebody it refused. The
+       share link is the only place this flow can be looked at without an
+       account, so the two screens a new starter is most likely to ask about
+       have to be reachable from it. useSearchParams needs a boundary or the
+       route opts out of static rendering, same as /setup. */
+    <Suspense fallback={null}>
+      <PreviewWizard onFinish={() => setDone(true)} />
+    </Suspense>
+  );
+}
+
+function PreviewWizard({ onFinish }: { onFinish: () => void }) {
+  const mail = useSearchParams().get("mail");
+  return <Wizard forceDemo mail={mail} onFinish={onFinish} />;
 }

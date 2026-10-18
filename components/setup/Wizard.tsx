@@ -67,8 +67,11 @@ export default function Wizard({
     if (!ready || placed.current) return;
     placed.current = true;
 
+    /* A dry run opens on the welcome screen - unless it was asked for a
+       particular outcome of the email step, in which case it opens there, so
+       a share link can point straight at the screen being discussed. */
     if (dry) {
-      setScreen("welcome");
+      setScreen(mail ? "email" : "welcome");
       return;
     }
     if (mail) {
