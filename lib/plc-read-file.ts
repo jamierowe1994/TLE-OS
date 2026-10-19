@@ -33,6 +33,7 @@ Slots:
 - landlord-aml: the landlord's AML or KYC check, or their proof of address (utility bill, bank or
   council tax statement)
 - proof-of-ownership: Land Registry title register or plan, deeds, or a mortgage statement naming the owner
+- terms-of-business: the letting agent's terms of business (or management agreement) signed by the landlord
 - tenant-checks: a tenant referencing report or outcome (Goodlord, Homelet, Let Alliance, Propoly
   referencing, Legal for Landlords, credit check)
 - holding-deposit: a holding deposit form or agreement signed by the tenant

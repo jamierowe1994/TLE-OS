@@ -45,6 +45,9 @@ const CHECK_FOR_TYPE: Record<string, CheckId> = {
   epc: "epc",
   gas_safety: "gas-safety",
   eicr: "eicr",
+  /* Kirstie, 19 Oct 2026: the terms were the one thing that never came
+     through. They were set aside here on purpose (8 Oct) and now belong. */
+  terms_of_business: "terms-of-business",
 };
 
 /** The other way: the Documents-tab label for a file filed on a pack. */
@@ -54,7 +57,15 @@ const TYPE_FOR_CHECK: Partial<Record<CheckId, string>> = Object.fromEntries(
 TYPE_FOR_CHECK["landlord-id-aml"] = "landlord_id";
 
 /** Never part of a pre-let check: left on the Documents tab. */
-const NOT_FOR_A_PACK = new Set(["terms_of_business", "tenant_proof_of_address"]);
+const NOT_FOR_A_PACK = new Set(["tenant_proof_of_address"]);
+
+/**
+ * Written into a pack's offered keys once the terms of business have been
+ * offered to it. A pack opened before 19 Oct 2026 had its terms offered and
+ * set aside, so without this they would never come in: they are offered
+ * once more, and then the usual rule (taken off = not brought back) holds.
+ */
+const TERMS_OFFERED = "mark:terms-of-business-offered";
 
 /**
  * Tenant papers older than this before the pack was started belong to an
@@ -80,7 +91,7 @@ async function hashOf(key: string): Promise<string | null> {
   }
 }
 
-export type PullSource = "file" | "certificates" | "landlord";
+export type PullSource = "file" | "certificates" | "landlord" | "terms";
 
 export type PullOutcome = {
   case: PlcCase;
@@ -124,7 +135,9 @@ const shortAddress = (a: string) => a.split(",").slice(0, 2).join(",").trim();
  *      download, renewals, the EPC register) - an EPC lasts ten years and
  *      nobody should download it to upload it again;
  *   3. the landlord's ID and AML from the packs and Documents tabs of their
- *      OTHER homes - a landlord with four homes shows their passport once.
+ *      OTHER homes - a landlord with four homes shows their passport once;
+ *   4. the terms of business the landlord signed in DocuSeal, or the copy on
+ *      the home's property record, when the Documents tab had none.
  *
  * Safe to call every time the pack is opened: a file filed once and taken
  * off again is never brought back, and nothing is removed from anywhere.
@@ -153,11 +166,14 @@ export async function pullFileDocs(caseId: string, ctx: Ctx): Promise<PullOutcom
     added: [],
     left: [],
     remember: [],
+    termsOffered: (start.fileKeys ?? []).includes(TERMS_OFFERED),
   };
 
   await fromDocumentsTab(run);
   await fromCertificates(run, home.ids);
   if (landlord) await fromLandlordsOtherHomes(run, landlord, home.ids);
+  await fromSignedTerms(run, home.ids);
+  if (!run.termsOffered) run.remember.push(TERMS_OFFERED);
 
   if (run.remember.length) run.current = await noteFileKeys(caseId, run.remember);
   return { case: run.current, added: run.added, left: run.left };
@@ -175,6 +191,8 @@ type Run = {
   left: PullOutcome["left"];
   /** Keys never to offer this pack again. */
   remember: string[];
+  /** The terms of business have been offered to this pack since they became part of it. */
+  termsOffered: boolean;
 };
 
 /** File one; a refusal (a twin, a pack that has gone) is noted, never thrown. */
@@ -223,7 +241,7 @@ async function fromDocumentsTab(run: Run) {
   /* Newest first, so when the same file was uploaded twice under different
      labels, the later (corrected) one is the one read. */
   const all = (await storedDocsForHome({ address: start.address, propertyId: run.ctx.propertyId })).filter(
-    (d) => !run.offered.has(d.r2Key)
+    (d) => !run.offered.has(d.r2Key) || (d.type === "terms_of_business" && !run.termsOffered)
   );
   if (!all.length) return;
 
@@ -372,6 +390,48 @@ async function fromCertificates(run: Run, ids: string[]) {
         note: `Already on file for this home${r.source ? ` (${r.source})` : ""}.${r.awaiting_check ? ` ${CHECKING_LABEL}.` : ""}`,
       },
     });
+  }
+}
+
+/* ── 4. The signed terms of business ───────────────────────────────────── */
+
+/**
+ * The terms the landlord signed in DocuSeal on the appraisal or the New
+ * listing file, else the copy on the OS property record (lib/terms-to-rex
+ * osTermsFor, the same answer the listing's go-live check gives). Only when
+ * the Documents tab brought none. Not read: it is known to be the terms.
+ */
+async function fromSignedTerms(run: Run, ids: string[]) {
+  if (!ids.length || filledOn(run.current).has("terms-of-business")) return;
+  const { osTermsFor } = await import("@/lib/terms-to-rex");
+  for (const id of ids) {
+    const t = await osTermsFor(id, { record: true }).catch(() => null);
+    if (!t || !t.r2_key || run.offered.has(t.r2_key)) continue;
+    const hash = await hashOf(t.r2_key);
+    if (hash && run.hashes.has(hash)) return;
+    const on = t.at ? new Date(t.at).toISOString().slice(0, 10) : null;
+    await file(run, "terms", {
+      key: t.r2_key,
+      name: t.file_name,
+      checkId: "terms-of-business",
+      hash,
+      read: {
+        checkId: "terms-of-business",
+        what: "Terms of business",
+        issueDate: on,
+        expiryDate: null,
+        names: t.by_name ? [t.by_name] : [],
+        confidence: "high",
+        note:
+          t.source === "signed"
+            ? `Signed in DocuSeal${t.by_name ? ` by ${t.by_name}` : ""}${on ? ` on ${on.split("-").reverse().join("/")}` : ""}.`
+            : t.source === "record"
+              ? "From this home's property record."
+              : "From this home's Documents tab.",
+        at: new Date().toISOString(),
+      },
+    });
+    return;
   }
 }
 

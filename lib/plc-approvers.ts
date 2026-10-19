@@ -38,6 +38,28 @@ export async function isPlcApprover(email: string | null | undefined): Promise<b
   return e !== "" && (await plcApprovers()).includes(e);
 }
 
+/**
+ * Who the final approval is for, by first name, for the sentence that says
+ * so: "Kirstie, Michael or Susan". It was written into the screen as
+ * "Kirstie's or Michael's" and stayed that way after the list changed.
+ */
+export async function plcApproverNames(): Promise<string> {
+  const emails = await plcApprovers();
+  let named = new Map<string, string>();
+  if (hasDb()) {
+    const rows = await q<{ email: string; name: string | null }>(
+      `SELECT lower(email) AS email, name FROM os_users WHERE lower(email) = ANY($1)`,
+      [emails]
+    ).catch(() => []);
+    named = new Map(rows.map((r) => [r.email, (r.name ?? "").trim().split(/\s+/)[0]]));
+  }
+  const firsts = emails.map((e) => {
+    const n = named.get(e) || e.split("@")[0].split(/[._-]/)[0];
+    return n.charAt(0).toUpperCase() + n.slice(1);
+  });
+  return firsts.length > 1 ? `${firsts.slice(0, -1).join(", ")} or ${firsts[firsts.length - 1]}` : firsts[0] ?? "the approvers";
+}
+
 /** An empty list is refused: nobody could ever approve a pack again. */
 export async function savePlcApprovers(emails: string[], by: string): Promise<string[]> {
   const list = clean(emails);

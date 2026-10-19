@@ -37,6 +37,9 @@ export type CheckId =
   | "landlord-id-aml"
   | "landlord-aml"
   | "proof-of-ownership"
+  /* The landlord's signed terms of business (Kirstie, 19 Oct 2026: "the only
+     thing that doesn't pull through is terms of businesses"). */
+  | "terms-of-business"
   | "tenant-checks"
   | "guarantor-checks"
   | "gas-safety"
@@ -136,6 +139,14 @@ export const PLC_CHECKS: Check[] = [
     needs: "Land Registry title, or the mortgage or deeds naming the owners",
     scan: "reading",
     why: "The people giving us the keys have to be the people who own the home.",
+    gate: "optional",
+  },
+  {
+    id: "terms-of-business",
+    label: "Terms of business",
+    needs: "The terms of business the landlord signed",
+    scan: "presence",
+    why: "We act for the landlord on the terms they signed, so the check sees them with everything else.",
     gate: "optional",
   },
   {
@@ -301,7 +312,7 @@ export const CHECK_GROUPS: { id: "landlord" | "tenant"; title: string; blurb: st
     id: "landlord",
     title: "Landlord Documents",
     blurb: "The landlord's ID and every certificate for the property.",
-    checks: ["landlord-id-aml", "landlord-aml", "proof-of-ownership", "gas-safety", "epc", "eicr", "licensing", "pat", "fire-safety", "emergency-lighting", "alarms", "legionella"],
+    checks: ["landlord-id-aml", "landlord-aml", "proof-of-ownership", "terms-of-business", "gas-safety", "epc", "eicr", "licensing", "pat", "fire-safety", "emergency-lighting", "alarms", "legionella"],
   },
   {
     id: "tenant",
@@ -328,6 +339,8 @@ export const groupOf = (id: CheckId): "landlord" | "tenant" =>
  * "certificate", so the specific patterns are tried before the loose ones.
  */
 const FILENAME_HINTS: [RegExp, CheckId][] = [
+  /* Before "agreement" and "landlord": "TLE_TOB_ENGLAND.pdf", "Landlord terms of business.pdf". */
+  [/terms.?of.?business|(^|[^a-z])tob([^a-z]|$)|docuseal/i, "terms-of-business"],
   [/\bpat\b|portable.?appliance/i, "pat"],
   [/legionella/i, "legionella"],
   [/emergency.?light/i, "emergency-lighting"],
@@ -374,7 +387,7 @@ export type PlcState =
   | "scanning"
   /** Findings are in. The first check (Josel) has not passed it yet. */
   | "reviewing"
-  /** First check done. Waiting on Kirstie or Michael for the final approval. */
+  /** First check done. Waiting on a final approver (lib/plc-approvers). */
   | "checked"
   | "approved"
   /** Something is missing or wrong; it goes back to the agent to fix. */
@@ -390,8 +403,8 @@ export const PLC_STATES: { id: PlcState; label: string; who: string; blurb: stri
     blurb: "Reading the documents for dates and details." },
   { id: "reviewing", label: "First check", who: "Compliance",
     blurb: "Findings are in. Josel checks every document against the pack before it goes further." },
-  { id: "checked", label: "Final approval", who: "Kirstie or Michael",
-    blurb: "Checked once. Kirstie or Michael gives the final approval." },
+  { id: "checked", label: "Final approval", who: "Kirstie, Michael or Susan",
+    blurb: "Checked once. Kirstie, Michael or Susan gives the final approval." },
   { id: "approved", label: "Approved", who: "Agent",
     blurb: "Cleared. The property can be let." },
   { id: "deferred", label: "Deferred", who: "Agent",
@@ -709,6 +722,11 @@ export function gateFor(c: Pick<PlcCase, "documents" | "waivers" | "letType">): 
 export const DEFAULT_PLC_APPROVERS = [
   "kirstie.mulholland@thelettingexperts.co.uk",
   "michael.healy@thelettingexperts.co.uk",
+  /* 19 Oct 2026, ticket c2ad920f: Kirstie did the first check on 12b Cliff
+     Road and "sent to Sue to check over and do final check", and Susan was
+     refused. Kirstie could not approve her own check, so only Michael could
+     have finished it. Susan signs off as well. */
+  "susan@thelettingexperts.co.uk",
 ];
 
 /** Has the agent said yes or no to Rent and Legal Protection? */

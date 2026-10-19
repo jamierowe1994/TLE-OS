@@ -27,7 +27,7 @@ export type Loaded = {
   scanConfigured: boolean;
   /** What the person looking may do. Absent on the practice and preview
    *  screens, where one person plays every part. */
-  me?: { canCheck: boolean; canApprove: boolean; approveBlocked: string | null };
+  me?: { canCheck: boolean; canApprove: boolean; approveBlocked: string | null; approvers?: string };
   /** The RLP request as it would go, when the agent asked for cover. */
   rlp?: { preview: { subject: string; html: string; files: string[] }; teamSet: boolean; switchOn: boolean } | null;
 };
@@ -278,6 +278,7 @@ export function ComplianceSide({
   const decided = c.state === "approved" || c.state === "deferred" || c.state === "declined";
   const canCheck = data.me?.canCheck ?? true;
   const canApprove = data.me?.canApprove ?? true;
+  const approvers = data.me?.approvers ?? "Kirstie, Michael or Susan";
 
   const anyway = sentAnywayNow(c);
 
@@ -303,7 +304,7 @@ export function ComplianceSide({
           <Head icon="search" title="Read the pack" />
           <p className="mt-3 text-[13px] leading-relaxed text-muted">
             The scan reads dates and names out of the documents and tells you what it found. It does
-            not decide anything. A person still checks it, and then Kirstie or Michael approves it.
+            not decide anything. A person still checks it, and then {approvers} approves it.
           </p>
           {!data.scanConfigured && (
             <p className="mt-2 text-sm text-amber-700">
@@ -456,7 +457,7 @@ export function ComplianceSide({
         <section className="rounded-[18px] bg-accent-soft p-5">
           <Head icon="checklist" title="First check" tone="pink" />
           <p className="mt-3 text-[13px] leading-relaxed text-ink/70">
-            Check every document against the pack. When it is right, pass it to Kirstie or Michael for
+            Check every document against the pack. When it is right, pass it to {approvers} for
             the final approval. If something is wrong, send it back to {who(c.agentName)} now.
           </p>
           <textarea
@@ -493,7 +494,7 @@ export function ComplianceSide({
         </section>
       )}
 
-      {/* ── Step two: the final approval ── Kirstie or Michael, and never the
+      {/* ── Step two: the final approval ── a named approver, and never the
           person who did the first check. */}
       {c.state === "checked" && (
         <section className="rounded-[18px] bg-accent-soft p-5">

@@ -20,7 +20,7 @@ import {
 import { gateFor, missingDocuments, PLC_CHECKS, rlpAnswered, scanSummary, sortFindings, type CheckId, type PlcCase, type SentAnyway } from "@/lib/plc";
 import { scanCase, scanConfigured, type ScanOutcome } from "@/lib/plc-scan";
 import { actorName, currentUser } from "@/lib/plc-actor";
-import { isPlcApprover } from "@/lib/plc-approvers";
+import { isPlcApprover, plcApproverNames } from "@/lib/plc-approvers";
 import { rlpEmail, rlpTeamEmail, sendRlpRequest } from "@/lib/plc-rlp";
 import { can } from "@/lib/roles";
 import { requireCapability } from "@/lib/admin";
@@ -68,6 +68,7 @@ async function payload(c: PlcCase | null, req: NextRequest) {
   const checker = Boolean(email && c.checkedByEmail && email === c.checkedByEmail);
   const canApprove = dryRun || ((await isPlcApprover(email)) && !checker);
   const rlpOn = c.rlpWanted ? await switchOn("rlp_requests") : false;
+  const approvers = await plcApproverNames();
   return {
     case: { ...c, findings: sortFindings(c.findings) },
     checks: PLC_CHECKS,
@@ -78,7 +79,9 @@ async function payload(c: PlcCase | null, req: NextRequest) {
       canCheck: dryRun || Boolean(me && can(me.role, "work:plc")),
       canApprove,
       /* Why not, in a sentence, when they cannot. */
-      approveBlocked: canApprove ? null : checker ? "You did the first check, so the final approval has to be somebody else." : "The final approval is Kirstie's or Michael's.",
+      approveBlocked: canApprove ? null : checker ? "You did the first check, so the final approval has to be somebody else." : `The final approval is for ${approvers}.`,
+      /* Who gives the final approval, for the copy on the pack. */
+      approvers,
     },
     rlp: c.rlpWanted
       ? { preview: rlpEmail(c), teamSet: Boolean(rlpTeamEmail()), switchOn: rlpOn }
@@ -276,7 +279,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
      Two steps since 30 Sep 2026 (James): anybody holding work:plc may do the
      first check, defer or decline; the final approval is a short named list
-     (Kirstie and Michael, lib/plc-approvers), and never the person who did
+     (Kirstie, Michael and Susan, lib/plc-approvers), and never the person who did
      the first check on the same pack. */
   const COMPLIANCE_ONLY = new Set(["check", "decide", "push-rex", "push-propoly", "rlp-send"]);
   /* A test file's pack (lib/test-guard isTestCase, 5 Oct 2026): the tester
@@ -309,7 +312,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     const current = await getCase(id);
     const email = me?.email?.toLowerCase() ?? "";
     if (!(await isPlcApprover(email))) {
-      return NextResponse.json({ ok: false, error: "The final approval is Kirstie's or Michael's." }, { status: 403 });
+      return NextResponse.json({ ok: false, error: `The final approval is for ${await plcApproverNames()}.` }, { status: 403 });
     }
     if (APPROVER_ONLY && current?.checkedByEmail && current.checkedByEmail === email) {
       return NextResponse.json(
